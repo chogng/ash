@@ -376,7 +376,7 @@ async function createConversationShareServer() {
 	return { origin, records, [Symbol.asyncDispose]: () => server[Symbol.asyncDispose]() };
 }
 
-function createAshModelServer(ashRequests: string[], replySuffix = '') {
+function createAshModelServer(ashRequests: string[], replySuffix = '', codeMatch?: { url: string; license: string; snippet: string; }) {
 	return createServer(async (request, response) => {
 		if (request.method === 'GET') {
 			response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ data: [{ id: ashFixtureModel.model }] }));
@@ -386,7 +386,8 @@ function createAshModelServer(ashRequests: string[], replySuffix = '') {
 		for await (const chunk of request) chunks.push(Buffer.from(chunk));
 		ashRequests.push((JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string; }).model);
 		const content = JSON.stringify('Answer from Ash' + replySuffix);
-		response.writeHead(200, { 'Content-Type': 'text/event-stream' }).end(`data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":${content}},"finish_reason":null}]}\n\ndata: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n`);
+		const annotations = codeMatch ? `data: ${JSON.stringify({ choices: [{ index: 0, delta: { copilot_annotations: { IPCodeCitations: [{ citations: codeMatch }] } } }] })}\n\n` : '';
+		response.writeHead(200, { 'Content-Type': 'text/event-stream' }).end(`data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":${content}},"finish_reason":null}]}\n\n${annotations}data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n`);
 	});
 }
 
@@ -550,7 +551,14 @@ test.describe('Unified Chat sidebar', () => {
 			'',
 			'参见 urlFloem 文档turn2search1。',
 			'',
+			'<Link url="https://github.com/lapce/floem" title="Floem 源码"/>',
+			'',
 			'![正文图片](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==)',
+			'',
+			'```diff:rust',
+			'-let value = 1;',
+			'+let value = 2;',
+			'```',
 		].join('\n');
 		const source = { ref_id: 'turn2search1', url: 'https://example.com/floem', title: 'Floem 文档', snippet: '介绍响应式组件与布局。' };
 		await installService(application as ElectronApplication, false, { suffix: reply, sources: [source] });
@@ -704,6 +712,27 @@ test.describe('Unified Chat sidebar', () => {
 		await page.keyboard.press('Escape');
 		await expect(preview).toBeHidden();
 		await expect(link).toBeFocused();
+		const replySources = chat.locator('.ash-chat-response-citations').getByRole('button', { name: '来源（1）', exact: true });
+		await replySources.press('Enter');
+		const replySourceCard = page.getByRole('dialog', { name: '来源（1）', exact: true });
+		await expect(replySourceCard.getByRole('link', { name: /Floem 文档/u })).toHaveAttribute('href', source.url);
+		await page.keyboard.press('Escape');
+		await expect(replySourceCard).toBeHidden();
+		await expect(replySources).toBeFocused();
+		const external = chat.getByRole('link', { name: 'Floem 源码', exact: true });
+		await external.focus();
+		await page.keyboard.press(`${modifier}+k`);
+		await page.keyboard.press(`${modifier}+i`);
+		const linkCard = page.getByRole('dialog', { name: '链接预览', exact: true });
+		await expect(linkCard.getByRole('link', { name: 'github.com Floem 源码', exact: true })).toHaveAttribute('href', 'https://github.com/lapce/floem');
+		await page.keyboard.press('Escape');
+		await expect(linkCard).toBeHidden();
+		await expect(external).toBeFocused();
+		const comparison = chat.getByRole('region', { name: '差异编辑器：原始文件 与 修改后的文件' });
+		await expect(comparison.locator('.modified .view-lines')).toContainText('let value = 2;');
+		await comparison.scrollIntoViewIfNeeded();
+		await expect(comparison).toBeInViewport();
+		await testInfo.attach('chatgpt-markdown-diff', { body: await comparison.screenshot(), contentType: 'image/png' });
 		await link.press('Alt+F1');
 		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/如果回复中的链接附有来源摘要/u);
 		await page.keyboard.press('Escape');
@@ -721,6 +750,7 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(entity).toBeVisible();
 		await electron.evaluate(() => ashNativeFixture.setOffline(true));
 		const reopened = await workbench.reopenAgentsWindow(electron, page);
+		await expect(reopened.locator('.ash-chat-response-citations').getByRole('button', { name: '来源（1）', exact: true })).toBeVisible();
 		await reopened.getByRole('region', { name: 'ChatGPT', exact: true }).getByRole('link', { name: 'GPUI', exact: true }).press('Enter');
 		const cachedDetail = reopened.locator('.ash-chat-entity-details');
 		await expect(cachedDetail.getByRole('link', { name: 'Zed 文档', exact: true })).toBeVisible();
@@ -781,9 +811,10 @@ test.describe('Unified Chat sidebar', () => {
 		const application = browser as ElectronApplication;
 		const lines = ['const label: string = "Ash code card";', 'const count = 42;'];
 		const fence = '\n\n```ts\n' + lines.join('\n') + '\n```';
+		const codeMatch = { url: 'https://github.com/example/repo/blob/main/example.ts', license: 'MIT', snippet: lines.join('\n') };
 		await installService(application, false, fence);
 		await application.evaluate(({ clipboard }) => { clipboard.writeText = async () => { }; });
-		await using catalog = createAshModelServer([], fence);
+		await using catalog = createAshModelServer([], fence, codeMatch);
 		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
 		const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
 		try {
@@ -803,6 +834,8 @@ test.describe('Unified Chat sidebar', () => {
 				},
 			});
 			await expect.poll(async () => (await readThread()).turns[0]?.status).toBe('completed');
+			const answer = (await readThread()).turns[0]?.items.find(item => item.type === 'agentMessage');
+			expect(answer?.citations).toEqual([{ type: 'code', ...codeMatch }]);
 			const page = await workbench.openAgentsWindow(target.kind);
 			for (const [source, selector, canApply] of [
 				['ChatGPT', 'chatgpt:history-one', false],
@@ -862,6 +895,17 @@ test.describe('Unified Chat sidebar', () => {
 				else await expect(apply).toBeDisabled();
 				await page.keyboard.press('Escape');
 				await expect(more).toBeFocused();
+				const codeMatches = reply.locator('.ash-chat-code-citations');
+				if (source === 'Ash') {
+					const summary = codeMatches.locator('summary');
+					await expect(summary).toHaveText('匹配代码（1）');
+					await summary.press('Enter');
+					await expect(codeMatches.getByText('许可证：MIT', { exact: true })).toBeVisible();
+					await expect(codeMatches.getByRole('link')).toHaveAttribute('href', codeMatch.url);
+					await expect(codeMatches.locator('pre code')).toHaveText(codeMatch.snippet);
+				} else {
+					await expect(codeMatches).toHaveCount(0);
+				}
 			}
 		} finally { await connection.close(); }
 	});

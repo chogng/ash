@@ -130,10 +130,11 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 				return composer.input;
 			}, {
 			promptTimelineChanges: prompt => turnChanges.getChangesForRequest(prompt),
+			getTurnChanges: source => turnChanges.getChangesForResponse(source),
 			messagePresentation,
 			virtualizeHistoryFrom: codePresentation.map(code => code ? CODE_HISTORY_VIRTUALIZE_FROM : undefined),
 			welcomeTitle,
-		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
+		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding, configuration);
 		this.composer = this._register(composer);
 		this.codePresentation = codePresentation;
 		const shown = observableFromEvent(this, this.onDidChangeVisibility, () => this.visible);

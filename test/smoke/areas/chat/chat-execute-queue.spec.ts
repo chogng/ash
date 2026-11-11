@@ -7,6 +7,81 @@ import { connectProfile } from '../sessions/sessionProfileFixture.js';
 
 test.use({ gitRepository: true });
 
+test('Agents Code reorders durable queued messages with the keyboard and by dragging', { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }) => {
+	const model = { provider: 'custom-reorder-queue-fixture', model: 'reorder-queue-model' };
+	const server = createServer((request, response) => {
+		if (request.method === 'GET') {
+			response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
+			return;
+		}
+		request.resume();
+		response.writeHead(200, { 'content-type': 'text/event-stream' });
+		response.write('data: {"choices":[{"index":0,"delta":{"content":"Queue fixture is running."}}]}\n\n');
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
+	try {
+		const page = await workbench.openAgentsWindow(target.kind);
+		connection = await connectProfile(application, webAppServer, testWorkspace.directory, page);
+		const { client } = connection;
+		const address = server.address();
+		if (!address || typeof address === 'string') throw new Error('Missing queue fixture port');
+		const config = await client.request(methods['config/read'], {});
+		await client.request(methods['provider/configure'], {
+			commandId: 'reorder-queue-provider', expectedRevision: config.revision, config: {
+				connection: model.provider, provider: model.provider, baseUrl: `http://127.0.0.1:${address.port}/v1`,
+				custom: { name: 'Queue reorder fixture', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 },
+				modelContext: { [model.model]: { contextWindow: 272_000 } },
+			},
+		});
+		await client.request(methods['provider/apiKey/set'], { connection: model.provider, apiKey: 'isolated-queue-key' });
+		const { session } = await client.request(methods['session/create'], {
+			commandId: 'reorder-queue-session', kind: 'code', title: 'Reorder queue fixture', agent: { type: 'default' },
+			executionTarget: { type: 'local', root: testWorkspace.directory },
+		});
+		const sessionId = session.sessionId;
+		const threadId = session.threads[0]!.threadId;
+		const read = async () => (await client.request(methods['session/thread/read'], { sessionId, threadId })).thread;
+		const queue = async () => (await client.request(methods['queue/list'], { sessionId, threadId })).messages;
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Reorder queue fixture' }).click();
+		const chat = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		await expect(chat).toHaveAttribute('data-thread-id', threadId);
+		await client.request(methods['session/request'], {
+			commandId: 'reorder-queue-active', sessionId, request: {
+				type: 'startTurn', threadId, expectedSequence: (await read()).sequence, mode: 'ask', model,
+				input: [{ type: 'text', text: 'Wait for pending queue fixtures.' }],
+			},
+		});
+		await expect(chat).toContainText('Queue fixture is running.');
+		for (const [commandId, text] of [['queue-first', 'First queued fixture'], ['queue-second', 'Second queued fixture']]) {
+			await client.request(methods['queue/enqueue'], {
+				commandId, sessionId, threadId, mode: 'ask', model,
+				input: [{ type: 'text', text }, { type: 'context', name: 'Frozen context', content: 'Keep these bytes.' }],
+			});
+		}
+		const original = await queue();
+		const rows = chat.locator('[data-item-id^="queue:"]');
+		const first = rows.filter({ hasText: 'First queued fixture' });
+		const second = rows.filter({ hasText: 'Second queued fixture' });
+		const reorder = first.getByRole('button', { name: 'Reorder queued message', exact: true });
+		const order = async () => (await queue()).map(message => message.request.commandId);
+		await expect(rows.first()).toContainText('First queued fixture');
+		await reorder.press('Enter');
+		await page.getByRole('menuitem', { name: 'Move later', exact: true }).press('Enter');
+		await expect.poll(order).toEqual(['queue-second', 'queue-first']);
+		await expect(rows.first()).toContainText('Second queued fixture');
+		await reorder.dragTo(second);
+		await expect.poll(order).toEqual(['queue-first', 'queue-second']);
+		await expect(rows.first()).toContainText('First queued fixture');
+		expect((await queue()).map(message => message.request)).toEqual(original.map(message => message.request));
+	} finally {
+		await connection?.close();
+		server.closeAllConnections();
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
+});
+
 for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 	test(`${surface} sends, queues, steers and stops through the owning execution model`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 		test.setTimeout(180_000);

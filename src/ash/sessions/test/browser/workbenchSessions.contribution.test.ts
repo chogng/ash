@@ -324,6 +324,34 @@ test('Conversation review keeps identical paths in different repositories and re
 	await assert.rejects(() => createThreadMultiDiffEditorInput(chat, 'session', 'thread'), /conversation changed/);
 });
 
+test('Composer file review opens one exact repository and checkpoint through the changes command', async () => {
+	const file = { path: 'same.txt', kind: 'modified', binary: false, additions: 1, deletions: 1 };
+	const reads: unknown[][] = [];
+	const chat = {
+		readThreadChanges: async () => ({
+			sequence: 1, revision: 'current', statistics: { files: 2, additions: 2, deletions: 2 },
+			repositories: ['first', 'second'].map(repositoryId => ({ repositoryId, files: [file] })), warnings: []
+		}),
+		readThreadChangeFile: async (...args: unknown[]) => {
+			reads.push(args);
+			return { path: file.path, binary: false, truncated: false, before: 'base', after: args[3] };
+		},
+	} as unknown as IChatService;
+	const session = { sessionId: 'session', chats: [{ threadId: 'thread' }] };
+	using services = createReviewServices('working-set-review');
+	services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, active: { session, threadId: 'thread' }, sessions: [session] } as unknown as ISessionsManagementService);
+	services.registerInstance(IChatService, chat);
+	const opened: MultiDiffEditorInput[] = [];
+	services.registerInstance(IEditorService, { openEditor: async (input: MultiDiffEditorInput) => { opened.push(input); } } as unknown as IEditorService);
+	const open = CommandsRegistry.getCommand(OPEN_CHAT_CHANGES_COMMAND_ID)!;
+	const target = { repositoryId: 'second', path: file.path };
+	await assert.rejects(async () => open(services, 'session', 'thread', 'stale', target), /conversation changed/);
+	assert.deepEqual(reads, []);
+	await open(services, 'session', 'thread', 'current', target);
+	assert.deepEqual(reads, [['session', 'thread', 'current', 'second', file.path]]);
+	assert.deepEqual(opened.map(input => input.items.map(item => [item.label, item.modified.initialText, item.modified.readOnly])), [[['second: same.txt', 'second', true]]]);
+});
+
 test('Reply turn changes include every sealed repository of that turn and reject a changed capture', async () => {
 	const summary = (changeSetId: string, turnId: string, captureState: TurnChangeSetSummary['captureState']): TurnChangeSetSummary => ({
 		changeSetId, sessionId: 'session', threadId: 'thread', turnId, repositoryId: changeSetId, captureState,

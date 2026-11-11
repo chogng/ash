@@ -26,7 +26,14 @@ export interface ChatReplyResource {
 	readonly mimeType?: string;
 	readonly frameOrigin?: string;
 }
-export interface ChatReplyReference { readonly id: string; readonly url: string; readonly title: string; readonly snippet: string; }
+export interface ChatReplyReference {
+	readonly id: string;
+	readonly url: string;
+	readonly title: string;
+	readonly snippet: string;
+	/** The provider attached this source to the reply itself. */
+	readonly cited?: true;
+}
 export interface ChatReplyMessage {
 	readonly id: string;
 	readonly role: 'user' | 'assistant';

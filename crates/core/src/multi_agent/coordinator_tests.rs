@@ -154,6 +154,11 @@ fn spawn_creates_seeded_child_thread_and_initial_turn_idempotently() {
     assert_eq!(tree.roots.len(), 1);
     assert_eq!(tree.roots[0].thread_id, fixture.parent_thread_id);
     assert_eq!(tree.roots[0].children[0].thread_id, first.child_thread_id);
+    assert!(matches!(
+        &tree.roots[0].children[0].origin,
+        Some(ash_protocol::ThreadOrigin::AgentSpawn { parent_thread_id, delegation_id, .. })
+            if parent_thread_id == &fixture.parent_thread_id && delegation_id == &first.delegation_id
+    ));
 }
 
 #[test]

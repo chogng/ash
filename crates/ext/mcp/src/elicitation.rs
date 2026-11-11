@@ -95,6 +95,7 @@ impl FormRequest {
 
     fn request(&self) -> RequestUserInput {
         RequestUserInput {
+            plan_review: None,
             questions: self
                 .fields
                 .iter()

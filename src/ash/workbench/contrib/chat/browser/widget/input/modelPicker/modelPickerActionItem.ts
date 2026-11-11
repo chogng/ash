@@ -5,6 +5,7 @@ import { IInstantiationService } from '../../../../../../../platform/instantiati
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 import { ModelPickerWidget } from './modelPickerWidget.js';
+import type { ChatInputModelSelectionController } from '../chatInputModelSelectionController.js';
 
 export interface IModelPickerDelegate {
 	canSelectModel?(): boolean;
@@ -12,6 +13,7 @@ export interface IModelPickerDelegate {
 	readonly useWorkbenchModelManagement?: boolean;
 	readonly chatModelSlider?: boolean;
 	readonly onDidChangePresentation: Event<void>;
+	readonly selection?: ChatInputModelSelectionController;
 	getInputLifecycle?(): AbortSignal;
 	getModels(): readonly ModelCatalogEntry[];
 	getSelectedModel(): ModelRef | undefined;

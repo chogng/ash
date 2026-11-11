@@ -18,6 +18,7 @@ import type { Icon } from '../../../base/common/icon.js';
 import type { ResolvedKeybinding } from '../../../base/common/keybindings.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
+import { autorun, type IObservable } from '../../../base/common/observable.js';
 import { isMacintosh } from '../../../base/common/platform.js';
 import { localize } from '../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../accessibility/browser/accessibleView.js';
@@ -85,6 +86,8 @@ export interface IActionListOptions {
 	readonly accessibilityHelp?: () => void;
 	readonly filterVisible?: boolean;
 	readonly itemsVisible?: boolean;
+	/** Disables action dispatch while the caller has a pending operation. */
+	readonly busy?: IObservable<boolean>;
 	/** Minimum popup width in CSS pixels, including its border. */
 	readonly minWidth?: number;
 	/** Maximum popup width in CSS pixels; longer labels are truncated. */
@@ -238,8 +241,10 @@ export class ActionList<T> extends Disposable {
 	public readonly onDidRequestLayout = this.layoutRequested.event;
 	private focusedEntry: IActionListItem<T> | undefined;
 	private visibleItems: readonly IActionListItem<T>[] = [];
-	private busy = false;
+	private selecting = false;
 	private contentWidth: number | undefined;
+
+	private get busy(): boolean { return this.selecting || this.options.busy?.get() === true; }
 
 	constructor(
 		private readonly user: string,
@@ -362,6 +367,8 @@ export class ActionList<T> extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.renderItems();
+		const busy = options.busy;
+		if (busy) this._register(autorun(reader => { this.updateBusy(busy.read(reader)); }));
 		this._register(addDisposableListener(this.domNode, 'pointerdown', event => event.stopPropagation()));
 		this._register(addDisposableListener(this.domNode, 'mousedown', event => event.stopPropagation()));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
@@ -689,6 +696,12 @@ export class ActionList<T> extends Disposable {
 		return Math.min(maximum, Math.max(minimum, this.contentWidth));
 	}
 
+	private updateBusy(externalBusy = this.options.busy?.get()): void {
+		if (this.selecting || externalBusy) this.domNode.setAttribute('aria-busy', 'true');
+		else this.domNode.removeAttribute('aria-busy');
+		this.updatePreview();
+	}
+
 	private async select(entry: IActionListItem<T>, preview = false): Promise<void> {
 		if (this.busy || entry.kind !== ActionListItemKind.Action || isDisabled(entry) || (preview && (!this.supportsPreview || !entry.canPreview || entry.standaloneToggle))) {
 			return;
@@ -701,9 +714,8 @@ export class ActionList<T> extends Disposable {
 			}
 			return;
 		}
-		this.busy = true;
-		this.updatePreview();
-		this.domNode.setAttribute('aria-busy', 'true');
+		this.selecting = true;
+		this.updateBusy();
 		try {
 			const toggle = entry.standaloneToggle;
 			if (toggle) {
@@ -714,9 +726,8 @@ export class ActionList<T> extends Disposable {
 			}
 		} finally {
 			if (!this.isDisposed) {
-				this.busy = false;
-				this.domNode.removeAttribute('aria-busy');
-				this.updatePreview();
+				this.selecting = false;
+				this.updateBusy();
 			}
 		}
 	}

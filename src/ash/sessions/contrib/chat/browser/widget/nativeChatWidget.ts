@@ -1,5 +1,6 @@
 import { IContextMenuService, IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -33,9 +34,10 @@ export class NativeChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel
 		@IChatWidgetService widgets: IChatWidgetService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
+		@IConfigurationService configuration: IConfigurationService,
 	) {
 		super(container, panelId, model, createUntitledSession, contextMenus, contextViews, commands, accessibleViews, notifications,
 			undefined, undefined, undefined, createInput, { classPrefix: 'ash-native-chat', showWelcome: false },
-			instantiation, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
+			instantiation, dialogs, quickInput, widgets, contextKeys, voiceOnboarding, configuration);
 	}
 }

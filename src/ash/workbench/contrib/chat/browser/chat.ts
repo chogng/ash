@@ -1,4 +1,4 @@
-import type { PromptTurnChanges } from './promptTimeline/promptTimelineModel.js';
+import type { IChatResponseFileChangesService } from './chatResponseFileChangesService.js';
 import type { ChatMode } from '../../../services/chat/common/chatService.js';
 import type { IChatInputPart } from './widget/input/chatInputPart.js';
 import type { ChatRequestQueueKind, QueuedMessage } from '../../../services/chat/common/chatService.js';
@@ -169,7 +169,8 @@ export interface IChatWidgetViewOptions {
 	readonly showPromptTimeline?: boolean;
 	/** Minimum number of loaded rows for virtualization. Undefined keeps the full transcript mounted. */
 	readonly virtualizeHistoryFrom?: import('../../../../base/common/observable.js').IObservable<number | undefined>;
-	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
+	readonly promptTimelineChanges?: IChatResponseFileChangesService['getChangesForRequest'];
+	readonly getTurnChanges?: IChatResponseFileChangesService['getChangesForResponse'];
 	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	readonly messagePresentation?: ChatMessagePresentation;
@@ -181,11 +182,13 @@ export interface IChatWidgetViewOptions {
 export interface ChatMessagePresentation {
 	readonly user: { readonly name: string; readonly icon?: Icon; };
 	readonly assistant: { readonly name: string; readonly icon?: Icon; };
-	readonly getReferences?: (item: IChatListItem) => readonly {
-		readonly id: string;
-		readonly label: string;
-		readonly open: (trigger: HTMLElement) => void;
-	}[];
+	readonly getReferences?: (item: IChatListItem) => readonly ChatMessageReference[];
+}
+
+export interface ChatMessageReference {
+	readonly id: string;
+	readonly label: string;
+	open(trigger: HTMLElement): void;
 }
 
 export type ChatTurnChangesOpener = (source: NonNullable<IChatListItem['feedbackSource']>, signal: AbortSignal) => Promise<void>;

@@ -299,6 +299,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		getPendingRequests: async () => { throw new Error('Unexpected queue operation'); },
 		pausePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		resumePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
+		movePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		editPendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		removePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		sendPendingRequestImmediately: async () => { throw new Error('Unexpected queue operation'); },

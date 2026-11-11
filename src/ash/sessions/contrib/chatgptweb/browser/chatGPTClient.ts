@@ -1120,7 +1120,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 	}
 	const references: ChatGPTReference[] = [];
 	const imageGroups: ChatGPTImageGroup[] = [];
-	const addReference = (entry: unknown): string | undefined => {
+	const addReference = (entry: unknown, cited?: true): string | undefined => {
 		if (!isRecord(entry) || typeof entry.url !== 'string') return;
 		let url: URL; try { url = new URL(entry.url); } catch { return; }
 		if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return;
@@ -1128,14 +1128,16 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 			typeof ref === 'string' ? [ref] : isRecord(ref) && typeof ref.turn_index === 'number' && typeof ref.ref_type === 'string' && typeof ref.ref_index === 'number'
 				? [`turn${ref.turn_index}${ref.ref_type}${ref.ref_index}`] : []);
 		for (const id of ids.length ? ids : [url.href]) {
-			if (!references.some(item => item.id === id)) references.push({ id, url: url.href, title: typeof entry.title === 'string' ? entry.title : url.hostname, snippet: typeof entry.snippet === 'string' ? entry.snippet : '' });
+			const index = references.findIndex(item => item.id === id);
+			if (index < 0) references.push({ id, url: url.href, title: typeof entry.title === 'string' ? entry.title : url.hostname, snippet: typeof entry.snippet === 'string' ? entry.snippet : '', ...(cited && { cited }) });
+			else if (cited && references[index].url === url.href) references[index] = { ...references[index], cited };
 		}
 		return url.href;
 	};
 	if (isRecord(value.metadata)) {
 		imageGroups.push(...readAsyncImages(value.metadata));
 		for (const group of Array.isArray(value.metadata.search_result_groups) ? value.metadata.search_result_groups : []) {
-			if (isRecord(group) && Array.isArray(group.entries)) group.entries.forEach(addReference);
+			if (isRecord(group) && Array.isArray(group.entries)) group.entries.forEach(entry => addReference(entry));
 		}
 		for (const reference of Array.isArray(value.metadata.content_references) ? value.metadata.content_references : []) {
 			if (!isRecord(reference)) continue;
@@ -1144,16 +1146,16 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 				if (group) imageGroups.push(group);
 				continue;
 			}
-			addReference(reference);
-			addReference(reference.item);
-			for (const key of ['sources', 'items']) if (Array.isArray(reference[key])) reference[key].forEach(addReference);
+			addReference(reference, true);
+			addReference(reference.item, true);
+			for (const key of ['sources', 'items']) if (Array.isArray(reference[key])) reference[key].forEach(entry => addReference(entry, true));
 			// Sidebar replies can bind a whole citation marker to URLs without supplying per-result IDs.
 			const marker = reference.matched_text;
 			if (reference.type === 'grouped_webpages' && typeof marker === 'string' && /^\uE200cite\uE202[^\uE200\uE201\r\n]+\uE201$/u.test(marker)
 				&& text.includes(marker) && Array.isArray(reference.safe_urls) && !reference.url && !reference.item
 				&& ![reference.sources, reference.items].some(items => Array.isArray(items) && items.length)) {
 				const urls = reference.safe_urls.slice(0, 20).flatMap(url => {
-					const href = typeof url === 'string' && url.length <= 8192 ? addReference({ url }) : undefined;
+					const href = typeof url === 'string' && url.length <= 8192 ? addReference({ url }, true) : undefined;
 					return href ? [href] : [];
 				});
 				if (urls.length) text = text.replaceAll(marker, `\uE200cite\uE202${urls.join('\uE202')}\uE201`);

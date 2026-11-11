@@ -169,6 +169,7 @@ export interface AgentExecutionNode {
 	readonly threadId: string;
 	readonly threadSequence: number;
 	readonly title: string;
+	readonly origin?: ThreadOrigin | null;
 	readonly parentThreadId?: string | null;
 	readonly forkedFromId?: string | null;
 	readonly executionStatus: 'idle' | 'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
@@ -294,6 +295,7 @@ export interface QueueMessageTarget extends QueueListParams {
 
 export type QueueMessageEdit =
 	| { readonly type: 'pause' | 'resume'; }
+	| { readonly type: 'move'; readonly direction: 'up' | 'down'; }
 	| { readonly type: 'replaceText'; readonly text: string; }
 	| { readonly type: 'replaceTextWithDelivery'; readonly text: string; readonly delivery: { readonly type: 'queued' | 'immediate'; } | { readonly type: 'steering'; readonly turnId: string; }; }
 	| { readonly type: 'send'; };
@@ -445,6 +447,10 @@ export type ChatContentPart =
 type MessagePhase = 'commentary' | 'partial_answer' | 'final_answer' | { readonly other: string; };
 
 /** User input clientId identifies the submitting command across all parts; legacy history may omit it. */
+export type ResponseCitation =
+	| { readonly type: 'web'; readonly url: string; readonly title: string; }
+	| { readonly type: 'code'; readonly url: string; readonly license: string; readonly snippet: string; };
+
 export type ThreadItem =
 	| { readonly type: 'userMessage'; readonly clientId?: string | null; readonly itemId: string; readonly turnId: string; readonly text: string; }
 	| {
@@ -477,6 +483,7 @@ export type ThreadItem =
 		readonly turnId: string;
 		readonly text: string;
 		readonly phase?: MessagePhase | null;
+		readonly citations?: readonly ResponseCitation[] | null;
 	}
 	| {
 		readonly type: 'reasoning';
@@ -671,6 +678,13 @@ export interface UserInputValidation {
 
 export interface RequestUserInput {
 	readonly questions: readonly UserInputQuestion[];
+	readonly planReview?: {
+		readonly markdown: string;
+		readonly decisionQuestionId: string;
+		readonly approveValue: string;
+		readonly reviseValue: string;
+		readonly feedbackQuestionId: string;
+	} | null;
 }
 
 export interface ActionApprovalCapability {

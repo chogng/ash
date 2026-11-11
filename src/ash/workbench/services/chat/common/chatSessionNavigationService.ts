@@ -19,7 +19,7 @@ export interface IChatSessionConnection extends IDisposable {
 /** Conversation destinations exposed by the session owner to workbench contributions. */
 export interface IChatSessionNavigationService {
 	/** Resolves backend-local result coordinates through the originating Session's host. */
-	openToolResult?(sourceSessionId: string, target: ToolResultPresentation, signal: AbortSignal): Promise<void>;
+	openToolResult?(sourceSessionId: string, target: ToolResultPresentation, signal: AbortSignal, options?: { readonly sideBySide?: boolean; }): Promise<void>;
 	readonly revision: number;
 	/** Multi-host owners capture the selected Session's backend; unavailable Sessions must throw without ambient fallback. */
 	captureConnection?(sessionId: string): IChatSessionConnection;

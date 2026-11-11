@@ -21,6 +21,21 @@ use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
 
+/// Sources attributed by a provider to one assistant message.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum ResponseCitation {
+    Web {
+        url: String,
+        title: String,
+    },
+    Code {
+        url: String,
+        license: String,
+        snippet: String,
+    },
+}
+
 /// A normalized, provider-independent item produced or consumed during one Thread turn.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
@@ -83,6 +98,9 @@ pub enum ThreadItem {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         phase: Option<crate::MessagePhase>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        citations: Option<Vec<ResponseCitation>>,
     },
     Reasoning {
         item_id: ItemId,

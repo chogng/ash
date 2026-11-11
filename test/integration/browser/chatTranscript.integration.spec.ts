@@ -1,5 +1,61 @@
 import { expect, test } from '@playwright/test';
 
+test('Chat renders language-specific Markdown diffs through completion, resize and correction', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/chatTranscript.html?locale=zh-CN');
+	const diffText = [
+		'diff --git a/app.ts b/app.ts', 'index a1b2c3d..b2c3d4e 100644',
+		'--- a/app.ts', '+++ b/app.ts', '@@ -1,2 +1,2 @@',
+		' export function answer() {', '-  return 41;', '+  return 42;',
+	].join('\n');
+	const source = ['```diff:typescript', diffText, '```'].join('\n');
+	const render = (value: string, complete: boolean) => page.evaluate(({ value, complete }) => {
+		window.ashChatTranscriptIntegration.stream(value, complete);
+	}, { value, complete });
+	await render(source, false);
+	const comparison = page.getByRole('region', { name: '差异编辑器：原始文件 与 修改后的文件' });
+	await expect(comparison).toHaveCount(0);
+	await expect(page.locator('.ash-chat-code-block')).toHaveCount(1);
+	await page.locator('main').first().evaluate(element => element.style.width = '1100px');
+	await render(source, true);
+	await expect(comparison).toBeVisible();
+	await expect(comparison.locator('.original .view-lines')).toContainText('return 41;');
+	await expect(comparison.locator('.modified .view-lines')).toContainText('return 42;');
+	await expect(comparison).not.toContainText('diff --git');
+	await page.locator('main').first().evaluate(element => element.style.width = '420px');
+	await expect(comparison).toHaveClass(/\binline-view\b/u);
+	const modified = comparison.locator('.modified .stanza-editor-input');
+	await modified.focus();
+	await page.keyboard.type('changed');
+	await expect(comparison.locator('.modified .view-lines')).not.toContainText('changed');
+	await render(source.replace('return 42;', 'return 43;'), true);
+	await expect(comparison.locator('.modified .view-lines')).toContainText('return 43;');
+	await expect(modified).toBeFocused();
+	await render(source.replace('diff:typescript', 'diff'), true);
+	await expect(comparison).toHaveCount(0);
+	await expect(page.locator('.ash-chat-code-block')).toHaveCount(1);
+	expect(errors).toEqual([]);
+});
+
+test('Chat Markdown diffs keep each patched file in its own comparison', async ({ page }) => {
+	await page.goto('/chatTranscript.html?locale=zh-CN');
+	const patch = ['```diff:typescript',
+		'diff --git a/first.ts b/first.ts', '--- a/first.ts', '+++ b/first.ts', '@@ -1 +1 @@', '-const first = 1;', '+const first = 2;',
+		'diff --git a/second.ts b/second.ts', '--- a/second.ts', '+++ b/second.ts', '@@ -1 +1 @@', '-const second = 3;', '+const second = 4;',
+		'```',
+	].join('\n');
+	await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), patch);
+	const picker = page.getByRole('combobox', { name: '对比中的文件' });
+	const comparison = page.locator('.ash-chat-markdown-diff .modified .view-lines');
+	await expect(picker.locator('option')).toHaveText(['first.ts', 'second.ts']);
+	await expect(comparison).toContainText('const first = 2;');
+	await expect(comparison).not.toContainText('second');
+	await picker.selectOption({ label: 'second.ts' });
+	await expect(comparison).toContainText('const second = 4;');
+	await expect(comparison).not.toContainText('first');
+});
+
 test('Chat bounded history response comparison uses the same decoded content and visible endpoint', async ({ page }, testInfo) => {
 	test.setTimeout(120_000);
 	await page.goto('/chatTranscript.html');
@@ -455,6 +511,15 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.appState().messages)).toContainEqual({ jsonrpc: '2.0', id: 'ash-teardown', result: {} });
 		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
 		await expect(part).toHaveCount(0);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showApp());
+		const summary = page.locator('.ash-chat-tool-invocation > summary');
+		if (await summary.evaluate(element => !(element.parentElement as HTMLDetailsElement).open)) await summary.click();
+		const restoredHeight = await open.evaluate(button => {
+			(button as HTMLButtonElement).click();
+			return button.parentElement!.querySelector<HTMLElement>('.ash-chat-mcp-app-viewport')!.style.height;
+		});
+		expect(restoredHeight).toBe('240px');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
 		expect(errors).toEqual([]);
 	});
 }

@@ -36,7 +36,8 @@ fn responses_preserves_ordered_message_phases_and_replays_them_only_to_responses
         messages.map(|(id, text, phase)| OutputItem::Message(AssistantMessage {
             id: id.into(),
             text: text.into(),
-            phase: Some(MessagePhase::from_wire(phase))
+            phase: Some(MessagePhase::from_wire(phase)),
+            citations: None,
         }))
     );
     let mut input = Message::text(MessageRole::Assistant, "working");
@@ -812,7 +813,8 @@ fn openai_responses_collects_completed_items_with_terminal_usage() {
             OutputItem::Message(ash_protocol::AssistantMessage {
                 id: "message-1".into(),
                 text: "Hello".into(),
-                phase: None
+                phase: None,
+                citations: None,
             }),
             OutputItem::ToolCall(ToolCall {
                 id: ToolCallId::new("call_1").unwrap(),
@@ -833,7 +835,8 @@ fn openai_responses_collects_completed_items_with_terminal_usage() {
             ModelStreamEvent::MessageCompleted(ash_protocol::AssistantMessage {
                 id: "message-1".into(),
                 text: "Hello".into(),
-                phase: None
+                phase: None,
+                citations: None,
             }),
         ]
     );
@@ -944,6 +947,47 @@ fn chat_completions_streams_wire_deltas_and_reassembles_tool_calls() {
     assert_eq!(
         request.as_ref().unwrap()["stream_options"]["include_usage"],
         true
+    );
+}
+
+#[test]
+fn chat_completions_promotes_provider_code_matches_into_the_assistant_message() {
+    let transport = StreamingPayloadTransport::new(
+        concat!(
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Example\"}}]}\n\n",
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"copilot_annotations\":{\"IPCodeCitations\":[{\"citations\":{\"url\":\"https://github.com/example/repo/blob/main/lib.rs\",\"license\":\"MIT\",\"snippet\":\"fn example() {}\"}}]}}}]}\n\n",
+            "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+            "data: [DONE]\n\n",
+        ),
+        19,
+    );
+    let mut events = RecordedStreamEvents::default();
+    let response = ApiEndpoint::OpenAiChatCompletions
+        .stream_with_client_and_cancellation(
+            &target(),
+            "chat-test",
+            &ModelRequest::text("hello"),
+            &transport,
+            &CancellationSource::new().token(),
+            &mut events,
+        )
+        .unwrap();
+    assert_eq!(
+        events.events,
+        [ModelStreamEvent::TextDelta("Example".into())]
+    );
+    assert_eq!(
+        response.output,
+        [OutputItem::Message(ash_protocol::AssistantMessage {
+            id: "chat-completion".into(),
+            text: "Example".into(),
+            phase: None,
+            citations: Some(vec![ash_protocol::ResponseCitation::Code {
+                url: "https://github.com/example/repo/blob/main/lib.rs".into(),
+                license: "MIT".into(),
+                snippet: "fn example() {}".into(),
+            }]),
+        })]
     );
 }
 

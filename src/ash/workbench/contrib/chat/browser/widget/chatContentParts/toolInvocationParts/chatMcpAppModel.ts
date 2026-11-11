@@ -22,6 +22,8 @@ import { IThemeService } from '../../../../../../../platform/theme/common/themeS
 import { IWebviewService, type IWebviewElement } from '../../../../../webview/browser/webview.js';
 
 import { observableValue, type IObservable } from '../../../../../../../base/common/observable.js';
+import { IChatOutputPartStateCache } from '../chatOutputPartStateCache.js';
+
 export type McpAppLoadState =
 	| { readonly status: 'unavailable' | 'loading' | 'loaded'; }
 	| { readonly status: 'error'; readonly error: Error; };
@@ -63,7 +65,7 @@ export class ChatMcpAppModel extends Disposable {
 	private readonly attachmentListeners = this._register(new MutableDisposable<DisposableStore>());
 	private resource: Awaited<ReturnType<IAgentThreadService['readToolResource']>> | undefined;
 
-	constructor(private readonly coordinate: AgentAttachmentSource & { readonly contentIndex: number; }, argumentsJson: string, result: ToolResult, private readonly delegate: IChatMcpAppDelegate | undefined,
+	constructor(private readonly coordinate: AgentAttachmentSource & { readonly contentIndex: number; }, private readonly outputIdentity: string, argumentsJson: string, result: ToolResult, private readonly delegate: IChatMcpAppDelegate | undefined,
 		@IAgentThreadService private readonly threads: IAgentThreadService,
 		@IWebviewService private readonly webviews: IWebviewService,
 		@IThemeService private readonly themes: IThemeService,
@@ -71,6 +73,7 @@ export class ChatMcpAppModel extends Disposable {
 		@IOpenerService private readonly opener: IOpenerService,
 		@IDialogsModel private readonly dialogs: IDialogsModel,
 		@ILogService private readonly logs: ILogService,
+		@IChatOutputPartStateCache private readonly outputState: IChatOutputPartStateCache,
 	) {
 		super();
 		this.argumentsJson = argumentsJson;
@@ -92,6 +95,8 @@ export class ChatMcpAppModel extends Disposable {
 		this.stop();
 		const attachment = { container, target: layout.target, focus: layout.focus };
 		this.attachment = attachment;
+		const savedHeight = this.outputState.getHeight(this.outputIdentity);
+		container.style.height = savedHeight === undefined ? '' : `${savedHeight}px`;
 		const listeners = this.attachmentListeners.value = new DisposableStore();
 		listeners.add(addDisposableListener(container.ownerDocument, 'fullscreenchange', () => {
 			if (this.initialized) {
@@ -183,8 +188,13 @@ export class ChatMcpAppModel extends Disposable {
 		if (method === 'ui/notifications/size-changed' && this.initialized && id === undefined) {
 			const height = params?.height;
 			if (typeof height === 'number' && Number.isFinite(height) && height >= 0 && height <= 4096) {
-				this.viewport.style.height = `${Math.min(Math.max(height, 120), 640)}px`;
-				this.height.fire();
+				const constrained = Math.min(Math.max(height, 120), 640);
+				const size = `${constrained}px`;
+				this.outputState.setHeight(this.outputIdentity, constrained);
+				if (this.viewport.style.height !== size) {
+					this.viewport.style.height = size;
+					this.height.fire();
+				}
 			}
 			return;
 		}

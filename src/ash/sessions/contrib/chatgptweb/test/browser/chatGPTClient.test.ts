@@ -344,7 +344,7 @@ suite('Bundled ChatGPT client', () => {
 			}
 		})) as typeof fetch);
 		const reply = (await client.history('conversation', signal())).messages[0]!;
-		assert.deepEqual(reply.references, [{ id: url, url, title: 'example.test', snippet: '' }]);
+		assert.deepEqual(reply.references, [{ id: url, url, title: 'example.test', snippet: '', cited: true }]);
 		assert.equal(reply.text, `See the documentation \uE200cite\uE202${url}\uE201.`);
 	});
 

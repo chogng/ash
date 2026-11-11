@@ -10,6 +10,7 @@ import type { ChatReplyReference, ChatReplyResource } from '../../../common/chat
 import { ChatMarkdownRichContentBuilder, type ChatMarkdownRichContent, type ChatMarkdownRichPart, type ChatMarkdownRichStyle } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import type { ChatGPTImageGroup } from './chatGPTClient.js';
+import type { ResponseCitation } from '../../../../platform/agentHost/common/agent.js';
 
 interface RichTag {
 	readonly name: string;
@@ -292,14 +293,27 @@ function entityPart(label: string, category: unknown, disambiguation: unknown, b
 	return { kind: 'entity', entity: { label, category, disambiguation: typeof disambiguation === 'string' ? disambiguation.slice(0, 1024) : '' }, block };
 }
 
+function parseWebLink(value: string | undefined): string | undefined {
+	const url = value ? URL.parse(value) : null;
+	return url && (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password ? url.href : undefined;
+}
+
 /** Projects Web-specific syntax and resources into Ash's response model. */
 export function decodeChatGPTReply(text: string, references: readonly ChatReplyReference[] = [], conversationId?: string, imageGroups: readonly ChatGPTImageGroup[] = []): {
 	readonly text: string;
 	readonly richContent?: ChatMarkdownRichContent;
 	readonly resources: readonly ChatReplyResource[];
+	readonly citations?: readonly ResponseCitation[];
 } {
 	const normalized = text.replace(/\r\n?/gu, '\n');
-	if (!/[<\[\uE200]|:::writing\{/u.test(normalized)) return { text: normalized, resources: [] };
+	const citations = new Map<string, Extract<ResponseCitation, { type: 'web'; }>>();
+	const addCitation = ({ url, title }: Pick<ChatReplyReference, 'url' | 'title'>): void => {
+		if (!citations.has(url)) citations.set(url, { type: 'web', url, title });
+	};
+	for (const reference of references) if (reference.cited) addCitation(reference);
+	if (!/[<\[\uE200]|:::writing\{/u.test(normalized)) {
+		return { text: normalized, resources: [], ...(citations.size && { citations: [...citations.values()] }) };
+	}
 	const resources: ChatReplyResource[] = [];
 	const richContent = new ChatMarkdownRichContentBuilder(normalized);
 	const fallback = {
@@ -314,6 +328,7 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 
 	function citationPart(ids: readonly string[], block: boolean): ChatMarkdownRichPart | '' {
 		const entries = referencesFor(ids, references);
+		entries.forEach(addCitation);
 		return entries.length ? { kind: 'citations', entries, block } : '';
 	}
 
@@ -322,6 +337,12 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		if (tag.closing) return '';
 		const block = !token.inline;
 		const values = attributes(tag);
+		if (tag.name === 'divider') return { kind: 'markdown', markdown: '---', block: true };
+		if (tag.name === 'link') {
+			const href = parseWebLink(values.get('url'));
+			const label = values.get('title')?.trim() || values.get('label')?.trim() || renderAsPlaintext(token.body) || href || '';
+			return href ? { kind: 'link', link: { href, label }, external: true, block } : { kind: 'textLiteral', label, block };
+		}
 		if (tag.name === 'asyncimage') {
 			const query = values.get('query');
 			const group = imageGroups.find(group => 'query' in group && group.query === query);
@@ -426,16 +447,11 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		if (token.kind === 'cite') return citationPart(parts, false);
 		const [label = '', ...targets] = parts;
 		const reference = references.find(reference => targets.includes(reference.id));
-		let href = reference?.url;
 		const direct = targets.find(target => /^https?:\/\//iu.test(target));
-		if (!href && direct) {
-			try {
-				const url = new URL(direct);
-				if (!url.username && !url.password) href = url.href;
-			} catch { /* Keep the readable label when the destination is invalid. */ }
-		}
+		const href = reference?.url ?? parseWebLink(direct);
 		const snippet = reference?.snippet.trim();
 		const title = snippet && reference?.title && reference.title !== label ? `${reference.title}\n${snippet}` : snippet;
+		if (href) addCitation({ url: href, title: reference?.title || label });
 		return href ? { kind: 'link', link: { href, label }, title, block: false } : { kind: 'textLiteral', label, block: false };
 	}
 
@@ -468,6 +484,7 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 	function decode(source: string, tokens: readonly Token[], inline: boolean, tableCell = false): string {
 		let cursor = 0;
 		let result = '';
+		let previous: Token | undefined;
 		for (const token of tokens) {
 			let raw = token.raw;
 			const escapedPipe = tableCell && raw.includes('|');
@@ -487,7 +504,12 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 			result += source.slice(cursor, start);
 			const part = project(token, inline);
 			if (part !== undefined) {
-				if (part) result += richContent.add(part);
+				if (part && part.kind === 'citations' && previous?.type === 'paragraph' && !inline) {
+					// Web replies also send citations on their own line after the paragraph they support.
+					result = result.trimEnd() + ' ' + richContent.add({ ...part, block: false });
+				} else if (part) {
+					result += richContent.add(part);
+				}
 				if (!inline) result += '\n';
 			} else if (token.type === 'list') {
 				result += decode(raw, token.items, false);
@@ -499,10 +521,11 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 				result += raw;
 			}
 			cursor = start + raw.length;
+			if (token.type !== 'space') previous = token;
 		}
 		return result + source.slice(cursor);
 	}
 
 	const decoded = decode(normalized, richContentLexer().lexer(normalized), false);
-	return { text: decoded, richContent: richContent.content, resources };
+	return { text: decoded, richContent: richContent.content, resources, ...(citations.size && { citations: [...citations.values()] }) };
 }

@@ -171,6 +171,24 @@ pub(super) fn response_bytes(response: &ModelResponse, limit: usize) -> Option<u
                     budget.string(&message.id)?;
                     budget.string(&message.text)?;
                     budget.optional_string(message.phase.as_ref().map(|phase| phase.as_str()))?;
+                    for citation in message.citations.iter().flatten() {
+                        budget.add(std::mem::size_of::<ash_protocol::ResponseCitation>())?;
+                        match citation {
+                            ash_protocol::ResponseCitation::Web { url, title } => {
+                                budget.string(url)?;
+                                budget.string(title)?;
+                            }
+                            ash_protocol::ResponseCitation::Code {
+                                url,
+                                license,
+                                snippet,
+                            } => {
+                                budget.string(url)?;
+                                budget.string(license)?;
+                                budget.string(snippet)?;
+                            }
+                        }
+                    }
                 }
                 ResponseItem::ReasoningState(state) => {
                     budget.string(&state.scope)?;

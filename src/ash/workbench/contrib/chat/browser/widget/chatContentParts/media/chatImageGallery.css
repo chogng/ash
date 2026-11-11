@@ -67,13 +67,26 @@
 	flex: none;
 	inline-size: min(100%, 144px);
 	margin-block: 0;
+	padding: 0;
 	overflow: visible;
+}
+
+.ash-chat-image-gallery.compact .ash-chat-image-gallery-sources > a[href] {
+	margin-block-start: var(--ash-spacing-size20);
+	text-decoration-line: none;
+}
+
+.ash-chat-image-gallery.compact
+	.ash-chat-image-gallery-sources
+	> a[href]:is(:hover, :focus-visible) {
+	text-decoration-line: underline;
 }
 
 .ash-chat-image-gallery.compact
 	.ash-chat-image-attachment-thumbnail.loaded
 	> .ash-chat-image-attachment-source {
 	aspect-ratio: 5 / 4;
+	border-radius: var(--ash-cornerRadius-large);
 }
 
 .ash-chat-image-gallery-sources > a:not([hidden]) {

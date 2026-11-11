@@ -1,25 +1,22 @@
-import { addDisposableListener, h } from '../../../../../../../base/browser/dom.js';
 import { DisposableMap, DisposableStore } from '../../../../../../../base/common/lifecycle.js';
 import type { ChatContentPart } from '../../../../../../../platform/agentHost/common/agent.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../../../../nls.js';
 import { ChatMarkdownContentPart } from '../chatMarkdownContentPart.js';
-import { BaseChatToolInvocationSubPart } from './chatToolInvocationSubPart.js';
+import { ChatCollapsibleContentPart } from '../chatCollapsibleContentPart.js';
 
 /** Opt-in formatted previews of explicitly typed Markdown resources, alongside their exact raw bytes. */
-export class ChatInputOutputMarkdownProgressPart extends BaseChatToolInvocationSubPart<HTMLDetailsElement> {
+export class ChatInputOutputMarkdownProgressPart extends ChatCollapsibleContentPart {
 	private readonly parts = this._register(new DisposableMap<number, DisposableStore & { part: ChatMarkdownContentPart; }>());
 	private visible = true;
 
 	constructor(document: Document, @IInstantiationService private readonly instantiation: IInstantiationService) {
-		super(h(document, 'details'));
-		const summary = h(document, 'summary');
-		summary.textContent = localize('chat.tool.markdownPreview', 'Preview formatted results');
-		this.domNode.append(summary);
-		this._register(addDisposableListener(this.domNode, 'toggle', () => {
-			for (const [, entry] of this.parts) entry.part.setVisible(this.visible && this.domNode.open);
-			this.changedHeight.fire();
-		}));
+		super(document);
+		this.summary.textContent = localize('chat.tool.markdownPreview', 'Preview formatted results');
+	}
+
+	protected override expansionDidChange(expanded: boolean): void {
+		for (const [, entry] of this.parts) entry.part.setVisible(this.visible && expanded);
 	}
 
 	public get codeblocks() {
@@ -43,7 +40,12 @@ export class ChatInputOutputMarkdownProgressPart extends BaseChatToolInvocationS
 			const markdown = { value: value.artifact.data.text, isTrusted: false, supportHtml: false };
 			let entry = this.parts.get(index);
 			if (!entry) {
-				const part = this.instantiation.createInstance(ChatMarkdownContentPart, { ownerDocument: this.domNode.ownerDocument, markdown, visible: this.visible && this.domNode.open });
+				const part = this.instantiation.createInstance(ChatMarkdownContentPart, {
+					ownerDocument: this.domNode.ownerDocument,
+					markdown,
+					allowInlineDiffs: true,
+					visible: this.visible && this.domNode.open,
+				});
 				entry = this.parts.set(index, Object.assign(new DisposableStore(), { part }));
 				entry.add(part);
 				entry.add(part.onDidChangeHeight(() => this.changedHeight.fire()));

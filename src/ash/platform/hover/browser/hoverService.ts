@@ -29,6 +29,7 @@ export interface HoverSetupOptions extends HoverDelegateSetupOptions {
 	readonly anchor?: HTMLElement;
 	readonly delay?: HoverDelayMode;
 	readonly setupKeyboardEvents?: boolean;
+	readonly dialogLabel?: string;
 }
 
 /** Handle returned to callers for updating or explicitly controlling a Hover. */
@@ -192,6 +193,7 @@ export class HoverService extends Disposable implements IHoverService {
 				isTargetWithin: target => this.containsDescendant(managed, target),
 				setupKeyboardEvents: options.setupKeyboardEvents,
 				trapFocus: options.trapFocus,
+				dialogLabel: options.dialogLabel,
 			}),
 			groupId: options.groupId,
 			onDidShow: () => this.didShow(managed),

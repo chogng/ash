@@ -1,7 +1,7 @@
 import { registerTestWorkbenchHostServices } from '../../../src/ash/workbench/test/common/workbenchHostTestServices.js';
 import { constObservable } from '../../../src/ash/base/common/observable.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
-import type { AgentVoiceSessionState } from '../../../src/ash/platform/agentHost/common/agent.js';
+import type { AgentVoiceSessionState, ChatContentPart } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { AGENTS_VOICE_TOGGLE_MUTE_COMMAND_ID } from '../../../src/ash/workbench/contrib/agentsVoice/common/agentsVoice.js';
 import '../../../src/ash/workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import { BtwSlashCommandContribution } from '../../../src/ash/workbench/contrib/chat/browser/btwSlashCommand.js';
@@ -27,6 +27,12 @@ import { IImageEditorService } from '../../../src/ash/workbench/services/imageEd
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
 import { IWebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
+import { IDiffProviderFactoryService, WorkerBasedDiffProviderFactoryService } from '../../../src/ash/editor/browser/widget/diffEditor/diffProviderFactoryService.js';
+import { IDiffService } from '../../../src/ash/workbench/services/diff/common/diffService.js';
+import { DiffService } from '../../../src/ash/workbench/services/diff/browser/diffService.js';
+import { ILinkPresentationService } from '../../../src/ash/platform/dataChannel/common/dataChannel.js';
+import { LinkPresentationService } from '../../../src/ash/workbench/services/dataChannel/browser/dataChannelService.js';
+import { ISessionSummaryHoverService, SessionSummaryHoverService } from '../../../src/ash/workbench/contrib/chat/browser/agentSessions/sessionSummaryHoverService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { createDiffEditorInput } from '../../../src/ash/workbench/common/editor/diffEditorInput.js';
@@ -167,7 +173,7 @@ declare global {
 		openWorkspace(): Promise<unknown>;
 		showVoiceIntroduction(): void;
 		showSandboxApproval(): void;
-		showResultReview(): void;
+		showResultReview(markdown?: string): void;
 		commandExplanations(): readonly { readonly resource: string; readonly command: string; readonly aborted: boolean; }[];
 		triggerInputSuggestions(): Promise<unknown>;
 		hostCompletionRequests(): readonly { text: string; offset: number; }[];
@@ -192,6 +198,10 @@ declare global {
 		setRunning(running: boolean): void;
 		setQueueDefault(value: 'queue' | 'steer'): Promise<void>;
 		queueState(): unknown;
+		modelSelections(): readonly string[];
+		finishModelSelection(index: number, success: boolean): void;
+		switchModelSelectionInput(): void;
+		setWorkingSet(threadId: string, revision: string, repositories: ChatInputState['changesRepositories']): void;
 		finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; addDeferredImageContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; inputLinkAtCursor(): string | undefined; openInputLink(): Promise<unknown>; setSlashCommands(commands: ChatInputState['slashCommands']): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; finishModelPreference(success: boolean): void; restoreProviderModels(): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
 }
 
@@ -350,8 +360,9 @@ services.registerInstance(IHostService, {
 });
 let toolsChanged = false;
 const toolCatalogChanges = resources.add(new Emitter<void>());
-services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({
-	isAvailable: !new URLSearchParams(location.search).has('noTools'),
+const scopedTools = new URLSearchParams(location.search).has('scopedTools');
+const createToolsService = (isAvailable: boolean) => createTestLanguageModelToolsService({
+	isAvailable,
 	onDidChangeTools: toolCatalogChanges.event,
 	read: async () => {
 		if (new URLSearchParams(location.search).has('toolFailure')) { throw new Error('Tool catalog failed'); }
@@ -365,7 +376,8 @@ services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageM
 			],
 		};
 	},
-}));
+});
+services.registerSingleton(ILanguageModelToolsService, () => createToolsService(!scopedTools && !new URLSearchParams(location.search).has('noTools')));
 const instructionWaiters: (() => void)[] = [];
 services.registerInstance(IInstructionService, {
 	isAvailable: !new URLSearchParams(location.search).has('noInstructions'),
@@ -432,6 +444,10 @@ services.registerInstance(IGitHubService, gitHubContextService as unknown as IGi
 services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
 services.registerInstance(IWebWorkerService, new WebWorkerService());
+services.registerSingleton(IDiffProviderFactoryService, () => services.createInstance(WorkerBasedDiffProviderFactoryService));
+services.registerSingleton(IDiffService, () => services.createInstance(DiffService));
+services.registerSingleton(ILinkPresentationService, () => services.createInstance(LinkPresentationService));
+services.registerSingleton(ISessionSummaryHoverService, () => services.createInstance(SessionSummaryHoverService));
 services.registerInstance(ILabelService, { getUriLabel: resource => resource.scheme === 'file' ? resource.fsPath : resource.toString() } as ILabelService);
 services.registerSingleton(IContextMenuService, () => new BrowserContextMenuService(
 	services.get(IMenuService), contextKeys,
@@ -448,6 +464,9 @@ const chatModelSlider = new URLSearchParams(location.search).has('chatModelSlide
 const multipleAcceleration = new URLSearchParams(location.search).get('acceleration') === 'multiple';
 let holdModelPreference = new URLSearchParams(location.search).has('holdModelPreference');
 let finishModelPreference: ((success: boolean) => void) | undefined;
+const holdModelSelection = new URLSearchParams(location.search).has('holdModelSelection');
+const modelSelections: { readonly model: string; readonly complete: (success: boolean) => void; }[] = [];
+let modelSelectionGeneration = 0;
 let models: readonly ModelCatalogEntry[] = [{
 	model: { provider: 'openai', model: 'test-model' }, displayName: 'Test Model',
 	inputModalities: new URLSearchParams(location.search).get('imageCapability') === 'text' ? ['text'] : new URLSearchParams(location.search).get('imageCapability') === 'image' ? ['text', 'image'] : null,
@@ -885,9 +904,15 @@ const delegate: ChatInputDelegate = {
 		}
 		if (new URLSearchParams(location.search).has('sendFailure')) { throw new Error('Send failed'); }
 	}, executeCommand: async invocation => { recordDestination({ command: invocation.commandId }); }, ...(cowork ? {} : { executeServerCommand: async () => { } }), interrupt: async () => { queueEvents.push({ kind: 'interrupt' }); },
-	openChanges: async () => { recordDestination({ changes: true }); },
+	openChanges: async (revision, file) => { recordDestination(file ? { revision, file } : { changes: true }); },
 	readWorkspaceChanges: async () => { workspaceChangesReads++; return new Promise(resolve => { releaseWorkspaceChanges = resolve; }); },
 	selectModel: async model => {
+		if (holdModelSelection) {
+			const generation = modelSelectionGeneration;
+			const success = await new Promise<boolean>(complete => modelSelections.push({ model: model.model, complete }));
+			if (!success) throw new Error('Model selection failed');
+			if (generation !== modelSelectionGeneration) return;
+		}
 		selectedModel = model;
 		automatic = false;
 		renderModels();
@@ -932,7 +957,9 @@ const workspaceChanged = resources.add(new Emitter<IWorkspacePickerItem | undefi
 let selectedWorkspace: IWorkspacePickerItem | undefined;
 const workspaceChoices = [{ uri: URI.file('/fixture/workspace'), label: 'Fixture workspace', isFolder: true }];
 let part!: ChatInputPart;
-part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, services.get(IContextMenuService), services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
+const inputServices = scopedTools ? resources.add(services.createChild()) : services;
+if (scopedTools) inputServices.registerSingleton(ILanguageModelToolsService, () => createToolsService(true));
+part = resources.add(inputServices.createInstance(ChatInputPart, document.querySelector('main')!, delegate, services.get(IContextMenuService), services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
 	layout: new URLSearchParams(location.search).has('compact') ? 'compact' : undefined,
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
@@ -1185,6 +1212,10 @@ window.ashChatInputIntegration = {
 	},
 	setActiveFile: path => { activeEditor = path ? { resource: URI.parse(path) } : undefined; activeEditorChanged.fire(); },
 	setChanges: changes => { state = { ...state, changes, changesError: undefined, interaction: undefined }; part.render(state); },
+	setWorkingSet: (threadId, changesRevision, changesRepositories) => {
+		state = { ...state, conversation: { sessionId: 'session', threadId }, changesRevision, changesRepositories, changesScope: 'conversation' };
+		part.render(state);
+	},
 	setChangesScope: changesScope => { state = { ...state, changesScope, changes: undefined }; part.render(state); },
 	releaseWorkspaceChanges: changes => releaseWorkspaceChanges?.(changes),
 	workspaceChangesReads: () => workspaceChangesReads,
@@ -1256,6 +1287,9 @@ window.ashChatInputIntegration = {
 	setHistorySkill: digest => part.render({ ...state, skillSelectors: [{ name: 'commit', description: 'Commit the synthetic change', source: 'user', skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest } } }] }),
 	modelState: () => ({ selectedModel, selectedReasoningEffort, automatic, mode: state.mode, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
 	finishModelPreference: success => finishModelPreference?.(success),
+	modelSelections: () => modelSelections.map(selection => selection.model),
+	finishModelSelection: (index, success) => modelSelections[index]?.complete(success),
+	switchModelSelectionInput: () => { modelSelectionGeneration++; part.invalidatePendingInput(); },
 	restoreProviderModels: () => { models = [...models, ...unavailableProviderModels]; renderModels(); modelChanged.fire(); },
 	setModelsAvailable: available => { if (available) { models = hiddenModels ?? models; hiddenModels = undefined; } else { hiddenModels = models; models = []; } renderModels(); modelChanged.fire(); },
 	setDescription: description => { models = models.map(entry => ({ ...entry, description })); renderModels(); modelChanged.fire(); },
@@ -1288,9 +1322,19 @@ window.ashChatInputIntegration = {
 	openModels: () => part.openModelPicker(),
 	dispose: () => resources.dispose(),
 	refresh: () => part.render({ ...state, queuedMessages: 1 }),
-	showResultReview: () => {
+	showResultReview: markdown => {
+		const content: ChatContentPart[] = [{ type: 'text', text: '<img src=x> private evidence\n' + 'long-output'.repeat(100) }];
+		if (markdown) {
+			content.push({ type: 'artifact', artifact: {
+				source: { type: 'embeddedResource', uri: 'docs://review' },
+				mimeType: 'text/markdown',
+				data: { type: 'text', text: markdown },
+				contentDigest: 'review-markdown',
+				truncated: false,
+			} });
+		}
 		state = { ...state, interaction: { requestId: 'review-result', request: { type: 'toolResultReview', request: {
-			toolCallId: 'captured-call', toolName: 'capture_result', review: { reason: 'Review captured output', isError: false, content: [{ type: 'text', text: '<img src=x> private evidence\n' + 'long-output'.repeat(100) }] },
+			toolCallId: 'captured-call', toolName: 'capture_result', review: { reason: 'Review captured output', isError: false, content },
 		} } } };
 		part.render(state);
 	},

@@ -1,5 +1,7 @@
 import { localize } from '../../../../../../../nls.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
+import { resolveModelReasoningEffort } from '../chatModelConfigurationLogic.js';
+import { modelPickerAccelerationOptions } from './modelPickerVariants.js';
 
 /** The toolbar shows effort and an explicitly selected acceleration mode. */
 export function getModelConfigSummary(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): string {
@@ -18,43 +20,6 @@ export function getModelConfigEffortLabel(entry: ModelCatalogEntry, selectedEffo
 	return options.length ? options.find(option => option.checked)?.label ?? localize('chat.modelPicker.modelDefault', 'Model default') : undefined;
 }
 
-/** The catalog already reflects connection availability; preserve each provider's exact option ID. */
-export function modelPickerAccelerationOptions(entry: ModelCatalogEntry): readonly {
-	value: string | null;
-	label: string;
-	description?: string;
-	checked: boolean;
-}[] {
-	if (!entry.accelerationOptions?.length) { return []; }
-	return [
-		{ value: null, label: localize('chat.modelPicker.defaultAcceleration', 'Default'), checked: entry.selectedAcceleration === null || entry.selectedAcceleration === undefined },
-		...entry.accelerationOptions.map(option => ({
-			value: option.id,
-			label: accelerationLabel(option.name),
-			description: accelerationDescription(option.description),
-			checked: option.id === entry.selectedAcceleration,
-		})),
-	];
-}
-
-function accelerationLabel(name: string): string {
-	switch (name) {
-		case 'Fast': return localize('chat.modelPicker.fast', 'Fast');
-		case 'Ultra Fast': return localize('chat.modelPicker.ultraFast', 'Ultra Fast');
-		case 'Priority': return localize('chat.modelPicker.priority', 'Priority');
-		default: return name;
-	}
-}
-
-function accelerationDescription(description: string): string {
-	switch (description) {
-		case 'Faster responses, increased usage': return localize('chat.modelPicker.fastDescription', 'Faster responses, increased usage');
-		case 'Priority processing, increased usage': return localize('chat.modelPicker.priorityDescription', 'Priority processing, increased usage');
-		case 'Uses committed Priority Tier capacity when available': return localize('chat.modelPicker.committedPriorityDescription', 'Uses committed Priority Tier capacity when available');
-		default: return description;
-	}
-}
-
 export function getModelConfigValueLabel(tokens: number): string {
 	if (tokens >= 1_000_000) {
 		return `${Number((tokens / 1_000_000).toFixed(2))}M`;
@@ -67,8 +32,7 @@ export function getModelConfigValueLabel(tokens: number): string {
 
 export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort; label: string; description?: string; checked: boolean; }[] {
 	const supported = entry.supportedReasoningEfforts ?? [];
-	const displayedEffort = [selectedEffort, entry.effectiveReasoningEffort, entry.defaultReasoningEffort]
-		.find(candidate => supported.some(({ effort }) => effort === candidate));
+	const displayedEffort = resolveModelReasoningEffort(entry, selectedEffort);
 	return supported.map(({ effort, description }) => ({
 		effort,
 		label: modelPickerEffortLabel(effort),

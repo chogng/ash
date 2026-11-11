@@ -1776,13 +1776,14 @@ suite('chatContextActions browser component', () => {
 			await expect(page.getByLabel('Submission')).toContainText('read_file');
 		});
 
-		test(`open tool configuration follows catalog changes without losing pending selection in ${locale}`, async function () {
+		test(`open tool configuration follows the composer catalog without losing pending selection in ${locale}`, async function () {
 			const { page } = browserTests;
 
-			await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}`);
+			await page.goto(`/chatInput.html?inlineCode=1&scopedTools&locale=${locale}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const chinese = locale === 'zh-CN';
 			await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+			await page.getByRole('menuitem', { name: chinese ? '搜索附件' : 'Search attachments', exact: true }).click();
 			const picker = page.getByRole('dialog');
 			await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
 			await picker.getByRole('option', { name: chinese ? '配置工具…' : 'Configure tools…', exact: true }).click();
@@ -1822,9 +1823,13 @@ suite('chatContextActions browser component', () => {
 			const configureLabel = chinese ? '配置工具…' : 'Configure tools…';
 			const applyLabel = chinese ? '应用' : 'Apply';
 			const attachments = page.locator('.ash-chat-input-editor');
-			const openSelection = async (): Promise<void> => {
+			const openTools = async (): Promise<void> => {
 				await add.press('Enter');
+				await page.getByRole('menuitem', { name: chinese ? '搜索附件' : 'Search attachments', exact: true }).click();
 				await picker.getByRole('option', { name: toolsLabel, exact: true }).click();
+			};
+			const openSelection = async (): Promise<void> => {
+				await openTools();
 				await picker.getByRole('option', { name: configureLabel, exact: true }).click();
 			};
 			await openSelection();
@@ -1855,8 +1860,7 @@ suite('chatContextActions browser component', () => {
 			const submitted = JSON.parse((await page.getByLabel('Submission').textContent())!);
 			expect(JSON.parse(submitted[0].content)).toEqual(['read_file', 'write_file']);
 			await expect(page.locator('.ash-chat-input-attachments')).toHaveCount(0);
-			await add.press('Enter');
-			await picker.getByRole('option', { name: toolsLabel, exact: true }).click();
+			await openTools();
 			await picker.getByRole('combobox').fill('read_file');
 			await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toHaveCount(0);
 			await page.keyboard.press('Escape');

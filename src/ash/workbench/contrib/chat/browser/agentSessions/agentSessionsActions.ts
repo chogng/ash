@@ -175,9 +175,10 @@ function prepareChatResize(accessor: ServicesAccessor): (view: IChatViewPane, or
 }
 
 /** Shared command and prompt ownership for the IDE and Agents hosts. */
+export const RestoreAgentSessionActionId = 'agentSession.restore';
+
 export function registerAgentSessionActions(): void {
 	const archiveId = 'agentSession.archive';
-	const restoreId = 'agentSession.restore';
 	const archiveAllId = 'workbench.action.chat.archiveAllAgentSessions';
 	registerAction2(class PinAgentSessionAction extends Action2 {
 		constructor() { super({ id: 'sessions.list.togglePin', title: localize2('sessions.list.pin', 'Pin') }); }
@@ -246,7 +247,7 @@ export function registerAgentSessionActions(): void {
 	type ArchivedSessionPick = IQuickPickItem & ({ readonly sessionId: string; } | { readonly all: true; });
 
 	registerAction2(class RestoreAgentSessionAction extends Action2 {
-		constructor() { super({ id: restoreId, title: localize2('chatSession.restore', 'Restore') }); }
+		constructor() { super({ id: RestoreAgentSessionActionId, title: localize2('chatSession.restore', 'Restore') }); }
 
 		override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
 			getAgentSessionId(argument);
@@ -262,7 +263,12 @@ export function registerAgentSessionActions(): void {
 				if (!root) throw new Error(localize('chatSession.restore.rootMissing', 'The restored root conversation is unavailable.'));
 				await navigation.openConversation(id, root);
 			};
-			if (typeof argument === 'string') { await restore(argument); return; }
+			if (typeof argument === 'string') {
+				const selection = sessions.captureSelection();
+				try { await restore(argument, () => selection.isCurrent()); }
+				finally { selection.dispose(); }
+				return;
+			}
 			const archived = sessions.sessions.filter(session => session.status === 'archived');
 			if (!archived.length) throw new Error(localize('chatSession.archived.none', 'No archived sessions are available.'));
 			const wording = getChatSessionArchiveActionWording(configuration);
@@ -306,7 +312,7 @@ export function registerAgentSessionActions(): void {
 		const presentation = getChatSessionArchiveActionPresentation(wording);
 		const done = ContextKeyExpr.equals(`config.${ChatSessionArchiveActionWordingSettingId}`, 'done');
 		const when = wording === ChatSessionArchiveActionWording.MarkAsDone ? done : ContextKeyExpr.notEquals(`config.${ChatSessionArchiveActionWordingSettingId}`, 'done');
-		for (const [id, action] of [[archiveId, presentation.archive], [restoreId, presentation.unarchive], [archiveAllId, presentation.archiveAll]] as const) {
+		for (const [id, action] of [[archiveId, presentation.archive], [RestoreAgentSessionActionId, presentation.unarchive], [archiveAllId, presentation.archiveAll]] as const) {
 			MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id, title: localize2('chatSession.paletteAction', 'Chat: {0}', action.title.value), icon: action.icon }, when });
 		}
 	}

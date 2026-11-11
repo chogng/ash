@@ -28,13 +28,18 @@ fn every_mode_freezes_its_authored_asset() {
         let frozen = super::instructions(mode);
         assert_eq!(frozen.id(), format!("collaboration-mode/{id}"));
         let revision = match mode {
-            CollaborationMode::Plan | CollaborationMode::Ask => format!("{id}-v3"),
+            CollaborationMode::Plan | CollaborationMode::Ask => format!("{id}-v4"),
             CollaborationMode::Agent | CollaborationMode::Debug | CollaborationMode::Multitask => {
-                format!("{id}-v2")
+                format!("{id}-v3")
             }
         };
         assert_eq!(frozen.revision(), revision);
-        assert_eq!(frozen.body(), body);
+        if mode == CollaborationMode::Plan {
+            assert_eq!(frozen.body(), body);
+        } else {
+            assert!(frozen.body().starts_with(body.trim_end()));
+            assert!(frozen.body().contains("#ash-followup"));
+        }
         frozen.validate().unwrap();
     }
 }

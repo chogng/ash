@@ -1,7 +1,7 @@
 import { Selection } from '../../../../../../editor/common/core/selection.js';
 import type { ChatInputEditorSelection } from './chatInputEditorRegistry.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { DEFAULT_FONT_FAMILY } from '../../../../../../base/browser/fonts.js';
+import { getChatInputEditorFont } from '../chatOptions.js';
 import './chatInputEditor.css';
 import './editor/chatInputEditorContrib.js';
 import './editor/chatInputEditorHover.js';
@@ -254,14 +254,11 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	}
 
 	private getFontOptions(): Pick<CodeEditorWidgetOptions, 'fontFamily' | 'fontSize' | 'lineHeight'> {
-		const fontSize = this.configurationService.getValue<number>(ChatInputConfiguration.fontSize);
-		const configuredLineHeight = this.configurationService.getValue<number>(ChatInputConfiguration.lineHeight);
-		const lineHeight = configuredLineHeight === 0 ? Math.round(fontSize * 1.5) : configuredLineHeight;
+		const font = getChatInputEditorFont(this.configurationService);
 		const hasAttachmentControls = this.inlineAttachments?.getPillReferences().some(attachment => attachment.kind !== 'file' && attachment.kind !== 'codeSelection') ?? false;
 		return {
-			fontFamily: this.configurationService.getValue<string>(ChatInputConfiguration.fontFamily) || DEFAULT_FONT_FAMILY,
-			fontSize,
-			lineHeight: Math.max(hasAttachmentControls ? 28 : 0, lineHeight),
+			...font,
+			lineHeight: Math.max(hasAttachmentControls ? 28 : 0, font.lineHeight),
 		};
 	}
 }

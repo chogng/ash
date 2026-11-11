@@ -68,6 +68,7 @@ fn subscribing_reads_every_history_page_before_installing_in_chronological_order
             turn_id: turn_id.clone(),
             item: ash_protocol::ThreadItem::AgentMessage {
                 phase: None,
+                citations: None,
                 item_id: ash_protocol::ItemId::new(name).unwrap(),
                 turn_id,
                 text: name.into(),

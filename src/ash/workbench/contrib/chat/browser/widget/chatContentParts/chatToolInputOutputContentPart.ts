@@ -1,8 +1,9 @@
 import type { IChatToolInvocation } from '../../../common/chatService/chatService.js';
 import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
-import type { ToolResultTextPage } from '../../../../../../platform/agentHost/common/agent.js';
-import type { IAgentThreadService } from '../../../../../../platform/agentHost/common/agentService.js';
+import type { ToolResultTextPage, ToolResultTextSource } from '../../../../../../platform/agentHost/common/agent.js';
+import { IAgentThreadService } from '../../../../../../platform/agentHost/common/agentService.js';
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { Emitter } from '../../../../../../base/common/event.js';
@@ -32,7 +33,7 @@ export class ChatCollapsibleInputOutputContentPart extends Disposable {
 	private readonly changedHeight = this._register(new Emitter<void>());
 	public readonly onDidChangeHeight = this.changedHeight.event;
 
-	constructor(document: Document, private readonly threadService: IAgentThreadService) {
+	constructor(document: Document, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-chat-tool-io';
@@ -69,9 +70,8 @@ export class ChatCollapsibleInputOutputContentPart extends Disposable {
 			const identity = JSON.stringify(coordinate);
 			if (this.pager.value?.identity !== identity) {
 				const section = this.sections.get('result')!;
-				const pager = new ToolResultPager(section.details.ownerDocument, identity,
-					(offset, signal) => this.threadService.readToolResultText(coordinate, offset, signal),
-					text => {
+				const pager = this.instantiation.createInstance(ToolResultPager, section.details.ownerDocument, identity,
+					coordinate, (text?: string) => {
 						section.text.data = text ?? this.previewText;
 						section.content.scrollTop = 0;
 						section.content.scrollLeft = 0;
@@ -131,8 +131,9 @@ class ToolResultPager extends Disposable {
 	constructor(
 		document: Document,
 		readonly identity: string,
-		private readonly read: (offset: number, signal: AbortSignal) => Promise<ToolResultTextPage>,
+		private readonly source: ToolResultTextSource,
 		private readonly updateText: (text?: string) => void,
+		@IAgentThreadService private readonly threadService: IAgentThreadService,
 	) {
 		super();
 		this.domNode = h(document, 'div');
@@ -176,7 +177,7 @@ class ToolResultPager extends Disposable {
 		this.renderControls(localize('chat.tool.outputLoading', 'Loading output…'));
 		let status: string | undefined;
 		try {
-			const page = await this.read(offset, this.abort.signal);
+			const page = await this.threadService.readToolResultText(this.source, offset, this.abort.signal);
 			if (this.abort.signal.aborted) return;
 			this.page = page;
 			this.offsets.splice(index, this.offsets.length - index, offset);

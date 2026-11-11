@@ -1,0 +1,48 @@
+.ash-chat-response-citations {
+	margin-block-start: var(--ash-spacing-size80);
+	min-inline-size: 0;
+}
+
+.ash-chat-code-citations {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-chat-code-citations summary {
+	inline-size: fit-content;
+	cursor: pointer;
+}
+
+.ash-chat-code-citations summary:focus-visible,
+.ash-chat-code-citations a:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}
+
+.ash-chat-code-citations ul {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+	list-style: none;
+	margin: var(--ash-spacing-size60) 0 0;
+	padding-inline-start: var(--ash-spacing-size120);
+}
+
+.ash-chat-code-citations a {
+	color: var(--ash-link-foreground);
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-code-citations li {
+	min-inline-size: 0;
+}
+
+.ash-chat-code-citations pre {
+	background: var(--ash-text-codeBlockBackground);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-medium);
+	color: var(--ash-foreground);
+	margin: var(--ash-spacing-size40) 0 0;
+	overflow: auto;
+	max-block-size: 12em;
+	padding: var(--ash-spacing-size80);
+}

@@ -130,6 +130,10 @@ export class SessionsChatService extends Disposable implements IChatService {
 		const [sessionId, threadId] = args;
 		return this.run(sessionId, async scope => (await scope.services.chat.getPendingRequests(scope.backendIdentity(sessionId), scope.backendIdentity(threadId))).map(value => pair(value, scope)));
 	}
+
+	movePendingRequest(target: Parameters<IChatService['movePendingRequest']>[0], direction: Parameters<IChatService['movePendingRequest']>[1]): ReturnType<IChatService['movePendingRequest']> {
+		return this.run(target.sessionId, async scope => pair(await scope.services.chat.movePendingRequest(backendOptions(target, scope), direction), scope));
+	}
 	pausePendingRequest(...args: Parameters<IChatService['pausePendingRequest']>): ReturnType<IChatService['pausePendingRequest']> {
 		const [target, ...rest] = args;
 		return this.run(target.sessionId, async scope => {

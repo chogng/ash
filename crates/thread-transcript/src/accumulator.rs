@@ -594,6 +594,7 @@ fn item_from_delta(turn_id: &TurnId, item_id: &ItemId, delta: &ItemDelta) -> Thr
         ItemDelta::AgentMessage { .. } | ItemDelta::AgentMessagePhase { .. } => {
             ThreadItem::AgentMessage {
                 phase: None,
+                citations: None,
                 item_id: item_id.clone(),
                 turn_id: turn_id.clone(),
                 text: String::new(),

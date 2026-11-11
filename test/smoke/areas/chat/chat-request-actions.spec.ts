@@ -280,12 +280,30 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 					}
 				};
 				const diff = page.locator(agents ? '.ash-sessions-changes-editor:visible .stanza-multi-diff-editor' : '.stanza-multi-diff-editor:visible');
-				await openTurnChanges(1);
+				if (agents) {
+					const firstReply = replies.filter({ hasText: 'Request action answer 1' });
+					await firstReply.locator('.ash-chat-changed-files > summary').press('Enter');
+					const preview = firstReply.getByRole('button', { name: 'Preview changes for first-turn.txt', exact: true });
+					await preview.press('Enter');
+					const inlineDiff = firstReply.locator('.ash-chat-edit-preview-editor');
+					await expect(preview).toHaveAttribute('aria-expanded', 'true');
+					await expect(inlineDiff).toContainText('Captured by first-turn.txt');
+					await expect(inlineDiff).not.toContainText('second-turn.txt');
+					await preview.press('Enter');
+					await expect(inlineDiff).toBeHidden();
+					await firstReply.getByRole('button', { name: /^Open changes for first-turn\.txt/u }).press('Enter');
+				} else await openTurnChanges(1);
 				await expect(diff).toContainText('Captured by first-turn.txt');
 				await expect(diff).not.toContainText('second-turn.txt');
 				await openTurnChanges(2);
 				await expect(diff).toContainText('Captured by second-turn.txt');
 				await expect(diff).not.toContainText('first-turn.txt');
+				if (agents) {
+					await replies.filter({ hasText: 'Request action answer 1' })
+						.getByRole('button', { name: 'Open Turn Changes: 1 file, added 1, removed 0', exact: true }).press('Enter');
+					await expect(diff).toContainText('Captured by first-turn.txt');
+					await expect(diff).not.toContainText('second-turn.txt');
+				}
 				return;
 			}
 			if (scenario === 'queue') {

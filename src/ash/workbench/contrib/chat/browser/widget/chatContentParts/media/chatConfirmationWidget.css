@@ -1,0 +1,20 @@
+.ash-chat-interaction-form {
+	display: flex;
+	gap: 8px;
+	flex-direction: column;
+}
+
+.ash-chat-interaction-form label {
+	display: flex;
+	gap: 4px;
+	flex-direction: column;
+}
+
+.ash-chat-interaction-form input,
+.ash-chat-interaction-form textarea,
+.ash-chat-interaction-form select {
+	padding: 6px;
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	color: inherit;
+	background: var(--ash-editor-background);
+}

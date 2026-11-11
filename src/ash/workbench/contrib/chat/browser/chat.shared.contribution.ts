@@ -21,7 +21,10 @@ import { registerChatFileTreeActions } from './actions/chatFileTreeActions.js';
 import { registerNewChatActions } from './actions/chatNewActions.js';
 import { ExportAgentHostDebugLogsAction } from './actions/exportAgentHostDebugLogsAction.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { CopyInlineResourceAction, OpenInlineResourceToSideAction } from './widget/chatContentParts/chatInlineAnchorWidget.js';
+import { ChatMarkdownAnchorService, IChatMarkdownAnchorService } from './widget/chatContentParts/chatMarkdownAnchorService.js';
 import { ChatContextContributions, ChatReferenceContextContribution } from './actions/chatContext.js';
+import { ChatOutputPartStateCache, IChatOutputPartStateCache } from './widget/chatContentParts/chatOutputPartStateCache.js';
 import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
 import { ChatLayoutService } from './widget/chatLayoutService.js';
 import { registerChatCopyActions } from './actions/chatCopyActions.js';
@@ -45,6 +48,7 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
+import { parseEditorAssociations, type EditorAssociations } from '../../../browser/parts/editor/editorConfiguration.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import type { ChatDebugEditor } from './chatDebug/chatDebugEditor.js';
 import { chatDebugEditorId } from './chatDebug/chatDebugEditorInput.js';
@@ -118,6 +122,10 @@ import { ChatStatusBarEntry } from './chatStatus/chatStatusEntry.js';
 // Both renderer hosts use these primitives; each host owns session navigation and History actions.
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
 registerSingleton(ISessionSummaryHoverService, SessionSummaryHoverService, InstantiationType.Delayed);
+registerSingleton(IChatMarkdownAnchorService, ChatMarkdownAnchorService, InstantiationType.Delayed);
+registerSingleton(IChatOutputPartStateCache, ChatOutputPartStateCache, InstantiationType.Delayed);
+registerAction2(CopyInlineResourceAction);
+registerAction2(OpenInlineResourceToSideAction);
 registerSingleton(ICodeMapperService, CodeMapperService, InstantiationType.Delayed);
 registerSingleton(IVoiceInputModeService, VoiceInputModeService, InstantiationType.Delayed);
 registerSingleton(IChatInputNoticeHubService, ChatInputNoticeHubService, InstantiationType.Delayed);
@@ -280,6 +288,13 @@ registerWorkbenchContribution(ChatSetupContribution.ID, WorkbenchPhase.BlockStar
 const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);
 configurationRegistry.registerConfiguration(chatUpvoteAnimationConfiguration);
+configurationRegistry.registerConfiguration<EditorAssociations>({
+	key: ChatConfiguration.EditorAssociations,
+	defaultValue: {},
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'object', description: localize('chat.editorAssociations', 'Map file patterns to editor IDs for files opened from Chat.'), additionalProperties: { type: 'string', minLength: 1 } },
+	parse: parseEditorAssociations,
+});
 
 configurationRegistry.registerConfiguration<boolean>({
 	key: ChatConfiguration.AutoFollowReplies,

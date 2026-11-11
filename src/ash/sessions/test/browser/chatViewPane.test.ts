@@ -50,6 +50,8 @@ import { KeybindingTestServices } from '../../../workbench/services/keybinding/t
 import { AdvisorConfigurationPicker } from '../../../workbench/contrib/advisor/browser/advisor.js';
 import type { IOpenSettingsOptions } from '../../../workbench/services/preferences/common/preferences.js';
 import { ChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
+import { createTestLanguageModelToolsService } from '../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { ChatInputEditors } from '../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { createTestModel } from '../../../platform/agentHost/test/common/testAppServerProtocol.js';
@@ -224,6 +226,7 @@ function createInputServices(
 	} as unknown as ISessionsService);
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
+	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
@@ -5424,7 +5427,7 @@ for (const locale of ['en', 'zh-CN']) for (const kind of ['Code', 'Cowork'] as c
 		const services = createInputServices(contextView, chat);
 		const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible' as const, modelPickerPosition: 'leading' as const });
 		using widget = kind === 'Code'
-			? new ChatWidget(document.body, 'goal-banner', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService))
+			? new ChatWidget(document.body, 'goal-banner', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService), services.get(IConfigurationService))
 			: services.createInstance(NativeChatWidget, document.body, 'goal-banner', model, () => { }, createInput);
 		widget.setVisible(true);
 		const banner = widget.domNode.querySelector<HTMLDivElement>('.ash-chat-goal-banner')!;
@@ -5464,7 +5467,7 @@ for (const kind of ['Code', 'Cowork'] as const) test(`${kind} widget submits inl
 	const services = createInputServices(contextView, chat);
 	const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible' as const, modelPickerPosition: 'leading' as const });
 	using widget = kind === 'Code'
-		? new ChatWidget(document.body, 'ordered-snapshots', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService))
+		? new ChatWidget(document.body, 'ordered-snapshots', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService), services.get(IConfigurationService))
 		: services.createInstance(NativeChatWidget, document.body, 'ordered-snapshots', model, () => { }, createInput);
 	widget.setVisible(true);
 	const first = new DeferredPromise<{ name: string; content: string; }>();
@@ -5506,7 +5509,7 @@ test('Chat footer permission changes use the current model and confirm full acce
 		undefined, undefined, undefined, (container, delegate) => {
 			delegates.push(delegate);
 			return services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
-		}, undefined, services, dialogs, services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService));
+		}, undefined, services, dialogs, services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService), services.get(IConfigurationService));
 	const delegate = delegates[0]!;
 	assert.ok(delegate.selectApprovalMode);
 	await delegate.selectApprovalMode('auto');
@@ -6252,6 +6255,27 @@ for (const locale of ['en', 'zh-CN']) {
 		} finally { resetNlsResolver(); }
 	});
 }
+
+test('archived Chat shows its transcript and blocks the composer in Chinese', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		const fixture = await createNavigationInputPane('{}', undefined, {
+			subscribe: async ({ threadId }) => {
+				const snapshot = navigationThreadSnapshot(threadId);
+				return { ...snapshot, thread: { ...snapshot.thread, status: 'archived' }, updates: [] };
+			},
+		});
+		using resources = fixture.resources;
+		const { pane, fake, chatPane } = fixture;
+		const banner = chatPane.querySelector<HTMLElement>('.ash-chat-readonly-banner')!;
+		await waitFor(() => !banner.hidden);
+		assert.equal(banner.querySelector('[role="status"]')?.textContent, '此对话已归档。');
+		assert.equal(chatPane.classList.contains('ash-chat-readonly'), true);
+		assert.equal(banner.querySelector('button')?.hidden, true);
+		await pane.acceptInput();
+		assert.equal(fake.turnStartRequests.length, 0);
+	} finally { resetNlsResolver(); }
+});
 
 test('Chat history recovery actions expire across A-B-A selection and pane disposal', async () => {
 	const activeSession = session('session-1', 'thread-1');

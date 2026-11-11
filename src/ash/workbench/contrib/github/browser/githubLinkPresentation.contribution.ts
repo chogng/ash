@@ -9,6 +9,7 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ILinkPresentationService, type ILinkPresentation, type ILinkPresentationProvider, type ILinkPresentationWatcher, type LinkPresentationKind } from '../../../../platform/dataChannel/common/dataChannel.js';
 import { GitHubError, GitHubErrorCode, IGitHubService } from '../../../../platform/github/common/githubService.js';
+import { parseGitHubLinkTarget, type GitHubLinkTarget } from '../../../../platform/github/common/githubUrls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -20,11 +21,10 @@ import { IGitHubConnectionService } from '../../../services/accounts/common/gitH
 import { GitHubCommitResolver, type IGitHubCommitTarget } from './githubCommitResolver.js';
 import { computePullRequestIcon } from '../../../common/chatPullRequest.js';
 import { createCommitResourceHover, createIssueResourceHover, createPullRequestResourceHover, createRepositoryResourceHover, getIssueResourceStatus, getPullRequestChecksStatusLabel, getPullRequestResourceStatus, GitHubResourcePresentation } from './githubResourceHover.js';
-import { LazyGitHubResourceResolver, parseGitHubReferenceTarget, type IGitHubReferenceTarget } from './lazyGitHubResourceHover.js';
+import { LazyGitHubResourceResolver } from './lazyGitHubResourceHover.js';
 
 type LinkTarget =
-	| { readonly kind: 'repository'; readonly owner: string; readonly repo: string; }
-	| ({ readonly kind: 'issue' | 'pullRequest'; } & IGitHubReferenceTarget)
+	| GitHubLinkTarget
 	| ({ readonly kind: 'commit'; } & IGitHubCommitTarget);
 
 export class GitHubLinkPresentationContribution extends Disposable {
@@ -236,14 +236,9 @@ function parseTarget(resource: URI): LinkTarget | undefined {
 	if (resource.scheme !== 'https' || resource.authority.toLowerCase() !== 'github.com') {
 		return undefined;
 	}
-	const issue = parseGitHubReferenceTarget(resource, 'issue');
-	if (issue) { return { kind: 'issue', ...issue }; }
-	const pullRequest = parseGitHubReferenceTarget(resource, 'pullRequest');
-	if (pullRequest) { return { kind: 'pullRequest', ...pullRequest }; }
 	const commit = /^\/([\w.-]+)\/([\w.-]+)\/commit\/([a-fA-F0-9]{7,40})$/.exec(resource.path);
 	if (commit) { return { kind: 'commit', owner: commit[1], repo: commit[2], sha: commit[3] }; }
-	const repository = /^\/([\w.-]+)\/([\w.-]+)\/?$/.exec(resource.path);
-	return repository ? { kind: 'repository', owner: repository[1], repo: repository[2] } : undefined;
+	return parseGitHubLinkTarget(resource);
 }
 
 // Opener resolves CodeEditorService; editor parts are registered by the BlockRestore phase.

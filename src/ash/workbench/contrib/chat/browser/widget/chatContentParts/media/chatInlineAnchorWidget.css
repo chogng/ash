@@ -1,0 +1,5 @@
+.ash-chat-inline-anchor > .ash-icon-label-inline-icon {
+	margin-inline: 0 var(--ash-spacing-size40);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-lxiconFontSize-compact);
+}

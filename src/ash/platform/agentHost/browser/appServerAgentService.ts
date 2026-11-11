@@ -849,7 +849,7 @@ function toTurnInteraction(interaction: import('../../../../../.build/protocol/t
 				: request.type === 'permissions'
 					? { type: 'permissions', request: structuredClone(request.request) }
 					: request.type === 'userInput'
-						? { type: 'userInput', request: { questions: request.request.questions.map(question => ({ ...question, required: question.required ?? true, options: question.options?.map(option => ({ ...option })) })) } }
+						? { type: 'userInput', request: { ...request.request, questions: request.request.questions.map(question => ({ ...question, required: question.required ?? true, options: question.options?.map(option => ({ ...option })) })) } }
 						: { type: 'dynamicTool', call: { ...request.call, arguments: structuredClone(request.call.arguments) } },
 	};
 }
@@ -1018,6 +1018,10 @@ function toThreadItem(item: ThreadItemDto): ThreadItem {
 	// Detach tool provenance and result content from transport values before Chat retains them.
 	// Reads and notifications share this conversion.
 	switch (item.type) {
+		case 'agentMessage': return {
+			...item,
+			citations: item.citations?.map(citation => ({ ...citation })),
+		};
 		case 'toolCall': {
 			const binding = item.binding;
 			return {
@@ -1141,6 +1145,7 @@ function toAgentExecutionNode(node: AgentNodeDto): AgentExecutionNode {
 		threadId: node.threadId,
 		threadSequence: node.threadSequence,
 		title: node.title,
+		origin: node.origin ? { ...node.origin } : undefined,
 		parentThreadId: node.parentThreadId,
 		forkedFromId: node.forkedFromId,
 		executionStatus: node.executionStatus,

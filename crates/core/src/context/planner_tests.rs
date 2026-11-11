@@ -827,6 +827,7 @@ fn user_item(item_id: &str, turn_id: TurnId, text: &str) -> ThreadItem {
 fn agent_item(item_id: &str, turn_id: TurnId, text: &str) -> ThreadItem {
     ThreadItem::AgentMessage {
         phase: None,
+        citations: None,
         item_id: id(item_id),
         turn_id,
         text: text.into(),

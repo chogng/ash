@@ -21,6 +21,7 @@ import { ChatMarkdownDecorationsRenderer } from './chatMarkdownDecorationsRender
 import { canStartListCheckpoint, lexMarkdownTail, markdownTailCheckpoint, type MarkdownTailCheckpoint } from './chatMarkdownTail.js';
 import { CodeBlockPart } from './codeBlockPart.js';
 import type { ICodeBlockActionContext } from './codeBlockPart.js';
+import { MarkdownDiffBlockPart, parseUnifiedDiff, parseUnifiedDiffFiles, type IMarkdownDiffBlockData } from './chatDiffBlockPart.js';
 import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
 import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import type { ChatMarkdownRichContent } from '../../../common/model/chatMarkdownRichContent.js';
@@ -103,6 +104,7 @@ interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
 	readonly deferCodeBlockModels?: boolean;
 	/** The virtual list measures a newly mounted row before returning from the scroll event. */
 	readonly synchronousInitialRender?: boolean;
+	readonly allowInlineDiffs?: boolean;
 }
 
 /** Owns one stable response root, sanitized render lifetime and the response's existing code models. */
@@ -118,7 +120,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	private readonly renders = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 	private readonly lexer = new Marked(MarkedKatexExtension.extension());
 	private readonly plainLexer = new Marked();
-	private readonly codeBlocks = this._register(new DisposableMap<number, CodeBlockPart>());
+	private readonly codeBlocks = this._register(new DisposableMap<number, CodeBlockPart | MarkdownDiffBlockPart>());
 	private readonly images = new Map<string, Promise<Blob>>();
 	private readonly galleries = new Set<ChatImageGallery>();
 	private mermaid: ChatMermaidRenderer | undefined;
@@ -134,7 +136,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	};
 	private viewportVisible = true;
 	private hasDeferredCodeBlocks = false;
-	private readonly deferredCodeBlocks = new WeakSet<CodeBlockPart>();
+	private readonly deferredCodeBlocks = new WeakSet<CodeBlockPart | MarkdownDiffBlockPart>();
 
 	constructor(
 		private readonly options: ChatMarkdownContentPartOptions,
@@ -145,9 +147,15 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		this.markdownRenderer = this._register(instantiation.createInstance(ChatContentMarkdownRenderer));
 		this.domNode = h(options.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-markdown-part ash-markdown';
-		this.decorations = this._register(instantiation.createInstance(ChatMarkdownDecorationsRenderer, this.domNode));
+		this.decorations = this._register(instantiation.createInstance(ChatMarkdownDecorationsRenderer, this.domNode, (href: string) => {
+			if (this.options.actionHandler) this.options.actionHandler(href, this.codeElement);
+			else void openLinkFromMarkdown(this.opener, href, this.codeElement.isTrusted);
+		}));
 		if (options.fileReferenceDirectory) {
-			this.fileReferences = this._register(instantiation.createInstance(ChatMarkdownFileReferences, this.domNode, options.fileReferenceDirectory, () => this.changedHeight.fire()));
+			this.fileReferences = this._register(instantiation.createInstance(ChatMarkdownFileReferences, this.domNode, options.fileReferenceDirectory, (anchor: HTMLAnchorElement) => {
+				this.decorations.decorateLink(anchor);
+				this.changedHeight.fire();
+			}));
 		}
 		this.incrementalRendering = this._register(new IncrementalDOMMorpher<ChatResponseMarkdown>(this.domNode, options.visible ?? true, markdownSizeLimit, (markdown, incomplete, fromFrame) => {
 			this.render(markdown, incomplete);
@@ -193,8 +201,8 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			ownerMarkdownPartId: this.codeblocksPartId,
 			codeBlockIndex: index,
 			elementId: part.element.id,
-			uri: part.model?.uri,
-			languageId: part.model?.getLanguageId(),
+			uri: part instanceof CodeBlockPart ? part.model?.uri : undefined,
+			languageId: part instanceof CodeBlockPart ? part.model?.getLanguageId() : part.languageId,
 			focus: () => { if (!this.isDisposed && this.incrementalRendering.isVisible) { part.focus(); } },
 		}));
 	}
@@ -307,6 +315,9 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		const document = this.options.ownerDocument;
 		const active = document.activeElement as HTMLElement | null;
 		const focused = active && this.domNode.contains(active) ? active : undefined;
+		const focusedDiffElement = focused?.closest('.ash-chat-markdown-diff');
+		const focusedDiff = focusedDiffElement && [...this.codeBlocks].find(([, part]) => part.element === focusedDiffElement)?.[1];
+		const originalDiffSide = Boolean(focused?.closest('.stanza-diff-editor-side.original'));
 		const selection = document.getSelection();
 		const selected = selection?.anchorNode && selection.focusNode && this.domNode.contains(selection.anchorNode) && this.domNode.contains(selection.focusNode)
 			? { anchor: selection.anchorNode, anchorOffset: selection.anchorOffset, focus: selection.focusNode, focusOffset: selection.focusOffset } : undefined;
@@ -380,6 +391,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		if (selected?.anchor.isConnected && selected.focus.isConnected) selection?.setBaseAndExtent(selected.anchor, selected.anchorOffset, selected.focus, selected.focusOffset);
 		// Restoring a DOM range can focus the browser's editing host. Preserve toolbar focus.
 		if (focused?.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
+		else if (!focused?.isConnected && focusedDiff instanceof MarkdownDiffBlockPart && focusedDiff.element.isConnected) focusedDiff.focus(originalDiffSide);
 	}
 
 	private renderFragment(markdown: ChatResponseMarkdown, incomplete: boolean, codeStart: number, previous: MarkdownFragment | undefined, resumeEnd: number | undefined, patchable: boolean): { fragment: MarkdownFragment; patch?: MarkdownTailPatch; } {
@@ -387,7 +399,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		// The content part owns the fragment root, which can outlive an individual render.
 		const element = previous?.element ?? h(document, 'div');
 		const lifetime = new DisposableStore();
-		const code: { readonly languageId: string; readonly text: string; readonly placeholder: HTMLElement; readonly diagram: boolean; }[] = [];
+		const code: { readonly languageId: string; readonly text: string; readonly placeholder: HTMLElement; readonly diagram: boolean; readonly diff?: IMarkdownDiffBlockData; }[] = [];
 		const images = new Set<string>();
 		try {
 			const options: MarkdownRenderOptions = {
@@ -406,7 +418,18 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 				codeBlockRendererSync: (languageId, text, raw) => {
 					const placeholder = h(document, 'div');
 					placeholder.className = 'ash-chat-code-placeholder';
-					code.push({ languageId, text, placeholder, diagram: !incomplete && languageId === 'mermaid' && isClosedMermaidFence(raw) });
+					const diffLanguage = this.options.allowInlineDiffs && !incomplete && /^diff:([\w+.-]+)$/u.exec(languageId)?.[1];
+					let diff: IMarkdownDiffBlockData | undefined;
+					if (diffLanguage) {
+						const files = parseUnifiedDiffFiles(text, diffLanguage);
+						if (files) {
+							diff = { ...files[0], languageId: diffLanguage, source: text, files };
+						} else {
+							const { before, after } = parseUnifiedDiff(text);
+							if (before !== after) diff = { languageId: diffLanguage, source: text, beforeContent: before, afterContent: after };
+						}
+					}
+					code.push({ languageId, text, placeholder, diff, diagram: !incomplete && languageId === 'mermaid' && isClosedMermaidFence(raw) });
 					return placeholder;
 				},
 			};
@@ -450,8 +473,10 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			for (const [localIndex, data] of code.entries()) {
 				const index = codeStart + localIndex;
 				let part = this.codeBlocks.get(index);
-				if (!part) {
-					part = this.codeBlocks.set(index, this.instantiation.createInstance(CodeBlockPart, document, this.options.codeBlockPresentation));
+				if (!part || (part instanceof MarkdownDiffBlockPart) !== Boolean(data.diff)) {
+					part = this.codeBlocks.set(index, data.diff
+						? this.instantiation.createInstance(MarkdownDiffBlockPart, document, () => this.changedHeight.fire())
+						: this.instantiation.createInstance(CodeBlockPart, document, this.options.codeBlockPresentation));
 					part.element.id = `${this.codeblocksPartId}-${index}`;
 					if (this.options.deferCodeBlockModels) {
 						this.deferredCodeBlocks.add(part);
@@ -459,7 +484,11 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 					}
 				}
 				part.setVisible(this.incrementalRendering.isVisible && this.viewportVisible && !this.deferredCodeBlocks.has(part));
-				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 } });
+				if (part instanceof MarkdownDiffBlockPart) {
+					part.render(data.diff!);
+				} else {
+					part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 } });
+				}
 				const parent = data.placeholder.parentElement;
 				let block = part.element;
 				if (data.diagram) {
@@ -596,6 +625,9 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	private extendFence(markdown: IMarkdownString, incomplete: boolean): boolean {
 		const fragment = this.fragments.at(-1);
 		if (!fragment?.fence || markdown.value.length > markdownSizeLimit) return false;
+		if (!incomplete && this.options.allowInlineDiffs && fragment.fence.languageId.startsWith('diff:')) return false;
+		const part = this.codeBlocks.get(fragment.codeStart);
+		if (!(part instanceof CodeBlockPart)) return false;
 		const appended = markdown.value.slice(this.markdown!.value.length);
 		if (appended.includes('\r')) return false;
 		// A closing marker can span chunks, or cease being a closing marker when its
@@ -604,7 +636,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		if (fragment.fence.closing.test(fragment.source.slice(lineStart) + appended)) return false;
 		fragment.source += appended;
 		fragment.incomplete = incomplete;
-		this.codeBlocks.get(fragment.codeStart)!.render({
+		part.render({
 			text: fragment.source.slice(fragment.fence.headerLength).replace(/\n$/u, ''),
 			languageId: fragment.fence.languageId, codeBlockIndex: fragment.codeStart,
 			element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 },

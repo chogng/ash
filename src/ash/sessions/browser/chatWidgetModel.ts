@@ -22,6 +22,7 @@ import { chatExecutionWorkspace, findAgentNode, type IActiveSessionThread, type 
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import type { ArtifactKind } from '../common/artifactKind.js';
 import { chatQueuedMessageListItems, chatStreamingResponseUpdate, chatTranscriptListItems, type ChatStreamingResponseUpdate, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
+import { withSessionSubagentActivities } from '../common/sessionSubagentActivity.js';
 import { ChatHistoryRedoModel } from '../../workbench/contrib/chat/common/model/chatHistoryRedoModel.js';
 import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/services/chat/common/modelCatalog.js';
@@ -238,13 +239,14 @@ export class ChatWidgetModel extends Disposable {
 			activeMode: activeTurn(this._thread)?.mode,
 			queuedMessages: this.queue.filter(message => message.status !== 'rejected').length,
 			phase: this._state,
-			inputBlocked: modelUnavailableMessage !== undefined || this.requiresWorkspaceSelection || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
+			inputBlocked: this._thread?.status === 'archived' || modelUnavailableMessage !== undefined || this.requiresWorkspaceSelection || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			status: modelUnavailableMessage,
 			aiDisabled: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			error: this.historyStatus ? undefined : this._error,
 			canInterrupt: this.canInterrupt,
 			changes: this.threadChanges?.statistics,
 			changesRevision: this.threadChanges?.revision,
+			changesRepositories: this.threadChanges?.repositories,
 			changesScope: this.selection.kind === 'session' ? 'conversation' : 'workspace',
 			changesError: this.threadChangesError,
 			contextUsage: this.contextUsage,
@@ -365,6 +367,10 @@ export class ChatWidgetModel extends Disposable {
 		return this.activeSession?.session.sessionId;
 	}
 
+	get canRestoreArchivedSession(): boolean {
+		return this.activeSession?.session.status === 'archived';
+	}
+
 	get session(): ISession | undefined {
 		return this.selection.kind === 'session' ? this.selection.active.session : undefined;
 	}
@@ -475,9 +481,9 @@ export class ChatWidgetModel extends Disposable {
 			sessionId: thread.sessionId, threadId: thread.threadId, commandTerminals: isNative && (!provider || provider === LOCAL_AGENT_HOST_PROVIDER_ID),
 			directoryForTurn: (turn: Turn) => agentHostTurnDirectory(thread.sessionId, turn.directory),
 		};
-		let transcript = chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, source, {
+		let transcript = withSessionSubagentActivities(chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, source, {
 			archived: thread?.status === 'archived', hasOlderTurns: this.historyBoundary?.hasOlderTurns,
-		}, this._changeSets);
+		}, this._changeSets), this.session, thread?.threadId);
 		const firstRequest = this.selection.kind === 'session' && this.selection.firstRequestClientId;
 		if (firstRequest) {
 			const start = transcript.findIndex(item => item.type === 'userMessage' && item.requestClientId === firstRequest);
@@ -768,6 +774,9 @@ export class ChatWidgetModel extends Disposable {
 			await this.initialize();
 			this.requireCurrentOperation(operation);
 			if (this.historyStatus) throw new Error(this.historyStatus.message);
+			if (this._thread?.status === 'archived') {
+				throw new Error(localize('chatReadOnlyBanner.archivedMessage', 'This conversation is archived.'));
+			}
 			this.assertAIEnabled();
 			const model = this.isAutomaticModel ? undefined : this.selectedModel;
 			await this.awaitOperationPreparation(this.refreshModelAvailability(true), operation);
@@ -1463,6 +1472,8 @@ export class ChatWidgetModel extends Disposable {
 		try {
 			const details = await this.chatService.readTurnChange(owner.session.sessionId, owner.threadId, changeSetId);
 			if (this.isDisposed || generation !== this.changesGeneration || details.summary.threadId !== this.threadId) return;
+			const previousRevision = this.changeDetails.get(changeSetId)?.summary.revision;
+			if (previousRevision !== undefined && details.summary.revision < previousRevision) return;
 			this.changeDetails.set(changeSetId, details);
 			this._onDidChange.fire();
 		} catch {

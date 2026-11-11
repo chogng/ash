@@ -2,7 +2,7 @@ import { Schemas } from '../../../../../base/common/network.js';
 import { extUri } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { FileKind } from '../../../../../platform/files/common/files.js';
-import type { ThreadItem, ThreadTranscriptEntry, Turn } from '../../../../../platform/agentHost/common/agent.js';
+import type { AgentExecutionNode, ThreadItem, ThreadTranscriptEntry, ToolResultPresentation, Turn } from '../../../../../platform/agentHost/common/agent.js';
 
 /** An inert resource tree carried by a response or structured tool-result snapshot. */
 export interface IChatResponseProgressFileTreeData {
@@ -72,4 +72,15 @@ export interface IChatToolInvocation {
 	readonly stopped: boolean;
 	readonly waitingFor?: NonNullable<Turn['pendingInteraction']>['kind'];
 	readonly executionStarted?: boolean;
+	readonly subagentActivity?: Pick<AgentExecutionNode, 'executionStatus' | 'waitingReason' | 'result'>;
+}
+
+export function chatToolResultPresentation(result: IChatToolInvocation['result']): ToolResultPresentation | undefined {
+	if (!result || result.isError) return undefined;
+	for (const part of result.content ?? []) {
+		if (part.type === 'artifact' && part.artifact.source.type === 'viewMetadata' && part.artifact.presentation) {
+			return part.artifact.presentation;
+		}
+	}
+	return undefined;
 }

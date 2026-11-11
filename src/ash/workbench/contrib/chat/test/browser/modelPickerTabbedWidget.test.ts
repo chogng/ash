@@ -7,7 +7,7 @@ suite('model picker browser component', () => {
 
 	test('the Chat slider exposes Fast and Ultra for eligible built-in models', async () => {
 		const { page } = browserTests;
-		await page.goto('/chatInput.html?chatModelSlider&acceleration=multiple&holdModelPreference&locale=zh-CN&theme=hcDark');
+		await page.goto('/chatInput.html?chatModelSlider&holdModelPreference&locale=zh-CN&theme=hcDark');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await page.locator('.ash-chat-input-model-action').press('ArrowDown');
 		const picker = page.getByRole('dialog', { name: '选择聊天模型' });
@@ -109,6 +109,30 @@ suite('model picker browser component', () => {
 		await expect(slider).toHaveAttribute('aria-valuetext', '极高');
 	});
 
+	for (const configuration of ['chatModelSlider', 'modelMenuConfiguration']) {
+		test(`the ${configuration} picker exposes every declared speed with keyboard selection`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?${configuration}&acceleration=multiple&locale=zh-CN`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			await page.locator('.ash-chat-input-model-action').press('ArrowDown');
+			const picker = page.getByRole('dialog', { name: '选择聊天模型' });
+			const speed = picker.getByRole('menuitem', { name: '速度', exact: true });
+			await speed.press('ArrowRight');
+			const submenu = page.getByRole('menu', { name: '速度', exact: true });
+			await expect(submenu.getByRole('menuitemradio')).toHaveCount(3);
+			await expect(submenu.getByRole('menuitemradio', { checked: true })).toHaveText('默认');
+			await submenu.getByRole('menuitemradio', { name: '极速', exact: true }).press('Enter');
+			const ultraFast = { model: { provider: 'openai', model: 'test-model' }, update: { acceleration: 'ultrafast' } };
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({ preferenceWrites: [ultraFast] });
+			await speed.press('ArrowRight');
+			await expect(submenu.getByRole('menuitemradio', { checked: true })).toHaveText('极速');
+			await submenu.getByRole('menuitemradio', { name: '默认', exact: true }).press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({
+				preferenceWrites: [ultraFast, { model: ultraFast.model, update: { acceleration: null } }],
+			});
+		});
+	}
+
 	for (const success of [true, false]) {
 		test(`reopening the picker unlocks its controls after a ${success ? 'successful' : 'failed'} save`, async () => {
 			const { page } = browserTests;
@@ -197,7 +221,7 @@ suite('model picker browser component', () => {
 			const trigger = page.locator('.ash-chat-input-model-action');
 			await expect(trigger).toHaveText('Test Model');
 			await expect(trigger).toHaveAccessibleName('Test Model');
-			await expect(trigger.locator('.ash-icon')).toHaveCount(0);
+			await expect(trigger.locator('.ash-chat-input-model-action-icon')).toHaveAttribute('aria-hidden', 'true');
 			await trigger.press('ArrowDown');
 			const picker = page.locator('.ash-chat-model-picker');
 			await expect(picker.getByRole('tab', { includeHidden: true })).toHaveCount(0);

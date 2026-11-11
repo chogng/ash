@@ -433,6 +433,7 @@ fn failed_interaction_resume_keeps_the_answer_and_records_terminal_failure() {
                 deadline: None,
                 request: AgentRequest::UserInput {
                     request: RequestUserInput {
+                        plan_review: None,
                         questions: vec![UserInputQuestion {
                             required: true,
                             id: "choice".into(),

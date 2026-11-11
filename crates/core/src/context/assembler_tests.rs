@@ -486,6 +486,7 @@ fn interrupted_history_keeps_partial_output_and_marks_the_reusable_prefix() {
             },
             ThreadItem::AgentMessage {
                 phase: None,
+                citations: None,
                 item_id: id("interrupted-agent"),
                 turn_id: interrupted_turn_id.clone(),
                 text: "partial answer".into(),

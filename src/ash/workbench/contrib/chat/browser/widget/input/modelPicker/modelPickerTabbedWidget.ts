@@ -5,7 +5,7 @@ import { appendIcon } from '../../../../../../../base/browser/ui/lxicons/lxicon.
 import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
 import { Switch } from '../../../../../../../base/browser/ui/toggle/toggle.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
-import { autorun, observableValue } from '../../../../../../../base/common/observable.js';
+import { autorun } from '../../../../../../../base/common/observable.js';
 import { localize } from '../../../../../../../nls.js';
 import {
 	AccessibleContentProvider,
@@ -24,10 +24,15 @@ import type { ModelCatalogEntry } from '../../../../../../services/chat/common/m
 import { ILanguageModelsService } from '../../../../common/languageModels.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { ModelCard, type IModelCardOptions } from './modelPickerCard.js';
+import { renderModelPickerHover } from './modelPickerHover.js';
 import { buildModelPickerItems, createManageModelsAction } from './modelPickerItems.js';
 import { buildModelPickerDestinations, type IModelPickerDestination } from './modelPickerTabs.js';
 import { modelPickerEffortOptions } from './modelPickerModelConfig.js';
+import { getFastModelVariant, modelPickerAccelerationOptions, renderModelSpeedMenu } from './modelPickerVariants.js';
+import { applyModelReasoningEffort } from '../chatModelConfigurationLogic.js';
 import { ModelPickerWelcome } from './modelPickerWelcome.js';
+import type { ChatInputModelSelectionController } from '../chatInputModelSelectionController.js';
+import { findModelForChatInput, sameModel } from '../chatInputModelUtils.js';
 
 let nextPickerId = 0;
 
@@ -38,10 +43,10 @@ export class TabbedModelPicker extends Disposable {
 	private providers: readonly ModelProviderCredentialStatus[] = [];
 	private activeCard: ModelCard | undefined;
 	private detailsModel: ModelRef | undefined;
-	private readonly selecting = observableValue(this, false);
 
 	constructor(
 		private readonly delegate: IModelPickerDelegate,
+		private readonly selection: ChatInputModelSelectionController,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@ILanguageModelsService private readonly languageModels: ILanguageModelsService,
 		@IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService,
@@ -68,6 +73,7 @@ export class TabbedModelPicker extends Disposable {
 		this.hide();
 		const session = new DisposableStore();
 		this.showing.value = session;
+		const inputLifetime = this.delegate.getInputLifecycle?.();
 		const document = anchor.ownerDocument;
 		const pickerId = `chatModelPicker-${++nextPickerId}`;
 		const useWorkbenchModelManagement = this.delegate.useWorkbenchModelManagement !== false;
@@ -103,26 +109,27 @@ export class TabbedModelPicker extends Disposable {
 			}));
 			automaticSwitch = automatic;
 			resources.add(automatic.onDidChange(async value => {
-				if (this.selecting.get()) { automatic.checked = this.delegate.isAutomaticModel(); return; }
-				this.selecting.set(true, undefined);
+				if (resources.isDisposed || this.selection.isSelecting.get()) {
+					automatic.checked = this.delegate.isAutomaticModel();
+					return;
+				}
 				error.hidden = true;
 				const hadFocus = document.activeElement === automatic.input;
-				automatic.busy = true;
 				try {
-					if (value) { await this.delegate.selectAutomaticModel?.(); }
-					else {
-						const model = this.delegate.getSelectedModel() ?? this.delegate.getModels()[0]?.model;
-						if (model) { await this.delegate.selectModel(model); }
-					}
+					await this.selection.run(inputLifetime, async () => {
+						if (value) { await this.delegate.selectAutomaticModel?.(); }
+						else {
+							const model = this.delegate.getSelectedModel() ?? this.delegate.getModels()[0]?.model;
+							if (model) await this.delegate.selectModel(model);
+						}
+					});
 				} catch {
 					if (!session.isDisposed) {
 						error.textContent = localize('chat.modelPicker.selectionFailed', 'Could not select model');
 						error.hidden = false;
 					}
 				} finally {
-					this.selecting.set(false, undefined);
 					if (!resources.isDisposed) {
-						automatic.busy = false;
 						automatic.checked = this.delegate.isAutomaticModel();
 						if (hadFocus) { automatic.focus(); }
 					}
@@ -134,6 +141,7 @@ export class TabbedModelPicker extends Disposable {
 			};
 			refresh();
 			resources.add(this.delegate.onDidChangePresentation(refresh));
+			resources.add(autorun(reader => { automatic.busy = this.selection.isSelecting.read(reader); }));
 			return resources;
 		};
 		const header = h(document, 'div', { className: 'ash-chat-model-picker-header' });
@@ -175,24 +183,24 @@ export class TabbedModelPicker extends Disposable {
 						filterPlaceholder: localize('chat.modelPicker.search', 'Search models'),
 						focusFilterOnOpen: true, filterAsCombobox: true,
 						itemsVisible: models.length > 0 && !this.delegate.isAutomaticModel(), header,
+						busy: this.selection.isSelecting,
 						accessibilityHelp: () => this.accessibleViewService.show(AccessibleViewType.Help),
 					},
 				};
 			},
 			delegate: {
 				onSelect: async entry => {
-					if (this.selecting.get()) { return; }
-					this.selecting.set(true, undefined);
+					if (session.isDisposed || this.selection.isSelecting.get()) return;
 					error.hidden = true;
 					try {
-						await this.delegate.selectModel(entry.model);
-						if (!session.isDisposed) { this.hide(); }
+						const applied = await this.selection.run(inputLifetime, () => this.delegate.selectModel(entry.model));
+						if (applied && !session.isDisposed) this.hide();
 					} catch {
 						if (!session.isDisposed) {
 							error.textContent = localize('chat.modelPicker.selectionFailed', 'Could not select model');
 							error.hidden = false;
 						}
-					} finally { this.selecting.set(false, undefined); }
+					}
 				},
 				onHide: () => {
 					this.activeCard = undefined;
@@ -200,20 +208,7 @@ export class TabbedModelPicker extends Disposable {
 					this.showing.clear();
 				},
 			},
-			renderHover: (entry, container) => {
-				if (!entry.description?.trim() && !(entry.maximumContextWindow ?? entry.contextWindow)) return undefined;
-				const resources = new DisposableStore();
-				const cards = ModelCard.instantiateObservable(this.instantiationService, resources, container.ownerDocument, undefined);
-				const render = (card: ModelCard): void => {
-					const hadFocus = container.contains(container.ownerDocument.activeElement);
-					card.update(entry);
-					container.replaceChildren(card.element);
-					if (hadFocus) { card.focus(); }
-				};
-				render(cards.get());
-				resources.add(cards.onDidChange(render));
-				return resources;
-			},
+			renderHover: (entry, container) => renderModelPickerHover(entry, container, this.instantiationService),
 			renderWidget: root => {
 				const resources = new DisposableStore();
 				popupRoot = root;
@@ -231,14 +226,16 @@ export class TabbedModelPicker extends Disposable {
 				const configurationResources = resources.add(new DisposableStore());
 				let configurationKey: string | undefined;
 				let effortActions: Action[] = [];
+				let speedActions: readonly Action[] = [];
 				let fast: Switch | undefined;
 				const refreshConfiguration = (selecting: boolean): void => {
 					if (!configureInMenu) { return; }
 					const entry = this.delegate.isAutomaticModel() ? undefined : this.delegate.getSelectedModelEntry();
 					const efforts = entry?.supportedReasoningEfforts?.length
 						? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()) : [];
-					const acceleration = useWorkbenchModelManagement ? entry?.accelerationOptions?.find(option => option.name === 'Fast') : undefined;
-					const key = JSON.stringify([entry?.model, efforts.map(option => option.effort), acceleration?.id]);
+					const acceleration = useWorkbenchModelManagement && entry ? getFastModelVariant(entry) : undefined;
+					const speeds = useWorkbenchModelManagement && entry && !acceleration ? modelPickerAccelerationOptions(entry) : [];
+					const key = JSON.stringify([entry?.model, efforts.map(option => option.effort), acceleration?.id, speeds.map(option => [option.value, option.label])]);
 					if (key !== configurationKey) {
 						const active = document.activeElement;
 						const hadFocus = active && (effortSection.contains(active) || fastSection.contains(active) || sidePanel?.contains(active));
@@ -247,10 +244,17 @@ export class TabbedModelPicker extends Disposable {
 						effortSection.replaceChildren();
 						fastSection.replaceChildren();
 						fast = undefined;
+						speedActions = [];
 						effortActions = efforts.map((option, index) => configurationResources.add(new Action(
 							`chat.modelPicker.effort.${index}`, option.label, undefined, true,
 							() => updateConfiguration(async () => {
-								await this.delegate.selectReasoningEffort(option.effort);
+								if (!entry) return;
+								const current = this.delegate.getSelectedModelEntry();
+								await applyModelReasoningEffort(useWorkbenchModelManagement ? current?.reasoningEffortOverride : undefined, option.effort,
+									() => !resources.isDisposed && !inputLifetime?.aborted && !this.delegate.isAutomaticModel()
+										&& sameModel(this.delegate.getSelectedModel(), entry.model),
+									() => this.languageModels.setModelPreferences(entry.model, { ultra: false }),
+									() => this.delegate.selectReasoningEffort(option.effort));
 								if (!session.isDisposed) { this.hide(); }
 							}),
 						)));
@@ -281,11 +285,18 @@ export class TabbedModelPicker extends Disposable {
 								await updateConfiguration(() => this.languageModels.setModelPreferences(entry.model, { acceleration: value ? acceleration.id : null }));
 								if (hadFocus && toggle.input.isConnected && document.activeElement === document.body) { toggle.focus(); }
 							}));
+						} else if (entry && speeds.length) {
+							speedActions = renderModelSpeedMenu(fastSection, speeds, configurationResources,
+								value => updateConfiguration(() => this.languageModels.setModelPreferences(entry.model, { acceleration: value })), sidePanel);
 						}
 						if (hadFocus) { automaticSwitch?.focus(); }
 					}
 					for (const [index, action] of effortActions.entries()) {
 						action.checked = efforts[index]!.checked;
+						action.enabled = !selecting;
+					}
+					for (const [index, action] of speedActions.entries()) {
+						action.checked = speeds[index]!.checked;
 						action.enabled = !selecting;
 					}
 					if (fast) {
@@ -294,18 +305,15 @@ export class TabbedModelPicker extends Disposable {
 					}
 				};
 				const updateConfiguration = async (update: () => Promise<unknown>): Promise<void> => {
-					if (this.selecting.get()) { return; }
-					this.selecting.set(true, undefined);
+					if (resources.isDisposed || this.selection.isSelecting.get()) return;
 					error.hidden = true;
 					try {
-						await update();
+						await this.selection.run(inputLifetime, update);
 					} catch {
 						if (!resources.isDisposed) {
 							error.textContent = localize('chat.modelPicker.configurationFailed', 'Could not update model settings');
 							error.hidden = false;
 						}
-					} finally {
-						this.selecting.set(false, undefined);
 					}
 				};
 				const actions = manageModels && manageModelsLabel ? [{ ...manageModels, label: manageModelsLabel, run: () => { this.hide(); return manageModels.run(); } }] : [];
@@ -319,11 +327,11 @@ export class TabbedModelPicker extends Disposable {
 					moreSection.hidden = !manageModels || !hasModels || (!configureInMenu && this.delegate.isAutomaticModel());
 					refreshConfiguration(selecting);
 				};
-				resources.add(autorun(reader => refreshFooter(this.selecting.read(reader))));
-				resources.add(this.delegate.onDidChangePresentation(() => refreshFooter(this.selecting.get())));
+				resources.add(autorun(reader => refreshFooter(this.selection.isSelecting.read(reader))));
+				resources.add(this.delegate.onDidChangePresentation(() => refreshFooter(this.selection.isSelecting.get())));
 				return resources;
 			},
-			openItemDetails: item => { this.showDetails(item.item!); return true; },
+			openItemDetails: item => { this.showDetails(item.item!, inputLifetime); return true; },
 		});
 		session.add(this.delegate.onDidChangePresentation(() => {
 			const hadWelcomeFocus = welcome.value?.element.contains(document.activeElement);
@@ -350,17 +358,17 @@ export class TabbedModelPicker extends Disposable {
 		}
 		if (detailsModel) {
 			const entry = this.findModel(detailsModel);
-			if (entry) { this.showDetails(entry); }
+			if (entry) { this.showDetails(entry, inputLifetime); }
 		}
 	}
 
 	private findModel(model: ModelRef): ModelCatalogEntry | undefined {
 		const selected = this.delegate.getSelectedModelEntry();
-		if (selected?.model.provider === model.provider && selected.model.model === model.model) { return selected; }
-		return this.delegate.getModels().find(entry => entry.model.provider === model.provider && entry.model.model === model.model);
+		if (sameModel(selected?.model, model)) return selected;
+		return findModelForChatInput(this.delegate.getModels(), model);
 	}
 
-	private showDetails(entry: ModelCatalogEntry): void {
+	private showDetails(entry: ModelCatalogEntry, inputLifetime: AbortSignal | undefined): void {
 		this.detailsModel = entry.model;
 		const useWorkbenchModelManagement = this.delegate.useWorkbenchModelManagement !== false;
 		this.widget.showDetails({
@@ -369,28 +377,32 @@ export class TabbedModelPicker extends Disposable {
 			focus: () => this.activeCard?.focus(),
 			render: container => {
 				const resources = new DisposableStore();
+				const configure = async (apply: () => Promise<void>): Promise<void> => {
+					if (resources.isDisposed) return;
+					await this.selection.run(inputLifetime, async () => {
+						if (this.delegate.isAutomaticModel() || !sameModel(this.delegate.getSelectedModel(), entry.model)) {
+							await this.delegate.selectModel(entry.model);
+						}
+						if (!resources.isDisposed && !inputLifetime?.aborted && !this.delegate.isAutomaticModel()
+							&& sameModel(this.delegate.getSelectedModel(), entry.model)) await apply();
+					});
+				};
 				const cards = ModelCard.instantiateObservable(this.instantiationService, resources, container.ownerDocument, {
-					getSelectedReasoningEffort: () => {
-						const selected = this.delegate.getSelectedModel();
-						return selected?.provider === entry.model.provider && selected.model === entry.model.model
-							? this.delegate.getSelectedReasoningEffort() : undefined;
-					},
-					onReasoningEffortChange: async effort => {
-						await this.selectForConfiguration(entry);
-						const selected = this.delegate.getSelectedModel();
-						if (resources.isDisposed || selected?.provider !== entry.model.provider || selected.model !== entry.model.model) { return; }
-						await this.delegate.selectReasoningEffort(effort);
-					},
-					onAccelerationChange: useWorkbenchModelManagement ? async acceleration => {
-						await this.selectForConfiguration(entry);
-						if (resources.isDisposed) { return; }
-						await this.languageModels.setModelPreferences(entry.model, { acceleration });
-					} : undefined,
-					onLongContextChange: useWorkbenchModelManagement ? async longContext => {
-						await this.selectForConfiguration(entry);
-						if (resources.isDisposed) { return; }
-						await this.languageModels.setModelPreferences(entry.model, { longContext });
-					} : undefined,
+					getSelectedReasoningEffort: () => sameModel(this.delegate.getSelectedModel(), entry.model)
+						? this.delegate.getSelectedReasoningEffort() : undefined,
+					onReasoningEffortChange: effort => configure(async () => {
+						const current = this.delegate.getSelectedModelEntry();
+						if (effort === undefined) return;
+						await applyModelReasoningEffort(useWorkbenchModelManagement ? current?.reasoningEffortOverride : undefined, effort,
+							() => !resources.isDisposed && !inputLifetime?.aborted && !this.delegate.isAutomaticModel()
+								&& sameModel(this.delegate.getSelectedModel(), entry.model),
+							() => this.languageModels.setModelPreferences(entry.model, { ultra: false }),
+							() => this.delegate.selectReasoningEffort(effort));
+					}),
+					onAccelerationChange: useWorkbenchModelManagement
+						? acceleration => configure(async () => { await this.languageModels.setModelPreferences(entry.model, { acceleration }); }) : undefined,
+					onLongContextChange: useWorkbenchModelManagement
+						? longContext => configure(async () => { await this.languageModels.setModelPreferences(entry.model, { longContext }); }) : undefined,
 				} satisfies IModelCardOptions);
 				const attach = (card: ModelCard): void => {
 					const hadFocus = container.contains(container.ownerDocument.activeElement);
@@ -404,13 +416,6 @@ export class TabbedModelPicker extends Disposable {
 				return resources;
 			},
 		});
-	}
-
-	private async selectForConfiguration(entry: ModelCatalogEntry): Promise<void> {
-		const selected = this.delegate.getSelectedModel();
-		if (this.delegate.isAutomaticModel() || selected?.provider !== entry.model.provider || selected.model !== entry.model.model) {
-			await this.delegate.selectModel(entry.model);
-		}
 	}
 
 	private registerAccessibility(root: HTMLElement, session: DisposableStore, id: string, configureInMenu: boolean): void {
@@ -429,7 +434,7 @@ export class TabbedModelPicker extends Disposable {
 							? this.delegate.useWorkbenchModelManagement === false
 								? localize('chat.modelPicker.hostCatalogHelp', 'Type to filter this chat’s models. Use Up and Down Arrow to browse, Enter to select, and Right Arrow to open model details. Tab to the action for starting a separate chat when available. Escape closes the picker.')
 								: configureInMenu
-									? localize('chat.modelPicker.menuHelp', 'Model picker. Type to filter models. Use Up and Down Arrow to browse, Enter to select, and Right Arrow on a model to open its details. Tab to the Effort submenu and press Right Arrow to choose a level. Tab to Fast Mode and press Space to toggle it. Auto enables automatic model selection. More Models opens Language Models management. Escape closes the current menu.')
+									? localize('chat.modelPicker.menuHelp', 'Model picker. Type to filter models. Use Up and Down Arrow to browse, Enter to select, and Right Arrow on a model to open its details. Tab to the Effort submenu and press Right Arrow to choose a level. Tab to Fast Mode and press Space to toggle it, or use Right Arrow on Speed when several levels are available. Auto enables automatic model selection. More Models opens Language Models management. Escape closes the current menu.')
 									: localize('chat.modelPicker.help', 'Model picker. All enabled models appear in one list. Type in search to filter models across all providers. Up and Down Arrow browse models and Enter selects one. Right Arrow opens model information and supported thinking, context and speed settings. Tab moves between controls; arrow keys change a focused option group. Applying settings selects that model. Back to models or Alt+Left Arrow returns to the retained list and search. Auto enables automatic model selection. Escape closes the picker. Add Models opens Language Models management.')
 							: root.innerText,
 						() => { if (active.isConnected) { active.focus(); } }, AccessibilityVerbositySettingId.ChatModelConfiguration);

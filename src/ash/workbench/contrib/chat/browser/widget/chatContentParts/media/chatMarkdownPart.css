@@ -332,24 +332,52 @@
 }
 .ash-chat-citation {
 	display: inline-block;
-	vertical-align: baseline;
+	vertical-align: middle;
+	max-inline-size: 100%;
 	margin-inline: var(--ash-spacing-size20);
+	font-family: var(--ash-font-family);
+	font-size: var(--ash-fontSize-label1);
 }
-.ash-chat-citation > summary {
-	color: var(--ash-link-foreground);
-	cursor: pointer;
-	font-size: var(--ash-fontSize-body2);
-}
-.ash-chat-citation[open] {
-	display: block;
-	padding: var(--ash-spacing-size80);
+.ash-chat-citation-button {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size80);
 	border: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, var(--ash-border));
-	border-radius: var(--ash-cornerRadius-medium);
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-button-secondaryBackground);
+	color: var(--ash-button-foreground);
+	font: inherit;
+	line-height: 1.25;
+	cursor: pointer;
 }
-.ash-chat-citation > summary:focus-visible {
+.ash-chat-citation-list {
+	display: none;
+}
+.ash-chat-citation-button:hover,
+.ash-chat-citation-button[aria-expanded="true"] {
+	background: var(--ash-button-hoverBackground);
+}
+.ash-chat-citation-chevron {
+	display: inline-flex;
+}
+.ash-chat-citation-button:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: var(--ash-spacing-size20);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+.ash-chat-citation .ash-icon-label-inline-icon {
+	margin: 0;
+}
+.ash-chat-markdown-part hr {
+	border: 0;
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	margin-block: var(--ash-spacing-size160);
+}
+.ash-chat-markdown-part .ash-chat-rich-box > hr {
+	align-self: stretch;
+	margin: 0;
 }
 .ash-chat-resource {
 	color: var(--ash-description-foreground);

@@ -1,0 +1,22 @@
+.ash-chat-changed-files {
+	margin-block: var(--ash-spacing-size80);
+}
+
+.ash-chat-changed-files[hidden] {
+	display: none;
+}
+
+.ash-chat-changed-files > summary {
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-small);
+	cursor: pointer;
+}
+
+.ash-chat-changed-files > summary:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-chat-changed-files > summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}

@@ -116,6 +116,7 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
             },
             ThreadItem::AgentMessage {
                 phase: None,
+                citations: None,
                 item_id: ItemId::new("item_2").unwrap(),
                 turn_id,
                 text: "complete response".into(),
@@ -183,6 +184,7 @@ fn completed_turn_advances_to_the_next_queued_turn() {
             context_usage: None,
             items: vec![ThreadItem::AgentMessage {
                 phase: None,
+                citations: None,
                 item_id: ItemId::new("item_first").unwrap(),
                 turn_id: first_id,
                 text: "first answer".into(),

@@ -1,0 +1,30 @@
+.ash-chat-plan {
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-plan-explanation {
+	margin: 0 0 var(--ash-spacing-size60);
+}
+
+.ash-chat-plan-steps {
+	display: grid;
+	gap: var(--ash-spacing-size40);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ash-chat-plan-step {
+	display: flex;
+	align-items: baseline;
+	gap: var(--ash-spacing-size60);
+}
+
+.ash-chat-plan-step > .ash-icon {
+	flex: none;
+}
+
+.ash-chat-plan-status {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}

@@ -1,6 +1,7 @@
 import { localize } from '../../../../../../../nls.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
-import { getModelConfigSummary, modelPickerEffortOptions, modelPickerAccelerationOptions } from './modelPickerModelConfig.js';
+import { getModelConfigSummary, modelPickerEffortOptions } from './modelPickerModelConfig.js';
+import { modelPickerAccelerationOptions } from './modelPickerVariants.js';
 
 /** Renders supplied state; the toolbar owns the button, its hover and service dependencies. */
 export function renderModelConfigurationButton(

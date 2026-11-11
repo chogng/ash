@@ -6299,6 +6299,7 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
                 item_id: None,
                 request: AgentRequest::UserInput {
                     request: RequestUserInput {
+                        plan_review: None,
                         questions: Vec::new(),
                     },
                 },
@@ -6441,6 +6442,7 @@ impl ToolService for AppServerInteractiveTool {
         _: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
         match interactions.request_user_input(RequestUserInput {
+            plan_review: None,
             questions: vec![ash_protocol::UserInputQuestion {
                 required: true,
                 id: "city".into(),
@@ -6717,6 +6719,7 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
                 item_id: None,
                 request: AgentRequest::UserInput {
                     request: RequestUserInput {
+                        plan_review: None,
                         questions: Vec::new(),
                     },
                 },

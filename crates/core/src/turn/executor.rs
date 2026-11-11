@@ -2227,6 +2227,7 @@ impl InvocationStream {
                     turn_id: self.turn_id.clone(),
                     text: String::new(),
                     phase,
+                    citations: None,
                 },
             });
         }
@@ -2252,6 +2253,7 @@ impl InvocationStream {
                     turn_id: self.turn_id.clone(),
                     text: strip_citations(&message.text).0,
                     phase: message.phase.clone(),
+                    citations: message.citations.clone(),
                 });
             }
         }
@@ -2267,6 +2269,7 @@ impl InvocationStream {
                 turn_id: self.turn_id.clone(),
                 text,
                 phase: None,
+                citations: None,
             });
         } else if items.is_empty() {
             let text = final_text(response, self);
@@ -2278,6 +2281,7 @@ impl InvocationStream {
                     turn_id: self.turn_id.clone(),
                     text,
                     phase: None,
+                    citations: None,
                 });
             }
         }
@@ -2314,6 +2318,7 @@ impl InvocationStream {
             turn_id: self.turn_id.clone(),
             item: ThreadItem::AgentMessage {
                 phase: None,
+                citations: None,
                 item_id: item_id.clone(),
                 turn_id: self.turn_id.clone(),
                 text: String::new(),

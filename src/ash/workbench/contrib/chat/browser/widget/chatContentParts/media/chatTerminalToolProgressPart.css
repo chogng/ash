@@ -1,11 +1,7 @@
 .ash-chat-tool-copy-command {
 	max-width: 100%;
-}
-
-.ash-chat-tool-copy-command .ash-button-label,
-.ash-chat-tool-copy-command .ash-icon-label-segment {
+	--ash-icon-label-white-space: normal;
 	overflow-wrap: anywhere;
-	white-space: normal;
 }
 
 .ash-chat-tool-terminal-actions:not([hidden]) {

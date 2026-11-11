@@ -21,6 +21,7 @@ import { ITelemetryService } from '../../../../../../platform/telemetry/common/t
 import { NullTelemetryService } from '../../../../../../platform/telemetry/common/telemetryUtils.js';
 import { MainThreadDataChannels } from '../../../../../api/browser/mainThreadDataChannels.js';
 import { ChatListWidget } from '../../../../../contrib/chat/browser/widget/chatListWidget.js';
+import { ChatMarkdownRichContentBuilder } from '../../../../../contrib/chat/common/model/chatMarkdownRichContent.js';
 import { DataChannelService, LinkPresentationService } from '../../../browser/dataChannelService.js';
 
 class ExtensionHost extends Disposable implements IExtensionHostApi {
@@ -28,6 +29,7 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 	private readonly changes = this._register(new Emitter<number>());
 	private readonly connection = this._register(new Emitter<AppServerConnectionState>());
 	private incarnation = 1;
+	private linkRequests = 0;
 	public title = 'Issue one';
 	public state: AppServerConnectionState = 'ready';
 	public readonly delivery = document.createElement('output');
@@ -62,6 +64,10 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 		if (request.operation === 'receiveData') {
 			this.delivery.textContent = JSON.stringify(request.payload);
 			return Promise.resolve(null);
+		}
+		document.body.dataset.linkRequests = String(++this.linkRequests);
+		if (request.payload && typeof request.payload === 'object' && 'resource' in request.payload && request.payload.resource === 'https://example.com/issues/2') {
+			return Promise.resolve({ kind: 'issue', status: { kind: 'open', label: 'Open' } });
 		}
 		return Promise.resolve({ kind: 'issue', title: this.title, reference: '#1', status: { kind: 'open', label: 'Open' }, changes: { insertions: 2, deletions: 1 } });
 	}
@@ -99,9 +105,15 @@ api.delivery.setAttribute('aria-label', 'Extension channel delivery');
 api.uriDelivery.setAttribute('aria-label', 'Extension URL delivery');
 document.body.append(container, opened, api.delivery, api.uriDelivery);
 const widget = resources.add(editorServices.createInstance(ChatListWidget, container, { onDidRequestLink: (target: string) => { opened.textContent = target; void opener.open(target, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true }); } }));
+widget.element.style.blockSize = '200px';
 opener.setDefaultExternalOpener({ openExternal: async href => { api.uriDelivery.textContent = `default:${href}`; return true; } });
 widget.setVisible(true);
-widget.render([{ id: 'message', type: 'agentMessage', text: '[Original issue](https://example.com/issues/1) and [Plain link](https://example.org/)', transient: false }]);
+const issueUrl = 'https://example.com/issues/1';
+const richContent = new ChatMarkdownRichContentBuilder('');
+const action = richContent.add({ kind: 'link', link: { href: issueUrl, label: 'Open issue' }, external: true, block: true });
+const citation = richContent.add({ kind: 'citations', entries: [{ number: 1, url: issueUrl, title: 'Search title', snippet: 'Search snippet' }], block: true });
+const text = `[Original *issue*](${issueUrl}) and [Plain link](https://example.org/100%) and [Another *issue*](https://example.com/issues/2)\n\n${action}\n\n${citation}`;
+widget.render([{ id: 'message', type: 'agentMessage', text, markdown: { supportHtml: true, richContent: richContent.content }, transient: false }]);
 const telemetry = services.createInstance(DataChannelForwardingTelemetryService);
 const publish = document.createElement('button');
 publish.textContent = 'Publish edit event';

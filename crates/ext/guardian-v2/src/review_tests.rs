@@ -75,6 +75,7 @@ impl ModelInvoker for RecordingInvoker {
                 id: "assessment".into(),
                 text: r#"{"recommendation":"deny","reason":"unsafe"}"#.into(),
                 phase: Some(protocol::MessagePhase::FinalAnswer),
+                citations: None,
             })],
             usage: None,
             billing: None,

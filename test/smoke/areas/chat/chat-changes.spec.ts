@@ -64,8 +64,14 @@ test('Chat changes follow the selected conversation, history cursor and workspac
 		await expectChanges(a, 0);
 		await shell(a, writeLines('a.txt', 'A line', 120), 'a-120-lines');
 		await expectChanges(a, 120);
+		const reviewFiles = chat.getByRole('button', { name: 'Review changed files', exact: true });
+		await reviewFiles.press('Enter');
+		const workingSet = chat.getByRole('region', { name: 'Review changed files', exact: true });
+		await workingSet.getByRole('button', { name: /Open changes for a\.txt/ }).press('Enter');
+		await expect(page.locator('.stanza-multi-diff-editor:visible')).toContainText('A line 1');
 		await openDiff('a.txt', 'A line 1');
 		await open(b);
+		await expect(workingSet).toBeHidden();
 		await expectChanges(b, 0);
 		await shell(b, writeLines('b.txt', 'B line', 7), 'b-seven-lines');
 		await expectChanges(b, 7);

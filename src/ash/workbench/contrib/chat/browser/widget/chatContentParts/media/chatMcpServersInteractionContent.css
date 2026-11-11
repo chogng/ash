@@ -1,0 +1,24 @@
+.ash-chat-mcp-authentication {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size80);
+	margin-block-end: var(--ash-spacing-size80);
+}
+
+.ash-chat-interaction .ash-chat-mcp-authentication > p {
+	flex: 1 1 min(100%, 16em);
+	overflow-wrap: anywhere;
+	margin: 0;
+}
+
+.ash-chat-mcp-authentication-feedback {
+	flex-basis: 100%;
+	color: var(--ash-description-foreground);
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-mcp-authentication-feedback:empty {
+	display: none;
+}

@@ -6,6 +6,10 @@ import { createTestLanguageModelToolsService } from '../common/tools/testLanguag
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { isMacintosh } from '../../../../../base/common/platform.js';
+import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
+import { IChatMarkdownAnchorService } from '../../browser/widget/chatContentParts/chatMarkdownAnchorService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
@@ -58,14 +62,14 @@ import { DisposableStore, toDisposable } from '../../../../../base/common/lifecy
 import { createCodeEditorServices, createTestCodeEditor, registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { chatTranscriptListItems } from '../../common/model/chatViewModel.js';
+import { chatListItem, chatTranscriptListItems } from '../../common/model/chatViewModel.js';
 import type { ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
 import { Range } from '../../../../../editor/common/core/range.js';
-import type { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { openChatMarkdownLink } from '../../browser/widget/chatWidget.js';
 import { ChatListWidget } from '../../browser/widget/chatListWidget.js';
 import '../../browser/chat.shared.contribution.js';
-import { ChatEditorConfiguration, ChatInputConfiguration } from '../../common/constants.js';
+import { ChatConfiguration, ChatEditorConfiguration, ChatInputConfiguration } from '../../common/constants.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
@@ -75,6 +79,23 @@ import { IWorkspaceContextService } from '../../../../../platform/workspace/comm
 import { createTestPathService } from '../../../../test/common/workbenchHostTestServices.js';
 
 const document = browserEnvironment.window.document;
+
+test('Chat updates a structured Turn plan in place and keeps step text literal', () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
+	const plan = { id: 'plan', type: 'plan' as const, text: 'Prepare files', transient: false };
+	const step = 'Review [untrusted](https://example.test)';
+	widget.render([{ ...plan, plan: { explanation: '**Review plan**', steps: [{ step, status: 'inProgress' }] } }]);
+	const row = widget.element.querySelector('[data-item-id="plan"]')!;
+	assert.equal(row.querySelector('[aria-current="step"]')?.textContent, `In progress ${step}`);
+	assert.equal(row.querySelector('strong')?.textContent, 'Review plan');
+	assert.equal(row.querySelector('a'), null);
+	widget.render([{ ...plan, plan: { steps: [{ step, status: 'completed' }] } }]);
+	assert.equal(widget.element.querySelector('[data-item-id="plan"]'), row);
+	assert.equal(row.querySelector('[data-status="completed"]')?.textContent, `Completed ${step}`);
+	assert.equal(row.querySelector('[aria-current]'), null);
+});
 
 test('Chat renders connection-qualified conversation links without permitting script links', () => {
 	using resources = new DisposableStore();
@@ -112,6 +133,47 @@ test('Chat exposes explicit file references as streamed destinations complete', 
 		{ resource: URI.parse('file:///workspace/src/main.ts') },
 		{ selection: new Range(12, 1, 12, 1) },
 	]);
+});
+
+test('Chat file anchors copy the focused resource and use the most specific editor association in either group', async () => {
+	using resources = new DisposableStore();
+	const workbench = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(workbench.createChild());
+	const copy = mock.fn<IClipboardService['writeResources']>(async () => { });
+	const openEditor = mock.fn<IEditorService['openEditor']>(async () => { });
+	services.registerInstance(IClipboardService, { writeResources: copy } as unknown as IClipboardService);
+	services.registerInstance(IEditorService, { openEditor } as unknown as IEditorService);
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
+	const configuration = services.get(IConfigurationService);
+	await configuration.updateValue(ChatConfiguration.EditorAssociations, { '**/src/main.ts': 'ash.test.specific', '*.ts': 'ash.test.generic' });
+	const container = document.createElement('main');
+	document.body.append(container);
+	resources.add(toDisposable(() => container.remove()));
+	let opening: Promise<void> | undefined;
+	using widget = services.createInstance(ChatListWidget, container, {
+		onDidRequestLink: (target: string) => { opening = openChatMarkdownLink(target, undefined, { openEditor }, configuration); },
+	});
+	const href = 'file:///workspace/src/main.ts#L12,3';
+	const item = { id: 'file-anchor', type: 'agentMessage' as const, transient: false };
+	widget.render([{ ...item, text: `[Source](${href})` }]);
+	const anchor = widget.element.querySelector<HTMLAnchorElement>('.ash-chat-inline-anchor')!;
+	const focus = services.get(IChatMarkdownAnchorService);
+	anchor.focus();
+	assert.equal(focus.lastFocusedAnchor?.element, anchor);
+	anchor.click();
+	await opening;
+	const options = { selection: new Range(12, 3, 12, 3), preferredEditorId: 'ash.test.specific' };
+	assert.deepEqual(openEditor.mock.calls[0]?.arguments, [{ resource: URI.file('/workspace/src/main.ts') }, options]);
+	const keydown = (key: string, modifiers: KeyboardEventInit) => anchor.dispatchEvent(
+		new browserEnvironment.window.KeyboardEvent('keydown', { key, ...modifiers, bubbles: true, cancelable: true }));
+	assert.equal(keydown('c', isMacintosh ? { metaKey: true } : { ctrlKey: true }), false);
+	assert.deepEqual(copy.mock.calls[0]?.arguments, [[URI.file('/workspace/src/main.ts')], 'copy']);
+	assert.equal(keydown('Enter', { ctrlKey: true }), false);
+	assert.deepEqual(openEditor.mock.calls[1]?.arguments, [
+		{ resource: URI.file('/workspace/src/main.ts') }, options, 'sideGroup',
+	]);
+	widget.render([{ ...item, text: 'Reference removed' }]);
+	assert.equal(focus.lastFocusedAnchor, undefined);
 });
 
 test('Chat opens explicit and plain-text file references at the correct line in each Git worktree', async () => {
@@ -541,6 +603,54 @@ test('Skill diagnostics follow shared editor bindings and cancel validation afte
 		assert.equal(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).length, 0);
 	} finally {
 		mock.timers.reset();
+	}
+});
+
+test('renders finalized code matches as literal, localized response citations', () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
+	document.body.append(widget.element);
+	resources.add(toDisposable(() => widget.element.remove()));
+	const reply = { type: 'agentMessage', itemId: 'reply', turnId: 'turn', text: 'Example reply' } as const;
+	const url = 'https://github.com/example/repo/blob/main/lib.rs';
+	const snippet = '<img src=x onerror=alert(1)>';
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	try {
+		widget.render([chatListItem(reply, true)]);
+		const body = widget.element.querySelector('.ash-chat-markdown-part');
+		widget.render([chatListItem({
+			...reply, citations: [
+				{ type: 'web', url: 'https://example.test/doc', title: 'Documentation' },
+				{ type: 'web', url: 'https://example.test/doc', title: 'Duplicate' },
+				{ type: 'code', url, license: 'MIT', snippet },
+				{ type: 'code', url: 'javascript:alert(1)', license: 'MIT', snippet },
+			]
+		})]);
+		const matches = widget.element.querySelector<HTMLDetailsElement>('.ash-chat-code-citations')!;
+		assert.equal(widget.element.querySelector('.ash-chat-markdown-part'), body);
+		const sources = widget.element.querySelector('.ash-chat-response-citations button');
+		assert.equal(sources?.textContent, '来源（1）');
+		assert.equal(sources?.getAttribute('aria-haspopup'), 'dialog');
+		assert.equal(matches.querySelector('summary')?.textContent, '匹配代码（1）');
+		assert.equal(matches.querySelector('.ash-chat-code-citation-license')?.textContent, '许可证：MIT');
+		assert.equal(matches.querySelector('a')?.href, url);
+		assert.equal(matches.querySelector('pre code')?.textContent, snippet);
+		assert.equal(matches.querySelector('img'), null);
+		matches.open = true;
+		const sourceLink = matches.querySelector('a')!;
+		sourceLink.focus();
+		widget.render([chatListItem({
+			...reply, citations: [
+				{ type: 'web', url: 'https://example.test/updated', title: 'Updated source' },
+				{ type: 'code', url, license: 'MIT', snippet },
+			]
+		})]);
+		assert.equal(matches.open, true);
+		assert.equal(document.activeElement, sourceLink);
+		assert.equal(widget.element.querySelector('.ash-chat-code-citations'), matches);
+	} finally {
+		resetNlsResolver();
 	}
 });
 

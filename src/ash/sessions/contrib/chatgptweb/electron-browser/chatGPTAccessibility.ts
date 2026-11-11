@@ -7,7 +7,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import type { ServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
-import { getChatCodeBlockCardAccessibilityHelp, getChatRequestAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
+import { getChatCodeBlockCardAccessibilityHelp, getChatLinkPreviewAccessibilityHelp, getChatRequestAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
 import { experimentalChatGPTSelected } from '../common/chatGPTNative.js';
 import { CHAT_NAVIGATION_FOCUS_CONTEXT } from '../../chat/common/constants.js';
 import { getSessionsListAttentionHelp, getSessionsListGroupingHelp } from '../../sessions/browser/views/sessionsListActions.js';
@@ -45,6 +45,7 @@ export function registerChatGPTAccessibility(focusContext: string, contentServic
 					+ '\n\n' + getSessionsListGroupingHelp()
 					+ '\n\n' + localize('sessions.chat.entityOpenHelp', 'Press Enter on an entity name to open its details in the auxiliary sidebar.')
 					+ '\n\n' + localize('sessions.chatgpt.imageGalleryHelp', 'Use Tab to reach images and their sources. Press Enter to preview an image and Escape to return to it.')
+					+ '\n\n' + getChatLinkPreviewAccessibilityHelp()
 					+ '\n\n' + getChatRequestAccessibilityHelp(true)
 					+ '\n\n' + getChatCodeBlockCardAccessibilityHelp()
 					+ '\n\n' + localize('sessions.chatgpt.messageVersionsHelp', 'For a message with alternate versions, use Message versions in its toolbar. Use Up or Down Arrow to select a version and Enter to open it. Escape closes the picker.')

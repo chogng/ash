@@ -309,6 +309,7 @@ fn reinstalling_a_cell_advances_its_render_revision() {
         turn_id: turn_id.clone(),
         item: ThreadItem::AgentMessage {
             phase: None,
+            citations: None,
             item_id: item_id("agent-item"),
             turn_id,
             text: "streamed answer".into(),
@@ -657,6 +658,7 @@ fn message(entry: &str, turn: &TurnId, role: MessageRole, text: &str) -> ThreadT
         },
         MessageRole::Agent => ThreadItem::AgentMessage {
             phase: None,
+            citations: None,
             item_id: item_id(entry),
             turn_id: turn.clone(),
             text: text.into(),

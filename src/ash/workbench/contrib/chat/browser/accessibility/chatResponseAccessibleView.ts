@@ -6,7 +6,8 @@ import type { IAccessibleViewImplementation } from '../../../../../platform/acce
 import type { ChatToolCallBinding } from '../../../../../platform/agentHost/common/agent.js';
 import type { ChatContentPart } from '../../../../services/chat/common/chatService.js';
 import { formatChatMessageTime, formatLoadedSkillReason, type IChatListItem } from '../../common/model/chatViewModel.js';
-import { reviveChatTreeData, type IChatResponseProgressFileTreeData } from '../../common/chatService/chatService.js';
+import { chatToolResultPresentation, reviveChatTreeData, type IChatResponseProgressFileTreeData } from '../../common/chatService/chatService.js';
+import { chatSubagentStatusLabel } from '../../common/model/chatSubagentActivity.js';
 import { ChatAccessibilityProvider } from './chatAccessibilityProvider.js';
 import { renderChatMarkdownPlaintext, renderChatRichContentText } from '../widget/chatMarkdownRichContent.js';
 
@@ -49,7 +50,12 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 		}
 		const invocation = item.toolInvocation;
 		if (invocation) {
-			const { call, output, result, stopped, waitingFor, executionStarted } = invocation;
+			const { call, output, result, stopped, waitingFor, executionStarted, subagentActivity } = invocation;
+			if (subagentActivity) {
+				const target = chatToolResultPresentation(result);
+				if (target?.type === 'sessionTarget') sections.push(target.label);
+				sections.push(chatSubagentStatusLabel(subagentActivity), subagentActivity.result?.summary ?? '');
+			}
 			if (result) {
 				sections.push(result.isError ? localize('chat.tool.failed', '{0} · Failed', call.name) : localize('chat.tool.completed', '{0} · Completed', call.name));
 			} else if (!stopped && waitingFor) {

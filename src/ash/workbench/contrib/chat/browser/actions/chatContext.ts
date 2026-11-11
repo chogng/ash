@@ -24,7 +24,8 @@ import { IClipboardService } from '../../../../../platform/clipboard/common/clip
 import { GitHubIssueState, IGitHubService, type GitHubRepository } from '../../../../../platform/github/common/githubService.js';
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import { createToolSelectionAttachment, showToolsPicker, toolSetLabel } from './chatToolPicker.js';
+import { showToolsPicker, toolSetLabel } from './chatToolPicker.js';
+import { createToolSelectionAttachment, readChatSelectedTools } from '../widget/input/chatSelectedTools.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { convertBufferToScreenshotVariable } from '../attachments/chatScreenshotContext.js';
@@ -69,49 +70,51 @@ class ToolsContextPickerPick implements IChatContextPickerItem {
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) { }
 
-	public isEnabled(): boolean { return this.toolsService.isAvailable; }
+	public isEnabled(widget?: IChatWidget): boolean {
+		return (widget?.input.languageModelTools ?? this.toolsService).isAvailable;
+	}
 
 	public asPicker(widget?: IChatWidget): IChatContextPicker {
+		const toolsService = widget?.input.languageModelTools ?? this.toolsService;
 		const lifetime = new DisposableStore();
 		const controller = new AbortController();
 		lifetime.add(toDisposable(() => controller.abort()));
-		const changed = observableSignalFromEvent(lifetime, this.toolsService.onDidChangeTools);
+		const changed = observableSignalFromEvent(lifetime, toolsService.onDidChangeTools);
 		let disabled: readonly string[] = [];
 		const load = async (): Promise<IChatContextPickerPickItem[]> => {
-			await this.toolsService.refresh();
+			await toolsService.refresh();
 			if (controller.signal.aborted) return [];
-			const selection = widget?.input.attachmentModel.attachments.find(attachment => attachment.kind === 'toolSelection');
-			disabled = selection ? JSON.parse((await selection.resolve()).content) : [];
+			disabled = await readChatSelectedTools(widget?.input.attachmentModel.attachments ?? []);
 			return [];
 		};
 		// Discovery and the captured draft selection belong to this picker, never the registration.
 		const initial = load();
 		const getPicks = (query: string): IChatContextPickerPickItem[] => {
-			const tools = [...this.toolsService.getAllToolsIncludingDisabled()].filter(tool => tool.canBeReferencedInPrompt && !disabled.includes(tool.id));
-			const sets = [...this.toolsService.toolSets.get()].filter(set => [...set.getTools()].some(tool => tool.canBeReferencedInPrompt && !disabled.includes(tool.id)));
+			const tools = [...toolsService.getAllToolsIncludingDisabled()].filter(tool => tool.canBeReferencedInPrompt && !disabled.includes(tool.id));
+			const sets = [...toolsService.toolSets.get()].filter(set => [...set.getTools()].some(tool => tool.canBeReferencedInPrompt && !disabled.includes(tool.id)));
 			const references: IChatContextPickerPickItem[] = [
 				...tools.map(tool => {
-					const reference = this.toolsService.getFullReferenceName(tool);
+					const reference = toolsService.getFullReferenceName(tool);
 					return {
 						label: tool.displayName, description: tool.sourceDetails.join(' › '),
 						detail: `${tool.modelDescription}\n${reference}`,
-						asAttachment: () => this.captureReference(reference, disabled) ?? [],
+						asAttachment: () => this.captureReference(toolsService, reference, disabled) ?? [],
 					};
 				}),
 				...sets.map(set => {
-					const reference = this.toolsService.getFullReferenceName(set);
+					const reference = toolsService.getFullReferenceName(set);
 					const members = [...set.getTools()].filter(tool => tool.canBeReferencedInPrompt && !disabled.includes(tool.id)).map(tool => tool.id);
 					return {
 						label: toolSetLabel(set), description: localize('chat.tools.set', 'Tool set'),
 						detail: `${members.join(', ')}\n${reference}`,
-						asAttachment: () => this.captureReference(reference, disabled) ?? [],
+						asAttachment: () => this.captureReference(toolsService, reference, disabled) ?? [],
 					};
 				}),
 			];
 			return [...filterQuickPickItems(references, query), {
 				label: localize('chat.tools.configure', 'Configure tools…'), alwaysShow: true,
 				asAttachment: async () => {
-					const selection = await showToolsPicker(this.quickInput, this.toolsService, disabled, controller.signal);
+					const selection = await showToolsPicker(this.quickInput, toolsService, disabled, controller.signal);
 					return selection && !controller.signal.aborted ? createToolSelectionAttachment(selection) : [];
 				},
 			}];
@@ -130,8 +133,8 @@ class ToolsContextPickerPick implements IChatContextPickerItem {
 		};
 	}
 
-	private captureReference(name: string, disabled: readonly string[]): ChatContextAttachment | undefined {
-		const reference = this.toolsService.getToolByFullReferenceName(name);
+	private captureReference(toolsService: ILanguageModelToolsService, name: string, disabled: readonly string[]): ChatContextAttachment | undefined {
+		const reference = toolsService.getToolByFullReferenceName(name);
 		const set = isToolSet(reference) ? reference : undefined;
 		const tool = reference && !isToolSet(reference) ? reference : undefined;
 		if (!tool && !set) { return undefined; }

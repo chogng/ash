@@ -141,6 +141,13 @@ async function readTurnFileContents(chat: IChatService, change: ISessionFileChan
 	return contents;
 }
 
+/** Reads one file and verifies it still belongs to the displayed capture. */
+export async function readCapturedTurnFile(chat: IChatService, change: ISessionFileChange, signal: AbortSignal): Promise<TurnChangeFileContents> {
+	const contents = await readTurnFileContents(chat, change, signal);
+	await assertTurnCaptureCurrent(chat, change.summary, signal);
+	return contents;
+}
+
 async function assertTurnCaptureCurrent(chat: IChatService, summary: TurnChangeSetSummary, signal?: AbortSignal): Promise<void> {
 	if (signal) throwIfCancelled(signal);
 	const pending = chat.readTurnChange(summary.sessionId, summary.threadId, summary.changeSetId);

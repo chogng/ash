@@ -1,0 +1,25 @@
+.ash-chat-transcript-working {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-chat-transcript-working-sticky {
+	position: absolute;
+	inset-inline-start: var(
+		--ash-chat-content-inset,
+		var(--ash-spacing-size120)
+	);
+	inset-block-end: calc(
+		var(--ash-chat-transcript-composer-overlap, 0px) +
+			var(--ash-spacing-size80)
+	);
+	z-index: 2;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-medium);
+	background-color: var(
+		--ash-chat-transcript-surface,
+		var(--ash-editor-background)
+	);
+	pointer-events: none;
+}

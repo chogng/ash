@@ -1,5 +1,5 @@
 import { Disposable, DisposableStore, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
-import { Separator, type IAction } from '../../../../../../../base/common/actions.js';
+import { Separator, type Action, type IAction } from '../../../../../../../base/common/actions.js';
 import { AnchorAlignment, AnchorPosition } from '../../../../../../../base/common/layout.js';
 import { createUuid } from '../../../../../../../base/common/uuid.js';
 import { clamp } from '../../../../../../../base/common/numbers.js';
@@ -19,15 +19,22 @@ import { ILanguageModelsService } from '../../../../common/languageModels.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { modelRefIdentity, type ModelCatalogEntry, type ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 import { modelPickerEffortOptions } from './modelPickerModelConfig.js';
+import { getFastModelVariant, modelPickerAccelerationOptions, renderModelSpeedMenu } from './modelPickerVariants.js';
+import { applyModelReasoningEffort } from '../chatModelConfigurationLogic.js';
+import { getModelProviderIcon } from './modelProviderIcons.js';
+import { getModelPickerLabel } from './modelPickerPresentation.js';
 import type { ModelPreferencesUpdate } from '../../../../../../../platform/models/common/agentModels.js';
+import { autorun } from '../../../../../../../base/common/observable.js';
+import type { ChatInputModelSelectionController } from '../chatInputModelSelectionController.js';
+import { findModelForChatInput, sameModel } from '../chatInputModelUtils.js';
 
 /** Presents model selection above the trigger next to the effort control in Chat. */
 export class ChatModelSliderWidget extends Disposable {
 	private readonly panel: TabbedActionListWidget;
-	private savingModelPreference = false;
 
 	constructor(
 		private readonly delegate: IModelPickerDelegate,
+		private readonly selection: ChatInputModelSelectionController,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@ILanguageModelsService private readonly languageModels: ILanguageModelsService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -99,24 +106,20 @@ export class ChatModelSliderWidget extends Disposable {
 		return entry;
 	}
 
-	private async updateModelPreference(change: (model: ModelCatalogEntry) => ModelPreferencesUpdate | undefined): Promise<boolean> {
-		if (this.savingModelPreference || this.delegate.canSelectModel?.() === false) { return false; }
+	private async updateModelPreference(inputLifetime: AbortSignal | undefined, change: (model: ModelCatalogEntry) => ModelPreferencesUpdate | undefined): Promise<boolean> {
+		if (this.delegate.canSelectModel?.() === false) return false;
 		const model = this.getSelectedBuiltInModel();
 		const update = model && change(model);
 		if (!model || !update) { return false; }
-		this.savingModelPreference = true;
 		try {
-			await this.languageModels.setModelPreferences(model.model, update);
-			return true;
+			return await this.selection.run(inputLifetime, () => this.languageModels.setModelPreferences(model.model, update));
 		} catch {
 			if (!this.isDisposed) { this.notifications.error(localize('chat.modelPicker.configurationFailed', 'Could not update model settings')); }
 			return false;
-		} finally {
-			this.savingModelPreference = false;
 		}
 	}
 
-	private renderModelActions(row: HTMLElement, summary: HTMLElement, modelButton: HTMLButtonElement, rendered: DisposableStore): void {
+	private renderModelActions(row: HTMLElement, summary: HTMLElement, modelButton: HTMLButtonElement, rendered: DisposableStore, inputLifetime: AbortSignal | undefined): void {
 		const addToggle = (
 			id: string, label: string, icon: Icon, activeIcon: Icon,
 			readChecked: (model: ModelCatalogEntry) => boolean | undefined, run: () => Promise<boolean>,
@@ -146,19 +149,46 @@ export class ChatModelSliderWidget extends Disposable {
 		};
 		addToggle('chat.modelPicker.fastMode', localize('chat.modelPicker.fastMode', 'Fast Mode'), Lxicon.lightning, Lxicon.lightningFilled,
 			model => {
-				const fast = model.accelerationOptions?.find(option => option.name === 'Fast');
+				const fast = getFastModelVariant(model);
 				return fast && model.selectedAcceleration === fast.id;
-			}, () => this.updateModelPreference(model => {
-				const fast = model.accelerationOptions?.find(option => option.name === 'Fast');
+			}, () => this.updateModelPreference(inputLifetime, model => {
+				const fast = getFastModelVariant(model);
 				return fast && { acceleration: model.selectedAcceleration === fast.id ? null : fast.id };
 			}));
+		const speed = h(row.ownerDocument, 'div', { className: 'ash-chat-slider-speed-menu' });
+		row.append(speed);
+		const speedResources = rendered.add(new DisposableStore());
+		let speedKey: string | undefined;
+		let actions: readonly Action[] = [];
+		const refreshSpeeds = (selecting: boolean): void => {
+			const model = this.getSelectedBuiltInModel();
+			const options = model && !getFastModelVariant(model) ? modelPickerAccelerationOptions(model) : [];
+			const key = JSON.stringify([model?.model, options.map(option => [option.value, option.label])]);
+			if (key !== speedKey) {
+				speedKey = key;
+				if (speed.contains(row.ownerDocument.activeElement)) modelButton.focus({ preventScroll: true });
+				speedResources.clear();
+				speed.replaceChildren();
+				speed.hidden = !options.length;
+				actions = options.length ? renderModelSpeedMenu(speed, options, speedResources,
+					value => this.updateModelPreference(inputLifetime, current => sameModel(model?.model, current.model)
+						? { acceleration: value } : undefined)) : [];
+			}
+			for (const [index, action] of actions.entries()) {
+				action.checked = options[index]!.checked;
+				action.enabled = !selecting;
+			}
+		};
+		rendered.add(autorun(reader => refreshSpeeds(this.selection.isSelecting.read(reader))));
+		rendered.add(this.delegate.onDidChangePresentation(() => refreshSpeeds(this.selection.isSelecting.get())));
 		row.append(summary);
 		addToggle('chat.modelPicker.ultraMode', localize('chat.modelPicker.ultraMode', 'Ultra Mode'), Lxicon.brain, Lxicon.brain,
-			model => model.ultra, () => this.updateModelPreference(model => model.ultra === undefined ? undefined : { ultra: !model.ultra }));
+			model => model.ultra, () => this.updateModelPreference(inputLifetime, model => model.ultra === undefined ? undefined : { ultra: !model.ultra }));
 	}
 
 	private renderContent(container: HTMLElement, layout: () => void): IDisposable {
 		const lifetime = new DisposableStore();
+		const inputLifetime = this.delegate.getInputLifecycle?.();
 		const rendered = lifetime.add(new DisposableStore());
 		const document = container.ownerDocument;
 		const root = h(document, 'div', { className: 'ash-chat-model-slider-widget' });
@@ -166,11 +196,13 @@ export class ChatModelSliderWidget extends Disposable {
 		const effortLabelId = `${drawerId}-effort`;
 		container.classList.add('ash-chat-model-slider-dialog');
 		container.append(root);
+		lifetime.add(autorun(reader => {
+			container.setAttribute('aria-busy', String(this.selection.isSelecting.read(reader)));
+		}));
 
 		const models = this.delegate.getModels();
 		let displayedModels = models;
-		const selectedModelRef = this.delegate.getSelectedModel();
-		const currentModel = models.find(m => m.model.provider === selectedModelRef?.provider && m.model.model === selectedModelRef.model);
+		const currentModel = findModelForChatInput(models, this.delegate.getSelectedModel());
 		const hasMultiplePresets = !this.delegate.isAutomaticModel() && this.effortChoices(currentModel).length > 1;
 
 		// Expand drawer by default only if there are no effort presets to adjust
@@ -202,13 +234,18 @@ export class ChatModelSliderWidget extends Disposable {
 			const actions: IAction[] = entries.map(entry => ({
 				id: entry ? modelRefIdentity(entry.model) : 'chat.modelPicker.auto',
 				label: entry?.displayName ?? localize('chat.modelPicker.auto', 'Auto'),
+				icon: entry && getModelProviderIcon(entry),
 				tooltip: '',
-				checked: entry ? entry === activeModel : automatic,
+				checked: entry ? !automatic && sameModel(entry.model, activeSelectedRef) : automatic,
 				enabled: true,
 				run: async () => {
+					if (lifetime.isDisposed) return;
 					try {
-						if (entry) await this.delegate.selectModel(entry.model);
-						else await this.delegate.selectAutomaticModel?.();
+						const applied = await this.selection.run(inputLifetime, async () => {
+							if (entry) await this.delegate.selectModel(entry.model);
+							else await this.delegate.selectAutomaticModel?.();
+						});
+						if (!applied) return;
 					} catch (error) {
 						if (!lifetime.isDisposed) this.notifications.error(toErrorMessage(error));
 						return;
@@ -234,7 +271,7 @@ export class ChatModelSliderWidget extends Disposable {
 			}, defaultMenuStyles));
 			root.append(drawer);
 
-			const modelTitle = automatic ? localize('chat.modelPicker.auto', 'Auto') : activeModel?.displayName ?? activeSelectedRef?.model ?? localize('chat.modelPicker.selectModel', 'Select model');
+			const modelTitle = getModelPickerLabel(automatic, activeModel, activeSelectedRef);
 			const modelButton = h(document, 'button', {
 				className: 'ash-chat-slider-model-button',
 				attributes: {
@@ -270,7 +307,7 @@ export class ChatModelSliderWidget extends Disposable {
 			root.append(effortCard);
 			if (presets.length > 1 || useWorkbenchModelManagement) {
 				const speedRow = h(document, 'div', { className: 'ash-chat-slider-speed-row' });
-				if (useWorkbenchModelManagement) { this.renderModelActions(speedRow, summary, modelButton, rendered); }
+				if (useWorkbenchModelManagement) { this.renderModelActions(speedRow, summary, modelButton, rendered, inputLifetime); }
 				else { speedRow.append(summary); }
 				effortCard.append(speedRow);
 			} else {
@@ -341,20 +378,22 @@ export class ChatModelSliderWidget extends Disposable {
 				rendered.add(this.delegate.onDidChangePresentation(refreshEffort));
 
 				const selectEffort = async (index: number) => {
-					if (drag.isMonitoring() || this.savingModelPreference || this.delegate.canSelectModel?.() === false) { return; }
+					if (lifetime.isDisposed || drag.isMonitoring() || this.delegate.canSelectModel?.() === false) return;
 					const model = this.getSelectedBuiltInModel();
-					if (model?.reasoningEffortOverride !== undefined) {
-						if (index === activeIndex) { return; }
-						const inputLifecycle = this.delegate.getInputLifecycle?.();
-						if (!await this.updateModelPreference(() => ({ ultra: false }))) { return; }
-						const selected = this.delegate.getSelectedModel();
-						if (this.isDisposed || inputLifecycle?.aborted || this.delegate.isAutomaticModel()
-							|| selected?.provider !== model.model.provider || selected.model !== model.model.model) { return; }
-					}
-					await presets[index].select();
-					if (slider.isConnected) {
-						refreshEffort();
-						slider.focus({ preventScroll: true });
+					try {
+						const applied = await this.selection.run(inputLifetime, () => applyModelReasoningEffort(
+							model?.reasoningEffortOverride, presets[index].id,
+							() => !lifetime.isDisposed && !this.isDisposed && !inputLifetime?.aborted && !this.delegate.isAutomaticModel()
+								&& sameModel(this.delegate.getSelectedModel(), activeSelectedRef),
+							async () => { if (model) await this.languageModels.setModelPreferences(model.model, { ultra: false }); },
+							async () => { await presets[index].select(); },
+						));
+						if (applied && slider.isConnected) {
+							refreshEffort();
+							slider.focus({ preventScroll: true });
+						}
+					} catch {
+						if (!lifetime.isDisposed) this.notifications.error(localize('chat.modelPicker.configurationFailed', 'Could not update model settings'));
 					}
 				};
 
@@ -399,7 +438,7 @@ export class ChatModelSliderWidget extends Disposable {
 					return closestIdx;
 				};
 				rendered.add(addDisposableListener(slider, 'pointerdown', event => {
-					if (event.button !== 0 || drag.isMonitoring() || this.savingModelPreference || this.delegate.canSelectModel?.() === false) { return; }
+					if (event.button !== 0 || drag.isMonitoring() || this.selection.isSelecting.get() || this.delegate.canSelectModel?.() === false) { return; }
 					layout();
 					// Read the rendered end stops so the pointer uses the same travel as the ticks and thumb.
 					const firstTick = ticks[0].getBoundingClientRect();

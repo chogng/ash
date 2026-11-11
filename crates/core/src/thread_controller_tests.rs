@@ -286,6 +286,7 @@ fn start_turn(threads: &ThreadController, thread: &ThreadId, key: &str) -> TurnI
 fn user_input_interaction() -> AgentRequest {
     AgentRequest::UserInput {
         request: RequestUserInput {
+            plan_review: None,
             questions: vec![UserInputQuestion {
                 required: true,
                 id: "answer".into(),
@@ -3801,6 +3802,7 @@ fn speech_committed_during_a_model_request_does_not_supersede_the_original_respo
                 turn_id: turn.clone(),
                 text: "The original answer".into(),
                 phase: Some(ash_protocol::MessagePhase::FinalAnswer),
+                citations: None,
             }],
             ash_protocol::TurnLoopDecision {
                 action: ash_protocol::TurnLoopAction::Complete,

@@ -52,7 +52,7 @@ export class ChatMcpAppSubPart extends Disposable {
 		this.viewport.className = 'ash-chat-mcp-app-viewport';
 		this.viewport.hidden = true;
 		this.domNode.append(this.viewport);
-		this.model = this._register(instantiation.createInstance(ChatMcpAppModel, coordinate, argumentsJson, result, delegate));
+		this.model = this._register(instantiation.createInstance(ChatMcpAppModel, coordinate, this.identity, argumentsJson, result, delegate));
 		this._register(this.model.onDidChangeHeight(() => this.height.fire()));
 		this._register(autorun(reader => {
 			const state = this.model.loadState.read(reader);

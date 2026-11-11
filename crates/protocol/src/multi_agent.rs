@@ -59,6 +59,9 @@ pub struct AgentTreeNodeProjection {
     pub title: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
+    pub origin: Option<crate::ThreadOrigin>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
     pub parent_thread_id: Option<ThreadId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]

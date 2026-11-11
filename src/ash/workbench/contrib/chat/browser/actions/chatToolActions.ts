@@ -5,9 +5,9 @@ import { Action2, registerAction2 } from '../../../../../platform/actions/common
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
-import { ILanguageModelToolsService } from '../../common/tools/languageModelToolsService.js';
 import { IChatWidgetService } from '../chat.js';
-import { createToolSelectionAttachment, showToolsPicker } from './chatToolPicker.js';
+import { showToolsPicker } from './chatToolPicker.js';
+import { createToolSelectionAttachment, readChatSelectedTools } from '../widget/input/chatSelectedTools.js';
 
 export const AcceptToolConfirmationActionId = 'workbench.action.chat.acceptTool';
 export const SkipToolConfirmationActionId = 'workbench.action.chat.skipTool';
@@ -54,15 +54,14 @@ export class ConfigureToolsAction extends Action2 {
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
 		if (!widget?.visible) { return; }
-		const tools = accessor.get(ILanguageModelToolsService);
+		const tools = widget.input.languageModelTools;
 		const quickInput = accessor.get(IQuickInputService);
 		if (!tools.isAvailable) { return; }
 		try {
 			await widget.acquireContext(async signal => {
 				await tools.refresh();
 				if (signal.aborted) { return []; }
-				const selection = widget.input.attachmentModel.attachments.find(attachment => attachment.kind === 'toolSelection');
-				const disabled: readonly string[] = selection ? JSON.parse((await selection.resolve()).content) : [];
+				const disabled = await readChatSelectedTools(widget.input.attachmentModel.attachments);
 				if (signal.aborted) { return []; }
 				const result = await showToolsPicker(quickInput, tools, disabled, signal);
 				return result && !signal.aborted ? [createToolSelectionAttachment(result)] : [];

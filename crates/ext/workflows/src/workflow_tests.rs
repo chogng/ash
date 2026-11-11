@@ -687,6 +687,7 @@ fn waiting_stage_keeps_its_identity_and_cancellation_reaches_its_pending_interac
                 deadline: None,
                 request: protocol::AgentRequest::UserInput {
                     request: protocol::RequestUserInput {
+                        plan_review: None,
                         questions: vec![protocol::UserInputQuestion {
                             required: true,
                             id: "choice".into(),

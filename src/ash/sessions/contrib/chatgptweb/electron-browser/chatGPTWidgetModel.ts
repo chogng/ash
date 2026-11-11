@@ -404,7 +404,8 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 				sources.set(itemId, { messageId: message.id, conversationId: resourceConversationId });
 				const text = message.role === 'user' && resources?.some(resource => resource.kind === 'image')
 					? message.editableText ?? message.text : decoded?.text ?? message.text;
-				if (message.role === 'user' || text.trim() || resources?.length) result.push({
+				const citations = message !== latest ? decoded?.citations : undefined;
+				if (message.role === 'user' || text.trim() || resources?.length || citations?.length) result.push({
 					id: itemId,
 					type: message.role === 'user' ? 'userMessage' : 'agentMessage',
 					text,
@@ -412,6 +413,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 					markdown: decoded && { supportHtml: true, richContent: decoded.richContent, linkPolicy: 'external' },
 					label: message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
 					resources,
+					citations,
 					transient: message === latest,
 					requestHasVersions: !!state.conversationId && message.role === 'user' && message.hasVersions === true,
 					...(state.conversationId && message.role === 'user' && message !== latest && typeof message.editableText === 'string' && {

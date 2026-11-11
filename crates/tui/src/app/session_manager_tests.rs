@@ -780,6 +780,7 @@ fn preview_result(
                 timestamp: None,
                 item: ash_protocol::ThreadItem::AgentMessage {
                     phase: None,
+                    citations: None,
                     item_id: ash_protocol::ItemId::new(format!("item-{index}")).unwrap(),
                     turn_id,
                     text: format!(

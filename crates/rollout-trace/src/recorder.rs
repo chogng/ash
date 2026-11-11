@@ -1243,6 +1243,7 @@ impl ModelAttemptTrace {
                     id: id.clone(),
                     text: String::new(),
                     phase: None,
+                    citations: None,
                 });
                 active.messages.len() - 1
             });

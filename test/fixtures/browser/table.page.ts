@@ -71,6 +71,8 @@ import { DictationInput } from '../../../src/ash/workbench/contrib/chat/browser/
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { ILanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/common/tools/languageModelToolsService.js';
+import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { IChatAttachmentResolveService } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import type { ChatInputEditorOptions } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { TestNotificationService } from './notificationFixture.js';
@@ -311,6 +313,7 @@ services.get(IKeybindingService);
 
 const dictationSession = resources.add(services.createInstance(DictationInput, editor, preview, () => true, async () => { }, 'chat'));
 const contextViews = services.get(IContextViewService);
+services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 const secondInput = resources.add(services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {
 	create: (options: ChatInputEditorOptions) => services.createInstance(ChatInputEditor, options),
 }, [], { modePicker: 'visible', modelPickerPosition: 'leading' }));

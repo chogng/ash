@@ -4,6 +4,29 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('chatTranscript browser component', () => {
 	const browserTests = useBrowserTests();
+	test('message references refresh in place and use the latest host action', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?messageReferences');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.renderItems([
+			{ id: 'review', type: 'userMessage', text: 'Review the saved comparison', transient: false },
+		]));
+		const row = page.locator('[data-item-id="review"]');
+		const reference = { id: 'comment', label: 'main.ts · Line 7', target: 'first-comparison' };
+		const publish = (references: (typeof reference)[]) => page.evaluate(
+			items => window.ashChatTranscriptIntegration.setMessageReferences(items), references);
+		const button = row.getByRole('button', { name: reference.label, exact: true });
+		await expect(button).toHaveCount(0);
+		await publish([reference]);
+		await button.focus();
+		await publish([{ ...reference, target: 'updated-comparison' }]);
+		await expect(button).toBeFocused();
+		await button.press('Enter');
+		await expect(page.locator('main')).toHaveAttribute('data-opened-message-reference', 'updated-comparison');
+		await publish([]);
+		await expect(button).toHaveCount(0);
+		await expect(row).toBeFocused();
+	});
+
 	test('long Code history restores tool disclosures and retains focused code while scrolling', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html?locale=en');
@@ -110,8 +133,30 @@ suite('chatTranscript browser component', () => {
 			await expect(changes).toContainText('−1');
 			await changes.press('Space');
 			await expect(page.locator('main[data-opened-turn]')).toHaveAttribute('data-opened-turn', JSON.stringify(feedbackSource));
+			const summary = row.locator('.ash-chat-changed-files > summary');
+			await expect(summary).toBeHidden();
+			const captured = { id: 'capture', path: 'src/new.ts', previousPath: 'src/old.ts', kind: 'renamed' as const, additions: 3, deletions: 1 };
+			const setFiles = (files: (typeof captured)[]) => page.evaluate(files => window.ashChatTranscriptIntegration.setTurnFiles(files), files);
+			await setFiles([captured]);
+			await expect(summary).toHaveText(locale === 'en' ? 'Changed files (1)' : '已更改的文件（1）');
+			await summary.press('Enter');
+			const file = row.getByRole('button', {
+				name: locale === 'en'
+					? 'Open changes for src/old.ts → src/new.ts, added 3, removed 1'
+					: '打开 src/old.ts → src/new.ts 的变更，新增 3 行，删除 1 行', exact: true
+			});
+			await expect(file).toHaveAttribute('aria-description', locale === 'en' ? 'Renamed file' : '文件已重命名');
+			await file.press('Enter');
+			await expect(page.locator('main[data-opened-turn-file]')).toHaveAttribute('data-opened-turn-file', JSON.stringify({ source: feedbackSource, id: captured.id }));
+			await setFiles([captured, { ...captured, id: 'other', path: 'src/' + 'nested/'.repeat(24) + 'other.ts' }]);
+			await expect(file).toBeFocused();
+			await page.locator('main').evaluate(element => { element.style.width = '360px'; });
+			expect(await row.locator('.ash-chat-changed-file-list').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 			expect(await row.locator('.ash-chat-markdown-part').evaluate((node, previous) => node === previous, body)).toBe(true);
 			await body?.dispose();
+			await page.evaluate(() => window.ashChatTranscriptIntegration.recreateTranscript());
+			await expect(file).toBeVisible();
+			await file.focus();
 			await render();
 			await expect(changes).toHaveCount(0);
 			await expect(row).toBeFocused();

@@ -78,6 +78,35 @@ test('extension link payloads reject invalid states and keep independent normali
 	}
 });
 
+test('link consumers share one live watcher until its last reference is released', () => {
+	using services = new InstantiationService();
+	using contexts = new ContextKeyService();
+	services.registerInstance(IContextKeyService, contexts);
+	using links = services.createInstance(LinkPresentationService);
+	let created = 0;
+	let disposed = 0;
+	using registration = links.registerLinkPresentationProvider({ id: 'issues', uriPattern: /^https:\/\/example\.com\//u, kind: 'issue' }, {
+		createLinkPresentationWatcher: () => {
+			const presentation = observableValue<ILinkPresentation | undefined>('issue', { kind: 'issue', title: `Issue ${++created}` });
+			return Object.assign(toDisposable(() => { disposed++; }), { presentation });
+		},
+	});
+	const resource = URI.parse('https://example.com/issues/1');
+	using first = links.createLinkPresentationWatcher('issues', resource)!;
+	using second = links.createLinkPresentationWatcher('issues', resource)!;
+	assert.equal(first.presentation, second.presentation);
+	assert.equal(created, 1);
+	first.dispose();
+	assert.equal(disposed, 0);
+	second.dispose();
+	assert.equal(disposed, 1);
+	using reopened = links.createLinkPresentationWatcher('issues', resource)!;
+	assert.equal(reopened.presentation.get()?.title, 'Issue 2');
+	registration.dispose();
+	reopened.dispose();
+	assert.equal(disposed, 2);
+});
+
 suite('dataChannel browser component', () => {
 	const browserTests = useBrowserTests();
 	test('extension channel delivery and Chat link updates retain keyboard navigation and targets', async function () {
@@ -86,9 +115,22 @@ suite('dataChannel browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => { errors.push(error.message); console.error(error.stack); });
 		await page.goto('/dataChannel.html');
-		const link = page.locator('a[href="https://example.com/issues/1"]');
+		const link = page.locator('a.ash-chat-rich-link[href="https://example.com/issues/1"]').or(page.getByRole('link', { name: 'Original issue', exact: true }));
 		await expect(link).toHaveText('Issue one · #1 · Open · +2 −1');
 		await expect(link).toHaveAccessibleName('Issue one · #1 · Open · +2 −1');
+		await expect(link.locator('.ash-chat-rich-link-status')).toHaveText('Open');
+		const authored = page.getByRole('link', { name: 'Another issue · Open', exact: true });
+		await expect(authored.locator('em')).toHaveText('issue');
+		const action = page.getByRole('link', { name: 'Open issue', exact: true });
+		await action.hover();
+		await expect(page.getByRole('dialog', { name: 'Link preview' })).toContainText('Issue one');
+		const citation = page.getByRole('button', { name: '1 source' });
+		await citation.press('Enter');
+		const source = page.getByRole('dialog', { name: '1 source' }).getByRole('link', { name: 'example.com Search title', exact: true });
+		await source.hover();
+		await expect(page.getByRole('tooltip')).toContainText('Search snippet');
+		await expect(page.getByRole('tooltip')).toContainText('Issue one');
+		await expect(page.locator('body')).toHaveAttribute('data-link-requests', '2');
 		await page.getByRole('button', { name: 'Publish edit event' }).click();
 		await expect(page.getByRole('status', { name: 'Extension channel delivery' })).toHaveText('{"data":{"eventName":"inlineCompletion.endOfLife","data":{"accepted":true,"durationMs":5}}}');
 		await page.getByRole('button', { name: 'Replace extension' }).click();
@@ -100,11 +142,12 @@ suite('dataChannel browser component', () => {
 		await expect(page.getByRole('status', { name: 'Extension URL delivery' })).toHaveText(JSON.stringify({ incarnation: 2, payload: { resolvedUri: 'https://example.com/issues/1', sourceUri: 'https://example.com/issues/1' } }));
 		await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
 		await expect(link).toHaveText('Original issue');
+		await expect(link.locator('em')).toHaveText('issue');
 		await expect(link).not.toHaveAttribute('aria-busy');
 		await link.focus();
 		await page.keyboard.press('Enter');
 		await expect(page.getByRole('status', { name: 'Extension URL delivery' })).toHaveText('default:https://example.com/issues/1');
-		await expect(page.getByRole('link', { name: 'Plain link' })).toHaveAttribute('href', 'https://example.org/');
+		await expect(page.getByRole('link', { name: 'Plain link' })).toHaveAttribute('href', 'https://example.org/100%');
 		expect(errors).toEqual([]);
 	});
 });

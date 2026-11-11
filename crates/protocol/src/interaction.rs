@@ -25,6 +25,7 @@ pub use dynamic_tool::DynamicToolCall;
 pub use dynamic_tool::DynamicToolOutput;
 pub use dynamic_tool::DynamicToolResponse;
 pub use dynamic_tool::DynamicToolSpec;
+pub use request_user_input::PlanReview;
 pub use request_user_input::RequestUserInput;
 pub use request_user_input::RequestUserInputResponse;
 pub use request_user_input::UserInputAnswer;

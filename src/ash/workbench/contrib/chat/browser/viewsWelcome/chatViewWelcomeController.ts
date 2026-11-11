@@ -1,4 +1,4 @@
-import './media/chatViewWelcome.css';
+import '../widget/media/chatViewWelcome.css';
 import { h } from '../../../../../base/browser/dom.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';

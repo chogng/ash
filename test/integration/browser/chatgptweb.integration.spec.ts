@@ -873,6 +873,42 @@ test('ChatGPT replies omit internal citation tags while preserving literal code 
 	await expect(body.getByRole('link', { name: 'Source' })).toHaveAttribute('href', 'https://example.com/source');
 });
 
+test('ChatGPT reply cards show external actions and separators as part of the reply', async ({ page }) => {
+	await chatPage(page, [
+		'<box gap={3}>',
+		'<row><box>**Floem**\n\n<Link url="https://github.com/lapce/floem" title="Floem 源码"/></box></row>',
+		'<divider color="subtle"/>',
+		'<row><box>**Slint**\n\n<Link url="https://slint.dev" title="Slint 官网"/></box></row>',
+		'</box>',
+	].join('\n'));
+	const body = page.locator('.ash-chat-item-agentMessage .ash-chat-markdown-part');
+	const floem = body.getByRole('link', { name: 'Floem 源码', exact: true });
+	const slint = body.getByRole('link', { name: 'Slint 官网', exact: true });
+	const divider = body.getByRole('separator');
+	await expect(floem).toHaveAttribute('href', 'https://github.com/lapce/floem');
+	await expect(slint).toHaveAttribute('href', 'https://slint.dev/');
+	await expect(floem.locator('[data-ash-icon-id="link-external"]')).toBeVisible();
+	await expect(body.locator('details, pre')).toHaveCount(0);
+	await expect(divider).toHaveCSS('border-top-width', '1px');
+	await expect(divider).toHaveCSS('margin-top', '0px');
+	await floem.focus();
+	await page.keyboard.press('Tab');
+	await expect(slint).toBeFocused();
+	await floem.hover();
+	const preview = page.getByRole('dialog', { name: '链接预览', exact: true });
+	const previewLink = preview.getByRole('link', { name: 'github.com Floem 源码', exact: true });
+	await expect(previewLink).toHaveAttribute('href', 'https://github.com/lapce/floem');
+	await expect(preview.locator('..')).toHaveClass(/ash-context-view-dialog/u);
+	await previewLink.click();
+	await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://github.com/lapce/floem');
+	await expect(preview).toBeHidden();
+	await page.setViewportSize({ width: 620, height: 680 });
+	const [first, line, second] = await Promise.all([floem.boundingBox(), divider.boundingBox(), slint.boundingBox()]);
+	expect(first!.y + first!.height).toBeLessThan(line!.y);
+	expect(line!.y + line!.height).toBeLessThan(second!.y);
+	expect(line!.width).toBeGreaterThan(Math.max(first!.width, second!.width));
+});
+
 test('ChatGPT retains text around structured media and names file attachments', async ({ page }) => {
 	await mockChatGPTRequests(page);
 	await page.route('**/service/backend-api/conversation/fixture-chat', route => route.fulfill({
@@ -899,6 +935,11 @@ test('ChatGPT retains text around structured media and names file attachments', 
 
 test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames locally without Workbench access', async ({ page }) => {
 	await mockChatGPTRequests(page);
+	const repositoryTitle = 'GitHub - team/project: A long description from a search result';
+	const references = [
+		{ ref_id: { turn_index: 0, ref_type: 'search', ref_index: 1 }, title: 'CSV documentation - Docs.Python.org', url: 'https://docs.python.org/3/library/csv.html', snippet: 'Read and write tabular data.' },
+		{ ref_id: { turn_index: 0, ref_type: 'search', ref_index: 2 }, title: repositoryTitle, url: 'https://github.com/team/project', snippet: 'Source repository.' },
+	];
 	const html = '<button onclick="document.querySelector(\'output\').textContent=\'1\'">Increment</button><output>0</output><canvas id="plot" width="16" height="16"></canvas><script>document.querySelector(\'canvas\').getContext(\'2d\').fillRect(0,0,16,16);try{top.document.body.dataset.escaped="true"}catch{document.body.dataset.isolated="true"}</script>';
 	const srcdoc = html.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 	await page.route('https://frame.example.invalid/**', route => route.fulfill({ contentType: 'text/html', body: html }));
@@ -909,22 +950,49 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 					parent: null, message: {
 						id: 'reply', author: { role: 'assistant' }, content: {
 							content_type: 'text', parts: [
-								`Source <Cite refs={[["turn0search1"]]}/> urlPython docsturn0search1\n\n<iframe title="Inline preview" srcdoc="${srcdoc}"/>\n\n<iframe title="External preview" src="https://frame.example.invalid/demo"/>\n\n<Chart title="Dataset chart" data={${JSON.stringify({ labels: ['May', 'June'], datasets: [{ label: 'Amount', data: [42, 64] }] })}}/>\n\n**完整可筛选表格：**[实验结果.csv](sandbox:/mnt/data/report.csv) · [在线查看](https://example.com/report)`
+								`Source <Cite refs={[["turn0search1","turn0search2"]]}/> urlPython docsturn0search1\n\n<iframe title="Inline preview" srcdoc="${srcdoc}"/>\n\n<iframe title="External preview" src="https://frame.example.invalid/demo"/>\n\n<Chart title="Dataset chart" data={${JSON.stringify({ labels: ['May', 'June'], datasets: [{ label: 'Amount', data: [42, 64] }] })}}/>\n\n**完整可筛选表格：**[实验结果.csv](sandbox:/mnt/data/report.csv) · [在线查看](https://example.com/report)`
 							]
-						}, metadata: { search_result_groups: [{ entries: [{ ref_id: { turn_index: 0, ref_type: 'search', ref_index: 1 }, title: 'CSV documentation', url: 'https://docs.python.org/3/library/csv.html', snippet: 'Read and write tabular data.' }] }] },
+						}, metadata: { search_result_groups: [{ entries: references }] },
 					}
 				}
 			},
 		}
 	}));
 	await page.route('**/service/.resource?*', route => route.fulfill({ contentType: 'text/csv', body: 'name,value\nMay,42\n' }));
-	await page.goto('/chatgptNavigation.html');
+	await page.goto('/chatgptNavigation.html?locale=zh-CN');
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-	const citation = page.locator('.ash-chat-citation');
-	await citation.locator('summary').focus(); await citation.locator('summary').press('Enter');
-	await expect(citation).toContainText('CSV documentation');
-	await expect(citation).toContainText('Read and write tabular data.');
-	await expect(page.getByRole('link', { name: 'Python docs', exact: true })).toHaveAttribute('href', 'https://docs.python.org/3/library/csv.html');
+	const sources = page.getByRole('button', { name: '2 个来源', exact: true });
+	const sourceCard = page.getByRole('dialog', { name: '2 个来源', exact: true });
+	const sourceLinks = sourceCard.getByRole('link');
+	const adjacentLink = page.getByRole('link', { name: 'Python docs', exact: true });
+	const linkOffset = () => adjacentLink.evaluate(element => element.getBoundingClientRect().top - element.closest('.ash-chat-markdown-part')!.getBoundingClientRect().top);
+	const restingY = await linkOffset();
+	await expect(sources).toHaveAttribute('aria-expanded', 'false');
+	await sources.hover();
+	await expect(sourceCard).toBeVisible();
+	await expect(sources).toHaveAttribute('aria-expanded', 'true');
+	await expect(sourceLinks.first()).toHaveAccessibleName('docs.python.org CSV documentation');
+	await expect(sourceLinks.last()).toHaveAccessibleName('github.com team/project');
+	await expect(sourceLinks.last()).toHaveAttribute('href', references[1]!.url);
+	await expect(sourceLinks.last()).toHaveCSS('text-decoration-line', 'none');
+	expect(await linkOffset()).toBe(restingY);
+	await page.mouse.move(1, 1);
+	await expect(sourceCard).toBeHidden();
+	await sources.press('Enter');
+	await expect(sourceCard).toBeFocused();
+	await page.keyboard.press('Tab');
+	await expect(sourceLinks.first()).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(sourceCard).toBeHidden();
+	await expect(sources).toBeFocused();
+	await sources.press('Space');
+	await sourceLinks.last().hover();
+	await expect(page.getByRole('tooltip')).toContainText(repositoryTitle);
+	await expect(page.getByRole('tooltip')).toContainText('Source repository.');
+	await sourceLinks.last().click();
+	await expect(page.locator('body')).toHaveAttribute('data-opened-external', references[1]!.url);
+	await expect(sourceCard).toBeHidden();
+	await expect(adjacentLink).toHaveAttribute('href', 'https://docs.python.org/3/library/csv.html');
 	const inline = page.frameLocator('iframe[title="Inline preview"]').frameLocator('iframe');
 	await inline.getByRole('button', { name: 'Increment' }).click();
 	await expect(inline.locator('output')).toHaveText('1');

@@ -50,7 +50,7 @@ pub(crate) fn complete(
         build_request(model, request)?,
         cancellation,
     )?;
-    parse_response(endpoint, response)
+    parse_response(endpoint, response, Vec::new())
 }
 
 pub(crate) fn stream(
@@ -97,12 +97,13 @@ pub(crate) fn stream(
     transport?;
     let OpenAiChatCompletionsBodySink {
         framing,
-        events,
+        mut events,
         sink: _,
         failure: _,
     } = body_sink;
     framing.finish()?;
-    parse_response(endpoint, events.finish_response()?)
+    let citations = events.take_citations();
+    parse_response(endpoint, events.finish_response()?, citations)
 }
 
 struct OpenAiChatCompletionsBodySink<'a> {
@@ -322,7 +323,11 @@ fn convert_completions_tool_choice(choice: &ToolChoice) -> Value {
     }
 }
 
-fn parse_response(endpoint: ApiEndpoint, response: Value) -> Result<ModelResponse, ApiError> {
+fn parse_response(
+    endpoint: ApiEndpoint,
+    response: Value,
+    mut citations: Vec<ash_protocol::ResponseCitation>,
+) -> Result<ModelResponse, ApiError> {
     let choice = response
         .pointer("/choices/0")
         .ok_or_else(|| ApiError::InvalidResponse("missing first completion choice".into()))?;
@@ -344,6 +349,24 @@ fn parse_response(endpoint: ApiEndpoint, response: Value) -> Result<ModelRespons
             }
             _ => {}
         }
+    }
+    if let Some(annotations) = message.pointer("/copilot_annotations/IPCodeCitations") {
+        crate::response_citations::collect_code_citations(&mut citations, annotations);
+    }
+    if !citations.is_empty() && !output.is_empty() {
+        let text = output
+            .drain(..)
+            .filter_map(|item| match item {
+                OutputItem::Text(text) => Some(text),
+                _ => None,
+            })
+            .collect();
+        output.push(OutputItem::Message(ash_protocol::AssistantMessage {
+            id: "chat-completion".into(),
+            text,
+            phase: None,
+            citations: Some(citations),
+        }));
     }
     if let Some(reasoning) = message
         .get("reasoning_content")

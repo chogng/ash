@@ -1,0 +1,16 @@
+.ash-chat-question-answer {
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-question-answer input,
+.ash-chat-question-answer textarea,
+.ash-chat-question-answer select {
+	box-sizing: border-box;
+	min-inline-size: 0;
+	max-inline-size: 100%;
+}
+
+.ash-chat-question-answer > div:not([hidden]) {
+	margin-block-start: var(--ash-spacing-size80);
+}

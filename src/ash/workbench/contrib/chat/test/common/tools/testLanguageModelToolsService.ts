@@ -12,7 +12,9 @@ export interface ToolCatalogFixture {
 }
 
 /** The caller or a singleton registration owns the returned service. */
-export function createTestLanguageModelToolsService(api: { readonly isAvailable: boolean; readonly onDidChangeTools?: Event<void>; read(): Promise<ToolCatalogFixture>; }): LanguageModelToolsService {
+export function createTestLanguageModelToolsService(api: { readonly isAvailable: boolean; readonly onDidChangeTools?: Event<void>; read(): Promise<ToolCatalogFixture>; } = {
+	isAvailable: false, read: async () => ({ tools: [], sourceGroups: [] }),
+}): LanguageModelToolsService {
 	return new LanguageModelToolsService({
 		isAvailable: api.isAvailable,
 		onDidChangeTools: api.onDidChangeTools ?? Event.None,

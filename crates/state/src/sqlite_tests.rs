@@ -1580,6 +1580,7 @@ fn sqlite_session_catalog_follows_waiting_turn_model_migration_and_reopen() {
                 item_id: None,
                 request: ash_protocol::AgentRequest::UserInput {
                     request: ash_protocol::RequestUserInput {
+                        plan_review: None,
                         questions: vec![ash_protocol::UserInputQuestion {
                             required: true,
                             id: "continue".into(),
@@ -2587,6 +2588,7 @@ fn history_window_retains_live_interactions_outside_an_older_page() {
                 item_id: None,
                 request: ash_protocol::AgentRequest::UserInput {
                     request: ash_protocol::RequestUserInput {
+                        plan_review: None,
                         questions: vec![ash_protocol::UserInputQuestion {
                             required: true,
                             id: "continue".into(),

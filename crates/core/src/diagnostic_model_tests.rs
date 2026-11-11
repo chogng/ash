@@ -14,6 +14,7 @@ fn timing_ignores_empty_reasoning_and_complete_snapshots() {
             id: "m".into(),
             text: "completed snapshot".into(),
             phase: None,
+            citations: None,
         }),
     ] {
         timing.observe(&event, 100);

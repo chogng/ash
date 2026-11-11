@@ -389,6 +389,7 @@
 		"--ash-icon-font-weight",
 		"--ash-icon-label-suffix-icon-color",
 		"--ash-icon-label-text-overflow",
+		"--ash-icon-label-white-space",
 		"--ash-input-style-input-background",
 		"--ash-input-style-input-border",
 		"--ash-input-style-input-foreground",

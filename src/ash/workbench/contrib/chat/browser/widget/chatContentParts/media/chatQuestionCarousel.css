@@ -1,0 +1,5 @@
+.ash-chat-questions {
+	max-block-size: min(45vh, 420px);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}

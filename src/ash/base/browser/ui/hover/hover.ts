@@ -51,6 +51,8 @@ export interface HoverOptions {
 	readonly contextViewProvider?: IContextViewProvider;
 	readonly setupKeyboardEvents?: boolean;
 	readonly trapFocus?: boolean;
+	/** Accessible name for an interactive, nonmodal hover. */
+	readonly dialogLabel?: string;
 	/** The coordinating owner can include child hover views in this hover's interaction boundary. */
 	readonly isTargetWithin?: (target: Node) => boolean;
 }
@@ -95,6 +97,7 @@ export class Hover extends Disposable {
 	private hideOnKeyDown = true;
 	private keyboardFocusTrapped = false;
 	private readonly trapFocus: boolean;
+	private readonly dialogLabel: string | undefined;
 	private readonly isTargetWithin: ((target: Node) => boolean) | undefined;
 
 	constructor(options: HoverOptions) {
@@ -105,6 +108,7 @@ export class Hover extends Disposable {
 		this.content = options.content;
 		this.getHoverOptions = options.getHoverOptions;
 		this.trapFocus = options.trapFocus ?? false;
+		this.dialogLabel = options.dialogLabel;
 		this.isTargetWithin = options.isTargetWithin;
 		this.delayMs = options.delayMs ?? 300;
 		this.persistence = options.persistence ?? 'transient';
@@ -149,7 +153,7 @@ export class Hover extends Disposable {
 			// Focus returning from a dismissed hover or removed overlay must not reopen it.
 			const fromHover = isHTMLElement(event.relatedTarget) &&
 				event.relatedTarget.closest('.ash-hover') !== null;
-			if (this.pointerDown || !event.relatedTarget || fromHover) {
+			if (this.dialogLabel || this.pointerDown || !event.relatedTarget || fromHover) {
 				return;
 			}
 			this.scheduleShow('focus');
@@ -247,8 +251,9 @@ export class Hover extends Disposable {
 		const tooltip = h(ownerDocument, 'div');
 		hoverId += 1;
 		tooltip.id = `ash-hover-${hoverId}`;
-		tooltip.className = 'ash-hover';
-		tooltip.setAttribute('role', 'tooltip');
+		tooltip.className = this.dialogLabel ? 'ash-hover ash-hover-dialog' : 'ash-hover';
+		tooltip.setAttribute('role', this.dialogLabel ? 'dialog' : 'tooltip');
+		if (this.dialogLabel) tooltip.setAttribute('aria-label', this.dialogLabel);
 		const hoverOptions = this.getHoverOptions?.();
 		if (!this.renderContent(tooltip, hoverOptions ? hoverOptions.content : this.content)) {
 			this.contentLifetime.clear();
@@ -259,7 +264,12 @@ export class Hover extends Disposable {
 		this.bindTargetExitListeners();
 		this.bindTooltipListeners(tooltip);
 		this.tooltip = tooltip;
-		this.applyDescription(tooltip.id);
+		if (this.dialogLabel && this.element.getAttribute('aria-haspopup') === 'dialog') {
+			this.element.setAttribute('aria-expanded', 'true');
+			this.element.setAttribute('aria-controls', tooltip.id);
+		} else if (!this.dialogLabel) {
+			this.applyDescription(tooltip.id);
+		}
 		// Layout can synchronously rebuild and dispose the target while measuring
 		// its anchor. Treat the view as active first so disposal can close it.
 		this._visible = true;
@@ -270,7 +280,7 @@ export class Hover extends Disposable {
 			anchorAxisAlignment,
 			anchorPosition,
 			gap: this.gap,
-			presentation: 'hover',
+			presentation: this.dialogLabel ? 'dialog' : 'hover',
 			isTargetWithin: this.isTargetWithin,
 			onHide: (reason) => this.didHide(reason),
 		});
@@ -491,6 +501,10 @@ export class Hover extends Disposable {
 		if (!this.contentLifetime.isDisposed) this.contentLifetime.clear();
 		if (!this.tooltipListeners.isDisposed) this.tooltipListeners.clear();
 		this.restoreDescription();
+		if (this.dialogLabel && this.element.getAttribute('aria-haspopup') === 'dialog') {
+			this.element.setAttribute('aria-expanded', 'false');
+			this.element.removeAttribute('aria-controls');
+		}
 		if (returnFocus) restoreFocus(this.element);
 		if (wasVisible) this._onDidHide.fire();
 	}

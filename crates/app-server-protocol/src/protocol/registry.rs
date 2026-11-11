@@ -3022,6 +3022,8 @@ use ash_protocol::PermissionResponse;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::Personality;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::PlanReview;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::PlanStep;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::PlanStepStatus;
@@ -3049,6 +3051,8 @@ use ash_protocol::RequestUserInput;
 use ash_protocol::RequestUserInputResponse;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::RequestedDirectoryGrant;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ResponseCitation;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ReviewTarget;
 #[cfg(any(test, feature = "export"))]
@@ -7400,6 +7404,7 @@ typescript_bindings! {
     PendingInteraction,
     InteractionDeadline,
     InteractionCancelReason,
+    PlanReview,
     RequestUserInput,
     RequestUserInputResponse,
     UserInputQuestion,
@@ -7409,6 +7414,7 @@ typescript_bindings! {
     DynamicToolCall,
     DynamicToolResponse,
     DynamicToolOutput,
+    ResponseCitation,
     ThreadItem,
     ToolActivity,
     ToolConfirmationPresentation,

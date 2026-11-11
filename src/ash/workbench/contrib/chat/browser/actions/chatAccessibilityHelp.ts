@@ -1,5 +1,5 @@
 import { getActiveElement, isHTMLElement } from '../../../../../base/browser/dom.js';
-import { isNative } from '../../../../../base/common/platform.js';
+import { isMacintosh, isNative } from '../../../../../base/common/platform.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IAccessibleViewImplementation } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -47,6 +47,10 @@ export class PanelChatAccessibilityHelp implements IAccessibleViewImplementation
 export function getChatRequestAccessibilityHelp(sessionsWindow = false): string {
 	return localize('chat.request.actionsHelp', 'Use Tab to reach Message actions below a sent message. Use Left or Right to choose Copy message or, when available, Edit message. Press Enter or Space to activate the action. You can also press Enter on a focused editable message. The editor opens in place. Press Tab to reach Cancel and Send, or use Control+Enter or Command+Enter to send the edit. Escape cancels and returns focus to Edit message.') + '\n' + localize('chat.showAgentReplyTimestamps.help', 'In Settings, search for Show Agent reply timestamps to change whether reply times are shown.')
 		+ (sessionsWindow ? '\n' + localize('chat.request.sentImagePreviewHelp', 'Use Tab to reach a sent image thumbnail. Press Enter or Space to open the image preview. Escape closes the preview and returns focus to the thumbnail. If the preview is unavailable, use Tab to reach Retry and press Enter or Space to load it again.') : '');
+}
+
+export function getChatLinkPreviewAccessibilityHelp(): string {
+	return localize('chat.link.previewHelp', 'Press Enter or Space on a sources button to show its links. Use Tab to reach a link and Enter to open it. Escape returns to the sources button. On an external link, use {0} to show its preview.', '<keybinding:workbench.action.showHover>');
 }
 
 export function getChatCodeBlockCardAccessibilityHelp(): string {
@@ -128,6 +132,9 @@ export function getChatInputAccessibilityHelp(screenshotHelp: string, secondaryT
 		isNative && localize('chat.developer.desktopHelp', 'On desktop, run Developer: Open Local Chat Storage Folder from the Command Palette to reveal the local profile in your file manager. Developer: Network Diagnostics opens the window’s App Server connectivity report in an editor. From a local window, Developer: Restart Local App Server restarts the shared local backend and interrupts active work.'),
 		isNative && localize('chat.developer.nativeProfileHelp', 'From a local desktop window, Developer: Debug Local App Server opens a native debugger. Run Developer: Start Local App Server CPU Recording and then Developer: Stop Local App Server CPU Recording to save a report. Recording requires Samply on the desktop PATH.'),
 		localize('chat.markdown.imagePreviewHelp', 'In a reply, use Tab to focus a Markdown image preview and Enter or Space to open it. In a gallery preview, activate a dot to jump to its image, or press Left or Right Arrow in the image viewport or gallery controls to change images. Press Escape to return to the current image.'),
+		getChatLinkPreviewAccessibilityHelp(),
+		localize('chat.markdown.diffHelp', 'In a reply, use Tab or Next Code Block to reach a read-only diff. Press F7 or Shift+F7 to review the next or previous change in the accessible diff viewer.'),
+		localize('chat.fileAnchor.help', 'Focus a file link in a reply. Press Enter to open it, Ctrl+Enter to open it in a side editor, or {0} to copy the file reference.', isMacintosh ? 'Command+C' : 'Ctrl+C'),
 		localize('chat.plugins.updateHelp', 'Run Chat: Update Plugins from the Command Palette to install newer stable versions of plugins from signed registries and review the result.'),
 		localize('chat.plugins.help', 'Run Chat: Plugins from the Command Palette to open Plugins in Extensions. The search field has focus; type to filter installed plugins. Use Down Arrow to reach the plugin list and Enter to open details. Opening Plugins keeps your message draft.'),
 		localize('chat.fileTree.help', 'Structured tool results can include file tree snapshots. Run Chat: Next File Tree or Chat: Previous File Tree, or press Ctrl/Cmd+F9 and Ctrl/Cmd+Shift+F9, to cycle between trees in the current result. Use arrow keys to move and expand or collapse directories. Press Enter or double-click a file to open its original resource. Expanding directories does not reload the file list. The Accessible View includes tree labels and resource addresses.'),

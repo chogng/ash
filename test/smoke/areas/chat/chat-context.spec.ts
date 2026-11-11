@@ -7,6 +7,7 @@ import { createTestWorkspace, disposeTestWorkspace } from '../../../automation/t
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 
 // The same renderer interaction is exercised in Browser, Electron UI and connected Electron.
 test('Workbench context picker uploads, previews and removes attachments with the keyboard', async ({ workbench }) => {
@@ -454,38 +455,50 @@ instructionTest('Sessions instruction context is available before its first turn
 });
 
 for (const surface of ['Workbench', 'Sessions']) {
-	test(`${surface} tool selection controls the backend catalog and removal restores tools`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+	test(`${surface} tool selection persists in the composer and removal restores tools`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 		const page = surface === 'Sessions' ? await workbench.openAgentsWindow(target.kind) : workbench.page;
+		if (surface === 'Sessions') {
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		}
 		if (surface === 'Workbench' && !await page.locator('.ash-chat-view-pane').isVisible()) {
 			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 		}
 		const chat = page.locator(surface === 'Sessions' ? '.ash-sessions-chat-slot.active:visible' : '.ash-chat-view-pane .ash-chat:visible');
 		const picker = page.getByRole('dialog');
-		const openTools = async (): Promise<void> => {
-			await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
-			await picker.getByRole('option', { name: 'Tools…', exact: true }).click();
+		const quickAccess = new QuickAccess(page);
+		const readFile = picker.getByRole('treeitem', { name: /^read_file(?:,|\s|$)/ });
+		const removeSelection = chat.getByRole('button', { name: 'Remove Tool selection: 1 disabled', exact: true });
+		const configureTools = async (): Promise<void> => {
+			await chat.getByRole('textbox', { name: 'Chat message', exact: true }).focus();
+			await quickAccess.runCommand('workbench.action.chat.configureTools');
 		};
-		await openTools();
-		await picker.getByRole('option', { name: 'Configure tools…', exact: true }).click();
+		const expectToolReference = async (count: number): Promise<void> => {
+			await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+			await page.getByRole('menuitem', { name: 'Search attachments', exact: true }).click();
+			await picker.getByRole('combobox').fill('Tools');
+			await picker.getByRole('option', { name: 'Tools…', exact: true }).click();
+			await picker.getByRole('combobox').fill('read_file');
+			await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toHaveCount(count);
+			await page.keyboard.press('Escape');
+			await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
+			await page.keyboard.press('Escape');
+		};
+		await configureTools();
 		await picker.getByRole('combobox').fill('read_file');
-		await picker.getByRole('option', { name: /^read_file(?:\s|$)/ }).press('Enter');
-		await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toContainText('Disabled');
-		await picker.getByRole('option', { name: 'Apply tool selection', exact: true }).click();
-		await expect(chat.getByRole('list', { name: 'Attached context' })).toContainText('Tool selection: 1 disabled');
-		await openTools();
+		await readFile.click();
+		await expect(readFile).toHaveAttribute('aria-checked', 'false');
+		await picker.getByRole('button', { name: 'Apply', exact: true }).click();
+		await expect(removeSelection).toBeVisible();
+		await expectToolReference(0);
+		await configureTools();
 		await picker.getByRole('combobox').fill('read_file');
-		await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toHaveCount(0);
-		await picker.getByRole('option', { name: 'Configure tools…', exact: true }).click();
+		await expect(readFile).toHaveAttribute('aria-checked', 'false');
+		await page.keyboard.press('Escape');
+		await removeSelection.click();
+		await configureTools();
 		await picker.getByRole('combobox').fill('read_file');
-		await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toContainText('Disabled');
+		await expect(readFile).toHaveAttribute('aria-checked', 'true');
 		await page.keyboard.press('Escape');
-		await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
-		await page.keyboard.press('Escape');
-		await chat.getByRole('button', { name: 'Remove Tool selection: 1 disabled', exact: true }).click();
-		await openTools();
-		await picker.getByRole('combobox').fill('read_file');
-		await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toHaveCount(1);
-		await page.keyboard.press('Escape');
-		await page.keyboard.press('Escape');
+		await expectToolReference(1);
 	});
 }
