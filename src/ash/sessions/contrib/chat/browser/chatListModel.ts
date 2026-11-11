@@ -32,7 +32,7 @@ import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 
 import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
 
-import { sessionProjectOrganization, type SessionListOrganization } from '../../sessions/browser/views/sessionsListActions.js';
+import { sessionProjectOrganization, type SessionListOrganization, type SessionListProjectOrganization } from '../../sessions/browser/views/sessionsListActions.js';
 import { NativeConversationShare } from './nativeConversationShare.js';
 import { ChatListForks } from './chatListForks.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
@@ -82,6 +82,55 @@ export interface ChatListEntry extends SessionListOrganization {
 	/** Deletes this conversation after the host confirms the action. */
 	readonly remove?: () => Promise<void>;
 	readonly getActions?: (signal: AbortSignal) => readonly IAction[] | Promise<readonly IAction[]>;
+}
+
+export function getChatListEntryProject(
+	entry: ChatListEntry, destinations: readonly { readonly id: string; readonly name: string; }[],
+	projects: IProjectService, localProjectId?: string,
+): SessionListProjectOrganization | undefined {
+	if (entry.sessionId) return sessionProjectOrganization(projects, entry.sessionId, localProjectId, destinations);
+	const externalId = entry.externalConversationId;
+	if (!externalId) return entry.project;
+	const ashDestinations = destinations.map(({ id, name }) => ({ id, title: name }));
+	if (localProjectId) {
+		return {
+			current: localProjectId,
+			destinations: ashDestinations,
+			move: destination => projects.moveExternalConversation(externalId, localProjectId, destination),
+		};
+	}
+	const remote = entry.project;
+	if (remote?.current || !ashDestinations.length) return remote;
+	return {
+		...remote,
+		destinations: [...ashDestinations, ...(remote?.destinations ?? [])],
+		move: destination => ashDestinations.some(item => item.id === destination)
+			? projects.moveExternalConversation(externalId, undefined, destination)
+			: remote?.move(destination) ?? Promise.resolve(),
+	};
+}
+
+export async function getChatListEntryActions(
+	entry: ChatListEntry, signal: AbortSignal, commands: ICommandService, configuration: IConfigurationService,
+): Promise<IAction[]> {
+	const contributed = await entry.getActions?.(signal);
+	const actions = [...contributed ?? []];
+	if (signal.aborted || !(entry.archive || entry.remove)) return actions;
+	if (actions.length) actions.push(new Separator());
+	if (entry.archive) {
+		const presentation = getChatSessionArchiveActionPresentation(getChatSessionArchiveActionWording(configuration)).archive;
+		actions.push({
+			id: 'agentSession.archive',
+			label: presentation.title.value, tooltip: presentation.title.value, icon: presentation.icon, enabled: true,
+			run: () => commands.executeCommand('agentSession.archive', { catalogId: entry.id }),
+		});
+	}
+	if (entry.remove) actions.push({
+		id: 'agentSession.delete', label: localize('sessions.list.delete', 'Delete'),
+		icon: Lxicon.trash, enabled: true, tooltip: '',
+		run: () => commands.executeCommand('agentSession.delete', { catalogId: entry.id, preferenceKey: entry.preferenceKey }),
+	});
+	return actions;
 }
 
 type ProjectHistory =
@@ -580,32 +629,15 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		const openSource = forkSource?.open;
 		const iconKey = sessionId ? `session:${sessionId}` : entry.preferenceKey;
 		const iconScope = sessionId ? undefined : 'catalog';
-		const project = sessionId ? () => {
-			const memberships = destinations.filter(project => this.membership.get(project.id)?.sessionIds?.includes(sessionId));
-			const current = parentProject ?? (memberships.length === 1 ? memberships[0]!.id : undefined);
-			return sessionProjectOrganization(this.projectService, sessionId, current, destinations);
-		} : () => {
-			const externalId = entry.externalConversationId;
-			if (!externalId) return entry.project;
-			const memberships = destinations.filter(item => this.membership.get(item.id)?.externalConversationIds?.includes(externalId));
-			const current = memberships.find(item => item.id === parentProject) ?? (memberships.length === 1 ? memberships[0] : undefined);
-			const ashDestinations = destinations.map(({ id, name }) => ({ id, title: name }));
-			if (!current) {
-				const remote = entry.project;
-				if (remote?.current || !ashDestinations.length) return remote;
-				return {
-					...remote,
-					destinations: [...ashDestinations, ...(remote?.destinations ?? [])],
-					move: (destination: string | undefined) => ashDestinations.some(item => item.id === destination)
-						? this.projectService.moveExternalConversation(externalId, undefined, destination)
-						: remote?.move(destination) ?? Promise.resolve(),
-				};
-			}
-			return {
-				current: current.id,
-				destinations: ashDestinations,
-				move: (destination: string | undefined) => this.projectService.moveExternalConversation(externalId, current.id, destination),
-			};
+		const project = () => {
+			const memberships = destinations.filter(({ id }) => {
+				const membership = this.membership.get(id);
+				return sessionId ? membership?.sessionIds?.includes(sessionId)
+					: entry.externalConversationId && membership?.externalConversationIds?.includes(entry.externalConversationId);
+			});
+			const current = (sessionId ? parentProject : memberships.find(item => item.id === parentProject)?.id)
+				?? (memberships.length === 1 && (!parentProject || parentProject !== entry.projectId) ? memberships[0]!.id : undefined);
+			return getChatListEntryProject(entry, destinations, this.projectService, current);
 		};
 		return {
 			id: entry.id,
@@ -634,26 +666,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 				pinned: entry.pinned, setPinned: entry.setPinned, moveToGroup: entry.moveToGroup, project: project(),
 			},
 			open: threadId => this.openConversation(signal => entry.open(signal, threadId)),
-			getActions: async signal => {
-				const contributed = await entry.getActions?.(signal);
-				const actions = [...contributed ?? []];
-				if (signal.aborted || !(entry.archive || entry.remove)) return actions;
-				if (actions.length) actions.push(new Separator());
-				if (entry.archive) {
-					const presentation = getChatSessionArchiveActionPresentation(getChatSessionArchiveActionWording(this.configuration)).archive;
-					actions.push({
-						id: 'agentSession.archive',
-						label: presentation.title.value, tooltip: presentation.title.value, icon: presentation.icon, enabled: true,
-						run: () => this.commands.executeCommand('agentSession.archive', { catalogId: entry.id }),
-					});
-				}
-				if (entry.remove) actions.push({
-					id: 'agentSession.delete', label: localize('sessions.list.delete', 'Delete'),
-					icon: Lxicon.trash, class: 'ash-session-delete-action', enabled: true, tooltip: '',
-					run: () => this.commands.executeCommand('agentSession.delete', { catalogId: entry.id, preferenceKey: entry.preferenceKey }),
-				});
-				return actions;
-			},
+			getActions: signal => getChatListEntryActions(entry, signal, this.commands, this.configuration),
 		};
 	}
 }

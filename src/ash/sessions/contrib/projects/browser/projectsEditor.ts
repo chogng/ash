@@ -16,7 +16,7 @@ import type { Project } from '../../../../platform/projects/common/projectServic
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { getCatalogProjectRename, getProjectSessionRows, groupChatList, IChatListCatalog, type CatalogProjectDetails, type ChatListEntry, type ChatListGroup } from '../../chat/browser/chatListModel.js';
-import type { CatalogProjectMemoryMode } from '../../sessions/browser/views/sessionsCatalogList.js';
+import type { CatalogProjectCreator, CatalogProjectMemoryMode } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IProjectsService, type ProjectsState } from './projectsService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -156,6 +156,11 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.projectList = this._register(this.instantiationService.createInstance(ProjectsList, this.body, this.projectActions, {
 			openedProject: () => this.focusPage(),
 			isVisible: () => this.isVisible(),
+			createProjectForConversation: (creator: CatalogProjectCreator, restoreFocus: () => void) => {
+				if (!this.isVisible()) return;
+				restoreFocus();
+				this.projectDialogs.showChatProjectDialog(this.domNode, restoreFocus, undefined, creator);
+			},
 		}));
 		this.projectsView = this._register(this.instantiationService.createInstance(ProjectsView, this.body, this.projectList, this.projectActions));
 		main.append(this.projectsView.heading, feedback, this.body);
@@ -280,7 +285,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		} else {
 			this.catalogDetailsRequest.clear();
 			this.catalogDetailsLoad.set(undefined);
-			this.projectList.stopUpdatingTimes();
+			this.projectList.reset();
 			this.projectsView.closeSortMenu();
 			this.projectActions.cancelPendingEdit();
 			this.projectDialogs.close(this.domNode);
@@ -349,7 +354,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const anchor = scrollTop && scroller ? Array.from(scroller.querySelectorAll<HTMLElement>('.ash-projects-conversation'))
 			.find(row => row.getBoundingClientRect().bottom > viewportTop) : undefined;
 		const anchorTop = anchor?.getBoundingClientRect().top;
-		this.projectList.stopUpdatingTimes();
+		this.projectList.reset();
 		this.content.clear();
 		const catalogInputs = new Set(groups.flatMap(group => group.project?.composer ? [group.project.composer.key] : []));
 		for (const [key, input] of this.projectInputs) {
@@ -412,7 +417,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const { element: layout, card, chats: chatContent, instructions, memory, files } = detail;
 		const details = conversationProject?.details;
 		chatContent.replaceChildren();
-		this.projectList.renderConversations(chatContent, chats, conversationProject, this.content);
+		this.projectList.renderConversations(chatContent, chats, conversationProject, localProject?.id, this.content);
 		files.replaceChildren();
 		memory.replaceChildren();
 		memory.hidden = true;

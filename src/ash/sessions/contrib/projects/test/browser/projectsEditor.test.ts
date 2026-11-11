@@ -741,7 +741,7 @@ suite('Projects toolbar', () => {
 				.fill('Unavailable project save');
 			const submit = dialog.getByRole('button', { name: chinese ? '创建' : 'Create', exact: true });
 			await submit.click();
-			await expect(dialog.locator('.ash-projects-form-error')).not.toBeEmpty();
+			await expect(dialog.getByRole('alert')).toContainText("Web App Server operation 'project/create' is unavailable");
 			await expect(submit).toBeEnabled();
 			await page.keyboard.press('Escape');
 			await page.getByRole('button', { name: chinese ? '放弃更改' : 'Discard', exact: true }).click();

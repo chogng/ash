@@ -1,5 +1,5 @@
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { CodeConversationPageContext, SessionsMenuActiveConversationContext, SessionsMenuCanMoveConversationContext, SessionsMenuCanSetFolderContext, SessionsMenuConversationPinnedContext, SessionsMenuWorkspaceIdleContext } from '../../../../common/contextkeys.js';
+import { CodeConversationPageContext, SessionsMenuCanMoveConversationContext, SessionsMenuCanSetFolderContext, SessionsMenuWorkspaceIdleContext } from '../../../../common/contextkeys.js';
 import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
@@ -9,12 +9,11 @@ import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
-import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, isNode } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, isHTMLElement, isNode } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextViewHideReason } from '../../../../../base/browser/ui/contextview/contextview.js';
-import { renderInlineRenameInput, showInlineRenameInput } from '../../../../browser/parts/titlebar/inlineRenameInput.js';
 import { createLoadingSpinner } from '../../../../../base/browser/ui/loadingSpinner/loadingSpinner.js';
 import { observeResize } from '../../../../../base/browser/observer.js';
 import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -24,10 +23,9 @@ import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Event } from '../../../../../base/common/event.js';
 import { AbstractDisposable, Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { getFlatContextMenuActions } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { SessionActionFeedback } from '../sessionActionFeedback.js';
 import { getSessionsListEntries, sessionSortTime } from './sessionsListFilters.js';
-import { sessionListProjectActions, sessionProjectOrganization, sessionSortActions, type SessionListOrganization, type SessionListProjectOrganization } from './sessionsListActions.js';
+import { catalogConversationActions, conversationMenuActions, sessionListProjectActions, sessionProjectOrganization, sessionSortActions, startConversationRename, type ConversationMenuTarget, type SessionListOrganization, type SessionListProjectOrganization } from './sessionsListActions.js';
 import { SessionsListSearch } from './sessionsListSearch.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
@@ -654,22 +652,13 @@ export class SessionsList extends DomWidget {
 		const controller = new AbortController();
 		this.catalogMenu.value = toDisposable(() => controller.abort());
 		try {
-			let actions = [...await row.getActions(controller.signal)];
+			const actions = await catalogConversationActions(row, controller.signal,
+				rename => this.renameConversation(item, row.title, rename, row.validateRename),
+				() => {
+					const project = row.organization()?.project;
+					return project ? this.projectActions(item, project) : [];
+				});
 			if (controller.signal.aborted || !item.domNode.isConnected) return;
-			const rename = row.rename;
-			if (!row.sessionId && rename) {
-				actions = Separator.join([{
-					id: 'sessions.list.renameConversation',
-					label: localize('sessions.list.rename', 'Rename'),
-					tooltip: '', enabled: true, icon: Lxicon.edit,
-					run: () => this.renameConversation(item, row.title, rename, row.validateRename),
-				}], actions);
-			}
-			const project = row.organization()?.project;
-			if (project) {
-				const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
-				actions.splice(separator < 0 ? actions.length : separator, 0, ...this.projectActions(item, project));
-			}
 			this.showConversationMenu(item, anchor, actions, row.sessionId ? { sessionId: row.sessionId } : { catalogId: row.id }, row.pinned);
 		} catch (error) {
 			if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
@@ -840,8 +829,7 @@ export class SessionsList extends DomWidget {
 
 	private renameConversation(
 		item: SessionListItem, name: string, rename: (title: string) => Promise<void>,
-		validate = (title: string): string | undefined => title && Array.from(title).length <= 256
-			? undefined : localize('sessions.titlebar.invalidName', 'Enter a name with 1 to 256 characters.'),
+		validate?: (title: string) => string | undefined,
 	): void {
 		const row = item.domNode;
 		if (this.isDisposed || !row.isConnected) return;
@@ -856,46 +844,15 @@ export class SessionsList extends DomWidget {
 		row.classList.add('renaming');
 		store.add(toDisposable(() => row.classList.remove('renaming')));
 		item.hidePreviewHover();
-		let saving = false;
-		const finish = (restoreFocus: boolean): void => {
-			if (this.inlineRename.value !== store) return;
-			this.inlineRename.clear();
-			if (restoreFocus) this.tree.focusRow(row, true);
-		};
-		const save = async (): Promise<void> => {
-			if (saving) return;
-			const title = input.value.trim();
-			const error = validate(title);
-			if (error) {
-				input.setCustomValidity(error);
-				input.setAttribute('aria-invalid', 'true');
-				input.reportValidity();
-				return;
-			}
-			if (title === name) {
-				finish(true);
-				return;
-			}
-			saving = input.readOnly = true;
-			try {
-				await rename(title);
-				finish(getActiveElement(input.ownerDocument) === input);
-			} catch (error) {
-				if (!store.isDisposed) {
-					saving = input.readOnly = false;
-					this.notifications.error(toErrorMessage(error));
-					if (getActiveElement(input.ownerDocument) !== input) finish(false);
-				}
-			}
-		};
-		const input = renderInlineRenameInput(row, {
-			label: localize('sessions.titlebar.sessionName', 'Session name'),
-			onAccept: () => { void save(); },
-			onCancel: () => { if (!saving) finish(true); },
-			onBlur: () => { if (!saving) finish(false); },
-		}, store);
+		const input = startConversationRename(row, store, this.notifications, {
+			name, rename, validate,
+			finish: restoreFocus => {
+				if (this.inlineRename.value !== store) return;
+				this.inlineRename.clear();
+				if (restoreFocus) this.tree.focusRow(row, true);
+			},
+		});
 		input.style.setProperty('--sessions-rename-start', `${titleInset}px`);
-		showInlineRenameInput(input, name);
 	}
 
 	private appearanceActions(id: string, change: (field: 'icon' | 'color') => Promise<void>, iconLabel: string, colorLabel: string): IAction[] {
@@ -950,25 +907,20 @@ export class SessionsList extends DomWidget {
 	}
 
 	private showConversationMenu(item: SessionListItem, anchor: ContextMenuAnchor, actions: IAction[],
-		target?: { readonly sessionId: string; readonly threadId?: string; } | { readonly catalogId: string; } | { readonly untitledSessionId: string; }, pinned = false): void {
+		target?: ConversationMenuTarget, pinned = false): void {
 		this.rowMenuContext.clear();
 		const context = this.rowMenuContext.value = this.contextKeys?.createScoped(item.domNode);
 		const workspace = this.mode === 'code' && target && 'sessionId' in target && target.threadId
 			? getSessionWorkspaceMenuState(target.sessionId, target.threadId, this.sessionService)
 			: undefined;
-		if (context && target && 'sessionId' in target) {
-			const { sessionId, threadId } = target;
-			SessionsMenuActiveConversationContext.bindTo(context).set(true);
-			SessionsMenuConversationPinnedContext.bindTo(context).set(pinned);
-			if (this.mode === 'code' && threadId) {
-				SessionsMenuCanSetFolderContext.bindTo(context).set(!!workspace);
-				SessionsMenuWorkspaceIdleContext.bindTo(context).set(workspace?.enabled === true);
-				SessionsMenuCanMoveConversationContext.bindTo(context).set(!!this.sessionService.getChatMoveDestinations?.(sessionId, threadId).length);
-			}
+		if (context && this.mode === 'code' && target && 'sessionId' in target && target.threadId) {
+			const { sessionId } = target;
+			SessionsMenuCanSetFolderContext.bindTo(context).set(!!workspace);
+			SessionsMenuWorkspaceIdleContext.bindTo(context).set(workspace?.enabled === true);
+			SessionsMenuCanMoveConversationContext.bindTo(context).set(!!this.sessionService.getChatMoveDestinations?.(sessionId, target.threadId).length);
 		}
-		const menu = this.mode === 'code' ? Menus.SidebarCodeSessionContext : Menus.SidebarChatSessionContext;
 		this.showRowMenu(item, anchor, {
-			getActions: () => Separator.join(actions, getFlatContextMenuActions(this.menus.getMenuActions(menu, { arg: target }, context))).map(action => {
+			getActions: () => conversationMenuActions(this.mode, this.menus, context, target, pinned, actions).map(action => {
 				const sessionActions = this.sessionActions;
 				if (action.id === 'agentSession.rename' && sessionActions && target && !('catalogId' in target)) {
 					return {
@@ -984,7 +936,6 @@ export class SessionsList extends DomWidget {
 				if (action.id === 'agentSession.changeDirectory' && workspace) {
 					return { ...action, label: workspace.label, tooltip: workspace.label, badge: workspace.busyBadge, run: () => action.run() };
 				}
-				if (action.id === 'agentSession.delete') return { ...action, class: 'ash-session-delete-action', run: () => action.run() };
 				if (action.id === 'sessions.list.togglePin') return {
 					...action, run: async () => {
 						const id = await action.run();

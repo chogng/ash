@@ -1,9 +1,98 @@
+import { getActiveElement } from '../../../../../base/browser/dom.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
+import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
+import type { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
+import { getFlatContextMenuActions } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import type { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import type { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IProjectService } from '../../../../../platform/projects/common/projectService.js';
+import { Menus } from '../../../../browser/menus.js';
+import { renderInlineRenameInput, showInlineRenameInput } from '../../../../browser/parts/titlebar/inlineRenameInput.js';
+import { SessionsMenuActiveConversationContext, SessionsMenuConversationPinnedContext } from '../../../../common/contextkeys.js';
 import type { ISessionsListModelService, SessionSortDirection, SessionSortMode, SessionsListMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
-import type { CatalogProjectCreator } from './sessionsCatalogList.js';
+import type { CatalogProjectCreator, SessionsCatalogRow } from './sessionsCatalogList.js';
+
+export type ConversationMenuTarget = { readonly sessionId: string; readonly threadId?: string; } | { readonly catalogId: string; } | { readonly untitledSessionId: string; };
+
+export function conversationMenuActions(
+	mode: SessionsListMode, menus: IMenuService, context: IContextKeyService | undefined,
+	target: ConversationMenuTarget | undefined, pinned: boolean, actions: IAction[],
+): IAction[] {
+	if (context && target && 'sessionId' in target) {
+		SessionsMenuActiveConversationContext.bindTo(context).set(true);
+		SessionsMenuConversationPinnedContext.bindTo(context).set(pinned);
+	}
+	const menu = mode === 'code' ? Menus.SidebarCodeSessionContext : Menus.SidebarChatSessionContext;
+	return Separator.join(actions, getFlatContextMenuActions(menus.getMenuActions(menu, { arg: target }, context))).map(action =>
+		action.id === 'agentSession.delete' ? { ...action, class: 'ash-session-delete-action', run: () => action.run() } : action);
+}
+
+export async function catalogConversationActions(
+	row: Pick<SessionsCatalogRow, 'sessionId' | 'rename' | 'getActions'>, signal: AbortSignal,
+	rename: (run: NonNullable<SessionsCatalogRow['rename']>) => void, projectActions: () => readonly IAction[],
+): Promise<IAction[]> {
+	let actions = [...await row.getActions(signal)];
+	if (signal.aborted) return [];
+	const renameConversation = row.rename;
+	if (!row.sessionId && renameConversation) {
+		actions = Separator.join([{
+			id: 'sessions.list.renameConversation',
+			label: localize('sessions.list.rename', 'Rename'),
+			tooltip: '', enabled: true, icon: Lxicon.edit, run: () => rename(renameConversation),
+		}], actions);
+	}
+	const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
+	actions.splice(separator < 0 ? actions.length : separator, 0, ...projectActions());
+	return actions;
+}
+
+export function startConversationRename(row: HTMLElement, store: DisposableStore, notifications: INotificationService, options: {
+	readonly name: string;
+	readonly rename: (title: string) => Promise<void>;
+	readonly validate?: (title: string) => string | undefined;
+	readonly finish: (restoreFocus: boolean) => void;
+}): HTMLInputElement {
+	const { name, rename, finish, validate = (title: string): string | undefined => title && Array.from(title).length <= 256
+		? undefined : localize('sessions.titlebar.invalidName', 'Enter a name with 1 to 256 characters.') } = options;
+	let saving = false;
+	const save = async (): Promise<void> => {
+		if (saving) return;
+		const title = input.value.trim();
+		const error = validate(title);
+		if (error) {
+			input.setCustomValidity(error);
+			input.setAttribute('aria-invalid', 'true');
+			input.reportValidity();
+			return;
+		}
+		if (title === name) {
+			finish(true);
+			return;
+		}
+		saving = input.readOnly = true;
+		try {
+			await rename(title);
+			finish(getActiveElement(input.ownerDocument) === input);
+		} catch (error) {
+			if (!store.isDisposed) {
+				saving = input.readOnly = false;
+				notifications.error(toErrorMessage(error));
+				if (getActiveElement(input.ownerDocument) !== input) finish(false);
+			}
+		}
+	};
+	const input = renderInlineRenameInput(row, {
+		label: localize('sessions.titlebar.sessionName', 'Session name'),
+		onAccept: () => { void save(); },
+		onCancel: () => { if (!saving) finish(true); },
+		onBlur: () => { if (!saving) finish(false); },
+	}, store);
+	showInlineRenameInput(input, name);
+	return input;
+}
 
 export function getSessionsListGroupingHelp(): string {
 	return localize('sessions.list.groupingHelp', 'Use Tab to reach More Sessions Actions beside Projects or Recents and press Enter. Under Group By, choose Projects to browse conversations by project or Flat List to browse recent conversations together. Chat and Code remember their choices separately. Sort By changes the order of conversations.');

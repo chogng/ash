@@ -1244,7 +1244,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 					], cursor: null,
 				},
 			}));
-			const pinned = { id: 'pinned', title: 'Pinned project chat', gizmo_id: 'g-p-one' };
+			const updatedAt = '2026-10-25T18:00:00.000Z';
+			const pinned = { id: 'pinned', title: 'Pinned project chat', gizmo_id: 'g-p-one', update_time: updatedAt };
 			const firstPage = [pinned, { id: 'one', title: 'First research chat' },
 				...Array.from({ length: 18 }, (_, index) => ({ id: `project-chat-${index}`, title: `Research chat ${index + 2}` }))];
 			const firstPageTitles = firstPage.map(item => item.title);
@@ -1349,8 +1350,9 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(projects.getByRole('button', { name: zh ? '查看记忆' : 'View memory', exact: true })).toBeEnabled();
 			const conversations = projects.locator('.ash-projects-conversations');
 			const list = conversations.getByRole('list', { name: zh ? '项目对话' : 'Project conversations' });
-			const rows = list.getByRole('button');
-			await expect(rows).toHaveText(firstPageTitles);
+			const rows = list.locator('.ash-projects-conversation');
+			const rowTitles = rows.locator('.ash-button-label');
+			await expect(rowTitles).toHaveText(firstPageTitles);
 			await expect(projects).toHaveAccessibleName('Research');
 			await page.keyboard.press('Tab');
 			await expect(rows.first()).toBeFocused();
@@ -1369,7 +1371,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(ring).toHaveCount(0);
 			await expect(projects.getByRole('button', { name: zh ? '无法加载项目聊天，点击重试' : 'Could not load project chats. Retry', exact: true })).toHaveCount(0);
 			await page.evaluate(() => window.ashChatGPTIntegration.retryHistory());
-			await expect(rows).toHaveText([...firstPageTitles, 'Older research chat']);
+			await expect(rowTitles).toHaveText([...firstPageTitles, 'Older research chat']);
 			await expect(rows.nth(1)).toBeFocused();
 			await expect(list).toHaveAttribute('aria-busy', 'false');
 			await page.screenshot({ path: info.outputPath(`project-conversations-${locale}.png`) });
@@ -1378,9 +1380,35 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const olderChat = rows.getByText('Older research chat', { exact: true });
 			if (zh) await rows.nth(1).press('End');
 			else await olderChat.scrollIntoViewIfNeeded();
-			await expect(rows).toHaveText([...firstPageTitles, 'Older research chat', 'Oldest research chat']);
+			await expect(rowTitles).toHaveText([...firstPageTitles, 'Older research chat', 'Oldest research chat']);
 			await expect(zh ? rows.filter({ hasText: 'Older research chat' }) : rows.nth(1)).toBeFocused();
 			expect(cursors).toEqual([null, 'page+two', 'page+two', 'page+three']);
+			const first = list.getByRole('button', { name: pinned.title, exact: true });
+			const more = first.locator('..').locator('.ash-projects-conversation-more');
+			const time = first.locator('time');
+			await expect(time).toHaveAttribute('datetime', updatedAt);
+			await expect(first).toHaveAccessibleDescription(zh ? /^最后活动时间为 /u : /^Last active /u);
+			await expect(rows.nth(1).locator('time')).toHaveCount(0);
+			await page.mouse.move(0, 0);
+			await expect(more).toHaveCSS('opacity', '0');
+			await first.hover();
+			await expect(more).toHaveCSS('opacity', '1');
+			await time.hover();
+			await expect(page.getByRole('tooltip')).toHaveText((await time.getAttribute('aria-label'))!);
+			await more.click();
+			const menu = page.getByRole('menu');
+			await expect(menu.getByRole('menuitem')).toHaveText(zh
+				? ['重命名', '分享', '移至项目', '从项目中移除', '归档', '删除']
+				: ['Rename', 'Share', 'Move to project', 'Remove from project', 'Archive', 'Delete']);
+			await page.keyboard.press('Escape');
+			await expect(more).toBeFocused();
+			await first.press('Shift+F10');
+			await menu.getByRole('menuitem', { name: zh ? '重命名' : 'Rename', exact: true }).press('Enter');
+			const rename = list.getByRole('textbox', { name: zh ? '会话名称' : 'Session name', exact: true });
+			await expect(rename).toHaveValue(pinned.title);
+			await rename.press('Escape');
+			await expect(rename).toHaveCount(0);
+			await expect(first).toBeFocused();
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: zh ? '项目' : 'Projects', exact: true }).click();
 			await expect(research).toBeFocused();
 			const writingToggle = sidebar.getByRole('button', { name: 'Writing', exact: true });

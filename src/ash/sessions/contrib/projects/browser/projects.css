@@ -360,7 +360,7 @@
 	.ash-projects-detail-content:has(
 		> .ash-projects-detail-card:not([hidden])
 	) {
-	grid-template-columns: minmax(0, 1.6fr) minmax(304px, 1fr);
+	grid-template-columns: minmax(0, 1.35fr) minmax(340px, 1fr);
 }
 
 .ash-projects:not(.stack-project-details) .ash-projects-chat-content {
@@ -462,16 +462,78 @@
 	list-style: none;
 }
 
+.ash-projects-conversation-row {
+	position: relative;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) var(--ash-spacing-size320);
+	align-items: center;
+	min-inline-size: 0;
+	border-radius: var(
+		--ash-button-border-radius,
+		var(--ash-cornerRadius-small)
+	);
+}
+
 .ash-projects .ash-projects-conversation {
+	min-inline-size: 0;
 	width: 100%;
 	min-height: var(--ash-spacing-size320);
-	justify-content: flex-start;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size120);
 	color: inherit;
+	font-weight: var(--ash-fontWeight-semiBold);
 	text-align: start;
 }
 
-.ash-projects .ash-projects-conversation:not(:disabled):hover {
+.ash-projects-conversation-row:is(:hover, .menu-visible):has(
+		> .ash-projects-conversation:not(:disabled)
+	) {
 	background: var(--ash-sessions-sidebar-hover-background);
+}
+
+.ash-projects .ash-projects-conversation:hover {
+	background: transparent;
+}
+
+.ash-projects-conversation-time {
+	flex-shrink: 0;
+	max-inline-size: 45%;
+	overflow: hidden;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	font-weight: var(--ash-fontWeight-regular);
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-projects-conversation-more {
+	margin-inline-end: var(--ash-spacing-size40);
+	opacity: 0;
+	pointer-events: none;
+}
+
+.ash-projects-conversation-row:is(:hover, :focus-within, .menu-visible)
+	> .ash-projects-conversation-more {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+@media (hover: none) {
+	.ash-projects-conversation-more {
+		opacity: 1;
+		pointer-events: auto;
+	}
+}
+
+.ash-projects-conversation-row.renaming > .ash-button {
+	visibility: hidden;
+}
+
+.ash-projects-conversation-row > .ash-inline-rename-input {
+	position: absolute;
+	inset-inline: var(--ash-spacing-size80);
+	inline-size: auto;
+	font-size: inherit;
 }
 
 .ash-projects-conversation-empty {
