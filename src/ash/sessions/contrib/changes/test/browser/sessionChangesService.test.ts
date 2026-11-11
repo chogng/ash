@@ -77,6 +77,7 @@ suite('Session Changes opening and capture contract', () => {
 		services.registerInstance(IQuickInputService, { input: async () => 'Delete file' } as unknown as IQuickInputService);
 		services.registerInstance(IChatService, {
 			readTurnChange: async () => currentDetails,
+			readTurnChangeFile: async () => ({ path: 'deleted.ts', binary: false, truncated: false, before: 'deleted' }),
 			prepareTurnCommit: async (_session: string, _thread: string, selections: unknown, message: string) => {
 				prepared.push({ selections, message });
 				return { commitId: 'prepared', targetBranch: 'main', message, files: details.files, warnings: [] };
@@ -124,6 +125,17 @@ suite('Session Changes opening and capture contract', () => {
 		const turnInput = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(opened[2]!.input)))) as SessionChangesEditorInput;
 		assert.deepEqual(turnInput.changesetSelection, { kind: 'turn', turnId: 'turn' });
 		assert.equal(opened[2]?.options?.viewState, undefined);
+		const replySource = { sessionId: 'session', threadId: 'thread', turnId: 'turn' };
+		const replyFile = responseChanges.getChangesForResponse(replySource)?.fileDiffs[0];
+		assert.equal(replyFile?.deletions, 2);
+		const signal = new AbortController().signal;
+		assert.deepEqual(await replyFile?.preview?.read(signal), { beforeContent: 'deleted', afterContent: '' });
+		currentDetails = { ...details, summary: { ...details.summary, revision: 4 } };
+		assert.deepEqual(responseChanges.getChangesForResponse(replySource)?.fileDiffs, []);
+		await assert.rejects(replyFile!.preview!.read(signal));
+		await replyFile?.review();
+		assert.equal(opened.length, 3);
+		currentDetails = details;
 		model.composerGeneration++;
 		await file?.review();
 		await turn?.review();

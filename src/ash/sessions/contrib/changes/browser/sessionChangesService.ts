@@ -1,21 +1,23 @@
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { constObservable } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type TurnCommitSelection } from '../../../../workbench/services/chat/common/chatService.js';
 import { IDecorationsService } from '../../../../workbench/services/decorations/common/decorations.js';
 import { IEditorService, type EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService, type IEditorGroup } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import {
 	createSessionFileChange, matchesSessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus,
-	type ISessionChangeset,
+	type ISessionChangeset, type ISessionFileChange,
 } from '../../../services/sessions/common/session.js';
 import { createTurnCommitPreviewInput } from '../../../browser/turnMultiDiffSource.js';
+import { getCapturedTurnIds } from '../common/changes.js';
 import type { ISessionChangesEditorOptions, ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 
@@ -97,22 +99,81 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 				if (this.isDisposed || operationId !== 'preview' || status === SessionChangesetOperationStatus.Disabled || status === SessionChangesetOperationStatus.Running || !files.length) {
 					throw new Error(localize('sessions.changes.noSelection', 'Select sealed file changes that have not been committed.'));
 				}
-				const message = await this.quickInput.input({
-					title: localize('sessions.changes.commitMessage', 'Commit message'),
-					value: details.draftMessage ?? '',
-					validateInput: async value => value.trim() ? undefined : localize('sessions.changes.messageRequired', 'Enter a commit message.'),
-				});
-				if (message === undefined || this.isDisposed) { return; }
-				const selections = [{
+				await this.openCommitPreview(sessionId, threadId, [{
 					changeSetId: details.summary.changeSetId,
 					expectedRevision: details.summary.revision,
 					paths: files.map(change => change.file.path),
-				}];
-				const preview = await this.chat.prepareTurnCommit(sessionId, threadId, selections, message);
-				const input = await createTurnCommitPreviewInput(this.chat, sessionId, threadId, preview);
-				if (!this.isDisposed) { await this.editors.openEditor(input, { pinned: true }); }
+				}], CancellationToken.None, details.draftMessage ?? '');
 			},
 		};
+	}
+
+	public async previewCommit(sessionResource: URI, token: CancellationToken, selection?: ISessionChangesEditorOptions['changesetSelection']): Promise<void> {
+		const { sessionId, threadId } = this.getConversation(sessionResource);
+		const captures = await this.chat.listTurnChanges(sessionId, threadId);
+		if (this.isDisposed || token.isCancellationRequested) return;
+		const turnNumbers = new Map(getCapturedTurnIds(captures).map((id, index) => [id, index + 1]));
+		const selectedId = selection?.kind === 'transient' ? selection.changeset.id : selection?.kind === 'id' ? selection.id : undefined;
+		const items = (await Promise.all(captures.map(async capture => {
+			if (capture.captureState !== 'sealed' || !capture.statistics.files || capture.commitState === 'queued' || capture.commitState === 'committing') return [];
+			if ((selectedId && capture.changeSetId !== selectedId) || (selection?.kind === 'turn' && capture.turnId !== selection.turnId)) return [];
+			const { files, summary } = await this.chat.readTurnChange(sessionId, threadId, capture.changeSetId);
+			if (summary.revision !== capture.revision) return [];
+			return files.filter(file => !summary.committedPaths.includes(file.path)).map(file => ({
+				label: file.path, description: localize('sessions.changes.turn', 'Turn {0}', turnNumbers.get(capture.turnId)!), summary,
+			}));
+		}))).flat();
+		if (this.isDisposed || token.isCancellationRequested) return;
+		if (!items.length) throw new Error(localize('sessions.changes.noSelection', 'Select sealed file changes that have not been committed.'));
+		using resources = new DisposableStore();
+		const picker = resources.add(this.quickInput.createQuickPick<(typeof items)[number]>());
+		picker.items = items;
+		picker.canSelectMany = true;
+		picker.ariaLabel = picker.placeholder = localize('sessions.changes.choosePreviewFiles', 'Choose files for the commit');
+		const selected = await new Promise<readonly (typeof items)[number][]>(resolve => {
+			resources.add(token.onCancellationRequested(() => picker.hide()));
+			resources.add(picker.onDidHide(() => resolve([])));
+			resources.add(picker.onDidAccept(() => {
+				const files = picker.selectedItems;
+				if (!files.length) return;
+				if (files.some(file => file.summary.repositoryId !== files[0]!.summary.repositoryId)) {
+					picker.description = localize('sessions.changes.previewOneRepository', 'Choose files from one repository at a time.');
+					return;
+				}
+				resolve(files);
+				picker.hide();
+			}));
+			picker.show();
+		});
+		await this.openCommitPreview(sessionId, threadId, this.groupCommitFiles(selected.map(file => ({ summary: file.summary, path: file.label }))), token);
+	}
+
+	public async previewSelectedFiles(sessionResource: URI, token: CancellationToken, files: readonly ISessionFileChange[]): Promise<void> {
+		const { sessionId, threadId } = this.getConversation(sessionResource);
+		await this.openCommitPreview(sessionId, threadId, this.groupCommitFiles(files.map(({ summary, file }) => ({ summary, path: file.path }))), token);
+	}
+
+	private groupCommitFiles(files: readonly { readonly summary: ISessionFileChange['summary']; readonly path: string; }[]): TurnCommitSelection[] {
+		const grouped = new Map<string, TurnCommitSelection>();
+		for (const { summary: { changeSetId, revision }, path } of files) {
+			const existing = grouped.get(changeSetId);
+			grouped.set(changeSetId, { changeSetId, expectedRevision: revision, paths: [...(existing?.paths ?? []), path] });
+		}
+		return [...grouped.values()];
+	}
+
+	private async openCommitPreview(sessionId: string, threadId: string, selections: readonly TurnCommitSelection[], token: CancellationToken, draftMessage?: string): Promise<void> {
+		const isCurrent = () => !this.isDisposed && !token.isCancellationRequested;
+		if (!selections.length || !isCurrent()) return;
+		const message = await this.quickInput.input({
+			title: localize('sessions.changes.commitMessage', 'Commit message'), value: draftMessage,
+			validateInput: async value => value.trim() ? undefined : localize('sessions.changes.messageRequired', 'Enter a commit message.'),
+		}, token);
+		if (message === undefined || !isCurrent()) return;
+		const preview = await this.chat.prepareTurnCommit(sessionId, threadId, selections, message);
+		if (!isCurrent()) return;
+		const input = await createTurnCommitPreviewInput(this.chat, sessionId, threadId, preview);
+		if (isCurrent()) await this.editors.openEditor(input, { pinned: true });
 	}
 
 	public setChangesCount(editorResource: URI, count: number | undefined): void {

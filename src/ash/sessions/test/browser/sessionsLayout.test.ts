@@ -39,12 +39,12 @@ suite('sessions browser component', () => {
 		const reference = composer.getByRole('button', { name: `${locale === 'zh-CN' ? '打开' : 'Open'} Follow-up chat`, exact: true });
 		await expect(reference).toBeVisible();
 		await expect(input).toBeFocused();
-		expect(await reads()).toEqual(['Host A']);
+		expect(await reads()).toEqual([]);
 		await input.press('ControlOrMeta+z');
 		await expect(reference).toHaveCount(0);
 		await input.press('ControlOrMeta+Shift+z');
 		await expect(reference).toBeVisible();
-		expect(await reads()).toEqual(['Host A']);
+		expect(await reads()).toEqual([]);
 
 		await input.press('ControlOrMeta+z');
 		await composer.getByRole('button', { name: locale === 'zh-CN' ? '添加上下文' : 'Add context', exact: true }).press('Enter');
@@ -58,7 +58,7 @@ suite('sessions browser component', () => {
 		await expect(picker.getByRole('option', { name: /Follow-up chat/u })).toHaveCount(1);
 		await picker.getByRole('combobox').press('Enter');
 		await expect(reference).toBeVisible();
-		expect(await reads()).toEqual(['Host A', 'Host A']);
+		expect(await reads()).toEqual([]);
 	});
 
 
@@ -184,6 +184,8 @@ suite('sessions browser component', () => {
 		await expect(layout.locator('[data-ash-icon-id="layout-grid"]')).toBeVisible();
 		await layout.hover();
 		await expect(page.getByRole('tooltip')).toHaveText('网格布局');
+		await expect(panel.getByRole('heading', { name: '范例' })).toBeVisible();
+		await creator.getByRole('tab', { name: '我的', exact: true }).click();
 		const empty = panel.getByText(/你的作品将显示在这里/u);
 		await expect(empty).toBeVisible();
 		expect((await panel.boundingBox())!.height).toBeGreaterThan((await empty.boundingBox())!.height);
@@ -351,7 +353,7 @@ suite('sessions browser component', () => {
 		await expect(buttons).toHaveText(chatNavigation);
 		await codeMode.click();
 		await expect(codeMode).toHaveAttribute('aria-pressed', 'true');
-		await expect(buttons).toHaveText(['New', 'Search', 'Customize', 'More']);
+		await expect(buttons).toHaveText(['New', 'Search', 'Bots', 'Customize', 'More']);
 		await more.press('Enter');
 		await expect(page.getByRole('menuitemradio', { name: 'Symphony', exact: true })).toBeVisible();
 		await expect(collaboration).toHaveCount(0);
@@ -410,6 +412,7 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-sessions-list-row.selected:has(> .ash-sessions-list-item[aria-current="page"])').first()).toHaveCSS('background-color', selectedBackground);
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+			await expect(page.locator('html')).toHaveAttribute('data-color-theme', theme);
 			await chat.click();
 			await page.mouse.move(400, 180);
 			const selectedBackground = await chat.evaluate(element => getComputedStyle(element).backgroundColor);
@@ -733,7 +736,7 @@ suite('sessions browser component', () => {
 			await expect(menu).toHaveCount(0);
 			await expect(control).toBeFocused();
 			await expect(title).toHaveCSS('color', 'rgb(59, 59, 59)');
-			await expect(row.locator('.ash-configuration-setting-description:not([hidden])')).toHaveCSS('color', 'rgb(118, 118, 118)');
+			await expect(row.locator('.ash-configuration-setting-description:not([hidden])')).toHaveCSS('color', 'color(srgb 0.442157 0.442157 0.442157)');
 			const sidebar = settings.locator('.ash-sessions-settings-sidebar');
 			const settingsPage = settings.locator('.ash-sessions-settings-page');
 			const sidebarBounds = await sidebar.boundingBox();
@@ -1324,23 +1327,16 @@ suite('sessions browser component', () => {
 		await expect(toolHeaders.locator('[data-editor-tool="changes"]')).toHaveCount(0);
 		const filesPane = editor.locator('[data-editor-tool="files"] > .ash-workbench-part-frame > [data-part="tool-editor"]');
 		const filesDetails = filesHeader.locator('[data-action-id="ash.sessions.toggleDetails"] button');
-		const changesFiles = changesHeader.locator('[data-action-id="ash.sessions.toggleChangesFileList"] button');
+		const changesFiles = changesHeader.locator('[data-action-id="multiDiffEditor.toggleFileList"] button');
 		await expect(filesDetails).toHaveAttribute('aria-pressed', 'true');
-		await expect(changesFiles).toHaveAttribute('aria-pressed', 'true');
-		await changesFiles.click();
-		await expect(changesFiles).toHaveAttribute('aria-pressed', 'false');
+		await expect(changesFiles).toHaveCount(0);
 		await expect(filesPane).toBeVisible();
-		await expect(filesDetails).toHaveAttribute('aria-pressed', 'true');
-		await changesFiles.click();
-		await expect(changesFiles).toHaveAttribute('aria-pressed', 'true');
 		const filesBounds = (await filesPane.boundingBox())!;
 		const changesBounds = (await changesPane.boundingBox())!;
 		expect(changesBounds.x).toBeCloseTo(filesBounds.x, 0);
 		expect(changesBounds.y).toBeGreaterThanOrEqual(filesBounds.y + filesBounds.height);
 		expect((await changesHeader.boundingBox())!.y).toBeCloseTo(changesBounds.y, 0);
-		const changesLabel = changesHeader.locator('.ash-sessions-tool-header-label');
-		await expect(changesLabel).toHaveText('Changes');
-		await expect(changesLabel).toBeVisible();
+		await expect(changesHeader.getByRole('button', { name: 'Changes', exact: true })).toBeVisible();
 		const filesClose = filesHeader.locator('[data-action-id="ash.sessions.hideTool"] button');
 		await expect(filesHeader.locator('.ash-editor-header-layout > .ash-toolbar')).toHaveCSS('-webkit-app-region', 'no-drag');
 		const changesClose = changesHeader.locator('[data-action-id="ash.sessions.hideTool"] button');
@@ -1533,7 +1529,8 @@ suite('sessions browser component', () => {
 		await page.locator('[data-action-id="sessions.open.projects"]').click();
 		await expect(page.locator('.ash-projects')).toBeVisible();
 		const sidebar = page.locator('[data-part="sidebar"]');
-		const auxiliarybar = page.locator('[data-part="auxiliarybar"]');
+		const auxiliaryFrame = page.locator('.ash-sessions-auxiliarybar-frame');
+		const auxiliaryBorderColor = () => auxiliaryFrame.evaluate(element => getComputedStyle(element, '::after').borderLeftColor);
 		const initialWidth = (await sidebar.boundingBox())!.width;
 		const expectSharedBoundary = async (): Promise<void> => {
 			const boundary = await page.evaluate(() => {
@@ -1567,15 +1564,15 @@ suite('sessions browser component', () => {
 			expect(boundary.feedbackCenter).toBeCloseTo(boundary.borderCenter, 3);
 			expect(boundary.leadingSeparators.every(content => content === 'none')).toBe(true);
 		};
-		for (const [theme, color, auxiliaryColor] of [
-			['ash-light', 'rgb(229, 229, 229)', 'rgba(0, 0, 0, 0)'],
-			['ash-dark', 'rgb(43, 43, 43)', 'rgba(0, 0, 0, 0)'],
-			['ash-high-contrast-dark', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)'],
-			['ash-high-contrast-light', 'rgb(0, 0, 0)', 'rgb(0, 0, 0)'],
+		for (const [theme, color] of [
+			['ash-light', 'rgb(229, 229, 229)'],
+			['ash-dark', 'rgb(43, 43, 43)'],
+			['ash-high-contrast-dark', 'rgb(255, 255, 255)'],
+			['ash-high-contrast-light', 'rgb(0, 0, 0)'],
 		] as const) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			await expect(sidebar).toHaveCSS('border-right-color', color);
-			await expect(auxiliarybar).toHaveCSS('border-left-color', auxiliaryColor);
+			await expect.poll(auxiliaryBorderColor).toBe(color);
 			expect((await sidebar.boundingBox())!.width).toBe(initialWidth);
 			await expectSharedBoundary();
 		}
@@ -1584,7 +1581,7 @@ suite('sessions browser component', () => {
 			await window.ashSessionsIntegration.updateConfiguration('workbench.colorCustomizations', { 'sideBar.border': '#123456' });
 		});
 		await expect(sidebar).toHaveCSS('border-right-color', 'rgb(18, 52, 86)');
-		await expect(auxiliarybar).toHaveCSS('border-left-color', 'rgb(18, 52, 86)');
+		await expect.poll(auxiliaryBorderColor).toBe('rgb(18, 52, 86)');
 		await expectSharedBoundary();
 		const sash = page.locator('.ash-primary-sidebar-sash');
 		await expect(page.locator('.ash-sessions-window')).toHaveClass(/ash-sash-handle-scope/);

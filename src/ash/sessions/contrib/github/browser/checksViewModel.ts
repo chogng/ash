@@ -8,7 +8,7 @@ import { IGitHubService as IGitHubApi, GitHubError, GitHubErrorCode, type GitHub
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { localize } from '../../../../nls.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { IGitHubService } from '../../github/browser/githubService.js';
+import { IGitHubService } from './githubService.js';
 import { IChecksOperationService } from '../common/checksOperationService.js';
 
 export interface ChecksEntry {

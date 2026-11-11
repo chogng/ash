@@ -23,6 +23,7 @@ EditorInputSerializers.registerStatic({
 				...(item.goToFile === undefined ? {} : { goToFile: registry.serialize(item.goToFile) }),
 				...(item.actions === undefined ? {} : { actions: item.actions }),
 				...(item.contextKeys === undefined ? {} : { contextKeys: item.contextKeys }),
+				...(item.fileList === undefined ? {} : { fileList: item.fileList }),
 			}))),
 			...(input.source === undefined ? {} : { source: input.source }),
 		});
@@ -42,6 +43,7 @@ EditorInputSerializers.registerStatic({
 				...(entry.actions === undefined ? {} : { actions: requireActions(entry.actions) }),
 				// The input factory validates this metadata before publishing the comparisons.
 				...(entry.contextKeys === undefined ? {} : { contextKeys: entry.contextKeys as Readonly<Record<string, boolean>> }),
+				...(entry.fileList === undefined ? {} : { fileList: requireFileListEntry(entry.fileList) }),
 			};
 		});
 		return createMultiDiffEditorInput(
@@ -73,6 +75,8 @@ export interface MultiDiffEditorInputItem {
 	readonly actions?: readonly MultiDiffCommandAction[];
 	/** Provider capabilities are scoped to this file's toolbar. */
 	readonly contextKeys?: Readonly<Record<string, boolean>>;
+	/** Repository-relative path and optional tree group, independent of the displayed diff label. */
+	readonly fileList?: { readonly path: string; readonly group?: { readonly id: string; readonly label: string; }; };
 }
 
 export interface MultiDiffEditorInput extends IResourceEditorInput {
@@ -107,6 +111,7 @@ export function createMultiDiffEditorInput(resource: URI, items: readonly MultiD
 			...(item.goToFile ? { goToFile: item.goToFile } : {}),
 			...(item.actions ? { actions: requireActions(item.actions) } : {}),
 			...(item.contextKeys === undefined ? {} : { contextKeys: requireContextKeys(item.contextKeys) }),
+			...(item.fileList === undefined ? {} : { fileList: requireFileListEntry(item.fileList) }),
 		});
 		const key = multiDiffEditorItemKey(normalized);
 		if (keys.has(key)) throw new TypeError(`Duplicate multi-diff comparison '${normalized.label}'`);
@@ -147,7 +152,22 @@ function isMultiDiffEditorInputItem(value: unknown): value is MultiDiffEditorInp
 		'modified' in value && isTextResourceInput(value.modified) &&
 		(!('goToFile' in value) || value.goToFile === undefined || isTextResourceInput(value.goToFile)) &&
 		(!('actions' in value) || value.actions === undefined || Array.isArray(value.actions)) &&
-		(!('binary' in value) || value.binary === undefined || typeof value.binary === 'boolean');
+		(!('binary' in value) || value.binary === undefined || typeof value.binary === 'boolean') &&
+		(!('fileList' in value) || value.fileList === undefined || isFileListEntry(value.fileList));
+}
+
+function isFileListEntry(value: unknown): value is NonNullable<MultiDiffEditorInputItem['fileList']> {
+	if (typeof value !== 'object' || value === null || !('path' in value) || typeof value.path !== 'string'
+		|| value.path.split('/').some(segment => !segment || segment === '.' || segment === '..')) return false;
+	if (!('group' in value) || value.group === undefined) return true;
+	const group = value.group;
+	return typeof group === 'object' && group !== null && 'id' in group && typeof group.id === 'string' && !!group.id
+		&& 'label' in group && typeof group.label === 'string' && !!group.label;
+}
+
+function requireFileListEntry(value: unknown): NonNullable<MultiDiffEditorInputItem['fileList']> {
+	if (!isFileListEntry(value)) throw new TypeError('Invalid multi-diff file list entry');
+	return Object.freeze({ path: value.path, ...(value.group ? { group: Object.freeze({ id: value.group.id, label: value.group.label }) } : {}) });
 }
 
 function requireBinary(value: unknown): boolean {

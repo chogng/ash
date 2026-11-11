@@ -13,7 +13,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
-import { IGitHubService } from '../../github/browser/githubService.js';
+import { IGitHubService } from './githubService.js';
 import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../../sessions/browser/automationsConstants.js';
 
 interface FollowUpRow {

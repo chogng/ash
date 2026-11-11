@@ -32,8 +32,9 @@ import { IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../../
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from './addTabActions.js';
-import { ChangesFileListAvailableContext, ChangesFileListVisibleContext, SessionChangesEditor } from '../../changes/browser/sessionChangesEditor.js';
+import { ChangesHasWorkspaceContext, ChangesScopeContext, SessionChangesEditor } from '../../changes/browser/sessionChangesEditor.js';
 import { isRecord } from '../../../../base/common/types.js';
+import { getMultiDiffEditorFilesViewTitle, getToggleMultiDiffEditorFileListTitle, MultiDiffEditorFileListAvailableContext, MultiDiffEditorFileListEnabledContext, MultiDiffEditorFilesViewMenu, TOGGLE_MULTI_DIFF_EDITOR_FILE_LIST_COMMAND_ID } from '../../../../workbench/contrib/multiDiffEditor/common/multiDiffEditor.js';
 
 const editorVisibleContext = new RawContextKey<boolean>('sessions.editorContentVisible', false);
 const detailsVisibleContext = new RawContextKey<boolean>('sessions.detailsVisible', false);
@@ -135,6 +136,42 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			});
 		const toolGroup = (arg: unknown): number => isRecord(arg) && typeof arg.groupId === 'number'
 			&& editor.groups.some(group => group.id === arg.groupId) ? arg.groupId : editor.activeGroup.id;
+		const changesTool = ContextKeyExpr.and(codeContext.isEqualTo(true), ContextKeyExpr.equals('sessions.editorTool', 'changes'));
+		const previewCommitId = 'ash.sessions.changes.previewCommit';
+		this._register(CommandsRegistry.register(previewCommitId, (_accessor, arg) => {
+			const pane = editor.groups.find(group => group.id === toolGroup(arg))?.activePane;
+			return pane instanceof SessionChangesEditor ? pane.previewCommit() : undefined;
+		}));
+		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+			command: { id: previewCommitId, title: localize2('sessions.changes.previewCommit', 'Preview commit…') },
+			when: ContextKeyExpr.and(changesTool, ChangesHasWorkspaceContext.isEqualTo(true),
+				ContextKeyExpr.or(ChangesScopeContext.isEqualTo('all'), ChangesScopeContext.isEqualTo('turn'))),
+			group: '1_changes', order: 0,
+		}));
+		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+			submenu: MultiDiffEditorFilesViewMenu, title: getMultiDiffEditorFilesViewTitle(),
+			when: ContextKeyExpr.and(changesTool, MultiDiffEditorFileListAvailableContext.isEqualTo(true)), group: '1_changes', order: 1,
+		}));
+		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorHeaderPrimary, {
+			submenu: Menus.SessionsChangesScope, title: localize2('sessions.changes.title', 'Changes'),
+			when: changesTool, group: 'navigation',
+		}));
+		for (const [order, [scope, title]] of ([
+			['all', localize2('sessions.changes.allChanges', 'All Changes')],
+			['turn', localize2('sessions.changes.chooseTurn', 'Changes from Turn')],
+			['uncommitted', localize2('sessions.changes.uncommittedChanges', 'Uncommitted Changes')],
+			['branch', localize2('sessions.changes.compareAgainst', 'Compare Against…')],
+		] as const).entries()) {
+			const id = `ash.sessions.changesScope.${scope}`;
+			this._register(CommandsRegistry.register(id, (_accessor, arg) => {
+				const group = editor.groups.find(group => group.id === toolGroup(arg));
+				if (group?.activePane instanceof SessionChangesEditor) return group.activePane.selectScope(scope, group.id);
+				return undefined;
+			}));
+			this._register(MenusRegistry.appendMenuItem(Menus.SessionsChangesScope, {
+				command: { id, title, toggled: ChangesScopeContext.isEqualTo(scope) }, group: 'navigation', order,
+			}));
+		}
 		const terminalInCode = ContextKeyExpr.and(codeContext.isEqualTo(true), terminalTool);
 		const liveShell = TerminalEditorCanSplitContext.isEqualTo(true);
 		const appServerAvailable = AppServerAvailableContext.isEqualTo(true);
@@ -193,10 +230,6 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				toggled: terminalCursorBlinkingContext.isEqualTo(true),
 			},
 			when: flatTerminal, group: '1_terminal', order: 2,
-		}));
-		this._register(CommandsRegistry.register('ash.sessions.toggleChangesFileList', (_accessor, arg) => {
-			const pane = editor.groups.find(group => group.id === toolGroup(arg))?.activePane;
-			if (pane instanceof SessionChangesEditor) { pane.toggleFileList(); }
 		}));
 		const hideToolId = 'ash.sessions.hideTool';
 		this._register(CommandsRegistry.register(hideToolId, (_accessor, arg) => run(async () => {
@@ -295,14 +328,12 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: Menus.SessionsEditorHeaderLayout,
 					item: {
 						command: {
-							id: 'ash.sessions.toggleChangesFileList',
-							title: localize2({ bundle: 'ash', key: 'sessions.changes.toggleFileList' }, 'Toggle changed files list'),
+							id: TOGGLE_MULTI_DIFF_EDITOR_FILE_LIST_COMMAND_ID,
+							title: getToggleMultiDiffEditorFileListTitle(),
 							icon: Lxicon.listUnordered,
-							toggled: ChangesFileListVisibleContext.isEqualTo(true),
+							toggled: MultiDiffEditorFileListEnabledContext.isEqualTo(true),
 						},
-						when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.equals('sessions.editorTool', 'changes'), ChangesFileListAvailableContext.isEqualTo(true)),
-						group: 'navigation',
-						order: 2,
+						when: ContextKeyExpr.and(changesTool, MultiDiffEditorFileListAvailableContext.isEqualTo(true)), group: 'navigation', order: -1,
 					},
 				},
 				{

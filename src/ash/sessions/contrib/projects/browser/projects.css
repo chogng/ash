@@ -195,8 +195,7 @@
 	pointer-events: auto;
 }
 
-.ash-projects-card-actions
-	.ash-action-view-item:not(:has(> button[aria-pressed="true"])) {
+.ash-projects-card-actions .ash-action-view-item {
 	opacity: 0;
 	pointer-events: none;
 	transition: opacity var(--ash-animation-durationFast) ease-out;
@@ -218,6 +217,12 @@
 	@media (prefers-reduced-motion: reduce) {
 		transition: none;
 	}
+}
+
+.ash-projects-card-actions .ash-action-view-item.pinned {
+	opacity: 1;
+	pointer-events: auto;
+	transition: none;
 }
 
 .ash-projects-card-actions::before {

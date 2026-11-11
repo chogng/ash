@@ -4859,6 +4859,9 @@ impl AppServer {
             Some(ClientMethod::GitRepositoryContexts) => {
                 git().git_repository_contexts(&request.params, cancellation)
             }
+            Some(ClientMethod::GitSessionComparison) => {
+                git().git_session_comparison(&request.params, cancellation)
+            }
             Some(ClientMethod::GitRepositories) => git().git_repositories(&request.params),
             Some(ClientMethod::GitClone) => {
                 git().git_clone(connection, &request.params, cancellation)

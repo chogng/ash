@@ -57,6 +57,8 @@ import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/ed
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IResourceLabelService } from '../../../browser/labels.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
+import { getMultiDiffEditorFileListViewMode, isMultiDiffEditorFileListEnabled, MultiDiffEditorFileListAvailableContext, MultiDiffEditorFileListEnabledContext, MultiDiffEditorFileListViewModeContext, onDidChangeMultiDiffEditorFileList, type MultiDiffEditorFileListViewMode } from '../common/multiDiffEditor.js';
+import { MultiDiffEditorWithFileListWidget } from './multiDiffEditorWithFileListWidget.js';
 
 export const MultiDiffEditorAllCollapsed = new RawContextKey<boolean>('multiDiffEditorAllCollapsed', false);
 export const MultiDiffEditorHideUnchangedRegions = new RawContextKey<boolean>('multiDiffEditorHideUnchangedRegions', true);
@@ -91,6 +93,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 	private readonly collapseStateListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly hideUnchangedRegionsListener = this._register(new MutableDisposable<IDisposable>());
 	private previewEnabled = false;
+	private fileListAvailable: boolean;
 	public readonly onDidChangeWorkingCopies = this.workingCopiesEmitter.event;
 
 	public getWorkingCopies(): readonly IWorkingCopy[] {
@@ -109,11 +112,13 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		private readonly options: MultiDiffEditorOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
-		@IStorageService storageService: IStorageService,
+		@IStorageService private readonly fileListStorage: IStorageService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
-		super(MULTI_DIFF_EDITOR_ID, themeService, storageService);
+		super(MULTI_DIFF_EDITOR_ID, themeService, fileListStorage);
+		this.fileListAvailable = (!options.activeEditorId || options.activeEditorId === MULTI_DIFF_EDITOR_ID) && !options.attachEditor;
+		this._register(onDidChangeMultiDiffEditorFileList(fileListStorage, () => this.updateFileList()));
 		this.previewEnabled = !options.attachEditor && configuration.getValue(CodeEditorConfiguration.diffReviewPreview);
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (!event.affectsConfiguration(CodeEditorConfiguration.diffReviewPreview)) return;
@@ -147,6 +152,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 				input.label ?? 'Changes', this.options, signal,
 			);
 			this.pendingSession.value = next;
+			next.setFileListState(this.fileListAvailable && isMultiDiffEditorFileListEnabled(this.fileListStorage), getMultiDiffEditorFileListViewMode(this.fileListStorage) ?? 'list');
 			next.layout(this.dimension);
 			await next.resolveVisible();
 			throwIfCancelled(signal, 'Multi-diff editor input loading was cancelled');
@@ -161,6 +167,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		this.collapseStateListener.value = this.session.value?.editor?.onDidChangeCollapseState(() => this.updateCollapseContext());
 		this.hideUnchangedRegionsListener.value = this.session.value?.editor?.onDidChangeHideUnchangedRegions(() => this.updateCollapseContext());
 		this.updateCollapseContext();
+		this.updateFileList();
 		this.workingCopiesEmitter.fire();
 		this.session.value?.show();
 	}
@@ -172,7 +179,16 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		this.pendingSession.clear();
 		this.session.clear();
 		this.updateCollapseContext();
+		this.updateFileList();
 		this.workingCopiesEmitter.fire();
+	}
+
+	/** Updates an open comparison from the same source while retaining its file navigator. */
+	public updateInput(input: MultiDiffEditorInput): boolean {
+		const session = this.session.value;
+		if (!session || session.resource.toString() !== input.resource.toString()) return false;
+		session.updateInput(input);
+		return true;
 	}
 
 	public override layout(dimension: IDimension): void {
@@ -185,6 +201,23 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		this.session.value?.setVisible(visibility);
 		if (visibility) this.session.value?.layout(this.dimension);
 		if (visibility) this.updateCollapseContext();
+		if (visibility) this.updateFileList();
+	}
+
+	public setFileListAvailable(available: boolean): void {
+		this.fileListAvailable = available;
+		this.updateFileList();
+	}
+
+	private updateFileList(): void {
+		const enabled = this.fileListAvailable && isMultiDiffEditorFileListEnabled(this.fileListStorage);
+		const mode = getMultiDiffEditorFileListViewMode(this.fileListStorage) ?? 'list';
+		this.session.value?.setFileListState(enabled, mode);
+		if (this.isVisible()) {
+			this.contextKeyService.setContext(MultiDiffEditorFileListAvailableContext.key, this.fileListAvailable);
+			this.contextKeyService.setContext(MultiDiffEditorFileListEnabledContext.key, enabled);
+			this.contextKeyService.setContext(MultiDiffEditorFileListViewModeContext.key, mode);
+		}
 	}
 
 	public override focus(): void {
@@ -209,6 +242,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 	}
 	public getReviewLocation(): ReturnType<MultiDiffEditorWidget['getReviewLocation']> { return this.session.value?.editor?.getReviewLocation(); }
 	public getAccessibleContent(): string | undefined { return this.session.value?.editor?.getAccessibleContent(); }
+	public getFileListAccessibleContent(): string | undefined { return this.session.value?.getFileListAccessibleContent(); }
 
 	public getActiveDiffItem(): MultiDiffEditorInputItem | undefined {
 		return this.session.value?.getActiveDiffItem();
@@ -296,8 +330,11 @@ class MultiDiffEditorSession extends Disposable {
 	private readonly computationService: IDocumentDiffProvider;
 	private readonly emptyDomNode: HTMLDivElement;
 	private readonly abortController = new AbortController();
+	private readonly openingAbortListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly domNode: HTMLDivElement;
 	private readonly editorDomNode: HTMLDivElement;
+	private readonly comparison: MultiDiffEditorWithFileListWidget;
+	private dimension: IDimension = { width: 0, height: 0 };
 	private readonly toolbar = this._register(new MutableDisposable<MultiDiffEditorToolbar>());
 	private visible = false;
 	private hasBeenVisible = false;
@@ -328,11 +365,12 @@ class MultiDiffEditorSession extends Disposable {
 			this.domNode.className = 'stanza-multi-diff-editor-session pending';
 			this.editorDomNode = h(container.ownerDocument, 'div');
 			this.editorDomNode.className = 'stanza-multi-diff-editor-host';
-			this.domNode.append(this.editorDomNode);
+			const comparisonContainer = h(container.ownerDocument, 'div', { className: 'ash-multi-diff-comparison' });
+			this.domNode.append(comparisonContainer);
 			container.append(this.domNode);
 			this._register(toDisposable(() => this.domNode.remove()));
 			const abort = (): void => this.abortController.abort();
-			this._register(addDisposableListener(initialSignal, 'abort', abort, { once: true }));
+			this.openingAbortListener.value = addDisposableListener(initialSignal, 'abort', abort, { once: true });
 			if (initialSignal.aborted) abort();
 			const computationService = diffService.createComputationService();
 			this._register(computationService);
@@ -442,6 +480,8 @@ class MultiDiffEditorSession extends Disposable {
 					},
 				},
 			}));
+			this.comparison = this._register(instantiationService.createInstance(MultiDiffEditorWithFileListWidget, comparisonContainer, this.editorDomNode, this.editor));
+			this.comparison.setItems(paneInput.items);
 			this.createToolbar();
 			this.updateEmptyState();
 			this._register(this.sourceResolvers.onDidChange(() => { void this.refreshSource().catch(error => { if (!this.isDisposed) void this.dialogs.error(String(error)); }); }));
@@ -453,8 +493,13 @@ class MultiDiffEditorSession extends Disposable {
 	}
 
 	public layout(dimension: IDimension): void {
+		this.dimension = dimension;
 		const toolbarHeight = this.toolbar.value?.domNode.offsetHeight ?? (this.toolbar.value ? 40 : 0);
-		this.editor?.layout({ width: dimension.width, height: Math.max(0, dimension.height - toolbarHeight) });
+		this.comparison.layout({ width: dimension.width, height: Math.max(0, dimension.height - toolbarHeight) });
+	}
+
+	public setFileListState(enabled: boolean, viewMode: MultiDiffEditorFileListViewMode): void {
+		this.comparison.setFileListState(enabled, viewMode);
 	}
 
 	public async resolveVisible(): Promise<void> {
@@ -468,6 +513,8 @@ class MultiDiffEditorSession extends Disposable {
 	}
 
 	public show(): void {
+		// Once published, lazy comparisons belong to the pane's lifetime.
+		this.openingAbortListener.clear();
 		this.domNode.classList.remove('pending');
 	}
 
@@ -555,6 +602,10 @@ class MultiDiffEditorSession extends Disposable {
 	public getActiveDiffItem(): MultiDiffEditorInputItem | undefined {
 		const item = this.editor?.getActiveItem();
 		return item ? this.paneInput.items.find(input => multiDiffEditorItemKey(input) === item.id) : undefined;
+	}
+
+	public getFileListAccessibleContent(): string {
+		return this.paneInput.items.map(item => item.label).join('\n');
 	}
 
 	private createFileActions(container: HTMLElement, item: IDocumentDiffItem, input: MultiDiffEditorInputItem): IDisposable {
@@ -683,22 +734,29 @@ class MultiDiffEditorSession extends Disposable {
 			if (!resolved) return;
 			const next = createMultiDiffEditorInput(resolved.resource, resolved.resources, resolved.label, resolved.source);
 			if (this.isDisposed || this.abortController.signal.aborted || generation !== this.refreshGeneration) return;
-			// An unchanged source snapshot must retain the models used by an in-flight toolbar
-			// action. Replacing them would invalidate its reviewed range during the client RPC.
-			if (structuralEquals(EditorInputSerializers.serialize(this.paneInput), EditorInputSerializers.serialize(next))) return;
-			const state = this.editor?.saveViewState();
-			const resources = new DisposableStore();
-			const items = this.createItems(next, resources);
-			this.paneInput = next;
-			this.model.setItems(items);
-			this.itemResources.value = resources;
-			if (state) this.editor?.restoreViewState(state);
-			this.updateEmptyState();
-			this.createToolbar();
+			this.updateInput(next);
 		} catch (error) {
 			if (generation !== this.refreshGeneration || this.isDisposed) return;
 			throw error;
 		}
+	}
+
+	public get resource(): URI { return this.paneInput.resource; }
+
+	public updateInput(next: MultiDiffEditorInput): void {
+		// An unchanged snapshot must retain the models used by an in-flight toolbar action.
+		if (structuralEquals(EditorInputSerializers.serialize(this.paneInput), EditorInputSerializers.serialize(next))) return;
+		const state = this.editor?.saveViewState();
+		const resources = new DisposableStore();
+		const items = this.createItems(next, resources);
+		this.paneInput = next;
+		this.model.setItems(items);
+		this.itemResources.value = resources;
+		if (state) this.editor?.restoreViewState(state);
+		this.updateEmptyState();
+		this.createToolbar();
+		this.comparison.setItems(next.items);
+		this.layout(this.dimension);
 	}
 
 }

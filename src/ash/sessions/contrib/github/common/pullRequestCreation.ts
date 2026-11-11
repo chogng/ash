@@ -1,3 +1,4 @@
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 
 export type SessionPullRequestMergeMethod = 'MERGE' | 'SQUASH' | 'REBASE';
@@ -45,3 +46,5 @@ export interface ISessionPullRequestCreation {
 	/** Rechecks the captured repository before handing an explicit request to the Turn owner. */
 	prepareChatRequest?(message: string, options: ISessionPullRequestChatOptions): Promise<string>;
 }
+
+export const CreatePullRequestFocusedContext = new RawContextKey<boolean>('sessions.createPullRequestFocused', false);

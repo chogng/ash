@@ -78,7 +78,7 @@ test('Sessions Artifacts retains Design and Slides canvases independently', asyn
 	await page.keyboard.press('Escape');
 	await expect(design).toBeFocused();
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
-	for (const part of ['sidebar', 'auxiliarybar']) {
+	for (const part of ['sidebar', 'sessions']) {
 		await expect(page.locator(`[data-part="${part}"]`)).toBeVisible();
 	}
 	let workspace = creator.locator('.ash-creator-workspace:visible');
@@ -188,12 +188,13 @@ test('Sessions Creator uses Chinese mode names, actions and keyboard help', asyn
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Artifacts 导航返回首页/);
 	await page.keyboard.press('Escape');
-	await creator.getByRole('button', { name: '幻灯片', exact: true }).press('Enter');
-	await expect(creator.getByRole('button', { name: '添加幻灯片', exact: true })).toBeVisible();
+	await creator.getByRole('button', { name: /^幻灯片范例/ }).press('Enter');
+	const pages = creator.getByRole('combobox', { name: '页面', exact: true });
+	await expect(pages.locator('option')).toHaveText(['第 1 页', '第 2 页']);
 	await creator.getByRole('button', { name: '添加幻灯片', exact: true }).click();
-	await expect(creator.getByRole('combobox', { name: '页面', exact: true })).toHaveText('第 1 页');
+	await expect(pages.locator('option:checked')).toHaveText('第 3 页');
 	await creator.getByRole('button', { name: 'Artifacts 首页', exact: true }).click();
-	await creator.getByRole('button', { name: '设计', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	await expect(creator.locator('.ash-creator-header')).toBeHidden();
 	await expect(creator.locator('[data-creator-mode="design"] .ash-creator-workspace-navigation')).toHaveCount(0);
 	const canvas = page.getByRole('region', { name: '设计画布', exact: true });

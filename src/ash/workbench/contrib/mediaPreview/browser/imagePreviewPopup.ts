@@ -380,7 +380,7 @@ export class ImagePreviewPopup {
 							getMenuClassName: () => 'ash-image-preview-popup-menu',
 							iconPlacement: 'trailing', getCheckedActionsRepresentation: () => 'radio',
 						}),
-					}, options, () => ({ anchorAlignment: AnchorAlignment.Right }));
+					}, { ...options, buttonClassName: 'ash-image-preview-zoom' }, () => ({ anchorAlignment: AnchorAlignment.Right }));
 				}
 				if (action.id === openId && listApps) {
 					// The provider supplies the actual menu actions once app discovery finishes.

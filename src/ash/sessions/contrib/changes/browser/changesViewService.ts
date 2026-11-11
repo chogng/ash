@@ -3,10 +3,10 @@ import { observableValue, type IReader } from '../../../../base/common/observabl
 import { URI } from '../../../../base/common/uri.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { ChangesViewMode } from '../common/changes.js';
+import { onDidChangeMultiDiffEditorFileList, setMultiDiffEditorFileListViewMode } from '../../../../workbench/contrib/multiDiffEditor/common/multiDiffEditor.js';
+import { ChangesViewMode, getChangesViewMode } from '../common/changes.js';
 import type {
 	IChangesDetailsViewState, IChangesViewService,
-	IChangesViewSectionCollapseState, ChangesViewSection,
 } from '../common/changesViewService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
@@ -18,7 +18,7 @@ interface StoredChangesState {
 	readonly version: 1;
 	readonly changesets: readonly (readonly [string, string])[];
 	readonly details: readonly (readonly [string, IChangesDetailsViewState])[];
-	readonly sections: readonly (readonly [string, IChangesViewSectionCollapseState])[];
+	readonly sections?: unknown;
 	readonly reviewed: readonly string[];
 }
 
@@ -27,12 +27,9 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 	private readonly mode = observableValue(this, ChangesViewMode.List);
 	private readonly reviewed = observableValue<ReadonlySet<string>>(this, new Set());
 	private readonly details = new Map<string, IChangesDetailsViewState>();
-	private readonly sections = new Map<string, IChangesViewSectionCollapseState>();
 	private readonly changesetSelections = observableValue<ReadonlyMap<string, string>>(this, new Map());
-	private readonly sectionState = observableValue<IChangesViewSectionCollapseState>(this, { checks: false });
 	public readonly viewModeObs = this.mode;
 	public readonly reviewedFilesObs = this.reviewed;
-	public readonly activeSessionSectionCollapseStateObs = this.sectionState;
 
 	constructor(
 		@IStorageService private readonly storage: IStorageService,
@@ -41,17 +38,12 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 	) {
 		super();
 		this.restoreState();
-		const restore = (): void => {
-			const value = storage.get('sessions.changes.viewMode', StorageScope.PROFILE);
-			this.mode.set(value === ChangesViewMode.Tree ? ChangesViewMode.Tree : ChangesViewMode.List);
-		};
+		const restore = (): void => this.mode.set(getChangesViewMode(storage));
 		restore();
+		this._register(onDidChangeMultiDiffEditorFileList(storage, restore));
 		this._register(storage.onDidChangeValue(event => {
-			if (event.key === 'sessions.changes.viewMode' && event.scope === StorageScope.PROFILE) { restore(); }
 			if (event.external && event.key === stateKey && event.scope === StorageScope.WORKSPACE) { this.restoreState(); }
 		}));
-		this._register(sessions.onDidChange(() => this.updateSections()));
-		this.updateSections();
 		const reviewedResources = context.createKey<readonly string[]>('sessions.changesReviewedFiles', []);
 		const updateReviewed = (): void => reviewedResources.set([...this.reviewed.get()].flatMap(resource => [resource, `${resource}&side=before`, `${resource}&side=after`]));
 		this._register(this.reviewed.onDidChange(updateReviewed));
@@ -59,22 +51,9 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 		updateReviewed();
 	}
 
-	public setSectionCollapsed(resource: URI, section: ChangesViewSection, collapsed: boolean): void {
-		if (this.isDisposed) { return; }
-		const key = resource.toString();
-		const state = { ...(this.sections.get(key) ?? { checks: false }), [section]: collapsed };
-		this.sections.delete(key);
-		this.sections.set(key, state);
-		if (this.sections.size > 64) { this.sections.delete(this.sections.keys().next().value!); }
-		const selected = this.sessions.activeSelection;
-		if (selected && new SessionChangesEditorInput(selected).resource.toString() === key) { this.sectionState.set(state); }
-		this.saveState();
-	}
-
 	public setViewMode(mode: ChangesViewMode): void {
 		if (this.isDisposed) { return; }
-		this.mode.set(mode);
-		this.storage.store('sessions.changes.viewMode', mode, StorageScope.PROFILE, StorageTarget.MACHINE);
+		setMultiDiffEditorFileListViewMode(this.storage, mode);
 	}
 
 	public getChangesetId(resource: URI | undefined, reader?: IReader): string | undefined {
@@ -123,30 +102,23 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 		this.saveState();
 	}
 
-	private updateSections(): void {
-		const selected = this.sessions.activeSelection;
-		const resource = selected && new SessionChangesEditorInput(selected).resource.toString();
-		this.sectionState.set(resource ? this.sections.get(resource) ?? { checks: false } : { checks: false });
-	}
-
 	private saveState(): void {
+		// Preserve the legacy Checks field until the GitHub contribution finishes migrating it.
+		const sections = parseStoredChangesState(this.storage.get(stateKey, StorageScope.WORKSPACE))?.sections;
 		const state: StoredChangesState = {
 			version: 1, changesets: [...this.changesetSelections.get()], details: [...this.details],
-			sections: [...this.sections], reviewed: [...this.reviewed.get()],
+			...(sections === undefined ? {} : { sections }), reviewed: [...this.reviewed.get()],
 		};
 		this.storage.store(stateKey, JSON.stringify(state), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 
 	private restoreState(): void {
 		const stored = this.storage.get(stateKey, StorageScope.WORKSPACE);
-		const state = stored === undefined ? { version: 1 as const, changesets: [], details: [], sections: [], reviewed: [] } : readChangesState(stored);
+		const state = stored === undefined ? { version: 1 as const, changesets: [], details: [], reviewed: [] } : readChangesState(stored);
 		// Invalid cache data must not partially replace a valid live snapshot.
 		if (!state) { return; }
 		this.details.clear();
 		for (const [key, value] of state.details) { this.details.set(key, value); }
-		this.sections.clear();
-		for (const [key, value] of state.sections) { this.sections.set(key, value); }
-		this.updateSections();
 		this.reviewed.set(new Set(state.reviewed));
 		this.changesetSelections.set(new Map(state.changesets));
 	}
@@ -154,8 +126,8 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 
 function readChangesState(stored: string): StoredChangesState | undefined {
 	try {
-		const value: unknown = JSON.parse(stored);
-		if (!isRecord(value) || value.version !== 1) { return undefined; }
+		const value = parseStoredChangesState(stored);
+		if (!value) { return undefined; }
 		const entries = (candidate: unknown, validKey: (key: string) => boolean, validValue: (entry: unknown) => boolean): boolean => {
 			if (!Array.isArray(candidate) || candidate.length > 64) { return false; }
 			const keys = new Set<string>();
@@ -172,7 +144,6 @@ function readChangesState(stored: string): StoredChangesState | undefined {
 				&& (resource.path.startsWith('/draft/') || !!new URLSearchParams(resource.query).get('thread'));
 		};
 		if (!entries(value.changesets, key => validResource(key) && !URI.parse(key).fragment, entry => typeof entry === 'string' && entry.length > 0)
-			|| !entries(value.sections, validResource, entry => isRecord(entry) && typeof entry.checks === 'boolean')
 			|| !entries(value.details, key => {
 				const delimiter = key.lastIndexOf('\n');
 				return delimiter > 0 && validResource(key.slice(0, delimiter)) && [ChangesViewMode.List, ChangesViewMode.Tree].includes(key.slice(delimiter + 1) as ChangesViewMode);
@@ -189,5 +160,13 @@ function readChangesState(stored: string): StoredChangesState | undefined {
 				|| !query.get('revision') || !Number.isSafeInteger(revision) || revision < 0 || query.has('side')) { return undefined; }
 		}
 		return value as unknown as StoredChangesState;
+	} catch { return undefined; }
+}
+
+function parseStoredChangesState(stored: string | undefined): Record<string, unknown> | undefined {
+	if (stored === undefined) return undefined;
+	try {
+		const value: unknown = JSON.parse(stored);
+		return isRecord(value) && value.version === 1 ? value : undefined;
 	} catch { return undefined; }
 }

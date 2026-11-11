@@ -108,11 +108,13 @@
 
 .ash-toolbar .ash-split-action-dropdown > .ash-button {
 	box-sizing: border-box;
-	width: calc(
-		var(--ash-lxiconFontSize-compact) + 2 * var(--ash-spacing-size20)
+	width: var(
+		--ash-split-action-dropdown-width,
+		calc(var(--ash-lxiconFontSize-compact) + 2 * var(--ash-spacing-size20))
 	);
-	min-width: calc(
-		var(--ash-lxiconFontSize-compact) + 2 * var(--ash-spacing-size20)
+	min-width: var(
+		--ash-split-action-dropdown-width,
+		calc(var(--ash-lxiconFontSize-compact) + 2 * var(--ash-spacing-size20))
 	);
 	padding: 0 var(--ash-spacing-size20);
 	border-start-start-radius: 0;

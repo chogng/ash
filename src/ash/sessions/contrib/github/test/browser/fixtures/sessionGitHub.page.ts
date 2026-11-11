@@ -6,12 +6,13 @@ import { SessionsListModelService } from '../../../../../services/sessions/brows
 import { BrowserContextViewService } from '../../../../../../platform/contextview/browser/contextViewService.js';
 import { AppServerAutomationService } from '../../../../../../platform/automations/browser/appServerAutomationService.js';
 import type { Automation } from '../../../../../../platform/automations/common/automation.js';
-import { ChecksOperationService } from '../../../../changes/browser/checksOperationService.js';
+import { ChecksOperationService } from '../../../browser/checksOperationService.js';
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
-import { IChecksOperationService } from '../../../../changes/common/checksOperationService.js';
+import { IChecksOperationService } from '../../../common/checksOperationService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
-import { ChecksWidget } from '../../../../changes/browser/checksWidget.js';
-import { IChangesViewService } from '../../../../changes/common/changesViewService.js';
+import { ChecksWidget } from '../../../browser/checksWidget.js';
+import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
+import { ILogService } from '../../../../../../platform/log/common/log.js';
 import { IChatService, type StartTurnOptions } from '../../../../../../workbench/services/chat/common/chatService.js';
 import { IGitHubService as IGitHubApi } from '../../../../../../platform/github/common/githubService.js';
 import { IGitHubService as ISessionGitHubService } from '../../../browser/githubService.js';
@@ -318,10 +319,8 @@ if (new URL(location.href).searchParams.has('checks')) {
 	services.registerInstance(IAccountService, { onDidChangeAccounts: accountsChanged.event } as IAccountService);
 	services.registerInstance(IOpenerService, opener);
 	services.registerInstance(INotificationService, notifications);
-	services.registerInstance(IChangesViewService, {
-		activeSessionSectionCollapseStateObs: observableValue('testChecksCollapse', { checks: false }),
-		setSectionCollapsed: () => { },
-	} as unknown as IChangesViewService);
+	services.registerInstance(IStorageService, listStorage);
+	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(IChatService, {
 		readThread: async () => ({ thread: { status: 'active', sequence: 3, turns: [] } }),
 		startTurn: async (options: StartTurnOptions) => { submissions.push({ ...options }); },

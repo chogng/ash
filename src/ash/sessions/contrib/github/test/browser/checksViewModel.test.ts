@@ -11,7 +11,7 @@ import { IAccountService, type AccountState } from '../../../../../platform/acco
 import { IGitHubService as IGitHubApi, GitHubError, GitHubErrorCode, type GitHubChecks, type GitHubCheckDetails } from '../../../../../platform/github/common/githubService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
-import { IGitHubService } from '../../../github/browser/githubService.js';
+import { IGitHubService } from '../../browser/githubService.js';
 import { ChecksViewModel, type ChecksEntry } from '../../browser/checksViewModel.js';
 import { getCheckStateLabel } from '../../browser/checksActions.js';
 import { IChecksOperationService } from '../../common/checksOperationService.js';

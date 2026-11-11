@@ -72,15 +72,18 @@ export class ProjectAppearancePicker extends Disposable {
 		];
 		const colorButtons = new Map<string | undefined, HTMLButtonElement>();
 		for (const [color, name] of swatches) {
+			const selected = this.draft.color === color;
 			const swatch = h(document, 'span', { attributes: { 'aria-hidden': 'true' } });
 			swatch.style.backgroundColor = color ? `var(${colorCssVariable(color)})` : 'currentColor';
 			const button = h(document, 'button', {
-				attributes: { type: 'button', 'aria-label': name, 'aria-pressed': String(this.draft.color === color), title: name },
+				className: selected ? 'selected' : '',
+				attributes: { type: 'button', 'aria-label': name, 'aria-pressed': String(selected), title: name },
 			}, swatch);
 			store.add(addDisposableListener(button, 'click', () => {
 				this.draft = { ...this.draft, color };
 				this.updatePreview();
 				for (const [id, candidate] of colorButtons) {
+					candidate.classList.toggle('selected', id === color);
 					candidate.setAttribute('aria-pressed', String(id === color));
 				}
 			}));

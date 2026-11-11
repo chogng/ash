@@ -860,6 +860,8 @@ export abstract class Workbench extends Disposable {
 			() => configurationService.getValue(SessionsConfiguration.layoutStyle) === 'flat');
 		const flatLayoutContext = SessionsFlatLayoutContext.bindTo(contextKeys);
 		this._register(autorun(reader => flatLayoutContext.set(flatLayout.read(reader))));
+		const titlebarHeight = observableFromEvent(this, titlebar.onDidChangeConstraints, () => titlebar.minimumHeight);
+		const changesHeaderHeight = derived(reader => flatLayout.read(reader) ? titlebarHeight.read(reader) : undefined);
 		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
@@ -973,7 +975,7 @@ export abstract class Workbench extends Disposable {
 			if (selected?.kind === 'session' && selected.active.session.sessionId === sessionId && selected.active.threadId === threadId) sessionsPart!.focus();
 		};
 		services.registerInstance(IChatSessionNavigationService, {
-			openToolResult: async (sourceSessionId, target, signal) => {
+			openToolResult: async (sourceSessionId, target, signal, options) => {
 				const scope = providerScopes.getScope(sourceSessionId);
 				const revision = view.navigationRevision;
 				const connection = scope.services.host.appServer;
@@ -989,7 +991,7 @@ export abstract class Workbench extends Disposable {
 					if (target.type === 'sessionTarget') {
 						await scope.services.chat.readThread(target.sessionId, target.threadId);
 						assertCurrent();
-						await view.openThread(scope.identity(target.sessionId), scope.identity(target.threadId));
+						await view.openThread(scope.identity(target.sessionId), scope.identity(target.threadId), options);
 						if (!signal.aborted && !layout.isPartVisible('sessions')) await this.showChat();
 					} else {
 						const store = services.get(ISessionsProvidersService).getProvider(scope.providerId)?.automations;
@@ -1103,11 +1105,11 @@ export abstract class Workbench extends Disposable {
 		for (const tool of desktopEditorTools) {
 			if (tool === 'files') continue;
 			const scope = createToolScope(tool);
-			const titleActions: IEditorPartOptions['titleActions'] = tool === 'terminal' ? {
+			const titleActions: IEditorPartOptions['titleActions'] = tool === 'changes' || tool === 'terminal' ? {
 				menuService: menus,
 				contextMenuProvider: {
 					showContextMenu: delegate => contextMenus.showContextMenu(
-						flatLayout.get() ? { ...delegate, iconPlacement: 'trailing' } : delegate,
+						tool === 'changes' || flatLayout.get() ? { ...delegate, iconPlacement: 'trailing' } : delegate,
 					),
 				},
 			} : editorOptions.titleActions;
@@ -1116,6 +1118,7 @@ export abstract class Workbench extends Disposable {
 				canDropEditor: input => (tool === 'search') === isSearchEditorInput(input),
 				contextKeyService: scope.context,
 				hideTabs: tool === 'changes',
+				headerRowHeight: tool === 'changes' ? changesHeaderHeight : undefined,
 				titleActions,
 			} satisfies IEditorPartOptions));
 			scope.services.registerInstance(IEditorPart, part);

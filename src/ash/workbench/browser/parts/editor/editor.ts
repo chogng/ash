@@ -6,6 +6,7 @@ import type { EditorGroupId, EditorInstanceId } from '../../../services/editor/c
 import type { SerializedEditorViewState } from '../../../services/editor/common/editorWorkingSet.js';
 import type { ISaveEditorsOptions } from '../../../services/editor/common/editorService.js';
 import type { MenuId } from '../../../../platform/actions/common/actions.js';
+import type { IObservable } from '../../../../base/common/observable.js';
 
 /** Menu locations supplied by the product hosting an editor group. */
 export interface IEditorGroupMenuIds {
@@ -18,6 +19,7 @@ export interface IEditorGroupViewOptions {
 	readonly menuIds?: IEditorGroupMenuIds;
 	readonly showHeader?: boolean;
 	readonly hideTabs?: boolean;
+	readonly headerRowHeight?: IObservable<number | undefined>;
 }
 
 /** Shared presentation marker for editor tabs connected to their pane. */

@@ -1645,6 +1645,7 @@ for (const background of [false, true]) test(background
 		const editorRoot = createCodeEditorServices(editorResources);
 		registerTestExtensionService(editorResources, editorRoot);
 		const editorServices = editorResources.add(createTestEditorServices(undefined, editorRoot, dom.window.document, composerStorage));
+		editorServices.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 		editorServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 		editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
 		editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
@@ -2849,6 +2850,7 @@ test('ChatWidgetModel projects a durable Turn failure into the conversation', as
 		detail: 'Choose a model with working credentials before sending another message.',
 		errorCode: 'providerAuth',
 		action: { type: 'chooseModel', label: 'Choose another model' },
+		secondaryAction: undefined,
 	}]);
 	assert.equal(model.state, 'ready');
 });
@@ -5301,7 +5303,7 @@ test('stream updates preserve message order and survive an older refresh snapsho
 	await waitFor(() => reads === 1);
 	emit(6, 'first', 'Completed', false);
 	emit(5, 'first', 'Stale duplicate');
-	assert.deepEqual(changes, [undefined, undefined, { previousText: 'Partial', item: { id: 'item:first', type: 'agentMessage', text: 'Partial reply', transient: true, timestamp, fileReferenceDirectory: undefined } }, undefined, undefined]);
+	assert.deepEqual(changes, [undefined, undefined, { previousText: 'Partial', item: { id: 'item:first', type: 'agentMessage', text: 'Partial reply', transient: true, timestamp, fileReferenceDirectory: undefined, citations: undefined } }, undefined, undefined]);
 	assert.deepEqual(model.items.map(item => [item.id, item.text, item.transient]), [['item:first', 'Completed', false], ['item:second', 'Later message', true]]);
 	await read.complete(await fake.api.thread.read({ sessionId: 'session-1', threadId: 'thread-1' }));
 	await nextTask();

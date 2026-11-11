@@ -1,9 +1,10 @@
 import type { URI } from '../../../../base/common/uri.js';
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import type { IMultiDiffEditorOptions } from '../../../../editor/common/multiDiffEditor.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
 import type { IEditorGroup } from '../../../../workbench/services/editor/common/editorGroupsService.js';
-import type { ISessionChangeset } from '../../../services/sessions/common/session.js';
+import type { ISessionChangeset, ISessionFileChange } from '../../../services/sessions/common/session.js';
 
 export interface ISessionChangesEditorOptions extends IMultiDiffEditorOptions {
 	readonly changesetSelection?:
@@ -18,6 +19,8 @@ export interface ISessionChangesService {
 	getSessionResource(editorResource: URI): URI | undefined;
 	openChangesEditor(sessionResource: URI, options?: ISessionChangesEditorOptions, group?: EditorOpenTarget): Promise<IEditorGroup | undefined>;
 	resolveChangeset(sessionResource: URI, id: string): Promise<ISessionChangeset>;
+	previewCommit(sessionResource: URI, token: CancellationToken, selection?: ISessionChangesEditorOptions['changesetSelection']): Promise<void>;
+	previewSelectedFiles(sessionResource: URI, token: CancellationToken, files: readonly ISessionFileChange[]): Promise<void>;
 	setChangesCount(editorResource: URI, count: number | undefined): void;
 }
 

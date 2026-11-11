@@ -225,6 +225,8 @@ When Session Activity Bar is enabled and the conversation Part is visible, `Sess
 
 Changes hides the tab strip while keeping the group's title toolbar. Diff View commands use that group as their context and update the Agents window's shared diff preference. Maximize Tool acts on the whole card in the outer tool Grid.
 
+The Changes header toggles the Workbench changed-files list in both layouts. The editor owns the split and reveals selected files in the current comparison. The independent Changes view in the Auxiliary Bar uses the same Workbench list and list or tree preference. Session Rail follows the conversation pane's lifecycle and hosts branch actions, pull requests, and checks.
+
 The desktop window title bar reserves pointer interaction for editor tabs and controls, and dragging the surrounding title area moves the window. Alt-drag on an inline card header and Alt+Shift+Arrow move the tool card in the outer Grid.
 
 ### Tool placement strategy

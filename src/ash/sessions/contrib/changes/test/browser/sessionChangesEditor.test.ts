@@ -17,6 +17,8 @@ import { IEditorPart } from '../../../../../workbench/browser/parts/editor/edito
 import { createThreadChangeFileResource, IChatService, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnChangeSetSummary } from '../../../../../workbench/services/chat/common/chatService.js';
 
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
+import { SessionsConfiguration } from '../../../../common/configuration.js';
 import { SessionChangesEditor } from '../../browser/sessionChangesEditor.js';
 import { URI } from '../../../../../base/common/uri.js';
 import '../../browser/changes.contribution.js';
@@ -41,6 +43,27 @@ import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 
 const emptySummary: ThreadChangesSummary = { sequence: 1, revision: 'empty', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] };
+
+test('Changes creates its editor without constructing the standalone Changes view', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using domOwner = toDisposable(() => dom.window.close());
+	using services = registerTestComponentServices(new InstantiationService());
+	using context = new ContextKeyService();
+	using configuration = new InMemoryConfigurationService();
+	await configuration.updateValue(SessionsConfiguration.layoutStyle, 'modern');
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IContextKeyService, context);
+	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+	services.registerInstance(ISessionsService, { onDidChange: Event.None } as unknown as ISessionsService);
+	services.registerInstance(ISessionsManagementService, { sessions: [] } as unknown as ISessionsManagementService);
+	services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
+	services.registerInstance(IChatService, { onDidUpdateThread: Event.None, onDidUpdateTurnChanges: Event.None, onDidBecomeReady: Event.None } as unknown as IChatService);
+	// This editor does not need the view-specific services registered for the Auxiliary Bar.
+	using pane = services.createInstance(SessionChangesEditor, { showFileList: true });
+	pane.create(dom.window.document.body);
+	pane.layout({ width: 800, height: 600 });
+	assert.ok(dom.window.document.querySelector('.ash-sessions-changes-editor'));
+});
 
 suite('Changes editor overlapping opens', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -146,6 +169,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 			assert.ok(chinese);
 			setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 			try {
+				assert.match(provider.provideContent(), /查看“全部更改”或回合更改时，可以使用“预览提交”/u);
 				assert.match(provider.provideContent(), /“更改”是一张独立工具卡，每个编辑器组都有自己的标题工具栏/u);
 				assert.match(provider.provideContent(), /打开“差异视图”.*“行内”“并排”或“自动”/u);
 			} finally {

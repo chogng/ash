@@ -39,6 +39,7 @@ class ProjectsPinActionViewItem extends ButtonActionViewItem {
 		if (!this.action.checked) {
 			return;
 		}
+		container.classList.add('pinned');
 		const button = this.button.domNode;
 		const updateIcon = () => {
 			this.button.icon = button.matches(':hover, :focus') ? Lxicon.unpin : this.action.icon;

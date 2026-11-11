@@ -165,7 +165,7 @@ export class ChatListWidget extends DomWidget {
 	public get element(): HTMLElement { return this.domNode; }
 
 	/** Places the list-owned control in the composer action row when the host supplies one. */
-	public setScrollToLatestHost(host: HTMLElement | undefined, composerForm: HTMLElement | undefined, changesSummaryVisible?: IObservable<boolean>): void {
+	public setScrollToLatestHost(host: HTMLElement | undefined, composerForm: HTMLElement | undefined, changesSummaryVisible?: IObservable<boolean>, overlapBoundary?: HTMLElement): void {
 		this.scrollToLatestHostObserver.clear();
 		const overlapProperty = '--ash-chat-transcript-composer-overlap';
 		const updateOverlap = () => {
@@ -176,9 +176,11 @@ export class ChatListWidget extends DomWidget {
 			}
 			const composer = composerForm.getBoundingClientRect();
 			if (!composer.height || !this.element.clientHeight) return;
+			const boundary = overlapBoundary?.getBoundingClientRect();
+			const limit = boundary?.height ? Math.min(boundary.top, composer.top) : composer.top;
 			// Measure from the unextended edge so observing the list cannot accumulate overlap.
 			const appliedMargin = parseFloat(host.ownerDocument.defaultView!.getComputedStyle(this.element).marginBlockEnd);
-			const overlap = Math.max(0, Math.round(composer.top - this.element.getBoundingClientRect().bottom - appliedMargin));
+			const overlap = Math.max(0, Math.round(limit - this.element.getBoundingClientRect().bottom - appliedMargin));
 			const value = `${overlap}px`;
 			if (this.element.style.getPropertyValue(overlapProperty) !== value) {
 				const { top, maximumTop } = this.scrollable.state;
@@ -203,6 +205,7 @@ export class ChatListWidget extends DomWidget {
 			// Updating the list margin changes an observed box. Apply it outside observer delivery.
 			const layout = new RunOnceScheduler(updateOverlap, 0);
 			const targets = [this.element, host, composerForm];
+			if (overlapBoundary) targets.push(overlapBoundary);
 			if (host.parentElement) targets.push(host.parentElement);
 			const resize = observeResize(targets, () => layout.schedule());
 			// The jump button can hide its entire composer row on the last scroll event.

@@ -151,6 +151,29 @@ test('editor contributions follow layout state, serialize open commands without 
 	contextKeys.setContext('sessions.editorToolMaximized', false);
 	const desktopIds = () => desktopTitle.getActions().flatMap(([, actions]) => actions).map(action => action.id);
 	assert.deepEqual(desktopIds(), title.getActions().flatMap(([, actions]) => actions).map(action => action.id));
+	contextKeys.setContext('sessions.editorTool', 'changes');
+	contextKeys.setContext('sessions.changes.hasWorkspace', true);
+	contextKeys.setContext('sessions.changes.scope', 'all');
+	contextKeys.setContext('multiDiffEditorFileListAvailable', true);
+	contextKeys.setContext('multiDiffEditorFileListEnabled', true);
+	assert.equal(headerActions().find(action => action.id === 'multiDiffEditor.toggleFileList')?.checked, true);
+	assert.ok(!headerActions().some(action => action.id === 'ash.sessions.changes.createPullRequest'));
+	assert.ok(desktopIds().includes('ash.sessions.changes.previewCommit'));
+	using changesScopes = menus.createMenu(Menus.SessionsChangesScope);
+	assert.ok(changesScopes.getActions().flatMap(([, actions]) => actions).some(action => action.id === 'ash.sessions.changesScope.turn'));
+	flatLayout.set(false);
+	assert.equal(headerActions().find(action => action.id === 'multiDiffEditor.toggleFileList')?.checked, true);
+	assert.ok(desktopIds().includes('ash.sessions.changes.previewCommit'));
+	for (const layout of [true, false]) {
+		flatLayout.set(layout);
+		for (const [scope, canPreview] of [['all', true], ['turn', true], ['uncommitted', false], ['branch', false]] as const) {
+			contextKeys.setContext('sessions.changes.scope', scope);
+			assert.equal(desktopIds().includes('ash.sessions.changes.previewCommit'), canPreview);
+		}
+	}
+	contextKeys.setContext('sessions.changes.scope', 'all');
+	flatLayout.set(true);
+	contextKeys.setContext('sessions.editorTool', 'files');
 	const dynamic = MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
 		command: { id: 'test.desktopEditor.action', title: 'Dynamic editor command' }, group: 'navigation',
 	});
@@ -174,10 +197,10 @@ test('editor contributions follow layout state, serialize open commands without 
 	contextKeys.setContext('sessions.editorTool', 'changes');
 	assert.ok(!desktopIds().includes('ash.sessions.toggleDetails'));
 	assert.ok(!desktopIds().includes('ash.sessions.hideEditor'));
+	flatLayout.set(false);
 	assert.ok(!headerActions().some(action => action.id === 'ash.sessions.toggleChangesFileList'));
-	contextKeys.setContext('sessions.changesFileListAvailable', true);
-	contextKeys.setContext('sessions.changesFileListVisible', true);
-	assert.equal(headerActions().find(action => action.id === 'ash.sessions.toggleChangesFileList')?.checked, true);
+	assert.equal(headerActions().find(action => action.id === 'multiDiffEditor.toggleFileList')?.checked, true);
+	flatLayout.set(true);
 	contextKeys.setContext('sessions.editorTool', 'terminal');
 	assert.ok(!desktopIds().includes('ash.sessions.toggleDetails'));
 	assert.ok(!desktopIds().includes('ash.sessions.hideEditor'));
@@ -289,6 +312,10 @@ test('the Flat Terminal title splits the selected shell within its terminal tab'
 	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using commands = new CommandService(services);
+	using configuration = new InMemoryConfigurationService();
+	services.registerInstance(IConfigurationService, configuration);
+	const flat = SessionsFlatLayoutContext.bindTo(contextKeys);
+	flat.set(true);
 	contextKeys.setContext('sessions.editorTool', 'terminal');
 	contextKeys.setContext('appServerAvailable', true);
 	contextKeys.setContext('terminalEditorCanSplit', true);
@@ -299,10 +326,6 @@ test('the Flat Terminal title splits the selected shell within its terminal tab'
 	services.registerInstance(ILayoutService, { isPartVisible: () => false, onDidLayoutMainContainer: Event.None } as unknown as IAgentWorkbenchLayoutService);
 	services.registerInstance(IEditorPart, { groups: [source], onDidChangeEditors: Event.None, filesPart: { onDidChangeDetailsVisibility: Event.None } } as unknown as IEditorPart);
 	const paneSplits: Direction[] = [];
-	using configuration = new InMemoryConfigurationService();
-	services.registerInstance(IConfigurationService, configuration);
-	const flat = SessionsFlatLayoutContext.bindTo(contextKeys);
-	flat.set(true);
 	services.registerInstance(ITerminalEditorService, {
 		async splitPane(source: TerminalEditorInput, preserveFocus: boolean, direction: Direction) {
 			assert.equal(source, input);

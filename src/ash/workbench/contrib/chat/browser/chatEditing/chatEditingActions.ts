@@ -271,7 +271,7 @@ export async function readThreadChangesComparison(chat: IChatService, sessionId:
 	if (expectedRevision !== undefined && summary.revision !== expectedRevision) throw new ThreadChangesNotCurrentError();
 	const items: MultiDiffEditorInputItem[] = [];
 	let selectedResource: URI | undefined;
-	for (const repository of summary.repositories) {
+	for (const [index, repository] of summary.repositories.entries()) {
 		if (target && repository.repositoryId !== target.repositoryId) continue;
 		for (const file of repository.files) {
 			if (target && file.path !== target.path) continue;
@@ -287,6 +287,11 @@ export async function readThreadChangesComparison(chat: IChatService, sessionId:
 			}
 			items.push({
 				label, binary: contents.binary,
+				fileList: {
+					path: file.path, ...(summary.repositories.length > 1 ? {
+						group: { id: JSON.stringify([repository.repositoryId]), label: localize('sessions.changes.repository', 'Repository {0}', index + 1) },
+					} : {})
+				},
 				original: { resource: resource.with({ query: `${resource.query}&side=before` }), initialText: contents.before ?? '', readOnly: true },
 				modified: { resource: resource.with({ query: `${resource.query}&side=after` }), initialText: contents.after ?? '', readOnly: true },
 			});

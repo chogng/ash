@@ -2,6 +2,7 @@ import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.j
 import './media/editorTitleControl.css';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
+import { autorun } from '../../../../base/common/observable.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -92,6 +93,16 @@ export class EditorTitleControl extends Disposable {
 		this.lockIndicator.hidden = true;
 		this.headerElement.append(this.lockIndicator);
 		this._register(this.header.onDidChangeHeight(() => this.heightEmitter.fire()));
+		if (viewOptions.headerRowHeight) {
+			this._register(autorun(reader => {
+				const height = viewOptions.headerRowHeight!.read(reader);
+				for (const node of [this.domNode, this.headerElement]) {
+					if (height === undefined) node.style.removeProperty('--ash-pane-titleHeight');
+					else node.style.setProperty('--ash-pane-titleHeight', `${height}px`);
+				}
+				this.heightEmitter.fire();
+			}));
+		}
 		if (configurationService) {
 			this._register(configurationService.onDidChangeConfiguration(event => {
 				if (!viewOptions.hideTabs && model.editorLimit !== 1 && event.affectsConfiguration(EditorTabsModeConfiguration)) {
@@ -117,7 +128,8 @@ export class EditorTitleControl extends Disposable {
 	get tabsHeight(): number {
 		if (this.domNode.hidden || this.headerElement.parentElement !== this.domNode) return 0;
 		const rows = this.tabs instanceof MultiRowEditorControl ? this.tabs.rowCount : 1;
-		const rowHeight = this.viewOptions.showHeader ? EditorHeaderControl.HEIGHT : EditorTitleControl.HEIGHT;
+		const rowHeight = this.viewOptions.headerRowHeight?.get()
+			?? (this.viewOptions.showHeader ? EditorHeaderControl.HEIGHT : EditorTitleControl.HEIGHT);
 		return rowHeight * rows;
 	}
 

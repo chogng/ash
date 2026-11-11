@@ -9,7 +9,7 @@ import { ICommandService, CommandsRegistry } from '../../../../../platform/comma
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
+import { ISessionsService } from '../../browser/sessionsService.js';
 import { SessionGitActionsService } from '../../browser/sessionGitActionsService.js';
 
 suite('Session Git actions', () => {

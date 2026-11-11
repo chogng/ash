@@ -7,38 +7,12 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import { CHANGES_VIEW_ID } from '../common/changes.js';
 import { ChangesViewPane } from './changesView.js';
 import { SessionChangesEditor } from './sessionChangesEditor.js';
-import { CreatePullRequestFocusedContext } from '../common/changes.js';
-import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { isHTMLElement } from '../../../../base/browser/dom.js';
 
 /** Uses the live view or editor content and restores focus to its owning surface. */
 export function getSessionsChangesAccessibilityProviders(): readonly IAccessibleViewImplementation[] {
 	const providers: IAccessibleViewImplementation[] = [];
 	for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-		providers.push({
-			type,
-			name: `sessionsCreatePullRequest.${type}`,
-			priority: 110,
-			when: CreatePullRequestFocusedContext.isEqualTo(true),
-			getProvider: accessor => {
-				const form = accessor.get(IContextViewService).container.querySelector<HTMLElement>('.ash-sessions-create-pr');
-				if (!form) { return undefined; }
-				const focused = form.ownerDocument.activeElement;
-				return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChanges, { type }, () => {
-					if (!form.isConnected) { return localize('sessions.changes.prClosed', 'Pull request form closed.'); }
-					if (type === AccessibleViewType.Help) { return localize('sessions.changes.prHelp', 'Create pull request\nUse Tab and Shift+Tab to move between the title, target branch, description, Draft checkbox, merge mode and actions. Choose Create pull request to submit the displayed values. Escape or Cancel closes the form and returns focus. Changes to the session or GitHub account close the form. Creation checks the repository and branch again; a changed context requires reopening the form.') + '\n' + localize('sessions.changes.prAgentHelp', 'The primary button repeats the last pull request action. Use Left and Right to move between it and Pull request action; Down opens the menu. Choose Create directly to use GitHub, or Ask agent to create to submit the displayed title, description, branch and merge choice to this conversation. Choosing a menu action submits immediately. Escape closes the menu and returns focus to its button. An active Turn queues the request. This uses normal agent permissions. Draft and merge choices are remembered for the profile and limited by the current repository. An unconfirmed submission disables retry; inspect the conversation or repository first.'); }
-					const fields = [...form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select')].filter(field => !field.hidden);
-					const values = fields.map(field => {
-						let value = field.value;
-						if (field instanceof form.ownerDocument.defaultView!.HTMLInputElement && field.type === 'checkbox') {
-							value = field.checked ? localize('sessions.changes.prChecked', 'Checked') : localize('sessions.changes.prUnchecked', 'Unchecked');
-						}
-						return localize('sessions.changes.prField', '{0}: {1}', field.getAttribute('aria-label') ?? '', value);
-					});
-					return [form.textContent, ...values].join('\n');
-				}, () => { if (isHTMLElement(focused) && focused.isConnected) { focused.focus(); } }, AccessibilityVerbositySettingId.SessionsChanges);
-			},
-		});
 		providers.push({
 			type,
 			name: `sessionsChangesEditor.${type}`,
@@ -52,7 +26,7 @@ export function getSessionsChangesAccessibilityProviders(): readonly IAccessible
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsChanges,
 					{ type },
-					() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('sessions.changes.editorHelp', "Changes editor\nThe file list and comparisons share this editor. Use arrow keys to navigate changed files and Enter to compare a file. Tab reaches review, commit and comparison controls. Resize the internal separator to change list and comparison sizes. Changes is a separate tool card with a title toolbar for each editor group. Split adds a group inside the card. Toggle tool size maximizes or restores the whole card. From a focused header action, press Alt+Shift+Arrow to move a group within the card or move the card at a group boundary. Alt+F2 reads the file list and before and after contents.") + '\n' + getChangesViewHelp() + '\n' + localize('sessions.changes.editorActionsHelp', 'Use the file toolbar to mark a file Viewed, open its workspace file, expand the full file or collapse unchanged regions. Marking Viewed collapses that comparison; marking it unviewed expands it. Read markers belong to the captured revision. Preview commit asks for a message and prepares the exact captured file for review before committing.') + '\n' + localize('sessions.changes.diffViewHelp', 'In the editor title menu, open Diff View to choose Inline, Side by Side, or Automatic for comparisons in the Agents window.'),
+					() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('sessions.changes.editorHelp', "Changes editor\nThe file list and comparisons share this editor. Use Changes in the title toolbar to select All Changes, Changes from Turn, Uncommitted Changes, or Compare Against. Toggle Changed Files shows the files in the comparison. In More Actions, use Files View to switch between list and tree. For All Changes and Changes from Turn, use Preview commit to select files and enter a commit message. Use Up and Down to browse files, Left and Right to close and open folders, Space to preview while keeping list focus, or Enter to focus the diff. Select files and use the context menu to mark them reviewed or unreviewed. Changes is a separate tool card with a title toolbar for each editor group. Use Session information under Environment for Git branch actions, pull requests and checks. Alt+F2 reads the file list and before and after contents.") + '\n' + localize('sessions.changes.editorActionsHelp', 'Use the file toolbar to mark a file Viewed, open its workspace file, expand the full file or collapse unchanged regions. Marking Viewed collapses that comparison; marking it unviewed expands it. Read markers belong to the captured revision. Preview commit asks for a message and prepares the exact captured file for review before committing.') + '\n' + localize('sessions.changes.diffViewHelp', 'In the editor title menu, open Diff View to choose Inline, Side by Side, or Automatic for comparisons in the Agents window.'),
 					() => pane.focus(),
 					AccessibilityVerbositySettingId.SessionsChanges,
 				);

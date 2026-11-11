@@ -11,6 +11,7 @@ import { ChangesViewService } from '../../browser/changesViewService.js';
 import { ChangesViewMode } from '../../common/changes.js';
 import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { autorun } from '../../../../../base/common/observable.js';
+import { getMultiDiffEditorFileListViewMode, setMultiDiffEditorFileListViewMode } from '../../../../../workbench/contrib/multiDiffEditor/common/multiDiffEditor.js';
 
 suite('Changes window view state', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -21,20 +22,27 @@ suite('Changes window view state', () => {
 			using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'changes', flushInterval: 0 });
 			using context = new ContextKeyService();
 			const sessions = { onDidChange: Event.None, activeSelection: { kind: 'session', active: { session: { sessionId: 'session' }, threadId: 'thread' } } } as unknown as ISessionsService;
-			using first = new ChangesViewService(storage, sessions, context);
 			const resource = URI.parse('ash-session-changes:/session?thread=thread');
+			const sections = [[resource.toString(), { checks: true }]];
+			storage.store('changesView.sessionViewState', JSON.stringify({ version: 1, changesets: [], details: [], sections, reviewed: [] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			storage.store('sessions.changes.viewMode', 'tree', StorageScope.PROFILE, StorageTarget.MACHINE);
+			using first = new ChangesViewService(storage, sessions, context);
+			assert.equal(getMultiDiffEditorFileListViewMode(storage), 'tree');
+			setMultiDiffEditorFileListViewMode(storage, 'list');
+			assert.equal(first.viewModeObs.get(), ChangesViewMode.List);
 			const peer = resource.with({ query: 'thread=peer' });
 			const file = URI.parse('ash-turn-diff:/capture/main.ts?session=session&thread=thread&revision=1');
 			const snapshot = { focus: ['capture:main.ts'], selection: ['capture:main.ts'], expanded: { folder: 0 as const }, scrollTop: 64 };
 			first.setViewMode(ChangesViewMode.Tree);
+			assert.equal(getMultiDiffEditorFileListViewMode(storage), 'tree');
 			first.setChangesetId('capture', resource);
 			first.setChangesetId('peer-capture', peer);
 			first.setDetailsViewState(resource.with({ fragment: 'capture' }), ChangesViewMode.Tree, snapshot);
-			first.setSectionCollapsed(resource, 'checks', true);
 			first.setChangesetFilesReviewState([file], true);
 			assert.ok(storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE).includes('changesView.sessionViewState'));
 			first.dispose();
 			const stored = storage.get('changesView.sessionViewState', StorageScope.WORKSPACE);
+			assert.deepEqual(JSON.parse(stored!).sections, sections);
 			first.setChangesetId('stale', resource);
 			first.setChangesetFilesReviewState([file], false);
 			assert.equal(storage.get('changesView.sessionViewState', StorageScope.WORKSPACE), stored);
@@ -44,7 +52,6 @@ suite('Changes window view state', () => {
 			assert.deepEqual(restored.getDetailsViewState(resource.with({ fragment: 'capture' }), ChangesViewMode.Tree), snapshot);
 			assert.deepEqual([...restored.reviewedFilesObs.get()], [file.toString()]);
 			assert.equal(restored.viewModeObs.get(), ChangesViewMode.Tree);
-			assert.deepEqual(restored.activeSessionSectionCollapseStateObs.get(), { checks: true });
 			await storage.switchWorkspace('other');
 			assert.equal(restored.getChangesetId(resource), undefined);
 			assert.deepEqual([...restored.reviewedFilesObs.get()], []);

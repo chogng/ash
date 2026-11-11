@@ -5,7 +5,7 @@ import './contrib/workspace/browser/workspace.contribution.js';
 import './contrib/chat/browser/chat.contribution.js';
 import './contrib/sessionComparison/browser/sessionComparison.contribution.js';
 import './contrib/chat/browser/sharedChatInputComposer.contribution.js';
-import './contrib/github/browser/createSessionFromPullRequestAction.js';
+import './contrib/github/browser/github.contribution.js';
 import '../workbench/contrib/accessibility/browser/accessibility.contribution.js';
 import '../workbench/contrib/debug/browser/debug.service.contribution.js';
 import '../workbench/services/testing/browser/testingServiceRegistration.js';

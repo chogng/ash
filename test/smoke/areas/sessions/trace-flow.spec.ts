@@ -14,6 +14,8 @@ interface TraceModelFixture {
 	readonly url: string;
 	readonly requests: FixtureRequest[];
 	readonly held: ServerResponse[];
+	holdChildren(): void;
+	releaseChildren(): void;
 }
 
 function fixtureToolOutput(output: unknown): Record<string, unknown> {
@@ -34,6 +36,7 @@ const test = base.extend<{ traceModelFixture: TraceModelFixture; }>({
 		const requests: FixtureRequest[] = [];
 		const held: ServerResponse[] = [];
 		const children: ServerResponse[] = [];
+		let holdChildren = false;
 		const respond = (response: ServerResponse, output: unknown[]): void => {
 			response.writeHead(200, { 'Content-Type': 'text/event-stream' });
 			response.end(`event: response.completed\ndata: ${JSON.stringify({ type: 'response.completed', response: { id: 'trace-fixture-response', status: 'completed', output, usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } } })}\n\n`);
@@ -48,15 +51,33 @@ const test = base.extend<{ traceModelFixture: TraceModelFixture; }>({
 				const body = JSON.parse(text) as FixtureRequest;
 				requests.push(body);
 				const prompt = JSON.stringify(body.input.filter(item => item.role === 'user'));
+				if (prompt.includes('chat-widget-usage-limit-fixture')) {
+					response.writeHead(429, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: { message: 'Fixture usage limit reached', code: 'insufficient_quota' } }));
+					return;
+				}
 				if (prompt.includes('trace-fixture-cancel')) { held.push(response); response.writeHead(200, { 'Content-Type': 'text/event-stream' }); response.flushHeaders(); return; }
 				if (prompt.includes('trace-fixture-failure')) { response.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: { message: 'trace-fixture-deliberate-failure', type: 'invalid_request_error' } })); return; }
 				if (prompt.includes('trace-fixture-child-task')) {
 					children.push(response);
 					// Both real child model requests must overlap before either can finish.
-					if (children.length === 2) { for (const child of children) { respond(child, message('trace-fixture-child-result')); } }
+					if (!holdChildren && children.length === 2) { for (const child of children) respond(child, message('trace-fixture-child-result')); }
 					return;
 				}
 				const results = body.input.filter(item => item.type === 'function_call_output');
+				if (prompt.includes('chat-widget-plan-review-fixture')) {
+					if (results.length === 0) {
+						respond(response, [call('fixture-plan', 'switch_mode', { mode: 'agent', reason: 'Review the proposed coverage.', plan: '# Proposed plan\n\n1. Add a reconnect test.' })]);
+					} else if (results.length === 1) {
+						const declined = fixtureToolOutput(results[0].output);
+						if (!declined.rejected || declined.feedback !== 'Also cover a failed reconnect.') throw new Error('Expected the user’s plan feedback');
+						respond(response, [call('fixture-revised-plan', 'switch_mode', { mode: 'agent', reason: 'Review the revised coverage.', plan: '# Revised plan\n\n1. Cover successful and failed reconnects.' })]);
+					} else {
+						const approved = fixtureToolOutput(results.at(-1)!.output);
+						if (!approved.changed || approved.mode !== 'agent') throw new Error('Expected the approved execution mode');
+						respond(response, message('The plan review fixture is complete.\n\n- [Run the reconnect tests](#ash-followup)'));
+					}
+					return;
+				}
 				if (prompt.includes('hook-trace-fixture')) {
 					respond(response, results.length ? message('hook-trace-fixture-final') : [call('fixture-hook-tool', 'shell-command', { program: process.execPath, arguments: ['-e', 'console.log("hook-trace-tool-executed")'], working_directory: '.' })]);
 					return;
@@ -74,7 +95,7 @@ const test = base.extend<{ traceModelFixture: TraceModelFixture; }>({
 						if (typeof id !== 'string') { throw new Error('Expected actual spawn delegation ID'); }
 						return id;
 					});
-					respond(response, [call('fixture-wait', 'wait_agent', { delegation_id: null, delegation_ids: delegationIds, policy: 'all', quorum: null, timeout_ms: 10_000 })]);
+					respond(response, [call('fixture-wait', 'wait_agent', { delegation_id: null, delegation_ids: delegationIds, policy: 'all', quorum: null, timeout_ms: holdChildren ? 30_000 : 10_000 })]);
 					return;
 				}
 				const joined = fixtureToolOutput(results.find(item => item.call_id === 'fixture-wait')!.output);
@@ -85,7 +106,14 @@ const test = base.extend<{ traceModelFixture: TraceModelFixture; }>({
 		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 		const address = server.address();
 		if (!address || typeof address === 'string') { throw new Error('Expected fixture HTTP address'); }
-		try { await use({ url: `http://127.0.0.1:${address.port}/v1`, requests, held }); }
+		try {
+			await use({
+				url: `http://127.0.0.1:${address.port}/v1`, requests, held, holdChildren: () => { holdChildren = true; }, releaseChildren: () => {
+					expect(children).toHaveLength(2);
+					for (const child of children) respond(child, message('trace-fixture-child-result'));
+				}
+			});
+		}
 		finally { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 	},
 	backendConfiguration: async ({ testWorkspace, traceModelFixture }, use) => {
@@ -244,6 +272,108 @@ test('Execution Trace follows a controlled model through real tools, parallel ch
 			} catch (evidenceError) { console.warn('Trace failure evidence unavailable', String(evidenceError)); }
 		}
 		throw error;
+	} finally { await connection.close(); }
+});
+
+test('Chat widget updates delegated agents in place and opens the child beside the parent', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace, traceModelFixture }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
+	const { client } = connection;
+	traceModelFixture.holdChildren();
+	try {
+		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'chat-widget-agents', kind: 'code', title: 'Delegated activity fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const { sessionId } = created.session;
+		const { threadId } = created.session.threads[0];
+		const thread = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+		await client.request(APP_SERVER_METHODS['session/request'], {
+			commandId: 'chat-widget-agents-start', sessionId, request: {
+				type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'trace-fixture-parent-task: inspect delegated activity.' }],
+				model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'agent', approvalMode: 'bypassPermissions', toolMode: 'direct',
+			}
+		});
+		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Delegated activity fixture' }).click();
+		const subagents = page.locator('.ash-chat-subagent-content');
+		await expect(subagents.getByRole('status').filter({ hasText: 'Running' })).toHaveCount(2);
+		const open = subagents.filter({ hasText: 'Trace fixture child a' }).getByRole('button', { name: 'Open to the side', exact: true });
+		await open.focus();
+		await expect.poll(() => traceModelFixture.requests.filter(request => JSON.stringify(request.input.filter(item => item.role === 'user')).includes('trace-fixture-child-task')).length).toBe(2);
+		traceModelFixture.releaseChildren();
+		await expect(subagents.getByRole('status').filter({ hasText: 'Completed' })).toHaveCount(2);
+		await expect(subagents.filter({ hasText: 'trace-fixture-child-result' })).toHaveCount(2);
+		const { agentTree } = await client.request(APP_SERVER_METHODS['session/read'], { sessionId });
+		const child = agentTree.roots.find(root => root.threadId === threadId)?.children?.find(node => node.title === 'Trace fixture child a');
+		expect(child).toBeDefined();
+		await expect(open).toBeFocused();
+		await open.press('Enter');
+		const childChat = page.locator(`.ash-chat[data-thread-id="${child!.threadId}"]:visible`);
+		await expect(childChat.getByRole('article', { name: 'Ash' }).getByText('trace-fixture-child-result', { exact: true })).toBeVisible();
+		const parentChat = page.locator(`.ash-chat[data-thread-id="${threadId}"]:visible`);
+		await expect(parentChat.getByRole('article', { name: 'You' }).getByText('trace-fixture-parent-task: inspect delegated activity.', { exact: true })).toBeVisible();
+	} finally { await connection.close(); }
+});
+
+test('Chat widget reviews and revises a real plan and stages a follow-up from the completed reply', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
+	const { client } = connection;
+	try {
+		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'plan-review-session', kind: 'code', title: 'Plan review fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const { sessionId } = created.session;
+		const { threadId } = created.session.threads[0];
+		const read = () => client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+		const thread = await read();
+		await client.request(APP_SERVER_METHODS['session/request'], {
+			commandId: 'plan-review-start', sessionId, request: {
+				type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'chat-widget-plan-review-fixture' }],
+				model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'plan', approvalMode: 'bypassPermissions', toolMode: 'direct',
+			}
+		});
+		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Plan review fixture' }).click();
+		const review = page.locator('.ash-chat-plan-review');
+		await expect(review.getByRole('heading', { name: 'Proposed plan' })).toBeVisible();
+		await review.getByRole('textbox', { name: 'Changes to the plan (optional)' }).fill('Also cover a failed reconnect.');
+		await review.getByRole('button', { name: 'Keep planning' }).press('Enter');
+		await expect(review.getByRole('heading', { name: 'Revised plan' })).toBeVisible();
+		expect((await read()).thread.turns.at(-1)?.mode).toBe('plan');
+		await review.getByRole('button', { name: 'Approve and continue' }).press('Enter');
+		await expect.poll(async () => (await read()).thread.turns.at(-1)?.status).toBe('completed');
+		expect((await read()).thread.turns.at(-1)?.mode).toBe('agent');
+		await expect(page.getByRole('log', { name: 'Chat transcript' }).getByText('The plan review fixture is complete.', { exact: true })).toBeVisible();
+		const suggestion = page.getByRole('group', { name: 'Suggested follow-ups' }).getByRole('button', { name: 'Run the reconnect tests' });
+		await expect(suggestion).toBeVisible();
+		await suggestion.click();
+		await expect(page.locator('.ash-chat-input-part .stanza-editor-input:visible')).toBeFocused();
+		await expect(page.locator('.ash-chat-input-part').getByRole('region', { name: 'Chat message', exact: true })).toContainText('Run the reconnect tests');
+		expect((await read()).thread.turns).toHaveLength(1);
+	} finally { await connection.close(); }
+});
+
+test('Chat widget routes a real provider usage limit to the model picker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
+	const { client } = connection;
+	try {
+		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'usage-limit-session', kind: 'code', title: 'Usage limit fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const { sessionId } = created.session;
+		const { threadId } = created.session.threads[0];
+		const read = () => client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+		const thread = await read();
+		await client.request(APP_SERVER_METHODS['session/request'], {
+			commandId: 'usage-limit-start', sessionId, request: {
+				type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'chat-widget-usage-limit-fixture' }],
+				model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'agent', approvalMode: 'bypassPermissions', toolMode: 'direct',
+			}
+		});
+		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Usage limit fixture' }).click();
+		const errorActions = page.locator('.ash-chat-quota-error-actions');
+		await expect(errorActions.getByRole('button')).toHaveCount(1);
+		expect((await read()).thread.turns.at(-1)?.error).toMatchObject({ code: 'usageLimited', retryable: false });
+		await errorActions.getByRole('button', { name: 'Choose another model' }).press('Enter');
+		await expect(page.getByRole('dialog', { name: 'Choose a chat model' })).toBeVisible();
+		expect((await read()).thread.turns).toHaveLength(1);
 	} finally { await connection.close(); }
 });
 

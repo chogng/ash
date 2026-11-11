@@ -346,6 +346,7 @@
 }
 
 .ash-project-appearance {
+	--ash-icon-select-selected-border: var(--ash-focusBorder);
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
 	border: var(--ash-strokeThickness) solid var(--ash-border);
@@ -380,7 +381,7 @@
 	border-radius: var(--ash-cornerRadius-circle);
 }
 
-.ash-project-appearance-colors > button:is(:hover, [aria-pressed="true"]) {
+.ash-project-appearance-colors > button:is(:hover, .selected) {
 	background: var(--ash-list-hoverBackground);
 	border-color: var(--ash-widget-border);
 }
@@ -388,10 +389,6 @@
 .ash-project-appearance-colors > button:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
-}
-
-.ash-project-appearance .ash-icon-select-item[aria-selected="true"] {
-	border-color: var(--ash-focusBorder);
 }
 
 .ash-project-appearance-footer {

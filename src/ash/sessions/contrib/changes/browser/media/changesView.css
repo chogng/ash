@@ -26,19 +26,9 @@
 	min-height: 0;
 }
 
-.ash-sessions-change-row {
-	display: flex;
-	min-width: 0;
+.ash-sessions-changes-tree .ash-multi-diff-file-list-row {
 	gap: var(--ash-spacing-size80);
 	font-size: var(--ash-fontSize-body1);
-}
-
-.ash-sessions-change-path {
-	flex: 1;
-	min-width: 0;
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
 }
 
 .ash-sessions-change-state {
@@ -48,4 +38,11 @@
 	white-space: nowrap;
 	text-overflow: ellipsis;
 	color: var(--ash-description-foreground);
+}
+
+.ash-sessions-changes > .ash-sessions-changes-summary {
+	margin: 0;
+	font-size: var(--ash-fontSize-body2);
+	color: var(--ash-description-foreground);
+	overflow-wrap: anywhere;
 }

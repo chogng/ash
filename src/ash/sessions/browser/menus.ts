@@ -25,6 +25,7 @@ export const Menus = {
 	CodeAddTab: new MenuId('SessionsAddTab'),
 	SessionsEditorHeaderPrimary: new MenuId('SessionsEditorHeaderPrimary'),
 	SessionsEditorHeaderLayout: new MenuId('SessionsEditorHeaderLayout'),
+	SessionsChangesScope: new MenuId('SessionsChangesScope'),
 	SessionsTerminalSplit: new MenuId('SessionsTerminalSplit'),
 	SessionsEditorTitle: new MenuId('SessionsEditorTitle'),
 	SessionsEditorTabsBarAddTabCanvas: new MenuId('SessionsEditorTabsBarAddTabCanvas'),

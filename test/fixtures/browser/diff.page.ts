@@ -87,7 +87,7 @@ import { isEditorPaneWithViewState } from '../../../src/ash/workbench/browser/pa
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { CodeEditorService } from '../../../src/ash/workbench/services/editor/browser/codeEditorService.js';
 import { IEditorPartsService } from '../../../src/ash/workbench/browser/parts/editor/editorParts.js';
-import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffToggleCollapseAllAction, MultiDiffToggleCollapseUnchangedRegionsAction } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorActions.js';
+import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffToggleCollapseAllAction, MultiDiffToggleCollapseUnchangedRegionsAction, ToggleFileListAction } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorActions.js';
 import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
 import { EditorOption } from '../../../src/ash/editor/common/config/editorOptions.js';
 import type { ExtensionClientOperation, ExtensionClientResult } from '../../../src/ash/workbench/api/common/extHost.protocol.js';
@@ -446,6 +446,7 @@ const harness = {
 		resources.add(registerAction2(MultiDiffToggleCollapseAllAction));
 		resources.add(registerAction2(MultiDiffExpandAllAction));
 		resources.add(registerAction2(MultiDiffToggleCollapseUnchangedRegionsAction));
+		resources.add(registerAction2(ToggleFileListAction));
 		resources.add(CommandsRegistry.register('integration.inspectMultiDiffFile', (_accessor, input: unknown) => {
 			inspectedFiles.push((input as { resource: URI; }).resource.toString());
 		}));

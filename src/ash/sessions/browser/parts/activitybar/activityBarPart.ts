@@ -467,6 +467,7 @@ class PinnableMenuActionViewItem extends MenuActionViewItem {
 	override render(container: HTMLElement): void {
 		super.render(container);
 		container.classList.add('ash-sessions-navigation-menu-row');
+		this.button.domNode.classList.add('ash-sessions-navigation-menu-primary');
 		this.pinItem.render(container);
 		this._register(addDisposableListener(this.button.domNode, 'keydown', event => {
 			if (event.key !== 'ArrowRight') return;

@@ -22,7 +22,7 @@ import { createDisconnectedRendererApi } from '../../../workbench/browser/render
 import { IAgentHostInputCompletionService, IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { createTestLanguageModelToolsService } from '../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
-import { ISessionGitActionsService, SessionGitActionsService } from '../../contrib/changes/browser/sessionGitActionsService.js';
+import { ISessionGitActionsService, SessionGitActionsService } from '../../services/sessions/browser/sessionGitActionsService.js';
 
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
@@ -428,6 +428,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	paneServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
 	paneServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
 	paneServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
+	paneServices.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 
 
 	paneServices.registerInstance(ISearchService, {

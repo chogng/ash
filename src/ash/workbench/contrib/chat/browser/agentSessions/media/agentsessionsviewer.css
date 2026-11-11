@@ -37,7 +37,7 @@
 	flex-shrink: 0;
 }
 
-.ash-agent-sessions-toolbar [aria-pressed="true"] {
+.ash-agent-sessions-toolbar > .checked {
 	background: var(--ash-button-secondaryBackground);
 	color: var(--ash-foreground);
 	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);

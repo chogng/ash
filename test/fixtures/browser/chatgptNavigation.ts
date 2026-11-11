@@ -105,6 +105,8 @@ import { IPreferencesService } from '../../../src/ash/workbench/services/prefere
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
+import { ILanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/common/tools/languageModelToolsService.js';
+import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
@@ -250,6 +252,7 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IPreferencesService, { openSettings: async () => undefined } as unknown as IPreferencesService],
 )));
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
+services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);

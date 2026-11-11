@@ -34,6 +34,8 @@ import { IEditorService } from '../../../workbench/services/editor/common/editor
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { errorHandler } from '../../../base/common/errors.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
+import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
+import { createTestLanguageModelToolsService } from '../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { registerTestVoiceInputServices } from '../../../workbench/test/common/testDictationServices.js';
 import { observableValue } from '../../../base/common/observable.js';
 import assert from 'node:assert/strict';
@@ -132,6 +134,7 @@ test('opens a local Chat conversation before the backend session request settles
 	using files = new TestConfigurationFiles();
 	registerCodeEditorServices(services);
 	using viewServices = services.createChild();
+	viewServices.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 	viewServices.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	viewServices.registerInstance(IChatService, chat);
 	viewServices.registerInstance(ISessionsManagementService, sessionService);

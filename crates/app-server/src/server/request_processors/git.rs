@@ -765,6 +765,38 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
         result(&GitRepositoryContextsResult { repositories })
     }
+
+    pub(super) fn git_session_comparison(
+        &self,
+        value: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::git::GitSessionComparisonParams;
+        let params: GitSessionComparisonParams = decode(value)?;
+        if !params.session_directory.path.is_absolute() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let authorization = self
+            .context
+            .session_dir_authorization(
+                &params.session_directory.session_id,
+                &params.session_directory.path,
+                ash_file_access::Permission::InspectRepository,
+            )
+            .map_err(session_git_error)?;
+        let comparison = super::git_runtime::session_comparison(
+            &authorization,
+            &params.repository_id,
+            params.comparison,
+            cancellation,
+        )
+        .map_err(git_error)?;
+        authorization
+            .ensure_active()
+            .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
+        result(&comparison)
+    }
+
     pub(super) fn git_repositories(&self, value: &Value) -> Result<Value, RpcError> {
         let params: ash_app_server_protocol::protocol::git::GitDiscoveryParams = decode(value)?;
         let folders = params

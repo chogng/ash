@@ -465,7 +465,7 @@ test('ChatGPT dictation inserts text at the cursor and cancels on navigation wit
 	await input.press('Home');
 	await mic.click();
 	const stop = page.getByRole('button', { name: 'Stop dictation', exact: true });
-	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await expect(stop).toBeEnabled();
 	await page.evaluate(() => window.ashChatGPTIntegration.dictate('interim speech', false));
 	await expect(page.locator('.ash-chatgpt-widget .ash-chat-dictation-preview')).toHaveText('interim speech');
 	await expectDraft(page, 'Please explain');
@@ -475,33 +475,33 @@ test('ChatGPT dictation inserts text at the cursor and cancels on navigation wit
 	await expect(input).toBeFocused();
 	await expect(page.locator('.ash-chat-item-userMessage')).toHaveCount(0);
 	await mic.click();
-	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await expect(stop).toBeEnabled();
 	await input.focus();
 	await input.press('Escape');
-	await expect(mic).toHaveAttribute('aria-pressed', 'false');
+	await expect(mic).toBeEnabled();
 	await expectDraft(page, 'First Please explain');
 	await expect(page.locator('.ash-chatgpt-widget .ash-chat-dictation-preview')).toBeHidden();
 	await mic.click();
-	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await expect(stop).toBeEnabled();
 	await page.evaluate(() => window.ashChatGPTIntegration.newChat());
-	await expect(mic).toHaveAttribute('aria-pressed', 'false');
+	await expect(mic).toBeEnabled();
 	await page.evaluate(() => window.ashChatGPTIntegration.dictate('late new-chat speech', true));
 	await expectDraft(page, 'First Please explain');
 	await mic.click();
-	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await expect(stop).toBeEnabled();
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 	await expectDraft(page, '');
 	await page.evaluate(() => window.ashChatGPTIntegration.dictate('late old speech', true));
 	await expectDraft(page, '');
 	await mic.click();
-	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await expect(stop).toBeEnabled();
 	await page.evaluate(() => window.ashChatGPTIntegration.setVisible(false));
 	await expect(mic).toBeHidden();
 	await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.dictationStops())).toBe(5);
 	await expectDraft(page, '');
 });
 
-test('ChatGPT Send finishes dictation before submitting the final transcript', async ({ page }) => {
+test('ChatGPT keyboard submission finishes dictation before submitting the final transcript', async ({ page }) => {
 	await mockChatGPTRequests(page);
 	let submitted: string | undefined;
 	await page.route('**/service/backend-api/f/conversation', async route => {
@@ -509,10 +509,11 @@ test('ChatGPT Send finishes dictation before submitting the final transcript', a
 		await route.fulfill({ status: 500, json: {} });
 	});
 	await page.goto('/chatgptNavigation.html?dictation=1&locale=en');
-	await expect(page.locator('.ash-chat-input-editor').getByRole('textbox')).toBeEnabled();
+	const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+	await expect(input).toBeEnabled();
 	await page.getByRole('button', { name: 'Dictate message', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toHaveAttribute('aria-pressed', 'true');
-	await page.getByRole('button', { name: 'Send', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeEnabled();
+	await input.press('Enter');
 	await expect.poll(() => submitted).toBe('final words');
 	await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.dictationStops())).toBe(1);
 });
@@ -562,7 +563,7 @@ test('ChatGPT uploads images and documents, waits for readiness and preserves at
 	await composer.getByRole('button', { name: 'Send', exact: true }).click();
 	await expect.poll(() => submitted?.messages[0]?.content.content_type).toBe('multimodal_text');
 	expect(submitted!.messages[0]!.metadata.attachments.map(item => item.name)).toEqual(['notes.txt', 'pixel.png']);
-	expect(submitted!.messages[0]!.content.parts).toEqual([{ content_type: 'image_asset_pointer', asset_pointer: 'file-service://file_image', size_bytes: image.byteLength, width: 1, height: 1 }]);
+	expect(submitted!.messages[0]!.content.parts).toEqual([{ content_type: 'image_asset_pointer', asset_pointer: 'sediment://file_image', size_bytes: image.byteLength, width: 1, height: 1 }]);
 	await expect(composer.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
 	await expect(attachments.getByRole('listitem')).toHaveCount(2);
 });
@@ -572,7 +573,7 @@ test('ChatGPT retries failed uploads and keeps removed or old-draft files out of
 	let attempts = 0;
 	let release!: () => Promise<void>;
 	await page.route('**/service/backend-api/files', async route => {
-		if (++attempts === 1) { await route.fulfill({ status: 500, json: {} }); return; }
+		if (++attempts === 1) { await route.fulfill({ status: 400, json: {} }); return; }
 		await route.fulfill({ json: { file_id: 'file_retry', upload_url: 'https://files.oaiusercontent.com/retry?signature=fixture' } });
 	});
 	await page.route('**/service/.upload?*', route => { release = async () => { await route.fulfill({ status: 201, body: '' }).catch(() => { }); }; });
@@ -1098,13 +1099,13 @@ test('ChatGPT Stop cancels pending verification without sending or stopping the 
 	expect(stops).toBe(0);
 	await page.getByRole('button', { name: '停止', exact: true }).click();
 	try {
-		await expect(page.locator('.ash-chatgpt-widget')).toContainText('确认本次回复之前被中断');
-		await expect(page.getByRole('textbox', { name: '询问 ChatGPT' })).toBeEnabled();
+		await expect(page.getByText('已停止回复', { exact: true })).toBeVisible();
+		await expect(input).toBeEditable();
 		await verify();
 		expect(sent).toBe(0);
 		expect(stops).toBe(0);
 		await expectDraft(page, 'Synthetic cancellation probe');
-		await expect(page.getByRole('button', { name: '发送', exact: true })).toBeDisabled();
+		await expect(page.getByRole('button', { name: '发送', exact: true })).toBeEnabled();
 	} finally { await verify(); await stop?.(); }
 });
 

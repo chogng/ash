@@ -4,6 +4,18 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('changes browser component', () => {
 	const browserTests = useBrowserTests();
+	test('commit preview selects captured files before asking for a message', async () => {
+		const { page } = browserTests;
+		await page.goto('/changes.html?commitPreview&multiple');
+		await page.evaluate(() => window.ashChangesIntegration.previewCommit());
+		const picker = page.getByRole('listbox');
+		await expect(picker.getByRole('option')).toHaveCount(2);
+		await picker.getByRole('option', { name: /tests\/main.test.ts/u }).click();
+		await page.keyboard.press('Enter');
+		await expect(page.getByRole('textbox', { name: 'Commit message' })).toBeFocused();
+		await page.keyboard.press('Escape');
+	});
+
 	for (const direction of ['topToBottom', 'bottomToTop'] as const) test(`Animated counts resize and interrupt in ${direction}`, async function () {
 		const { page } = browserTests;
 
@@ -540,22 +552,25 @@ suite('changes browser component', () => {
 		await page.evaluate(() => window.ashChangesIntegration.fail(false));
 		await expect(file).toHaveCount(1);
 		await page.setViewportSize({ width: 320, height: 600 });
-		const path = page.locator('.ash-sessions-change-path');
-		await expect(path).toHaveCSS('text-overflow', 'ellipsis');
-		await expect(path).toHaveAttribute('title', 'src/a-long-directory-name/main.ts');
+		const path = page.locator('.ash-sessions-changes-tree .ash-icon-label');
+		await expect(path.locator('.ash-icon-label-text')).toHaveCSS('text-overflow', 'ellipsis');
+		await expect(path).toHaveAttribute('aria-label', 'src/a-long-directory-name/main.ts');
 		await expect(page.locator('#changes').getByRole('combobox', { name: 'Git branch actions' })).toHaveCount(0);
 		await expect(page.locator('#changes').getByRole('button', { name: 'Checks', exact: true })).toHaveCount(0);
+		await page.evaluate(() => window.ashChangesIntegration.seedLegacyChecksCollapseState());
 		await page.evaluate(() => window.ashChangesIntegration.openSessionRail());
 		const rail = page.getByRole('complementary', { name: 'Session information' });
 		await expect(rail.locator('.ash-session-environment-repository-status')).toContainText('origin/feature: 1 incoming · 2 outgoing · 3 uncommitted files');
 		await expect(rail.getByRole('button', { name: 'Create pull request', exact: true })).toBeVisible();
+		const checks = page.getByRole('button', { name: 'Checks', exact: true });
+		await expect(checks).toHaveAttribute('aria-expanded', 'false');
+		await checks.press('Enter');
 		await expect(page.getByRole('link', { name: 'Build · Successful · team/repo #7' })).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Tests · Failed · team/repo #7' })).toBeVisible();
 		const build = page.getByRole('link', { name: 'Build · Successful · team/repo #7' });
 		await build.focus();
 		await page.evaluate(() => window.ashChangesIntegration.fail(false));
 		await expect(build).toBeFocused();
-		const checks = page.getByRole('button', { name: 'Checks', exact: true });
 		await checks.focus();
 		await checks.press('Enter');
 		await expect(checks).toHaveAttribute('aria-expanded', 'false');

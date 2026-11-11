@@ -13,15 +13,15 @@ import { promisify } from 'node:util';
 const run = promisify(execFile);
 test.use({ gitRepository: true });
 
-test('Turn file selection starts disabled and explains review before commit', async ({ target, workbench }) => {
+test('Changes explains the review and commit preview workflow before files arrive', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await new QuickAccess(page).runCommand('workbench.agentSessions.action.viewChanges');
-	const changes = page.locator('.ash-sessions-changes');
-	await expect(changes.getByRole('button', { name: 'Preview selected changes', exact: true })).toBeDisabled();
-	await changes.getByRole('tree').focus();
+	const changes = page.locator('.ash-sessions-changes-editor:visible');
+	await expect(changes.getByRole('tree')).toHaveCount(0);
+	await changes.focus();
 	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Preview selected changes[\s\S]*Commit this preview[\s\S]*remaining files/u);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Preview commit to select files and enter a commit message/u);
 });
 
 test('Turn file selection commits a reviewed file and keeps another Session separate', { tag: ['@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }, testInfo) => {
@@ -52,11 +52,10 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 		await client.request(APP_SERVER_METHODS['execPolicy/rule/upsert'], { commandId: 'allow-turn-selection-shell', expectedRevision: config.revision, rule: { id: 'turn-selection-shell', selector: { type: 'source', source: 'built_in_tool', sourceId: 'shell-command' }, effect: { type: 'allowUnsandboxed' }, justification: 'The scenario writes only to its isolated temporary repositories.' } });
 		const create = async (name: string, command: string): Promise<{ sessionId: string; threadId: string; }> => {
-			const session = await client.request(APP_SERVER_METHODS['session/create'], { commandId: `create-${name}`, kind: 'code', title: name, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
-			const thread = await client.request(APP_SERVER_METHODS['session/request'], { commandId: `thread-${name}`, sessionId: session.session.sessionId, request: { type: 'createThread', title: name } });
-			if (thread.type !== 'thread') throw new Error('Expected a Thread');
-			const identity = { sessionId: session.session.sessionId, threadId: thread.value.threadId };
-			await client.request(APP_SERVER_METHODS['session/request'], { ...identity, commandId: `write-${name}`, request: { type: 'startShellTurn', threadId: identity.threadId, expectedSequence: 1, approvalMode: 'bypassPermissions', command, workingDirectory: '.' } });
+			const { session } = await client.request(APP_SERVER_METHODS['session/create'], { commandId: `create-${name}`, kind: 'code', title: name, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+			const identity = { sessionId: session.sessionId, threadId: session.threads[0]!.threadId };
+			const { thread } = await client.request(APP_SERVER_METHODS['session/thread/read'], identity);
+			await client.request(APP_SERVER_METHODS['session/request'], { ...identity, commandId: `write-${name}`, request: { type: 'startShellTurn', threadId: identity.threadId, expectedSequence: thread.sequence, approvalMode: 'bypassPermissions', command, workingDirectory: '.' } });
 			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], identity)).changeSets[0]?.captureState).toBe('sealed');
 			return identity;
 		};
@@ -89,12 +88,11 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		const localState = await git('status', '--porcelain');
 		const page = await workbench.openAgentsWindow(target.kind);
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		const open = async (name: string): Promise<void> => {
-			await page.locator('.ash-sessions-list-item').filter({ hasText: name }).click();
+		const open = async (sessionId: string): Promise<void> => {
+			await page.locator(`.ash-sessions-list [data-item="session:${sessionId}"] .ash-sessions-list-item`).click();
 			await new QuickAccess(page).runCommand('workbench.agentSessions.action.viewChanges');
 		};
-		await open('Selected files A');
-		const commands = new QuickAccess(page);
+		await open(a.sessionId);
 		const review = page.locator('.ash-sessions-changes-editor .stanza-multi-diff-editor');
 		await expect(review).toBeVisible();
 		const screenshot = testInfo.outputPath('changes-card-review.png');
@@ -103,18 +101,29 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		const fileHeader = review.getByRole('button', { name: /main.ts/ });
 		await fileHeader.press('Enter');
 		await expect(fileHeader).toHaveAttribute('aria-expanded', 'false');
-		await commands.runCommand('ash.sessions.hideEditor');
-		await expect(review).toHaveCount(0);
-		await commands.runCommand('ash.sessions.showEditor');
+		const changesTool = page.locator('[data-part="titlebar"] [data-action-id="ash.sessions.toggleChanges"] button');
+		await changesTool.click();
+		await expect(review).toBeHidden();
+		await changesTool.click();
 		await expect(fileHeader).toHaveAttribute('aria-expanded', 'false');
 		await fileHeader.press('Enter');
 		await expect(fileHeader).toHaveAttribute('aria-expanded', 'true');
-		const changes = page.locator('.ash-sessions-changes');
-		const rows = changes.getByRole('treeitem');
+		const changes = page.locator('.ash-sessions-changes-editor:visible');
+		const header = page.locator('[data-editor-tool="changes"] .ash-editor-group-header:visible');
+		const toggleFiles = header.getByRole('button', { name: 'Toggle Changed Files', exact: true });
+		if (await toggleFiles.getAttribute('aria-pressed') === 'false') await toggleFiles.click();
+		const rows = changes.getByRole('tree', { name: 'Changed Files', exact: true }).getByRole('treeitem');
+		const previewFile = async (name: RegExp, committed?: RegExp): Promise<void> => {
+			await header.getByRole('button', { name: 'More Actions', exact: true }).click();
+			await page.getByRole('menu').getByText('Preview commit…', { exact: true }).click();
+			const picker = page.getByRole('listbox');
+			if (committed) await expect(picker.getByRole('option', { name: committed })).toHaveCount(0);
+			await picker.getByRole('option', { name }).click();
+			await page.keyboard.press('Enter');
+		};
 		await expect(rows).toHaveCount(2);
 		await expect(rows.filter({ hasText: 'main.ts' })).toBeInViewport({ ratio: 1 });
-		await rows.filter({ hasText: 'main.ts' }).click();
-		await changes.getByRole('button', { name: 'Preview selected changes', exact: true }).click();
+		await previewFile(/main\.ts/u);
 		const message = page.getByRole('textbox', { name: 'Commit message', exact: true });
 		await message.fill('commit selected A');
 		await message.press('Enter');
@@ -133,11 +142,9 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		await client.request(APP_SERVER_METHODS['turnChanges/commit'], { ...b, commandId: 'reject-stale-preview-B', commitId: previewB.commitId });
 		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], b)).changeSets[0]?.commitState).toBe('conflict');
 		expect(await git('rev-parse', 'HEAD')).toBe(committedA);
-		await open('Selected files B');
+		await open(b.sessionId);
 		await expect(rows).toHaveCount(1);
-		await expect(changes.getByRole('button', { name: 'Preview selected changes', exact: true })).toBeDisabled();
-		await rows.first().click();
-		await changes.getByRole('button', { name: 'Preview selected changes', exact: true }).click();
+		await previewFile(/other-session\.txt/u);
 		await message.fill('commit separate B');
 		await message.press('Enter');
 		await expect(page.locator('[data-part="editor"]').getByRole('tab', { name: /commit separate B/u })).toHaveAttribute('aria-selected', 'true');
@@ -149,12 +156,9 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		expect(await git('ls-tree', '--name-only', 'HEAD')).not.toContain('remaining.txt');
 		expect(await git('rev-list', '--count', 'HEAD')).toBe('3');
 		expect(await git('status', '--porcelain')).toBe(localState);
-		await open('Selected files A');
+		await open(a.sessionId);
 		await expect(rows).toHaveCount(2);
-		await rows.filter({ hasText: 'main.ts' }).click();
-		await expect(changes.getByRole('button', { name: 'Preview selected changes', exact: true })).toBeDisabled();
-		await rows.filter({ hasText: 'remaining.txt' }).click();
-		await changes.getByRole('button', { name: 'Preview selected changes', exact: true }).click();
+		await previewFile(/remaining\.txt/u, /main\.ts/u);
 		await message.fill('commit remaining A');
 		await message.press('Enter');
 		await expect(page.locator('[data-part="editor"]').getByRole('tab', { name: /commit remaining A/u })).toHaveAttribute('aria-selected', 'true');

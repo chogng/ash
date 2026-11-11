@@ -13,9 +13,10 @@ import { GitHubError, GitHubErrorCode } from '../../../../platform/github/common
 import { PullRequestFollowUpWidget } from './pullRequestFollowUpWidget.js';
 import { ChecksViewModel, checkDetailsText } from './checksViewModel.js';
 import { getCheckStateLabel } from './checksActions.js';
-import { IChangesViewService } from '../common/changesViewService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
+import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { checksCollapseStateKey, checksThreadKey, legacyChecksCollapseStateKey, migrateChecksCollapseState, readCollapsedChecks, setChecksCollapsed } from './checksViewState.js';
 
 /** A keyboard-accessible, collapsible list of the selected Session's CI checks. */
 export class ChecksWidget extends Disposable {
@@ -30,29 +31,44 @@ export class ChecksWidget extends Disposable {
 		@IInstantiationService instantiation: IInstantiationService,
 		@IOpenerService opener: IOpenerService,
 		@INotificationService notifications: INotificationService,
-		@IChangesViewService viewState: IChangesViewService,
 		@ISessionsService sessions: ISessionsService,
+		@IStorageService storage: IStorageService,
+		@ILogService log: ILogService,
 	) {
 		super();
 		this.followUp = this._register(instantiation.createInstance(PullRequestFollowUpWidget, container, undefined));
 		this.element = h(container.ownerDocument, 'section', { className: 'ash-sessions-checks' });
 		container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
+		const selectionKey = (): string | undefined => {
+			const selected = sessions.activeSelection;
+			return selected?.kind === 'session' ? checksThreadKey(selected.active.session.sessionId, selected.active.threadId) : undefined;
+		};
 		this.header = this._register(new Button(this.element, {
 			...defaultButtonStyles,
 			label: localize('sessions.changes.checks', 'Checks'),
 			onClick: () => {
-				const selected = sessions.activeSelection;
-				if (selected) { viewState.setSectionCollapsed(new SessionChangesEditorInput(selected).resource, 'checks', !this.body.hidden); }
+				const key = selectionKey();
+				if (key) setChecksCollapsed(storage, key, !this.body.hidden);
 			},
 		}));
 		this.header.domNode.setAttribute('aria-expanded', 'true');
 		this.body = h(container.ownerDocument, 'div', { className: 'ash-sessions-checks-body' });
 		this.body.setAttribute('aria-live', 'polite');
 		this.element.append(this.body);
-		this._register(autorun(reader => {
-			this.body.hidden = viewState.activeSessionSectionCollapseStateObs.read(reader).checks;
+		const updateCollapsed = (): void => {
+			const key = selectionKey();
+			this.body.hidden = !!key && readCollapsedChecks(storage).has(key);
 			this.header.domNode.setAttribute('aria-expanded', String(!this.body.hidden));
+		};
+		const migrate = () => { void migrateChecksCollapseState(storage).catch(error => log.warn('Could not migrate Checks collapse state', error)); };
+		migrate();
+		updateCollapsed();
+		this._register(sessions.onDidChange(updateCollapsed));
+		this._register(storage.onDidChangeValue(event => {
+			if (event.scope !== StorageScope.WORKSPACE) return;
+			if (event.external && event.key === legacyChecksCollapseStateKey) migrate();
+			if (event.key === checksCollapseStateKey) updateCollapsed();
 		}));
 		const model = this._register(instantiation.createInstance(ChecksViewModel));
 		this._register(autorun(reader => {

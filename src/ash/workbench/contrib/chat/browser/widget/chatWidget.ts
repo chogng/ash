@@ -400,7 +400,6 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.input = this._register(createInputPart
 			? createInputPart(this.element, inputDelegate)
 			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading', configureModelInMenu: viewOptions?.configureModelInMenu, get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
-		this.listWidget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm, this.input.changesSummaryVisible);
 		this._register(widgets.register(this));
 		if (model.prepareConversation || model.sessionId) this._register(scopedInstantiation.createInstance(ChatRequestOriginPart, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');
@@ -423,12 +422,13 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			this.updateConversationState();
 		}));
 		this.element.append(this.goalBanner.domNode, this.olderHistoryElement, this.welcome.element, this.listWidget.element, this.historyStatusElement, voiceContainer, this.readOnlyBanner.domNode, this.input.element);
+		this.listWidget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm, this.input.changesSummaryVisible, this.voiceWidget?.element);
 		this._register(listWidgets.onDidChange(widget => {
 			const previous = this.listWidget;
 			const state = previous.getViewState();
 			previous.element.replaceWith(widget.element);
 			this.listWidget = widget;
-			widget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm, this.input.changesSummaryVisible);
+			widget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm, this.input.changesSummaryVisible, this.voiceWidget?.element);
 			widget.restoreViewState(state, this.model.items, this.responseWorking);
 		}));
 		this._register(this.model.onDidChangeComposer(() => { this.input.invalidatePendingInput(); this.listWidget.resetFind(); }));

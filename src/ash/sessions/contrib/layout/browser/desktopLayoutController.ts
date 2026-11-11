@@ -9,6 +9,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
+import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { EditorWorkingSet } from '../../../../workbench/services/editor/common/editorWorkingSet.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -313,7 +314,11 @@ export class DesktopLayoutController extends BaseLayoutController {
 	public async toggleChanges(): Promise<void> {
 		if (this.isDisposed) { return; }
 		const editor = this.editor as DesktopEditorParts;
-		if (!this.documentsVisible || !await editor.toggleToolEditors(input => input.resource.scheme === 'ash-session-changes')) {
+		const isChanges = (input: IResourceEditorInput) => input.resource.scheme === 'ash-session-changes';
+		// Hiding the last tool hides the whole Editor Part. Reopen a retained Changes group with its current scope and view state.
+		if (!this.context.isDocumentContent
+			|| (!this.documentsVisible && editor.getToolGroups(isChanges).some(group => editor.isGroupVisible(group.id)))
+			|| !await editor.toggleToolEditors(isChanges)) {
 			await this.openChanges();
 			return;
 		}

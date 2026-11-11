@@ -27,6 +27,7 @@
 }
 
 .ash-image-preview-popup-actions {
+	--ash-split-action-dropdown-width: var(--ash-toolbar-actionSize);
 	margin-inline-start: auto;
 }
 
@@ -35,9 +36,7 @@
 	flex-wrap: wrap;
 }
 
-.ash-image-preview-popup-actions
-	[data-action-id="imagePreview.zoom"]
-	> .ash-button {
+.ash-image-preview-popup-actions .ash-image-preview-zoom {
 	inline-size: calc(
 		7ch + var(--ash-lxiconFontSize) + var(--ash-spacing-size120)
 	);
@@ -64,14 +63,6 @@
 .ash-menu-leading-slot > .ash-image-preview-app-icon {
 	inline-size: 100%;
 	block-size: 100%;
-}
-
-.ash-image-preview-popup-actions
-	[data-action-id="imagePreview.openExternal"]
-	.ash-split-action-dropdown
-	> .ash-button {
-	width: var(--ash-toolbar-actionSize);
-	min-width: var(--ash-toolbar-actionSize);
 }
 
 .ash-image-preview-popup

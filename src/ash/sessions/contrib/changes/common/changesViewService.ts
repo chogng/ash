@@ -10,16 +10,11 @@ export interface IChangesDetailsViewState {
 	readonly scrollTop: number;
 }
 
-export interface IChangesViewSectionCollapseState { readonly checks: boolean; }
-export type ChangesViewSection = keyof IChangesViewSectionCollapseState;
-
 /** Owns reconstructable Changes presentation state; Turn contents remain in ChatService. */
 export interface IChangesViewService {
 	readonly viewModeObs: IObservable<ChangesViewMode>;
 	readonly reviewedFilesObs: IObservable<ReadonlySet<string>>;
-	readonly activeSessionSectionCollapseStateObs: IObservable<IChangesViewSectionCollapseState>;
 	setViewMode(mode: ChangesViewMode): void;
-	setSectionCollapsed(sessionResource: URI, section: ChangesViewSection, collapsed: boolean): void;
 	/** Restorable workspace filter preferences are keyed by Session and Thread. */
 	getChangesetId(sessionResource: URI | undefined, reader?: IReader): string | undefined;
 	setChangesetId(changesetId: string | undefined, sessionResource?: URI): void;

@@ -13,6 +13,8 @@
 .ash-icon-label-icon {
 	display: inline-flex;
 	flex: 0 0 auto;
+	width: var(--ash-icon-label-icon-slot-size, auto);
+	height: var(--ash-icon-label-icon-slot-size, auto);
 	align-items: center;
 	justify-content: center;
 }

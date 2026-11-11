@@ -9,7 +9,8 @@ import { GitHubError, GitHubErrorCode } from '../../../../../platform/github/com
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { CreatePullRequestWidget, type ICreatePullRequestWidgetOptions } from '../../browser/createPullRequestWidget.js';
 import type { ISessionPullRequestDetails, ISessionPullRequestOptions } from '../../common/pullRequestCreation.js';
-import { getSessionsChangesAccessibilityProviders } from '../../browser/sessionsChangesAccessibilityHelp.js';
+import '../../browser/github.contribution.js';
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextViewService, IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -71,7 +72,7 @@ suite('Changes Create PR form', () => {
 		});
 		document.body.append(widget.domNode);
 		services.registerInstance(IContextViewService, { container: document.body } as IContextViewService);
-		const accessible = getSessionsChangesAccessibilityProviders().find(provider => provider.name === `sessionsCreatePullRequest.${AccessibleViewType.View}`)!;
+		const accessible = AccessibleViewRegistry.getImplementations().find(provider => provider.name === `sessionsCreatePullRequest.${AccessibleViewType.View}`)!;
 		using reader = accessible.getProvider(services)!;
 		const title = widget.domNode.querySelector<HTMLInputElement>('input[aria-label="Title"]')!;
 		title.value = 'Edited title';

@@ -1,3 +1,4 @@
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { localize2 } from '../../../../nls.js';
@@ -16,11 +17,14 @@ import { SessionChangesetOperationStatus } from '../../../services/sessions/comm
 
 registerDiffEditorViewMenu(ActiveEditorContext.isEqualTo(SessionChangesEditor.ID));
 
+const captureFile = ContextKeyExpr.and(ActiveEditorContext.isEqualTo(SessionChangesEditor.ID), ContextKeyExpr.not('sessions.changesGitFile'));
+
 class OpenChangedFileAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.agentSessions.changes.openFile', title: localize2('sessions.changes.openFile', 'Open File'),
-			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID), group: 'navigation', order: 22 },
+			icon: Lxicon.goToFile,
+			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: captureFile, group: 'navigation', order: 22 },
 		});
 	}
 	public async run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> {
@@ -60,9 +64,10 @@ class ExpandFullFileAction extends Action2 {
 		super({
 			id: 'workbench.agentSessions.changes.expandFullFile',
 			title: localize2('sessions.changes.expandFullFile', 'Expand Full File'),
+			icon: Lxicon.unfold,
 			menu: {
 				id: MenuId.MultiDiffEditorFileToolbar,
-				when: ContextKeyExpr.and(ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID), ContextKeyExpr.not('multiDiffEditorFileIsBinary')),
+				when: ContextKeyExpr.and(captureFile, ContextKeyExpr.not('multiDiffEditorFileIsBinary')),
 				group: 'navigation', order: 23,
 			},
 		});
@@ -77,9 +82,10 @@ class CollapseUnchangedRegionsAction extends Action2 {
 		super({
 			id: 'workbench.agentSessions.changes.collapseUnchangedRegions',
 			title: localize2('sessions.changes.collapseUnchanged', 'Collapse Unchanged Regions'),
+			icon: Lxicon.fold,
 			menu: {
 				id: MenuId.MultiDiffEditorFileToolbar,
-				when: ContextKeyExpr.and(ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID), ContextKeyExpr.not('multiDiffEditorFileIsBinary')),
+				when: ContextKeyExpr.and(captureFile, ContextKeyExpr.not('multiDiffEditorFileIsBinary')),
 				group: 'navigation', order: 24,
 			},
 		});
@@ -97,6 +103,7 @@ class PreviewChangesetFileAction extends Action2 {
 		super({
 			id: 'workbench.agentSessions.changes.previewFile',
 			title: localize2('sessions.changes.previewCommit', 'Preview commit…'),
+			icon: Lxicon.gitCommit,
 			precondition: ContextKeyExpr.has('sessions.changesCanPreview'),
 			menu: {
 				id: MenuId.MultiDiffEditorFileToolbar,

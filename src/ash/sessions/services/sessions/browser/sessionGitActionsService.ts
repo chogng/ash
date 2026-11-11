@@ -11,8 +11,8 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { readLocalRepositories, type LocalRepository } from '../../../../workbench/contrib/github/common/localRepository.js';
-import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { chatExecutionWorkspace } from '../../../services/sessions/common/session.js';
+import { ISessionsService } from './sessionsService.js';
+import { chatExecutionWorkspace } from '../common/session.js';
 
 export interface ISessionGitActionsService {
 	readonly onDidChange: Event<void>;

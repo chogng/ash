@@ -5,9 +5,9 @@ import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { ChecksWidget } from '../../changes/browser/checksWidget.js';
-import { CreatePullRequestRailAction } from '../../changes/browser/createPullRequestContextView.js';
-import { ISessionGitActionsService } from '../../changes/browser/sessionGitActionsService.js';
+import { ChecksWidget } from '../../github/browser/checksWidget.js';
+import { CreatePullRequestRailAction } from '../../github/browser/createPullRequestContextView.js';
+import { ISessionGitActionsService } from '../../../services/sessions/browser/sessionGitActionsService.js';
 
 /** Composes repository actions and PR checks for the visible Code conversation. */
 export class SessionEnvironmentActions extends Disposable {

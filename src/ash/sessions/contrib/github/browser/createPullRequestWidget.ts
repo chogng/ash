@@ -12,7 +12,7 @@ import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../.
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { GitHubError, GitHubErrorCode } from '../../../../platform/github/common/githubService.js';
 import type { ISessionPullRequestCreation, ISessionPullRequestDetails, ISessionPullRequestOptions, SessionPullRequestMergeMethod } from '../common/pullRequestCreation.js';
-import { CreatePullRequestFocusedContext } from '../common/changes.js';
+import { CreatePullRequestFocusedContext } from '../common/pullRequestCreation.js';
 import { CreatePullRequestPreferences } from '../common/createPullRequestPreferences.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';

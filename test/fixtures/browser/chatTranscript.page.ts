@@ -43,7 +43,7 @@ import { ChatTipService, IChatTipService } from '../../../src/ash/workbench/cont
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { registerTestVoiceInputServices, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { LocalTranscriptionService } from '../../../src/ash/workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
-import { ILocalTranscriptionBackendService, ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
+import { DictationModelState, ILocalTranscriptionBackendService, ILocalTranscriptionService, ILocalTranscriptionModelService, type IDictationModelStatus } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { IDevContainerAgentHostService } from '../../../src/ash/sessions/common/devContainerAgentHostService.js';
@@ -229,6 +229,7 @@ let builtinStop: DeferredPromise<void> | undefined;
 let builtinAudio: ReturnType<typeof installTestDictationAudio> | undefined;
 const builtinBackend = new URLSearchParams(location.search).get('builtinBackend');
 if (builtinBackend) {
+	const modelStatus = resources.add(new Emitter<{ resourceId: string; model: string; status: IDictationModelStatus; }>());
 	const start = async (resourceId: string) => { builtinResource = resourceId; builtinOperations.push('start'); };
 	const stop = async (resourceId: string) => {
 		builtinOperations.push('stop');
@@ -245,12 +246,16 @@ if (builtinBackend) {
 		pushAudio: async (_resourceId, audio) => { builtinOperations.push(`audio:${atob(audio).length}`); },
 	});
 	services.registerInstance(ILocalTranscriptionBackendService, {
-		isConnected: true, onDidDisconnect: Event.None, onDidTranscribe: builtinTranscripts.event, onDidEnd: Event.None, onDidChangeModels: Event.None, onDidChangeModelStatus: Event.None,
+		isConnected: true, onDidDisconnect: Event.None, onDidTranscribe: builtinTranscripts.event, onDidEnd: Event.None, onDidChangeModels: Event.None, onDidChangeModelStatus: modelStatus.event,
 		getModelCacheInfo: async () => ({ directory: '/fixture/models', version: 1 }),
 		getModelStatus: async model => ({ model, available: true, sizeBytes: 1024 }), listModels: async () => [],
 		cancelModel: async () => { throw new Error('Unexpected model cancellation'); }, deleteModel: async () => { throw new Error('Unexpected model deletion'); },
 		startModelOperation: async () => { throw new Error('Unexpected model preparation'); }, stopModelOperation: async () => { throw new Error('Unexpected model operation'); },
-		start, stop, cancel, pushAudio: async (_resourceId, audio) => { builtinOperations.push(`audio:${audio.byteLength}`); },
+		async start(resourceId, model) {
+			await start(resourceId);
+			modelStatus.fire({ resourceId, model, status: { state: DictationModelState.Ready } });
+		},
+		stop, cancel, pushAudio: async (_resourceId, audio) => { builtinOperations.push(`audio:${audio.byteLength}`); },
 	});
 	services.registerSingleton(ILocalTranscriptionService, () => services.createInstance(LocalTranscriptionService));
 	services.registerSingleton(ILocalTranscriptionModelService, () => services.get(ILocalTranscriptionService) as LocalTranscriptionService);
@@ -374,6 +379,9 @@ const accessibleView = resources.add(services.createInstance(AccessibleViewServi
 services.registerInstance(IAccessibleViewService, accessibleView);
 let imageReads = 0;
 const openedAppLinks: { uri: string; options: unknown; }[] = [];
+services.registerInstance(IChatService, {
+	movePendingRequest: async () => { throw new Error('Unexpected queue reorder'); },
+} satisfies Pick<IChatService, 'movePendingRequest'> as unknown as IChatService);
 const appServices = resources.add(services.createChild());
 if (new URLSearchParams(location.search).has('sentImageViewer')) {
 	ChatContextKeys.imagePreviewPresentation.bindTo(appServices.get(IContextKeyService)).set('popup');
@@ -868,7 +876,6 @@ services.registerInstance(IExtensionHostApi, readApi);
 
 window.ashChatTranscriptIntegration = {
 	prepareBuiltinDictation: async (cowork, backend) => {
-		services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected model settings'); } } as unknown as IPreferencesService);
 		await services.get(IConfigurationService).updateValue('dictation.backend', backend);
 		builtinAudio = resources.add(installTestDictationAudio(window));
 		window.ashChatTranscriptIntegration.showChatApp(false, cowork);
@@ -882,7 +889,6 @@ window.ashChatTranscriptIntegration = {
 	finishBuiltinStop: () => { void builtinStop?.complete(); builtinStop = undefined; },
 	builtinDictationState: () => ({ operations: builtinOperations, busy: services.get(IChatSpeechToTextService).isBusy, state: services.get(IChatSpeechToTextService).state }),
 	prepareDictation: cowork => {
-		services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected model preparation'); } } as unknown as IPreferencesService);
 		resources.add(services.get(ISpeechService).registerSpeechProvider('command-fixture', {
 			metadata: { extension: new ExtensionIdentifier('test.speech'), displayName: 'Controlled recognition' },
 			createSpeechToTextSession: token => {

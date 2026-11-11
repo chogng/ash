@@ -1304,7 +1304,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			// Preparation can outlast the permission to send. Recheck before consuming the draft or recording history.
 			if (this.isSubmissionBlocked(localCommand)) return;
 			if (!this.commandText(draft.text, contexts).trim() && !this.state.draft?.files.length && !contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
-			if ((input.kind === 'message' || input.kind === 'command' && input.binding.origin === 'client') && !this.supportsImages() && contexts.some(attachment => attachment.kind === 'image')) {
+			if ((input.kind === 'message' && options?.sideChat || input.kind === 'command' && input.binding.origin === 'client') && !this.supportsImages() && contexts.some(attachment => attachment.kind === 'image')) {
 				throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 			}
 			if (options?.sideChat || input.kind === 'command' && input.binding.origin === 'client') {

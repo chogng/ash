@@ -45,7 +45,7 @@ import { BlockedSessionsIndicatorModel } from '../../contrib/sessions/browser/bl
 import { showBlockedSessionsList } from '../../contrib/sessions/browser/blockedSessionsList.js';
 import { BlockedSessionsCIFixModel } from '../../contrib/sessions/browser/blockedSessionsCIFixModel.js';
 import type { IBlockedSession } from '../../contrib/sessions/browser/blockedSessionsIndicatorModel.js';
-import { ChecksOperationService } from '../../contrib/changes/browser/checksOperationService.js';
+import { ChecksOperationService } from '../../contrib/github/browser/checksOperationService.js';
 import type { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 import type { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { URI } from '../../../base/common/uri.js';

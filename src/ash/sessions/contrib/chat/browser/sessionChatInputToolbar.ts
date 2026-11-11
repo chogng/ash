@@ -1,5 +1,5 @@
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { PullRequestFollowUpWidget } from '../../changes/browser/pullRequestFollowUpWidget.js';
+import { PullRequestFollowUpWidget } from '../../github/browser/pullRequestFollowUpWidget.js';
 import { ArtifactDetailsContextView } from './artifactDetailsContextView.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';

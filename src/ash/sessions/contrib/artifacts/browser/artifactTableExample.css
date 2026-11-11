@@ -45,7 +45,7 @@
 }
 
 .ash-artifact-table-example.sheet :is(thead, tr > :first-child) {
-	background: var(--ash-editorWidget-background);
+	background: var(--ash-editor-widgetBackground);
 }
 
 .ash-artifact-table-example.sheet
