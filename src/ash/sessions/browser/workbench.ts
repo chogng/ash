@@ -567,9 +567,11 @@ export abstract class Workbench extends Disposable {
 				const directory = await options.api.workspaceTrust.readDirectory(target.root);
 				return hasDevelopmentPermissions(directory.permissions ?? directory.inheritedWorkspacePermissions);
 			},
-			authorizeWorkspace: (target, signal, onTrustDeclined) => folderAuthorization.authorize(
-				target.root, signal, target.type === 'ssh' ? { api: options.api, label: target.host }
-				: target.type === 'remote' ? { api: options.api, label: target.authority } : undefined, onTrustDeclined),
+			authorizeWorkspace: (target, signal, onTrustDeclined) => folderAuthorization.authorize([target.root], signal, {
+				host: target.type === 'ssh' ? { api: options.api, label: target.host }
+					: target.type === 'remote' ? { api: options.api, label: target.authority } : undefined,
+				onTrustDeclined,
+			}),
 			selectWorkspace: async folders => {
 				using selection = services.createInstance(WorkspacePicker, {});
 				return await selection.pick(folders);

@@ -28,7 +28,7 @@ import {
 } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
-import type { DirectoryPermissionRequest, IDirectoryPermissionRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
+import type { IDirectoryPermissionRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import {
 	AppServerRecoveryAvailableContext,
@@ -49,17 +49,26 @@ registerWorkbenchContribution(WorkspaceFolderManagementContribution.ID, Workbenc
 	accessor.get(IInstantiationService).createInstance(WorkspaceFolderManagementContribution),
 );
 
+interface SessionFolderTrustRequest {
+	readonly paths: readonly string[];
+	readonly remoteHostLabel?: string;
+}
+
 export function createSessionFolderTrustRequestService(
 	container: HTMLElement,
 	showPrompt: (load: () => Promise<DialogRequest>, handler: IDialogHandler, signal?: AbortSignal) => Promise<IDialogOutcome>,
 ): IDirectoryPermissionRequestService & {
-	confirmFolderTrust(request: DirectoryPermissionRequest, signal?: AbortSignal): Promise<boolean>;
+	confirmFoldersTrust(request: SessionFolderTrustRequest, signal?: AbortSignal): Promise<boolean>;
 } {
-	const confirmFolderTrust = async (request: DirectoryPermissionRequest, signal?: AbortSignal): Promise<boolean> => {
+	const confirmFoldersTrust = async (request: SessionFolderTrustRequest, signal?: AbortSignal): Promise<boolean> => {
 		const document = container.ownerDocument;
+		const multiple = request.paths.length > 1;
 		const detail = h(document, 'div', { className: 'ash-sessions-directory-permission-detail' });
 		const explanation = h(document, 'div');
-		explanation.textContent = localize(
+		explanation.textContent = multiple ? localize(
+			'sessions.workspace.trustFoldersDetail',
+			'Trust allows Agents to read and edit files, run commands, and load project instructions and integrations in these folders. Continue only if you trust every folder listed.',
+		) : localize(
 			'sessions.workspace.trustDetail',
 			'Trust allows Agents to read and edit files, run commands, and load project instructions and integrations in this folder.',
 		);
@@ -69,9 +78,18 @@ export function createSessionFolderTrustRequestService(
 			host.textContent = localize('sessions.workspace.remoteTrustHost', 'Remote environment: {0}', request.remoteHostLabel);
 			detail.append(host);
 		}
-		const path = h(document, 'div', { className: 'ash-sessions-directory-permission-path' });
-		path.textContent = request.path;
-		detail.append(path);
+		const paths = request.paths.map(path => h(document, 'div', {
+			className: 'ash-sessions-directory-permission-path',
+			attributes: multiple ? { role: 'listitem' } : undefined,
+		}, path));
+		if (multiple) {
+			detail.append(h(document, 'div', {
+				className: 'ash-sessions-directory-permission-detail',
+				attributes: { role: 'list' },
+			}, ...paths));
+		} else {
+			detail.append(...paths);
+		}
 		const handler = new BrowserDialogHandler(container, {
 			messageAsTitle: true,
 			layout: 'form',
@@ -83,16 +101,18 @@ export function createSessionFolderTrustRequestService(
 		});
 		const outcome = await showPrompt(async () => ({
 			kind: 'confirmation',
-			message: localize('sessions.workspace.trustQuestion', 'Trust this workspace?'),
-			primaryButton: localize('sessions.workspace.trustAndOpen', 'Trust and Open'),
+			message: multiple ? localize('sessions.workspace.trustFoldersQuestion', 'Trust these folders?')
+				: localize('sessions.workspace.trustQuestion', 'Trust this workspace?'),
+			primaryButton: multiple ? localize('sessions.workspace.trustFolders', 'Trust Folders')
+				: localize('sessions.workspace.trustAndOpen', 'Trust and Open'),
 		}), handler, signal);
 		return outcome.button === DialogResult.Primary;
 	};
 	return {
 		requiresDevelopmentTrust: true,
-		confirmFolderTrust,
+		confirmFoldersTrust,
 		async requestDirectoryPermissions(request, signal) {
-			return await confirmFolderTrust(request, signal) ? 'development' : 'cancel';
+			return await confirmFoldersTrust({ paths: [request.path], remoteHostLabel: request.remoteHostLabel }, signal) ? 'development' : 'cancel';
 		},
 	};
 }

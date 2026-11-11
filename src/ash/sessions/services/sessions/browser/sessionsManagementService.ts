@@ -300,6 +300,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				: workspace && !runtime ? workspace : undefined;
 			const target = draft?.workspace ?? (source ? selectionFromResource(sessionWorkspaceUri(source)) : undefined);
 			const devContainer = draft?.devContainer === true || runtime?.providerId === 'ash.dev-containers';
+			// An incomplete Project draft must wait for its own folder instead of using a host default.
+			if (draft?.projectId && target?.type === 'current') {
+				return { providerId, workspace: target, projectId: draft.projectId };
+			}
 			if (target && target.type !== 'current' && await this.canReuseWorkspace(provider, target, devContainer)
 				&& this.isAvailableForNewSession(provider)) {
 				const projectId = draft?.projectId ?? (session && providerId === this.defaultProviderId

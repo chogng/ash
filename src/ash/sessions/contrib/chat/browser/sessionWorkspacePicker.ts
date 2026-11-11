@@ -648,7 +648,7 @@ export class SessionWorkspacePicker extends Disposable {
 			const onTrustDeclined = () => { declined = true; };
 			const accepted = provider && provider.authorizeWorkspace
 				? await provider.authorizeWorkspace(folder, authorization.signal, onTrustDeclined)
-				: folder.type !== 'local' || await this.folderAuthorization.authorize(folder.root, authorization.signal, undefined, onTrustDeclined);
+				: folder.type !== 'local' || await this.folderAuthorization.authorize([folder.root], authorization.signal, { onTrustDeclined });
 			if (!isCurrent()) { return; }
 			if (!accepted) {
 				if (declined && getProvider() === provider) {

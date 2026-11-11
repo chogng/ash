@@ -16,8 +16,13 @@ export interface ISessionFolderAuthorizationService {
 	/** Checks existing local directory permissions without prompting or granting access. */
 	isTrusted(path: string): Promise<boolean>;
 
-	/** Checks directory permissions and reports explicit dismissal of the trust prompt via onTrustDeclined. */
-	authorize(path: string, signal: AbortSignal, host?: { readonly api: IAgentConnection; readonly label: string; }, onTrustDeclined?: () => void): Promise<boolean>;
+	/** Checks development permissions and confirms all missing grants on the same host in one prompt. */
+	authorize(paths: readonly string[], signal: AbortSignal, options?: {
+		readonly host?: { readonly api: IAgentConnection; readonly label: string; };
+		/** Require a grant that can bind the directory as a workspace root. */
+		readonly explicitGrant?: boolean;
+		readonly onTrustDeclined?: () => void;
+	}): Promise<boolean>;
 }
 
 export const ISessionFolderAuthorizationService = createServiceIdentifier<ISessionFolderAuthorizationService>('sessionFolderAuthorizationService');

@@ -30,6 +30,10 @@ import { IProjectService, type Project, type ProjectAppearance, type ProjectMate
 import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
 import { OPEN_MEMORIES_COMMAND_ID } from '../../../../workbench/contrib/memories/browser/memorySettings.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { ISessionFolderAuthorizationService } from '../../../common/sessionWorkspace.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import type { SessionWorkspaceSelection } from '../../../services/sessions/common/session.js';
 import { IChatListCatalog, type CatalogProjectDetails } from '../../chat/browser/chatListModel.js';
 import type { CatalogProjectCreator, CatalogProjectMemoryMode, ConversationProjectEditor } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { ProjectAppearancePicker } from './projectAppearancePicker.js';
@@ -130,6 +134,8 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		@IModelService private readonly models: IModelService,
 		@ILanguageService private readonly languages: ILanguageService,
 		@ICommandService private readonly commands: ICommandService,
+		@ISessionsService private readonly sessions: ISessionsService,
+		@ISessionFolderAuthorizationService private readonly folderAuthorization: ISessionFolderAuthorizationService,
 	) {
 		super();
 	}
@@ -940,6 +946,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		form.append(source, feedback);
 		let picking = false;
 		let saving = false;
+		let created: { readonly projectId: string; readonly workspace: SessionWorkspaceSelection; readonly navigationRevision: number; } | undefined;
 		const add = store.add(new Button(panel, {
 			...defaultButtonStyles,
 			label: localize('projects.code.addFolder', 'Add folder'),
@@ -953,7 +960,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				try {
 					const folders = await this.files.showOpenDialog({
 						title: localize('sessions.workspace.browseTitle', 'Choose a folder'),
-						canSelectFiles: false, canSelectFolders: true, availableFileSystems: ['file'],
+						canSelectFiles: false, canSelectFolders: true, canSelectMany: true, availableFileSystems: ['file'],
 					});
 					if (store.isDisposed) return;
 					for (const resource of folders ?? []) {
@@ -1062,16 +1069,37 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 						}
 					}
 				} else {
-					await this.projects.create(id, title, '', [...materials.values()], 'code', appearance.appearance);
+					const navigationRevision = this.sessions.navigationRevision;
+					const folders = [...materials.values()].map(material => material.resource.fsPath);
+					const firstFolder = folders[0];
+					let workspace: SessionWorkspaceSelection = { type: 'current' };
+					if (firstFolder) {
+						const controller = new AbortController();
+						using cancelOnClose = store.add(toDisposable(() => controller.abort()));
+						using navigation = this.sessions.onDidChange(() => {
+							if (this.sessions.navigationRevision !== navigationRevision) controller.abort();
+						});
+						try {
+							const accepted = await this.folderAuthorization.authorize(folders, controller.signal, { explicitGrant: true });
+							if (!accepted || controller.signal.aborted || this.sessions.navigationRevision !== navigationRevision) return;
+						} finally {
+							store.delete(cancelOnClose);
+						}
+						workspace = { type: 'local', root: firstFolder };
+					}
+					const project = await this.projects.create(id, title, '', [...materials.values()], 'code', appearance.appearance);
+					if (!store.isDisposed) created = { projectId: project.id, workspace, navigationRevision };
 				}
 				if (!store.isDisposed) dialog.dispose();
 			} catch (error) {
-				if (store.isDisposed) return;
-				feedback.textContent = toErrorMessage(error);
-				saving = name.disabled = source.disabled = false;
-				appearance.enabled = true;
-				updateSubmit();
-				name.focus();
+				if (!store.isDisposed && !isCancellationError(error)) feedback.textContent = toErrorMessage(error);
+			} finally {
+				if (!store.isDisposed && !dialog.isDisposed) {
+					saving = name.disabled = source.disabled = false;
+					appearance.enabled = true;
+					updateSubmit();
+					if (form.isConnected) name.focus();
+				}
 			}
 		}));
 		try {
@@ -1084,5 +1112,8 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		} finally {
 			if (this.active.value === active) this.active.clear();
 		}
+		if (!created || this.isDisposed || this.active.value || this.sessions.navigationRevision !== created.navigationRevision) return;
+		this.sessions.openNewSession(undefined, { providerId: LOCAL_AGENT_HOST_PROVIDER_ID, projectId: created.projectId, workspace: created.workspace });
+		await this.commands.executeCommand('sessions.open.code', 'conversation');
 	}
 }
