@@ -26,15 +26,20 @@ use ash_app_server_protocol::protocol::session::SessionThreadSubscribeResult;
 use ash_app_server_protocol::protocol::session::SessionThreadUnsubscribeParams;
 use ash_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use ash_app_server_protocol::protocol::session::ThreadSnapshotHistory;
+use ash_app_server_protocol::protocol::session::ToolResultPreview;
+use ash_app_server_protocol::protocol::session::ToolResultTextReadParams;
+use ash_app_server_protocol::protocol::session::ToolResultTextReadResult;
 use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_app_server_protocol::protocol::turn::TurnInteractionResolveResult;
 use ash_app_server_protocol::protocol::turn::TurnInterruptResult;
 use ash_app_server_protocol::protocol::turn::TurnStartResult;
 use ash_app_server_protocol::protocol::turn::TurnSteerResult;
 use ash_protocol::AgentRequestEnvelope;
+use ash_protocol::ContentPart;
 use ash_protocol::HookEvent;
 use ash_protocol::ModelAccess;
 use ash_protocol::Session;
+use ash_protocol::ThreadItem;
 use ash_protocol::ThreadStatus;
 use ash_protocol::UserInput;
 
@@ -1651,6 +1656,37 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         })
     }
 
+    pub(super) fn tool_result_text_read(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ToolResultTextReadParams = decode(params)?;
+        let source = params.source;
+        let item = self
+            .context
+            .agent_runtime()
+            .read_history_item(
+                &params.session_id,
+                &params.thread_id,
+                &source.turn_id,
+                source.item_ordinal,
+            )
+            .map_err(core_error)?;
+        let Some(ThreadItem::ToolResult {
+            item_id,
+            text,
+            content,
+            ..
+        }) = item
+        else {
+            return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotFound));
+        };
+        if item_id != source.item_id {
+            return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotFound));
+        }
+        let page =
+            tool_result_text_page(&text, content.as_deref().unwrap_or_default(), params.offset)
+                .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        result(&page)
+    }
+
     pub(super) fn thread_goal_get(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ThreadGoalGetParams = decode(params)?;
         let thread = self.read_goal_thread(&params.thread_id)?;
@@ -1826,6 +1862,16 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             self.fill_missing_reply_directories(&mut thread)?;
             return Ok((thread, None, pending));
         };
+        let preview = match &history {
+            ThreadSnapshotHistory::Latest {
+                preview_tool_results,
+                ..
+            }
+            | ThreadSnapshotHistory::Before {
+                preview_tool_results,
+                ..
+            } => *preview_tool_results == Some(true),
+        };
         let mut page = self
             .context
             .agent_runtime()
@@ -1846,6 +1892,9 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         let boundary = ThreadHistoryBoundary {
             has_older_turns: page.has_older_turns,
             oldest_turn_id: page.thread.turns.first().map(|turn| turn.turn_id.clone()),
+            tool_result_previews: preview
+                .then(|| preview_tool_results(&mut page.thread))
+                .filter(|items| !items.is_empty()),
         };
         self.fill_missing_reply_directories(&mut page.thread)?;
         Ok((page.thread, Some(boundary), page.pending_interactions))
@@ -2795,7 +2844,7 @@ fn history_window(
     history: ThreadSnapshotHistory,
 ) -> Result<thread_store::ThreadHistoryWindow, RpcError> {
     let limit = match &history {
-        ThreadSnapshotHistory::Latest { turn_limit }
+        ThreadSnapshotHistory::Latest { turn_limit, .. }
         | ThreadSnapshotHistory::Before { turn_limit, .. } => *turn_limit,
     };
     if limit == 0 || limit > MAX_THREAD_SNAPSHOT_TURNS {
@@ -2812,6 +2861,121 @@ fn history_window(
                 turn_limit,
             }
         }
+    })
+}
+
+const TOOL_RESULT_PREVIEW_BYTES: usize = 4 * 1024;
+const TOOL_RESULT_PAGE_BYTES: usize = 64 * 1024;
+
+fn clip_text(text: &mut String, budget: usize) -> bool {
+    if text.len() <= budget {
+        return false;
+    }
+    *text = text[..text.floor_char_boundary(budget)].to_owned();
+    true
+}
+
+fn preview_tool_results(thread: &mut ash_protocol::Thread) -> Vec<ToolResultPreview> {
+    let mut previews = Vec::new();
+    for turn in &mut thread.turns {
+        // Advisor and interactive shell results carry structured presentation data.
+        // An MCP App consumes its original tool result through the app bridge.
+        let calls = turn
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                ThreadItem::ToolCall {
+                    name, tool_call_id, ..
+                } if !matches!(name.as_str(), "advisor" | "shell-session") => {
+                    Some(tool_call_id.clone())
+                }
+                _ => None,
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        for (ordinal, item) in turn.items.iter_mut().enumerate() {
+            let ThreadItem::ToolResult {
+                item_id,
+                turn_id,
+                tool_call_id,
+                text,
+                content,
+                ..
+            } = item
+            else {
+                continue;
+            };
+            if !calls.contains(tool_call_id) || content.iter().flatten().any(|part| matches!(
+                part, ContentPart::Artifact { artifact } if matches!(artifact.source, ash_protocol::ToolOutputArtifactSource::McpApp { .. })
+            )) {
+                continue;
+            }
+            let Ok(item_ordinal) = u32::try_from(ordinal) else {
+                continue;
+            };
+            let mut budget = TOOL_RESULT_PREVIEW_BYTES;
+            let mut has_parts = false;
+            let mut parts_clipped = false;
+            for part in content.iter_mut().flatten() {
+                if let ContentPart::Text(text) = part {
+                    if has_parts {
+                        budget = budget.saturating_sub(1);
+                    }
+                    has_parts = true;
+                    if clip_text(text, budget) {
+                        parts_clipped = true;
+                        budget = 0;
+                    } else {
+                        budget -= text.len();
+                    }
+                }
+            }
+            let text_clipped = clip_text(text, TOOL_RESULT_PREVIEW_BYTES);
+            if parts_clipped || (!has_parts && text_clipped) {
+                previews.push(ToolResultPreview {
+                    turn_id: turn_id.clone(),
+                    item_id: item_id.clone(),
+                    item_ordinal,
+                });
+            }
+        }
+    }
+    previews
+}
+
+/// Page the same literal text that the tool Result disclosure displays. Part indexes in
+/// the original Item remain unchanged, including media and interactive app coordinates.
+fn tool_result_text_page(
+    text: &str,
+    content: &[ContentPart],
+    offset: u64,
+) -> Option<ToolResultTextReadResult> {
+    let mut skip = usize::try_from(offset).ok()?;
+    let mut text_parts = content.iter().filter_map(|part| match part {
+        ContentPart::Text(text) => Some(text.as_str()),
+        _ => None,
+    });
+    let first = text_parts.next().unwrap_or(text);
+    let segments = std::iter::once(first).chain(text_parts.flat_map(|text| ["\n", text]));
+    let mut page = String::new();
+    for segment in segments {
+        if skip >= segment.len() {
+            skip -= segment.len();
+            continue;
+        }
+        let remaining = segment.get(skip..)?;
+        skip = 0;
+        let end = remaining.floor_char_boundary(TOOL_RESULT_PAGE_BYTES - page.len());
+        page.push_str(&remaining[..end]);
+        if end < remaining.len() {
+            return Some(ToolResultTextReadResult {
+                next_offset: Some(offset + page.len() as u64),
+                text: page,
+            });
+        }
+    }
+    (skip == 0).then_some(ToolResultTextReadResult {
+        text: page,
+        next_offset: None,
     })
 }
 

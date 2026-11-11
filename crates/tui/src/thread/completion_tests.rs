@@ -60,6 +60,7 @@ fn older_history_request_uses_the_subscription_cursor() {
     let preparation = prepare_command(
         Some(ThreadSnapshotHistory::Before {
             turn_id: turn_id.clone(),
+            preview_tool_results: None,
             turn_limit: 50,
         }),
         command_state(None, CommandActivity::Ready),

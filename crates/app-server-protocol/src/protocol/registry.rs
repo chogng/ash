@@ -2367,6 +2367,12 @@ use crate::protocol::session::ThreadHistoryBoundary;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::ThreadSnapshotHistory;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::ToolResultPreview;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::ToolResultTextReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::ToolResultTextReadResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::skills::SkillCatalogReloadDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::skills::SkillCompatibilityDto;
@@ -4214,6 +4220,11 @@ client_methods! {
     SessionThreadRead => "session/thread/read" {
         params: SessionThreadReadParams,
         response: SessionThreadReadResult,
+        serialization: SessionSharedRead,
+    },
+    ToolResultTextRead => "session/thread/toolResult/text/read" {
+        params: ToolResultTextReadParams,
+        response: ToolResultTextReadResult,
         serialization: SessionSharedRead,
     },
     ThreadGoalGet => "thread/goal/get" {
@@ -7292,6 +7303,9 @@ typescript_bindings! {
     ThreadGoalUpdatedNotification,
     ThreadGoalClearedNotification,
     ThreadSnapshotHistory,
+    ToolResultPreview,
+    ToolResultTextReadParams,
+    ToolResultTextReadResult,
     ThreadHistoryBoundary,
     CapabilitySupport,
     ModelAccess,

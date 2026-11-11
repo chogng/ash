@@ -30,6 +30,7 @@ export function createSessionThreadService(scope: ISessionProviderScope): IAgent
 			const result = await backend.rename(params(source), ...rest);
 			return result;
 		}),
+		readToolResultText: (source, offset, signal) => run(() => backend.readToolResultText(params(source), offset, signal)),
 		readAttachment: (...args: Parameters<IAgentThreadService['readAttachment']>) => run(async () => {
 			const [source, ...rest] = args;
 			const result = await backend.readAttachment(params(source), ...rest);

@@ -767,6 +767,7 @@ fn preview_result(
     };
     let boundary = ThreadHistoryBoundary {
         has_older_turns,
+        tool_result_previews: None,
         oldest_turn_id: Some(ash_protocol::TurnId::new(format!("turn-{}", range.start)).unwrap()),
     };
     let entries = range

@@ -235,7 +235,10 @@ impl SessionNavigation {
         let params = SessionThreadReadParams {
             session_id: session_id.clone(),
             thread_id: thread.thread_id.clone(),
-            history: Some(ThreadSnapshotHistory::Latest { turn_limit: 50 }),
+            history: Some(ThreadSnapshotHistory::Latest {
+                turn_limit: 50,
+                preview_tool_results: None,
+            }),
         };
         self.preview_generation = self.preview_generation.wrapping_add(1);
         self.preview = Some(ConversationPreview::new(

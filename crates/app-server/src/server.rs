@@ -3805,6 +3805,9 @@ impl AppServer {
             Some(ClientMethod::SessionThreadRead) => {
                 self.agent_processor().session_thread_read(&request.params)
             }
+            Some(ClientMethod::ToolResultTextRead) => self
+                .agent_processor()
+                .tool_result_text_read(&request.params),
             Some(ClientMethod::ThreadGoalGet) => {
                 self.agent_processor().thread_goal_get(&request.params)
             }

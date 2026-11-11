@@ -497,6 +497,7 @@ export type ThreadItem =
 	}
 	| {
 		readonly type: 'toolResult';
+		readonly outputPreview?: { readonly itemOrdinal: number; };
 		readonly itemId: string;
 		readonly turnId: string;
 		readonly toolCallId: string;
@@ -962,8 +963,8 @@ export interface ThreadTranscriptUpdateEnvelope {
 
 /** A bounded, chronological Turn window. Omission preserves full-history callers. */
 export type ThreadSnapshotHistory =
-	| { readonly type: 'latest'; readonly turnLimit: number; }
-	| { readonly type: 'before'; readonly turnId: string; readonly turnLimit: number; };
+	| { readonly type: 'latest'; readonly turnLimit: number; readonly previewToolResults?: boolean; }
+	| { readonly type: 'before'; readonly turnId: string; readonly turnLimit: number; readonly previewToolResults?: boolean; };
 
 export interface ThreadHistoryBoundary {
 	readonly hasOlderTurns: boolean;
@@ -1008,6 +1009,19 @@ export interface IRestoreMessageOptions {
 }
 
 /** Locates a stored media part without exposing a backend path or accepting a storage digest. */
+export interface ToolResultTextSource {
+	readonly sessionId: string;
+	readonly threadId: string;
+	readonly turnId: string;
+	readonly itemId: string;
+	readonly itemOrdinal: number;
+}
+
+export interface ToolResultTextPage {
+	readonly text: string;
+	readonly nextOffset?: number;
+}
+
 export interface AgentAttachmentSource {
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;

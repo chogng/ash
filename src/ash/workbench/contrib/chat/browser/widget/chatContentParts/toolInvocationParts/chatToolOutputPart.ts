@@ -2,6 +2,7 @@ import { BaseChatToolInvocationSubPart } from './chatToolInvocationSubPart.js';
 import type { IChatToolInvocation } from '../../../../common/chatService/chatService.js';
 import { h } from '../../../../../../../base/browser/dom.js';
 import { MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { IAgentThreadService } from '../../../../../../../platform/agentHost/common/agentService.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import type { IChatListItem } from '../../../../common/model/chatViewModel.js';
 import { ChatAttachmentsContentPart } from '../chatAttachmentsContentPart.js';
@@ -25,9 +26,13 @@ export class ChatToolOutputSubPart extends BaseChatToolInvocationSubPart {
 	private readonly resultTarget = this._register(new MutableDisposable<ChatSessionTargetResultPillSubPart | ChatAutomationConfiguredResultSubPart>());
 	private targetIdentity: string | undefined;
 
-	constructor(document: Document, @IInstantiationService private readonly instantiation: IInstantiationService) {
+	constructor(
+		document: Document,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IAgentThreadService threadService: IAgentThreadService,
+	) {
 		super(h(document, 'div'));
-		this.inputOutput = this._register(new ChatCollapsibleInputOutputContentPart(document));
+		this.inputOutput = this._register(new ChatCollapsibleInputOutputContentPart(document, threadService));
 		this.markdown = this._register(instantiation.createInstance(ChatInputOutputMarkdownProgressPart, document));
 		this._register(this.markdown.onDidChangeHeight(() => this.changedHeight.fire()));
 		this.domNode.append(this.inputOutput.domNode, this.markdown.domNode);
@@ -54,7 +59,7 @@ export class ChatToolOutputSubPart extends BaseChatToolInvocationSubPart {
 			}
 		}
 		this.markdown.render(presentation ? [] : content);
-		this.inputOutput.render(invocation, presentation);
+		this.inputOutput.render(invocation, presentation, source);
 		const mediaContent = options.generatedImages ? content.map(part => part.type === 'imageUrl' || part.type === 'imageAttachment' ? { type: 'text' as const, text: '' } : part) : content;
 		if (mediaContent.some(part => part.type !== 'text' && part.type !== 'artifact')) {
 			if (!this.media.value) {

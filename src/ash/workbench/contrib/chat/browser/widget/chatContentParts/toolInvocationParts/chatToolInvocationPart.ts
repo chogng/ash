@@ -107,7 +107,7 @@ export class ChatToolInvocationPart extends Disposable implements IChatContentPa
 		this.output.render(invocation, source, {
 			generatedImages: imageGeneration && !!result && !result.isError && content.some(part => part.type === 'imageUrl' || part.type === 'imageAttachment'),
 		});
-		this.output.domNode.hidden = this.simple.render(invocation);
+		this.output.domNode.hidden = this.simple.render(invocation) && !result?.outputPreview;
 		if (focusedOutput && !focusedOutput.isConnected && this.domNode.ownerDocument.activeElement === this.domNode.ownerDocument.body) {
 			this.output.domNode.querySelector<HTMLElement>('[data-tool-section="input"] pre')?.focus({ preventScroll: true });
 		}

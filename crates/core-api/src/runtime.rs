@@ -166,6 +166,13 @@ pub trait AgentRuntime {
         thread_id: &ThreadId,
         window: &ash_thread_store::ThreadHistoryWindow,
     ) -> Result<ash_thread_store::ThreadHistoryPage, CoreError>;
+    fn read_history_item(
+        &self,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        ordinal: u32,
+    ) -> Result<Option<ash_protocol::ThreadItem>, CoreError>;
     fn read_started_thread(&self, command_id: &CommandId) -> Result<Option<ThreadView>, CoreError>;
     fn read_session(&self, session_id: &SessionId) -> Result<SessionView, CoreError>;
     fn list_sessions(&self) -> Result<Vec<ash_protocol::Session>, CoreError>;

@@ -13,6 +13,7 @@ use ash_protocol::AgentResponse;
 use ash_protocol::AgentTreeProjection;
 use ash_protocol::CollaborationMode;
 use ash_protocol::CommandInterpretation;
+use ash_protocol::ItemId;
 use ash_protocol::ReviewTarget;
 use ash_protocol::Session;
 use ash_protocol::SessionExecutionTarget;
@@ -473,6 +474,9 @@ pub const MAX_THREAD_SNAPSHOT_TURNS: u32 = 100_000;
 pub enum ThreadSnapshotHistory {
     Latest {
         turn_limit: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        preview_tool_results: Option<bool>,
     },
     /// Selects a bounded page of Turns older than the supplied durable Turn identity.
     ///
@@ -481,6 +485,9 @@ pub enum ThreadSnapshotHistory {
     Before {
         turn_id: TurnId,
         turn_limit: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        preview_tool_results: Option<bool>,
     },
 }
 
@@ -492,6 +499,38 @@ pub struct ThreadHistoryBoundary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub oldest_turn_id: Option<TurnId>,
+    /// Items whose text was shortened in both copies of the history projection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub tool_result_previews: Option<Vec<ToolResultPreview>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolResultPreview {
+    pub turn_id: TurnId,
+    pub item_id: ItemId,
+    pub item_ordinal: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolResultTextReadParams {
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+    pub source: ToolResultPreview,
+    /// UTF-8 byte offset in the displayed text. Zero starts at the beginning.
+    #[ts(type = "number")]
+    pub offset: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolResultTextReadResult {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable, type = "number")]
+    pub next_offset: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

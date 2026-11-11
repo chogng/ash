@@ -226,6 +226,17 @@ impl AgentRuntime for Runtime<'_> {
     ) -> Result<ash_thread_store::ThreadHistoryPage, CoreError> {
         self.threads.read_thread_history(thread_id, window)
     }
+    fn read_history_item(
+        &self,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        ordinal: u32,
+    ) -> Result<Option<ash_protocol::ThreadItem>, CoreError> {
+        self.threads
+            .read_history_item(session_id, thread_id, turn_id, ordinal)
+    }
+
     fn inspect_context(
         &self,
         request: ContextInspectionRequest<'_>,

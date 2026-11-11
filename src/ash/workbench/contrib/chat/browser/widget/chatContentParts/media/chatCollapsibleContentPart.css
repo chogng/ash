@@ -76,3 +76,22 @@
 	font-size: var(--ash-chat-code-font-size, var(--ash-fontSize-body1));
 	line-height: var(--ash-chat-code-line-height, normal);
 }
+
+.ash-chat-tool-result-pager {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding-inline: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-chat-tool-result-pager > button[hidden] {
+	display: none;
+}
+
+.ash-chat-tool-result-pager > button[aria-disabled="true"] {
+	opacity: 0.6;
+	cursor: default;
+}

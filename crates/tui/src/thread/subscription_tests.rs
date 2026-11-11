@@ -133,12 +133,18 @@ fn history_window_expands_one_page_at_a_time() {
 
     assert_eq!(
         subscription.history(),
-        ThreadSnapshotHistory::Latest { turn_limit: 50 }
+        ThreadSnapshotHistory::Latest {
+            turn_limit: 50,
+            preview_tool_results: None
+        }
     );
     subscription.expand_history();
     assert_eq!(
         subscription.history(),
-        ThreadSnapshotHistory::Latest { turn_limit: 100 }
+        ThreadSnapshotHistory::Latest {
+            turn_limit: 100,
+            preview_tool_results: None
+        }
     );
 }
 
@@ -153,6 +159,7 @@ fn history_window_never_exceeds_the_server_limit() {
     assert_eq!(
         subscription.history(),
         ThreadSnapshotHistory::Latest {
+            preview_tool_results: None,
             turn_limit: MAX_THREAD_SNAPSHOT_TURNS
         }
     );
@@ -167,6 +174,7 @@ fn older_history_uses_the_server_turn_cursor() {
         HISTORY_PAGE_TURNS,
         Some(ThreadHistoryBoundary {
             has_older_turns: true,
+            tool_result_previews: None,
             oldest_turn_id: Some(oldest_turn_id.clone()),
         }),
     );
@@ -175,6 +183,7 @@ fn older_history_uses_the_server_turn_cursor() {
         subscription.older_history(),
         Some(ThreadSnapshotHistory::Before {
             turn_id: oldest_turn_id,
+            preview_tool_results: None,
             turn_limit: HISTORY_PAGE_TURNS,
         })
     );
@@ -189,6 +198,7 @@ fn latest_snapshot_replaces_a_stale_history_boundary() {
         HISTORY_PAGE_TURNS,
         Some(ThreadHistoryBoundary {
             has_older_turns: false,
+            tool_result_previews: None,
             oldest_turn_id: Some(TurnId::new("turn-50").unwrap()),
         }),
     );
@@ -202,6 +212,7 @@ fn latest_snapshot_replaces_a_stale_history_boundary() {
         0,
         ThreadHistoryBoundary {
             has_older_turns: true,
+            tool_result_previews: None,
             oldest_turn_id: Some(oldest_turn_id.clone()),
         },
     );
@@ -210,6 +221,7 @@ fn latest_snapshot_replaces_a_stale_history_boundary() {
         subscription.older_history(),
         Some(ThreadSnapshotHistory::Before {
             turn_id: oldest_turn_id,
+            preview_tool_results: None,
             turn_limit: HISTORY_PAGE_TURNS,
         })
     );
@@ -262,6 +274,7 @@ fn an_older_async_snapshot_cannot_replace_a_newer_transcript_update() {
         0,
         ThreadHistoryBoundary {
             has_older_turns: false,
+            tool_result_previews: None,
             oldest_turn_id: None,
         },
     ));
@@ -275,6 +288,7 @@ fn older_page_does_not_confirm_durable_state_missing_from_the_page() {
         HISTORY_PAGE_TURNS,
         Some(ThreadHistoryBoundary {
             has_older_turns: true,
+            tool_result_previews: None,
             oldest_turn_id: Some(TurnId::new("turn-50").unwrap()),
         }),
     );
@@ -285,6 +299,7 @@ fn older_page_does_not_confirm_durable_state_missing_from_the_page() {
         &older_page,
         ThreadHistoryBoundary {
             has_older_turns: false,
+            tool_result_previews: None,
             oldest_turn_id: Some(TurnId::new("turn-1").unwrap()),
         },
     );

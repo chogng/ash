@@ -87,6 +87,7 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 			}
 			if (result) {
 				sections.push(result.isError ? localize('chat.tool.error', 'Error') : localize('chat.tool.result', 'Result'));
+				if (result.outputPreview) sections.push(localize('chat.tool.outputPreviewHelp', 'For a large tool result, open Result and choose Read full output. Use Next page and Previous page to read one page at a time. Back to preview returns to the excerpt.'));
 				sections.push(result.text, ...this.attachments(result.content ?? []));
 			}
 		} else if (item.hookPart) {

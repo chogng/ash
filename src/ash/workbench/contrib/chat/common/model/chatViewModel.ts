@@ -246,7 +246,7 @@ export function chatTranscriptListItems(
 					waitingFor: !result && !stoppedTurns.has(entry.turnId) && pending?.itemId === call.itemId ? pending.kind : undefined,
 					executionStarted: startedCalls.has(identity),
 				},
-				...(source && result?.content?.some(part => part.type !== 'text') ? { attachmentSource: { sessionId: source.sessionId, threadId: source.threadId, itemId: result.itemId, kind: 'toolResult' as const } } : {}),
+				...(source && result && (result.outputPreview || result.content?.some(part => part.type !== 'text')) ? { attachmentSource: { sessionId: source.sessionId, threadId: source.threadId, itemId: result.itemId, kind: 'toolResult' as const } } : {}),
 			}];
 		}
 		if (entry.type === 'item' && entry.item.type === 'toolResult') {

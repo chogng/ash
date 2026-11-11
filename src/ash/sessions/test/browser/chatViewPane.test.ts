@@ -4699,11 +4699,11 @@ test('bounded Chat pages are requested by cursor and retain every message in chr
 	using sessions = new SessionsManagementService(fixture.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
-	assert.deepEqual(fixture.requests, [{ type: 'subscribe', afterSequence: 0, history: { type: 'latest', turnLimit: 20 } }]);
+	assert.deepEqual(fixture.requests, [{ type: 'subscribe', afterSequence: 0, history: { type: 'latest', turnLimit: 20, previewToolResults: true } }]);
 	assert.equal(model.items.length, 20);
 	while (model.olderHistory) await model.loadOlderHistory();
 	assert.deepEqual(model.items.map(item => item.text), Array.from({ length: 65 }, (_, index) => `Answer ${index + 1}`));
-	assert.deepEqual(fixture.requests.slice(1).map(request => request.history), ['turn-46', 'turn-26', 'turn-6'].map(turnId => ({ type: 'before', turnId, turnLimit: 20 })));
+	assert.deepEqual(fixture.requests.slice(1).map(request => request.history), ['turn-46', 'turn-26', 'turn-6'].map(turnId => ({ type: 'before', turnId, turnLimit: 20, previewToolResults: true })));
 });
 
 test('bounded Chat pagination coalesces clicks without replacing live transcript revisions', async () => {
@@ -4796,9 +4796,9 @@ for (const retryFails of [false, true]) {
 		fixture.setCount(44);
 		await model.loadOlderHistory();
 		assert.deepEqual(fixture.requests.slice(1).map(request => request.history), [
-			{ type: 'before', turnId: 'turn-46', turnLimit: 20 },
-			{ type: 'latest', turnLimit: 20 },
-			{ type: 'before', turnId: 'turn-25', turnLimit: 20 },
+			{ type: 'before', turnId: 'turn-46', turnLimit: 20, previewToolResults: true },
+			{ type: 'latest', turnLimit: 20, previewToolResults: true },
+			{ type: 'before', turnId: 'turn-25', turnLimit: 20, previewToolResults: true },
 		]);
 		assert.deepEqual(model.items.map(item => item.text), Array.from({ length: retryFails ? 20 : 40 }, (_, index) => `Answer ${index + (retryFails ? 25 : 5)}`));
 		assert.equal(model.olderHistory?.loading, false);

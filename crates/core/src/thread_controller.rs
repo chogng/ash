@@ -2924,6 +2924,34 @@ impl ThreadController {
         })
     }
 
+    /// Reads one durable Item scoped to its Session and Turn, without loading a current index's other items.
+    pub fn read_history_item(
+        &self,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        ordinal: u32,
+    ) -> Result<Option<ThreadItem>, CoreError> {
+        if let Some(item) = self
+            .store
+            .read_history_item(session_id, thread_id, turn_id, ordinal)?
+        {
+            return Ok(item);
+        }
+        self.with_loaded_thread(thread_id, |loaded| {
+            let snapshot = &loaded.snapshot;
+            if snapshot.session_id != *session_id {
+                return Ok(None);
+            }
+            Ok(snapshot
+                .items
+                .iter()
+                .filter(|item| item.turn_id() == turn_id)
+                .nth(ordinal as usize)
+                .cloned())
+        })
+    }
+
     /// Admits transient extension data to the current Turn under the Thread commit lock.
     /// The callback must not re-enter Core. It must keep data in the supplied Turn's
     /// extension scope, which is removed when that Turn ends. This never starts work.

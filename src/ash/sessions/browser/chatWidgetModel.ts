@@ -296,7 +296,7 @@ export class ChatWidgetModel extends Disposable {
 		if (!active || !boundary?.hasOlderTurns || !boundary.oldestTurnId || this.hasFirstPresentedRequest) return Promise.resolve();
 		const cursor = boundary.oldestTurnId;
 		const generation = this.generation;
-		const readPage = (turnId: string) => this.chatService.readThread(active.session.sessionId, active.threadId, { type: 'before', turnId, turnLimit: historyPageTurns });
+		const readPage = (turnId: string) => this.chatService.readThread(active.session.sessionId, active.threadId, { type: 'before', turnId, turnLimit: historyPageTurns, previewToolResults: true });
 		this.olderHistoryError = undefined;
 		const pending = Promise.resolve().then(async () => {
 			let pageBoundary = boundary;
@@ -1256,7 +1256,7 @@ export class ChatWidgetModel extends Disposable {
 			void this.chatService.unsubscribeThread(active.session.sessionId, oldThreadId, this);
 		}
 		try {
-			const subscribed = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, this.durableSequence, this, { type: 'latest', turnLimit: historyPageTurns });
+			const subscribed = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, this.durableSequence, this, { type: 'latest', turnLimit: historyPageTurns, previewToolResults: true });
 			subscribedAt = performance.now();
 			if (this.isDisposed || generation !== this.generation) return;
 			const result = { ...await this.bridgeHistoryGap(subscribed, generation), updates: subscribed.updates };
@@ -1539,7 +1539,7 @@ export class ChatWidgetModel extends Disposable {
 		const generation = this.generation;
 		const request = ++this.readRequest;
 		try {
-			let result = await this.chatService.readThread(active.session.sessionId, threadId, { type: 'latest', turnLimit: historyPageTurns });
+			let result = await this.chatService.readThread(active.session.sessionId, threadId, { type: 'latest', turnLimit: historyPageTurns, previewToolResults: true });
 			if (this.isDisposed || generation !== this.generation) return;
 			if (!replaceHistory) result = await this.bridgeHistoryGap(result, generation);
 			if (
@@ -1637,7 +1637,7 @@ export class ChatWidgetModel extends Disposable {
 		while (existing.size && oldest.history?.hasOlderTurns && oldest.history.oldestTurnId
 			&& !oldest.thread.turns.some(turn => existing.has(turn.turnId))) {
 			const cursor = oldest.history.oldestTurnId;
-			const page = await this.chatService.readThread(snapshot.thread.sessionId, snapshot.thread.threadId, { type: 'before', turnId: cursor, turnLimit: historyPageTurns });
+			const page = await this.chatService.readThread(snapshot.thread.sessionId, snapshot.thread.threadId, { type: 'before', turnId: cursor, turnLimit: historyPageTurns, previewToolResults: true });
 			if (this.isDisposed || generation !== this.generation) return snapshot;
 			if (page.thread.sequence < snapshot.thread.sequence || page.history?.oldestTurnId === cursor) {
 				throw new Error(localize('chat.history.changed', 'Chat history changed. Try loading again.'));

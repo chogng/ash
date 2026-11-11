@@ -74,6 +74,7 @@ impl ThreadSubscription {
             thread_id: thread_id.clone(),
             after_sequence: 0,
             history: Some(ThreadSnapshotHistory::Latest {
+                preview_tool_results: None,
                 turn_limit: HISTORY_PAGE_TURNS,
             }),
         })?;
@@ -90,6 +91,7 @@ impl ThreadSubscription {
                 session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
                 history: Some(ThreadSnapshotHistory::Latest {
+                    preview_tool_results: None,
                     turn_limit: HISTORY_PAGE_TURNS,
                 }),
             })?;
@@ -234,6 +236,7 @@ impl ThreadSubscription {
 
     pub(crate) fn history(&self) -> ThreadSnapshotHistory {
         ThreadSnapshotHistory::Latest {
+            preview_tool_results: None,
             turn_limit: self.history_turn_limit,
         }
     }
@@ -264,6 +267,7 @@ impl ThreadSubscription {
             .flatten()
             .map(|turn_id| ThreadSnapshotHistory::Before {
                 turn_id,
+                preview_tool_results: None,
                 turn_limit: HISTORY_PAGE_TURNS,
             })
     }

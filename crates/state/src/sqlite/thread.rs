@@ -108,6 +108,27 @@ impl ThreadStore for SqliteThreadStore {
         transaction.commit().map_err(storage_error)?;
         Ok(result)
     }
+    fn read_history_item(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        thread_id: &ThreadId,
+        turn_id: &ash_protocol::TurnId,
+        ordinal: u32,
+    ) -> Result<Option<Option<ash_protocol::ThreadItem>>, ThreadStoreError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(storage_error)?;
+        let result = super::thread_history::read_item(
+            &transaction,
+            session_id,
+            thread_id,
+            turn_id,
+            ordinal,
+        )?;
+        transaction.commit().map_err(storage_error)?;
+        Ok(result)
+    }
     fn backfill_history_index(
         &self,
         index: &ash_thread_store::ThreadHistoryIndexUpdate,
