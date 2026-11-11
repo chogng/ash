@@ -61,10 +61,11 @@ test('Sessions discards an unavailable saved entry and completes restoration wit
 	page.on('pageerror', error => errors.push(error.message));
 	await workbench.reloadWindow(page);
 	const navigation = page.locator('.ash-sessions-activity-content');
-	await expect(navigation.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
+	const chatMode = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true });
+	await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
 	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorContents(text => text === draft);
 	await expect.poll(async () => (await readStorageEntries(application, page, identity))['sessions.layout.activeEntry']?.value).toBe('sessions.open.chat');
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await chatMode.click();
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	await expect(page.locator('.ash-projects')).toBeVisible();
 	page = await workbench.reopenAgentsWindow(application, page);

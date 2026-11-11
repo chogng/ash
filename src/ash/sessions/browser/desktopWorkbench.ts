@@ -38,14 +38,16 @@ import { Position } from '../../workbench/services/layout/browser/layoutService.
 
 /** Selects the desktop layout while the shared Workbench owns window services and Parts. */
 export class DesktopWorkbench extends Workbench {
-	constructor(
+	static create(
 		options: IWorkbenchOptions,
 		themes: ExtensionColorThemeService,
 		storage: IStorageService & IDisposable,
 		logger: LogService,
 		userDataFiles: IFileSystemProvider & IDisposable,
-	) {
-		super(DesktopWorkbenchLayout, options, themes, storage, logger, userDataFiles);
+	): DesktopWorkbench {
+		const workbench = new DesktopWorkbench(options.workspaceSelection, logger);
+		workbench.startup(DesktopWorkbenchLayout, options, themes, storage, userDataFiles);
+		return workbench;
 	}
 }
 
