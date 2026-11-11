@@ -319,6 +319,17 @@
 	display: inline-block;
 	margin: 4px;
 }
+.ash-chat-mermaid > .ash-chat-media-preview-trigger {
+	display: block;
+	margin: var(--ash-spacing-size80) auto;
+}
+.ash-chat-mermaid summary {
+	color: var(--ash-description-foreground);
+	cursor: pointer;
+}
+.ash-chat-mermaid summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}
 .ash-chat-citation {
 	display: inline-block;
 	vertical-align: baseline;

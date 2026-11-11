@@ -50,7 +50,11 @@ export function getChatRequestAccessibilityHelp(sessionsWindow = false): string 
 }
 
 export function getChatCodeBlockCardAccessibilityHelp(): string {
-	return localize('chat.code.cardHelp', 'Use Tab to reach the code block actions. Press Left or Right to move between More Actions and Copy. Open More Actions to insert the code at the cursor, open it in a new file, or apply it to the editor when available. Press Escape to close the menu and return to More Actions.');
+	return localize('chat.code.cardHelp', 'Use Tab to reach the code block actions. Press Left or Right to move between More Actions and Copy. Open More Actions to insert the code at the cursor, open it in a new file, or apply it to the editor when available. Press Escape to close the menu and return to More Actions.') + '\n' + getChatMermaidAccessibilityHelp();
+}
+
+function getChatMermaidAccessibilityHelp(): string {
+	return localize('chat.mermaid.help', 'When a Mermaid diagram is rendered, use Tab to reach its preview button or Mermaid source. Press Enter or Space to open the image preview or expand the code. Escape closes the preview and returns focus to the diagram.');
 }
 
 /** Shared input operations; product composers append their own layout and session help. */
@@ -60,6 +64,7 @@ export function getChatInputAccessibilityHelp(screenshotHelp: string, secondaryT
 		localize('dictation.downloadHelp', 'The dictation button shows when the local model is downloading. Activate it again, or press Escape in the input to cancel. The microphone opens after the model is ready.'),
 		localize('chat.response.fileLinksHelp', 'Use Tab to reach a file link in a reply and Enter to open the file at the referenced line.'),
 		localize('chat.message.actionsHelp', 'Use Tab to reach Response actions below a reply. Press Left or Right to move between actions, then Enter or Space to activate the focused action.'),
+		getChatMermaidAccessibilityHelp(),
 		getChatRequestAccessibilityHelp(),
 		localize('chat.request.codeVersionsHelp', 'In Code, right-click an eligible message or press Shift+F10 on its row to open Run another version.'),
 		localize('chat.modelPicker.sliderHelp', 'In the Chat model picker, press Enter or Space on the model name to expand or collapse the model list. The current thinking level appears below the model name. Use the arrow keys on the slider to change the level.'),

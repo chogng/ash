@@ -265,6 +265,7 @@ aes-gcm = "0.10"
 whoami = "1"
 guardian-context = { package = "ash-guardian-context", path = "crates/guardian-context" }
 mermaid = { package = "ash-mermaid", path = "crates/mermaid" }
+mermaid-svg = "=0.7.0"
 async-trait = "0.1.92"
 livekit-net = { version = "=0.1.3", default-features = false }
 livekit-signaling = { version = "=0.1.2", default-features = false }

@@ -18,6 +18,11 @@ to one render. Both views consume the returned HTML + MathML; their static bundl
 include formula styles and fonts, with no JavaScript formula renderer. Missing or
 disabled math retains formula source and does not prevent Markdown editing.
 
+Ash Chat invokes this extension's `markdown.mermaid.render.v1` capability for
+closed Mermaid fences. Rust parses and lays out the diagram and returns a bounded
+SVG. Chat displays the image and keeps the original code available. Missing
+providers, unsupported syntax and limit violations leave the source visible.
+
 The public Rust SDK registers commands, custom text editors, language providers and
 client document/workspace observations. Versioned snapshots are analysis input;
 the existing client TextModel owns edits, dirty state, save, conflicts and undo/redo.

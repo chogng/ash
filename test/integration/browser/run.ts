@@ -39,7 +39,7 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 		if (!gitExecutable) throw new Error('Cargo did not report the Git extension test executable');
 	}
 	let backendPackageRoot: string | undefined;
-	if (files.length === 0 || files.some(file => /(?:treeSitter|tokenization|themes|textModel|markdownEditor|chatgptweb)\.integration\.spec\.[jt]s$/u.test(file))) {
+	if (files.length === 0 || files.some(file => /(?:treeSitter|tokenization|themes|textModel|markdownEditor|chatMermaid|chatgptweb)\.integration\.spec\.[jt]s$/u.test(file))) {
 		// Reuse the invoking package manager. A Windows command shim cannot be
 		// launched directly through spawn, and its script may live outside PATH.
 		const packageManager = environment.npm_execpath;

@@ -28,6 +28,7 @@ import type { IChatContentPart } from './chatContentParts.js';
 import type { IChatCodeBlockInfo } from '../../chat.js';
 import { createUuid } from '../../../../../../base/common/uuid.js';
 import { ChatImageGallery } from './chatImageGallery.js';
+import { ChatMermaidRenderer, isClosedMermaidFence } from './chatMermaidRenderer.js';
 import type { URI } from '../../../../../../base/common/uri.js';
 import { ImagePreviewPopup } from '../../../../mediaPreview/browser/imagePreviewPopup.js';
 import { localize } from '../../../../../../nls.js';
@@ -52,7 +53,6 @@ interface MarkdownTailPatch {
 const markdownTailThreshold = 4096;
 const markdownSizeLimit = 4 * 1024 * 1024;
 
-// Streaming lists and pipe-led tables can start reusing rows as soon as
 interface ChatResponseMarkdown extends IMarkdownString {
 	readonly richContent?: ChatMarkdownRichContent;
 }
@@ -70,6 +70,7 @@ function retainsRichParts(previous: ChatMarkdownRichContent | undefined, next: C
 		&& previous.parts.length <= next.parts.length && previous.parts.every((part, index) => equals(part, next.parts[index]));
 }
 
+// Streaming lists and pipe-led tables can start reusing rows as soon as
 // rendering moves to the frame queue. Paragraphs keep the larger threshold.
 function canPatchTail(source: string, allowEarlyList: boolean): boolean {
 	return source.length >= markdownTailThreshold || source.length >= markdownFrameThreshold
@@ -120,6 +121,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	private readonly codeBlocks = this._register(new DisposableMap<number, CodeBlockPart>());
 	private readonly images = new Map<string, Promise<Blob>>();
 	private readonly galleries = new Set<ChatImageGallery>();
+	private mermaid: ChatMermaidRenderer | undefined;
 	private readonly inlineImagePreview = this._register(new MutableDisposable<DisposableStore & { readonly anchor: HTMLButtonElement; }>());
 	private fragments: readonly MarkdownFragment[] = [];
 	private markdown: ChatResponseMarkdown | undefined;
@@ -385,14 +387,14 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		// The content part owns the fragment root, which can outlive an individual render.
 		const element = previous?.element ?? h(document, 'div');
 		const lifetime = new DisposableStore();
-		const code: { readonly languageId: string; readonly text: string; readonly placeholder: HTMLElement; }[] = [];
+		const code: { readonly languageId: string; readonly text: string; readonly placeholder: HTMLElement; readonly diagram: boolean; }[] = [];
 		const images = new Set<string>();
 		try {
 			const options: MarkdownRenderOptions = {
 				...this.options, fillInIncompleteTokens: incomplete,
+				markedExtensions: markdown.richContent ? [chatMarkdownRichContentExtension(markdown.richContent), ...(this.options.markedExtensions ?? [])] : this.options.markedExtensions,
 				sanitizerConfig: this.fileReferences ? { ...this.options.sanitizerConfig, deferLink: isMarkdownFileReference } : this.options.sanitizerConfig,
 				actionHandler: this.options.actionHandler ? href => this.options.actionHandler!(href, this.codeElement) : undefined,
-				markedExtensions: markdown.richContent ? [chatMarkdownRichContentExtension(markdown.richContent), ...(this.options.markedExtensions ?? [])] : this.options.markedExtensions,
 				asyncRenderCallback: () => { this.options.asyncRenderCallback?.(); this.changedHeight.fire(); },
 				imageResourceLoader: this.options.imageResourceLoader ? resource => {
 					const key = resource.toString();
@@ -401,10 +403,10 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 					if (!request) { request = this.options.imageResourceLoader!(resource); this.images.set(key, request); }
 					return request;
 				} : undefined,
-				codeBlockRendererSync: (languageId, text) => {
+				codeBlockRendererSync: (languageId, text, raw) => {
 					const placeholder = h(document, 'div');
 					placeholder.className = 'ash-chat-code-placeholder';
-					code.push({ languageId, text, placeholder });
+					code.push({ languageId, text, placeholder, diagram: !incomplete && languageId === 'mermaid' && isClosedMermaidFence(raw) });
 					return placeholder;
 				},
 			};
@@ -459,8 +461,13 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 				part.setVisible(this.incrementalRendering.isVisible && this.viewportVisible && !this.deferredCodeBlocks.has(part));
 				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 } });
 				const parent = data.placeholder.parentElement;
-				if (parent?.tagName === 'PRE') parent.replaceWith(part.element);
-				else data.placeholder.replaceWith(part.element);
+				let block = part.element;
+				if (data.diagram) {
+					this.mermaid ??= this._register(this.instantiation.createInstance(ChatMermaidRenderer));
+					block = this.mermaid.render(data.text, block, lifetime, (image, previewLifetime) => this.enableInlineImagePreview(image, previewLifetime));
+				}
+				if (parent?.tagName === 'PRE') parent.replaceWith(block);
+				else data.placeholder.replaceWith(block);
 			}
 			element.classList.remove('ash-markdown');
 			element.classList.add('ash-chat-markdown-fragment');
@@ -514,6 +521,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		}));
 		lifetime.add(toDisposable(() => {
 			if (this.inlineImagePreview.value?.anchor === anchor) this.inlineImagePreview.clear();
+			// A diagram can replace just its image when the theme changes.
 			anchor.replaceWith(...anchor.childNodes);
 		}));
 	}

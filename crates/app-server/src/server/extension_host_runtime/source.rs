@@ -506,6 +506,7 @@ fn product_markdown_deployment(
     let source = [
         include_str!("../../../../../extensions/markdown-language-features/src/parser.rs"),
         include_str!("../../../../../extensions/markdown-language-features/src/math.rs"),
+        include_str!("../../../../../extensions/markdown-language-features/src/mermaid.rs"),
         include_str!("../../../../../extensions/markdown-language-features/src/lib.rs"),
         include_str!("../../../../../extensions/markdown-language-features/src/language.rs"),
         include_str!("../../../../../extensions/markdown-language-features/package.nls.json"),
@@ -597,6 +598,7 @@ fn product_markdown_deployment(
                 ExtensionCapability::Command,
                 ExtensionCapability::CustomTextEditor,
                 ExtensionCapability::LanguageProvider,
+                ExtensionCapability::DataChannel,
             ],
         },
         authority: Arc::new(ProductAuthority),

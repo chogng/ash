@@ -806,10 +806,19 @@ const readSnapshot: ExtensionHostFleetSnapshot = {
 };
 const readApi: IExtensionHostApi = {
 	onDidChange: Event.None, onConnectionState: Event.None, isAvailable: async () => true, getConnectionState: async () => 'ready',
-	list: async () => readSnapshot, start: async () => readSnapshot, reconcile: async () => readSnapshot, activateByEvent: async () => readSnapshot,
+	list: async () => {
+		if (!new URLSearchParams(location.search).has('mermaid')) { return readSnapshot; }
+		const response = await fetch('/__chat_mermaid');
+		return response.json();
+	},
+	start: async () => readSnapshot, reconcile: async () => readSnapshot, activateByEvent: async () => readSnapshot,
 	registerClientHandler: () => Disposable.None,
 	invoke: async (request, signal): Promise<JsonValue> => {
 		signal.throwIfAborted();
+		if (request.registrationId === 'markdown.mermaid.render.v1') {
+			const response = await fetch('/__chat_mermaid', { method: 'POST', body: JSON.stringify(request.payload), signal });
+			return response.json();
+		}
 		const payload = request.payload as { sessionId: string; kind?: string; text?: string; };
 		if (request.operation === 'createSpeechSession') {
 			if (payload.kind !== 'textToSpeech') throw new Error('Unexpected media session');

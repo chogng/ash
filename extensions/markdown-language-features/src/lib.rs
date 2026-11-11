@@ -2,6 +2,7 @@
 //! formulas use the independent math capability. Models and history belong to the client.
 mod language;
 mod math;
+mod mermaid;
 mod parser;
 
 use external_ext_sdk::Command;
@@ -153,6 +154,7 @@ impl Extension for MarkdownExtension {
                 }
             })?;
         }
+        mermaid::register(context)?;
         language::register(context, chinese)
     }
 }

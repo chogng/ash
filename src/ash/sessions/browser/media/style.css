@@ -197,6 +197,23 @@
 	content: none;
 }
 
+.ash-sessions-window .ash-image-preview-popup-header {
+	min-block-size: var(--ash-spacing-size280);
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-window .ash-image-preview-popup-header > span {
+	flex: 1 1 0;
+	overflow: hidden;
+	font-size: var(--ash-fontSize-label1);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-sessions-window .ash-chat-mermaid > details > summary {
+	font-size: var(--ash-fontSize-label2);
+}
+
 .ash-sessions-window
 	.ash-context-view-default:has(> .ash-chat-context-details) {
 	border-radius: var(--ash-cornerRadius-xLarge);
