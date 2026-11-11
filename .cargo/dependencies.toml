@@ -149,8 +149,8 @@ reason = "Current upstream API families: 0.5.18 via parking_lot_core; 0.9.1 via 
 
 [[multiple_versions]]
 name = "rustix"
-versions = ["0.38.44", "1.1.5"]
-reason = "Which uses 0.38.44. Zbus 6's zruntime requires 1.1.5, shared with Crossterm and Ash's filesystem consumers."
+versions = ["0.38.44", "1.1.6"]
+reason = "Which 6 uses the 0.38 series. Zbus 6's zruntime, Crossterm and Ash's filesystem consumers share the 1.1 series."
 
 [[multiple_versions]]
 name = "security-framework"

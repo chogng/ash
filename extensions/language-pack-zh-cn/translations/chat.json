@@ -354,7 +354,7 @@
     "chat.plugins.updatedVersion": "{0}：{1} → {2}",
     "chat.plugins.updateIncomplete": "已更新 {0} 个插件。无法验证或更新 {1} 个包。",
     "chat.plugins.updatedCount": "已更新 {0} 个插件。",
-    "chat.plugins.upToDate": "签名仓库中的插件已是最新版本。",
+    "chat.plugins.current": "签名仓库中的插件已是最新版本。",
     "chat.plugins.updateFailed": "无法验证或更新：{0}",
     "chat.plugins.help": "在命令面板运行“聊天：插件”，可打开扩展中的插件视图。焦点位于搜索框，输入文字可筛选已安装的插件。按下方向键进入插件列表，按 Enter 打开详情。打开插件视图会保留消息草稿。",
     "chat.developer.logChatIndex": "开发人员：记录聊天索引",
