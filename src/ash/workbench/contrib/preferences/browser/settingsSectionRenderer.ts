@@ -111,9 +111,13 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 		this._register(toDisposable(() => { this.model.setVisible(false); this.domNode.remove(); }));
 	}
 
-	protected override buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {
+	public renderSection(): HTMLElement {
 		this.render();
-		const item: SettingsTreeNode<SettingsSectionReference> = { element: { kind: 'item', id: this.model.itemId ?? `${this.categoryId}.section`, title: this.model.title, description: this.model.description, keywords: [this.categoryId, ...this.model.keywords ?? [], ...this.model.fields.flatMap(field => field.kind === 'status' ? [] : [field.label])], value: this.retainElement(this.model.itemId ?? `${this.categoryId}.section`, this.domNode) } };
+		return this.domNode;
+	}
+
+	protected override buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {
+		const item: SettingsTreeNode<SettingsSectionReference> = { element: { kind: 'item', id: this.model.itemId ?? `${this.categoryId}.section`, title: this.model.title, description: this.model.description, keywords: [this.categoryId, ...this.model.keywords ?? [], ...this.model.fields.flatMap(field => field.kind === 'status' ? [] : [field.label])], value: this.retainElement(this.model.itemId ?? `${this.categoryId}.section`, this.renderSection()) } };
 		if (this.model.groupId === null) { return [item]; }
 		return [{ element: { kind: 'group', id: this.model.groupId ?? `${this.categoryId}.services`, title: this.model.groupTitle ?? this.model.title, description: '' }, children: [item] }];
 	}

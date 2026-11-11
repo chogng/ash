@@ -1,0 +1,15 @@
+.ash-dialog.ash-code-conversation-defaults-dialog {
+	inline-size: 480px;
+}
+
+.ash-code-conversation-defaults-dialog .ash-settings-section {
+	padding: 0;
+}
+
+.ash-code-conversation-defaults-dialog .ash-settings-section > p {
+	overflow-wrap: anywhere;
+}
+
+.ash-code-conversation-defaults-dialog .ash-settings-section-status:empty {
+	display: none;
+}

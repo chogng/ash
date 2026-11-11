@@ -3595,7 +3595,7 @@ test('New Code conversations resolve workspace and profile pairs before the last
 	assert.deepEqual(pair(inherited), [sol, 'low']);
 });
 
-test('New Code defaults preserve inheritance when selecting a model or clearing an effort', async () => {
+test('New Code defaults save staged model and effort changes for the captured workspace', async () => {
 	const { CodeConversationDefaultsSettings } = await import('../../contrib/preferences/browser/codeConversationDefaultsSettings.js');
 	const sol = { provider: 'openai', model: 'gpt-6.1-sol' };
 	const luna = { provider: 'openai', model: 'gpt-6-luna' };
@@ -3612,13 +3612,18 @@ test('New Code defaults preserve inheritance when selecting a model or clearing 
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(ISessionsManagementService, sessions);
+	const workspace = { type: 'local', root: '/workspace/first' } as const;
+	const otherWorkspace = { type: 'local', root: '/workspace/second' } as const;
+	const workspaceKey = codeConversationWorkspaceKey(workspace)!;
+	const otherKey = codeConversationWorkspaceKey(otherWorkspace)!;
+	sessions.createUntitledSession(undefined, workspace);
 	using settings = services.createInstance(CodeConversationDefaultsSettings);
 	const select = (id: string) => {
 		const field = settings.fields.find(field => field.id === id);
 		assert.equal(field?.kind, 'select');
 		return field;
 	};
-	const profile = () => configuration.getValue<CodeConversationDefaults>(codeConversationDefaultsSetting).profile;
+	const read = () => configuration.getValue<CodeConversationDefaults>(codeConversationDefaultsSetting);
 	settings.setVisible(true);
 	await waitFor(() => select('profile-model').enabled);
 	initializeTestLocalization('zh-CN');
@@ -3626,18 +3631,30 @@ test('New Code defaults preserve inheritance when selecting a model or clearing 
 		const solOption = select('profile-model').options.find(option => option.label === 'Sol');
 		assert.ok(solOption);
 		select('profile-model').setValue(solOption.value);
-		await waitFor(() => profile()?.model?.model === sol.model && select('profile-effort').enabled);
-		assert.equal(profile()?.effort, undefined);
+		assert.ok(select('profile-effort').enabled);
+		assert.equal(read().profile, undefined);
 		assert.equal(select('profile-effort').options.find(option => option.value === '')?.label, '使用默认推理强度');
 		select('profile-effort').setValue('high');
-		await waitFor(() => profile()?.effort === 'high' && select('profile-effort').enabled);
+		assert.equal(select('profile-effort').value, 'high');
 		select('profile-effort').setValue('');
-		await waitFor(() => profile()?.effort === undefined && select('profile-model').enabled);
+		assert.equal(select('profile-effort').value, '');
 		const lunaOption = select('profile-model').options.find(option => option.label === 'Luna');
 		assert.ok(lunaOption);
 		select('profile-model').setValue(lunaOption.value);
-		await waitFor(() => profile()?.model?.model === luna.model);
-		assert.equal(profile()?.effort, undefined);
+		select('workspace-model').setValue(solOption.value);
+		select('workspace-effort').setValue('high');
+		sessions.createUntitledSession(undefined, otherWorkspace);
+		assert.ok(settings.description.includes(workspace.root));
+		assert.deepEqual(read(), { workspaces: {} });
+		await configuration.updateValue(codeConversationDefaultsSetting, { workspaces: { [otherKey]: { model: luna, effort: 'low' } } });
+		assert.equal(await settings.save(), true);
+		assert.deepEqual(read(), {
+			profile: { model: luna },
+			workspaces: { [workspaceKey]: { model: sol, effort: 'high' }, [otherKey]: { model: luna, effort: 'low' } },
+		});
+		assert.equal(settings.hasChanges, false);
+		select('workspace-model').setValue('');
+		assert.equal(read().workspaces[workspaceKey]?.effort, 'high');
 	} finally { resetNlsResolver(); }
 });
 
