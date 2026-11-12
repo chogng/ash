@@ -1,0 +1,23 @@
+.ash-open-in-ash-widget {
+	min-inline-size: var(--ash-toolbar-actionSize);
+	padding-inline: var(--ash-spacing-size40);
+}
+
+.ash-open-in-ash-widget > .ash-button-content {
+	column-gap: 0;
+}
+
+.ash-open-in-ash-widget .ash-icon-label-container {
+	max-inline-size: 0;
+	opacity: 0;
+	transition:
+		max-inline-size 160ms ease,
+		margin-inline-start 160ms ease,
+		opacity 160ms ease;
+}
+
+.ash-open-in-ash-widget:is(:hover, :focus-visible) .ash-icon-label-container {
+	max-inline-size: 12em;
+	margin-inline-start: var(--ash-spacing-size60);
+	opacity: 1;
+}

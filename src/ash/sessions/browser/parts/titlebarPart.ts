@@ -194,6 +194,9 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 				presentation: 'inherit-foreground',
 				highlightToggledItems: true,
 				contextKeyService: contextKeys,
+				actionViewItemProvider: (action, options) => presentations.lookUp(Menus.TitleBarRightLayout, action.id)?.(
+					action, options, instantiationService, getWindowId(ownerWindow) ?? 0,
+				),
 				responsiveBehavior: {
 					enabled: true,
 					observedElement: this.contentDomNode,
@@ -214,6 +217,9 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 			}),
 		);
 		layoutActions.element.classList.add('ash-sessions-titlebar-actions');
+		this._register(presentations.onDidChange(menu => {
+			if (menu === Menus.TitleBarRightLayout) layoutActions.refresh();
+		}));
 		this.activityActions = this._register(new WorkbenchToolBar(right, contextMenus, {
 			ariaLabel: localize('workbench.accounts', 'Accounts'),
 			presentation: 'inherit-foreground',

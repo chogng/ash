@@ -1,4 +1,4 @@
-import { onUnexpectedError } from '../../base/common/errors.js';
+import { getErrorMessage, isCancellationError, onUnexpectedError } from '../../base/common/errors.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
 import { WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING } from '../../platform/window/common/window.js';
@@ -8,6 +8,8 @@ import { URI } from '../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { Range } from '../../editor/common/core/range.js';
 import { EditorOpenSource } from '../../platform/editor/common/editor.js';
+import { parseOpenSessionLinkUri } from '../../platform/agentHost/common/openSessionLink.js';
+import { OPEN_IDE_SESSION_CHANNEL } from '../../platform/window/common/window.js';
 import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesRequest, type IWindowFilesRequest } from '../../platform/window/common/window.js';
 import { IEditorService } from '../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
@@ -31,6 +33,7 @@ export class ElectronWindow extends Disposable {
 		@INativeHostService private readonly host: INativeHostApi,
 		@IIntegrityService private readonly integrity: IIntegrityService,
 		@ITitleService private readonly title: ITitleService,
+		@IOpenerService private readonly opener: IOpenerService,
 		@INotificationService private readonly notifications: INotificationService,
 		@ILogService private readonly log: ILogService,
 	) {
@@ -45,6 +48,22 @@ export class ElectronWindow extends Disposable {
 			this.opening = operation.catch(error => console.error('Failed to acknowledge a file open request', error));
 		});
 		this._register(toDisposable(() => subscription.dispose()));
+		let openingConversation = Promise.resolve();
+		const conversations = this.ipc.subscribe<unknown>(OPEN_IDE_SESSION_CHANNEL, value => {
+			openingConversation = openingConversation.then(async () => {
+				await whenRestored;
+				if (this.isDisposed) return;
+				if (typeof value !== 'string') throw new TypeError('Invalid IDE conversation');
+				const resource = URI.parse(value, true);
+				parseOpenSessionLinkUri(resource);
+				if (!await this.opener.open(resource)) {
+					throw new Error(localize('chat.sessionLink.missing', 'This conversation is unavailable on this connection.'));
+				}
+			}).catch(error => {
+				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(getErrorMessage(error));
+			});
+		});
+		this._register(toDisposable(() => conversations.dispose()));
 		this._register(this.groups.onDidChangeGroups(() => this.completeClosedFiles()));
 		await this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'ready' });
 		// Do not compete with editor restoration for disk reads on a cold start.
