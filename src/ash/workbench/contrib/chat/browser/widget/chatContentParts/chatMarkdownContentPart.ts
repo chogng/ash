@@ -22,6 +22,7 @@ import { INotificationService } from '../../../../../../platform/notification/co
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { resourceFileName, saveResourceAs } from '../../../../../services/files/browser/resourceSave.js';
+import { serializeChatMarkdownTable } from './chatMarkdownTableCsv.js';
 import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExtension.js';
 import { ChatContentMarkdownRenderer, getChatMarkdownRenderOptions } from '../chatContentMarkdownRenderer.js';
 import { CHAT_RESPONSE_IMAGE_SCHEME, chatMarkdownRichContentExtension } from '../chatMarkdownRichContent.js';
@@ -650,8 +651,8 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			label: localize({ bundle: 'ash.workbench', key: 'chat.markdown.exportTable' }, 'Export table as CSV'),
 			toolbarLabel: localize({ bundle: 'ash.workbench', key: 'chat.markdown.tableActions' }, 'Table actions'),
 			run: signal => {
-				const rows = Array.from(table.rows, row => Array.from(row.cells, cell => '"' + cell.innerText.replaceAll('"', '""') + '"').join(','));
-				const csv = new Blob([rows.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+				const rows = Array.from(table.rows, row => Array.from(row.cells, cell => cell.innerText));
+				const csv = new Blob([serializeChatMarkdownTable(rows)], { type: 'text/csv;charset=utf-8' });
 				return this.instantiation.invokeFunction(saveResourceAs, csv, 'table.csv', table.ownerDocument, { signal });
 			},
 		});

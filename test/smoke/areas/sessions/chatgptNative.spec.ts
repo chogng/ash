@@ -24,6 +24,7 @@ declare global {
 		readonly workbookRequests: number;
 	};
 	var ashLibraryLinkFixture: { readonly opened: string[]; restore(): void; };
+	var ashTableCsvSaveFixture: { readonly calls: number; finish(filePath?: string): void; restore(): void; };
 }
 
 interface FixtureReply {
@@ -492,6 +493,65 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
+
+	test('exports chat Markdown tables as safe CSV through cancellation and repeated saves', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }, testInfo) => {
+		const electron = application as ElectronApplication;
+		await installService(electron, false, '\n\n' + [
+			'| Text | Code |', '| --- | --- |', '| =1+1 | `=1+1` |', '| +1+1 | `-42` |',
+			'| @SUM(1) | &#160;=1+1 |', '| =1+1",=2+2 | `=SUM(1,2)` |',
+			'', '| Name | Value |', '| --- | --- |', '| 中文 | 42 |', '| say "hi", please | `00123` |', '| line break | |',
+		].join('\n'));
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.getByRole('button', { name: 'First native history', exact: true }).click();
+		const chat = page.getByRole('region', { name: 'ChatGPT', exact: true });
+		const exports = chat.getByRole('button', { name: '将表格导出为 CSV', exact: true });
+		await expect(exports).toHaveCount(2);
+		const cells = ['=1+1', '=1+1', '+1+1', '-42', '@SUM(1)', '\u00a0=1+1', '=1+1",=2+2', '=SUM(1,2)', '中文', '42', 'say "hi", please', '00123', 'line break', ''];
+		await expect.poll(() => chat.getByRole('cell').allInnerTexts()).toEqual(cells);
+		const actions = chat.locator('.ash-chat-content-actions').filter({ has: page.getByRole('button', { name: '将表格导出为 CSV', exact: true }) }).first();
+		const directory = await realpath(testWorkspace.directory);
+		const safePath = join(directory, 'safe-table.csv');
+		const ordinaryPath = join(directory, 'ordinary-table.csv');
+		const expected = '"Text","Code"\r\n"\'=1+1","\'=1+1"\r\n"\'+1+1","\'-42"\r\n"\'@SUM(1)","\'\u00a0=1+1"\r\n"\'=1+1"",=2+2","\'=SUM(1,2)"\r\n';
+		await electron.evaluate(({ dialog }) => {
+			const original = dialog.showSaveDialog;
+			let calls = 0;
+			let pending: ((value: { canceled: boolean; filePath: string; }) => void) | undefined;
+			dialog.showSaveDialog = async () => {
+				calls++;
+				return new Promise(resolve => { pending = resolve; });
+			};
+			globalThis.ashTableCsvSaveFixture = {
+				get calls() { return calls; },
+				finish(filePath) { pending?.({ canceled: !filePath, filePath: filePath ?? '' }); pending = undefined; },
+				restore() { dialog.showSaveDialog = original; pending?.({ canceled: true, filePath: '' }); },
+			};
+		});
+		try {
+			await exports.nth(0).press('Enter');
+			await expect.poll(() => electron.evaluate(() => ashTableCsvSaveFixture.calls)).toBe(1);
+			await exports.nth(0).press('Enter');
+			expect(await electron.evaluate(() => ashTableCsvSaveFixture.calls)).toBe(1);
+			await electron.evaluate(() => ashTableCsvSaveFixture.finish());
+			await expect(actions).not.toHaveAttribute('aria-busy', 'true');
+			expect((await readdir(directory)).filter(name => name.endsWith('.csv'))).toEqual([]);
+			for (const [index, path, content] of [[0, safePath, expected], [1, ordinaryPath, '"Name","Value"\r\n"中文","42"\r\n"say ""hi"", please","00123"\r\n"line break",""\r\n'], [0, safePath, expected]] as const) {
+				const previous = await electron.evaluate(() => ashTableCsvSaveFixture.calls);
+				if (index === 0 && previous > 1) await writeFile(path, 'stale export');
+				await exports.nth(index).press('Enter');
+				await expect.poll(() => electron.evaluate(() => ashTableCsvSaveFixture.calls)).toBe(previous + 1);
+				await electron.evaluate((_electron, path) => ashTableCsvSaveFixture.finish(path), path);
+				await expect.poll(() => readFile(path, 'utf8').catch(() => '')).toBe(content);
+				await expect(chat.locator('.ash-chat-content-actions[aria-busy="true"]')).toHaveCount(0);
+			}
+			expect(await chat.getByRole('cell').allInnerTexts()).toEqual(cells);
+			await testInfo.attach('safe-table.csv', { path: safePath, contentType: 'text/csv' });
+			await testInfo.attach('ordinary-table.csv', { path: ordinaryPath, contentType: 'text/csv' });
+			await testInfo.attach('table-csv-export', { body: await page.screenshot(), contentType: 'image/png' });
+		} finally {
+			await electron.evaluate(() => ashTableCsvSaveFixture.restore());
+		}
+	});
 
 	test('opens a ChatGPT Web writing block as an editable Docs copy', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }, testInfo) => {
 		const electron = application as ElectronApplication;

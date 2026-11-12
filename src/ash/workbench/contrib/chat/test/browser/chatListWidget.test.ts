@@ -45,7 +45,7 @@ import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/commo
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -980,6 +980,33 @@ suite('chatRenderer browser component', () => {
 		await expect.poll(async () => Math.abs(await anchor.evaluate(element => element.getBoundingClientRect().top) - top)).toBeLessThanOrEqual(1);
 	});
 
+
+	test('Markdown table downloads protect formula text and preserve ordinary CSV on repeated exports', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?locale=zh-CN');
+		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), [
+			'| Text | Code |', '| --- | --- |',
+			'| =1+1 | `=1+1` |', '| +1+1 | `-1+1` |', '| @SUM(1) | `-42` |',
+			'| &#160;=1+1 | &#65279;&#8203;=1+1 |', '| =1+1",=2+2 | `=SUM(1,2)` |',
+			'', '| Name | Value |', '| --- | --- |', '| 中文 | 42 |', '| say "hi", please | `00123` |', '| line break | |',
+		].join('\n'));
+		const buttons = page.getByRole('button', { name: '将表格导出为 CSV', exact: true });
+		await expect(buttons).toHaveCount(2);
+		const cells = await page.getByRole('cell').allInnerTexts();
+		assert.deepEqual(cells.slice(0, 10), ['=1+1', '=1+1', '+1+1', '-1+1', '@SUM(1)', '-42', '\u00a0=1+1', '\ufeff\u200b=1+1', '=1+1",=2+2', '=SUM(1,2)']);
+		const expected = [
+			'"Text","Code"\r\n"\'=1+1","\'=1+1"\r\n"\'+1+1","\'-1+1"\r\n"\'@SUM(1)","\'-42"\r\n"\'\u00a0=1+1","\'\ufeff\u200b=1+1"\r\n"\'=1+1"",=2+2","\'=SUM(1,2)"\r\n',
+			'"Name","Value"\r\n"中文","42"\r\n"say ""hi"", please","00123"\r\n"line break",""\r\n',
+		];
+		for (const index of [0, 1, 0]) {
+			const downloading = page.waitForEvent('download');
+			await buttons.nth(index).click();
+			const download = await downloading;
+			assert.equal(download.suggestedFilename(), 'table.csv');
+			assert.equal(await readFile((await download.path())!, 'utf8'), expected[index]);
+		}
+		assert.deepEqual(await page.getByRole('cell').allInnerTexts(), cells);
+	});
 
 	test('wide Markdown tables scroll with the keyboard and retain their viewport during streaming', async () => {
 		const { page } = browserTests;
