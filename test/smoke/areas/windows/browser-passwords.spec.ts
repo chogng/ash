@@ -32,6 +32,24 @@ test.describe('Ephemeral website credentials', () => {
 		let application = initialApplication; let workbench = initialWorkbench;
 		const server = createServer((request, response) => {
 			response.setHeader('Content-Type', 'text/html');
+			if (request.url?.startsWith('/target/')) {
+				const variant = request.url.slice('/target/'.length);
+				const base = variant.includes('base') ? '<base href="https://other.invalid/base/">' : '';
+				const overrides: Record<string, string> = {
+					'same-image': '<input type="image" formaction="/login">',
+					'cross-image': '<input type="image" formaction="https://other.invalid/login">',
+					'external-image': '',
+					'cross-base': '<button formaction="login">Log in</button>',
+					'empty-base': '<input type="image" formaction="">',
+					'same-origin-base': `<button formaction="${origin}/login">Log in</button>`,
+					'retarget-image': '<input type="image" formaction="/login">',
+					'retarget-base': `<button formaction="${origin}/login">Log in</button>`,
+				};
+				const outside = variant === 'external-image' ? '<input type="image" form="login" formaction="https://other.invalid/login">' : '';
+				const retarget = variant === 'retarget-image' ? `document.querySelector('input[type=image]').formAction='https://other.invalid/login';` : variant === 'retarget-base' ? `document.querySelector('button').setAttribute('formaction','login');` : '';
+				response.end(`<title>Target login</title>${base}<form id="login" action="${origin}/login"><input name="username" autocomplete="username"><input name="password" type="password" autocomplete="current-password">${overrides[variant]}</form>${outside}<script>document.querySelector('[name=username]').oninput=()=>{${retarget}};</script>`);
+				return;
+			}
 			response.end(request.method === 'POST' ? '<title>Account page</title><p>Signed in</p>' : '<title>Memory login</title><form method="post"><input name="username" autocomplete="username" value="memory-account"><input name="password" type="password" autocomplete="current-password" value="memory-password"><button>Log in</button></form>');
 		});
 		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -62,6 +80,25 @@ test.describe('Ephemeral website credentials', () => {
 			await workbench.dialogs.confirm(application, 'Save website password', 'Save password', () => clickBrowserControl(view!, 'button'));
 			const state = () => workbench.page.evaluate(() => globalThis.ashTestMainProcess.call<BrowserPasswordState>('browserPasswords', 'readState', []));
 			await expect.poll(async () => (await state()).entries.map(entry => entry.username)).toEqual(['memory-account']);
+			if (target.appServerMode === 'disabled') {
+				// Exercise saved-credential lookup and the real sandbox preload in Ash,
+				// including destination changes made by a controlled username handler.
+				for (const [variant, filled, usernameFilled] of [
+					['same-image', true, true], ['cross-image', false, false], ['external-image', false, false],
+					['cross-base', false, false], ['empty-base', true, true], ['same-origin-base', true, true],
+					['retarget-image', false, true], ['retarget-base', false, true],
+				] as const) {
+					await view.evaluate((view, url) => view.webContents.loadURL(url), `${origin}/target/${variant}`);
+					await clickBrowserControl(view, '[name=username]');
+					// A preload command runs on the same frame after its fill IPC. Wait for
+					// a complete renderer turn before checking the rejected destinations.
+					await view.evaluate(view => view.webContents.executeJavaScript('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))'));
+					await expect.poll(() => view!.evaluate(view => view.webContents.executeJavaScript(`[
+						document.querySelector('[name=username]').value==='memory-account',
+						document.querySelector('[name=password]').value==='memory-password'
+					]`)), { message: variant }).toEqual([usernameFilled, filled]);
+				}
+			}
 			const disk = await readFile(join(paths.storage, 'workbench-state.json'), 'utf8');
 			for (const value of ['browser.passwords.', 'memory-account', 'memory-password']) expect(disk).not.toContain(value);
 			if (process.platform === 'darwin') await expect(stat(join(paths.home, 'Library', 'Keychains'))).rejects.toMatchObject({ code: 'ENOENT' });
