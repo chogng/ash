@@ -22,6 +22,7 @@
     "MODULE.bazel.lock",
     ".bazelrc",
     ".bazelversion",
+    ".github/actions/setup-ubuntu-apt/action.yml",
     ".github/workflows/bazel.yml"
   ],
   "blob-size-policy": null,
@@ -67,7 +68,9 @@
     "rust-toolchain.toml",
     ".cargo/**",
     ".github/actions/setup-playwright/action.yml",
+    ".github/actions/setup-ubuntu-apt/action.yml",
     ".github/workflows/frontend.yml",
+    ".github/workflows/bun-benchmark.yml",
     ".github/workflows/format.yml",
     ".github/workflows/desktop-runtime-acceptance.yml"
   ],
@@ -111,6 +114,7 @@
     "scripts/pyproject.toml",
     "scripts/uv.lock",
     "justfile",
+    ".github/actions/setup-ubuntu-apt/action.yml",
     ".github/workflows/rust-build-health.yml"
   ],
   "rust-warnings": [
@@ -128,6 +132,7 @@
     "build/lib/**",
     "build/lib/ripgrep.py",
     "third_party/ripgrep/runtime-lock.json",
+    ".github/actions/setup-ubuntu-apt/action.yml",
     ".github/workflows/rust-warnings.yml"
   ],
   "v8-security": [
@@ -163,6 +168,7 @@
     ".nvmrc",
     "rust-toolchain.toml",
     "justfile",
+    ".github/actions/setup-ubuntu-apt/action.yml",
     ".github/workflows/tooling.yml",
     ".github/workflows/rusty-v8-release.yml"
   ],

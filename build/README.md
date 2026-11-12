@@ -229,12 +229,13 @@ The regular `Frontend` workflow also requires the `Windows setup lifecycle`
 job. Run it locally on Windows after provisioning the pinned host tools with
 `python -B build/setup_acceptance.py --output .build/benchmarks/windows-setup`.
 It snapshots the current Git-visible sources into a temporary checkout outside
-the repository, with its own Python environment, empty pnpm store and browser
-cache. The same workspace must pass a frozen first install, an offline repeat
-install, two complete rebuilds and the normal Git browser integration entrypoint
-in English and Chinese. It then switches to a local source revision and repeats
-that entrypoint, requiring regenerated protocol output and a changed input
-fingerprint. `setup.json` and per-command logs retain the results; `--resume`
+the repository, with an empty pnpm store and browser cache. The acceptance
+script passes its Python interpreter to the build tools. The same workspace
+must pass a frozen first install, an offline repeat install, two complete
+rebuilds and the normal Git browser integration entrypoint in English and
+Chinese. It explicitly generates the protocol before testing each source
+revision and verifies that switching revisions changes the input fingerprint.
+`setup.json` and per-command logs retain the results; `--resume`
 can retry a failed stage after a source fix without replacing installed state.
 Dependency changes or source changes after the baseline test require a fresh
 run. This verifies checkout setup with existing host tools, rather than

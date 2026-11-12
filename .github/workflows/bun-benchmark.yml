@@ -35,14 +35,11 @@ jobs:
         id: python
         with:
           python-version: "3.11"
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
-        with:
-          version-file: scripts/pyproject.toml
+      - uses: ./.github/actions/setup-ubuntu-apt
+        if: runner.os == 'Linux'
       - name: Install Linux frontend build dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install --yes libx11-dev libxkbfile-dev time
-      - name: Sync locked Python tools
-        run: python -B scripts/install_python_tools.py
       - name: Select an isolated dependency store
         if: inputs.phase != 'setup'
         id: store
@@ -67,6 +64,8 @@ jobs:
         run: python -B build/bun_acceptance.py install --phase "$PHASE" --output "$OUTPUT"
       - name: Prepare identical generated inputs
         if: inputs.phase != 'setup'
+        env:
+          PYTHON: ${{ steps.python.outputs.python-path }}
         run: |
           pnpm run protocol:generate
           pnpm run prepare:generated

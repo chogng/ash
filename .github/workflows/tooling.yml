@@ -34,6 +34,8 @@ jobs:
           version-file: scripts/pyproject.toml
       - name: Sync locked Python tools
         run: just install-python
+      - uses: ./.github/actions/setup-ubuntu-apt
+        if: runner.os == 'Linux'
       - name: Install Linux symbol tools
         if: runner.os == 'Linux'
         run: |

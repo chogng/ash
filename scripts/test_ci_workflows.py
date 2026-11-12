@@ -209,6 +209,20 @@ class CiWorkflowTests(unittest.TestCase):
             with self.subTest(path=name):
                 self.assertTrue(all(ci_workflows.select([name], policy).values()))
 
+    def test_ubuntu_apt_changes_select_all_consumers(self) -> None:
+        selected = ci_workflows.select(
+            [".github/actions/setup-ubuntu-apt/action.yml"], self.policy
+        )
+        for name in (
+            "bazel",
+            "frontend",
+            "rust-build-health",
+            "rust-warnings",
+            "tooling",
+        ):
+            with self.subTest(workflow=name):
+                self.assertTrue(selected[name])
+
     def test_main_uses_the_last_successful_ancestor_instead_of_the_previous_push(
         self,
     ) -> None:

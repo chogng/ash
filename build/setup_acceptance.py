@@ -89,7 +89,7 @@ def source_revision(workspace: Path, revision: str) -> None:
 def check_protocol(workspace: Path, revision: str) -> str:
     if f"{MARKER} {revision}." not in (workspace / GENERATED).read_text():
         raise RuntimeError(
-            f"Normal test entrypoint did not generate protocol revision {revision}"
+            f"Prepared protocol does not match source revision {revision}"
         )
     return json.loads((workspace / ".build/protocol-inputs.json").read_text())["inputs"]
 
@@ -198,16 +198,14 @@ def accept(output: Path, *, resume: bool = False) -> None:
     pnpm = shutil.which("pnpm")
     if not pnpm:
         raise RuntimeError("The repository-pinned pnpm must be on PATH")
-    environment = {"PLAYWRIGHT_BROWSERS_PATH": str(browser_cache)}
-    # The acceptance copy owns its Python environment; a caller's override must
-    # not silently route normal test preparation back into the original checkout.
-    environment["PYTHON"] = str(workspace / "scripts/.venv/Scripts/python.exe")
+    environment = {
+        "PLAYWRIGHT_BROWSERS_PATH": str(browser_cache),
+        "PYTHON": sys.executable,
+    }
     modules = workspace / "node_modules"
     dependency_hashes = {name: files[name] for name in DEPENDENCIES}
 
-    def command(
-        label: str, args: list[str], *, bootstrap: bool = False, reuse: bool = True
-    ) -> dict:
+    def command(label: str, args: list[str], *, reuse: bool = True) -> dict:
         if reuse and report["steps"].get(label, {}).get("exitCode") == 0:
             return report["steps"][label]
         attempt = 1 + sum(item["step"] == label for item in report["commands"])
@@ -219,7 +217,7 @@ def accept(output: Path, *, resume: bool = False) -> None:
                 output,
                 f"{label}-{attempt}",
                 cwd=workspace,
-                environment={} if bootstrap else environment,
+                environment=environment,
                 timeout=1800,
             )
         except BaseException as error:
@@ -264,11 +262,13 @@ def accept(output: Path, *, resume: bool = False) -> None:
             if actual != version:
                 raise RuntimeError(f"{name}: expected {version}, found {actual}")
 
-    def test_entry(label: str) -> None:
+    def test_entry(revision: str) -> str:
+        prefix = f"source-{revision.lower()}"
+        # The frontend test consumes validated protocol artifacts. Prepare them
+        # explicitly after each checkout so it tests the matching source revision.
+        command(f"{prefix}-protocol", [pnpm, "protocol:generate"], reuse=False)
         try:
-            # A command can succeed while the following generated-input check
-            # fails. Retrying that stage must execute the repaired entrypoint.
-            result = command(label, [pnpm, *BROWSER_ARGS], reuse=False)
+            result = command(f"{prefix}-test", [pnpm, *BROWSER_ARGS], reuse=False)
         finally:
             browser_results = workspace / ".build/desktop/playwright"
             if browser_results.is_dir():
@@ -277,6 +277,7 @@ def accept(output: Path, *, resume: bool = False) -> None:
         log = (output / result["log"]).read_text(encoding="utf-8", errors="replace")
         if not re.search(r"\b2 passed\b", log):
             raise RuntimeError("Setup acceptance must execute both language cases")
+        return check_protocol(workspace, revision)
 
     try:
         if "git-init" not in report["steps"]:
@@ -306,11 +307,6 @@ def accept(output: Path, *, resume: bool = False) -> None:
             ],
         )
         command("git-baseline", ["git", "commit", "-m", "Setup acceptance source A"])
-        command(
-            "python-tools",
-            [sys.executable, "-B", "scripts/install_python_tools.py"],
-            bootstrap=True,
-        )
         command(
             "first-install",
             [pnpm, "install", "--frozen-lockfile", "--store-dir", str(store)],
@@ -348,12 +344,10 @@ def accept(output: Path, *, resume: bool = False) -> None:
                     ["git", "commit", "-m", "Setup acceptance source B"],
                 )
             command("source-baseline-switch", ["git", "switch", "setup-base"])
-            test_entry("source-a-test")
-            report["baselineProtocol"] = check_protocol(workspace, "A")
+            report["baselineProtocol"] = test_entry("A")
             save(report_path, report)
         command("source-switch", ["git", "switch", "setup-next"])
-        test_entry("source-b-test")
-        report["nextProtocol"] = check_protocol(workspace, "B")
+        report["nextProtocol"] = test_entry("B")
         if report["nextProtocol"] == report["baselineProtocol"]:
             raise RuntimeError(
                 "Source switch did not refresh the protocol input fingerprint"
