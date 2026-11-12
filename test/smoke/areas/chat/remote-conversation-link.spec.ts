@@ -16,6 +16,157 @@ import { expect, test } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { connectProfile } from '../sessions/sessionProfileFixture.js';
 
+test('The first Agents window returns ambient SSH threads to their original IDE host and directory', { tag: ['@electron-app-server', '@darwin'] }, async ({ }, testInfo) => {
+	test.setTimeout(120_000);
+	const packageRoot = developmentAshPackagePath(process.env.ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve('.'));
+	const ssh = await createSshFixture(join(packageRoot, 'bin/ash-app-server-daemon'));
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	let seed: Awaited<ReturnType<typeof connectProfile>> | undefined;
+	let mainErrors = '';
+	try {
+		const root = await realpath(ssh.root);
+		const remoteRoot = join(root, 'ambient-project');
+		await mkdir(remoteRoot);
+		desktop = await launchElectron({
+			appServerMode: 'required', userDataDirectory: join(root, 'desktop'), workspaceDirectory: remoteRoot, workspacePermissions: 'development',
+			environment: { ...process.env, ASH_SSH_PATH: ssh.ssh, ASH_REMOTE_ASH_PATH: join(packageRoot, 'bin/ash-remote-server') },
+		});
+		let { application, driver: { workbench } } = desktop;
+		seed = await connectProfile(application, undefined, remoteRoot, workbench.page, { profileRoot: join(root, 'remote-profile'), directoryGrantsHost: true });
+		const { client } = seed;
+		const grants = await client.request(methods['config/directoryGrants/list'], {});
+		await client.request(methods['config/directoryGrants/set'], {
+			commandId: 'ambient-ssh-grant', expectedRevision: grants.revision, path: remoteRoot,
+			permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'mutateRepository', 'discoverPlugins'],
+		});
+		const { session } = await client.request(methods['session/create'], {
+			commandId: 'ambient-ssh-session', kind: 'code', title: 'Ambient SSH conversation', agent: { type: 'default' }, executionTarget: { type: 'local', root: remoteRoot },
+		});
+		const branch = await client.request(methods['session/request'], {
+			commandId: 'ambient-ssh-fork', sessionId: session.sessionId,
+			request: { type: 'forkThread', parentThreadId: session.threads[0]!.threadId, title: 'Ambient SSH worktree' },
+		});
+		if (branch.type !== 'thread') throw new Error('Expected a persisted SSH fork');
+		const threads = [];
+		for (const [index, threadId] of [session.threads[0]!.threadId, branch.value.threadId].entries()) {
+			const { directory } = await client.request(methods['session/thread/read'], { sessionId: session.sessionId, threadId });
+			if (directory?.type !== 'local') throw new Error('Expected an SSH-host directory');
+			const marker = `ambient-thread-${index}.txt`;
+			await writeFile(join(directory.root, marker), 'Synthetic SSH handoff marker');
+			threads.push({ threadId, directory, marker });
+		}
+		// Prepare the remote profile before launching its IDE, so this scenario
+		// starts with a granted workspace and existing, readable conversations.
+		await seed.close(); seed = undefined;
+		await desktop.close();
+		desktop = await launchElectron({
+			appServerMode: 'required', userDataDirectory: join(root, 'ssh-desktop'), workspaceDirectory: remoteRoot, workspacePermissions: 'development',
+			extraArgs: [`--remote-ssh=${ssh.host}`],
+			environment: { ...process.env, ASH_SSH_PATH: ssh.ssh, ASH_REMOTE_ASH_PATH: join(packageRoot, 'bin/ash-remote-server') },
+		});
+		({ application, driver: { workbench } } = desktop);
+		desktop.process.stderr?.on('data', chunk => { mainErrors = (mainErrors + String(chunk)).slice(-16000); });
+		await workbench.page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+		// No explicit remote provider is connected: Main selects the SSH backend
+		// when it creates the very first Agents window from this IDE.
+		expect(application.windows().filter(page => page.url().endsWith('/sessions.html'))).toHaveLength(0);
+		await workbench.page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		let agentsWindow: typeof workbench.page | undefined;
+		// Identify the native Agents document before handling first-use trust.
+		await expect.poll(() => {
+			agentsWindow = application.windows().find(page => page.url().endsWith('/sessions.html'));
+			return !!agentsWindow;
+		}).toBe(true);
+		const agents = agentsWindow!;
+		const trust = agents.getByRole('button', { name: 'Trust and Open', exact: true });
+		await expect(trust.or(agents.locator('.ash-sessions-window[aria-busy="false"]')).first()).toBeVisible();
+		if (await trust.isVisible()) await trust.click();
+		await expect(agents.locator('.ash-sessions-window')).toHaveAttribute('aria-busy', 'false');
+		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await testInfo.attach('ambient-ssh-source-host', {
+			body: JSON.stringify(await agents.evaluate(async () => {
+				const ipc = (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer;
+				return { connection: await ipc.invoke('ash:remote:connection'), workspace: await ipc.invoke('ash:workspace:context:read') };
+			})), contentType: 'application/json'
+		});
+		await testInfo.attach('ambient-ssh-source.png', { body: await agents.screenshot(), contentType: 'image/png' });
+		const row = agents.locator(`[data-item="session:${session.sessionId}"] > .ash-sessions-list-item`);
+		const source = agents.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		const openIde = agents.locator('.ash-sessions-titlebar-right').getByRole('button', { name: 'Open IDE', exact: true });
+		await expect(row).toBeVisible();
+		await row.click();
+		for (const [index, { threadId, directory, marker }] of threads.entries()) {
+			await test.step(`Return SSH ${index === 0 ? 'project' : 'worktree'} to the IDE`, async () => {
+				if (index === 1) {
+					await row.press('ArrowRight');
+					await agents.locator('.ash-sessions-list').getByRole('treeitem', { name: /^Ambient SSH worktree\b/u }).locator('.ash-sessions-list-item').click();
+				}
+				await expect(source).toHaveAttribute('data-thread-id', threadId);
+				await openIde.click();
+				const expected = createSshRemoteWorkspaceUri(ssh.host, directory.root).toString();
+				let destination: typeof workbench.page | undefined;
+				await expect.poll(async () => {
+					const folders: (string | undefined)[] = [];
+					for (const page of application.windows()) {
+						if (!page.url().endsWith('/workbench.html')) continue;
+						const folder = await page.evaluate(async () => {
+							const workspace = await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:workspace:context:read') as { folders: { uri: string; }[]; };
+							return workspace.folders[0]?.uri;
+						}).catch(() => undefined);
+						folders.push(folder);
+						if (folder === expected) destination = page;
+					}
+					return folders;
+				}).toContain(expected);
+				const idePage = destination!;
+				const permission = directoryPermissionPrompt(idePage);
+				const chat = idePage.locator('.ash-chat-view-pane .ash-chat:visible');
+				await expect(permission.or(chat).first()).toBeVisible({ timeout: 30_000 });
+				if (await permission.isVisible()) await permission.getByRole('button', { name: 'Trust Folder', exact: true }).click();
+				await expect(chat).toHaveAttribute('data-session-id', session.sessionId);
+				await expect(chat).toHaveAttribute('data-thread-id', threadId);
+				const connection = await idePage.evaluate(() => (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:remote:connection'));
+				expect(connection).toMatchObject({ kind: 'ssh', host: ssh.host, authority: `ssh+${ssh.host}` });
+				const ide = new Workbench(idePage);
+				await ide.openExplorer();
+				await expect(idePage.locator('[data-part="sidebar"]').getByText(marker, { exact: true })).toBeVisible();
+				const windows = application.windows().length;
+				await ide.quickaccess.runCommand('workbench.action.chat.newChat');
+				await expect(chat).not.toHaveAttribute('data-thread-id', threadId);
+				await openIde.click();
+				await expect(chat).toHaveAttribute('data-thread-id', threadId);
+				expect(application.windows()).toHaveLength(windows);
+				await expect(source).toHaveAttribute('data-thread-id', threadId);
+				const screenshot = testInfo.outputPath(`ambient-ssh-ide-${index}.png`);
+				await idePage.screenshot({ path: screenshot });
+				await testInfo.attach(`ambient-ssh-ide-${index}`, { path: screenshot, contentType: 'image/png' });
+			});
+		}
+		const screenshot = testInfo.outputPath('ambient-ssh-agents.png');
+		await agents.screenshot({ path: screenshot });
+		await testInfo.attach('ambient-ssh-agents', { path: screenshot, contentType: 'image/png' });
+	} catch (error) {
+		if (desktop) {
+			const path = testInfo.outputPath('ambient-ssh-diagnostics.json');
+			const windows = await Promise.all(desktop.application.windows().map(async page => ({ url: page.url(), text: await page.locator('body').innerText().catch(() => '') })));
+			await writeFile(path, JSON.stringify({ pageErrors: desktop.diagnostics.pageErrors, consoleErrors: desktop.diagnostics.consoleErrors, mainErrors, windows }, null, 2));
+			await testInfo.attach('ambient-ssh-diagnostics', { path, contentType: 'application/json' });
+		}
+		throw error;
+	} finally {
+		try { await seed?.close(); }
+		finally {
+			try {
+				if (desktop) {
+					const path = testInfo.outputPath('ambient-ssh-trace.zip');
+					await desktop.driver.workbench.page.context().tracing.stop({ path }).then(() => testInfo.attach('trace', { path, contentType: 'application/zip' })).catch(() => { });
+					await desktop.close();
+				}
+			} finally { await ssh.close(); }
+		}
+	}
+});
+
 test('Open IDE hands off the selected SSH project and worktree threads', { tag: ['@electron-app-server', '@darwin'] }, async ({ }, testInfo) => {
 	test.setTimeout(120_000);
 	const packageRoot = developmentAshPackagePath(process.env.ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve('.'));

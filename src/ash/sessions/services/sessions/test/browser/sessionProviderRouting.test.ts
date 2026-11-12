@@ -380,9 +380,10 @@ test('long provider conversation links preserve short backend coordinates and ca
 	using registration = context.registry.registerProvider({ ...context.remote, id: providerId } as ISessionsProvider);
 	Object.assign(context.remoteHost.appServer, { isAvailable: true, connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: Event.None });
 	const reads: unknown[] = [];
+	const directory = { type: 'ssh', host: 'host', root: '/actual-thread-worktree' } as const;
 	context.remoteChat.readThread = async (sessionId, threadId) => {
 		reads.push({ sessionId, threadId });
-		return { thread: { sessionId, threadId, origin: { type: 'root' }, turns: [] }, transcript: { sessionId, threadId, entries: [] } } as unknown as ThreadRead;
+		return { directory, thread: { sessionId, threadId, origin: { type: 'root' }, turns: [] }, transcript: { sessionId, threadId, entries: [] } } as unknown as ThreadRead;
 	};
 	const opened: unknown[] = [];
 	const view = { navigationRevision: 0, openThread: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); } } as unknown as ISessionsService;
@@ -391,11 +392,12 @@ test('long provider conversation links preserve short backend coordinates and ca
 	const threadId = sessionIdentity(providerId, 'thread', 'primary');
 	assert.ok(sessionId.length > 256);
 	const address = await links.prepare(sessionId, threadId);
+	assert.deepEqual(await links.prepareConversation(sessionId, threadId), { link: address, directory });
 	assert.deepEqual({ sessionId: address.sessionId, threadId: address.threadId }, { sessionId: 'same', threadId: 'thread' });
 	const parsed = parseOpenSessionLinkUri(URI.parse(buildOpenSessionLinkUri(address.sessionId, address.threadId, address.connectionAuthority).toString()));
 	await links.open(parsed, view);
 	assert.deepEqual(opened, [{ sessionId, threadId }]);
-	assert.deepEqual(reads, [{ sessionId: 'same', threadId: 'thread' }, { sessionId: 'same', threadId: 'thread' }]);
+	assert.deepEqual(reads, [{ sessionId: 'same', threadId: 'thread' }, { sessionId: 'same', threadId: 'thread' }, { sessionId: 'same', threadId: 'thread' }]);
 	registration.dispose();
 	await assert.rejects(links.open(parsed, view), /connection for this conversation link is unavailable/i);
 	assert.equal(opened.length, 1);

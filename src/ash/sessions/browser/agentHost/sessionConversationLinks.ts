@@ -1,7 +1,7 @@
 import { canceled, isCancellationError } from '../../../base/common/errors.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
-import type { IChatSessionConnection } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import type { IChatSessionConnection, IPreparedChatConversation } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import type { OpenSessionLink } from '../../../platform/agentHost/common/openSessionLink.js';
 import { ISessionProviderScopeService } from './sessionProviderScopeService.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
@@ -35,6 +35,9 @@ export class SessionConversationLinks {
 		});
 	}
 	async prepare(sessionId: string, threadId: string): Promise<OpenSessionLink> {
+		return (await this.prepareConversation(sessionId, threadId)).link;
+	}
+	async prepareConversation(sessionId: string, threadId: string): Promise<IPreparedChatConversation> {
 		const scope = this.scopes.getScope(sessionId);
 		scope.assertCurrent();
 		const backendSessionId = scope.backendIdentity(sessionId);
@@ -43,7 +46,10 @@ export class SessionConversationLinks {
 		const result = await scope.services.chat.readThread(backendSessionId, backendThreadId);
 		await connection.assertCurrent();
 		if (result.thread.sessionId !== backendSessionId || result.thread.threadId !== backendThreadId) throw new Error(localize('chat.sessionLink.missing', 'This conversation is unavailable on this connection.'));
-		return { connectionAuthority: sessionProviderAuthority(scope.providerId, this.defaultProviderId), sessionId: backendSessionId, threadId: backendThreadId };
+		return {
+			link: { connectionAuthority: sessionProviderAuthority(scope.providerId, this.defaultProviderId), sessionId: backendSessionId, threadId: backendThreadId },
+			directory: result.directory,
+		};
 	}
 	async open(
 		address: OpenSessionLink,

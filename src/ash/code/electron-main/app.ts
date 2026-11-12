@@ -1448,14 +1448,18 @@ export class AshApplication extends Disposable {
 		if (this.appServerStartupMode === 'disabled') {
 			return existing ?? new AppServerConnectionRelay({ enabled: false }, connectionKind);
 		}
-		const remote = (role === 'workbench' || typeof connectionKind === 'object') && getWorkspaceRemoteAuthority(workspace)?.startsWith('ssh+') === true;
+		// Both IDE and Agents inherit the workspace host. Only the separately named
+		// local connection stays on this computer for profile-owned capabilities.
+		const remote = connectionKind !== 'local' && getWorkspaceRemoteAuthority(workspace)?.startsWith('ssh+') === true;
 		const connection = createAppServerDaemonLauncher({
 			packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
 			sourceEnvironment: process.env,
 			profileRoot: this.profileRoot,
 			electronExecutable: process.execPath,
 			workspaceRoot: !remote && role === 'workbench' && isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri.fsPath : undefined,
-			role,
+			// SSH carriers require Workbench scope; the remote runtime supplies the
+			// execution host while the local Agents lease retains profile capabilities.
+			role: remote ? 'workbench' : role,
 		});
 		resources.add(connection.launcher);
 		const processLauncher = remote ? this.createRemoteAppServerProcessLauncher(workspace, resources, connection.launcher) : connection.launcher;

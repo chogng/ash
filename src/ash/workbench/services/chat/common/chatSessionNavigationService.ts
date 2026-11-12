@@ -16,6 +16,12 @@ export interface IChatSessionConnection extends IDisposable {
 	assertCurrent(): Promise<void>;
 }
 
+/** One owner-validated read supplies both the address and its execution directory. */
+export interface IPreparedChatConversation {
+	readonly link: OpenSessionLink;
+	readonly directory: ThreadRead['directory'];
+}
+
 /** Conversation destinations exposed by the session owner to workbench contributions. */
 export interface IChatSessionNavigationService {
 	/** Resolves backend-local result coordinates through the originating Session's host. */
@@ -25,6 +31,8 @@ export interface IChatSessionNavigationService {
 	captureConnection?(sessionId: string): IChatSessionConnection;
 	/** Multi-host owners validate and return backend coordinates on the captured connection. */
 	prepareConversationLink?(sessionId: string, threadId: string): Promise<OpenSessionLink>;
+	/** Prepares a cross-window handoff without relying on a cached Session directory. */
+	prepareConversation?(sessionId: string, threadId: string): Promise<IPreparedChatConversation>;
 	/** Resolves an opaque authority without interpreting it in shared Workbench code. */
 	openConversationLink?(address: OpenSessionLink, options?: { readonly sideBySide?: boolean; }): Promise<void>;
 	/** Creates and selects an unsent draft; focus reveals its presentation. False means the host picker was canceled. */

@@ -1262,6 +1262,7 @@ export abstract class Workbench extends Disposable {
 			get revision() { return view.navigationRevision; },
 			captureConnection: sessionId => conversationLinks.captureConnection(sessionId),
 			prepareConversationLink: (sessionId, threadId) => conversationLinks.prepare(sessionId, threadId),
+			prepareConversation: (sessionId, threadId) => conversationLinks.prepareConversation(sessionId, threadId),
 			openConversationLink: async (address, options) => {
 				const { sessionId, threadId } = await conversationLinks.open(address, view, options);
 				const selected = view.activeSelection;
