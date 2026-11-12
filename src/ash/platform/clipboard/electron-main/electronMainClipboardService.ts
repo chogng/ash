@@ -55,6 +55,10 @@ export class ElectronMainClipboardService implements IClipboardService {
 		await clipboard.writeText(value);
 	}
 
+	async writeTextWithHtml(text: string, html: Promise<string>): Promise<void> {
+		await clipboard.write([new ClipboardItem({ 'text/plain': text, 'text/html': await html })]);
+	}
+
 	public async writeImage(data: Uint8Array | Promise<Uint8Array>): Promise<void> {
 		await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(await data)], { type: 'image/png' }) })]);
 	}

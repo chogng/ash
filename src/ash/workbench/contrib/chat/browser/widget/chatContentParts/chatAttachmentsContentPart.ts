@@ -1,8 +1,9 @@
 import { IChatResponseResourceFileSystemProvider, type IChatResourceAssociation } from '../../../common/widget/chatResponseResourceFileSystemProvider.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
+import { resourceFileName, saveResourceAs } from '../../../../../services/files/browser/resourceSave.js';
 import './media/chatMarkdownPart.css';
 import { addDisposableListener, getWindow, h } from '../../../../../../base/browser/dom.js';
-import { createObjectUrl, triggerDownload } from '../../../../../../base/browser/fileAccess.js';
+import { createObjectUrl } from '../../../../../../base/browser/fileAccess.js';
 import type { URI } from '../../../../../../base/common/uri.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { decodeBase64 } from '../../../../../../base/common/buffer.js';
@@ -221,7 +222,13 @@ export class ChatAttachmentsContentPart extends Disposable {
 				row.resources.add(addDisposableListener(row.loadButton, 'click', () => { void this.load(current); }));
 				row.resources.add(addDisposableListener(row.openButton, 'click', () => { void this.open(current); }));
 				if (row.imageTrigger) row.resources.add(addDisposableListener(row.imageTrigger, 'click', () => this.showImage(current)));
-				row.resources.add(addDisposableListener(row.downloadButton, 'click', () => { if (current.blob) triggerDownload(current.blob, mediaName(current.part, !!current.imageTrigger), this.options.ownerDocument); }));
+				row.resources.add(addDisposableListener(row.downloadButton, 'click', () => {
+					const blob = current.blob;
+					if (!blob) return;
+					const name = resourceFileName(mediaName(current.part, !!current.imageTrigger), '');
+					void this.instantiation.invokeFunction(saveResourceAs, blob, name, this.options.ownerDocument, { download: true, signal: current.controller.signal })
+						.catch(error => this.instantiation.invokeFunction(accessor => accessor.get(INotificationService).error(String(error))));
+				}));
 				if (row.copyButton) {
 					const button = row.copyButton;
 					const image = row.media as HTMLImageElement;
@@ -535,14 +542,13 @@ export class ChatAttachmentsContentPart extends Disposable {
 		if (restoreFocus) link.focus();
 	}
 
-	private setDownloadUrl(row: MediaRow, link: HTMLAnchorElement, blob: Blob): URL {
+	private setDownloadUrl(row: MediaRow, link: HTMLAnchorElement, blob: Blob): void {
 		// A copied link can also be navigated to. Serve it as download-only bytes.
 		const { url, registration } = createObjectUrl(getWindow(row.element), new Blob([blob], { type: Mimes.binary }));
 		row.objectUrl.value = registration;
 		row.association.clear();
 		row.loaded = true;
 		link.href = url.href;
-		return url;
 	}
 
 	private async downloadFile(row: MediaRow, part: IChatAttachmentResource, link: HTMLAnchorElement): Promise<void> {
@@ -553,8 +559,8 @@ export class ChatAttachmentsContentPart extends Disposable {
 		try {
 			const blob = await this.readResource(part, signal);
 			if (!blob || signal.aborted) return;
-			const url = this.setDownloadUrl(row, link, blob);
-			triggerDownload(url, part.name, link.ownerDocument);
+			this.setDownloadUrl(row, link, blob);
+			await this.instantiation.invokeFunction(saveResourceAs, blob, resourceFileName(part.name, ''), link.ownerDocument, { download: true, signal });
 		} catch (error) {
 			if (!signal.aborted && !isCancellationError(error)) this.instantiation.invokeFunction(accessor => accessor.get(INotificationService).error(String(error)));
 		} finally {

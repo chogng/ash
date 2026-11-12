@@ -1029,21 +1029,66 @@ function readImageGroup(reference: Record<string, unknown>, text: string): ChatG
 	return images.size ? { marker, images: [...images.values()] } : undefined;
 }
 
+/** Read the query and result ID from the compiler's literal AsyncImage calls. Never run model code. */
+function readCompiledAsyncImageQueries(model: Record<string, unknown>): Map<string, string | undefined> {
+	const queries = new Map<string, string | undefined>();
+	const { code, constants } = model;
+	if (typeof code !== 'string' || code.length > 512_000 || !isRecord(constants)) return queries;
+	// Skip string literals so snippets in the reply cannot be mistaken for component calls.
+	const calls = /"(?:[^"\\]|\\[\s\S])*"|\b__dil\.jsx\(\s*AsyncImage\s*,\s*\{/gu;
+	const property = /\s*"(\w+)"\s*:\s*(?:"((?:[^"\\]|\\[\s\S])*)"|__dilConstants\[\s*"(\d{1,8})"\s*\]|-?\d+(?:\.\d+)?|true|false|null)\s*([,}])/gy;
+	let count = 0;
+	for (const call of code.matchAll(calls)) {
+		if (call[0][0] === '"') continue;
+		if (++count > 64) break;
+		property.lastIndex = call.index + call[0].length;
+		let query: unknown, id: unknown;
+		for (let match; (match = property.exec(code));) {
+			const [, name, literal, index, delimiter] = match;
+			if (name === 'query' || name === '__resolutionId') {
+				let value: unknown;
+				try {
+					value = index !== undefined ? constants[index] : literal === undefined ? undefined : JSON.parse('"' + literal + '"');
+				} catch { break; }
+				if (name === 'query') query = value;
+				else id = value;
+			}
+			if (delimiter !== '}') continue;
+			if (typeof query === 'string' && query && query.length <= 1024 && typeof id === 'string' && id && id.length <= 128) {
+				// The Markdown cannot distinguish identical queries bound to different results.
+				queries.set(query, !queries.has(query) || queries.get(query) === id ? id : undefined);
+			}
+			break;
+		}
+	}
+	return queries;
+}
+
 /** Saved AsyncImage components keep their result separately from the Markdown. */
 function readAsyncImages(metadata: Record<string, unknown>): ChatGPTImageGroup[] {
 	const model = metadata.model_dil_v2;
 	if (!isRecord(model) || !isRecord(model.appData) || !isRecord(model.appData.opGenui)) return [];
 	const results = model.appData.opGenui.componentResults;
 	if (!isRecord(results)) return [];
-	const images: ChatGPTImageGroup[] = [];
-	for (const result of Object.values(results).slice(0, 64)) {
-		if (!isRecord(result) || result.componentName !== 'AsyncImage' || !isRecord(result.state) || !Array.isArray(result.state.images)) continue;
+	const groups = new Map<string, ChatGPTImageGroup>();
+	const queries = readCompiledAsyncImageQueries(model);
+	const add = (result: unknown, boundQuery?: string): void => {
+		if (!isRecord(result) || result.componentName !== 'AsyncImage'
+			|| (result.status !== 'resolved' && (boundQuery !== undefined || result.status !== undefined))
+			|| !isRecord(result.state) || !Array.isArray(result.state.images)) return;
 		const first = result.state.images[0];
-		if (!isRecord(first) || typeof first.image_search_query !== 'string' || !first.image_search_query || first.image_search_query.length > 1024) continue;
+		if (!isRecord(first)) return;
+		const query = boundQuery ?? first.image_search_query;
+		if (typeof query !== 'string' || !query || query.length > 1024 || groups.has(query) || (boundQuery === undefined && queries.has(query))) return;
 		const image = readSearchImage(first);
-		if (image) images.push({ query: first.image_search_query, images: [image] });
+		if (image) groups.set(query, { query, images: [image] });
+	};
+	for (const [query, id] of queries) {
+		if (id !== undefined && Object.hasOwn(results, id)) add(results[id], query);
 	}
-	return images;
+	// Older replies stored the query on the image result itself.
+	for (const result of Object.values(results).slice(0, 64)) add(result);
+	return [...groups.values()];
 }
 
 function readMessage(value: unknown, conversationId: string | undefined): ChatGPTMessage | undefined {

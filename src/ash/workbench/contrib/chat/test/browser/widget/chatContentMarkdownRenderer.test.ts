@@ -17,11 +17,14 @@ import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } fr
 import { createDisconnectedExtensionHostApi } from '../../../../../../platform/extensions/browser/extensionHostApi.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { ConfigurationRegistry } from '../../../../../../platform/configuration/common/configurationRegistry.js';
+import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
+import { BrowserLayoutService, ILayoutService } from '../../../../../../platform/layout/browser/layoutService.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../../platform/instantiation/common/serviceCollection.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { IMarkdownRendererService, MarkdownRendererService } from '../../../../../../platform/markdown/browser/markdownRenderer.js';
+import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { IHoverService } from '../../../../../../platform/hover/browser/hoverService.js';
 import { ILinkPresentationService, type ILinkPresentationRule } from '../../../../../../platform/dataChannel/common/dataChannel.js';
@@ -48,6 +51,9 @@ function services(
 	linkPresentation?: { service: ILinkPresentationService; hover: Pick<IHoverService, 'setupHover'>; },
 ): InstantiationService {
 	const instance = new InstantiationService(new ServiceCollection([IOpenerService, opener]));
+	instance.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None });
+	instance.registerInstance(INotificationService, { error: (error: unknown) => assert.fail(String(error)) } as unknown as INotificationService);
+	instance.registerSingleton(ILayoutService, () => new BrowserLayoutService({ root: document.body }));
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'markdown.math.enabled', defaultValue: true, parse: value => Boolean(value) });
 	registry.registerConfiguration({ key: 'markdown.math.macros', defaultValue: {}, parse: value => value });
@@ -68,7 +74,7 @@ function services(
 function fragmentContents(element: HTMLElement): string {
 	const copy = element.cloneNode(true) as HTMLElement;
 	for (const fragment of copy.querySelectorAll('.ash-chat-markdown-fragment')) fragment.replaceWith(...fragment.childNodes);
-	for (const viewport of copy.querySelectorAll('.ash-chat-markdown-table-scroll')) viewport.replaceWith(...viewport.childNodes);
+	for (const table of copy.querySelectorAll('table')) table.closest('.ash-chat-markdown-table-scroll')?.replaceWith(table);
 	return copy.innerHTML;
 }
 
@@ -171,6 +177,21 @@ suite('Shared chat Markdown rendering', () => {
 		assert.doesNotMatch(copied, /ash-rich:|chat-response-download|fixture:\/|\$\(/u);
 		const found = getChatFindTextParts({ id: 'reply', type: 'agentMessage', text: value, transient: false, markdown: { supportHtml: true, richContent } });
 		assert.ok(found.some(part => part.text.includes('Second | line')));
+	});
+
+	test('copies nested layout as Markdown in reading order', () => {
+		const builder = new ChatMarkdownRichContentBuilder('');
+		const first = builder.add({ kind: 'box', style: { flex: '1' }, block: true, markdown: '**First step**\n\nPrepare the sample.' });
+		const arrow = builder.add({ kind: 'icon', label: '→', style: { size: 'sm' }, block: false, fallback: { href: 'https://example.com', label: 'Open' } });
+		const second = builder.add({ kind: 'box', style: { flex: '1' }, block: true, markdown: '**Second step**\n\nUse `control`.' });
+		const row = builder.add({ kind: 'row', style: { align: 'center' }, block: true, markdown: [first, arrow, second].join('\n') });
+		const thirdTitle = builder.add({ kind: 'text', style: {}, block: false, markdown: '**Third step**' });
+		const thirdCaption = builder.add({ kind: 'text', style: { color: 'secondary' }, block: false, markdown: 'Record the result.' });
+		const diagram = builder.add({ kind: 'box', style: { border: 'true' }, block: true, markdown: row + '\n\n' + thirdTitle + '\n' + thirdCaption });
+		const value = 'Before\n' + diagram + '\nAfter';
+		assert.equal(expandChatRichContentForCopy(value, builder.content), [
+			'Before', '**First step**', 'Prepare the sample.', '→', '**Second step**', 'Use `control`.', '**Third step**\nRecord the result.', 'After',
+		].join('\n\n'));
 	});
 
 	const corpus = JSON.parse(readFileSync(resolve(process.cwd(), 'test/fixtures/markdownMath.json'), 'utf8')) as { name: string; markdown: string; formulas: { source: string; display: string; }[]; }[];

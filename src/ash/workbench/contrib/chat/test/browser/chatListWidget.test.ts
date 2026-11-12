@@ -990,16 +990,44 @@ suite('chatRenderer browser component', () => {
 		const rows = Array.from({ length: 20 }, () => row(columns));
 		const text = [...header, ...rows].join('\n') + '\n';
 		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, false), text);
-		const viewport = page.getByRole('region', { name: '可滚动表格' });
-		await expect(viewport.getByRole('table')).toHaveCount(1);
+		const region = page.getByRole('region', { name: '可滚动表格' });
+		const viewport = region.locator('.ash-chat-markdown-table-viewport');
+		await expect(region.getByRole('table')).toHaveCount(1);
 		assert.ok(await viewport.evaluate(node => node.scrollWidth > node.clientWidth));
-		await viewport.focus();
-		await viewport.press('ArrowRight');
+		await expect(region.getByRole('scrollbar')).toHaveCSS('opacity', '1');
+		const expand = page.getByRole('button', { name: '展开表格', exact: true });
+		await expect(expand).toHaveAttribute('aria-haspopup', 'dialog');
+		await expand.focus();
+		const geometry = await viewport.evaluate(node => {
+			const shell = node.closest('.ash-chat-content-actions-anchor')!;
+			const actions = shell.querySelector<HTMLElement>(':scope > .ash-chat-content-actions')!;
+			const size = () => ({ width: node.clientWidth, height: node.clientHeight, scrollWidth: node.scrollWidth, blockHeight: shell.clientHeight });
+			const withActions = size();
+			const actionBounds = actions.getBoundingClientRect();
+			const viewportBounds = node.getBoundingClientRect();
+			actions.hidden = true;
+			const withoutActions = size();
+			actions.hidden = false;
+			return { withActions, withoutActions, shellWidth: shell.clientWidth, actionBottom: actionBounds.bottom, viewportTop: viewportBounds.top };
+		});
+		assert.deepEqual(geometry.withActions, geometry.withoutActions);
+		assert.equal(geometry.withActions.width, geometry.shellWidth);
+		assert.ok(geometry.actionBottom <= geometry.viewportTop);
+		await expand.focus();
+		await expand.press('Enter');
+		const preview = page.getByRole('dialog', { name: '表格预览' });
+		await expect(preview.getByRole('columnheader')).toHaveCount(columns.length);
+		await expect(preview.getByRole('region', { name: '可滚动表格' })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(preview).toHaveCount(0);
+		await expect(expand).toBeFocused();
+		await region.focus();
+		await region.press('ArrowRight');
 		await expect.poll(() => viewport.evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
 		const scrollLeft = await viewport.evaluate(node => node.scrollLeft);
 		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), text + row(columns.map(() => 'Appended cell')));
 		await expect(viewport.getByRole('row')).toHaveCount(22);
-		await expect(viewport).toBeFocused();
+		await expect(region).toBeFocused();
 		assert.ok(await viewport.evaluate(node => node.scrollLeft) >= scrollLeft);
 
 		await viewport.evaluate(node => { node.scrollLeft = 0; });
@@ -1007,9 +1035,21 @@ suite('chatRenderer browser component', () => {
 		const cell = viewport.getByRole('columnheader', { name: 'Wide column heading 24' });
 		await expect.poll(async () => cell.evaluate(node => {
 			const cell = node.getBoundingClientRect();
-			const bounds = node.closest('.ash-chat-markdown-table-scroll')!.getBoundingClientRect();
+			const bounds = node.closest('.ash-chat-markdown-table-viewport')!.getBoundingClientRect();
 			return cell.left < bounds.right && cell.right > bounds.left;
 		})).toBe(true);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.stream('| Fits |\n| --- |\n| Cell |', true));
+		await expect(region.getByRole('columnheader', { name: 'Fits' })).toBeVisible();
+		await expect(region.getByRole('scrollbar')).toHaveCount(0);
+		await expect(expand).toHaveCount(0);
+		const shell = page.locator('.ash-chat-markdown-table-scroll').filter({ has: region });
+		const width = await shell.evaluate(node => Math.ceil(node.getBoundingClientRect().width));
+		await shell.evaluate((node, width) => { node.style.maxInlineSize = `${width - 12}px`; }, width);
+		await expect(expand).toBeVisible();
+		await expand.focus();
+		await shell.evaluate((node, width) => { node.style.maxInlineSize = `${width}px`; }, width);
+		await expect(expand).toHaveCount(0);
+		await expect(shell.getByRole('button', { name: '将表格导出为 CSV' })).toBeFocused();
 	});
 
 	test('streaming Markdown tables preserve the focused cell through appends and corrections', async () => {

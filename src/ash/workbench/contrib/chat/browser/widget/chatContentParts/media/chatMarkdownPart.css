@@ -167,17 +167,75 @@
 }
 
 .ash-chat-markdown-table-scroll {
-	max-width: 100%;
-	overflow-x: auto;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	inline-size: fit-content;
+	max-inline-size: 100%;
 }
 
-.ash-markdown .ash-chat-markdown-table-scroll > table {
+.ash-chat-markdown-table-scroll > .ash-scrollable-element {
+	grid-area: 1 / 1;
+}
+
+.ash-chat-markdown-table-scroll
+	> .ash-scrollable-element:has(
+		> .ash-scrollbar-track-horizontal:not([hidden])
+	) {
+	padding-block-end: var(--ash-scrollbar-size);
+}
+
+.ash-chat-markdown-table-scroll
+	> .ash-scrollable-element
+	> .ash-scrollbar-track-horizontal:not([hidden]) {
+	/* Keep the shared rail discoverable whenever there is more table to see. */
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.ash-chat-markdown-table-scroll .ash-chat-markdown-table-viewport {
+	/* The table supplies the height instead of filling a fixed scroll frame. */
+	position: relative;
+	inset: auto;
+}
+
+.ash-markdown .ash-chat-markdown-table-viewport table {
 	max-width: none;
 }
 
-.ash-chat-markdown-table-scroll:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: calc(-1 * var(--ash-strokeThickness));
+.ash-dialog.ash-chat-table-preview[open] {
+	--ash-dialog-nonmodal-backdrop: transparent;
+	display: flex;
+	flex-direction: column;
+	inline-size: 100%;
+	overflow: hidden;
+}
+
+.ash-chat-table-preview > .ash-dialog-header {
+	flex-shrink: 0;
+}
+
+.ash-chat-table-preview > .ash-dialog-body,
+.ash-chat-table-preview
+	.ash-chat-markdown-table-scroll
+	> .ash-scrollable-element {
+	display: flex;
+	flex-direction: column;
+	min-block-size: 0;
+}
+
+.ash-chat-table-preview .ash-chat-markdown-table-scroll {
+	grid-template-rows: minmax(0, auto);
+	min-block-size: 0;
+}
+
+.ash-chat-table-preview .ash-chat-markdown-table-viewport {
+	min-block-size: 0;
+}
+
+.ash-chat-table-preview
+	.ash-chat-markdown-table-viewport
+	> .ash-scrollbar-content {
+	display: flow-root;
 }
 
 .ash-chat-rich-box,
@@ -193,7 +251,50 @@
 	flex-direction: row;
 	flex-wrap: wrap;
 }
-.ash-chat-rich-row:has(> .ash-chat-image-gallery.compact) > .ash-chat-rich-box {
+.ash-chat-rich-row > .ash-chat-rich.flex-1 {
+	box-sizing: border-box;
+	flex: 1 1 0%;
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+.ash-chat-rich-image > :is(img, .ash-chat-media-preview-trigger),
+.ash-chat-rich-image > .ash-chat-media-preview-trigger > img {
+	display: block;
+	inline-size: 100%;
+	block-size: auto;
+	max-block-size: none;
+}
+.ash-chat-inline-image {
+	display: inline-block;
+	max-inline-size: 100%;
+}
+.ash-chat-content-actions-anchor {
+	/* The frame provides space for the overlay without reducing the content width. */
+	position: relative;
+	padding-block-start: calc(
+		var(--ash-toolbar-actionSize) + 2 * var(--ash-strokeThickness)
+	);
+}
+.ash-chat-content-actions-anchor > .ash-chat-content-actions {
+	/* The same slot stays outside the image or scroll viewport. */
+	position: absolute;
+	inset-block-start: 0;
+	inset-inline-end: 0;
+	z-index: 1;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-small);
+}
+.ash-chat-rich-row.align-center {
+	align-items: center;
+}
+.ash-chat-rich-text.ash-badge {
+	max-width: 100%;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.ash-chat-rich-row:has(> .ash-chat-image-gallery.compact)
+	> .ash-chat-rich-box:not(.flex-1) {
 	flex: 1 1 16rem;
 }
 .ash-chat-rich-grid {
@@ -299,6 +400,9 @@
 .ash-chat-rich.justify-end {
 	justify-content: flex-end;
 }
+.ash-chat-rich.justify-between {
+	justify-content: space-between;
+}
 .ash-chat-rich.background-surface {
 	background: var(--ash-editor-background, Canvas);
 }
@@ -338,8 +442,10 @@
 	display: inline-block;
 	margin: 4px;
 }
-.ash-chat-mermaid > .ash-chat-media-preview-trigger {
+.ash-chat-mermaid
+	> :is(.ash-chat-media-preview-trigger, .ash-chat-inline-image) {
 	display: block;
+	inline-size: fit-content;
 	margin: var(--ash-spacing-size80) auto;
 }
 .ash-chat-mermaid summary {

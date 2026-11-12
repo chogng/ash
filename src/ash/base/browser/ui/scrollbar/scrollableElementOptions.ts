@@ -15,6 +15,8 @@ export interface ScrollbarWheelOptions {
 	readonly axis?: 'both' | 'predominant';
 	/** Whether Shift converts a vertical-only wheel gesture to horizontal. */
 	readonly shift?: 'preserve' | 'horizontal';
+	/** Whether a horizontal viewport also maps an unmodified vertical wheel gesture to horizontal. */
+	readonly scrollYToX?: boolean;
 	/** Whether wheel events may propagate when this container cannot move. */
 	readonly consume?: 'when-scrolling' | 'always';
 }
@@ -67,6 +69,7 @@ export interface ResolvedScrollableElementOptions {
 		readonly fastSensitivity: number;
 		readonly axis: 'both' | 'predominant';
 		readonly shift: 'preserve' | 'horizontal';
+		readonly scrollYToX: boolean;
 		readonly consume: 'when-scrolling' | 'always';
 	};
 }
@@ -103,6 +106,7 @@ export function resolveScrollableElementOptions(
 			),
 			axis: options.wheel?.axis ?? 'predominant',
 			shift: options.wheel?.shift ?? 'horizontal',
+			scrollYToX: options.wheel?.scrollYToX ?? true,
 			consume: options.wheel?.consume ?? 'when-scrolling',
 		},
 	};

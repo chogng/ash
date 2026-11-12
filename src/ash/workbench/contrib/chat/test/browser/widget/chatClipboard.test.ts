@@ -122,7 +122,7 @@ suite('Chat clipboard in the rendered transcript', () => {
 		await row.focus();
 		assert.equal(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(true)), true);
 		const help = page.getByRole('dialog').getByRole('textbox');
-		await expect(help).toHaveValue(/“复制消息”保留 Markdown，并将内部资源链接复制为代码标签。复制选区时，内部链接也会替换为可见标签。/u);
+		await expect(help).toHaveValue(/“复制消息”保留 Markdown，并将内部资源链接复制为代码标签。复制选区时，内部链接也会替换为可见标签。将复制的消息粘贴到富文本编辑器，可保留正文中的图和图注。/u);
 		await help.press('Escape');
 		await expect(row).toBeFocused();
 	});

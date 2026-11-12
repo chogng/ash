@@ -29,6 +29,9 @@ const mediaTags = new Set(['img', 'video', 'audio', 'iframe', 'canvas', 'svg']);
 // This is routing to the shared HTML renderer, not a second HTML implementation.
 const htmlTags = new Set<string>([...basicMarkupHtmlTags, 'script', 'style', 'path', 'line', 'title', 'desc', 'canvas', 'iframe', 'audio', 'math']);
 const hiddenTags = new Set(['cite']);
+const writingDirectivePrefix = String.raw` {0,3}:::writing(?=\{|[ \t]*(?:\n|$))`;
+const writingDirective = new RegExp('^' + writingDirectivePrefix, 'u');
+const writingDirectiveStart = new RegExp('\n' + writingDirectivePrefix, 'u');
 const fallbackText = (): string => localize('sessions.chatgpt.viewContent', 'View this content in ChatGPT');
 const iconText = new Map(Object.entries({
 	'arrow-down': '↓', 'arrow-up': '↑', 'arrow-left': '←', 'arrow-right': '→', 'arrow-down-up': '⇅',
@@ -49,11 +52,11 @@ interface RichContent {
 }
 
 /** Read the component syntax as data; JSX expressions are never evaluated. */
-function readTag(source: string, allowCaption: boolean): RichTag | undefined {
+function readTag(source: string, layoutTag: string | undefined): RichTag | undefined {
 	const name = /^<\/?([a-z][\w-]*(?::[a-z][\w-]*)?)(?=[\s/>]|$)/iu.exec(source);
 	if (!name) { return undefined; }
 	const normalizedName = name[1].toLowerCase();
-	if (htmlTags.has(normalizedName) && name[1] !== 'Cite' && !mediaTags.has(normalizedName) && !(allowCaption && normalizedName === 'caption')) { return undefined; }
+	if (htmlTags.has(normalizedName) && name[1] !== 'Cite' && !mediaTags.has(normalizedName) && normalizedName !== layoutTag) { return undefined; }
 	let quote = '', braces = 0;
 	for (let index = name[0].length; index < Math.min(source.length, 8192); index++) {
 		const character = source[index];
@@ -83,40 +86,52 @@ function codeEnd(source: string, index: number): number | undefined {
 
 /** Writing metadata is a transport envelope, not Markdown or executable attributes. */
 function readWriting(source: string): { raw: string; body: string; complete?: true; title?: string; } | undefined {
-	const prefix = /^ {0,3}:::writing\{/u.exec(source);
+	const prefix = writingDirective.exec(source);
 	if (!prefix) { return undefined; }
-	let quote = false;
-	for (let index = prefix[0].length; index < Math.min(source.length, 8192); index++) {
-		const character = source[index];
-		if (character === '\\' && quote) { index++; continue; }
-		if (character === '"') { quote = !quote; }
-		if (character !== '}' || quote) { continue; }
-		const start = index + 1;
-		// Strip surrounding blank lines without removing the first block's indentation.
-		const body = (end: number) => source.slice(start, end).replace(/^(?:[ \t]*\n)+|(?:\n[ \t]*)+$/gu, '');
-		for (index = start; index < source.length;) {
-			const end = codeEnd(source, index);
-			if (end !== undefined) { index = end; continue; }
-			if (source.startsWith(':::', index) && /^(?:\s|$)/u.test(source.slice(index + 3))) {
-				const metadata = source.slice(prefix[0].length, start - 1);
-				const quotedTitle = /(?:^|\s)title=("(?:\\.|[^"\\])*")/u.exec(metadata)?.[1];
-				let title: string | undefined;
-				if (quotedTitle) {
-					try { title = (JSON.parse(quotedTitle) as string).trim(); }
-					catch { /* A malformed title does not affect the draft body. */ }
-				}
-				return { raw: source.slice(0, index + 3), body: body(index), complete: true, title };
-			}
-			index++;
+	let start = prefix[0].length;
+	let metadata: string | undefined;
+	if (source[start] === '{') {
+		let quote = false;
+		const limit = Math.min(source.length, 8192);
+		let index = start + 1;
+		for (; index < limit; index++) {
+			const character = source[index];
+			if (character === '\\' && quote) { index++; continue; }
+			if (character === '"') { quote = !quote; }
+			if (character === '}' && !quote) break;
 		}
-		// The body is useful before its closing delimiter arrives during streaming.
-		return { raw: source, body: body(source.length) };
+		if (index >= limit) return source.length < 8192 ? { raw: source, body: '' } : undefined;
+		metadata = source.slice(start + 1, index);
+		start = index + 1;
 	}
-	return source.length < 8192 ? { raw: source, body: '' } : undefined;
+	for (let index = start; index < source.length;) {
+		const end = codeEnd(source, index);
+		if (end !== undefined) { index = end; continue; }
+		if (source.startsWith(':::', index) && /^(?:\s|$)/u.test(source.slice(index + 3))) {
+			const raw = source.slice(0, index + 3);
+			const body = trimWritingBody(source.slice(start, index));
+			if (metadata === undefined) return { raw, body };
+			const quotedTitle = /(?:^|\s)title=("(?:\\.|[^"\\])*")/u.exec(metadata)?.[1];
+			let title: string | undefined;
+			if (quotedTitle) {
+				try { title = (JSON.parse(quotedTitle) as string).trim(); }
+				catch { /* A malformed title does not affect the draft body. */ }
+			}
+			return { raw, body, complete: true, title };
+		}
+		index++;
+	}
+	// The body is useful before its closing delimiter arrives during streaming.
+	return { raw: source, body: trimWritingBody(source.slice(start)) };
 }
 
-function readContent(source: string, allowCaption: boolean): RichContent | undefined {
-	const tag = readTag(source, allowCaption);
+function trimWritingBody(body: string): string {
+	// Keep indentation and trailing spaces on content lines for Markdown.
+	return body.replace(/^(?:[ \t]*\n)+|(?:\n[ \t]*)+$/gu, '');
+}
+
+function readContent(source: string, layoutTag: string | undefined): RichContent | undefined {
+	const tag = readTag(source, layoutTag);
 	if (!tag) { return undefined; }
 	if (tag.closing) { return { tag, raw: tag.raw, body: '' }; }
 	if (tag.selfClosing) { return { tag, raw: tag.raw, body: '' }; }
@@ -125,7 +140,7 @@ function readContent(source: string, allowCaption: boolean): RichContent | undef
 		const end = codeEnd(source, index);
 		if (end !== undefined) { index = end; continue; }
 		if (source[index] === '<') {
-			const nested = readTag(source.slice(index), allowCaption);
+			const nested = readTag(source.slice(index), layoutTag);
 			if (nested) {
 				if (nested.name === tag.name && !nested.selfClosing) { depth += nested.closing ? -1 : 1; }
 				if (depth === 0) {
@@ -198,6 +213,7 @@ function style(values: ReadonlyMap<string, string>): ChatMarkdownRichStyle {
 		radius: values.get('radius'), padding: values.get('padding'), gap: values.get('gap'),
 		align: values.get('textAlign') ?? values.get('align'), justify: values.get('justify'), background: values.get('background'),
 		color: values.get('color'), size: values.get('size'), border,
+		flex: values.get('flex')?.trim() === '1' ? '1' : undefined,
 		borderColor: /\bcolor\s*:\s*["']([^"']+)["']/u.exec(border ?? '')?.[1],
 	};
 }
@@ -217,8 +233,9 @@ function tokenize(this: TokenizerThis, source: string, level: 'block' | 'inline'
 	const depth = lexerDepth.get(this.lexer) ?? 0;
 	const leading = /^ {0,3}(?=<)/u.exec(source)?.[0] ?? '';
 	const markup = source.slice(leading.length);
-	// A layout caption is distinct from the HTML caption that names a table.
-	const isLayoutCaption = depth > 0 && level === 'block' && /^<\/?caption(?=[\s/>]|$)/iu.test(markup);
+	// Inside a rich layout these tags describe visible text. Outside it the
+	// HTML renderer owns table captions and document titles.
+	const layoutTag = depth > 0 && level === 'block' ? /^<\/?(caption|title)(?=[\s/>]|$)/iu.exec(markup)?.[1].toLowerCase() : undefined;
 	// SVG's standard <text> element shares a spelling with the web component.
 	// Let the shared HTML renderer own it while an SVG namespace is open.
 	let svgDepth = 0, tableDepth = 0;
@@ -227,16 +244,17 @@ function tokenize(this: TokenizerThis, source: string, level: 'block' | 'inline'
 		for (const match of token.raw.matchAll(/<\/?svg\b[^>]*>/giu)) {
 			svgDepth += match[0].startsWith('</') ? -1 : match[0].endsWith('/>') ? 0 : 1;
 		}
-		if (isLayoutCaption) {
+		if (layoutTag) {
 			for (const match of token.raw.matchAll(/<\/?table\b[^>]*>/giu)) {
 				tableDepth += match[0].startsWith('</') ? -1 : 1;
 			}
 		}
 	}
 	if (svgDepth > 0) { return undefined; }
-	const content = readContent(markup, isLayoutCaption && tableDepth === 0);
+	const content = readContent(markup, tableDepth === 0 ? layoutTag : undefined);
 	if (!content) { return undefined; }
 	const inline = inlineTags.has(content.tag.name) || level === 'inline';
+	const writing = content.tag.name === 'writingblock';
 	if (content.tag.name === 'svg') {
 		// Keep the SVG subtree intact for the image sanitizer.
 		return { type: 'chatgptRichContent', raw: leading + content.raw, tag: content.tag, inline };
@@ -247,7 +265,8 @@ function tokenize(this: TokenizerThis, source: string, level: 'block' | 'inline'
 		if (line.trim()) { indentation = Math.min(indentation, /^[ \t]*/u.exec(line)![0].length); }
 	}
 	// Remove the component's common indentation, preserving indentation inside code.
-	const body = inline ? content.body : lines.map(line => line.slice(Number.isFinite(indentation) ? indentation : 0)).join('\n').trim();
+	const body = inline ? content.body : writing ? trimWritingBody(content.body)
+		: lines.map(line => line.slice(Number.isFinite(indentation) ? indentation : 0)).join('\n').trim();
 	let tokens: Token[] = [];
 	const literal = depth >= 32 || content.tag.name === 'code';
 	if (!literal && !hiddenTags.has(content.tag.name)) {
@@ -255,7 +274,7 @@ function tokenize(this: TokenizerThis, source: string, level: 'block' | 'inline'
 		try { tokens = inline ? this.lexer.inlineTokens(body) : this.lexer.blockTokens(body); }
 		finally { lexerDepth.set(this.lexer, depth); }
 	}
-	return { type: 'chatgptRichContent', raw: leading + content.raw, tag: content.tag, tokens, inline, literal: literal ? renderAsPlaintext(body) : undefined, body };
+	return { type: writing && !literal ? 'chatgptWriting' : 'chatgptRichContent', raw: leading + content.raw, tag: content.tag, tokens, inline, literal: literal ? renderAsPlaintext(body) : undefined, body };
 }
 
 function referencesFor(ids: readonly string[], references: readonly ChatReplyReference[]) {
@@ -295,7 +314,7 @@ function richContentLexer(): Marked {
 			},
 		}, {
 			name: 'chatgptWriting', level: 'block',
-			start: source => /\n {0,3}:::writing\{/u.exec(source)?.index ?? -1,
+			start: source => writingDirectiveStart.exec(source)?.index ?? -1,
 			tokenizer(source) {
 				const depth = lexerDepth.get(this.lexer) ?? 0;
 				if (depth >= 32) return undefined;
@@ -314,7 +333,7 @@ function dataUri(mimeType: string, source: string): string {
 }
 
 /** Converts Web's JSX-style SVG into a standalone image for the existing preview. */
-function svgDiagram(source: string): ChatGPTImageGroup['images'][number] | undefined {
+function svgDiagram(source: string): { uri: string; label: string; } | undefined {
 	const ownerDocument = getDocument();
 	const fragment = sanitizeHtmlToFragment(source, {
 		ownerDocument,
@@ -414,7 +433,7 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		const url = parseWebLink(reference.url);
 		if (url) addCitation({ url, title: reference.title });
 	}
-	if (!/[<\[\uE200]|:::writing\{/u.test(normalized) && !/(?:https?:\/\/|www\.)\S*\?/iu.test(normalized)) {
+	if (!/[<\[\uE200]|:::writing/u.test(normalized) && !/(?:https?:\/\/|www\.)\S*\?/iu.test(normalized)) {
 		return { text: normalized, resources: [], ...(citations.size && { citations: [...citations.values()] }) };
 	}
 	const resources: ChatReplyResource[] = [];
@@ -441,7 +460,7 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		const block = !token.inline;
 		if (tag.name === 'svg') {
 			const image = svgDiagram(token.raw);
-			return image ? { kind: 'imageGallery', images: [image], block } : { kind: 'unavailableMedia', fallback, block };
+			return image ? { kind: 'image', ...image, block } : { kind: 'unavailableMedia', fallback, block };
 		}
 		const values = attributes(tag);
 		if (tag.name === 'divider') return { kind: 'markdown', markdown: '---', block: true };
@@ -505,6 +524,9 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		if (tag.name === 'box' || tag.name === 'row' || tag.name === 'text') {
 			return { kind: tag.name, markdown, style: style(values), fallback, block };
 		}
+		if (tag.name === 'badge') {
+			return markdown ? { kind: 'text', markdown, style: { appearance: 'badge' }, block } : '';
+		}
 		if (tag.name === 'grid') {
 			return markdown ? { kind: 'grid', columns: gridColumns(values.get('columns')), markdown, style: style(values), block } : '';
 		}
@@ -515,6 +537,11 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 			const presentation = style(values);
 			return markdown ? { kind: 'text', markdown, style: { ...presentation, color: presentation.color ?? 'secondary', size: presentation.size ?? 'sm' }, block } : '';
 		}
+		if (tag.name === 'title') {
+			const presentation = style(values);
+			const size = presentation.size === 'xl' ? 'lg' : presentation.size ?? 'lg';
+			return markdown ? { kind: 'text', markdown, style: { ...presentation, size }, block } : '';
+		}
 		const data = componentData(tag);
 		if (tag.name === 'chart' && data) {
 			try {
@@ -522,7 +549,9 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 				return resourcePart({ uri: dataUri('application/json', data), name: label || localize('chat.chart.label', 'Chart'), kind: 'chart' }, block, data);
 			} catch { /* Display invalid chart data as inert text. */ }
 		}
-		return label || markdown || data ? { kind: 'details', label, data, markdown, block } : '';
+		if (data || (label && markdown)) return { kind: 'details', label, data, markdown, block };
+		if (markdown) return { kind: 'markdown', markdown, block };
+		return label ? { kind: 'textLiteral', label, block } : '';
 	}
 
 	function projectReference(token: Tokens.Generic): ChatMarkdownRichPart | '' {
@@ -575,12 +604,6 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 	function project(token: Token, inline: boolean): ChatMarkdownRichPart | '' | undefined {
 		if (token.type === 'chatgptRichContent') return projectComponent(token);
 		if (token.type === 'chatgptWebReference') return projectReference(token);
-		if (token.type === 'chatgptWriting') {
-			const markdown = decode(token.body, token.tokens ?? [], false);
-			return token.complete && markdown.trim()
-				? { kind: 'writing', markdown, title: token.title, block: true }
-				: { kind: 'markdown', markdown, block: true };
-		}
 		if (token.type === 'html' && /^\s*<\/?(?:script|style)\b/iu.test(token.raw)) return '';
 		if (token.type === 'image' && !token.href.startsWith('data:image/')) {
 			return resourcePart({ uri: token.href, name: token.text || localize('sessions.chatgpt.image', 'Image'), kind: 'image' }, !inline);
@@ -650,6 +673,25 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 			}
 			if (start < 0) continue;
 			result += source.slice(cursor, start);
+			cursor = start + raw.length;
+			if (token.type === 'chatgptWriting') {
+				const inlineWriting = inline || token.inline === true;
+				const body = decode(token.body, token.tokens ?? [], inlineWriting, tableCell);
+				if (body.trim()) {
+					if (!inlineWriting) {
+						result = result.trimEnd();
+						if (result) result += '\n\n';
+					}
+					result += !inlineWriting && token.complete
+						? richContent.add({ kind: 'writing', markdown: body, title: token.title, block: true })
+						: body;
+					if (!inlineWriting && cursor < source.length && !source.startsWith('\n\n', cursor)) {
+						result += source.startsWith('\n', cursor) ? '\n' : '\n\n';
+					}
+				}
+				previous = token;
+				continue;
+			}
 			const part = project(token, inline);
 			const link = part === undefined && token.type === 'link' ? rewriteBodyLink(token as Tokens.Link, raw, tableCell) : undefined;
 			if (part !== undefined) {
@@ -671,7 +713,6 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 			} else {
 				result += raw;
 			}
-			cursor = start + raw.length;
 			if (token.type !== 'space') previous = token;
 		}
 		return result + source.slice(cursor);

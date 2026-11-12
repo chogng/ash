@@ -24,6 +24,8 @@ export interface IClipboardService {
 	/** Writes PNG bytes; a pending encoding preserves the browser's user-gesture lease. */
 	writeImage(data: Uint8Array | Promise<Uint8Array>): Promise<void>;
 	writeText(value: string, type?: string): Promise<void>;
+	/** Writes plain text and HTML as two representations of one item. The HTML may finish encoding after the user gesture. */
+	writeTextWithHtml?(text: string, html: Promise<string>): Promise<void>;
 	/** Reads the shared find term independently of copied text. */
 	readFindText(): Promise<string>;
 	writeFindText(text: string): Promise<void>;

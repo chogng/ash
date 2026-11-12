@@ -1,5 +1,5 @@
 import { localize, localize2 } from '../../../../../nls.js';
-import { h } from '../../../../../base/browser/dom.js';
+import { getActiveDocument, h } from '../../../../../base/browser/dom.js';
 import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { Button } from '../../../../../base/browser/ui/button/button.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
@@ -13,12 +13,13 @@ import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/commo
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
 import { IChatService, type ThreadRead } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService, withChatConversation } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { getCompletedChatResponseSource, type IChatListItem } from '../../common/model/chatViewModel.js';
 import { ChatMessageActionContext, IChatWidgetService, unwrapChatResponseActionContext } from '../chat.js';
-import { toPortableMarkdown } from '../widget/chatClipboard.js';
+import { renderChatClipboardHtml, toPortableMarkdown } from '../widget/chatClipboard.js';
 import { expandChatRichContentForCopy } from '../widget/chatMarkdownRichContent.js';
 
 // Single-host owners retain the established local address namespace.
@@ -230,8 +231,19 @@ export function registerChatCopyActions(): void {
 		public override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
 			context = unwrapChatResponseActionContext(context);
 			if (!context || typeof context !== 'object' || !('text' in context) || typeof context.text !== 'string' || !('type' in context) || context.type !== 'agentMessage' && context.type !== 'userMessage') return;
-			const text = context.type === 'userMessage' ? context.text : toPortableMarkdown(expandChatRichContentForCopy(context.text, (context as IChatListItem).markdown?.richContent));
-			await accessor.get(IClipboardService).writeText(text);
+			const clipboard = accessor.get(IClipboardService);
+			if (context.type === 'userMessage') {
+				await clipboard.writeText(context.text);
+				return;
+			}
+			const richContent = (context as IChatListItem).markdown?.richContent;
+			const text = toPortableMarkdown(expandChatRichContentForCopy(context.text, richContent));
+			if (clipboard.writeTextWithHtml && richContent?.parts.some(part => part.kind === 'image')) {
+				const html = renderChatClipboardHtml(context.text, richContent, getActiveDocument(), accessor.get(IWebWorkerService));
+				await clipboard.writeTextWithHtml(text, html);
+			} else {
+				await clipboard.writeText(text);
+			}
 		}
 	});
 	registerAction2(CopyChatSessionLinkAction);

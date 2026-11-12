@@ -1,4 +1,6 @@
+import { convertHtmlToMarkdown } from '../../../../../base/browser/htmlToMarkdown.js';
 import { renderAsPlaintext, renderWorkbenchMarkdown } from '../../../../../base/browser/markdownRenderer.js';
+import '../../../../../base/browser/ui/countBadge/countBadge.css';
 import { escapeIcons } from '../../../../../base/common/iconLabels.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { Marked, type MarkedExtension, type Token } from '../../../../../base/common/marked/marked.js';
@@ -13,6 +15,7 @@ import { getChatMarkdownExtensions } from './chatCjkMarkdown.js';
 export const CHAT_RESPONSE_DOWNLOAD_SCHEME = 'chat-response-download';
 export const CHAT_RESPONSE_ENTITY_SCHEME = 'chat-response-entity';
 export const CHAT_RESPONSE_WRITING_SCHEME = 'chat-response-writing';
+export const CHAT_RESPONSE_IMAGE_SCHEME = 'chat-response-image';
 export const chatSourcePreviewClass = 'ash-chat-source-preview';
 export const chatCitationLinkClass = 'ash-chat-citation-link';
 export const chatCitationClass = 'ash-chat-citation';
@@ -41,7 +44,8 @@ function classes(kind: 'box' | 'row' | 'grid' | 'text' | 'icon', style: ChatMark
 	const result = ['ash-chat-rich', `ash-chat-rich-${kind}`];
 	const variants: ReadonlyArray<readonly [keyof ChatMarkdownRichStyle, readonly string[]]> = [
 		['radius', ['sm', 'md', 'lg']], ['padding', ['0', '1', '2', '3', '4']], ['gap', ['0', '1', '2', '3', '4']],
-		['align', ['start', 'center', 'end', 'stretch']], ['justify', ['start', 'center', 'end']],
+		['align', ['start', 'center', 'end', 'stretch']], ['justify', ['start', 'center', 'end', 'between']],
+		['flex', ['1']],
 		['background', ['surface', 'surface-secondary']], ['color', kind === 'icon' ? ['secondary', 'success', 'danger'] : ['secondary']], ['size', ['xs', 'sm', 'lg']],
 	];
 	for (const [name, allowed] of variants) {
@@ -98,13 +102,20 @@ function renderCitations(part: Extract<ChatMarkdownRichPart, { kind: 'citations'
 	return `<span class="${chatCitationClass}"><span class="ash-chat-citation-label">$(${Lxicon.link.id})${escapeHTML(label)}<span class="ash-chat-citation-chevron">$(${Lxicon.chevronDown.id})</span></span><span class="ash-chat-citation-list">${entries}</span></span>`;
 }
 
-function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inLink: boolean, textOnly: boolean): string {
+function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inLink: boolean, textOnly: boolean, clipboardImages?: ReadonlyMap<string, string>): string {
 	switch (part.kind) {
 		case 'markdown': return body;
 		case 'writing':
 			return textOnly || inLink ? body : `<div>${body}${link(`${CHAT_RESPONSE_WRITING_SCHEME}:${index}`, localize('chat.writing.editInDocs', 'Edit in Docs'))}</div>`;
 		case 'textLiteral': return escapeHTML(part.label);
 		case 'entity': return textOnly || inLink ? escapeHTML(part.entity.label) : link(`${CHAT_RESPONSE_ENTITY_SCHEME}:${index}`, part.entity.label);
+		case 'image': {
+			const clipboardSource = clipboardImages?.get(part.uri);
+			if (clipboardSource) return `<img src="${escapeHTML(clipboardSource)}" alt="${escapeHTML(part.label)}">`;
+			if (textOnly || inLink) return escapeHTML(part.label);
+			const image = `<img src="${CHAT_RESPONSE_IMAGE_SCHEME}:${index}" alt="${escapeHTML(part.label)}">`;
+			return part.block ? `<div class="ash-chat-rich-image">${image}</div>` : image;
+		}
 		case 'imageGallery': {
 			const label = localize('chat.imageGallery.label', 'Image gallery');
 			if (textOnly || inLink) {
@@ -131,7 +142,10 @@ function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inL
 		case 'text': {
 			const tag = part.block ? 'div' : 'span';
 			const fallback = part.fallback && link(part.fallback.href, part.fallback.label);
-			return `<${tag} class="${classes(part.kind, part.style)}">${body || fallback || ''}</${tag}>`;
+			const content = body || fallback || '';
+			if (textOnly) return `<${tag}>${content}</${tag}>`;
+			const badge = part.kind === 'text' && part.style.appearance === 'badge' ? ' ash-badge outlined' : '';
+			return `<${tag} class="${classes(part.kind, part.style)}${badge}">${content}</${tag}>`;
 		}
 		case 'grid': {
 			const tag = part.block ? 'div' : 'span';
@@ -143,13 +157,18 @@ function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inL
 		}
 		case 'icon': {
 			const label = escapeHTML(part.label);
-			const content = !textOnly && part.icon
+			const fallback = label || link(part.fallback.href, part.fallback.label);
+			if (textOnly) return fallback;
+			const content = part.icon
 				? `$(${part.icon.id})<span class="ash-chat-rich-icon-text">${label}</span>`
-				: label || link(part.fallback.href, part.fallback.label);
+				: fallback;
 			return `<span class="${classes('icon', part.style)}">${content}</span>`;
 		}
-		case 'details':
-			return `<details class="ash-chat-rich" open><summary>${escapeHTML(part.label || localize('chat.richContent.details', 'Content'))}</summary>${body}${part.data ? `<pre><code>${escapeHTML(part.data)}</code></pre>` : ''}</details>`;
+		case 'details': {
+			const label = escapeHTML(part.label.trim());
+			const content = body + (part.data ? `<pre><code>${escapeHTML(part.data)}</code></pre>` : '');
+			return label && content ? `<details class="ash-chat-rich" open><summary>${label}</summary>${content}</details>` : content || label;
+		}
 		case 'citations': return renderCitations(part, inLink, textOnly);
 		case 'unavailableMedia':
 			return `<span class="ash-chat-markdown-media">${localize('chat.markdown.mediaUnavailable', 'Media content is unavailable here.')} ${link(part.fallback.href, part.fallback.label)}</span>`;
@@ -157,7 +176,7 @@ function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inL
 }
 
 /** Renders the referenced part after Markdown has established the enclosing list, paragraph or table cell. */
-export function chatMarkdownRichContentExtension(content: ChatMarkdownRichContent, textOnly = false): MarkedExtension {
+export function chatMarkdownRichContentExtension(content: ChatMarkdownRichContent, textOnly = false, clipboardImages?: ReadonlyMap<string, string>): MarkedExtension {
 	const pattern = escapeRegExpCharacters(content.markerPrefix) + '(\\d+):>';
 	const marker = new RegExp('^' + pattern, 'u');
 	const blockMarkers = new RegExp('\n' + pattern, 'gu');
@@ -190,7 +209,7 @@ export function chatMarkdownRichContentExtension(content: ChatMarkdownRichConten
 				const part = token.part as ChatMarkdownRichPart;
 				const tokens = token.tokens as Token[];
 				const body = part.block ? this.parser.parse(tokens) : this.parser.parseInline(tokens);
-				return renderPart(part, token.index as number, body, token.inLink === true, textOnly);
+				return renderPart(part, token.index as number, body, token.inLink === true, textOnly, clipboardImages);
 			},
 		})),
 	};
@@ -214,6 +233,26 @@ export function renderChatMarkdownPlaintext(markdown: string, useLinkFormatter =
 export function expandChatRichContentForCopy(markdown: string, content: ChatMarkdownRichContent | undefined): string {
 	if (!content) return markdown;
 	const parser = new Marked(...(getChatMarkdownExtensions(markdown, [chatMarkdownRichContentExtension(content, true)]) ?? []));
-	const markers = new RegExp(escapeRegExpCharacters(content.markerPrefix) + '\\d+:>', 'gu');
-	return markdown.replace(markers, marker => parser.parseInline(marker, { async: false }).replaceAll('\n', '&#10;').replaceAll('|', '&#124;'));
+	const markers = new RegExp(escapeRegExpCharacters(content.markerPrefix) + '(\\d+):>', 'gu');
+	return markdown.replace(markers, (marker: string, index: string, offset: number) => {
+		const part = content.parts[Number(index)];
+		if (!part) return marker;
+		if (part.kind === 'writing') return expandChatRichContentForCopy(part.markdown, content);
+		const end = offset + marker.length;
+		const standaloneLayout = part.block && (offset === 0 || markdown[offset - 1] === '\n') && (end === markdown.length || markdown[end] === '\n')
+			&& (part.kind === 'box' || part.kind === 'row' || part.kind === 'grid' || part.kind === 'gridItem' || part.kind === 'text');
+		// Block parsing finalizes nested inline tokens. Keep the layout's line breaks so
+		// adjacent labels and captions remain distinct when its wrappers are removed.
+		const html = part.block ? parser.parse(marker, { async: false, breaks: standaloneLayout }) : parser.parseInline(marker, { async: false });
+		if (standaloneLayout) {
+			const body = convertHtmlToMarkdown(html);
+			if (body) {
+				const before = offset > 0 && markdown[offset - 2] !== '\n' ? '\n' : '';
+				const after = end < markdown.length && markdown[end + 1] !== '\n' ? '\n' : '';
+				return before + body + after;
+			}
+		}
+		// A part embedded in a paragraph, list, or table must stay within its enclosing line.
+		return html.replaceAll('\n', '&#10;').replaceAll('|', '&#124;');
+	});
 }

@@ -52,6 +52,7 @@ export interface MarkdownSanitizerConfig {
 	readonly allowedAttributes?: { readonly override: ReadonlyArray<string | SanitizeAttributeRule>; };
 	readonly resolveFileLink?: (href: string) => string | undefined;
 	readonly allowedLinkSchemes?: { readonly augment: readonly string[]; };
+	readonly allowedMediaSchemes?: { readonly augment: readonly string[]; };
 	readonly remoteImageIsAllowed?: (uri: URI) => boolean;
 }
 
@@ -228,7 +229,8 @@ class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 		if (this.imageResourceLoader) {
 			for (const image of fragment.querySelectorAll<HTMLImageElement>('img[src]')) {
 				const resource = URI.parse(image.getAttribute('src')!);
-				if (!RESOURCE_IMAGE_SCHEMES.some(scheme => resource.scheme === scheme)) continue;
+				if (!RESOURCE_IMAGE_SCHEMES.some(scheme => resource.scheme === scheme)
+					&& !this.sanitizerConfig?.allowedMediaSchemes?.augment.includes(resource.scheme)) continue;
 				image.removeAttribute('src');
 				workspaceImages.push({ image, resource });
 			}
@@ -529,7 +531,7 @@ function createMarkdownSanitizerConfig(markdown: IMarkdownString | undefined, co
 		allowedLinkProtocols: {
 			override: [...DEFAULT_LINK_SCHEMES, ...(config?.allowedLinkSchemes?.augment ?? [])],
 		},
-		allowedMediaProtocols: { override: DEFAULT_MEDIA_SCHEMES },
+		allowedMediaProtocols: { override: [...DEFAULT_MEDIA_SCHEMES, ...(config?.allowedMediaSchemes?.augment ?? [])] },
 		mediaSourceIsAllowed: source => SAFE_DATA_IMAGE.test(source) || resolveMarkdownImageTarget(source, markdown, config) !== undefined,
 		replaceWithPlaintext: config?.replaceWithPlaintext,
 	};
@@ -622,7 +624,8 @@ function resolveMarkdownImageTarget(source: string, markdown: IMarkdownString | 
 		const image = new URL(source, base);
 		const scheme = image.protocol.slice(0, -1);
 		if (scheme === Schemas.data) return undefined;
-		if (!DEFAULT_MEDIA_SCHEMES.some(allowed => allowed === scheme) || image.username || image.password) return undefined;
+		if ((!DEFAULT_MEDIA_SCHEMES.some(allowed => allowed === scheme) && !config?.allowedMediaSchemes?.augment.includes(scheme))
+			|| image.username || image.password) return undefined;
 		const isLocalFile = scheme === Schemas.file && !image.hostname;
 		if (config?.remoteImageIsAllowed && !isLocalFile) {
 			if (!config.remoteImageIsAllowed(URI.parse(image.toString()))) return undefined;

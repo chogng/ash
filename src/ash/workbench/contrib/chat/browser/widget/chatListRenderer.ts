@@ -1,4 +1,4 @@
-import { triggerDownload } from '../../../../../base/browser/fileAccess.js';
+import { resourceFileName, saveResourceAs } from '../../../../services/files/browser/resourceSave.js';
 import { allowedMarkdownHtmlAttributes } from '../../../../../base/browser/markdownRenderer.js';
 import { isPortableLinkTarget } from '../../../../../base/common/htmlContent.js';
 import { equals } from '../../../../../base/common/objects.js';
@@ -270,6 +270,7 @@ export class ChatListItemRenderer extends Disposable {
 			canInspect: !!this.options.inspectResponseEntity && !!parts?.some(part => part.kind === 'entity'),
 			canReadGallery: !!this.options.readResponseResource && !!parts?.some(part => part.kind === 'imageGallery'),
 			canEditWriting: item.type === 'agentMessage' && !!parts?.some(part => part.kind === 'writing'),
+			canReadInlineImage: !!this.options.readResponseResource && !!parts?.some(part => part.kind === 'image'),
 		};
 	}
 
@@ -869,7 +870,7 @@ export class ChatListItemRenderer extends Disposable {
 			const resource = part?.kind === 'resource' && item.resources?.find(resource => resource.uri === part.uri);
 			if (!resource || !this.options.readResponseResource || signal.aborted) return;
 			const blob = await this.options.readResponseResource(item, URI.parse(resource.uri), signal);
-			if (!signal.aborted) triggerDownload(blob, resource.name, this.element.ownerDocument);
+			await this.instantiationService.invokeFunction(saveResourceAs, blob, resourceFileName(resource.name, ''), this.element.ownerDocument, { download: true, signal });
 			return;
 		}
 		if (externalLinks) {
@@ -991,7 +992,7 @@ export class ChatListItemRenderer extends Disposable {
 			part.render(item.plan);
 			body.append(part.domNode);
 		} else if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
-			const { canDownload, canInspect, canReadGallery, canEditWriting } = this.richActions(item);
+			const { canDownload, canInspect, canReadGallery, canReadInlineImage, canEditWriting } = this.richActions(item);
 			const linkPolicy = item.markdown?.linkPolicy;
 			const externalLinks = linkPolicy === 'external';
 			const linkLifetime = canDownload || canInspect || canEditWriting || externalLinks ? new AbortController() : undefined;
@@ -999,7 +1000,7 @@ export class ChatListItemRenderer extends Disposable {
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
 				getChatItem: () => this.item,
-				readGalleryImage: canReadGallery
+				readResponseImage: canReadGallery || canReadInlineImage
 					? (uri: URI, signal: AbortSignal) => this.options.readResponseResource!(this.item, uri, signal) : undefined,
 				codeBlockPresentation: item.type === 'agentMessage' ? this.options.codeBlockPresentation : undefined,
 				visible: this.options.isVisible() && (item.type === 'reasoning' ? this.options.thinkingExpansion.get(item.id) === true
@@ -1010,6 +1011,7 @@ export class ChatListItemRenderer extends Disposable {
 				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
 				allowInlineDiffs: item.type === 'agentMessage',
+				showContentActions: item.type === 'agentMessage',
 				fileReferenceDirectory: !externalLinks && this.options.onDidRequestLink ? item.fileReferenceDirectory : undefined,
 				actionHandler: linkLifetime
 					? (target: string) => {

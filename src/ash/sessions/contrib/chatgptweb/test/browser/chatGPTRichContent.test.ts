@@ -12,7 +12,7 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IMarkdownRendererService, MarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
 import { ChatContentMarkdownRenderer } from '../../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
-import { chatMarkdownRichContentExtension, renderChatRichContentText } from '../../../../../workbench/contrib/chat/browser/widget/chatMarkdownRichContent.js';
+import { chatMarkdownRichContentExtension, expandChatRichContentForCopy, renderChatRichContentText } from '../../../../../workbench/contrib/chat/browser/widget/chatMarkdownRichContent.js';
 import { decodeChatGPTReply } from '../../browser/chatGPTRichContent.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { ChatGPTClient, type ChatGPTReference } from '../../browser/chatGPTClient.js';
@@ -50,10 +50,30 @@ suite('ChatGPT rich content', () => {
 		assert.doesNotMatch(text, /Edit in Docs/u);
 	});
 
+	test('renders and copies all writing formats as Markdown', () => {
+		const body = '### 杭州周末\n\n**两间房**共1160元。\n\n~~~text\n:::\n~~~';
+		const expected = 'Before\n\n' + body + '\n\nAfter';
+		const metadata = 'variant="document" id="64821" title="A } quoted title"';
+		for (const writing of [
+			'<WritingBlock ' + metadata + '>\n' + body + '\n</WritingBlock>',
+			':::writing{' + metadata + '}' + body + ':::',
+			':::writing\n' + body + '\n:::',
+		]) {
+			const source = 'Before\n' + writing + '\nAfter';
+			const decoded = decodeChatGPTReply(source);
+			assert.equal(expandChatRichContentForCopy(decoded.text, decoded.richContent), expected);
+			const html = render(source);
+			assert.match(html, /Before[\s\S]*<h3[^>]*>杭州周末<\/h3>[\s\S]*<strong>两间房<\/strong>共1160元。[\s\S]*After/u);
+			assert.doesNotMatch(html, /<details|<summary|writingblock|variant=|64821|quoted title/iu);
+			assert.match(getChatGPTRichContentText(source), /Before[\s\S]*杭州周末[\s\S]*1160[\s\S]*After/u);
+		}
+	});
+
 	test('keeps writing text while streaming and preserves writing examples inside code', () => {
 		assert.match(render(':::writing{variant="chat_message"}**Visible draft**'), /<strong>Visible draft<\/strong>/u);
 		assert.ok(!decodeChatGPTReply(':::writing{variant="chat_message"}**Visible draft**').richContent?.parts.some(part => part.kind === 'writing'));
 		assert.match(render(':::writing{title="Indented example"}\n    echo ready\n:::'), /<pre[\s\S]*<code>echo ready/u);
+		assert.match(render('<WritingBlock variant="document">\n### Visible draft\n\n    indented code'), /<h3[^>]*>Visible draft<\/h3>[\s\S]*<pre><code>indented code/u);
 		assert.doesNotMatch(render('Before\n\n:::writing{variant="chat_message'), /:::|variant=/u);
 		const source = '`:::writing{id="inline"}literal:::`\n\n```text\n:::writing{id="fenced"}example:::\n```';
 		const root = document.createElement('div'); root.innerHTML = render(source);
@@ -397,7 +417,19 @@ suite('ChatGPT rich content', () => {
 		assert.doesNotMatch(html, /title=/u);
 	});
 
-	test('retains unknown cards as disclosures and charts as isolated interactive resources', () => {
+	test('renders badges as text in a rich row and in an ordinary paragraph', () => {
+		const row = '<row justify="between" align=center>\n  **状态 A：容易翻转**\n  <badge>写入</badge>\n</row>';
+		const source = row + '\n\n状态 B <badge>保持</badge>。';
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		assert.equal(root.querySelector('.ash-chat-rich-row.justify-between.align-center > .ash-badge')?.textContent?.trim(), '写入');
+		assert.equal(root.querySelector('p > span.ash-badge')?.textContent, '保持');
+		assert.equal(root.querySelector('details, summary'), null);
+		assert.match(getChatGPTRichContentText(source), /状态 A：容易翻转\s+写入[\s\S]*状态 B\s+保持/u);
+		assert.doesNotMatch(render(row.slice(0, row.indexOf('</badge>'))), /details|summary|<badge/u);
+	});
+
+	test('keeps unknown wrapper bodies, titled disclosures and isolated charts', () => {
 		const source = '<FuturePanel title="Panel title"><FutureCard>**Card body**</FutureCard></FuturePanel>\n\n<Chart title="Sales" data={[{"month":"May","amount":42}]}/>\n\nTail';
 		const html = render(source);
 		const root = document.createElement('div'); root.innerHTML = html;
@@ -405,7 +437,9 @@ suite('ChatGPT rich content', () => {
 		const chart = decodeChatGPTReply(source).resources[0]!;
 		assert.equal(chart.kind, 'chart');
 		assert.deepEqual(JSON.parse(decodeURIComponent(chart.uri.slice(chart.uri.indexOf(',') + 1))), [{ month: 'May', amount: 42 }]);
-		assert.equal(root.querySelectorAll('details').length, 2);
+		assert.equal(root.querySelectorAll('details').length, 1);
+		assert.equal(root.querySelector('details > summary')?.textContent, 'Panel title');
+		assert.equal(root.querySelector('details strong')?.textContent, 'Card body');
 		assert.doesNotMatch(html, /ash-chat-rich-fallback/u);
 		assert.doesNotMatch(html, /<\/?(?:FuturePanel|FutureCard|Chart)\b/u);
 		assert.match(getChatGPTRichContentText(source), /Card body[\s\S]*Sales[\s\S]*May[\s\S]*42/u);
@@ -416,6 +450,8 @@ suite('ChatGPT rich content', () => {
 		const source = '<FutureCard value={42} description="Score"/>\n\n<Chart data={missingValues()}/>\n\n<Chart title="Unknown schema" data={{"points":{"May":42},"caption":"Retained caption"}}/>';
 		root.innerHTML = render(source);
 		assert.match(root.textContent ?? '', /Score[\s\S]*42[\s\S]*missingValues\(\)/u);
+		assert.deepEqual([...root.querySelectorAll('summary')].map(summary => summary.textContent), ['Score']);
+		assert.match(root.querySelector('pre:not(details pre)')?.textContent ?? '', /missingValues\(\)/u);
 		const chart = decodeChatGPTReply(source).resources[0]!;
 		assert.deepEqual(JSON.parse(decodeURIComponent(chart.uri.slice(chart.uri.indexOf(',') + 1))), { points: { May: 42 }, caption: 'Retained caption' });
 	});
@@ -463,19 +499,19 @@ suite('ChatGPT rich content', () => {
 		].join('\n');
 		const source = '<grid columns={3}><grid-item><box>\n' + svg + '\n</box></grid-item></grid>\n\nCaption';
 		const reply = decodeChatGPTReply(source);
-		const galleries = reply.richContent?.parts.filter(part => part.kind === 'imageGallery') ?? [];
-		assert.equal(galleries.length, 1);
-		assert.equal(galleries[0]?.images[0]?.label, '插层');
+		const diagrams = reply.richContent?.parts.filter(part => part.kind === 'image') ?? [];
+		assert.equal(diagrams.length, 1);
+		assert.equal(diagrams[0]?.label, '插层');
 		assert.deepEqual(reply.resources, []);
 
 		const root = document.createElement('div');
 		root.innerHTML = render(source);
-		assert.ok(root.querySelector('.ash-chat-rich-grid-item > .ash-chat-rich-box > .ash-chat-image-gallery'));
+		assert.ok(root.querySelector('.ash-chat-rich-grid-item > .ash-chat-rich-box > .ash-chat-rich-image'));
 		assert.match(root.textContent ?? '', /Caption/u);
 		assert.match(getChatGPTRichContentText(source), /插层[\s\S]*Caption/u);
 		assert.doesNotMatch(root.innerHTML, /<svg|<rect|invalid\.test/u);
 
-		const image = await new ChatGPTClient().readResource(URI.parse(galleries[0]!.images[0]!.uri).toString(), undefined, '', new AbortController().signal);
+		const image = await new ChatGPTClient().readResource(URI.parse(diagrams[0]!.uri).toString(), undefined, '', new AbortController().signal);
 		assert.match(image.type, /^image\/svg\+xml\b/u);
 		const imageDocument = new document.defaultView!.DOMParser().parseFromString(await image.text(), 'image/svg+xml');
 		assert.equal(imageDocument.documentElement.namespaceURI, 'http://www.w3.org/2000/svg');

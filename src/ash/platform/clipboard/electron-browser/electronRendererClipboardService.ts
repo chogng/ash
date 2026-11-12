@@ -35,6 +35,10 @@ export class ElectronRendererClipboardService implements IClipboardService {
 		return invoke<void>('ash:host:writeClipboard', type ? { text: value, type } : value);
 	}
 
+	public async writeTextWithHtml(text: string, html: Promise<string>): Promise<void> {
+		await invoke<void>('ash:host:writeClipboardHtml', { text, html: await html });
+	}
+
 	public readFindText(): Promise<string> {
 		return invoke<string>('ash:host:readFindClipboard');
 	}
