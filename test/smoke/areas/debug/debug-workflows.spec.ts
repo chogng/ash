@@ -404,7 +404,7 @@ test('Rust JavaScript provider releases a launched target when its window connec
 	await expect(pane.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
 });
 
-test('Rust server-ready opens its matching URL once through the native opener', tags, async ({ application, workbench, testWorkspace }) => {
+test('Rust server-ready opens its complete URL once through the native opener', tags, async ({ application, workbench, testWorkspace }) => {
 	if (!('windows' in application)) throw new Error('Native opener acceptance requires Electron');
 	await application.evaluate(({ shell }) => {
 		const saved = shell.openExternal;
@@ -415,10 +415,27 @@ test('Rust server-ready opens its matching URL once through the native opener', 
 	try {
 		const root = testWorkspace.directory;
 		await mkdir(join(root, '.vscode'), { recursive: true });
-		await writeFile(join(root, 'open.cjs'), "console.log('READY 4567'); console.log('READY 4567'); setInterval(() => {}, 1000);\n");
-		await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: 'Server URL', type: 'node', request: 'launch', runtimeExecutable: process.execPath, program: '${workspaceFolder}/open.cjs', cwd: '${workspaceFolder}', console: 'internalConsole', serverReadyAction: { action: 'openExternally', pattern: 'READY (\\d+)', uriFormat: 'http://localhost:%s/status' } }] }));
+		await writeFile(join(root, 'open.cjs'), `const fs = require('node:fs');
+process.stdout.write('READY 300');
+const timer = setInterval(() => {
+	if (!fs.existsSync('finish-ready-output')) return;
+	clearInterval(timer);
+	process.stdout.write('0\\nREADY 4000\\n');
+	setInterval(() => {}, 1000);
+}, 20);
+`);
+		await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: 'Server URL', type: 'node', request: 'launch', runtimeExecutable: process.execPath, program: '${workspaceFolder}/open.cjs', cwd: '${workspaceFolder}', console: 'internalConsole', outputCapture: 'std', serverReadyAction: { action: 'openExternally', pattern: 'READY (\\d+)', uriFormat: 'http://localhost:%s/status' } }] }));
+		const openedUrls = () => application.evaluate(() => (globalThis as typeof globalThis & { debugWorkflowOpener: { urls: string[]; }; }).debugWorkflowOpener.urls);
 		await workbench.quickaccess.runCommand('workbench.action.debug.start');
-		await expect.poll(async () => application.evaluate(() => (globalThis as typeof globalThis & { debugWorkflowOpener: { urls: string[]; }; }).debugWorkflowOpener.urls)).toEqual(['http://localhost:4567/status']);
+		await expect.poll(() => workbench.page.evaluate(() => {
+			type OutputFrame = { method?: string; messages?: { message: { event?: string; body?: { category?: string; output?: string; }; }; }[]; };
+			const { frames } = (globalThis as typeof globalThis & { debugWorkflowTrace: { frames: OutputFrame[]; }; }).debugWorkflowTrace;
+			return frames.some(frame => frame.method === 'debug/adapter/read' && frame.messages?.some(({ message }) =>
+				message.event === 'output' && message.body?.category === 'stdout' && message.body.output === 'READY 300'));
+		})).toBe(true);
+		expect(await openedUrls()).toEqual([]);
+		await writeFile(join(root, 'finish-ready-output'), '');
+		await expect.poll(openedUrls).toEqual(['http://localhost:3000/status']);
 		await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
 	} finally {
 		await application.evaluate(() => (globalThis as typeof globalThis & { debugWorkflowOpener: { restore(): void; }; }).debugWorkflowOpener.restore());

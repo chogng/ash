@@ -230,6 +230,45 @@ struct State {
     disposed: bool,
     generation: u64,
 }
+impl State {
+    fn capture_output(&mut self, category: &str, text: &str, pattern: &Regex) -> Option<String> {
+        static ANSI: OnceLock<Regex> = OnceLock::new();
+        if self.disposed
+            || self.fired
+            || !matches!(category, "stdout" | "stderr" | "console" | "terminal")
+        {
+            return None;
+        }
+
+        let buffer = self.output.entry(category.into()).or_default();
+        // A bounded raw buffer preserves escape sequences and UTF-8 across output chunks.
+        buffer.push_str(text);
+        if buffer.len() > 32768 {
+            let mut start = buffer.len() - 32768;
+            while !buffer.is_char_boundary(start) {
+                start += 1;
+            }
+            buffer.drain(..start);
+        }
+        let plain = ANSI
+            .get_or_init(|| {
+                Regex::new(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
+                    .expect("constant ANSI expression")
+            })
+            .replace_all(buffer, "");
+        // DAP and terminal chunks can end in the middle of a port or URL.
+        // Match only the completed lines, including their terminators for custom patterns.
+        let end = plain.rfind('\n')?;
+        let capture = pattern
+            .captures(&plain[..=end])?
+            .get(1)?
+            .as_str()
+            .to_owned();
+        self.fired = true;
+        self.output.clear();
+        Some(capture)
+    }
+}
 struct Tracker {
     jobs: mpsc::SyncSender<Work>,
     owns_action: bool,
@@ -244,43 +283,11 @@ impl Tracker {
         text: &str,
         token: &CancellationToken,
     ) -> Result<(), ExtensionError> {
-        static ANSI: OnceLock<Regex> = OnceLock::new();
-        let capture = {
-            let mut state = self.state.lock().map_err(|_| invalid(&self.action.error))?;
-            if state.disposed
-                || state.fired
-                || !matches!(category, "stdout" | "stderr" | "console" | "terminal")
-            {
-                return Ok(());
-            }
-            let buffer = state.output.entry(category.into()).or_default();
-            // A bounded raw buffer preserves escape sequences and UTF-8 across output chunks.
-            buffer.push_str(text);
-            if buffer.len() > 32768 {
-                let mut start = buffer.len() - 32768;
-                while !buffer.is_char_boundary(start) {
-                    start += 1;
-                }
-                buffer.drain(..start);
-            }
-            let plain = ANSI
-                .get_or_init(|| {
-                    Regex::new(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
-                        .expect("constant ANSI expression")
-                })
-                .replace_all(buffer, "");
-            let capture = self
-                .action
-                .pattern
-                .captures(&plain)
-                .and_then(|captures| captures.get(1))
-                .map(|capture| capture.as_str().to_owned());
-            if capture.is_some() {
-                state.fired = true;
-                state.output.clear();
-            }
-            capture
-        };
+        let capture = self
+            .state
+            .lock()
+            .map_err(|_| invalid(&self.action.error))?
+            .capture_output(category, text, &self.action.pattern);
         let Some(capture) = capture else {
             return Ok(());
         };
