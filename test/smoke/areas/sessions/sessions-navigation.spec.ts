@@ -1,10 +1,14 @@
-import { readFile, realpath } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
+import { URI } from '../../../../src/ash/base/common/uri.js';
+import { FileKind } from '../../../../src/ash/platform/files/common/files.js';
+import { getSingleFolderWorkspaceIdentifier } from '../../../../src/ash/platform/workspaces/node/workspaces.js';
 import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
 
 test('Bots keeps Code navigation and search separate', async ({ target, workbench }) => {
@@ -187,7 +191,34 @@ test('Sessions restores the Projects entry and its pane visibility through entry
 	await chatEditor().waitForEditorContents(text => text === draft);
 });
 
-test('Artifacts creation and example cards use the retained editor and conversation', { tag: ['@browser-ui', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench, application, testWorkspace }) => {
+test('Artifacts creation cards select a Chat draft type without creating an artifact', { tag: ['@browser-ui', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const artifacts = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true });
+	const home = page.locator('.ash-creator-home');
+	const sessions = page.locator('[data-part="sessions"]');
+	const conversation = new Editor(sessions.locator(':is(.chat-composer, .native-chat-composer):visible'));
+	const pill = sessions.locator('.ash-chat-input-artifact-pill:visible');
+	for (const kind of ['docs', 'slides', 'design', 'sheet', 'whiteboard', 'data', 'motion']) {
+		await artifacts.click();
+		const card = home.locator(`.ash-artifacts-create.${kind}`);
+		if (kind === 'docs') await card.click();
+		else await card.press('Enter');
+		await expect(home).toBeHidden();
+		await expect(page.locator('[data-part="editor"]')).toBeHidden();
+		await expect(conversation.input).toBeFocused();
+		await expect(pill).toHaveAttribute('data-artifact-kind', kind);
+	}
+	await conversation.waitForTypeInEditor('Animate this draft');
+	await pill.getByRole('button', { name: 'Remove Ash Motion', exact: true }).press('Enter');
+	await expect(pill).toHaveCount(0);
+	await expect(conversation.input).toBeFocused();
+	await conversation.waitForEditorContents(text => text === 'Animate this draft');
+	await artifacts.click();
+	await home.getByRole('tab', { name: 'Yours', exact: true }).press('Enter');
+	await expect(home.locator('.ash-artifacts-card')).toHaveCount(0);
+});
+
+test('Artifacts examples use the retained editor and conversation', { tag: ['@browser-ui', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.setViewportSize({ width: 1440, height: 860 });
 	const navigation = page.locator('.ash-sessions-activity-content');
@@ -209,63 +240,79 @@ test('Artifacts creation and example cards use the retained editor and conversat
 		['motion', '.ash-canvas-editor-toolbar', '.ash-sessions-design-stage'],
 	] as const;
 	for (const [kind, toolbarSelector, bodySelector] of cases) {
-		for (const selector of [`.ash-artifacts-create.${kind}`, `[data-artifact-example="${kind}"]`]) {
-			await artifacts.click();
-			await editor.locator(selector).press('Enter');
-			const toolbar = editor.locator(`${toolbarSelector}:visible`);
-			const body = editor.locator(`${bodySelector}:visible`);
-			await expect(toolbar).toBeVisible();
-			await expect(body).toBeVisible();
-			await expect(editor.locator('.ash-editor-tabs')).toBeHidden();
-			await expect(editor.locator('.stanza-editor-pane:visible')).toHaveCount(0);
-			await expect(sidebar).toBeVisible();
-			await expect(sessions).toBeVisible();
+		await artifacts.click();
+		await editor.locator(`[data-artifact-example="${kind}"]`).press('Enter');
+		const toolbar = editor.locator(`${toolbarSelector}:visible`);
+		const body = editor.locator(`${bodySelector}:visible`);
+		await expect(toolbar).toBeVisible();
+		await expect(body).toBeVisible();
+		await expect(editor.locator('.ash-editor-tabs')).toBeHidden();
+		await expect(editor.locator('.stanza-editor-pane:visible')).toHaveCount(0);
+		await expect(sidebar).toBeVisible();
+		await expect(sessions).toBeVisible();
+		await expect(details).toBeHidden();
+		expect((await toolbar.boundingBox())!.y).toBeLessThan((await body.boundingBox())!.y);
+		const toggle = toolbar.getByRole('button', { name: kind === 'docs' ? 'Document tools' : 'Show Secondary Side Bar', exact: true });
+		if (kind === 'sheet' || kind === 'data') {
+			await expect(body.getByRole('table')).toBeVisible();
+			await expect(toggle).toHaveCount(0);
+		} else {
+			await toggle.click();
+			await expect(details).toBeVisible();
+			expect(await details.evaluate(element => element.closest('[data-part="editor"]') !== null)).toBe(true);
+			if (kind === 'slides') continue;
+			await toolbar.getByRole('button', { name: kind === 'docs' ? 'Document tools' : 'Hide Secondary Side Bar', exact: true }).click();
 			await expect(details).toBeHidden();
-			expect((await toolbar.boundingBox())!.y).toBeLessThan((await body.boundingBox())!.y);
-			const toggle = toolbar.getByRole('button', { name: kind === 'docs' ? 'Document tools' : 'Show Secondary Side Bar', exact: true });
-			if (kind === 'sheet' || kind === 'data') {
-				await expect(body.getByRole('table')).toBeVisible();
-				await expect(toggle).toHaveCount(0);
-				if (selector.startsWith('.')) {
-					await body.getByRole('textbox', { name: 'Cell A1', exact: true }).fill('A draft value');
-					await expect(toolbar.getByRole('toolbar', { name: 'Workspace actions' }).getByRole('button')).toHaveCount(1);
-					await body.getByRole('button', { name: 'Add row', exact: true }).press('Enter');
-					await expect(body.getByRole('textbox', { name: 'Cell A2', exact: true })).toBeFocused();
-					await expect(body.getByRole('textbox', { name: 'Cell A1', exact: true })).toHaveValue('A draft value');
-					await body.getByRole('button', { name: 'Add column', exact: true }).press('Enter');
-					await expect(body.getByRole('textbox', { name: 'Cell D1', exact: true })).toBeFocused();
-					if (kind === 'sheet' && target.appServerMode === 'required' && 'windows' in application) {
-						const output = join(await realpath(testWorkspace.directory), 'artifact-sheet.csv');
-						await application.evaluate(({ dialog }, filePath) => {
-							dialog.showSaveDialog = async () => ({ canceled: false, filePath });
-						}, output);
-						await toolbar.getByRole('button', { name: 'Export CSV', exact: true }).click();
-						await expect.poll(() => readFile(output, 'utf8').catch(() => '')).toBe('"A draft value","","",""\r\n"","","",""');
-					}
-				}
-			} else {
-				await toggle.click();
-				await expect(details).toBeVisible();
-				expect(await details.evaluate(element => element.closest('[data-part="editor"]') !== null)).toBe(true);
-				if (kind === 'slides' && selector.startsWith('[')) continue;
-				await toolbar.getByRole('button', { name: kind === 'docs' ? 'Document tools' : 'Hide Secondary Side Bar', exact: true }).click();
-				await expect(details).toBeHidden();
-			}
 		}
 	}
+
 	expect(await sessions.evaluate((element, original) => element === original, retained)).toBe(true);
 	await retained!.dispose();
 	await conversation.waitForEditorContents(text => text === 'Keep this conversation alongside Artifacts');
 });
 
-test('Artifacts restores editable Sheet and Data drafts after reopening', { tag: ['@electron-ui', '@browser-ui'] }, async ({ target, application, workbench }) => {
+test('Artifacts restores editable Sheet and Data drafts after reopening', { tag: ['@electron-ui', '@browser-ui', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	const openArtifacts = () => page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	const table = (kind: string) => page.locator(`.ash-artifact-table-workspace.editable.${kind}:visible`);
 	const drafts = [['sheet', 'Quarterly budget'], ['data', 'Pilot cohort']] as const;
+	const files = drafts.map(([kind, value]) => ({
+		name: `${randomUUID()}.json`, content: JSON.stringify({ kind, rows: [[value, '', '']] }),
+	}));
+	if ('windows' in application) {
+		const profile = await application.evaluate(() => process.env.ASH_HOME!);
+		const workspaceId = getSingleFolderWorkspaceIdentifier(URI.file(await realpath(testWorkspace.directory))).id;
+		const directory = join(profile, 'creator', workspaceId, 'tables');
+		await mkdir(directory, { recursive: true });
+		await Promise.all(files.map(file => writeFile(join(directory, file.name), file.content)));
+	} else {
+		const workspaceId = await page.evaluate(() => globalThis.ashWebWorkbenchHost?.workspace?.id ?? 'sessions');
+		const directory = URI.from({ scheme: 'ash-userdata', path: '/user/creator' }).joinPathSegment(encodeURIComponent(workspaceId)).joinPathSegment('tables');
+		await page.evaluate(async ({ directory, files, directoryKind, fileKind }) => {
+			const database = await new Promise<IDBDatabase>((resolve, reject) => {
+				const request = indexedDB.open('ash-user-data-files', 1);
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+			try {
+				await new Promise<void>((resolve, reject) => {
+					const transaction = database.transaction('files', 'readwrite');
+					const store = transaction.objectStore('files');
+					const put = (key: string, kind: FileKind, bytes: Uint8Array) =>
+						store.put({ kind, bytes, revision: crypto.randomUUID(), modifiedAtMillis: Date.now() }, key);
+					put(directory, directoryKind, new Uint8Array());
+					for (const { resource, content } of files) put(resource, fileKind, new TextEncoder().encode(content));
+					transaction.oncomplete = () => resolve();
+					transaction.onabort = () => reject(transaction.error);
+				});
+			} finally { database.close(); }
+		}, {
+			directory: directory.toString(), directoryKind: FileKind.Directory, fileKind: FileKind.File,
+			files: files.map(file => ({ ...file, resource: directory.joinPathSegment(file.name).toString() })),
+		});
+	}
+
 	const waitForBrowserSave = async (value: string) => {
 		if (target.kind !== 'browser') { return; }
-		// Browser reload cannot join a native shutdown. Wait for the actual background write.
+		// Browser reload cannot join a native shutdown. Wait for the background write.
 		await expect.poll(() => page.evaluate(async expected => {
 			const database = await new Promise<IDBDatabase>((resolve, reject) => {
 				const request = indexedDB.open('ash-user-data-files', 1);
@@ -281,20 +328,36 @@ test('Artifacts restores editable Sheet and Data drafts after reopening', { tag:
 			} finally { database.close(); }
 		}, value)).toBe(true);
 	};
+	const openArtifacts = () => page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
+	const openTable = (kind: string) => page.locator(`.ash-artifacts-card.${kind}[data-artifact-workspace]`).press('Enter');
+	const table = (kind: string) => page.locator(`.ash-artifact-table-workspace.editable.${kind}:visible`);
 	for (const [kind, value] of drafts) {
 		await openArtifacts();
-		await page.locator(`.ash-artifacts-create.${kind}`).press('Enter');
+		await openTable(kind);
 		const body = table(kind);
-		await body.getByRole('textbox', { name: 'Cell A1', exact: true }).fill(value);
+		await expect(body.getByRole('textbox', { name: 'Cell A1', exact: true })).toHaveValue(value);
 		await body.getByRole('button', { name: 'Add row', exact: true }).press('Enter');
-		await body.getByRole('textbox', { name: 'Cell A2', exact: true }).fill(`${value} details`);
+		const cell = body.getByRole('textbox', { name: 'Cell A2', exact: true });
+		await expect(cell).toBeFocused();
+		await cell.fill(`${value} details`);
+		await body.getByRole('button', { name: 'Add column', exact: true }).press('Enter');
+		await expect(body.getByRole('textbox', { name: 'Cell D1', exact: true })).toBeFocused();
+		if (kind === 'sheet' && target.appServerMode === 'required' && 'windows' in application) {
+			const output = join(await realpath(testWorkspace.directory), 'artifact-sheet.csv');
+			await application.evaluate(({ dialog }, filePath) => {
+				dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+			}, output);
+			await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
+			await expect.poll(() => readFile(output, 'utf8').catch(() => '')).toBe('"Quarterly budget","","",""\r\n"Quarterly budget details","","",""');
+		}
 	}
+
 	await waitForBrowserSave('Pilot cohort details');
 	page = await workbench.reopenAgentsWindow(application, page);
 	for (const [kind, value] of drafts) {
 		await openArtifacts();
 		await page.getByRole('tab', { name: 'Yours', exact: true }).press('Enter');
-		await page.locator(`.ash-artifacts-card.${kind}[data-artifact-workspace]`).press('Enter');
+		await openTable(kind);
 		const body = table(kind);
 		await expect(body.getByRole('textbox', { name: 'Cell A1', exact: true })).toHaveValue(value);
 		await expect(body.getByRole('textbox', { name: 'Cell A2', exact: true })).toHaveValue(`${value} details`);
@@ -303,7 +366,7 @@ test('Artifacts restores editable Sheet and Data drafts after reopening', { tag:
 	await waitForBrowserSave('Edited Pilot cohort');
 	page = await workbench.reopenAgentsWindow(application, page);
 	await openArtifacts();
-	await page.locator('.ash-artifacts-card.data[data-artifact-workspace]').press('Enter');
+	await openTable('data');
 	await expect(table('data').getByRole('textbox', { name: 'Cell A2', exact: true })).toHaveValue('Edited Pilot cohort');
 });
 

@@ -35,8 +35,8 @@ import { artifactKinds, isArtifactKind, type ArtifactKind } from '../../../commo
 import { ARTIFACT_EXAMPLE_SCHEME, getArtifactExamples, OPEN_ARTIFACT_EXAMPLE, type CanvasArtifactExample, type TableArtifactExample } from './artifactExamples.js';
 import { ArtifactTableWorkspace } from './artifactTableWorkspace.js';
 import { ArtifactTableDrafts, type TableArtifactKind } from './artifactTableDrafts.js';
+import { OPEN_ARTIFACT_DRAFT_COMMAND_ID } from '../../chat/common/constants.js';
 
-export const NEW_ARTIFACT = 'sessions.creator.newArtifact';
 export const OPEN_CANVAS_ARTIFACT = 'sessions.creator.openCanvasArtifact';
 
 interface ArtifactCard {
@@ -261,7 +261,7 @@ export class ArtifactsEditorView extends Disposable {
 	private createTile(container: HTMLElement, kind: ArtifactKind): Button {
 		const button = this._register(new Button(container, {
 			...defaultButtonStyles, label: getArtifactTitle(kind),
-			onClick: () => { void this.commands.executeCommand(NEW_ARTIFACT, kind); },
+			onClick: () => { void this.commands.executeCommand(OPEN_ARTIFACT_DRAFT_COMMAND_ID, kind); },
 		}));
 		button.domNode.classList.add('ash-artifacts-create', kind);
 		button.domNode.prepend(this.createIllustration(kind));
@@ -426,11 +426,6 @@ export class ArtifactsEditorView extends Disposable {
 		}
 		this.storage.remove('sessions.creator.activeMode', StorageScope.WORKSPACE);
 		this.activateWorkspace({ key, title: document.name, kind: document.artifactKind, mode }, workspace);
-	}
-
-	public createTable(kind: TableArtifactKind): void {
-		const draft = this.tables.create(kind);
-		this.openTable(draft.id);
 	}
 
 	public openTable(id: string): void {

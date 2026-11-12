@@ -24,7 +24,7 @@ import { IChatEntityDetails, type ChatEntityDetailsSource } from './chatEntityDe
 import type { IChatWidgetViewOptions } from '../../../../workbench/contrib/chat/browser/chat.js';
 import type { IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ReplyChatInputFactory, type ReplyChatDraftPicker } from './replyChatInput.js';
-import { ChatInputArtifactPill, getArtifactDraftHelp, type ArtifactDraftModel } from '../../artifacts/browser/chatInputArtifactPill.js';
+import { ChatInputArtifactPill, getArtifactDraftHelp, type ArtifactDraftModel } from './chatInputArtifactPill.js';
 import { ChatView, NewChatView } from './chatView.js';
 
 export interface ICompactChatModel extends IChatWidgetModel, ArtifactDraftModel {

@@ -117,9 +117,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 			const cards = page.locator('.ash-creator-modes');
 			await expect(cards.locator('.ash-artifacts-create')).toHaveText(['文档', '幻灯片', '设计', '电子表格', '白板', '数据', '动效']);
-			await cards.getByRole('button', { name: '动效', exact: true }).press('Enter');
-			await expect(page.locator('.ash-code-page-group .ash-canvas-editor-toolbar:visible')).toBeVisible();
-			await expect(page.locator('.ash-code-page-group .ash-design-motion-widget:visible')).toBeVisible();
+			const motion = cards.getByRole('button', { name: '动效', exact: true });
+			await motion.press('Alt+F1');
+			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/打开新的聊天草稿/u);
+			await page.keyboard.press('Escape');
+			await expect(motion).toBeFocused();
+			await motion.press('Enter');
+			await expect(page.locator('.ash-chat-input-artifact-pill:visible')).toHaveText('Ash 动效');
+			await expect(page.locator('[data-part="editor"]')).toBeHidden();
 			await expect(page.locator('[data-part="sessions"]')).toBeVisible();
 		}
 	});
