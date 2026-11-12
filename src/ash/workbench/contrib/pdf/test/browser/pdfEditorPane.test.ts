@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { CancellationError } from '../../../../../base/common/errors.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { FileKind } from '../../../../../platform/files/common/files.js';
 import { EditorPaneMatch } from '../../../../../workbench/browser/parts/editor/editorPane.js';
@@ -135,6 +136,183 @@ test('PDF reading shortcuts precede document commands only while the pane is foc
 	assert.equal(globalKeys, 2);
 	dom.window.close();
 });
+
+for (const change of ['add', 'update', 'delete', 'undo', 'redo'] as const) {
+	test(`PDF editor retains ${change} during a delayed save and persists it with the next revision`, async () => {
+		using fixture = await createSavingFixture();
+		const { dom, pane, annotations } = fixture;
+		addNote(dom);
+		if (change === 'redo') {
+			addNote(dom);
+			actionButton(dom, 'ash.pdf.annotations.undo').click();
+		}
+		const pending = pane.save();
+		assert.equal(annotations.requests.length, 1);
+		const duplicate = pane.save();
+		assert.equal(annotations.requests.length, 1);
+		if (change === 'add') addNote(dom);
+		if (change === 'update') {
+			const text = dom.window.document.querySelector<HTMLTextAreaElement>('.ash-pdf-annotation-text')!;
+			assert.equal(text.disabled, false);
+			text.value = 'Edited while saving';
+			text.dispatchEvent(new dom.window.Event('change'));
+		}
+		if (change === 'delete') actionButton(dom, 'ash.pdf.annotations.delete').click();
+		if (change === 'undo') actionButton(dom, 'ash.pdf.annotations.undo').click();
+		if (change === 'redo') actionButton(dom, 'ash.pdf.annotations.redo').click();
+		assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, true);
+		const items = () => [...dom.window.document.querySelectorAll('.ash-pdf-annotation-list-item')].map(item => item.textContent);
+		const edited = items();
+		const expectedCounts = { add: 2, update: 1, delete: 0, undo: 0, redo: 2 };
+		assert.equal(edited.length, expectedCounts[change]);
+		const history = { undo: actionButton(dom, 'ash.pdf.annotations.undo').disabled, redo: actionButton(dom, 'ash.pdf.annotations.redo').disabled };
+		await annotations.complete(0);
+		await Promise.all([pending, duplicate]);
+		assert.deepEqual(items(), edited);
+		assert.deepEqual({ undo: actionButton(dom, 'ash.pdf.annotations.undo').disabled, redo: actionButton(dom, 'ash.pdf.annotations.redo').disabled }, history);
+		assert.match(dom.window.document.querySelector('.ash-pdf-annotation-status')!.textContent!, /Unsaved annotations/);
+		assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, false);
+		actionButton(dom, change === 'undo' ? 'ash.pdf.annotations.redo' : 'ash.pdf.annotations.undo').click();
+		assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, true);
+		actionButton(dom, change === 'undo' ? 'ash.pdf.annotations.undo' : 'ash.pdf.annotations.redo').click();
+		assert.deepEqual(items(), edited);
+		const second = pane.save();
+		assert.equal(annotations.requests[1].expectedRevision, 'revision-1');
+		assert.equal(annotations.requests[1].document.annotations.length, edited.length);
+		if (change === 'update') assert.equal(annotations.requests[1].document.annotations[0].kind === 'note' && annotations.requests[1].document.annotations[0].text, 'Edited while saving');
+		await annotations.complete(1);
+		await second;
+		assert.deepEqual(items(), edited);
+		assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, true);
+		assert.equal(dom.window.document.querySelector('.ash-pdf-annotation-status')!.textContent, 'Annotations saved');
+	});
+}
+
+test('PDF editor acknowledges a delayed save without intervening edits', async () => {
+	using fixture = await createSavingFixture();
+	const { dom, pane, annotations } = fixture;
+	addNote(dom);
+	const pending = pane.save();
+	assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, true);
+	await annotations.complete(0);
+	await pending;
+	assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, true);
+	assert.equal(dom.window.document.querySelector('.ash-pdf-annotation-status')!.textContent, 'Annotations saved');
+	actionButton(dom, 'ash.pdf.annotations.undo').click();
+	assert.equal(dom.window.document.querySelectorAll('.ash-pdf-annotation-note').length, 0);
+	assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, false);
+	actionButton(dom, 'ash.pdf.annotations.redo').click();
+	assert.equal(dom.window.document.querySelectorAll('.ash-pdf-annotation-note').length, 1);
+	assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, true);
+});
+
+test('PDF editor keeps edits and the previous revision after a failed save, then retries', async () => {
+	using fixture = await createSavingFixture();
+	const { dom, pane, annotations } = fixture;
+	addNote(dom);
+	const pending = assert.rejects(pane.save(), /write failed/);
+	addNote(dom);
+	await annotations.requests[0].result.error(new Error('write failed'));
+	await pending;
+	assert.equal(dom.window.document.querySelectorAll('.ash-pdf-annotation-note').length, 2);
+	assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, false);
+	assert.match(dom.window.document.querySelector('.ash-pdf-annotation-status')!.textContent!, /Could not save annotations: write failed/);
+	const retry = pane.save();
+	assert.equal(annotations.requests[1].expectedRevision, 'initial');
+	assert.equal(annotations.requests[1].document.annotations.length, 2);
+	await annotations.complete(1);
+	await retry;
+	assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, true);
+	assert.equal(dom.window.document.querySelectorAll('.ash-pdf-annotation-note').length, 2);
+});
+
+for (const transition of ['switch', 'reopen', 'close', 'retire'] as const) {
+	for (const outcome of ['success', 'failure'] as const) {
+		test(`PDF editor ignores a delayed ${outcome} after input ${transition}`, async () => {
+			using fixture = await createSavingFixture();
+			const { dom, pane, annotations, provider, resourceInput } = fixture;
+			addNote(dom);
+			const pending = assert.rejects(pane.save(), outcome === 'success' ? CancellationError : /old write failed/);
+			if (transition === 'retire') {
+				addNote(dom);
+				provider.abort();
+			} else {
+				pane.clearInput();
+			}
+			assert.equal(annotations.requests[0].signal.aborted, true);
+			let next: Promise<void> | undefined;
+			if (transition === 'switch' || transition === 'reopen') {
+				await pane.setInput(transition === 'switch' ? input('other.pdf') : resourceInput, new AbortController().signal);
+				addNote(dom);
+				next = pane.save();
+				assert.equal(annotations.requests.length, 2, 'The new input can save independently of the cancelled request');
+			}
+			const status = dom.window.document.querySelector('.ash-pdf-annotation-status')!.textContent;
+			if (outcome === 'success') await annotations.complete(0);
+			else await annotations.requests[0].result.error(new Error('old write failed'));
+			await pending;
+			assert.equal(dom.window.document.querySelector('.ash-pdf-annotation-status')!.textContent, status);
+			const expectedCounts = { switch: 1, reopen: 1, close: 0, retire: 2 };
+			assert.equal(dom.window.document.querySelectorAll('.ash-pdf-annotation-note').length, expectedCounts[transition]);
+			assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, true);
+			if (next) {
+				const duplicate = pane.save();
+				assert.equal(annotations.requests.length, 2);
+				await annotations.complete(1);
+				await Promise.all([next, duplicate]);
+				assert.equal(annotations.requests[1].expectedRevision, 'initial');
+			}
+		});
+	}
+}
+
+interface SavingFixture extends IDisposable {
+	readonly dom: JSDOM;
+	readonly pane: PdfEditorPane;
+	readonly annotations: DelayedAnnotationStore;
+	readonly provider: AbortController;
+	readonly resourceInput: IResourceEditorInput;
+}
+
+async function createSavingFixture(): Promise<SavingFixture> {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const annotations = new DelayedAnnotationStore();
+	const services = createTestComponentServices(undefined, undefined, dom.window.document);
+	const pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, annotations, new TestRenderer());
+	const provider = new AbortController();
+	pane.bindProvider(provider.signal);
+	pane.create(dom.window.document.body);
+	const resourceInput = input('paper.pdf');
+	await pane.setInput(resourceInput, new AbortController().signal);
+	const dispose = () => { pane.dispose(); services.dispose(); dom.window.close(); };
+	return { dom, pane, annotations, provider, resourceInput, dispose, [Symbol.dispose]: dispose };
+}
+
+function addNote(dom: JSDOM): void {
+	actionButton(dom, 'ash.pdf.annotations.note').click();
+	const layer = dom.window.document.querySelector<HTMLElement>('.ash-pdf-annotation-layer')!;
+	setLayerBounds(layer);
+	layer.dispatchEvent(pointer(dom, 'pointerdown', 100, 60));
+}
+
+class DelayedAnnotationStore implements IPdfAnnotationStore {
+	readonly requests: { readonly resource: URI; readonly document: PdfAnnotationDocument; readonly expectedRevision: string | undefined; readonly signal: AbortSignal; readonly result: DeferredPromise<PdfAnnotationSnapshot>; }[] = [];
+
+	async load(): Promise<PdfAnnotationSnapshot> {
+		return { document: emptyPdfAnnotationDocument(), revision: 'initial' };
+	}
+
+	save(resource: URI, document: PdfAnnotationDocument, expectedRevision: string | undefined, signal: AbortSignal): Promise<PdfAnnotationSnapshot> {
+		const result = new DeferredPromise<PdfAnnotationSnapshot>();
+		this.requests.push({ resource, document, expectedRevision, signal, result });
+		return result.p;
+	}
+
+	async complete(index: number): Promise<void> {
+		const request = this.requests[index];
+		await request.result.complete({ document: request.document, revision: `revision-${index + 1}` });
+	}
+}
 
 test('workspace PDF loader reads only through the binary file contract', async () => {
 	const resource = URI.file('C:\\project\\paper.pdf');
