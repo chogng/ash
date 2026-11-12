@@ -310,6 +310,7 @@ impl<'ctx, C: TerminalRequestProcessorContext + ?Sized> TerminalRequestProcessor
             lifetime_token: params.lifetime_token,
             terminal_id: params.terminal_id,
             reconnect_token: params.reconnect_token,
+            attach_nonce: params.attach_nonce,
             rows: params.rows,
             cols: params.cols,
         };

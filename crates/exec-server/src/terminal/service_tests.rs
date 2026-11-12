@@ -73,6 +73,7 @@ fn auto_reply_rules_are_atomic_owned_and_revoked_at_each_handoff() {
         .attach(
             2,
             TerminalAttachRequest {
+                attach_nonce: None,
                 lifetime_token: None,
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: lease.reconnect_token,
@@ -99,6 +100,7 @@ fn auto_reply_rules_are_atomic_owned_and_revoked_at_each_handoff() {
         .attach(
             3,
             TerminalAttachRequest {
+                attach_nonce: None,
                 lifetime_token: None,
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: token,
@@ -175,6 +177,7 @@ fn revoked_directory_terminates_detached_sessions_and_rejects_new_work() {
         service.attach(
             2,
             TerminalAttachRequest {
+                attach_nonce: None,
                 lifetime_token: None,
                 terminal_id: created.terminal_id,
                 reconnect_token: created.reconnect.unwrap().reconnect_token,
@@ -230,6 +233,7 @@ fn explicit_handoff_revokes_live_owner_preserves_pid_and_rotates_credentials() {
         .attach(
             2,
             TerminalAttachRequest {
+                attach_nonce: None,
                 lifetime_token: None,
                 terminal_id: identity.clone(),
                 reconnect_token: handoff.reconnect_token.clone(),
@@ -245,6 +249,7 @@ fn explicit_handoff_revokes_live_owner_preserves_pid_and_rotates_credentials() {
         service.attach(
             1,
             TerminalAttachRequest {
+                attach_nonce: None,
                 lifetime_token: None,
                 terminal_id: identity.clone(),
                 reconnect_token: handoff.reconnect_token,
@@ -258,6 +263,7 @@ fn explicit_handoff_revokes_live_owner_preserves_pid_and_rotates_credentials() {
         .attach(
             2,
             TerminalAttachRequest {
+                attach_nonce: None,
                 lifetime_token: None,
                 terminal_id: identity.clone(),
                 reconnect_token: attached.reconnect.reconnect_token,
@@ -281,6 +287,7 @@ fn cancelled_handoff_can_be_reclaimed_and_expired_handoff_is_terminated() {
         .attach(
             1,
             TerminalAttachRequest {
+                attach_nonce: None,
                 lifetime_token: None,
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: handoff.reconnect_token,
@@ -297,6 +304,71 @@ fn cancelled_handoff_can_be_reclaimed_and_expired_handoff_is_terminated() {
         assert!(sessions.is_empty());
     }
     assert_eq!(service.active_count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn attach_replays_final_output_and_status_after_disconnected_child_exits() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let mut request = terminal_request(TerminalLifecycle::Reconnectable);
+    request.execution = Some(TerminalExecution::Process {
+        program: "/bin/sh".into(),
+        args: TerminalArguments::Argv(vec![
+            "-c".into(),
+            "until [ -f release ]; do sleep 0.01; done; printf 'FINAL_OUTPUT\\n'; exit 7".into(),
+        ]),
+    });
+    let created = service.create(1, request).unwrap();
+    let id = created.terminal_id;
+    service.close_owner(1);
+    std::fs::write(root.path().join("release"), b"").unwrap();
+
+    let state = service.sessions.lock().unwrap()[&id].state.clone();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !state.lock().unwrap().exited {
+        assert!(
+            Instant::now() < deadline,
+            "terminal did not finish draining"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    let attached = service
+        .attach(
+            2,
+            TerminalAttachRequest {
+                attach_nonce: None,
+                lifetime_token: None,
+                terminal_id: id.clone(),
+                reconnect_token: created.reconnect.unwrap().reconnect_token,
+                rows: 40,
+                cols: 120,
+            },
+        )
+        .unwrap();
+    assert_eq!(attached.ready, created.ready);
+    let result = service
+        .read(
+            2,
+            TerminalReadRequest {
+                terminal_id: id.clone(),
+                after_sequence: 0,
+                after_command_sequence: 0,
+                max_chunks: 128,
+            },
+        )
+        .unwrap();
+    assert!(!result.output_gap);
+    assert!(result.exited);
+    assert_eq!(result.exit_code, Some(7));
+    let output: Vec<_> = result
+        .chunks
+        .into_iter()
+        .flat_map(|chunk| chunk.data)
+        .collect();
+    assert_eq!(output, b"FINAL_OUTPUT\r\n");
+    service.close(2, &id).unwrap();
 }
 
 #[test]
@@ -570,6 +642,7 @@ fn backpressure_is_isolated_and_a_detached_producer_resumes_after_attach() {
         .attach(
             2,
             TerminalAttachRequest {
+                attach_nonce: None,
                 lifetime_token: None,
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: created.reconnect.unwrap().reconnect_token,
@@ -723,6 +796,7 @@ fn terminal_process_properties_follow_resize_and_reject_other_connections() {
         .attach(
             2,
             TerminalAttachRequest {
+                attach_nonce: None,
                 lifetime_token: None,
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: created.reconnect.unwrap().reconnect_token,

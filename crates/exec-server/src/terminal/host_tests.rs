@@ -131,6 +131,7 @@ fn attach(
     service.attach(
         1,
         TerminalAttachRequest {
+            attach_nonce: None,
             lifetime_token: Some(TEST_LIFETIME.into()),
             terminal_id: id.into(),
             reconnect_token: token.into(),
@@ -217,10 +218,38 @@ fn host_retains_the_same_pty_across_app_server_connection_replacement() {
         attach(second.service(), id, "invalid"),
         Err(TerminalError::AttachRejected)
     );
-    let attached = attach(second.service(), id, &token).unwrap();
+    let request = TerminalAttachRequest {
+        attach_nonce: Some("a".repeat(32)),
+        lifetime_token: Some(TEST_LIFETIME.into()),
+        terminal_id: id.clone(),
+        reconnect_token: token.clone(),
+        rows: 30,
+        cols: 100,
+    };
+    let attached = second.service().attach(1, request.clone()).unwrap();
     assert_eq!(attached.ready.pid, created.ready.pid);
     assert_ne!(attached.reconnect.reconnect_token, token);
-    second
+    drop(second);
+
+    let restored = Peer::new(root.path(), &services, &next_owner);
+    let other_lifetime = "b".repeat(64);
+    services
+        .lock()
+        .unwrap()
+        .lifetimes
+        .insert(other_lifetime.clone(), Arc::new(AtomicBool::new(true)));
+    assert_eq!(
+        restored.service().attach(
+            1,
+            TerminalAttachRequest {
+                lifetime_token: Some(other_lifetime),
+                ..request.clone()
+            },
+        ),
+        Err(TerminalError::AttachRejected)
+    );
+    assert_eq!(restored.service().attach(1, request).unwrap(), attached);
+    restored
         .service()
         .write(
             1,
@@ -230,18 +259,18 @@ fn host_retains_the_same_pty_across_app_server_connection_replacement() {
             },
         )
         .unwrap();
-    wait_output(second.service(), id, b"HOST_AFTER");
-    let info = second.service().process_info(1, id).unwrap();
+    wait_output(restored.service(), id, b"HOST_AFTER");
+    let info = restored.service().process_info(1, id).unwrap();
     assert_eq!((info.rows, info.cols), (30, 100));
     assert_eq!(info.ready.pid, created.ready.pid);
-    second.service().close_owner(1);
+    restored.service().close_owner(1);
     assert_eq!(
-        attach(second.service(), id, &token),
+        attach(restored.service(), id, &token),
         Err(TerminalError::AttachRejected)
     );
-    attach(second.service(), id, &attached.reconnect.reconnect_token).unwrap();
-    second.service().close(1, id).unwrap();
-    assert_eq!(second.service().active_count(), 0);
+    attach(restored.service(), id, &attached.reconnect.reconnect_token).unwrap();
+    restored.service().close(1, id).unwrap();
+    assert_eq!(restored.service().active_count(), 0);
 }
 
 #[test]
@@ -378,6 +407,7 @@ fn host_reattachment_retains_the_current_session_directory_revocation_proof() {
     drop(peer);
     let next = Peer::new(root.path(), &services, &next_owner);
     let request = TerminalAttachRequest {
+        attach_nonce: None,
         lifetime_token: Some(TEST_LIFETIME.into()),
         terminal_id: created.terminal_id.clone(),
         reconnect_token: token,
@@ -745,6 +775,7 @@ fn session_directory_restore_order_does_not_change_the_original_pty_owner() {
         .attach_in_dir(
             1,
             TerminalAttachRequest {
+                attach_nonce: None,
                 lifetime_token: Some(TEST_LIFETIME.into()),
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: token,
@@ -797,6 +828,7 @@ fn session_directory_restore_order_does_not_change_the_original_pty_owner() {
         .attach_in_dir(
             1,
             TerminalAttachRequest {
+                attach_nonce: None,
                 lifetime_token: Some(TEST_LIFETIME.into()),
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: attached.reconnect.reconnect_token,
@@ -976,6 +1008,7 @@ fn offered_handoffs_outlive_the_source_window_and_adopt_the_target_window_lifeti
         .attach(
             1,
             TerminalAttachRequest {
+                attach_nonce: None,
                 lifetime_token: Some(target_token),
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: lease.reconnect_token,

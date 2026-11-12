@@ -7,7 +7,7 @@ import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { APP_SERVER_METHODS } from '../../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_METHODS, type TerminalAttachParams } from '../../../../../../.build/protocol/typescript/index.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { AppServerRemoteError } from '../../../agentHost/common/appServerError.js';
 import type { AppServerConnectionState } from '../../../agentHost/common/appServerApi.js';
@@ -271,7 +271,9 @@ test('a replacement renderer attaches the original process and rotates its hando
 	const attached = await replacement.attach(credential, dimensions, created.profile);
 	assert.deepEqual(attached.ready, created.ready);
 	assert.equal(supervisor.requests.filter(request => request.method === 'terminal/create').length, 1);
-	assert.deepEqual(supervisor.requests.find(request => request.method === 'terminal/attach')?.params, { terminalId: created.terminalId, dirId: 'folder', reconnectToken: FIRST_TOKEN, cols: 120, rows: 40 });
+	const attach = supervisor.requests.find(request => request.method === 'terminal/attach')!.params as TerminalAttachParams;
+	assert.match(attach.attachNonce!, /^[0-9a-f]{32}$/);
+	assert.deepEqual(attach, { terminalId: created.terminalId, dirId: 'folder', reconnectToken: FIRST_TOKEN, attachNonce: attach.attachNonce, cols: 120, rows: 40 });
 	assert.deepEqual(supervisor.requests.at(-1), { method: 'terminal/processInfo', params: { terminalId: created.terminalId, dirId: 'folder' } });
 	assert.equal((await replacement.getReconnectLease(created.terminalId))!.reconnectToken, SECOND_TOKEN);
 	await replacement.close({ terminalId: created.terminalId, dirId: 'folder' });
@@ -365,12 +367,16 @@ test('Remote terminal leases stay in the renderer and rotate across connection g
 	assert.deepEqual(supervisor.requests.at(-1), { method: 'terminal/writeBinary', params: { terminalId: 'terminal-1', dataBase64: 'AID/' } });
 	const firstGenerationAttachments = supervisor.requests.filter(request => request.method === 'terminal/attach');
 	assert.equal(firstGenerationAttachments.length, 2);
+	const firstAttempt = firstGenerationAttachments[0].params as TerminalAttachParams;
+	assert.match(firstAttempt.attachNonce!, /^[0-9a-f]{32}$/);
 	assert.deepEqual(firstGenerationAttachments[0]?.params, {
 		terminalId: 'terminal-1',
 		reconnectToken: FIRST_TOKEN,
+		attachNonce: firstAttempt.attachNonce,
 		rows: 24,
 		cols: 80,
 	});
+	assert.deepEqual(firstGenerationAttachments[1].params, firstAttempt);
 	assert.deepEqual(failures, []);
 
 	supervisor.emit('crashed');
@@ -378,15 +384,55 @@ test('Remote terminal leases stay in the renderer and rotate across connection g
 	supervisor.emit('ready');
 	await waitFor(() => supervisor.successfulAttachments === 2);
 	const attachments = supervisor.requests.filter(request => request.method === 'terminal/attach');
-	assert.deepEqual(attachments.at(-1)?.params, {
+	const secondAttempt = attachments.at(-1)!.params as TerminalAttachParams;
+	assert.match(secondAttempt.attachNonce!, /^[0-9a-f]{32}$/);
+	assert.notEqual(secondAttempt.attachNonce, firstAttempt.attachNonce);
+	assert.deepEqual(secondAttempt, {
 		terminalId: 'terminal-1',
 		reconnectToken: SECOND_TOKEN,
+		attachNonce: secondAttempt.attachNonce,
 		rows: 40,
 		cols: 120,
 	});
 
 	await service.close({ terminalId: 'terminal-1' });
 	assert.equal(supervisor.requests.at(-1)?.method, 'terminal/close');
+});
+
+for (const mode of ['recovery', 'restore'] as const) test(`terminal ${mode} reuses its unacknowledged attachment across connection generations`, async () => {
+	const supervisor = new TestSupervisor();
+	let now = 0;
+	using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient, { now: () => now, wait: async milliseconds => { now += milliseconds; } });
+	const terminalId = 'terminal-1';
+	const lostReply = new DeferredPromise<void>();
+	supervisor.attachReply = lostReply.p;
+	let restoring: ReturnType<typeof service.attach> | undefined;
+	if (mode === 'restore') {
+		restoring = service.attach({ terminalId, reconnectToken: FIRST_TOKEN, reconnectGracePeriodMillis: 30_000 }, { rows: 24, cols: 80 }, { profileId: 'shell', title: 'Shell', isDefault: true });
+	} else {
+		await service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
+		supervisor.emit('crashed');
+		supervisor.generation++;
+		supervisor.emit('ready');
+	}
+	await waitFor(() => supervisor.requests.some(request => request.method === 'terminal/attach'));
+
+	// A request timeout can close the connection after the first grace period.
+	now = 30_000;
+	supervisor.emit('crashed');
+	await lostReply.error(new Error('connection closed before the attach reply arrived'));
+	supervisor.attachReply = undefined;
+	supervisor.attachFailures = 1;
+	supervisor.generation++;
+	supervisor.emit('ready');
+	await restoring;
+	await service.read({ terminalId, afterSequence: 0, afterCommandSequence: 0, maxChunks: 1 });
+	const attempts = supervisor.requests.filter(request => request.method === 'terminal/attach');
+	assert.equal(attempts.length, 3);
+	assert.deepEqual(attempts[1].params, attempts[0].params);
+	assert.deepEqual(attempts[2].params, attempts[0].params);
+	assert.equal((await service.getReconnectLease(terminalId))?.reconnectToken, SECOND_TOKEN);
+	await service.close({ terminalId });
 });
 
 test('Remote terminal creation rejects malformed leases before exposing a terminal', async () => {
@@ -597,6 +643,10 @@ class TestSupervisor {
 	onStateChange(listener: (state: AppServerConnectionState) => void) {
 		this.listeners.add(listener);
 		return toDisposable(() => this.listeners.delete(listener));
+	}
+
+	whenReady(): Promise<void> {
+		return waitFor(() => this.state === 'ready');
 	}
 
 	emit(state: AppServerConnectionState): void {
