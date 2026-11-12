@@ -15,6 +15,8 @@ import { chatInputStackSlotClass, ChatInputStackSlot, setChatInputStackSlot } fr
 /** Presents conversation snapshots and polls the optional Git provider while New Chat is visible. */
 export class ChatChangesPill extends Disposable {
 	readonly domNode: HTMLDivElement;
+	/** Mount point for change review actions alongside the summary. */
+	readonly actionsDomNode: HTMLDivElement;
 	readonly summaryVisible = observableValue(this, false);
 	private readonly button: Button;
 	private readonly counts: HTMLSpanElement;
@@ -35,13 +37,15 @@ export class ChatChangesPill extends Disposable {
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'div', { className: `ash-chat-input-changes ${chatInputStackSlotClass}` });
+		this.actionsDomNode = h(container.ownerDocument, 'div', { className: 'ash-chat-changes-actions' });
+		this.domNode.append(this.actionsDomNode);
 		this.domNode.hidden = true;
 		container.append(this.domNode);
 		this._register(toDisposable(() => {
 			setChatInputStackSlot(this.domNode, ChatInputStackSlot.Empty);
 			this.domNode.remove();
 		}));
-		this.button = this._register(new Button(this.domNode, {
+		this.button = this._register(new Button(this.actionsDomNode, {
 			...defaultButtonStyles,
 			label: '',
 			icon: Lxicon.diff,
@@ -128,7 +132,7 @@ export class ChatChangesPill extends Disposable {
 	}
 
 	private updateRowVisibility(): void {
-		const hidden = !this.domNode.querySelector(':scope > button:not([hidden])');
+		const hidden = !this.domNode.querySelector('button:not([hidden])');
 		if (this.domNode.hidden === hidden) return;
 		this.domNode.hidden = hidden;
 		setChatInputStackSlot(this.domNode, hidden ? ChatInputStackSlot.Empty : ChatInputStackSlot.Standalone);

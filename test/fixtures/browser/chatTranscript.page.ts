@@ -504,6 +504,11 @@ let allowAppCsp = false;
 let appCallMode: 'read' | 'delay' | 'error' = 'read';
 let appItems: readonly IChatListItem[] = [];
 let hasConversationChanges = false;
+const conversationChanges = {
+	changes: { files: 1, additions: 1, deletions: 1 },
+	changesRevision: 'fixture-revision',
+	changesRepositories: [{ repositoryId: 'fixture-repo', files: [{ path: 'sample.ts', kind: 'modified' as const, binary: false, additions: 1, deletions: 1 }] }],
+};
 let responseWorking = false;
 let appChat: ChatWidget | NativeChatWidget | undefined;
 let composerServices: InstantiationService | undefined;
@@ -1394,7 +1399,7 @@ window.ashChatTranscriptIntegration = {
 			},
 			get inputState() {
 				const aiDisabled = services.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId);
-				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: responseWorking, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, changes: hasConversationChanges ? { files: 1, additions: 1, deletions: 1 } : undefined };
+				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: responseWorking, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, ...(hasConversationChanges ? conversationChanges : {}) };
 			},
 			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
 			executeServerCommand: async () => { }, interrupt: async () => { }, refreshChanges: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },

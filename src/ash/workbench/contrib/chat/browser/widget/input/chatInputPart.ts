@@ -591,7 +591,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.changesPill = this._register(instantiationService.createInstance(ChatChangesPill, this.element, () => {
 			void this.runSecondaryAction(async () => { await this.delegate.openChanges?.(this.state.changesRevision); });
 		}, () => this.focus(), this.delegate.readWorkspaceChanges));
-		this.sessionWorkingSet = this._register(instantiationService.createInstance(ChatSessionWorkingSet, this.changesPill.domNode,
+		this.sessionWorkingSet = this._register(instantiationService.createInstance(ChatSessionWorkingSet, this.changesPill.actionsDomNode,
 			async (revision: string, file: ChatChangedFileTarget) => {
 				const lifecycle = this.inputLifecycle.signal;
 				try {
