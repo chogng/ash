@@ -712,25 +712,85 @@ impl GitClient {
             .await?;
         parse_tree(output.stdout, &output.command)
     }
+    /// Installs a transaction's checkout layers without forcing a captured snapshot over edits.
+    /// The real index stays locked and unchanged until the guarded worktree update succeeds.
+    /// On failure the caller must retain its recovery evidence: even a failed Git process may
+    /// have written some files, so restoring an older worktree here would destroy later saves.
     pub async fn install_checkout_state(
         &self,
         repository: &GitRepository,
+        expected_worktree: &GitTreeId,
+        expected_index: &GitTreeId,
         worktree: &GitTreeId,
         index: &GitTreeId,
     ) -> GitResult<()> {
-        self.run_mutation(
+        let real_index = repository.git_dir().join("index");
+        let mut lock = index_edit::IndexLock::acquire(real_index.with_extension("lock"))?;
+        let temporary = tempfile::NamedTempFile::new_in(repository.git_dir())
+            .map_err(|source| GitError::io("prepare checkout index", source))?
+            .into_temp_path();
+        match std::fs::copy(&real_index, &temporary) {
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                std::fs::remove_file(&temporary)
+                    .map_err(|source| GitError::io("prepare empty checkout index", source))?;
+                self.run_mutation_with_index(
+                    repository.worktree_root(),
+                    ["read-tree", "--empty"],
+                    &temporary,
+                )
+                .await?
+                .require_success()?;
+            }
+            Err(source) => return Err(GitError::io("copy checkout index", source)),
+        }
+        let output = self
+            .run_mutation_with_index(repository.worktree_root(), ["write-tree"], &temporary)
+            .await?
+            .require_success()?;
+        if parse_tree(output.stdout, &output.command)? != *expected_index {
+            return Err(GitError::IndexChanged);
+        }
+        // The temporary index represents the captured worktree, including its unstaged and
+        // untracked files. Refresh verifies those bytes; two-tree merge then refuses late edits
+        // at Git's own checkout boundary instead of discarding them with --reset.
+        self.run_mutation_with_index(
             repository.worktree_root(),
-            ["read-tree", "--reset", "-u", worktree.as_str()],
+            ["read-tree", expected_worktree.as_str()],
+            &temporary,
         )
         .await?
         .require_success()?;
-        self.run_mutation(
+        self.run_mutation_with_index(
             repository.worktree_root(),
-            ["read-tree", "--reset", index.as_str()],
+            ["update-index", "--refresh"],
+            &temporary,
         )
         .await?
         .require_success()?;
-        Ok(())
+        self.run_mutation_with_index(
+            repository.worktree_root(),
+            [
+                "read-tree",
+                "-m",
+                "-u",
+                expected_worktree.as_str(),
+                worktree.as_str(),
+            ],
+            &temporary,
+        )
+        .await?
+        .require_success()?;
+        self.run_mutation_with_index(
+            repository.worktree_root(),
+            ["read-tree", index.as_str()],
+            &temporary,
+        )
+        .await?
+        .require_success()?;
+        std::fs::copy(&temporary, &lock.path)
+            .map_err(|source| GitError::io("write checkout index lock", source))?;
+        lock.publish(&real_index)
     }
 }
 

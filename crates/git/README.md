@@ -390,6 +390,11 @@ bazel test //crates/git:git-unit-tests
 `replay_tree_delta` 使用 Git 三方合并，允许同文件的互不重叠文本变化；实际重叠返回冲突路径。
 文件选择与重放均拒绝把未选文件整份拷入目标。
 
+`install_checkout_state` 要求同时提供捕获时的 index/worktree 和目标 index/worktree。
+它持有真实 `index.lock`，在临时 index 校验原 index，刷新捕获的 worktree，再用 `read-tree -m -u`
+执行受保护的双树检出；成功后才原子替换真实 index。并发保存或暂存使安装失败，不能用强制
+恢复旧快照处理错误；进程中断或 I/O 失败可能留下部分安装，由事务 journal 保留恢复证据。
+
 这两个接口只处理对象。Session/Thread/Turn 归属、选择版本、提交记录与进度由
 [`git-turn-changes`](../git-turn-changes/README.md) 持有；条件发布与恢复由提交事务持有。
 详细能力边界见 [Git 能力划分方案](../../docs/git-capabilities.md)。

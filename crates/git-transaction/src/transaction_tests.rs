@@ -634,3 +634,313 @@ async fn committing_sealed_turn_a_does_not_touch_running_turn_b_on_the_same_file
         .await
         .unwrap();
 }
+
+// The executable wrapper delegates to real Git and injects a save at an exact process boundary.
+// No timing sleeps or production-only test hooks are needed to reproduce the capture/install gap.
+#[cfg(unix)]
+fn git_with_race(fixture: &TestRepository, injection: &str) -> (tempfile::TempDir, GitClient) {
+    use std::os::unix::fs::PermissionsExt;
+    fn quote(path: &std::path::Path) -> String {
+        format!("'{}'", path.display().to_string().replace('\'', "'\\''"))
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let executable = directory.path().join("git-race");
+    let marker = quote(&directory.path().join("injected"));
+    let real_git = quote(&GitClient::system().executable().unwrap());
+    let root = quote(fixture.root());
+    std::fs::write(
+        &executable,
+        format!(
+            "#!/bin/sh\nset -eu\nreal_git={real_git}\nroot={root}\nmarker={marker}\n{injection}\nexec \"$real_git\" \"$@\"\n"
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client =
+        GitClient::with_executable(executable, ash_git::GitExecutionLimits::default()).unwrap();
+    (directory, client)
+}
+
+#[cfg(unix)]
+async fn prepare_checkout_race(fixture: &TestRepository, id: &str) -> crate::GitPreparedTreeCommit {
+    fixture.write("change.txt", "base\n");
+    fixture.write("staged.txt", "base\n");
+    fixture.write("unstaged.txt", "base\n");
+    fixture.commit_all("base");
+    let base_head = fixture.git(&["rev-parse", "HEAD"]);
+    let before = tree(fixture, "HEAD");
+    fixture.write("change.txt", "sealed Turn\n");
+    fixture.git(&["add", "change.txt"]);
+    let after = GitTreeId::new(fixture.git(&["write-tree"])).unwrap();
+    fixture.git(&["reset", "--hard", &base_head]);
+    fixture.write("staged.txt", "staged local\n");
+    fixture.git(&["add", "staged.txt"]);
+    fixture.write("unstaged.txt", "unstaged local\n");
+    fixture.write("untracked.txt", "untracked local\n");
+    let client = GitClient::system();
+    let repository = client.open_repository(fixture.root()).await.unwrap();
+    let prepared = GitTransactions::new(&client)
+        .prepare_tree_commit(
+            &repository,
+            &GitPreparedTreeCommitRequest::new(
+                id.into(),
+                "main".into(),
+                base_head,
+                before,
+                after,
+                "commit sealed Turn".into(),
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    let GitPrepareTreeCommitResult::Prepared(prepared) = prepared else {
+        panic!("preparation conflicted");
+    };
+    prepared
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn publication_preserves_saves_after_final_capture_and_at_checkout_boundary() {
+    for injection in [
+        r#"case " $* " in
+  *" update-ref refs/heads/main "*)
+    if mkdir "$marker" 2>/dev/null; then
+      "$real_git" "$@"
+      printf 'external save\n' > "$root/change.txt"
+      exit 0
+    fi ;;
+esac"#,
+        r#"case " $* " in
+  *" read-tree -m -u "*|*" read-tree --reset -u "*)
+    if mkdir "$marker" 2>/dev/null; then
+      printf 'external save\n' > "$root/change.txt"
+    fi ;;
+esac"#,
+        r#"case " $* " in
+  *" read-tree -m -u "*|*" read-tree --reset -u "*)
+    if mkdir "$marker" 2>/dev/null; then
+      "$real_git" "$@"
+      printf 'external save\n' > "$root/change.txt"
+      exit 73
+    fi ;;
+esac"#,
+    ] {
+        let fixture = TestRepository::init();
+        let prepared = prepare_checkout_race(&fixture, "late-save").await;
+        let original_index = fixture.git(&["write-tree"]);
+        let (wrapper, client) = git_with_race(&fixture, injection);
+        let repository = client.open_repository(fixture.root()).await.unwrap();
+        assert_eq!(
+            GitTransactions::new(&client)
+                .publish_prepared_tree_commit(&repository, &prepared)
+                .await
+                .unwrap(),
+            GitTreeCommitResult::Conflict(GitTreeCommitConflict::CheckoutChanged {
+                paths: vec!["change.txt".into()]
+            })
+        );
+        assert!(wrapper.path().join("injected").exists());
+        assert_eq!(fixture.read("change.txt"), "external save\n");
+        assert_eq!(fixture.read("staged.txt"), "staged local\n");
+        assert_eq!(fixture.read("unstaged.txt"), "unstaged local\n");
+        assert_eq!(fixture.read("untracked.txt"), "untracked local\n");
+        assert_eq!(fixture.git(&["write-tree"]), original_index);
+        assert_eq!(fixture.git(&["rev-parse", "HEAD"]), prepared.object_id());
+        let path = journal_path(&repository, "late-save").unwrap();
+        assert!(path.exists());
+        fixture.git(&["gc", "--prune=now"]);
+        let journal = super::read_journal(&path).unwrap();
+        for name in [
+            "original-index",
+            "original-worktree",
+            "desired-index",
+            "desired-worktree",
+            "commit",
+        ] {
+            fixture.git(&[
+                "cat-file",
+                "-e",
+                super::journal_ref("late-save", name).unwrap().as_str(),
+            ]);
+        }
+        assert!(!journal.checkout_installed);
+        assert_eq!(
+            GitTransactions::new(&GitClient::system())
+                .recover_tree_commit(&repository, "late-save")
+                .await
+                .unwrap(),
+            GitTreeCommitRecovery::Conflict {
+                paths: vec!["change.txt".into()]
+            }
+        );
+        assert_eq!(fixture.read("change.txt"), "external save\n");
+        assert!(path.exists());
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn publication_preserves_staging_after_final_capture() {
+    let fixture = TestRepository::init();
+    let prepared = prepare_checkout_race(&fixture, "late-stage").await;
+    let (wrapper, client) = git_with_race(
+        &fixture,
+        r#"case " $* " in
+  *" update-ref refs/heads/main "*)
+    if mkdir "$marker" 2>/dev/null; then
+      "$real_git" "$@"
+      "$real_git" -C "$root" add unstaged.txt
+      exit 0
+    fi ;;
+esac"#,
+    );
+    let repository = client.open_repository(fixture.root()).await.unwrap();
+    assert_eq!(
+        GitTransactions::new(&client)
+            .publish_prepared_tree_commit(&repository, &prepared)
+            .await
+            .unwrap(),
+        GitTreeCommitResult::Conflict(GitTreeCommitConflict::CheckoutChanged {
+            paths: vec!["unstaged.txt".into()]
+        })
+    );
+    assert!(wrapper.path().join("injected").exists());
+    assert_eq!(fixture.git(&["show", ":unstaged.txt"]), "unstaged local");
+    assert_eq!(fixture.git(&["show", ":staged.txt"]), "staged local");
+    assert_eq!(fixture.read("change.txt"), "base\n");
+    assert_eq!(
+        GitTransactions::new(&GitClient::system())
+            .recover_tree_commit(&repository, "late-stage")
+            .await
+            .unwrap(),
+        GitTreeCommitRecovery::Conflict {
+            paths: vec!["unstaged.txt".into()]
+        }
+    );
+    assert!(journal_path(&repository, "late-stage").unwrap().exists());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn recovery_preserves_a_save_after_its_own_final_capture() {
+    let fixture = TestRepository::init();
+    let prepared = prepare_checkout_race(&fixture, "recover-save").await;
+    let (wrapper, client) = git_with_race(
+        &fixture,
+        r#"case " $* " in
+  *" read-tree -m -u "*|*" read-tree --reset -u "*)
+    if mkdir "$marker" 2>/dev/null; then exit 73; fi ;;
+esac"#,
+    );
+    let repository = client.open_repository(fixture.root()).await.unwrap();
+    GitTransactions::new(&client)
+        .publish_prepared_tree_commit(&repository, &prepared)
+        .await
+        .expect_err("interrupt the first installation");
+    assert!(wrapper.path().join("injected").exists());
+    let (wrapper, client) = git_with_race(
+        &fixture,
+        r#"case " $* " in
+  *" read-tree -m -u "*|*" read-tree --reset -u "*)
+    if mkdir "$marker" 2>/dev/null; then
+      printf 'saved during recovery\n' > "$root/change.txt"
+    fi ;;
+esac"#,
+    );
+    assert_eq!(
+        GitTransactions::new(&client)
+            .recover_tree_commit(&repository, "recover-save")
+            .await
+            .unwrap(),
+        GitTreeCommitRecovery::Conflict {
+            paths: vec!["change.txt".into()]
+        }
+    );
+    assert!(wrapper.path().join("injected").exists());
+    assert_eq!(fixture.read("change.txt"), "saved during recovery\n");
+    assert!(journal_path(&repository, "recover-save").unwrap().exists());
+    assert_eq!(fixture.git(&["rev-parse", "HEAD"]), prepared.object_id());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn interrupted_install_resumes_after_worktree_update_before_index_publication() {
+    let fixture = TestRepository::init();
+    let prepared = prepare_checkout_race(&fixture, "recover-index").await;
+    let original_index = fixture.git(&["write-tree"]);
+    let (wrapper, client) = git_with_race(
+        &fixture,
+        r#"case " $* " in
+  *" read-tree -m -u "*|*" read-tree --reset -u "*)
+    if mkdir "$marker" 2>/dev/null; then
+      "$real_git" "$@"
+      exit 73
+    fi ;;
+esac"#,
+    );
+    let repository = client.open_repository(fixture.root()).await.unwrap();
+    assert_eq!(
+        GitTransactions::new(&client)
+            .publish_prepared_tree_commit(&repository, &prepared)
+            .await
+            .unwrap(),
+        GitTreeCommitResult::Conflict(GitTreeCommitConflict::CheckoutChanged {
+            paths: vec!["change.txt".into()]
+        })
+    );
+    assert!(wrapper.path().join("injected").exists());
+    assert_eq!(fixture.read("change.txt"), "sealed Turn\n");
+    assert_eq!(fixture.git(&["write-tree"]), original_index);
+    assert_eq!(
+        GitTransactions::new(&GitClient::system())
+            .recover_tree_commit(&repository, "recover-index")
+            .await
+            .unwrap(),
+        GitTreeCommitRecovery::Committed {
+            object_id: prepared.object_id().into()
+        }
+    );
+    assert_eq!(
+        fixture.git_raw(&["status", "--short"]),
+        "M  staged.txt\n M unstaged.txt\n?? untracked.txt\n"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn checkout_holds_the_real_index_lock_until_publication() {
+    let fixture = TestRepository::init();
+    let prepared = prepare_checkout_race(&fixture, "index-lock").await;
+    let (wrapper, client) = git_with_race(
+        &fixture,
+        r#"case " $* " in
+  *" read-tree -m -u "*|*" read-tree --reset -u "*)
+    if mkdir "$marker" 2>/dev/null; then
+      if (unset GIT_INDEX_FILE; "$real_git" -C "$root" add unstaged.txt) 2> "$marker/stage-error"; then
+        exit 74
+      fi
+    fi ;;
+esac"#,
+    );
+    let repository = client.open_repository(fixture.root()).await.unwrap();
+    assert_eq!(
+        GitTransactions::new(&client)
+            .publish_prepared_tree_commit(&repository, &prepared)
+            .await
+            .unwrap(),
+        GitTreeCommitResult::Committed {
+            object_id: prepared.object_id().into()
+        }
+    );
+    assert!(
+        std::fs::read_to_string(wrapper.path().join("injected/stage-error"))
+            .unwrap()
+            .contains("index.lock")
+    );
+    assert_eq!(fixture.git(&["show", ":unstaged.txt"]), "base");
+    assert_eq!(fixture.git(&["show", ":staged.txt"]), "staged local");
+    assert_eq!(fixture.read("unstaged.txt"), "unstaged local\n");
+    assert!(!fixture.path(".git/index.lock").exists());
+}

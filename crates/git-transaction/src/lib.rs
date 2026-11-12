@@ -244,6 +244,11 @@ struct CheckoutState {
     worktree_tree: GitTreeId,
 }
 
+enum CheckoutInstall {
+    Installed,
+    Conflict { paths: Vec<PathBuf> },
+}
+
 /// One executor shared with the caller; publication rules and journals are owned here.
 pub struct GitTransactions<'a> {
     git: &'a GitClient,
@@ -301,22 +306,36 @@ impl<'a> GitTransactions<'a> {
             });
         }
         let install_can_resume = (current_index == original_index
-            && current_worktree == original_worktree)
+            && (current_worktree == original_worktree || current_worktree == desired_worktree))
             || (current_index == desired_worktree && current_worktree == desired_worktree);
         if install_can_resume {
-            self.git
-                .install_checkout_state(&checkout_repository, &desired_worktree, &desired_index)
-                .await?;
+            if let CheckoutInstall::Conflict { paths } = self
+                .install_checkout(
+                    &checkout_repository,
+                    &current_worktree,
+                    &current_index,
+                    &desired_worktree,
+                    &desired_index,
+                )
+                .await?
+            {
+                return Ok(GitTreeCommitRecovery::Conflict { paths });
+            }
             complete_recovered_journal(&path, &journal)?;
             return Ok(GitTreeCommitRecovery::Committed {
                 object_id: journal.new_head,
             });
         }
-        let paths = changed_paths(
+        let mut changes = self
+            .git
+            .diff_trees(&checkout_repository, &original_worktree, &current_worktree)
+            .await?;
+        changes.extend(
             self.git
-                .diff_trees(&checkout_repository, &original_worktree, &current_worktree)
+                .diff_trees(&checkout_repository, &original_index, &current_index)
                 .await?,
         );
+        let paths = changed_paths(changes);
         Ok(GitTreeCommitRecovery::Conflict { paths })
     }
 
@@ -485,11 +504,16 @@ impl<'a> GitTransactions<'a> {
             let latest_index = self.git.capture_index_tree(&state.repository).await?;
             let latest_worktree = self.git.capture_worktree_tree(&state.repository).await?;
             if latest_index != state.index_tree || latest_worktree != state.worktree_tree {
-                let paths = changed_paths(
+                let mut changes = self
+                    .git
+                    .diff_trees(&state.repository, &state.worktree_tree, &latest_worktree)
+                    .await?;
+                changes.extend(
                     self.git
-                        .diff_trees(&state.repository, &state.worktree_tree, &latest_worktree)
+                        .diff_trees(&state.repository, &state.index_tree, &latest_index)
                         .await?,
                 );
+                let paths = changed_paths(changes);
                 return Ok(GitTreeCommitResult::Conflict(
                     GitTreeCommitConflict::CheckoutChanged { paths },
                 ));
@@ -565,37 +589,21 @@ impl<'a> GitTransactions<'a> {
             }
             return Err(error);
         }
-        if let (Some(state), Some((index_tree, worktree_tree))) = (checkout, checkout_update)
-            && let Err(error) = self
-                .git
-                .install_checkout_state(&state.repository, &worktree_tree, &index_tree)
-                .await
-        {
-            let rollback = match target_head.as_deref() {
-                Some(target_head) => {
-                    self.git
-                        .update_ref_cas(repository, &target_ref, target_head, &prepared.object_id)
-                        .await
-                }
-                None => {
-                    self.git
-                        .delete_ref_cas(repository, &target_ref, &prepared.object_id)
-                        .await
-                }
-            };
-            let restore = self
-                .git
-                .install_checkout_state(&state.repository, &state.worktree_tree, &state.index_tree)
-                .await;
-            if rollback.is_err() || restore.is_err() {
-                return Err(GitError::runtime(
-                    "restore prepared tree commit transaction",
-                    format!("install failed: {error}; repository requires transaction recovery"),
+        if let (Some(state), Some((index_tree, worktree_tree))) = (checkout, checkout_update) {
+            if let CheckoutInstall::Conflict { paths } = self
+                .install_checkout(
+                    &state.repository,
+                    &state.worktree_tree,
+                    &state.index_tree,
+                    &worktree_tree,
+                    &index_tree,
+                )
+                .await?
+            {
+                return Ok(GitTreeCommitResult::Conflict(
+                    GitTreeCommitConflict::CheckoutChanged { paths },
                 ));
             }
-            self.release_journal(repository, &prepared.transaction_id, &journal_path)
-                .await?;
-            return Err(error);
         }
         let mut completed = journal;
         completed.checkout_installed = true;
@@ -603,6 +611,51 @@ impl<'a> GitTransactions<'a> {
         Ok(GitTreeCommitResult::Committed {
             object_id: prepared.object_id.clone(),
         })
+    }
+
+    async fn install_checkout(
+        &self,
+        repository: &GitRepository,
+        expected_worktree: &GitTreeId,
+        expected_index: &GitTreeId,
+        worktree: &GitTreeId,
+        index: &GitTreeId,
+    ) -> GitResult<CheckoutInstall> {
+        let Err(error) = self
+            .git
+            .install_checkout_state(
+                repository,
+                expected_worktree,
+                expected_index,
+                worktree,
+                index,
+            )
+            .await
+        else {
+            return Ok(CheckoutInstall::Installed);
+        };
+        // The ref is already published. Preserve the journal and pinned trees on every failure.
+        // Report a concurrent save/stage immediately rather than leaving the UI in Publishing;
+        // an unchanged checkout with an I/O/transport error still requires explicit recovery.
+        let current_index = self.git.capture_index_tree(repository).await?;
+        let current_worktree = self.git.capture_worktree_tree(repository).await?;
+        let mut changes = self
+            .git
+            .diff_trees(repository, expected_worktree, &current_worktree)
+            .await?;
+        changes.extend(
+            self.git
+                .diff_trees(repository, expected_index, &current_index)
+                .await?,
+        );
+        let paths = changed_paths(changes);
+        if !paths.is_empty() {
+            return Ok(CheckoutInstall::Conflict { paths });
+        }
+        Err(GitError::runtime(
+            "install prepared tree commit checkout",
+            format!("{error}; published commit and checkout journal retained for recovery"),
+        ))
     }
 
     async fn retain_journal_objects(

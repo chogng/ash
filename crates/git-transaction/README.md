@@ -13,13 +13,19 @@ SQLite、工作目录归属或界面。调用方通过 `GitTransactions::new(&gi
 | acknowledge | 调用方持久保存成功回执后，清理事务保留引用与 journal；重放仍可安全确认             |
 
 提交事务要求调用方持有 `repository_operation_lock`。该锁按 Git common directory 共享，
-协调不同目录指向同一仓库的操作；外部 Git 由 ref CAS 和 checkout tree 比较检测。
+协调不同目录指向同一仓库的操作；外部 Git 由 ref CAS、真实 index lock 和 checkout tree 比较检测。
+活动 checkout 使用临时 index 的受保护双树合并安装，不执行强制 reset。最终捕获之后的保存
+由 Git 安装边界再次校验；并发修改不会触发旧快照的强制恢复。
 不执行仓库 commit hooks，真实发布使用仓库配置的 author/committer。三方合并所需的临时对象身份
 只用于计算，不能作为用户提交身份。
 
 journal 位于 `<common directory>/ash/commit-transactions`。发布之前保留原/目标 checkout tree
 和 commit；即使 Git GC，也能恢复。checkout 安装完成标记单独持久保存，后续外部提交推进分支
-不会被旧事务回滚。调用方的数据库回执和 Git journal 各有明确职责，不能提前删除恢复信息。
+不会被旧事务回滚。ref 发布后安装失败时，保留已发布 commit、原/目标 tree 引用和 journal，
+检测到实际层变化时立即返回 checkout 冲突，否则返回需要恢复的错误；不回滚 ref 或覆盖实际文件。
+恢复会重新校验 index 与 worktree，变化时报告
+冲突并继续保留证据，也能完成仅 worktree 已安装、真实 index 尚未替换的中断事务。
+调用方的数据库回执和 Git journal 各有明确职责，不能提前删除恢复信息。
 
 `commit_tree_delta` 保留给旧整轮请求的一次性存储迁移流程；新选择走
 `prepare_tree_commit` → `publish_prepared_tree_commit`，确认期间目标移动必须重新预览。
