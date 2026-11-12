@@ -3,6 +3,7 @@ import { expect, test } from '../../../automation/test.js';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { SignedExtensionRegistry } from '../../../automation/extensionRegistry.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 
 test.use({ openWorkspace: false });
 
@@ -202,6 +203,26 @@ test('display language startup recovers from missing and damaged Ash packs and r
 		await expect(settings.getByRole('combobox', { name: languageLabel, exact: true })).toHaveText('fr-CA');
 		await settings.locator('.ash-modal-editor-close').click();
 	}
+});
+
+test('Agents settings use the window confirmation layout for display language changes', { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await new QuickAccess(page).runCommand('workbench.action.openSettings');
+	const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+	await settings.getByRole('button', { name: 'General', exact: true }).click();
+	const language = settings.getByRole('combobox', { name: 'Interface language', exact: true });
+	await language.press('Enter');
+	await settings.getByRole('option', { name: '简体中文', exact: true }).click();
+
+	const confirmation = page.getByRole('dialog', { name: 'Display Language', exact: true });
+	await expect(confirmation).toHaveAttribute('aria-modal', 'true');
+	await expect(confirmation).toHaveClass(/\bash-dialog-form-confirmation\b/u);
+	await expect(confirmation).toContainText('Restart Ash to use 简体中文?');
+	await expect(confirmation.getByRole('button', { name: 'Later', exact: true })).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(confirmation).toHaveCount(0);
+	await expect(language).toBeFocused();
+	await expect(language).toHaveText('简体中文');
 });
 
 test('display language stays unchanged until restart and initializes Chinese command titles', async ({ target, workbench, restartWorkbench, deferRestart, restartMessage }) => {
