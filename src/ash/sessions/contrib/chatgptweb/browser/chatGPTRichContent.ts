@@ -1,10 +1,8 @@
 import { Lexer, Marked, type Token, type TokenizerThis, type Tokens } from '../../../../base/common/marked/marked.js';
 import { basicMarkupHtmlTags, sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { getDocument } from '../../../../base/browser/dom.js';
+import { encodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
-import { Icon } from '../../../../base/common/icon.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
-import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { renderAsPlaintext } from '../../../../base/browser/markdownRenderer.js';
 import { escapeRegExpCharacters, htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
@@ -13,6 +11,7 @@ import type { ChatReplyReference, ChatReplyResource } from '../../../common/chat
 import { ChatMarkdownRichContentBuilder, type ChatMarkdownRichContent, type ChatMarkdownRichPart, type ChatMarkdownRichStyle } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { chatGPTResourceKey, type ChatGPTImageGroup } from './chatGPTClient.js';
+import { resolveChatGPTIcon } from './chatGPTIcon.js';
 import type { ResponseCitation } from '../../../../platform/agentHost/common/agent.js';
 
 interface RichTag {
@@ -26,18 +25,22 @@ interface RichTag {
 const inlineTags = new Set(['text', 'icon']);
 const chatGPTFileLinkSchemes = ['sandbox', 'file-service', 'sediment'] as const;
 const isChatGPTFileLink = (href: string): boolean => chatGPTFileLinkSchemes.some(scheme => href.startsWith(`${scheme}:`));
-const mediaTags = new Set(['img', 'video', 'audio', 'iframe', 'canvas']);
+const mediaTags = new Set(['img', 'video', 'audio', 'iframe', 'canvas', 'svg']);
 // This is routing to the shared HTML renderer, not a second HTML implementation.
-const htmlTags = new Set<string>([...basicMarkupHtmlTags, 'script', 'style', 'svg', 'path', 'line', 'title', 'desc', 'canvas', 'iframe', 'audio', 'math']);
+const htmlTags = new Set<string>([...basicMarkupHtmlTags, 'script', 'style', 'path', 'line', 'title', 'desc', 'canvas', 'iframe', 'audio', 'math']);
 const hiddenTags = new Set(['cite']);
 const fallbackText = (): string => localize('sessions.chatgpt.viewContent', 'View this content in ChatGPT');
-const iconText = new Map(Object.entries({ 'arrow-down': '↓', 'arrow-up': '↑', 'arrow-left': '←', 'arrow-right': '→', 'arrow-down-up': '⇅', check: '✓', x: '×', plus: '+', minus: '−', info: 'ⓘ', warning: '⚠' }));
-const iconAliases = new Map([
-	['arrow-down-up', Lxicon.sort.id],
-	['minus', Lxicon.remove.id],
-	['plus', Lxicon.add.id],
-	['x', Lxicon.close.id],
-]);
+const iconText = new Map(Object.entries({
+	'arrow-down': '↓', 'arrow-up': '↑', 'arrow-left': '←', 'arrow-right': '→', 'arrow-down-up': '⇅',
+	check: '✓', x: '×', plus: '+', minus: '−', info: 'ⓘ', warning: '⚠', 'pencil-line': '✎', 'lock-keyhole': '🔒',
+}));
+const svgNamespace = 'http://www.w3.org/2000/svg';
+const svgPresentationAttributes = [
+	'alignment-baseline', 'dominant-baseline', 'fill-opacity', 'fill-rule', 'font-family', 'font-size', 'font-style',
+	'font-weight', 'stop-color', 'stop-opacity', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap',
+	'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'text-anchor',
+];
+const svgAttributeAliases = new Map(svgPresentationAttributes.map(name => [name.replaceAll('-', ''), name]));
 
 interface RichContent {
 	readonly tag: RichTag;
@@ -132,7 +135,7 @@ function readContent(source: string, allowCaption: boolean): RichContent | undef
 	}
 	// An unmatched wrapper must not swallow subsequent paragraphs while a reply
 	// streams (or if a component is malformed). Its children are parsed normally.
-	return { tag, raw: tag.raw, body: '' };
+	return tag.name === 'svg' ? undefined : { tag, raw: tag.raw, body: '' };
 }
 
 function attributes(tag: RichTag): Map<string, string> {
@@ -225,6 +228,10 @@ function tokenize(this: TokenizerThis, source: string, level: 'block' | 'inline'
 	const content = readContent(markup, isLayoutCaption && tableDepth === 0);
 	if (!content) { return undefined; }
 	const inline = inlineTags.has(content.tag.name) || level === 'inline';
+	if (content.tag.name === 'svg') {
+		// Keep the SVG subtree intact for the image sanitizer.
+		return { type: 'chatgptRichContent', raw: leading + content.raw, tag: content.tag, inline };
+	}
 	const lines = content.body.split('\n');
 	let indentation = Infinity;
 	for (const line of lines) {
@@ -295,6 +302,60 @@ function richContentLexer(): Marked {
 
 function dataUri(mimeType: string, source: string): string {
 	return 'data:' + mimeType + ';charset=utf-8,' + encodeURIComponent(source);
+}
+
+/** Converts Web's JSX-style SVG into a standalone image for the existing preview. */
+function svgDiagram(source: string): ChatGPTImageGroup['images'][number] | undefined {
+	const ownerDocument = getDocument();
+	const fragment = sanitizeHtmlToFragment(source, {
+		ownerDocument,
+		config: {
+			// SVG images can be saved and opened externally. Only keep static drawing primitives.
+			allowedTags: {
+				override: [
+					'svg', 'g', 'defs', 'title', 'desc', 'rect', 'circle', 'ellipse', 'path', 'line', 'polyline',
+					'polygon', 'text', 'tspan', 'lineargradient', 'radialgradient', 'stop',
+				]
+			},
+			allowedAttributes: {
+				override: [
+					'aria-label', 'id', 'viewBox', 'preserveAspectRatio', 'width', 'height', 'x', 'y', 'dx', 'dy', 'rx', 'ry',
+					'cx', 'cy', 'r', 'd', 'x1', 'y1', 'x2', 'y2', 'points', 'transform', 'opacity', 'fill', 'stroke', 'color',
+					'gradientUnits', 'gradientTransform', 'offset', 'fx', 'fy', ...svgPresentationAttributes, ...svgAttributeAliases.keys(),
+				]
+			},
+			allowAriaAttributes: false,
+			allowDataAttributes: false,
+		},
+		afterSanitizeAttributes: element => {
+			for (const attribute of [...element.attributes]) {
+				const name = svgAttributeAliases.get(attribute.name);
+				if (!name) continue;
+				if (!element.hasAttribute(name)) element.setAttribute(name, attribute.value);
+				element.removeAttribute(attribute.name);
+			}
+			for (const name of ['fill', 'stroke', 'color', 'stop-color']) {
+				const paint = element.getAttribute(name)?.trim();
+				if (paint && !/^(?:[a-z]+|#[\da-f]{3,8}|(?:rgb|rgba|hsl|hsla)\([\d.% ,/+\-]+\)|url\(#[\w.-]+\))$/iu.test(paint)) {
+					element.removeAttribute(name);
+				}
+			}
+			if (element.localName === 'svg') {
+				for (const name of ['width', 'height']) {
+					const value = /^(\d+(?:\.\d+)?|\.\d+)(%|px)?$/u.exec(element.getAttribute(name) ?? '');
+					if (!value || Number(value[1]) > (value[2] === '%' ? 100 : 4096)) element.removeAttribute(name);
+				}
+			}
+		},
+	});
+	const svg = fragment.firstElementChild;
+	if (svg?.namespaceURI !== svgNamespace || svg.localName !== 'svg' || !svg.childElementCount) return undefined;
+	const label = svg.getAttribute('aria-label')?.trim() || svg.querySelector('title')?.textContent?.trim()
+		|| svg.querySelector('desc')?.textContent?.trim()
+		|| [...svg.querySelectorAll('text')].map(element => element.textContent?.trim()).filter(Boolean).join(', ')
+		|| localize('sessions.chatgpt.image', 'Image');
+	const xml = new ownerDocument.defaultView!.XMLSerializer().serializeToString(svg);
+	return { uri: 'data:image/svg+xml;base64,' + encodeBase64(VSBuffer.fromString(xml)), label };
 }
 
 function entityPart(label: string, category: unknown, disambiguation: unknown, block: boolean): ChatMarkdownRichPart {
@@ -369,6 +430,10 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		const tag = token.tag as RichTag;
 		if (tag.closing) return '';
 		const block = !token.inline;
+		if (tag.name === 'svg') {
+			const image = svgDiagram(token.raw);
+			return image ? { kind: 'imageGallery', images: [image], block } : { kind: 'unavailableMedia', fallback, block };
+		}
 		const values = attributes(tag);
 		if (tag.name === 'divider') return { kind: 'markdown', markdown: '---', block: true };
 		if (tag.name === 'link') {
@@ -423,8 +488,7 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		}
 		if (tag.name === 'icon') {
 			const name = values.get('name') ?? '';
-			const iconId = iconAliases.get(name) ?? name;
-			const icon = getLxiconDefinition(iconId) ? Icon.fromId(iconId) : undefined;
+			const icon = resolveChatGPTIcon(name);
 			return { kind: 'icon', icon, label: iconText.get(name) ?? (label || name), style: style(values), fallback, block };
 		}
 		if (typeof token.literal === 'string') return { kind: 'textLiteral', label: token.literal, block };

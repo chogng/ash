@@ -6,6 +6,7 @@ import { createDisconnectedExtensionHostApi } from '../../../../../platform/exte
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
+import { URI } from '../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
@@ -14,7 +15,7 @@ import { ChatContentMarkdownRenderer } from '../../../../../workbench/contrib/ch
 import { chatMarkdownRichContentExtension, renderChatRichContentText } from '../../../../../workbench/contrib/chat/browser/widget/chatMarkdownRichContent.js';
 import { decodeChatGPTReply } from '../../browser/chatGPTRichContent.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import type { ChatGPTReference } from '../../browser/chatGPTClient.js';
+import { ChatGPTClient, type ChatGPTReference } from '../../browser/chatGPTClient.js';
 
 function render(value: string, references?: readonly ChatGPTReference[]): string {
 	using services = new InstantiationService(new ServiceCollection([IOpenerService, { open: async () => true } as unknown as IOpenerService]));
@@ -332,15 +333,49 @@ suite('ChatGPT rich content', () => {
 
 	test('maps ChatGPT icons to registered Ash glyphs and retains accessible text', () => {
 		const names = ['check', 'x', 'arrow-down', 'arrow-up', 'arrow-left', 'arrow-right', 'arrow-down-up', 'plus', 'minus', 'info', 'warning', 'file'];
-		const markers = [...names.map(name => `<icon name="${name}"/>`), '<icon name="key-round" label="Key"/>'];
-		const iconIds = ['check', 'close', 'arrow-down', 'arrow-up', 'arrow-left', 'arrow-right', 'sort', 'add', 'remove', 'info', 'warning', 'file'];
+		const markers = [
+			...names.map(name => `<icon name="${name}"/>`),
+			'<icon name="pencil-line" size="lg"/>',
+			'<icon name="lock-keyhole" size="lg"/>',
+			'<icon name="key-round" label="Key"/>',
+		];
+		const iconIds = ['check', 'close', 'arrow-down', 'arrow-up', 'arrow-left', 'arrow-right', 'sort', 'add', 'remove', 'info', 'warning', 'file', 'edit', 'lock'];
 		const parts = decodeChatGPTReply(markers.join(' ')).richContent!.parts;
 		assert.deepEqual(parts.map(part => part.kind === 'icon' && part.icon?.id), [...iconIds, undefined]);
 		const root = document.createElement('div');
 		root.innerHTML = render(markers.join(' '));
 		assert.deepEqual(Array.from(root.querySelectorAll<HTMLElement>('[data-ash-icon-id]'), icon => icon.dataset.ashIconId), iconIds);
 		assert.equal(root.querySelector('.ash-chat-rich-icon:last-child')?.textContent, 'Key');
-		assert.deepEqual(markers.map(marker => getChatGPTRichContentText(marker).trim()), ['✓', '×', '↓', '↑', '←', '→', '⇅', '+', '−', 'ⓘ', '⚠', 'file', 'Key']);
+		assert.deepEqual(markers.map(marker => getChatGPTRichContentText(marker).trim()), ['✓', '×', '↓', '↑', '←', '→', '⇅', '+', '−', 'ⓘ', '⚠', 'file', '✎', '🔒', 'Key']);
+	});
+
+	test('resolves Web icon families through their canonical names and preserves unknown labels', () => {
+		const icons = [
+			['message-circle', 'chat'],
+			['message-square', 'chat'],
+			['chat', 'chat'],
+			['paintbrush-vertical', 'paintbrush'],
+			['cleanup', 'paintbrush'],
+			['chart-spline', 'chart'],
+			['chart-column', 'chart'],
+			['zap', 'lightning'],
+			['gauge-circle', 'dashboard'],
+			['Grid2X2', 'layout-grid'],
+			['layout', 'table'],
+			['LogOut', 'sign-out'],
+			['lucide:mic-vocal', 'mic'],
+			['table-2', 'table'],
+			['write-alt', 'edit'],
+			['panel-left-close', 'layout-sidebar-left-off'],
+			['circle-x', 'error'],
+			['files', 'copy'],
+		];
+		const source = icons.map(([name]) => `<icon name="${name}" size="lg"/>`).join(' ')
+			+ ' <icon name="landmark" label="Institution"/> <icon name="constructor"/>';
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		assert.deepEqual([...root.querySelectorAll<HTMLElement>('[data-ash-icon-id]')].map(element => element.dataset.ashIconId), icons.map(([, id]) => id));
+		assert.match(getChatGPTRichContentText(source), /Institution\s+constructor/u);
 	});
 
 	test('does not evaluate JSX expressions, forward event handlers or render arbitrary HTML', () => {
@@ -411,10 +446,54 @@ suite('ChatGPT rich content', () => {
 		assert.doesNotMatch(accessibleText, /category|disambig/u);
 	});
 
+	test('projects Web SVG diagrams in place as static images with accessible labels', async () => {
+		const svg = [
+			'<svg viewBox="0 0 110 112" width="100%" onload="alert(1)">',
+			'  <rect x="5" y="13" width="100" height="34" rx="5" fill="#D9B8E8"/>',
+			'  <text x="55" y="35" fontSize="13" textAnchor="middle" fontWeight="600">插层</text>',
+			'  <path d="M55 48 V60" stroke="currentColor" strokeDasharray="2 2"/>',
+			'  <circle cx="20" cy="60" r="4" fill="url(https://invalid.test/paint.svg#color)"/>',
+			'  <script>alert(1)</script><foreignObject><iframe src="https://invalid.test/frame"/></foreignObject>',
+			'  <image href="https://invalid.test/image.svg"/><animate attributeName="x" to="3"/>',
+			'</svg>',
+		].join('\n');
+		const source = '<grid columns={3}><grid-item><box>\n' + svg + '\n</box></grid-item></grid>\n\nCaption';
+		const reply = decodeChatGPTReply(source);
+		const galleries = reply.richContent?.parts.filter(part => part.kind === 'imageGallery') ?? [];
+		assert.equal(galleries.length, 1);
+		assert.equal(galleries[0]?.images[0]?.label, '插层');
+		assert.deepEqual(reply.resources, []);
+
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		assert.ok(root.querySelector('.ash-chat-rich-grid-item > .ash-chat-rich-box > .ash-chat-image-gallery'));
+		assert.match(root.textContent ?? '', /Caption/u);
+		assert.match(getChatGPTRichContentText(source), /插层[\s\S]*Caption/u);
+		assert.doesNotMatch(root.innerHTML, /<svg|<rect|invalid\.test/u);
+
+		const image = await new ChatGPTClient().readResource(URI.parse(galleries[0]!.images[0]!.uri).toString(), undefined, '', new AbortController().signal);
+		assert.match(image.type, /^image\/svg\+xml\b/u);
+		const imageDocument = new document.defaultView!.DOMParser().parseFromString(await image.text(), 'image/svg+xml');
+		assert.equal(imageDocument.documentElement.namespaceURI, 'http://www.w3.org/2000/svg');
+		assert.equal(imageDocument.documentElement.getAttribute('viewBox'), '0 0 110 112');
+		assert.equal(imageDocument.querySelector('rect')?.getAttribute('fill'), '#D9B8E8');
+		const label = imageDocument.querySelector('text');
+		assert.equal(label?.getAttribute('x'), '55');
+		assert.equal(label?.getAttribute('y'), '35');
+		assert.equal(label?.getAttribute('font-size'), '13');
+		assert.equal(label?.getAttribute('text-anchor'), 'middle');
+		assert.equal(label?.getAttribute('font-weight'), '600');
+		assert.equal(imageDocument.querySelector('path')?.getAttribute('stroke-dasharray'), '2 2');
+		assert.equal(imageDocument.querySelector('circle')?.hasAttribute('fill'), false);
+		assert.equal(imageDocument.querySelector('script, foreignObject, iframe, image, animate, [onload]'), null);
+
+		assert.equal(decodeChatGPTReply('```svg\n' + svg + '\n```').richContent, undefined);
+	});
+
 	test('shows media and opaque components without running or loading their source', () => {
-		const source = '<svg><title>Architecture</title><text>Node A</text><path d="M0 0"/></svg>\n\n<video src="https://invalid.test/movie" title="Demo"/>\n\n<img src="file:///private.png" alt="Picture"/>\n\n<icon name="arrow-right"/><icon name="new-icon"/><icon name="constructor"/>';
+		const source = '<video src="https://invalid.test/movie" title="Demo"/>\n\n<img src="file:///private.png" alt="Picture"/>\n\n<icon name="arrow-right"/><icon name="new-icon"/><icon name="constructor"/>';
 		const html = render(source);
-		assert.match(html, /Architecture[\s\S]*Node A[\s\S]*Demo[\s\S]*Picture[\s\S]*→[\s\S]*new-icon[\s\S]*constructor/u);
+		assert.match(html, /Demo[\s\S]*Picture[\s\S]*→[\s\S]*new-icon[\s\S]*constructor/u);
 		assert.doesNotMatch(html, /<video|<img|src=/u);
 		assert.equal(decodeChatGPTReply(source).resources.length, 2);
 	});
