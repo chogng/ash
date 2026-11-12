@@ -10,12 +10,12 @@ test('blank rich Docs synchronizes first input and IME and retains document stat
 	let rich = richInput();
 	await expect(rich).toBeEditable();
 	await rich.click();
-	await page.keyboard.type('First input');
-	await expect(rich).toHaveText('First input');
-	await expect(rich.locator('[data-text-node-id]')).toHaveText('First input');
+	await page.keyboard.type('Read books');
+	await expect(rich).toHaveText('Read books');
+	await expect(rich.locator('[data-text-node-id]')).toHaveText('Read books');
 	await page.keyboard.press('ArrowLeft');
 	await page.keyboard.type('!');
-	await expect(rich).toHaveText('First inpu!t');
+	await expect(rich).toHaveText('Read book!s');
 	await rich.fill('');
 	await expect(rich).toBeEmpty();
 	const cdp = await page.context().newCDPSession(page);
