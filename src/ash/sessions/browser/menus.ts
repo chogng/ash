@@ -13,6 +13,7 @@ export const Menus = {
 	SidebarCodeSessionContext: new MenuId('SidebarCodeSessionContext'),
 	SidebarChatProjectContext: new MenuId('SidebarChatProjectContext'),
 	SidebarCodeProjectContext: new MenuId('SidebarCodeProjectContext'),
+	SessionSectionToolbar: new MenuId('SessionSectionToolbar'),
 	SidebarSessionsHeader: new MenuId('SidebarSessionsHeader'),
 	SessionsViewFilter: new MenuId('SessionsViewPaneFilterSubMenu'),
 	NewSessionChatInputToolbar: new MenuId('NewSessionChatInputToolbar'),
