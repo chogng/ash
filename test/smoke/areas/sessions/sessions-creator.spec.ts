@@ -221,6 +221,9 @@ test('Sessions Creator uses Chinese mode names, actions and keyboard help', asyn
 	await page.keyboard.press('Escape');
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await expect(creator.getByRole('button', { name: '设计', exact: true })).toBeVisible();
+	await creator.getByRole('button', { name: '电子表格', exact: true }).press('Enter');
+	await expect(creator.getByRole('button', { name: '导出 CSV', exact: true })).toBeVisible();
+	await expect(creator.getByRole('button', { name: '添加行', exact: true })).toBeVisible();
 });
 
 test('Sessions Design vector booleans keep editable operands, holes, history and exported paths', async ({ target, workbench }, testInfo) => {

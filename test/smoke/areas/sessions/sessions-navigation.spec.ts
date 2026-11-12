@@ -228,16 +228,19 @@ test('Artifacts creation and example cards use the retained editor and conversat
 				await expect(toggle).toHaveCount(0);
 				if (selector.startsWith('.')) {
 					await body.getByRole('textbox', { name: 'Cell A1', exact: true }).fill('A draft value');
-					await toolbar.getByRole('button', { name: 'Add row', exact: true }).click();
+					await expect(toolbar.getByRole('toolbar', { name: 'Workspace actions' }).getByRole('button')).toHaveCount(1);
+					await body.getByRole('button', { name: 'Add row', exact: true }).press('Enter');
 					await expect(body.getByRole('textbox', { name: 'Cell A2', exact: true })).toBeFocused();
 					await expect(body.getByRole('textbox', { name: 'Cell A1', exact: true })).toHaveValue('A draft value');
+					await body.getByRole('button', { name: 'Add column', exact: true }).press('Enter');
+					await expect(body.getByRole('textbox', { name: 'Cell D1', exact: true })).toBeFocused();
 					if (kind === 'sheet' && target.appServerMode === 'required' && 'windows' in application) {
 						const output = join(await realpath(testWorkspace.directory), 'artifact-sheet.csv');
 						await application.evaluate(({ dialog }, filePath) => {
 							dialog.showSaveDialog = async () => ({ canceled: false, filePath });
 						}, output);
-						await toolbar.getByRole('button', { name: 'Save as CSV', exact: true }).click();
-						await expect.poll(() => readFile(output, 'utf8').catch(() => '')).toBe('"A draft value","",""\r\n"","",""');
+						await toolbar.getByRole('button', { name: 'Export CSV', exact: true }).click();
+						await expect.poll(() => readFile(output, 'utf8').catch(() => '')).toBe('"A draft value","","",""\r\n"","","",""');
 					}
 				}
 			} else {
@@ -253,6 +256,55 @@ test('Artifacts creation and example cards use the retained editor and conversat
 	expect(await sessions.evaluate((element, original) => element === original, retained)).toBe(true);
 	await retained!.dispose();
 	await conversation.waitForEditorContents(text => text === 'Keep this conversation alongside Artifacts');
+});
+
+test('Artifacts restores editable Sheet and Data drafts after reopening', { tag: ['@electron-ui', '@browser-ui'] }, async ({ target, application, workbench }) => {
+	let page = await workbench.openAgentsWindow(target.kind);
+	const openArtifacts = () => page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
+	const table = (kind: string) => page.locator(`.ash-artifact-table-workspace.editable.${kind}:visible`);
+	const drafts = [['sheet', 'Quarterly budget'], ['data', 'Pilot cohort']] as const;
+	const waitForBrowserSave = async (value: string) => {
+		if (target.kind !== 'browser') { return; }
+		// Browser reload cannot join a native shutdown. Wait for the actual background write.
+		await expect.poll(() => page.evaluate(async expected => {
+			const database = await new Promise<IDBDatabase>((resolve, reject) => {
+				const request = indexedDB.open('ash-user-data-files', 1);
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+			try {
+				return await new Promise<boolean>((resolve, reject) => {
+					const request = database.transaction('files').objectStore('files').getAll();
+					request.onsuccess = () => resolve(request.result.some(entry => entry.kind === 'file' && new TextDecoder().decode(entry.bytes).includes(JSON.stringify(expected))));
+					request.onerror = () => reject(request.error);
+				});
+			} finally { database.close(); }
+		}, value)).toBe(true);
+	};
+	for (const [kind, value] of drafts) {
+		await openArtifacts();
+		await page.locator(`.ash-artifacts-create.${kind}`).press('Enter');
+		const body = table(kind);
+		await body.getByRole('textbox', { name: 'Cell A1', exact: true }).fill(value);
+		await body.getByRole('button', { name: 'Add row', exact: true }).press('Enter');
+		await body.getByRole('textbox', { name: 'Cell A2', exact: true }).fill(`${value} details`);
+	}
+	await waitForBrowserSave('Pilot cohort details');
+	page = await workbench.reopenAgentsWindow(application, page);
+	for (const [kind, value] of drafts) {
+		await openArtifacts();
+		await page.getByRole('tab', { name: 'Yours', exact: true }).press('Enter');
+		await page.locator(`.ash-artifacts-card.${kind}[data-artifact-workspace]`).press('Enter');
+		const body = table(kind);
+		await expect(body.getByRole('textbox', { name: 'Cell A1', exact: true })).toHaveValue(value);
+		await expect(body.getByRole('textbox', { name: 'Cell A2', exact: true })).toHaveValue(`${value} details`);
+		await body.getByRole('textbox', { name: 'Cell A2', exact: true }).fill(`Edited ${value}`);
+	}
+	await waitForBrowserSave('Edited Pilot cohort');
+	page = await workbench.reopenAgentsWindow(application, page);
+	await openArtifacts();
+	await page.locator('.ash-artifacts-card.data[data-artifact-workspace]').press('Enter');
+	await expect(table('data').getByRole('textbox', { name: 'Cell A2', exact: true })).toHaveValue('Edited Pilot cohort');
 });
 
 test('Artifacts home keeps the conversation sidebar and offers seven creation types', async ({ target, workbench }, testInfo) => {

@@ -5,7 +5,7 @@ import { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import { DesignMode } from '../common/config/designEditorConfiguration.js';
 import type { DesignShape, DesignShapeGeometry } from '../common/model/designDocument.js';
 import { getArtifactTitle } from './artifactKindPresentation.js';
-import type { TableArtifactKind } from './artifactTableWorkspace.js';
+import type { TableArtifactKind } from './artifactTableDrafts.js';
 
 export const OPEN_ARTIFACT_EXAMPLE = 'sessions.creator.openExample';
 export const ARTIFACT_EXAMPLE_SCHEME = 'ash-artifact-example';

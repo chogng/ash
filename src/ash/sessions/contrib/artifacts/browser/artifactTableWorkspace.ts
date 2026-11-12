@@ -1,56 +1,53 @@
 import './artifactTableWorkspace.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { Action } from '../../../../base/common/actions.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { ArtifactTableDraft } from './artifactTableDrafts.js';
 import type { TableArtifactExample } from './artifactExamples.js';
 import type { IArtifactWorkspace } from './artifactWorkspaceRegistry.js';
-
-export type TableArtifactKind = 'sheet' | 'data';
 
 export class ArtifactTableWorkspace extends Disposable implements IArtifactWorkspace {
 	public readonly domNode: HTMLElement;
 	public readonly usesCanvasPanels = false;
 	public readonly toolbarActions: readonly Action[];
-	private readonly rows: string[][] = [];
-	private columns = 3;
+	private readonly tableControls = this._register(new DisposableStore());
 
 	constructor(
 		ownerDocument: Document,
-		public readonly kind: TableArtifactKind,
-		public readonly title: string,
-		private readonly example: TableArtifactExample | undefined,
+		private readonly title: string,
+		private readonly source: TableArtifactExample | ArtifactTableDraft,
 		@IFileDialogService private readonly dialogs: IFileDialogService,
 		@IFileService private readonly files: IFileService,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
+		const { kind } = source;
 		this.domNode = h(ownerDocument, 'section', {
 			className: `ash-artifact-table-workspace ${kind}`,
 			attributes: { 'aria-label': title, 'data-creator-mode': kind, tabindex: '0' },
 		});
-		if (example) {
-			this.toolbarActions = [];
-			this.renderExample(example);
-		} else {
+		if (source instanceof ArtifactTableDraft) {
 			this.domNode.classList.add('editable');
-			const addRow = this._register(new Action('sessions.artifacts.table.addRow', localize({ bundle: 'ash.artifacts', key: 'addRow' }, 'Add row'), '', true, () => this.addRow()));
-			const addColumn = this._register(new Action('sessions.artifacts.table.addColumn', localize({ bundle: 'ash.artifacts', key: 'addColumn' }, 'Add column'), '', true, () => this.addColumn()));
-			const save = this._register(new Action('sessions.artifacts.table.save', localize({ bundle: 'ash.artifacts', key: 'saveCsv' }, 'Save as CSV'), '', true, () => this.save()));
-			save.icon = Lxicon.save;
-			this.toolbarActions = [addRow, addColumn, save];
-			this.rows.push(Array<string>(this.columns).fill(''));
-			this.renderDraft();
+			const exportCsv = this._register(new Action('sessions.artifacts.table.exportCsv', localize({ bundle: 'ash.artifacts', key: 'exportCsv' }, 'Export CSV'), '', true, () => this.exportCsv(source)));
+			exportCsv.icon = Lxicon.export;
+			this.toolbarActions = [exportCsv];
+			this.renderDraft(source);
+		} else {
+			this.toolbarActions = [];
+			this.renderExample(source);
 		}
 	}
 
 	private renderExample(example: TableArtifactExample): void {
 		const ownerDocument = this.domNode.ownerDocument;
-		const sheet = this.kind === 'sheet';
+		const sheet = example.kind === 'sheet';
 		const numberFormat = new Intl.NumberFormat(getNLSLanguage());
 		if (example.summary) {
 			const summary = h(ownerDocument, 'dl', { className: 'ash-artifact-example-summary' });
@@ -89,17 +86,22 @@ export class ArtifactTableWorkspace extends Disposable implements IArtifactWorks
 		this.domNode.append(table);
 	}
 
-	private renderDraft(focus?: { row: number; column: number; }): void {
+	private renderDraft(draft: ArtifactTableDraft, focus?: { row: number; column: number; }): void {
+		this.tableControls.clear();
 		const document = this.domNode.ownerDocument;
 		const table = h(document, 'table', { attributes: { 'aria-label': this.title } });
 		const headings = table.createTHead().insertRow();
 		headings.append(h(document, 'td'));
-		for (let column = 0; column < this.columns; column++) {
+		for (let column = 0; column < draft.columnCount; column++) {
 			headings.append(h(document, 'th', { attributes: { scope: 'col' } }, getColumnName(column)));
 		}
+		this.addTableButton(headings.insertCell(), localize({ bundle: 'ash.artifacts', key: 'addColumn' }, 'Add column'), () => {
+			draft.addColumn();
+			this.renderDraft(draft, { row: 0, column: draft.columnCount - 1 });
+		});
 		const body = table.createTBody();
 		let active: HTMLInputElement | undefined;
-		for (const [row, values] of this.rows.entries()) {
+		for (const [row, values] of draft.rows.entries()) {
 			const line = body.insertRow();
 			line.append(h(document, 'th', { attributes: { scope: 'row' } }, String(row + 1)));
 			for (const [column, value] of values.entries()) {
@@ -107,34 +109,35 @@ export class ArtifactTableWorkspace extends Disposable implements IArtifactWorks
 					properties: { value },
 					attributes: { 'aria-label': localize({ bundle: 'ash.artifacts', key: 'cell' }, 'Cell {0}', `${getColumnName(column)}${row + 1}`) },
 				});
-				input.oninput = () => { values[column] = input.value; };
+				input.oninput = () => { draft.setCell(row, column, input.value); };
 				line.insertCell().append(input);
 				if (focus?.row === row && focus.column === column) active = input;
 			}
 		}
+		const footer = table.createTFoot().insertRow();
+		const addRowCell = footer.insertCell();
+		addRowCell.colSpan = draft.columnCount + 2;
+		this.addTableButton(addRowCell, localize({ bundle: 'ash.artifacts', key: 'addRow' }, 'Add row'), () => {
+			draft.addRow();
+			this.renderDraft(draft, { row: draft.rows.length - 1, column: 0 });
+		});
 		this.domNode.replaceChildren(table);
 		active?.focus();
 	}
 
-	private addRow(): void {
-		this.rows.push(Array<string>(this.columns).fill(''));
-		this.renderDraft({ row: this.rows.length - 1, column: 0 });
+	private addTableButton(container: HTMLElement, label: string, onClick: () => void): void {
+		const button = this.tableControls.add(new Button(container, { ...defaultButtonStyles, label, title: label, iconOnly: true, size: 'small', onClick }));
+		button.icon = Lxicon.add;
 	}
 
-	private addColumn(): void {
-		this.columns++;
-		for (const row of this.rows) { row.push(''); }
-		this.renderDraft({ row: 0, column: this.columns - 1 });
-	}
-
-	private async save(): Promise<void> {
+	private async exportCsv(draft: ArtifactTableDraft): Promise<void> {
 		try {
 			const resource = await this.dialogs.showSaveDialog({
-				title: localize({ bundle: 'ash.artifacts', key: 'saveCsv' }, 'Save as CSV'),
+				title: localize({ bundle: 'ash.artifacts', key: 'exportCsv' }, 'Export CSV'),
 				filters: [{ name: 'CSV', extensions: ['csv'] }],
 			});
 			if (!resource || this.isDisposed) { return; }
-			const content = this.rows.map(row => row.map(value => `"${value.replaceAll('"', '""')}"`).join(',')).join('\r\n');
+			const content = draft.rows.map(row => row.map(value => `"${value.replaceAll('"', '""')}"`).join(',')).join('\r\n');
 			await this.files.writeFile({ resource, content });
 		} catch (error) {
 			this.notifications.error(error instanceof Error ? error : String(error));
@@ -146,12 +149,13 @@ export class ArtifactTableWorkspace extends Disposable implements IArtifactWorks
 	public layout(_dimension: IDimension): void { }
 	public focus(): void { this.domNode.focus(); }
 	public getAccessibleContent(): string {
-		if (!this.example) return this.rows.map(row => row.join('\t')).join('\n');
+		const source = this.source;
+		if (source instanceof ArtifactTableDraft) return source.rows.map(row => row.join('\t')).join('\n');
 		return [
-			this.example.detail,
-			...(this.example.summary?.map(({ label, value }) => `${label}: ${value}`) ?? []),
-			this.example.columns.join('\t'),
-			...this.example.rows.map(row => row.join('\t')),
+			source.detail,
+			...(source.summary?.map(({ label, value }) => `${label}: ${value}`) ?? []),
+			source.columns.join('\t'),
+			...source.rows.map(row => row.join('\t')),
 		].join('\n');
 	}
 }

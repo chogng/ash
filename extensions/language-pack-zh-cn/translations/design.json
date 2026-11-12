@@ -981,7 +981,9 @@
     "untitledMotion": "未命名动效",
     "addRow": "添加行",
     "addColumn": "添加列",
-    "saveCsv": "另存为 CSV",
+    "exportCsv": "导出 CSV",
+    "tableSaveFailed": "无法保存表格修改。你的编辑仍在 Artifacts 中打开。",
+    "tableHelp": "在可编辑表格中，按 Tab 可在单元格间移动，也可访问「添加行」「添加列」和「导出 CSV」。修改会自动保存，可从 Artifacts 重新打开表格。",
     "cell": "单元格 {0}"
   }
 }

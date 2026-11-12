@@ -27,14 +27,14 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import { GENERAL_DOCUMENT_CONTENT_TYPE } from '../contrib/docs/common/docs.js';
 import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { generateUuid } from '../../../../base/common/uuid.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { ToolbarSearchActionViewItem } from '../../../browser/ui/toolbarSearchActionViewItem.js';
 import { appendArtifactIcon, getArtifactTitle } from './artifactKindPresentation.js';
 import { artifactKinds, isArtifactKind, type ArtifactKind } from '../../../common/artifactKind.js';
 import { ARTIFACT_EXAMPLE_SCHEME, getArtifactExamples, OPEN_ARTIFACT_EXAMPLE, type CanvasArtifactExample, type TableArtifactExample } from './artifactExamples.js';
-import { ArtifactTableWorkspace, type TableArtifactKind } from './artifactTableWorkspace.js';
+import { ArtifactTableWorkspace } from './artifactTableWorkspace.js';
+import { ArtifactTableDrafts, type TableArtifactKind } from './artifactTableDrafts.js';
 
 export const NEW_ARTIFACT = 'sessions.creator.newArtifact';
 export const OPEN_CANVAS_ARTIFACT = 'sessions.creator.openCanvasArtifact';
@@ -101,6 +101,8 @@ export class ArtifactsEditorView extends Disposable {
 	private readonly titleDomNode: HTMLElement;
 	private readonly headerDomNode: HTMLElement;
 	private readonly back: Button;
+	private readonly tables: ArtifactTableDrafts;
+	private tablesRestoring = true;
 	private tableActions: WorkbenchToolBar | undefined;
 	private readonly docsButton: Button;
 	private readonly artifactsDomNode: HTMLElement;
@@ -131,6 +133,7 @@ export class ArtifactsEditorView extends Disposable {
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 	) {
 		super();
+		this.tables = this._register(instantiation.createInstance(ArtifactTableDrafts, ownerDocument.defaultView!));
 		this.domNode = h(ownerDocument, 'section', { className: 'ash-creator', attributes: { role: 'region', 'aria-label': localize('sessions.creator.title', 'Artifacts') } });
 		pages.set(this.domNode, this);
 		this._register(contextKeys.createScoped(this.domNode)).createKey('sessionsCreatorFocused', true);
@@ -234,7 +237,7 @@ export class ArtifactsEditorView extends Disposable {
 		this.workspacesDomNode = h(ownerDocument, 'div', { className: 'ash-creator-workspaces' });
 		this.workspacesDomNode.hidden = true;
 		this.domNode.append(header, this.homeDomNode, this.workspacesDomNode);
-		// Cards project the existing editor and canvas owners; they do not persist another catalog.
+		// Cards project the document, canvas, and table owners.
 		this._register(editors.onDidChangeEditors(() => this.renderArtifacts()));
 		for (const mode of [ArtifactWorkspaceId.Design, ArtifactWorkspaceId.Slides]) {
 			const document = designs.getDocument(mode);
@@ -244,9 +247,15 @@ export class ArtifactsEditorView extends Disposable {
 		}
 		this._register(autorun(reader => {
 			designs.canvasArtifacts.read(reader);
+			this.tables.drafts.read(reader);
 			this.renderArtifacts();
 		}));
 		void designs.loadCanvasArtifacts();
+		void this.tables.ready.then(() => {
+			if (this.isDisposed) { return; }
+			this.tablesRestoring = false;
+			this.renderArtifacts();
+		});
 	}
 
 	private createTile(container: HTMLElement, kind: ArtifactKind): Button {
@@ -306,13 +315,12 @@ export class ArtifactsEditorView extends Disposable {
 				open: () => { void this.commands.executeCommand(OPEN_CANVAS_ARTIFACT, id); },
 			});
 		}
-		for (const [key, workspace] of this.workspaces) {
-			if (workspace instanceof ArtifactTableWorkspace && key.startsWith('table:')) {
-				cards.push({
-					title: workspace.title, kind: workspace.kind, detail: getArtifactTitle(workspace.kind), workspaceKey: key,
-					open: () => { void this.commands.executeCommand('sessions.creator.openTable', key); }
-				});
-			}
+		for (const draft of this.tables.drafts.get().values()) {
+			const key = `table:${draft.id}` as const;
+			cards.push({
+				title: getTableTitle(draft.kind), kind: draft.kind, detail: getArtifactTitle(draft.kind), workspaceKey: key,
+				open: () => { void this.commands.executeCommand('sessions.creator.openTable', key); },
+			});
 		}
 		return cards;
 	}
@@ -324,7 +332,7 @@ export class ArtifactsEditorView extends Disposable {
 		const query = this.search.value.trim().toLocaleLowerCase();
 		const cards = this.filter === 'shared' ? [] : this.getArtifacts().filter(card => card.title.toLocaleLowerCase().includes(query));
 		const examples = this.filter === 'all' ? this.examples.filter(card => card.title.toLocaleLowerCase().includes(query)) : [];
-		const restoring = this.filter !== 'shared' && [ArtifactWorkspaceId.Design, ArtifactWorkspaceId.Slides].some(mode => this.designs.getDocument(mode).isRestoring);
+		const restoring = this.filter !== 'shared' && (this.tablesRestoring || [ArtifactWorkspaceId.Design, ArtifactWorkspaceId.Slides].some(mode => this.designs.getDocument(mode).isRestoring));
 		this.artifactsDomNode.setAttribute('aria-busy', String(restoring));
 		const byTitle = (a: ArtifactCard, b: ArtifactCard) => a.title.localeCompare(b.title) * (this.sortAction.checked ? -1 : 1);
 		cards.sort(byTitle);
@@ -399,7 +407,7 @@ export class ArtifactsEditorView extends Disposable {
 				workspace = contribution.create(this.instantiation, this.domNode.ownerDocument);
 				workspace.create(this.workspacesDomNode, example);
 			} else {
-				workspace = this.instantiation.createInstance(ArtifactTableWorkspace, this.domNode.ownerDocument, example.kind, example.title, example);
+				workspace = this.instantiation.createInstance(ArtifactTableWorkspace, this.domNode.ownerDocument, example.title, example);
 				workspace.create(this.workspacesDomNode);
 			}
 			this.workspaces.set(key, workspace);
@@ -421,19 +429,22 @@ export class ArtifactsEditorView extends Disposable {
 	}
 
 	public createTable(kind: TableArtifactKind): void {
-		const key = `table:${generateUuid()}` as const;
-		const title = localize('sessions.creator.untitled', 'Untitled {0}', getArtifactTitle(kind));
-		const workspace = this.instantiation.createInstance(ArtifactTableWorkspace, this.domNode.ownerDocument, kind, title, undefined);
-		this.workspaces.set(key, workspace);
-		workspace.create(this.workspacesDomNode);
-		this.activateWorkspace({ key, title, kind }, workspace);
+		const draft = this.tables.create(kind);
+		this.openTable(draft.id);
 	}
 
-	public openTable(key: string): void {
-		if (!key.startsWith('table:')) { return; }
-		const workspaceKey = key as `table:${string}`;
-		const workspace = this.workspaces.get(workspaceKey);
-		if (workspace instanceof ArtifactTableWorkspace) this.activateWorkspace({ key: workspaceKey, title: workspace.title, kind: workspace.kind }, workspace);
+	public openTable(id: string): void {
+		const draft = this.tables.drafts.get().get(id);
+		if (!draft) { return; }
+		const key = `table:${id}` as const;
+		const title = getTableTitle(draft.kind);
+		let workspace = this.workspaces.get(key);
+		if (!workspace) {
+			workspace = this.instantiation.createInstance(ArtifactTableWorkspace, this.domNode.ownerDocument, title, draft);
+			this.workspaces.set(key, workspace);
+			workspace.create(this.workspacesDomNode);
+		}
+		this.activateWorkspace({ key, title, kind: draft.kind }, workspace);
 	}
 
 	public revealInitialContent(): void {
@@ -502,4 +513,8 @@ export class ArtifactsEditorView extends Disposable {
 		return [localize('sessions.creator.title', 'Artifacts'), ...artifactKinds.map(getArtifactTitle), ...cards.map(card => `${card.title}: ${card.detail}`)].join('\n');
 	}
 	protected override disposeCore(): void { pages.delete(this.domNode); super.disposeCore(); this.domNode.remove(); }
+}
+
+function getTableTitle(kind: TableArtifactKind): string {
+	return localize('sessions.creator.untitled', 'Untitled {0}', getArtifactTitle(kind));
 }
