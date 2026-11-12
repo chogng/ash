@@ -10791,3 +10791,140 @@ fn browser_tcp_half_close_keeps_the_response_readable() {
     assert_eq!(received, b"reply");
     server.close_connection(owner);
 }
+
+#[test]
+fn browser_tcp_revokes_existing_streams_without_revoking_other_hosts() {
+    use ash_http_client::NetworkAccess;
+    use ash_http_client::OutboundNetworkPolicy;
+    use std::io::Read;
+    use std::io::Write;
+
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let hosts =
+        |names: &[&str]| NetworkAccess::Hosts(names.iter().map(|s| (*s).to_owned()).collect());
+    let policy = OutboundNetworkPolicy::new(hosts(&["127.0.0.1", "localhost"]));
+    let server = server().with_capability_network_policy(policy.clone());
+    let mut owner = server.product_host_connection();
+    initialize(&server, &mut owner);
+    let mut id = 1;
+    let mut rpc = |method: &str, params: serde_json::Value| {
+        id += 1;
+        call(
+            &server,
+            &mut owner,
+            serde_json::json!({"jsonrpc":"2.0", "id":id, "method":method,"params":params}),
+        )
+    };
+    let mut peers = Vec::new();
+    for stream in ["read", "write", "end", "unrelated"] {
+        let host = if stream == "unrelated" {
+            "127.0.0.1"
+        } else {
+            "localhost"
+        };
+        let opened = rpc(
+            "browser/tcp/open",
+            serde_json::json!({"streamId":stream,"host":host,"port":port}),
+        );
+        assert!(opened.get("error").is_none(), "{opened}");
+        let (peer, _) = listener.accept().unwrap();
+        peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        peers.push(peer);
+    }
+    // Native traffic on an allowed host remains usable across a policy change.
+    policy.update(hosts(&["127.0.0.1"]));
+    let written = rpc(
+        "browser/tcp/write",
+        serde_json::json!({"streamId":"unrelated","dataBase64":"b2s="}),
+    );
+    assert_eq!(written["result"]["written"], 2, "{written}");
+    let mut bytes = [0; 2];
+    peers[3].read_exact(&mut bytes).unwrap();
+    assert_eq!(&bytes, b"ok");
+    peers[3].write_all(b"reply").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut received = Vec::new();
+    loop {
+        let read = rpc(
+            "browser/tcp/read",
+            serde_json::json!({"streamId":"unrelated"}),
+        );
+        assert!(read.get("error").is_none(), "{read}");
+        received.extend(
+            base64::engine::general_purpose::STANDARD
+                .decode(read["result"]["dataBase64"].as_str().unwrap())
+                .unwrap(),
+        );
+        if received.len() >= 5 {
+            break;
+        }
+        assert!(Instant::now() < deadline, "{read}");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert_eq!(received, b"reply");
+    let denied = rpc(
+        "browser/tcp/open",
+        serde_json::json!({"streamId":"denied","host":"localhost","port":port}),
+    );
+    assert_eq!(denied["error"]["message"], "ResourceNotOwner", "{denied}");
+    peers[0].write_all(b"private buffered data").unwrap();
+    // Both immediate use and use after a regrant must reject the old permits.
+    for access in [hosts(&["127.0.0.1"]), hosts(&["127.0.0.1", "localhost"])] {
+        policy.update(access);
+        for (stream, method, extra) in [
+            ("read", "browser/tcp/read", serde_json::json!({})),
+            (
+                "write",
+                "browser/tcp/write",
+                serde_json::json!({"dataBase64":"Zm9yYmlkZGVu"}),
+            ),
+            (
+                "end",
+                "browser/tcp/write",
+                serde_json::json!({"dataBase64":"","eof":true}),
+            ),
+        ] {
+            let mut params = serde_json::json!({"streamId":stream});
+            params
+                .as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            let denied = rpc(method, params);
+            assert!(
+                denied.get("error").is_some(),
+                "revoked {stream} succeeded: {denied}"
+            );
+        }
+    }
+    for peer in &mut peers[..3] {
+        let closed = peer.read(&mut [0]);
+        assert!(
+            matches!(closed, Ok(0))
+                || matches!(&closed, Err(error) if error.kind() == std::io::ErrorKind::ConnectionReset),
+            "revoked socket sent bytes or remained open: {closed:?}"
+        );
+    }
+    let closed = rpc("browser/tcp/close", serde_json::json!({"streamId":"read"}));
+    assert!(closed.get("error").is_none(), "{closed}");
+    let reopened = rpc(
+        "browser/tcp/open",
+        serde_json::json!({"streamId":"read","host":"localhost","port":port}),
+    );
+    assert!(reopened.get("error").is_none(), "{reopened}");
+    let (mut replacement, _) = listener.accept().unwrap();
+    replacement
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let written = rpc(
+        "browser/tcp/write",
+        serde_json::json!({"streamId":"read","dataBase64":"bmV3"}),
+    );
+    assert_eq!(written["result"]["written"], 3, "{written}");
+    let mut bytes = [0; 3];
+    replacement.read_exact(&mut bytes).unwrap();
+    assert_eq!(&bytes, b"new");
+    server.close_connection(owner);
+    assert_eq!(replacement.read(&mut [0]).unwrap(), 0);
+    assert_eq!(peers[3].read(&mut [0]).unwrap(), 0);
+}

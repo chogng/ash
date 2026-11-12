@@ -13,6 +13,21 @@ use serde_json::Value;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+#[derive(Debug)]
+struct BrowserTcpAuthorization(ash_http_client::NetworkPermit);
+
+impl network_proxy::TcpAuthorization for BrowserTcpAuthorization {
+    fn check(&self) -> std::io::Result<()> {
+        self.0
+            .check()
+            .map_err(|_| std::io::ErrorKind::PermissionDenied.into())
+    }
+
+    fn revoked(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + '_>> {
+        Box::pin(self.0.revoked())
+    }
+}
+
 /// Browser ownership and network authorization use the same host and call policy as tools.
 pub(super) struct BrowserRequestProcessor<'a> {
     browser_host: &'a Arc<super::BrowserHost>,
@@ -104,17 +119,18 @@ impl<'a> BrowserRequestProcessor<'a> {
                     params.port,
                 )
                 .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-                self.calls
+                let permit = self
+                    .calls
                     .network_policy()
-                    .check_url(&format!("https://{}/", destination.authority()))
+                    .acquire(&format!("https://{}/", destination.authority()))
                     .map_err(|_| RpcError::new(-32000, AppServerErrorName::ResourceNotOwner))?;
                 super::request_dispatch::runtime()
                     .map_err(failed)?
-                    .block_on(
-                        connection
-                            .tcp_streams
-                            .open(params.stream.stream_id, &destination),
-                    )
+                    .block_on(connection.tcp_streams.open(
+                        params.stream.stream_id,
+                        &destination,
+                        Arc::new(BrowserTcpAuthorization(permit)),
+                    ))
                     .map_err(failed)?;
                 result(&())
             }
