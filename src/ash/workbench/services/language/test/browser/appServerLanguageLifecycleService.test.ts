@@ -42,6 +42,9 @@ function fixture(resources: DisposableStore, source = '{"languageServers.autoSus
 	services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, warn() { }, error() { } });
 	const capabilities = () => notifications.fire({ method: 'language/serverCapabilities', params: { server: 'rust-analyzer', languageIds: ['rust'], features: ['hover'], completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [] } });
 	const serverService: ILanguageServerService = {
+		onDidChangeConfig: Event.None,
+		readEnablement: async () => undefined,
+		setEnabled: async () => { throw new Error('Unexpected language server enablement change'); },
 		read: async () => ({ revision: 0, configurations: {}, servers: [] }), configure: async () => { }, removeConfiguration: async () => { },
 		control: async request => {
 			controls.push(request);

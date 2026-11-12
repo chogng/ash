@@ -727,7 +727,7 @@ impl EnvRuntimeControl {
             self.language
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .retain_dir_roots(&language_roots);
+                .retain_dir_roots(language_roots);
         }
         for dir in retired {
             dir.retire(None, None, None);
@@ -841,7 +841,7 @@ impl EnvRuntimeControl {
         self.language
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .retain_dir_roots(&language_roots);
+            .retain_dir_roots(language_roots);
 
         for directory in directories {
             directory.retire(None, None, None);
@@ -2488,7 +2488,7 @@ impl AppServer {
         self.language
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .retain_dir_roots(&language_roots);
+            .retain_dir_roots(language_roots);
         if let Some(customizations) = &customizations {
             customizations.reconcile_session(session_id, instruction_dirs);
         }
@@ -2645,8 +2645,13 @@ impl AppServer {
     }
 
     fn reset_language_env_runtimes(&self) {
+        let environment = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Ok(mut language) = self.language.lock() {
             language.reset_dirs();
+            language.retain_dir_roots(language_roots_for(&environment));
         }
     }
 
@@ -3564,17 +3569,19 @@ impl AppServer {
         if dir_id.is_some() && session_directory.is_some() {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        if let Some(selector) = session_directory {
-            let language = self.session_dir_authorization(
-                &selector.session_id,
-                &selector.path,
-                Permission::UseLanguageServices,
-            )?;
-            self.session_dir_authorization(
-                &selector.session_id,
-                &selector.path,
-                Permission::ExecuteCommands,
-            )?;
+        let projected = session_directory_from_workspace_id(dir_id)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let session = session_directory
+            .map(|selector| (&selector.session_id, selector.path.as_path()))
+            .or_else(|| projected.as_ref().map(|(id, root)| (id, root.as_path())));
+        if let Some((session_id, path)) = session {
+            let grant = self.session_folder_grant(session_id, path)?;
+            let language = grant
+                .authorize(Permission::UseLanguageServices)
+                .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
+            grant
+                .authorize(Permission::ExecuteCommands)
+                .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
             return Ok(language.dir().clone());
         }
         let runtime = self
@@ -3734,6 +3741,50 @@ impl AppServer {
             -32064,
             AppServerErrorName::TerminalOperationFailed,
         ))
+    }
+
+    /// Resolves an exact projected folder through the grants owned by its Session.
+    pub(super) fn session_folder_grant(
+        &self,
+        session_id: &SessionId,
+        root: &std::path::Path,
+    ) -> Result<Grant, RpcError> {
+        let denied = || RpcError::new(-32043, AppServerErrorName::PermissionRequired);
+        let root = dunce::canonicalize(root).map_err(|_| denied())?;
+        let threads = self
+            .threads
+            .list_session_threads(session_id)
+            .map_err(|_| denied())?;
+        if threads.is_empty() {
+            return Err(denied());
+        }
+        let runtime = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let matches_root =
+            |grant: &Grant| grant.dir().canonical_path() == root && grant.is_active();
+        if let Some(grant) = runtime
+            .dir_grants
+            .session_grants(session_id)
+            .into_iter()
+            .find(matches_root)
+        {
+            return Ok(grant);
+        }
+        // A managed checkout may run LSP only while its execution workspace permits it.
+        if !runtime
+            .selected_grant
+            .as_ref()
+            .is_some_and(allows_language_services)
+        {
+            return Err(denied());
+        }
+        threads
+            .iter()
+            .filter_map(|thread| runtime.dir_grants.thread_grant(&thread.thread_id))
+            .find(matches_root)
+            .ok_or_else(denied)
     }
 
     /// Records where the Turn ran. Filesystem operations authorize access separately.
@@ -4288,7 +4339,9 @@ fn retire_env_runtime(
 mod tests;
 
 /// One live directory set shared by selected, multi-folder, and session LSP consumers.
-fn language_roots_for(runtime: &EnvRuntime) -> std::collections::BTreeSet<PathBuf> {
+pub(super) fn language_roots_for(
+    runtime: &EnvRuntime,
+) -> super::language_runtime::LanguageDirectoryRoots {
     let mut roots = runtime.dir_grants.dirs_for(Permission::UseLanguageServices);
     let executable = runtime.dir_grants.dirs_for(Permission::ExecuteCommands);
     roots.retain(|root| executable.contains(root));
@@ -4298,14 +4351,32 @@ fn language_roots_for(runtime: &EnvRuntime) -> std::collections::BTreeSet<PathBu
         .map(|dir| &dir.grant)
         .chain(runtime.selected_grant.iter())
     {
-        if grant.is_active()
-            && grant.permissions().allows(Permission::UseLanguageServices)
-            && grant.permissions().allows(Permission::ExecuteCommands)
-        {
+        if allows_language_services(grant) {
             roots.insert(grant.dir().canonical_path().to_path_buf());
         }
     }
-    roots
+    let worktrees = runtime
+        .dir_grants
+        .managed_language_roots()
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+    if runtime
+        .selected_grant
+        .as_ref()
+        .is_some_and(allows_language_services)
+    {
+        roots.extend(worktrees.iter().cloned());
+    }
+    super::language_runtime::LanguageDirectoryRoots {
+        granted: roots,
+        worktrees,
+    }
+}
+
+fn allows_language_services(grant: &Grant) -> bool {
+    grant.is_active()
+        && grant.permissions().allows(Permission::UseLanguageServices)
+        && grant.permissions().allows(Permission::ExecuteCommands)
 }
 
 /// Retrieval consumes SearchFiles and the same applied profile as Agent file tools.

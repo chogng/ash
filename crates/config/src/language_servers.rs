@@ -139,13 +139,31 @@ impl LanguageServerConfig {
     }
 }
 
-/// User-owned language-server preferences keyed by stable integration identity.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+/// Profile-wide language-server enablement and preferences for individual integrations.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LanguageServersConfig {
+    #[serde(default = "enabled_by_default")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub worktrees_enabled: bool,
     #[serde(default)]
     pub servers: BTreeMap<LanguageServerId, LanguageServerConfig>,
+}
+
+impl Default for LanguageServersConfig {
+    fn default() -> Self {
+        Self {
+            enabled: enabled_by_default(),
+            worktrees_enabled: false,
+            servers: BTreeMap::new(),
+        }
+    }
+}
+
+fn enabled_by_default() -> bool {
+    true
 }
 
 impl LanguageServersConfig {

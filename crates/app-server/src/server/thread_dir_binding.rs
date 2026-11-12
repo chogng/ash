@@ -115,8 +115,7 @@ impl GitTurnChangesRuntime {
         // Windows directory capabilities pin their roots. Release the owning services
         // before deletion and restore them on failure so cleanup can be retried.
         self.stop_watcher(thread_id);
-        self.dirs.file_access.unbind_thread_dir(thread_id);
-        self.dirs.hooks.unbind_thread_dir(thread_id);
+        self.dirs.unbind_services(thread_id);
         if let Err(error) = self
             .dirs
             .runtime
@@ -838,8 +837,7 @@ impl GitTurnChangesRuntime {
 
     pub(super) fn release_switched_directory(&self, thread: &ThreadId) {
         self.stop_watcher(thread);
-        self.dirs.file_access.unbind_thread_dir(thread);
-        self.dirs.hooks.unbind_thread_dir(thread);
+        self.dirs.unbind_services(thread);
         self.dirs
             .bindings
             .write()

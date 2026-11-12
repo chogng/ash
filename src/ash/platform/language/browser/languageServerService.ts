@@ -1,3 +1,4 @@
+import { Event } from '../../../base/common/event.js';
 import type { JsonValue } from '../../../base/common/jsonValue.js';
 import type { JsonValue as ProtocolJsonValue } from '../../../../../.build/protocol/typescript/index.js';
 import { generateUuid } from '../../../base/common/uuid.js';
@@ -8,6 +9,25 @@ import type { ILanguageServerService } from '../common/languageServerService.js'
 
 export function createAppServerLanguageServerService(connection: AppServerProtocolClient): ILanguageServerService {
 	return {
+		onDidChangeConfig: (listener, thisArgs, disposables) => {
+			const subscription = connection.onNotification(event => {
+				if (event.method === 'config/changed') { listener.call(thisArgs); }
+			});
+			if (Array.isArray(disposables)) { disposables.push(subscription); }
+			else { disposables?.add(subscription); }
+			return subscription;
+		},
+		readEnablement: async () => {
+			const config = await appServerRequest(connection, 'config/read', {});
+			return config.languageServersEnabled === undefined ? undefined : {
+				revision: config.revision,
+				enabled: config.languageServersEnabled,
+				worktreesEnabled: config.worktreeLanguageServersEnabled,
+			};
+		},
+		setEnabled: async (enabled, expectedRevision, scope) => {
+			await appServerRequest(connection, 'languageServer/setEnabled', { commandId: generateUuid(), expectedRevision, enabled, scope });
+		},
 		read: async dirId => {
 			const [config, result] = await Promise.all([appServerRequest(connection, 'config/read', {}), appServerRequest(connection, 'language/servers', { dirId })]);
 			return { revision: config.revision, configurations: Object.fromEntries(Object.entries(config.languageServers).map(([id, value]) => [id, { ...value, executable: value.executable ?? undefined, initializationOptions: value.initializationOptions ?? undefined }])), servers: result.servers.map(server => ({ id: server.id, languageIds: server.languageIds, state: server.state ?? undefined })) };
@@ -23,7 +43,15 @@ export function createAppServerLanguageServerService(connection: AppServerProtoc
 }
 
 export function createDisconnectedLanguageServerService(unavailable: UnavailableOperation): ILanguageServerService {
-	return { read: () => unavailable('languageServers.read'), control: () => unavailable('languageServers.control'), configure: () => unavailable('languageServers.configure'), removeConfiguration: () => unavailable('languageServers.removeConfiguration') };
+	return {
+		onDidChangeConfig: Event.None,
+		readEnablement: () => unavailable('languageServers.readEnablement'),
+		setEnabled: () => unavailable('languageServers.setEnabled'),
+		read: () => unavailable('languageServers.read'),
+		control: () => unavailable('languageServers.control'),
+		configure: () => unavailable('languageServers.configure'),
+		removeConfiguration: () => unavailable('languageServers.removeConfiguration'),
+	};
 }
 
 function protocolJsonValue(value: JsonValue): ProtocolJsonValue {

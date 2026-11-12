@@ -17,7 +17,7 @@ import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type Lan
 import { type ICodeIntelligenceDocumentService } from '../../codeIntelligence/common/codeIntelligenceDocumentService.js';
 import { AppServerLanguageSupport } from './appServerLanguageSupport.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { resolveAppServerLanguageDirAccess } from './appServerLanguageWorkspace.js';
+import { languageWorkspaceDirId, resolveAppServerLanguageDirAccess } from './appServerLanguageWorkspace.js';
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from '../common/languageDiagnosticsService.js';
 
 const MAX_LANGUAGE_DOCUMENT_BYTES = 10 * 1024 * 1024;
@@ -152,7 +152,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 					if (target) {
 						entry.dirId = target.dirId;
 						entry.path = target.path;
-						entry.wireWorkspaceFolderId = this.workspace.getWorkspace().folders.length > 1 ? target.dirId : undefined;
+						entry.wireWorkspaceFolderId = languageWorkspaceDirId(target.dirId, this.workspace.getWorkspace().folders.length);
 					}
 				});
 			}
@@ -199,7 +199,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		const entry: LanguageDocumentEntry = {
 			resource,
 			dirId: target.dirId,
-			...(this.workspace.getWorkspace().folders.length > 1 ? { wireWorkspaceFolderId: target.dirId } : {}),
+			wireWorkspaceFolderId: languageWorkspaceDirId(target.dirId, this.workspace.getWorkspace().folders.length),
 			path: target.path,
 			languageId,
 			languageGeneration: 0,
@@ -398,7 +398,8 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			for (const languageId of this.support.workspaceLanguageIds(folder.id)) {
 				if (!this.alive || signal.aborted || !this.languageAllowed || generation !== this.permissionRefreshGeneration || !this.hasWorkspaceFolder()) return;
 				try {
-					const report = await this.api.directoryDiagnostics({ ...(this.workspace.getWorkspace().folders.length > 1 ? { dirId: folder.id } : {}), languageId }, { signal });
+					const dirId = languageWorkspaceDirId(folder.id, this.workspace.getWorkspace().folders.length);
+					const report = await this.api.directoryDiagnostics({ ...(dirId ? { dirId } : {}), languageId }, { signal });
 					if (signal.aborted || generation !== this.permissionRefreshGeneration) return;
 					if (!report.supported) continue;
 					supported = true;

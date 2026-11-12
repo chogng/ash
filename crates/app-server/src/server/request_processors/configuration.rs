@@ -32,8 +32,10 @@ use ash_app_server_protocol::protocol::config::GitConfigDto;
 use ash_app_server_protocol::protocol::config::GrepBackendDto;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigDto;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigureParams;
+use ash_app_server_protocol::protocol::config::LanguageServerEnablementScope;
 use ash_app_server_protocol::protocol::config::LanguageServerModeDto;
 use ash_app_server_protocol::protocol::config::LanguageServerRemoveParams;
+use ash_app_server_protocol::protocol::config::LanguageServerSetEnabledParams;
 use ash_app_server_protocol::protocol::config::McpCredentialBindingDto;
 use ash_app_server_protocol::protocol::config::McpServerConfigDto;
 use ash_app_server_protocol::protocol::config::McpServerEnablementDto;
@@ -682,6 +684,40 @@ impl<'ctx, C: ConfigRequestProcessorContext + ?Sized> ConfigRequestProcessor<'ct
         result(&config_command_result(outcome))
     }
 
+    pub(super) fn language_server_set_enabled(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageServerSetEnabledParams = decode(params)?;
+        let store = self
+            .config
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: match params.scope {
+                    LanguageServerEnablementScope::All => {
+                        UserConfigCommand::SetLanguageServersEnabled {
+                            enabled: params.enabled,
+                        }
+                    }
+                    LanguageServerEnablementScope::Worktrees => {
+                        UserConfigCommand::SetWorktreeLanguageServersEnabled {
+                            enabled: params.enabled,
+                        }
+                    }
+                },
+            })
+            .map_err(config_operation_error)?;
+        self.context.reconcile_language_configuration(
+            &store
+                .read_snapshot()
+                .map_err(config_error)?
+                .values
+                .language_servers,
+        );
+        result(&config_command_result(outcome))
+    }
+
     pub(super) fn language_server_configure(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageServerConfigureParams = decode(params)?;
         let server_id = LanguageServerId::new(params.server_id)
@@ -1031,6 +1067,8 @@ fn config_read_result(
             .into_iter()
             .map(|(id, hook)| (id.to_string(), hook_config_dto(hook)))
             .collect(),
+        language_servers_enabled: Some(snapshot.values.language_servers.enabled),
+        worktree_language_servers_enabled: Some(snapshot.values.language_servers.worktrees_enabled),
         language_servers: snapshot
             .values
             .language_servers

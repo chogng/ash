@@ -1,9 +1,14 @@
 import type { CodebaseStatusResult, ConfigCommandResult, CodebaseModelsDto } from '../../../../../../.build/protocol/typescript/index.js';
+import type { Event } from '../../../../base/common/event.js';
 import type { ICodebaseApi } from '../../../../platform/codebase/common/codebaseApi.js';
 import type { CodebaseConfigurationCommandResult, CodebaseConfigurationSnapshot, CodebaseStatus, ICodebaseService, CodebaseAutomaticContext, CodebaseModels } from '../../../../platform/codebase/common/codebaseService.js';
 
 export class AppServerCodebaseService implements ICodebaseService {
-	constructor(private readonly api: ICodebaseApi) { }
+	readonly onDidChangeConfig: Event<void>;
+
+	constructor(private readonly api: ICodebaseApi) {
+		this.onDidChangeConfig = api.onDidChangeConfig;
+	}
 
 	async readConfig(): Promise<CodebaseConfigurationSnapshot> {
 		const config = await this.api.readConfig();

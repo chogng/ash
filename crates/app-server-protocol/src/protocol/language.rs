@@ -168,6 +168,10 @@ pub struct LanguageOperationParams<P> {
 pub struct LanguageCancelParams {
     #[schemars(length(min = 1, max = 128))]
     pub operation_id: String,
+    /// Selects the same directory route as the original request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
 }
 
 /// Observable outcome of a language cancellation request.

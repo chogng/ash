@@ -1222,14 +1222,22 @@
     },
     "LanguageServersConfig": {
       "additionalProperties": false,
-      "description": "User-owned language-server preferences keyed by stable integration identity.",
+      "description": "Profile-wide language-server enablement and preferences for individual integrations.",
       "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
         "servers": {
           "additionalProperties": {
             "$ref": "#/$defs/LanguageServerConfig"
           },
           "default": {},
           "type": "object"
+        },
+        "worktreesEnabled": {
+          "default": false,
+          "type": "boolean"
         }
       },
       "type": "object"
@@ -2082,7 +2090,9 @@
     "languageServers": {
       "$ref": "#/$defs/LanguageServersConfig",
       "default": {
-        "servers": {}
+        "enabled": true,
+        "servers": {},
+        "worktreesEnabled": false
       }
     },
     "mcp": {

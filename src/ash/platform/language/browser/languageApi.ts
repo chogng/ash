@@ -45,17 +45,18 @@ export function createAppServerLanguageApi(connection: AppServerProtocolClient):
 	};
 }
 
-function languageRequest<M extends AppServerMethod, P>(
+function languageRequest<M extends AppServerMethod, P extends { readonly dirId?: string; readonly document?: { readonly dirId?: string; }; }>(
 	connection: AppServerProtocolClient,
 	method: M,
 	request: P,
 	options: LanguageRequestOptions | undefined,
 	wrap: (operationId: string, request: P) => MethodParams<M>,
 ): Promise<MethodResult<M>> {
+	const dirId = request.document?.dirId ?? request.dirId;
 	return runCancellableLanguageRequest(
 		options,
 		operationId => languageServerRequest(connection, method, wrap(operationId, request)),
-		operationId => appServerRequest(connection, 'language/cancel', { operationId }),
+		operationId => appServerRequest(connection, 'language/cancel', { operationId, ...(dirId?.startsWith('session:') ? { dirId } : {}) }),
 	);
 }
 

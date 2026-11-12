@@ -4,6 +4,7 @@ import { addToValueTree, isConfigured, type IConfigurationService } from '../../
 import type { JsonValue } from '../../../../base/common/jsonValue.js';
 import type { JsonValue as ProtocolJsonValue } from '../../../../../../.build/protocol/typescript/index.js';
 import { equals } from '../../../../base/common/arrays.js';
+import { languageWorkspaceDirId } from './appServerLanguageWorkspace.js';
 
 interface LanguageServer {
 	readonly id: string;
@@ -34,7 +35,8 @@ export class AppServerLanguageSupport {
 			}
 			// An empty section on removal retires the previous runtime override.
 			const settings = { 'rust-analyzer': protocolJsonValue(rust) };
-			const result = await api.servers({ ...(folders.length > 1 ? { dirId: folder.id } : {}), settings });
+			const dirId = languageWorkspaceDirId(folder.id, folders.length);
+			const result = await api.servers({ ...(dirId ? { dirId } : {}), settings });
 			return [folder.id, result.servers.map(server => ({
 				id: server.id,
 				languageIds: server.languageIds,

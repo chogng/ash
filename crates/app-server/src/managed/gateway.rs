@@ -1390,6 +1390,12 @@ fn selected_execution_target(
     }
     let folder_id = match method {
         Some("git/repositories") => request.pointer("/params/folders/0/dirId"),
+        Some(method) if method.starts_with("language/") => request
+            .pointer("/params/request/document/dirId")
+            .or_else(|| request.pointer("/params/request/dirId"))
+            .or_else(|| request.pointer("/params/document/dirId"))
+            .or_else(|| request.pointer("/params/dirId")),
+        Some("env/dir/read") => request.pointer("/params/dirId"),
         Some(method) if method.starts_with("terminal/") || method.starts_with("fs/") => {
             request.pointer("/params/dirId")
         }

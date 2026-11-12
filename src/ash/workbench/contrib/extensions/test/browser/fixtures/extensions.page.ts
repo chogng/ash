@@ -411,6 +411,9 @@ services.registerInstance(IConnectorService, {
 	revokeOAuth: async () => { },
 });
 services.registerInstance(ILanguageServerService, {
+	onDidChangeConfig: Event.None,
+	readEnablement: async () => undefined,
+	setEnabled: async () => { throw new Error('Unexpected language server enablement change'); },
 	read: async () => ({ revision, configurations: {}, servers: [{ id: 'typescript-language-server', languageIds: ['typescriptreact'] }] }),
 	control: async () => { throw new Error('Process control is outside the extension settings fixture'); },
 	configure: async (id, config, expectedRevision) => { requests.push(['configure', id, config, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } revision++; },

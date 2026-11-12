@@ -91,6 +91,12 @@ integration 可以沿用声明的语言映射。`args` 原样追加到 integrati
 `initializationOptions` 进入 initialize，`settings` 按 `workspace/configuration` 的 section 顺序和嵌套路径返回。
 配置变更先退休旧会话；后续文档请求按新配置创建会话，失败不会继续使用旧命令。
 
+Agent Window 的「设置 → Code Intelligence → LSP」控制当前 App Server profile 的
+`[languageServers].enabled`，默认开启。关闭会退休该 profile 的语言服务器并保留各服务器的配置。
+「Enable LSPs for Worktrees」控制 `[languageServers].worktreesEnabled`，默认关闭。总开关开启时，
+此设置允许 Agent 的托管 worktree 按需启动独立的语言服务器。关闭会停止正在运行的 worktree 语言服务器。
+界面从 `config/read` 读取两项，通过 `languageServer/setEnabled` 按配置 revision 和 `scope` 保存。
+
 Settings 高级 JSON 示例：
 
 ```json

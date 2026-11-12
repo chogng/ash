@@ -110,6 +110,9 @@ function updateServerState(state: LanguageServerState): void {
 	changes.fire({ method: 'language/serverState', params: { server: 'rust-analyzer', state } });
 }
 statusServices.registerInstance(ILanguageServerService, {
+	onDidChangeConfig: Event.None,
+	readEnablement: async () => undefined,
+	setEnabled: async () => { throw new Error('Unexpected language server enablement change'); },
 	read: async () => ({ revision: 0, configurations: {}, servers: [{ id: 'rust-analyzer', languageIds: ['rust'], state: serverState }, ...(new URLSearchParams(location.search).has('preview') ? ['css-language-server', 'typescript-language-server', 'demo-tools'].map(id => ({ id, languageIds: ['fixture'] })) : []), ...(new URLSearchParams(location.search).has('many') ? Array.from({ length: 24 }, (_, index) => ({ id: `synthetic-server-${index}`, languageIds: ['fixture'] })) : [])] }),
 	control: async request => {
 		controls.push(request);

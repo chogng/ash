@@ -4,6 +4,8 @@ import { IWorkbenchHostService } from '../../../../services/host/common/workbenc
 import { IChatWidgetService } from '../../../chat/browser/chat.js';
 import { ChatWidgetService } from '../../../chat/browser/widget/chatWidgetService.js';
 import '../../../advisor/browser/advisor.contribution.js';
+import '../../../codebase/browser/codebase.contribution.js';
+import { ICodebaseService, type CodebaseConfigurationSnapshot } from '../../../../../platform/codebase/common/codebaseService.js';
 import '../../../chat/browser/chat.shared.contribution.js';
 import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../../../../platform/browserView/common/browserPasswordService.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
@@ -70,6 +72,7 @@ import { DialogService } from '../../../../services/dialogs/common/dialogService
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IExtensionManagementService } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ILanguageServerService } from '../../../../../platform/language/common/languageServerService.js';
+import { Event as AshEvent } from '../../../../../base/common/event.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { createTestFileService, createTestEditorServices, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
@@ -3125,6 +3128,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		onDidChangeInstalled: Event.None,
 	} as IExtensionManagementService);
 	services.registerInstance(ILanguageServerService, {
+		onDidChangeConfig: AshEvent.None,
+		readEnablement: async () => undefined,
+		setEnabled: async () => { throw new Error('Unexpected language server enablement change'); },
 		control: async () => { },
 		read: async () => ({ revision: 0, configurations: {}, servers: [] }),
 		configure: async () => { },
@@ -3225,6 +3231,23 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		onDidChange: Event.None,
 		read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }),
 		configure: async () => { },
+	});
+	const codebaseChanged = disposables.add(new Emitter<void>());
+	let codebaseConfig: CodebaseConfigurationSnapshot = {
+		revision: 4, generation: 6, codebase: {
+			automaticContext: 'off',
+			models: { embeddingModel: { provider: 'local', model: 'embed' }, rerankModel: { provider: 'local', model: 'rank' } },
+		},
+	};
+	services.registerInstance(ICodebaseService, {
+		onDidChangeConfig: codebaseChanged.event,
+		readConfig: async () => codebaseConfig,
+		configure: async (models, automaticContext, expectedRevision) => {
+			assert.equal(expectedRevision, codebaseConfig.revision);
+			codebaseConfig = { revision: expectedRevision + 1, generation: codebaseConfig.generation + 1, codebase: { models, automaticContext } };
+			return { revision: codebaseConfig.revision, generation: codebaseConfig.generation, disposition: 'updated' };
+		},
+		status: async () => { throw new Error('Unexpected Codebase index status request'); },
 	});
 	services.registerInstance(IFileDialogService, {
 		pickFolderAndOpen: async () => {
@@ -3739,6 +3762,39 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.deepEqual(skillScopes, []);
 	assert.deepEqual(skillMutations, []);
 	root.querySelector<HTMLElement>('[data-settings-category-id="agents"]')?.click();
+	assert.equal(root.querySelector('[data-settings-item-id="codebase"]'), null);
+	await preferences.openSettings({ section: 'editor-suggestions' });
+	await nextTurn();
+	const codebase = root.querySelector<HTMLElement>('[data-settings-item-id="codebase"]')!;
+	const embedding = codebase.querySelector<HTMLInputElement>('input[aria-label="Embedding model"]')!;
+	assert.equal(embedding.value, 'local/embed');
+	assert.throws(() => configuration.inspect('codebase'), /Unknown configuration key/);
+	codebaseConfig = { revision: 5, generation: 7, codebase: { ...codebaseConfig.codebase, automaticContext: 'firstInvocation' } };
+	codebaseChanged.fire();
+	await nextTurn();
+	assert.equal(codebase.querySelector<HTMLInputElement>('[aria-label="Automatic context"]')?.checked, true);
+	embedding.value = '';
+	embedding.dispatchEvent(new ownerDocument.defaultView!.Event('input', { bubbles: true }));
+	const codebaseActions = [...codebase.querySelectorAll<HTMLElement>('button, [role="button"]')];
+	const saveCodebase = codebaseActions.find(button => button.textContent === 'Save Codebase settings')!;
+	const refreshCodebase = codebaseActions.find(button => button.textContent === 'Refresh Codebase settings')!;
+	codebaseConfig = { revision: 6, generation: 8, codebase: { ...codebaseConfig.codebase, automaticContext: 'off' } };
+	codebaseChanged.fire();
+	await nextTurn();
+	saveCodebase.click();
+	await nextTurn();
+	assert.match(codebase.querySelector('[role="status"]')?.textContent ?? '', /Could not save Codebase settings/u);
+	assert.equal(embedding.value, '', 'a conflicting backend revision leaves the local draft available');
+	assert.equal(codebaseConfig.codebase.models?.embeddingModel.model, 'embed');
+	refreshCodebase.click();
+	await nextTurn();
+	assert.equal(embedding.value, 'local/embed');
+	embedding.value = '';
+	embedding.dispatchEvent(new ownerDocument.defaultView!.Event('input', { bubbles: true }));
+	saveCodebase.click();
+	await nextTurn();
+	assert.deepEqual(codebaseConfig, { revision: 7, generation: 9, codebase: { models: undefined, automaticContext: 'off' } });
+	await preferences.openSettings({ section: 'agents' });
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Agents');
 	assert.ok(root.querySelector('.ash-settings-content-tree [data-settings-item-id="agents.definitions"] .ash-agent-roles-actions'));

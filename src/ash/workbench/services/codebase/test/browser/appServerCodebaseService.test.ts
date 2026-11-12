@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { decodeAppServerResult } from '../../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import type { CodebaseConfigureParams, CodebaseStatusResult } from '../../../../../../../.build/protocol/typescript/index.js';
+import { Event } from '../../../../../base/common/event.js';
 import type { ICodebaseApi } from '../../../../../platform/codebase/common/codebaseApi.js';
 import { AppServerCodebaseService } from '../../browser/appServerCodebaseService.js';
 
@@ -23,6 +24,7 @@ test('Codebase policy excludes provider configuration and preserves revision con
 	const writes: CodebaseConfigureParams[] = [];
 	const models = { embeddingModel: { provider: 'openai-compatible', model: 'embed-v1' }, rerankModel: null };
 	const api: ICodebaseApi = {
+		onDidChangeConfig: Event.None,
 		readConfig: async () => ({
 			revision: 4,
 			generation: 9,
@@ -78,6 +80,7 @@ test('Codebase status preserves source readiness while embedding is unavailable 
 	];
 	for (const status of statuses) {
 		const api: ICodebaseApi = {
+			onDidChangeConfig: Event.None,
 			readConfig: async () => { throw new Error('unexpected config read'); },
 			configure: async () => { throw new Error('unexpected configuration write'); },
 			status: async () => decodeAppServerResult('codebase/status', status),

@@ -72,6 +72,8 @@ import { WebWorkerExtensionHost } from '../../workbench/services/extensions/brow
 import { IExtensionBackendApi } from '../../platform/extensions/common/extensionBackendApi.js';
 import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
 import { IContentSearchService, IContentSearchConfigurationService } from '../../platform/search/common/search.js';
+import { ICodebaseService } from '../../platform/codebase/common/codebaseService.js';
+import { AppServerCodebaseService } from '../../workbench/services/codebase/browser/appServerCodebaseService.js';
 import { FileContentSearchService } from '../../platform/search/browser/searchService.js';
 import { ISearchService } from '../../workbench/services/search/common/search.js';
 import { SearchService } from '../../workbench/services/search/common/searchService.js';
@@ -603,6 +605,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IProjectService, options.api.projects);
 		services.registerInstance(INetworkDiagnosticsService, options.api.networkDiagnostics);
 		services.registerInstance(IContentSearchConfigurationService, options.api.contentSearchConfiguration);
+		services.registerInstance(ICodebaseService, new AppServerCodebaseService(options.api.codebase));
 		if (!services.has(ITelemetryService)) { services.registerInstance(ITelemetryService, NullTelemetryService); }
 		services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment);
 		services.registerInstance(IVoiceCodeTranscriptionBackendService, options.api.dictation);

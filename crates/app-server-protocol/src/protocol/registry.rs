@@ -728,9 +728,13 @@ use crate::protocol::config::LanguageServerConfigDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::LanguageServerConfigureParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::config::LanguageServerEnablementScope;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::config::LanguageServerModeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::LanguageServerRemoveParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::LanguageServerSetEnabledParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::McpCredentialBindingDto;
 #[cfg(any(test, feature = "export"))]
@@ -4839,6 +4843,11 @@ client_methods! {
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
+    LanguageServerSetEnabled => "languageServer/setEnabled" {
+        params: LanguageServerSetEnabledParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
     LanguageServerRemove => "languageServer/remove" {
         params: LanguageServerRemoveParams,
         response: ConfigCommandResult,
@@ -7039,6 +7048,8 @@ typescript_bindings! {
     CommitMessageRevokeParams,
     LanguageServerConfigureParams,
     LanguageServerRemoveParams,
+    LanguageServerSetEnabledParams,
+    LanguageServerEnablementScope,
     ProviderConfigureParams,
     ProviderRemoveParams,
     McpServerUpsertParams,

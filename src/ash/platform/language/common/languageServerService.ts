@@ -1,3 +1,4 @@
+import type { Event } from '../../../base/common/event.js';
 import type { JsonValue } from '../../../base/common/jsonValue.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
@@ -31,7 +32,18 @@ export interface LanguageServerSnapshot {
 	readonly servers: readonly { readonly id: string; readonly languageIds: readonly string[]; readonly state?: LanguageServerState; }[];
 }
 
+export interface LanguageServerEnablement {
+	readonly revision: number;
+	readonly enabled: boolean;
+	readonly worktreesEnabled?: boolean;
+}
+
+export type LanguageServerEnablementScope = 'all' | 'worktrees';
+
 export interface ILanguageServerService {
+	readonly onDidChangeConfig: Event<void>;
+	readEnablement(): Promise<LanguageServerEnablement | undefined>;
+	setEnabled(enabled: boolean, expectedRevision: number, scope?: LanguageServerEnablementScope): Promise<void>;
 	read(dirId?: string): Promise<LanguageServerSnapshot>;
 	control(request: LanguageServerControl): Promise<void>;
 	configure(serverId: string, configuration: LanguageServerConfiguration, expectedRevision: number): Promise<void>;

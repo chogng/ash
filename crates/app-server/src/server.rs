@@ -1663,6 +1663,7 @@ impl AppServer {
             file_access,
             hooks,
             Arc::downgrade(&self.env_runtime),
+            Arc::downgrade(&self.language),
             &self.threads,
         )?;
         let runtime = git_turn_changes_runtime::GitTurnChangesRuntime::open(
@@ -4443,6 +4444,9 @@ impl AppServer {
             Some(ClientMethod::LanguageServerConfigure) => self
                 .config_processor()
                 .language_server_configure(&request.params),
+            Some(ClientMethod::LanguageServerSetEnabled) => self
+                .config_processor()
+                .language_server_set_enabled(&request.params),
             Some(ClientMethod::LanguageServerRemove) => self
                 .config_processor()
                 .language_server_remove(&request.params),

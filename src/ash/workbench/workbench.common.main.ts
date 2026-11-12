@@ -6,6 +6,7 @@ import './contrib/debug/browser/debugAdapterManager.js';
 import '../platform/uriIdentity/common/uriIdentityService.js';
 import './contrib/chat/browser/chat.shared.contribution.js';
 import './contrib/advisor/browser/advisor.contribution.js';
+import './contrib/codebase/browser/codebase.contribution.js';
 import './contrib/terminal/terminal.all.js';
 import { registerMemoryManagement } from './contrib/memories/browser/memories.contribution.js';
 import './contrib/memory/browser/memory.contribution.js';

@@ -2629,6 +2629,7 @@ fn language_server_preferences_are_typed_persisted_and_revision_safe() {
 
     assert_eq!(result.revision, ConfigRevision::new(1));
     let snapshot = store.read_snapshot().unwrap();
+    assert!(snapshot.values.language_servers.enabled);
     assert_eq!(
         snapshot.values.language_servers.servers.get(&server_id),
         Some(&LanguageServerConfig {
@@ -2638,6 +2639,7 @@ fn language_server_preferences_are_typed_persisted_and_revision_safe() {
         })
     );
     assert!(persisted_config_document(&path).contains("rust-analyzer"));
+    assert!(!snapshot.values.language_servers.worktrees_enabled);
 
     let invalid = store.apply(ConfigCommandRequest {
         command_id: CommandId::new("configure-relative-rust-analyzer").unwrap(),
@@ -2652,6 +2654,30 @@ fn language_server_preferences_are_typed_persisted_and_revision_safe() {
         },
     });
     assert!(matches!(invalid, Err(ConfigCommandError::Config(_))));
+    let worktrees_enabled = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("enable-worktree-language-servers").unwrap(),
+            expected_revision: snapshot.revision,
+            command: UserConfigCommand::SetWorktreeLanguageServersEnabled { enabled: true },
+        })
+        .unwrap();
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("disable-language-servers").unwrap(),
+            expected_revision: worktrees_enabled.revision,
+            command: UserConfigCommand::SetLanguageServersEnabled { enabled: false },
+        })
+        .unwrap();
+    drop(store);
+    let reopened = ConfigStore::open(&path).unwrap();
+    let saved = reopened.read_snapshot().unwrap();
+    assert!(!saved.values.language_servers.enabled);
+    assert!(saved.values.language_servers.worktrees_enabled);
+    assert_eq!(
+        saved.values.language_servers.servers,
+        snapshot.values.language_servers.servers
+    );
+    drop(reopened);
     remove_config_files(&path);
 }
 

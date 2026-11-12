@@ -6,6 +6,11 @@ export interface AppServerLanguageDirAccess {
 	readonly allowed: boolean;
 }
 
+/** A projected session folder has its own authority even in a single-folder window. */
+export function languageWorkspaceDirId(folderId: string, folderCount: number): string | undefined {
+	return folderCount > 1 || folderId.startsWith('session:') ? folderId : undefined;
+}
+
 /** Resolves whether every folder may start executable language services. */
 export async function resolveAppServerLanguageDirAccess(workspaceContext: IWorkspaceContextService, workspaceTrust: IWorkspaceTrustManagementService, checkWorkspaceTrust: boolean): Promise<AppServerLanguageDirAccess> {
 	const workspace = workspaceContext.getWorkspace();
