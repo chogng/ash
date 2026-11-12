@@ -328,10 +328,12 @@ export class ChatListItemRenderer extends Disposable {
 		const content = this.item.content ?? [];
 		const changed = () => { this.options.onDidChangeHeight(); this.options.onDidChangeContent(); };
 		const useImagePopup = this.contextKeys.getValue(ChatContextKeys.imagePreviewPresentation.key) === 'popup';
-		const resources: IChatAttachmentResource[] = (this.item.resources ?? []).map(resource => {
+		const richParts = this.item.markdown?.richContent?.parts;
+		const resources: IChatAttachmentResource[] = (this.item.resources ?? []).flatMap(resource => {
+			if (resource.presentation === 'download' && richParts?.some(part => part.kind === 'resource' && part.uri === resource.uri)) return [];
 			const mimeType = useImagePopup && (!resource.mimeType || resource.mimeType === 'application/octet-stream') ? getMediaMime(resource.name) : resource.mimeType;
-			const presentation = useImagePopup && resource.kind === 'document' && mimeType?.startsWith('image/') ? 'image' : resource.kind;
-			return { type: 'resource', resource: URI.parse(resource.uri), name: resource.name, presentation, mimeType, frameOrigin: resource.frameOrigin };
+			const presentation = resource.presentation ?? (useImagePopup && resource.kind === 'document' && mimeType?.startsWith('image/') ? 'image' : resource.kind);
+			return [{ type: 'resource', resource: URI.parse(resource.uri), name: resource.name, presentation, mimeType, frameOrigin: resource.frameOrigin }];
 		});
 		const mediaContent = [...content, ...resources];
 		if (resources.length || content.some(part => part.type !== 'text' && part.type !== 'artifact')) {
@@ -339,7 +341,7 @@ export class ChatListItemRenderer extends Disposable {
 				const media = this.instantiationService.createInstance(ChatAttachmentsContentPart, {
 					ownerDocument: this.element.ownerDocument, variables: mediaContent, source: this.item.attachmentSource,
 					thumbnailImages: this.item.type === 'userMessage' || this.item.type === 'userImage' || this.item.type === 'userImageAttachment',
-					readResource: resources.length && this.options.readResponseResource ? (resource: URI, signal: AbortSignal) => this.options.readResponseResource!(this.item, resource, signal) : undefined
+					readResource: this.options.readResponseResource ? (resource: URI, signal: AbortSignal) => this.options.readResponseResource!(this.item, resource, signal) : undefined
 				});
 				this.media.value = media;
 				this.attachments.prepend(media.domNode);

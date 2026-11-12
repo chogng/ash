@@ -73,6 +73,8 @@ export interface IChatListItem {
 		readonly uri: string;
 		readonly name: string;
 		readonly kind: 'image' | 'audio' | 'video' | 'document' | 'html' | 'chart';
+		/** Offer the file for download and read its bytes on activation. */
+		readonly presentation?: 'download';
 		readonly mimeType?: string;
 		readonly frameOrigin?: string;
 	}[];

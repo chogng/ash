@@ -6,6 +6,7 @@ import { createObjectUrl, triggerDownload } from '../../../../../../base/browser
 import type { URI } from '../../../../../../base/common/uri.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { decodeBase64 } from '../../../../../../base/common/buffer.js';
+import { isCancellationError } from '../../../../../../base/common/errors.js';
 import { getMediaMime, Mimes } from '../../../../../../base/common/mime.js';
 import { htmlAttributeEncodeValue } from '../../../../../../base/common/strings.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
@@ -33,7 +34,7 @@ export interface IChatAttachmentResource {
 	readonly type: 'resource';
 	readonly resource: URI;
 	readonly name: string;
-	readonly presentation: 'image' | 'audio' | 'video' | 'document' | 'html' | 'chart';
+	readonly presentation: 'image' | 'audio' | 'video' | 'document' | 'html' | 'chart' | 'download';
 	readonly mimeType?: string;
 	readonly frameOrigin?: string;
 }
@@ -276,7 +277,9 @@ export class ChatAttachmentsContentPart extends Disposable {
 						row.status.textContent = localize('chat.media.unavailable', 'This media could not be loaded.');
 					}
 				}
-				if (part.type === 'resource') { void this.load(current); }
+				if (part.type === 'resource' && part.presentation === 'download' && this.options.readResource) {
+					this.showFileDownload(current, part);
+				} else if (part.type === 'resource') { void this.load(current); }
 				if (part.type === 'imageAttachment' && this.options.imagePresentation === 'inline') { void this.load(current); }
 			}
 			// Avoid disconnecting a retained audio player or the user's focused media row.
@@ -463,7 +466,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 					const input = { resource: row.association.value!.resource, contentType: mime, readOnly: true, initialBytes: bytes };
 					const descriptor = EditorPanes.getEditorPanesForInput(input).find(pane => pane.resourceEditor);
 					if (!descriptor) {
-						this.showFileDownload(row, row.part.name, blob);
+						this.showFileDownload(row, row.part, blob);
 						return;
 					}
 					const pane = await descriptor.create({ input, instantiationService: this.instantiation });
@@ -498,24 +501,66 @@ export class ChatAttachmentsContentPart extends Disposable {
 		}
 	}
 
-	private showFileDownload(row: MediaRow, name: string, blob: Blob): void {
+	private showFileDownload(row: MediaRow, part: IChatAttachmentResource, blob?: Blob): void {
 		const document = row.element.ownerDocument;
 		const restoreFocus = row.element.contains(document.activeElement);
+		const label = localize('chat.resource.downloadFile', 'Download {0}', part.name);
+		const icon = h(document, 'span', { className: 'ash-chat-file-link-icon' });
+		appendIcon(getChatFileIcon(part.name), icon);
+		const link = h(document, 'a', {
+			className: 'ash-chat-file-download',
+			properties: { download: part.name, title: label },
+			attributes: { 'aria-label': label },
+		}, icon, part.name);
+		if (blob) {
+			this.setDownloadUrl(row, link, blob);
+		} else {
+			// Give the file link keyboard activation before it has a local download URL.
+			link.setAttribute('role', 'link');
+			link.tabIndex = 0;
+			row.resources.add(addDisposableListener(link, 'keydown', event => {
+				if (event.key === 'Enter' && !link.hasAttribute('href')) {
+					event.preventDefault();
+					link.click();
+				}
+			}));
+			row.resources.add(addDisposableListener(link, 'click', event => {
+				if (!link.hasAttribute('href')) {
+					event.preventDefault();
+					void this.downloadFile(row, part, link);
+				}
+			}));
+		}
+		row.element.replaceChildren(link);
+		if (restoreFocus) link.focus();
+	}
+
+	private setDownloadUrl(row: MediaRow, link: HTMLAnchorElement, blob: Blob): URL {
 		// A copied link can also be navigated to. Serve it as download-only bytes.
 		const { url, registration } = createObjectUrl(getWindow(row.element), new Blob([blob], { type: Mimes.binary }));
 		row.objectUrl.value = registration;
 		row.association.clear();
-		const label = localize('chat.resource.downloadFile', 'Download {0}', name);
-		const icon = h(document, 'span', { className: 'ash-chat-file-link-icon' });
-		appendIcon(getChatFileIcon(name), icon);
-		const link = h(document, 'a', {
-			className: 'ash-chat-file-download',
-			properties: { href: url.href, download: name, title: label },
-			attributes: { 'aria-label': label },
-		}, icon, name);
-		row.element.replaceChildren(link);
 		row.loaded = true;
-		if (restoreFocus) link.focus();
+		link.href = url.href;
+		return url;
+	}
+
+	private async downloadFile(row: MediaRow, part: IChatAttachmentResource, link: HTMLAnchorElement): Promise<void> {
+		if (row.loading || row.isDisposed) return;
+		row.loading = true;
+		link.setAttribute('aria-busy', 'true');
+		const signal = row.controller.signal;
+		try {
+			const blob = await this.readResource(part, signal);
+			if (!blob || signal.aborted) return;
+			const url = this.setDownloadUrl(row, link, blob);
+			triggerDownload(url, part.name, link.ownerDocument);
+		} catch (error) {
+			if (!signal.aborted && !isCancellationError(error)) this.instantiation.invokeFunction(accessor => accessor.get(INotificationService).error(String(error)));
+		} finally {
+			row.loading = false;
+			link.removeAttribute('aria-busy');
+		}
 	}
 
 	private async open(row: MediaRow): Promise<void> {

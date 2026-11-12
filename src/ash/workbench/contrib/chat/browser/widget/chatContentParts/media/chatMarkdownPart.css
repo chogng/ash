@@ -24,6 +24,15 @@
 	overflow-wrap: anywhere;
 }
 
+.ash-chat-file-download:not([href]) {
+	cursor: pointer;
+	text-decoration-line: underline;
+}
+
+.ash-chat-file-download[aria-busy="true"] {
+	cursor: progress;
+}
+
 .ash-chat-file-download:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: var(--ash-spacing-size20);

@@ -21,6 +21,7 @@ declare global {
 		seedProjectMemory(versions: readonly string[]): void;
 		releaseNextUpload(): void;
 		readonly projectMemoryBodies: readonly string[];
+		readonly workbookRequests: number;
 	};
 	var ashLibraryLinkFixture: { readonly opened: string[]; restore(): void; };
 }
@@ -47,6 +48,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		let recentHistoryRateLimited = false;
 		let recentHistoryRequests = 0;
 		let shareRequests = 0;
+		let workbookRequests = 0;
 		let shareUrl = 'https://chatgpt.com/share/fixture-live';
 		let uploadsHeld = false;
 		let heldUploads = 0;
@@ -76,6 +78,7 @@ async function installService(application: ElectronApplication, holdInitializati
 			setClockOffset(milliseconds) { Date.now = milliseconds === 0 ? now : () => now() + milliseconds; },
 			get recentHistoryRequests() { return recentHistoryRequests; },
 			get shareRequests() { return shareRequests; },
+			get workbookRequests() { return workbookRequests; },
 			setShareUrl(value) { shareUrl = value; },
 			holdUploads(value) {
 				uploadsHeld = value;
@@ -182,7 +185,8 @@ async function installService(application: ElectronApplication, holdInitializati
 				if (historyImage && url.pathname === '/backend-api/files/file_diagram/download') {
 					return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="#396da8"/></svg>', { headers: { 'Content-Type': 'image/svg+xml' } });
 				}
-				if (historyReply.workbook && url.pathname === '/backend-api/files/file_workbook/download') {
+				if (historyReply.workbook && (url.pathname === '/backend-api/files/file_workbook/download' || url.searchParams.get('sandbox_path') === '/mnt/data/report.xlsx')) {
+					workbookRequests++;
 					return new Response(new Uint8Array(historyReply.workbook.bytes), { headers: { 'Content-Type': 'application/octet-stream' } });
 				}
 				if (url.pathname === '/backend-api/conversations') { recentHistoryRequests++; }
@@ -903,7 +907,13 @@ test.describe('Unified Chat sidebar', () => {
 		}
 		const attachment = page.getByRole('link', { name: `下载 ${workbook.name}`, exact: true });
 		await expect(attachment.locator('[data-ash-icon-id="xls-green"][aria-hidden="true"]')).toBeVisible();
+		await expect(attachment).toHaveCSS('text-decoration-line', 'underline');
 		await expect(attachment).toHaveCSS('text-decoration-style', 'dotted');
+		const workbookRequests = () => electron.evaluate(() => globalThis.ashNativeFixture.workbookRequests);
+		expect(await workbookRequests()).toBe(0);
+		await expect(page.locator('.ash-chat-item-agentMessage .ash-chat-media')).toHaveCount(1);
+		await attachment.screenshot({ path: testInfo.outputPath('conversation-workbook-attachment.png') });
+		const attachmentHeight = (await attachment.boundingBox())!.height;
 		await attachment.focus();
 		await expect(attachment).toHaveCSS('outline-style', 'solid');
 		const downloadPath = testInfo.outputPath(workbook.name);
@@ -917,7 +927,9 @@ test.describe('Unified Chat sidebar', () => {
 		}, { url: page.url(), path: downloadPath, name: workbook.name });
 		await page.keyboard.press('Enter');
 		await expect.poll(() => readFile(downloadPath).catch(() => undefined)).toEqual(Buffer.from(workbook.bytes));
-		await testInfo.attach('conversation-workbook-attachment', { body: await attachment.screenshot(), contentType: 'image/png' });
+		expect(await workbookRequests()).toBe(1);
+		await expect(attachment).toBeFocused();
+		expect((await attachment.boundingBox())!.height).toBe(attachmentHeight);
 
 		const actions = page.locator('.ash-chat-item-agentMessage > .ash-chat-message-actions');
 		const sources = actions.getByRole('button', { name: '来源（1）', exact: true });

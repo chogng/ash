@@ -12,7 +12,7 @@ import { localize } from '../../../../nls.js';
 import type { ChatReplyReference, ChatReplyResource } from '../../../common/chatReplyBackend.js';
 import { ChatMarkdownRichContentBuilder, type ChatMarkdownRichContent, type ChatMarkdownRichPart, type ChatMarkdownRichStyle } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
-import type { ChatGPTImageGroup } from './chatGPTClient.js';
+import { chatGPTResourceKey, type ChatGPTImageGroup } from './chatGPTClient.js';
 import type { ResponseCitation } from '../../../../platform/agentHost/common/agent.js';
 
 interface RichTag {
@@ -510,7 +510,7 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 			return resourcePart({ uri: token.href, name: token.text || localize('sessions.chatgpt.image', 'Image'), kind: 'image' }, !inline);
 		}
 		if (token.type === 'link' && isChatGPTFileLink(token.href)) {
-			const uri = token.href.replace(/^sediment:\/\//u, 'file-service://');
+			const uri = chatGPTResourceKey(token.href);
 			const name = token.text || token.href.split('/').at(-1) || localize('sessions.chatgpt.file', 'File');
 			const mimeType = getMediaOrTextMime(token.href);
 			let kind: ChatReplyResource['kind'] = 'document';

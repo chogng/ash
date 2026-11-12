@@ -982,11 +982,15 @@ function readEditableMessage(message: Record<string, unknown>): { text: string; 
 	return text.trim() ? { text, files: [...files.values()] } : undefined;
 }
 
+export function chatGPTResourceKey(uri: string): string {
+	return uri.replace(/^sediment:\/\//u, 'file-service://');
+}
+
 /** History can describe one upload in both the content and attachment metadata. */
 export function mergeChatGPTResources(resources: readonly ChatGPTResource[]): ChatGPTResource[] {
 	const merged = new Map<string, ChatGPTResource>();
 	for (const resource of resources) {
-		const key = resource.uri.replace(/^sediment:\/\//u, 'file-service://');
+		const key = chatGPTResourceKey(resource.uri);
 		const previous = merged.get(key);
 		if (!previous) {
 			merged.set(key, resource);
