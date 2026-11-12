@@ -116,6 +116,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private closeTask: Promise<void> | undefined;
 	private processCloseTask: Promise<void> | undefined;
 	private readonly initialLayout: DeferredPromise<void> | undefined;
+	private readonly initialProcessReady: DeferredPromise<void> | undefined;
 	private initialProcessTask: Promise<void> | undefined;
 	private startupInput = '';
 	private relaunchTask: Promise<void> | undefined;
@@ -129,13 +130,15 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	readonly onDidExit: Event<number | undefined> = this._onDidExit.event;
 	readonly onDidChangeState: Event<TerminalInstanceState> = this._onDidChangeState.event;
 
+	get processReady(): Promise<void> | undefined { return this.initialProcessReady?.p; }
+
 	constructor(
 		readonly id: string,
 		private readonly instanceNumber: number,
 		readonly dirId: string,
 		private readonly processWorkspaceFolderId: string | undefined,
 		child: AgentHostPty | undefined,
-		private processReady: ITerminalProcessReady,
+		private ready: ITerminalProcessReady,
 		title: string,
 		profile: ITerminalProfile,
 		private connectionPersistence: TerminalProcessConnectionPersistence,
@@ -168,6 +171,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (!child && !custom) {
 			this._state = 'starting';
 			this.initialLayout = new DeferredPromise<void>();
+			this.initialProcessReady = new DeferredPromise<void>();
 		}
 		try {
 			this._register(this.capabilities.add(this.processCapabilities));
@@ -208,6 +212,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		// or a readiness promise that resolved to its potentially large buffer.
 		this.screen = undefined;
 		this.screenInitialization = undefined;
+		void this.initialProcessReady?.complete();
 		this.onClosed?.();
 		super.disposeCore();
 	}
@@ -230,7 +235,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 
 	public get processId(): number {
-		return this.processReady.pid;
+		return this.ready.pid;
 	}
 
 	get extEnvironmentVariableCollection(): MergedEnvironmentVariableCollection | undefined { return this.environmentVariableCollection; }
@@ -251,7 +256,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			name: this.title,
 			environmentVariableCollections: this.environmentVariableCollection && serializeEnvironmentVariableCollections(this.environmentVariableCollection.collections),
 			environmentVariableCollectionsPersistable: this.environmentVariableCollectionsPersistable,
-			executable: this.processReady.launch?.executable ?? this.launch?.executable ?? (profile?.type === 'custom' ? profile.path : undefined),
+			executable: this.ready.launch?.executable ?? this.launch?.executable ?? (profile?.type === 'custom' ? profile.path : undefined),
 			args: this.launch?.args ?? (profile?.type === 'custom' ? profile.args : undefined),
 			env: this.launch?.env,
 			strictEnv: this.launch?.strictEnv,
@@ -266,12 +271,12 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	public get cwd(): string | undefined { return this.shellProcessManager?.cwd; }
 	public get shellIntegration() { return this.shellProcessManager?.shellIntegration; }
-	public get shellType() { return this.processReady.shellType; }
+	public get shellType() { return this.ready.shellType; }
 	/** Actual argv is display-only; split/relaunch must use the original profile arguments. */
-	public get injectedArgs() { return this.processReady.launch?.args; }
+	public get injectedArgs() { return this.ready.launch?.args; }
 
 	public get initialCwd(): string {
-		return this.processReady.cwd;
+		return this.ready.cwd;
 	}
 
 	get profile(): ITerminalProfile {
@@ -330,7 +335,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			}
 			this.shellProcessManager = child;
 			const created = child.creation;
-			this.processReady = created.ready;
+			this.ready = created.ready;
 			this.connectionPersistence = created.connectionPersistence;
 			this._profile = { ...created.profile, icon: this._profile.icon, color: this._profile.color };
 			if (this.launch && this.launch.profile.type !== 'custom') {
@@ -346,6 +351,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		});
 		try { await operation; }
 		finally { this.initialProcessTask = undefined; }
+	}
+
+	completeInitialProcessSetup(): void {
+		void this.initialProcessReady?.complete();
 	}
 
 	start(): void {
@@ -393,7 +402,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				this._onDidWriteData.fire(event);
 			}
 		}));
-		lifetime.add(process.onProcessReady(ready => { this.processReady = ready; }));
+		lifetime.add(process.onProcessReady(ready => { this.ready = ready; }));
 		if (process.onDidChangeInputMode) lifetime.add(process.onDidChangeInputMode(() => {
 			if (this.screen) this.screen.raw.options.disableStdin = this.isReadOnly;
 		}));
@@ -565,7 +574,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		using stateListener = this.onDidChangeState(() => { retired = true; });
 		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === this.dirId);
 		if (!process || !folder || this.isReadOnly || this.closed || this._state !== 'running') throw new CancellationError();
-		const shell = this.processReady.shellType;
+		const shell = this.ready.shellType;
 		if (shell !== PosixShellType.Bash && shell !== PosixShellType.Zsh && shell !== GeneralShellType.PowerShell
 			|| shell !== GeneralShellType.PowerShell && this.processes.operatingSystem === OperatingSystem.Windows) {
 			throw new Error(localize('terminal.path.unsupportedShell', 'This terminal does not have a supported, confirmed shell for sending paths.'));
@@ -924,7 +933,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				this.customProcess = undefined;
 				this.processCloseTask = undefined;
 				this._exitCode = undefined;
-				this.processReady = { pid: -1, cwd: replacement?.cwd ?? this.processReady.cwd };
+				this.ready = { pid: -1, cwd: replacement?.cwd ?? this.ready.cwd };
 				this.writeInitialText();
 				this.custom.dimensions = dimensions;
 				this.createCustomProcess(this.custom);
@@ -951,7 +960,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				throw new CancellationError();
 			}
 
-			this.processReady = created.ready;
+			this.ready = created.ready;
 			this.connectionPersistence = created.connectionPersistence;
 			this.processCloseTask = undefined;
 			this._profile = { ...created.profile, icon: replacement?.icon ?? this._profile.icon, color: replacement?.color ?? this._profile.color };
@@ -980,7 +989,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}));
 		// The backend owns the child. This instance holds a release lease, not a second disposable owner.
 		lifetime.add(toDisposable(() => { void manager.close().catch(() => { }); }));
-		lifetime.add(manager.onProcessReady(ready => { this.processReady = ready; this.refreshCapabilities(); }));
+		lifetime.add(manager.onProcessReady(ready => { this.ready = ready; this.refreshCapabilities(); }));
 		lifetime.add(toDisposable(() => this.statusList.remove(TerminalStatus.ShellIntegrationInfo)));
 		lifetime.add(manager.onProcessError(error => this.handleProcessError(error)));
 		lifetime.add(manager.onProcessData(event => this.handleProcessData(event)));
@@ -1025,7 +1034,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			level = localize('terminal.tooltip.rich', 'Rich');
 		} else if (integration?.commandDetection) {
 			level = localize('terminal.tooltip.basic', 'Basic');
-		} else if (this.processReady.launch?.usedShellIntegrationInjection) {
+		} else if (this.ready.launch?.usedShellIntegrationInjection) {
 			level = localize('terminal.tooltip.injectionFailed', 'Injection failed to activate');
 		}
 		const tooltip = localize('terminal.tooltip.shellIntegration', 'Shell integration: {0}', level);

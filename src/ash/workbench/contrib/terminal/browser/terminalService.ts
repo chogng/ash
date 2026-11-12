@@ -477,6 +477,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 			if (activate && !initialLayout) this.setActiveInstance(instance);
 			if (!options.deferStart) instance.start();
 			this._onDidChangeInstances.fire();
+			instance.completeInitialProcessSetup();
 			return instance;
 		} catch (error) {
 			await instance.close().catch(onUnexpectedError);

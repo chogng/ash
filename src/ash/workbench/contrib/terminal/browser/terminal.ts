@@ -179,6 +179,8 @@ export interface ITerminalInstance extends IDisposable {
 	readonly statusList?: ITerminalStatusList;
 	readonly state: TerminalInstanceState;
 	readonly exitCode: number | undefined;
+	/** For terminals mounted before launch, resolves when process setup finishes or the instance is disposed. */
+	readonly processReady?: Promise<void>;
 	readonly onDidWriteData: Event<IProcessDataEvent>;
 	readonly onDidChangeCommandStatus: Event<ITerminalCommandStatusEvent>;
 	readonly onDidExit: Event<number | undefined>;
