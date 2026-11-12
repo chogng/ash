@@ -50,6 +50,12 @@ struct ConfigAuthority {
     document: UserConfigDocument,
 }
 
+struct ObservedAuthority {
+    authority: ConfigAuthority,
+    content_changed: bool,
+    rewrite_required: bool,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ConfigCommandReceipt {
@@ -104,16 +110,16 @@ impl ConfigStore {
                     crate::store_file::write_document(&config_path, &document)?;
                     document
                 } else {
-                    let document = read_document_and_migrate(&config_path)?;
-                    if !config_path.exists() {
-                        crate::store_file::write_document(&config_path, &document)?;
+                    let decoded = crate::store_file::read_document(&config_path)?;
+                    if decoded.rewrite_required || !config_path.exists() {
+                        crate::store_file::write_document(&config_path, &decoded.document)?;
                     }
-                    document
+                    decoded.document
                 };
                 crate::store_file::document_digest(&document)
             },
         )?;
-        let (authority, _) = synchronize_authority(&connection, &config_path)?;
+        let authority = synchronize_authority(&connection, &config_path)?;
         let subscribers = Arc::new(Mutex::new(Vec::new()));
         let (committed, _) = watch::channel(authority.snapshot());
         let committed = Arc::new(committed);
@@ -145,7 +151,7 @@ impl ConfigStore {
             .connection
             .lock()
             .map_err(|_| ConfigError("config database lock poisoned".into()))?;
-        let (authority, _) = synchronize_authority(&connection, &self.config_path)?;
+        let authority = synchronize_authority(&connection, &self.config_path)?;
         drop(connection);
         let snapshot = authority.snapshot();
         self.publish_snapshot(snapshot.clone());
@@ -311,14 +317,14 @@ pub(crate) fn reconcile_external_snapshot(
     connection: &Connection,
     config_path: &Path,
 ) -> Result<ResolvedConfigSnapshot, ConfigError> {
-    let (authority, _) = synchronize_authority(connection, config_path)?;
+    let authority = synchronize_authority(connection, config_path)?;
     Ok(authority.snapshot())
 }
 
 fn synchronize_authority(
     connection: &Connection,
     config_path: &Path,
-) -> Result<(ConfigAuthority, bool), ConfigError> {
+) -> Result<ConfigAuthority, ConfigError> {
     let has_pending: bool = connection
         .query_row(
             "SELECT EXISTS(SELECT 1 FROM config_pending_command)",
@@ -327,28 +333,37 @@ fn synchronize_authority(
         )
         .map_err(sql_error)?;
     if !has_pending {
-        let (authority, changed) = read_authority(connection, config_path)?;
-        if !changed {
-            return Ok((authority, false));
+        let observed = read_authority(connection, config_path)?;
+        if !observed.content_changed && !observed.rewrite_required {
+            return Ok(observed.authority);
         }
     }
+    // Re-read under the same writer lock as commands. The optimistic read may have
+    // decoded a legacy file that another writer has since replaced.
     let transaction = begin_write(connection, config_path)?;
-    let result = reconcile_authority(&transaction, config_path)?;
+    let (authority, _) = reconcile_authority(&transaction, config_path)?;
     transaction.commit().map_err(sql_error)?;
-    Ok(result)
+    Ok(authority)
 }
 
 fn reconcile_authority(
-    connection: &Connection,
+    transaction: &Transaction<'_>,
     config_path: &Path,
 ) -> Result<(ConfigAuthority, bool), ConfigError> {
-    let (mut authority, changed) = read_authority(connection, config_path)?;
-    if changed {
+    let ObservedAuthority {
+        mut authority,
+        content_changed,
+        rewrite_required,
+    } = read_authority(transaction, config_path)?;
+    if rewrite_required {
+        crate::store_file::write_document(config_path, &authority.document)?;
+    }
+    if content_changed {
         authority.revision = authority.revision.next();
         authority.generation = authority.generation.next();
-        write_metadata(connection, &authority)?;
+        write_metadata(transaction, &authority)?;
     }
-    Ok((authority, changed))
+    Ok((authority, content_changed))
 }
 
 enum PendingCommand {
@@ -408,7 +423,7 @@ fn finish_pending(
     };
     let staged = crate::store_file::staged_document_path(config_path);
     if staged.try_exists().map_err(io_error)? {
-        let observed = crate::store_file::read_document(config_path)?;
+        let observed = crate::store_file::read_document(config_path)?.document;
         if crate::store_file::document_digest(&observed)? != previous_digest {
             transaction
                 .execute("DELETE FROM config_pending_command WHERE singleton = 1", [])
@@ -421,7 +436,7 @@ fn finish_pending(
                 .map_err(sql_error)?;
             return Ok(PendingCommand::Superseded);
         }
-        let prepared = crate::store_file::read_document(&staged)?;
+        let prepared = crate::store_file::read_document(&staged)?.document;
         if crate::store_file::document_digest(&prepared)? != result_digest {
             return Err(ConfigError(
                 "staged config document digest does not match its command".into(),
@@ -449,7 +464,7 @@ fn finish_pending(
 fn read_authority(
     connection: &Connection,
     config_path: &Path,
-) -> Result<(ConfigAuthority, bool), ConfigError> {
+) -> Result<ObservedAuthority, ConfigError> {
     let metadata = connection
         .query_row(
             "SELECT document_schema_version, revision, generation, content_digest
@@ -471,23 +486,19 @@ fn read_authority(
             metadata.0
         )));
     }
-    let document = read_document_and_migrate(config_path)?;
-    let content_digest = crate::store_file::document_digest(&document)?;
-    let changed = content_digest != metadata.3;
-    Ok((
-        ConfigAuthority {
+    let decoded = crate::store_file::read_document(config_path)?;
+    let content_digest = crate::store_file::document_digest(&decoded.document)?;
+    Ok(ObservedAuthority {
+        content_changed: content_digest != metadata.3,
+        rewrite_required: decoded.rewrite_required,
+        authority: ConfigAuthority {
             schema_version: metadata.0,
             revision: ConfigRevision::new(from_sql_integer(metadata.1)?),
             generation: ConfigGeneration::new(from_sql_integer(metadata.2)?),
             content_digest,
-            document,
+            document: decoded.document,
         },
-        changed,
-    ))
-}
-
-fn read_document_and_migrate(config_path: &Path) -> Result<UserConfigDocument, ConfigError> {
-    crate::store_file::read_document(config_path)
+    })
 }
 
 fn write_metadata(connection: &Connection, authority: &ConfigAuthority) -> Result<(), ConfigError> {
