@@ -1263,9 +1263,22 @@ impl ThreadController {
     pub fn start_turn_with_model_routing(
         &self,
         thread_id: &ThreadId,
+        request: StartTurnRequest,
+        directory: Option<ash_protocol::SessionExecutionTarget>,
+        model_routing: Option<ash_protocol::TurnModelRouting>,
+    ) -> Result<StartTurnResult, CoreError> {
+        self.start_turn_with_admission(thread_id, request, directory, model_routing, None)
+    }
+
+    /// Commits an optional durable authorization precondition with Turn acceptance.
+    /// No authority lock or transaction survives this call into backend dispatch.
+    pub fn start_turn_with_admission(
+        &self,
+        thread_id: &ThreadId,
         mut request: StartTurnRequest,
         directory: Option<ash_protocol::SessionExecutionTarget>,
         model_routing: Option<ash_protocol::TurnModelRouting>,
+        precondition: Option<&ash_thread_store::ThreadEventPrecondition>,
     ) -> Result<StartTurnResult, CoreError> {
         self.store.execution_binding(thread_id)?.require_bound()?;
         validate_command_id(&request.command_id)?;
@@ -1516,7 +1529,7 @@ impl ThreadController {
                     },
                 },
             )?;
-            self.commit_batch(&batch)?;
+            self.commit_batch_with_precondition(&batch, precondition)?;
             *snapshot = next_snapshot;
             Ok(StartTurnResult {
                 turn_id,
@@ -3803,6 +3816,14 @@ impl ThreadController {
         &self,
         batch: &crate::message_checkpoint::PreparedThreadBatch,
     ) -> Result<AppendBatchResult, CoreError> {
+        self.commit_batch_with_precondition(batch, None)
+    }
+
+    fn commit_batch_with_precondition(
+        &self,
+        batch: &crate::message_checkpoint::PreparedThreadBatch,
+        precondition: Option<&ash_thread_store::ThreadEventPrecondition>,
+    ) -> Result<AppendBatchResult, CoreError> {
         let registries = self
             .extensions
             .read()
@@ -3813,7 +3834,13 @@ impl ThreadController {
             .unwrap_or(&registries.fallback)
             .clone();
         drop(registries);
-        let result = self.store.append_batch(batch).map_err(CoreError::from)?;
+        let result = match precondition {
+            Some(precondition) => self
+                .store
+                .append_batch_with_precondition(batch, precondition),
+            None => self.store.append_batch(batch),
+        }
+        .map_err(CoreError::from)?;
         self.loaded_threads
             .slot(&batch.thread_id)?
             .activity

@@ -7,6 +7,10 @@ use ash_thread_store::ThreadStoreError;
 use github::Repository;
 use rusqlite::params;
 
+#[cfg(test)]
+#[path = "thread_pull_requests_tests.rs"]
+mod tests;
+
 enum ReferenceKind {
     PullRequest,
     Issue,
@@ -250,4 +254,40 @@ fn normalized(repository: &Repository, number: u64) -> Result<Repository, Thread
 
 fn storage(error: impl std::fmt::Display) -> ThreadStoreError {
     ThreadStoreError::Storage(error.to_string())
+}
+
+/// Runs inside the same immediate transaction as Turn acceptance. DELETE and append
+/// therefore have one durable order across independent connections and processes.
+pub(super) fn validate_admission(
+    transaction: &rusqlite::Transaction<'_>,
+    batch: &ash_thread_store::ThreadEventBatch,
+    precondition: &ash_thread_store::ThreadEventPrecondition,
+) -> Result<(), ThreadStoreError> {
+    match precondition {
+        ash_thread_store::ThreadEventPrecondition::PullRequestArtifact {
+            source_thread_id,
+            artifact_id,
+        } => {
+            let current: bool = transaction
+                .query_row(
+                    "SELECT EXISTS(
+                    SELECT 1 FROM thread_pull_requests AS pr
+                    JOIN thread_catalog AS source ON source.thread_id = pr.thread_id
+                    WHERE pr.thread_id = ?1 AND pr.artifact_id = ?2 AND pr.is_artifact = 1
+                    AND source.session_id = ?3
+                )",
+                    params![
+                        source_thread_id.as_str(),
+                        artifact_id,
+                        batch.catalog.session_id.as_str()
+                    ],
+                    |row| row.get(0),
+                )
+                .map_err(storage)?;
+            if !current {
+                return Err(ThreadStoreError::AuthorizationRevoked);
+            }
+        }
+    }
+    Ok(())
 }

@@ -747,10 +747,31 @@ impl ThreadStore for SqliteThreadStore {
         &self,
         batch: &ThreadEventBatch,
     ) -> Result<AppendBatchResult, ThreadStoreError> {
+        self.append_batch_conditionally(batch, None)
+    }
+
+    fn append_batch_with_precondition(
+        &self,
+        batch: &ThreadEventBatch,
+        precondition: &ash_thread_store::ThreadEventPrecondition,
+    ) -> Result<AppendBatchResult, ThreadStoreError> {
+        self.append_batch_conditionally(batch, Some(precondition))
+    }
+}
+
+impl SqliteThreadStore {
+    fn append_batch_conditionally(
+        &self,
+        batch: &ThreadEventBatch,
+        precondition: Option<&ash_thread_store::ThreadEventPrecondition>,
+    ) -> Result<AppendBatchResult, ThreadStoreError> {
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage_error)?;
+        if let Some(precondition) = precondition {
+            super::thread_pull_requests::validate_admission(&transaction, batch, precondition)?;
+        }
         transaction
             .execute(
                 "INSERT OR IGNORE INTO thread_streams (thread_id, current_sequence)

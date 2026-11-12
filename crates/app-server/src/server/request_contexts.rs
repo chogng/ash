@@ -841,6 +841,7 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
+        precondition: Option<&thread_store::ThreadEventPrecondition>,
     ) -> Result<core_api::TurnReceipt, core_api::CoreError> {
         // Core prepares the admission and dispatches only after the host releases its
         // document binding lock. The processor sees only the complete operation.
@@ -856,6 +857,7 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
                     document_mode,
                     expected_ide,
                     model_routing,
+                    precondition,
                 )
             },
             |request, updates| self.schedule_thread_title(request, updates),
@@ -932,6 +934,7 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
+        precondition: Option<&thread_store::ThreadEventPrecondition>,
     ) -> Result<workflows::Receipt, core_api::CoreError> {
         AppServer::submit_workflow(
             self,
@@ -941,6 +944,7 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
             connection,
             document_mode,
             expected_ide,
+            precondition,
         )
     }
     fn workflow_store(&self) -> &workflows::Store {

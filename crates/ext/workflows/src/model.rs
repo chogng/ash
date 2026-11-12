@@ -189,6 +189,9 @@ pub(crate) struct Plan {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct Submission {
+    /// Authority is retained across recovery of a prepared but not yet accepted Turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub precondition: Option<ash_core::ThreadEventPrecondition>,
     pub command_id: protocol::CommandId,
     pub sequence: u64,
     pub policy: String,
@@ -200,8 +203,10 @@ impl Submission {
         request: ash_core::StartTurnRequest,
         sequence: u64,
         model_routing: Option<protocol::TurnModelRouting>,
+        precondition: Option<ash_core::ThreadEventPrecondition>,
     ) -> Self {
         Self {
+            precondition,
             command_id: request.command_id,
             sequence,
             policy: request.policy_revision,

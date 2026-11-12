@@ -17,6 +17,7 @@ pub use store::AppendBatchResult;
 pub use store::ThreadCatalogRecord;
 pub use store::ThreadEventBatch;
 pub use store::ThreadEventPage;
+pub use store::ThreadEventPrecondition;
 pub use store::ThreadExecutionBinding;
 pub use store::ThreadHistoryIndexMode;
 pub use store::ThreadHistoryIndexUpdate;

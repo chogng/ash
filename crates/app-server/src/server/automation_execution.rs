@@ -277,30 +277,46 @@ impl AppServer {
                         -32030, ash_app_server_protocol::protocol::error::AppServerErrorName::AccountAuthenticationRequired, message,
                     ))?;
                 }
-                self.agent_processor().start_turn_request(
-                    ThreadMutation {
-                        ide_window_id: None,
-                        connection_id: None,
-                        command_id: command.clone(),
-                        session_id: snapshot.session_id.clone(),
-                        expected_sequence: snapshot.sequence,
-                    },
-                    snapshot.thread_id.clone(),
-                    (!chat).then(ash_protocol::ApprovalMode::default),
-                    ash_protocol::CollaborationMode::Agent,
-                    TurnModelSelection::Current,
-                    None,
-                    None,
-                    ash_protocol::CommandInterpretation::Product,
-                    vec![InputItem::Text {
-                        text: match &observed.event {
-                            Some(event) => {
-                                format!("{}\n\n{}", run.definition.prompt, event.context)
-                            }
-                            None => run.definition.prompt.clone(),
+                let precondition = match (&run.definition.condition, &run.definition.session) {
+                    (
+                        Some(ash_protocol::AutomationCondition::GitHubChecks {
+                            artifact_id: Some(artifact_id),
+                            ..
+                        }),
+                        AutomationSession::Continue { session_id, .. },
+                    ) => Some(thread_store::ThreadEventPrecondition::PullRequestArtifact {
+                        source_thread_id: ash_protocol::ThreadId::new(session_id.as_str())
+                            .map_err(|error| core_error(CoreError::Execution(error.to_string())))?,
+                        artifact_id: artifact_id.clone(),
+                    }),
+                    _ => None,
+                };
+                self.agent_processor()
+                    .with_turn_precondition(precondition)
+                    .start_turn_request(
+                        ThreadMutation {
+                            ide_window_id: None,
+                            connection_id: None,
+                            command_id: command.clone(),
+                            session_id: snapshot.session_id.clone(),
+                            expected_sequence: snapshot.sequence,
                         },
-                    }],
-                )
+                        snapshot.thread_id.clone(),
+                        (!chat).then(ash_protocol::ApprovalMode::default),
+                        ash_protocol::CollaborationMode::Agent,
+                        TurnModelSelection::Current,
+                        None,
+                        None,
+                        ash_protocol::CommandInterpretation::Product,
+                        vec![InputItem::Text {
+                            text: match &observed.event {
+                                Some(event) => {
+                                    format!("{}\n\n{}", run.definition.prompt, event.context)
+                                }
+                                None => run.definition.prompt.clone(),
+                            },
+                        }],
+                    )
             };
             let start = if let Some(store) = self.automation_processor.store() {
                 match store
@@ -328,6 +344,19 @@ impl AppServer {
                 .is_none()
             {
                 if let Err(error) = start {
+                    if matches!(
+                        error.cause.as_deref(),
+                        Some(CoreError::ThreadStore(
+                            thread_store::ThreadStoreError::AuthorizationRevoked
+                        ))
+                    ) {
+                        // Admission rejected before any receipt was written. Retire the plan
+                        // only after releasing AutomationStore's dispatch mutex.
+                        self.pause_follow_up(run, now)?;
+                        observed.status = AutomationRunStatus::Stopped;
+                        observed.finished_at = Some(now);
+                        return Ok(observed);
+                    }
                     observed.message = Some(format!("Agent start failed: {:?}", error.message));
                     if run.definition.condition.is_some()
                         && matches!(

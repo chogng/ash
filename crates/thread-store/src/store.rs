@@ -163,6 +163,18 @@ pub struct ThreadEventBatch {
     pub catalog: ThreadCatalogRecord,
 }
 
+/// Durable authority that must still exist when an admission batch commits.
+/// Checking and appending must be atomic with revocation, including through other connections.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ThreadEventPrecondition {
+    /// The source Thread's immutable PR artifact generation authorizes its Session's Turn.
+    PullRequestArtifact {
+        source_thread_id: ThreadId,
+        artifact_id: String,
+    },
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AppendBatchResult {
     pub batch_id: String,
@@ -381,6 +393,18 @@ pub trait ThreadStore: agent_graph_store::AgentGraphStore {
 
     fn append_batch(&self, batch: &ThreadEventBatch)
     -> Result<AppendBatchResult, ThreadStoreError>;
+
+    /// Commits a batch only while its authority remains current. Stores without an
+    /// atomic implementation must reject the request rather than check and then append.
+    fn append_batch_with_precondition(
+        &self,
+        _batch: &ThreadEventBatch,
+        _precondition: &ThreadEventPrecondition,
+    ) -> Result<AppendBatchResult, ThreadStoreError> {
+        Err(ThreadStoreError::InvalidBatch(
+            "Thread store does not support admission preconditions".into(),
+        ))
+    }
 }
 
 pub fn validate_append_batch(

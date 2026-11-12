@@ -37,6 +37,96 @@ struct Fixture {
     root: ThreadId,
 }
 
+#[test]
+fn prepared_artifact_workflow_retains_its_authority_across_restart() {
+    for revoke in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let database = directory.path().join("state.sqlite3");
+        let history = Arc::new(state::SqliteThreadStore::open(&database).unwrap());
+        let threads = Arc::new(ThreadController::with_store(history.clone()));
+        let root = threads
+            .start_thread(
+                &NoThreadWorktreeBinder,
+                StartThreadRequest {
+                    kind: protocol::SessionKind::Code,
+                    execution_target: None,
+                    branch_name: None,
+                    worktree_start: None,
+                    agent_id: None,
+                    agent: None,
+                    command_id: CommandId::new("source").unwrap(),
+                    title: "Workflow source".into(),
+                },
+            )
+            .unwrap()
+            .thread_id;
+        let repository = serde_json::from_value(
+            serde_json::json!({"host":"github.com","owner":"team","name":"repo"}),
+        )
+        .unwrap();
+        history.record_pull_request(&root, &repository, 7).unwrap();
+        let precondition = ash_core::ThreadEventPrecondition::PullRequestArtifact {
+            source_thread_id: root.clone(),
+            artifact_id: history
+                .pull_request_artifact_id(&root, &repository, 7)
+                .unwrap()
+                .unwrap(),
+        };
+        let mut fixture = Fixture {
+            agents: MultiAgentCoordinator::new(threads.clone(), AgentTreeLimits::default()),
+            threads,
+            root,
+            store: Store::open(&database).unwrap(),
+            backend: Backend::default(),
+        };
+        let text = "/develop Fix CI";
+        let interrupted = fixture.runtime().execute_with_turn_submission(
+            &fixture.root,
+            Command::parse(text).unwrap().unwrap(),
+            fixture.request("repair", text),
+            None,
+            Some(precondition.clone()),
+            |_, _, _| Err(CoreError::Execution("shutdown before admission".into())),
+        );
+        assert!(
+            matches!(interrupted, Err(CoreError::Execution(message)) if message == "shutdown before admission")
+        );
+        let changed_authority = fixture.runtime().execute_with_turn_submission(
+            &fixture.root,
+            Command::parse(text).unwrap().unwrap(),
+            fixture.request("repair", text),
+            None,
+            None,
+            |_, _, _| unreachable!("a retry cannot drop its frozen authority"),
+        );
+        assert!(matches!(changed_authority, Err(CoreError::CommandConflict)));
+        if revoke {
+            history
+                .detach_pull_request(&fixture.root, &repository, 7)
+                .unwrap();
+            history
+                .record_pull_request(&fixture.root, &repository, 7)
+                .unwrap();
+        }
+        // Reopen both owners, including Core's in-memory Thread projections.
+        fixture.threads = Arc::new(ThreadController::with_store(Arc::new(
+            state::SqliteThreadStore::open(&database).unwrap(),
+        )));
+        fixture.agents =
+            MultiAgentCoordinator::new(fixture.threads.clone(), AgentTreeLimits::default());
+        fixture.store = Store::open(&database).unwrap();
+        assert_eq!(fixture.runtime().recover().unwrap(), 1);
+        assert_eq!(fixture.runtime().recover().unwrap(), 0);
+        let source = fixture.threads.read_thread(&fixture.root).unwrap();
+        assert_eq!(source.turns.len(), usize::from(!revoke));
+        assert_eq!(source.delegations.len(), usize::from(!revoke));
+        assert_eq!(
+            fixture.backend.0.lock().unwrap().len(),
+            usize::from(!revoke)
+        );
+    }
+}
+
 impl Fixture {
     fn new(store: Store) -> Self {
         let threads = Arc::new(ThreadController::with_store(Arc::new(

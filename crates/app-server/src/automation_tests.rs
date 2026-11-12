@@ -707,6 +707,272 @@ fn open_follow_up_server(
     (server, store)
 }
 
+fn artifact_follow_up_plan(
+    server: &crate::AppServer,
+    store: &AutomationStore,
+    directory: &std::path::Path,
+    id: &str,
+    prompt: &str,
+) -> AutomationRun {
+    let mut connection = server.connection();
+    let initialized = call(
+        server,
+        &mut connection,
+        json!({"jsonrpc":"2.0", "id":1,
+        "method":"initialize", "params":{"clientInfo":{"name":"test","version":"1"}}}),
+    );
+    assert!(initialized.get("error").is_none(), "{initialized}");
+    let created = super::create_session(server, &mut connection, 2, id);
+    let session = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let reference = json!({"repository":{"host":"github.com","owner":"team","name":"repo"},"number":7,"isArtifact":true});
+    let attached = call(
+        server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":3,
+        "method":"github/session/pullRequest/attach","params":{"sessionId":session,"reference":reference}}),
+    );
+    assert!(attached.get("error").is_none(), "{attached}");
+    let listed = call(
+        server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":4,
+        "method":"github/session/pullRequests","params":{"sessionId":session}}),
+    );
+    let artifact = listed["result"]["references"][0]["artifactId"]
+        .as_str()
+        .unwrap();
+    let authorized = call(
+        server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":5,
+        "method":"automation/write","params":{"commandId":format!("authorize-{id}"),"id":id,"expectedRevision":0,"status":"enabled",
+        "definition":{"title":"Artifact follow-up","prompt":prompt,"directory":directory,
+            "session":{"type":"continue","sessionId":session,"threadId":session},
+            "schedule":{"type":"interval","anchor":0,"minutes":1},
+            "condition":{"type":"gitHubChecks","host":"github.com","owner":"team","repository":"repo","number":7,
+                "accountId":"account","credentialRevision":"1","artifactId":artifact}}}}),
+    );
+    assert_eq!(authorized["result"]["status"], "enabled", "{authorized}");
+    store
+        .run_now(id, &format!("check-{id}"), ash_automation::now().unwrap())
+        .unwrap()
+}
+
+/// Model selection runs after the dispatcher's artifact check and before Core admission.
+/// Blocking here exercises that production window without a scheduler timing dependency.
+struct FollowUpAdmissionCatalog {
+    before_default: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>,
+}
+
+impl crate::model_catalog::ModelCatalog for FollowUpAdmissionCatalog {
+    fn set_preferences(
+        &self,
+        _: crate::model_catalog::ModelPreferencesCommand,
+    ) -> Result<ash_config::ConfigCommandResult, crate::model_catalog::ModelPreferencesError> {
+        unreachable!("this fixture does not accept preference writes")
+    }
+
+    fn list(
+        &self,
+    ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, core_api::CoreError>
+    {
+        Ok(Vec::new())
+    }
+
+    fn current_access(
+        &self,
+        _: &ash_protocol::ModelRef,
+    ) -> Result<ash_protocol::ModelAccess, core_api::CoreError> {
+        Ok(ash_protocol::ModelAccess::Unknown)
+    }
+
+    fn configured_default(&self) -> Result<Option<ash_protocol::ModelRef>, core_api::CoreError> {
+        if let Some(callback) = self.before_default.lock().unwrap().take() {
+            callback();
+        }
+        Ok(None)
+    }
+}
+
+#[test]
+fn artifact_follow_up_detached_after_dispatch_check_cannot_admit_a_turn() {
+    for reattach in [false, true] {
+        for prompt in ["Fix CI", "/develop Fix CI"] {
+            let profile = tempfile::tempdir().unwrap();
+            let directory = tempfile::tempdir().unwrap();
+            let api = Arc::new(FollowUpApi::default());
+            let (server, store) =
+                open_follow_up_server(profile.path(), directory.path(), api.clone());
+            let run = artifact_follow_up_plan(&server, &store, directory.path(), "revoked", prompt);
+            let independent =
+                artifact_follow_up_plan(&server, &store, directory.path(), "independent", "Fix CI");
+            let AutomationSession::Continue {
+                session_id,
+                thread_id,
+            } = &run.definition.session
+            else {
+                panic!("artifact follow-up must continue its source")
+            };
+            let source = ash_protocol::ThreadId::new(session_id.as_str()).unwrap();
+            // This independent connection stands in for the concurrent detach request.
+            let references =
+                ash_state::SqliteThreadStore::open(profile.path().join("state.sqlite3")).unwrap();
+            let invoked = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let reached = invoked.clone();
+            let server = server.with_model_catalog(Arc::new(FollowUpAdmissionCatalog {
+                before_default: std::sync::Mutex::new(Some(Box::new(move || {
+                    let repository =
+                        github::Repository::new("github.com".into(), "team".into(), "repo".into())
+                            .unwrap();
+                    let generation = references
+                        .pull_request_artifact_id(&source, &repository, 7)
+                        .unwrap()
+                        .unwrap();
+                    assert!(
+                        references
+                            .detach_pull_request(&source, &repository, 7)
+                            .unwrap()
+                    );
+                    if reattach {
+                        assert!(
+                            references
+                                .record_pull_request(&source, &repository, 7)
+                                .unwrap()
+                        );
+                        assert_ne!(
+                            references
+                                .pull_request_artifact_id(&source, &repository, 7)
+                                .unwrap(),
+                            Some(generation)
+                        );
+                    }
+                    reached.store(true, std::sync::atomic::Ordering::SeqCst);
+                }))),
+            }));
+            let observed = server
+                .advance_automation_run(&run, ash_automation::now().unwrap())
+                .unwrap();
+            assert!(invoked.load(std::sync::atomic::Ordering::SeqCst));
+            assert!(
+                observed.turn_id.is_none(),
+                "revoked artifact admitted a Turn: {observed:?}"
+            );
+            assert_eq!(observed.status, AutomationRunStatus::Stopped);
+            assert!(
+                server
+                    .threads()
+                    .read_thread(thread_id)
+                    .unwrap()
+                    .turns
+                    .is_empty()
+            );
+            assert_eq!(
+                store
+                    .list()
+                    .unwrap()
+                    .into_iter()
+                    .find(|plan| plan.id == run.automation_id)
+                    .unwrap()
+                    .status,
+                ash_protocol::AutomationStatus::Paused
+            );
+            store.observe(&observed).unwrap();
+            let healthy = server
+                .advance_automation_run(&independent, ash_automation::now().unwrap())
+                .unwrap();
+            let healthy_thread = healthy.thread_id.clone().unwrap();
+            assert!(healthy.turn_id.is_some(), "{healthy:?}");
+            super::wait_for_latest_turn(
+                &server,
+                healthy.session_id.as_ref().unwrap().as_str(),
+                ash_protocol::TurnStatus::Completed,
+            );
+            drop(server);
+            drop(store);
+            // Recovery must neither revive revoked consent nor duplicate a valid receipt.
+            let (server, store) = open_follow_up_server(profile.path(), directory.path(), api);
+            assert_eq!(
+                server
+                    .advance_automation_run(&run, ash_automation::now().unwrap())
+                    .unwrap(),
+                observed
+            );
+            server.resume_recovered_agent_coordinations().unwrap();
+            assert!(
+                server
+                    .threads()
+                    .read_thread(thread_id)
+                    .unwrap()
+                    .turns
+                    .is_empty()
+            );
+            let retried = server
+                .advance_automation_run(&independent, ash_automation::now().unwrap())
+                .unwrap();
+            assert_eq!(retried.turn_id, healthy.turn_id);
+            assert_eq!(
+                server
+                    .threads()
+                    .read_thread(&healthy_thread)
+                    .unwrap()
+                    .turns
+                    .len(),
+                1
+            );
+            assert!(store.get_run(&run.id).unwrap().turn_id.is_none());
+        }
+    }
+}
+
+#[test]
+fn artifact_follow_up_stop_and_configuration_changes_still_revoke_pending_dispatch() {
+    for change_configuration in [false, true] {
+        let profile = tempfile::tempdir().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let api = Arc::new(FollowUpApi::default());
+        let (server, store) = open_follow_up_server(profile.path(), directory.path(), api.clone());
+        let run = artifact_follow_up_plan(&server, &store, directory.path(), "stopped", "Fix CI");
+        let stopping = store.clone();
+        let original = run.clone();
+        *api.before_checks.lock().unwrap() = Some(Box::new(move || {
+            if change_configuration {
+                let mut definition = original.definition;
+                definition.prompt = "Changed follow-up instructions".into();
+                stopping
+                    .write(
+                        &ash_automation::AutomationWrite {
+                            command_id: "change-follow-up".into(),
+                            id: original.automation_id,
+                            expected_revision: original.revision,
+                            definition,
+                            status: ash_protocol::AutomationStatus::Enabled,
+                        },
+                        ash_automation::now().unwrap(),
+                    )
+                    .unwrap();
+            } else {
+                stopping.stop_run(&original.id).unwrap();
+            }
+        }));
+        let observed = server
+            .advance_automation_run(&run, ash_automation::now().unwrap())
+            .unwrap();
+        assert_eq!(observed.status, AutomationRunStatus::Stopped);
+        assert!(observed.turn_id.is_none());
+        let AutomationSession::Continue { thread_id, .. } = &run.definition.session else {
+            unreachable!()
+        };
+        assert!(
+            server
+                .threads()
+                .read_thread(thread_id)
+                .unwrap()
+                .turns
+                .is_empty()
+        );
+    }
+}
+
 #[test]
 fn artifact_follow_up_revokes_the_old_generation_after_restart() {
     let initialize = |server: &crate::AppServer, connection: &mut crate::ConnectionState| {
