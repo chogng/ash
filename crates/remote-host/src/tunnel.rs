@@ -404,11 +404,7 @@ mod tests {
     #[cfg(unix)]
     use std::path::Path;
     #[cfg(unix)]
-    use std::path::PathBuf;
-    #[cfg(unix)]
     use std::sync::mpsc;
-    #[cfg(unix)]
-    use std::thread::JoinHandle;
     #[cfg(unix)]
     use std::time::Duration;
     #[cfg(unix)]
@@ -439,13 +435,12 @@ mod tests {
         std::fs::write(
             &fake_ssh,
             format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nexec sleep 60\n",
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\necho ash-ssh-forward-ready\nexec sleep 60\n",
                 arguments_path.display()
             ),
         )
         .unwrap();
         make_executable(&fake_ssh);
-        let listener = FakeTunnelListener::start(arguments_path.clone());
         let (sender, receiver) = mpsc::channel();
         let process = spawn_remote_tunnel(
             RemoteTunnelTarget {
@@ -468,7 +463,7 @@ mod tests {
         assert_eq!(
             arguments,
             format!(
-                "-N\n-T\n-o\nBatchMode=yes\n-o\nExitOnForwardFailure=yes\n-o\nConnectTimeout=10\n-L\n127.0.0.1:{local_port}:127.0.0.1:3000\nbuild.example\n"
+                "-N\n-T\n-o\nBatchMode=yes\n-o\nExitOnForwardFailure=yes\n-o\nConnectTimeout=10\n-S\nnone\n-o\nPermitLocalCommand=yes\n-o\nLocalCommand=echo ash-ssh-forward-ready\n-L\n127.0.0.1:{local_port}:127.0.0.1:3000\nbuild.example\n"
             )
         );
 
@@ -477,7 +472,6 @@ mod tests {
             receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap().update(),
             &RemoteTunnelUpdate::Stopped
         );
-        drop(listener);
     }
 
     #[cfg(unix)]
@@ -539,12 +533,12 @@ if [ -f \"$count_path\" ]; then count=$(cat \"$count_path\"); fi\n\
 count=$((count + 1))\n\
 printf '%s' \"$count\" > \"$count_path\"\n\
 printf '%s\\n' \"$@\" > \"$directory/arguments-$count.txt\"\n\
+echo ash-ssh-forward-ready\n\
 if [ \"$count\" -eq 1 ]; then sleep 0.15; exit 17; fi\n\
 exec sleep 60\n",
         )
         .unwrap();
         make_executable(&fake_ssh);
-        let listener = FakeTunnelListener::start(directory.path().join("arguments-1.txt"));
         let (sender, receiver) = mpsc::channel();
         let process = spawn_remote_tunnel(
             RemoteTunnelTarget {
@@ -583,7 +577,6 @@ exec sleep 60\n",
             receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap().update(),
             &RemoteTunnelUpdate::Stopped
         );
-        drop(listener);
     }
 
     #[cfg(unix)]
@@ -593,11 +586,10 @@ exec sleep 60\n",
         let fake_ssh = directory.path().join("fake-ssh");
         std::fs::write(
             &fake_ssh,
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"${0%/*}/arguments.txt\"\nsleep 0.15\nexit 17\n",
+            "#!/bin/sh\necho ash-ssh-forward-ready\nsleep 0.15\nexit 17\n",
         )
         .unwrap();
         make_executable(&fake_ssh);
-        let listener = FakeTunnelListener::start(directory.path().join("arguments.txt"));
         let (sender, receiver) = mpsc::channel();
         let process = spawn_remote_tunnel(
             RemoteTunnelTarget {
@@ -626,7 +618,6 @@ exec sleep 60\n",
             receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap().update(),
             &RemoteTunnelUpdate::Stopped
         );
-        drop(listener);
     }
 
     #[cfg(unix)]
@@ -657,57 +648,5 @@ exec sleep 60\n",
                 Err(error) => panic!("could not read fake OpenSSH arguments: {error}"),
             }
         }
-    }
-
-    #[cfg(unix)]
-    struct FakeTunnelListener {
-        stop: mpsc::Sender<()>,
-        worker: Option<JoinHandle<()>>,
-    }
-
-    #[cfg(unix)]
-    impl FakeTunnelListener {
-        fn start(arguments_path: PathBuf) -> Self {
-            let (stop, receiver) = mpsc::channel();
-            let worker = std::thread::spawn(move || {
-                let arguments = read_when_available(&arguments_path);
-                let local_port = forwarded_local_port(&arguments);
-                let _listener = std::net::TcpListener::bind(("127.0.0.1", local_port)).unwrap();
-                let _ = receiver.recv();
-            });
-            Self {
-                stop,
-                worker: Some(worker),
-            }
-        }
-    }
-
-    #[cfg(unix)]
-    impl Drop for FakeTunnelListener {
-        fn drop(&mut self) {
-            let _ = self.stop.send(());
-            if let Some(worker) = self.worker.take() {
-                if std::thread::panicking() {
-                    let _ = worker.join();
-                } else {
-                    worker.join().unwrap();
-                }
-            }
-        }
-    }
-
-    #[cfg(unix)]
-    fn forwarded_local_port(arguments: &str) -> u16 {
-        let mut arguments = arguments.lines();
-        while let Some(argument) = arguments.next() {
-            if argument == "-L" {
-                return arguments
-                    .next()
-                    .and_then(|forward| forward.split(':').nth(1))
-                    .and_then(|port| port.parse().ok())
-                    .expect("fake OpenSSH should receive a loopback forward");
-            }
-        }
-        panic!("fake OpenSSH did not receive -L");
     }
 }

@@ -4,6 +4,10 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
+## 终端恢复 · macOS 验收
+
+- [ ] **验收 · 断线期间退出的 PTY** · Linux 已验证重连后能读到末尾输出和退出码 `7`。Windows 上针对 macOS 的交叉检查在构建 `libsqlite3-sys` 时因缺少目标 C 编译器中止。在装有 Xcode Command Line Tools 的 macOS 上运行 `just verify ash-exec-server --lib --filter attach_replays_final_output_and_status_after_disconnected_child_exits`，通过后移除此条。
+
 ## Agents Window · 真实 SSH 主机验收
 
 - [ ] **验收 · SSH 工作区信任** · 已通过本地桌面场景和远程路径的定向自动化测试。真实远程主机验收缺少可连接的 SSH 地址及允许创建临时目录的路径。取得这两项后，在隔离目录验证 SSH 工作区启动恢复、已有受限授权时重新提示并在确认后挂载，以及取消后目录未挂载。用远端目录绑定状态核对结果。
@@ -109,6 +113,12 @@
   - 范围与风险：保留现有一般诊断及用户选择的日志／只读输出入口，不重做通用错误展示层；类型化判断不依赖任意自然语言子串，不把认证、网络、hook 或 lease 拒绝误认作分支落后。未知结果保持既有回退，新分类与本地化恢复提示不增加原始 stderr、含凭据 URL 或路径披露；检查现有诊断边界但不扩大输出采集或持久化范围。不自动 fetch／pull／rebase／force-push／重试，保持 reviewed commit／upstream、权限、取消及失败后状态刷新。
   - 验收：在 `crates/git/src/remote_tests.rs`、`crates/app-server/src/server_tests.rs` 与 `extensions/git/tests/host.rs` 扩展受控 remote 的 diverged／fetch-first、成功、认证／hook／lease 拒绝、取消、未知格式和部分 ref 成功场景；核对分类与本地化恢复提示不泄露新增敏感信息，目标远端／ref 不变且无额外自动操作。复用现有扩展进程反馈测试，保持状态先落定、取消静默、只提示一次、日志与只读输出查看可用，并覆盖本地／SSH 及适用平台；现有合成一般错误测试不等同于推送拒绝分类验收。
 
+## Git 未合并状态识别与解决入口 · TODO
+
+- [ ] **修复候选 · AA／DD 冲突识别**：`crates/git/src/working_copy.rs` 的 `parse_unmerged` 读取 porcelain-v2 的 `u` 记录后，仅保留 XY 两列；`is_conflicted()` 只判断是否含 `U`，因此 `AA`／`DD` 被判为非冲突。`crates/app-server/src/server/git_runtime.rs` 将此结果写入状态 DTO，`extensions/git/src/scm.rs` 与 `extensions/git/src/changes.rs` 据此分组和选择解决入口，App Server 的冲突读取／完成接口也要求该判断为真。参考 [Zed 未合并状态解析回归](https://github.com/zed-industries/zed/pull/66648)（2026-11-11 已合并 main，稳定 v1.28.1 尚不包含），在现有 Git 状态 owner 保留权威未合并身份并接回既有解决流程；Ash 的问题是冲突身份丢失，不是照搬上游 `DD` 两侧元数据修正。本项由静态调用链确认，尚无 Ash 运行时复现。
+  - 范围与风险：保留两侧 Added／Deleted 等状态，不把所有双列变化都判为冲突；同时核对 `crates/git/src/working_copy/content.rs` 对 stage 2／3 同时缺失的拒绝，合法 `DD` 可只有 stage 1，不能仅修分组后仍无法读取。沿既有显式解决操作、仓库锁、stage ID／结果版本校验处理删除结果，不新增自动解决、暂存、提交或恢复文件行为，不宣称已发生数据丢失。
+  - 验收：扩展 `working_copy_tests.rs`、冲突内容／App Server 测试及 Git 扩展与 Desktop SCM 场景，覆盖全部七种未合并 XY（DD／AU／UD／UA／DU／AA／UU）、普通双列变化、add/add 与双向重命名产生的 `DD`；核对状态 DTO、Merge 分组、打开／刷新、stage 1-only 的合法缺侧与索引已清空的区别，以及显式解决后的 index 状态。保留脏编辑、外部 Git 改写、旧 stage ID／结果版本、取消和部分暂存保护，确认未解决时不落入普通变更动作；真实 Git／Desktop 通过前不标完成。
+
 ## SCM 普通文件点击 · 残余极端往返
 
 - [ ] **测量** · 最终独立窗口中最慢暖点击 375.6 ms：extensionHost/invoke/read（connection 1，request 2907）客户端往返 274.3 ms，同 ID 服务端处理 0.088 ms、出站 0.040 ms，Git 请求在之后才开始且仅 3.4 ms。尚未拆清 Renderer→Main→daemon 送达与返程 decode/dispatch，不能归因扩展执行或渲染。下一步补这些边界的 method/request ID 标记，保留极值复现；本轮全部原始数据和已完成实现见[报告](.build/scm-tail-v2/report.md)。
@@ -142,7 +152,7 @@
 
 ## Ash Code · `/fork` 拒绝时保留草稿
 
-- [ ] **修复候选 · `/fork` 本地校验拒绝不消耗草稿**：`crates/tui/src/thread/composer/input/state.rs` 的普通提交和活动任务队列入口，对本地命令先清空输入及附件，再交给 `crates/tui/src/app/state.rs` 校验；运行中拒绝 `/fork` 或 `text_arguments()` 拒绝图片等非文本参数时，当前草稿已不再可编辑。纯文本虽进入输入历史，带附件的提交不会记录到该历史，不能以历史恢复替代保留完整草稿。参考 [Codex 在消耗草稿前校验 fork](https://github.com/openai/codex/pull/58767)（2026-11-01 已合并；尚未包含于当前稳定版 [0.167.1](https://github.com/openai/codex/releases/tag/rust-v0.167.1)），先闭合本地校验与草稿消耗的顺序。本项为静态调用链确认，未运行端到端复现，不将其描述为持久文件或历史会话丢失。
+- [ ] **修复候选 · `/fork` 本地校验拒绝不消耗草稿**：`crates/tui/src/thread/composer/input/state.rs` 的普通提交和活动任务队列入口，对本地命令先清空输入及附件，再交给 `crates/tui/src/app/state.rs` 校验；运行中拒绝 `/fork` 或 `text_arguments()` 拒绝图片等非文本参数时，当前草稿已不再可编辑。纯文本虽进入输入历史，带附件的提交不会记录到该历史，不能以历史恢复替代保留完整草稿。参考 [Codex 在消耗草稿前校验 fork](https://github.com/openai/codex/pull/58767)（2026-11-01 已合并；尚未包含于当前稳定版 [0.167.2](https://github.com/openai/codex/releases/tag/rust-v0.167.2)），先闭合本地校验与草稿消耗的顺序。本项为静态调用链确认，未运行端到端复现，不将其描述为持久文件或历史会话丢失。
   - 范围与风险：仅修现有 `/fork` 提交链，复用 composer 的完整 draft／附件绑定；本地拒绝后保留文本、光标、附件占位及后续编辑能力，校验通过后仅消耗一次。保持运行中禁止 fork 和只接受文本参数的现有规则，不顺带允许图片／Skill、放宽状态门禁或移植 Codex 的 MCP／side-conversation 产品语义。不要把已发出的 RPC 失败自动恢复为可重试 fork，避免结果未知时重复创建会话；其他 slash 命令及普通 queue／steer 行为保持回归。
   - 验收：扩展 `crates/tui/src/app/state_tests.rs` 的 `fork_rejects_image_arguments_before_session_creation`，并在 composer submission 测试覆盖空闲非法附件、运行中纯文本／带附件拒绝、修正后再次提交和成功清空；断言拒绝不产生 SessionCommand、不调用 fork RPC、草稿和附件绑定保持且可继续编辑，纯文本历史不重复。覆盖 Inline／Fullscreen 与取消任务后再次提交；保留 `crates/tui/src/sessions/completion_tests.rs` 中成功 fork 不切换当前会话、无 prompt 不启动任务、有 prompt 仅启动一次的既有语义。
 
@@ -163,8 +173,8 @@
 - [ ] **修复候选 · 保留 Provider 流错误的稳定分类**：沿 `crates/ash-api/src/requests.rs`、endpoint decoder、`crates/app-server/src/model_provider_error.rs` 到 `crates/core/src/turn/executor.rs` 核对以下独立缺口，避免将可诊断的失败降为通用无效响应。既有配置／认证／限流提示已存在，不重复建设错误展示层；以下依据静态调用链，尚未运行真实端点验收，各出处的合并与发布状态分别标注。
   - **Chat Completions 错误帧**：`crates/ash-api/src/sse/openai_chat_completions.rs` 未识别 `error` envelope，无 `choices` 时直接忽略；若随后结束或只有 `[DONE]`，错误会变为缺少终态的 `InvalidResponse`。参考 [流错误分类保留](https://github.com/zed-industries/zed/pull/66038)（2026-10-23 已合并 main，已包含于 [Zed v1.27.0](https://github.com/zed-industries/zed/releases/tag/v1.27.0) 稳定版），在普通 chunk／usage 处理前识别经确认的错误帧并接回已有分类入口，不照搬上游类型装箱修复。Core 对无效响应只立即重试一次，而 transient 有等待及独立重试预算；须让额度／认证错误终止并给出正确恢复方向、过载沿原 transient 策略处理，而非一概关闭重试。
   - **Responses 模型不可用代码**：`requests.rs` 仍按正文子串识别，裸 `model_not_found` 从 `error`／`response.failed` 落为 `InvalidResponse`，同样可能多发一次请求；HTTP 403 则在读取该代码前归为认证错误。参考 [模型不可用终态错误](https://github.com/openai/codex/pull/56445)（2026-10-23 已合并，已包含于 [Codex 0.165.0](https://github.com/openai/codex/releases/tag/rust-v0.165.0)），优先识别可信协议结构中的精确 code，并沿现有稳定错误契约给出更换模型／检查模型访问的恢复方向，不凭自然语言子串推断、不自动切换模型。HTTP 400／404 与含 `invalid_request_error` 的现有路径本已不可重试，不能把所有模型不存在都描述为重试缺陷；未知 403 仍保留原认证语义。
-  - **Responses 预算耗尽代码**：当已配置的 Responses 端点实际返回精确 `budget_reached` 流错误且未同时命中现有额度／无效请求正文分类，也会沿 `error`／`response.failed` 落为 `InvalidResponse` 并立即重试一次。参考 [预算耗尽终态分类](https://github.com/openai/codex/pull/59228)（2026-11-03 已合并；尚未包含于 [Codex 0.167.1](https://github.com/openai/codex/releases/tag/rust-v0.167.1)），在同一精确 code 分类入口保留不可重试结果与有界提示，不新增错误架构、不自动换模型或推断额度恢复时间。HTTP 400 的现有路径本已不可重试；含 `usage_limit`／`insufficient_quota`／`invalid_request_error` 等已命中分类的正文不算本缺口。此项为静态协议与调用链核对，未断言真实端点已发生故障。
-  - **Responses 内容策略拒绝代码**：当已配置的 Responses 端点实际返回精确 `content_policy_violation` 流错误，且正文未命中现有认证／额度／无效请求等分类时，`requests.rs` 仍将其降为 `InvalidResponse`，Core 会立即再调用一次。参考 [内容策略拒绝终态分类](https://github.com/openai/codex/pull/60479)（2026-11-10 已合并 main，尚未包含于 [Codex 0.167.1](https://github.com/openai/codex/releases/tag/rust-v0.167.1)），在同一精确 code 分类入口保留不可重试终态并给出有界、脱敏的拒绝提示，避免自动重发相同请求；不自动改写输入、换模型或绕过端点策略。HTTP 400 的现有路径本已不可重试，不算本缺口。本项为静态协议与调用链核对，未断言真实端点已发生故障。
+  - **Responses 预算耗尽代码**：当已配置的 Responses 端点实际返回精确 `budget_reached` 流错误且未同时命中现有额度／无效请求正文分类，也会沿 `error`／`response.failed` 落为 `InvalidResponse` 并立即重试一次。参考 [预算耗尽终态分类](https://github.com/openai/codex/pull/59228)（2026-11-03 已合并；尚未包含于 [Codex 0.167.2](https://github.com/openai/codex/releases/tag/rust-v0.167.2)），在同一精确 code 分类入口保留不可重试结果与有界提示，不新增错误架构、不自动换模型或推断额度恢复时间。HTTP 400 的现有路径本已不可重试；含 `usage_limit`／`insufficient_quota`／`invalid_request_error` 等已命中分类的正文不算本缺口。此项为静态协议与调用链核对，未断言真实端点已发生故障。
+  - **Responses 内容策略拒绝代码**：当已配置的 Responses 端点实际返回精确 `content_policy_violation` 流错误，且正文未命中现有认证／额度／无效请求等分类时，`requests.rs` 仍将其降为 `InvalidResponse`，Core 会立即再调用一次。参考 [内容策略拒绝终态分类](https://github.com/openai/codex/pull/60479)（2026-11-10 已合并 main，尚未包含于 [Codex 0.167.2](https://github.com/openai/codex/releases/tag/rust-v0.167.2)），在同一精确 code 分类入口保留不可重试终态并给出有界、脱敏的拒绝提示，避免自动重发相同请求；不自动改写输入、换模型或绕过端点策略。HTTP 400 的现有路径本已不可重试，不算本缺口。本项为静态协议与调用链核对，未断言真实端点已发生故障。
   - **范围与验收**：在 `crates/ash-api/src/sse/openai_chat_completions_tests.rs`、`crates/ash-api/src/endpoint/responses/events_tests.rs` 和 `crates/app-server/src/model_provider_error_tests.rs` 补受控错误帧与完整 Core 调用次数断言；覆盖错误出现在首帧／部分输出之后、缺少／附带 `[DONE]`、普通 usage-only 帧、嵌套 `response.failed`、SSE／WebSocket 共用解码、400／403／404、取消、未知或畸形错误。额度／认证／已确认模型不可用不额外调用，过载仍按预算等待，终态与历史恢复提示一致；保留既有上下文溢出处理、错误正文截断和脱敏，不把原始 provider 正文直传 UI 或新增账号／provider 抽象。补精确 `budget_reached` 的顶层／嵌套错误帧、部分输出后失败、携带 retry-after 后跟 completed、已有额度／无效请求正文命中及 HTTP 400 场景，断言终态不多调用模型；未知 code 与正常 transient 的原重试策略不变。补精确 `content_policy_violation` 的顶层／嵌套错误帧、部分输出后失败、携带 retry-after 后跟 completed、空／缺失提示及 HTTP 400 场景，断言一次请求即清晰终止，不自动换模型或重写输入；未知 code、正常 transient 及既有认证／额度分类保持原策略。
 
 - [ ] **修复候选 · 兼容 Chat Completions 的结构化流内容**：`crates/ash-api/src/sse/openai_chat_completions.rs` 仍把 `delta.content` 限定为字符串，已启用 native streaming 的 OpenAI-compatible 端点遇到 text/thinking 数组会报错；参考 [Zed 混合流适配](https://github.com/zed-industries/zed/pull/65915)（已合并 main，已包含于 [Zed v1.26.2](https://github.com/zed-industries/zed/releases/tag/v1.26.2) 稳定版），沿现有 decoder 与 terminal assembly 支持经确认的结构化内容，保持思考与正文分离。不新增 provider 抽象或账号接线。
@@ -338,7 +348,7 @@ Git 首次发现已由 watcher 或首个 Git 查询接手。使用同一 Electro
 
 ### TUI 剪贴板图片文件的显示方向
 
-- [ ] **修复候选 · TUI 剪贴板图片文件的显示方向**：`crates/tui/src/keymap/bindings.rs` 的 `Attach clipboard image` 经 `host.rs` 调用 `host/clipboard.rs`；该入口优先读取剪贴板 `file_list`，用 `image::open` 解码后重新编码为 PNG。当前锁定的 image 0.25.10 不自动应用 EXIF 方向，`DynamicImage::write_to` 也不保留该元数据，因此依赖方向标记的文件会按原始像素方向进入附件。参考 [图片解码应用显示方向](https://github.com/openai/codex/pull/60455)（2026-11-09 已合并 main，尚未包含于 [Codex 0.167.1](https://github.com/openai/codex/releases/tag/rust-v0.167.1)），在现有剪贴板文件解码 owner 内应用方向后再计算尺寸／指纹并编码；这是静态链路确认的候选，尚未执行 Ash 剪贴板复现。
+- [ ] **修复候选 · TUI 剪贴板图片文件的显示方向**：`crates/tui/src/keymap/bindings.rs` 的 `Attach clipboard image` 经 `host.rs` 调用 `host/clipboard.rs`；该入口优先读取剪贴板 `file_list`，用 `image::open` 解码后重新编码为 PNG。当前锁定的 image 0.25.10 不自动应用 EXIF 方向，`DynamicImage::write_to` 也不保留该元数据，因此依赖方向标记的文件会按原始像素方向进入附件。参考 [图片解码应用显示方向](https://github.com/openai/codex/pull/60455)（2026-11-09 已合并 main，尚未包含于 [Codex 0.167.2](https://github.com/openai/codex/releases/tag/rust-v0.167.2)），在现有剪贴板文件解码 owner 内应用方向后再计算尺寸／指纹并编码；这是静态链路确认的候选，尚未执行 Ash 剪贴板复现。
   - 范围与风险：仅限实际从系统剪贴板文件列表取得并重编码的图片，保留文件优先级、失败回退、附件目标及异步结果代次检查。普通文本路径粘贴经 `attachments.rs` 保留原始 bytes，不列为同一缺口；系统剪贴板原生 RGBA 已是像素数据，不能猜测或重复旋转。现有共享图片处理已能保留方向元数据，不重构它、不扩大到 Desktop，也不一并引入 macOS 专属 pasteboard 或 TIFF 性能改造。按当前解码限制处理，不为修方向放宽资源上限；不复制不必要的 EXIF 隐私字段。
   - 验收：在 `crates/tui/src/host/clipboard_tests.rs` 用不对称合成 JPEG／PNG 覆盖八种 EXIF 方向、无方向、无效元数据和解码失败，断言输出 PNG 的像素排列、旋转后宽高及指纹一致，不仅检查文件头。沿 `app/state_tests.rs` 复用附件落入目标线程与旧结果拒绝测试，保留普通路径粘贴、原生 RGBA 和非图片回退。再于支持文件列表的真实终端／系统剪贴板走一次复制文件 → 附图流程，明确实际平台；不把 macOS 上游验证当作 Ash Windows／Linux 已通过。
 
@@ -423,7 +433,7 @@ Git 首次发现已由 watcher 或首个 Git 查询接手。使用同一 Electro
 
 ### SCM 文件拖入终端
 
-- [ ] **候选／链路补齐（未排期）· SCM 文件拖入终端**：`src/ash/workbench/contrib/scm/browser/scmViewPane.ts` 的变更树尚未提供 drag policy，共享 Tree／List 仅在消费者提供 `dnd.getDragURI` 时启用行拖动；终端已接入 URI-list 文件拖放和 `sendPath(resource, false)`。参考 [Zed Git 面板文件拖放](https://github.com/zed-industries/zed/pull/66423)（2026-11-02 已合并 main，稳定 v1.27.0 尚不包含），补齐从已显示的 SCM 工作文件到现有终端的路径输入，减少先定位 Explorer 或复制路径的步骤。本项是静态确认的入口缺口，不是执行失败或数据丢失缺陷。
+- [ ] **候选／链路补齐（未排期）· SCM 文件拖入终端**：`src/ash/workbench/contrib/scm/browser/scmViewPane.ts` 的变更树尚未提供 drag policy，共享 Tree／List 仅在消费者提供 `dnd.getDragURI` 时启用行拖动；终端已接入 URI-list 文件拖放和 `sendPath(resource, false)`。参考 [Zed Git 面板文件拖放](https://github.com/zed-industries/zed/pull/66423)（2026-11-02 已合并 main，已包含于 [Zed v1.28.1](https://github.com/zed-industries/zed/releases/tag/v1.28.1) 稳定版），补齐从已显示的 SCM 工作文件到现有终端的路径输入，减少先定位 Explorer 或复制路径的步骤。本项是静态确认的入口缺口，不是执行失败或数据丢失缺陷。
   - 前提与范围：先限定单个文件行，沿现有 `TreeDragAndDrop` 和 Explorer 的 `text/uri-list` 契约导出权威 `sourceUri`，终端继续使用既有宿主 URI 转换及 shell 引号；只允许可确认的本地／同连接远端工作文件，分组、目录、已删除项、Git 历史／虚拟资源不伪装为工作文件。拖放只填入路径，不附加回车、不执行命令，不增加文件读写、上传或 provider 动作。当前终端只消费首个 URI，不能把上游多选行为直接照搬或静默截断成“多文件支持”；本候选不扩张到批量拖放。
   - 风险与验收：在 `src/ash/workbench/contrib/scm/test/browser/scmViewPane.test.ts` 与 `src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts` 补来源／接收链测试，并走真实 Desktop SCM → 终端拖放；覆盖 staged／unstaged 同一工作文件、删除与重命名、列表／树视图、刷新后旧行、空格／中文／引号／shell 元字符、本地与 SSH 同名路径。异连接、只读或已退出终端、未知 shell、控制字符及转换期间进程重启仍拒绝；点击预览、键盘打开、inline actions 和文件菜单不退化。沿用现有取消与执行主机检查，不绕开 `sendPath`。
 

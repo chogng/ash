@@ -74,7 +74,7 @@ function nextNotification(notifications: TestNotificationService): Promise<Notif
 }
 
 suite('Contextual extension recommendation notifications', () => {
-	test('suggests an installable extension once and opens the existing marketplace on explicit action', async () => {
+	test('suggests Academy once and routes discovery to Plugins on explicit action', async () => {
 		const f = fixture(); using lifetime = f.lifetime;
 		const service = f.create();
 		const added = nextNotification(f.notifications);
@@ -84,7 +84,7 @@ suite('Contextual extension recommendation notifications', () => {
 		assert.equal(await service.promptImportantExtensionsInstallNotification(recommendation), RecommendationsNotificationResult.Ignored);
 		await item.actions?.primary?.find(action => action.id.endsWith('.show'))?.run();
 		assert.equal(await result, RecommendationsNotificationResult.Accepted);
-		assert.deepEqual(f.commands, [['ash.extensions.open', { mode: 'browse', query: 'Rich documents' }]]);
+		assert.deepEqual(f.commands, [['ash.extensions.open', { mode: 'browse', query: 'Rich documents', view: 'plugins' }]]);
 		assert.equal(f.lookupCount, 1);
 	});
 
@@ -143,7 +143,7 @@ suite('Contextual extension recommendation notifications', () => {
 	test('language discovery opens the same marketplace with the exact language filter', async () => {
 		const f = fixture(); using lifetime = f.lifetime;
 		const added = nextNotification(f.notifications);
-		const result = f.create().promptImportantExtensionsInstallNotification({ ...recommendation, name: 'Python', languageId: 'python', searchValue: '' });
+		const result = f.create().promptImportantExtensionsInstallNotification({ ...recommendation, extensions: ['support.python@ash'], name: 'Python', languageId: 'python', searchValue: '' });
 		const item = await added;
 		await item.actions?.primary?.find(action => action.id.endsWith('.show'))?.run(); await result;
 		assert.deepEqual(f.commands, [['ash.extensions.open', { mode: 'browse', query: '', languageId: 'python' }]]);

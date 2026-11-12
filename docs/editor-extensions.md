@@ -40,7 +40,7 @@ Rust 作者继续使用 `sdk/rust` 的 Host RPC v1 接口。文档客户端的 `
 
 ## 快速理解
 
-通用 Code 编辑功能由客户端 `src/ash/editor` 内置，不属于可执行扩展，不需要 App Server 提供模块描述。Academy、PDF 与文献编辑器保持独立安装包；其资源加载与 Provider 生命周期仍沿公开 SDK 和客户端桥。
+通用 Code 编辑功能由客户端 `src/ash/editor` 内置。Agent Window 按需加载基础 Docs 的 `.ash-doc` 编辑器，复用 Academy 的通用文档模型和工作台的工作副本。Academy 的论文编辑器、PDF 查看器与文献管理器独立安装，资源加载与 Provider 生命周期沿公开 SDK 和客户端桥。
 
 Ash 的共享核心服务 App、TUI 与其他客户端，拥有 Agent 执行、权威状态、权限裁决和通用资源机制。服务商认证、托管平台 API 和特定产品工作流由可选扩展提供；实现需要 Rust、后台执行或跨窗口存活，都不能单独成为进入核心的理由。
 

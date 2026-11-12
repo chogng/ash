@@ -155,6 +155,11 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 	private async prepareReload(revive = false): Promise<void> {
 		await this.terminals.whenConnected;
 		const instances = [...this.terminals.instances];
+		if (!revive) {
+			// Foreground panes are published before launch. Let startup finish before
+			// freezing the process client, including any resize queued by layout.
+			await Promise.all(instances.map(instance => instance.processReady));
+		}
 		const activeId = this.terminals.activeInstance?.instanceId;
 		const focusedId = instances.find(instance => {
 			const element = instance.xterm?.element;
@@ -163,7 +168,7 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		const snapshots = [];
 		const leases = [];
 		for (const instance of instances) {
-			if (!this.canPersist(instance)) continue;
+			if (!this.terminals.instances.includes(instance) || !this.canPersist(instance)) continue;
 			if (revive && (instance.isReadOnly || instance.state !== 'running' || !instance.revivalLaunch)) continue;
 			if (instance.shellLaunchConfig?.customPtyImplementation) {
 				if (revive) continue;

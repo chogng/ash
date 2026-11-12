@@ -22,6 +22,8 @@ pub enum Error {
     NotFound,
     #[error("workflow command conflicts with an earlier command")]
     Conflict,
+    #[error("workflow changed before the Linear request; retry with the current configuration")]
+    StaleWorkflow,
     #[error("workflow storage: {0}")]
     Storage(#[from] rusqlite::Error),
     #[error("workflow record: {0}")]

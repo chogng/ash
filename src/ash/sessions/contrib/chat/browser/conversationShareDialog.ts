@@ -13,7 +13,6 @@ export async function shareConversationLink(
 		...prompt,
 		title: localize('sessions.chat.shareTitle', 'Share conversation'),
 		primaryButton: localize('sessions.titlebar.share', 'Share'),
-		layout: 'form',
 	});
 	if (!confirmation.confirmed) return;
 	const url = await publish();

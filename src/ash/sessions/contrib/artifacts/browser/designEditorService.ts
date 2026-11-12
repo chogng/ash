@@ -1,11 +1,20 @@
+import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { mainWindow } from '../../../../base/browser/window.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { generateUuid, isUuid } from '../../../../base/common/uuid.js';
+import type { URI } from '../../../../base/common/uri.js';
+import { FileKind, FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
 import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
 import { IWorkingCopyService } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
-import { DesignDocumentController } from './designDocumentController.js';
+import { DesignDocumentController, getDesignDraftHome } from './designDocumentController.js';
 import type { CanvasEditorWidget } from './widget/canvasEditorWidget.js';
-import { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
+import { ArtifactWorkspaceId, canvasArtifactModes, type CanvasArtifactKind } from '../common/artifactWorkspace.js';
+import type { DesignShape } from '../common/model/designDocument.js';
 
 export const DESIGN_LAYERS_CONTAINER_ID = 'workbench.sessions.sidebar.designLayers';
 export const DESIGN_PROPERTIES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.designProperties';
@@ -14,7 +23,11 @@ export const DESIGN_PROPERTIES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.d
 export interface IDesignEditorService {
 	readonly document: DesignDocumentController;
 	readonly activeEditor: IObservable<CanvasEditorWidget | undefined>;
+	readonly canvasArtifacts: IObservable<ReadonlyMap<string, DesignDocumentController>>;
 	getDocument(mode: ArtifactWorkspaceId): DesignDocumentController;
+	loadCanvasArtifacts(): Promise<void>;
+	createCanvasArtifact(kind: CanvasArtifactKind, shapes: readonly DesignShape[]): DesignDocumentController;
+	adoptExampleDocument(document: DesignDocumentController, ownerWindow: Window): void;
 	setActiveEditor(editor: CanvasEditorWidget | undefined): void;
 }
 
@@ -22,17 +35,93 @@ export const IDesignEditorService = createServiceIdentifier<IDesignEditorService
 
 export class DesignEditorService extends Disposable implements IDesignEditorService {
 	private readonly documents = new Map<ArtifactWorkspaceId, DesignDocumentController>();
+	private readonly adoptedExamples = new Set<DesignDocumentController>();
+	private readonly artifacts = observableValue<ReadonlyMap<string, DesignDocumentController>>(this, new Map());
+	public readonly canvasArtifacts: IObservable<ReadonlyMap<string, DesignDocumentController>> = this.artifacts;
+	private readonly draftHome: URI;
+	private canvasLoading: Promise<void> | undefined;
+	private get managedDocuments(): readonly DesignDocumentController[] {
+		return [...this.documents.values(), ...this.adoptedExamples, ...this.artifacts.get().values()];
+	}
 	public get document(): DesignDocumentController { return this.getDocument(ArtifactWorkspaceId.Design); }
 	private readonly active = observableValue<CanvasEditorWidget | undefined>(this, undefined);
 	public readonly activeEditor: IObservable<CanvasEditorWidget | undefined> = this.active;
-	constructor(@IInstantiationService private readonly instantiation: IInstantiationService, @IWorkingCopyService private readonly workingCopies: IWorkingCopyService, @ILifecycleService lifecycle: ILifecycleService) {
+	constructor(
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
+		@ILifecycleService private readonly lifecycle: ILifecycleService,
+		@IFileService private readonly files: IFileService,
+		@ILogService private readonly log: ILogService,
+		@IWorkspaceContextService workspace: IWorkspaceContextService,
+		@IUserDataProfileService profiles: IUserDataProfileService,
+	) {
 		super();
+		this.draftHome = getDesignDraftHome(profiles.currentProfile.location, workspace.getWorkspace().id);
+		// Browser reload cannot wait for the final asynchronous write.
+		this._register(addDisposableListener(mainWindow, 'beforeunload', (event: BeforeUnloadEvent) => {
+			if (!this.lifecycle.willShutdown && [...this.artifacts.get().values()].some(document => document.isDirty || document.needsSaveRetry)) {
+				event.preventDefault();
+				event.returnValue = '';
+			}
+		}));
 		this._register(lifecycle.onBeforeShutdown(event => event.veto(this.confirmDiscard(), 'unsavedCreator')));
 		this._register(lifecycle.onWillShutdown(event => event.join(async () => {
-			for (const document of this.documents.values()) {
+			for (const document of this.managedDocuments) {
 				if (document.automaticallySaves && !(await document.flushAutoSave())) { throw new Error(document.saveStatus); }
 			}
-		}, 'Creator automatic save', () => [...this.documents.values()].every(document => !document.automaticallySaves || (!document.isDirty && !document.needsSaveRetry && !document.isRestoring)))));
+		}, 'Creator automatic save', () => this.managedDocuments.every(document => !document.automaticallySaves || (!document.isDirty && !document.needsSaveRetry && !document.isRestoring)))));
+	}
+	public loadCanvasArtifacts(): Promise<void> {
+		return this.canvasLoading ??= this.restoreCanvasArtifacts().catch(error => {
+			this.canvasLoading = undefined;
+			this.log.error('creator', 'Failed to load canvas artifacts', error);
+		});
+	}
+
+	private async restoreCanvasArtifacts(): Promise<void> {
+		for (const kind of Object.keys(canvasArtifactModes) as CanvasArtifactKind[]) {
+			await this.restoreCanvasKind(kind);
+		}
+	}
+
+	private async restoreCanvasKind(kind: CanvasArtifactKind): Promise<void> {
+		const entries = await this.files.readDirectory(this.draftHome.joinPathSegment(kind)).catch(error => {
+			if (error instanceof FileNotFoundError) { return []; }
+			throw error;
+		});
+		for (const entry of entries) {
+			if (this.isDisposed) { return; }
+			const id = entry.name.slice(0, -'.ash-design'.length);
+			if (entry.kind !== FileKind.Directory || !entry.name.endsWith('.ash-design') || !isUuid(id) || this.artifacts.get().has(id)) { continue; }
+			const document = this.instantiation.createInstance(DesignDocumentController, { kind, id, resource: entry.resource });
+			await document.ready;
+			if (this.isDisposed || document.needsSaveRetry || this.artifacts.get().has(id)) {
+				if (document.needsSaveRetry) { this.log.warn('creator', 'Failed to restore canvas artifact', entry.resource.toString()); }
+				document.dispose();
+				continue;
+			}
+			this.addCanvasArtifact(id, document);
+		}
+	}
+
+	public createCanvasArtifact(kind: CanvasArtifactKind, shapes: readonly DesignShape[]): DesignDocumentController {
+		const id = generateUuid();
+		const resource = this.draftHome.joinPathSegment(kind).joinPathSegment(`${id}.ash-design`);
+		const document = this.instantiation.createInstance(DesignDocumentController, { kind, id, resource, shapes });
+		this.addCanvasArtifact(id, document);
+		return document;
+	}
+
+	private addCanvasArtifact(id: string, document: DesignDocumentController): void {
+		this._register(document);
+		let title = document.name;
+		this._register(document.onDidChangeLabel(() => {
+			if (document.name === title) { return; }
+			title = document.name;
+			this.artifacts.set(new Map(this.artifacts.get()), undefined);
+		}));
+		this._register(this.workingCopies.register(document));
+		this.artifacts.set(new Map(this.artifacts.get()).set(id, document));
 	}
 	public getDocument(mode: ArtifactWorkspaceId): DesignDocumentController {
 		let document = this.documents.get(mode);
@@ -43,8 +132,19 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 		}
 		return document;
 	}
+	public adoptExampleDocument(document: DesignDocumentController, ownerWindow: Window): void {
+		this.adoptedExamples.add(this._register(document));
+		this._register(this.workingCopies.register(document));
+		// Browser navigation cannot wait for an asynchronous file write.
+		this._register(addDisposableListener(ownerWindow, 'beforeunload', (event: BeforeUnloadEvent) => {
+			if (!this.lifecycle.willShutdown && (document.isDirty || document.needsSaveRetry)) {
+				event.preventDefault();
+				event.returnValue = '';
+			}
+		}));
+	}
 	private async confirmDiscard(): Promise<boolean> {
-		for (const document of this.documents.values()) {
+		for (const document of this.managedDocuments) {
 			if (await document.confirmDiscard()) { return true; }
 		}
 		return false;

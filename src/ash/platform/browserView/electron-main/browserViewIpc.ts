@@ -33,6 +33,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 		['setVisible', ['targetId', 'visible']],
 		['loadURL', ['targetId', 'url']],
 		['getBrowserHistory', ['targetId']],
+		['getWebsiteFavicon', ['origin']],
 		['deleteBrowserHistory', ['targetId', 'entryIds']],
 		['getSharing', ['targetId']],
 		['respondToPermission', ['targetId', 'requestId', 'allowed']],
@@ -290,6 +291,18 @@ function browserViewIpcRoutes(
 ): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		{ channel: 'getBrowserHistory', validate: validateBrowserViewTargetRequest, invoke: value => service.getBrowserHistory((value as IBrowserViewTargetRequest).targetId) },
+		{
+			channel: 'getWebsiteFavicon',
+			validate: value => {
+				const origin = isRecord(value) && typeof value.origin === 'string' && value.origin.length <= 512 ? value.origin : undefined;
+				const url = origin && URL.parse(origin);
+				if (!url || url.origin !== origin || (url.protocol !== 'https:' && url.protocol !== 'http:') || url.port) {
+					throw new TypeError('Invalid website favicon origin');
+				}
+				return url.origin;
+			},
+			invoke: value => service.getWebsiteFavicon(value as string),
+		},
 		{
 			channel: 'deleteBrowserHistory',
 			validate: value => {

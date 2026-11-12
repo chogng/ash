@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { createTestEditorServices, createTestFileService, createTestTextFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
@@ -29,8 +30,6 @@ import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import type { EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput, IEditorExtensionApi } from '../../../src/ash/workbench/common/editor.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import editorMessages from '../../../extensions/language-pack-zh-cn/translations/editor.json' with { type: 'json' };
-import workbenchMessages from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { AccessibleViewRegistry } from '../../../src/ash/platform/accessibility/browser/accessibleViewRegistry.js';
 import { bindTestColorTheme } from '../../fixtures/browser/themeFixture.js';
@@ -38,7 +37,7 @@ import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/toolbar/toolbar.css';
 
 const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
-setNlsMessages(locale, locale === 'zh-CN' ? { ash: { ...editorMessages.ash, ...workbenchMessages.ash } } : {});
+setNlsMessages(locale, locale === 'zh-CN' ? chineseCatalog.bundles : {});
 const parent = new InstantiationService();
 const memory = new InMemoryFileSystemProvider(); const files = createTestFileService(memory); parent.registerInstance(IFileService, files);
 let dialogPaths: string[] = []; let metadata: string[] | undefined;

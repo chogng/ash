@@ -224,6 +224,30 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(hosts.area.isToolVisible('files'), true);
 	});
 
+	test('reveals Files when opening a result in the foreground from maximized Search', async () => {
+		using hosts = fixture();
+		const { editor, area, files } = hosts;
+		const result = { resource: URI.file('/fixture/result.txt') };
+		await editor.openEditor(result, { pinned: true });
+		const search = { resource: URI.parse('untitled:/fixture.code-search'), editorId: SearchEditorID };
+		await editor.openEditor(search, { pinned: true });
+		const searchGroup = editor.activeGroup;
+		editor.toggleMaximizeTool();
+		assert.equal(area.isToolVisible('search'), true);
+		assert.equal(area.isToolVisible('files'), false);
+
+		await editor.openEditor(result, { pinned: true, preserveFocus: true });
+		assert.equal(area.isToolVisible('files'), false);
+		assert.equal(editor.activeGroup, searchGroup);
+
+		const pane = await editor.openEditor(result, { pinned: true });
+		assert.equal(area.isToolVisible('files'), true);
+		assert.equal(area.isToolVisible('search'), true);
+		assert.equal(editor.activeGroup, files.activeGroup);
+		assert.equal(editor.activeGroup.activePane, pane);
+		assert.equal(editor.activeInput?.resource.toString(), result.resource.toString());
+	});
+
 	test('moves a saved Search tab out of Files while restoring the original active tab', async () => {
 		using hosts = fixture();
 		const file = URI.file('/fixture/a.txt');

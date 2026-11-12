@@ -89,6 +89,15 @@ enum ReconnectPolicy {
     ProcessLifetime,
 }
 
+impl ReconnectPolicy {
+    fn grace_period_millis(self) -> u64 {
+        match self {
+            Self::GracePeriod => RECONNECT_GRACE_PERIOD_MILLIS,
+            Self::ProcessLifetime => 0,
+        }
+    }
+}
+
 enum InputAdmission {
     Wait,
     NonBlocking,
@@ -488,6 +497,7 @@ impl TerminalService {
                 reconnect_token: reconnect
                     .as_ref()
                     .map(|lease| lease.reconnect_token.clone()),
+                attachment_retry: None,
                 ready: ready.clone(),
                 size: TerminalSize {
                     rows: params.rows,
@@ -541,6 +551,7 @@ impl TerminalService {
         }
         session.lifetime = None;
         session.reconnect_token = Some(reconnect.reconnect_token.clone());
+        session.attachment_retry = None;
         session.owner = TerminalOwner::Detached {
             previous_owner: owner_connection_id,
             expires_at: Instant::now() + RECONNECT_GRACE_PERIOD,
@@ -593,32 +604,57 @@ impl TerminalService {
 
         self.ensure_active()?;
         validate_size(params.rows, params.cols)?;
-        let reconnect = new_reconnect_lease(if lifetime.is_some() {
+        if params.attach_nonce.as_deref().is_some_and(|nonce| {
+            nonce.len() != 32 || !nonce.bytes().all(|byte| byte.is_ascii_hexdigit())
+        }) {
+            return Err(TerminalError::InvalidInput);
+        }
+        let policy = if lifetime.is_some() {
             ReconnectPolicy::ProcessLifetime
         } else {
             ReconnectPolicy::GracePeriod
-        })?;
+        };
         let mut sessions = self.sessions.lock().map_err(|_| TerminalError::Busy)?;
         remove_expired_sessions(&mut sessions, Instant::now());
         let session = sessions
             .get_mut(&params.terminal_id)
             .ok_or(TerminalError::NotFound)?;
+        let retry = session
+            .attachment_retry
+            .as_ref()
+            .zip(params.attach_nonce.as_deref())
+            .is_some_and(|(previous, nonce)| {
+                constant_time_eq(&previous.nonce, nonce)
+                    && constant_time_eq(&previous.token, &params.reconnect_token)
+            });
         match session.owner {
+            TerminalOwner::Attached(owner) if owner == owner_connection_id && retry => {}
             TerminalOwner::Attached(_) => return Err(TerminalError::Busy),
             TerminalOwner::Detached { expires_at, .. } if expires_at <= Instant::now() => {
                 return Err(TerminalError::AttachRejected);
             }
             TerminalOwner::Detached { .. } | TerminalOwner::Disconnected { .. } => {}
         }
-        if !session
-            .reconnect_token
-            .as_deref()
-            .is_some_and(|expected| constant_time_eq(expected, &params.reconnect_token))
+        if !retry
+            && !session
+                .reconnect_token
+                .as_deref()
+                .is_some_and(|expected| constant_time_eq(expected, &params.reconnect_token))
         {
             return Err(TerminalError::AttachRejected);
         }
         if session.lifetime.is_some() && lifetime.is_none() {
             return Err(TerminalError::AttachRejected);
+        }
+        if retry {
+            let same_lifetime = match (&session.lifetime, &lifetime) {
+                (Some(current), Some(requested)) => Arc::ptr_eq(current, requested),
+                (None, None) => true,
+                (None, Some(_)) | (Some(_), None) => false,
+            };
+            if !same_lifetime {
+                return Err(TerminalError::AttachRejected);
+            }
         }
         // A service may host terminals created under different Session grants.
         // The service grant cannot substitute for the process's own authorization.
@@ -628,25 +664,39 @@ impl TerminalService {
         {
             return Err(TerminalError::AttachRejected);
         }
-        session
-            .process
-            .resize(TerminalSize {
+        let reconnect = if retry {
+            TerminalReconnectLease {
+                reconnect_token: session
+                    .reconnect_token
+                    .clone()
+                    .expect("a successful attachment issued a reconnect token"),
+                reconnect_grace_period_millis: policy.grace_period_millis(),
+            }
+        } else {
+            new_reconnect_lease(policy)?
+        };
+        // A repeat on the live owner only confirms the result. A replacement
+        // connection can reclaim the same attachment after the owner closes.
+        if session.owner != TerminalOwner::Attached(owner_connection_id) {
+            session.resize(TerminalSize {
                 rows: params.rows,
                 cols: params.cols,
-            })
-            .map_err(|_| TerminalError::OperationFailed)?;
-        session.size = TerminalSize {
-            rows: params.rows,
-            cols: params.cols,
-        };
-        session
-            .state
-            .lock()
-            .map_err(|_| TerminalError::Busy)?
-            .flow_control = OutputFlowControl::Acknowledged;
-        session.lifetime = lifetime;
-        session.owner = TerminalOwner::Attached(owner_connection_id);
-        session.reconnect_token = Some(reconnect.reconnect_token.clone());
+            })?;
+            session
+                .state
+                .lock()
+                .map_err(|_| TerminalError::Busy)?
+                .flow_control = OutputFlowControl::Acknowledged;
+            session.lifetime = lifetime;
+            session.owner = TerminalOwner::Attached(owner_connection_id);
+        }
+        if !retry {
+            session.reconnect_token = Some(reconnect.reconnect_token.clone());
+            session.attachment_retry = params.attach_nonce.map(|nonce| AttachmentRetry {
+                token: params.reconnect_token,
+                nonce,
+            });
+        }
         Ok(TerminalAttachResult {
             ready: session.ready.clone(),
             terminal_id: params.terminal_id,
@@ -868,21 +918,10 @@ impl TerminalService {
         let session = sessions
             .get_mut(&params.terminal_id)
             .expect("terminal ownership was just validated");
-        let size = TerminalSize {
+        session.resize(TerminalSize {
             rows: params.rows,
             cols: params.cols,
-        };
-        // The renderer can resize its retained terminal after the child exits,
-        // before the next output poll reports that exit. Released PTY handles
-        // must not turn a completed task into a transport failure.
-        if !session.process.has_exited()
-            && session.process.resize(size).is_err()
-            && !session.process.has_exited()
-        {
-            return Err(TerminalError::OperationFailed);
-        }
-        session.size = size;
-        Ok(())
+        })
     }
 
     pub fn read(
@@ -1108,12 +1147,35 @@ struct TerminalSession {
     size: TerminalSize,
     owner: TerminalOwner,
     reconnect_token: Option<String>,
+    // The previous token is accepted only with its original attempt nonce,
+    // until a fresh attachment or explicit handoff replaces the lease.
+    attachment_retry: Option<AttachmentRetry>,
     process: Arc<ProcessHandle>,
     output_task: AbortHandle,
     state: Arc<Mutex<TerminalState>>,
     authorization: Authorization,
     // The window owns this live connection; backend peers can be replaced freely.
     lifetime: Option<Arc<std::sync::atomic::AtomicBool>>,
+}
+
+struct AttachmentRetry {
+    token: String,
+    nonce: String,
+}
+
+impl TerminalSession {
+    fn resize(&mut self, size: TerminalSize) -> Result<(), TerminalError> {
+        // The child can exit and release the PTY before the screen receives its
+        // final output. A resize can also race with that release.
+        if !self.process.has_exited()
+            && self.process.resize(size).is_err()
+            && !self.process.has_exited()
+        {
+            return Err(TerminalError::OperationFailed);
+        }
+        self.size = size;
+        Ok(())
+    }
 }
 
 impl Drop for TerminalSession {
@@ -1596,10 +1658,7 @@ fn validate_size(rows: u16, cols: u16) -> Result<(), TerminalError> {
 fn new_reconnect_lease(policy: ReconnectPolicy) -> Result<TerminalReconnectLease, TerminalError> {
     Ok(TerminalReconnectLease {
         reconnect_token: random_hex::<RECONNECT_TOKEN_BYTES>()?,
-        reconnect_grace_period_millis: match policy {
-            ReconnectPolicy::GracePeriod => RECONNECT_GRACE_PERIOD_MILLIS,
-            ReconnectPolicy::ProcessLifetime => 0,
-        },
+        reconnect_grace_period_millis: policy.grace_period_millis(),
     })
 }
 

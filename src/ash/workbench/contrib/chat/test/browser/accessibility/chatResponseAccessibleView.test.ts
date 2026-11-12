@@ -1,6 +1,6 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
@@ -61,7 +61,7 @@ suite('ChatResponseAccessibleView', () => {
 	for (const locale of ['en', 'zh-CN']) {
 		test(`reads tool status from current backend evidence in ${locale}`, () => {
 			if (locale === 'zh-CN') {
-				setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+				setNlsMessages(locale, chineseCatalog.bundles);
 			}
 			try {
 				const entries: ThreadTranscriptEntry[] = [{
@@ -122,7 +122,7 @@ suite('ChatResponseAccessibleView', () => {
 	});
 
 	test('includes tool evidence and resource metadata in Chinese without creating resource DOM', () => {
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try {
 			const items: readonly IChatListItem[] = [{
 				id: 'call', type: 'toolCall', text: '', transient: false,

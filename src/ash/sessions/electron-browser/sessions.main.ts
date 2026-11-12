@@ -21,6 +21,7 @@ import { AppServerTextDocumentHost } from '../../workbench/services/textfile/bro
 import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
 import { FileDialogService } from '../../workbench/services/dialogs/electron-browser/fileDialogService.js';
 import { OpenAgentsWindowSystemWideKeybindingTip } from '../contrib/openAgentsWindow/electron-browser/openAgentsWindowKeybindingTip.js';
+import { OpenInAshWidgetContribution } from './actions/ashActions.js';
 import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
 import { URI } from '../../base/common/uri.js';
 import { IFileService } from '../../platform/files/common/files.js';
@@ -32,6 +33,7 @@ import { onUnexpectedError } from '../../base/common/errors.js';
 import { createElectronRendererApi } from '../../workbench/electron-browser/rendererApi.js';
 import { registerLocalTranscriptionService } from '../../workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 import { throwIfCancelled, type CancellationToken } from '../../base/common/cancellation.js';
+import { OPEN_IDE_EXTENSIONS_CHANNEL } from '../../platform/extensionManagement/common/extensionManagementService.js';
 import { createAppServerWorkspaceTrustApi } from '../../platform/workspace/browser/workspaceTrustApi.js';
 import { DEVELOPMENT_DIR_PERMISSIONS, hasDevelopmentPermissions } from '../../platform/workspace/common/workspaceTrust.js';
 import { ISessionFolderAuthorizationService } from '../common/sessionWorkspace.js';
@@ -136,6 +138,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	let logger: NativeLogService;
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	let documentClient: AppServerProtocolClient | undefined;
+	let localBrowserClient: AppServerProtocolClient | undefined;
 	let restoreEntry: boolean;
 	let promptForWorkspaceTrust: boolean;
 	try {
@@ -166,7 +169,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			readOverview: async () => { throw new Error('Local App Server is unavailable'); },
 			cleanWorktree: async () => { throw new Error('Local App Server is unavailable'); },
 		});
-		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, (_client, _appServer, localClient) => {
+		api = await createElectronRendererApi([(client, _appServer, localClient) => { documentClient = client; localBrowserClient = localClient; return {}; }, (_client, _appServer, localClient) => {
 			serviceCollection.set(IProfileStorageService, new DesktopProfileStorageService(localClient, mainProcessService.getChannel(desktopStorageChannelName)));
 			const localTrust = createAppServerWorkspaceTrustApi(localClient);
 			serviceCollection.set(ISessionFolderAuthorizationService, {
@@ -288,7 +291,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				createBrowserHost: documentClient
 					? services => {
 						const browsers = services.get(IBrowserViewWorkbenchService);
-						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp);
+						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp, localBrowserClient);
 						const browserHost = registerAppServerBrowserHost(
 							documentClient!,
 							services.get(IPlaywrightService),
@@ -352,6 +355,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					SessionsWindowNotifier.ID,
 					'workbench.contrib.nativeWindow',
 					OpenAgentsWindowSystemWideKeybindingTip.ID,
+					OpenInAshWidgetContribution.ID,
 					'workbench.contrib.chatScreenshot',
 					'workbench.contrib.agentsWindowInvitation',
 					'chat.edits.editorOverlay',
@@ -443,6 +447,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				returnToWorkbench: () => {
 					void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError);
 				},
+				openIdeExtensions: options => invoke<void>(OPEN_IDE_EXTENSIONS_CHANNEL, options),
 				createUserDataFileSystemProvider: async () =>
 					new FileUserDataProvider(api.localFiles, api.userDataHome),
 				// Keep content menus in the window's themed DOM, independently of IDE menu preferences.

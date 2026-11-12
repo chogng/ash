@@ -12,6 +12,10 @@
 	display: none;
 }
 
+.ash-sessions-environment-card-changes[hidden] {
+	display: none;
+}
+
 .ash-sessions-environment-card {
 	box-sizing: border-box;
 	inline-size: min(100%, 20rem);
@@ -66,8 +70,16 @@
 	border-end-end-radius: inherit;
 }
 
+.ash-sessions-environment-card-trigger:has(
+	+ .ash-sessions-environment-card-changes:not([hidden])
+) {
+	border-end-start-radius: 0;
+	border-end-end-radius: 0;
+}
+
 .ash-sessions-environment-card-projects:not([hidden])
-	+ .ash-sessions-environment-card-trigger {
+	+ .ash-sessions-environment-card-trigger,
+.ash-sessions-environment-card-changes {
 	border-block-start: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, var(--ash-border));
 }

@@ -24,7 +24,10 @@ export interface ISessionsEntry {
 	readonly showEditorTabs?: boolean;
 	/** An editor entry docks this view container in its EditorPart. */
 	readonly detailsContainerId?: string;
+	readonly showDetailsByDefault?: boolean;
 	readonly editorInput?: IResourceEditorInput;
+	/** Update feature-owned restoration state after Save As changes the resource. */
+	readonly onEditorInputReplaced?: (input: IResourceEditorInput, replacement: IResourceEditorInput) => void;
 	readonly restoreCommand: string;
 	/** Routes the window's New action to this entry's own conversation owner. */
 	readonly newSessionCommand?: string;
@@ -36,6 +39,7 @@ export interface ISessionsEntry {
 export interface ISessionsEntryOpenOptions {
 	readonly source?: 'restore' | 'startup';
 	readonly focus?: 'conversation';
+	readonly preserveChatSource?: boolean;
 }
 
 export interface ISessionsEntryService extends IDisposable {
@@ -45,6 +49,7 @@ export interface ISessionsEntryService extends IDisposable {
 	setConversationVisible(visible: boolean): Promise<void>;
 	/** Initialize retained content after its editor is created. Restoration preserves any covering Custom View and its focus. */
 	openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: ISessionsEntryOpenOptions): Promise<void>;
+	replaceEditorResource(sourceGroupId: number, input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void>;
 	restore(): Promise<void>;
 }
 

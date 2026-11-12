@@ -1,5 +1,5 @@
 import type { ExtensionsPackageSummary } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
-import { EditorInputSerializers, optionalString, requireRecord, requireString } from '../../../services/editor/common/editorInputSerializer.js';
+import { optionalString, requireRecord, requireString, type EditorInputSerializer } from '../../../services/editor/common/editorInputSerializer.js';
 import { ExtensionsInput, ExtensionsInputSource } from './extensionsInput.js';
 
 /** A local package tab tracks the immutable artifact reviewed by the user. */
@@ -11,7 +11,7 @@ export class AgentPluginEditorInput extends ExtensionsInput {
 	}
 }
 
-EditorInputSerializers.registerStatic({
+export const agentPluginEditorInputSerializer: EditorInputSerializer = {
 	typeId: 'ash.extensions.agentPluginInput',
 	canSerialize: input => input instanceof AgentPluginEditorInput,
 	serialize: input => {
@@ -28,4 +28,4 @@ EditorInputSerializers.registerStatic({
 			description: optionalString(record.description, 'plugin description') ?? '',
 		}, requireString(record.digest, 'plugin digest'));
 	},
-});
+};

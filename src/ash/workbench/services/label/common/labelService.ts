@@ -9,7 +9,7 @@ import {
 } from '../../../../base/common/labels.js';
 import { operatingSystem, OperatingSystem } from '../../../../base/common/platform.js';
 import { Schemas } from '../../../../base/common/network.js';
-import { basename } from '../../../../base/common/resources.js';
+import { basenameOrAuthority } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -72,7 +72,7 @@ export class LabelService extends Disposable implements ILabelService {
 			const label = this.getUriLabel(resource);
 			return label.split(formatter.formatting.separator || this.getSeparator(resource.scheme, resource.authority)).filter(Boolean).at(-1) ?? label;
 		}
-		return basename(resource) || resource.authority || resource.toString();
+		return basenameOrAuthority(resource);
 	}
 
 	getSeparator(scheme: string, authority?: string): '/' | '\\' {

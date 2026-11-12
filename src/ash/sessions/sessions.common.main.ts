@@ -30,6 +30,7 @@ import '../workbench/contrib/chat/browser/aiCustomization/customizationMarketpla
 import '../workbench/contrib/preferences/browser/preferences.contribution.js';
 import './contrib/preferences/browser/sessionsKeyboardShortcuts.contribution.js';
 import '../workbench/contrib/advisor/browser/advisor.contribution.js';
+import '../workbench/contrib/codebase/browser/codebase.contribution.js';
 import '../workbench/contrib/authentication/browser/authentication.contribution.js';
 import '../workbench/contrib/issue/browser/issue.contribution.js';
 import '../workbench/contrib/language/browser/languageServers.contribution.js';

@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
@@ -14,7 +15,6 @@ import { UpdateMainService } from '../../../update/electron-main/updateMainServi
 import { Registry } from '../../../registry/common/platform.js';
 import { ConfigurationRegistry, ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../configuration/common/configurationRegistry.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../nls.js';
-import chineseMessages from '../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { DefaultSettings } from '../../../../workbench/services/preferences/common/settingsModels.js';
 import { createSettingsLayout } from '../../../../workbench/contrib/preferences/browser/settingsLayout.js';
 
@@ -108,7 +108,7 @@ suite('Desktop metered connection policy', () => {
 	});
 
 	test('the application setting validates values and presents its Chinese labels', async () => {
-		setNlsMessages('zh-CN', chineseMessages);
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try {
 			await import('../../common/meteredConnection.config.contribution.js');
 			const configuration = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration('network.meteredConnection')!;

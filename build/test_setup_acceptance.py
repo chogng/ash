@@ -68,7 +68,7 @@ class SetupAcceptanceTests(unittest.TestCase):
             self.assertEqual(setup.check_protocol(root, "A"), "before")
             setup.source_revision(root, "B")
             with self.assertRaisesRegex(
-                RuntimeError, "did not generate protocol revision B"
+                RuntimeError, "does not match source revision B"
             ):
                 setup.check_protocol(root, "B")
             generated.write_text(f"{setup.MARKER} B.")
@@ -141,6 +141,9 @@ class SetupAcceptanceTests(unittest.TestCase):
         self.assertIn("phase: setup", lifecycle)
         job = (setup.ROOT / ".github/workflows/bun-benchmark.yml").read_text()
         self.assertIn('python -B build/setup_acceptance.py --output "$OUTPUT"', job)
+        self.assertIn('python-version: "3.11"', job)
+        self.assertNotIn("setup-uv", job)
+        self.assertNotIn("install_python_tools.py", job)
         self.assertIn("if: always()", job)
         self.assertNotIn("continue-on-error", lifecycle + job)
 

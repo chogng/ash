@@ -71,6 +71,7 @@ function isReply(value: unknown): value is ChatEntityDetailsReply {
 	if (resources !== undefined && (!Array.isArray(resources) || !resources.every(resource => isRecord(resource)
 		&& typeof resource.uri === 'string' && typeof resource.name === 'string'
 		&& typeof resource.kind === 'string' && ['image', 'audio', 'video', 'document', 'html', 'chart'].includes(resource.kind)
+		&& (resource.presentation === undefined || resource.presentation === 'download')
 		&& (resource.mimeType === undefined || typeof resource.mimeType === 'string')
 		&& (resource.frameOrigin === undefined || typeof resource.frameOrigin === 'string')))) return false;
 	if (markdown === undefined) return true;

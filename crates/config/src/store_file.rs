@@ -1,3 +1,4 @@
+use crate::document_migration::DecodedDocument;
 use crate::{ConfigError, UserConfigDocument};
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -5,21 +6,23 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub(crate) fn read_document(path: &Path) -> Result<UserConfigDocument, ConfigError> {
-    if !path.exists() {
-        return Ok(UserConfigDocument::default());
-    }
-    let source = fs::read_to_string(path).map_err(io_error)?;
-    let decoded = crate::document_migration::decode(&source).map_err(|error| {
+pub(crate) fn read_document(path: &Path) -> Result<DecodedDocument, ConfigError> {
+    let source = match fs::read_to_string(path) {
+        Ok(source) => source,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(DecodedDocument {
+                document: UserConfigDocument::default(),
+                rewrite_required: false,
+            });
+        }
+        Err(error) => return Err(io_error(error)),
+    };
+    crate::document_migration::decode(&source).map_err(|error| {
         ConfigError(format!(
             "invalid user configuration '{}': {error}",
             path.display()
         ))
-    })?;
-    if decoded.rewrite_required {
-        write_document(path, &decoded.document)?;
-    }
-    Ok(decoded.document)
+    })
 }
 
 pub(crate) fn write_document(

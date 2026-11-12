@@ -138,6 +138,12 @@ pub(crate) fn apply_command(
                 .servers
                 .insert(server_id.clone(), config.clone());
         }
+        UserConfigCommand::SetLanguageServersEnabled { enabled } => {
+            document.language_servers.enabled = *enabled;
+        }
+        UserConfigCommand::SetWorktreeLanguageServersEnabled { enabled } => {
+            document.language_servers.worktrees_enabled = *enabled;
+        }
         UserConfigCommand::RemoveLanguageServerConfiguration { server_id } => {
             document.language_servers.servers.remove(server_id);
         }

@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { DocumentTextModel } from '../../../../../extensions/academy/common/model/documentTextModel.js';
-import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -26,7 +26,7 @@ test('Academy structural snapshot replacement reports conflict when a retained n
 });
 
 test('Academy structural conflict uses the Chinese client translation', () => {
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		const schema = createDefaultDocumentSchema();
 		const base = createDocument(schema);

@@ -273,6 +273,11 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .read_snapshot()
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let mut runtime = self.runtime()?;
+        if !runtime.directory_enabled(dir.canonical_path(), &snapshot.values.language_servers) {
+            return result(&LanguageServersResult {
+                servers: Vec::new(),
+            });
+        }
         if let Some(settings) = params.settings {
             runtime.configure_workspace_settings(dir.canonical_path(), settings);
         }
@@ -325,6 +330,9 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .read_snapshot()
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let mut runtime = self.runtime()?;
+        if !runtime.directory_enabled(dir.canonical_path(), &snapshot.values.language_servers) {
+            return result(&());
+        }
         let definitions = runtime
             .definitions(dir.canonical_path(), &snapshot.values.language_servers)
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;

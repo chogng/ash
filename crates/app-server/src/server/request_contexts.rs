@@ -204,6 +204,13 @@ impl super::environment_operations::EnvironmentRequestProcessorContext for AppSe
     > {
         AppServer::list_session_dirs(self, session_id)
     }
+    fn session_folder_grant(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        path: &std::path::Path,
+    ) -> Result<ash_file_access::Grant, super::RpcError> {
+        AppServer::session_folder_grant(self, session_id, path)
+    }
     fn move_session_dir(
         &self,
         session_id: &ash_protocol::SessionId,

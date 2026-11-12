@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 import { expect } from '@playwright/test';
 import type { IChatListItem } from '../../common/model/chatViewModel.js';
@@ -44,7 +45,6 @@ import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/commo
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
-import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -483,7 +483,7 @@ test('streaming tool content preserves disclosure focus, failure state and resto
 });
 
 test('Skill activity uses the Chinese locale', () => {
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		const items = chatTranscriptListItems([
 			{ type: 'skillLoad', entryId: 'one', turnId: 'turn', skill: { name: 'review', source: 'project', reason: 'explicit' } },
@@ -495,7 +495,7 @@ test('Skill activity uses the Chinese locale', () => {
 });
 
 test('tool invocation summaries and sections use the Chinese locale', () => {
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		using resources = new DisposableStore();
 		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
@@ -606,7 +606,7 @@ test('Skill diagnostics follow shared editor bindings and cancel validation afte
 	}
 });
 
-test('renders finalized code matches as literal, localized response citations', () => {
+test('renders finalized web sources with response actions and code matches in a separate disclosure', () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
@@ -615,7 +615,7 @@ test('renders finalized code matches as literal, localized response citations', 
 	const reply = { type: 'agentMessage', itemId: 'reply', turnId: 'turn', text: 'Example reply' } as const;
 	const url = 'https://github.com/example/repo/blob/main/lib.rs';
 	const snippet = '<img src=x onerror=alert(1)>';
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		widget.render([chatListItem(reply, true)]);
 		const body = widget.element.querySelector('.ash-chat-markdown-part');
@@ -629,9 +629,11 @@ test('renders finalized code matches as literal, localized response citations', 
 		})]);
 		const matches = widget.element.querySelector<HTMLDetailsElement>('.ash-chat-code-citations')!;
 		assert.equal(widget.element.querySelector('.ash-chat-markdown-part'), body);
-		const sources = widget.element.querySelector('.ash-chat-response-citations button');
+		const footer = widget.element.querySelector('.ash-chat-message-actions')!;
+		const sources = footer.querySelector('.ash-chat-response-sources button[aria-haspopup="dialog"]');
 		assert.equal(sources?.textContent, '来源（1）');
-		assert.equal(sources?.getAttribute('aria-haspopup'), 'dialog');
+		assert.equal(sources?.closest('.ash-chat-response-sources')?.nextElementSibling, footer.querySelector('time'));
+		assert.equal(matches.parentElement, footer.parentElement);
 		assert.equal(matches.querySelector('summary')?.textContent, '匹配代码（1）');
 		assert.equal(matches.querySelector('.ash-chat-code-citation-license')?.textContent, '许可证：MIT');
 		assert.equal(matches.querySelector('a')?.href, url);
@@ -649,6 +651,11 @@ test('renders finalized code matches as literal, localized response citations', 
 		assert.equal(matches.open, true);
 		assert.equal(document.activeElement, sourceLink);
 		assert.equal(widget.element.querySelector('.ash-chat-code-citations'), matches);
+		const updatedSources = footer.querySelector<HTMLButtonElement>('.ash-chat-response-sources button')!;
+		updatedSources.focus();
+		widget.render([chatListItem(reply)]);
+		assert.equal(footer.querySelector('.ash-chat-response-sources button'), null);
+		assert.equal(document.activeElement, footer.closest('article'));
 	} finally {
 		resetNlsResolver();
 	}
@@ -983,16 +990,44 @@ suite('chatRenderer browser component', () => {
 		const rows = Array.from({ length: 20 }, () => row(columns));
 		const text = [...header, ...rows].join('\n') + '\n';
 		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, false), text);
-		const viewport = page.getByRole('region', { name: '可滚动表格' });
-		await expect(viewport.getByRole('table')).toHaveCount(1);
+		const region = page.getByRole('region', { name: '可滚动表格' });
+		const viewport = region.locator('.ash-chat-markdown-table-viewport');
+		await expect(region.getByRole('table')).toHaveCount(1);
 		assert.ok(await viewport.evaluate(node => node.scrollWidth > node.clientWidth));
-		await viewport.focus();
-		await viewport.press('ArrowRight');
+		await expect(region.getByRole('scrollbar')).toHaveCSS('opacity', '1');
+		const expand = page.getByRole('button', { name: '展开表格', exact: true });
+		await expect(expand).toHaveAttribute('aria-haspopup', 'dialog');
+		await expand.focus();
+		const geometry = await viewport.evaluate(node => {
+			const shell = node.closest('.ash-chat-content-actions-anchor')!;
+			const actions = shell.querySelector<HTMLElement>(':scope > .ash-chat-content-actions')!;
+			const size = () => ({ width: node.clientWidth, height: node.clientHeight, scrollWidth: node.scrollWidth, blockHeight: shell.clientHeight });
+			const withActions = size();
+			const actionBounds = actions.getBoundingClientRect();
+			const viewportBounds = node.getBoundingClientRect();
+			actions.hidden = true;
+			const withoutActions = size();
+			actions.hidden = false;
+			return { withActions, withoutActions, shellWidth: shell.clientWidth, actionBottom: actionBounds.bottom, viewportTop: viewportBounds.top };
+		});
+		assert.deepEqual(geometry.withActions, geometry.withoutActions);
+		assert.equal(geometry.withActions.width, geometry.shellWidth);
+		assert.ok(geometry.actionBottom <= geometry.viewportTop);
+		await expand.focus();
+		await expand.press('Enter');
+		const preview = page.getByRole('dialog', { name: '表格预览' });
+		await expect(preview.getByRole('columnheader')).toHaveCount(columns.length);
+		await expect(preview.getByRole('region', { name: '可滚动表格' })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(preview).toHaveCount(0);
+		await expect(expand).toBeFocused();
+		await region.focus();
+		await region.press('ArrowRight');
 		await expect.poll(() => viewport.evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
 		const scrollLeft = await viewport.evaluate(node => node.scrollLeft);
 		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), text + row(columns.map(() => 'Appended cell')));
 		await expect(viewport.getByRole('row')).toHaveCount(22);
-		await expect(viewport).toBeFocused();
+		await expect(region).toBeFocused();
 		assert.ok(await viewport.evaluate(node => node.scrollLeft) >= scrollLeft);
 
 		await viewport.evaluate(node => { node.scrollLeft = 0; });
@@ -1000,9 +1035,21 @@ suite('chatRenderer browser component', () => {
 		const cell = viewport.getByRole('columnheader', { name: 'Wide column heading 24' });
 		await expect.poll(async () => cell.evaluate(node => {
 			const cell = node.getBoundingClientRect();
-			const bounds = node.closest('.ash-chat-markdown-table-scroll')!.getBoundingClientRect();
+			const bounds = node.closest('.ash-chat-markdown-table-viewport')!.getBoundingClientRect();
 			return cell.left < bounds.right && cell.right > bounds.left;
 		})).toBe(true);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.stream('| Fits |\n| --- |\n| Cell |', true));
+		await expect(region.getByRole('columnheader', { name: 'Fits' })).toBeVisible();
+		await expect(region.getByRole('scrollbar')).toHaveCount(0);
+		await expect(expand).toHaveCount(0);
+		const shell = page.locator('.ash-chat-markdown-table-scroll').filter({ has: region });
+		const width = await shell.evaluate(node => Math.ceil(node.getBoundingClientRect().width));
+		await shell.evaluate((node, width) => { node.style.maxInlineSize = `${width - 12}px`; }, width);
+		await expect(expand).toBeVisible();
+		await expand.focus();
+		await shell.evaluate((node, width) => { node.style.maxInlineSize = `${width}px`; }, width);
+		await expect(expand).toHaveCount(0);
+		await expect(shell.getByRole('button', { name: '将表格导出为 CSV' })).toBeFocused();
 	});
 
 	test('streaming Markdown tables preserve the focused cell through appends and corrections', async () => {

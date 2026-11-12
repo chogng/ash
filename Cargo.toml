@@ -430,7 +430,7 @@ sysinfo = { version = "0.39.6", default-features = false, features = ["system"] 
 rustls = { version = "0.23.46", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
 rustls-native-certs = "0.8.4"
 rustls-platform-verifier = "0.7.0"
-rustix = "1.1.4"
+rustix = "1.1.6"
 rmcp = { version = "=3.9.0", default-features = false }
 rusqlite = { version = "0.41.0", features = ["bundled"] }
 sha2 = "0.10"

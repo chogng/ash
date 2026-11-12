@@ -14,7 +14,7 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { getFlatContextMenuActions } from '../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IMenuService, MenuId } from '../../../platform/actions/common/actions.js';
-import { IAccountService, type Account, type AccountState } from '../../../platform/accounts/common/accountService.js';
+import { getAccountProviderLabel, IAccountService, type Account, type AccountState } from '../../../platform/accounts/common/accountService.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
@@ -189,8 +189,10 @@ export class GlobalCompositeBar extends Disposable {
 			: this.label('workbench.connectGitHub', 'Connect GitHub');
 		const accountActions = this.accounts.map(account => {
 			const providerName = this.accountProviderName(account.provider);
-			const name = account.displayName ?? account.email ?? (account.provider === 'chatgpt-web' ? providerName : account.provider);
-			const label = this.localizationService.translate('ash', 'workbench.accountWithProvider', '{0} ({1})', { '0': name, '1': providerName });
+			const name = account.displayName || account.email;
+			const label = name && name !== providerName
+				? this.localizationService.translate('ash', 'workbench.accountWithProvider', '{0} ({1})', { '0': name, '1': providerName })
+				: providerName;
 			return new SubmenuAction(`ash.activityBar.account.${account.provider}.${account.accountId}`, label, [
 				{ id: `ash.activityBar.signOut.${account.provider}.${account.accountId}`, label: signOutLabel, tooltip: signOutLabel, enabled: true, run: () => this.accountService.logout(account.provider, account.accountId) },
 			]);
@@ -205,14 +207,13 @@ export class GlobalCompositeBar extends Disposable {
 		switch (provider) {
 			case 'github': return 'GitHub';
 			case 'chatgpt-subscription': return 'ChatGPT';
-			case 'chatgpt-web': return this.label('workbench.chatgptWebAccount', 'ChatGPT Web');
 			case 'kimi-subscription': return 'Kimi';
 			case 'xai-subscription': return 'Super Grok';
 			case 'bigmodel-coding-plan': return 'BigModel';
 			case 'zai-coding-plan': return 'Z.AI';
 			case 'bigmodel-start-plan': return 'BigModel Start Plan';
 			case 'zai-start-plan': return 'Z.AI Start Plan';
-			default: return provider;
+			default: return getAccountProviderLabel(provider) ?? provider;
 		}
 	}
 

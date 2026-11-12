@@ -292,6 +292,48 @@ pub struct GitSessionComparisonFileDto {
     pub original_path: Option<String>,
     pub original: GitCommitFileContentDto,
     pub modified: GitCommitFileContentDto,
+    /// The path is changed, but its before and after contents were omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub omission: Option<GitComparisonOmissionDto>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum GitComparisonOmissionDto {
+    FileSizeLimit,
+    ComparisonSizeLimit,
+}
+
+/// Reads uncommitted changes in an explicitly granted checkout before a Session exists.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase")]
+pub struct GitWorktreeChangesParams {
+    #[schemars(length(min = 1, max = 32768))]
+    pub source_path: String,
+    pub query: GitWorktreeChangesQuery,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum GitWorktreeChangesQuery {
+    Summary,
+    Diff,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[ts(rename_all = "camelCase")]
+pub enum GitWorktreeChangesResult {
+    Summary {
+        files: usize,
+    },
+    Diff {
+        files: Vec<GitSessionComparisonFileDto>,
+    },
 }
 
 /// Stable, directory-relative identity for one discovered Git repository projection.

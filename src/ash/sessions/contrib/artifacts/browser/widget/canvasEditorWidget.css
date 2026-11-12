@@ -26,12 +26,11 @@
 	outline: none;
 }
 
-.ash-sessions-design-stage > .ash-canvas-editor-toolbar {
-	position: absolute;
-	z-index: 2;
-	bottom: var(--ash-spacing-size160);
-	left: 50%;
-	transform: translateX(-50%);
+.ash-sessions-design-view > .ash-canvas-editor-toolbar {
+	flex: none;
+	max-width: 100%;
+	border-radius: 0;
+	box-shadow: none;
 }
 
 .ash-sessions-design-stage > .ash-design-code-widget {
@@ -43,7 +42,7 @@
 	position: absolute;
 	left: var(--ash-spacing-size160);
 	right: var(--ash-spacing-size160);
-	bottom: 76px;
+	bottom: var(--ash-spacing-size160);
 	max-height: 35%;
 }
 

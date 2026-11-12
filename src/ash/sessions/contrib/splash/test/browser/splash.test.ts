@@ -99,7 +99,41 @@ test('Agent Window hands off at the first live layout and caches only shell pain
 	}
 });
 
-test('Agent Window keeps older shell paint and drops cached content geometry', () => {
+test('Agent Window startup conversation uses the adjacent editor background in light themes', () => {
+	const dom = new JSDOM();
+	try {
+		const { document, innerWidth, innerHeight, performance } = dom.window;
+		Object.defineProperty(performance, 'mark', { value: () => undefined });
+		const paint = {
+			top: 0, width: innerWidth / 2, height: innerHeight,
+			borderRadii: Array.from({ length: 4 }, () => [0, 0] as const),
+			borders: Array.from({ length: 4 }, () => ({ width: 0, style: 'none', color: '#ffffff' })),
+		};
+		for (const [baseTheme, editor, expected] of [
+			[ColorScheme.Light, '#fdfcfb', 'rgb(253, 252, 251)'],
+			[ColorScheme.Light, '#ffffff', 'rgb(255, 255, 255)'],
+			[ColorScheme.Dark, '#1e1e1e', 'rgb(255, 255, 255)'],
+			[ColorScheme.HighContrastLight, '#fafafa', 'rgb(255, 255, 255)'],
+		] as const) {
+			showSessionsSplash(document, {
+				baseTheme,
+				colorInfo: { background: '#ffffff', foreground: '#000000' },
+				layoutInfo: {
+					version: 2, width: innerWidth, height: innerHeight,
+					partBounds: [
+						{ ...paint, id: 'sessions', left: 0, background: '#ffffff' },
+						{ ...paint, id: 'editor', left: paint.width, background: editor },
+					],
+				},
+			});
+			assert.equal(document.querySelector<HTMLElement>('#ash-parts-splash [data-part="sessions"]')!.style.backgroundColor, expected);
+		}
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Agent Window recovers the older shell and takes the leading content fill from the titlebar', () => {
 	const dom = new JSDOM();
 	try {
 		const { document, innerWidth, innerHeight, performance } = dom.window;
@@ -117,7 +151,16 @@ test('Agent Window keeps older shell paint and drops cached content geometry', (
 			layoutInfo: {
 				version: 2, width: innerWidth, height: innerHeight,
 				partBounds: [
-					{ ...paint, left: 0, top: 0, width: innerWidth, height: 35 },
+					{
+						...paint, left: 0, top: 0, width: innerWidth, height: 35,
+						backgroundGradient: {
+							angle: 90, stops: [
+								{ color: '#f8f8f8', offset: 0 },
+								{ color: '#f8f8f8', offset: 225 },
+								{ color: '#fdfcfb', offset: 225 },
+							]
+						},
+					},
 					{ ...paint, left: 0, top: 35, width: 225, height: innerHeight - 35, borders: [emptyBorder, sidebarBorder, emptyBorder, emptyBorder] },
 					{
 						...paint, left: 225, top: 35, width: innerWidth - 225, height: innerHeight - 35,
@@ -132,7 +175,9 @@ test('Agent Window keeps older shell paint and drops cached content geometry', (
 		const shell = document.querySelector('#ash-parts-splash')!;
 		assert.equal(shell.children.length, 3);
 		assert.equal(shell.querySelector('[data-part="sidebar"]')!.children.length, 0);
-		assert.equal(shell.lastElementChild!.children.length, 0);
+		const content = shell.lastElementChild as HTMLElement;
+		assert.equal(content.children.length, 0);
+		assert.equal(content.style.backgroundColor, 'rgb(253, 252, 251)');
 		const separator = shell.querySelector<HTMLElement>('[data-part="titlebar"] .ash-sessions-splash-titlebar-separator')!;
 		assert.equal(separator.style.left, '224px');
 		assert.equal(separator.style.borderRightWidth, '1px');

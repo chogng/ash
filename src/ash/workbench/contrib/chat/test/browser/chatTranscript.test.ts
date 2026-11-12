@@ -625,6 +625,7 @@ suite('chatTranscript browser component', () => {
 		const composer = chat.locator(':scope > .ash-chat-input-part .ash-chat-input-container');
 		const row = chat.locator('.ash-chat-input-changes');
 		const summary = row.locator('.ash-chat-changes-pill');
+		const review = row.getByRole('button', { name: 'Review changed files', exact: true });
 		const jump = row.getByRole('button', { name: 'Scroll to Latest' });
 		const edgeFade = () => list.evaluate(element => getComputedStyle(element, '::after').backgroundImage);
 		const position = () => viewport.evaluate(element => ({ top: element.scrollTop, gap: element.scrollHeight - element.clientHeight - element.scrollTop }));
@@ -644,6 +645,14 @@ suite('chatTranscript browser component', () => {
 		await expect.poll(async () => (await position()).gap).toBeLessThan(1);
 		await viewport.evaluate(element => { element.scrollTop -= 140; });
 		await expect(jump).toBeVisible();
+		await expect(row).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(jump).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		const expectCenteredJump = async () => {
+			const jumpBox = (await jump.boundingBox())!;
+			const composerBox = (await composer.boundingBox())!;
+			expect(Math.abs((jumpBox.x + jumpBox.width / 2) - (composerBox.x + composerBox.width / 2))).toBeLessThan(1);
+		};
+		await expectCenteredJump();
 		await composer.getByRole('textbox').focus();
 		const gradient = await edgeFade();
 		expect(gradient).toContain('linear-gradient');
@@ -663,6 +672,18 @@ suite('chatTranscript browser component', () => {
 		for (const visible of [true, false, true, false]) {
 			await changes(visible);
 			await expect(jump).toBeVisible();
+			await expectCenteredJump();
+			if (visible) {
+				await expect(summary).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect(review).toBeVisible();
+				const summaryBox = (await summary.boundingBox())!;
+				const reviewBox = (await review.boundingBox())!;
+				const jumpBox = (await jump.boundingBox())!;
+				expect(summaryBox.x).toBe((await composer.boundingBox())!.x);
+				expect(summaryBox.x + summaryBox.width).toBeLessThan(reviewBox.x);
+				expect(reviewBox.x + reviewBox.width).toBeLessThan(jumpBox.x);
+				expect(Math.abs(summaryBox.y - jumpBox.y)).toBeLessThan(1);
+			}
 			expect(Math.abs((await position()).top - readingTop)).toBeLessThan(1);
 			expect(Math.abs((await row.boundingBox())!.y - rowTop)).toBeLessThan(1);
 			expect(Math.abs((await composer.boundingBox())!.y - composerTop)).toBeLessThan(1);

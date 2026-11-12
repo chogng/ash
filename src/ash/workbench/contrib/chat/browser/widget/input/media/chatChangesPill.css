@@ -1,13 +1,17 @@
 .ash-chat-input-changes {
-	display: flex;
+	display: grid;
+	/* Equal side tracks center the jump button, with room for change actions on narrow panes. */
+	grid-template-columns: minmax(max-content, 1fr) auto minmax(0, 1fr);
 	align-items: center;
 	gap: var(--ash-spacing-size40);
 	min-width: 0;
 }
 
 .ash-chat-input-changes > .ash-chat-scroll-to-latest.ash-button {
+	--ash-button-secondaryBackground: transparent;
+
 	position: static;
-	flex: none;
+	grid-column: 2;
 	margin-inline: 0;
 	box-shadow: none;
 }
@@ -16,12 +20,19 @@
 	display: none;
 }
 
+.ash-chat-changes-actions {
+	grid-column: 1;
+	justify-self: start;
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+}
+
 .ash-chat-changes-pill.ash-button {
 	min-width: 0;
 	gap: var(--ash-spacing-size40);
 	padding: var(--ash-spacing-size20) var(--ash-spacing-size60);
 	border-color: var(--ash-widget-border);
-	background: var(--ash-button-secondaryBackground);
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label1);
 	font-variant-numeric: tabular-nums;

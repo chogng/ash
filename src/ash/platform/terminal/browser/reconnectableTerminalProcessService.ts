@@ -5,6 +5,7 @@ import { timeout } from '../../../base/common/async.js';
 import { CancellationError, isCancellationError } from '../../../base/common/errors.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
+import { generateUuid } from '../../../base/common/uuid.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import type { AppServerConnectionState } from '../../agentHost/common/appServerApi.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
@@ -42,6 +43,7 @@ interface TerminalRecord {
 	rows: number;
 	cols: number;
 	generation: number;
+	attachNonce?: string;
 	recoveryDeadline?: number;
 	recovery?: { readonly generation: number; readonly promise: Promise<void>; };
 	closing: boolean;
@@ -239,7 +241,16 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		};
 		this.terminals.set(record.terminalId, record);
 		try {
-			await this.ensureAttached(record.terminalId);
+			while (true) {
+				try {
+					await this.ensureAttached(record.terminalId);
+					break;
+				} catch (error) {
+					if (!(error instanceof RecoverySupersededError)) throw error;
+					await this.supervisor.whenReady();
+					if (this.terminals.get(record.terminalId) !== record) throw new CancellationError();
+				}
+			}
 			const info = await this.getProcessInfo({ terminalId: record.terminalId, ...workspaceFolder(record.dirId) });
 			this.assertAttached(record);
 			return { terminalId: record.terminalId, ready: info.ready, profile, connectionPersistence: 'reconnectable' };
@@ -347,7 +358,9 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		if (previous === 'ready' && state !== 'ready') {
 			const now = this.now();
 			for (const record of this.terminals.values()) {
-				if (!record.closing && record.recoveryDeadline === undefined) {
+				// The host may have attached before losing the reply, starting a new
+				// grace period when it releases this connection.
+				if (record.attachNonce !== undefined || (!record.closing && record.recoveryDeadline === undefined)) {
 					record.recoveryDeadline = record.reconnectGracePeriodMillis === 0 ? Infinity : now + record.reconnectGracePeriodMillis;
 				}
 			}
@@ -402,10 +415,13 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 				if (this.whenDirectoriesReady) await this.waitForDirectories();
 				const lifetimeToken = this.options.lifetimeToken ? await this.options.lifetimeToken() : undefined;
 				if (this.terminals.get(record.terminalId) !== record || this.supervisor.generation !== generation) throw new CancellationError();
+				// A replacement connection may have to confirm an attachment whose reply was lost.
+				const attachNonce = record.attachNonce ??= generateUuid().replaceAll('-', '');
 				const attached = await this.supervisor.request(APP_SERVER_METHODS['terminal/attach'], {
 					...workspaceFolder(record.dirId),
 					terminalId: record.terminalId,
 					reconnectToken: record.reconnectToken,
+					attachNonce,
 					lifetimeToken,
 					rows: record.rows,
 					cols: record.cols,
@@ -413,14 +429,14 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 				this.acceptAttachment(record, generation, attached);
 				return;
 			} catch (error) {
+				if (this.supervisor.state !== 'ready' || this.supervisor.generation !== generation) {
+					throw new RecoverySupersededError();
+				}
 				if (isCancellationError(error)) throw error;
 				lastError = error;
 				// An authoritative rejection ends recovery; transport loss and Busy
 				// can still resolve when the old backend releases its connection.
 				if (error instanceof AppServerRemoteError && (error.errorName === 'TerminalNotFound' || error.errorName === 'TerminalAttachRejected')) break;
-			}
-			if (this.supervisor.state !== 'ready' || this.supervisor.generation !== generation) {
-				throw new RecoverySupersededError();
 			}
 			const remaining = deadline - this.now();
 			if (remaining <= 0) break;
@@ -456,6 +472,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		}
 		record.reconnectToken = lease.reconnectToken;
 		record.reconnectGracePeriodMillis = lease.reconnectGracePeriodMillis;
+		record.attachNonce = undefined;
 		record.generation = generation;
 		record.recoveryDeadline = undefined;
 	}

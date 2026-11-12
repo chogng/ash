@@ -108,11 +108,11 @@
 	z-index: 1;
 }
 
-/* Keep the floating labels legible where the transcript extends behind them. */
+/* Keep the status text legible where the transcript extends behind it. */
 .ash-chat
 	> .ash-chat-transcript-overlaps-composer.ash-chat-transcript-has-more-below
 	~ .ash-chat-input-part
-	> :is(.ash-chat-status, .ash-chat-input-changes) {
+	> .ash-chat-status {
 	box-sizing: border-box;
 	inline-size: fit-content;
 	max-inline-size: 100%;

@@ -542,7 +542,7 @@ export class DesktopWorkbenchLayout
 		this.gridHandle.value = this.grid;
 		this.grid.layout(dimension.width, dimension.height);
 		this.restorePartVisibility();
-		this.updateTitlebarGeometry();
+		this.updateLayoutChrome();
 		this.gridChangeHandle.value = combinedDisposable(this.grid.onDidSashChange(() => {
 			this.rememberToolWidth();
 			this.saveState();
@@ -561,7 +561,7 @@ export class DesktopWorkbenchLayout
 					this.conversationWidth = this.getViewSize(this.view('sessions')).width;
 
 				this.updateContentCorners();
-				this.updateTitlebarGeometry();
+				this.updateLayoutChrome();
 				this.publishPartVisibility();
 				this.saveState();
 				// Publish completed sash geometry to overlays and the shared startup cache.
@@ -619,7 +619,7 @@ export class DesktopWorkbenchLayout
 			this.mainEditor!.layoutDockedAuxiliaryBar(width);
 			this.updateContentCorners();
 		}
-		this.updateTitlebarGeometry();
+		this.updateLayoutChrome();
 		if (this.partUpdateDepth > 0) return;
 		if (
 			this.primaryPart === 'editor' &&
@@ -1003,10 +1003,21 @@ export class DesktopWorkbenchLayout
 		}
 	}
 
-	private updateTitlebarGeometry(): void {
+	private updateLayoutChrome(): void {
 		const visibleWidth = (id: 'sidebar' | 'auxiliarybar') => this.isPartVisible(id) ? this.getViewSize(this.view(id)).width : 0;
-		this.mainContainer.style.setProperty('--ash-sessions-sidebar-width', `${visibleWidth('sidebar')}px`);
+		const sidebarWidth = visibleWidth('sidebar');
+		this.mainContainer.style.setProperty('--ash-sessions-sidebar-width', `${sidebarWidth}px`);
 		this.mainContainer.style.setProperty('--ash-titlebar-trailing-region-width', `${this.auxiliaryBarDocked ? 0 : visibleWidth('auxiliarybar')}px`);
+
+		// The desktop Grid places the editor immediately after the conversation when both are visible.
+		const split = this.isPartVisible('sessions') && this.isPartVisible('editor');
+		this.view('editor').frame.classList.toggle('ash-sessions-editor-frame-divider', split);
+		const titlebarFrame = this.view('titlebar').frame;
+		titlebarFrame.classList.toggle('ash-sessions-titlebar-frame-divider', split);
+		titlebarFrame.style.setProperty(
+			'--ash-sessions-editor-divider-offset',
+			split ? `${sidebarWidth + this.getViewSize(this.view('sessions')).width}px` : '',
+		);
 	}
 
 	private publishPartVisibility(): void {

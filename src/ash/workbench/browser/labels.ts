@@ -7,7 +7,7 @@ import { IconLabel, type IconLabelOptions, type IconLabelValueOptions } from '..
 import { getPathLabel, type IRelativePathProvider } from '../../base/common/labels.js';
 import { Emitter, Event } from '../../base/common/event.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../base/common/lifecycle.js';
-import { basenameOrAuthority, dirnameResource, isEqualResource } from './resourceLabelHelpers.js';
+import { basenameOrAuthority, dirname, extUri } from '../../base/common/resources.js';
 import { URI } from '../../base/common/uri.js';
 import { localize } from '../../nls.js';
 import { operatingSystem } from '../../base/common/platform.js';
@@ -169,7 +169,7 @@ export class ResourceLabels extends Disposable {
 
 	private rerenderResource(resource: URI): void {
 		for (const widget of this.widgets) {
-			if (isEqualResource(widget.resource, resource)) widget.rerender();
+			if (extUri.isEqual(widget.resource, resource)) widget.rerender();
 		}
 	}
 
@@ -368,13 +368,14 @@ class ResourceLabelWidget extends Disposable {
 			const workspaceFolder = fileKind === FileKind.Directory
 				? this.services.workspaceContextService.getWorkspaceFolder(resource)
 				: undefined;
+			const isWorkspaceRoot = workspaceFolder && extUri.isEqual(workspaceFolder.uri, resource);
 			const fileName = fileOptions.hideLabel
 				? undefined
-				: workspaceFolder && isEqualResource(workspaceFolder.uri, resource)
+				: isWorkspaceRoot
 					? workspaceFolder.name
 					: basenameOrAuthority(resource);
 			displayName = applyNameAffixes(fileName, options.namePrefix, options.nameSuffix);
-			displayDescription = fileOptions.hidePath || workspaceFolder && isEqualResource(workspaceFolder.uri, resource)
+			displayDescription = fileOptions.hidePath || isWorkspaceRoot
 				? undefined
 				: parentLabel(resource, this.services.workspaceContextService, this.services.labelService);
 			const untitled = resource.scheme === 'untitled' && !options.forceLabel
@@ -437,9 +438,10 @@ function resourceOf(props: IResourceLabelProps | undefined): URI | undefined {
 }
 
 function parentLabel(resource: URI, context: IWorkspaceContextService, labelService?: ILabelService): string | undefined {
-	const parent = dirnameResource(resource);
-	if (!parent) return undefined;
-	return pathLabel(parent, context, labelService);
+	const parent = dirname(resource);
+	if (extUri.isEqual(parent, resource)) return undefined;
+	const description = pathLabel(parent, context, labelService);
+	return description && description !== '.' ? description : undefined;
 }
 
 function pathLabel(resource: URI, context: IWorkspaceContextService, labelService?: ILabelService): string {

@@ -793,6 +793,12 @@ pub struct ConfigReadResult {
     pub skill_sources: BTreeMap<String, SkillSourceConfigDto>,
     pub plugin_requests: BTreeMap<String, PluginRequestDto>,
     pub hooks: BTreeMap<String, HookConfigDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub language_servers_enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub worktree_language_servers_enabled: Option<bool>,
     pub language_servers: BTreeMap<String, LanguageServerConfigDto>,
     pub tool_search: ToolSearchConfigDto,
     pub codebase: CodebaseConfigDto,
@@ -1005,6 +1011,29 @@ pub struct LanguageServerConfigureParams {
     #[schemars(length(min = 1))]
     pub server_id: String,
     pub config: LanguageServerConfigDto,
+}
+
+/// Selects the profile-wide or Agent worktree language-server switch.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageServerEnablementScope {
+    #[default]
+    All,
+    Worktrees,
+}
+
+/// Sets a language-server switch while keeping individual server preferences.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageServerSetEnabledParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub enabled: bool,
+    #[serde(default)]
+    #[ts(as = "Option<LanguageServerEnablementScope>", optional)]
+    pub scope: LanguageServerEnablementScope,
 }
 
 /// Removes an explicit language-server preference and restores the product default.

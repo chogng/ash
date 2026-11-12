@@ -1,7 +1,7 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
@@ -113,13 +113,7 @@ function createFixture() {
 for (const locale of ['en', 'zh-CN']) {
 	test(`Agent workspace status shows recovery and explicit folder trust actions (${locale})`, async () => {
 		if (locale === 'zh-CN') {
-			const sessions = JSON.parse(
-				readFileSync('extensions/language-pack-zh-cn/translations/sessions.json', 'utf8'),
-			);
-			const workbench = JSON.parse(
-				readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'),
-			);
-			setNlsMessages(locale, { ash: { ...workbench.ash, ...sessions.ash } });
+			setNlsMessages(locale, chineseCatalog.bundles);
 		}
 		try {
 			using fixture = createFixture();

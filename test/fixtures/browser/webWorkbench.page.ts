@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { Orientation } from '../../../src/ash/base/browser/ui/sash/sash.js';
@@ -38,7 +39,6 @@ import { createTestEditorServices } from '../../../src/ash/workbench/test/common
 import { registerTestTitlebarServices } from '../../../src/ash/workbench/test/common/testTitlebarServices.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import chinese from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 const resources = new DisposableStore();
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
@@ -140,7 +140,7 @@ updateServices.registerInstance(IClipboardService, new BrowserClipboardService(n
 const notifications = resources.add(new TestNotificationService());
 updateServices.registerInstance(INotificationService, notifications);
 resources.add(updateServices.createInstance(NotificationsToasts, root, notifications.model, resources.add(new ActionRunner())));
-if (new URLSearchParams(location.search).has('chinese')) setNlsMessages('zh-CN', chinese);
+if (new URLSearchParams(location.search).has('chinese')) setNlsMessages('zh-CN', chineseCatalog.bundles);
 await import('../../../src/ash/workbench/contrib/update/browser/update.contribution.js');
 const contribution = resources.add(WorkbenchContributionsRegistry.createHost(updateServices, error => { throw error; }, ['workbench.contrib.webUpdate']));
 contribution.advance(WorkbenchPhase.AfterRestored);

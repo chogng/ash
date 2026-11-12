@@ -43,12 +43,14 @@ export async function createTurnMultiDiffEditorInput(
 			if (existing) {
 				existing.modified = turnSnapshotSide(change.modifiedUri, contents.after, existing.modified.label);
 				existing.binary ||= contents.binary;
+				existing.composed = true;
 				existing.latestSummary = snapshot.summary;
 				continue;
 			}
 			composed.set(identity, {
 				file: change.file,
 				binary: contents.binary,
+				composed: false,
 				original: turnSnapshotSide(change.originalUri, contents.before, `${basename(change.file.previousPath ?? change.file.path)} (Before)`),
 				modified: turnSnapshotSide(change.modifiedUri, contents.after, `${basename(change.file.path)} (After)`),
 				latestSummary: snapshot.summary,
@@ -72,7 +74,7 @@ export async function createTurnMultiDiffEditorInput(
 			const repositoryId = file.latestSummary.repositoryId;
 			return {
 				...item, label: repositories.length > 1 ? `${repositoryId}: ${item.label}` : item.label, contextKeys: undefined,
-				fileList: { path: file.file.path, group: turnFileListGroup(repositories, repositoryId) },
+				fileList: { ...item.fileList!, group: turnFileListGroup(repositories, repositoryId) },
 			};
 		});
 		return createMultiDiffEditorInput(source, items, label, { kind: 'snapshot', label });
@@ -102,7 +104,11 @@ export async function createTurnChangesSelectionInput(
 		const contents = await readTurnFileContents(chat, change, signal);
 		return {
 			label: change.file.previousPath ? `${change.file.previousPath} → ${change.file.path}` : change.file.path, binary: contents.binary,
-			fileList: { path: change.file.path, group: turnFileListGroup(repositories, change.summary.repositoryId) },
+			fileList: {
+				path: change.file.path, originalPath: change.file.previousPath,
+				group: turnFileListGroup(repositories, change.summary.repositoryId),
+				statistics: contents.binary ? undefined : { additions: change.file.additions, deletions: change.file.deletions },
+			},
 			contextKeys: turnReviewContextKeys(change.summary, change.file.path, canReview),
 			original: turnSnapshotSide(change.originalUri, contents.before),
 			modified: turnSnapshotSide(change.modifiedUri, contents.after),
@@ -187,6 +193,7 @@ function captureChanged(): Error {
 interface ComposedTurnFile {
 	readonly file: TurnChangeFile;
 	binary: boolean;
+	composed: boolean;
 	readonly original: ReturnType<typeof turnSnapshotSide>;
 	modified: ReturnType<typeof turnSnapshotSide>;
 	latestSummary: TurnChangeSetSummary;
@@ -203,7 +210,11 @@ function turnFileInput(file: ComposedTurnFile): MultiDiffEditorInputItem {
 	return {
 		binary: file.binary,
 		label: file.file.previousPath ? `${file.file.previousPath} → ${file.file.path}` : file.file.path,
-		fileList: { path: file.file.path },
+		fileList: {
+			path: file.file.path,
+			originalPath: file.file.previousPath,
+			statistics: file.binary || file.composed ? undefined : { additions: file.file.additions, deletions: file.file.deletions },
+		},
 		original: file.original,
 		modified: file.modified,
 		goToFile: file.modified,
@@ -243,7 +254,7 @@ export async function createTurnCommitPreviewInput(chat: IChatService, sessionId
 		if (file.beforeMode && file.afterMode && file.beforeMode !== file.afterMode) {
 			label = localize('sessions.changes.modeLabel', '{0} (mode {1} → {2})', label, file.beforeMode, file.afterMode);
 		}
-		return { label, original, modified, binary: contents.binary, goToFile: modified, fileList: { path: file.path } };
+		return { label, original, modified, binary: contents.binary, goToFile: modified, fileList: { path: file.path, originalPath: file.previousPath } };
 	}));
 	const resource = URI.parse(`ash-multi-diff:/turn-commit/${encodeURIComponent(preview.commitId)}?session=${encodeURIComponent(sessionId)}&thread=${encodeURIComponent(threadId)}`);
 	const title = localize('sessions.changes.commitPreview', '{0} files to commit to {1}: {2}', preview.files.length, preview.targetBranch, preview.message);

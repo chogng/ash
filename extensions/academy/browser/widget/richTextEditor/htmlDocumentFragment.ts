@@ -8,7 +8,7 @@ import { sanitizeHtmlToFragment } from 'ash:editor/base/browser/domSanitize.js';
 const MAX_HTML_CLIPBOARD_CHARACTERS = 1_000_000;
 
 /**
- * Converts untrusted external clipboard HTML into a schema-valid Stanza fragment.
+ * Converts untrusted HTML into a schema-valid document fragment.
  *
  * The converter reads only a small, explicit HTML vocabulary. It never carries
  * DOM nodes, styles, event handlers, or arbitrary attributes into the document
@@ -16,7 +16,18 @@ const MAX_HTML_CLIPBOARD_CHARACTERS = 1_000_000;
  */
 export function createDocumentFragmentFromHtml(ownerDocument: Document, schema: DocumentSchema, html: string): DocumentFragment | undefined {
 	if (typeof html !== 'string' || html.length === 0 || html.length > MAX_HTML_CLIPBOARD_CHARACTERS) return undefined;
-	const sanitized = sanitizeHtmlToFragment(html, { ownerDocument, config: {} });
+	const sanitized = sanitizeHtmlToFragment(html, {
+		ownerDocument,
+		config: {
+			allowedTags: { augment: ['input'] },
+			allowedAttributes: {
+				augment: [{
+					attributeName: 'class',
+					shouldKeep: (node, { attrValue }) => node.localName === 'code' && /^language-[\w+#.-]+$/u.test(attrValue),
+				}]
+			},
+		},
+	});
 	const content = blocksFromNodes(sanitized.childNodes, schema);
 	if (content.length === 0) return undefined;
 	try {
@@ -45,8 +56,11 @@ function blocksFromNodes(nodes: NodeListOf<ChildNode> | readonly ChildNode[], sc
 		const element = node as HTMLElement;
 		if (isDiscardedElement(element)) continue;
 		switch (element.localName.toLowerCase()) {
-			case 'p':
 			case 'pre':
+				flushInline();
+				appendCodeBlock(blocks, element, schema);
+				break;
+			case 'p':
 				flushInline();
 				appendContainerBlocks(blocks, element, schema, 'paragraph', {});
 				break;
@@ -113,6 +127,15 @@ function appendContainerBlocks(target: DocumentNode[], element: HTMLElement, sch
 	if (block) target.push(block);
 }
 
+function appendCodeBlock(target: DocumentNode[], element: HTMLElement, schema: DocumentSchema): void {
+	const code = element.firstElementChild;
+	const language = code?.localName === 'code' ? code.getAttribute('class')?.slice('language-'.length) : undefined;
+	const text = element.textContent ?? '';
+	const block = createNode(schema, 'codeBlock', text ? [schema.createText(text)] : [], { language: language || 'text' });
+	if (block) target.push(block);
+	else appendContainerBlocks(target, element, schema, 'paragraph', {});
+}
+
 function appendBlockquote(target: DocumentNode[], element: HTMLElement, schema: DocumentSchema): void {
 	const content = blocksFromNodes(element.childNodes, schema);
 	if (content.length === 0) return;
@@ -127,7 +150,8 @@ function appendList(target: DocumentNode[], element: HTMLElement, schema: Docume
 		if (child.localName.toLowerCase() !== 'li') continue;
 		const content = blocksFromNodes(child.childNodes, schema);
 		const fallback = content.length > 0 ? content : emptyParagraph(schema);
-		const item = fallback ? createNode(schema, 'listItem', fallback) : undefined;
+		const checkbox = child.querySelector(':scope > input[type="checkbox"], :scope > p > input[type="checkbox"]');
+		const item = fallback ? createNode(schema, 'listItem', fallback, checkbox ? { checked: checkbox.hasAttribute('checked') } : {}) : undefined;
 		if (item) items.push(item);
 	}
 	if (items.length === 0) return;
@@ -140,19 +164,26 @@ function appendList(target: DocumentNode[], element: HTMLElement, schema: Docume
 
 function appendTable(target: DocumentNode[], element: HTMLElement, schema: DocumentSchema): void {
 	const rows: DocumentNode[] = [];
-	for (const rowElement of tableRows(element)) {
+	const sourceRows = tableRows(element);
+	for (const rowElement of sourceRows) {
 		const cells: DocumentNode[] = [];
 		for (const child of rowElement.children) {
 			const tagName = child.localName.toLowerCase();
 			if (tagName !== 'td' && tagName !== 'th') continue;
-			const content = blocksFromNodes(child.childNodes, schema);
+			const alignment = child.getAttribute('align');
+			const textAlign = alignment === 'left' ? 'start' : alignment === 'right' ? 'end' : alignment === 'center' ? alignment : undefined;
+			const content = blocksFromNodes(child.childNodes, schema).map(block => block.type === 'paragraph' && textAlign
+				? { ...block, attrs: { ...block.attrs, textAlign } }
+				: block);
 			const cell = createNode(schema, 'tableCell', content.length > 0 ? content : emptyParagraph(schema) ?? []);
 			if (cell) cells.push(cell);
 		}
 		const row = cells.length > 0 ? createNode(schema, 'tableRow', cells) : undefined;
 		if (row) rows.push(row);
 	}
-	const table = rows.length > 0 ? createNode(schema, 'table', rows) : undefined;
+	const headers = sourceRows[0]?.children;
+	const markdownHeader = !!headers?.length && Array.from(headers).every(cell => cell.localName === 'th');
+	const table = rows.length > 0 ? createNode(schema, 'table', rows, markdownHeader ? { markdownHeader } : {}) : undefined;
 	if (table) target.push(table);
 	else {
 		for (const row of rows) for (const cell of row.content) target.push(...cell.content);

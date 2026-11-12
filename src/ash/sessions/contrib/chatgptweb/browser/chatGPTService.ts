@@ -26,7 +26,7 @@ import { IProjectService } from '../../../../platform/projects/common/projectSer
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { CatalogProjectMemoryEditor } from '../../chat/browser/chatListModel.js';
 import { ChatGPTAuthenticationError, IChatGPTNativeTransport, IChatGPTTransport } from '../common/chatGPTTransport.js';
-import { ChatGPTClient, ChatGPTRequestError, isChatGPTRateLimit, type ChatGPTBranchSource, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTMessageVersion, type ChatGPTModel, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTProjectDetails, type ChatGPTHistory } from './chatGPTClient.js';
+import { ChatGPTClient, ChatGPTRequestError, hasChatGPTAsyncImages, isChatGPTRateLimit, type ChatGPTBranchSource, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTMessageVersion, type ChatGPTModel, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTProjectDetails, type ChatGPTHistory } from './chatGPTClient.js';
 import { ChatGPTDraftAttachmentStorage, type ChatGPTAttachment } from './chatGPTDraftAttachmentStorage.js';
 import { createChatGPTFetch } from './chatGPTFetch.js';
 import { decodeChatGPTReply } from './chatGPTRichContent.js';
@@ -2147,6 +2147,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 					this.markHistoryValidated(value);
 				}
 				if (conversations.status === 'rejected' && !items.has(value.id) && !value.archived) { this.rememberHistory(value); }
+				await this.refreshCachedNativeImages(history.value, signal);
 			} else if (history?.status === 'rejected') {
 				this.setHistoryFailure('conversation', { error: history.reason, retry: this.reloadHistory });
 			}
@@ -2288,6 +2289,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			this.restoreHistory(history);
 			this.rememberConversation(id);
 			this.setHistoryFailure('conversation', undefined);
+			await this.refreshCachedNativeImages(history, signal);
 		} catch (error) {
 			if (generation === this.generation) {
 				this.update({
@@ -2336,6 +2338,52 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const prefixLength = saved.messages.findIndex(message => message.id === history.messages[0]?.id);
 		if (prefixLength <= 0) return history;
 		return { ...history, messages: [...saved.messages.slice(0, prefixLength), ...history.messages], olderCursor: saved.olderCursor };
+	}
+
+	/** Recover image metadata for cached messages that predate the current native decoder. */
+	private async refreshCachedNativeImages(history: ChatGPTHistory, signal: AbortSignal): Promise<void> {
+		if (!this.native || !history.olderCursor || signal.aborted) return;
+		const { id, parentId } = history;
+		const state = this.model.get();
+		if (state.conversationId !== id || state.parentId !== parentId) return;
+		const prefixLength = state.messages.findIndex(message => message.id === history.messages[0]?.id);
+		if (prefixLength <= 0) return;
+
+		const stale = new Map<string, ChatGPTMessage>();
+		for (const message of state.messages.slice(0, prefixLength)) {
+			if (message.role === 'assistant' && !message.activity && message.asyncImagesDecoded !== true && hasChatGPTAsyncImages(message.text)) {
+				stale.set(message.id, message);
+			}
+		}
+		if (!stale.size) return;
+
+		const refreshed = new Map<ChatGPTMessage, ChatGPTMessage>();
+		const seenCursors = new Set<string>();
+		const pageSignal = AbortSignal.any([signal, AbortSignal.timeout(15_000)]);
+		try {
+			let cursor: string | undefined = history.olderCursor;
+			while (cursor && stale.size && !seenCursors.has(cursor)) {
+				seenCursors.add(cursor);
+				const page = await this.client.olderHistory(id, cursor, pageSignal);
+				for (const message of page.messages) {
+					const cached = stale.get(message.id);
+					if (!cached || cached.text !== message.text || !message.asyncImagesDecoded) continue;
+					refreshed.set(cached, { ...cached, imageGroups: message.imageGroups, asyncImagesDecoded: true });
+					stale.delete(message.id);
+				}
+				cursor = page.olderCursor;
+			}
+		} catch {
+			// A failed older-page read leaves the remaining cached messages available for a later retry.
+		}
+
+		const current = this.model.get();
+		if (signal.aborted || !refreshed.size || current.conversationId !== id || current.parentId !== parentId
+			|| current.sending || current.voice !== 'idle') return;
+		const messages = current.messages.map(message => refreshed.get(message) ?? message);
+		if (messages.every((message, index) => message === current.messages[index])) return;
+		this.persistHistory({ id, parentId, title: current.title, messages, olderCursor: current.olderCursor });
+		this.update({ messages });
 	}
 
 	private restoreHistory(history: ChatGPTHistory, preserveModel = false, preserveLoading = false): void {

@@ -41,7 +41,7 @@ export interface ITerminalDimensions {
 }
 
 /** Lifecycle state of one Workbench terminal instance. */
-export type TerminalInstanceState = 'running' | 'reconnecting' | 'exited' | 'disconnected' | 'error';
+export type TerminalInstanceState = 'starting' | 'running' | 'reconnecting' | 'exited' | 'disconnected' | 'error';
 
 /** The screen needs no process, membership, persistence, or launch authority. */
 export interface ITerminalScreenHost {
@@ -131,6 +131,8 @@ export type ICreateTerminalOptions = Omit<Partial<ITerminalCreateOptions>, 'conf
 	readonly skipContributedProfileCheck?: boolean;
 	/** Leave a resolved editor terminal unplaced until its caller reveals it. */
 	readonly deferEditorOpen?: boolean;
+	/** Mount in an existing editor tab before launch. The optional rollback restores replaced panes if launch fails. */
+	readonly placeInEditor?: (instance: ITerminalInstance) => (() => void) | void;
 	/** Do not select the created instance, including intermediate provider-created instances. */
 	readonly preserveFocus?: boolean;
 };
@@ -177,6 +179,8 @@ export interface ITerminalInstance extends IDisposable {
 	readonly statusList?: ITerminalStatusList;
 	readonly state: TerminalInstanceState;
 	readonly exitCode: number | undefined;
+	/** For terminals mounted before launch, resolves when process setup finishes or the instance is disposed. */
+	readonly processReady?: Promise<void>;
 	readonly onDidWriteData: Event<IProcessDataEvent>;
 	readonly onDidChangeCommandStatus: Event<ITerminalCommandStatusEvent>;
 	readonly onDidExit: Event<number | undefined>;

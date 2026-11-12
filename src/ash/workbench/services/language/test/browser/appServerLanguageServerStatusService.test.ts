@@ -3,6 +3,7 @@ import { IContextViewService } from '../../../../../platform/contextview/browser
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { ILanguageServerService, type LanguageServerControl, type LanguageServerSnapshot } from '../../../../../platform/language/common/languageServerService.js';
+import { Event } from '../../../../../base/common/event.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
@@ -280,6 +281,9 @@ function createService(services: ReturnType<typeof workbenchInstantiationService
 	if (options.workspace) scope.registerInstance(IWorkspaceContextService, options.workspace);
 	else scope.registerSingleton(IWorkspaceContextService, () => new TestWorkspaceService({ id: 'empty', folders: [] }));
 	scope.registerInstance(ILanguageServerService, {
+		onDidChangeConfig: Event.None,
+		readEnablement: async () => undefined,
+		setEnabled: async () => { throw new Error('Unexpected language server enablement change'); },
 		read: options.read ?? (async () => ({ revision: 0, configurations: {}, servers: [] })),
 		control: async request => { options.controls?.push(request); },
 		configure: async () => { throw new Error('Configuration is outside this management fixture'); },

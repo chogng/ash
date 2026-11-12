@@ -69,6 +69,11 @@ pub(super) trait EnvironmentRequestProcessorContext: Send + Sync {
     ) -> Result<ash_config::ResolvedConfigSnapshot, super::RpcError>;
     fn directory_grants_store(&self) -> Result<&ash_config::ConfigStore, super::RpcError>;
     fn env_runtime_control(&self) -> Option<super::environment_runtime::EnvRuntimeControl>;
+    fn session_folder_grant(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        path: &std::path::Path,
+    ) -> Result<ash_file_access::Grant, RpcError>;
     fn list_session_dirs(
         &self,
         session_id: &ash_protocol::SessionId,
@@ -246,6 +251,17 @@ impl<'ctx, C: EnvironmentRequestProcessorContext + ?Sized> EnvironmentRequestPro
 
     pub(super) fn env_dir_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: EnvDirReadParams = decode(params)?;
+        if let Some((session_id, path)) =
+            super::environment_runtime::session_directory_from_workspace_id(Some(&params.dir_id))
+                .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
+        {
+            let grant = self.context.session_folder_grant(&session_id, &path)?;
+            return result(&EnvDirDto {
+                id: params.dir_id,
+                path: grant.dir().canonical_path().to_path_buf(),
+                permissions: permission_dtos(grant.permissions()),
+            });
+        }
         if params.dir_id.trim().is_empty() || params.dir_id.len() > 256 {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }

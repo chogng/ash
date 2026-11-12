@@ -1,10 +1,10 @@
 # Artifacts 工作空间
 
-Artifacts 是 Sessions 的创作主页，点击 Docs、Slides、Design、Sheet、Whiteboard、Data 或 Motion 会打开带有对应类型标记的新聊天草稿。Motion 的时间线和关键帧编辑由 Design 的 Motion 模式提供。已有作品卡片打开对应编辑器。主页保留窗口原有的对话侧栏，不注册单独的分类导航，也不显示编辑器标签栏。`ArtifactsEditorView` 保留画布工作空间。主页从已有文档编辑器和画布文档派生作品列表，不持久化第二份作品目录。
+Artifacts 是 Sessions 的创作主页，七项新建入口打开 Chat 草稿，并在输入框下方显示对应的作品类型。示例在 Sessions 的 `EditorPart` 打开对应工作区，工具栏在内容上方，左侧保留 `SessionsPart`。注册了详情视图的工作区按需打开右侧停靠的 `AuxiliaryBarPart`。Motion 的时间线和关键帧编辑由 Design 的 Motion 模式提供。已有作品卡片打开对应编辑器。Sheet 和 Data 的草稿自动保存在当前工作区，重开后可从 Artifacts 继续编辑。导出 CSV 会生成独立文件。主页保留窗口原有的对话侧栏，不注册单独的分类导航，也不显示编辑器标签栏。`ArtifactsEditorView` 保留画布工作空间。主页从已有文档编辑器、画布文档和表格草稿派生作品列表，不持久化第二份作品目录。
 
-在命令面板中运行 Choose Docs editor 可以新建空白文档，或选择自动、富文档和 Markdown。偏好由 UI profile 的 `sessions.docs.editor` 设置持有。缺少可用富文档 Provider 时仍创建 Markdown，并通过共享扩展推荐通知发现可安装的编辑器。Docs 在 `contrib/docs` 注册文档创建、恢复、转换和文件导入导出，复用 Workbench 的编辑器宿主、工作副本、保存和备份。富文档格式由扩展提供。切换 Docs 编辑器会创建未保存的副本并保留源文档。
+在命令面板中运行 Choose Docs editor 可以新建空白文档，或选择富文档和 Markdown。Agent Window 随产品提供按需加载的 `.ash-doc` 富文档编辑器，偏好由 UI profile 的 `sessions.docs.editor` 设置持有。Docs 示例、新建富文档或 Markdown 和 Edit in Docs 都使用 Sessions `EditorPart` 的产品页面组。页面上方是 Docs 工具栏，下方是正文；排版、查找和大纲按需挂载到停靠在 `EditorPart` 内的 `AuxiliaryBarPart`。Docs 在 `contrib/docs` 注册文档创建、恢复、转换和文件导入导出，复用 Workbench 的工作副本、保存和备份。ChatGPT Web 的写作块打开为独立的未保存文档，来源对话由 Sessions 保留。
 
-各画布功能在 `contrib/<mode>/browser` 注册工作空间和命令面板操作。Whiteboard、Brand、Sites、Make、Prototype 通过命令面板打开。画布工作空间各自拥有文档、保存基准和撤销历史，选区、视口及编辑工具由各自的编辑器实例持有。画布模式仍借用现有的图层和属性面板；主页及 Make 保留对话侧栏。配置、主题、快捷键、文件访问、对话框和窗口生命周期复用已有服务。
+各画布功能在 `contrib/<mode>/browser` 注册工作空间和命令面板操作。Brand、Sites、Make、Prototype 也可以通过命令面板打开。画布工作空间各自拥有文档、保存基准和撤销历史，选区、视口及编辑工具由各自的编辑器实例持有。画布模式仍借用现有的图层和属性面板；主页及 Make 保留对话侧栏。配置、主题、快捷键、文件访问、对话框和窗口生命周期复用已有服务。
 
 | 模式       | 当前操作                                                           |
 | ---------- | ------------------------------------------------------------------ |
@@ -22,13 +22,13 @@ Sites 尚未提供网站布局重排、路由文档和发布，完整领域约�
 
 ### Design 画布布局
 
-Design 隐藏编辑器标签栏和 Creator 标题行，画布直接占用中央内容区。添加画板和导入图片可使用底部工具栏、快捷键或右键菜单。打开设计、保存副本与导出 SVG 使用画布快捷键或右键菜单；自动保存失败时，右键菜单提供重试保存。点击左侧 Artifacts 导航返回创作主页。
+Design 使用工作区自己的标题和工具栏。添加画板和导入图片可使用快捷键或右键菜单。打开设计、保存副本与导出 SVG 使用画布快捷键或右键菜单；自动保存失败时，右键菜单提供重试保存。点击左侧 Artifacts 导航返回创作主页。
 
-画布工作区共用底部工具栏。编辑器提供当前工具与编辑模式的动作。各工作区在各自的 `.contribution.ts` 中向 `ArtifactCanvasToolbar` 注册命令，菜单通过工作区实例的上下文键确定显示和启用状态。Slides 和 Sites 的页码导航由各自的页面导航组件挂载在画布上方。
+画布工作区共用顶部工具栏。编辑器提供当前工具与编辑模式的动作。各工作区在各自的 `.contribution.ts` 中向 `ArtifactCanvasToolbar` 注册命令，菜单通过工作区实例的上下文键确定显示和启用状态。Slides 和 Sites 的页码导航由各自的页面导航组件挂载到工具栏。
 
 ## 目录与命名
 
-Artifacts 的窗口入口由 `artifacts.contribution.ts` 注册，`artifactsEditor.ts` 承载首页和工作区。聊天创建卡片使用 Sessions 的 `ArtifactKind`，已注册的画布工作区使用 `ArtifactWorkspaceId`，画布工具切换使用 `DesignMode`。Docs 在自己的 contribution 注册文档操作，Motion 卡片走共享聊天草稿入口，时间线由 Design 编辑器装配。
+Artifacts 的窗口入口由 `artifacts.contribution.ts` 注册，`artifactsEditor.ts` 承载首页和工作区。新建和示例卡片使用 Sessions 的 `ArtifactKind`，已注册的画布工作区使用 `ArtifactWorkspaceId`，画布工具切换使用 `DesignMode`。Docs 在自己的 contribution 注册文档操作，Motion 在独立的画布文档中使用 Design 编辑器的时间线。
 
 职责划分参考 [Editor browser](../../../editor/browser/README.md)：主 Widget 拥有编辑器实例与组件组合，View 拥有内容显示，Controller 拥有输入。`designDocument.ts` 表达文档，`designModel.ts` 对应文本编辑器的 `textModel.ts`，`documentCommands.ts` 承接编辑操作。Design 的对象几何、选区和历史由本目录实现；视口及空间输入由平级的 [Canvas contrib](../canvas/README.md) 拥有。
 
@@ -46,7 +46,7 @@ Artifacts 的窗口入口由 `artifacts.contribution.ts` 注册，`artifactsEdit
 | [common/config/designEditorConfiguration.ts](common/config/designEditorConfiguration.ts)                                                                    | Design 的配置键、默认值、作用域和校验                                                                                            |
 | [common/designSelection.ts](common/designSelection.ts)                                                                                                      | 每个编辑器实例的对象选区和路径节点选择                                                                                           |
 | [browser/widget/canvasEditorWidget.ts](browser/widget/canvasEditorWidget.ts)                                                                                | `CanvasEditorWidget`，编辑器根 DOM、组件组合、实例状态、公共快捷键和贡献生命周期                                                 |
-| [browser/widget/canvasEditorToolbar.ts](browser/widget/canvasEditorToolbar.ts)                                                                              | 底部单行悬浮工具栏、工具与模式选择、键盘导航                                                                                     |
+| [browser/widget/canvasEditorToolbar.ts](browser/widget/canvasEditorToolbar.ts)                                                                              | 顶部单行工具栏、工具与模式选择、键盘导航                                                                                         |
 | [browser/designCanvasView.ts](browser/designCanvasView.ts)、[designCanvasView.css](browser/designCanvasView.css)                                            | `DesignCanvasView`，挂载公共 Canvas，显示对象、绘制预览和路径控制点；只显示输入数据，不提交文档编辑                              |
 | [browser/controller/designInputController.ts](browser/controller/designInputController.ts)                                                                  | 参与公共画布输入，拥有对象选择、移动和路径控制点编辑；通过输入契约调用绘制贡献                                                   |
 | [browser/designEditorBrowser.ts](browser/designEditorBrowser.ts)、[browser/designEditorContributions.ts](browser/designEditorContributions.ts)              | 前者定义核心与贡献之间的契约，后者装配产品所需的能力实例                                                                         |
@@ -152,9 +152,11 @@ Shift+A 为所选画板添加横向自动布局，或将同级选区包入新画
 
 未命名文档的图片字节由工作副本保留，恢复备份包含清单和媒体字节。Widget 只持有可释放的预览 URL，关闭某个编辑器不会删除素材；删除图片也不立即清理素材，因为撤销历史仍可能引用它。当前媒体随窗口文档释放，不提供全局素材清理。
 
-版本 1 的 `.ash-design.json` 仍可导入，保留原对象、分组、文字、路径和动画；首次保存选择版本 2 包，不改写旧文件。配置和 UI 存储各自保存偏好，不承接文档内容。对象可携带 `motion`，包含毫秒时长、循环标记及从 0 到 1 严格递增的关键帧；每帧保存父坐标系中的位置、旋转和透明度。所有关键帧编辑经过同一个撤销历史。格式版本、模型编辑令牌和磁盘读取版本分别表示文件结构、当前编辑状态和文件写入依据。
+Design 仍可导入版本 1 的 `.ash-design.json`，保留原对象、分组、文字、路径和动画；首次保存选择版本 2 包，不改写旧文件。配置和 UI 存储各自保存偏好，不承接文档内容。对象可携带 `motion`，包含毫秒时长、循环标记及从 0 到 1 严格递增的关键帧；每帧保存父坐标系中的位置、旋转和透明度。所有关键帧编辑经过同一个撤销历史。格式版本、模型编辑令牌和磁盘读取版本分别表示文件结构、当前编辑状态和文件写入依据。
 
-`DesignDocumentController` 调用已有文件与对话框服务。桌面和连接 App Server 的浏览器沿已有文件服务访问工作区；独立浏览器通过用户选定的文件夹访问文件。打开其他文档和桌面关闭会提供保存、放弃或取消；浏览器关闭使用同步的未保存提示。当前没有自动保存或跨窗口合并。
+每次启动 Slides 示例都会创建一份独立作品，自动保存到当前 UI profile 的 `creator/<workspace-id>/slides/<document-id>.ash-design`。Artifacts 从这些文件包加载作品，可在「我的」重新打开。导出可编辑副本会创建独立文件包，导出 SVG 会生成单独文件。常规 Slides 工作区通过文件包打开已有幻灯片。
+
+`DesignDocumentController` 调用已有文件与对话框服务。桌面和连接 App Server 的浏览器沿已有文件服务访问工作区；独立浏览器通过用户选定的文件夹访问文件。手动保存模式在打开其他文档和桌面关闭时会提供保存、放弃或取消；浏览器关闭使用同步的未保存提示。跨窗口写入使用文件版本检查。
 
 画布和 SVG 导出都使用 `designSvgRenderer.ts`。对象从文档读取，用户文字作为文本节点写入；导出仅包含作品，省略网格与选区，并保留可编辑文档的保存状态。图片导出为内嵌数据，离开 Ash 后仍可显示；关闭画板裁切时，导出范围包含伸出画板的内容。
 

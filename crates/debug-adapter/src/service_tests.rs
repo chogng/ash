@@ -1,8 +1,38 @@
+use std::collections::HashMap;
+use std::time::Duration;
+use std::time::Instant;
+
+use ash_file_access::Dir;
+use ash_file_access::Grant;
+use ash_file_access::GrantSource;
+use ash_file_access::Permission;
+use ash_file_access::Permissions;
 use serde_json::json;
 
+use super::DebugAdapterCommand;
+use super::DebugAdapterService;
 use super::DebugAdapterState;
 use super::push_message;
 use super::read_buffered_state;
+
+fn service(environment: HashMap<String, String>) -> DebugAdapterService {
+    let root = Dir::open_local(std::env::temp_dir()).unwrap();
+    let authorization = |permission| {
+        Grant::for_environment(
+            root.clone(),
+            GrantSource::HostConfiguration,
+            Permissions::new([permission]),
+        )
+        .authorize(permission)
+        .unwrap()
+    };
+    DebugAdapterService::new(
+        authorization(Permission::LoadConfig),
+        authorization(Permission::ExecuteCommands),
+        environment,
+    )
+    .unwrap()
+}
 
 #[test]
 fn source_catalog_bursts_preserve_the_following_stop_without_expanding_the_byte_budget() {
@@ -62,32 +92,11 @@ fn buffered_messages_advance_only_through_the_returned_page() {
 
 #[test]
 fn adapter_cwd_uses_the_authorized_directory_canonical_form() {
-    use super::DebugAdapterCommand;
     use super::DebugAdapterError;
-    use super::DebugAdapterService;
-    use ash_file_access::Dir;
-    use ash_file_access::Grant;
-    use ash_file_access::GrantSource;
-    use ash_file_access::Permission;
-    use ash_file_access::Permissions;
     use std::path::PathBuf;
 
     let root = std::env::temp_dir();
-    let authorization = |permission| {
-        Grant::for_environment(
-            Dir::open_local(&root).unwrap(),
-            GrantSource::HostConfiguration,
-            Permissions::new([permission]),
-        )
-        .authorize(permission)
-        .unwrap()
-    };
-    let service = DebugAdapterService::new(
-        authorization(Permission::LoadConfig),
-        authorization(Permission::ExecuteCommands),
-        std::env::vars().collect(),
-    )
-    .unwrap();
+    let service = service(std::env::vars().collect());
     let command = |cwd| {
         DebugAdapterCommand::new(
             std::env::current_exe().unwrap().to_string_lossy(),
@@ -108,33 +117,90 @@ fn adapter_cwd_uses_the_authorized_directory_canonical_form() {
 }
 
 #[test]
+fn process_exit_is_reported_after_the_final_response_and_stderr_are_read() {
+    let response = json!({
+        "seq": 2, "type": "response", "request_seq": 1, "command": "evaluate", "success": true,
+        "body": {"result": "42", "variablesReference": 0}
+    });
+    let frame = String::from_utf8(crate::encode_message(&response).unwrap()).unwrap();
+    let (program, arguments) = if cfg!(windows) {
+        (
+            "powershell.exe",
+            vec![
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "[Console]::Out.Write($env:ASH_TEST_DAP_FRAME); [Console]::Error.Write('final adapter diagnostic'); exit 7",
+            ],
+        )
+    } else {
+        (
+            "/bin/sh",
+            vec![
+                "-c",
+                r#"printf '%s' "$ASH_TEST_DAP_FRAME"; printf '%s' 'final adapter diagnostic' >&2; exit 7"#,
+            ],
+        )
+    };
+    let command =
+        DebugAdapterCommand::new(program, arguments.into_iter().map(String::from).collect())
+            .unwrap()
+            .with_options(
+                None,
+                HashMap::from([("ASH_TEST_DAP_FRAME".into(), Some(frame))]),
+            )
+            .unwrap();
+    let mut service = service(std::env::vars().collect());
+    // Keep the reader tasks idle until the child has exited and the first read polls its status.
+    service.runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let id = service.start(command).unwrap();
+    let session = service.session(&id).unwrap();
+    let timeout = Duration::from_secs(10);
+    let deadline = Instant::now() + timeout;
+    {
+        let mut process = session.process.try_lock().unwrap();
+        let child = process.as_mut().unwrap();
+        while child.try_wait().unwrap().is_none() {
+            assert!(Instant::now() < deadline, "Adapter process did not exit");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    let read = service.read(&id, 0, 128).unwrap();
+    assert!(read.messages.is_empty());
+    assert!(read.stderr.is_empty());
+    assert!(!read.exited);
+    assert_eq!(read.exit_code, None);
+
+    service.runtime.block_on(async {
+        let readers = session.readers.lock().await;
+        tokio::time::timeout(timeout, async {
+            while readers.iter().any(|reader| !reader.is_finished()) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("Adapter readers did not finish");
+    });
+    let read = service.read(&id, read.next_sequence, 128).unwrap();
+    assert_eq!(read.messages.len(), 1);
+    assert_eq!(read.messages[0].message, response);
+    assert_eq!(read.stderr, "final adapter diagnostic");
+    assert!(read.exited);
+    assert_eq!(read.exit_code, Some(7));
+    assert_eq!(read.protocol_error, None);
+    service.close(&id).unwrap();
+}
+
+#[test]
 fn connection_reader_reports_eof_and_frame_errors_without_inventing_exit_codes() {
     use super::DebugAdapterConnection;
-    use super::DebugAdapterService;
-    use ash_file_access::Dir;
-    use ash_file_access::Grant;
-    use ash_file_access::GrantSource;
-    use ash_file_access::Permission;
-    use ash_file_access::Permissions;
     use std::io::Write;
-    use std::time::Duration;
-    use std::time::Instant;
 
-    let authorization = |permission| {
-        Grant::for_environment(
-            Dir::open_local(std::env::temp_dir()).unwrap(),
-            GrantSource::HostConfiguration,
-            Permissions::new([permission]),
-        )
-        .authorize(permission)
-        .unwrap()
-    };
-    let service = DebugAdapterService::new(
-        authorization(Permission::LoadConfig),
-        authorization(Permission::ExecuteCommands),
-        Default::default(),
-    )
-    .unwrap();
+    let service = service(HashMap::new());
     for invalid_frame in [false, true] {
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
         let port = listener.local_addr().unwrap().port();

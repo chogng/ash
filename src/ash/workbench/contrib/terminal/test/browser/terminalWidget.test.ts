@@ -509,7 +509,7 @@ suite('terminal browser component', () => {
 				await expect(page.locator('.xterm')).toHaveCount(1);
 			} else {
 				// Hiding a view retains creation already admitted through trust; disposal cancels it.
-				expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(action === 'hide' ? 1 : 0);
+				await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(action === 'hide' ? 1 : 0);
 				if (action === 'hide') await expect(page.locator('.xterm')).toBeHidden();
 				else await expect(page.locator('.xterm')).toHaveCount(0);
 			}
@@ -2100,7 +2100,7 @@ suite('terminal browser component', () => {
 			await expect(page.getByRole('option', { name: /Editor shell/ })).toHaveCount(0);
 			await picker.press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.active())).toBe(panelId);
-			const panelInput = page.locator('.ash-terminal-group-pane:visible .xterm-helper-textarea');
+			const panelInput = page.locator('.ash-terminal-view .ash-terminal-group-pane:visible .xterm-helper-textarea');
 			await expect(panelInput).toBeFocused();
 			await command('workbench.action.quickOpenTerm');
 			await picker.fill('term Editor');

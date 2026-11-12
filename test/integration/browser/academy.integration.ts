@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { InMemoryFileSystemProvider } from '../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js';
 import { exportDocumentArtifact, importDocumentArtifact } from '../../../src/ash/sessions/contrib/artifacts/contrib/docs/browser/documentActions.js';
@@ -64,8 +65,6 @@ import { OpenerService } from '../../../src/ash/editor/browser/services/openerSe
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { StandaloneCodeEditorService } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditorService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import messages from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
-import editorMessages from '../../../extensions/language-pack-zh-cn/translations/editor.json' with { type: 'json' };
 import { withEnabledBuiltInExtensions } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
 import { GlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js';
 import { AppServerExtensionService } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
@@ -196,7 +195,7 @@ class BrowserDocumentCollaborationConnection extends Disposable implements Docum
 	}
 }
 
-if (new URLSearchParams(location.search).get('locale') === 'zh-CN') { setNlsMessages('zh-CN', { ...messages, ...editorMessages, ash: { ...messages.ash, ...editorMessages.ash } }); }
+if (new URLSearchParams(location.search).get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chineseCatalog.bundles); }
 const schema = createDefaultDocumentSchema();
 const generalDocument = new URLSearchParams(location.search).has('generalDocument');
 if (generalDocument) {

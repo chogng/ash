@@ -6,15 +6,16 @@ import { createDisconnectedExtensionHostApi } from '../../../../../platform/exte
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
+import { URI } from '../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IMarkdownRendererService, MarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
 import { ChatContentMarkdownRenderer } from '../../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
-import { chatMarkdownRichContentExtension, renderChatRichContentText } from '../../../../../workbench/contrib/chat/browser/widget/chatMarkdownRichContent.js';
+import { chatMarkdownRichContentExtension, expandChatRichContentForCopy, renderChatRichContentText } from '../../../../../workbench/contrib/chat/browser/widget/chatMarkdownRichContent.js';
 import { decodeChatGPTReply } from '../../browser/chatGPTRichContent.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import type { ChatGPTReference } from '../../browser/chatGPTClient.js';
+import { ChatGPTClient, type ChatGPTReference } from '../../browser/chatGPTClient.js';
 
 function render(value: string, references?: readonly ChatGPTReference[]): string {
 	using services = new InstantiationService(new ServiceCollection([IOpenerService, { open: async () => true } as unknown as IOpenerService]));
@@ -39,16 +40,40 @@ suite('ChatGPT rich content', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('renders writing bodies as shared Markdown without displaying envelope metadata', () => {
 		const source = 'Before\n\n:::writing{variant="chat_message" id="64821" title="A } quoted title"}**杭州周末**\n\n两间房共1160元。:::\n\nAfter';
+		assert.equal(decodeChatGPTReply(source).richContent?.parts.find(part => part.kind === 'writing')?.title, 'A } quoted title');
 		const html = render(source);
 		assert.match(html, /Before[\s\S]*<strong>杭州周末<\/strong>[\s\S]*两间房共1160元。[\s\S]*After/u);
 		assert.doesNotMatch(html, /:::|variant=|64821|quoted title/u);
 		const text = getChatGPTRichContentText(source);
 		assert.match(text, /Before[\s\S]*杭州周末[\s\S]*1160[\s\S]*After/u);
 		assert.doesNotMatch(text, /:::|variant=|64821/u);
+		assert.doesNotMatch(text, /Edit in Docs/u);
+	});
+
+	test('renders and copies all writing formats as Markdown', () => {
+		const body = '### 杭州周末\n\n**两间房**共1160元。\n\n~~~text\n:::\n~~~';
+		const expected = 'Before\n\n' + body + '\n\nAfter';
+		const metadata = 'variant="document" id="64821" title="A } quoted title"';
+		for (const writing of [
+			'<WritingBlock ' + metadata + '>\n' + body + '\n</WritingBlock>',
+			':::writing{' + metadata + '}' + body + ':::',
+			':::writing\n' + body + '\n:::',
+		]) {
+			const source = 'Before\n' + writing + '\nAfter';
+			const decoded = decodeChatGPTReply(source);
+			assert.equal(expandChatRichContentForCopy(decoded.text, decoded.richContent), expected);
+			const html = render(source);
+			assert.match(html, /Before[\s\S]*<h3[^>]*>杭州周末<\/h3>[\s\S]*<strong>两间房<\/strong>共1160元。[\s\S]*After/u);
+			assert.doesNotMatch(html, /<details|<summary|writingblock|variant=|64821|quoted title/iu);
+			assert.match(getChatGPTRichContentText(source), /Before[\s\S]*杭州周末[\s\S]*1160[\s\S]*After/u);
+		}
 	});
 
 	test('keeps writing text while streaming and preserves writing examples inside code', () => {
 		assert.match(render(':::writing{variant="chat_message"}**Visible draft**'), /<strong>Visible draft<\/strong>/u);
+		assert.ok(!decodeChatGPTReply(':::writing{variant="chat_message"}**Visible draft**').richContent?.parts.some(part => part.kind === 'writing'));
+		assert.match(render(':::writing{title="Indented example"}\n    echo ready\n:::'), /<pre[\s\S]*<code>echo ready/u);
+		assert.match(render('<WritingBlock variant="document">\n### Visible draft\n\n    indented code'), /<h3[^>]*>Visible draft<\/h3>[\s\S]*<pre><code>indented code/u);
 		assert.doesNotMatch(render('Before\n\n:::writing{variant="chat_message'), /:::|variant=/u);
 		const source = '`:::writing{id="inline"}literal:::`\n\n```text\n:::writing{id="fenced"}example:::\n```';
 		const root = document.createElement('div'); root.innerHTML = render(source);
@@ -220,6 +245,17 @@ suite('ChatGPT rich content', () => {
 		assert.match(renderChatRichContentText(inline.text, inline.richContent), /Project screenshot[\s\S]*Project summary/u);
 	});
 
+	test('leaves the paper row intact when a saved image search reference has no image', () => {
+		const source = '<Row><AsyncImage ref="turn1image2"/><Box flex="1"><Link url="https://example.test/paper" title="Paper title"/></Box></Row>';
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		const row = root.querySelector('.ash-chat-rich-row');
+		assert.equal(row?.children.length, 1);
+		assert.equal(row?.querySelector('.ash-chat-rich-box a')?.textContent, 'Paper title');
+		assert.doesNotMatch(getChatGPTRichContentText(source), /Media content|turn1image2/u);
+		assert.match(render('<AsyncImage query="Paper illustration"/>'), /View this content in ChatGPT/u);
+	});
+
 	test('renders entity thumbnail metadata as readable text without exposing the provider payload', () => {
 		const marker = '\uE200genui\uE202' + JSON.stringify({
 			entity_thumbnail_list: {
@@ -231,6 +267,92 @@ suite('ChatGPT rich content', () => {
 		assert.match(text, /Related projects[\s\S]*Zed[\s\S]*An editor using <GPUI>\.[\s\S]*After/u);
 		assert.doesNotMatch(text, /genui|entity_thumbnail_list|private query/u);
 		assert.doesNotMatch(render(`Related projects ${marker.slice(0, -4)}`), /genui|entity_thumbnail_list/u);
+	});
+
+	test('renders GenUI citation markers as inline sources in saved replies', () => {
+		const references = [
+			{ id: 'turn2search1', title: 'First paper', url: 'https://example.test/first', snippet: 'First abstract' },
+			{ id: 'turn2search2', title: 'Second paper', url: 'https://example.test/second', snippet: 'Second abstract' },
+		];
+		const single = '\uE200genui\uE202{"citation":{"ref":"turn2search1"}}\uE201';
+		const multiple = '\uE200genui\uE202{"citation":{"refs":["turn2search2","turn2search1","turn2search2",42,"turn2search3"]}}\uE201';
+		const missing = '\uE200genui\uE202{"citation":{"ref":"turn2search3"}}\uE201';
+		const source = `**First claim.** ${single}\n\nSecond claim. ${multiple}\n\nMissing source. ${missing}`;
+		const root = document.createElement('div');
+		root.innerHTML = render(source, references);
+		const paragraphs = [...root.querySelectorAll('p')];
+		assert.deepEqual(paragraphs.map(paragraph => [...paragraph.querySelectorAll('a')].map(link => link.href)), [
+			[references[0]!.url], [references[1]!.url, references[0]!.url], [],
+		]);
+		assert.equal(paragraphs[0]?.querySelector('strong')?.textContent, 'First claim.');
+		assert.doesNotMatch(root.textContent ?? '', /Media content|View this content|genui/u);
+		assert.match(getChatGPTRichContentText(source, references), /Second claim\.[\s\S]*Second paper[\s\S]*Second abstract/u);
+		assert.deepEqual(decodeChatGPTReply(source, references).citations, references.map(({ url, title }) => ({ type: 'web', url, title })));
+	});
+
+	test('removes only ChatGPT attribution from rich source links', () => {
+		const url = 'https://example.test/paper?query=a%20b&utm_source=chatgpt.com&lang=en&utm_source=publisher&path=%2f#methods';
+		const clean = 'https://example.test/paper?query=a%20b&lang=en&utm_source=publisher&path=%2f#methods';
+		const references = [
+			{ id: 'turn2search1', title: 'Paper', url, snippet: '', cited: true as const },
+			{ id: 'turn2search2', title: 'Same paper', url: clean, snippet: '', cited: true as const },
+		];
+		const source = [
+			'Paper. \uE200genui\uE202{"citation":{"ref":"turn2search1"}}\uE201',
+			'\uE200url\uE202Paper link\uE202turn2search1\uE201',
+			'\uE200url\uE202Direct link\uE202https://example.test/abstract?utm_source=chatgpt.com#results\uE201',
+			'<Link url="https://example.test/other?utm_source=chatgpt.com&download=1" title="Other link"/>',
+		].join('\n\n');
+		const root = document.createElement('div');
+		root.innerHTML = render(source, references);
+		assert.deepEqual([...root.querySelectorAll('a')].map(link => link.getAttribute('href')), [
+			clean, clean, 'https://example.test/abstract#results', 'https://example.test/other?download=1',
+		]);
+		assert.deepEqual(decodeChatGPTReply(source, references).citations, [
+			{ type: 'web', url: clean, title: 'Paper' },
+			{ type: 'web', url: 'https://example.test/abstract#results', title: 'Direct link' },
+		]);
+	});
+
+	test('cleans ordinary Markdown links and preserves link labels, titles and code', () => {
+		const tracked = 'https://example.test/paper?q=a%20b&utm_source=chatgpt.com&utm_source=publisher#methods';
+		const clean = 'https://example.test/paper?q=a%20b&utm_source=publisher#methods';
+		const source = [
+			`[**Paper** \\[PDF\\]](${tracked} "Publication")`,
+			'[Reference *label*][paper]',
+			`<${tracked}>`,
+			`\`${tracked}\``,
+			'```text\n' + tracked + '\n```',
+			`[paper]: ${tracked} "Referenced publication"`,
+		].join('\n\n');
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		const links = [...root.querySelectorAll('a')];
+		assert.deepEqual(links.map(link => [link.textContent, link.getAttribute('href'), link.getAttribute('title')]), [
+			['Paper [PDF]', clean, 'Publication'], ['Reference label', clean, 'Referenced publication'], [clean, clean, null],
+		]);
+		assert.equal(links[0]?.querySelector('strong')?.textContent, 'Paper');
+		assert.equal(links[1]?.querySelector('em')?.textContent, 'label');
+		assert.deepEqual([...root.querySelectorAll('code')].map(code => code.textContent?.trim()), [tracked, tracked]);
+	});
+
+	test('cleans bare URLs and formatted links inside Markdown tables and blockquotes', () => {
+		const root = document.createElement('div');
+		root.innerHTML = render('https://example.test/brief?utm_source=chatgpt.com#abstract.');
+		assert.equal(root.querySelector('a')?.getAttribute('href'), 'https://example.test/brief#abstract');
+		assert.equal(root.querySelector('p')?.textContent, 'https://example.test/brief#abstract.');
+		root.innerHTML = render([
+			'| Sources |', '| --- |',
+			'| [A \\| **B**](<https://example.test/paper?q=a\\|b&amp;utm_source=chatgpt.com&amp;page=2#fig> "A \\| B") |',
+			'',
+			'> [Multi-line', '> **label**](https://example.test/brief?utm_source=chatgpt.com#abstract)',
+		].join('\n'));
+		const cellLink = root.querySelector('td a');
+		assert.equal(cellLink?.textContent, 'A | B');
+		assert.equal(cellLink?.getAttribute('href'), 'https://example.test/paper?q=a%7Cb&page=2#fig');
+		assert.equal(cellLink?.getAttribute('title'), 'A | B');
+		assert.equal(root.querySelector('blockquote a')?.getAttribute('href'), 'https://example.test/brief#abstract');
+		assert.equal(root.querySelector('blockquote a strong')?.textContent, 'label');
 	});
 
 	test('leaves inline and fenced code examples literal', () => {
@@ -246,14 +368,49 @@ suite('ChatGPT rich content', () => {
 
 	test('maps ChatGPT icons to registered Ash glyphs and retains accessible text', () => {
 		const names = ['check', 'x', 'arrow-down', 'arrow-up', 'arrow-left', 'arrow-right', 'arrow-down-up', 'plus', 'minus', 'info', 'warning', 'file'];
-		const markers = [...names.map(name => `<icon name="${name}"/>`), '<icon name="key-round" label="Key"/>'];
+		const markers = [
+			...names.map(name => `<icon name="${name}"/>`),
+			'<icon name="pencil-line" size="lg"/>',
+			'<icon name="lock-keyhole" size="lg"/>',
+			'<icon name="key-round" label="Key"/>',
+		];
+		const iconIds = ['check', 'close', 'arrow-down', 'arrow-up', 'arrow-left', 'arrow-right', 'sort', 'add', 'remove', 'info', 'warning', 'file', 'edit', 'lock'];
+		const parts = decodeChatGPTReply(markers.join(' ')).richContent!.parts;
+		assert.deepEqual(parts.map(part => part.kind === 'icon' && part.icon?.id), [...iconIds, undefined]);
 		const root = document.createElement('div');
 		root.innerHTML = render(markers.join(' '));
-		assert.deepEqual(Array.from(root.querySelectorAll<HTMLElement>('[data-ash-icon-id]'), icon => icon.dataset.ashIconId), [
-			'check', 'close', 'arrow-down', 'arrow-up', 'arrow-left', 'arrow-right', 'sort', 'add', 'remove', 'info', 'warning', 'file',
-		]);
+		assert.deepEqual(Array.from(root.querySelectorAll<HTMLElement>('[data-ash-icon-id]'), icon => icon.dataset.ashIconId), iconIds);
 		assert.equal(root.querySelector('.ash-chat-rich-icon:last-child')?.textContent, 'Key');
-		assert.deepEqual(markers.map(marker => getChatGPTRichContentText(marker).trim()), ['✓', '×', '↓', '↑', '←', '→', '⇅', '+', '−', 'ⓘ', '⚠', 'file', 'Key']);
+		assert.deepEqual(markers.map(marker => getChatGPTRichContentText(marker).trim()), ['✓', '×', '↓', '↑', '←', '→', '⇅', '+', '−', 'ⓘ', '⚠', 'file', '✎', '🔒', 'Key']);
+	});
+
+	test('resolves Web icon families through their canonical names and preserves unknown labels', () => {
+		const icons = [
+			['message-circle', 'chat'],
+			['message-square', 'chat'],
+			['chat', 'chat'],
+			['paintbrush-vertical', 'paintbrush'],
+			['cleanup', 'paintbrush'],
+			['chart-spline', 'chart'],
+			['chart-column', 'chart'],
+			['zap', 'lightning'],
+			['gauge-circle', 'dashboard'],
+			['Grid2X2', 'layout-grid'],
+			['layout', 'table'],
+			['LogOut', 'sign-out'],
+			['lucide:mic-vocal', 'mic'],
+			['table-2', 'table'],
+			['write-alt', 'edit'],
+			['panel-left-close', 'layout-sidebar-left-off'],
+			['circle-x', 'error'],
+			['files', 'copy'],
+		];
+		const source = icons.map(([name]) => `<icon name="${name}" size="lg"/>`).join(' ')
+			+ ' <icon name="landmark" label="Institution"/> <icon name="constructor"/>';
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		assert.deepEqual([...root.querySelectorAll<HTMLElement>('[data-ash-icon-id]')].map(element => element.dataset.ashIconId), icons.map(([, id]) => id));
+		assert.match(getChatGPTRichContentText(source), /Institution\s+constructor/u);
 	});
 
 	test('does not evaluate JSX expressions, forward event handlers or render arbitrary HTML', () => {
@@ -271,7 +428,19 @@ suite('ChatGPT rich content', () => {
 		assert.doesNotMatch(html, /title=/u);
 	});
 
-	test('retains unknown cards as disclosures and charts as isolated interactive resources', () => {
+	test('renders badges as text in a rich row and in an ordinary paragraph', () => {
+		const row = '<row justify="between" align=center>\n  **状态 A：容易翻转**\n  <badge>写入</badge>\n</row>';
+		const source = row + '\n\n状态 B <badge>保持</badge>。';
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		assert.equal(root.querySelector('.ash-chat-rich-row.justify-between.align-center > .ash-badge')?.textContent?.trim(), '写入');
+		assert.equal(root.querySelector('p > span.ash-badge')?.textContent, '保持');
+		assert.equal(root.querySelector('details, summary'), null);
+		assert.match(getChatGPTRichContentText(source), /状态 A：容易翻转\s+写入[\s\S]*状态 B\s+保持/u);
+		assert.doesNotMatch(render(row.slice(0, row.indexOf('</badge>'))), /details|summary|<badge/u);
+	});
+
+	test('keeps unknown wrapper bodies, titled disclosures and isolated charts', () => {
 		const source = '<FuturePanel title="Panel title"><FutureCard>**Card body**</FutureCard></FuturePanel>\n\n<Chart title="Sales" data={[{"month":"May","amount":42}]}/>\n\nTail';
 		const html = render(source);
 		const root = document.createElement('div'); root.innerHTML = html;
@@ -279,7 +448,9 @@ suite('ChatGPT rich content', () => {
 		const chart = decodeChatGPTReply(source).resources[0]!;
 		assert.equal(chart.kind, 'chart');
 		assert.deepEqual(JSON.parse(decodeURIComponent(chart.uri.slice(chart.uri.indexOf(',') + 1))), [{ month: 'May', amount: 42 }]);
-		assert.equal(root.querySelectorAll('details').length, 2);
+		assert.equal(root.querySelectorAll('details').length, 1);
+		assert.equal(root.querySelector('details > summary')?.textContent, 'Panel title');
+		assert.equal(root.querySelector('details strong')?.textContent, 'Card body');
 		assert.doesNotMatch(html, /ash-chat-rich-fallback/u);
 		assert.doesNotMatch(html, /<\/?(?:FuturePanel|FutureCard|Chart)\b/u);
 		assert.match(getChatGPTRichContentText(source), /Card body[\s\S]*Sales[\s\S]*May[\s\S]*42/u);
@@ -290,6 +461,8 @@ suite('ChatGPT rich content', () => {
 		const source = '<FutureCard value={42} description="Score"/>\n\n<Chart data={missingValues()}/>\n\n<Chart title="Unknown schema" data={{"points":{"May":42},"caption":"Retained caption"}}/>';
 		root.innerHTML = render(source);
 		assert.match(root.textContent ?? '', /Score[\s\S]*42[\s\S]*missingValues\(\)/u);
+		assert.deepEqual([...root.querySelectorAll('summary')].map(summary => summary.textContent), ['Score']);
+		assert.match(root.querySelector('pre:not(details pre)')?.textContent ?? '', /missingValues\(\)/u);
 		const chart = decodeChatGPTReply(source).resources[0]!;
 		assert.deepEqual(JSON.parse(decodeURIComponent(chart.uri.slice(chart.uri.indexOf(',') + 1))), { points: { May: 42 }, caption: 'Retained caption' });
 	});
@@ -324,10 +497,54 @@ suite('ChatGPT rich content', () => {
 		assert.doesNotMatch(accessibleText, /category|disambig/u);
 	});
 
+	test('projects Web SVG diagrams in place as static images with accessible labels', async () => {
+		const svg = [
+			'<svg viewBox="0 0 110 112" width="100%" onload="alert(1)">',
+			'  <rect x="5" y="13" width="100" height="34" rx="5" fill="#D9B8E8"/>',
+			'  <text x="55" y="35" fontSize="13" textAnchor="middle" fontWeight="600">插层</text>',
+			'  <path d="M55 48 V60" stroke="currentColor" strokeDasharray="2 2"/>',
+			'  <circle cx="20" cy="60" r="4" fill="url(https://invalid.test/paint.svg#color)"/>',
+			'  <script>alert(1)</script><foreignObject><iframe src="https://invalid.test/frame"/></foreignObject>',
+			'  <image href="https://invalid.test/image.svg"/><animate attributeName="x" to="3"/>',
+			'</svg>',
+		].join('\n');
+		const source = '<grid columns={3}><grid-item><box>\n' + svg + '\n</box></grid-item></grid>\n\nCaption';
+		const reply = decodeChatGPTReply(source);
+		const diagrams = reply.richContent?.parts.filter(part => part.kind === 'image') ?? [];
+		assert.equal(diagrams.length, 1);
+		assert.equal(diagrams[0]?.label, '插层');
+		assert.deepEqual(reply.resources, []);
+
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		assert.ok(root.querySelector('.ash-chat-rich-grid-item > .ash-chat-rich-box > .ash-chat-rich-image'));
+		assert.match(root.textContent ?? '', /Caption/u);
+		assert.match(getChatGPTRichContentText(source), /插层[\s\S]*Caption/u);
+		assert.doesNotMatch(root.innerHTML, /<svg|<rect|invalid\.test/u);
+
+		const image = await new ChatGPTClient().readResource(URI.parse(diagrams[0]!.uri).toString(), undefined, '', new AbortController().signal);
+		assert.match(image.type, /^image\/svg\+xml\b/u);
+		const imageDocument = new document.defaultView!.DOMParser().parseFromString(await image.text(), 'image/svg+xml');
+		assert.equal(imageDocument.documentElement.namespaceURI, 'http://www.w3.org/2000/svg');
+		assert.equal(imageDocument.documentElement.getAttribute('viewBox'), '0 0 110 112');
+		assert.equal(imageDocument.querySelector('rect')?.getAttribute('fill'), '#D9B8E8');
+		const label = imageDocument.querySelector('text');
+		assert.equal(label?.getAttribute('x'), '55');
+		assert.equal(label?.getAttribute('y'), '35');
+		assert.equal(label?.getAttribute('font-size'), '13');
+		assert.equal(label?.getAttribute('text-anchor'), 'middle');
+		assert.equal(label?.getAttribute('font-weight'), '600');
+		assert.equal(imageDocument.querySelector('path')?.getAttribute('stroke-dasharray'), '2 2');
+		assert.equal(imageDocument.querySelector('circle')?.hasAttribute('fill'), false);
+		assert.equal(imageDocument.querySelector('script, foreignObject, iframe, image, animate, [onload]'), null);
+
+		assert.equal(decodeChatGPTReply('```svg\n' + svg + '\n```').richContent, undefined);
+	});
+
 	test('shows media and opaque components without running or loading their source', () => {
-		const source = '<svg><title>Architecture</title><text>Node A</text><path d="M0 0"/></svg>\n\n<video src="https://invalid.test/movie" title="Demo"/>\n\n<img src="file:///private.png" alt="Picture"/>\n\n<icon name="arrow-right"/><icon name="new-icon"/><icon name="constructor"/>';
+		const source = '<video src="https://invalid.test/movie" title="Demo"/>\n\n<img src="file:///private.png" alt="Picture"/>\n\n<icon name="arrow-right"/><icon name="new-icon"/><icon name="constructor"/>';
 		const html = render(source);
-		assert.match(html, /Architecture[\s\S]*Node A[\s\S]*Demo[\s\S]*Picture[\s\S]*→[\s\S]*new-icon[\s\S]*constructor/u);
+		assert.match(html, /Demo[\s\S]*Picture[\s\S]*→[\s\S]*new-icon[\s\S]*constructor/u);
 		assert.doesNotMatch(html, /<video|<img|src=/u);
 		assert.equal(decodeChatGPTReply(source).resources.length, 2);
 	});

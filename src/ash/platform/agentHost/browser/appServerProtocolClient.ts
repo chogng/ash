@@ -14,7 +14,7 @@ import { WebWorkerRemoteError } from '../../../base/common/worker/webWorker.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
-import { DeferredPromise } from '../../../base/common/async.js';
+import { DeferredPromise, TimeoutTimer } from '../../../base/common/async.js';
 import { AppServerFrameDecoder } from './appServerFrameDecoder.js';
 import type { AppServerDecodeContext, DecodedAppServerCall, DecodedAppServerFrame } from './appServerProtocolDecoding.js';
 import { localize } from '../../../nls.js';
@@ -644,12 +644,12 @@ export class AppServerProtocolClient {
 export class AppServerConnectionRecovery extends Disposable implements IAppServerConnectionRecovery {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
+	private readonly deadlineTimer = this._register(new TimeoutTimer());
 	private _status: IAppServerConnectionRecovery['status'] = 'idle';
 	private failure: Error | undefined;
 	private task: Promise<void> | undefined;
 	private latest: Promise<void> = Promise.resolve();
 	private timer: ReturnType<typeof setTimeout> | undefined;
-	private deadlineTimer: ReturnType<typeof setTimeout> | undefined;
 	private attemptDeadline: DeferredPromise<never> | undefined;
 	private attempts = 0;
 	private isActive = false;
@@ -696,6 +696,7 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 		if (this.suspended) { return Promise.reject(canceled()); }
 		this.attempts = 0;
 		this.failure = undefined;
+		this.deadlineTimer.cancel();
 		this.startedAt = Date.now();
 		return this.run();
 	}
@@ -708,7 +709,7 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 		this.suspended = true;
 		this.suspendedAt = Date.now();
 		this.clearTimer();
-		this.clearDeadlineTimer();
+		this.deadlineTimer.cancel();
 		if (this.isActive && this.status !== 'unavailable') this.publish('suspended');
 	}
 
@@ -822,8 +823,8 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 
 	private armDeadline(): void {
 		const budget = this.policy?.maxElapsedTimeMs;
-		if (budget === undefined || this.startedAt === undefined || this.deadlineTimer !== undefined || this.suspended) return;
-		this.deadlineTimer = setTimeout(() => {
+		if (budget === undefined || this.startedAt === undefined || this.suspended) return;
+		this.deadlineTimer.setIfNotSet(() => {
 			const error = new AppServerRecoveryTimeoutError(budget);
 			this.endBudget();
 			this.clearTimer();
@@ -840,14 +841,7 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 
 	private endBudget(): void {
 		this.startedAt = undefined;
-		this.clearDeadlineTimer();
-	}
-
-	private clearDeadlineTimer(): void {
-		if (this.deadlineTimer !== undefined) {
-			clearTimeout(this.deadlineTimer);
-			this.deadlineTimer = undefined;
-		}
+		this.deadlineTimer.cancel();
 	}
 
 	private publish(status: IAppServerConnectionRecovery['status']): void {

@@ -3,6 +3,8 @@ import type { IConfigurationService } from '../../configuration/common/configura
 import { createSshRemoteAuthority } from '../../remote/common/remote.js';
 import { isRecord } from '../../../base/common/types.js';
 import { URI } from '../../../base/common/uri.js';
+import { parseOpenSessionLinkUri } from '../../agentHost/common/openSessionLink.js';
+import { ASH_REMOTE_SCHEME, getRemoteWorkspacePath } from '../../remote/common/remote.js';
 import { parseWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 
 export interface IRectangle {
@@ -53,6 +55,32 @@ export function validateWindowClientSizeEvent(value: unknown): IWindowClientSize
 export const WORKSPACE_RECOVERY_CHANNEL = 'ash:window:restoreWorkspaces';
 export const WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL = 'ash:window:terminal-transfer-startup';
 export const WINDOW_OPEN_EXTERNAL_URI_CHANNEL = 'ash:window:openExternalUri';
+export const OPEN_IDE_SESSION_CHANNEL = 'ash:window:openIdeSession';
+
+export function validateOpenIdeSessionRequest(value: unknown): { folder?: URI; conversation?: URI; } {
+	if (!isRecord(value) || Object.keys(value).some(key => key !== 'folder' && key !== 'conversation')
+		|| (value.folder === undefined && value.conversation === undefined)) {
+		throw new TypeError('Invalid IDE session request');
+	}
+	const resource = (input: unknown): URI | undefined => {
+		if (input === undefined) return undefined;
+		if (typeof input !== 'string' || !input || input.length > 32768 || /[\x00-\x1f\x7f]/u.test(input)) {
+			throw new TypeError('Invalid IDE session resource');
+		}
+		return URI.parse(input, true);
+	};
+	const folder = resource(value.folder);
+	if (folder?.scheme === ASH_REMOTE_SCHEME && folder.authority.startsWith('ssh+')) {
+		getRemoteWorkspacePath(folder);
+	} else if (folder && (folder.scheme !== 'file' || !folder.path.startsWith('/') || folder.query || folder.fragment || /[\x00-\x1f\x7f]/u.test(folder.fsPath))) {
+		throw new TypeError('Invalid IDE session folder');
+	}
+	const conversation = resource(value.conversation);
+	if (conversation && parseOpenSessionLinkUri(conversation).connectionAuthority !== 'local' && folder?.scheme === ASH_REMOTE_SCHEME) {
+		throw new TypeError('A conversation opened with an SSH workspace must address the destination IDE’s ambient host');
+	}
+	return { folder, conversation };
+}
 export const AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL = 'ash:sessions:handoff-available';
 export const AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL = 'ash:sessions:handoff-take';
 export const AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL = 'ash:sessions:handoff-complete';

@@ -253,11 +253,84 @@ fn configured_provider_definitions_preserve_explicit_executable_override_semanti
     assert!(command.arguments().is_empty());
 }
 
+#[test]
+fn profile_enablement_fences_stale_launches_and_preserves_server_preferences() {
+    let fixture = ProviderFixture::new();
+    let enabled = configuration(LanguageServerModeConfig::Enabled, None);
+    let mut disabled = enabled.clone();
+    disabled.enabled = false;
+    let mut runtime = AppServerLanguageRuntime::new(Arc::new(UpdateBroker::default()));
+    runtime.set_server_providers(fixture.providers());
+    runtime.reconcile_configuration(&enabled);
+    let mut connection = runtime.child_runtime();
+    let root = fixture.dir.path();
+    assert_eq!(connection.definitions(root, &enabled).unwrap().len(), 1);
+
+    runtime.reconcile_configuration(&disabled);
+    assert!(connection.definitions(root, &disabled).unwrap().is_empty());
+    assert!(connection.restart(root, 1, &enabled, "css").is_err());
+    assert!(connection.manager().is_none());
+
+    runtime.reconcile_configuration(&enabled);
+    connection.refresh_sources();
+    let definitions = connection.definitions(root, &enabled).unwrap();
+    assert_eq!(definitions[0].name().as_str(), TEST_SERVER_ID);
+}
+
+#[test]
+fn worktree_enablement_controls_only_managed_roots_and_fences_stale_launches() {
+    let fixture = ProviderFixture::new();
+    let primary = fixture.dir.path().to_path_buf();
+    let worktree = tempfile::tempdir().unwrap();
+    let mut runtime = AppServerLanguageRuntime::new(Arc::new(UpdateBroker::default()));
+    runtime.set_server_providers(fixture.providers());
+    runtime.retain_dir_roots(super::LanguageDirectoryRoots {
+        granted: [primary.clone(), worktree.path().to_path_buf()]
+            .into_iter()
+            .collect(),
+        worktrees: [worktree.path().to_path_buf()].into_iter().collect(),
+    });
+    let disabled = configuration(LanguageServerModeConfig::Enabled, None);
+    runtime.reconcile_configuration(&disabled);
+    assert_eq!(runtime.definitions(&primary, &disabled).unwrap().len(), 1);
+    assert!(
+        runtime
+            .definitions(worktree.path(), &disabled)
+            .unwrap()
+            .is_empty()
+    );
+    let mut enabled = disabled.clone();
+    enabled.worktrees_enabled = true;
+    runtime.reconcile_configuration(&enabled);
+    let mut connection = runtime.child_runtime();
+    assert_eq!(
+        connection
+            .definitions(worktree.path(), &enabled)
+            .unwrap()
+            .len(),
+        1
+    );
+
+    runtime.reconcile_configuration(&disabled);
+    assert!(
+        connection
+            .restart(worktree.path(), 1, &enabled, "css")
+            .is_err()
+    );
+    assert!(connection.manager().is_none());
+    assert_eq!(
+        connection.definitions(&primary, &disabled).unwrap().len(),
+        1
+    );
+}
+
 fn configuration(
     mode: LanguageServerModeConfig,
     executable: Option<std::path::PathBuf>,
 ) -> LanguageServersConfig {
     LanguageServersConfig {
+        enabled: true,
+        worktrees_enabled: false,
         servers: [(
             LanguageServerId::new(TEST_SERVER_ID).unwrap(),
             LanguageServerConfig {
@@ -486,6 +559,8 @@ fn connection_sessions_keep_independent_revisions_saved_text_and_process_lifetim
     let path = root.path().join("same.demo");
     fs::write(&path, "disk").unwrap();
     let configuration = LanguageServersConfig {
+        enabled: true,
+        worktrees_enabled: false,
         servers: std::collections::BTreeMap::from([(
             LanguageServerId::new("fixture").unwrap(),
             LanguageServerConfig {

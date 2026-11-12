@@ -1,6 +1,6 @@
 import { DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
-import { isCancellationError } from '../../../../base/common/errors.js';
+import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize2 } from '../../../../nls.js';
@@ -45,32 +45,53 @@ export function registerSessionsTerminalContribution(
 	const restoring = new WeakMap<TerminalEditorInput, Promise<boolean>>();
 	const restoreTab = (
 		input: TerminalEditorInput, group: IEditorGroupView, terminals: ITerminalService, terminalEditors: ITerminalEditorService,
-		workspace: IWorkspaceContextService, retained?: ITerminalInstance, willShutdown?: () => boolean,
+		workspace: IWorkspaceContextService, options: {
+			readonly retained?: ITerminalInstance;
+			readonly willShutdown?: () => boolean;
+			readonly reveal?: () => void;
+		},
 	): Promise<boolean> => {
 		const pending = restoring.get(input);
 		if (pending) return pending;
 		const scope = workspace.getWorkspace();
-		const isCurrent = () => !disposables.isDisposed && !willShutdown?.() && workspace.getWorkspace() === scope
+		const isCurrent = () => !disposables.isDisposed && !options.willShutdown?.() && workspace.getWorkspace() === scope
 			&& group.inputs.includes(input) && editor.getToolGroups(isTerminal).includes(group);
 		const operation = Promise.resolve().then(async () => {
 			if (!isCurrent()) return false;
 			if (hasShell(input, terminalEditors)) return true;
-			// A saved tab identifies its old process, but has no executable or CWD
-			// to replay. Resolve a fresh default shell in the current workspace.
-			const instance = retained ?? await terminals.createTerminal({
-				location: { viewColumn: group.id },
-				dirId: scope.folders[0]?.id,
-				deferEditorOpen: true,
-				preserveFocus: true,
-				skipContributedProfileCheck: true,
-			});
-			if (!isCurrent() || !instance.resource || !terminals.instances.includes(instance) || hasShell(input, terminalEditors)) {
-				if (!retained && terminals.instances.includes(instance)) await terminals.closeTerminal(instance);
+			let rollback: (() => void) | undefined;
+			const mount = (instance: ITerminalInstance): (() => void) => {
+				if (!isCurrent() || !instance.resource || !terminals.instances.includes(instance) || hasShell(input, terminalEditors)) throw new CancellationError();
+				instance.target = TerminalLocation.Editor;
+				const restoreSavedTab = input.restoreShell(instance, terminals.onDidChangeInstances);
+				rollback = () => { if (group.inputs.includes(input)) restoreSavedTab(); };
+				options.reveal?.();
+				if (editor.activeGroup === group && group.activeInput === input) terminals.setActiveInstance(instance);
+				return rollback;
+			};
+			try {
+				if (options.retained) {
+					mount(options.retained);
+				} else {
+					// A saved tab identifies its old process. A fresh shell resolves its
+					// profile and directory in the current workspace, then uses this pane's grid.
+					const instance = await terminals.createTerminal({
+						location: { viewColumn: group.id },
+						dirId: scope.folders[0]?.id,
+						preserveFocus: true,
+						skipContributedProfileCheck: true,
+						placeInEditor: mount,
+					});
+					if (!isCurrent()) {
+						rollback?.();
+						await terminals.closeTerminal(instance);
+						return false;
+					}
+				}
+			} catch (error) {
+				if (!isCancellationError(error)) throw error;
 				return isCurrent() && hasShell(input, terminalEditors);
 			}
-			instance.target = TerminalLocation.Editor;
-			input.restoreShell(instance, terminals.onDidChangeInstances);
-			if (editor.activeGroup === group && group.activeInput === input) terminals.setActiveInstance(instance);
 			return true;
 		}).finally(() => restoring.delete(input));
 		restoring.set(input, operation);
@@ -91,7 +112,7 @@ export function registerSessionsTerminalContribution(
 				if (!isTerminal(input) || !editor.isGroupVisible(group.id) || attempted.has(input) || hasShell(input, terminalEditors)) continue;
 				attempted.add(input);
 				try {
-					if (!await restoreTab(input, group, terminals, terminalEditors, workspace, undefined, () => lifecycle.willShutdown)) attempted.delete(input);
+					if (!await restoreTab(input, group, terminals, terminalEditors, workspace, { willShutdown: () => lifecycle.willShutdown })) attempted.delete(input);
 				} catch (error) {
 					if (!isCancellationError(error)) log.error('terminal', error);
 				}
@@ -164,7 +185,7 @@ export function registerSessionsTerminalContribution(
 						const retained = active && matchesScope(active) ? active : terminals.instances.find(matchesScope);
 						const saved = isTerminal(selected) ? selected : destination?.inputs.find(isTerminal);
 						if (destination && saved) {
-							if (!await restoreTab(saved, destination, terminals, terminalEditors, workspace, retained)) return;
+							if (!await restoreTab(saved, destination, terminals, terminalEditors, workspace, { retained, reveal: () => editor.setGroupVisible(destination.id, true) })) return;
 						} else if (retained) {
 							await terminalEditors.openEditor(retained, location);
 						} else {

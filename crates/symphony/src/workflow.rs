@@ -418,13 +418,18 @@ impl Workflow {
         })
     }
 
-    /// Resolve credentials at IO time; source literals are not included in serialized workflows.
-    pub fn linear_credential(&self) -> Result<String, Error> {
+    /// Resolve credentials from the same source version that supplied the endpoint.
+    pub(crate) fn linear_credential(&self) -> Result<String, Error> {
         let Tracker::Linear { token_env, .. } = &self.tracker else {
             return Err(Error::Invalid("workflow does not use Linear".into()));
         };
+        // Check the raw bytes before normalizing line endings, as in `load`.
+        let source = read_source(Path::new(&self.path))?;
+        if identity(&source) != self.digest {
+            return Err(Error::StaleWorkflow);
+        }
         let token = if token_env.is_empty() {
-            let source = read_source(Path::new(&self.path))?.replace("\r\n", "\n");
+            let source = source.replace("\r\n", "\n");
             let (yaml, _) = frontmatter(&source);
             let definition: Definition = serde_saphyr::from_str(yaml)
                 .map_err(|_| Error::Invalid("workflow YAML is invalid".into()))?;

@@ -29,6 +29,49 @@ import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/ele
 const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined });
 const emptyWorkspaceTest = test.extend({ openWorkspace: false });
 
+test('Sessions routes agent resources to Customize and editor extensions to the IDE', { tag: ['@electron-ui', '@browser-ui'] }, async ({ target, workbench }) => {
+	const source = workbench.page;
+	const page = await workbench.openAgentsWindow(target.kind);
+	const quick = new QuickAccess(page);
+	const customize = page.locator('.ash-customize');
+	const categories = customize.getByRole('tablist', { name: 'Customization categories' });
+	const extensions = page.locator('.ash-extensions-view-container');
+
+	await quick.runCommand('workbench.action.chat.managePlugins');
+	await expect(categories.getByRole('tab', { name: 'Plugins', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await quick.runCommand('workbench.action.chat.configure.skills');
+	await expect(categories.getByRole('tab', { name: 'Skills', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await categories.getByRole('tab', { name: 'Connectors', exact: true }).click();
+	await customize.getByRole('button', { name: 'Add', exact: true }).click();
+	await expect(page.getByRole('menuitem', { name: 'Add connection', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await quick.runCommand('ash.extensions.showInstalled');
+	await expect(categories.getByRole('tab', { name: 'Plugins', exact: true })).toHaveAttribute('aria-selected', 'true');
+
+	const ideReady = target.kind === 'browser' ? page.context().waitForEvent('page') : Promise.resolve(source);
+	await quick.runCommand('ash.extensions.manageBuiltIn');
+	const ide = await ideReady;
+	const search = ide.locator('[data-part="sidebar"] .ash-extensions-view-container').getByRole('searchbox');
+	await expect(search).toHaveValue('@builtin');
+	await expect(search).toBeEditable();
+	if (target.kind === 'electron') await expect(search).toBeFocused();
+	await expect(customize).toBeVisible();
+	await expect(extensions).toHaveCount(0);
+});
+
+const agentsStartupTest = test.extend({ electronArgs: ['--agents-window'] });
+agentsStartupTest('Editor extension commands create an IDE when only Sessions is open', { tag: ['@electron-ui'] }, async ({ application, workbench }) => {
+	if (!('windows' in application)) throw new Error('Opening the standalone IDE requires Electron');
+	const agents = workbench.page;
+	await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+	const opened = application.waitForEvent('window');
+	await workbench.quickaccess.runCommand('ash.extensions.manageBuiltIn');
+	const ide = await opened;
+	await expect(ide.locator('[data-part="sidebar"] .ash-extensions-view-container').getByRole('searchbox')).toHaveValue('@builtin');
+	await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+	await expect(agents.locator('.ash-extensions-view-container')).toHaveCount(0);
+});
+
 test('Agents Window can publish and clear its application badge', { tag: ['@electron-ui'] }, async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.evaluate(async channel => {
@@ -3682,23 +3725,43 @@ emptyWorkspaceTest('Sessions Activity Bar changes layout while retaining the sam
 	await expectDraft('Edited from Code');
 });
 
-focusTest(
+focusTest.extend({ electronUserSettings: { 'workbench.locale': 'zh-CN' } })(
 	'Open IDE focuses or creates an IDE while keeping the Agents window and draft',
 	{ tag: ['@electron-ui', '@electron-app-server'] },
 	async ({ application, target, workbench }, testInfo) => {
 		if (target.kind !== 'electron' || !('windows' in application)) throw new Error('Open IDE requires Electron');
 		const ide = workbench.page;
 		const agents = await workbench.openAgentsWindow(target.kind);
-		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const modes = agents.locator('.ash-window-mode-control');
+		const code = modes.getByRole('button', { name: '代码', exact: true });
+		const chat = modes.getByRole('button', { name: '聊天 / Agents', exact: true });
+		const titlebarAction = agents.locator('.ash-sessions-titlebar-right').getByRole('button', { name: '打开 IDE', exact: true });
+		await code.click();
+		await expect(titlebarAction).toBeVisible();
+		await expect(titlebarAction.locator('[data-ash-icon-id="ash-mark"]')).toBeVisible();
+		const label = titlebarAction.locator('.ash-icon-label-container');
+		await expect(label).toHaveCSS('opacity', '0');
+		await titlebarAction.hover();
+		await expect(label).toHaveCSS('opacity', '1');
+		await expect(label).toHaveText('打开 IDE');
+		await code.hover();
+		await expect(label).toHaveCSS('opacity', '0');
+		await titlebarAction.press('Shift');
+		await expect(titlebarAction).toBeFocused();
+		await expect(label).toHaveCSS('opacity', '1');
+		await chat.click();
+		await expect(titlebarAction).toHaveCount(0);
+		await code.click();
+		await expect(titlebarAction).toBeVisible();
 		const editor = new Editor(agents.locator('.ash-sessions-chat-slot.active:visible'));
 		const draft = 'Keep this unsent Agent draft while opening the IDE';
 		await replaceChatInput(editor, draft);
 		const input = await editor.input.elementHandle();
-		const accounts = agents.getByRole('button', { name: 'Accounts', exact: true });
-		const openIde = async (): Promise<void> => {
+		const accounts = agents.getByRole('button', { name: '账户', exact: true });
+		const openIdeFromAccounts = async (): Promise<void> => {
 			await agents.bringToFront();
 			await accounts.press('Enter');
-			const action = agents.getByRole('menuitem', { name: 'Open IDE', exact: true });
+			const action = agents.getByRole('menuitem', { name: '打开 IDE', exact: true });
 			await expect(action).toBeVisible();
 			await action.press('Enter');
 			await expect(accounts).toHaveAttribute('aria-expanded', 'false');
@@ -3716,7 +3779,7 @@ focusTest(
 		try {
 			for (let attempt = 0; attempt < 2; attempt++) {
 				if (attempt === 0) {
-					await openIde();
+					await openIdeFromAccounts();
 				} else {
 					await agents.bringToFront();
 					await new QuickAccess(agents).runCommand('agents.openAshWindow');
@@ -3735,7 +3798,8 @@ focusTest(
 			await closed;
 			await expect.poll(async () => (await windowIds()).length).toBe(1);
 			const opened = application.waitForEvent('window');
-			await openIde();
+			await agents.bringToFront();
+			await titlebarAction.press('Enter');
 			const reopened = await opened;
 			await new Workbench(reopened).waitForReady();
 			await expect.poll(async () => (await windowIds()).length).toBe(2);
@@ -3752,7 +3816,8 @@ focusTest(
 					)
 					.toBe(reopenedId);
 				const reopenedIds = await windowIds();
-				await openIde();
+				await agents.bringToFront();
+				await titlebarAction.click();
 				await expect
 					.poll(() =>
 						application.evaluate(

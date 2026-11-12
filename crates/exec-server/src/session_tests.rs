@@ -35,10 +35,110 @@ fn output_buffer_reports_an_explicit_gap_after_tail_truncation() {
 }
 
 #[test]
+fn output_buffer_waits_for_every_byte_of_a_utf8_character() {
+    for text in ["中", "🚀"] {
+        let mut output = StreamBuffer::new(16);
+        let bytes = text.as_bytes();
+        for byte in &bytes[..bytes.len() - 1] {
+            output.append(&[*byte]);
+            assert!(!output.has_text_update(0));
+            let chunk = output.read(0).unwrap();
+            assert!(chunk.text.is_empty());
+            assert_eq!(chunk.next_cursor, 0);
+            assert!(!chunk.gap);
+        }
+        output.append(&bytes[bytes.len() - 1..]);
+        assert!(output.has_text_update(0));
+        let chunk = output.read(0).unwrap();
+        assert_eq!(chunk.text, text);
+        assert_eq!(chunk.next_cursor, bytes.len() as u64);
+        assert!(!chunk.gap);
+    }
+}
+
+#[test]
+fn output_buffer_flushes_an_incomplete_utf8_tail_at_eof() {
+    let mut output = StreamBuffer::new(16);
+    let bytes = b"abc\xff\xf0\x9f";
+    output.append(bytes);
+
+    let partial = output.read(0).unwrap();
+    assert_eq!(partial.text, "abc�");
+    assert_eq!(partial.next_cursor, 4);
+    assert_eq!(
+        output.read_bytes(0).unwrap(),
+        (bytes.to_vec(), bytes.len() as u64, false)
+    );
+    assert!(!output.has_text_update(partial.next_cursor));
+
+    output.closed = true;
+    assert!(output.has_text_update(partial.next_cursor));
+    let tail = output.read(partial.next_cursor).unwrap();
+    assert_eq!(tail.text, "�");
+    assert_eq!(tail.next_cursor, bytes.len() as u64);
+    assert!(!tail.gap);
+}
+
+#[test]
 fn command_session_id_rejects_non_opaque_values() {
     assert!(CommandSessionId::new("session-1").is_err());
     assert!(CommandSessionId::new("cmd-not-hexadecimal-not-hexadecim").is_err());
     assert!(CommandSessionId::new("cmd-0123456789abcdef0123456789abcdef").is_ok());
+}
+
+#[test]
+fn process_reads_preserve_utf8_split_across_stdout_and_stderr_chunks() {
+    let (fixture, backend) = StreamsFixture::new();
+    let environment = fixture.start_process_with_output(backend);
+    let stdout = ":中".as_bytes();
+    let stderr = ":🚀".as_bytes();
+    fixture.stdout.send(Ok(stdout[..2].to_vec())).unwrap();
+    fixture.stderr.send(Ok(stderr[..4].to_vec())).unwrap();
+    let partial = wait_process(&environment, |snapshot| {
+        snapshot.stdout.text.starts_with("stdout-prefix:")
+            && snapshot.stderr.text.starts_with("stderr-prefix:")
+    });
+    assert_eq!(partial.stdout.text, "stdout-prefix:");
+    assert_eq!(partial.stderr.text, "stderr-prefix:");
+    assert_eq!(partial.stdout.next_cursor, "stdout-prefix:".len() as u64);
+    assert_eq!(partial.stderr.next_cursor, "stderr-prefix:".len() as u64);
+    assert!(!partial.stdout.gap);
+    assert!(!partial.stderr.gap);
+
+    fixture.stdout.send(Ok(stdout[2..].to_vec())).unwrap();
+    fixture.stderr.send(Ok(stderr[4..].to_vec())).unwrap();
+    wait_process(&environment, |snapshot| {
+        snapshot.stdout.text == "stdout-prefix:中" && snapshot.stderr.text == "stderr-prefix:🚀"
+    });
+
+    let Response::Process(resumed) = environment.request(Request::ProcessRead(ProcessRead {
+        operation_id: "streams".into(),
+        stdout_cursor: partial.stdout.next_cursor,
+        stderr_cursor: partial.stderr.next_cursor,
+        wait_millis: 0,
+    })) else {
+        panic!("expected process snapshot");
+    };
+    assert_eq!(resumed.state, ProcessState::Running);
+    assert_eq!(resumed.stdout.text, "中");
+    assert_eq!(resumed.stderr.text, "🚀");
+    assert_eq!(resumed.stdout.next_cursor, partial.stdout.next_cursor + 3);
+    assert_eq!(resumed.stderr.next_cursor, partial.stderr.next_cursor + 4);
+    assert!(!resumed.stdout.gap);
+    assert!(!resumed.stderr.gap);
+
+    fixture.stdout.send(Ok(stdout[1..3].to_vec())).unwrap();
+    fixture.stdout.send(Ok(Vec::new())).unwrap();
+    let eof = wait_process(&environment, |snapshot| {
+        snapshot.stdout.text == "stdout-prefix:中�"
+    });
+    assert_eq!(eof.state, ProcessState::Running);
+    fixture.stderr.send(Ok(Vec::new())).unwrap();
+    fixture.exit();
+    wait_process(&environment, |snapshot| {
+        snapshot.state != ProcessState::Running
+    });
+    fixture.assert_closed();
 }
 
 #[test]

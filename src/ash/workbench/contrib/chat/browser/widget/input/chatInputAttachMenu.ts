@@ -393,7 +393,7 @@ export class ChatInputAttachMenu extends Disposable {
 			id: 'browse-skills',
 			label: localize('chat.attach.browseSkills', 'Browse skills…'),
 			icon: Lxicon.search,
-			run: () => void this.commandService.executeCommand('sessions.open.customize').catch(() => undefined),
+			run: () => void this.commandService.executeCommand('sessions.open.customize', { category: 'skills', collection: 'discover' }).catch(() => undefined),
 		});
 
 		return items;
@@ -410,7 +410,7 @@ export class ChatInputAttachMenu extends Disposable {
 							id: `connector:${conn.id}`,
 							label: conn.displayName,
 							icon: Lxicon.connectors,
-							run: () => void this.commandService.executeCommand('sessions.open.customize').catch(() => undefined),
+							run: () => void this.commandService.executeCommand('sessions.open.customize', { category: 'connectors', collection: 'yours', query: conn.displayName }).catch(() => undefined),
 						});
 					}
 				}
@@ -427,7 +427,7 @@ export class ChatInputAttachMenu extends Disposable {
 			id: 'browse-connectors',
 			label: localize('chat.attach.browseConnectors', 'Browse connectors…'),
 			icon: Lxicon.search,
-			run: () => void this.commandService.executeCommand('sessions.open.customize').catch(() => undefined),
+			run: () => void this.commandService.executeCommand('sessions.open.customize', { category: 'connectors', collection: 'discover' }).catch(() => undefined),
 		});
 
 		return items;
@@ -461,7 +461,7 @@ export class ChatInputAttachMenu extends Disposable {
 							id: `plugin:${plugin.id}`,
 							label: plugin.displayName || plugin.id,
 							icon: Lxicon.plug,
-							run: () => void this.commandService.executeCommand('sessions.open.customize').catch(() => undefined),
+							run: () => void this.commandService.executeCommand('sessions.open.customize', { category: 'plugins', collection: 'yours', query: plugin.displayName || plugin.id }).catch(() => undefined),
 						});
 					}
 				}
@@ -478,7 +478,7 @@ export class ChatInputAttachMenu extends Disposable {
 			id: 'browse-plugins',
 			label: localize('chat.attach.browsePlugins', 'Browse plugins…'),
 			icon: Lxicon.search,
-			run: () => void this.commandService.executeCommand('sessions.open.customize').catch(() => undefined),
+			run: () => void this.commandService.executeCommand('sessions.open.customize', { category: 'plugins', collection: 'discover' }).catch(() => undefined),
 		});
 
 		return items;

@@ -1,9 +1,6 @@
-.ash-chat-response-citations {
+.ash-chat-code-citations {
 	margin-block-start: var(--ash-spacing-size80);
 	min-inline-size: 0;
-}
-
-.ash-chat-code-citations {
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label1);
 }

@@ -1,4 +1,6 @@
 use super::environment_runtime::EnvRuntime;
+use super::environment_runtime::language_roots_for;
+use super::language_runtime::AppServerLanguageRuntime;
 use crate::dir_grants::DirGrants;
 use ash_config::ConfigStore;
 use ash_file_access::{Dir, DirId};
@@ -23,6 +25,7 @@ pub(super) struct ThreadDirs {
     // The runtime's Turn executor retains this directory owner as its observer. Keep the reverse
     // link weak so disposing the environment also drops its search registrations and processes.
     env_runtime: Weak<RwLock<EnvRuntime>>,
+    language: Weak<Mutex<AppServerLanguageRuntime>>,
 }
 
 impl ThreadDirs {
@@ -33,6 +36,7 @@ impl ThreadDirs {
         file_access: Arc<DirGrants>,
         hooks: Arc<DeclarativeHookRuntime>,
         env_runtime: Weak<RwLock<EnvRuntime>>,
+        language: Weak<Mutex<AppServerLanguageRuntime>>,
         threads: &ash_core::ThreadController,
     ) -> Result<Arc<Self>, String> {
         let dir = Dir::open_local(dir_root).map_err(|error| error.to_string())?;
@@ -92,7 +96,8 @@ impl ThreadDirs {
                 .map_err(|error| error.to_string())?;
             file_access.bind_thread_dir(thread_id.clone(), root);
         }
-        Ok(Arc::new(Self {
+        let has_recovered_bindings = !bindings.is_empty();
+        let dirs = Arc::new(Self {
             root: dir.canonical_path().to_path_buf(),
             id: dir.id(),
             worktrees,
@@ -103,7 +108,12 @@ impl ThreadDirs {
             file_access,
             hooks,
             env_runtime,
-        }))
+            language,
+        });
+        if has_recovered_bindings {
+            dirs.refresh_language_roots();
+        }
+        Ok(dirs)
     }
 
     pub(super) fn manager_for(&self, binding: &ManagedDirBinding) -> &WorktreeManager {
@@ -155,6 +165,27 @@ impl ThreadDirs {
             .bind_thread_dir(thread_id.clone(), root.clone())
             .map_err(|error| error.to_string())?;
         self.file_access.bind_thread_dir(thread_id.clone(), root);
+        self.refresh_language_roots();
         Ok(())
+    }
+
+    pub(super) fn unbind_services(&self, thread_id: &ThreadId) {
+        self.file_access.unbind_thread_dir(thread_id);
+        self.hooks.unbind_thread_dir(thread_id);
+        self.refresh_language_roots();
+    }
+
+    fn refresh_language_roots(&self) {
+        if let (Some(environment), Some(language)) =
+            (self.env_runtime.upgrade(), self.language.upgrade())
+        {
+            let environment = environment
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            language
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .retain_dir_roots(language_roots_for(&environment));
+        }
     }
 }

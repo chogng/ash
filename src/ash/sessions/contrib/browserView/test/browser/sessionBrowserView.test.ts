@@ -353,6 +353,7 @@ function fixture() {
 		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', getAccessibilityTree: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
+		getWebsiteFavicon: async () => undefined,
 		getBrowserViews: async () => [...f.pages.values()],
 		getOrCreateBrowserView: async (id, options) => {
 			const existing = f.pages.get(id);

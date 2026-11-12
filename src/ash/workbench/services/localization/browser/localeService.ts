@@ -41,6 +41,7 @@ export class WorkbenchLocaleService extends Disposable implements ILocaleService
 
 	private async promptRestart(languageName: string): Promise<void> {
 		const { confirmed } = await this.dialogs.confirm({
+			title: localize({ bundle: 'ash.settings', key: 'displayLanguage.title' }, 'Display Language'),
 			message: localize({ bundle: 'ash.settings', key: 'displayLanguage.restartMessage' }, 'Restart Ash to use {0}?', languageName),
 			detail: localize({ bundle: 'ash.settings', key: 'displayLanguage.restartDetail' }, 'Your display language preference is saved. It will take effect after restarting the app or refreshing the page.'),
 			primaryButton: localize({ bundle: 'ash.settings', key: 'displayLanguage.restartNow' }, 'Restart now'),

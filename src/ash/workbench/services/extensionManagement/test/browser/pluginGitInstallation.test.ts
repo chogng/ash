@@ -29,6 +29,7 @@ function fixture() {
 		listWorktrees: async () => [],
 		readRepositoryContexts: async () => [],
 		readSessionComparison: async () => { throw new Error('Unexpected session comparison'); },
+		readWorktreeChanges: async () => { throw new Error('Unexpected worktree changes'); },
 		clone: async (...args) => { cloned = args; checkout = URI.file(args[2]); },
 		cancel: async id => { cancellations.push(id); },
 	};

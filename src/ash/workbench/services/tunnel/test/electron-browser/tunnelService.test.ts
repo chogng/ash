@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import type { ChildProcessByStdio } from 'node:child_process';
@@ -15,7 +16,6 @@ import type { SshPortForward as Forward, SshPortForwardChange as ForwardChange }
 import { TunnelPrivacyId, type RemoteTunnel } from '../../../../../platform/tunnel/common/tunnel.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { TunnelService } from '../../electron-browser/tunnelService.js';
-import chinese from '../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { ITunnelService } from '../../../../../platform/tunnel/common/tunnel.js';
 
 
@@ -74,11 +74,11 @@ test('Unsupported Tunnel options are rejected before IPC and use Chinese localiz
 	using services = new InstantiationService();
 	registerMainProcess(services, api);
 	using service = services.createInstance(TunnelService);
-	setNlsMessages('zh-CN', chinese);
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
-		assert.equal(await service.openTunnel(undefined, '0.0.0.0', 3000), chinese.ash['tunnel.unsupportedOptions']);
-		assert.equal(await service.openTunnel(undefined, 'localhost', 3000, undefined, 3000), chinese.ash['tunnel.unsupportedOptions']);
-		await assert.rejects(service.openTunnel(undefined, 'localhost', 0), { message: chinese.ash['tunnel.invalidPort'] });
+		assert.equal(await service.openTunnel(undefined, '0.0.0.0', 3000), chineseCatalog.bundles.ash['tunnel.unsupportedOptions']);
+		assert.equal(await service.openTunnel(undefined, 'localhost', 3000, undefined, 3000), chineseCatalog.bundles.ash['tunnel.unsupportedOptions']);
+		await assert.rejects(service.openTunnel(undefined, 'localhost', 0), { message: chineseCatalog.bundles.ash['tunnel.invalidPort'] });
 		assert.equal(api.opens, 0);
 	} finally {
 		resetNlsResolver();

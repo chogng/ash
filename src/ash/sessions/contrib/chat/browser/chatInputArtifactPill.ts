@@ -8,8 +8,8 @@ import { localize } from '../../../../nls.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatInputPart, IChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ArtifactKind } from '../../../common/artifactKind.js';
-import { appendArtifactIcon, getArtifactTitle } from './artifactKindPresentation.js';
-import './chatInputArtifactPill.css';
+import { appendArtifactIcon, getArtifactTitle } from '../../artifacts/browser/artifactKindPresentation.js';
+import './media/chatInputArtifactPill.css';
 
 export interface ArtifactDraftModel {
 	readonly artifactDraftKind: ArtifactKind | undefined;
@@ -24,8 +24,10 @@ export function getArtifactDraftHelp(): string {
 export class ChatInputArtifactPill extends Disposable {
 	private static readonly pills = new WeakMap<IChatInputPart, ChatInputArtifactPill>();
 
-	static show(input: IChatInputPart, kind: ArtifactKind): void {
-		this.pills.get(input)?.show(kind);
+	static select(input: IChatInputPart, kind: ArtifactKind): void {
+		if (this.pills.get(input)?.model.setArtifactDraftKind?.(kind)) {
+			status(localize('sessions.artifacts.draftSelected', '{0} selected for this draft.', artifactDraftTitle(kind)));
+		}
 	}
 
 	private readonly element: HTMLElement;
@@ -58,12 +60,6 @@ export class ChatInputArtifactPill extends Disposable {
 		}));
 		this._register(model.onDidChange(() => this.render()));
 		this.render();
-	}
-
-	private show(kind: ArtifactKind): void {
-		if (this.model.setArtifactDraftKind?.(kind)) {
-			status(localize('sessions.artifacts.draftSelected', '{0} selected for this draft.', artifactDraftTitle(kind)));
-		}
 	}
 
 	private removeKind(): void {

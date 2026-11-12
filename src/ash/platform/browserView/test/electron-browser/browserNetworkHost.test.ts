@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Event } from '../../../../base/common/event.js';
+import { promiseWithResolvers } from '../../../../base/common/async.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -9,6 +11,7 @@ import type { IMainProcessService } from '../../../ipc/common/mainProcessService
 import type { IWorkbenchHost } from '../../../../workbench/browser/rendererApi.js';
 import type { IRemoteAgentHostConnectionInfo } from '../../../agentHost/common/remoteAgentHostService.js';
 import { AgentHostConnectionsService } from '../../../agentHost/browser/agentHostConnectionsService.js';
+import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { RemoteAgentHostConnection } from '../../../agentHost/common/remoteAgentHostService.js';
 import { createDisconnectedRendererApi } from '../../../../workbench/browser/rendererApi.js';
 import { createProviderRemoteWorkspaceUri } from '../../../remote/common/remote.js';
@@ -102,6 +105,34 @@ test('a reconnect during open retires its reservation without closing a new conn
 	await assert.rejects(opening, /BrowserRemoteNetworkUnavailable/);
 	assert.equal(closed, false);
 	await channel!.call('window', 'open', request);
+});
+
+test('public icon requests use the local device connection and cancel the same operation', async () => {
+	let channel: IServerChannel<string>;
+	const url = 'https://example.test/favicon.ico';
+	const response = promiseWithResolvers<{ dataUrl: null; }>();
+	const calls: Array<{ method: string; params: { operationId: string; url?: string; }; }> = [];
+	const localClient = {
+		state: 'ready', generation: 1,
+		request: ({ method }: { method: string; }, params: { operationId: string; url?: string; }) => {
+			calls.push({ method, params });
+			return method === 'browser/favicon/read' ? response.promise : Promise.resolve(null);
+		},
+	} as unknown as AppServerProtocolClient;
+	using connections = registry(createDisconnectedRendererApi(), []);
+	using lifetime = registerBrowserNetworkHost({ registerChannel: (_name, registered) => { channel = registered; } } as IMainProcessService,
+		connections, { getWorkspace: () => ({ id: 'window', folders: [], remoteAuthority: 'ssh+host' }) } as unknown as IWorkspaceContextService,
+		undefined, localClient);
+	const cancellation = new CancellationTokenSource();
+	try {
+		const reading = channel!.call('window', 'readPublicFavicon', { url }, cancellation.token);
+		cancellation.cancel();
+		response.resolve({ dataUrl: null });
+		assert.equal(await reading, null);
+		assert.equal(calls[0]?.method, 'browser/favicon/read');
+		assert.equal(calls[0]?.params.url, url);
+		assert.deepEqual(calls[1], { method: 'browser/favicon/cancel', params: { operationId: calls[0]!.params.operationId } });
+	} finally { cancellation.dispose(); }
 });
 
 test('same-host directory routing keeps an unavailable child and ambiguous resources off other connections', async () => {

@@ -2111,7 +2111,7 @@ fn terminal_rpc_enforces_connection_ownership_and_close() {
 }
 
 #[test]
-fn reconnectable_terminal_detaches_rotates_its_token_and_rejects_replay() {
+fn reconnectable_terminal_rotates_its_token_and_confirms_an_unacknowledged_attach() {
     let root = std::env::temp_dir().join(format!(
         "ash-app-server-terminal-attach-{}-{}",
         std::process::id(),
@@ -2185,15 +2185,20 @@ fn reconnectable_terminal_detaches_rotates_its_token_and_rejects_replay() {
     );
     assert_eq!(rejected["error"]["message"], "TerminalAttachRejected");
 
+    let attach_nonce = "a".repeat(32);
+    let attach = |id, token: &str, nonce: Option<&str>| {
+        let mut params = serde_json::json!({
+            "terminalId":terminal_id,"reconnectToken":token,"rows":30,"cols":100
+        });
+        if let Some(nonce) = nonce {
+            params["attachNonce"] = nonce.into();
+        }
+        serde_json::json!({"jsonrpc":"2.0", "id":id, "method":"terminal/attach", "params":params})
+    };
     let attached = call(
         &server,
         &mut replacement,
-        serde_json::json!({
-            "jsonrpc":"2.0",
-            "id":3,
-            "method":"terminal/attach",
-            "params":{"terminalId":terminal_id,"reconnectToken":first_token,"rows":30,"cols":100}
-        }),
+        attach(3, &first_token, Some(&attach_nonce)),
     );
     assert_eq!(
         attached["result"]["ready"]["pid"],
@@ -2205,31 +2210,69 @@ fn reconnectable_terminal_detaches_rotates_its_token_and_rejects_replay() {
         .to_owned();
     assert_ne!(second_token, first_token);
 
-    server.close_connection(replacement);
+    let duplicate = call(
+        &server,
+        &mut replacement,
+        attach(4, &first_token, Some(&attach_nonce)),
+    );
+    assert_eq!(duplicate["result"], attached["result"]);
     let mut final_connection = server.connection();
     initialize(&server, &mut final_connection);
-    let replayed = call(
+    let busy = call(
         &server,
         &mut final_connection,
-        serde_json::json!({
-            "jsonrpc":"2.0",
-            "id":2,
-            "method":"terminal/attach",
-            "params":{"terminalId":terminal_id,"reconnectToken":first_token,"rows":30,"cols":100}
-        }),
+        attach(2, &first_token, Some(&attach_nonce)),
     );
-    assert_eq!(replayed["error"]["message"], "TerminalAttachRejected");
+    assert_eq!(busy["error"]["message"], "TerminalBusy");
+    server.close_connection(replacement);
+
+    let other_nonce = "b".repeat(32);
+    for (id, nonce) in [(3, None), (4, Some(other_nonce.as_str()))] {
+        let rejected = call(
+            &server,
+            &mut final_connection,
+            attach(id, &first_token, nonce),
+        );
+        assert_eq!(rejected["error"]["message"], "TerminalAttachRejected");
+    }
+    // Simulate a lost response by resending the original request on a new connection.
+    let recovered = call(
+        &server,
+        &mut final_connection,
+        attach(5, &first_token, Some(&attach_nonce)),
+    );
+    assert_eq!(recovered["result"], attached["result"]);
+
+    server.close_connection(final_connection);
+    let mut final_connection = server.connection();
+    initialize(&server, &mut final_connection);
     let final_attach = call(
         &server,
         &mut final_connection,
-        serde_json::json!({
-            "jsonrpc":"2.0",
-            "id":3,
-            "method":"terminal/attach",
-            "params":{"terminalId":terminal_id,"reconnectToken":second_token,"rows":30,"cols":100}
-        }),
+        attach(2, &second_token, None),
     );
     assert_eq!(final_attach["result"]["terminalId"], terminal_id);
+    server.close_connection(final_connection);
+    let mut final_connection = server.connection();
+    initialize(&server, &mut final_connection);
+    let stale = call(
+        &server,
+        &mut final_connection,
+        attach(2, &first_token, Some(&attach_nonce)),
+    );
+    assert_eq!(stale["error"]["message"], "TerminalAttachRejected");
+    let fresh = call(
+        &server,
+        &mut final_connection,
+        attach(
+            3,
+            final_attach["result"]["reconnect"]["reconnectToken"]
+                .as_str()
+                .unwrap(),
+            None,
+        ),
+    );
+    assert_eq!(fresh["result"]["ready"], created["result"]["ready"]);
     let closed = call(
         &server,
         &mut final_connection,

@@ -391,6 +391,52 @@ suite('Bundled ChatGPT client', () => {
 		assert.equal(reply.resources, undefined);
 	});
 
+	test('binds saved AsyncImage results by the compiled query and resolution ID', async () => {
+		const first = 'https://images.openai.com/static-rsc-4/first-figure?purpose=fullsize';
+		const second = 'https://images.openai.com/static-rsc-4/second-figure?purpose=fullsize';
+		const resolved = (content_url: string) => ({ status: 'resolved', componentName: 'AsyncImage', state: { images: [{ content_url }] } });
+		const text = [
+			'<AsyncImage query="First figure" aspectRatio="4:3"/>',
+			'<AsyncImage ref="missing-source"/>',
+			'<AsyncImage query="Second figure"/>',
+			'<AsyncImage query="Unsafe figure"/>',
+		].join('\n');
+		const client = new ChatGPTClient(async () => json({
+			current_node: 'reply', mapping: {
+				reply: {
+					parent: null, message: {
+						...message('reply', 'assistant', text),
+						metadata: {
+							model_dil_v2: {
+								code: [
+									'__dil.jsx(AsyncImage,{"query":"First figure","aspectRatio":"4:3","__resolutionId":__dilConstants["8"]})',
+									'__dil.jsx(AsyncImage,{"query":__dilConstants["10"],"__resolutionId":__dilConstants["9"]})',
+									'__dil.jsx(AsyncImage,{"query":"Unsafe figure","__resolutionId":__dilConstants["11"]})',
+								].join(';'),
+								constants: { 8: 'figure-a', 9: 'figure-b', 10: 'Second figure', 11: 'untrusted' },
+								appData: {
+									opGenui: {
+										componentResults: {
+											'figure-b': resolved(second),
+											untrusted: resolved('https://untrusted.example/figure.png'),
+											'figure-a': resolved(first),
+										}
+									}
+								},
+							}
+						},
+					}
+				},
+			}
+		}));
+		const reply = (await client.history('conversation', signal())).messages[0]!;
+		assert.equal(reply.text, text);
+		assert.deepEqual(reply.imageGroups?.map(group => ['query' in group ? group.query : undefined, group.images[0]?.uri]), [
+			['First figure', first],
+			['Second figure', second],
+		]);
+	});
+
 	test('resolves a sandbox file through the web download endpoint and signed resource bytes', async () => {
 		const requests: string[] = [];
 		const client = new ChatGPTClient((async input => {

@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
 import { registerTestTitlebarServices } from '../../../../../test/common/testTitlebarServices.js';
 import { test, suiteTeardown } from 'mocha';
@@ -17,7 +18,6 @@ import { darkColorTheme, lightColorTheme } from '../../../../../../platform/them
 import { INativeHostService } from '../../../../../common/services.js';
 import type { INativeWindowTheme } from '../../../../../../platform/native/common/nativeHost.js';
 import type { IEditorGroup, IEditorGroupsContainer } from '../../../../../services/editor/common/editorGroupsService.js';
-import { readFileSync } from 'node:fs';
 import { setNlsMessages, resetNlsResolver } from '../../../../../../nls.js';
 import type { IWindowAlwaysOnTopChangedEvent } from '../../../../../../platform/window/common/window.js';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
@@ -205,7 +205,7 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 			const mainWindowButton = environment.window.document.createElement('button');
 			environment.window.document.body.append(mainWindowButton);
 			try {
-				setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+				setNlsMessages('zh-CN', chineseCatalog.bundles);
 				registerPinActions();
 				assert.equal(action(true)?.getAttribute('aria-label'), '窗口置顶');
 				mainWindowButton.focus();

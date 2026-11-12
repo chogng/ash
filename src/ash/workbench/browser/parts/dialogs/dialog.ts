@@ -31,7 +31,7 @@ export function createWorkbenchDialogOptions({ shouldConfirmDiscard, ...options 
 
 export interface BrowserDialogPresentation extends Pick<IDialogOptions, 'icon' | 'extraClasses' | 'layout' | 'detailElement' | 'buttonOptions' | 'disableCloseButton' | 'disableDefaultAction' | 'focusCancelButton'> {
 	readonly messageAsTitle?: boolean;
-	readonly useFormForDestructiveConfirmations?: boolean;
+	readonly confirmationLayout?: 'form';
 }
 
 /** Maps queued domain requests to the service-independent Dialog widget. */
@@ -48,18 +48,18 @@ export class BrowserDialogHandler implements IDialogHandler {
 			if (request.kind === 'prompt') buttons.push(request.secondaryButton);
 			if (request.kind !== 'message') buttons.push(request.cancelButton ?? localize('dialog.cancel', 'Cancel'));
 			const cancelId = request.kind === 'message' ? -1 : buttons.length - 1;
-			const destructiveForm = request.kind === 'confirmation' && request.destructive && this.presentation?.useFormForDestructiveConfirmations;
-			const formConfirmation = request.kind === 'confirmation' && (request.layout === 'form' || destructiveForm);
+			const formConfirmation = request.kind === 'confirmation' && this.presentation?.confirmationLayout === 'form';
+			const destructiveForm = formConfirmation && request.destructive;
 			const title = this.presentation?.messageAsTitle ? request.message : request.title ?? defaultTitle(request);
 			const options = createWorkbenchDialogOptions({
 				...this.presentation,
 				...(formConfirmation && {
 					layout: 'form',
+					focusCancelButton: true,
 					extraClasses: [...(this.presentation?.extraClasses ?? []),
 					destructiveForm ? 'ash-dialog-destructive-confirmation' : 'ash-dialog-form-confirmation'],
 				}),
 				...(destructiveForm && { buttonOptions: [{ presentation: 'danger' }, { presentation: 'secondary' }] }),
-				...(request.kind === 'confirmation' && request.layout === 'form' && { focusCancelButton: true }),
 				cancelId,
 				type: formConfirmation || this.presentation?.messageAsTitle ? 'none' : request.kind === 'message' || request.kind === 'choice' ? request.severity ?? 'question' : 'question',
 				detail: request.detail,

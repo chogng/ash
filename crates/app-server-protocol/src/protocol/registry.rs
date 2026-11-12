@@ -417,6 +417,12 @@ use crate::protocol::browser::BrowserCreateResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserElementTargetDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserFaviconCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserFaviconReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserFaviconReadResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserListResult;
@@ -722,9 +728,13 @@ use crate::protocol::config::LanguageServerConfigDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::LanguageServerConfigureParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::config::LanguageServerEnablementScope;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::config::LanguageServerModeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::LanguageServerRemoveParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::LanguageServerSetEnabledParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::McpCredentialBindingDto;
 #[cfg(any(test, feature = "export"))]
@@ -3921,6 +3931,13 @@ client_methods! {
     BrowserTcpRead => "browser/tcp/read" { params: BrowserTcpParams, response: BrowserTcpReadResult, serialization: None, },
     BrowserTcpWrite => "browser/tcp/write" { params: BrowserTcpWriteParams, response: BrowserTcpWriteResult, serialization: None, },
     BrowserTcpClose => "browser/tcp/close" { params: BrowserTcpParams, response: (), serialization: None, },
+    BrowserFaviconRead => "browser/favicon/read" {
+        params: BrowserFaviconReadParams, response: BrowserFaviconReadResult, serialization: ResourceExclusive("url"),
+        cancellation: "operationId",
+    },
+    BrowserFaviconCancel => "browser/favicon/cancel" {
+        params: BrowserFaviconCancelParams, response: (), serialization: None,
+    },
     BrowserConfigure => "browser/configure" {
         params: BrowserConfigureParams,
         response: (),
@@ -4826,6 +4843,11 @@ client_methods! {
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
+    LanguageServerSetEnabled => "languageServer/setEnabled" {
+        params: LanguageServerSetEnabledParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
     LanguageServerRemove => "languageServer/remove" {
         params: LanguageServerRemoveParams,
         response: ConfigCommandResult,
@@ -5573,6 +5595,11 @@ client_methods! {
     GitSessionComparison => "git/sessionComparison" {
         params: crate::protocol::git::GitSessionComparisonParams,
         response: crate::protocol::git::GitSessionComparisonResult,
+        serialization: None,
+    },
+    GitWorktreeChanges => "git/worktree/changes" {
+        params: crate::protocol::git::GitWorktreeChangesParams,
+        response: crate::protocol::git::GitWorktreeChangesResult,
         serialization: None,
     },
     GitRepositories => "git/repositories" {
@@ -6776,6 +6803,9 @@ typescript_bindings! {
     AgentInteractionCapability,
     BrowserCapability,
     BrowserTcpParams,
+    BrowserFaviconCancelParams,
+    BrowserFaviconReadParams,
+    BrowserFaviconReadResult,
     BrowserTcpOpenParams,
     BrowserTcpWriteParams,
     BrowserTcpReadResult,
@@ -7018,6 +7048,8 @@ typescript_bindings! {
     CommitMessageRevokeParams,
     LanguageServerConfigureParams,
     LanguageServerRemoveParams,
+    LanguageServerSetEnabledParams,
+    LanguageServerEnablementScope,
     ProviderConfigureParams,
     ProviderRemoveParams,
     McpServerUpsertParams,
@@ -8006,6 +8038,10 @@ typescript_bindings! {
     crate::protocol::git::GitSessionComparisonDto,
     crate::protocol::git::GitSessionComparisonResult,
     crate::protocol::git::GitSessionComparisonFileDto,
+    crate::protocol::git::GitComparisonOmissionDto,
+    crate::protocol::git::GitWorktreeChangesParams,
+    crate::protocol::git::GitWorktreeChangesQuery,
+    crate::protocol::git::GitWorktreeChangesResult,
     GitRepositoriesResult,
     GitRepositoryChangeDto,
     GitStatusResult,

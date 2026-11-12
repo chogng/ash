@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
@@ -13,7 +14,6 @@ import { FileService } from '../../../src/ash/platform/files/common/fileService.
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import chinese from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
 
@@ -35,7 +35,7 @@ services.registerInstance(IAppServerApi, createDisconnectedAppServerApi(unavaila
 let host: WebWorkerExtensionHost | undefined;
 
 async function activate(sourceKind: ExtensionSourceKind = 'user', id = 'attacker.ssh', language = 'en') {
-	setNlsMessages(language, language === 'zh-CN' ? chinese : {});
+	setNlsMessages(language, language === 'zh-CN' ? chineseCatalog.bundles : {});
 	host?.dispose();
 	const source = `export function activate() { return [{ kind: 'remoteConnectionResolver', registrationId: 'ssh', authorityPrefix: 'ssh' }]; } export function deactivate() {}`;
 	host = resources.add(services.createInstance(WebWorkerExtensionHost, {

@@ -1,6 +1,6 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, suiteSetup, test } from 'mocha';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../../base/common/errors.js';
@@ -80,7 +80,7 @@ function fixture(resources: DisposableStore, options: { readonly history?: IMess
 suite('Chat developer commands', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	suiteSetup(() => {
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try { registerChatDeveloperActions(); } finally { resetNlsResolver(); }
 	});
 
@@ -88,7 +88,7 @@ suite('Chat developer commands', () => {
 		assert.deepEqual(importedCommands, [undefined, undefined, undefined]);
 		const labels = MenusRegistry.getMenuItems(MenuId.CommandPalette).flatMap(item => 'command' in item && ids.includes(item.command.id) ? [commandActionLabel(item.command.title)] : []);
 		assert.deepEqual(labels, ['开发人员：记录聊天输入历史', '开发人员：记录聊天索引', '开发人员：检查聊天模型']);
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try { assert.match(getChatInputAccessibilityHelp('', false, false), /新的 JSON 编辑器.*保留草稿和当前对话/u); }
 		finally { resetNlsResolver(); }
 	});

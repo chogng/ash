@@ -39,7 +39,6 @@ export class CanvasEditorToolbar extends Disposable {
 		this.domNode = h(ownerDocument, 'div', { className: 'ash-canvas-editor-toolbar' });
 		const tools = h(ownerDocument, 'div', { className: 'ash-canvas-editor-toolbar-group' });
 		const modes = h(ownerDocument, 'div', { className: 'ash-canvas-editor-toolbar-group' });
-		this.domNode.append(tools, modes);
 		const menuProvider: IContextMenuProvider = {
 			showContextMenu: delegate => {
 				contextMenus.showContextMenu({
@@ -78,6 +77,7 @@ export class CanvasEditorToolbar extends Disposable {
 			menuOptions: { shouldForwardArgs: true },
 		}));
 		this.workspaceToolbar.element.classList.add('ash-canvas-editor-toolbar-workspace');
+		this.domNode.append(tools, modes);
 	}
 
 	public setEditorActions(tools: readonly CanvasToolbarAction[], modes: readonly IAction[]): void {

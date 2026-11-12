@@ -9,10 +9,13 @@ import { autorun, observableFromEvent, type IObservable } from '../../../../../.
 import { URI } from '../../../../../../base/common/uri.js';
 import { localize } from '../../../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
+import { isBrowserFavicon } from '../../../../../../platform/browserView/common/browserHistory.js';
+import { IBrowserViewService } from '../../../../../../platform/browserView/common/browserView.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../../platform/agentHost/common/openSessionLink.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { ILinkPresentationService, type ILinkPresentation } from '../../../../../../platform/dataChannel/common/dataChannel.js';
 import { IHoverService } from '../../../../../../platform/hover/browser/hoverService.js';
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { colorCssVariable } from '../../../../../../platform/theme/common/colorUtils.js';
 import { GitHubResourcePresentation, type IGitHubResourceHover } from '../../../../github/browser/githubResourceHover.js';
 import { ISessionSummaryHoverService } from '../../agentSessions/sessionSummaryHoverService.js';
@@ -142,6 +145,7 @@ class ChatRichLink extends Disposable {
 /** Binds presentation and hover behavior for the lifetime of a rendered anchor. */
 export class ChatRichLinkDecorator extends Disposable {
 	private readonly verbosity: IObservable<boolean>;
+	private readonly browserViews: IBrowserViewService | undefined;
 
 	constructor(
 		private readonly openLink: (href: string) => void,
@@ -149,9 +153,31 @@ export class ChatRichLinkDecorator extends Disposable {
 		@IHoverService private readonly hoverService: IHoverService,
 		@IConfigurationService configuration: IConfigurationService,
 		@ISessionSummaryHoverService private readonly summaryHover: ISessionSummaryHoverService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
+		this.browserViews = instantiation.getOptional(IBrowserViewService);
 		this.verbosity = observableFromEvent(this, configuration.onDidChangeConfiguration, () => configuration.getValue<boolean>(AccessibilityVerbositySettingId.GitHub));
+	}
+
+	loadPreviewIcons(preview: HTMLElement, store: DisposableStore): void {
+		const browserViews = this.browserViews;
+		if (!browserViews) return;
+		for (const link of preview.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+			const url = URL.parse(link.href);
+			if (!url || !['https:', 'http:'].includes(url.protocol) || url.port || url.username || url.password) continue;
+			const fallback = link.querySelector(':scope > .ash-icon-label-inline-icon:first-child');
+			if (!fallback) continue;
+			void browserViews.getWebsiteFavicon(url.origin).then(async source => {
+				if (!isBrowserFavicon(source) || store.isDisposed || !preview.isConnected) return;
+				const image = preview.ownerDocument.createElement('img');
+				image.className = 'ash-chat-link-favicon';
+				image.alt = '';
+				image.src = source;
+				await image.decode();
+				if (!store.isDisposed && preview.isConnected && fallback.parentElement === link) fallback.replaceWith(image);
+			}).catch(() => { /* Keep the existing icon when the website has no usable favicon. */ });
+		}
 	}
 
 	decorate(anchor: HTMLAnchorElement, href: string, store: DisposableStore): boolean {
@@ -161,11 +187,15 @@ export class ChatRichLinkDecorator extends Disposable {
 		const preview = anchor.classList.contains(chatSourcePreviewClass) ? anchor.getAttribute('title')?.trim() : undefined;
 		const linkPreview = external ? createExternalLinkPreview(anchor, href) : undefined;
 		const fallback = linkPreview ?? (preview || (compact ? href : undefined));
+		const showPreview = () => {
+			if (linkPreview) this.loadPreviewIcons(linkPreview, store);
+			return fallback;
+		};
 		const dialogLabel = external ? localize('chat.link.preview', 'Link preview') : undefined;
 		const rule = resource && this.links.getLinkPresentationRule(resource);
 		if (!rule || !resource) {
 			if (!fallback) return false;
-			const hover = store.add(this.hoverService.setupHover({ target: anchor, content: fallback, dialogLabel }));
+			const hover = store.add(this.hoverService.setupHover({ target: anchor, content: linkPreview ? showPreview : fallback, dialogLabel }));
 			if (linkPreview) store.add(bindChatLinkPreviewActivation(linkPreview, anchor, () => hover.hide(), this.openLink));
 			return true;
 		}
@@ -184,7 +214,7 @@ export class ChatRichLinkDecorator extends Disposable {
 		const initialContent = compact ? () => {
 			// Hover renders synchronously. Wait until it has mounted before subscribing to live updates.
 			queueMicrotask(() => { if (!store.isDisposed && hover.visible) startWatching(); });
-			return fallback;
+			return showPreview();
 		} : fallback;
 		const hover = store.add(this.hoverService.setupHover({
 			target: anchor,

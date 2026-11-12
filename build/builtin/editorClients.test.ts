@@ -19,12 +19,14 @@ test('Academy publishes closed client resources and platform-specific executable
 		const catalog = JSON.parse(await readFile(join(output, 'catalog.json'), 'utf8'));
 		assert.equal(catalog.id, 'ash/academy');
 		assert.equal(catalog.schemaVersion, 2);
-		assert.deepEqual(catalog.uiTargets, ['ide', 'agents']);
+		assert.equal(catalog.packageType, 'editor');
+		assert.deepEqual(catalog.uiTargets, ['agents']);
 		const adapter = JSON.parse(await readFile(join(output, 'package/editor/ash/editor-extensions.json'), 'utf8'));
 		assert.ok(adapter.editorExtensions.every((entry: { activationEvents: unknown; }) => JSON.stringify(entry.activationEvents) === JSON.stringify([{ type: 'onDemand', capability: 'dataChannel' }])));
 
 		assert.deepEqual(catalog.capabilities.filter((capability: { kind: string; }) => capability.kind === 'executable').map((capability: { path: string; }) => capability.path), ['bin/darwin-arm64/ash-academy', 'bin/win32-x64/ash-academy.exe']);
 		const manifest = JSON.parse(await readFile(join(output, 'package/editor/package.json'), 'utf8'));
+		assert.deepEqual(manifest.ashUiTargets, ['agents']);
 		for (const [path, digest] of [[manifest.ashRuntime.client.entry, manifest.ashRuntime.client.digest], [manifest.ashRuntime.client.style, manifest.ashRuntime.client.styleDigest]]) {
 			assert.equal(`sha256:${createHash('sha256').update(await readFile(join(output, 'package/editor', path))).digest('hex')}`, digest);
 		}

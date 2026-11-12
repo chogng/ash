@@ -30,6 +30,7 @@ export interface BrowserViewOptions {
 	readonly creation: IBrowserViewCreateOptions;
 	readonly session: BrowserSession;
 	readonly history: IBrowserSessionHistory;
+	readonly readPublicFavicon: (url: URL, signal: AbortSignal) => Promise<string | undefined>;
 	readonly emitEvent: (event: BrowserViewEvent) => void;
 	readonly openContextMenu: (view: BrowserView, params: ContextMenuParams) => void;
 }
@@ -275,7 +276,10 @@ export class BrowserView extends Disposable {
 	private readonly openContextMenu: BrowserViewOptions['openContextMenu'];
 	private networkToken: string | null = null;
 	private readonly history: IBrowserSessionHistory;
+	private readonly readPublicFavicon: BrowserViewOptions['readPublicFavicon'];
 	private historyItem: IBrowserHistoryItemHandle | undefined;
+	private favicon: string | undefined;
+	private faviconRevision = 0;
 	private explicitNavigation = true;
 	private readonly preloadFrames = new Map<WebFrameMain, string>();
 	private preloadConfiguration: IBrowserViewWindowConfiguration | undefined;
@@ -644,6 +648,7 @@ export class BrowserView extends Disposable {
 		this.view = options.view;
 		this.session = options.session;
 		this.history = options.history;
+		this.readPublicFavicon = options.readPublicFavicon;
 		this.creation = options.creation;
 		this.canvas = options.creation.canvas;
 		this.remoteAuthority = options.remoteAuthority;
@@ -782,6 +787,7 @@ export class BrowserView extends Disposable {
 		});
 		this.on(contents, 'did-start-navigation', (_event: ElectronEvent, _url: string, inPlace: boolean, mainFrame: boolean) => {
 			if (mainFrame && !inPlace) {
+				this.faviconRevision++;
 				this.cancelPasswordChoice();
 				if (this.passwordSave) {
 					this.emit({ type: 'passwordRequestClosed', targetId: this.id, requestId: this.passwordSave.id });
@@ -807,6 +813,8 @@ export class BrowserView extends Disposable {
 			_event: ElectronEvent,
 			url: string,
 		) => {
+			this.faviconRevision++;
+			this.favicon = undefined;
 			this.url = normalizeBrowserViewUrl(url);
 			this.recordVisit();
 			this.emitState();
@@ -826,9 +834,7 @@ export class BrowserView extends Disposable {
 			this.emitState();
 		});
 		this.on(contents, 'page-favicon-updated', (_event: ElectronEvent, favicons: string[]) => {
-			// Inline images can be retained without initiating a request outside the page's authority.
-			const favicon = favicons.find(value => value.startsWith('data:image/') && value.length <= 64 * 1024);
-			if (favicon) { this.historyItem?.update({ favicon }); }
+			void this.updateFavicon(favicons);
 		});
 		this.on(
 			contents,
@@ -910,7 +916,34 @@ export class BrowserView extends Disposable {
 		const explicit = this.explicitNavigation;
 		this.explicitNavigation = false;
 		if (this.url === 'about:blank') { return; }
-		this.historyItem = this.history.add(this.url, this.webContents.getTitle(), undefined, explicit);
+		this.historyItem = this.history.add(this.url, this.webContents.getTitle(), this.favicon, explicit);
+	}
+
+	private async updateFavicon(candidates: readonly string[]): Promise<void> {
+		const revision = ++this.faviconRevision;
+		const pageOrigin = URL.parse(this.url)?.origin;
+		// Store fetched icons for local user history. Inline icons need no network request.
+		const canFetch = this.creation.owner.type === 'user' && !this.remoteAuthority && !!this.history.storageKeys.history;
+		for (const candidate of candidates.slice(0, 8)) {
+			let image: string | undefined;
+			if (candidate.startsWith('data:image/') && candidate.length <= 64 * 1024) {
+				image = candidate;
+			} else if (canFetch && pageOrigin && pageOrigin !== 'null' && candidate.length <= 8192) {
+				const url = URL.parse(candidate);
+				if (url && !url.username && !url.password && !url.port && ['https:', 'http:'].includes(url.protocol)) {
+					url.hash = '';
+					const signal = AbortSignal.any([this.signal, AbortSignal.timeout(4000)]);
+					const readPublic = () => this.readPublicFavicon(url, signal).catch(() => undefined);
+					image = url.origin === pageOrigin ? await this.session.readPageFavicon(url, signal).catch(readPublic) : await readPublic();
+				}
+			}
+			if (this.signal.aborted || revision !== this.faviconRevision) return;
+			if (image) {
+				this.favicon = image;
+				this.historyItem?.update({ favicon: image });
+				return;
+			}
+		}
 	}
 
 	private on(

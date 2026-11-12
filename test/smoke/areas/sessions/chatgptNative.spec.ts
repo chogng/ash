@@ -21,12 +21,16 @@ declare global {
 		seedProjectMemory(versions: readonly string[]): void;
 		releaseNextUpload(): void;
 		readonly projectMemoryBodies: readonly string[];
+		readonly workbookRequests: number;
 	};
+	var ashLibraryLinkFixture: { readonly opened: string[]; restore(): void; };
 }
 
 interface FixtureReply {
 	readonly suffix: string;
-	readonly sources: readonly { readonly ref_id: string; readonly url: string; readonly title: string; readonly snippet: string; }[];
+	readonly timestamp?: number;
+	readonly sources?: readonly { readonly ref_id: string; readonly url: string; readonly title: string; readonly snippet: string; }[];
+	readonly workbook?: { readonly name: string; readonly bytes: readonly number[]; };
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
@@ -44,6 +48,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		let recentHistoryRateLimited = false;
 		let recentHistoryRequests = 0;
 		let shareRequests = 0;
+		let workbookRequests = 0;
 		let shareUrl = 'https://chatgpt.com/share/fixture-live';
 		let uploadsHeld = false;
 		let heldUploads = 0;
@@ -53,6 +58,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		const initializing = new Set<() => void>();
 		const pendingUploads = new Set<() => void>();
 		const message = (id: string, role: string, text: string, create_time?: number) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] }, create_time });
+		const historyReply = typeof historyReplySuffix === 'string' ? { suffix: historyReplySuffix } : historyReplySuffix;
 		const live: Record<string, { parent: string | null; message: ReturnType<typeof message>; }> = {};
 		let head: string | null = null;
 		let userId = '';
@@ -72,6 +78,7 @@ async function installService(application: ElectronApplication, holdInitializati
 			setClockOffset(milliseconds) { Date.now = milliseconds === 0 ? now : () => now() + milliseconds; },
 			get recentHistoryRequests() { return recentHistoryRequests; },
 			get shareRequests() { return shareRequests; },
+			get workbookRequests() { return workbookRequests; },
 			setShareUrl(value) { shareUrl = value; },
 			holdUploads(value) {
 				uploadsHeld = value;
@@ -177,6 +184,10 @@ async function installService(application: ElectronApplication, holdInitializati
 				}
 				if (historyImage && url.pathname === '/backend-api/files/file_diagram/download') {
 					return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="#396da8"/></svg>', { headers: { 'Content-Type': 'image/svg+xml' } });
+				}
+				if (historyReply.workbook && (url.pathname === '/backend-api/files/file_workbook/download' || url.searchParams.get('sandbox_path') === '/mnt/data/report.xlsx')) {
+					workbookRequests++;
+					return new Response(new Uint8Array(historyReply.workbook.bytes), { headers: { 'Content-Type': 'application/octet-stream' } });
 				}
 				if (url.pathname === '/backend-api/conversations') { recentHistoryRequests++; }
 				if (offline) { return new Response(null, { status: 503 }); }
@@ -314,12 +325,15 @@ async function installService(application: ElectronApplication, holdInitializati
 						},
 						metadata: { attachments: [{ id: 'file_diagram', name: 'diagram.svg', mime_type: 'image/svg+xml', size: 126 }] },
 					} : message('question', 'user', 'History question');
-					const historyReply = typeof historyReplySuffix === 'string' ? { suffix: historyReplySuffix } : historyReplySuffix;
-					const answer = message('answer', 'assistant', first ? 'History one answer' + historyReply.suffix : 'History two answer');
+					const answer = message('answer', 'assistant', first ? 'History one answer' + historyReply.suffix : 'History two answer', first ? historyReply.timestamp : undefined);
+					const metadata = {
+						content_references: historyReply.sources,
+						attachments: historyReply.workbook && [{ id: 'file_workbook', name: historyReply.workbook.name }],
+					};
 					return Response.json({
 						title: first ? 'First native history' : 'Second native history', current_node: 'answer', mapping: {
 							question: { parent: null, message: question },
-							answer: { parent: 'question', message: first && 'sources' in historyReply ? { ...answer, metadata: { content_references: historyReply.sources } } : answer },
+							answer: { parent: 'question', message: first ? { ...answer, metadata } : answer },
 						}
 					});
 				}
@@ -478,6 +492,60 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
+
+	test('opens a ChatGPT Web writing block as an editable Docs copy', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }, testInfo) => {
+		const electron = application as ElectronApplication;
+		const suffix = [
+			'', '', ':::writing{title="First copy"}', 'First block only', ':::', '',
+			':::writing{title="Travel draft"}', '## Weekend itinerary', '',
+			'**Start early** and bring an [offline map](https://example.com/map).', '',
+			'3. Take the train', '   - Pack lunch', '', '| Stop | Time |', '| --- | ---: |', '| Station | 08:30 |', '',
+			'```sh', 'echo ready', '```', ':::',
+		].join('\n');
+		await installService(electron, false, suffix);
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.getByRole('button', { name: 'First native history', exact: true }).click();
+		const chat = page.getByRole('region', { name: 'ChatGPT', exact: true });
+		const edit = chat.getByRole('link', { name: '在 Docs 中编辑', exact: true });
+		await expect(edit).toHaveCount(2);
+		await edit.nth(1).press('Enter');
+		const workspace = page.locator('.ash-code-page-group .ash-docs-workspace:visible');
+		const docs = workspace.locator('.stanza-structured-editor-pane');
+		await expect(docs).toBeVisible();
+		await expect(workspace.locator('.ash-docs-workspace-title')).toHaveText('Travel draft.ash-doc');
+		await expect(page.getByRole('tab', { name: /^Travel draft\.ash-doc/u })).toHaveCount(0);
+		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await expect(docs.locator('table')).toBeVisible();
+		await expect(docs.locator('ol.stanza-document-list')).toHaveAttribute('start', '3');
+		await expect(docs.locator('ol.stanza-document-list ul')).toBeVisible();
+		await expect(docs.locator('.stanza-document-mark-strong')).toHaveText('Start early');
+		await expect(docs.getByText('First block only')).toHaveCount(0);
+		await expect(docs.locator('.stanza-document-rich-text-input').first()).toBeFocused();
+		await docs.locator('.stanza-document-rich-text-input').first().fill('Edited weekend itinerary');
+		await page.screenshot({ path: testInfo.outputPath('chatgpt-writing-in-docs.png') });
+
+		const path = join(await realpath(testWorkspace.directory), 'Travel draft.ash-doc');
+		await electron.evaluate(({ dialog }, filePath) => {
+			dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+		}, path);
+		await workspace.getByRole('button', { name: '保存文档' }).press('Enter');
+		await expect.poll(() => readFile(path, 'utf8').catch(() => '')).toContain('Edited weekend itinerary');
+		const saved = await readFile(path, 'utf8');
+		expect(saved).toContain('echo ready');
+		expect(saved).toContain('"language":"sh"');
+		expect(saved).toContain('"textAlign":"end"');
+		expect(saved).toContain('https://example.com/map');
+		expect(saved).not.toContain('First block only');
+		await expect(workspace.locator('.ash-docs-workspace-title')).toHaveText('Travel draft.ash-doc');
+		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await workspace.getByRole('button', { name: '返回 Artifacts' }).press('Enter');
+		await expect(docs).toHaveCount(0);
+		await page.locator('.ash-artifacts-card.docs:not([data-artifact-example])').getByText('Travel draft', { exact: true }).click();
+		await expect(docs.locator('.stanza-document-rich-text-input').first()).toHaveText('Edited weekend itinerary');
+		await page.getByRole('button', { name: 'First native history', exact: true }).click();
+		await expect(chat).toContainText('Weekend itinerary');
+		expect(await electron.evaluate(() => ashNativeFixture.sends)).toBe(0);
+	});
 
 	test('splits the Chat titlebar at the resizable Entity details column', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 		const suffix = '\n\n<Entity category="software" value="GPUI" disambig="Zed Rust GPU UI framework"/>';
@@ -712,7 +780,7 @@ test.describe('Unified Chat sidebar', () => {
 		await page.keyboard.press('Escape');
 		await expect(preview).toBeHidden();
 		await expect(link).toBeFocused();
-		const replySources = chat.locator('.ash-chat-response-citations').getByRole('button', { name: '来源（1）', exact: true });
+		const replySources = chat.locator('.ash-chat-message-actions').getByRole('button', { name: '来源（1）', exact: true });
 		await replySources.press('Enter');
 		const replySourceCard = page.getByRole('dialog', { name: '来源（1）', exact: true });
 		await expect(replySourceCard.getByRole('link', { name: /Floem 文档/u })).toHaveAttribute('href', source.url);
@@ -750,7 +818,7 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(entity).toBeVisible();
 		await electron.evaluate(() => ashNativeFixture.setOffline(true));
 		const reopened = await workbench.reopenAgentsWindow(electron, page);
-		await expect(reopened.locator('.ash-chat-response-citations').getByRole('button', { name: '来源（1）', exact: true })).toBeVisible();
+		await expect(reopened.locator('.ash-chat-message-actions').getByRole('button', { name: '来源（1）', exact: true })).toBeVisible();
 		await reopened.getByRole('region', { name: 'ChatGPT', exact: true }).getByRole('link', { name: 'GPUI', exact: true }).press('Enter');
 		const cachedDetail = reopened.locator('.ash-chat-entity-details');
 		await expect(cachedDetail.getByRole('link', { name: 'Zed 文档', exact: true })).toBeVisible();
@@ -836,12 +904,25 @@ test.describe('Unified Chat sidebar', () => {
 		await expect.poll(scrollTop).toBeGreaterThan(beforeWheel);
 	});
 
-	test('renders colored file icons and quiet links in the conversation', { tag: ['@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
-		await installService(application as ElectronApplication, false, '\n\n**完整可筛选表格：**[实验结果.xlsx](sandbox:/mnt/data/report.xlsx) · [在线查看](https://example.com/report)');
+	test('renders file links and keeps Sources beside the reply actions', { tag: ['@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
+		const electron = application as ElectronApplication;
+		const workbook = { name: '二维磁性材料_合成气氛与温度.xlsx', bytes: [0x50, 0x4b, 0x03, 0x04, 0x00, 0xff] };
+		const source = { ref_id: 'turn2search1', url: 'https://example.com/workbook?view=full&utm_source=chatgpt.com#data', title: 'Workbook source', snippet: '' };
+		const sourceUrl = 'https://example.com/workbook?view=full#data';
+		const libraryUrl = 'https://chatgpt.com/library?file_id=libfile_example&account_id=personal';
+		const externalUrl = 'https://example.com/report?view=compact#table';
+		const citation = '\uE200genui\uE202{"citation":{"ref":"turn2search1"}}\uE201';
+		await installService(electron, false, {
+			suffix: `\n\n**完整可筛选表格：**[实验结果.xlsx](sandbox:/mnt/data/report.xlsx) · [在线查看](${libraryUrl}) ${citation}\n\n[报告](https://example.com/report?view=compact&utm_source=chatgpt.com#table)`,
+			workbook,
+			sources: [source],
+			timestamp: 1_793_003_940,
+		});
 		const page = await workbench.openAgentsWindow('electron');
 		await page.locator('[data-item="chatgpt:history-one"] .ash-sessions-list-item').click();
 		const fileLink = page.getByRole('link', { name: '实验结果.xlsx', exact: true });
 		const webLink = page.getByRole('link', { name: '在线查看', exact: true });
+		await expect(webLink).toHaveAttribute('href', libraryUrl);
 		const paragraph = fileLink.locator('..');
 		await expect(paragraph.locator('strong')).toHaveText('完整可筛选表格：');
 		await expect(fileLink.locator('[data-ash-icon-id="xls-green"][aria-hidden="true"]')).toBeVisible();
@@ -857,6 +938,77 @@ test.describe('Unified Chat sidebar', () => {
 		await page.keyboard.press('Tab');
 		await expect(webLink).toBeFocused();
 		await expect(webLink).toHaveCSS('outline-style', 'solid');
+		await electron.evaluate(({ shell }) => {
+			const original = shell.openExternal;
+			globalThis.ashLibraryLinkFixture = { opened: [], restore: () => { shell.openExternal = original; } };
+			shell.openExternal = async url => { globalThis.ashLibraryLinkFixture.opened.push(url); };
+		});
+		try {
+			const opened = () => electron.evaluate(() => globalThis.ashLibraryLinkFixture.opened);
+			const confirmation = page.getByRole('dialog', { name: '打开外部链接', exact: true });
+			await webLink.press('Enter');
+			await expect.poll(opened).toEqual([libraryUrl]);
+			await expect(confirmation).toHaveCount(0);
+			const reportLink = page.getByRole('link', { name: '报告', exact: true });
+			await expect(reportLink).toHaveAttribute('href', externalUrl);
+			await reportLink.click();
+			await expect(confirmation).toContainText(externalUrl);
+			await page.keyboard.press('Escape');
+			await expect(confirmation).toHaveCount(0);
+			expect(await opened()).toEqual([libraryUrl]);
+		} finally {
+			await electron.evaluate(() => globalThis.ashLibraryLinkFixture.restore());
+		}
+		const attachment = page.getByRole('link', { name: `下载 ${workbook.name}`, exact: true });
+		await expect(attachment.locator('[data-ash-icon-id="xls-green"][aria-hidden="true"]')).toBeVisible();
+		await expect(attachment).toHaveCSS('text-decoration-line', 'underline');
+		await expect(attachment).toHaveCSS('text-decoration-style', 'dotted');
+		const workbookRequests = () => electron.evaluate(() => globalThis.ashNativeFixture.workbookRequests);
+		expect(await workbookRequests()).toBe(0);
+		await expect(page.locator('.ash-chat-item-agentMessage .ash-chat-media')).toHaveCount(1);
+		await attachment.screenshot({ path: testInfo.outputPath('conversation-workbook-attachment.png') });
+		const attachmentHeight = (await attachment.boundingBox())!.height;
+		await attachment.focus();
+		await expect(attachment).toHaveCSS('outline-style', 'solid');
+		const downloadPath = testInfo.outputPath(workbook.name);
+		await electron.evaluate(({ BrowserWindow }, { url, path, name }) => {
+			const owner = BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === url);
+			if (!owner) throw new Error('Download window is missing');
+			owner.webContents.session.once('will-download', (_event, item) => {
+				if (item.getFilename() === name) item.setSavePath(path);
+				else item.cancel();
+			});
+		}, { url: page.url(), path: downloadPath, name: workbook.name });
+		await page.keyboard.press('Enter');
+		await expect.poll(() => readFile(downloadPath).catch(() => undefined)).toEqual(Buffer.from(workbook.bytes));
+		expect(await workbookRequests()).toBe(1);
+		await expect(attachment).toBeFocused();
+		expect((await attachment.boundingBox())!.height).toBe(attachmentHeight);
+
+		const actions = page.locator('.ash-chat-item-agentMessage > .ash-chat-message-actions');
+		const sources = actions.getByRole('button', { name: '来源（1）', exact: true });
+		const toolbar = actions.getByRole('toolbar');
+		const time = actions.locator('time');
+		await expect(sources).toBeVisible();
+		await expect(time).toBeVisible();
+		const [sourceBounds, toolbarBounds, timeBounds] = await Promise.all([sources.boundingBox(), toolbar.boundingBox(), time.boundingBox()]);
+		expect(sourceBounds!.x).toBeGreaterThanOrEqual(toolbarBounds!.x + toolbarBounds!.width);
+		expect(timeBounds!.x).toBeGreaterThanOrEqual(sourceBounds!.x + sourceBounds!.width);
+		expect(Math.abs(sourceBounds!.y + sourceBounds!.height / 2 - toolbarBounds!.y - toolbarBounds!.height / 2)).toBeLessThanOrEqual(1);
+		await testInfo.attach('response-actions-with-sources', { body: await actions.screenshot(), contentType: 'image/png' });
+		await sources.press('Enter');
+		const sourceCard = page.getByRole('dialog', { name: '来源（1）', exact: true });
+		await expect(sourceCard.getByRole('link', { name: /Workbook source/u })).toHaveAttribute('href', sourceUrl);
+		await page.keyboard.press('Escape');
+		await expect(sourceCard).toBeHidden();
+		await expect(sources).toBeFocused();
+		const inlineSources = paragraph.getByRole('button', { name: '1 个来源', exact: true });
+		await inlineSources.press('Enter');
+		const inlineCard = page.getByRole('dialog', { name: '1 个来源', exact: true });
+		await expect(inlineCard.getByRole('link', { name: /Workbook source/u })).toHaveAttribute('href', sourceUrl);
+		await page.keyboard.press('Escape');
+		await expect(inlineSources).toBeFocused();
+		await expect(paragraph.locator('.ash-chat-markdown-media')).toHaveCount(0);
 	});
 
 	test('renders the shared code card for Ash and ChatGPT replies', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }, testInfo) => {

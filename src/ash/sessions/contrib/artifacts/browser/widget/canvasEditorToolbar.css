@@ -85,6 +85,17 @@
 	gap: var(--ash-spacing-size40);
 }
 
+.ash-canvas-editor-title {
+	flex: 0 0 auto;
+	max-width: 136px;
+	overflow: hidden;
+	margin: 0;
+	font-size: inherit;
+	font-weight: var(--ash-fontWeight-semiBold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .ash-canvas-editor-toolbar-workspace {
 	flex: 0 0 auto;
 	white-space: nowrap;

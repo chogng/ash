@@ -30,7 +30,7 @@ import { IHostService } from '../../../services/host/browser/host.js';
 import { ImageAnnotation } from './imageAnnotation.js';
 import { encodeImageBlobAsPng } from './imageEncoder.js';
 import { ImageViewer, type ImageViewerScale, type IImageViewerSourceOptions } from './imageViewer.js';
-import { mediaImageFileName, saveMediaImageAs } from './mediaPreviewSaveAs.js';
+import { resourceFileName, saveResourceAs } from '../../../services/files/browser/resourceSave.js';
 
 export interface IImagePreviewAnnotationTarget {
 	readonly signal: AbortSignal;
@@ -345,7 +345,7 @@ export class ImagePreviewPopup {
 		const open = async (applicationId?: string) => {
 			const image = displayed?.blob;
 			if (!openImage || !displayed || !image) return;
-			const name = mediaImageFileName(displayed.name, image.type);
+			const name = resourceFileName(displayed.name, image.type);
 			try {
 				const bytes = nativeImageFormats.has(image.type)
 					? new Uint8Array(await image.arrayBuffer())
@@ -457,7 +457,7 @@ export class ImagePreviewPopup {
 		const save = action('imagePreview.save', localize('media.image.save', 'Save image'), Lxicon.download, () => {
 			if (!displayed?.blob) return;
 			const { blob, name } = displayed;
-			return instantiation.invokeFunction(saveMediaImageAs, blob, mediaImageFileName(name, blob.type), document);
+			return instantiation.invokeFunction(saveResourceAs, blob, resourceFileName(name, blob.type), document);
 		});
 		const fileActions = [save];
 		if (openImage) fileActions.push(action(openId, localize('media.image.open', 'Open'), listApps ? undefined : Lxicon.openInProduct, () => open(selectedApp?.id)));
@@ -510,7 +510,7 @@ export class ImagePreviewPopup {
 				update();
 				try {
 					const blob = await annotation.renderPng(lifetime.signal);
-					const name = source.blob ? mediaImageFileName(source.name, source.blob.type) : source.name;
+					const name = source.blob ? resourceFileName(source.name, source.blob.type) : source.name;
 					const fileName = `${name.slice(0, name.length - extname(name).length)}-annotated.png`;
 					await target.attach(new (getWindow(document).File)([blob], fileName, { type: 'image/png' }), lifetime.signal);
 					if (!lifetime.signal.aborted) hide();

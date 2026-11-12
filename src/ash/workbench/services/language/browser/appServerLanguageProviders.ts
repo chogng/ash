@@ -17,7 +17,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { ILanguageServerLifecycleService } from '../common/languageServerLifecycleService.js';
 import { AppServerLanguageSupport } from './appServerLanguageSupport.js';
-import { resolveAppServerLanguageDirAccess } from './appServerLanguageWorkspace.js';
+import { languageWorkspaceDirId, resolveAppServerLanguageDirAccess } from './appServerLanguageWorkspace.js';
 
 type LocationKind = 'declaration' | 'definition' | 'implementation' | 'typeDefinition' | 'references';
 const APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -571,7 +571,7 @@ class AppServerWorkspaceSymbolProvider implements languages.LanguageWorkspaceSym
 
 	async provideWorkspaceSymbols(query: string, signal: AbortSignal): Promise<readonly languages.LanguageWorkspaceSymbol[]> {
 		const folders = this.workspace.getWorkspace().folders;
-		const roots = folders.map(folder => ({ id: folder.id, uri: folder.uri, ...(folders.length > 1 ? { wireId: folder.id } : {}) }));
+		const roots = folders.map(folder => ({ id: folder.id, uri: folder.uri, wireId: languageWorkspaceDirId(folder.id, folders.length) }));
 		const responses = await Promise.all(roots.flatMap(root => this.support.workspaceLanguageIds(root.id).map(async languageId => {
 			const document = { ...(root.wireId ? { dirId: root.wireId } : {}), languageId };
 			const result = await this.lifecycle.withActivity(document, signal, () => requestWithCapability(this.capabilities, this.workspace, 'workspaceSymbols', document, signal, signal => this.api.directorySymbols({ ...document, query }, { signal })));
@@ -742,13 +742,16 @@ function diagnosticSeverity(severity: languages.LanguageDiagnosticSeverity): 'er
 
 function workspaceRootForResource(workspace: IWorkspaceContextService, resource: URI | undefined): LanguageWorkspaceRoot {
 	const folders = workspace.getWorkspace().folders;
-	if (!resource && folders.length === 1) return { id: folders[0]!.id, uri: folders[0]!.uri };
+	if (!resource && folders.length === 1) {
+		const folder = folders[0]!;
+		return { id: folder.id, uri: folder.uri, wireId: languageWorkspaceDirId(folder.id, folders.length) };
+	}
 	let match: LanguageWorkspaceRoot | undefined;
 	for (const folder of folders) {
 		if (!resource) continue;
 		try {
 			workspaceRelativePath(folder.uri, resource);
-			if (!match || folder.uri.toEncodedComponents().path.length > match.uri.toEncodedComponents().path.length) match = { id: folder.id, uri: folder.uri, ...(folders.length > 1 ? { wireId: folder.id } : {}) };
+			if (!match || folder.uri.toEncodedComponents().path.length > match.uri.toEncodedComponents().path.length) match = { id: folder.id, uri: folder.uri, wireId: languageWorkspaceDirId(folder.id, folders.length) };
 		} catch {
 			// Resource belongs to a different Workspace folder.
 		}

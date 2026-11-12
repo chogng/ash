@@ -5,8 +5,11 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { constObservable, observableValue, type IObservable } from '../../../../../base/common/observable.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import type { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { OpenerService } from '../../../../../editor/browser/services/openerService.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
+import { getAccountProviderLabel } from '../../../../../platform/accounts/common/accountService.js';
 import type { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
@@ -32,9 +35,10 @@ import type { ICustomViewService } from '../../../../services/customView/browser
 import type { ISession, IUntitledChatSession, ModelRef } from '../../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
-import { ChatGPTWebContribution, chatGPTViewSource, chatGPTScrollOptimization, SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../electron-browser/chatGPTWeb.js';
+import { ChatGPTWebContribution, chatGPTViewSource, experimentalChatGPTViewSource, chatGPTScrollOptimization, SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../electron-browser/chatGPTWeb.js';
 import { IChatGPTNativeService, IChatGPTService, linkedTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
 import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../../common/chatGPTNative.js';
+import '../../common/chatGPTAccountLabel.js';
 import { ISessionsSearchService } from '../../../search/browser/searchService.js';
 import type { SearchResult } from '../../../search/browser/searchModel.js';
 import { ChatWorkspaceContribution, registerChatWorkspace } from '../../../chat/electron-browser/chatWorkspace.contribution.js';
@@ -85,11 +89,44 @@ const chatViews: IChatViewFactory = {
 
 suite('ChatGPT entry', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('only ChatGPT views open first-party Library file links directly on activation', async () => {
+		using opener = new OpenerService({} as ICodeEditorService, {} as ICommandService);
+		using validator = opener.registerValidator({ shouldOpen: async () => false });
+		const opened: string[] = [];
+		opener.setDefaultExternalOpener({ openExternal: async href => { opened.push(href); return true; } });
+		using services = new InstantiationService(new ServiceCollection(
+			[IOpenerService, opener],
+			[IChatGPTNativeService, {} as IChatGPTService],
+		));
+		const library = 'https://chatgpt.com/library?file_id=libfile_example&account_id=personal';
+		const activation = { fromUserGesture: true, openExternal: true };
+		assert.equal(await opener.open(library, activation), false);
+		for (const source of [chatGPTViewSource, experimentalChatGPTViewSource]) {
+			using view = services.createChild(services.invokeFunction(source.scopedServices));
+			const scopedOpener = view.get(IOpenerService);
+			assert.equal(await scopedOpener.open(library, activation), true);
+			assert.equal(await scopedOpener.open(library, { openExternal: true }), false);
+			for (const untrusted of [
+				library.replace('https:', 'http:'),
+				library.replace('chatgpt.com', 'chatgpt.com.example.test'),
+				library.replace('chatgpt.com', 'chatgpt.com:8443'),
+				library.replace('/library', '/library-other'),
+				library.replace('libfile_example', '%00'),
+				'https://chatgpt.com/library?file_id=',
+			]) {
+				assert.equal(await scopedOpener.open(untrusted, activation), false, untrusted);
+			}
+		}
+		assert.deepEqual(opened, [library, library]);
+	});
+
 	test('the Workbench Browser settings expose the translated ChatGPT scrolling control', async () => {
 		setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 		try {
 			assert.equal(localize('sessions.chatgpt.toggleOptimization', 'ChatGPT: Toggle Scrolling Optimization'), 'ChatGPT：切换滚动优化');
 			assert.equal(localize('sessions.chatgpt.reloadShort', 'Reload'), '刷新');
+			assert.equal(getAccountProviderLabel('chatgpt-web'), 'ChatGPT 网页');
 			assert.equal(linkedTaskStatus({ sessionId: 'session', threadId: 'thread', prompt: '任务' }), '正在准备任务…');
 			const { createSettingsLayout, SettingsNavigation } = await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
 			const defaults = new DefaultSettings();

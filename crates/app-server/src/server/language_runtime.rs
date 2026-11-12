@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -456,7 +457,19 @@ struct LanguageRuntimeSources {
     configuration: Option<LanguageServersConfig>,
     versions: BTreeMap<String, u64>,
     sessions: Vec<std::sync::Weak<LanguageSession>>,
-    retained_roots: Option<std::collections::BTreeSet<PathBuf>>,
+    retained_roots: Option<LanguageDirectoryRoots>,
+}
+
+#[derive(Clone, Default)]
+pub(super) struct LanguageDirectoryRoots {
+    pub(super) granted: BTreeSet<PathBuf>,
+    pub(super) worktrees: BTreeSet<PathBuf>,
+}
+
+impl LanguageDirectoryRoots {
+    fn retains(&self, root: &Path, worktrees_enabled: bool) -> bool {
+        self.granted.contains(root) && (worktrees_enabled || !self.worktrees.contains(root))
+    }
 }
 
 #[derive(Clone)]
@@ -472,6 +485,36 @@ impl CatalogLanguageServer {
 }
 
 impl LanguageRuntimeSources {
+    fn directory_enabled(&self, root: &Path, configuration: &LanguageServersConfig) -> bool {
+        configuration.enabled
+            && (configuration.worktrees_enabled
+                || !self
+                    .retained_roots
+                    .as_ref()
+                    .is_some_and(|roots| roots.worktrees.contains(root)))
+    }
+
+    fn worktrees_enabled(&self) -> bool {
+        self.configuration
+            .as_ref()
+            .is_some_and(|config| config.worktrees_enabled)
+    }
+
+    fn retire_unavailable_directories(&self) {
+        let Some(roots) = &self.retained_roots else {
+            return;
+        };
+        let worktrees_enabled = self.worktrees_enabled();
+        for session in self.sessions.iter().filter_map(std::sync::Weak::upgrade) {
+            if !roots.retains(&session.root, worktrees_enabled) {
+                session.cancellation.cancel();
+                let _ = session
+                    .manager
+                    .set_enablement(ash_lsp_manager::LspManagerEnablement::Disabled);
+            }
+        }
+    }
+
     fn retire(&mut self, names: Vec<String>) {
         if names.is_empty() {
             return;
@@ -771,7 +814,7 @@ impl AppServerLanguageRuntime {
     }
 
     fn refresh_sources(&mut self) {
-        let (providers, acquisitions, versions, retained_roots) = {
+        let (providers, acquisitions, versions, retained_roots, worktrees_enabled) = {
             let sources = self
                 .sources
                 .lock()
@@ -781,6 +824,7 @@ impl AppServerLanguageRuntime {
                 sources.acquisitions.clone(),
                 sources.versions.clone(),
                 sources.retained_roots.clone(),
+                sources.worktrees_enabled(),
             )
         };
         let changed_names = self
@@ -812,12 +856,13 @@ impl AppServerLanguageRuntime {
         self.source_versions = versions;
         self.definitions_dirty |= changed;
         if let Some(roots) = retained_roots {
-            self.env_runtimes.retain(|root, _| roots.contains(root));
+            self.env_runtimes
+                .retain(|root, _| roots.retains(root, worktrees_enabled));
             if self
                 .dir_state
                 .root
                 .as_ref()
-                .is_some_and(|root| !roots.contains(root))
+                .is_some_and(|root| !roots.retains(root, worktrees_enabled))
             {
                 self.shutdown_selected();
             }
@@ -833,6 +878,13 @@ impl AppServerLanguageRuntime {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if sources.configuration.as_ref() != Some(configuration) {
+            let worktrees_disabled =
+                sources.worktrees_enabled() && !configuration.worktrees_enabled;
+            let enablement_changed = sources
+                .configuration
+                .as_ref()
+                .is_none_or(|config| config.enabled)
+                != configuration.enabled;
             let old = sources.configuration.as_ref().map(|config| &config.servers);
             let ids = old
                 .into_iter()
@@ -840,15 +892,25 @@ impl AppServerLanguageRuntime {
                 .chain(configuration.servers.keys())
                 .cloned()
                 .collect::<std::collections::BTreeSet<_>>();
-            let changed = ids
+            let mut changed: Vec<_> = ids
                 .into_iter()
                 .filter(|id| {
-                    old.and_then(|servers| servers.get(id)) != configuration.servers.get(id)
+                    enablement_changed
+                        || old.and_then(|servers| servers.get(id)) != configuration.servers.get(id)
                 })
                 .map(|id| id.to_string())
                 .collect();
+            if enablement_changed {
+                changed.extend(sources.providers.ids().map(str::to_owned));
+                changed.extend(sources.acquisitions.keys().cloned());
+                changed.sort_unstable();
+                changed.dedup();
+            }
             sources.configuration = Some(configuration.clone());
             sources.retire(changed);
+            if worktrees_disabled {
+                sources.retire_unavailable_directories();
+            }
         }
         drop(sources);
         self.refresh_sources();
@@ -972,6 +1034,22 @@ impl AppServerLanguageRuntime {
         Ok(())
     }
 
+    pub(super) fn directory_enabled(
+        &self,
+        root: &Path,
+        configuration: &LanguageServersConfig,
+    ) -> bool {
+        let sources = self
+            .sources
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        sources.directory_enabled(root, configuration)
+            && sources
+                .configuration
+                .as_ref()
+                .is_none_or(|current| sources.directory_enabled(root, current))
+    }
+
     pub(super) fn acquisitions<'a>(
         &'a self,
         configuration: &'a LanguageServersConfig,
@@ -980,7 +1058,8 @@ impl AppServerLanguageRuntime {
             .values()
             .map(|server| &server.acquisition)
             .filter(move |server| {
-                !self.providers.contains(&server.id)
+                configuration.enabled
+                    && !self.providers.contains(&server.id)
                     && configuration
                         .servers
                         .iter()
@@ -1022,6 +1101,9 @@ impl AppServerLanguageRuntime {
         target: Option<(&str, &str)>,
         action: ash_lsp_manager::LanguageServerControl,
     ) -> Result<(), String> {
+        if !self.directory_enabled(root, configuration) {
+            return Ok(());
+        }
         if self.env_runtimes.contains_key(root)
             || self
                 .dir_state
@@ -1137,23 +1219,13 @@ impl AppServerLanguageRuntime {
             .retained_roots = None;
     }
 
-    pub(super) fn retain_dir_roots(&mut self, roots: &std::collections::BTreeSet<PathBuf>) {
+    pub(super) fn retain_dir_roots(&mut self, roots: LanguageDirectoryRoots) {
         let mut sources = self
             .sources
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        sources.retained_roots = Some(roots.clone());
-        for session in sources
-            .sessions
-            .iter()
-            .filter_map(std::sync::Weak::upgrade)
-            .filter(|session| !roots.contains(&session.root))
-        {
-            session.cancellation.cancel();
-            let _ = session
-                .manager
-                .set_enablement(ash_lsp_manager::LspManagerEnablement::Disabled);
-        }
+        sources.retained_roots = Some(roots);
+        sources.retire_unavailable_directories();
         drop(sources);
         self.refresh_sources();
     }
@@ -1214,6 +1286,9 @@ impl AppServerLanguageRuntime {
         language_id: &str,
         purpose: LanguageDocumentPurpose,
     ) -> Result<&LspManager, String> {
+        if !self.directory_enabled(dir_root, configuration) {
+            return Err("language servers are disabled".into());
+        }
         if self.env_runtimes.contains_key(dir_root)
             || (self.dir_state.root.is_some() && self.dir_state.root.as_deref() != Some(dir_root))
         {
@@ -1380,6 +1455,9 @@ impl AppServerLanguageRuntime {
         dir_root: &Path,
         configuration: &LanguageServersConfig,
     ) -> Result<Vec<ash_lsp_manager::LanguageServerDefinition>, String> {
+        if !self.directory_enabled(dir_root, configuration) {
+            return Ok(Vec::new());
+        }
         if let Some(runtime) = self.env_runtimes.get(dir_root) {
             return runtime.definitions(dir_root, configuration);
         }
@@ -1521,14 +1599,18 @@ impl AppServerLanguageRuntime {
             .sources
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if self
-            .connection_cancellation
+        if sources
+            .configuration
             .as_ref()
-            .is_some_and(CancellationToken::is_cancelled)
+            .is_some_and(|config| !sources.directory_enabled(dir_root, config))
+            || self
+                .connection_cancellation
+                .as_ref()
+                .is_some_and(CancellationToken::is_cancelled)
             || sources
                 .retained_roots
                 .as_ref()
-                .is_some_and(|roots| !roots.contains(dir_root))
+                .is_some_and(|roots| !roots.granted.contains(dir_root))
             || definitions.iter().any(|definition| {
                 sources.versions.get(definition.name().as_str())
                     != self.source_versions.get(definition.name().as_str())

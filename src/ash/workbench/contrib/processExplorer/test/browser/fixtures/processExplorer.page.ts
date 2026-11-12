@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../base/browser/ui/styles.css';
 import '../../../../../../platform/theme/common/sizes/baseSizes.js';
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
@@ -6,7 +7,6 @@ import { Event } from '../../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { ProxyChannel } from '../../../../../../base/parts/ipc/common/ipc.js';
 import { setNlsMessages } from '../../../../../../nls.js';
-import messages from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { IAccessibleViewService, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { BrowserClipboardService } from '../../../../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
@@ -39,7 +39,7 @@ import '../../../../../services/process/electron-browser/processService.js';
 import '../../../electron-browser/processExplorer.contribution.js';
 import '../../../../accessibility/browser/accessibilityConfiguration.js';
 
-if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', messages); }
+if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chineseCatalog.bundles); }
 setARIAContainer(document.body);
 const resources = new DisposableStore();
 const root = document.querySelector<HTMLElement>('#explorer')!;

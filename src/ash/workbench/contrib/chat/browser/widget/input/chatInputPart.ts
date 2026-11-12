@@ -591,7 +591,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.changesPill = this._register(instantiationService.createInstance(ChatChangesPill, this.element, () => {
 			void this.runSecondaryAction(async () => { await this.delegate.openChanges?.(this.state.changesRevision); });
 		}, () => this.focus(), this.delegate.readWorkspaceChanges));
-		this.sessionWorkingSet = this._register(instantiationService.createInstance(ChatSessionWorkingSet, this.changesPill.domNode,
+		this.sessionWorkingSet = this._register(instantiationService.createInstance(ChatSessionWorkingSet, this.changesPill.actionsDomNode,
 			async (revision: string, file: ChatChangedFileTarget) => {
 				const lifecycle = this.inputLifecycle.signal;
 				try {
@@ -1448,7 +1448,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	protected getAccessibilityHelpContent(): string {
 		const request = this.state.interaction?.request;
 		return [
-			getChatInputAccessibilityHelp(this.imageEditors.accessibilityHelp, !!this.secondaryToolbarContainer, !!this.delegate.executeServerCommand || this.clientCommands.getCommands().length > 0),
+			getChatInputAccessibilityHelp(this.imageEditors.accessibilityHelp, !!this.secondaryToolbarContainer, !!this.delegate.executeServerCommand || this.clientCommands.getCommands().length > 0, !!this.delegate.readWorkspaceChanges),
 			this.delegate.draft?.readImage ? localize('chat.input.stagedImageHelp', 'Pasted images appear above the message text inside the input. Use Tab to reach Preview or Remove, and Enter or Space to activate. Escape closes the preview and returns focus to the image.') : '',
 			this.state.interaction?.request.type === 'toolResultReview' ? localize('chat.resultReview.help', 'This tool has already executed. Tab to Results awaiting review to read its captured output. Share results sends it to the model; Skip results withholds it without undoing changes. Restoring supported file changes is a separate checkpoint operation.') : '',
 			this.toolConfirmation instanceof ChatToolAuthenticationSubPart ? localize('chat.tool.authHelp', 'Use Tab to reach Sign in. The sign-in result appears in the approval. Review the tool and choose whether to approve it afterwards.') : '',

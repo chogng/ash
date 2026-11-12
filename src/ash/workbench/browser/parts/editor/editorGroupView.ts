@@ -646,8 +646,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 				onApplyWorkspaceEdit: this.onApplyWorkspaceEdit,
 				...(this.onSave ? {
 					onSave: () => {
-						if (!createdPane) return Promise.reject(new Error('Editor save is unavailable'));
-						return this.onSave!(this, input, createdPane).then(result => !!result);
+						const entry = this.entry(input);
+						// Reopening a retained pane can replace its input without recreating the pane.
+						if (!createdPane || entry?.paneInstance.pane !== createdPane) return Promise.reject(new Error('Editor save is unavailable'));
+						return this.onSave!(this, entry.input, createdPane).then(result => !!result);
 					},
 				} : {}),
 			});

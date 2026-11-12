@@ -9,6 +9,7 @@ import { ILanguageServerService, type LanguageServerState } from '../../../../pl
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ILanguageServerLifecycleService, LanguageServerLifecycleConfiguration } from '../common/languageServerLifecycleService.js';
+import { languageWorkspaceDirId } from './appServerLanguageWorkspace.js';
 
 interface Server {
 	readonly dirId: string;
@@ -171,7 +172,7 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 		return entry.waking;
 	}
 
-	private wireId(entry: Server): string | undefined { return this.workspace.getWorkspace().folders.length > 1 ? entry.dirId : undefined; }
+	private wireId(entry: Server): string | undefined { return languageWorkspaceDirId(entry.dirId, this.workspace.getWorkspace().folders.length); }
 	private cancelTimer(entry: Server): void { if (entry.timer !== undefined) clearTimeout(entry.timer); entry.timer = undefined; }
 	private clear(): void {
 		for (const entry of this.entries.values()) { this.cancelTimer(entry); entry.ready?.error(new Error('Language workspace closed')); }

@@ -12,6 +12,8 @@ import type { ISerializedBrowserHistoryEntriesSnapshot, ISerializedBrowserFavico
 import type { BrowserSessionHistory } from './browserSessionHistory.js';
 import { getMediaOrTextMime } from '../../../base/common/mime.js';
 
+const maxFaviconBytes = 64 * 1024;
+
 /** Storage and permission policy have the Electron session's lifetime, independent of any page. */
 export class BrowserSession {
 	private readonly authenticationOwners = new Set<() => void>();
@@ -166,6 +168,14 @@ export class BrowserSession {
 		catch (error) { lease.dispose(); throw error; }
 	}
 
+	/** Use the page's Chromium cache, allowing Chromium to follow same-origin redirects. */
+	public async readPageFavicon(url: URL, signal: AbortSignal): Promise<string | undefined> {
+		const response = await this.electronSession.fetch(url.href, {
+			cache: 'force-cache', credentials: 'omit', mode: 'same-origin', headers: { Origin: url.origin }, bypassCustomProtocolHandlers: true, signal,
+		});
+		return readFaviconImage(response);
+	}
+
 	public static getOrCreate(id: string, scope: BrowserViewStorageScope, electronSession: Session): BrowserSession {
 		const existing = this.sessions.get(electronSession);
 		if (existing) {
@@ -178,4 +188,30 @@ export class BrowserSession {
 		this.sessions.set(electronSession, browserSession);
 		return browserSession;
 	}
+}
+
+async function readFaviconImage(response: Response): Promise<string | undefined> {
+	if (!response.body || response.status !== 200 || Number(response.headers.get('content-length')) > maxFaviconBytes) {
+		await response.body?.cancel();
+		return undefined;
+	}
+	const chunks: Uint8Array[] = [];
+	let size = 0;
+	for await (const chunk of response.body) {
+		size += chunk.byteLength;
+		if (size > maxFaviconBytes) return undefined;
+		chunks.push(chunk);
+	}
+	const data = Buffer.concat(chunks, size);
+	const type = iconMediaType(data);
+	return type ? `data:image/${type};base64,${data.toString('base64')}` : undefined;
+}
+
+function iconMediaType(data: Buffer): string | undefined {
+	if (data.subarray(0, 8).toString('hex') === '89504e470d0a1a0a') return 'png';
+	if (data.subarray(0, 4).toString('hex') === '00000100') return 'x-icon';
+	if (data.subarray(0, 3).toString('hex') === 'ffd8ff') return 'jpeg';
+	if (['GIF87a', 'GIF89a'].includes(data.toString('ascii', 0, 6))) return 'gif';
+	if (data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+	return undefined;
 }

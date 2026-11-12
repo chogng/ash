@@ -42,6 +42,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 			getVerticalSashTop: () => this.top,
 			getVerticalSashHeight: () => this.height,
 		}, { orientation: Orientation.VERTICAL }));
+		this.sash.element.classList.add('ash-editor-docked-auxiliarybar-sash');
 		this.sash.state = SashState.Disabled;
 		let startWidth = 0;
 		let collapsed = false;
@@ -69,10 +70,9 @@ export class DockedAuxiliaryBarController extends Disposable {
 
 	public dock(part: Part, home: HTMLElement): IDisposable {
 		const { domNode } = part;
-		domNode.classList.add('ash-editor-docked-auxiliarybar');
 		this.editor.append(domNode);
 		return toDisposable(() => {
-			domNode.classList.remove('ash-editor-docked-auxiliarybar');
+			domNode.classList.remove('ash-editor-docked-auxiliarybar', 'ash-editor-docked-auxiliarybar-split');
 			for (const property of ['top', 'right', 'width', 'height']) domNode.style.removeProperty(property);
 			home.append(domNode);
 		});
@@ -97,7 +97,10 @@ export class DockedAuxiliaryBarController extends Disposable {
 				}
 			}
 			const visible = this.width > 0;
+			const split = visible && editorVisible;
 			if (part) {
+				part.domNode.classList.add('ash-editor-docked-auxiliarybar');
+				part.domNode.classList.toggle('ash-editor-docked-auxiliarybar-split', split);
 				Object.assign(part.domNode.style, {
 					top: `${this.top}px`, right: '0px', width: `${this.width}px`, height: `${this.height}px`,
 				});
@@ -106,7 +109,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 			}
 			this.host.setEditorContentRightInset(this.width);
 			this.host.setEditorContentVisible(!visible || editorVisible);
-			this.sash.state = visible && editorVisible ? SashState.Enabled : SashState.Disabled;
+			this.sash.state = split ? SashState.Enabled : SashState.Disabled;
 			this.sash.layout();
 		} finally {
 			this.layingOut = false;

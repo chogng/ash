@@ -6,12 +6,16 @@ import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../commo
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { derived, type IObservable } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { isURLSafeForTrust } from '../../../../platform/url/common/trustedDomains.js';
 import type { IWorkbenchContribution } from '../../../../workbench/common/contributions.js';
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
@@ -31,12 +35,40 @@ export const chatGPTScrollOptimization = 'sessions.chatgpt.optimizeScrolling';
 export const SHOW_CHATGPT_COMMAND = 'sessions.show.chatgpt';
 export const SHOW_PREFERRED_CHATGPT_COMMAND = 'sessions.show.preferredChatgpt';
 
+function chatGPTScopedServices(accessor: ServicesAccessor): ServiceCollection {
+	const opener = accessor.get(IOpenerService);
+	const scopedOpener: IOpenerService = {
+		_serviceBrand: undefined,
+		registerOpener: opener.registerOpener.bind(opener),
+		registerValidator: opener.registerValidator.bind(opener),
+		registerExternalUriResolver: opener.registerExternalUriResolver.bind(opener),
+		setDefaultExternalOpener: opener.setDefaultExternalOpener.bind(opener),
+		registerExternalOpener: opener.registerExternalOpener.bind(opener),
+		resolveExternalUri: opener.resolveExternalUri.bind(opener),
+		async open(target, options) {
+			if (options?.fromUserGesture && options.openExternal) {
+				const resource = typeof target === 'string' ? URI.parse(target) : target;
+				if (isURLSafeForTrust(resource)) {
+					const url = new URL(resource.toString());
+					// Library links are the first-party viewer for generated files in ChatGPT replies.
+					if (url.origin === 'https://chatgpt.com' && url.pathname === '/library' && url.searchParams.get('file_id')) {
+						return opener.open(target, { ...options, skipValidation: true });
+					}
+				}
+			}
+			return opener.open(target, options);
+		},
+	};
+	return new ServiceCollection([IOpenerService, scopedOpener]);
+}
+
 export const chatGPTViewSource = {
 	id: 'sessions.editor.chatgpt',
 	rootClass: 'ash-chatgpt-widget',
 	title: () => localize('sessions.chatgpt.title', 'ChatGPT'),
 	inputLabel: () => localize('sessions.chatgpt.prompt', 'Ask ChatGPT'),
 	model: new SyncDescriptor(ChatGPTWidgetModel),
+	scopedServices: chatGPTScopedServices,
 	createDraftPicker: (instantiation, footer, visible) => instantiation.createInstance(ChatGPTProjectFolderPicker, footer, visible),
 	accessibility: {
 		focusContext: 'chatGPTFocused',
@@ -52,7 +84,11 @@ export const experimentalChatGPTViewSource = {
 	id: 'sessions.editor.experimentalChatgpt',
 	title: () => localize('sessions.chatgpt.experimentalTitle', 'ChatGPT (Experimental)'),
 	inputLabel: () => localize('sessions.chatgpt.experimentalPrompt', 'Ask ChatGPT (Experimental)'),
-	scopedServices: accessor => new ServiceCollection([IChatGPTService, accessor.get(IChatGPTNativeService)]),
+	scopedServices: accessor => {
+		const services = chatGPTScopedServices(accessor);
+		services.set(IChatGPTService, accessor.get(IChatGPTNativeService));
+		return services;
+	},
 	accessibility: { ...chatGPTViewSource.accessibility, focusContext: 'experimentalChatGPTFocused' },
 } satisfies IChatViewSource;
 

@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import assert from 'node:assert/strict';
@@ -30,7 +31,6 @@ import { CommandService } from '../../../../services/commands/common/commandServ
 import { BrowserEditor, CONTEXT_BROWSER_HAS_ERROR, CONTEXT_BROWSER_HAS_URL } from '../../electron-browser/browserEditor.js';
 import { CONTEXT_BROWSER_DEVTOOLS_OPEN } from '../../electron-browser/features/browserDevToolsFeature.js';
 import { DialogResult } from '../../../../../platform/dialogs/common/dialogs.js';
-import { readFile } from 'node:fs/promises';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
@@ -55,7 +55,7 @@ suite('Browser Workbench page lifecycle', () => {
 	});
 
 	test('authentication uses translated masked inputs, defaults to no persistence and cancels retired requests', async () => {
-		const chinese = JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
+		const chinese = chineseCatalog.bundles;
 		try {
 			setNlsMessages('zh-CN', chinese);
 			using f = fixture(); await f.views.initialize();
@@ -370,6 +370,7 @@ function fixture() {
 		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', getAccessibilityTree: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
+		getWebsiteFavicon: async () => undefined,
 		getBrowserViews: async () => [f.info],
 		getOrCreateBrowserView: async (targetId, options) => ({ ...f.info, id: targetId, owner: options.owner, session: options.session, state: { ...f.info.state, targetId, url: options.initialUrl } }),
 		getState: async targetId => ({ ...f.info.state, targetId }),

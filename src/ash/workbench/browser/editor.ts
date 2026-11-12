@@ -54,6 +54,7 @@ export function registerBuiltinEditorPane(extensionId: string, editorId: string,
 /** Owns editor declarations and matching; editor groups own the created panes. */
 export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistry {
 	private readonly descriptors = new Map<string, IEditorPaneDescriptor>();
+	private readonly staticEditors = new WeakSet<IEditorPaneDescriptor>();
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	public readonly onDidChange: Event<void> = this.changeEmitter.event;
 
@@ -93,7 +94,13 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 
 	/** Product contributions retain their declarations for the module lifetime. */
 	public registerStatic(descriptor: IEditorPaneDescriptor): void {
+		this.staticEditors.add(descriptor);
 		this._register(this.registerEditorPane(descriptor));
+	}
+
+	public hasStaticEditor(id: string): boolean {
+		const descriptor = this.descriptors.get(id);
+		return descriptor !== undefined && this.staticEditors.has(descriptor);
 	}
 
 	public getEditorPanes(): readonly IEditorPaneDescriptor[] {

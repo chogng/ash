@@ -1,5 +1,7 @@
 # Ash Agent Instructions
 
+This is your repo, you have the most full priority to implement various architechtural approaches, all with the goal of making the code more robust, stable, highly cohesive and loosely coupled.
+
 If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `../zed`, `../warp`, `../livekit`
 
 ## Repository ownership
@@ -22,7 +24,6 @@ If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `
 
 ## Common rules
 
-- 只修改任务所需的内容；原文无问题就保留，不顺手重写；非必要不添加引用。
 - In `AGENTS.md`, instructions and skills, keep concrete actions, prohibitions and necessary exceptions in one place. Delete duplicated rules, skill triggers or documentation indexes, and prose that adds no constraint.
 - Skill 可以基于 `AGENTS.md` 和适用的 instructions，按职责保持独立；仅在任务确实需要组合时引用其他 skill，禁止循环引用。普通文档可以引用 skill，但 skill 不得依赖普通文档提供执行规则。通用约束放在 instructions，专项执行流程放在 skill，避免重复维护。
 - Do not keep competing copies of business state; update it through its owning model or service.
@@ -44,4 +45,3 @@ If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `
 - Modify the requested checkout; do not substitute another checkout or only a remote branch. Preserve unrelated changes.
 - Run self-hosting validation through Ash itself.
 - Before committing or publishing, run `just commit-check <base-ref>` and handle its result as defined in the [commit workflow](.agents/skills/commit-pr/SKILL.md#prepare-the-exact-change). CI checks the full repository.
-- A PR is optional for repository-owner changes; use PR review for external contributions or security-sensitive changes.

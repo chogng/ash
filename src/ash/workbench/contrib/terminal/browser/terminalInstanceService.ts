@@ -6,7 +6,7 @@ import { AgentHostTerminalService } from './agentHostTerminalService.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { TerminalProcessConnectionState } from '../../../../platform/terminal/common/terminal.js';
-import type { ITerminalCreateOptions, ITerminalProfile } from './terminal.js';
+import type { ITerminalCreateOptions, ITerminalDimensions, ITerminalProfile } from './terminal.js';
 import { TerminalInstance } from './terminalInstance.js';
 import { localize } from '../../../../nls.js';
 
@@ -28,7 +28,7 @@ export class TerminalInstanceService extends Disposable {
 		super();
 		this.backend = this._register(instantiationService.createInstance(AgentHostTerminalService));
 	}
-	async createInstance(options: ITerminalCreateOptions, callbacks: InstanceCreationCallbacks): Promise<TerminalInstance> {
+	async createInstance(options: ITerminalCreateOptions, callbacks: InstanceCreationCallbacks, prepareForLaunch?: (instance: TerminalInstance) => Promise<ITerminalDimensions>): Promise<TerminalInstance> {
 		if (this.isDisposed) {
 			throw new CancellationError();
 		}
@@ -99,40 +99,47 @@ export class TerminalInstanceService extends Disposable {
 		const instanceNumber = restored?.instanceId ?? this.nextInstanceId++;
 		this.nextInstanceId = Math.max(this.nextInstanceId, instanceNumber + 1);
 		const autoReplies = getTerminalAutoReplyRules(this.configuration);
-		const child = await this.backend.createProcess({
+		const createProcess = (dimensions: ITerminalDimensions) => this.backend.createProcess({
 			...(autoReplies.length ? { autoReplies } : {}),
 			...processWorkspaceFolder(processWorkspaceFolderId),
-			rows: options.dimensions.rows,
-			cols: options.dimensions.cols,
+			rows: dimensions.rows,
+			cols: dimensions.cols,
 			profile,
 			...(environment === undefined ? {} : { env: environment }),
 			...(launch.cwd === undefined ? {} : { cwd: launch.cwd }),
 			...(launch.strictEnv === undefined ? {} : { strictEnv: launch.strictEnv }),
 			...(execution === undefined ? {} : { execution }),
 		}, instanceNumber, options.attachPersistentProcess?.process, options.attachPersistentProcess?.ownership);
-		const created = child.creation;
+		const child = prepareForLaunch ? undefined : await createProcess(options.dimensions);
+		const created = child?.creation;
+		const initialProfile = created?.profile ?? {
+			profileId: profile.type === 'profile' ? profile.profileId : `pending-${instanceNumber}`,
+			title: profile.type === 'custom' ? profile.name : localize('terminal.profile.shell', 'Shell'),
+			isDefault: false,
+		};
 		// A completed backend request still owns a PTY even if its window has closed.
 		if (this.isDisposed) {
-			await child.close();
+			await child?.close();
 			throw new CancellationError();
 		}
+		let instance: TerminalInstance | undefined;
 		try {
-			const instance = this.instantiationService.createInstance(TerminalInstance,
+			const terminal: TerminalInstance = this.instantiationService.createInstance(TerminalInstance,
 				`terminal-instance-${instanceNumber}`,
 				instanceNumber,
 				workspaceFolder?.id ?? '',
 				processWorkspaceFolderId,
 				child,
-				created.ready,
-				options.title ?? terminalProfileTitle(created.profile),
-				{ ...created.profile, icon: options.icon, color: options.color },
-				created.connectionPersistence,
+				created?.ready ?? { pid: -1, cwd: options.cwd ?? '' },
+				options.title ?? terminalProfileTitle(initialProfile),
+				{ ...initialProfile, icon: options.icon, color: options.color },
+				created?.connectionPersistence ?? 'connectionOwned',
 				restored ? restored.customTitle : options.title,
 				callbacks.getConnectionState,
-				() => callbacks.onClosed(instance),
+				() => callbacks.onClosed(terminal),
 				callbacks.onTitleChanged,
 				undefined,
-				Object.freeze({ ...launch, profile: profile.type === 'custom' ? profile : { type: 'profile' as const, profileId: created.profile.profileId } }),
+				Object.freeze({ ...launch, profile: !created || profile.type === 'custom' ? profile : { type: 'profile' as const, profileId: created.profile.profileId } }),
 				options.initialText,
 				options.waitOnExit,
 				options.dimensions,
@@ -140,10 +147,16 @@ export class TerminalInstanceService extends Disposable {
 				restored,
 				revivalLaunch,
 			);
-			return instance;
+			instance = terminal;
+			if (prepareForLaunch) {
+				const dimensions = await prepareForLaunch(terminal);
+				await terminal.createInitialProcess(() => createProcess(dimensions), dimensions);
+			}
+			return terminal;
 		} catch (error) {
 			// Until construction succeeds, this factory still owns the acquired PTY.
-			await child.close().catch(onUnexpectedError);
+			const release = instance ? instance.close() : child?.close();
+			await release?.catch(onUnexpectedError);
 			throw error;
 		}
 	}

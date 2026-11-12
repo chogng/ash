@@ -8,6 +8,8 @@ import { chatCitationClass, chatCitationLinkClass, chatExternalLinkClass, chatSo
 import { InlineAnchorWidget, renderFileAnchor } from './chatInlineAnchorWidget.js';
 import { bindChatLinkPreviewActivation, ChatRichLinkDecorator, createChatLinkPreview } from './chatRichLink.js';
 
+export const chatCitationButtonClass = 'ash-chat-citation-button';
+
 /** Tracks the decorations attached to one response's sanitized Markdown. */
 export class ChatMarkdownDecorationsRenderer extends Disposable {
 	private readonly bindings = this._register(new DisposableMap<HTMLElement>());
@@ -53,6 +55,16 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 		if (binding) this.bindings.set(anchor, binding);
 	}
 
+	/** Bind citations in a rendered copy, with a lifetime independent of the transcript. */
+	bindCitations(root: HTMLElement): IDisposable {
+		const bindings = new DisposableStore();
+		for (const citation of root.querySelectorAll<HTMLElement>(`.${chatCitationClass}`)) {
+			const binding = this.bindCitation(citation);
+			if (binding) bindings.add(binding);
+		}
+		return bindings;
+	}
+
 	private get selector(): string {
 		return this.links.linkPresentationRules.length
 			? `a[href], .${chatCitationClass}`
@@ -72,14 +84,15 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 	}
 
 	private bindCitation(element: HTMLElement): IDisposable | undefined {
-		const label = element.querySelector(':scope > .ash-chat-citation-label');
+		// A rendered copy already has a button, but needs fresh state and listeners.
+		const label = element.querySelector(`:scope > .ash-chat-citation-label, :scope > button.${chatCitationButtonClass}`);
 		const sources = element.querySelectorAll<HTMLAnchorElement>(`:scope > .ash-chat-citation-list > a.${chatCitationLinkClass}[href]`);
 		if (!label || !sources.length) return undefined;
 		const binding = new DisposableStore();
 		const document = element.ownerDocument;
 		const button = document.createElement('button');
 		button.type = 'button';
-		button.className = 'ash-chat-citation-button';
+		button.className = chatCitationButtonClass;
 		button.setAttribute('aria-haspopup', 'dialog');
 		button.setAttribute('aria-expanded', 'false');
 		button.append(...[...label.childNodes].map(node => node.cloneNode(true)));
@@ -92,6 +105,7 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 				const scope = active.value = new DisposableStore();
 				const anchors = [...sources].map(source => source.cloneNode(true) as HTMLAnchorElement);
 				const preview = createChatLinkPreview(document, anchors);
+				this.richLinks.loadPreviewIcons(preview, scope);
 				scope.add(bindChatLinkPreviewActivation(preview, button, () => hover.hide(), this.openLink));
 				for (const anchor of anchors) {
 					const href = anchor.getAttribute('href')!;

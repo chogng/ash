@@ -139,6 +139,12 @@ pub enum UserConfigCommand {
         server_id: LanguageServerId,
         config: LanguageServerConfig,
     },
+    SetLanguageServersEnabled {
+        enabled: bool,
+    },
+    SetWorktreeLanguageServersEnabled {
+        enabled: bool,
+    },
     RemoveLanguageServerConfiguration {
         server_id: LanguageServerId,
     },

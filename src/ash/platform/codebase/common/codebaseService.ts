@@ -1,3 +1,4 @@
+import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { ModelRef } from '../../models/common/agentModels.js';
 
@@ -61,6 +62,7 @@ export interface CodebaseStatus {
  * Provider connections and credentials are managed by their configuration and model owners.
  */
 export interface ICodebaseService {
+	readonly onDidChangeConfig: Event<void>;
 	readConfig(): Promise<CodebaseConfigurationSnapshot>;
 	configure(models: CodebaseModels | undefined, automaticContext: CodebaseAutomaticContext, expectedRevision: number): Promise<CodebaseConfigurationCommandResult>;
 	status(): Promise<CodebaseStatus>;

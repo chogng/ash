@@ -24,6 +24,11 @@ import { pickSessionDestination } from '../sessionsPicker.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
+import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
+import { projectFolders } from '../../../chat/browser/sessionWorkspaceProjects.js';
 
 registerAction2(class CloseSessionAction extends Action2 {
 	constructor() {
@@ -81,6 +86,58 @@ registerAction2(class ManageScheduledTasksAction extends Action2 {
 function sessionActionTarget(accessor: ServicesAccessor, argument: unknown, useActive = false) {
 	return captureSessionActionTarget(accessor.get(ISessionsManagementService), accessor.get(IStorageService), accessor.get(IChatSessionNavigationService), argument, useActive);
 }
+
+registerAction2(class NewSessionForWorkspaceAction extends Action2 {
+	constructor() {
+		super({
+			id: 'sessionsView.sectionNewSession',
+			title: localize2('sessions.list.newProjectConversation', 'New conversation in this project'),
+			icon: Lxicon.add,
+			menu: [
+				{ id: Menus.SessionSectionToolbar, group: 'navigation' },
+				{ id: Menus.SidebarCodeProjectContext, group: 'navigation' },
+			],
+		});
+	}
+
+	override async run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
+		const projectId = target && typeof target === 'object' && 'projectId' in target ? target.projectId : undefined;
+		if (typeof projectId !== 'string' || !projectId.trim()) {
+			throw new TypeError(localize('projects.invalidId', 'Choose a valid project.'));
+		}
+		const context = accessor.get(IContextKeyService);
+		if (context.getValue(SessionsWorkspaceModeContext.key) !== 'code') return;
+		const sessions = accessor.get(ISessionsService);
+		const projects = accessor.get(IProjectService);
+		const commands = accessor.get(ICommandService);
+		const notifications = accessor.get(INotificationService);
+		const revision = sessions.navigationRevision;
+		let pageChanged = false;
+		using pageListener = context.onDidChangeContext(event => {
+			for (const key of event.keys) {
+				if (key === SessionsWorkspaceModeContext.key || key.startsWith('sessions.activity.') && key.endsWith('Selected')) pageChanged = true;
+			}
+		});
+		const stillCurrent = () => !pageChanged && revision === sessions.navigationRevision;
+		try {
+			const project = await projects.read(projectId, 'code');
+			if (!stillCurrent()) return;
+			if (project.archived) {
+				throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.project.unavailable' }, 'This project is unavailable. Choose another project.'));
+			}
+			const [folder] = projectFolders(project);
+			sessions.openNewSession(undefined, {
+				providerId: LOCAL_AGENT_HOST_PROVIDER_ID,
+				projectId,
+				workspace: folder ? { type: 'local', root: folder.fsPath } : { type: 'current' },
+			});
+		} catch (error) {
+			if (stillCurrent() && !isCancellationError(error)) notifications.error(toErrorMessage(error));
+			return;
+		}
+		await commands.executeCommand('sessions.open.code', 'conversation');
+	}
+});
 
 registerAction2(class AddSessionToProjectAction extends Action2 {
 	constructor() { super({ id: 'agentSession.addToProject', title: localize2('sessions.list.addToProject', 'Add to project') }); }

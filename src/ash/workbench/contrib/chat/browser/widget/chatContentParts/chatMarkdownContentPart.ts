@@ -1,23 +1,34 @@
 import './media/chatMarkdownPart.css';
-import { chatMarkdownTableScrollClass, wrapTablesWithScrollable } from './chatMarkdownTableScrolling.js';
+import { chatMarkdownTableScrollClass, wrapTableWithScrollable } from './chatMarkdownTableScrolling.js';
 import { Emitter } from '../../../../../../base/common/event.js';
-import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h } from '../../../../../../base/browser/dom.js';
 import { renderWorkbenchMarkdown, sanitizeMarkdownHtmlToFragment, type MarkdownRenderOptions } from '../../../../../../base/browser/markdownRenderer.js';
+import { observeResize } from '../../../../../../base/browser/observer.js';
+import { Dialog } from '../../../../../../base/browser/ui/dialog/dialog.js';
+import type { ScrollableElement } from '../../../../../../base/browser/ui/scrollbar/scrollableElement.js';
+import type { IAction } from '../../../../../../base/common/actions.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { Marked } from '../../../../../../base/common/marked/marked.js';
 import { equals } from '../../../../../../base/common/objects.js';
 import { escapeRegExpCharacters, htmlAttributeEncodeValue } from '../../../../../../base/common/strings.js';
+import { WorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
+import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { ILayoutService } from '../../../../../../platform/layout/browser/layoutService.js';
 import { openLinkFromMarkdown } from '../../../../../../platform/markdown/browser/markdownRenderer.js';
+import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
+import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
+import { resourceFileName, saveResourceAs } from '../../../../../services/files/browser/resourceSave.js';
 import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExtension.js';
 import { ChatContentMarkdownRenderer, getChatMarkdownRenderOptions } from '../chatContentMarkdownRenderer.js';
-import { chatMarkdownRichContentExtension } from '../chatMarkdownRichContent.js';
+import { CHAT_RESPONSE_IMAGE_SCHEME, chatMarkdownRichContentExtension } from '../chatMarkdownRichContent.js';
 import { IncrementalDOMMorpher, markdownFrameThreshold } from './chatIncrementalRendering/chatIncrementalRendering.js';
 import type { FileSearchDirectory } from '../../../../../../platform/search/common/fileSearch.js';
 import { ChatMarkdownFileReferences, isMarkdownFileReference } from './chatMarkdownFileReferences.js';
-import { ChatMarkdownDecorationsRenderer } from './chatMarkdownDecorationsRenderer.js';
+import { chatCitationButtonClass, ChatMarkdownDecorationsRenderer } from './chatMarkdownDecorationsRenderer.js';
 import { canStartListCheckpoint, lexMarkdownTail, markdownTailCheckpoint, type MarkdownTailCheckpoint } from './chatMarkdownTail.js';
 import { CodeBlockPart } from './codeBlockPart.js';
 import type { ICodeBlockActionContext } from './codeBlockPart.js';
@@ -30,7 +41,7 @@ import type { IChatCodeBlockInfo } from '../../chat.js';
 import { createUuid } from '../../../../../../base/common/uuid.js';
 import { ChatImageGallery } from './chatImageGallery.js';
 import { ChatMermaidRenderer, isClosedMermaidFence } from './chatMermaidRenderer.js';
-import type { URI } from '../../../../../../base/common/uri.js';
+import { URI } from '../../../../../../base/common/uri.js';
 import { ImagePreviewPopup } from '../../../../mediaPreview/browser/imagePreviewPopup.js';
 import { localize } from '../../../../../../nls.js';
 
@@ -94,7 +105,7 @@ interface MarkdownFragment {
 
 interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
 	readonly getChatItem?: () => IChatListItem | undefined;
-	readonly readGalleryImage?: (uri: URI, signal: AbortSignal) => Promise<Blob>;
+	readonly readResponseImage?: (uri: URI, signal: AbortSignal) => Promise<Blob>;
 	readonly ownerDocument: Document;
 	readonly codeBlockPresentation?: 'card';
 	readonly fileReferenceDirectory?: FileSearchDirectory;
@@ -105,6 +116,7 @@ interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
 	/** The virtual list measures a newly mounted row before returning from the scroll event. */
 	readonly synchronousInitialRender?: boolean;
 	readonly allowInlineDiffs?: boolean;
+	readonly showContentActions?: boolean;
 }
 
 /** Owns one stable response root, sanitized render lifetime and the response's existing code models. */
@@ -122,9 +134,11 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	private readonly plainLexer = new Marked();
 	private readonly codeBlocks = this._register(new DisposableMap<number, CodeBlockPart | MarkdownDiffBlockPart>());
 	private readonly images = new Map<string, Promise<Blob>>();
+	private readonly responseImageController?: AbortController;
 	private readonly galleries = new Set<ChatImageGallery>();
 	private mermaid: ChatMermaidRenderer | undefined;
 	private readonly inlineImagePreview = this._register(new MutableDisposable<DisposableStore & { readonly anchor: HTMLButtonElement; }>());
+	private readonly tables = this._register(new DisposableMap<HTMLTableElement, DisposableStore>());
 	private fragments: readonly MarkdownFragment[] = [];
 	private markdown: ChatResponseMarkdown | undefined;
 	// Code actions retain this response, rather than a full historical string per code block.
@@ -142,15 +156,19 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		private readonly options: ChatMarkdownContentPartOptions,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IOpenerService private readonly opener: IOpenerService,
+		@IContextMenuService private readonly contextMenus: IContextMenuService,
+		@INotificationService private readonly notifications: INotificationService,
+		@ILayoutService private readonly layout: ILayoutService,
 	) {
 		super();
+		if (options.readResponseImage) {
+			const controller = this.responseImageController = new AbortController();
+			this._register(toDisposable(() => controller.abort()));
+		}
 		this.markdownRenderer = this._register(instantiation.createInstance(ChatContentMarkdownRenderer));
 		this.domNode = h(options.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-markdown-part ash-markdown';
-		this.decorations = this._register(instantiation.createInstance(ChatMarkdownDecorationsRenderer, this.domNode, (href: string) => {
-			if (this.options.actionHandler) this.options.actionHandler(href, this.codeElement);
-			else void openLinkFromMarkdown(this.opener, href, this.codeElement.isTrusted);
-		}));
+		this.decorations = this._register(instantiation.createInstance(ChatMarkdownDecorationsRenderer, this.domNode, (href: string) => this.openMarkdownLink(href, this.codeElement)));
 		if (options.fileReferenceDirectory) {
 			this.fileReferences = this._register(instantiation.createInstance(ChatMarkdownFileReferences, this.domNode, options.fileReferenceDirectory, (anchor: HTMLAnchorElement) => {
 				this.decorations.decorateLink(anchor);
@@ -375,6 +393,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			if (fragment.element !== node) this.domNode.insertBefore(fragment.element, node);
 			node = fragment.element.nextSibling;
 		}
+		this.reconcileTables(created);
 		for (const [index] of this.codeBlocks) if (index >= codeStart) this.codeBlocks.deleteAndDispose(index);
 		this.fragments = next;
 		this.markdown = markdown;
@@ -402,17 +421,40 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		const code: { readonly languageId: string; readonly text: string; readonly placeholder: HTMLElement; readonly diagram: boolean; readonly diff?: IMarkdownDiffBlockData; }[] = [];
 		const images = new Set<string>();
 		try {
+			const parts = markdown.richContent?.parts;
+			const readResponseImage = this.options.readResponseImage;
+			const hasInlineImages = !!readResponseImage && parts?.some(part => part.kind === 'image');
+			const resolveResponseImage = (resource: URI) => {
+				if (resource.authority || resource.query || resource.fragment || !/^(?:0|[1-9]\d*)$/u.test(resource.path)) return undefined;
+				const part = parts?.[Number(resource.path)];
+				return part?.kind === 'image' ? part : undefined;
+			};
+			const sanitizer = this.options.sanitizerConfig;
 			const options: MarkdownRenderOptions = {
 				...this.options, fillInIncompleteTokens: incomplete,
 				markedExtensions: markdown.richContent ? [chatMarkdownRichContentExtension(markdown.richContent), ...(this.options.markedExtensions ?? [])] : this.options.markedExtensions,
-				sanitizerConfig: this.fileReferences ? { ...this.options.sanitizerConfig, deferLink: isMarkdownFileReference } : this.options.sanitizerConfig,
+				sanitizerConfig: hasInlineImages || this.fileReferences ? {
+					...sanitizer,
+					...(this.fileReferences && { deferLink: isMarkdownFileReference }),
+					...(hasInlineImages && {
+						allowedMediaSchemes: { augment: [...sanitizer?.allowedMediaSchemes?.augment ?? [], CHAT_RESPONSE_IMAGE_SCHEME] },
+						remoteImageIsAllowed: (resource: URI) => resource.scheme === CHAT_RESPONSE_IMAGE_SCHEME
+							? !!resolveResponseImage(resource) : sanitizer?.remoteImageIsAllowed?.(resource) ?? true,
+					}),
+				} : sanitizer,
 				actionHandler: this.options.actionHandler ? href => this.options.actionHandler!(href, this.codeElement) : undefined,
 				asyncRenderCallback: () => { this.options.asyncRenderCallback?.(); this.changedHeight.fire(); },
-				imageResourceLoader: this.options.imageResourceLoader ? resource => {
-					const key = resource.toString();
+				imageResourceLoader: hasInlineImages || this.options.imageResourceLoader ? resource => {
+					const responseImage = resource.scheme === CHAT_RESPONSE_IMAGE_SCHEME ? resolveResponseImage(resource) : undefined;
+					const key = responseImage?.uri ?? resource.toString();
 					images.add(key);
 					let request = this.images.get(key);
-					if (!request) { request = this.options.imageResourceLoader!(resource); this.images.set(key, request); }
+					if (!request) {
+						request = responseImage && readResponseImage
+							? readResponseImage(URI.parse(responseImage.uri), this.responseImageController!.signal)
+							: this.options.imageResourceLoader?.(resource) ?? Promise.reject(new Error('Unknown response image'));
+						this.images.set(key, request);
+					}
 					return request;
 				} : undefined,
 				codeBlockRendererSync: (languageId, text, raw) => {
@@ -448,7 +490,6 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 				lifetime.add(this.markdownRenderer.render(markdown, options, element));
 			}
 			if (!patch) {
-				wrapTablesWithScrollable(element);
 				this.enableInlineImagePreviews(element, lifetime);
 				this.renderImageGalleries(element, lifetime, markdown.richContent);
 				for (const rich of element.querySelectorAll<HTMLElement>('.ash-chat-rich')) {
@@ -530,33 +571,207 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	}
 
 	private enableInlineImagePreview(image: HTMLImageElement, lifetime: DisposableStore): void {
+		const document = image.ownerDocument;
 		const name = image.alt || image.title || localize('chat.markdown.imageName', 'Image');
-		const anchor = h(image.ownerDocument, 'button', {
+		const url = image.currentSrc || image.src;
+		const readImage = isLocalImageSource(url) ? async (signal: AbortSignal) => {
+			const response = await getWindow(image).fetch(url, { signal });
+			if (!response.ok) throw new Error(response.statusText);
+			return response.blob();
+		} : undefined;
+		const anchor = h(document, 'button', {
 			className: 'ash-chat-media-preview-trigger',
 			attributes: { type: 'button', 'aria-haspopup': 'dialog', 'aria-label': localize('chat.markdown.previewImage', 'Preview {0}', name) },
 		});
 		image.replaceWith(anchor);
 		anchor.append(image);
+		let wrapper: HTMLElement | undefined;
+		if (this.options.showContentActions && readImage) {
+			const parent = anchor.parentElement!;
+			if (!parent.classList.contains('ash-chat-rich-image')) {
+				wrapper = h(document, 'span', { className: 'ash-chat-inline-image' });
+				anchor.replaceWith(wrapper);
+				wrapper.append(anchor);
+			}
+			this.mountContentActions(wrapper ?? parent, lifetime, {
+				id: 'chat.markdown.downloadImage',
+				label: localize('chat.resource.downloadFile', 'Download {0}', name),
+				run: async signal => {
+					const blob = await readImage(signal);
+					await this.instantiation.invokeFunction(saveResourceAs, blob, resourceFileName(name, blob.type), document, { signal });
+				},
+			});
+		}
 		lifetime.add(addDisposableListener(anchor, 'click', () => {
-			const url = image.currentSrc || image.src;
 			if (!url) return;
 			const resources = Object.assign(new DisposableStore(), { anchor });
 			this.inlineImagePreview.value = resources;
 			anchor.focus({ preventScroll: true });
-			const preview = this.instantiation.createInstance(ImagePreviewPopup, { name, url }, anchor, resources, undefined, () => {
-				if (this.inlineImagePreview.value === resources) this.inlineImagePreview.clear();
+			const controller = new AbortController();
+			resources.add(toDisposable(() => controller.abort()));
+			void (async () => {
+				const blob = await readImage?.(controller.signal).catch(() => undefined);
+				if (resources.isDisposed) return;
+				const preview = this.instantiation.createInstance(ImagePreviewPopup, { name, url, blob }, anchor, resources, undefined, () => {
+					if (this.inlineImagePreview.value === resources) this.inlineImagePreview.clear();
+				});
+				if (!preview.show()) this.inlineImagePreview.clear();
+			})().catch(error => {
+				if (this.inlineImagePreview.value !== resources) return;
+				this.inlineImagePreview.clear();
+				this.notifications.error(String(error));
 			});
-			if (!preview.show()) this.inlineImagePreview.clear();
 		}));
 		lifetime.add(toDisposable(() => {
 			if (this.inlineImagePreview.value?.anchor === anchor) this.inlineImagePreview.clear();
 			// A diagram can replace just its image when the theme changes.
-			anchor.replaceWith(...anchor.childNodes);
+			(wrapper ?? anchor).replaceWith(...anchor.childNodes);
 		}));
 	}
 
+	private reconcileTables(created: readonly MarkdownFragment[]): void {
+		// Tail patches retain the table, including its scroll position and actions.
+		for (const [table] of this.tables) {
+			if (!this.domNode.contains(table)) this.tables.deleteAndDispose(table);
+		}
+		for (const { element } of created) {
+			for (const table of element.querySelectorAll('table')) {
+				if (this.tables.has(table)) continue;
+				const lifetime = this.tables.set(table, new DisposableStore());
+				const scrollable = lifetime.add(wrapTableWithScrollable(table));
+				if (this.options.showContentActions) this.mountTableActions(table, scrollable, lifetime);
+			}
+		}
+	}
+
+	private mountTableActions(table: HTMLTableElement, scrollable: ScrollableElement, lifetime: DisposableStore): void {
+		const { toolbar, download } = this.mountContentActions(scrollable.element.parentElement!, lifetime, {
+			id: 'chat.markdown.exportTable',
+			label: localize({ bundle: 'ash.workbench', key: 'chat.markdown.exportTable' }, 'Export table as CSV'),
+			toolbarLabel: localize({ bundle: 'ash.workbench', key: 'chat.markdown.tableActions' }, 'Table actions'),
+			run: signal => {
+				const rows = Array.from(table.rows, row => Array.from(row.cells, cell => '"' + cell.innerText.replaceAll('"', '""') + '"').join(','));
+				const csv = new Blob([rows.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+				return this.instantiation.invokeFunction(saveResourceAs, csv, 'table.csv', table.ownerDocument, { signal });
+			},
+		});
+		const preview = lifetime.add(new MutableDisposable<DisposableStore>());
+		const label = localize({ bundle: 'ash.workbench', key: 'chat.markdown.expandTable' }, 'Expand table');
+		const expand: IAction = {
+			id: 'chat.markdown.expandTable', label, tooltip: label, icon: Lxicon.screenFull, enabled: true,
+			run: async () => {
+				if (preview.value || lifetime.isDisposed) return;
+				const resources = preview.value = new DisposableStore();
+				try {
+					await this.showTablePreview(table, resources);
+				} finally {
+					preview.clear();
+					if (!lifetime.isDisposed) updateActions();
+				}
+			},
+		};
+		let expandedActionVisible = false;
+		const viewport = scrollable.scrollableElement;
+		const updateActions = (): void => {
+			// Keep the return-focus target while the dialog is open.
+			if (preview.value || !viewport.clientWidth) return;
+			const overflows = viewport.scrollWidth > viewport.clientWidth;
+			if (overflows === expandedActionVisible) return;
+			expandedActionVisible = overflows;
+			toolbar.setActions(overflows ? [download, expand] : [download]);
+			if (overflows) toolbar.element.querySelector('[data-action-id="chat.markdown.expandTable"] button')?.setAttribute('aria-haspopup', 'dialog');
+		};
+		lifetime.add(observeResize([viewport, scrollable.contentElement], updateActions));
+	}
+
+	private async showTablePreview(table: HTMLTableElement, resources: DisposableStore): Promise<void> {
+		// Reuse the rendered Markdown cells, including their formatting and links.
+		const markdown = this.markdown ?? this.codeElement;
+		const snapshot = table.cloneNode(true) as HTMLTableElement;
+		for (const wrapper of snapshot.querySelectorAll(`.${chatMarkdownTableScrollClass}`)) {
+			const nested = wrapper.querySelector('table');
+			if (nested) wrapper.replaceWith(nested);
+		}
+		for (const frame of snapshot.querySelectorAll('.ash-chat-content-actions-anchor')) {
+			frame.querySelector(':scope > .ash-chat-content-actions')?.remove();
+			frame.classList.remove('ash-chat-content-actions-anchor');
+		}
+		for (const button of snapshot.querySelectorAll(`button:not(.${chatCitationButtonClass})`)) button.replaceWith(...button.childNodes);
+		for (const element of snapshot.querySelectorAll('[id]')) element.removeAttribute('id');
+		snapshot.removeAttribute('id');
+		const dialog = resources.add(new Dialog(this.layout.getContainer(getWindow(table)), localize({ bundle: 'ash.workbench', key: 'chat.markdown.tablePreview' }, 'Table preview'), undefined, {
+			modal: false,
+			layout: 'form',
+			extraClasses: ['ash-chat-table-preview'],
+			disableDefaultAction: true,
+			buttonStyles: defaultButtonStyles,
+			checkboxStyles: defaultCheckboxStyles,
+			inputBoxStyles: defaultInputBoxStyles,
+			dialogStyles: { ...defaultDialogStyles, textLinkForeground: undefined },
+			renderBody: body => {
+				body.classList.add('ash-markdown');
+				body.append(snapshot);
+				resources.add(wrapTableWithScrollable(snapshot, 'both'));
+				resources.add(this.decorations.bindCitations(snapshot));
+				resources.add(addDisposableListener<MouseEvent>(snapshot, 'click', event => {
+					const href = (event.target as Element | null)?.closest?.('a[href]')?.getAttribute('href');
+					if (!href) return;
+					event.preventDefault();
+					event.stopPropagation();
+					this.openMarkdownLink(href, markdown);
+				}));
+			},
+		}));
+		await dialog.show();
+	}
+
+	private openMarkdownLink(href: string, markdown: IMarkdownString): void {
+		if (this.options.actionHandler) this.options.actionHandler(href, markdown);
+		else void openLinkFromMarkdown(this.opener, href, markdown.isTrusted);
+	}
+
+	private mountContentActions(container: HTMLElement, lifetime: DisposableStore, options: {
+		readonly id: string;
+		readonly label: string;
+		readonly toolbarLabel?: string;
+		readonly run: (signal: AbortSignal) => Promise<void>;
+	}): { toolbar: WorkbenchToolBar; download: IAction; } {
+		const host = h(container.ownerDocument, 'div', { className: 'ash-chat-content-actions' });
+		container.classList.add('ash-chat-content-actions-anchor');
+		container.append(host);
+		lifetime.add(toDisposable(() => {
+			host.remove();
+			container.classList.remove('ash-chat-content-actions-anchor');
+		}));
+		const controller = new AbortController();
+		lifetime.add(toDisposable(() => controller.abort()));
+		const toolbar = lifetime.add(new WorkbenchToolBar(host, this.contextMenus, { ariaLabel: options.toolbarLabel ?? options.label, tabNavigation: 'each-action' }));
+		let running = false;
+		const action: IAction = {
+			id: options.id, label: options.label, tooltip: options.label, icon: Lxicon.download, enabled: true,
+			run: async () => {
+				if (running || controller.signal.aborted) return;
+				running = true;
+				host.setAttribute('aria-busy', 'true');
+				try {
+					await options.run(controller.signal);
+				} finally {
+					running = false;
+					host.removeAttribute('aria-busy');
+				}
+			},
+		};
+		lifetime.add(toolbar.actionRunner.onDidRun(({ action: completedAction, error }) => {
+			if (!error || controller.signal.aborted) return;
+			if (completedAction === action) this.notifications.error(localize({ bundle: 'ash.workbench', key: 'chat.markdown.saveFailed' }, 'Could not save this content: {0}', String(error)));
+			else this.notifications.error(String(error));
+		}));
+		toolbar.setActions([action]);
+		return { toolbar, download: action };
+	}
+
 	private renderImageGalleries(element: HTMLElement, lifetime: DisposableStore, content: ChatMarkdownRichContent | undefined): void {
-		const readImage = this.options.readGalleryImage;
+		const readImage = this.options.readResponseImage;
 		if (!readImage) return;
 		const parts = (content ?? this.options.getChatItem?.()?.markdown?.richContent)?.parts;
 		for (const gallery of element.querySelectorAll<HTMLElement>('.ash-chat-image-gallery[data-ash-chat-gallery-index]')) {
@@ -643,6 +858,12 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		});
 		return true;
 	}
+}
+
+function isLocalImageSource(url: string): boolean {
+	// Use bytes already admitted by Markdown rendering. No remote image requests
+	// or screen captures are needed to save the original representation.
+	return url.startsWith('blob:') || /^data:image\/(?:png|jpeg|gif|webp);base64,/iu.test(url);
 }
 
 function tailChildren(body: Element, start: number): ChildNode[] {

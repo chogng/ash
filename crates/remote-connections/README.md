@@ -177,9 +177,8 @@ SSH 连接尝试，重试策略属于产品宿主。
 `ExitOnForwardFailure=yes` 权威判断。
 
 `SshTunnelDiagnostics` 允许图形宿主丢弃 OpenSSH stderr，而前台 CLI 可继承它。
-`SshTunnel::poll_readiness` 要求 OpenSSH child 保持存活，并在短暂稳定间隔前后两次确认选中的本机
-loopback 端口可连接；probe 不发送应用数据，只证明本地 forward listener 已经建立，不保证远端
-endpoint 后的应用已接受连接。产品宿主负责围绕 poll 设置超时和取消。Primitive 只尝试启动一次；
+`SshTunnel::poll_readiness` 要求 OpenSSH child 保持存活，并通过 `LocalCommand` 确认它已建立本地
+转发。该信号只确认本地监听；远端服务在收到连接时独立处理请求。产品宿主负责围绕 poll 设置超时和取消。Primitive 只尝试启动一次；
 `ash-remote-host` 在此之上提供共享的取消、保留本机端口和 30 秒恢复策略。产品仍负责把这些
 typed events 映射到自己的事件循环、状态投影和窗口生命周期。
 

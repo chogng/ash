@@ -3,7 +3,7 @@ import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../base/common/cancellation.js';
 import { raceCancellationError } from '../../../base/common/async.js';
-import type { GitRepositoryContext, GitSessionComparison, GitSessionComparisonSnapshot, ILocalGitService } from '../common/localGitService.js';
+import type { GitRepositoryContext, GitSessionComparison, GitSessionComparisonSnapshot, GitWorktreeChangesSnapshot, ILocalGitService } from '../common/localGitService.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { canceled } from '../../../base/common/errors.js';
@@ -86,7 +86,16 @@ export class AppServerLocalGitService implements ILocalGitService {
 		if (signal.aborted || generation !== this.connection.generation || this.connection.state !== 'ready') throw canceled();
 		return result.kind === 'branches'
 			? { kind: 'branches', references: result.references.map(({ name, objectId }) => ({ name, objectId })) }
-			: { kind: 'changes', files: result.files.map(({ path, originalPath, original, modified }) => ({ path, originalPath, original, modified })) };
+			: { kind: 'changes', files: result.files.map(({ path, originalPath, original, modified, omission }) => ({ path, originalPath, original, modified, omission })) };
+	}
+
+	async readWorktreeChanges(sourcePath: string, query: 'summary' | 'diff', signal: AbortSignal): Promise<GitWorktreeChangesSnapshot> {
+		const generation = this.connection.generation;
+		const result = await this.connection.request(APP_SERVER_METHODS['git/worktree/changes'], { sourcePath, query }, { signal });
+		if (signal.aborted || generation !== this.connection.generation || this.connection.state !== 'ready') throw canceled();
+		return result.kind === 'summary'
+			? { kind: 'summary', files: result.files }
+			: { kind: 'diff', files: result.files.map(({ path, originalPath, original, modified, omission }) => ({ path, originalPath, original, modified, omission })) };
 	}
 
 	async cancel(operationId: string): Promise<void> {
@@ -100,6 +109,7 @@ export function createDisconnectedLocalGitService(unavailable: UnavailableOperat
 		listWorktrees: () => unavailable('git/worktree/list'),
 		readRepositoryContexts: () => unavailable('git/repositoryContexts'),
 		readSessionComparison: () => unavailable('git/sessionComparison'),
+		readWorktreeChanges: () => unavailable('git/worktree/changes'),
 		clone: () => unavailable('git/cloneTo'),
 		cancel: () => unavailable('git/cloneTo/cancel'),
 	};

@@ -87,37 +87,34 @@ const agentsTest = test.extend({ electronArgs: ['--agents-window'], useDefaultLa
 agentsTest('Agents routes pending view reads and cancellable operations through their progress owners', { tag: ['@electron-app-server'] }, async ({ workbench, driver }) => {
 	const page = workbench.page;
 	await expect(page.locator('.ash-sessions-window')).toBeVisible();
+	const code = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+	await code.click();
+	await workbench.quickaccess.runCommand('notifications.clearAll');
 	await installRequestGate(page);
 	try {
 		// This public action is in the Agents palette; its underlying command is not a palette entry.
 		await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-		const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
+		const plugins = page.locator('.ash-customize').getByRole('tabpanel', { name: 'Plugins', exact: true });
 		await expect.poll(() => page.evaluate(() => globalThis.ashTestProgressRequests.requests.some(request => request.method === 'extensions/listInstalled'))).toBe(true);
-		await expect(plugins.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'true');
-		await expect(plugins.locator('progress')).toBeVisible();
+		await expect(plugins).toHaveAttribute('aria-busy', 'true');
+		await expect(plugins.getByRole('status')).toHaveText('Loading resources…');
 		await expect(page.locator('.ash-notification-message')).toHaveCount(0);
 
-		const header = plugins.locator('.ash-pane-view-header-button');
-		await header.press('ArrowLeft');
-		await expect(plugins.locator('progress')).toBeHidden();
-		await header.press('ArrowRight');
-		await expect(plugins.locator('progress')).toBeVisible();
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true }).click();
+		await code.click();
 		await expect(plugins).toBeHidden();
 		await expect(page.locator('.ash-view-pane progress:visible')).toHaveCount(0);
 		await expect(page.locator('.ash-notification-message')).toHaveCount(0);
 		await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-		await expect(plugins.locator('progress')).toBeVisible();
+		await expect(plugins).toHaveAttribute('aria-busy', 'true');
 		await page.evaluate(() => { const gate = globalThis.ashTestProgressRequests; gate.methods = []; gate.release(); });
-		await expect(plugins.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false');
-		await expect(plugins.locator('progress')).toBeHidden();
+		await expect(plugins).toHaveAttribute('aria-busy', 'false');
 		await workbench.quickaccess.runCommand('notifications.showList');
 		await expect(page.locator('.ash-notification-message')).toHaveCount(0);
 		await workbench.quickaccess.runCommand('notifications.hideList');
 
 		await page.evaluate(() => { globalThis.ashTestProgressRequests.methods = ['session/runtime/invoke']; });
 		await workbench.quickaccess.runCommand('sessions.newDevContainerSession');
-		const notice = page.locator('.ash-notification').filter({ hasText: 'Starting Dev Container...' });
+		const notice = page.locator('.ash-notification').filter({ hasText: 'Checking Dev Container...' });
 		await expect(notice.locator('progress')).toBeVisible();
 		await expect(notice.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
 		await expect(page.locator('.ash-view-pane progress:visible')).toHaveCount(0);
@@ -139,7 +136,7 @@ agentsTest('Agents routes pending view reads and cancellable operations through 
 		await expect(page.locator('.ash-notification-message')).toHaveCount(0);
 		expect(driver.diagnostics.errors).toEqual([]);
 	} finally {
-		const cancel = page.locator('.ash-notification').filter({ hasText: 'Starting Dev Container...' }).getByRole('button', { name: 'Cancel', exact: true });
+		const cancel = page.locator('.ash-notification').filter({ hasText: 'Checking Dev Container...' }).getByRole('button', { name: 'Cancel', exact: true });
 		if (await cancel.isVisible()) { await cancel.click(); }
 		await page.evaluate(() => globalThis.ashTestProgressRequests.restore());
 	}

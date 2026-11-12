@@ -163,6 +163,9 @@ pub struct TerminalAttachRequest {
     pub lifetime_token: Option<String>,
     pub terminal_id: String,
     pub reconnect_token: String,
+    /// A secret nonce reused only when retrying this attachment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attach_nonce: Option<String>,
     pub rows: u16,
     pub cols: u16,
 }
@@ -174,6 +177,7 @@ impl fmt::Debug for TerminalAttachRequest {
             .field("lifetime_token", &"[REDACTED]")
             .field("terminal_id", &self.terminal_id)
             .field("reconnect_token", &"[REDACTED]")
+            .field("attach_nonce", &"[REDACTED]")
             .field("rows", &self.rows)
             .field("cols", &self.cols)
             .finish()

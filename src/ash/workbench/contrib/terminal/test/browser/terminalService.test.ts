@@ -1182,7 +1182,7 @@ suite('TerminalService lifecycle', () => {
 		const published: ITerminalInstance[] = [];
 		using listener = terminals.onDidCreateInstance(instance => published.push(instance));
 		let settled = false;
-		const creating = terminals.createTerminal({ profile: { type: 'default' } });
+		const creating = terminals.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
 		const rejected = assert.rejects(creating.finally(() => { settled = true; }), error => error === failure);
 		await waitFor(() => processes.closeCalls.length === 1);
 		assert.equal(settled, false);
@@ -1384,6 +1384,86 @@ suite('TerminalService lifecycle', () => {
 			dimensions: [{ dirId: 'workspace', terminalId: 'terminal-1', cols: 91, rows: 31 }],
 		});
 		await instance.close();
+	});
+
+	test('a foreground shell is mounted and fitted before the PTY is created', async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const terminals = services.get(ITerminalService);
+		const mounted = deferred<ITerminalInstance>();
+		const created: ITerminalInstance[] = [];
+		using membership = terminals.onDidChangeInstances(() => {
+			const instance = terminals.activeInstance;
+			if (instance?.state === 'starting') mounted.resolve(instance);
+		});
+		using readiness = terminals.onDidCreateInstance(instance => created.push(instance));
+		const creation = terminals.createTerminal({ profile: { type: 'default' } });
+		const instance = await mounted.promise;
+		assert.deepEqual(processes.createCalls, []);
+		assert.deepEqual(created, []);
+		instance.resize({ cols: 30, rows: 40 });
+		assert.equal(await creation, instance);
+		assert.deepEqual(created, [instance]);
+		assert.deepEqual(processes.createCalls, [{ dirId: 'workspace', cols: 30, rows: 40, profile: { type: 'default' } }]);
+		assert.deepEqual(processes.resizeCalls, []);
+		await instance.close();
+	});
+
+	for (const fitted of [false, true]) {
+		test(`closing a starting shell releases its placement and any late PTY (fitted: ${fitted})`, async () => {
+			const processes = new TestTerminalProcessService([]);
+			const launch = deferred<void>();
+			processes.creationGates.push(launch.promise);
+			using workspace = folderWorkspaceContext();
+			using services = terminalServices(processes, workspace);
+			const terminals = services.get(ITerminalService);
+			const mounted = deferred<ITerminalInstance>();
+			using membership = terminals.onDidChangeInstances(() => {
+				const instance = terminals.activeInstance;
+				if (instance?.state === 'starting') mounted.resolve(instance);
+			});
+			const canceled = assert.rejects(terminals.createTerminal({ profile: { type: 'default' } }), isCancellationError);
+			const instance = await mounted.promise;
+			if (fitted) {
+				instance.resize({ cols: 30, rows: 40 });
+				await waitFor(() => processes.createCalls.length === 1);
+			}
+			const closed = terminals.closeTerminal(instance);
+			launch.resolve();
+			await closed;
+			await canceled;
+			assert.deepEqual(terminals.instances, []);
+			assert.equal(processes.createCalls.length, fitted ? 1 : 0);
+			assert.deepEqual(processes.closeCalls, fitted ? ['terminal-1'] : []);
+			assert.deepEqual(processes.readCursors, []);
+		});
+	}
+
+	test('a failed PTY launch rolls back the terminal pane before removing the instance', async () => {
+		const processes = new TestTerminalProcessService([]);
+		const launch = deferred<void>();
+		processes.creationGates.push(launch.promise);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const terminals = services.get(ITerminalService);
+		const events: string[] = [];
+		using removal = terminals.onDidDisposeInstance(() => events.push('removed'));
+		const failure = new Error('Failed to create the terminal process');
+		const result = assert.rejects(terminals.createTerminal({
+			location: TerminalLocation.Editor,
+			profile: { type: 'default' },
+			placeInEditor: instance => {
+				events.push('mounted');
+				instance.resize({ cols: 30, rows: 40 });
+				return () => events.push('rolled back');
+			},
+		}), error => error === failure);
+		await waitFor(() => processes.createCalls.length === 1);
+		launch.reject(failure);
+		await result;
+		assert.deepEqual(events, ['mounted', 'rolled back', 'removed']);
+		assert.deepEqual(terminals.instances, []);
 	});
 
 	test('list changes describe the final membership, order, titles and active instance', async () => {

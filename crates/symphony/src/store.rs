@@ -300,6 +300,30 @@ impl Store {
         self.read(|state| state.workflows.get(id).map(|plan| plan.workflow.clone()))?
             .ok_or(Error::NotFound)
     }
+
+    /// Resolve the endpoint and credential together before each Linear request. The source can
+    /// change before the scheduler reloads it, and an explicit import can supersede the poll.
+    pub fn linear_connection<'a>(
+        &self,
+        workflow: &'a Workflow,
+    ) -> Result<(&'a str, String), Error> {
+        let credential = workflow.linear_credential()?;
+        let current = self.read(|state| {
+            state
+                .workflows
+                .get(&workflow.id)
+                .is_some_and(|plan| plan.workflow.digest == workflow.digest)
+        })?;
+        if !current {
+            return Err(Error::StaleWorkflow);
+        }
+        let endpoint = workflow
+            .tracker_endpoint
+            .as_deref()
+            .unwrap_or("https://api.linear.app/graphql");
+        Ok((endpoint, credential))
+    }
+
     pub(crate) fn plans(&self) -> Result<Vec<Plan>, Error> {
         self.read(|state| state.workflows.values().cloned().collect())
     }
@@ -330,14 +354,15 @@ impl Store {
         &self,
         previous: &Workflow,
         current: Result<Workflow, Error>,
-    ) -> Result<(), Error> {
+    ) -> Result<Plan, Error> {
         self.mutate(|state| {
-            let Some(plan) = state.workflows.get_mut(&previous.id) else {
-                return Ok(());
-            };
+            let plan = state
+                .workflows
+                .get_mut(&previous.id)
+                .ok_or(Error::NotFound)?;
             // A newer explicit import wins over this scheduler's older reload.
             if plan.workflow.digest != previous.digest {
-                return Ok(());
+                return Ok(plan.clone());
             }
             match current {
                 Ok(workflow) if workflow.id != previous.id => {
@@ -354,7 +379,7 @@ impl Store {
                 }
                 Err(error) => plan.reload_error = Some(error.to_string()),
             }
-            Ok(())
+            Ok(plan.clone())
         })
     }
 
@@ -419,11 +444,19 @@ impl Store {
         })
     }
 
-    pub(crate) fn poll_error(&self, id: &str, message: String, now: u64) -> Result<(), Error> {
+    pub(crate) fn poll_error(
+        &self,
+        id: &str,
+        digest: &str,
+        message: String,
+        now: u64,
+    ) -> Result<(), Error> {
         self.mutate(|state| {
             let plan = state.workflows.get_mut(id).ok_or(Error::NotFound)?;
-            plan.error = Some(message);
-            plan.polled_at = now;
+            if plan.workflow.digest == digest {
+                plan.error = Some(message);
+                plan.polled_at = now;
+            }
             Ok(())
         })
     }

@@ -34,9 +34,25 @@
 	--ash-sash-feedback-cross-offset: calc(var(--ash-strokeThickness) / -2);
 }
 
+.ash-sessions-editor-frame-divider,
+.ash-sessions-titlebar-frame-divider {
+	position: relative;
+}
+
+.ash-sessions-editor-frame-divider::after,
+.ash-sessions-titlebar-frame-divider::after {
+	position: absolute;
+	z-index: 4;
+	inset: 0 auto 0 var(--ash-sessions-editor-divider-offset, 0px);
+	border-left: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	content: "";
+	pointer-events: none;
+}
+
 .ash-sessions-auxiliarybar-frame {
 	position: relative;
-	background: var(--ash-sideBar-background);
+	background: var(--ash-auxiliaryBar-background);
 }
 
 .ash-sessions-auxiliarybar-frame::after {

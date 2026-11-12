@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { suite, test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
@@ -37,7 +37,7 @@ suite('Extension resource loader', () => {
 	test('reports unsupported resources in Chinese and rejects invalid UTF-8', async () => {
 		const loader = new ExtensionResourceLoaderService(async () => Uint8Array.of(0xff));
 		await assert.rejects(loader.readExtensionResource(toExtensionResourceURI({ generation: 1, extensionId: 'publisher.sample', path: 'file' })), TypeError);
-		const bundles = JSON.parse(readFileSync(resolve(process.cwd(), 'extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8'));
+		const bundles = chineseCatalog.bundles;
 		setNlsMessages('zh-CN', bundles);
 		try {
 			await assert.rejects(loader.readExtensionResource(URI.parse('https://other.example/package.json')), { message: '此资源不是已安装扩展的资源。' });

@@ -257,6 +257,69 @@ suite('Desktop terminal exit revival', () => {
 		assert.deepEqual({ committed, errors: scope.errors, closes: scope.closes }, { committed: true, errors: [], closes: [] });
 	});
 
+	for (const pending of ['create', 'resize', 'failed create'] as const) test(`reload waits for terminal startup with pending ${pending}`, async () => {
+		using owner = new DisposableStore();
+		const scope = fixture(owner, async () => { });
+		const processes = scope.services.get(ITerminalProcessService);
+		const create = processes.create;
+		const createRequested = new DeferredPromise<void>();
+		const finishCreate = new DeferredPromise<void>();
+		processes.create = async options => {
+			void createRequested.complete();
+			await finishCreate.p;
+			return create(options);
+		};
+		const resizeRequested = new DeferredPromise<void>();
+		const finishResize = new DeferredPromise<void>();
+		processes.resize = async () => {
+			void resizeRequested.complete();
+			await finishResize.p;
+		};
+		processes.getReconnectLease = async terminalId => ({ terminalId, reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 30000 });
+
+		const failure = new Error('PTY launch failed');
+		const creation = scope.terminals.createTerminal({ profile: { type: 'default' } });
+		const failed = pending === 'failed create' ? assert.rejects(creation, error => error === failure) : undefined;
+		await createRequested.p;
+		const instance = scope.terminals.activeInstance!;
+		let published = false;
+		using publication = scope.terminals.onDidCreateInstance(created => {
+			assert.equal(created, instance);
+			published = true;
+		});
+		instance.serializeState = async () => {
+			assert.equal(published, true);
+			return exitSnapshot(instance);
+		};
+		if (pending === 'resize') {
+			instance.resize({ cols: 100, rows: 40 });
+			await finishCreate.complete();
+			await resizeRequested.p;
+		}
+		// Release the backend only once shutdown starts running its final joins.
+		using release = scope.lifecycle.onWillShutdown(event => event.join(async () => {
+			if (pending === 'failed create') await finishCreate.error(failure);
+			else if (pending === 'resize') await finishResize.complete();
+			else await finishCreate.complete();
+		}, 'release PTY startup'));
+		await scope.lifecycle.shutdown('reload');
+
+		const encoded = await scope.services.get(ISecretStorageService).get(TerminalStorageKeys.Reload);
+		if (failed) {
+			await failed;
+			assert.deepEqual(scope.terminals.instances, []);
+			assert.equal(encoded, undefined);
+		} else {
+			assert.equal(await creation, instance);
+			const credentials = JSON.parse(encoded!);
+			const storage = scope.services.get(IStorageService);
+			const checkpoint = parseTerminalReloadState(storage.get(credentials.stateKey, StorageScope.WORKSPACE)!);
+			assert.deepEqual(checkpoint.instances.map(snapshot => snapshot.instanceId), [instance.instanceId]);
+			assert.deepEqual(credentials.leases.map((lease: ITerminalReconnectLease) => lease.terminalId), [instance.id]);
+		}
+		assert.deepEqual(scope.errors, []);
+	});
+
 	test('reloading with no restorable terminals leaves no checkpoint or credentials', async () => {
 		using owner = new DisposableStore();
 		const scope = fixture(owner, async () => { });

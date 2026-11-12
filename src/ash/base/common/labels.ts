@@ -1,5 +1,5 @@
 import { isMacintosh, isWindows, OperatingSystem } from './platform.js';
-import { basename } from './resources.js';
+import { basenameOrAuthority } from './resources.js';
 import { URI } from './uri.js';
 import { posix, win32 } from './path.js';
 
@@ -75,10 +75,6 @@ function relativePath(folder: string, resource: string, os: OperatingSystem): st
 	const prefix = comparableFolder.endsWith(separator) ? comparableFolder : `${comparableFolder}${separator}`;
 	if (!comparableResource.startsWith(prefix)) return undefined;
 	return normalizedResource.slice(prefix.length);
-}
-
-function basenameOrAuthority(resource: URI): string {
-	return basename(resource) || resource.authority || resource.toString();
 }
 
 /** Normalizes a drive letter without changing the remainder of the path. */

@@ -19,6 +19,8 @@ import { createThreadChangeFileResource, IChatService, type ThreadUpdateEnvelope
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { SessionsConfiguration } from '../../../../common/configuration.js';
+import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import type { GitSessionComparisonSnapshot } from '../../../../../platform/git/common/localGitService.js';
 import { SessionChangesEditor } from '../../browser/sessionChangesEditor.js';
 import { URI } from '../../../../../base/common/uri.js';
 import '../../browser/changes.contribution.js';
@@ -39,7 +41,7 @@ import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from 
 import { constObservable } from '../../../../../base/common/observable.js';
 import { createSessionFileChange } from '../../../../services/sessions/common/session.js';
 import { SessionChangesEditorInput } from '../../browser/sessionChangesEditorInput.js';
-import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
+import { resetNlsResolver, setNlsMessages, setNlsResolver } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 
 const emptySummary: ThreadChangesSummary = { sequence: 1, revision: 'empty', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] };
@@ -213,6 +215,63 @@ function createComparisonServices(configuration: IConfigurationService, document
 	});
 	return services;
 }
+
+test('Git Changes keeps all files and reads preview omissions in Simplified Chinese', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using domOwner = toDisposable(() => dom.window.close());
+	using configuration = new InMemoryConfigurationService();
+	using fixture = createComparisonServices(configuration, dom.window.document);
+	using services = fixture.createChild();
+	const root = URI.file('/workspace').fsPath;
+	const counts: (number | undefined)[] = [];
+	const snapshot: GitSessionComparisonSnapshot = {
+		kind: 'changes',
+		files: [
+			{ path: 'large.ts', originalPath: null, omission: 'fileSizeLimit', original: { kind: 'missing' }, modified: { kind: 'missing' } },
+			{ path: 'budget.ts', originalPath: null, omission: 'comparisonSizeLimit', original: { kind: 'missing' }, modified: { kind: 'missing' } },
+			{ path: 'small.ts', originalPath: null, original: { kind: 'text', text: 'before' }, modified: { kind: 'text', text: 'after' } },
+		],
+	};
+	services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'session', chats: [], workspace: { root, authorityId: 'local' } }] } as unknown as ISessionsManagementService);
+	services.registerInstance(ISessionChangesService, { setChangesCount: (_resource: URI, count: number | undefined) => counts.push(count) } as unknown as ISessionChangesService);
+	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+	services.registerInstance(IChatService, {
+		onDidUpdateThread: Event.None, onDidUpdateTurnChanges: Event.None, onDidBecomeReady: Event.None,
+		readThreadChanges: async () => emptySummary,
+	} as unknown as IChatService);
+	services.registerInstance(ISessionProviderScopeService, {
+		getScope: () => ({
+			assertCurrent: () => { },
+			backendIdentity: () => 'session',
+			services: {
+				host: {
+					localGit: {
+						readRepositoryContexts: async () => [{ id: 'repo', label: 'Repo', rootPath: root }],
+						readSessionComparison: async () => snapshot,
+					}
+				}
+			},
+		}),
+	} as unknown as ISessionProviderScopeService);
+	using pane = services.createInstance(SessionChangesEditor, {});
+	pane.create(dom.window.document.body);
+	pane.setVisible(true);
+	await pane.setInput({ resource: URI.parse('ash-session-changes:/session?thread=thread') }, new AbortController().signal);
+
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
+	assert.ok(chinese);
+	setNlsMessages(chinese.locale, chinese.bundles);
+	try {
+		await pane.selectScope('uncommitted', 0);
+		assert.equal(counts.at(-1), 3);
+		const content = pane.getAccessibleContent();
+		assert.match(content, /large\.ts\n此文件的一个版本超出了预览大小上限。/u);
+		assert.match(content, /budget\.ts\n当前显示部分对比结果。/u);
+		assert.match(content, /small\.ts\n.*\nbefore\n.*\nafter/u);
+	} finally {
+		resetNlsResolver();
+	}
+});
 
 test('the default Changes editor reviews the backend checkpoint, resolves exact file identities and follows undo', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');

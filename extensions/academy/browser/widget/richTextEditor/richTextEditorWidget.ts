@@ -4,6 +4,7 @@ import { getDocumentPageOwner } from '../../../common/model/documentSections.js'
 import { exportDocx } from '../../contrib/documentOutput/docx.js';
 import { exportDocumentPdf } from '../../contrib/documentOutput/pdf.js';
 import './richTextEditorWidget.css';
+import type { DocumentEditorControlsHost } from 'ash:editor/workbench/services/documentEditor/browser/documentEditorProfile.js';
 import { DocumentPageView } from '../../contrib/pageLayout/documentPageView.js';
 import { documentPageDimensions } from '../../../common/model/documentPageLayout.js';
 import { Disposable, DisposableStore, MutableDisposable, combinedDisposable, type IDisposable, toDisposable } from 'ash:editor/base/common/lifecycle.js';
@@ -44,6 +45,8 @@ export interface EditorExtensionOperationContext {
 }
 
 export interface RichTextEditorOptions {
+	/** Let the document wrap text naturally in a resizable product workspace. */
+	readonly flowingText?: boolean;
 	readonly extensionApis?: Readonly<Record<string, (context: EditorExtensionOperationContext, payload: unknown) => { readonly command?: DocumentCommand; readonly result: unknown; }>>;
 	readonly contributions?: readonly DocumentContribution[];
 	/** Configures the generic heading query exposed by the pane. */
@@ -152,12 +155,14 @@ export class RichTextEditorWidget extends Disposable {
 		this._register(toDisposable(() => this.disposeNodeViews()));
 	}
 
-	create(parent: HTMLElement): void {
+	create(parent: HTMLElement, controls?: DocumentEditorControlsHost): void {
 		if (this.container) throw new ReferenceError('Document editor has already been created');
+		const controlsParent = controls?.container ?? parent;
 		for (const install of this.options.contributions ?? []) {
 			install({
 				kind: 'document',
-				container: parent,
+				container: controlsParent,
+				revealControls: controls && (() => controls.reveal()),
 				documentActions: [...DEFAULT_DOCUMENT_ACTIONS, ...(this.options.toolbarActions?.map(action => ({ id: action.id, label: action.label })) ?? [])],
 				onToggleMark: markType => this.handleTextMarkAction(markType),
 				onSetTextStyle: attrs => this.handleTextStyleAction(attrs),
@@ -185,19 +190,22 @@ export class RichTextEditorWidget extends Disposable {
 				runDocumentCommand: create => this.runContributionCommand(create),
 			});
 		}
-		this._register(addDisposableListener(parent, 'keydown', event => {
+		const handleKeydown = (event: KeyboardEvent) => {
 			for (const contribution of this.formattingContributions) contribution.handleKeydown?.(event);
-		}));
+		};
+		this._register(addDisposableListener(parent, 'keydown', handleKeydown));
+		if (controls) this._register(addDisposableListener(controlsParent, 'keydown', handleKeydown));
 		const editorDom = this._register(new EditorDom({
 			rootClassName: 'ash-text-editor-widget-layout',
 			contentClassName: 'ash-text-editor-widget-pane',
 		}));
-		parent.append(...this.formattingContributions.map(contribution => contribution.element));
+		controlsParent.append(...this.formattingContributions.map(contribution => contribution.element));
 		editorDom.attach(parent);
 		const container = editorDom.contentDomNode;
 		const layoutContainer = editorDom.domNode;
-		const outlineNavigator = this.options.outlineNavigator ? new DocumentOutlineNavigator(layoutContainer, { onSelect: nodeId => this.revealOutlineNode(nodeId) }) : undefined;
-		if (outlineNavigator) layoutContainer.append(outlineNavigator.element);
+		const outlineParent = controls?.container ?? layoutContainer;
+		const outlineNavigator = this.options.outlineNavigator ? new DocumentOutlineNavigator(outlineParent, { onSelect: nodeId => this.revealOutlineNode(nodeId) }) : undefined;
+		if (outlineNavigator) outlineParent.append(outlineNavigator.element);
 		layoutContainer.append(container);
 		this.editorDom = editorDom;
 		this.container = container;
@@ -474,10 +482,27 @@ export class RichTextEditorWidget extends Disposable {
 				}
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
-			case 'listItem':
+			case 'listItem': {
 				element.className = 'stanza-document-list-item';
+				const existing = element.querySelector<HTMLInputElement>(':scope > input.stanza-document-checklist-checkbox');
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
+				if (typeof node.attrs.checked === 'boolean') {
+					const checkbox = existing ?? h(document, 'input', { className: 'stanza-document-checklist-checkbox' });
+					checkbox.type = 'checkbox';
+					checkbox.setAttribute('aria-label', localize('document.checklist.item', 'Checklist item'));
+					checkbox.checked = node.attrs.checked;
+					checkbox.disabled = this.isReadOnly();
+					checkbox.onchange = () => {
+						if (this.model === model && !this.isReadOnly()) {
+							model.dispatch(new DocumentTransaction().setNodeAttributes(node.id, { ...node.attrs, checked: checkbox.checked }));
+							checkbox.focus();
+						}
+					};
+					element.classList.add('stanza-document-checklist-item');
+					element.prepend(checkbox);
+				}
 				break;
+			}
 			case 'table':
 				element.className = 'stanza-document-table';
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
@@ -527,7 +552,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private appendEditableText(element: HTMLElement, node: DocumentNode, model: DocumentTextModel, decorations: readonly ViewDecoration[]): void {
-		if ((documentPageDimensions({ ...model.document, attrs: { ...model.document.attrs, ...getDocumentPageOwner(model.document, node.id).attrs } }) && node.content.some(child => child.text !== undefined && child.text.length > 0)) || usesRichTextSurface(node) || hasRenderableDecoration(model, node, decorations)) {
+		if (this.options.flowingText || (documentPageDimensions({ ...model.document, attrs: { ...model.document.attrs, ...getDocumentPageOwner(model.document, node.id).attrs } }) && node.content.some(child => child.text !== undefined && child.text.length > 0)) || usesRichTextSurface(node) || hasRenderableDecoration(model, node, decorations)) {
 			this.appendRichText(element, node, model, decorations);
 			return;
 		}
@@ -609,6 +634,7 @@ export class RichTextEditorWidget extends Disposable {
 			const createdEditor = h(element.ownerDocument, 'div');
 			editor = createdEditor;
 			createdEditor.className = 'stanza-document-rich-text-input';
+			if (this.options.flowingText) createdEditor.tabIndex = 0;
 			createdEditor.dataset.blockId = node.id;
 			createdEditor.contentEditable = this.isReadOnly() ? 'false' : 'true';
 			createdEditor.setAttribute('aria-label', editableBlockAriaLabel(node));

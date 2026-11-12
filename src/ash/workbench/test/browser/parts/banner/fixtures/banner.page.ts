@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { WorkspaceTrustManagementService, WorkspaceTrustRequestService } from '../../../../../services/workspaces/common/workspaceTrust.js';
 import { IRemoteAuthorityResolverService } from '../../../../../../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../../../../../../platform/remote/browser/remoteAuthorityResolverService.js';
@@ -72,11 +73,10 @@ import { AccessibleViewService } from '../../../../../contrib/accessibility/brow
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../common/contributions.js';
 import { createTestEditorServices } from '../../../../common/testEditorServices.js';
 import { bindTestColorTheme } from '../../../../../../../../test/fixtures/browser/themeFixture.js';
-import chinese from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 const resources = new DisposableStore();
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
-if (new URLSearchParams(location.search).has('zh')) setNlsMessages('zh-CN', chinese);
+if (new URLSearchParams(location.search).has('zh')) setNlsMessages('zh-CN', chineseCatalog.bundles);
 const root = document.querySelector<HTMLElement>('#app')!;
 resources.add(setARIAContainer(root));
 const baseServices = resources.add(createTestEditorServices());

@@ -105,14 +105,25 @@ export class TerminalEditorInput implements IResourceEditorInput {
 	get terminalInstance(): ITerminalInstance | undefined { return this.titleSource.get().instance; }
 
 	/** Keep the editor identity when its saved pane resources have no process. */
-	restoreShell(instance: ITerminalInstance, onDidChangeLabel: Event<void>): void {
+	restoreShell(instance: ITerminalInstance, onDidChangeLabel: Event<void>): () => void {
 		const resource = instance.resource;
 		if (!resource) throw new TypeError('Terminal instance has no editor resource');
+		const previousLayout = this.layoutState.get();
+		const previousTitle = this.titleSource.get();
+		const previousActive = this.activeResource;
 		this.activeResource = resource;
 		transaction(tx => {
 			this.layoutState.set({ resource, size: 1 }, tx);
 			this.titleSource.set({ instance, changed: observableSignalFromEvent(this, onDidChangeLabel) }, tx);
 		});
+		return () => {
+			if (this.titleSource.get().instance !== instance) return;
+			this.activeResource = previousActive;
+			transaction(tx => {
+				this.layoutState.set(previousLayout, tx);
+				this.titleSource.set(previousTitle, tx);
+			});
+		};
 	}
 
 	contains(resource: URI): boolean { return this.panes.get().some(pane => pane.resource.path === resource.path); }

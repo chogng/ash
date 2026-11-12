@@ -6,6 +6,7 @@ import { ISessionSectionOrderService } from '../../../../services/sessions/brows
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { projectForFolder, projectFolders, readCodeProjects, unassignedCodeFolder, workspaceFolderKey } from '../../../chat/browser/sessionWorkspaceProjects.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
+import { MenuEntryActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
@@ -39,7 +40,7 @@ import { sessionExecutionWorkspace, type IChat, type ISession, type SessionManag
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
 import { autorun, derived, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
-import { IMenuService, SubmenuItemAction, type MenuId } from '../../../../../platform/actions/common/actions.js';
+import { IMenuService, MenuItemAction, SubmenuItemAction, type MenuId } from '../../../../../platform/actions/common/actions.js';
 import { WebAppServerUnavailableError } from '../../../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
@@ -1148,8 +1149,9 @@ export class SessionsList extends DomWidget {
 		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], kind: SessionListSectionKind = 'section',
 			options?: { readonly open?: () => void; readonly group?: SessionGroup; readonly project?: ProjectSummary; readonly projectAppearance?: CatalogProjectAppearance; readonly projectOperations?: SessionsCatalogProjectOperations; readonly catalogProjectId?: string; }): HTMLElement => {
 			activeSections.add(key);
+			const projectId = this.mode === 'code' ? options?.project?.id : undefined;
 			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, kind, this.mode, this.contextMenus,
-				collapsed => this.tree.setSectionCollapsed(key, collapsed)));
+				collapsed => this.tree.setSectionCollapsed(key, collapsed), this.menus, projectId));
 			const sorted = sortRows(children);
 			childrenByRow.set(section.domNode, key === attentionSection ? sorted
 				: reorderChildren(sorted, ids => this.listModel.getSessionOrder(this.mode, key, ids), 'rowOrderId'));
@@ -1875,7 +1877,7 @@ class SessionListSection extends Disposable {
 	get rowClassName(): string { return this.subgroup ? 'ash-sessions-list-subgroup-row' : 'ash-sessions-list-section-row'; }
 
 	constructor(document: Document, key: string, private readonly kind: SessionListSectionKind, private readonly mode: 'chat' | 'code', contextMenus: IContextMenuService,
-		toggle: (collapsed?: boolean) => void) {
+		toggle: (collapsed?: boolean) => void, menus: IMenuService, projectId?: string) {
 		super();
 		this.domNode = h(document, 'section', { className: this.subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
 		this.domNode.dataset.section = key;
@@ -1892,17 +1894,28 @@ class SessionListSection extends Disposable {
 		this.domNode.append(this.heading);
 		if (kind === 'project') {
 			this.domNode.classList.add('ash-sessions-list-project-row');
-			this.actions = this._register(new WorkbenchToolBar(this.domNode, contextMenus, {
-				ariaLabel: localize('sessions.list.projectActions', 'More project actions'),
-			}));
+			const more = rowMoreAction(() => {
+				if (this.moreButton) this.contextMenu?.(this.moreButton);
+			}, true);
+			if (projectId) {
+				this.actions = this._register(new MenuWorkbenchToolBar(this.domNode, menus, contextMenus, Menus.SessionSectionToolbar, {
+					ariaLabel: localize('projects.toolbar', 'Project actions'),
+					tabNavigation: 'each-action',
+					menuOptions: { arg: { projectId } },
+					leadingActions: [more],
+					actionViewItemProvider: (action, options) => action instanceof MenuItemAction
+						? new MenuEntryActionViewItem(action, { ...options, iconOnly: true })
+						: undefined,
+				}));
+			} else {
+				this.actions = this._register(new WorkbenchToolBar(this.domNode, contextMenus, { ariaLabel: more.label }));
+				this.actions.setActions([more]);
+			}
 			this.actions.element.classList.add('ash-sessions-list-actions');
 			this.actions.element.hidden = true;
 			this.label.observeActions(this.actions.element);
 			// The toolbar owns activation. A tree click would return focus to the row and dismiss the menu.
 			this._register(addDisposableListener(this.actions.element, 'click', event => event.stopPropagation()));
-			this.actions.setActions([rowMoreAction(() => {
-				if (this.moreButton) this.contextMenu?.(this.moreButton);
-			}, true)]);
 			this.moreButton?.setAttribute('aria-haspopup', 'menu');
 			this.moreButton?.setAttribute('aria-expanded', 'false');
 		}
@@ -2159,8 +2172,8 @@ class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 			styles: highlightRows ? {
 				...defaultListStyles,
 				listHoverBackground: 'var(--ash-sessions-sidebar-hover-background)',
-				listActiveSelectionBackground: 'var(--ash-sessions-sidebar-selection-background)',
-				listInactiveSelectionBackground: 'var(--ash-sessions-sidebar-selection-background)',
+				listActiveSelectionBackground: 'var(--ash-sessions-selectionBackground)',
+				listInactiveSelectionBackground: 'var(--ash-sessions-selectionBackground)',
 				listActiveSelectionForeground: 'var(--ash-foreground)',
 			} : {
 				...defaultListStyles,

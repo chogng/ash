@@ -430,11 +430,17 @@ fn directory_reset_accepts_the_new_authorized_root_and_discards_old_documents() 
     let mut connection = fixture.connection();
     fixture.configure(&mut connection, "fixture", "demo", true, "first");
     let old = fixture.hover(&mut connection, "demo", 9, "alpha");
-    fixture.server.language.lock().unwrap().retain_dir_roots(
-        &[fixture.root.path().canonicalize().unwrap()]
-            .into_iter()
-            .collect(),
-    );
+    fixture
+        .server
+        .language
+        .lock()
+        .unwrap()
+        .retain_dir_roots(super::LanguageDirectoryRoots {
+            granted: [fixture.root.path().canonicalize().unwrap()]
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        });
     let next = tempfile::tempdir().unwrap();
     std::fs::write(next.path().join("same.demo"), "disk").unwrap();
     let grant = ash_file_access::Grant::for_environment(

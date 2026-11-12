@@ -1,6 +1,7 @@
 # Academy
 
-`ash.academy` is an independently installed Rust editor extension. Its
+`ash.academy` is an independently installed Rust editor extension for the
+Agent Window. Discover and manage it in **Customize → Plugins**. Its
 `ash-academy` executable registers the versioned `editor.client.v1` capability
 through the public Rust SDK and existing Host RPC. Shared Workbench integration
 projects the admitted package's live registration into the editor registry before
@@ -48,8 +49,11 @@ work. The supported DOCX and page-image PDF formats are described below and in t
 Validate with `just verify ash-academy`, the MainThreadClientEditors / Academy
 profile / DocumentEditorPane unit suites, and
 `pnpm test:browser:integration academy.integration.spec.ts --project=chromium`.
-Ash product packages omit Academy's executable, manifest and client implementation.
-Build the runtime with the repository Rust wrappers, then stage a submission:
+The Agent Window ships the general `.ash-doc` profile and loads it on demand.
+The separate Academy package supplies the paper and channel-notes profiles. Its
+manifest also declares the general profile for older hosts. Current Agent Windows
+keep the built-in registration when this package is installed.
+Build the optional runtime with the repository Rust wrappers, then stage a submission:
 
 ```sh
 pnpm package:editor extensions/academy .build/academy-submission darwin-arm64=.build/cargo/ci-test/ash-academy

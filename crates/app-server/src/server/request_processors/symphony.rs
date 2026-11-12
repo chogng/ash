@@ -180,7 +180,7 @@ fn error(error: ash_symphony::Error) -> RpcError {
         ash_symphony::Error::NotFound => {
             RpcError::new(-32201, AppServerErrorName::SymphonyNotFound)
         }
-        ash_symphony::Error::Conflict => {
+        ash_symphony::Error::Conflict | ash_symphony::Error::StaleWorkflow => {
             RpcError::new(-32202, AppServerErrorName::SymphonyConflict)
         }
         ash_symphony::Error::Invalid(detail) => {

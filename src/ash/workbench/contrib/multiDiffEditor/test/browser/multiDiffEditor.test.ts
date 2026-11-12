@@ -15,7 +15,7 @@ import { IAccessibilityService } from '../../../../../platform/accessibility/com
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import type { MultiDiffEditorOptions } from '../../browser/multiDiffEditor.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { validateJsonValue } from '../../../../../base/common/jsonValue.js';
 import assert from 'node:assert/strict';
 import { test, suite, suiteSetup, suiteTeardown } from 'mocha';
@@ -51,6 +51,7 @@ import { EditorLineWrapping, EditorOption } from '../../../../../editor/common/c
 import { ITextModelResourceService, type TextModelInput, type TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IDiffService } from '../../../../services/diff/common/diffService.js';
 import { EditorPanes } from '../../../../browser/editor.js';
+import { isMultiDiffEditorFileListEnabled, toggleMultiDiffEditorFileList } from '../../common/multiDiffEditor.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
@@ -314,6 +315,57 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	pane.dispose();
 	assert.equal(parent.children.length, 0);
 	dom.window.close();
+});
+
+test('Multi-diff headers and file list use repository-relative labels for snapshot resources', async () => {
+	const dom = createTestDom();
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	try {
+		const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+		const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
+		using resources = new DisposableStore();
+		const services = createCodeEditorServices(resources);
+		registerDialogs(services, resources);
+		services.registerInstance(ITextModelResourceService, models);
+		using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {});
+		const storage = services.get(IStorageService);
+		const listWasHidden = !isMultiDiffEditorFileListEnabled(storage);
+		if (listWasHidden) toggleMultiDiffEditorFileList(storage);
+		using restoreFileList = toDisposable(() => { if (listWasHidden) toggleMultiDiffEditorFileList(storage); });
+		pane.create(parent);
+		pane.layout({ width: 1000, height: 900 });
+		const files = [
+			{ path: 'settings.ts' },
+			{ path: 'src/config/defaults.ts' },
+			{ path: 'src/renamed.ts', originalPath: 'legacy/old.ts' },
+		];
+		await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/checkpoint'), files.map(fileList => ({
+			label: fileList.originalPath ? `${fileList.originalPath} → ${fileList.path}` : fileList.path,
+			fileList,
+			original: { resource: URI.parse(`snapshot:/thread:before/repository/${fileList.path}`), initialText: 'before', readOnly: true },
+			modified: { resource: URI.parse(`snapshot:/thread:after/repository/${fileList.path}`), initialText: 'after', readOnly: true },
+		})), 'Changes'), new AbortController().signal);
+		const labels = [...parent.querySelectorAll('.stanza-multi-diff-editor-title .ash-multi-diff-resource')].map(label => [
+			label.querySelector('.ash-icon-label-text')?.textContent,
+			label.querySelector('.ash-icon-label-description')?.textContent,
+		]);
+		assert.deepEqual(labels, [
+			['settings.ts', undefined],
+			['defaults.ts', 'src/config'],
+			['renamed.ts', 'src'],
+			['old.ts', 'legacy'],
+		]);
+		const fileRows = [...parent.querySelectorAll('.ash-multi-diff-file-list-label')].map(label => [
+			label.querySelector('.ash-icon-label-text')?.textContent,
+			label.querySelector('.ash-icon-label-description')?.textContent,
+		]);
+		assert.deepEqual(fileRows, labels.slice(0, 3));
+		assert.equal(parent.querySelectorAll('.ash-multi-diff-rename-status').length, 1);
+		assert.equal(pane.getActiveDiffItem()?.modified.resource.path, '/thread:after/repository/settings.ts');
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('Multi-diff pane acquires text models as files enter the viewport and releases them on clear', async () => {

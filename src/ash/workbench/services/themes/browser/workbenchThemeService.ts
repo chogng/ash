@@ -17,8 +17,8 @@ import { ITelemetryService, TelemetryLevel } from '../../../../platform/telemetr
 import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileContent } from '../../../../platform/files/common/files.js';
 import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { getTokenClassificationRegistry } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
-import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
-import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
+import { Colors, type ColorValue } from '../../../../platform/theme/common/colorRegistry.js';
+import { createColorTheme, darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { applyThemeCustomizations, ThemeConfigurationSettings } from '../common/themeConfiguration.js';
 import { noFileIconTheme, defaultProductIconTheme, type IFileIconTheme, type IColorTheme, type IProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { getIconDefinition, getIconRegistry } from '../../../../platform/theme/common/iconRegistry.js';
@@ -49,6 +49,11 @@ type ColorThemeChangedClassification = {
 
 type ReportedColorTheme = Pick<IColorTheme, 'id' | 'colorScheme' | 'colors' | 'semanticHighlighting' | 'semanticTokenRules'>;
 
+interface IWindowColorOverrides {
+	readonly settings: readonly string[];
+	resolve(theme: IColorTheme): Readonly<Record<string, ColorValue>> | undefined;
+}
+
 /** Owns active theme selection and its window-scoped visual resources. */
 export class WorkbenchThemeService extends Disposable implements IWorkbenchThemeService, IResourceIconRenderer {
 	private readonly colorThemeChange = this._register(new Emitter<IColorTheme>());
@@ -59,6 +64,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 	/** Diagnostic baseline only; previews never replace the committed configuration being compared. */
 	private reportedColorTheme: ReportedColorTheme | undefined;
 	private initialized = false;
+	private windowColorOverrides: IWindowColorOverrides | undefined;
 	public readonly onDidColorThemeChange = this.colorThemeChange.event;
 	private readonly resourceIconChange = this._register(new Emitter<void>());
 	public readonly onDidChangeResourceIcons = this.resourceIconChange.event;
@@ -83,12 +89,13 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		this._register(toDisposable(() => this.previews.clear()));
 	}
 
-	public initialize(): void {
+	public initialize(windowColorOverrides?: IWindowColorOverrides): void {
 		this.assertNotDisposed();
 		if (this.initialized) {
 			throw new Error('Workbench themes are already initialized');
 		}
 		this.initialized = true;
+		this.windowColorOverrides = windowColorOverrides;
 		this.colorStyles = this._register(new ManagedStyleSheet(this.container.ownerDocument));
 		// The document scope also covers popups mounted outside the workbench container.
 		const root = this.container.ownerDocument.documentElement;
@@ -121,6 +128,8 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 							? selection.source
 							: 'settings';
 					this.updateColorTheme(source);
+				} else if (this.windowColorOverrides?.settings.some(key => event.affectsConfiguration(key))) {
+					this.updateColorTheme();
 				}
 				if (event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) {
 					this.colorThemeChange.fire(this.colorTheme);
@@ -266,7 +275,12 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		const committedTheme = this.resolveColorTheme();
 		// Auxiliary windows share previews; their lifetime changes presentation, never configuration.
 		const preview = [...this.previews.values()].at(-1);
-		const theme = preview ? applyThemeCustomizations(preview, this.configurationService) : committedTheme;
+		const baseTheme = preview ? applyThemeCustomizations(preview, this.configurationService) : committedTheme;
+		// Window presentation colors are resolved after user theme customizations.
+		const colorOverrides = this.windowColorOverrides?.resolve(baseTheme);
+		const theme = colorOverrides
+			? createColorTheme({ ...baseTheme, baseTheme, colorOverrides, allowUnregisteredColorOverrides: true })
+			: baseTheme;
 		const previous = this.reportedColorTheme;
 		// Capture values rather than getters or lazy token-color caches, which can change on reads.
 		const current: ReportedColorTheme = {

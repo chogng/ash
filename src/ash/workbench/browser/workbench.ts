@@ -104,6 +104,7 @@ import { ITestExecutionService } from '../../platform/testing/common/testExecuti
 import { IExtensionHostApi } from '../../platform/extensions/common/extensionHostApi.js';
 import { WebWorkerExtensionHost } from '../services/extensions/browser/webWorkerExtensionHost.js';
 import { withEnabledBuiltInExtensions } from '../../platform/extensions/browser/extensionApi.js';
+import { isAcademyExtension } from '../contrib/extensions/common/academyExtension.js';
 import { IExtensionResourceLoaderService } from '../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
@@ -703,7 +704,7 @@ export class Workbench extends Disposable {
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);
 		// PDF reading belongs to the Agents Window, including installed packages and Chat previews.
-		const enabledExtensions = withEnabledBuiltInExtensions(api.extensions, enablement, extensionManagementService, extension => extension.id !== 'ash.pdf-viewer');
+		const enabledExtensions = withEnabledBuiltInExtensions(api.extensions, enablement, extensionManagementService, extension => extension.id !== 'ash.pdf-viewer' && !isAcademyExtension(extension.id));
 		services.registerInstance(IWorkbenchEnvironmentService, environmentService);
 		const embedderTerminals = services.get(IEmbedderTerminalService);
 		this.window = {

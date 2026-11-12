@@ -2,6 +2,12 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { StringSHA1 } from '../../../base/common/hash.js';
 
+/** Favicon data accepted by link previews. The URL is a bounded raster image, independent of the page. */
+export function isBrowserFavicon(value: unknown): value is string {
+	return typeof value === 'string' && value.length <= 88_000
+		&& /^data:image\/(?:png|x-icon|vnd\.microsoft\.icon|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/u.test(value);
+}
+
 export interface ISerializedBrowserHistoryEntry {
 	readonly id: number;
 	readonly url: string;

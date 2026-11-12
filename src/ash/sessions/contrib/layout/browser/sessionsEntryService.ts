@@ -14,6 +14,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
+import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ILifecycleService, StartupKind } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
@@ -207,6 +208,9 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 				}
 				if (this.isDisposed) { return; }
 				entry = initialize ? initialize() : entry;
+				if (options?.preserveChatSource && !entry.chatSource && previousEntry?.chatSource) {
+					entry = { ...entry, chatSource: previousEntry.chatSource };
+				}
 				if (entry.content === 'editor' && (entry.conversationKind || entry.conversation)) {
 					await this.conversation.setConversationKind(entry.conversationKind ?? (retainedMode === 'code' ? 'code' : 'chat'));
 					if (this.isDisposed) { return; }
@@ -229,7 +233,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 				// Navigation visibility belongs to the window, independently of the page's side content.
 				const sidebarVisible = this.layout.isPartRequested('sidebar');
 				const state = this.visibility.get(entry.id) ?? {
-					details: entry.detailsContainerId !== undefined,
+					details: entry.showDetailsByDefault ?? entry.detailsContainerId !== undefined,
 					documents: documents && this.controller.hasDocumentEditors,
 				};
 				const detailsContainerId = !documents && state.details ? entry.detailsContainerId : undefined;
@@ -282,6 +286,32 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 				else if (focusSidebar) { sidebar?.focus(); }
 			} finally { this.isChangingContent = false; }
 		});
+	}
+
+	public async replaceEditorResource(sourceGroupId: number, input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void> {
+		const parts = this.editor as EditorParts;
+		const source = parts.groups.find(group => group.id === sourceGroupId);
+		if (!source) throw new RangeError(`Unknown editor group '${sourceGroupId}'`);
+		const inputKey = extUri.getComparisonKey(input.resource);
+		const entry = sourceGroupId === this.pageGroupId ? this.editorEntries.get(inputKey) : undefined;
+		if (!entry) return parts.replaceEditorResource(source, input, replacement);
+		const replacementKey = extUri.getComparisonKey(replacement.resource);
+		const previous = this.editorEntries.get(replacementKey);
+		// The editor group publishes activation before the old tab closes.
+		this.editorEntries.set(replacementKey, { ...entry, editorInput: replacement });
+		try {
+			await parts.replaceEditorResource(source, input, replacement);
+		} catch (error) {
+			if (previous) this.editorEntries.set(replacementKey, previous);
+			else this.editorEntries.delete(replacementKey);
+			throw error;
+		}
+		if (inputKey !== replacementKey) this.editorEntries.delete(inputKey);
+		const active = this.activeEntry.get();
+		if (active?.editorInput && extUri.isEqual(active.editorInput.resource, input.resource)) {
+			this.activeEntry.set({ ...active, editorInput: replacement }, undefined);
+		}
+		entry.onEditorInputReplaced?.(input, replacement);
 	}
 
 	public setConversationVisible(visible: boolean): Promise<void> {

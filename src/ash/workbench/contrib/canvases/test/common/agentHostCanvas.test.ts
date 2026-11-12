@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
@@ -10,7 +11,6 @@ import { AgentHostCanvasCollection, type ICanvasProvider } from '../../common/ag
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { Event } from '../../../../../base/common/event.js';
 import type { INotificationService, NotificationMessage } from '../../../../../platform/notification/common/notification.js';
-import { readFile } from 'node:fs/promises';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 
 suite('Agent Canvas provider ownership', () => {
@@ -90,7 +90,7 @@ suite('Agent Canvas provider ownership', () => {
 	for (const locale of ['en', 'zh-CN']) {
 		test('retains an Agent page when its provider changes URL and lets the user open the new source in ' + locale, async () => {
 			try {
-				if (locale === 'zh-CN') { setNlsMessages(locale, JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'))); }
+				if (locale === 'zh-CN') { setNlsMessages(locale, chineseCatalog.bundles); }
 				using resources = new DisposableStore();
 				const events = resources.add(new Emitter<BrowserViewEvent>());
 				const pages = new Map<string, IBrowserViewInfo>();

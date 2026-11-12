@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../base/browser/ui/styles.css';
 import '../../../../../browser/media/style.css';
 import { Dimension } from '../../../../../../base/browser/dom.js';
@@ -41,7 +42,6 @@ import { ActivityBarPosition } from '../../../../../common/configuration.js';
 import type { PartTitleProjection } from '../../../../../browser/parts/views/viewPane.js';
 import { HoverService, IHoverService } from '../../../../../../platform/hover/browser/hoverService.js';
 import { BrowserContextViewService } from '../../../../../../platform/contextview/browser/contextViewService.js';
-import chinese from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 const resources = new DisposableStore();
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
@@ -58,7 +58,7 @@ services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), 
 const theme = resources.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, theme);
 resources.add(bindTestColorTheme(theme, root));
-if (new URLSearchParams(location.search).has('chinese')) setNlsMessages('zh-CN', chinese);
+if (new URLSearchParams(location.search).has('chinese')) setNlsMessages('zh-CN', chineseCatalog.bundles);
 await import('../../../../../browser/parts/auxiliarybar/auxiliaryBarActions.js');
 
 class DraftView extends ViewPane {

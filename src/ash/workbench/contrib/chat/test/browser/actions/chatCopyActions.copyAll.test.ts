@@ -1,6 +1,6 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { suite, test } from 'mocha';
 import { Event } from '../../../../../../base/common/event.js';
@@ -171,7 +171,7 @@ suite('Copy conversation', () => {
 	});
 
 	test('Chinese content roles and completion use the product catalog', async () => {
-		const messagesByBundle = JSON.parse(readFileSync(resolve('extensions/language-pack-zh-cn/translations/chat.json'), 'utf8'));
+		const messagesByBundle = chineseCatalog.bundles;
 		setNlsMessages('zh-CN', messagesByBundle);
 		try {
 			using lifetime = new DisposableStore();

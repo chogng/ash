@@ -1,0 +1,16 @@
+name: Set up Ubuntu APT
+description: Use the official Ubuntu fallback mirrors and bound download retries on CI runners.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        # The hosted runner's mirror list also contains the public Ubuntu archive and security mirrors.
+        if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+          sudo sed -i -E '\#^https?://azure\.archive\.ubuntu\.com/ubuntu/?([[:space:]]|$)#d' /etc/apt/apt-mirrors.txt
+        fi
+        sudo tee /etc/apt/apt.conf.d/zz-ubuntu-ash-ci >/dev/null <<'EOF'
+        Acquire::Retries "1";
+        Acquire::http::Timeout "15";
+        Acquire::https::Timeout "15";
+        EOF

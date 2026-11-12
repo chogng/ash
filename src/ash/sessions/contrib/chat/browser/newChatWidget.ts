@@ -33,7 +33,7 @@ import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browse
 import { resolveChatContextAttachment } from '../../../../workbench/services/chat/common/chatContextService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { ChatInputArtifactPill } from '../../artifacts/browser/chatInputArtifactPill.js';
+import { ChatInputArtifactPill } from './chatInputArtifactPill.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
 import './media/newChatEnvironment.css';
@@ -105,6 +105,8 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 				};
 				composer = instantiationService.createInstance(SharedChatInputComposer, inputContainer, {
 					...delegate,
+					// The environment picker owns the selected checkout's pre-session changes.
+					readWorkspaceChanges: undefined,
 					get sendInBackground() { return model.untitledSessionId && !model.isNestedDraft ? sendInBackground : undefined; },
 					send: async (...args: Parameters<ChatInputDelegate['send']>) => {
 						const submissionSignal = args[4];
@@ -161,7 +163,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		const tipAnchor = h(parent.ownerDocument, 'div', { className: 'ash-sessions-chat-tip-anchor' });
 		const tipContainer = h(parent.ownerDocument, 'div', { className: 'ash-sessions-chat-tip-slot' });
 		tipAnchor.append(tipContainer);
-		parent.insertBefore(tipAnchor, inputContainer);
+		parent.prepend(tipAnchor);
 		this._register(toDisposable(() => tipAnchor.remove()));
 		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
 			container: tipContainer,
@@ -187,7 +189,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 			this.sessionControls = this._register(instantiationService.createInstance(ComposerSessionControls, footer, this.environmentSetup, model, () => this.saveState()));
 			const { setupCard } = this.sessionControls;
 			// Keep the tip measurable so it can return when the window has room again.
-			this._register(observeResize([this.environmentSetup, setupCard, tipContainer], () => {
+			this._register(observeResize([this.environmentSetup, setupCard, tipContainer, parent], () => {
 				const tip = tipContainer.getBoundingClientRect();
 				const card = setupCard.getBoundingClientRect();
 				const overlaps = tip.height > 0 && card.height > 0 && tip.top < card.bottom;

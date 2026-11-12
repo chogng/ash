@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -7,7 +8,6 @@ import { TAB_CLOSE_ACTION_ID, TabList, type TabListItem } from '../../browser/ui
 import { scheduleAtNextAnimationFrame } from '../../browser/scheduler.js';
 import type { IAction } from '../../common/actions.js';
 import { registerLxicon } from '../../common/lxiconsUtil.js';
-import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
 import { toDisposable } from '../../common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
@@ -781,7 +781,7 @@ test('TabList renders IconLabel content, custom actions, and its standard close 
 	assert.deepEqual(closed, ['first', 'first']);
 	setNlsMessages(
 		'zh-CN',
-		JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')),
+		chineseCatalog.bundles,
 	);
 	tabList.setTabs([tab('launch.json')], 'launch.json');
 	const localizedClose = tabList.element.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!;

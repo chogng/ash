@@ -47,7 +47,8 @@ import { basename, dirname, isAbsolute, join, parse } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { throwIfCancelled, type CancellationToken } from '../../base/common/cancellation.js';
+import { CancellationToken, CancellationTokenSource, throwIfCancelled } from '../../base/common/cancellation.js';
+import { OPEN_IDE_EXTENSIONS_CHANNEL, validateExtensionsOpenOptions } from '../../platform/extensionManagement/common/extensionManagementService.js';
 import { CancellationError, isCancellationError } from '../../base/common/errors.js';
 import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableDisposable, installDisposableTracker, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { Lazy } from '../../base/common/lazy.js';
@@ -64,6 +65,7 @@ import { remoteExecutablePath, remoteHostExecutablePath } from '../../platform/r
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from '../../platform/ipc/electron-main/trustedIpcRouter.js';
 import { ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { browserViewChannel } from '../../platform/browserView/electron-main/browserViewIpc.js';
+import { isBrowserFavicon } from '../../platform/browserView/common/browserHistory.js';
 import { BrowserViewMainService, IBrowserViewMainService } from '../../platform/browserView/electron-main/browserViewMainService.js';
 import { projectMaterialFilesChannel } from '../../platform/projects/common/projectMaterialFiles.js';
 import { ProjectMaterialFilesChannel } from '../../platform/projects/electron-main/projectMaterialFilesChannel.js';
@@ -126,7 +128,7 @@ import { WindowsMainService, windowOperationIpcRoute, workspaceContextIpcRoutes,
 import { LifecycleMainService, ILifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
 import { defaultWindowState, WorkspaceContextMainService, type IWindowState } from '../../platform/window/electron-main/window.js';
 import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, hasWorkspaceFileExtension, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState, workspaceFromIdentifier } from '../../platform/workspace/common/workspace.js';
-import { createEmptyWorkspaceIdentifier } from '../../platform/workspaces/node/workspaces.js';
+import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } from '../../platform/workspaces/node/workspaces.js';
 import { packagedRemoteRuntimeCatalogSource } from '../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js';
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from '../../platform/remote/electron-main/remoteRuntimeInstaller.js';
 import { RemoteRuntimeProvisioner } from '../../platform/remote/electron-main/remoteRuntimeProvisioner.js';
@@ -178,7 +180,7 @@ import { fallbackLanguagePackCatalog, loadProductLanguagePackCatalog } from '../
 import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
 import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePackContract.js';
 import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
-import { HOST_RESTART_CHANNEL, WINDOW_OPEN_EXTERNAL_URI_CHANNEL, WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL } from '../../platform/window/common/window.js';
+import { HOST_RESTART_CHANNEL, OPEN_IDE_SESSION_CHANNEL, validateOpenIdeSessionRequest, WINDOW_OPEN_EXTERNAL_URI_CHANNEL, WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL } from '../../platform/window/common/window.js';
 
 // Packaged Main can be bundled independently of the native helpers and utility entries.
 const mainOutput = app.isPackaged
@@ -2063,6 +2065,20 @@ export class AshApplication extends Disposable {
 			contextMenu,
 			getNlsMessages: () => this.activeLanguagePack.bundles['ash.workbench'] ?? {},
 			getWorkspaceId: () => workspaceContext.getWorkspace().id,
+			readPublicFavicon: async (url: URL, signal: AbortSignal) => {
+				signal.throwIfAborted();
+				const cancellation = new CancellationTokenSource();
+				const abort = () => cancellation.cancel();
+				signal.addEventListener('abort', abort, { once: true });
+				try {
+					const network = this.mainProcessIpcServer.getChannel('browserNetwork', client => client.ctx === context);
+					const icon = await network.call<unknown>('readPublicFavicon', { url: url.href }, cancellation.token);
+					return isBrowserFavicon(icon) ? icon : undefined;
+				} finally {
+					signal.removeEventListener('abort', abort);
+					cancellation.dispose();
+				}
+			},
 			getWindowNetwork: () => {
 				const authority = getWorkspaceRemoteAuthority(workspaceContext.getWorkspace());
 				return authority ? { authority } : undefined;
@@ -2298,6 +2314,39 @@ export class AshApplication extends Disposable {
 							channel: AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL,
 							validate: validateAgentsWindowHandoffComplete,
 							invoke: (result: unknown) => this.windowsMainService.completeManagedWindowHandoff(AGENTS_WINDOW_KEY, result as IAgentsWindowHandoffResult),
+						},
+						{
+							channel: OPEN_IDE_SESSION_CHANNEL,
+							validate: validateOpenIdeSessionRequest,
+							invoke: async (value: unknown) => {
+								const { folder, conversation } = value as ReturnType<typeof validateOpenIdeSessionRequest>;
+								const active = this.windowsMainService.getLastActiveWindow('workbench');
+								const activeWorkspace = active && this.workbenchWindowData.get(active.id)?.workspaceContext.getWorkspace();
+								// A folderless link must not resolve against an unrelated Remote window's ambient host.
+								const workspace = folder
+									? folder.scheme === 'file' ? await workspaces.resolveFolder(folder.fsPath) : getSingleFolderWorkspaceIdentifier(folder)
+									: activeWorkspace && !getWorkspaceRemoteAuthority(activeWorkspace) ? activeWorkspace : createEmptyWorkspaceIdentifier();
+								const opened = await this.openWorkspace(workspace, workspaces);
+								if (opened && conversation) {
+									this.windowsMainService.getWindowById(opened.window.id)?.sendWhenReady(OPEN_IDE_SESSION_CHANNEL, CancellationToken.None, conversation.toString());
+								}
+							},
+						},
+						{
+							channel: OPEN_IDE_EXTENSIONS_CHANNEL,
+							validate: validateExtensionsOpenOptions,
+							invoke: async (options: unknown) => {
+								const workspace = session.workspaceContext.getWorkspace();
+								const active = this.windowsMainService.getLastActiveWindow('workbench');
+								const activeWorkspace = active && this.workbenchWindowData.get(active.id)?.workspaceContext.getWorkspace();
+								const window = activeWorkspace && getWorkspaceRemoteAuthority(activeWorkspace) === getWorkspaceRemoteAuthority(workspace)
+									? active
+									: (await this.openWorkspace(workspace, workspaces))?.window;
+								if (!window) return;
+								const ide = this.windowsMainService.getWindowById(window.id);
+								ide?.sendWhenReady(OPEN_IDE_EXTENSIONS_CHANNEL, CancellationToken.None, options);
+								ide?.focus();
+							},
 						},
 						{
 							channel: RETURN_TO_WORKBENCH_CHANNEL,

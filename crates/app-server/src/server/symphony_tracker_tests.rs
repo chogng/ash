@@ -7,6 +7,8 @@ use serde_json::json;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::mpsc;
+use std::time::Duration;
 
 struct Responses {
     pages: Mutex<VecDeque<serde_json::Value>>,
@@ -50,16 +52,11 @@ fn linear_pagination_normalizes_blockers_and_zero_priority_without_exposing_cred
     });
     let root = tempfile::tempdir().unwrap();
     let store = Arc::new(ash_symphony::Store::open(&root.path().join("state.db")).unwrap());
+    let workflow = plan(&root, "fixture-secret", "");
+    store.configure("configure", workflow.clone()).unwrap();
     let server = crate::tests::server().with_symphony_store(store, transport.clone());
     let issues = server
-        .symphony_tracker_processor()
-        .fetch_symphony_linear(
-            &plan(&root),
-            "project",
-            "fixture-secret",
-            &[],
-            &CancellationSource::new().token(),
-        )
+        .poll_symphony(&workflow, &CancellationSource::new().token())
         .unwrap();
     assert_eq!(issues.len(), 1);
     assert_eq!(issues[0].priority, None);
@@ -83,26 +80,21 @@ fn partial_linear_result_never_returns_a_successful_snapshot() {
     });
     let root = tempfile::tempdir().unwrap();
     let store = Arc::new(ash_symphony::Store::open(&root.path().join("state.db")).unwrap());
+    let workflow = plan(&root, "fixture-secret", "");
+    store.configure("configure", workflow.clone()).unwrap();
     let server = crate::tests::server().with_symphony_store(store, transport);
     let error = server
-        .symphony_tracker_processor()
-        .fetch_symphony_linear(
-            &plan(&root),
-            "project",
-            "fixture-secret",
-            &[],
-            &CancellationSource::new().token(),
-        )
+        .poll_symphony(&workflow, &CancellationSource::new().token())
         .unwrap_err();
     assert!(error.contains("Linear rejected"));
     assert!(!error.contains("fixture-secret"));
 }
 
-fn plan(root: &tempfile::TempDir) -> ash_symphony::Workflow {
+fn plan(root: &tempfile::TempDir, credential: &str, settings: &str) -> ash_symphony::Workflow {
     let path = root.path().join("WORKFLOW.md");
     std::fs::write(
         &path,
-        "---\ntracker:\n  kind: linear\n  project_slug: project\n---\n{{ issue.title }}",
+        format!("---\ntracker:\n  kind: linear\n  project_slug: project\n  api_key: {credential}\n{settings}\n---\n{{{{ issue.title }}}}"),
     )
     .unwrap();
     ash_symphony::Workflow::load(&path).unwrap()
@@ -123,16 +115,15 @@ fn linear_id_refresh_and_viewer_routing_keep_unassigned_issues_visible_but_ineli
     });
     let root = tempfile::tempdir().unwrap();
     let store = Arc::new(ash_symphony::Store::open(&root.path().join("state.db")).unwrap());
+    let workflow = plan(&root, "fixture-secret", "  assignee: me");
+    store.configure("configure", workflow.clone()).unwrap();
     let server = crate::tests::server().with_symphony_store(store, transport.clone());
-    let mut workflow = plan(&root);
-    workflow.tracker_assignee = Some("me".into());
     let ids = vec!["one".into(), "two".into()];
     let issues = server
         .symphony_tracker_processor()
         .fetch_symphony_linear(
             &workflow,
             "project",
-            "fixture-secret",
             &ids,
             &CancellationSource::new().token(),
         )
@@ -145,5 +136,93 @@ fn linear_id_refresh_and_viewer_routing_keep_unassigned_issues_visible_but_ineli
     assert_eq!(
         queries[1]["variables"]["filter"]["project"]["slugId"]["eq"],
         "project"
+    );
+}
+
+struct PausedLinearPoll {
+    requests: Mutex<Vec<(String, String)>>,
+    started: mpsc::Sender<()>,
+    resume: Mutex<mpsc::Receiver<()>>,
+}
+
+impl HttpClient for PausedLinearPoll {
+    fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
+        let authorization = request
+            .headers()
+            .iter()
+            .find(|header| header.name() == "Authorization")
+            .unwrap();
+        let first_page = {
+            let mut requests = self.requests.lock().unwrap();
+            requests.push((request.url().into(), authorization.value().into()));
+            requests.len() == 1
+        };
+        if first_page {
+            self.started.send(()).unwrap();
+            self.resume
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap();
+        }
+        let body = json!({"data":{"issues":{"nodes":[],"pageInfo":{
+            "hasNextPage":first_page,"endCursor":"next"
+        }}}});
+        Ok(HttpResponse::new(
+            200,
+            Vec::new(),
+            serde_json::to_vec(&body).unwrap(),
+        ))
+    }
+}
+
+#[test]
+fn linear_endpoint_and_credential_rotation_rejects_stale_polls() {
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(ash_symphony::Store::open(&root.path().join("state.db")).unwrap());
+    let old = plan(
+        &root,
+        "fixture-old-key",
+        "  endpoint: https://old.example/graphql",
+    );
+    store.configure("configure", old.clone()).unwrap();
+    let (started, first_request) = mpsc::channel();
+    let (resume, paused) = mpsc::channel();
+    let transport = Arc::new(PausedLinearPoll {
+        requests: Mutex::new(Vec::new()),
+        started,
+        resume: Mutex::new(paused),
+    });
+    let server = crate::tests::server().with_symphony_store(store.clone(), transport.clone());
+    let token = CancellationSource::new().token();
+    let (current, stale_before_reload, stale_next_page) = std::thread::scope(|scope| {
+        let poll = scope.spawn(|| server.poll_symphony(&old, &token));
+        first_request.recv_timeout(Duration::from_secs(10)).unwrap();
+        let current = plan(
+            &root,
+            "fixture-new-key",
+            "  endpoint: https://new.example/graphql",
+        );
+        let stale_before_reload = server.poll_symphony(&old, &token);
+        store.configure("rotate", current.clone()).unwrap();
+        resume.send(()).unwrap();
+        (current, stale_before_reload, poll.join().unwrap())
+    });
+
+    assert_eq!(stale_before_reload.unwrap_err(), super::LINEAR_POLL_FAILED);
+    assert_eq!(stale_next_page.unwrap_err(), super::LINEAR_POLL_FAILED);
+    assert!(server.poll_symphony(&current, &token).unwrap().is_empty());
+    assert_eq!(
+        *transport.requests.lock().unwrap(),
+        [
+            (
+                String::from("https://old.example/graphql"),
+                String::from("fixture-old-key")
+            ),
+            (
+                String::from("https://new.example/graphql"),
+                String::from("fixture-new-key")
+            ),
+        ]
     );
 }

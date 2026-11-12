@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { createTestLanguageModelToolsService } from '../../../../chat/test/common/tools/testLanguageModelToolsService.js';
 import { BrowserClipboardService } from '../../../../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
@@ -22,7 +23,6 @@ import { localize } from '../../../../../../nls.js';
 import { ICustomizationMarketplaceService } from '../../../../../../platform/customizationMarketplace/common/customizationMarketplaceService.js';
 import { CustomizationMarketplaceWorkbenchService } from '../../../../chat/browser/aiCustomization/customizationMarketplaceWorkbenchService.js';
 import '../../../../chat/browser/aiCustomization/customizationMarketplace.contribution.js';
-import chineseSettingsMessages from '../../../../../../../../extensions/language-pack-zh-cn/translations/settings.json' with { type: 'json' };
 import '../../../../../../base/browser/ui/styles.css';
 import { IGlobalExtensionEnablementService } from '../../../../../../platform/extensionManagement/common/extensionManagement.js';
 import { GlobalExtensionEnablementService } from '../../../../../../platform/extensionManagement/common/extensionEnablementService.js';
@@ -134,15 +134,9 @@ import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../..
 import { AgentCapabilitiesSettings } from '../../../../preferences/browser/agentCapabilitiesSettings.js';
 import { SettingsNavigation } from '../../../../preferences/browser/settingsLayout.js';
 import type { IWorkspaceTrustApi } from '../../../../../../platform/workspace/common/workspaceTrust.js';
-import chineseMessages from '../../../../../../../../extensions/language-pack-zh-cn/translations/extensions.json' with { type: 'json' };
-import chineseWorkbenchMessages from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 if (new URLSearchParams(window.location.search).get('locale') === 'zh-CN') {
-	const bundles: Record<string, Record<string, string>> = {};
-	for (const resource of [chineseWorkbenchMessages, chineseMessages, chineseSettingsMessages]) {
-		for (const [bundle, messages] of Object.entries(resource)) { bundles[bundle] = { ...bundles[bundle], ...messages }; }
-	}
-	setNlsMessages('zh-CN', bundles);
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 }
 
 const disposables = new DisposableStore();
@@ -178,8 +172,8 @@ const mcpDetails = { ...packageDetails, ...mcpSummary, package: { ...reference, 
 const discoveryFixture = new URLSearchParams(location.search).has('marketplace');
 const partialDiscoveryFailure = new URLSearchParams(location.search).has('partialDiscoveryFailure');
 const nativeEditor = new URLSearchParams(location.search).has('nativeEditor');
-const extensionId = nativeEditor ? 'ash.academy' : 'publisher.sample';
-const extensionSummary = { ...summary, uiTargets: legacyUiTargets ? undefined : [ExtensionUiTarget.IDE], id: nativeEditor ? 'ash.academy@ash' : 'publisher.sample@ash', packageType: 'editor', displayName: nativeEditor ? 'Academy' : 'Sample editor extension' };
+const extensionId = nativeEditor ? 'ash.native-editor-sample' : 'publisher.sample';
+const extensionSummary = { ...summary, uiTargets: legacyUiTargets ? undefined : [ExtensionUiTarget.IDE], id: nativeEditor ? 'ash.native-editor-sample@ash' : 'publisher.sample@ash', packageType: 'editor', displayName: nativeEditor ? 'Native editor sample' : 'Sample editor extension' };
 const extensionReference = { ...reference, id: extensionSummary.id };
 const extensionCapabilities = [{ kind: 'editorExtension' as const, id: 'publisher.sample', contractVersion: '1', permissions: [], authenticationProvider: null }];
 const extensionDetails = { ...packageDetails, package: extensionReference, ...extensionSummary, capabilities: extensionCapabilities };
@@ -411,6 +405,9 @@ services.registerInstance(IConnectorService, {
 	revokeOAuth: async () => { },
 });
 services.registerInstance(ILanguageServerService, {
+	onDidChangeConfig: Event.None,
+	readEnablement: async () => undefined,
+	setEnabled: async () => { throw new Error('Unexpected language server enablement change'); },
 	read: async () => ({ revision, configurations: {}, servers: [{ id: 'typescript-language-server', languageIds: ['typescriptreact'] }] }),
 	control: async () => { throw new Error('Process control is outside the extension settings fixture'); },
 	configure: async (id, config, expectedRevision) => { requests.push(['configure', id, config, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } revision++; },
@@ -461,6 +458,7 @@ services.registerInstance(ILocalGitService, {
 	listWorktrees: async () => [],
 	readRepositoryContexts: async () => [],
 	readSessionComparison: async () => { throw new Error('Unexpected session comparison in the local installation fixture'); },
+	readWorktreeChanges: async () => { throw new Error('Unexpected worktree changes in the local installation fixture'); },
 	clone: async (operationId, url, targetPath, reference) => {
 		if (!new URLSearchParams(location.search).has('holdGitClone')) { throw new Error('Unexpected Git clone in the local installation fixture'); }
 		requests.push(['gitClone', { operationId, url, targetPath, reference }]);

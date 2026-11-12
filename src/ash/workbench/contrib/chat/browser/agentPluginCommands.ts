@@ -59,7 +59,7 @@ async function updateSignedPlugins(extensions: IExtensionManagementService, dial
 		? localize('chat.plugins.updateIncomplete', 'Updated {0} plugins. Could not verify or update {1} packages.', updated.length, failed.length)
 		: updated.length
 			? localize('chat.plugins.updatedCount', 'Updated {0} plugins.', updated.length)
-			: localize('chat.plugins.upToDate', 'Plugins from signed registries are up to date.');
+			: localize('chat.plugins.current', 'Plugins from signed registries are up to date.');
 	const details = failed.length ? [...updated, localize('chat.plugins.updateFailed', 'Could not verify or update: {0}', failed.join(', '))] : updated;
 	await dialogs.info(summary, details.join('\n'));
 }

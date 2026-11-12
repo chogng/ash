@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
@@ -16,7 +17,6 @@ import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { CanvasService } from '../../electron-browser/canvasService.js';
 import { CanvasInput, ICanvasContextService } from '../../common/canvas.js';
-import { readFile } from 'node:fs/promises';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { autorun, constObservable, observableValue, type IObservable } from '../../../../../base/common/observable.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -43,7 +43,7 @@ suite('Conversation Canvas presentation', () => {
 	});
 
 	test('Canvas presentation descriptions use the non-default client language', async () => {
-		const messages = JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
+		const messages = chineseCatalog.bundles;
 		try {
 			setNlsMessages('zh-CN', messages);
 			using f = fixture([info('one', 'thread-one')]);

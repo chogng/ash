@@ -209,6 +209,7 @@ struct StreamBuffer {
     start: u64,
     bytes: VecDeque<u8>,
     capacity: usize,
+    closed: bool,
 }
 
 impl StreamBuffer {
@@ -217,6 +218,7 @@ impl StreamBuffer {
             start: 0,
             bytes: VecDeque::new(),
             capacity: capacity.max(1),
+            closed: false,
         }
     }
 
@@ -232,8 +234,37 @@ impl StreamBuffer {
         }
     }
 
+    fn text_end(&self) -> u64 {
+        let end = self.end();
+        if self.closed {
+            return end;
+        }
+        // Only an unfinished UTF-8 code point at the end can change on the next read.
+        let mut tail = [0; 3];
+        for (index, &byte) in self.bytes.iter().rev().take(tail.len()).enumerate() {
+            let start = tail.len() - 1 - index;
+            tail[start] = byte;
+            if byte & 0b1100_0000 == 0b1000_0000 {
+                continue;
+            }
+            let suffix = &tail[start..];
+            if std::str::from_utf8(suffix).is_err_and(|error| error.error_len().is_none()) {
+                return end - suffix.len() as u64;
+            }
+            break;
+        }
+        end
+    }
+
+    fn has_text_update(&self, cursor: u64) -> bool {
+        // An out-of-range cursor also needs an immediate response.
+        cursor < self.text_end() || cursor > self.end()
+    }
+
     fn read(&self, cursor: u64) -> Result<CommandSessionOutput, ExecutionError> {
-        let (bytes, next_cursor, gap) = self.read_bytes(cursor)?;
+        let (mut bytes, end, gap) = self.read_bytes(cursor)?;
+        let next_cursor = self.text_end().max(cursor);
+        bytes.truncate(bytes.len() - (end - next_cursor) as usize);
         Ok(CommandSessionOutput {
             text: String::from_utf8_lossy(&bytes).into_owned(),
             next_cursor,
@@ -711,6 +742,9 @@ fn start_record(
         drop(runtime_dir);
         let (lock, changed) = &*data;
         if let Ok(mut state) = lock.lock() {
+            // A panicked reader can leave a pending UTF-8 tail too.
+            state.stdout.closed = true;
+            state.stderr.closed = true;
             state.final_state = Some(final_state);
             changed.notify();
         }
@@ -789,8 +823,8 @@ impl SessionRecord {
                 .lock()
                 .map_err(|_| session_error("command session output is unavailable"))?;
             let ready = state.final_state.is_some()
-                || state.stdout.end() != cursor.stdout
-                || state.stderr.end() != cursor.stderr;
+                || state.stdout.has_text_update(cursor.stdout)
+                || state.stderr.has_text_update(cursor.stderr);
             drop(state);
             if ready || Instant::now() >= deadline {
                 break;
@@ -889,6 +923,14 @@ fn spawn_output_reader(
             // Stop the producer even if the lifecycle worker is already joining readers.
             // This lets the other stream reach EOF without waiting for the command timeout.
             close_process(&process);
+        }
+        let (lock, changed) = &*data;
+        if let Ok(mut state) = lock.lock() {
+            match stream {
+                OutputStream::Stdout => state.stdout.closed = true,
+                OutputStream::Stderr => state.stderr.closed = true,
+            }
+            changed.notify();
         }
         result
     })

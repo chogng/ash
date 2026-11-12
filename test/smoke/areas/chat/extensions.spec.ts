@@ -6,10 +6,10 @@ import { readUserSettings } from '../../../automation/settings.js';
 import { parseJsonc } from '../../../../src/ash/base/common/jsonc.js';
 import { mkdir, readdir, stat, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
 
 test.beforeEach(async ({ workbench }) => {
-	// Fresh profiles restore Welcome after startup services; earlier input can be replaced during restoration.
-	await expect(workbench.page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
+	await workbench.waitForReady();
 });
 
 const durableExtensionTest = test.extend({
@@ -29,6 +29,42 @@ const durableExtensionTest = test.extend({
 		});
 	},
 });
+
+async function openConnections(page: Page, agents: boolean): Promise<Locator> {
+	const commands = new QuickAccess(page);
+	if (agents) {
+		await commands.runCommand('sessions.open.customize');
+		const customize = page.locator('.ash-customize');
+		await showConnectionCatalog(page, true);
+		await customize.getByRole('tab', { name: 'Connectors', exact: true }).click();
+		return customize;
+	}
+	await commands.runCommand('ash.extensions.showInstalled');
+	const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+	const header = pane.getByRole('button', { name: 'Connections', exact: true });
+	if (await header.getAttribute('aria-expanded') !== 'true') await header.press('ArrowRight');
+	return pane;
+}
+
+async function showConnectionCatalog(page: Page, agents: boolean): Promise<void> {
+	if (!agents) return;
+	const back = page.getByRole('button', { name: 'Back to Connectors', exact: true });
+	if (await back.isVisible()) await back.click();
+}
+
+function connectionRow(pane: Locator, name: string, agents: boolean): Locator {
+	return agents ? pane.getByRole('button', { name, exact: true }) : pane.getByRole('option').filter({ hasText: name });
+}
+
+async function addConnection(page: Page, pane: Locator, agents: boolean): Promise<void> {
+	if (agents) {
+		await showConnectionCatalog(page, true);
+		await pane.getByRole('button', { name: 'Add', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Add connection', exact: true }).click();
+	} else {
+		await pane.getByRole('button', { name: 'Add connection', exact: true }).click();
+	}
+}
 
 for (const window of ['Code', 'Agents']) {
 	for (const recovery of ['none', 'online', 'offline'] as const) {
@@ -96,11 +132,10 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 			await workbench.dialogs.confirm(application, 'Account smoke', 'Grant permissions', () => packageDetails.getByRole('button', { name: 'Grant permissions', exact: true }).click());
 			await expect(packageDetails.getByRole('button', { name: 'Revoke permissions', exact: true })).toBeVisible();
 			let page = window === 'Code' ? code : await workbench.openAgentsWindow(target.kind);
-			await new QuickAccess(page).runCommand('ash.extensions.showInstalled');
-			let pane = page.locator('[data-view-id="ash.extensions.mcp"]');
-			await pane.getByRole('button', { name: 'Connections', exact: true }).press('ArrowRight');
-			await expect(pane.getByRole('option').filter({ hasText: 'Smoke service account' })).toBeVisible();
-			await pane.getByRole('button', { name: 'Add connection', exact: true }).click();
+			const agents = window === 'Agents';
+			let pane = await openConnections(page, agents);
+			await expect(connectionRow(pane, 'Smoke service account', agents)).toBeVisible();
+			await addConnection(page, pane, agents);
 			const chooserImage = testInfo.outputPath(`add-connection-${window}.png`);
 			await page.screenshot({ path: chooserImage });
 			await testInfo.attach('Add connection methods', { path: chooserImage, contentType: 'image/png' });
@@ -123,11 +158,13 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 			let details = page.locator('.ash-extension-editor:visible');
 			await expect(details.getByRole('heading', { name: 'Smoke service account', exact: true })).toBeVisible();
 			await expect(details.getByRole('status')).toHaveText('Connected · Smoke user');
-			await expect(pane.getByRole('option').filter({ hasText: 'Smoke service account' })).toHaveCount(1);
+			await showConnectionCatalog(page, agents);
+			await expect(connectionRow(pane, 'Smoke service account', agents)).toHaveCount(1);
 			await expect(pane.getByRole('option').filter({ hasText: 'acme/account-smoke' })).toHaveCount(0);
 			const accountImage = testInfo.outputPath(`account-connected-${window}.png`);
 			await page.screenshot({ path: accountImage });
 			await testInfo.attach('Authorized service account', { path: accountImage, contentType: 'image/png' });
+			if (agents) await connectionRow(pane, 'Smoke service account', agents).click();
 			if (durable) {
 				await details.getByRole('switch').press('Space');
 				await expect(details.getByRole('status')).toHaveText('Disconnected');
@@ -136,13 +173,10 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 				// The Desktop fixture persists synthetic secrets independently of the memory store.
 				({ workbench, application } = await runningApplication.reload('quit'));
 				page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
-				await new QuickAccess(page).runCommand('ash.extensions.showInstalled');
-				pane = page.locator('[data-view-id="ash.extensions.mcp"]');
-				const header = pane.getByRole('button', { name: 'Connections', exact: true });
-				if (await header.getAttribute('aria-expanded') !== 'true') { await header.click(); }
-				await expect(pane.getByRole('option').filter({ hasText: 'Smoke service account' })).toHaveCount(1);
+				pane = await openConnections(page, agents);
+				await expect(connectionRow(pane, 'Smoke service account', agents)).toHaveCount(1);
 				await expect(pane.getByRole('option').filter({ hasText: 'acme/account-smoke' })).toHaveCount(0);
-				await pane.getByRole('option').filter({ hasText: 'Smoke service account' }).click();
+				await connectionRow(pane, 'Smoke service account', agents).click();
 				details = page.locator('.ash-extension-editor:visible');
 				await expect(details.getByRole('status')).toHaveText('Disconnected');
 				await expect(details.getByRole('switch')).not.toBeChecked();
@@ -160,7 +194,8 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 					await page.screenshot({ path: offlineImage });
 					await testInfo.attach('Unavailable MCP after cold restart', { path: offlineImage, contentType: 'image/png' });
 				}
-				await pane.getByRole('option').filter({ hasText: 'Smoke service account' }).click();
+				await showConnectionCatalog(page, agents);
+				await connectionRow(pane, 'Smoke service account', agents).click();
 				await expect(details.getByRole('status')).toHaveText('Connected · Smoke user');
 			}
 			await details.getByRole('switch').press('Space');
@@ -171,14 +206,11 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 	for (const reason of window === 'Code' ? ['windowClose', 'quit'] as const : ['windowClose'] as const) {
 		test(`Independent MCP configuration persists across reopening and can be removed in ${window}${reason === 'quit' ? ' after application quit' : ''}`, { tag: reason === 'quit' ? ['@electron-app-server'] : ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, runningApplication }) => {
 			let page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
-			let quickaccess = new QuickAccess(page);
-			const command = window === 'Code' ? 'ash.extensions.open' : 'workbench.action.chat.configure.skills';
-			await quickaccess.runCommand(command);
-			let mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-			const connections = mcp.getByRole('button', { name: 'Connections', exact: true });
-			await connections.press('ArrowRight');
+			const agents = window === 'Agents';
+			let mcp = await openConnections(page, agents);
+			const connections = agents ? mcp.getByRole('tab', { name: 'Connectors', exact: true }) : mcp.getByRole('button', { name: 'Connections', exact: true });
 			await connections.press('Alt+F1');
-			await expect(page.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox')).toHaveValue(/Add connection/u);
+			await expect(page.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox')).toHaveValue(/Add connection/ui);
 			await page.keyboard.press('Escape');
 			await expect(connections).toBeFocused();
 			let dialogs = new Dialogs(page);
@@ -193,7 +225,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 				await dialog.getByRole('button', { name: button, exact: true }).click();
 				return result;
 			};
-			await mcp.getByRole('button', { name: 'Add connection', exact: true }).click();
+			await addConnection(page, mcp, agents);
 			const methods = page.getByRole('dialog', { name: 'Add connection', exact: true });
 			await expect(methods.getByRole('option').filter({ hasText: 'Service account' })).toBeVisible();
 			await expect(methods).toContainText('authorize with an API token');
@@ -210,7 +242,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 			let details = page.locator('.ash-extension-editor:visible');
 			await expect(details.getByRole('heading', { name: 'Persistent MCP test', exact: true })).toBeVisible();
 			await expect(details.getByRole('status')).toHaveText('Disabled');
-			await mcp.getByRole('button', { name: 'Add connection', exact: true }).click();
+			await addConnection(page, mcp, agents);
 			await confirm('Add connection', 'Local process (stdio)', () => page.getByRole('dialog', { name: 'Add connection', exact: true }).getByRole('option').filter({ hasText: 'Custom MCP server' }).click());
 			const local = page.getByRole('dialog', { name: 'Add connection', exact: true });
 			await local.getByPlaceholder('Server ID', { exact: true }).fill('persistent-local');
@@ -226,13 +258,9 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 			} else {
 				page = await workbench.reopenAgentsWindow(application, page);
 			}
-			quickaccess = new QuickAccess(page);
 			dialogs = new Dialogs(page);
-			await quickaccess.runCommand(command);
-			mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-			const header = mcp.getByRole('button', { name: 'Connections', exact: true });
-			if (await header.getAttribute('aria-expanded') !== 'true') { await header.click(); }
-			await mcp.getByRole('option').filter({ hasText: 'Persistent MCP test' }).click();
+			mcp = await openConnections(page, agents);
+			await connectionRow(mcp, 'Persistent MCP test', agents).click();
 			details = page.locator('.ash-extension-editor:visible');
 			await expect(details.getByRole('status')).toHaveText('Disabled');
 			await confirm('Edit MCP server', 'HTTP server', () => details.getByRole('button', { name: 'Edit MCP server', exact: true }).click());
@@ -243,8 +271,9 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 			await expect(edit.getByRole('checkbox', { name: 'Enable this server', exact: true })).not.toBeChecked();
 			await page.keyboard.press('Escape');
 			await confirm('Remove MCP server', 'Remove', () => details.getByRole('button', { name: 'Remove MCP server', exact: true }).click());
-			await expect(mcp.getByRole('option').filter({ hasText: 'Persistent MCP test' })).toHaveCount(0);
-			await mcp.getByRole('option').filter({ hasText: 'Persistent stdio test' }).click();
+			await showConnectionCatalog(page, agents);
+			await expect(connectionRow(mcp, 'Persistent MCP test', agents)).toHaveCount(0);
+			await connectionRow(mcp, 'Persistent stdio test', agents).click();
 			await expect(details.getByRole('status')).toHaveText('Disabled');
 			await confirm('Edit MCP server', 'Local process (stdio)', () => details.getByRole('button', { name: 'Edit MCP server', exact: true }).click());
 			await expect(edit.getByPlaceholder('Display name', { exact: true })).toHaveValue('Persistent stdio test');
@@ -253,15 +282,18 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 			await expect(edit.getByRole('checkbox', { name: 'Enable this server', exact: true })).not.toBeChecked();
 			await page.keyboard.press('Escape');
 			await confirm('Remove MCP server', 'Remove', () => details.getByRole('button', { name: 'Remove MCP server', exact: true }).click());
-			await expect(mcp.getByRole('option').filter({ hasText: 'Persistent stdio test' })).toHaveCount(0);
+			await showConnectionCatalog(page, agents);
+			await expect(connectionRow(mcp, 'Persistent stdio test', agents)).toHaveCount(0);
 		});
 	}
 }
 
 for (const window of ['Code', 'Agents']) {
 	test(`Built-in extension details open in the registered Editor in ${window}`, { tag: ['@electron-app-server'] }, async ({ target, workbench }, testInfo) => {
-		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
-		await new QuickAccess(page).runCommand('ash.extensions.manageBuiltIn');
+		const origin = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
+		await new QuickAccess(origin).runCommand('ash.extensions.manageBuiltIn');
+		const page = workbench.page;
+		if (window === 'Agents') await expect(origin.locator('.ash-extensions-view-container')).toHaveCount(0);
 		const extensions = page.locator('[data-view-id="ash.extensions.plugins"]');
 		for (const id of ['ash.git', 'ash.markdown-language-features', 'ash.markdown-math', 'ash.rust']) {
 			const row = extensions.locator(`[data-package-id="${id}"]`);
@@ -298,14 +330,20 @@ for (const window of ['Code', 'Agents']) {
 	test(`Skills command shows metadata and readonly instructions from the shared backend in ${window}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
-		const row = page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').filter({ hasText: 'skill-creator' });
-		await expect(row.locator('.extension-description')).toHaveText('Create and update Ash skills.');
-		await expect(row.locator('.extension-metadata')).toHaveText('Ash · Enabled');
-		await expect(row).not.toContainText('builtin:skill-source:ash-release');
-		await row.click();
+		if (window === 'Agents') {
+			const skill = page.locator('.ash-customize-card').filter({ has: page.getByRole('button', { name: 'skill-creator', exact: true }) });
+			await expect(skill.locator('.ash-customize-card-description')).toHaveText('Create and update Ash skills.');
+			await skill.getByRole('button', { name: 'skill-creator', exact: true }).click();
+		} else {
+			const row = page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').filter({ hasText: 'skill-creator' });
+			await expect(row.locator('.extension-description')).toHaveText('Create and update Ash skills.');
+			await expect(row.locator('.extension-metadata')).toHaveText('Ash · Enabled');
+			await expect(row).not.toContainText('builtin:skill-source:ash-release');
+			await row.click();
+		}
 		const editor = page.locator('.ash-extension-editor');
 		await expect(editor.locator('.extension-metadata')).toHaveText('Developer: Ash · Version: 1.0.0 · Updated: 2026-10-22');
-		await expect(editor.locator('.extension-detail-description > p')).toHaveText('Create and update Ash skills.');
+		await expect(editor.getByRole('tabpanel', { name: 'Details', exact: true })).toContainText('Creates or updates concise, valid Agent Skills for Ash.');
 		await expect(editor.locator('.extension-actions')).toBeHidden();
 		await editor.getByRole('tab', { name: 'Instructions', exact: true }).focus();
 		await editor.getByRole('tab', { name: 'Instructions', exact: true }).press('Enter');
@@ -333,18 +371,6 @@ test('Skills command opens Extensions with keyboard help and no Settings managem
 	await expect(help.getByRole('textbox')).toHaveValue(/collapsible Extensions, Installed Extensions, Skills, Connections and Recommended panes/u);
 	await page.keyboard.press('Escape');
 	await expect(search).toBeFocused();
-});
-
-test('Skills configuration command opens Extensions in the Agents window', async ({ target, workbench }) => {
-	const page = await workbench.openAgentsWindow(target.kind);
-	await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
-	const skills = page.locator('[data-view-id="ash.extensions.skills"]');
-	await expect(skills).toBeVisible();
-	await expect(skills.getByRole('button', { name: 'Skills', exact: true })).toHaveAttribute('aria-expanded', 'true');
-	await expect(page.locator('.ash-sessions-settings-dialog')).toHaveCount(0);
-	const recommended = page.locator('[data-view-id="ash.extensions.recommended"]');
-	await recommended.getByRole('button', { name: 'Recommended', exact: true }).click();
-	await expect(recommended.getByRole('status')).toContainText('0 items');
 });
 
 test('Skill enablement updates Chat completion and survives a window reload', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {

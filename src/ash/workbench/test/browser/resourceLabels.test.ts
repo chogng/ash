@@ -7,7 +7,7 @@ import { noFileIconTheme } from '../../../platform/theme/common/themeService.js'
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { Emitter } from '../../../base/common/event.js';
+import { Emitter, Event } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
 import { FileKind } from '../../../platform/files/common/files.js';
 import { NullLoggerService } from '../../../platform/log/common/log.js';
@@ -91,7 +91,33 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 
 	iconThemeChange.fire();
 	assert.equal(label.element.querySelector('.test-file-icon')?.textContent, 'T');
+	label.setFile(URI.file('C:/project/main.ts'));
+	assert.equal(label.element.querySelector('.ash-icon-label-description')?.textContent, '');
 
+	dom.window.close();
+});
+
+test('ResourceLabels presents explicit file labels for snapshot URIs', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	using labels = new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
+		workspaceContextService: workspace,
+		resourceIconRenderer: {
+			onDidChangeResourceIcons: Event.None,
+			getFileIconTheme: () => noFileIconTheme,
+			renderFileIcon() { },
+		},
+	});
+	using label = labels.create(dom.window.document.body);
+	const snapshot = URI.parse('snapshot:/thread/repository/storage.txt');
+	label.setResource({ resource: snapshot, name: 'settings.ts', description: 'src/config' }, { title: 'src/config/settings.ts' });
+	assert.equal(label.element.querySelector('.ash-icon-label-text')?.textContent, 'settings.ts');
+	assert.equal(label.element.querySelector('.ash-icon-label-description')?.textContent, 'src/config');
+	assert.equal(label.element.getAttribute('title'), 'src/config/settings.ts');
+	label.setResource({ resource: snapshot, name: 'settings.ts' }, { title: 'settings.ts' });
+	assert.equal(label.element.querySelector('.ash-icon-label-text')?.textContent, 'settings.ts');
+	assert.equal(label.element.querySelector('.ash-icon-label-description')?.textContent, '');
+	assert.equal(label.element.getAttribute('title'), 'settings.ts');
 	dom.window.close();
 });
 

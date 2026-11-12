@@ -5,6 +5,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, type ExtensionsPackageSummary } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { isAcademyExtension } from '../common/academyExtension.js';
 import { IExtensionRecommendationNotificationService, RecommendationSource, RecommendationsNotificationResult, type IExtensionRecommendations } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
 import { INotificationService, NotificationPriority, Severity } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -131,7 +132,12 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 				},
 			});
 			const show = action('extensions.recommendations.show', localize({ bundle: 'ash.extensions', key: 'showRecommendations' }, 'Show recommendations'), async () => {
-				await this.commands.executeCommand(OPEN_EXTENSIONS_COMMAND_ID, candidates.length > 1 ? { query: '@recommended' } : { mode: 'browse', query: request.searchValue ?? candidates[0].displayName, ...(request.languageId ? { languageId: request.languageId } : {}) });
+				await this.commands.executeCommand(OPEN_EXTENSIONS_COMMAND_ID, candidates.length > 1 ? { query: '@recommended' } : {
+					mode: 'browse',
+					query: request.searchValue ?? candidates[0].displayName,
+					...(candidates[0].packageType === 'plugin' || isAcademyExtension(candidates[0].id) ? { view: 'plugins' } : {}),
+					...(request.languageId ? { languageId: request.languageId } : {}),
+				});
 			});
 			const install = action('extensions.recommendations.install', localize({ bundle: 'ash.extensions', key: 'installRecommended' }, 'Install'), async () => {
 				for (const candidate of candidates) { await changeExtensionPackage(this.packages, this.dialogs, this.notificationService, 'install', await this.packages.get(candidate.id, candidate.version)); }

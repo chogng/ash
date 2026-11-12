@@ -1,6 +1,6 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { ILifecycleService, LifecyclePhase } from '../../../../services/lifecycle/common/lifecycle.js';
-import { readFileSync } from 'node:fs';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -178,7 +178,7 @@ test('Welcome editor identity round trips without serializing another copy of th
 
 
 test('Chinese Welcome uses the translated heading, region label and editor name', async () => {
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		using f = fixture();
 		await f.open();

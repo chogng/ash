@@ -1,6 +1,6 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, suiteSetup, test } from 'mocha';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
@@ -20,7 +20,7 @@ import { registerLanguageModelActions } from '../../../browser/actions/chatLangu
 import { ILanguageModelsService } from '../../../common/languageModels.js';
 
 const id = 'workbench.action.chat.manageLanguageModelAuthentication';
-const chinese = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8'));
+const chinese = chineseCatalog.bundles;
 const direct: ModelProviderCredentialStatus = { connection: 'direct', provider: 'openai', displayName: 'Direct OpenAI', access: 'apiKey', active: true, configured: true, ready: true, apiKeyPolicy: 'required', apiKeyConfigured: true };
 
 class Fixture extends Disposable {

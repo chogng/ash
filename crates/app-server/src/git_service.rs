@@ -856,6 +856,33 @@ impl GitService {
         })
     }
 
+    /// Reads a projected path from an already enumerated comparison of two commits.
+    pub(crate) fn commit_file_at_paths(
+        &self,
+        repository: &GitRepository,
+        object_id: &str,
+        base_object_id: &str,
+        original_path: Option<&Path>,
+        path: &Path,
+    ) -> Result<GitCommitFile, GitServiceError> {
+        self.ensure_readable()?;
+        let prefix = self.repository_prefix(repository)?;
+        let original_path = original_path.map(|path| prefix.join(path));
+        run(&self.runtime, async {
+            self.client()
+                .commit_file(
+                    repository,
+                    object_id,
+                    Some(base_object_id),
+                    &prefix.join(path),
+                    original_path.as_deref(),
+                    MAX_COMMIT_FILE_BYTES,
+                )
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
     pub(crate) fn change_file(
         &self,
         path: &Path,

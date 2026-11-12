@@ -332,6 +332,7 @@ pub struct AppServer {
     model_instructions: Arc<ash_models_manager::ModelInstructionCatalog>,
     request_scheduler: RequestScheduler,
     request_cancellations: RequestCancellationRegistry,
+    browser_favicons: Arc<std::sync::OnceLock<Option<crate::browser_favicons::BrowserFavicons>>>,
     pub(super) resources: Arc<Mutex<ResourceStore>>,
     asset_processor: asset_operations::AssetsRequestProcessor,
     memory_diagnostics_processor: memory_diagnostics_processor::MemoryDiagnosticsRequestProcessor,
@@ -775,6 +776,8 @@ impl AppServer {
             &self.browser_host,
             &self.calls,
             &self.local_env_host,
+            &self.request_cancellations,
+            &self.request_scheduler,
         )
     }
     fn session_runtime_processor(
@@ -1032,7 +1035,11 @@ impl AppServer {
     fn symphony_tracker_processor(
         &self,
     ) -> symphony_tracker::SymphonyTrackerRequestProcessor<'_, Self> {
-        symphony_tracker::SymphonyTrackerRequestProcessor::new(self, &self.symphony_http)
+        symphony_tracker::SymphonyTrackerRequestProcessor::new(
+            self,
+            self.symphony.as_deref(),
+            &self.symphony_http,
+        )
     }
     fn terminal_processor(&self) -> terminal_operations::TerminalRequestProcessor<'_, Self> {
         terminal_operations::TerminalRequestProcessor::new(self)
@@ -1415,6 +1422,7 @@ impl AppServer {
             model_instructions: ash_models_manager::ModelInstructionCatalog::built_in(),
             request_scheduler,
             request_cancellations,
+            browser_favicons: Arc::default(),
             session_runtimes: None,
             memory_diagnostics_processor:
                 memory_diagnostics_processor::MemoryDiagnosticsRequestProcessor::new(Arc::clone(
@@ -1655,6 +1663,7 @@ impl AppServer {
             file_access,
             hooks,
             Arc::downgrade(&self.env_runtime),
+            Arc::downgrade(&self.language),
             &self.threads,
         )?;
         let runtime = git_turn_changes_runtime::GitTurnChangesRuntime::open(
@@ -3588,6 +3597,18 @@ impl AppServer {
             Some(ClientMethod::BrowserNetworkAuthorize) => self
                 .browser_processor()
                 .authorize_network(connection, &request.params, cancellation),
+            Some(ClientMethod::BrowserFaviconRead) => {
+                browser_processor::BrowserRequestProcessor::read_favicon(
+                    connection.authority,
+                    &self.browser_favicons,
+                    self.calls.network_policy(),
+                    &request.params,
+                    cancellation,
+                )
+            }
+            Some(ClientMethod::BrowserFaviconCancel) => self
+                .browser_processor()
+                .cancel_favicon(connection, &request.params),
             Some(ClientMethod::BrowserSharingSet) => {
                 self.browser_processor()
                     .set_sharing(connection, &request.params, cancellation)
@@ -4423,6 +4444,9 @@ impl AppServer {
             Some(ClientMethod::LanguageServerConfigure) => self
                 .config_processor()
                 .language_server_configure(&request.params),
+            Some(ClientMethod::LanguageServerSetEnabled) => self
+                .config_processor()
+                .language_server_set_enabled(&request.params),
             Some(ClientMethod::LanguageServerRemove) => self
                 .config_processor()
                 .language_server_remove(&request.params),
@@ -4868,6 +4892,9 @@ impl AppServer {
             }
             Some(ClientMethod::GitSessionComparison) => {
                 git().git_session_comparison(&request.params, cancellation)
+            }
+            Some(ClientMethod::GitWorktreeChanges) => {
+                git().git_worktree_changes(connection, &request.params, cancellation)
             }
             Some(ClientMethod::GitRepositories) => git().git_repositories(&request.params),
             Some(ClientMethod::GitClone) => {

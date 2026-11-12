@@ -18,8 +18,7 @@ import { chatListItem, type IChatListItem } from '../../../../workbench/contrib/
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
 import { decodeChatGPTReply } from '../browser/chatGPTRichContent.js';
-import { mergeChatGPTResources } from '../browser/chatGPTClient.js';
-import type { ChatGPTMessage } from '../browser/chatGPTClient.js';
+import { chatGPTResourceKey, mergeChatGPTResources, type ChatGPTMessage } from '../browser/chatGPTClient.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
 import { canQueueChatGPTCreation, linkedTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
@@ -31,6 +30,20 @@ const openOriginalResponseContext = [ChatGPTResponseCanOpenOriginalContext];
 const onlineResponseContext = [ChatGPTResponseOnlineContext];
 const onlineWebResponseContext = [ChatGPTResponseOnlineContext, ChatGPTResponseCanOpenOriginalContext];
 const emptyDraftFiles = [] as const;
+
+function projectResources(message: ChatGPTMessage, decoded: ReturnType<typeof decodeChatGPTReply> | undefined, conversationId: string | undefined): IChatListItem['resources'] {
+	const candidates = [...decoded?.resources ?? [], ...message.resources ?? []];
+	if (!candidates.length) return undefined;
+	const available = candidates.filter(resource => !resource.uri.startsWith('sandbox:') || conversationId);
+	const resources = mergeChatGPTResources(available);
+	if (message.role !== 'assistant') return resources;
+	// Saved ChatGPT replies may identify a generated workbook by filename alone.
+	const workbooks = new Set(available.filter(resource => resource.kind === 'document'
+		&& (/^sandbox:.*\.xlsx?$/iu.test(resource.uri) || /^(?:sandbox|file-service|sediment):/u.test(resource.uri) && /\.xlsx?$/iu.test(resource.name)))
+		.map(resource => chatGPTResourceKey(resource.uri)));
+	return resources.map(resource => resource.kind === 'document' && workbooks.has(chatGPTResourceKey(resource.uri))
+		? { ...resource, presentation: 'download' } : resource);
+}
 
 export function canUseAshModels(state: ChatGPTState): boolean {
 	// Existing conversations and drafts with provider-owned attachments keep their reply route.
@@ -341,7 +354,7 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 					yield {
 						id: message.id, text: decoded.text,
 						markdown: { supportHtml: true, richContent: decoded.richContent, linkPolicy: 'external' },
-						resources: [...decoded.resources, ...message.resources ?? []],
+						resources: projectResources(message, decoded, conversationId),
 					};
 				}
 			},
@@ -399,8 +412,7 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 			if (!message.activity) {
 				const itemId = id('message', message.id);
 				const decoded = message.role === 'assistant' ? this.decodeReply(message, resourceConversationId) : undefined;
-				const candidates = [...decoded?.resources ?? [], ...message.resources ?? []];
-				const resources = candidates.length ? mergeChatGPTResources(candidates.filter(resource => !resource.uri.startsWith('sandbox:') || resourceConversationId)) : undefined;
+				const resources = projectResources(message, decoded, resourceConversationId);
 				sources.set(itemId, { messageId: message.id, conversationId: resourceConversationId });
 				const text = message.role === 'user' && resources?.some(resource => resource.kind === 'image')
 					? message.editableText ?? message.text : decoded?.text ?? message.text;

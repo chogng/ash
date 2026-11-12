@@ -283,7 +283,7 @@
     "recommendationsOnDemandDescription": "在扩展中发现推荐，不在打开文件或工作区时自动显示通知。",
     "contextRecommendationReason": "为 {0} 推荐",
     "fileRecommendationReason": "为 {0} 文件推荐",
-    "recommendationDocs": "文档",
+    "recommendationDocs": "研究论文",
     "projectRecommendationsReadError": "无法检查 {0}：{1}",
     "contextRecommendationsEmpty": "打开文件或工作区以发现扩展。工作区也可以在 .ash/extensions.json 中声明推荐。",
     "invalidKeybindingContribution": "{0} 中的键位声明无效。",

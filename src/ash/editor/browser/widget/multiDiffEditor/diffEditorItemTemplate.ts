@@ -193,7 +193,7 @@ export class DiffEditorItemTemplate extends Disposable {
 	public focusPreview(): void { this.previewSlot.value?.focus(); }
 
 	public getAccessibleContent(): string | undefined {
-		return this.previewSlot.value?.getAccessibleContent();
+		return this.item.unavailableMessage ?? this.previewSlot.value?.getAccessibleContent();
 	}
 
 	public retainModel(): void {
@@ -306,12 +306,17 @@ export class DiffEditorItemTemplate extends Disposable {
 	}
 
 	public updateStatus(): void {
-		if (this.item.binary && !this.editorHostDomNode.classList.contains('binary')) {
-			this.editorHostDomNode.classList.add('binary');
+		if ((this.item.binary || this.item.unavailableMessage) && !this.editorHostDomNode.classList.contains('comparison-unavailable')) {
+			this.editorHostDomNode.classList.add('comparison-unavailable');
+			this.editorHostDomNode.classList.toggle('binary', this.item.binary === true);
 			this.editorHostDomNode.tabIndex = 0;
 			this.editorHostDomNode.setAttribute('role', 'group');
 			this.editorHostDomNode.setAttribute('aria-label', this.item.label);
-			this.editorHostDomNode.textContent = localize('multiDiffEditor.binary', 'Binary file changed. Text comparison is unavailable.');
+			this.editorHostDomNode.textContent = this.item.unavailableMessage ?? localize('multiDiffEditor.binary', 'Binary file changed. Text comparison is unavailable.');
+			if (this.item.unavailableMessage) {
+				this.toggleDomNode.setAttribute('aria-description', this.item.unavailableMessage);
+				this.editorHostDomNode.setAttribute('aria-description', this.item.unavailableMessage);
+			}
 		}
 		this.updateToggleLabel(this.domNode.classList.contains('collapsed'));
 		const model = this.item.model;

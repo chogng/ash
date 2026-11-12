@@ -13,7 +13,7 @@ import {
 import { BrowserView } from './browserView.js';
 import { BrowserSession } from './browserSession.js';
 import type { IBrowserViewNetworkProxyProvider } from '../common/browserView.js';
-import type { ISerializedBrowserHistoryEntriesSnapshot } from '../common/browserHistory.js';
+import { isBrowserFavicon, type ISerializedBrowserHistoryEntriesSnapshot } from '../common/browserHistory.js';
 import { BrowserSessionHistory } from './browserSessionHistory.js';
 import type { IBrowserViewWindowConfiguration, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions, IBrowserViewFindInPageOptions } from '../common/browserView.js';
 import type { IBrowserDeviceProfile } from '../common/browserView.js';
@@ -45,6 +45,7 @@ export interface BrowserViewMainServiceOptions {
 	readonly getWorkspaceId: () => string;
 	readonly createSession: (partition: string) => Session;
 	readonly createView: (session: Session) => WebContentsView;
+	readonly readPublicFavicon: (url: URL, signal: AbortSignal) => Promise<string | undefined>;
 	readonly getWindowNetwork: () => IBrowserViewNetwork | undefined;
 	readonly getRemoteNetwork: (network: IBrowserViewNetwork) => BrowserViewRemoteNetwork | undefined | Promise<BrowserViewRemoteNetwork | undefined>;
 	readonly contextMenu: ElectronContextMenu;
@@ -320,6 +321,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 			view = this.instantiationService.createInstance(BrowserView, {
 				remoteAuthority: remoteNetwork?.authority,
 				id, window: this.options.window, view: this.options.createView(electronSession), initialUrl, network, creation: options, session, history,
+				readPublicFavicon: this.options.readPublicFavicon,
 				openContextMenu: (target: BrowserView, params: ContextMenuParams) => {
 					void this.showContextMenu(target, params).catch(error => this.log.error('Could not open browser context menu', error));
 				},
@@ -361,6 +363,18 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	}
 	public async getBrowserHistory(id: string): Promise<ISerializedBrowserHistoryEntriesSnapshot> {
 		return this.histories.get(this.target(id).session)!.entries.serialize();
+	}
+	public async getWebsiteFavicon(origin: string): Promise<string | undefined> {
+		let icon: string | undefined;
+		let time = -Infinity;
+		for (const history of this.histories.values()) {
+			for (const entry of history.entries.items) {
+				if (!entry.icon || entry.time < time || URL.parse(entry.url)?.origin !== origin) continue;
+				const candidate = history.favicons.get(entry.icon);
+				if (isBrowserFavicon(candidate)) { icon = candidate; time = entry.time; }
+			}
+		}
+		return icon ?? this.options.readPublicFavicon(new URL('/favicon.ico', origin), AbortSignal.timeout(4000)).catch(() => undefined);
 	}
 	public async deleteBrowserHistory(id: string, entryIds?: readonly number[]): Promise<void> {
 		await this.histories.get(this.target(id).session)!.delete(entryIds);

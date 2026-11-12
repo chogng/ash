@@ -1,4 +1,5 @@
 import { AgentPluginEditorInput } from '../../../../workbench/contrib/extensions/common/agentPluginEditorInput.js';
+import { ACADEMY_PACKAGE_ID, isAcademyExtension } from '../../../../workbench/contrib/extensions/common/academyExtension.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -438,6 +439,19 @@ export class CustomizeEditorPane extends EditorPane {
 	public override async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		signal.throwIfAborted();
 	}
+
+	public openCatalog(category: Category, collection: Collection, query = ''): void {
+		this.showCatalog(false);
+		this.category = category;
+		this.collection = collection;
+		this.sourceId = undefined;
+		this.search.value = query;
+		this.updateControls();
+		this.searchActionViewItem.setExpanded(!!query);
+		void this.load();
+		this.focus();
+	}
+
 	public override clearInput(): void {
 		this.request?.dispose(true);
 		this.refresh.cancel();
@@ -596,9 +610,20 @@ export class CustomizeEditorPane extends EditorPane {
 	): Promise<Catalog> {
 		const query = this.search.value.trim();
 		if (this.category === 'plugins') {
-			const snapshot = await this.extensions.refreshBrowse(query, { packageType: 'plugin', limit: 200 });
+			const [snapshot, academy] = await Promise.all([
+				this.extensions.refreshBrowse(query, { packageType: 'plugin', limit: 200 }),
+				this.extensions.get(ACADEMY_PACKAGE_ID).catch(() => undefined),
+			]);
+			const packages = snapshot.packages.map(({ summary }) => summary).filter(summary => !isAcademyExtension(summary.id));
+			const normalizedQuery = query.toLowerCase();
+			if (academy && [academy.package.id, academy.displayName, academy.description].some(value => value.toLowerCase().includes(normalizedQuery))) {
+				packages.push({
+					id: academy.package.id, version: academy.package.version, packageType: academy.packageType,
+					displayName: academy.displayName, description: academy.description, uiTargets: academy.uiTargets,
+				});
+			}
 			return {
-				cards: snapshot.packages.map(({ summary }) => ({
+				cards: packages.map(summary => ({
 					id: `${summary.id}/${summary.version}`,
 					name: summary.displayName,
 					description: summary.description,
@@ -699,9 +724,16 @@ export class CustomizeEditorPane extends EditorPane {
 		}
 		if (this.category === 'connectors') return this.readConnections();
 		const [installed, local] = await Promise.all([this.extensions.listInstalled(), this.plugins.list()]);
+		const registryPlugins = await Promise.all(installed.map(async installation => {
+			if (isAcademyExtension(installation.package.id)) return installation;
+			if (!installation.capabilities.some(capability => capability.kind === 'editorExtension')) return installation;
+			// Registry plugins can also contribute editors. Use the package type to keep standalone editor extensions in the IDE.
+			const details = await this.extensions.get(installation.package.id, installation.package.version).catch(() => undefined);
+			return details?.packageType === 'plugin' ? installation : undefined;
+		}));
 		return {
 			cards: [
-				...installed.map(installation => ({
+				...registryPlugins.filter(installation => installation !== undefined).map(installation => ({
 					id: installation.installationId,
 					name: installation.package.id,
 					description: installation.capabilities.map(capability => capability.kind).join(' · '),
@@ -1019,6 +1051,7 @@ export class CustomizeEditorPane extends EditorPane {
 		const pane = this.instantiationService.createInstance(ExtensionEditor, {
 			presentation: 'page',
 			openDetails: (next: ExtensionsInput | ExtensionsCapabilityInput) => this.openInput(next),
+			openInstalledVersions: (query: string) => this.openCatalog('plugins', 'yours', query),
 			accessibilityHelp: localize(
 				'customize.detailHelp',
 				'Use the Back button above the details to return to your resource list. Your category, search, sorting and scroll position are preserved, and focus returns to the resource card.',
@@ -1234,7 +1267,7 @@ export class CustomizeEditorPane extends EditorPane {
 										: this.panel.innerText
 									: localize(
 										'customize.help',
-										'Customize brings Skills, Connectors and Plugins together. Use Left and Right Arrow on category tabs, then Enter to select. Yours lists current resources; Discover searches catalogs. Use Tab to reach the actions toolbar and resource cards. Activate Search to expand its input; Escape or Close search clears and collapses it, returning focus to Search. Empty search also collapses when focus leaves. In the toolbar, Left and Right Arrow move between Search, source filtering, sorting and Add; Up or Down Arrow opens the focused menu. Down Arrow in search moves to the first card. Arrow keys, Home and End move between card names; Enter opens resource details within Customize for installation, authorization and enablement. Use the Back button above the details to return to the same category, search, sorting and scroll position, with focus restored to the resource card. In Skills, Add offers Upload skill (a SKILL.md file or skill folder), Create a skill, and Create with Ash. Upload and Create save a personal skill; Create opens its instructions in the editor. Create with Ash starts a new chat draft using the skill creator without sending it. Other categories offer catalog browsing, connection setup or plugin installation. Load more continues catalog results. Refresh reloads current state, and Retry repeats a failed read. Escape closes menus and restores focus. Global navigation remains available while this page is open.',
+										'Customize brings Skills, Connectors and Plugins together. Use Left and Right Arrow on category tabs, then Enter to select. Yours lists current resources; Discover searches catalogs. Use Tab to reach the actions toolbar and resource cards. Activate Search to expand its input; Escape or Close search clears and collapses it, returning focus to Search. Empty search also collapses when focus leaves. In the toolbar, Left and Right Arrow move between Search, source filtering, sorting and Add; Up or Down Arrow opens the focused menu. Down Arrow in search moves to the first card. Arrow keys, Home and End move between card names; Enter opens resource details within Customize for installation, authorization and enablement. Use the Back button above the details to return to the same category, search, sorting and scroll position, with focus restored to the resource card. In Skills, Add offers Upload skill (a SKILL.md file or skill folder), Create a skill, and Create with Ash. Upload and Create save a personal skill; Create opens its instructions in the editor. Create with Ash starts a new chat draft using the skill creator without sending it. In Connectors, open Add and choose Add connection to set up a service account or MCP server. In Plugins, Add offers catalog browsing and installation. Load more continues catalog results. Refresh reloads current state, and Retry repeats a failed read. Escape closes menus and restores focus. Global navigation remains available while this page is open.',
 									),
 							() => {
 								if (

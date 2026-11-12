@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -40,7 +40,7 @@ suite('Execution Trace location', () => {
 		});
 	}
 	test('reports invalid locations in Chinese using the shipped catalog', () => {
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try { assert.throws(() => createAgentTraceResource({ sessionId: 's', eventId: 'event' }), /定位 Turn 或事件时必须提供所属 Thread ID/); }
 		finally { resetNlsResolver(); }
 	});

@@ -1,5 +1,5 @@
 import { addDisposableListener, getWindow, type IDimension } from '../../../../base/browser/dom.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -26,11 +26,23 @@ export class DesignEditorHost extends Disposable {
 		@IDesignEditorService private readonly designEditors: IDesignEditorService,
 	) { super(); }
 
-	public create(parent: HTMLElement, example?: CanvasArtifactExample): void {
-		// The example lives with this editor so edits never enter the window's workspace document.
-		this.document = example
-			? this._register(this.instantiationService.createInstance(DesignDocumentController, { mode: this.mode, title: example.title, shapes: example.createShapes() }))
-			: this.designEditors.getDocument(this.mode);
+	public create(parent: HTMLElement, example?: CanvasArtifactExample, document?: DesignDocumentController): void {
+		if (document) {
+			this.document = document;
+		} else if (example) {
+			const document = this.instantiationService.createInstance(DesignDocumentController, { mode: this.mode, title: example.title, shapes: example.createShapes() });
+			const temporary = this._register(new MutableDisposable<DesignDocumentController>());
+			temporary.value = this.document = document;
+			// Keep the canvas and its history while transferring the document's lifetime to the window.
+			const adoption = this._register(document.onDidChange(() => {
+				if (document.isTemporaryExample) { return; }
+				adoption.dispose();
+				this.designEditors.adoptExampleDocument(document, getWindow(parent));
+				temporary.clearAndLeak();
+			}));
+		} else {
+			this.document = this.designEditors.getDocument(this.mode);
+		}
 		this.editor = this._register(this.instantiationService.createInstance(CanvasEditorWidget, parent.ownerDocument, this.workingCopy, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, this.instantiationService)));
 		this.domNode = this.editor.domNode;
 		parent.append(this.domNode);
@@ -42,7 +54,7 @@ export class DesignEditorHost extends Disposable {
 		this._register(this.workingCopy.onDidChange(updateRestoring));
 		updateRestoring();
 		this._register(addDisposableListener(this.domNode, 'focusin', () => this.designEditors.setActiveEditor(this.editor)));
-		// Desktop drains saves through the lifecycle. Browser unload only prompts for manual-save modes.
+		// Adopted examples install their unload guard with the document's window lifetime.
 		this._register(addDisposableListener(getWindow(this.domNode), 'beforeunload', (event: BeforeUnloadEvent) => {
 			if (!example && !this.workingCopy.automaticallySaves && this.workingCopy.isDirty && !this.lifecycle.willShutdown) { event.preventDefault(); event.returnValue = ''; }
 		}));

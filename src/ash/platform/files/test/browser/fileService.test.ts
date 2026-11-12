@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { createHash } from 'node:crypto';
 import { setNlsMessages, resetNlsResolver } from '../../../../nls.js';
 import type { FileInvalidation, IFileApi, IFileSystemDirectory } from '../../common/fileApi.js';
@@ -1201,7 +1201,7 @@ test('resource discovery rejects stale connections and disposal before dispatchi
 });
 
 test('resource discovery preserves host authority and reports invalid routes in Chinese', async () => {
-	const translations = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
+	const translations = chineseCatalog.bundles;
 	setNlsMessages('zh-CN', translations);
 	try {
 		let discoveries = 0;

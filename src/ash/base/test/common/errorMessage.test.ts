@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { test } from 'mocha';
 import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
 import { toErrorMessage } from '../../common/errorMessage.js';
@@ -46,7 +46,7 @@ test('multiple error feedback identifies the first failure and total count', () 
 });
 
 test('error feedback uses the installed Simplified Chinese translation', () => {
-	const bundles = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
+	const bundles = chineseCatalog.bundles;
 	setNlsMessages('zh-CN', bundles);
 	try {
 		assert.deepEqual([

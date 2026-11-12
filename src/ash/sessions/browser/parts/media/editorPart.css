@@ -2,9 +2,19 @@
 	background: var(--ash-sideBar-background);
 }
 
-.ash-code-editor-groups > .ash-editor-docked-auxiliarybar {
+.ash-code-editor-groups .ash-editor-docked-auxiliarybar {
 	position: absolute;
 	box-sizing: border-box;
+	border-left: 0;
+}
+
+.ash-code-editor-groups .ash-editor-docked-auxiliarybar-split {
+	border-left: var(--ash-strokeThickness) solid var(--ash-editorGroup-border);
+}
+
+.ash-editor-docked-auxiliarybar-sash {
+	/* The docked part paints the line inside its leading edge. */
+	--ash-sash-feedback-cross-offset: calc(var(--ash-strokeThickness) / 2);
 }
 
 .ash-sessions-window
@@ -20,7 +30,9 @@
 
 .ash-sessions-window
 	.ash-code-editor-groups
-	.ash-split-view-separator-border
+	> .ash-workbench-part-content
+	> .ash-grid-view
+	.ash-split-view-separator-border:not(.ash-editor-group *)
 	> .ash-split-view-pane::before {
 	display: none;
 }

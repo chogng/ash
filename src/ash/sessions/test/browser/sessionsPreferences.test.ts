@@ -13,6 +13,9 @@ import { ITeamsManagementService } from '../../services/teams/common/teamsManage
 import { constObservable } from '../../../base/common/observable.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import '../../../workbench/contrib/advisor/browser/advisor.contribution.js';
+import '../../../workbench/contrib/codebase/browser/codebase.contribution.js';
+import { ICodebaseService, type CodebaseConfigurationSnapshot } from '../../../platform/codebase/common/codebaseService.js';
+import { ILanguageServerService, type LanguageServerEnablement } from '../../../platform/language/common/languageServerService.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
@@ -268,6 +271,38 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IAppServerRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnectionState: Event.None, onDidChangeConnection: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
 	services.registerInstance(ITraceSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }), configure: async () => { } });
+	using codebaseChanged = new Emitter<void>();
+	let codebaseConfig: CodebaseConfigurationSnapshot = { revision: 7, generation: 7, codebase: { automaticContext: 'off' } };
+	services.registerInstance(ICodebaseService, {
+		onDidChangeConfig: codebaseChanged.event,
+		readConfig: async () => codebaseConfig,
+		configure: async (models, automaticContext, expectedRevision) => {
+			assert.equal(expectedRevision, codebaseConfig.revision);
+			codebaseConfig = { revision: expectedRevision + 1, generation: codebaseConfig.generation + 1, codebase: { models, automaticContext } };
+			codebaseChanged.fire();
+			return { revision: codebaseConfig.revision, generation: codebaseConfig.generation, disposition: 'updated' };
+		},
+		status: async () => { throw new Error('Unexpected Codebase index status request'); },
+	});
+	using lspChanged = new Emitter<void>();
+	let lspEnablement: LanguageServerEnablement = { revision: 11, enabled: true, worktreesEnabled: false };
+	services.registerInstance(ILanguageServerService, {
+		onDidChangeConfig: lspChanged.event,
+		readEnablement: async () => lspEnablement,
+		setEnabled: async (enabled, expectedRevision, scope) => {
+			assert.equal(expectedRevision, lspEnablement.revision);
+			lspEnablement = {
+				...lspEnablement,
+				revision: expectedRevision + 1,
+				...(scope === 'worktrees' ? { worktreesEnabled: enabled } : { enabled }),
+			};
+			lspChanged.fire();
+		},
+		read: async () => { throw new Error('Unexpected language server catalog request'); },
+		control: async () => { throw new Error('Unexpected language server process request'); },
+		configure: async () => { throw new Error('Unexpected per-server configuration'); },
+		removeConfiguration: async () => { throw new Error('Unexpected per-server reset'); },
+	});
 	services.registerInstance(IFileDialogService, {
 		pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
 		pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
@@ -421,6 +456,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		['sessions.interfaceFontFamily', 'Ash Sans', 'System font', 'system'],
 		['chat.fontFamily', 'Follow interface font', 'Ash Sans SC', 'Ash Sans SC'],
 		['chat.editor.fontFamily', 'Use editor font', 'Ash Mono SC', 'Ash Mono SC'],
+		['sessions.backgroundColor', 'Warm', 'Cool', 'cool'],
 	]) {
 		const picker = window.document.querySelector<HTMLElement>(`[data-settings-item-id="${key}"] [role="combobox"]`)!;
 		assert.equal(picker.textContent, initialLabel);
@@ -619,6 +655,66 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await Promise.resolve();
 	await Promise.resolve();
 	assert.equal(window.document.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="switch"]'), null);
+	assert.equal(window.document.querySelector('[data-settings-item-id="codebase"]'), null);
+	assert.equal(window.document.querySelector('[data-settings-item-id="languageServers.enabled"]'), null);
+	await preferences.open({ section: 'code-intelligence' });
+	await Promise.resolve();
+	const codebase = window.document.querySelector<HTMLElement>('[data-settings-item-id="codebase"]')!;
+	const context = codebase.querySelector<HTMLInputElement>('[role="switch"][aria-label="Automatic context"]')!;
+	const embedding = codebase.querySelector<HTMLInputElement>('input[aria-label="Embedding model"]')!;
+	const rerank = codebase.querySelector<HTMLInputElement>('input[aria-label="Rerank model"]')!;
+	const saveCodebase = [...codebase.querySelectorAll<HTMLElement>('button, [role="button"]')].find(button => button.textContent === 'Save Codebase settings')!;
+	const editorCount = editorOpens.length;
+	assert.equal(context.checked, false);
+	assert.equal(rerank.disabled, true);
+	context.click();
+	embedding.value = 'local';
+	embedding.dispatchEvent(new window.Event('input', { bubbles: true }));
+	saveCodebase.click();
+	assert.match(codebase.querySelector('[role="status"]')?.textContent ?? '', /provider\/model/u);
+	assert.equal(codebaseConfig.revision, 7);
+	embedding.value = 'local/vendor/embed';
+	embedding.dispatchEvent(new window.Event('input', { bubbles: true }));
+	rerank.value = 'local/rank';
+	rerank.dispatchEvent(new window.Event('input', { bubbles: true }));
+	saveCodebase.click();
+	await new Promise(resolve => setImmediate(resolve));
+	assert.deepEqual(codebaseConfig, {
+		revision: 8, generation: 8, codebase: {
+			automaticContext: 'firstInvocation',
+			models: { embeddingModel: { provider: 'local', model: 'vendor/embed' }, rerankModel: { provider: 'local', model: 'rank' } },
+		},
+	});
+	assert.equal(editorOpens.length, editorCount, 'editing Codebase settings stays in the Agent Window dialog');
+	assert.ok(window.document.querySelector('dialog[open]')?.contains(codebase));
+	assert.equal(categoryButton('code-intelligence').getAttribute('aria-current'), 'page');
+	const codeIntelligencePage = codebase.closest('.ash-sessions-settings-page')!;
+	assert.doesNotMatch(codeIntelligencePage.textContent ?? '', /Open Code Intelligence settings|Open the settings editor/u);
+	assert.ok(![...codeIntelligencePage.querySelectorAll('button')].some(button => button.textContent === 'Language servers'));
+	const lspSection = codeIntelligencePage.querySelector('[data-settings-item-id="languageServers.enabled"]')!;
+	const enableLsps = lspSection.querySelector<HTMLInputElement>('[role="switch"][aria-label="Enable LSPs"]')!;
+	const enableWorktreeLsps = lspSection.querySelector<HTMLInputElement>('[role="switch"][aria-label="Enable LSPs for Worktrees"]')!;
+	assert.equal(enableLsps.checked, true);
+	assert.equal(enableLsps.disabled, false);
+	assert.equal(enableWorktreeLsps.checked, false);
+	assert.equal(enableWorktreeLsps.disabled, false);
+	enableWorktreeLsps.click();
+	await new Promise(resolve => setImmediate(resolve));
+	assert.deepEqual(lspEnablement, { revision: 12, enabled: true, worktreesEnabled: true });
+	enableLsps.click();
+	await new Promise(resolve => setImmediate(resolve));
+	assert.deepEqual(lspEnablement, { revision: 13, enabled: false, worktreesEnabled: true });
+	assert.equal(enableLsps.checked, false);
+	assert.equal(enableWorktreeLsps.disabled, true);
+	assert.equal(editorOpens.length, editorCount);
+	lspEnablement = { ...lspEnablement, revision: 14, enabled: true };
+	lspChanged.fire();
+	await Promise.resolve();
+	assert.equal(enableLsps.checked, true);
+	assert.equal(enableWorktreeLsps.checked, true);
+	assert.equal(enableWorktreeLsps.disabled, false);
+	await preferences.open({ section: 'agents' });
+	await Promise.resolve();
 	const titleSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.threadTitle"] button[aria-haspopup="menu"]');
 	assert.ok(titleSelector);
 	assert.equal(titleSelector.textContent?.trim(), 'Automatic');
@@ -679,6 +775,12 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		assert.equal(window.document.activeElement, reopenedMenu.control);
 		await preferences.open({ section: 'general' });
 		assert.equal(window.document.querySelector('[data-configuration-key="workbench.locale"] [role="combobox"]')?.getAttribute('aria-label'), '界面语言');
+		await preferences.open({ query: '重排序模型' });
+		assert.equal(window.document.querySelector<HTMLInputElement>('[data-settings-item-id="codebase"] input[aria-label="重排序模型"]')?.value, 'local/rank');
+		await preferences.open({ query: '启用语言服务器' });
+		await Promise.resolve();
+		assert.equal(window.document.querySelector<HTMLInputElement>('[data-settings-item-id="languageServers.enabled"] [role="switch"][aria-label="启用语言服务器"]')?.checked, true);
+		assert.equal(window.document.querySelector<HTMLInputElement>('[data-settings-item-id="languageServers.enabled"] [role="switch"][aria-label="为 Worktree 启用语言服务器"]')?.checked, true);
 		await preferences.open({ section: 'dictation' });
 		assert.equal(categoryButton('dictation').textContent, '语音');
 		assert.equal(window.document.querySelector('[data-settings-tree-group-id="dictation"]'), null);
@@ -769,7 +871,6 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await openCategoryAction('customize', 'Open Workbench Settings');
 	await openCategoryAction('browser', 'Open Browser settings');
 	await openCategoryAction('tab', 'Open Tab settings');
-	await openCategoryAction('code-intelligence', 'Language servers');
 	const terminalSettings = preferences.open({ section: 'environment', query: '@id:sessions.terminal.*' });
 	assert.ok(window.document.querySelector('dialog[open] [data-settings-item-id="sessions.terminal.fontSize"]'));
 	assert.equal(window.document.querySelector('[data-settings-item-id="terminal.integrated.fontSize"]'), null);
@@ -793,7 +894,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await environmentSettings;
 	assert.deepEqual(editorOpens.map(open => ({ section: new URL(open.resource).searchParams.get('target'), target: open.target })), [
 		{ section: null, target: 'modalGroup' }, { section: 'browser', target: 'modalGroup' },
-		{ section: 'editor-opening', target: 'modalGroup' }, { section: 'editor-language', target: 'modalGroup' },
+		{ section: 'editor-opening', target: 'modalGroup' },
 	]);
 	assert.equal(editorReveals, 1);
 	let accountOpens = 0;

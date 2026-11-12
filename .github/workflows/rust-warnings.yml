@@ -72,6 +72,8 @@ jobs:
           cargo clean --package v8 --profile ci-test
           cargo fetch --locked
 
+      - uses: ./.github/actions/setup-ubuntu-apt
+        if: runner.os == 'Linux'
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         shell: bash
@@ -172,6 +174,8 @@ jobs:
           cargo clean --package v8 --profile ci-test
           cargo fetch --locked
 
+      - uses: ./.github/actions/setup-ubuntu-apt
+        if: runner.os == 'Linux'
       - name: Install Linux process and build dependencies
         if: runner.os == 'Linux'
         run: |
@@ -275,6 +279,7 @@ jobs:
           cargo clean --package v8 --profile ci-test
           cargo fetch --locked
 
+      - uses: ./.github/actions/setup-ubuntu-apt
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update

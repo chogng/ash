@@ -23,6 +23,8 @@ import { IWorkspaceContextService } from '../../platform/workspace/common/worksp
 import { EnterMultiRootWorkspaceSupportContext } from '../common/contextkeys.js';
 import { WORKSPACE_EDIT_ERROR_CHANNEL } from '../../platform/workspace/common/workspaceIpc.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
+import { ICommandService } from '../../platform/commands/common/commands.js';
+import { OPEN_EXTENSIONS_COMMAND_ID, OPEN_IDE_EXTENSIONS_CHANNEL, validateExtensionsOpenOptions } from '../../platform/extensionManagement/common/extensionManagementService.js';
 import { localize } from '../../nls.js';
 import { WORKSPACE_RECOVERY_CHANNEL, WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL } from '../../platform/window/common/window.js';
 import { serializeWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
@@ -123,9 +125,10 @@ export class DesktopMain extends Disposable {
 			profileServices.registerInstance(IRemoteAuthorityResolverService, resolver);
 			const resolverScope = this._register(new MutableDisposable<DisposableStore>());
 			let documentClient: AppServerProtocolClient | undefined;
+			let localBrowserClient: AppServerProtocolClient | undefined;
 			let localResolver: NativeExtensionService | undefined;
 			const apiReady = createElectronRendererApi([
-				client => { documentClient = client; return {}; },
+				(client, _appServer, localClient) => { documentClient = client; localBrowserClient = localClient; return {}; },
 				...this.rendererCapabilities,
 				(_client, _appServer, localClient) => registerLocalTranscriptionService(transcriptionServices, localClient),
 			], { browser: true, textDocuments: true, agentHosts: true, transportHandshake: true }, workspaceTrust, mainProcessService, async (localApi, factories, authority, attempt) => {
@@ -263,7 +266,7 @@ export class DesktopMain extends Disposable {
 					} : undefined,
 					createBrowserHost: documentClient ? services => {
 						const browsers = services.get(IBrowserViewWorkbenchService);
-						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp);
+						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp, localBrowserClient);
 						const browserHost = registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService), services.get(IAgentHostCanvasCollection), owner => browsers.resolveNetwork(owner));
 						return toDisposable(() => { browserHost.dispose(); networkHost.dispose(); });
 					} : undefined,
@@ -325,6 +328,10 @@ export class DesktopMain extends Disposable {
 						if (typeof value === 'string') services.get(INotificationService).error(localize('workspace.reloadFailed', 'Could not update workspace folders. The last accepted folders were kept. {0}', value));
 					});
 					this._register(toDisposable(() => errors.dispose()));
+					const extensions = subscribe(OPEN_IDE_EXTENSIONS_CHANNEL, value => {
+						void Promise.resolve().then(() => services.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, validateExtensionsOpenOptions(value))).catch(onUnexpectedError);
+					});
+					this._register(toDisposable(() => extensions.dispose()));
 					return desktopWindow = services.createInstance(ElectronWindow, { invoke, subscribe });
 				},
 				startupFileRequestsReady: startupFileRequestsReady.p,

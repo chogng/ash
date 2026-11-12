@@ -12,6 +12,7 @@ export interface IDocumentDiffItem {
 	readonly modifiedLabel?: string;
 	readonly readOnly?: boolean;
 	readonly binary?: boolean;
+	readonly unavailableMessage?: string;
 	readonly model: DiffModel | undefined;
 	readonly state: 'unresolved' | 'loading' | 'ready' | 'error';
 	readonly error: Error | undefined;
@@ -73,6 +74,7 @@ export interface DocumentDiffItemDescriptor {
 	readonly modifiedLabel?: string;
 	readonly readOnly?: boolean;
 	readonly binary?: boolean;
+	readonly unavailableMessage?: string;
 }
 
 /** Resolves comparisons on demand; source models and reload resources remain caller-owned. */
@@ -96,7 +98,7 @@ export class DocumentDiffItem extends Disposable implements IDocumentDiffItem {
 		},
 	) {
 		super();
-		if (!model && !descriptor.binary) throw new TypeError('Text comparisons require a model loader');
+		if (!model && !descriptor.binary && !descriptor.unavailableMessage) throw new TypeError('Text comparisons require a model loader');
 		if (typeof model === 'function') {
 			this.load = model;
 			this.currentState = 'unresolved';
@@ -115,6 +117,7 @@ export class DocumentDiffItem extends Disposable implements IDocumentDiffItem {
 	public get modifiedLabel(): string | undefined { return this.descriptor.modifiedLabel; }
 	public get readOnly(): boolean | undefined { return this.descriptor.readOnly; }
 	public get binary(): boolean { return this.descriptor.binary === true || this.resolvedBinary; }
+	public get unavailableMessage(): string | undefined { return this.descriptor.unavailableMessage; }
 	public get model(): DiffModel | undefined { return this.resolvedModel; }
 	public get state(): IDocumentDiffItem['state'] { return this.currentState; }
 	public get error(): Error | undefined { return this.loadError; }
@@ -142,7 +145,7 @@ export class DocumentDiffItem extends Disposable implements IDocumentDiffItem {
 
 	public resolve(): Promise<DiffModel | undefined> {
 		if (this.isDisposed) return Promise.reject(new Error(`Comparison '${this.id}' has been disposed`));
-		if (this.binary) return Promise.resolve(undefined);
+		if (this.binary || this.unavailableMessage) return Promise.resolve(undefined);
 		if (this.resolvedModel) return Promise.resolve(this.resolvedModel);
 		if (this.pending) return this.pending;
 		this.currentState = 'loading';

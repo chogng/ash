@@ -17,7 +17,7 @@ import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 import { IDiffService } from '../../../src/ash/workbench/services/diff/common/diffService.js';
 import { DiffService } from '../../../src/ash/workbench/services/diff/browser/diffService.js';
-import { wrapTablesWithScrollable } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownTableScrolling.js';
+import { chatMarkdownTableScrollClass, wrapTableWithScrollable } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownTableScrolling.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { constObservable } from '../../../src/ash/base/common/observable.js';
 import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
@@ -504,6 +504,11 @@ let allowAppCsp = false;
 let appCallMode: 'read' | 'delay' | 'error' = 'read';
 let appItems: readonly IChatListItem[] = [];
 let hasConversationChanges = false;
+const conversationChanges = {
+	changes: { files: 1, additions: 1, deletions: 1 },
+	changesRevision: 'fixture-revision',
+	changesRepositories: [{ repositoryId: 'fixture-repo', files: [{ path: 'sample.ts', kind: 'modified' as const, binary: false, additions: 1, deletions: 1 }] }],
+};
 let responseWorking = false;
 let appChat: ChatWidget | NativeChatWidget | undefined;
 let composerServices: InstantiationService | undefined;
@@ -1095,16 +1100,23 @@ window.ashChatTranscriptIntegration = {
 		}
 		using renderer = services.createInstance(ChatContentMarkdownRenderer);
 		using expected = renderer.render({ value, supportThemeIcons: true, supportAlertSyntax: true }, { fillInIncompleteTokens: !complete, codeBlockRendererSync: codeNode });
-		wrapTablesWithScrollable(expected.element);
 		// Provider completion is asynchronous; compare formula identity and syntax here.
 		for (const element of [copy, expected.element]) for (const formula of element.querySelectorAll<HTMLElement>('.ash-katex-container')) formula.textContent = formula.dataset.latex!;
 		let layoutError = 0;
 		const layout: unknown[] = [];
 		if (measureLayout) {
+			using tableScrolls = new DisposableStore();
+			const scrollables = Array.from(expected.element.querySelectorAll('table'), table => {
+				const scrollable = tableScrolls.add(wrapTableWithScrollable(table));
+				// Compare assistant reply geometry with the same space for table actions.
+				scrollable.element.parentElement!.classList.add('ash-chat-content-actions-anchor');
+				return scrollable;
+			});
 			expected.element.style.position = 'absolute';
 			expected.element.style.visibility = 'hidden';
 			expected.element.style.width = `${root.getBoundingClientRect().width}px`;
 			root.parentElement!.append(expected.element);
+			for (const scrollable of scrollables) scrollable.layout();
 			const actualBounds = root.getBoundingClientRect();
 			const expectedBounds = expected.element.getBoundingClientRect();
 			layoutError = Math.abs(actualBounds.height - expectedBounds.height);
@@ -1116,7 +1128,9 @@ window.ashChatTranscriptIntegration = {
 				layoutError = Math.max(layoutError, Math.abs(actual.top - actualBounds.top - (reference.top - expectedBounds.top)), Math.abs(actual.height - reference.height));
 				layout.push({ tag: block.tagName, actual: { top: actual.top - actualBounds.top, height: actual.height }, expected: { top: reference.top - expectedBounds.top, height: reference.height } });
 			}
+			for (const table of expected.element.querySelectorAll('table')) table.closest(`.${chatMarkdownTableScrollClass}`)?.replaceWith(table);
 		}
+		for (const table of copy.querySelectorAll('table')) table.closest(`.${chatMarkdownTableScrollClass}`)?.replaceWith(table);
 		return { actual: copy.innerHTML, expected: expected.element.innerHTML, layoutError, layout };
 	},
 	inspectRawCodeUpdates: async values => {
@@ -1394,7 +1408,7 @@ window.ashChatTranscriptIntegration = {
 			},
 			get inputState() {
 				const aiDisabled = services.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId);
-				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: responseWorking, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, changes: hasConversationChanges ? { files: 1, additions: 1, deletions: 1 } : undefined };
+				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: responseWorking, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, ...(hasConversationChanges ? conversationChanges : {}) };
 			},
 			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
 			executeServerCommand: async () => { }, interrupt: async () => { }, refreshChanges: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },

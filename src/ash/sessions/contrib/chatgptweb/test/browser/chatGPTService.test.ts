@@ -1092,6 +1092,67 @@ suite('ChatGPT shared service', () => {
 		assert.equal(earlierReads, 1);
 	});
 
+	test('recovers image metadata in an older native transcript cached before image decoding', async () => {
+		const scope = 'a'.repeat(64);
+		const timeline = `sessions.chat.timeline.v1:chatgpt-web:${scope}:one`;
+		const query = 'Project diagram';
+		const imageUri = 'https://images.openai.com/static-rsc-4/diagram?purpose=fullsize';
+		const older = { id: 'older', role: 'assistant', text: `<AsyncImage query="${query}"/>` };
+		const unavailable = { id: 'unavailable', role: 'assistant', text: '<AsyncImage ref="missing"/>' };
+		const latest = { id: 'latest', role: 'assistant', text: 'Latest reply' };
+		const values = new Map([
+			[`sessions.chatgptExperimental.conversation:${scope}`, 'one'],
+			[timeline, JSON.stringify({
+				localId: 'local-one', tasks: [], history: {
+					title: 'One', parentId: latest.id, olderCursor: 'unloaded', messages: [older, unavailable, latest],
+				}
+			})],
+		]);
+		const remote = (reply: typeof older, metadata?: object) => ({
+			id: reply.id, author: { role: reply.role }, content: { content_type: 'text', parts: [reply.text] }, metadata,
+		});
+		const diagram = {
+			componentName: 'AsyncImage', status: 'resolved',
+			state: { images: [{ content_url: imageUri, image_search_query: query, title: query }] },
+		};
+		const olderWithImage = remote(older, {
+			model_dil_v2: { appData: { opGenui: { componentResults: { diagram } } } },
+		});
+		let earlierReads = 0;
+		using chat = fixture(async path => {
+			if (path.includes('/conversations/one/messages?')) {
+				assert.equal(new URL(path, 'https://chatgpt.com').searchParams.get('before'), 'earlier');
+				if (++earlierReads === 1) return new Response(null, { status: 503 });
+				return Response.json({
+					messages: [olderWithImage, remote(unavailable)],
+					page_info: { has_previous_page: true, start_cursor: 'unloaded' },
+				});
+			}
+			if (path.includes('/conversations/one?')) {
+				return Response.json({
+					title: 'One', current_node: latest.id, messages: [remote(latest)],
+					page_info: { has_previous_page: true, start_cursor: 'earlier' },
+				});
+			}
+			return response(path);
+		}, { values, native: true });
+		await chat.reload();
+		assert.deepEqual(chat.state.get().messages.map(message => message.id), [older.id, unavailable.id, latest.id]);
+		assert.equal(chat.state.get().messages[0]?.asyncImagesDecoded, undefined);
+		await chat.reload();
+		const { messages, olderCursor } = chat.state.get();
+		assert.deepEqual(messages.map(message => message.id), [older.id, unavailable.id, latest.id]);
+		assert.deepEqual(messages[0]?.imageGroups, [{ query, images: [{ uri: imageUri, label: query, source: undefined }] }]);
+		assert.equal(messages[1]?.imageGroups, undefined);
+		assert.equal(messages[1]?.asyncImagesDecoded, true);
+		assert.equal(olderCursor, 'unloaded');
+		assert.deepEqual(JSON.parse(values.get(timeline)!).history.messages[0].imageGroups, [
+			{ query, images: [{ uri: imageUri, label: query }] },
+		]);
+		await chat.reload();
+		assert.equal(earlierReads, 2);
+	});
+
 	test('cold restore and followup remain usable when only the recent list is rate-limited', async () => {
 		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
 		using clock = toDisposable(() => mock.timers.reset());

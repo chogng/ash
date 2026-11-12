@@ -41,7 +41,6 @@ import { productLanguagePackCatalogs } from '../../../../../../services/localiza
 import { BrowserStorageService } from '../../../../../../services/storage/browser/storageService.js';
 import { IQuickInputService } from '../../../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import workbenchTranslations from '../../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { IExternalUriOpenerService } from '../../../../../externalUriOpener/common/externalUriOpenerService.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../../common/contributions.js';
 import { IEditorService } from '../../../../../../services/editor/common/editorService.js';
@@ -72,9 +71,7 @@ declare global {
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
 	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
-	setNlsMessages(catalog.locale, locale === 'zh-CN'
-		? { ...catalog.bundles, 'ash.workbench': { ...catalog.bundles['ash.workbench'], ...workbenchTranslations['ash.workbench'] } }
-		: catalog.bundles);
+	setNlsMessages(catalog.locale, catalog.bundles);
 }
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
@@ -135,6 +132,7 @@ const pageEvents = resources.add(new Emitter<BrowserViewEvent>());
 // Main-owned page operations stop at the service boundary; renderer, toolbar and context menu remain real.
 services.registerInstance(IBrowserViewService, {
 	getBrowserHistory: async () => ({ items: [{ id: 1, url: 'https://example.com/visited', title: 'Visited page', time: 1 }] }),
+	getWebsiteFavicon: async () => undefined,
 	deleteBrowserHistory: async () => { calls.push('clearHistory'); },
 	loadURL: async (_id: string, url: string) => { calls.push(url); },
 	onDidEvent: pageEvents.event, getOrCreateBrowserView: async (id: string) => ({ ...info, id, state: { ...info.state, targetId: id } }), getState: async (id: string) => ({ ...info.state, targetId: id }),

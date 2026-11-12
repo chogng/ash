@@ -27,6 +27,15 @@ fn memory_index(directory: &TempDir) -> Codebase {
     .expect("index")
 }
 
+fn source_limited_index(directory: &TempDir) -> Codebase {
+    let limits = CodebaseLimits::default()
+        .with_max_file_bytes(NonZeroUsize::new(64).unwrap())
+        .with_max_total_source_bytes(NonZeroUsize::new(64).unwrap())
+        .with_target_chunk_bytes(NonZeroUsize::new(32).unwrap())
+        .with_max_chunk_bytes(NonZeroUsize::new(64).unwrap());
+    Codebase::open_memory(Dir::open_local(directory.path()).unwrap(), limits).unwrap()
+}
+
 #[test]
 fn unchanged_watcher_hints_preserve_content_but_detect_equal_size_saves() {
     let directory = dir();
@@ -375,6 +384,63 @@ fn exact_file_refresh_publishes_and_stale_reference_is_rejected() {
             .len(),
         1
     );
+}
+
+#[test]
+fn batched_refresh_reconciles_when_combined_growth_exceeds_source_limit() {
+    let directory = dir();
+    let first = directory.path().join("a.txt");
+    let second = directory.path().join("b.txt");
+    let unchanged = directory.path().join("c.txt");
+    fs::write(&first, [b'a'; 16]).unwrap();
+    fs::write(&second, [b'b'; 16]).unwrap();
+    fs::write(&unchanged, [b'c'; 16]).unwrap();
+    let index = source_limited_index(&directory);
+    let before = index.rebuild().unwrap();
+    assert_eq!(before.indexed_source_bytes, 48);
+    assert!(!before.source_bytes_limit_hit);
+
+    fs::write(&first, [b'a'; 32]).unwrap();
+    fs::write(&second, [b'b'; 32]).unwrap();
+    let outcome = index.refresh_observed_paths(&[first, second]).unwrap();
+    let RefreshOutcome::Rebuilt(snapshot) = outcome else {
+        panic!("expected a bounded rescan, got {outcome:?}");
+    };
+    assert_eq!(snapshot.generation, before.generation + 1);
+    assert_eq!(snapshot.indexed_source_bytes, 64);
+    assert_eq!(snapshot.indexed_file_count, 2);
+    assert_eq!(snapshot.skipped_file_count, 1);
+    assert!(snapshot.source_bytes_limit_hit);
+}
+
+#[test]
+fn batched_refresh_counts_a_later_deletion_toward_the_source_limit() {
+    let directory = dir();
+    let first = directory.path().join("a.txt");
+    let second = directory.path().join("b.txt");
+    let removed = directory.path().join("c.txt");
+    fs::write(&first, [b'a'; 16]).unwrap();
+    fs::write(&second, [b'b'; 16]).unwrap();
+    fs::write(&removed, [b'c'; 16]).unwrap();
+    let index = source_limited_index(&directory);
+    let before = index.rebuild().unwrap();
+    assert_eq!(before.indexed_source_bytes, 48);
+    assert!(!before.source_bytes_limit_hit);
+
+    fs::write(&first, [b'a'; 36]).unwrap();
+    fs::write(&second, [b'b'; 28]).unwrap();
+    fs::remove_file(&removed).unwrap();
+    // Refresh sorts paths, so both growth updates precede the deletion.
+    let outcome = index
+        .refresh_observed_paths(&[removed, second, first])
+        .unwrap();
+    let RefreshOutcome::Published(snapshot) = outcome else {
+        panic!("expected an incremental publication, got {outcome:?}");
+    };
+    assert_eq!(snapshot.generation, before.generation + 1);
+    assert_eq!(snapshot.indexed_source_bytes, 64);
+    assert_eq!(snapshot.indexed_file_count, 2);
+    assert!(!snapshot.source_bytes_limit_hit);
 }
 
 #[test]

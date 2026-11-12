@@ -15,6 +15,11 @@ import type { ServicesAccessor } from '../../../platform/instantiation/common/in
 import { ashTitlebarMark } from '../../../workbench/browser/parts/titlebar/titlebarMark.js';
 import { codeSessionsProfile } from '../../common/codeSessionsProfile.js';
 import { createAppServerDebugAdapterCapability } from '../../../platform/debug/browser/appServerDebugAdapterProcessService.js';
+import { onUnexpectedError } from '../../../base/common/errors.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { IDE_EXTENSIONS_FRAGMENT, OPEN_EXTENSIONS_COMMAND_ID, validateExtensionsOpenOptions, type ExtensionsOpenOptions } from '../../../platform/extensionManagement/common/extensionManagementService.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../workbench/common/contributions.js';
 
 try {
 	showPartsSplash(document, readBrowserPartsSplash(window));
@@ -32,6 +37,22 @@ try {
 	await import('../../../sessions/contrib/providers/agentHost/browser/workbenchSessionsService.contribution.js');
 	await import('../../../sessions/browser/workbenchChat.contribution.js');
 	await import('../../../sessions/contrib/changes/browser/changesMultiDiffSourceResolver.js');
+	const entryUrl = new URL(window.location.href);
+	const extensionsRequest = new URLSearchParams(entryUrl.hash.slice(1)).get(IDE_EXTENSIONS_FRAGMENT);
+	if (extensionsRequest !== null) {
+		entryUrl.hash = '';
+		window.history.replaceState(window.history.state, '', entryUrl);
+		let extensions: ExtensionsOpenOptions | undefined;
+		try { extensions = validateExtensionsOpenOptions(JSON.parse(extensionsRequest)); }
+		catch { /* Ignore malformed navigation from an external URL. */ }
+		if (extensions) {
+			const options = extensions;
+			registerWorkbenchContribution('workbench.contrib.openRequestedExtensions', WorkbenchPhase.AfterRestored, accessor => {
+				void accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, options).catch(onUnexpectedError);
+				return Disposable.None;
+			});
+		}
+	}
 	registerAction2(class OpenCodeSessionsAction extends Action2 {
 		constructor() {
 			super({

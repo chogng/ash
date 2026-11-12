@@ -141,6 +141,8 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
         skill_sources: BTreeMap::new(),
         plugin_requests: BTreeMap::new(),
         hooks: BTreeMap::new(),
+        language_servers_enabled: Some(true),
+        worktree_language_servers_enabled: Some(false),
         language_servers: BTreeMap::new(),
         tool_search: ToolSearchConfigDto {
             mode: ToolSearchModeDto::Lexical,

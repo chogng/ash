@@ -1,9 +1,9 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../common/widget/chatResponseResourceFileSystemProvider.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { ChatHookContentPart } from '../../browser/widget/chatContentParts/chatHookContentPart.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
@@ -78,7 +78,7 @@ for (const host of [
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Hook summaries distinguish all five statuses in ${locale} without translating process reasons`, () => {
-		if (locale === 'zh-CN') setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		if (locale === 'zh-CN') setNlsMessages(locale, chineseCatalog.bundles);
 		try {
 			const labels = locale === 'zh-CN'
 				? ['正在为 shell-command 运行 preToolUse Hook', '已允许 shell-command · preToolUse Hook', '已阻断 shell-command · preToolUse Hook', '针对 shell-command 的 preToolUse Hook 失败', '针对 shell-command 的 preToolUse Hook 已取消']

@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { ChatAttachmentsContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatAttachmentsContentPart.js';
 import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
@@ -20,8 +21,6 @@ import { IExtensionHostApi, type ExtensionHostFleetSnapshot } from '../../../src
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import type { EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import editorMessages from '../../../extensions/language-pack-zh-cn/translations/editor.json' with { type: 'json' };
-import workbenchMessages from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/toolbar/toolbar.css';
@@ -30,7 +29,7 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 
 const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
-setNlsMessages(locale, locale === 'zh-CN' ? { ash: { ...editorMessages.ash, ...workbenchMessages.ash } } : {});
+setNlsMessages(locale, locale === 'zh-CN' ? chineseCatalog.bundles : {});
 const services = new InstantiationService();
 const memory = new InMemoryFileSystemProvider();
 const files = createTestFileService(memory); services.registerInstance(IFileService, files);

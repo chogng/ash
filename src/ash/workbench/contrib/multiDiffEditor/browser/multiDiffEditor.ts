@@ -40,7 +40,7 @@ import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { createMultiDiffEditorInput, isMultiDiffEditorInput, MULTI_DIFF_EDITOR_ID, multiDiffEditorItemKey, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from './multiDiffEditorInput.js';
 import { MultiDiffEditorToolbar } from './multiDiffEditorToolbar.js';
 import { localize } from '../../../../nls.js';
-import { extname } from '../../../../base/common/path.js';
+import { extname, posix } from '../../../../base/common/path.js';
 import { basename, dirname } from '../../../../base/common/resources.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -55,7 +55,7 @@ import {
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { IResourceLabelService } from '../../../browser/labels.js';
+import { IResourceLabelService, type IResourceLabel } from '../../../browser/labels.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import { getMultiDiffEditorFileListViewMode, isMultiDiffEditorFileListEnabled, MultiDiffEditorFileListAvailableContext, MultiDiffEditorFileListEnabledContext, MultiDiffEditorFileListViewModeContext, onDidChangeMultiDiffEditorFileList, type MultiDiffEditorFileListViewMode } from '../common/multiDiffEditor.js';
 import { MultiDiffEditorWithFileListWidget } from './multiDiffEditorWithFileListWidget.js';
@@ -67,6 +67,8 @@ export const MultiDiffEditorPreview = new RawContextKey<boolean>('multiDiffEdito
 export interface MultiDiffEditorOptions {
 	/** A composed editor retains its own menu identity while reusing this comparison widget. */
 	readonly activeEditorId?: string;
+	readonly layoutStyleSetting?: string;
+	readonly showFileListStatistics?: boolean;
 	readonly viewMode?: 'inline' | 'sideBySide';
 	readonly createFileActions?: (container: HTMLElement, item: MultiDiffEditorInputItem) => IDisposable;
 	readonly attachEditor?: (item: MultiDiffEditorInputItem, editor: DiffEditorWidget) => IDisposable | undefined;
@@ -380,9 +382,10 @@ class MultiDiffEditorSession extends Disposable {
 			const items = this.createItems(paneInput, resources);
 			this.model = this._register(new MultiDiffEditorModel(items));
 			const useConfiguredViewMode = contextKeyService.getValue(IsSessionsWindowContext.key) === true;
+			const layoutStyleSetting = options.layoutStyleSetting ?? WorkbenchConfiguration.layoutStyle;
 			this._register(configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) {
-					this.editor?.setLayoutStyle(configuration.getValue(WorkbenchConfiguration.layoutStyle));
+				if (event.affectsConfiguration(layoutStyleSetting)) {
+					this.editor?.setLayoutStyle(configuration.getValue(layoutStyleSetting));
 				}
 				if (!options.viewMode && useConfiguredViewMode && (event.affectsConfiguration('diffEditor.renderSideBySide')
 					|| event.affectsConfiguration('diffEditor.useInlineViewWhenSpaceIsLimited')
@@ -442,29 +445,34 @@ class MultiDiffEditorSession extends Disposable {
 					useInlineViewWhenSpaceIsLimited: configuration.getValue<boolean>('diffEditor.useInlineViewWhenSpaceIsLimited'),
 					renderSideBySideInlineBreakpoint: configuration.getValue<number>('diffEditor.renderSideBySideInlineBreakpoint'),
 				} : {}),
-				layoutStyle: configuration.getValue(WorkbenchConfiguration.layoutStyle),
+				layoutStyle: configuration.getValue(layoutStyleSetting),
 				...this.getEditorOptions(),
 				workbenchUIElementFactory: {
 					createResourceLabel: (container: HTMLElement, item: IDocumentDiffItem) => {
 						const input = this.inputsById.get(item.id);
 						if (!input) throw new RangeError(`Unknown multi-diff item '${item.id}'`);
-						const resource = input.modified.preferredResource ?? input.goToFile?.resource ?? input.modified.resource;
+						const modifiedResource = input.modified.preferredResource ?? input.modified.resource;
+						const resource = input.modified.preferredResource ?? input.goToFile?.resource ?? modifiedResource;
 						const originalResource = input.original.preferredResource ?? input.original.resource;
+						const { fileList } = input;
+						const originalPath = fileList?.originalPath;
 						const resources = new DisposableStore();
 						const currentDomNode = h(container.ownerDocument, 'span');
 						currentDomNode.className = 'ash-multi-diff-resource';
 						container.append(currentDomNode);
-						resources.add(labels.create(currentDomNode)).setFile(resource);
-						// Snapshot identities may differ while still referring to the same file.
-						const modifiedResource = input.modified.preferredResource ?? input.modified.resource;
-						if (originalResource.path !== modifiedResource.path) {
+						setComparisonFileLabel(resources.add(labels.create(currentDomNode)), resource, fileList?.path);
+						// Snapshot identifiers can differ even when both sides represent the same path.
+						const hasPreferredPaths = input.original.preferredResource && input.modified.preferredResource;
+						const renamed = originalPath !== undefined ? originalPath !== fileList?.path
+							: (!fileList || hasPreferredPaths) && originalResource.path !== modifiedResource.path;
+						if (renamed) {
 							const statusDomNode = h(container.ownerDocument, 'span');
 							statusDomNode.className = 'ash-multi-diff-rename-status';
 							statusDomNode.textContent = 'R';
 							const originalDomNode = h(container.ownerDocument, 'span');
 							originalDomNode.className = 'ash-multi-diff-resource original';
 							container.append(statusDomNode, originalDomNode);
-							resources.add(labels.create(originalDomNode)).setFile(originalResource, { strikethrough: true });
+							setComparisonFileLabel(resources.add(labels.create(originalDomNode)), originalResource, originalPath, true);
 						}
 						return resources;
 					},
@@ -480,7 +488,8 @@ class MultiDiffEditorSession extends Disposable {
 					},
 				},
 			}));
-			this.comparison = this._register(instantiationService.createInstance(MultiDiffEditorWithFileListWidget, comparisonContainer, this.editorDomNode, this.editor));
+			this.comparison = this._register(instantiationService.createInstance(MultiDiffEditorWithFileListWidget,
+				comparisonContainer, this.editorDomNode, this.editor, options.showFileListStatistics ? this.model : undefined));
 			this.comparison.setItems(paneInput.items);
 			this.createToolbar();
 			this.updateEmptyState();
@@ -592,7 +601,7 @@ class MultiDiffEditorSession extends Disposable {
 
 	public async save(options?: ISaveOptions): Promise<void> {
 		// Collapsing or virtualizing a file must not exclude it from an explicit Save.
-		await Promise.all(this.model.items.filter(item => !item.binary && !item.readOnly).map(item => item.resolve()));
+		await Promise.all(this.model.items.filter(item => !item.binary && !item.unavailableMessage && !item.readOnly).map(item => item.resolve()));
 		throwIfCancelled(this.abortController.signal, 'Multi-diff save was cancelled');
 		for (const copy of this.workingCopies) {
 			if (copy.isDirty) await copy.save(this.abortController.signal, options);
@@ -605,7 +614,7 @@ class MultiDiffEditorSession extends Disposable {
 	}
 
 	public getFileListAccessibleContent(): string {
-		return this.paneInput.items.map(item => item.label).join('\n');
+		return this.paneInput.items.map(item => item.unavailableMessage ? `${item.label}\n${item.unavailableMessage}` : item.label).join('\n');
 	}
 
 	private createFileActions(container: HTMLElement, item: IDocumentDiffItem, input: MultiDiffEditorInputItem): IDisposable {
@@ -692,11 +701,11 @@ class MultiDiffEditorSession extends Disposable {
 			this.inputsById.set(id, item);
 			const loaded = resources.add(new MutableDisposable<DisposableStore>());
 			const comparison = resources.add(new DocumentDiffItem({
-				id, label: item.label, binary: item.binary,
+				id, label: item.label, binary: item.binary, unavailableMessage: item.unavailableMessage,
 				originalUri: item.original.resource, modifiedUri: item.modified.resource,
 				originalLabel: item.original.label, modifiedLabel: item.modified.label,
 				readOnly: item.modified.readOnly,
-			}, item.binary ? undefined : () => {
+			}, item.binary || item.unavailableMessage ? undefined : () => {
 				const lifetime = new DisposableStore();
 				loaded.value = lifetime;
 				return this.loadItem(item, lifetime, abort.signal);
@@ -759,6 +768,19 @@ class MultiDiffEditorSession extends Disposable {
 		this.layout(this.dimension);
 	}
 
+}
+
+function setComparisonFileLabel(label: IResourceLabel, resource: URI, path: string | undefined, strikethrough = false): void {
+	if (path === undefined) {
+		label.setFile(resource, { strikethrough });
+		return;
+	}
+
+	const directory = posix.dirname(path);
+	label.setResource({ resource, name: posix.basename(path), description: directory === '.' ? undefined : directory }, {
+		title: path,
+		strikethrough,
+	});
 }
 
 class PaneAction implements IAction {

@@ -1,6 +1,8 @@
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
+use ash_async_utils::CancellationSource;
+use ash_async_utils::CancellationToken;
 use ash_http_client::HttpClient;
 use ash_http_client::HttpClientConfig;
 use ash_http_client::HttpHeader;
@@ -13,6 +15,7 @@ use ash_http_client::ProxyPolicy;
 use ash_http_client::RedirectPolicy;
 use ash_http_client::ReqwestHttpClient;
 use ash_http_client::ResponseBodyLimit;
+use ash_http_client::TransportTimeouts;
 use ash_http_client::UreqHttpClient;
 use url::Url;
 
@@ -37,7 +40,7 @@ pub struct SafeRemoteImageFetcher {
 
 impl SafeRemoteImageFetcher {
     pub fn production() -> Result<Self, AttachmentError> {
-        let client = UreqHttpClient::with_config(remote_http_config()?)
+        let client = UreqHttpClient::with_config(remote_http_config(attachment_limit())?)
             .map_err(|_| AttachmentError::RemoteFetch)?;
         Ok(Self {
             client: Arc::new(client),
@@ -45,8 +48,20 @@ impl SafeRemoteImageFetcher {
     }
 
     pub fn with_policy(policy: OutboundNetworkPolicy) -> Result<Self, AttachmentError> {
-        let network = OutboundNetworkSnapshot::with_policy(remote_http_config()?, policy.clone())
-            .map_err(|_| AttachmentError::RemoteFetch)?;
+        Self::with_limits(policy, attachment_limit(), TransportTimeouts::default())
+    }
+
+    /// Uses the remote image security policy with a consumer-specific byte and time budget.
+    pub fn with_limits(
+        policy: OutboundNetworkPolicy,
+        max_bytes: NonZeroUsize,
+        timeouts: TransportTimeouts,
+    ) -> Result<Self, AttachmentError> {
+        let network = OutboundNetworkSnapshot::with_policy(
+            remote_http_config(max_bytes)?.with_timeouts(timeouts),
+            policy,
+        )
+        .map_err(|_| AttachmentError::RemoteFetch)?;
         let client: Arc<dyn HttpClient> = Arc::new(
             ReqwestHttpClient::with_network(network).map_err(|_| AttachmentError::RemoteFetch)?,
         );
@@ -59,11 +74,12 @@ impl SafeRemoteImageFetcher {
     }
 }
 
-fn remote_http_config() -> Result<HttpClientConfig, AttachmentError> {
-    let body_limit = ResponseBodyLimit::new(
-        NonZeroUsize::new(MAX_IMAGE_ATTACHMENT_BYTES).expect("attachment byte limit is non-zero"),
-    )
-    .map_err(|_| AttachmentError::RemoteFetch)?;
+fn attachment_limit() -> NonZeroUsize {
+    NonZeroUsize::new(MAX_IMAGE_ATTACHMENT_BYTES).expect("attachment byte limit is non-zero")
+}
+
+fn remote_http_config(max_bytes: NonZeroUsize) -> Result<HttpClientConfig, AttachmentError> {
+    let body_limit = ResponseBodyLimit::new(max_bytes).map_err(|_| AttachmentError::RemoteFetch)?;
     Ok(HttpClientConfig::new()
         .with_proxy_policy(ProxyPolicy::Direct)
         .with_redirect_policy(RedirectPolicy::Reject)
@@ -73,6 +89,22 @@ fn remote_http_config() -> Result<HttpClientConfig, AttachmentError> {
 
 impl RemoteImageFetcher for SafeRemoteImageFetcher {
     fn fetch(&self, url: &str) -> Result<Vec<u8>, AttachmentError> {
+        self.fetch_with_cancellation(
+            url,
+            "image/png,image/jpeg,image/webp,image/gif",
+            &CancellationSource::new().token(),
+        )
+    }
+}
+
+impl SafeRemoteImageFetcher {
+    /// Downloads an anonymous image, applying the same URL checks at each redirect.
+    pub fn fetch_with_cancellation(
+        &self,
+        url: &str,
+        accept: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<u8>, AttachmentError> {
         let mut current = validate_remote_url(url)?;
         let initial_scheme = current.scheme().to_owned();
         for hop in 0..=MAX_REMOTE_REDIRECTS {
@@ -80,7 +112,7 @@ impl RemoteImageFetcher for SafeRemoteImageFetcher {
                 HttpMethod::Get,
                 current.as_str(),
                 vec![
-                    HttpHeader::new("accept", "image/png,image/jpeg,image/webp,image/gif"),
+                    HttpHeader::new("accept", accept),
                     HttpHeader::new("accept-encoding", "identity"),
                 ],
                 Vec::new(),
@@ -88,7 +120,7 @@ impl RemoteImageFetcher for SafeRemoteImageFetcher {
             .map_err(|_| AttachmentError::RemoteFetch)?;
             let response = self
                 .client
-                .execute(&request)
+                .execute_with_cancellation(&request, cancellation)
                 .map_err(|_| AttachmentError::RemoteFetch)?;
             if response.is_success() {
                 return Ok(response.body().to_vec());

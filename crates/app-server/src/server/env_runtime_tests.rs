@@ -4819,6 +4819,51 @@ fn filesystem_resource_routes_are_independent_of_selection_and_never_grant_acces
             ),
         )
         .unwrap();
+    let folder_id = |session: &SessionId, path: &Path| {
+        let encode = |value: &str| {
+            url::form_urlencoded::byte_serialize(value.as_bytes()).collect::<String>()
+        };
+        format!(
+            "session:{}:{}",
+            encode(session.as_str()),
+            encode(&path.to_string_lossy())
+        )
+    };
+    let managed = folder_id(&a.session_id, &first.path);
+    let foreign = folder_id(&a.session_id, &second.path);
+    let restricted = folder_id(&a.session_id, &read_only.path);
+    assert!(server.language_dir_root_for(Some(&managed), None).is_err());
+    let workspace_grant = Grant::for_environment(
+        outside.root(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ExecuteCommands, Permission::UseLanguageServices]),
+    );
+    server.env_runtime.write().unwrap().selected_grant = Some(workspace_grant.clone());
+    let permissions = rpc(
+        &mut connection,
+        "env/dir/read",
+        serde_json::json!({ "dirId": managed }),
+    );
+    assert!(
+        permissions["result"]["permissions"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("useLanguageServices")),
+        "{permissions}"
+    );
+    assert_eq!(
+        server
+            .language_dir_root_for(Some(&managed), None)
+            .unwrap()
+            .canonical_path(),
+        first.path
+    );
+    for id in [&foreign, &restricted] {
+        assert!(
+            server.language_dir_root_for(Some(id), None).is_err(),
+            "{id}"
+        );
+    }
     let resolve = |connection: &mut ConnectionState, path: &Path| {
         rpc(
             connection,
@@ -4889,6 +4934,19 @@ fn filesystem_resource_routes_are_independent_of_selection_and_never_grant_acces
             .is_some()
     );
     access.unbind_thread_dir(&a.thread_id);
+    assert!(server.language_dir_root_for(Some(&managed), None).is_err());
+    workspace_grant.revoke();
+    let other_managed = folder_id(&b.session_id, &second.path);
+    assert!(
+        server
+            .language_dir_root_for(Some(&other_managed), None)
+            .is_err()
+    );
+    assert!(
+        !language_roots_for(&server.env_runtime.read().unwrap())
+            .granted
+            .contains(&second.path)
+    );
     assert!(
         resolve(&mut connection, &first.path.join("original.txt"))
             .get("error")

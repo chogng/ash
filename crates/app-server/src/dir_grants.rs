@@ -486,6 +486,15 @@ impl DirGrants {
             .map(|grant| grant.dir().clone())
     }
 
+    pub(crate) fn thread_grant(&self, thread_id: &ThreadId) -> Option<Grant> {
+        self.threads
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(thread_id)
+            .and_then(|dirs| dirs.default.clone())
+            .filter(Grant::is_active)
+    }
+
     pub(crate) fn thread_scope(
         &self,
         thread_id: &ThreadId,
@@ -685,6 +694,19 @@ impl DirGrants {
             .collect()
     }
 
+    pub(crate) fn managed_language_roots(&self) -> Vec<PathBuf> {
+        self.threads
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .filter_map(|dirs| dirs.default.as_ref())
+            .filter(|grant| {
+                grant.is_active() && grant.permissions().allows(Permission::UseLanguageServices)
+            })
+            .map(|grant| grant.dir().canonical_path().to_path_buf())
+            .collect()
+    }
+
     pub(crate) fn authorize(
         &self,
         session_id: &SessionId,
@@ -712,6 +734,7 @@ fn thread_directory_capabilities() -> Permissions {
         Permission::BrowseFiles,
         Permission::WriteFiles,
         Permission::ExecuteCommands,
+        Permission::UseLanguageServices,
         Permission::InspectRepository,
         Permission::MutateRepository,
     ])

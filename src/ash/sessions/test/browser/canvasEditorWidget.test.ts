@@ -34,7 +34,7 @@ import { BrowserWorkingCopyService } from '../../../workbench/services/workingCo
 import { IWorkingCopyService } from '../../../workbench/services/workingCopy/common/workingCopyService.js';
 
 import { AbstractLifecycleService } from '../../../workbench/services/lifecycle/common/lifecycleService.js';
-import { NullLoggerService } from '../../../platform/log/common/log.js';
+import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { ILifecycleService, LifecyclePhase, StartupKind, type IBeforeShutdownEvent } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
@@ -73,6 +73,7 @@ const { DesignEditorService, IDesignEditorService } = await import('../../contri
 const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/artifacts/browser/designPanelViews.js');
 const { ArtifactWorkspaceId } = await import('../../contrib/artifacts/common/artifactWorkspace.js');
 const { ArtifactsEditorView } = await import('../../contrib/artifacts/browser/artifactsEditor.js');
+const { getArtifactExample } = await import('../../contrib/artifacts/browser/artifactExamples.js');
 const { IEditorPart } = await import('../../../workbench/browser/parts/editor/editorPart.js');
 await import('../../contrib/artifacts/browser/artifacts.contribution.js');
 await import('../../contrib/artifacts/contrib/design/browser/design.contribution.js');
@@ -86,6 +87,7 @@ const DESIGN_EDITOR_RESOURCE = URI.parse('ash-creator:/design');
 await import('../../contrib/artifacts/browser/designEditor.contribution.js');
 const { createDesignEditorContributions } = await import('../../contrib/artifacts/browser/designEditorContributions.js');
 const services = new InstantiationService();
+services.registerInstance(ILogService, new NullLoggerService());
 const notifications = new TestNotificationService();
 services.registerInstance(INotificationService, notifications);
 setup(() => notifications.model.clear());
@@ -137,7 +139,7 @@ services.registerInstance(IFileDialogService, {
 });
 services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
 services.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: unexpected });
-services.registerInstance(ISessionsEntryService, { ...Disposable.None, setConversationVisible: unexpected, checkpointEditorLayout: unexpected, openEntry: unexpected, restore: unexpected });
+services.registerInstance(ISessionsEntryService, { ...Disposable.None, setConversationVisible: unexpected, checkpointEditorLayout: unexpected, openEntry: unexpected, replaceEditorResource: unexpected, restore: unexpected });
 const fileProvider: IFileSystemProvider = {
 	capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
 	onDidChangeCapabilities: Event.None,
@@ -1240,10 +1242,10 @@ test('Design reuses the exact Library version without importing again or duplica
 class CreatorFixture extends Disposable {
 	readonly page: InstanceType<typeof ArtifactsEditorView>;
 	readonly editors: InstanceType<typeof DesignEditorService>;
-	constructor() {
+	constructor(parent = services) {
 		super();
 		setARIAContainer(browser.window.document.body);
-		const child = this._register(services.createChild());
+		const child = this._register(parent.createChild());
 		this.editors = this._register(child.createInstance(DesignEditorService));
 		child.registerInstance(IDesignEditorService, this.editors);
 		child.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for help.', show: () => { throw new Error('Unexpected accessible view'); }, disableHint: unexpected, showAccessibleViewHelp: () => { throw new Error('Unexpected accessible view'); }, dispose() { }, [Symbol.dispose]() { } });
@@ -2408,6 +2410,103 @@ class AutoSaveFixture extends Disposable {
 	async readActive(): Promise<ReturnType<typeof parseDesignDocument>> { return parseDesignDocument((await this.files.readFile(URI.joinPath(this.activeResource, 'manifest.json'))).content); }
 }
 
+test('Slides examples create independent artifacts that autosave, export and reopen', async () => {
+	using fixture = new AutoSaveFixture();
+	using lifecycle = new class extends AbstractLifecycleService { }(StartupKind.NewWindow, new NullLoggerService(), fixture.storage);
+	fixture.child.registerInstance(ILifecycleService, lifecycle);
+	using view = new CreatorFixture(fixture.child);
+	const example = getArtifactExample('slides');
+	assert.equal(example.type, 'canvas');
+	view.page.openExample(example);
+	const deck = view.editors.activeEditor.get()!.documentController;
+	const id = deck.model.value.documentId;
+	assert.equal(deck.model.value.shapes.length, 2);
+	assert.deepEqual(fixture.child.get(IWorkingCopyService).get(deck.resource), [deck]);
+
+	const saved = new Promise<void>(resolve => {
+		const listener = deck.onDidChange(() => {
+			if (!deck.isDirty) {
+				listener.dispose();
+				resolve();
+			}
+		});
+	});
+	assert.equal(deck.isDirty, true);
+	await saved;
+	assert.equal(fixture.saveDialogs, 0);
+
+	view.click('More Actions');
+	const menu = contextMenu!;
+	const actions = menu.getActions();
+	assert.deepEqual(actions.map(action => action.label), ['Export editable copy', 'Export SVG']);
+	services.get(IContextMenuService).hideContextMenu();
+	await menu.actionRunner!.run(actions[0], menu.getActionsContext?.());
+	const manifest = fixture.copyResource.joinPathSegment('manifest.json');
+	const exported = parseDesignDocument((await fixture.files.readFile(manifest)).content);
+	assert.notEqual(exported.documentId, id);
+	assert.deepEqual(exported.shapes, deck.model.value.shapes);
+
+	view.click('Add slide');
+	const unload = new browser.window.Event('beforeunload', { cancelable: true });
+	browser.window.dispatchEvent(unload);
+	assert.equal(unload.defaultPrevented, true);
+	view.page.showHome();
+	assert.equal(view.page.domNode.ownerDocument.activeElement?.getAttribute('data-slides-artifact'), id);
+	view.page.openExample(example);
+	const second = view.editors.activeEditor.get()!.documentController;
+	assert.notEqual(second.model.value.documentId, id);
+	assert.equal(second.model.value.shapes.length, 2);
+	await lifecycle.shutdown('windowClose');
+	assert.equal(deck.isDirty, false);
+	assert.equal(second.isDirty, false);
+	assert.equal(fixture.confirmations, 0);
+	assert.deepEqual(parseDesignDocument((await fixture.files.readFile(manifest)).content), exported);
+
+	const expected = deck.model.value;
+	view.dispose();
+	using restarted = new CreatorFixture(fixture.child);
+	await restarted.editors.loadCanvasArtifacts();
+	assert.equal(restarted.page.domNode.querySelectorAll('[data-slides-artifact]').length, 2);
+	const restored = restarted.editors.canvasArtifacts.get().get(id)!;
+	restarted.page.openCanvasArtifact(restored);
+	assert.equal(restarted.editors.activeEditor.get()?.documentController, restored);
+	assert.deepEqual(restored.model.value, expected);
+});
+
+test('Slides opens packages and rejects standalone JSON', async () => {
+	using fixture = new AutoSaveFixture();
+	using child = fixture.child.createChild();
+	const dialogs = child.get(IFileDialogService);
+	const loose = URI.file('/slides.json');
+	let selected = loose;
+	let errorDetail: string | undefined;
+	child.registerInstance(IFileDialogService, {
+		...dialogs,
+		showOpenDialog: async options => {
+			assert.equal(options.canSelectFiles, false);
+			assert.equal(options.canSelectFolders, true);
+			assert.deepEqual(options.filters?.[0].extensions, ['ash-design']);
+			return [selected];
+		},
+	});
+	child.registerInstance(IDialogService, {
+		...services.get(IDialogService),
+		error: async (_message, detail) => { errorDetail = detail; },
+	});
+	using source = child.createInstance(DesignDocumentController, ArtifactWorkspaceId.Slides);
+	new DocumentCommands(source.model).addFrame({ x: 0, y: 0 });
+	await fixture.files.createDirectory(URI.file('/'));
+	await fixture.files.writeFile({ resource: loose, content: serializeDesignDocument(source.model.value) });
+	assert.equal(await source.saveDocument(fixture.copyResource), true);
+	using opened = child.createInstance(DesignDocumentController, ArtifactWorkspaceId.Slides);
+	await opened.openDocument();
+	assert.match(errorDetail!, /Choose an Ash Slides file package/u);
+	assert.equal(opened.model.value.shapes.length, 0);
+	selected = fixture.copyResource;
+	await opened.openDocument();
+	assert.deepEqual(opened.model.value, source.model.value);
+});
+
 test('Design automatically saves an untitled draft and restores its document and image bytes after reopening', async () => {
 	using fixture = new AutoSaveFixture();
 	const document = fixture.createDocument();
@@ -2539,7 +2638,7 @@ test('Design failed restoration keeps the original pointer and blocks replacemen
 	assert.deepEqual(restored.model.value, parseDesignDocument(original.content));
 });
 
-test('Design autosave status and copy actions use Chinese localization', async () => {
+test('Design autosave status and Slides artifact export use Chinese localization', async () => {
 	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
@@ -2553,6 +2652,14 @@ test('Design autosave status and copy actions use Chinese localization', async (
 		assert.equal(document.saveStatus, '所有更改已保存');
 		using view = createView();
 		assert.match(view.pane.editor.getAccessibleContent(), /所有更改已保存/u);
+		using creator = new CreatorFixture(fixture.child);
+		const example = getArtifactExample('slides');
+		assert.equal(example.type, 'canvas');
+		creator.page.openExample(example);
+		assert.match(creator.page.getAccessibleContent(), /工作室发布/u);
+		pressCanvas(creator.editors.activeEditor.get()!, 'F10', { shiftKey: true });
+		assert.ok(contextMenu?.getActions().some(action => action.label === '导出可编辑副本'));
+		services.get(IContextMenuService).hideContextMenu();
 	} finally { resetNlsResolver(); }
 });
 

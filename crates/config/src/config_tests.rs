@@ -2055,6 +2055,57 @@ fn valid_external_toml_edits_advance_revision_and_publish() {
 }
 
 #[test]
+fn external_migration_waits_for_the_config_writer_even_if_the_values_match() {
+    use rusqlite::TransactionBehavior;
+    use std::time::Duration;
+
+    let path = config_path("external-migration-write-lock");
+    let store = ConfigStore::open(&path).unwrap();
+    let configured = configure_provider(&store, 0, "openai");
+    let current = persisted_config_document(&path);
+    let legacy = current.replacen("schemaVersion = 12", "schemaVersion = 11", 1);
+    assert_ne!(legacy, current);
+
+    let mut writer = rusqlite::Connection::open(&path).unwrap();
+    let observer = rusqlite::Connection::open(&path).unwrap();
+    observer.busy_timeout(Duration::ZERO).unwrap();
+    let transaction = writer
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .unwrap();
+    std::fs::write(store.config_path(), &legacy).unwrap();
+
+    let result = crate::store::reconcile_external_snapshot(&observer, store.config_path());
+    assert_eq!(persisted_config_document(&path), legacy);
+    assert!(
+        result.is_err(),
+        "observer should need the writer lock to migrate the restored file"
+    );
+    transaction.commit().unwrap();
+
+    let result = store
+        .apply(update_preferences(
+            "save-after-legacy-restore",
+            configured.revision.get(),
+            Patch::Value(model_ref("openai", "saved-model")),
+        ))
+        .unwrap();
+    // The migration changes the file format but must not invalidate the command revision.
+    assert_eq!(result.revision, configured.revision.next());
+    let observed =
+        crate::store::reconcile_external_snapshot(&observer, store.config_path()).unwrap();
+    assert_eq!(observed.generation, result.generation);
+    assert_eq!(
+        observed.values.model,
+        Some(model_ref("openai", "saved-model"))
+    );
+    let persisted = crate::document_migration::decode(&persisted_config_document(&path)).unwrap();
+    assert!(!persisted.rewrite_required);
+    assert_eq!(persisted.document.agent.model, observed.values.model);
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
 fn invalid_external_toml_does_not_replace_the_last_valid_metadata() {
     let path = config_path("invalid-external-toml");
     let store = ConfigStore::open(&path).unwrap();
@@ -2629,6 +2680,7 @@ fn language_server_preferences_are_typed_persisted_and_revision_safe() {
 
     assert_eq!(result.revision, ConfigRevision::new(1));
     let snapshot = store.read_snapshot().unwrap();
+    assert!(snapshot.values.language_servers.enabled);
     assert_eq!(
         snapshot.values.language_servers.servers.get(&server_id),
         Some(&LanguageServerConfig {
@@ -2638,6 +2690,7 @@ fn language_server_preferences_are_typed_persisted_and_revision_safe() {
         })
     );
     assert!(persisted_config_document(&path).contains("rust-analyzer"));
+    assert!(!snapshot.values.language_servers.worktrees_enabled);
 
     let invalid = store.apply(ConfigCommandRequest {
         command_id: CommandId::new("configure-relative-rust-analyzer").unwrap(),
@@ -2652,6 +2705,30 @@ fn language_server_preferences_are_typed_persisted_and_revision_safe() {
         },
     });
     assert!(matches!(invalid, Err(ConfigCommandError::Config(_))));
+    let worktrees_enabled = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("enable-worktree-language-servers").unwrap(),
+            expected_revision: snapshot.revision,
+            command: UserConfigCommand::SetWorktreeLanguageServersEnabled { enabled: true },
+        })
+        .unwrap();
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("disable-language-servers").unwrap(),
+            expected_revision: worktrees_enabled.revision,
+            command: UserConfigCommand::SetLanguageServersEnabled { enabled: false },
+        })
+        .unwrap();
+    drop(store);
+    let reopened = ConfigStore::open(&path).unwrap();
+    let saved = reopened.read_snapshot().unwrap();
+    assert!(!saved.values.language_servers.enabled);
+    assert!(saved.values.language_servers.worktrees_enabled);
+    assert_eq!(
+        saved.values.language_servers.servers,
+        snapshot.values.language_servers.servers
+    );
+    drop(reopened);
     remove_config_files(&path);
 }
 

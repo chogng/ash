@@ -6,3 +6,17 @@
 	min-height: 0;
 	overflow: hidden;
 }
+
+.ash-sessions-changes-editor .ash-multi-diff-file-list .ash-tree {
+	--ash-list-row-inset-start: var(--ash-spacing-size60);
+	--ash-list-row-inset-end: var(--ash-spacing-size60);
+	--ash-list-row-padding-start: var(--ash-spacing-size40);
+	--ash-list-row-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-sessions-changes-editor
+	.ash-multi-diff-file-list
+	.ash-tree[data-file-list-mode="list"]
+	.ash-tree-twistie {
+	display: none;
+}

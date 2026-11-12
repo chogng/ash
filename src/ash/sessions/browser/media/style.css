@@ -19,9 +19,6 @@
 	);
 	--ash-sessions-sidebar-row-inset: var(--ash-spacing-size80);
 	--ash-sessions-sidebar-item-inset: var(--ash-spacing-size20);
-	--ash-sessions-sidebar-selection-background: var(
-		--ash-sessions-selectionBackground
-	);
 	--ash-toolbar-actionSize: var(--ash-spacing-size280);
 	--ash-menu-divider-gap: var(--ash-spacing-size40);
 	--ash-sessions-soft-shadow: 0 2px 8px
@@ -54,16 +51,16 @@
 	margin-block-end: var(--ash-spacing-size40);
 }
 
-.ash-sessions-window .ash-chat-markdown-part a[href] {
+.ash-sessions-window .ash-chat-markdown-part a[href],
+.ash-sessions-window .ash-chat-file-download {
 	color: inherit;
 	text-decoration-style: dotted;
 	text-decoration-color: var(--ash-description-foreground);
 	text-underline-offset: 0.18em;
 }
 
-.ash-sessions-window
-	.ash-chat-markdown-part
-	a[href]:is(:hover, :focus-visible) {
+.ash-sessions-window .ash-chat-markdown-part a[href]:is(:hover, :focus-visible),
+.ash-sessions-window .ash-chat-file-download:is(:hover, :focus-visible) {
 	text-decoration-style: solid;
 	text-decoration-color: currentColor;
 }
@@ -93,12 +90,9 @@
 .ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
 	.ash-sessions-window {
 	--ash-menu-check-foreground: var(--ash-accent-foreground);
-	--ash-sessions-sidebar-selection-background: var(
-		--ash-menu-hoverBackground
-	);
 	--ash-sessions-sidebar-hover-background: color-mix(
 		in srgb,
-		var(--ash-sessions-sidebar-selection-background) 50%,
+		var(--ash-sessions-selectionBackground) 50%,
 		transparent
 	);
 }

@@ -23,6 +23,12 @@ import { openExtensionsView, registerExtensionsViewContainer } from './extension
 import { ExtensionsSettingsModel } from './extensionsSettingsModel.js';
 import { registerSettingsSection } from '../../../services/preferences/browser/settingsSections.js';
 import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { EditorPanes } from '../../../browser/editor.js';
+import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
+import { EditorInputSerializers } from '../../../services/editor/common/editorInputSerializer.js';
+import { ExtensionsInput, ExtensionsCapabilityInput, extensionsInputSerializer, extensionsCapabilityInputSerializer } from '../common/extensionsInput.js';
+import { agentPluginEditorInputSerializer } from '../common/agentPluginEditorInput.js';
+import { ExtensionEditor } from './extensionEditor.js';
 
 registerSettingsSection({
 	id: 'extensions.management', categoryId: 'extensions', model: new SyncDescriptor(ExtensionsSettingsModel),
@@ -95,6 +101,17 @@ registerWorkbenchContribution('workbench.contrib.extensionRecommendations', Work
 
 registerWorkbenchContribution('workbench.contrib.extensions', WorkbenchPhase.BlockStartup, () => {
 	const registrations = new DisposableStore();
+	registrations.add(EditorInputSerializers.register(extensionsInputSerializer));
+	registrations.add(EditorInputSerializers.register(extensionsCapabilityInputSerializer));
+	registrations.add(EditorInputSerializers.register(agentPluginEditorInputSerializer));
+	registrations.add(EditorPanes.registerEditorPane({
+		id: 'ash.extensions.editor', name: localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'),
+		canOpen: input => input instanceof ExtensionsInput || input instanceof ExtensionsCapabilityInput ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		create: options => {
+			if (!options.instantiationService) throw new Error('Extensions editor requires the Instantiation Service');
+			return options.instantiationService.createInstance(ExtensionEditor, {});
+		},
+	}));
 	registrations.add(registerExtensionsViewContainer(ViewsRegistry));
 	registrations.add(registerAction2(class OpenExtensions extends Action2 {
 		constructor() { super({ id: OPEN_EXTENSIONS_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.OpenExtensions' }, 'Open Extensions'), f1: true }); }

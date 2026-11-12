@@ -92,8 +92,7 @@
 	flex: 0 0 auto;
 	min-width: 0;
 	align-self: stretch;
-	border-left: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, var(--ash-border));
+	padding-left: var(--ash-strokeThickness);
 	overflow: auto hidden;
 	scrollbar-width: none;
 }
@@ -104,10 +103,7 @@
 
 .ash-sessions-window[data-layout-style="flat"]
 	.ash-sessions-titlebar-tool-headers:not([hidden]) {
-	/* Paint the edge without shifting the first tool's header off its column. */
-	border-left-width: 0;
-	box-shadow: inset var(--ash-strokeThickness) 0
-		var(--ash-contrastBorder, var(--ash-border));
+	padding-left: 0;
 }
 
 .ash-sessions-titlebar.has-tool-headers .ash-sessions-titlebar-right {

@@ -374,6 +374,11 @@ pub struct TerminalAttachParams {
     pub terminal_id: String,
     #[schemars(length(min = 64, max = 64))]
     pub reconnect_token: String,
+    /// A random 32-digit hexadecimal secret reused only when retrying this attachment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(min = 32, max = 32))]
+    pub attach_nonce: Option<String>,
     #[schemars(range(min = 1, max = 512))]
     pub rows: u16,
     #[schemars(range(min = 1, max = 512))]
@@ -387,6 +392,7 @@ impl fmt::Debug for TerminalAttachParams {
             .field("lifetime_token", &"[REDACTED]")
             .field("terminal_id", &self.terminal_id)
             .field("reconnect_token", &"[REDACTED]")
+            .field("attach_nonce", &"[REDACTED]")
             .field("rows", &self.rows)
             .field("cols", &self.cols)
             .finish()

@@ -14,6 +14,30 @@ pub struct BrowserConfigureParams {
     pub cdp_enabled: bool,
 }
 
+/// Reads one public icon without a page session or attachment storage.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserFaviconReadParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
+    #[schemars(length(min = 1, max = 8192))]
+    pub url: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserFaviconCancelParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserFaviconReadResult {
+    #[schemars(length(max = 87432))]
+    pub data_url: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
     tag = "type",

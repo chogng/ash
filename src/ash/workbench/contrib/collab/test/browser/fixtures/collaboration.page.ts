@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { ChannelServiceFixture } from '../../../../../../../../test/fixtures/browser/channelServiceFixture.js';
 import { IChannelService, type ChannelRole } from '../../../../../../platform/collab/common/channelService.js';
 import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
@@ -10,7 +11,6 @@ import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { localize, setNlsMessages } from '../../../../../../nls.js';
-import translations from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { IAccessibleViewService, AccessibleViewType } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { MenuService } from '../../../../../../platform/actions/common/menuService.js';
@@ -46,7 +46,7 @@ import { emptyEditorServiceState } from '../../../../../test/common/testEditorSe
 import { bindTestColorTheme } from '../../../../../../../../test/fixtures/browser/themeFixture.js';
 
 const parameters = new URLSearchParams(location.search);
-if (parameters.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', translations); document.documentElement.lang = 'zh-CN'; }
+if (parameters.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chineseCatalog.bundles); document.documentElement.lang = 'zh-CN'; }
 const { registerCollabViews } = await import('../../../browser/collab.contribution.js');
 const { registerCallView } = await import('../../../../call/browser/call.contribution.js');
 const resources = new DisposableStore();

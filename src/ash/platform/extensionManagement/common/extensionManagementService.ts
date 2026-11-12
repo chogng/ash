@@ -1,4 +1,5 @@
 import type { Event } from '../../../base/common/event.js';
+import { isRecord } from '../../../base/common/types.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export type ExtensionsCapabilityKind = 'skill' | 'mcp' | 'connector' | 'theme' | 'language' | 'localization' | 'executable' | 'editorExtension' | 'asset';
@@ -32,6 +33,20 @@ export interface ExtensionsOpenOptions extends Pick<ExtensionsSearchOptions, 'ca
 
 export const OPEN_EXTENSIONS_COMMAND_ID = 'ash.extensions.open';
 export const OPEN_INSTALLED_EXTENSIONS_COMMAND_ID = 'ash.extensions.installed';
+export const OPEN_IDE_EXTENSIONS_CHANNEL = 'ash:extensions:open-ide';
+export const IDE_EXTENSIONS_FRAGMENT = 'ashExtensions';
+
+export function validateExtensionsOpenOptions(value: unknown): ExtensionsOpenOptions {
+	if (!isRecord(value) || Object.keys(value).some(key => !['mode', 'view', 'query', 'capabilityKind', 'languageId'].includes(key))
+		|| (value.mode !== undefined && value.mode !== 'browse' && value.mode !== 'installed' && value.mode !== 'builtIn')
+		|| (value.view !== undefined && value.view !== 'extensions' && value.view !== 'plugins' && value.view !== 'skills' && value.view !== 'mcp' && value.view !== 'recommended')
+		|| (value.query !== undefined && (typeof value.query !== 'string' || value.query.length > 2048))
+		|| (value.languageId !== undefined && (typeof value.languageId !== 'string' || value.languageId.length > 256))
+		|| (value.capabilityKind !== undefined && !['skill', 'mcp', 'connector', 'theme', 'language', 'localization', 'executable', 'editorExtension', 'asset'].some(kind => kind === value.capabilityKind))) {
+		throw new TypeError('Invalid Extensions navigation options');
+	}
+	return value as ExtensionsOpenOptions;
+}
 
 export interface ExtensionsPackageRef {
 	readonly id: string;

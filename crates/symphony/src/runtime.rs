@@ -61,7 +61,9 @@ impl Runtime {
                         }
                         let saved = match result {
                             Ok(issues) => store.ingest(&workflow, issues, current),
-                            Err(error) => store.poll_error(&workflow.id, error, current),
+                            Err(error) => {
+                                store.poll_error(&workflow.id, &workflow.digest, error, current)
+                            }
                         };
                         if let Err(error) = saved {
                             executor.report_error(&error.to_string());
@@ -92,12 +94,18 @@ impl Runtime {
                     }
                     match store.plans() {
                         Ok(plans) => {
-                            for plan in plans {
+                            for mut plan in plans {
                                 if reloading {
-                                    let _ = store.reload(
+                                    plan = match store.reload(
                                         &plan.workflow,
                                         Workflow::load(Path::new(&plan.workflow.path)),
-                                    );
+                                    ) {
+                                        Ok(plan) => plan,
+                                        Err(error) => {
+                                            executor.report_error(&error.to_string());
+                                            continue;
+                                        }
+                                    };
                                 }
                                 if (plan.enabled
                                     || before.as_ref().is_some_and(|jobs| {
@@ -114,6 +122,7 @@ impl Runtime {
                                 {
                                     let workflow = plan.workflow;
                                     let id = workflow.id.clone();
+                                    let digest = workflow.digest.clone();
                                     let executor = Arc::clone(&executor);
                                     let token = token.clone();
                                     let results = poll_result.clone();
@@ -128,8 +137,12 @@ impl Runtime {
                                             polls.insert(id, worker);
                                         }
                                         Err(error) => {
-                                            let _ =
-                                                store.poll_error(&id, error.to_string(), current);
+                                            let _ = store.poll_error(
+                                                &id,
+                                                &digest,
+                                                error.to_string(),
+                                                current,
+                                            );
                                         }
                                     }
                                 }

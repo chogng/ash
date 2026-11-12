@@ -22,7 +22,7 @@ const { DisposableStore, toDisposable } = await import('../../../../../base/comm
 const { SubmenuAction } = await import('../../../../../base/common/actions.js');
 const { formatNlsMessage, setNlsMessages } = await import('../../../../../nls.js');
 const { Emitter, Event } = await import('../../../../../base/common/event.js');
-const { IAccountService: AccountServiceId } = await import('../../../../../platform/accounts/common/accountService.js');
+const { IAccountService: AccountServiceId, registerAccountProviderLabel } = await import('../../../../../platform/accounts/common/accountService.js');
 const { IContextMenuService: ContextMenuServiceId } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { IConfigurationService: ConfigurationServiceId } = await import('../../../../../platform/configuration/common/configuration.js');
 const { AnchorAlignment, AnchorAxisAlignment } = await import('../../../../../base/browser/ui/contextview/contextview.js');
@@ -160,14 +160,15 @@ test('Activity Bar global actions open account and management menus', async () =
 	await actions[1].actions[0]?.run();
 	await actions[3]?.run();
 	assert.deepEqual({ loggedOutProviders, manageAccountsOpened }, { loggedOutProviders: ['github'], manageAccountsOpened: 1 });
-	accountState = { revision: 2n, accounts: [{ provider: 'chatgpt-web', accountId: 'private', status: 'ready', credentialRevision: 1n }] };
+	registerAccountProviderLabel('test-provider', () => 'Test Provider');
+	accountState = { revision: 2n, accounts: [{ provider: 'test-provider', accountId: 'private', status: 'ready', credentialRevision: 1n }] };
 	accountsChanged.fire(accountState);
 	closeMenu(false);
 	accountsButton.click();
-	assert.equal(actions[0]?.label, 'ChatGPT Web (ChatGPT Web)');
+	assert.equal(actions[0]?.label, 'Test Provider');
 	assert.ok(actions[0] instanceof SubmenuAction);
 	await actions[0].actions[0]?.run();
-	assert.deepEqual(loggedOutProviders, ['github', 'chatgpt-web']);
+	assert.deepEqual(loggedOutProviders, ['github', 'test-provider']);
 	accountState = { revision: 3n, accounts: [] };
 	accountsChanged.fire(accountState);
 	closeMenu(false);

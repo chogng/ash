@@ -3,10 +3,13 @@ use ash_async_utils::CancellationToken;
 use ash_http_client::HttpHeader;
 use ash_http_client::HttpRequest;
 use ash_symphony::Issue;
+use ash_symphony::Store;
 use ash_symphony::Tracker;
 use ash_symphony::Workflow;
 use serde::Deserialize;
 use std::collections::BTreeMap;
+
+const LINEAR_POLL_FAILED: &str = "Linear issue polling failed";
 
 /// Coordinates the existing owners needed by the symphony tracker adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
@@ -22,6 +25,7 @@ pub(super) struct SymphonyTrackerRequestProcessor<
     C: SymphonyTrackerRequestProcessorContext + ?Sized,
 > {
     context: &'ctx C,
+    symphony: Option<&'ctx Store>,
     symphony_http: &'ctx Option<super::Arc<dyn ash_http_client::HttpClient>>,
 }
 
@@ -30,10 +34,12 @@ impl<'ctx, C: SymphonyTrackerRequestProcessorContext + ?Sized>
 {
     pub(super) fn new(
         context: &'ctx C,
+        symphony: Option<&'ctx Store>,
         symphony_http: &'ctx Option<super::Arc<dyn ash_http_client::HttpClient>>,
     ) -> Self {
         Self {
             context,
+            symphony,
             symphony_http,
         }
     }
@@ -117,7 +123,7 @@ impl<'ctx, C: SymphonyTrackerRequestProcessorContext + ?Sized>
                 Ok(issues)
             }
             Tracker::Linear { project_slug, .. } => {
-                self.poll_symphony_linear(workflow, project_slug, &[], cancellation)
+                self.fetch_symphony_linear(workflow, project_slug, &[], cancellation)
             }
         }
     }
@@ -130,7 +136,7 @@ impl<'ctx, C: SymphonyTrackerRequestProcessorContext + ?Sized>
     ) -> Result<Option<Issue>, String> {
         match &workflow.tracker {
             Tracker::Linear { project_slug, .. } => Ok(self
-                .poll_symphony_linear(workflow, project_slug, &[id.into()], cancellation)?
+                .fetch_symphony_linear(workflow, project_slug, &[id.into()], cancellation)?
                 .into_iter()
                 .find(|issue| issue.id == id)),
             Tracker::Github { repo } => {
@@ -183,8 +189,7 @@ impl<'ctx, C: SymphonyTrackerRequestProcessorContext + ?Sized>
 
     fn symphony_linear_request(
         &self,
-        endpoint: &str,
-        token: &str,
+        workflow: &Workflow,
         payload: serde_json::Value,
         cancellation: &CancellationToken,
     ) -> Result<serde_json::Value, String> {
@@ -192,19 +197,29 @@ impl<'ctx, C: SymphonyTrackerRequestProcessorContext + ?Sized>
             .symphony_http
             .as_ref()
             .ok_or("Tracker transport is unavailable")?;
+        let payload =
+            serde_json::to_vec(&payload).map_err(|_| "Linear query could not be encoded")?;
+        let (endpoint, token) = self
+            .symphony
+            .ok_or("Symphony store is unavailable")?
+            .linear_connection(workflow)
+            .map_err(|error| match error {
+                ash_symphony::Error::StaleWorkflow => LINEAR_POLL_FAILED.into(),
+                error => error.to_string(),
+            })?;
         let request = HttpRequest::post(
             endpoint,
             vec![
                 HttpHeader::new("Authorization", token),
                 HttpHeader::new("Content-Type", "application/json"),
             ],
-            serde_json::to_vec(&payload).map_err(|_| "Linear query could not be encoded")?,
+            payload,
         )
         .map_err(|_| "Linear credential or request is invalid")?
         .without_redirects();
         let response = http
             .execute_with_cancellation(&request, cancellation)
-            .map_err(|_| "Linear issue polling failed")?;
+            .map_err(|_| LINEAR_POLL_FAILED)?;
         if !response.is_success() {
             return Err(format!(
                 "Linear issue polling returned HTTP {}",
@@ -224,36 +239,17 @@ impl<'ctx, C: SymphonyTrackerRequestProcessorContext + ?Sized>
         Ok(envelope)
     }
 
-    fn poll_symphony_linear(
-        &self,
-        workflow: &Workflow,
-        project: &str,
-        ids: &[String],
-        cancellation: &CancellationToken,
-    ) -> Result<Vec<Issue>, String> {
-        let token = workflow
-            .linear_credential()
-            .map_err(|error| error.to_string())?;
-        self.fetch_symphony_linear(workflow, project, &token, ids, cancellation)
-    }
-
     fn fetch_symphony_linear(
         &self,
         workflow: &Workflow,
         project: &str,
-        token: &str,
         ids: &[String],
         cancellation: &CancellationToken,
     ) -> Result<Vec<Issue>, String> {
-        let endpoint = workflow
-            .tracker_endpoint
-            .as_deref()
-            .unwrap_or("https://api.linear.app/graphql");
         let assignee = match workflow.tracker_assignee.as_deref().map(str::trim) {
             Some("me") => {
                 let viewer = self.symphony_linear_request(
-                    endpoint,
-                    token,
+                    workflow,
                     serde_json::json!({"query":"query SymphonyViewer { viewer { id } }"}),
                     cancellation,
                 )?;
@@ -281,7 +277,7 @@ impl<'ctx, C: SymphonyTrackerRequestProcessorContext + ?Sized>
                 return Err("Linear issue pagination exceeds the workflow limit".into());
             }
             cancellation.check().map_err(|error| error.to_string())?;
-            let body = self.symphony_linear_request(endpoint, token,
+            let body = self.symphony_linear_request(workflow,
                 serde_json::json!({"query":LINEAR_QUERY,"variables":{"filter":filter,"after":after}}), cancellation)?;
             let envelope: LinearEnvelope =
                 serde_json::from_value(body).map_err(|_| "Linear response is invalid")?;

@@ -10,17 +10,17 @@ import { NotificationService } from '../../../workbench/services/notification/co
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import type { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
-import type { IProjectService, Project } from '../../../platform/projects/common/projectService.js';
-import { CommandsRegistry, type ICommandService } from '../../../platform/commands/common/commands.js';
+import { IProjectService, type Project } from '../../../platform/projects/common/projectService.js';
+import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { IFileDialogService, type IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { NullLoggerService, type LogEntry } from '../../../platform/log/common/log.js';
 import { LogService } from '../../../platform/log/common/logServiceImpl.js';
-import { Severity, type INotificationService } from '../../../platform/notification/common/notification.js';
+import { INotificationService, Severity } from '../../../platform/notification/common/notification.js';
 import { constObservable, observableValue } from '../../../base/common/observable.js';
 import type { ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
-import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import { sessionManagementLabel } from '../../browser/sessionManagementLabels.js';
@@ -38,7 +38,9 @@ import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
+import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
+import { Menus } from '../../browser/menus.js';
+import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { SessionsList } from '../../contrib/sessions/browser/views/sessionsList.js';
 import { BlockedSessionsIndicatorModel } from '../../contrib/sessions/browser/blockedSessionsIndicatorModel.js';
 import type { SessionsCatalogRow, SessionsCatalogSnapshot } from '../../contrib/sessions/browser/views/sessionsCatalogList.js';
@@ -68,6 +70,60 @@ suiteTeardown(() => menuContexts.dispose());
 const listContextMenus = { showContextMenu() { } } as unknown as IContextMenuService;
 const listDialogs = { confirm: () => { throw new Error('Unexpected confirmation'); } } as unknown as IDialogService;
 const noAttention = { blockedSessions: constObservable([]), ignore: () => undefined };
+
+test('Code project actions use the saved workspace and yield to later navigation', async () => {
+	using context = new ContextKeyService();
+	SessionsWorkspaceModeContext.bindTo(context).set('code');
+	const folder = URI.file('/project/source');
+	const project: Project = {
+		id: 'project', name: 'Project', revision: 1, archived: false, sessionCount: 0,
+		description: '', materials: [{ kind: 'folder', name: 'source', resource: folder }], sessionIds: [],
+	};
+	let projectRead = Promise.resolve(project);
+	let revision = 0;
+	const opened: Parameters<ISessionsService['openNewSession']>[1][] = [];
+	const revealed: unknown[][] = [];
+	using services = new InstantiationService();
+	const commands = {
+		executeCommand: async (id: string, ...args: unknown[]) => {
+			if (id === 'sessions.open.code') revealed.push(args);
+			else await services.invokeFunction(CommandsRegistry.getCommand(id)!, ...args);
+		},
+	} as ICommandService;
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(IContextKeyService, context);
+	services.registerInstance(INotificationService, listNotifications);
+	services.registerInstance(IProjectService, {
+		read: async (id, scope) => {
+			assert.deepEqual([id, scope], [project.id, 'code']);
+			return projectRead;
+		},
+	} as IProjectService);
+	services.registerInstance(ISessionsService, {
+		get navigationRevision() { return revision; },
+		openNewSession: (_title, options) => { opened.push(options); },
+	} as ISessionsService);
+	const menus = new MenuService(commands, context);
+	const newSession = (menu: typeof Menus.SessionSectionToolbar) => {
+		const actions = menus.getMenuActions(menu, { arg: { projectId: project.id } });
+		const action = actions.flatMap(([, items]) => items).find(item => item.id === 'sessionsView.sectionNewSession');
+		assert.ok(action);
+		return action.run();
+	};
+	await newSession(Menus.SessionSectionToolbar);
+	assert.equal(opened[0]?.projectId, project.id);
+	assert.deepEqual(opened[0]?.workspace, { type: 'local', root: folder.fsPath });
+	assert.deepEqual(revealed, [['conversation']]);
+
+	const pending = new DeferredPromise<Project>();
+	projectRead = pending.p;
+	const opening = newSession(Menus.SidebarCodeProjectContext);
+	revision++;
+	await pending.complete(project);
+	await opening;
+	assert.equal(opened.length, 1);
+	assert.equal(revealed.length, 1);
+});
 
 test('Code folder migration waits for the primary catalog and retries when it recovers', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });

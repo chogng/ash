@@ -2,28 +2,77 @@ use super::ConnectionState;
 use super::RpcError;
 use super::decode;
 use super::result;
+use crate::browser_favicons::BrowserFavicons;
+use ash_app_server_protocol::protocol::browser::BrowserFaviconCancelParams;
+use ash_app_server_protocol::protocol::browser::BrowserFaviconReadParams;
+use ash_app_server_protocol::protocol::browser::BrowserFaviconReadResult;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_async_utils::CancellationToken;
+use ash_http_client::OutboundNetworkPolicy;
 use serde_json::Value;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 /// Browser ownership and network authorization use the same host and call policy as tools.
 pub(super) struct BrowserRequestProcessor<'a> {
     browser_host: &'a Arc<super::BrowserHost>,
     calls: &'a Arc<super::call_runtime::Calls>,
     local_env_host: &'a Option<super::LocalEnvHost>,
+    cancellations: &'a super::RequestCancellationRegistry,
+    scheduler: &'a super::RequestScheduler,
 }
 impl<'a> BrowserRequestProcessor<'a> {
     pub(super) fn new(
         browser_host: &'a Arc<super::BrowserHost>,
         calls: &'a Arc<super::call_runtime::Calls>,
         local_env_host: &'a Option<super::LocalEnvHost>,
+        cancellations: &'a super::RequestCancellationRegistry,
+        scheduler: &'a super::RequestScheduler,
     ) -> Self {
         Self {
             browser_host,
             calls,
             local_env_host,
+            cancellations,
+            scheduler,
         }
+    }
+
+    pub(super) fn read_favicon(
+        authority: super::ConnectionAuthority,
+        favicons: &OnceLock<Option<BrowserFavicons>>,
+        policy: OutboundNetworkPolicy,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        if authority != super::ConnectionAuthority::ProductHost {
+            return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+        }
+        let params: BrowserFaviconReadParams = decode(params)?;
+        let data_url = favicons
+            .get_or_init(|| BrowserFavicons::new(policy).ok())
+            .as_ref()
+            .and_then(|favicons| favicons.read(&params.url, cancellation))
+            .map(|data_url| data_url.to_string());
+        result(&BrowserFaviconReadResult { data_url })
+    }
+
+    pub(super) fn cancel_favicon(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        if connection.authority != super::ConnectionAuthority::ProductHost {
+            return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+        }
+        let params: BrowserFaviconCancelParams = decode(params)?;
+        if !(1..=128).contains(&params.operation_id.chars().count()) {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        self.cancellations
+            .cancel_operation(connection.connection_id, params.operation_id);
+        self.scheduler.cancel_waiting_requests();
+        result(&())
     }
     pub(super) fn tcp(
         &self,

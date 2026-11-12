@@ -40,6 +40,8 @@ import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { DraftWorkspaceChanges } from './draftWorkspaceChanges.js';
 
 export class SessionEnvironmentPicker extends Disposable {
 	private readonly newEnvironment = this._register(new MutableDisposable<NewEnvironmentDialog>());
@@ -68,6 +70,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		@IAgentConnection private readonly localHost: IAgentConnection,
 		@IProjectService private readonly projects: IProjectService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
 	}
@@ -132,8 +135,10 @@ export class SessionEnvironmentPicker extends Disposable {
 				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
 			});
 		}));
+		const changes = lifetime.add(this.instantiation.createInstance(DraftWorkspaceChanges, container, trigger));
 		this.updateSetup = enabled => {
 			trigger.disabled = !enabled;
+			changes.update(enabled ? this.draft : undefined);
 		};
 	}
 

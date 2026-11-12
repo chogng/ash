@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { EventEmitter, once } from 'node:events';
 import { copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
@@ -172,6 +172,16 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'src/ash/nls.ts': `export function localize(_key: string, message: string): string { return message; }`,
 		'src/ash/feature.ts': `import { localize } from './nls.js'; localize('hello', 'Hello');`,
 		'src/ash/nested/feature.ts': `import { localize } from '../nls.js'; localize('hello', 'Hello');`,
+		'src/ash/workbench/contrib/chat/browser/feature.ts': [
+			"import { localize } from '../../../../nls.js';",
+			"localize('chat.markdown.preview', 'Preview');",
+			"localize('chat.markdown.missing', 'Show the preview');",
+			"localize('chat.input.send', 'Send');",
+			"localize('chat.newAction', 'New chat action');",
+		].join('\n'),
+		'src/ash/sessions/contrib/chat/feature.ts': "import { localize } from '../../../nls.js';\nlocalize('untranslatedSessionAction', 'Open session');",
+		'src/ash/sessions/contrib/artifacts/feature.ts': "import { localize } from '../../../nls.js';\nlocalize('untranslatedArtifactAction', 'Open artifact');",
+		'src/ash/platform/terminal/feature.ts': "import { localize } from '../../nls.js';\nlocalize('untranslatedTerminalAction', 'Open terminal');",
 		'src/ash/ignored.test.ts': `import { localize } from './nls.js'; localize('hello', 'Ignored test');`,
 		'src/ash/test/ignored.ts': `import { localize } from '../nls.js'; localize('hello', 'Ignored test directory');`,
 		'src/ash/generated/ignored.ts': `import { localize } from '../nls.js'; localize('hello', 'Ignored generated directory');`,
@@ -183,9 +193,11 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'localization/preinstalled.json': JSON.stringify(['ash/language-pack-zh-cn']),
 		'extensions/language-pack-zh-cn/package.json': JSON.stringify({ name: 'language-pack-zh-cn', publisher: 'ash', version: '1.0.0', displayName: '简体中文', description: 'Chinese', license: 'MIT', ashUiTargets: ['ide', 'agents'], engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'zh-CN', languageName: 'Chinese', localizedLanguageName: '简体中文', translations: [{ id: 'ash', path: 'localization/package.json' }] }] } }),
 		'extensions/language-pack-zh-cn/translations/messages.json': JSON.stringify({ ash: { hello: '你好', packageClient: '包内文档' } }),
+		'extensions/language-pack-zh-cn/translations/chat-input.json': JSON.stringify({ ash: { 'chat.input.send': '发送' } }),
+		'extensions/language-pack-zh-cn/translations/chat-transcript.json': JSON.stringify({ ash: { 'chat.markdown.preview': '预览' } }),
 		'extensions/document-client/package.json': JSON.stringify({ name: 'document-client', publisher: 'ash', version: '1.0.0' }),
 		'extensions/document-client/browser/editor.ts': 'export {};',
-		'extensions/document-client/common/paragraph.ts': `import { localize } from '../../../src/ash/nls.js'; localize('packageClient', 'Package client');`,
+		'extensions/document-client/common/paragraph.ts': "import { localize } from '../../../src/ash/nls.js';\nlocalize('packageClient', 'Package client');",
 		'extensions/independent/package.json': JSON.stringify({ name: 'independent', publisher: 'ash', version: '1.0.0', browser: './extension.ts', l10n: 'l10n' }),
 		'extensions/independent/browser/editor.ts': `import { localize } from '../common/nls.js'; localize('extensionOwned', 'Extension-owned view');`,
 		'extensions/independent/common/nls.ts': `export function localize(_key: string, message: string): string { return message; }`,
@@ -213,7 +225,19 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	frenchManifest.contributes.localizations[0] = { languageId: 'fr', languageName: 'French', localizedLanguageName: 'Français', translations: [{ id: 'ash', path: 'localization/package.json' }] };
 	await writeFile(join(frenchRoot, 'package.json'), JSON.stringify(frenchManifest));
 	await writeFile(join(frenchRoot, 'translations/messages.json'), JSON.stringify({ ash: { hello: 'Bonjour' } }));
-	run(['build/resources/localization.ts', '--check']);
+	const report = run(['build/resources/localization.ts', '--check', '--report-missing']);
+	const chineseTranslations = 'extensions/language-pack-zh-cn/translations';
+	for (const [id, source, file] of [
+		['ash/chat.markdown.missing', 'src/ash/workbench/contrib/chat/browser/feature.ts:3:1', 'chat-transcript.json'],
+		['ash/chat.newAction', 'src/ash/workbench/contrib/chat/browser/feature.ts:5:1', 'chat.json'],
+		['ash/untranslatedSessionAction', 'src/ash/sessions/contrib/chat/feature.ts:2:1', 'sessions-chat.json'],
+		['ash/untranslatedArtifactAction', 'src/ash/sessions/contrib/artifacts/feature.ts:2:1', 'artifacts.json'],
+		['ash/untranslatedTerminalAction', 'src/ash/platform/terminal/feature.ts:2:1', 'workbench-terminal.json'],
+		['ash/slash.permission.description', 'crates/slash-commands/src/definition.rs', 'workbench.json'],
+	] as const) {
+		assert.ok(report.includes(`${id}\t${source}\t-> ${chineseTranslations}/${file}\n`), report);
+	}
+	assert.ok(report.includes('ash/packageClient\textensions/document-client/common/paragraph.ts:2:1\t-> extensions/language-pack-fr/translations/messages.json\n'), report);
 	await assert.rejects(stat(join(root, '.build/desktop/localization')), { code: 'ENOENT' });
 	run(['build/resources/localization.ts']);
 	const generated = join(root, '.build/desktop/localization');
@@ -349,11 +373,25 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	const parts = (await readdir(generated)).filter(file => file.startsWith('localizationMessages.zh-CN.'));
 	assert.ok(parts.length >= 5);
 	for (const file of parts) { assert.ok((await stat(join(generated, file))).size < 170_000); }
+	const readOutputs = async () => Object.fromEntries(await Promise.all(
+		(await readdir(generated, { recursive: true, withFileTypes: true })).filter(entry => entry.isFile()).map(async entry => {
+			const path = join(entry.parentPath, entry.name);
+			return [relative(generated, path), await readFile(path)] as const;
+		}),
+	));
+	const combinedOutputs = await readOutputs();
+	const entries = Object.entries(largeMessages);
+	const splitDomain = join(root, chineseTranslations, 'large-extra.json');
+	await writeFile(join(root, chineseTranslations, 'large.json'), JSON.stringify({ ash: Object.fromEntries(entries.slice(60)) }));
+	await writeFile(splitDomain, JSON.stringify({ ash: Object.fromEntries(entries.slice(0, 60)) }));
+	run(['build/resources/localization.ts']);
+	assert.deepEqual(await readOutputs(), combinedOutputs, 'source JSON boundaries must not affect generated modules or language packages');
 	run([join(repository, 'node_modules/@ash/typescript-compiler/bin/tsc'), '--module', 'NodeNext', '--target', 'ES2022', '--rootDir', '.', '--outDir', '.build/desktop/large', '--types', 'node', '--skipLibCheck', entry]);
 	const restored = JSON.parse(run(['--input-type=module', '--eval', `import { productLanguagePackCatalogs } from './.build/desktop/large/${entry.replace(/\.ts$/u, '.js')}'; console.log(JSON.stringify(productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN').bundles.ash));`]));
 	for (const [key, value] of Object.entries(largeMessages)) { assert.equal(restored[key], value); }
 	await writeFile(join(root, 'src/ash/large.ts'), '');
 	await writeFile(join(root, 'extensions/language-pack-zh-cn/translations/large.json'), '{}');
+	await rm(splitDomain);
 	run(['build/resources/localization.ts']);
 	assert.equal((await readdir(generated)).filter(file => file.startsWith('localizationMessages.')).length, 0);
 	await writeFile(join(root, 'localization/en/messages.json'), JSON.stringify({ ash: { hello: 'Hello again' } }));
@@ -376,5 +414,5 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	const conflicting = spawnSync(process.execPath, ['build/resources/localization.ts', '--check'], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30_000 });
 	assert.equal(conflicting.error, undefined);
 	assert.notEqual(conflicting.status, 0);
-	assert.match(conflicting.stderr, /Conflicting English declaration: ash\/hello in nested[/\\]feature\.ts/u);
+	assert.match(conflicting.stderr, /Conflicting English declaration: ash\/hello in src[/\\]ash[/\\]nested[/\\]feature\.ts/u);
 });

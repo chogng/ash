@@ -6,6 +6,7 @@ import { TERMINAL_CONFIG_SECTION } from '../../workbench/contrib/terminal/common
 import '../../workbench/contrib/terminal/common/terminalConfiguration.js';
 
 export type SessionsLayoutStyle = 'modern' | 'flat';
+export type SessionsBackgroundColor = 'warm' | 'cool';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
@@ -87,6 +88,28 @@ export const SessionsConfiguration = Object.freeze({
 				return [
 					{ value: 'ash-sans', label: 'Ash Sans' },
 					{ value: 'system', label: localize('sessions.interfaceFontFamily.system', 'System font') },
+				] as const;
+			},
+		},
+	}),
+	backgroundColor: configurationRegistry.registerConfiguration<SessionsBackgroundColor>({
+		key: 'sessions.backgroundColor',
+		defaultValue: 'warm',
+		scope: ConfigurationScope.APPLICATION,
+		schema: { type: 'string', enum: ['warm', 'cool'] },
+		parse(value: unknown): SessionsBackgroundColor {
+			if (value === 'warm' || value === 'cool') return value;
+			throw new TypeError(localize('sessions.backgroundColor.invalid', 'Choose Warm or Cool.'));
+		},
+		setting: {
+			included: false,
+			valueType: 'select',
+			get title() { return localize('sessions.backgroundColor.title', 'Background color'); },
+			get description() { return localize('sessions.backgroundColor.description', 'Choose a warm or pure white background for the conversation and editor area in light themes.'); },
+			get options() {
+				return [
+					{ value: 'warm', label: localize('sessions.backgroundColor.warm', 'Warm') },
+					{ value: 'cool', label: localize('sessions.backgroundColor.cool', 'Cool') },
 				] as const;
 			},
 		},

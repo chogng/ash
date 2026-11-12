@@ -72,6 +72,7 @@ jobs:
           python-version: "3.11"
       - name: Install protocol build tools
         uses: ./.github/actions/setup-just
+      - uses: ./.github/actions/setup-ubuntu-apt
       - name: Install compiler prerequisites
         run: |
           sudo apt-get update
@@ -128,6 +129,7 @@ jobs:
           with open(os.environ["GITHUB_ENV"], "a") as output:
               output.write(f"RUSTUP_TOOLCHAIN={channel}\n")
           PY
+      - uses: ./head/.github/actions/setup-ubuntu-apt
       - name: Prepare compiler prerequisites and both locked source graphs
         run: |
           sudo apt-get update
@@ -168,6 +170,7 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-ubuntu-apt
       - name: Install Linux build prerequisites
         run: |
           sudo apt-get update

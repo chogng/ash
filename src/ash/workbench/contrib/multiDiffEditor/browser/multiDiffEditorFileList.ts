@@ -1,14 +1,15 @@
 import './media/multiDiffEditorPane.css';
 import { h } from '../../../../base/browser/dom.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
-import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { posix } from '../../../../base/common/path.js';
 import { ResourceTree, type IResourceNode } from '../../../../base/common/resourceTree.js';
-import { basename, dirname } from '../../../../base/common/resources.js';
+import { dirname } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { FileKind } from '../../../../platform/files/common/files.js';
 import { WorkbenchObjectTree, type WorkbenchObjectTreeOptions } from '../../../../platform/list/browser/listService.js';
-import { IResourceLabelService, type IResourceLabel } from '../../../browser/labels.js';
+import { IResourceLabelService } from '../../../browser/labels.js';
 
 export interface IMultiDiffEditorFileListItem {
 	readonly type: 'file';
@@ -35,7 +36,7 @@ interface IChangedFilesGroup {
 interface IChangedFilesListOptions<T extends IMultiDiffEditorFileListItem> extends Pick<WorkbenchObjectTreeOptions<T>, 'ariaLabel' | 'openOnSingleClick' | 'scrolling'> {
 	readonly expandOnlyOnTwistieClick?: boolean;
 	readonly group?: (file: T) => IChangedFilesGroup | undefined;
-	readonly renderDetails?: (row: HTMLElement, file: T) => void;
+	readonly renderDetails?: (row: HTMLElement, file: T) => IDisposable | void;
 }
 
 function fileTree<T extends IMultiDiffEditorFileListItem>(files: readonly T[], groupFile?: (file: T) => IChangedFilesGroup | undefined): ObjectTreeElement<ChangedFilesElement<T>>[] {
@@ -79,7 +80,7 @@ export class MultiDiffEditorFileList<T extends IMultiDiffEditorFileListItem> ext
 	) {
 		super();
 		const labels = this._register(resourceLabels.createGroup());
-		const rows = this._register(new DisposableMap<HTMLElement, IResourceLabel>());
+		const rows = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 		this.tree = this._register(new WorkbenchObjectTree<ChangedFilesElement<T>>(container, {
 			configurationService,
 			ariaLabel: options.ariaLabel,
@@ -97,16 +98,24 @@ export class MultiDiffEditorFileList<T extends IMultiDiffEditorFileListItem> ext
 				}
 				const labelContainer = h(container.ownerDocument, 'span', { className: 'ash-multi-diff-file-list-label' });
 				row.append(labelContainer);
-				const label = labels.create(labelContainer);
+				const lifetime = new DisposableStore();
+				rows.set(row, lifetime);
+				const label = lifetime.add(labels.create(labelContainer));
 				if (element.type === 'file') {
-					const title = element.label ?? element.path;
-					const name = element.label ?? (this.mode === 'tree' ? basename(element.resource) : element.path);
-					label.setResource({ resource: element.resource, name }, { title, fileKind: FileKind.File });
-					options.renderDetails?.(row, element);
+					const directory = posix.dirname(element.path);
+					label.setResource({
+						resource: element.resource,
+						name: posix.basename(element.path),
+						description: this.mode === 'list' && directory !== '.' ? directory : undefined,
+					}, {
+						title: element.label ?? element.path,
+						fileKind: FileKind.File,
+					});
+					const details = options.renderDetails?.(row, element);
+					if (details) lifetime.add(details);
 				} else {
 					label.setResource({ resource: element.resource!, name: element.name }, { title: element.resource!.path.slice(1), fileKind: FileKind.Directory });
 				}
-				rows.set(row, label);
 				return row;
 			},
 			onDidRemoveRow: row => {
@@ -118,6 +127,7 @@ export class MultiDiffEditorFileList<T extends IMultiDiffEditorFileListItem> ext
 
 	setFiles(files: readonly T[], mode: 'list' | 'tree'): void {
 		this.mode = mode;
+		this.tree.element.dataset.fileListMode = mode;
 		this.tree.setChildren(mode === 'tree' ? fileTree(files, this.options.group) : files.map(element => ({ element })));
 	}
 }

@@ -1,15 +1,133 @@
 import { createServer } from 'node:http';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
 import { buildOpenSessionLinkUri } from '../../../../src/ash/platform/agentHost/common/openSessionLink.js';
 import { developmentAshPackagePath } from '../../../../src/ash/platform/environment/node/developmentArtifacts.js';
-import { sessionProviderAuthority, threadIdentity } from '../../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
+import { createSshRemoteWorkspaceUri } from '../../../../src/ash/platform/remote/common/remote.js';
+import { sshAgentHostProviderId } from '../../../../src/ash/sessions/common/agentHostSessionsProvider.js';
+import { sessionIdentity, sessionProviderAuthority, threadIdentity } from '../../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
 import { APP_SERVER_METHODS as methods } from '../../../../.build/protocol/typescript/index.js';
+import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 import { createSshFixture } from '../../../automation/ssh.js';
 import { expect, test } from '../../../automation/test.js';
+import { Workbench } from '../../../automation/workbench.js';
 import { connectProfile } from '../sessions/sessionProfileFixture.js';
+
+test('Open IDE hands off the selected SSH project and worktree threads', { tag: ['@electron-app-server', '@darwin'] }, async ({ }, testInfo) => {
+	test.setTimeout(120_000);
+	const packageRoot = developmentAshPackagePath(process.env.ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve('.'));
+	const ssh = await createSshFixture(join(packageRoot, 'bin/ash-app-server-daemon'));
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	let seed: Awaited<ReturnType<typeof connectProfile>> | undefined;
+	try {
+		const root = await realpath(ssh.root);
+		const localRoot = join(root, 'local-workspace');
+		const remoteRoot = join(root, 'remote-project');
+		await Promise.all([mkdir(localRoot), mkdir(remoteRoot)]);
+		desktop = await launchElectron({
+			appServerMode: 'required', userDataDirectory: join(root, 'desktop'), workspaceDirectory: localRoot, workspacePermissions: 'development',
+			environment: { ...process.env, ASH_SSH_PATH: ssh.ssh, ASH_REMOTE_ASH_PATH: join(packageRoot, 'bin/ash-remote-server') },
+		});
+		const { application, driver: { workbench } } = desktop;
+		const tracing = workbench.page.context().tracing;
+		await tracing.start({ screenshots: true, snapshots: true, sources: true });
+		seed = await connectProfile(application, undefined, remoteRoot, workbench.page, { profileRoot: join(root, 'remote-profile'), directoryGrantsHost: true });
+		const { client } = seed;
+		const grants = await client.request(methods['config/directoryGrants/list'], {});
+		await client.request(methods['config/directoryGrants/set'], {
+			commandId: 'ssh-ide-directory-grant', expectedRevision: grants.revision, path: remoteRoot,
+			permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'mutateRepository', 'discoverPlugins'],
+		});
+		const { session } = await client.request(methods['session/create'], {
+			commandId: 'ssh-ide-session', kind: 'code', title: 'SSH project conversation', agent: { type: 'default' },
+			executionTarget: { type: 'local', root: remoteRoot },
+		});
+		const rootThread = session.threads[0]!.threadId;
+		const { directory: rootDirectory } = await client.request(methods['session/thread/read'], { sessionId: session.sessionId, threadId: rootThread });
+		if (rootDirectory?.type !== 'local') throw new Error('Expected a working directory for the SSH project thread');
+		const branch = await client.request(methods['session/request'], {
+			commandId: 'ssh-ide-branch', sessionId: session.sessionId,
+			request: { type: 'forkThread', parentThreadId: rootThread, title: 'SSH worktree conversation' },
+		});
+		if (branch.type !== 'thread') throw new Error('Expected a persisted fork Thread');
+		const forkThread = branch.value.threadId;
+		const { directory } = await client.request(methods['session/thread/read'], { sessionId: session.sessionId, threadId: forkThread });
+		if (directory?.type !== 'local' || directory.root === rootDirectory.root) throw new Error('Expected a separate working directory on the SSH host');
+		await Promise.all([
+			writeFile(join(rootDirectory.root, 'ssh-project-marker.txt'), 'Project thread checkout'),
+			writeFile(join(directory.root, 'ssh-worktree-marker.txt'), 'Selected thread worktree'),
+		]);
+
+		const definition = { name: 'ssh-ide-fixture', host: ssh.host, workspace: remoteRoot };
+		await workbench.page.evaluate(connection => (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:remote:connection:save', { connection }), definition);
+		const agents = await workbench.openAgentsWindow('electron');
+		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await new QuickAccess(agents).runCommand('sessions.action.manageAgentHosts');
+		const hosts = agents.getByRole('dialog', { name: 'Remote Environments' });
+		await hosts.getByRole('button', { name: `Connect: ${definition.name}`, exact: true }).click();
+		await agents.getByRole('button', { name: 'Trust and Open', exact: true }).click();
+		await expect(hosts.getByRole('row').filter({ hasText: definition.name })).toContainText('Connected', { timeout: 30_000 });
+		await hosts.getByRole('button', { name: 'Close', exact: true }).click();
+		const providerId = sshAgentHostProviderId(definition);
+		const remoteId = sessionIdentity(providerId, session.sessionId, 'local-agent-host');
+		const row = agents.locator(`[data-item=${JSON.stringify(`session:${remoteId}`)}] > .ash-sessions-list-item`);
+		const source = agents.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		const openIde = agents.locator('.ash-sessions-titlebar-right').getByRole('button', { name: 'Open IDE', exact: true });
+		const assertHandoff = async (threadId: string, expectedRoot: string, marker: string): Promise<void> => {
+			const sourceThread = threadIdentity(providerId, threadId, 'local-agent-host');
+			await expect(source).toHaveAttribute('data-thread-id', sourceThread);
+			const opened = application.waitForEvent('window');
+			await openIde.click();
+			const destination = await opened;
+			await destination.waitForURL(url => url.pathname.endsWith('/workbench.html'), { waitUntil: 'domcontentloaded' });
+			const expectedUri = createSshRemoteWorkspaceUri(ssh.host, expectedRoot).toString();
+			const folder = () => destination.evaluate(async () => {
+				const workspace = await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:workspace:context:read') as { folders: { uri: string; }[]; };
+				return workspace.folders[0]?.uri;
+			});
+			await expect.poll(folder).toBe(expectedUri);
+			const permission = directoryPermissionPrompt(destination);
+			const chat = destination.locator('.ash-chat-view-pane .ash-chat:visible');
+			const reconnect = destination.getByRole('dialog').filter({ hasText: `Connect to ${definition.name} and open the conversation?` });
+			await expect(permission.or(chat).or(reconnect).first()).toBeVisible({ timeout: 30_000 });
+			if (await permission.isVisible()) await permission.getByRole('button', { name: 'Trust Folder', exact: true }).click();
+			await expect(chat.or(reconnect).first()).toBeVisible({ timeout: 30_000 });
+			await expect(reconnect).toHaveCount(0);
+			await expect(chat).toHaveAttribute('data-session-id', session.sessionId);
+			await expect(chat).toHaveAttribute('data-thread-id', threadId);
+			const ide = new Workbench(destination);
+			await ide.openExplorer();
+			await expect(destination.locator('[data-part="sidebar"]').getByText(marker, { exact: true })).toBeVisible();
+			await expect(source).toHaveAttribute('data-thread-id', sourceThread);
+		};
+		await test.step('Open the SSH project with the root thread', async () => {
+			await row.click();
+			await assertHandoff(rootThread, rootDirectory.root, 'ssh-project-marker.txt');
+		});
+		await test.step('Open the selected fork in its SSH worktree', async () => {
+			await row.press('ArrowRight');
+			await agents.locator('.ash-sessions-list').getByRole('treeitem', { name: /^SSH worktree conversation\b/u }).locator('.ash-sessions-list-item').click();
+			await assertHandoff(forkThread, directory.root, 'ssh-worktree-marker.txt');
+		});
+	} finally {
+		try {
+			await seed?.close();
+		} finally {
+			try {
+				if (desktop) {
+					const path = testInfo.outputPath('ssh-ide-trace.zip');
+					await desktop.driver.workbench.page.context().tracing.stop({ path }).then(() => testInfo.attach('trace', { path, contentType: 'application/zip' })).catch(() => { });
+					await desktop.close();
+				}
+			} finally {
+				await ssh.close();
+			}
+		}
+	}
+});
 
 test('IDE opens an SSH conversation link and continues on its original host', { tag: ['@electron-app-server', '@darwin'] }, async () => {
 	test.setTimeout(120_000);
@@ -118,8 +236,9 @@ test('IDE opens an SSH conversation link and continues on its original host', { 
 		ssh.disconnect();
 		await expect.poll(() => ssh.connectionCount, { timeout: 30_000 }).toBeGreaterThan(connectionsBeforeDrop);
 		await quickaccess.runCommand('sessions.action.manageAgentHosts');
-		await expect(quickaccess.items.filter({ hasText: 'link-ssh-host' })).toContainText('Connected');
-		await quickaccess.close();
+		const hosts = page.getByRole('dialog', { name: 'Remote Environments' });
+		await expect(hosts.getByRole('row').filter({ hasText: 'link-ssh-host' })).toContainText('Connected');
+		await hosts.getByRole('button', { name: 'Close', exact: true }).click();
 		await expect(chat).toHaveAttribute('data-thread-id', threadIdentity(providerId, threadId, 'local-agent-host'));
 		await expect(chat.locator('.stanza-editor')).toContainText('Draft retained after SSH recovery');
 		await expect.poll(async () => (await read()).turns.length).toBe(2);

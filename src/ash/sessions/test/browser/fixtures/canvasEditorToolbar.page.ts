@@ -1,8 +1,8 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../base/browser/ui/styles.css';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Event } from '../../../../base/common/event.js';
 import { setNlsMessages } from '../../../../nls.js';
-import chinese from '../../../../../../extensions/language-pack-zh-cn/translations/sessions.json' with { type: 'json' };
 import { MenuService } from '../../../../platform/actions/common/menuService.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyService, IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -34,7 +34,7 @@ declare global {
 
 const query = new URLSearchParams(location.search);
 if (query.get('locale') === 'zh-CN') {
-	setNlsMessages('zh-CN', chinese);
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 }
 const resources = new DisposableStore();
 const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
