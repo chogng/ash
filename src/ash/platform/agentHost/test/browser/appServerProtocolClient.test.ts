@@ -1402,6 +1402,67 @@ test('Web recovery retains its elapsed budget across attempts and excludes repor
 	} finally { mock.timers.reset(); }
 });
 
+for (const completes of [true, false]) {
+	test(`manual Web reconnect ${completes ? 'can finish after the previous recovery deadline' : 'times out at its new recovery deadline'}`, async () => {
+		mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+		try {
+			const budget = 1_200;
+			const initialDelay = 500;
+			const transport = new ProtocolTransport();
+			const client = new AppServerProtocolClient(transport);
+			using cleanup = toDisposable(() => client.dispose());
+			let offline = false;
+			using recovery = new AppServerConnectionRecovery(client, async () => {
+				client.disconnect();
+				if (offline) {
+					throw new Error('Web offline');
+				}
+				await client.connect();
+			}, () => { }, {
+				autoRestore: true,
+				initialDelayMs: initialDelay,
+				maxDelayMs: 1_000,
+				maxAttempts: Number.POSITIVE_INFINITY,
+				maxElapsedTimeMs: budget,
+			});
+			await recovery.connect();
+			offline = true;
+			transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
+			mock.timers.tick(initialDelay);
+			await assert.rejects(recovery.whenConnected(), /Web offline/);
+			mock.timers.tick(budget - initialDelay - 1);
+			assert.equal(recovery.status, 'recovering');
+
+			offline = false;
+			transport.holdInitialize = true;
+			const manual = recovery.reconnect();
+			await flushHandlers();
+			const initialize = transport.frames.at(-1)!;
+			assert.equal(initialize.method, 'initialize');
+			assert.equal(client.state, 'initializing');
+
+			mock.timers.tick(1);
+			assert.equal(recovery.status, 'recovering');
+			assert.equal(client.state, 'initializing');
+			if (completes) {
+				transport.frame({ id: initialize.id, result: createTestInitializeResult() });
+				await manual;
+				assert.equal(client.state, 'ready');
+				assert.equal(recovery.status, 'idle');
+				return;
+			}
+
+			mock.timers.tick(budget - 2);
+			assert.equal(recovery.status, 'recovering');
+			assert.equal(client.state, 'initializing');
+			mock.timers.tick(1);
+			assert.equal(recovery.status, 'failed');
+			assert.equal(client.state, 'stopped');
+			await assert.rejects(manual, /timed out after 1200 ms/);
+		} finally { mock.timers.reset(); }
+	});
+}
+
 test('the recovery deadline retires an in-flight handshake and ignores its late reply', async () => {
 	mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
 	try {
