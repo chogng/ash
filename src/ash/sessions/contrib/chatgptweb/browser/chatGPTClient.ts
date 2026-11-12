@@ -110,7 +110,13 @@ export type ChatGPTMessage = ChatReplyMessage & {
 	readonly editableText?: string;
 	readonly hasVersions?: boolean;
 	readonly imageGroups?: readonly ChatGPTImageGroup[];
+	readonly asyncImagesDecoded?: true;
 };
+
+export function hasChatGPTAsyncImages(text: string): boolean {
+	return /<AsyncImage(?=[\s/>])/iu.test(text);
+}
+
 export interface ChatGPTMessageVersion {
 	readonly head: string;
 	readonly text: string;
@@ -643,7 +649,11 @@ export class ChatGPTClient {
 				thinkingEffort = item.metadata.thinking_effort;
 			}
 			const message = readMessage(item, id);
-			if (message && (message.activity || message.text.trim() || message.resources?.length)) messages.push(message);
+			if (message && (message.activity || message.text.trim() || message.resources?.length)) {
+				// Distinguish a fresh decode with no image results from an older cached projection.
+				messages.push(!message.activity && message.role === 'assistant' && hasChatGPTAsyncImages(message.text)
+					? { ...message, asyncImagesDecoded: true } : message);
+			}
 		}
 		return { messages, olderCursor: hasPrevious === true && typeof before === 'string' ? before : undefined, thinkingEffort };
 	}

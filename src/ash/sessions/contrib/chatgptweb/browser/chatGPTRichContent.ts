@@ -471,6 +471,8 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		}
 		if (tag.name === 'asyncimage') {
 			const query = values.get('query');
+			// ChatGPT leaves the image out when a saved reply contains only this search reference.
+			if (!query && /^turn\d+image\d+$/u.test(values.get('ref') ?? '')) return '';
 			const group = imageGroups.find(group => 'query' in group && group.query === query);
 			return group ? { kind: 'imageGallery', images: group.images, compact: true, block } : { kind: 'unavailableMedia', fallback, block };
 		}

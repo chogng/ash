@@ -245,6 +245,17 @@ suite('ChatGPT rich content', () => {
 		assert.match(renderChatRichContentText(inline.text, inline.richContent), /Project screenshot[\s\S]*Project summary/u);
 	});
 
+	test('leaves the paper row intact when a saved image search reference has no image', () => {
+		const source = '<Row><AsyncImage ref="turn1image2"/><Box flex="1"><Link url="https://example.test/paper" title="Paper title"/></Box></Row>';
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		const row = root.querySelector('.ash-chat-rich-row');
+		assert.equal(row?.children.length, 1);
+		assert.equal(row?.querySelector('.ash-chat-rich-box a')?.textContent, 'Paper title');
+		assert.doesNotMatch(getChatGPTRichContentText(source), /Media content|turn1image2/u);
+		assert.match(render('<AsyncImage query="Paper illustration"/>'), /View this content in ChatGPT/u);
+	});
+
 	test('renders entity thumbnail metadata as readable text without exposing the provider payload', () => {
 		const marker = '\uE200genui\uE202' + JSON.stringify({
 			entity_thumbnail_list: {
