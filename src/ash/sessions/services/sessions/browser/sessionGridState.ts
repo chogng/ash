@@ -4,9 +4,9 @@ import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.
 import { isRecord } from '../../../../base/common/types.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import { isModelReasoningEffort, type ModelRef, type ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
-import type { IUntitledChatSession, SessionEnvironmentSelection, SessionWorkspaceSelection } from '../common/session.js';
+import type { IActiveSessionThread, IUntitledChatSession, SessionEnvironmentSelection, SessionWorkspaceSelection } from '../common/session.js';
 import { visibilityKey, type SessionsViewReference } from './visibleSessions.js';
-import { isArtifactKind } from '../../../common/artifactKind.js';
+import { isArtifactKind, isRequestArtifactKind, type RequestArtifactKind } from '../../../common/artifactKind.js';
 
 const storageKey = 'sessions.viewState';
 const chatSelectionKey = 'sessions.chat.ashSelection';
@@ -41,6 +41,20 @@ export function loadChatSelection(storage: IStorageService): StoredChatSelection
 
 export function saveChatSelection(storage: IStorageService, selection: StoredChatSelection): void {
 	storage.store(chatSelectionKey, JSON.stringify(selection), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+}
+
+function pendingArtifactKindKey(active: IActiveSessionThread): string {
+	return `sessions.chat.pendingArtifactKind.${JSON.stringify([active.session.sessionId, active.threadId])}`;
+}
+
+/** The promoted draft owns this choice until its first Turn is accepted. */
+export function readPendingArtifactKind(storage: IStorageService, active: IActiveSessionThread): RequestArtifactKind | undefined {
+	const kind = storage.get(pendingArtifactKindKey(active), StorageScope.WORKSPACE);
+	return isRequestArtifactKind(kind) ? kind : undefined;
+}
+
+export function writePendingArtifactKind(storage: IStorageService, active: IActiveSessionThread, kind: RequestArtifactKind | undefined): void {
+	storage.store(pendingArtifactKindKey(active), kind, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 }
 
 export function loadSessionGridState(storage: IStorageService): ISessionGridState | undefined {

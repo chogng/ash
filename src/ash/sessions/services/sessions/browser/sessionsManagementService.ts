@@ -18,6 +18,8 @@ import type { ChatAgent } from '../../../../workbench/services/chat/common/chatS
 import { localize } from '../../../../nls.js';
 import { selectionFromResource } from '../../../common/agentHostSessionWorkspace.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { isRequestArtifactKind } from '../../../common/artifactKind.js';
+import { writePendingArtifactKind } from './sessionGridState.js';
 import { ISessionsProvidersService } from './sessionsProvidersService.js';
 import { backendSession, parseSessionIdentity, projectSession, sessionIdentity, threadIdentity } from '../common/sessionIdentity.js';
 
@@ -57,7 +59,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	constructor(
 		private readonly defaultProviderId: string,
 		@ISessionsProvidersService private readonly providers: ISessionsProvidersService,
-		@IStorageService storage?: IStorageService,
+		@IStorageService private readonly storage?: IStorageService,
 		@IAgentConnection private readonly localHost?: IAgentConnection,
 		@ISecretStorageService private readonly windowSecrets?: ISecretStorageService,
 		@IProjectService private readonly projects?: IProjectService,
@@ -536,7 +538,9 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void {
 		this.materializations.delete(untitledSessionId);
 		const wasActive = this._activeUntitledSessionId === untitledSessionId;
-		const nested = this._untitledSessions.some(draft => draft.untitledSessionId === untitledSessionId && draft.forkSource);
+		const draft = this._untitledSessions.find(draft => draft.untitledSessionId === untitledSessionId);
+		const nested = !!draft?.forkSource;
+		if (this.storage && isRequestArtifactKind(draft?.artifactKind)) writePendingArtifactKind(this.storage, active, draft.artifactKind);
 		this._untitledSessions = this._untitledSessions.filter(session => session.untitledSessionId !== untitledSessionId);
 		if (wasActive) this._activeUntitledSessionId = undefined;
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];

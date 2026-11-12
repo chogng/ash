@@ -16,7 +16,7 @@ import { observableValue, type IObservable } from '../../../../base/common/obser
 import { equals } from '../../../../base/common/objects.js';
 import { isMacintosh, isNative } from '../../../../base/common/platform.js';
 import { isRecord } from '../../../../base/common/types.js';
-import { isArtifactKind, type ArtifactKind } from '../../../common/artifactKind.js';
+import { isArtifactKind, isRequestArtifactKind, type ArtifactKind } from '../../../common/artifactKind.js';
 import { generateUuid, isUuid } from '../../../../base/common/uuid.js';
 import { URI } from '../../../../base/common/uri.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
@@ -26,7 +26,7 @@ import { IProjectService } from '../../../../platform/projects/common/projectSer
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { CatalogProjectMemoryEditor } from '../../chat/browser/chatListModel.js';
 import { ChatGPTAuthenticationError, IChatGPTNativeTransport, IChatGPTTransport } from '../common/chatGPTTransport.js';
-import { ChatGPTClient, ChatGPTRequestError, hasChatGPTAsyncImages, isChatGPTRateLimit, type ChatGPTBranchSource, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTMessageVersion, type ChatGPTModel, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTProjectDetails, type ChatGPTHistory } from './chatGPTClient.js';
+import { ChatGPTClient, ChatGPTRequestError, chatGPTArtifactRequestText, hasChatGPTAsyncImages, isChatGPTRateLimit, type ChatGPTBranchSource, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTMessageVersion, type ChatGPTModel, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTProjectDetails, type ChatGPTHistory } from './chatGPTClient.js';
 import { ChatGPTDraftAttachmentStorage, type ChatGPTAttachment } from './chatGPTDraftAttachmentStorage.js';
 import { createChatGPTFetch } from './chatGPTFetch.js';
 import { decodeChatGPTReply } from './chatGPTRichContent.js';
@@ -1615,7 +1615,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			const signal = AbortSignal.any([account, controller.signal, AbortSignal.timeout(120_000)]);
 			let submitted = false;
 			try {
-				for await (const event of this.client.send({ ...entry, model: preset.model, thinkingEffort: preset.thinkingEffort }, signal, async () => {
+				for await (const event of this.client.send({ ...entry, text: chatGPTArtifactRequestText(entry.text, entry.artifactKind), model: preset.model, thinkingEffort: preset.thinkingEffort }, signal, async () => {
 					signal.throwIfAborted();
 					if (this.outbox !== outbox || outbox.creation(entry.localId) !== entry || !this.model.get().networkAvailable) { throw new DOMException('Cancelled', 'AbortError'); }
 					outbox.saveCreation({ ...entry, submittedAgainst: state.conversations.filter(item => !item.local).map(item => item.id) });
@@ -2549,10 +2549,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const { signal } = stream.controller;
 		this.update({ sending: true, stopped: false, error: '' });
 		try {
-			const { parentId, files } = await this.client.prepareMessageEdit(conversationId, messageId, state.parentId, AbortSignal.any([signal, AbortSignal.timeout(15_000)]));
+			const { parentId, files, artifactKind } = await this.client.prepareMessageEdit(conversationId, messageId, state.parentId, AbortSignal.any([signal, AbortSignal.timeout(15_000)]));
 			signal.throwIfAborted();
 			const projectId = this.conversationProjectId(state, conversationId);
-			const request = { text, model: preset.model, thinkingEffort: preset.thinkingEffort, conversationId, projectId, parentId, messageId: replacementId, files };
+			const request = { text: chatGPTArtifactRequestText(text, artifactKind), model: preset.model, thinkingEffort: preset.thinkingEffort, conversationId, projectId, parentId, messageId: replacementId, files };
 			for await (const event of this.replyBackend.streamReply(request, signal, async () => { stream.submitted = true; })) {
 				if (event.conversationId && event.conversationId !== conversationId) {
 					throw new Error(localize('sessions.chatgpt.editUnconfirmed', 'Reload the conversation to check whether ChatGPT accepted the edit.'));
@@ -2658,9 +2658,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const preset = state.models.find(model => model.id === state.model)?.presets.find(preset => preset.id === state.modelPreset);
 		const target = isChatGPTNewDraft(state) ? state.draftTarget : undefined;
 		const projectId = target?.projectId ?? this.conversationProjectId(state, state.conversationId);
+		const artifactKind = isChatGPTNewDraft(state) && isRequestArtifactKind(state.draftArtifactKind) ? state.draftArtifactKind : undefined;
 		const creation = !projectFiles && canQueueChatGPTCreation(state) ? {
 			localId: state.localConversationId, text, messageId: crypto.randomUUID(), parentId: state.parentId,
-			model: preset?.model, thinkingEffort: preset?.thinkingEffort, projectId: target?.projectId, ashProjectId: target?.ashProjectId,
+			model: preset?.model, thinkingEffort: preset?.thinkingEffort, projectId: target?.projectId, ashProjectId: target?.ashProjectId, artifactKind,
 		} : undefined;
 		if (creation && (!state.connected || !state.networkAvailable)) { await this.queueCreation(creation); return; }
 		const files = projectFiles ?? state.attachments.flatMap(attachment => attachment.file ? [attachment.file] : []);
@@ -2676,7 +2677,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.update({ sending: true, stopped: false, error: '', messages: [...state.messages, { id: messageId, role: 'user', text, resources: files.map(file => ({ uri: `file-service://${file.id}`, name: file.name, kind: file.mimeType.startsWith('image/') ? 'image' : 'document', mimeType: file.mimeType })) }] });
 		try {
 			for await (const event of this.replyBackend.streamReply({
-				text, model: preset.model, thinkingEffort: preset.thinkingEffort, parentId: state.parentId,
+				text: chatGPTArtifactRequestText(text, artifactKind), model: preset.model, thinkingEffort: preset.thinkingEffort, parentId: state.parentId,
 				conversationId: state.conversationId, branch: state.branch, projectId, messageId, files,
 			}, controller.signal, async () => { stream.submitted = true; })) {
 				if (this.isDisposed || this.stream !== stream) { return; }
@@ -2767,7 +2768,9 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				this.stream = undefined;
 				this.update({
 					sending: false,
-					...(state.branch && !acknowledged && controller.signal.aborted ? { messages: state.messages, parentId: state.parentId } : {}),
+					// Before submission, cancellation can safely remove the optimistic message
+					// and let the artifact draft send again as a first request.
+					...(!acknowledged && controller.signal.aborted && (state.branch || artifactKind && !stream.submitted) ? { messages: state.messages, parentId: state.parentId } : {}),
 					...(move?.error && !current.error ? { error: move.error } : {}),
 				});
 			}

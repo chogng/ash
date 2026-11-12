@@ -20,7 +20,8 @@ import type { ResolvedChatContext } from '../../workbench/services/chat/common/c
 import type { SessionHistoryBindingDiagnostic } from '../services/sessions/browser/sessionOpenTelemetryService.js';
 import { chatExecutionWorkspace, findAgentNode, type IActiveSessionThread, type ISession, type IUntitledChatSession, type ModelRef, type SessionId, type ThreadId } from '../services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import type { ArtifactKind } from '../common/artifactKind.js';
+import { getArtifactRequestContext, isRequestArtifactKind, type ArtifactKind } from '../common/artifactKind.js';
+import { readPendingArtifactKind, writePendingArtifactKind } from '../services/sessions/browser/sessionGridState.js';
 import { chatQueuedMessageListItems, chatStreamingResponseUpdate, chatTranscriptListItems, type ChatStreamingResponseUpdate, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { withSessionSubagentActivities } from '../common/sessionSubagentActivity.js';
 import { ChatHistoryRedoModel } from '../../workbench/contrib/chat/common/model/chatHistoryRedoModel.js';
@@ -384,11 +385,18 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	get artifactDraftKind(): ArtifactKind | undefined {
-		return this.selection.kind === 'untitled' ? this.selection.session.artifactKind : undefined;
+		if (this.selection.kind === 'untitled') return this.selection.session.artifactKind;
+		return this._thread?.turns.length ? undefined : readPendingArtifactKind(this.storage, this.selection.active);
 	}
 
 	setArtifactDraftKind(kind: ArtifactKind | undefined): boolean {
-		if (this.selection.kind !== 'untitled' || this.isNestedDraft) return false;
+		if (this.selection.kind === 'session') {
+			if (!this.artifactDraftKind || kind !== undefined && !isRequestArtifactKind(kind)) return false;
+			writePendingArtifactKind(this.storage, this.selection.active, kind);
+			this._onDidChange.fire();
+			return true;
+		}
+		if (this.isNestedDraft) return false;
 		this.sessionService.setUntitledSessionArtifactKind(this.selection.session.untitledSessionId, kind);
 		this.refreshUntitledSelection();
 		return this.artifactDraftKind === kind;
@@ -767,6 +775,8 @@ export class ChatWidgetModel extends Disposable {
 		this.assertAIEnabled();
 		this.assertWorkspaceSelected();
 		const operation = this.captureOperation(options);
+		const artifactKind = this.artifactDraftKind;
+		const artifactContext = isRequestArtifactKind(artifactKind) ? getArtifactRequestContext(artifactKind) : undefined;
 		const stateRequest = ++this.stateRequest;
 		let modelBlock: Error | undefined;
 		try {
@@ -827,7 +837,7 @@ export class ChatWidgetModel extends Disposable {
 				model,
 				...(automatic && { modelRouting: 'auto' as const }),
 				reasoningEffort,
-				contexts,
+				contexts: !thread.turns.length && artifactContext ? [...(contexts ?? []), artifactContext] : contexts,
 				signal: operation.signal,
 				commandId: options?.commandId,
 				source: options?.source,
@@ -854,6 +864,10 @@ export class ChatWidgetModel extends Disposable {
 				await this.chatService.steerTurn({ ...submission, turnId: turn.turnId });
 			} else {
 				await this.chatService.startTurn(submission);
+				// Acceptance consumes the promoted choice even if the composer has since moved.
+				if (submission.isNewSession && readPendingArtifactKind(this.storage, active)) {
+					writePendingArtifactKind(this.storage, active, undefined);
+				}
 			}
 			if (!this.isCurrentOperation(operation)) { this.recoverCancelledSubmission(operation, stateRequest); return; }
 			await this.refreshThread();
@@ -1647,7 +1661,12 @@ export class ChatWidgetModel extends Disposable {
 		const overlap = replaceHistory ? -1 : this._thread?.turns.findIndex(turn => incoming.has(turn.turnId)) ?? -1;
 		const prefix = result.history && overlap > 0 ? this._thread!.turns.slice(0, overlap) : [];
 		if (thread) {
-			this._thread = { ...result.thread, turns: [...prefix, ...result.thread.turns] };
+			const turns = [...prefix, ...result.thread.turns];
+			if (turns.length && !this._thread?.turns.length && this.selection.kind === 'session'
+				&& readPendingArtifactKind(this.storage, this.selection.active)) {
+				writePendingArtifactKind(this.storage, this.selection.active, undefined);
+			}
+			this._thread = { ...result.thread, turns };
 			void this.refreshModelAvailability();
 			if (!prefix.length) this.historyBoundary = result.history;
 			this.durableSequence = Math.max(this.durableSequence, result.thread.sequence);

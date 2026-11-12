@@ -1383,6 +1383,119 @@ suite('ChatGPT shared service', () => {
 		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['one']);
 	});
 
+	for (const kind of ['sheet', 'slides'] as const) {
+		test(`${kind} creation reaches the real online request and survives offline replay without changing displayed text`, async () => {
+			const text = 'Create the requested work';
+			const sent: string[] = [];
+			let user: { id: string; author: { role: string; }; content: { parts: string[]; }; } | undefined;
+			const respond = async (path: string, _signal: AbortSignal, request: ChatGPTRequest): Promise<Response> => {
+				if (path.includes('/.headers/')) return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' });
+				if (path.endsWith('/prepare')) return Response.json({ conduit_token: 'fixture' });
+				if (path.endsWith('/f/conversation')) {
+					const body = JSON.parse(String(request.body));
+					user = body.messages[0];
+					sent.push(user!.content.parts[0]!);
+					assert.equal(body.artifactKind, undefined);
+					return new Response('data: {"conversation_id":"created"}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+				}
+				if (path.endsWith('/conversation/created')) {
+					return Response.json({
+						title: 'Created', current_node: 'reply', mapping: {
+							question: { parent: null, message: user },
+							reply: { parent: 'question', message: { id: 'reply', author: { role: 'assistant' }, status: 'finished_successfully', content: { parts: ['Fixture response'] } } },
+						}
+					});
+				}
+				return response(path);
+			};
+			using online = fixture(respond);
+			await online.reload();
+			assert.equal(online.setDraftArtifactKind(kind), true);
+			online.setDraft(text);
+			await online.send();
+			assert.equal(sent.length, 1);
+			assert.ok(sent[0]!.startsWith(text + '\n\n'));
+			assert.ok(sent[0]!.includes(`name="ash.creation.${kind}"`));
+			assert.match(sent[0]!, kind === 'sheet' ? /Structure the rows and columns/u : /slide-by-slide content/u);
+			assert.equal(online.state.get().messages.find(message => message.role === 'user')?.text, text);
+			assert.equal(online.state.get().messages.find(message => message.role === 'user')?.editableText, text);
+
+			const values = new Map<string, string>();
+			using queued = fixture(respond, { values });
+			await queued.reload();
+			queued.setNetworkAvailable(false);
+			assert.equal(queued.setDraftArtifactKind(kind), true);
+			queued.setDraft(text);
+			await queued.send();
+			assert.equal(queued.state.get().messages[0]?.text, text);
+			assert.equal(sent.length, 1);
+			queued.dispose();
+			using reopened = fixture(respond, { values });
+			reopened.setNetworkAvailable(false);
+			await reopened.reload();
+			assert.equal(reopened.state.get().messages[0]?.text, text);
+			reopened.setNetworkAvailable(true);
+			await reopened.refresh();
+			assert.equal(sent.length, 2);
+			assert.equal(sent[1], sent[0]);
+			assert.equal(reopened.state.get().messages.find(message => message.role === 'user')?.text, text);
+		});
+	}
+
+	test('stopping before submit and a rejected first send preserve the creation choice for retry', async () => {
+		const preparing = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		const posts: string[] = [];
+		let holdPreparation = true;
+		using chat = fixture(async (path, _signal, request) => {
+			if (path.includes('/.headers/')) return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' });
+			if (path.endsWith('/prepare')) {
+				if (holdPreparation) {
+					void preparing.complete();
+					await release.p;
+				}
+				return Response.json({ conduit_token: 'fixture' });
+			}
+			if (path.endsWith('/f/conversation')) {
+				posts.push(JSON.parse(String(request.body)).messages[0].content.parts[0]);
+				if (posts.length === 1) return new Response(null, { status: 400 });
+				return new Response('data: {"conversation_id":"created"}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+			}
+			return response(path);
+		});
+		await chat.reload();
+		const draft = 'Create the plan';
+		chat.setDraft(draft);
+		assert.equal(chat.setDraftArtifactKind('sheet'), true);
+		const sending = chat.send();
+		await preparing.p;
+		try {
+			await chat.select('two');
+			assert.equal(chat.state.get().conversationId, undefined, 'Navigation waits for the active send');
+			await chat.stop();
+		} finally {
+			holdPreparation = false;
+			await release.complete();
+		}
+		await sending;
+		assert.deepEqual(posts, []);
+		assert.deepEqual(chat.state.get().messages, []);
+		assert.equal(chat.state.get().draft, draft);
+		assert.equal(chat.state.get().draftArtifactKind, 'sheet');
+
+		await chat.send();
+		assert.equal(chat.state.get().uncertain, false);
+		assert.equal(chat.state.get().draft, draft);
+		assert.equal(chat.state.get().draftArtifactKind, 'sheet');
+		assert.equal(chat.setDraftArtifactKind('slides'), true);
+		await chat.send();
+		assert.equal(posts.length, 2);
+		assert.match(posts[0]!, /name="ash\.creation\.sheet"/u);
+		assert.match(posts[1]!, /name="ash\.creation\.slides"/u);
+		assert.doesNotMatch(posts[1]!, /name="ash\.creation\.sheet"/u);
+		assert.equal(chat.state.get().conversationId, 'created');
+	});
+
 	test('offline creation and deletion survive restart, retry safely and suppress stale cloud rows', async () => {
 		const values = new Map<string, string>();
 		let available = false;

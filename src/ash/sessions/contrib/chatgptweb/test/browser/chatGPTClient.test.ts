@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { suite, test } from 'mocha';
 import { chatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
-import { ChatGPTClient, ChatGPTRequestError, decodeChatGPTStream, readChatGPTVoiceUpdate } from '../../browser/chatGPTClient.js';
+import { ChatGPTClient, chatGPTArtifactRequestText, ChatGPTRequestError, decodeChatGPTStream, readChatGPTVoiceUpdate } from '../../browser/chatGPTClient.js';
 
 const signal = (): AbortSignal => new AbortController().signal;
 const json = (value: unknown): Response => Response.json(value);
@@ -463,7 +463,7 @@ suite('Bundled ChatGPT client', () => {
 			if (path.endsWith('/conversation/chat-one')) {
 				return json({
 					title: 'Chosen branch', current_node: 'reply-two', mapping: {
-						root: { parent: null }, user: { parent: 'root', message: message('user', 'user', 'Question') },
+						root: { parent: null }, user: { parent: 'root', message: message('user', 'user', chatGPTArtifactRequestText('Question', 'slides')) },
 						'reply-one': { parent: 'user', message: message('reply-one', 'assistant', 'Other branch') },
 						'reply-two': { parent: 'user', message: message('reply-two', 'assistant', 'Selected answer') },
 					}
@@ -473,7 +473,8 @@ suite('Bundled ChatGPT client', () => {
 		}) as typeof fetch);
 		const history = await client.history('chat-one', signal());
 		assert.deepEqual(history.messages.map(item => item.text), ['Question', 'Selected answer']);
-		assert.deepEqual(await client.prepareMessageEdit('chat-one', 'user', 'reply-two', signal()), { parentId: 'root', files: [] });
+		assert.equal(history.messages[0]?.editableText, 'Question');
+		assert.deepEqual(await client.prepareMessageEdit('chat-one', 'user', 'reply-two', signal()), { parentId: 'root', files: [], artifactKind: 'slides' });
 		await assert.rejects(client.prepareMessageEdit('chat-one', 'user', 'reply-one', signal()), /Reload the ChatGPT conversation/u);
 		await assert.rejects(client.prepareMessageEdit('chat-one', 'reply-one', 'reply-two', signal()), /unavailable for editing/u);
 		const output = await collect(client.send({ text: 'Follow up', model: 'fixture-model', parentId: history.parentId, conversationId: history.id, messageId: 'new-user' }, signal()));

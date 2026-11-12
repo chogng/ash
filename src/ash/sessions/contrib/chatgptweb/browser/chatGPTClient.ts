@@ -1,5 +1,6 @@
 import type { ChatReplyRequest, ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyMessage, ChatReplyUpdate as ChatGPTStreamUpdate } from '../../../common/chatReplyBackend.js';
 export type { ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyUpdate as ChatGPTStreamUpdate } from '../../../common/chatReplyBackend.js';
+import { getArtifactRequestContext, type RequestArtifactKind } from '../../../common/artifactKind.js';
 import { localize } from '../../../../nls.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
@@ -140,6 +141,26 @@ function historyProjectId(value: Record<string, unknown>): Pick<ChatGPTHistory, 
 	return id === null || typeof id === 'string' && /^g-p-[A-Za-z0-9_-]{1,240}$/u.test(id) ? { projectId: id } : {};
 }
 interface ChatGPTStreamFrame extends ChatGPTStreamUpdate { readonly resumeToken?: string; readonly handoff?: boolean; readonly finished?: boolean; }
+
+function artifactRequestSuffix(kind: RequestArtifactKind): string {
+	const { name, content } = getArtifactRequestContext(kind);
+	return `\n\n<ash_context name="${name}">\n${content}\n</ash_context>`;
+}
+
+/** Keep request instructions out of the composer and outbox preview. */
+export function chatGPTArtifactRequestText(text: string, kind: RequestArtifactKind | undefined): string {
+	return kind ? text + artifactRequestSuffix(kind) : text;
+}
+
+function readArtifactRequest(text: string): { text: string; artifactKind?: RequestArtifactKind; } {
+	if (text.includes('<ash_context name="ash.creation.')) {
+		for (const artifactKind of ['sheet', 'slides'] as const) {
+			const suffix = artifactRequestSuffix(artifactKind);
+			if (text.endsWith(suffix)) return { text: text.slice(0, -suffix.length), artifactKind };
+		}
+	}
+	return { text };
+}
 
 /** An explicit HTTP rejection is different from an interrupted, possibly accepted message. */
 export class ChatGPTRequestError extends Error {
@@ -566,10 +587,10 @@ export class ChatGPTClient {
 		return { value, mapping: value.mapping, head: value.current_node };
 	}
 
-	async prepareMessageEdit(id: string, messageId: string, expectedHead: string, signal: AbortSignal): Promise<{ parentId: string; files: readonly ChatGPTFile[]; }> {
+	async prepareMessageEdit(id: string, messageId: string, expectedHead: string, signal: AbortSignal): Promise<{ parentId: string; files: readonly ChatGPTFile[]; artifactKind?: RequestArtifactKind; }> {
 		const { node, parentId } = await this.messageVersionGraph(id, messageId, expectedHead, signal);
 		const edit = readEditableMessage(node);
-		if (edit) return { parentId, files: edit.files };
+		if (edit) return { parentId, files: edit.files, ...(edit.artifactKind && { artifactKind: edit.artifactKind }) };
 		throw new Error(localize('sessions.chatgpt.editUnavailable', 'This ChatGPT message is unavailable for editing.'));
 	}
 
@@ -955,7 +976,7 @@ function* activeNodes(mapping: Record<string, unknown>, head: string): Iterable<
 	}
 }
 
-function readEditableMessage(message: Record<string, unknown>): { text: string; files: readonly ChatGPTFile[]; } | undefined {
+function readEditableMessage(message: Record<string, unknown>): { text: string; files: readonly ChatGPTFile[]; artifactKind?: RequestArtifactKind; } | undefined {
 	if (!isRecord(message.author) || message.author.role !== 'user' || !isRecord(message.content)
 		|| message.status !== undefined && message.status !== 'finished_successfully'
 		|| ![undefined, 'text', 'multimodal_text'].includes(message.content.content_type as string | undefined)
@@ -988,8 +1009,8 @@ function readEditableMessage(message: Record<string, unknown>): { text: string; 
 			|| typeof height !== 'number' || !Number.isSafeInteger(height) || height <= 0) return undefined;
 		files.set(file.id, { ...file, width, height });
 	}
-	const text = parts.join('\n');
-	return text.trim() ? { text, files: [...files.values()] } : undefined;
+	const request = readArtifactRequest(parts.join('\n'));
+	return request.text.trim() ? { ...request, files: [...files.values()] } : undefined;
 }
 
 export function chatGPTResourceKey(uri: string): string {
@@ -1223,6 +1244,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 	}
 	const timestamp = conversationTimestamp(value.create_time);
 	const edit = readEditableMessage(value);
+	if (user) text = readArtifactRequest(text).text;
 	return {
 		id: value.id, role: value.author.role as 'user' | 'assistant', text,
 		...(edit && { editableText: edit.text }),

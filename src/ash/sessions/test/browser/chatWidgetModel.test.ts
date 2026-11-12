@@ -29,7 +29,9 @@ import type { IAgentSkill, IPromptsService } from '../../../workbench/contrib/ch
 import type { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { INativeChatModelPreferencesService } from '../../contrib/chat/common/nativeChatModelPreferencesService.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import type { ISession } from '../../services/sessions/common/session.js';
+import { readPendingArtifactKind, writePendingArtifactKind } from '../../services/sessions/browser/sessionGridState.js';
+import type { RequestArtifactKind } from '../../common/artifactKind.js';
+import type { ISession, IUntitledChatSession } from '../../services/sessions/common/session.js';
 import { resolveChatContextAttachment, type ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
 import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
 
@@ -104,7 +106,11 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	// Tests select a thread explicitly. An empty catalog keeps fork-version reads out of transcript tests.
 	const sessions = { onDidChange: Event.None, sessions: [], untitledSessions: [] } as unknown as ISessionsManagementService;
 	const selection = { kind: 'session' as const, active: { session, threadId: 'A' } };
-	const storage = { get: () => undefined, store: () => { } } as unknown as IStorageService;
+	const values = new Map<string, string>();
+	const storage = {
+		get: (key: string) => values.get(key),
+		store: (key: string, value: string | undefined) => value === undefined ? values.delete(key) : values.set(key, value),
+	} as unknown as IStorageService;
 	const contextKeys = resources.add(new ContextKeyService());
 	SessionsWorkspaceModeContext.bindTo(contextKeys).set(kind === 'Code' ? 'code' : 'chat');
 	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, configuration, storage, contextKeys) : new AshChatModel(selection, 'session', sessions, routedChat, prompts, models, execution, configuration, storage, undefined, preferences));
@@ -114,6 +120,127 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 async function turnTask(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
 async function waitFor(condition: () => boolean): Promise<void> { for (let i = 0; i < 200 && !condition(); i++) await turnTask(); assert.ok(condition(), 'expected deferred operation reached'); }
 function approval(requestId: string): AgentInteractionOffer { return { connectionGeneration: 1, sessionId: 'session', threadId: 'A', turnId: 'turn-A', interaction: { requestId, request: { type: 'approval', request: { reason: requestId, capabilities: [{ kind: 'fileWrite', scope: '/owned/file' }] } } } }; }
+
+function artifactDraftFixture(kind: RequestArtifactKind) {
+	const f = fixture('Cowork');
+	f.model.dispose();
+	const draft: IUntitledChatSession = { untitledSessionId: 'creation-draft', kind: 'chat', title: 'New Chat', artifactKind: kind, model: undefined, agent: undefined, workspace: { type: 'current' } };
+	let drafts = [draft];
+	const materialized = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string; }>>('creation materialization', new Map());
+	const sessions = {
+		onDidChange: Event.None, sessions: [], get untitledSessions() { return drafts; }, materializedSessions: materialized,
+		materializeUntitledSession: async () => ({ session: f.session, threadId: 'A' }),
+		setUntitledSessionArtifactKind: (_id: string, artifactKind: RequestArtifactKind | undefined) => {
+			drafts = drafts.map(value => ({ ...value, artifactKind }));
+		},
+		promoteUntitledSession: (_id: string, active: { session: ISession; threadId: string; }) => {
+			const kind = drafts[0]?.artifactKind;
+			if (kind === 'sheet' || kind === 'slides') writePendingArtifactKind(f.storage, active, kind);
+			drafts = [];
+			materialized.set(new Map([[draft.untitledSessionId, { sessionId: 'session', threadId: 'A' }]]));
+		},
+	} as unknown as ISessionsManagementService;
+	class RetainedChat extends ChatWidgetModel {
+		retarget(selection: ConstructorParameters<typeof ChatWidgetModel>[1]): void { this.bindSelection(selection); }
+	}
+	const open = (selection: ConstructorParameters<typeof ChatWidgetModel>[1]) => f.resources.add(new RetainedChat(f.chat, selection, sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.contextKeys));
+	const model = open({ kind: 'untitled', session: draft });
+	return { ...f, model, open, sessions };
+}
+
+test('Changing Sheet to Slides during a failed first send affects only the retry after reopening', async () => {
+	const f = artifactDraftFixture('sheet');
+	using resources = f.resources;
+	await f.model.initialize();
+	const entered = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const materialize = f.sessions.materializeUntitledSession;
+	f.sessions.materializeUntitledSession = async id => {
+		void entered.complete();
+		await release.p;
+		return materialize(id);
+	};
+	const start = f.turnApi.start;
+	f.turnApi.start = async input => {
+		await start(input);
+		throw new Error('First send failed');
+	};
+	const rejected = assert.rejects(f.model.send('Create this'), /First send failed/);
+	await entered.p;
+	assert.equal(f.model.setArtifactDraftKind('slides'), true);
+	await release.complete();
+	await rejected;
+	assert.equal(f.starts[0].input[0]?.type, 'context');
+	assert.match(JSON.stringify(f.starts[0].input[0]), /ash\.creation\.sheet/u);
+
+	f.model.dispose();
+	const reopened = f.open({ kind: 'session', active: { session: f.session, threadId: 'A' } });
+	await reopened.initialize();
+	assert.equal(reopened.artifactDraftKind, 'slides');
+	f.turnApi.start = start;
+	f.threadApi.read = async () => messageHistory('A', 3, 'Created');
+	await reopened.send('Retry this');
+	assert.equal(f.starts[1].input[0]?.type, 'context');
+	assert.match(JSON.stringify(f.starts[1].input[0]), /ash\.creation\.slides/u);
+	assert.equal(reopened.artifactDraftKind, undefined);
+	assert.equal(readPendingArtifactKind(f.storage, { session: f.session, threadId: 'A' }), undefined);
+	await reopened.send('Follow up');
+	assert.deepEqual(f.starts[2].input, [{ type: 'text', text: 'Follow up' }]);
+});
+
+test('Navigation during Sheet materialization retires the send without lending its intent to another Thread', async () => {
+	const f = artifactDraftFixture('sheet');
+	using resources = f.resources;
+	await f.model.initialize();
+	const entered = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const materialize = f.sessions.materializeUntitledSession;
+	f.sessions.materializeUntitledSession = async id => {
+		void entered.complete();
+		await release.p;
+		return materialize(id);
+	};
+	const rejected = assert.rejects(f.model.send('Create a budget'), isCancellationError);
+	await entered.p;
+	f.model.retarget({ kind: 'session', active: { session: f.session, threadId: 'B' } });
+	await release.complete();
+	await rejected;
+	assert.equal(f.starts.length, 0);
+	assert.equal(f.model.artifactDraftKind, undefined);
+	await f.model.send('Unrelated message');
+	assert.deepEqual(f.starts[0].input, [{ type: 'text', text: 'Unrelated message' }]);
+
+	await f.model.selectThread({ session: f.session, threadId: 'A' });
+	assert.equal(f.model.artifactDraftKind, 'sheet');
+	assert.equal(f.model.setArtifactDraftKind(undefined), true);
+	await f.model.send('Continue without a type');
+	assert.deepEqual(f.starts[1].input, [{ type: 'text', text: 'Continue without a type' }]);
+});
+
+test('Acceptance consumes the promoted Slides choice after navigation', async () => {
+	const f = artifactDraftFixture('slides');
+	using resources = f.resources;
+	await f.model.initialize();
+	const entered = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const start = f.turnApi.start;
+	f.turnApi.start = async input => {
+		void entered.complete();
+		await release.p;
+		return start(input);
+	};
+	const sending = f.model.send('Create a presentation');
+	await entered.p;
+	const active = { session: f.session, threadId: 'A' };
+	try {
+		assert.equal(readPendingArtifactKind(f.storage, active), 'slides');
+		f.model.retarget({ kind: 'session', active: { session: f.session, threadId: 'B' } });
+	} finally {
+		await release.complete();
+		await sending;
+	}
+	assert.equal(readPendingArtifactKind(f.storage, active), undefined);
+});
 
 for (const kind of ['Code', 'Cowork'] as const) {
 	test(`${kind === 'Code' ? 'Code' : 'Native Chat'} restores Auto from the accepted Turn and sends it on the next request`, async () => {

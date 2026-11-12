@@ -1,3 +1,4 @@
+import { isRequestArtifactKind, type RequestArtifactKind } from '../../../common/artifactKind.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { type IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 
@@ -6,6 +7,7 @@ export interface PendingChatGPTCreation {
 	readonly messageId: string;
 	readonly parentId: string;
 	readonly text: string;
+	readonly artifactKind?: RequestArtifactKind;
 	readonly model?: string;
 	readonly thinkingEffort?: string;
 	readonly projectId?: string;
@@ -22,6 +24,7 @@ function isId(value: unknown): value is string {
 function isCreation(value: unknown): value is PendingChatGPTCreation {
 	return isRecord(value) && isId(value.localId) && isId(value.messageId) && isId(value.parentId)
 		&& typeof value.text === 'string' && value.text.length > 0
+		&& (value.artifactKind === undefined || isRequestArtifactKind(value.artifactKind))
 		&& (value.model === undefined || typeof value.model === 'string')
 		&& (value.thinkingEffort === undefined || typeof value.thinkingEffort === 'string')
 		&& (value.projectId === undefined || isId(value.projectId))
