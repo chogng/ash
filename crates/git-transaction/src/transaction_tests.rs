@@ -737,9 +737,10 @@ esac"#,
                 .publish_prepared_tree_commit(&repository, &prepared)
                 .await
                 .unwrap(),
-            GitTreeCommitResult::Conflict(GitTreeCommitConflict::CheckoutChanged {
-                paths: vec!["change.txt".into()]
-            })
+            GitTreeCommitResult::CheckoutPending {
+                paths: vec!["change.txt".into()],
+                error: None
+            }
         );
         assert!(wrapper.path().join("injected").exists());
         assert_eq!(fixture.read("change.txt"), "external save\n");
@@ -802,9 +803,10 @@ esac"#,
             .publish_prepared_tree_commit(&repository, &prepared)
             .await
             .unwrap(),
-        GitTreeCommitResult::Conflict(GitTreeCommitConflict::CheckoutChanged {
-            paths: vec!["unstaged.txt".into()]
-        })
+        GitTreeCommitResult::CheckoutPending {
+            paths: vec!["unstaged.txt".into()],
+            error: None
+        }
     );
     assert!(wrapper.path().join("injected").exists());
     assert_eq!(fixture.git(&["show", ":unstaged.txt"]), "unstaged local");
@@ -835,10 +837,12 @@ async fn recovery_preserves_a_save_after_its_own_final_capture() {
 esac"#,
     );
     let repository = client.open_repository(fixture.root()).await.unwrap();
-    GitTransactions::new(&client)
-        .publish_prepared_tree_commit(&repository, &prepared)
-        .await
-        .expect_err("interrupt the first installation");
+    assert!(matches!(
+        GitTransactions::new(&client)
+            .publish_prepared_tree_commit(&repository, &prepared)
+            .await.unwrap(),
+        GitTreeCommitResult::CheckoutPending { paths, error: Some(_) } if paths.is_empty()
+    ));
     assert!(wrapper.path().join("injected").exists());
     let (wrapper, client) = git_with_race(
         &fixture,
@@ -886,9 +890,10 @@ esac"#,
             .publish_prepared_tree_commit(&repository, &prepared)
             .await
             .unwrap(),
-        GitTreeCommitResult::Conflict(GitTreeCommitConflict::CheckoutChanged {
-            paths: vec!["change.txt".into()]
-        })
+        GitTreeCommitResult::CheckoutPending {
+            paths: vec!["change.txt".into()],
+            error: None
+        }
     );
     assert!(wrapper.path().join("injected").exists());
     assert_eq!(fixture.read("change.txt"), "sealed Turn\n");

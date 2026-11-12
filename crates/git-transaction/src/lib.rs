@@ -196,8 +196,15 @@ pub enum GitTreeCommitConflict {
 /// Result of committing one sealed tree delta without reading the managed Thread checkout.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GitTreeCommitResult {
-    Committed { object_id: String },
+    Committed {
+        object_id: String,
+    },
     Conflict(GitTreeCommitConflict),
+    /// Publication already happened; retain the journal and resume checkout only.
+    CheckoutPending {
+        paths: Vec<PathBuf>,
+        error: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -244,6 +251,11 @@ struct CheckoutState {
     worktree_tree: GitTreeId,
 }
 
+enum RecoveryPublication {
+    Unknown,
+    Published,
+}
+
 enum CheckoutInstall {
     Installed,
     Conflict { paths: Vec<PathBuf> },
@@ -264,6 +276,27 @@ impl<'a> GitTransactions<'a> {
         repository: &GitRepository,
         transaction_id: &str,
     ) -> GitResult<GitTreeCommitRecovery> {
+        self.recover_tree_commit_inner(repository, transaction_id, RecoveryPublication::Unknown)
+            .await
+    }
+
+    /// Resumes checkout for an already published transaction. A ref reset must not discard its
+    /// journal or turn recovery into permission to publish the immutable selection again.
+    pub async fn recover_published_tree_commit(
+        &self,
+        repository: &GitRepository,
+        transaction_id: &str,
+    ) -> GitResult<GitTreeCommitRecovery> {
+        self.recover_tree_commit_inner(repository, transaction_id, RecoveryPublication::Published)
+            .await
+    }
+
+    async fn recover_tree_commit_inner(
+        &self,
+        repository: &GitRepository,
+        transaction_id: &str,
+        publication: RecoveryPublication,
+    ) -> GitResult<GitTreeCommitRecovery> {
         let path = journal_path(repository, transaction_id)?;
         if !path.exists() {
             return Ok(GitTreeCommitRecovery::None);
@@ -279,6 +312,9 @@ impl<'a> GitTransactions<'a> {
             .read_optional_ref(repository, &journal.target_ref)
             .await?;
         if current == journal.old_head {
+            if matches!(publication, RecoveryPublication::Published) {
+                return Ok(GitTreeCommitRecovery::Conflict { paths: Vec::new() });
+            }
             self.release_journal(repository, transaction_id, &path)
                 .await?;
             return Ok(GitTreeCommitRecovery::RolledBack);
@@ -561,23 +597,31 @@ impl<'a> GitTransactions<'a> {
         {
             let actual = self.git.read_optional_ref(repository, &target_ref).await?;
             if actual.as_deref() == Some(prepared.object_id.as_str()) {
-                return match self
-                    .recover_tree_commit(repository, &prepared.transaction_id)
-                    .await?
-                {
-                    GitTreeCommitRecovery::Committed { object_id } => {
-                        Ok(GitTreeCommitResult::Committed { object_id })
-                    }
-                    GitTreeCommitRecovery::Conflict { paths } => Ok(GitTreeCommitResult::Conflict(
-                        GitTreeCommitConflict::CheckoutChanged { paths },
-                    )),
-                    GitTreeCommitRecovery::None | GitTreeCommitRecovery::RolledBack => {
-                        Err(GitError::runtime(
-                            "recover prepared tree commit after ref race",
-                            "publication journal disappeared before recovery",
-                        ))
-                    }
-                };
+                return Ok(
+                    match self
+                        .recover_published_tree_commit(repository, &prepared.transaction_id)
+                        .await
+                    {
+                        Ok(GitTreeCommitRecovery::Committed { object_id }) => {
+                            GitTreeCommitResult::Committed { object_id }
+                        }
+                        Ok(GitTreeCommitRecovery::Conflict { paths }) => {
+                            GitTreeCommitResult::CheckoutPending { paths, error: None }
+                        }
+                        Ok(GitTreeCommitRecovery::None | GitTreeCommitRecovery::RolledBack) => {
+                            GitTreeCommitResult::CheckoutPending {
+                                paths: Vec::new(),
+                                error: Some(
+                                    "Publication journal disappeared before recovery.".into(),
+                                ),
+                            }
+                        }
+                        Err(error) => GitTreeCommitResult::CheckoutPending {
+                            paths: Vec::new(),
+                            error: Some(error.to_string()),
+                        },
+                    },
+                );
             }
             if actual != target_head {
                 self.release_journal(repository, &prepared.transaction_id, &journal_path)
@@ -590,7 +634,7 @@ impl<'a> GitTransactions<'a> {
             return Err(error);
         }
         if let (Some(state), Some((index_tree, worktree_tree))) = (checkout, checkout_update) {
-            if let CheckoutInstall::Conflict { paths } = self
+            match self
                 .install_checkout(
                     &state.repository,
                     &state.worktree_tree,
@@ -598,16 +642,30 @@ impl<'a> GitTransactions<'a> {
                     &worktree_tree,
                     &index_tree,
                 )
-                .await?
+                .await
             {
-                return Ok(GitTreeCommitResult::Conflict(
-                    GitTreeCommitConflict::CheckoutChanged { paths },
-                ));
+                Ok(CheckoutInstall::Installed) => {}
+                Ok(CheckoutInstall::Conflict { paths }) => {
+                    return Ok(GitTreeCommitResult::CheckoutPending { paths, error: None });
+                }
+                Err(error) => {
+                    // Even when no files changed or inspection failed, the ref is already
+                    // published. Persist checkout recovery rather than an ambiguous retry.
+                    return Ok(GitTreeCommitResult::CheckoutPending {
+                        paths: Vec::new(),
+                        error: Some(error.to_string()),
+                    });
+                }
             }
         }
         let mut completed = journal;
         completed.checkout_installed = true;
-        write_journal(&journal_path, &completed)?;
+        if let Err(error) = write_journal(&journal_path, &completed) {
+            return Ok(GitTreeCommitResult::CheckoutPending {
+                paths: Vec::new(),
+                error: Some(error.to_string()),
+            });
+        }
         Ok(GitTreeCommitResult::Committed {
             object_id: prepared.object_id.clone(),
         })
@@ -635,8 +693,8 @@ impl<'a> GitTransactions<'a> {
             return Ok(CheckoutInstall::Installed);
         };
         // The ref is already published. Preserve the journal and pinned trees on every failure.
-        // Report a concurrent save/stage immediately rather than leaving the UI in Publishing;
-        // an unchanged checkout with an I/O/transport error still requires explicit recovery.
+        // A changed checkout is pending recovery, never a terminal pre-publication conflict.
+        // An unchanged checkout with an I/O/transport error still requires journal recovery.
         let current_index = self.git.capture_index_tree(repository).await?;
         let current_worktree = self.git.capture_worktree_tree(repository).await?;
         let mut changes = self

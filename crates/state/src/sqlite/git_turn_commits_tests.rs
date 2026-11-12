@@ -530,3 +530,377 @@ async fn legacy_queued_commits_migrate_the_full_selection_message_and_transactio
         CaptureState::Sealed
     );
 }
+
+#[cfg(unix)]
+fn git_with_install_failure(source: &Path, injection: &str) -> (tempfile::TempDir, GitClient) {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = tempfile::tempdir().unwrap();
+    let executable = directory.path().join("git-failure");
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+    std::fs::write(&executable, format!(
+        "#!/bin/sh\nset -eu\nreal_git={}\nroot={}\nmarker={}\n{injection}\nexec \"$real_git\" \"$@\"\n",
+        quote(&GitClient::system().executable().unwrap()), quote(source), quote(&directory.path().join("injected")),
+    )).unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client =
+        GitClient::with_executable(executable, ash_git::GitExecutionLimits::default()).unwrap();
+    (directory, client)
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn published_checkout_failure_remains_pending_and_resumes_after_sqlite_reopen() {
+    for (injection, expected_paths) in [
+        (
+            r#"case " $* " in
+  *" read-tree -m -u "*)
+    if mkdir "$marker" 2>/dev/null; then "$real_git" "$@"; exit 73; fi ;;
+esac"#,
+            vec!["a.txt"],
+        ),
+        (
+            r#"case " $* " in
+  *" read-tree -m -u "*)
+    if mkdir "$marker" 2>/dev/null; then exit 73; fi ;;
+esac"#,
+            vec![],
+        ),
+    ] {
+        let scenario = Scenario::new();
+        let checkout = scenario.checkout("session");
+        let repository = scenario.git.open_repository(&checkout).await.unwrap();
+        let before = scenario
+            .git
+            .capture_worktree_tree(&repository)
+            .await
+            .unwrap();
+        std::fs::write(checkout.join("a.txt"), "sealed\n").unwrap();
+        let record = scenario
+            .capture(&checkout, "session", "turn", &before)
+            .await;
+        let preview = scenario
+            .prepare(
+                &[record.clone()],
+                &[selection(&record, &["a.txt"])],
+                "recover-install",
+            )
+            .await;
+        let object_id = match &preview.publication {
+            TurnPublication::Prepared { commit } => commit.object_id().to_owned(),
+            _ => panic!("prepared request"),
+        };
+        scenario
+            .store
+            .queue_publication("recover-install", "queue", "queue", "{}")
+            .unwrap();
+        std::fs::write(scenario.source.join("b.txt"), "staged local\n").unwrap();
+        git(&scenario.source, &["add", "b.txt"]);
+        std::fs::write(scenario.source.join("b.txt"), "unstaged local\n").unwrap();
+        let (wrapper, failing) = git_with_install_failure(&scenario.source, injection);
+        let target = failing.open_repository(&scenario.source).await.unwrap();
+        git_turn_changes::publish_selection(&scenario.store, &failing, &target, "recover-install")
+            .await
+            .unwrap();
+        assert!(wrapper.path().join("injected").exists());
+        assert_eq!(git(&scenario.source, &["rev-parse", "HEAD"]), object_id);
+        assert_eq!(
+            scenario
+                .store
+                .load(&record.change_set_id)
+                .unwrap()
+                .commit_state,
+            CommitState::Committing
+        );
+        assert!(
+            git_turn_changes::require_settled_publications(
+                &scenario.store.list_commits(&record.thread_id).unwrap()
+            )
+            .is_err()
+        );
+        let TurnCommitState::Recovering { paths, error } =
+            scenario.store.load_commit("recover-install").unwrap().state
+        else {
+            panic!("checkout must remain recoverable")
+        };
+        assert_eq!(
+            paths,
+            expected_paths.iter().map(PathBuf::from).collect::<Vec<_>>()
+        );
+        assert_eq!(error.is_some(), expected_paths.is_empty());
+        let journal = target
+            .common_dir()
+            .join("ash/commit-transactions/recover-install.json");
+        assert!(journal.exists());
+
+        let path = scenario.store.path().to_owned();
+        drop(scenario.store);
+        let reopened = SqliteTurnChangeStore::open(path).unwrap();
+        let (guard, recovery) = git_with_install_failure(
+            &scenario.source,
+            r#"case " $* " in
+  *" update-ref refs/heads/main "*) printf 'ref republished\n' > "$marker"; exit 74 ;;
+esac"#,
+        );
+        for _ in 0..2 {
+            git_turn_changes::publish_selection(&reopened, &recovery, &target, "recover-install")
+                .await
+                .unwrap();
+        }
+        assert!(!guard.path().join("injected").exists());
+        assert_eq!(git(&scenario.source, &["rev-list", "--count", "HEAD"]), "2");
+        assert_eq!(git(&scenario.source, &["rev-parse", "HEAD"]), object_id);
+        assert_eq!(git(&scenario.source, &["show", ":a.txt"]), "sealed");
+        assert_eq!(git(&scenario.source, &["show", ":b.txt"]), "staged local");
+        assert_eq!(
+            std::fs::read_to_string(scenario.source.join("b.txt")).unwrap(),
+            "unstaged local\n"
+        );
+        assert!(matches!(
+            reopened.load_commit("recover-install").unwrap().state,
+            TurnCommitState::Committed { .. }
+        ));
+        assert!(matches!(
+            reopened.load(&record.change_set_id).unwrap().commit_state,
+            CommitState::Committed { .. }
+        ));
+        assert!(!journal.exists());
+        assert!(
+            git(
+                &scenario.source,
+                &["for-each-ref", "refs/ash/commit-transactions"]
+            )
+            .is_empty()
+        );
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn pending_and_legacy_checkout_conflicts_preserve_edits_and_never_republish() {
+    for legacy in [false, true] {
+        let scenario = Scenario::new();
+        let original = std::fs::read_to_string(scenario.source.join("a.txt")).unwrap();
+        let base_head = git(&scenario.source, &["rev-parse", "HEAD"]);
+        let checkout = scenario.checkout("session");
+        let repository = scenario.git.open_repository(&checkout).await.unwrap();
+        let before = scenario
+            .git
+            .capture_worktree_tree(&repository)
+            .await
+            .unwrap();
+        std::fs::write(checkout.join("a.txt"), "sealed\n").unwrap();
+        let capture = scenario
+            .capture(&checkout, "session", "turn", &before)
+            .await;
+        let preview = scenario
+            .prepare(
+                &[capture.clone()],
+                &[selection(&capture, &["a.txt"])],
+                "pending-save",
+            )
+            .await;
+        scenario
+            .prepare(
+                &[capture.clone()],
+                &[selection(&capture, &["a.txt"])],
+                "duplicate",
+            )
+            .await;
+        let TurnPublication::Prepared { commit: prepared } = &preview.publication else {
+            panic!("prepared request")
+        };
+        let published = prepared.object_id().to_owned();
+        scenario
+            .store
+            .queue_publication("pending-save", "queue-first", "first", "{}")
+            .unwrap();
+        let (injected, client) = git_with_install_failure(
+            &scenario.source,
+            r#"case " $* " in
+  *" update-ref refs/heads/main "*)
+    if mkdir "$marker" 2>/dev/null; then
+      "$real_git" "$@"
+      printf 'external editor save\n' > "$root/a.txt"
+      exit 0
+    fi ;;
+esac"#,
+        );
+        let target = client.open_repository(&scenario.source).await.unwrap();
+        git_turn_changes::publish_selection(&scenario.store, &client, &target, "pending-save")
+            .await
+            .unwrap();
+        assert!(injected.path().join("injected").exists());
+        assert!(matches!(
+            scenario.store.load_commit("pending-save").unwrap().state,
+            TurnCommitState::Recovering { .. }
+        ));
+        if legacy {
+            // Reproduce the JSON written by the previous release, keeping the real journal.
+            let mut record = scenario.store.load_commit("pending-save").unwrap();
+            record.state = TurnCommitState::Conflict {
+                paths: vec!["a.txt".into()],
+                message: "checkout conflict".into(),
+            };
+            scenario
+                .store
+                .connection()
+                .unwrap()
+                .execute(
+                    "UPDATE turn_commits SET record_json = ?1 WHERE commit_id = ?2",
+                    rusqlite::params![serde_json::to_string(&record).unwrap(), record.commit_id],
+                )
+                .unwrap();
+        }
+        let store_path = scenario.store.path().to_owned();
+        drop(scenario.store);
+        let reopened = SqliteTurnChangeStore::open(store_path).unwrap();
+        let journal = target
+            .common_dir()
+            .join("ash/commit-transactions/pending-save.json");
+        let (guard, recovery) = git_with_install_failure(
+            &scenario.source,
+            r#"case " $* " in
+  *" update-ref refs/heads/main "*) printf 'ref republished\n' > "$marker"; exit 74 ;;
+esac"#,
+        );
+        for _ in 0..2 {
+            git_turn_changes::publish_selection(&reopened, &recovery, &target, "pending-save")
+                .await
+                .unwrap();
+            assert_eq!(
+                std::fs::read_to_string(scenario.source.join("a.txt")).unwrap(),
+                "external editor save\n"
+            );
+            assert_eq!(git(&scenario.source, &["rev-parse", "HEAD"]), published);
+            assert_eq!(
+                reopened.load_commit("pending-save").unwrap().state,
+                TurnCommitState::Recovering {
+                    paths: vec!["a.txt".into()],
+                    error: None
+                }
+            );
+            assert!(journal.exists());
+        }
+        assert!(
+            reopened
+                .queue_publication("duplicate", "queue-duplicate", "duplicate", "{}")
+                .is_err()
+        );
+        assert!(
+            git_turn_changes::require_settled_publications(
+                &reopened.list_commits(&capture.thread_id).unwrap()
+            )
+            .is_err()
+        );
+        // Even a missing journal or an external ref reset cannot authorize re-publication.
+        let saved_journal = std::fs::read(&journal).unwrap();
+        std::fs::remove_file(&journal).unwrap();
+        assert!(
+            git_turn_changes::publish_selection(&reopened, &recovery, &target, "pending-save")
+                .await
+                .unwrap_err()
+                .contains("refusing to publish again")
+        );
+        std::fs::write(&journal, saved_journal).unwrap();
+        git(
+            &scenario.source,
+            &["update-ref", "refs/heads/main", &base_head, &published],
+        );
+        git_turn_changes::publish_selection(&reopened, &recovery, &target, "pending-save")
+            .await
+            .unwrap();
+        assert_eq!(git(&scenario.source, &["rev-parse", "HEAD"]), base_head);
+        assert!(journal.exists());
+        assert_eq!(
+            std::fs::read_to_string(scenario.source.join("a.txt")).unwrap(),
+            "external editor save\n"
+        );
+        git(
+            &scenario.source,
+            &["update-ref", "refs/heads/main", &published, &base_head],
+        );
+        // The editor's owner resolves the blocking save; recovery may now finish the same object.
+        std::fs::write(scenario.source.join("a.txt"), original).unwrap();
+        git_turn_changes::publish_selection(&reopened, &recovery, &target, "pending-save")
+            .await
+            .unwrap();
+        assert!(!guard.path().join("injected").exists());
+        assert_eq!(git(&scenario.source, &["rev-list", "--count", "HEAD"]), "2");
+        assert_eq!(git(&scenario.source, &["rev-parse", "HEAD"]), published);
+        assert_eq!(git(&scenario.source, &["show", ":a.txt"]), "sealed");
+        assert!(matches!(
+            reopened.load_commit("pending-save").unwrap().state,
+            TurnCommitState::Committed { .. }
+        ));
+        assert!(!journal.exists());
+        assert!(
+            git(
+                &scenario.source,
+                &["for-each-ref", "refs/ash/commit-transactions"]
+            )
+            .is_empty()
+        );
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn prepublication_conflict_without_a_journal_stays_terminal_after_reopen() {
+    let scenario = Scenario::new();
+    let checkout = scenario.checkout("session");
+    let repository = scenario.git.open_repository(&checkout).await.unwrap();
+    let before = scenario
+        .git
+        .capture_worktree_tree(&repository)
+        .await
+        .unwrap();
+    std::fs::write(checkout.join("a.txt"), "sealed\n").unwrap();
+    let capture = scenario
+        .capture(&checkout, "session", "turn", &before)
+        .await;
+    scenario
+        .prepare(
+            &[capture.clone()],
+            &[selection(&capture, &["a.txt"])],
+            "pre-conflict",
+        )
+        .await;
+    std::fs::write(
+        scenario.source.join("a.txt"),
+        "incompatible external save\n",
+    )
+    .unwrap();
+    scenario.publish("pre-conflict").await;
+    let conflict = scenario.store.load_commit("pre-conflict").unwrap();
+    assert!(matches!(conflict.state, TurnCommitState::Conflict { .. }));
+    let head = git(&scenario.source, &["rev-parse", "HEAD"]);
+    let path = scenario.store.path().to_owned();
+    drop(scenario.store);
+    let reopened = SqliteTurnChangeStore::open(path).unwrap();
+    let (guard, client) = git_with_install_failure(
+        &scenario.source,
+        r#"case " $* " in
+  *" update-ref refs/heads/main "*) printf 'ref republished\n' > "$marker"; exit 74 ;;
+esac"#,
+    );
+    let target = client.open_repository(&scenario.source).await.unwrap();
+    assert!(
+        git_turn_changes::publish_selection(&reopened, &client, &target, "pre-conflict")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(!guard.path().join("injected").exists());
+    assert_eq!(reopened.load_commit("pre-conflict").unwrap(), conflict);
+    assert_eq!(git(&scenario.source, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        std::fs::read_to_string(scenario.source.join("a.txt")).unwrap(),
+        "incompatible external save\n"
+    );
+    assert!(
+        !target
+            .common_dir()
+            .join("ash/commit-transactions/pre-conflict.json")
+            .exists()
+    );
+}

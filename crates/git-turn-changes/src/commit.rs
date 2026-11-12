@@ -69,6 +69,12 @@ pub enum TurnCommitState {
     Preview,
     Queued,
     Publishing,
+    /// The journal owns a published ref and unfinished checkout. Only recovery may run now.
+    Recovering {
+        paths: Vec<PathBuf>,
+        #[serde(default)]
+        error: Option<String>,
+    },
     Committed {
         object_id: String,
     },
@@ -343,6 +349,12 @@ pub async fn publish_selection(
             .map_err(|error| error.to_string())?;
         return Ok(Vec::new());
     }
+    // Older versions could persist a post-publication checkout failure as Conflict. Such a
+    // record may inspect its journal, but must never prepare or publish another transaction.
+    let recovery_only = matches!(
+        record.state,
+        TurnCommitState::Recovering { .. } | TurnCommitState::Conflict { .. }
+    );
     if record.state == TurnCommitState::Queued {
         let expected = record.revision;
         record.revision += 1;
@@ -350,22 +362,33 @@ pub async fn publish_selection(
         store
             .update_publication(expected, &record)
             .map_err(|error| error.to_string())?;
-    } else if record.state != TurnCommitState::Publishing {
+    } else if record.state != TurnCommitState::Publishing && !recovery_only {
         return Ok(Vec::new());
     }
     let transaction = GitTransactions::new(git);
-    let outcome = match transaction
-        .recover_tree_commit(repository, commit_id)
-        .await
-        .map_err(|error| error.to_string())?
-    {
+    let recovery = if recovery_only {
+        transaction
+            .recover_published_tree_commit(repository, commit_id)
+            .await
+    } else {
+        transaction.recover_tree_commit(repository, commit_id).await
+    }
+    .map_err(|error| error.to_string())?;
+    let outcome = match recovery {
         GitTreeCommitRecovery::Committed { object_id } => {
             GitTreeCommitResult::Committed { object_id }
         }
         GitTreeCommitRecovery::Conflict { paths } => {
-            GitTreeCommitResult::Conflict(GitTreeCommitConflict::CheckoutChanged { paths })
+            GitTreeCommitResult::CheckoutPending { paths, error: None }
         }
         GitTreeCommitRecovery::None | GitTreeCommitRecovery::RolledBack => {
+            if recovery_only {
+                return if matches!(record.state, TurnCommitState::Conflict { .. }) {
+                    Ok(Vec::new())
+                } else {
+                    Err("Published Turn commit is missing its recovery journal; refusing to publish again.".into())
+                };
+            }
             match &record.publication {
                 TurnPublication::Prepared { commit } => transaction
                     .publish_prepared_tree_commit(repository, commit)
@@ -415,10 +438,11 @@ pub async fn publish_selection(
             }
         }
     };
-    let expected = record.revision;
-    record.revision += 1;
-    record.state = match outcome {
+    let next_state = match outcome {
         GitTreeCommitResult::Committed { object_id } => TurnCommitState::Committed { object_id },
+        GitTreeCommitResult::CheckoutPending { paths, error } => {
+            TurnCommitState::Recovering { paths, error }
+        }
         GitTreeCommitResult::Conflict(conflict) => {
             let paths = match &conflict {
                 GitTreeCommitConflict::ChangeSet { paths }
@@ -446,6 +470,12 @@ pub async fn publish_selection(
             }
         }
     };
+    if next_state == record.state {
+        return Ok(Vec::new());
+    }
+    let expected = record.revision;
+    record.revision += 1;
+    record.state = next_state;
     let updated = store
         .update_publication(expected, &record)
         .map_err(|error| error.to_string())?;
@@ -498,7 +528,9 @@ pub fn derive_commit_progress(record: &mut TurnChangeSet, commits: &[TurnCommitR
                     pending = Some(CommitState::Queued);
                 }
             }
-            TurnCommitState::Publishing => pending = Some(CommitState::Committing),
+            TurnCommitState::Publishing | TurnCommitState::Recovering { .. } => {
+                pending = Some(CommitState::Committing);
+            }
             TurnCommitState::Conflict { paths, message } => {
                 terminal = Some(CommitState::Conflict {
                     paths: paths.clone(),
@@ -596,6 +628,7 @@ pub fn queued_publication(
                     commit.state,
                     TurnCommitState::Queued
                         | TurnCommitState::Publishing
+                        | TurnCommitState::Recovering { .. }
                         | TurnCommitState::Committed { .. }
                 )
             })
@@ -647,8 +680,17 @@ pub fn validate_publication_update(
                 | (
                     TurnCommitState::Publishing,
                     TurnCommitState::Committed { .. }
+                        | TurnCommitState::Recovering { .. }
                         | TurnCommitState::Conflict { .. }
                         | TurnCommitState::Failed { .. }
+                )
+                | (
+                    TurnCommitState::Recovering { .. },
+                    TurnCommitState::Recovering { .. } | TurnCommitState::Committed { .. }
+                )
+                | (
+                    TurnCommitState::Conflict { .. },
+                    TurnCommitState::Recovering { .. } | TurnCommitState::Committed { .. }
                 )
         )
     {
@@ -664,7 +706,9 @@ pub fn require_settled_publications(commits: &[TurnCommitRecord]) -> Result<(), 
     if commits.iter().any(|commit| {
         matches!(
             commit.state,
-            TurnCommitState::Queued | TurnCommitState::Publishing
+            TurnCommitState::Queued
+                | TurnCommitState::Publishing
+                | TurnCommitState::Recovering { .. }
         )
     }) {
         Err("Wait for pending Turn commits to finish before deleting this Session.".into())

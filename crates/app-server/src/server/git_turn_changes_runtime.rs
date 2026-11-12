@@ -259,6 +259,9 @@ impl GitTurnChangesRuntime {
                     commit.state,
                     git_turn_changes::TurnCommitState::Queued
                         | git_turn_changes::TurnCommitState::Publishing
+                        | git_turn_changes::TurnCommitState::Recovering { .. }
+                        // Older checkout failures may have a journal despite their terminal state.
+                        | git_turn_changes::TurnCommitState::Conflict { .. }
                         | git_turn_changes::TurnCommitState::Committed { .. }
                 ) {
                     let binding = self

@@ -26,7 +26,15 @@
 
 准备时固定目标 HEAD 和最终 commit 对象，保留于 Git 内部引用。确认只发布该对象；目标移动要求
 重新预览，不会将当前磁盘或新的消息塞进旧请求。发布先保存请求，Git 成功后原子记账，最后确认
-事务日志；数据库写入失败留下 Publishing，重启恢复同一事务。进行中的发布阻止 Session 删除。
+事务日志；数据库写入失败留下 Publishing，重启恢复同一事务。ref 已发布后的 checkout/index
+失败持久保存为 `Recovering { paths, error }`，对外继续显示 Committing，并继续占用选中的文件、
+阻止 Session 删除。后续调用和启动恢复只读取同一 journal，不重新准备或发布 ref；缺少 journal
+或外部编辑仍阻塞时保留待恢复状态。仅提交前冲突进入终态 Conflict。
+
+旧版本误存为 Conflict 的记录在启动时也检查 journal：存在时恢复并转为 Recovering/Committed，
+不存在时维持原冲突且不重新发布。新增状态只影响内部提交记录 JSON，不改变客户端协议；旧 JSON
+继续可读，`Recovering.error` 可缺省。旧版程序不识别 `recovering` 状态时会拒绝解析提交记录；
+仍有此类待恢复记录的 profile 不能降级给旧版读取，不会把未知状态当作可重新发布的请求。
 
 封存快照保留 common directory 位置，读取不依赖 Thread checkout 存在。目录搬迁更新对象库位置，
 不改变封存证据。非 Git Thread 不创建 ChangeSet。本次不提供行/块级 Turn 选择或跨仓库原子提交。

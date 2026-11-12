@@ -1818,6 +1818,17 @@ fn sqlite_delete_session_removes_all_thread_history_and_change_sets_atomically()
         )
         .unwrap();
     assert!(store.delete_session(&deleted_session).is_err());
+    pending.state = git_turn_changes::TurnCommitState::Recovering {
+        paths: vec!["note".into()],
+        error: None,
+    };
+    connection
+        .execute(
+            "UPDATE turn_commits SET record_json = ?1 WHERE commit_id = ?2",
+            rusqlite::params![serde_json::to_string(&pending).unwrap(), pending.commit_id],
+        )
+        .unwrap();
+    assert!(store.delete_session(&deleted_session).is_err());
     assert!(!store.load(&first).unwrap().is_empty());
     assert!(change_store.load(&capture.change_set_id).is_ok());
     connection

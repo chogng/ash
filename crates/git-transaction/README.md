@@ -22,10 +22,12 @@ SQLite、工作目录归属或界面。调用方通过 `GitTransactions::new(&gi
 journal 位于 `<common directory>/ash/commit-transactions`。发布之前保留原/目标 checkout tree
 和 commit；即使 Git GC，也能恢复。checkout 安装完成标记单独持久保存，后续外部提交推进分支
 不会被旧事务回滚。ref 发布后安装失败时，保留已发布 commit、原/目标 tree 引用和 journal，
-检测到实际层变化时立即返回 checkout 冲突，否则返回需要恢复的错误；不回滚 ref 或覆盖实际文件。
-恢复会重新校验 index 与 worktree，变化时报告
+统一返回 `CheckoutPending`（含冲突路径或 I/O 诊断）；不将已经发布的事务归为提交前冲突，
+也不回滚 ref 或覆盖实际文件。恢复会重新校验 index 与 worktree，变化时报告
 冲突并继续保留证据，也能完成仅 worktree 已安装、真实 index 尚未替换的中断事务。
 调用方的数据库回执和 Git journal 各有明确职责，不能提前删除恢复信息。
+已知发布后的恢复使用 `recover_published_tree_commit`：即使外部将 ref 退回旧值，也保留 journal
+并报告阻塞，不能当作未发布事务删除证据或再次发布。
 
 `commit_tree_delta` 保留给旧整轮请求的一次性存储迁移流程；新选择走
 `prepare_tree_commit` → `publish_prepared_tree_commit`，确认期间目标移动必须重新预览。
