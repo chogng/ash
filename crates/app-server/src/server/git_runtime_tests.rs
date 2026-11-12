@@ -3239,6 +3239,113 @@ fn external_rebase_restores_its_conflict_progress_and_rejects_a_stale_step() {
 }
 
 #[test]
+fn repository_comparisons_preserve_files_when_preview_limits_are_exceeded() {
+    use ash_app_server_protocol::protocol::git::GitCommitFileContentDto;
+    use ash_app_server_protocol::protocol::git::GitComparisonOmissionDto;
+    use ash_app_server_protocol::protocol::git::GitSessionComparisonDto;
+    use ash_app_server_protocol::protocol::git::GitSessionComparisonFileDto;
+    use ash_app_server_protocol::protocol::git::GitSessionComparisonResult;
+    use ash_app_server_protocol::protocol::git::GitWorktreeChangesQuery;
+    use ash_app_server_protocol::protocol::git::GitWorktreeChangesResult;
+
+    const MIB: usize = 1024 * 1024;
+    let repository = TestRepository::init();
+    let sizes = [
+        ("a-large.txt", 2 * MIB + 1),
+        ("b-exact.txt", 2 * MIB),
+        ("c-medium.txt", MIB + MIB / 2),
+        ("d-over-budget.txt", MIB),
+        ("e-small.txt", 5),
+    ];
+    for (path, size) in sizes {
+        let original_size = if path == "a-large.txt" { 1 } else { size };
+        repository.write(path, &"a".repeat(original_size));
+    }
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "Base"]);
+    let base = repository.git_output(&["rev-parse", "HEAD"]);
+    for (path, size) in sizes {
+        repository.write(path, &"b".repeat(size));
+    }
+
+    let authorization = inspection_authorization(repository.root());
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let token = cancellation.token();
+    let root = authorization.dir().canonical_path();
+    let repository_id = super::repository_descriptor(None, &authorization, root)
+        .unwrap()
+        .id;
+    let assert_previews = |files: Vec<GitSessionComparisonFileDto>| {
+        assert_eq!(files.len(), sizes.len());
+        let find = |path| files.iter().find(|file| file.path == path).unwrap();
+        assert_eq!(
+            find("a-large.txt").omission,
+            Some(GitComparisonOmissionDto::FileSizeLimit),
+        );
+        assert!(matches!(
+            &find("b-exact.txt").modified,
+            GitCommitFileContentDto::Text { text } if text.len() == 2 * MIB
+        ));
+        assert_eq!(find("c-medium.txt").omission, None);
+        let skipped = find("d-over-budget.txt");
+        assert_eq!(
+            skipped.omission,
+            Some(GitComparisonOmissionDto::ComparisonSizeLimit)
+        );
+        assert_eq!(skipped.original, GitCommitFileContentDto::Missing);
+        assert_eq!(skipped.modified, GitCommitFileContentDto::Missing);
+        let small = find("e-small.txt");
+        assert_eq!(small.omission, None);
+        assert_eq!(
+            small.original,
+            GitCommitFileContentDto::Text {
+                text: "aaaaa".into()
+            }
+        );
+        assert_eq!(
+            small.modified,
+            GitCommitFileContentDto::Text {
+                text: "bbbbb".into()
+            }
+        );
+    };
+
+    let GitWorktreeChangesResult::Diff { files } =
+        super::worktree_changes(&authorization, GitWorktreeChangesQuery::Diff, &token).unwrap()
+    else {
+        panic!("expected a worktree diff");
+    };
+    assert_previews(files);
+
+    repository.git(&["add", "."]);
+    let GitSessionComparisonResult::Changes { files } = super::session_comparison(
+        &authorization,
+        &repository_id,
+        GitSessionComparisonDto::Uncommitted,
+        &token,
+    )
+    .unwrap() else {
+        panic!("expected staged changes");
+    };
+    assert_previews(files);
+
+    repository.git(&["commit", "-m", "Modified files"]);
+    let GitSessionComparisonResult::Changes { files } = super::session_comparison(
+        &authorization,
+        &repository_id,
+        GitSessionComparisonDto::Branch {
+            base_object_id: base,
+            head_object_id: repository.git_output(&["rev-parse", "HEAD"]),
+        },
+        &token,
+    )
+    .unwrap() else {
+        panic!("expected branch changes");
+    };
+    assert_previews(files);
+}
+
+#[test]
 fn graph_comparisons_preserve_pagination_and_directory_read_authorization() {
     use ash_app_server_protocol::protocol::git::GitCommitFileContentDto;
     let repository = TestRepository::init();

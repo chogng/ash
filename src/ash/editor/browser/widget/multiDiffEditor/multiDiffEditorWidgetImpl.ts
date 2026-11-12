@@ -628,7 +628,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			rows ??= { height: 0, getOffset: () => 0 };
 			// A short placeholder would pull many unresolved files into the viewport
 			// and load them before the first comparison establishes its real height.
-			const estimatedHeight = model?.diff ? rows.height : item.binary ? this.lineHeight * 5
+			const estimatedHeight = model?.diff ? rows.height : item.binary || item.unavailableMessage ? this.lineHeight * 5
 				: Math.max(this.lineHeight * 5, this.viewportHeight - MULTI_DIFF_HEADER_HEIGHT);
 			const bodyHeight = collapsed ? 0 : Math.max(this.lineHeight, this.measuredHeights.get(item.id) ?? estimatedHeight);
 			const height = MULTI_DIFF_HEADER_HEIGHT + bodyHeight;
@@ -804,7 +804,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			if (!this.loopChanges && (rawIndex < 0 || rawIndex >= this.items.length)) break;
 			const index = rot(rawIndex, this.items.length);
 			const item = this.items[index]!;
-			if (item.binary) continue;
+			if (item.binary || item.unavailableMessage) continue;
 			const retention = item.retain?.();
 			try {
 				let model: DiffModel;
@@ -871,8 +871,8 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 
 	private announceChange(location: MultiDiffEditorLocation): void {
 		const item = this.items.find(candidate => candidate.id === location.itemId)!;
-		if (this.items.every(candidate => candidate.binary || candidate.model?.state.kind === 'ready')) {
-			const changes = this.items.flatMap(candidate => candidate.binary ? [] : Array.from(candidate.model!.diff!.rows.changedEntries(), ([rowIndex]) => ({ itemId: candidate.id, rowIndex })));
+		if (this.items.every(candidate => candidate.binary || candidate.unavailableMessage || candidate.model?.state.kind === 'ready')) {
+			const changes = this.items.flatMap(candidate => candidate.binary || candidate.unavailableMessage ? [] : Array.from(candidate.model!.diff!.rows.changedEntries(), ([rowIndex]) => ({ itemId: candidate.id, rowIndex })));
 			const selectedIndex = changes.findIndex(change => change.itemId === location.itemId && change.rowIndex === location.rowIndex);
 			this.accessibilityStatusDomNode.textContent = formatNlsMessage(localize('multiDiffEditor.changeLocation', 'Change {0} of {1}, {2}'), { 0: selectedIndex + 1, 1: changes.length, 2: item.label });
 			return;
@@ -952,7 +952,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		};
 		try {
 			reveal();
-			if (item.binary || item.model?.state.kind === 'ready') return;
+			if (item.binary || item.unavailableMessage || item.model?.state.kind === 'ready') return;
 			const model = await item.resolve();
 			if (model) await this.waitForReady(model, signal);
 			if (this.isDisposed || generation !== this.navigationGeneration) return;

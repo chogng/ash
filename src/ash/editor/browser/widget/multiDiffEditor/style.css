@@ -477,7 +477,7 @@
 	outline-offset: -1px;
 }
 
-.stanza-multi-diff-editor-item-editor.binary {
+.stanza-multi-diff-editor-item-editor.comparison-unavailable {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -488,7 +488,7 @@
 	font-size: var(--ash-fontSize-body1);
 }
 
-.stanza-multi-diff-editor-item-editor.binary:focus-visible {
+.stanza-multi-diff-editor-item-editor.comparison-unavailable:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

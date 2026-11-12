@@ -601,7 +601,7 @@ class MultiDiffEditorSession extends Disposable {
 
 	public async save(options?: ISaveOptions): Promise<void> {
 		// Collapsing or virtualizing a file must not exclude it from an explicit Save.
-		await Promise.all(this.model.items.filter(item => !item.binary && !item.readOnly).map(item => item.resolve()));
+		await Promise.all(this.model.items.filter(item => !item.binary && !item.unavailableMessage && !item.readOnly).map(item => item.resolve()));
 		throwIfCancelled(this.abortController.signal, 'Multi-diff save was cancelled');
 		for (const copy of this.workingCopies) {
 			if (copy.isDirty) await copy.save(this.abortController.signal, options);
@@ -614,7 +614,7 @@ class MultiDiffEditorSession extends Disposable {
 	}
 
 	public getFileListAccessibleContent(): string {
-		return this.paneInput.items.map(item => item.label).join('\n');
+		return this.paneInput.items.map(item => item.unavailableMessage ? `${item.label}\n${item.unavailableMessage}` : item.label).join('\n');
 	}
 
 	private createFileActions(container: HTMLElement, item: IDocumentDiffItem, input: MultiDiffEditorInputItem): IDisposable {
@@ -701,11 +701,11 @@ class MultiDiffEditorSession extends Disposable {
 			this.inputsById.set(id, item);
 			const loaded = resources.add(new MutableDisposable<DisposableStore>());
 			const comparison = resources.add(new DocumentDiffItem({
-				id, label: item.label, binary: item.binary,
+				id, label: item.label, binary: item.binary, unavailableMessage: item.unavailableMessage,
 				originalUri: item.original.resource, modifiedUri: item.modified.resource,
 				originalLabel: item.original.label, modifiedLabel: item.modified.label,
 				readOnly: item.modified.readOnly,
-			}, item.binary ? undefined : () => {
+			}, item.binary || item.unavailableMessage ? undefined : () => {
 				const lifetime = new DisposableStore();
 				loaded.value = lifetime;
 				return this.loadItem(item, lifetime, abort.signal);

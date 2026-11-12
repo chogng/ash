@@ -1,5 +1,6 @@
 import { hash } from '../../../../base/common/hash.js';
 import { URI } from '../../../../base/common/uri.js';
+import { localize } from '../../../../nls.js';
 import type { GitComparisonFile } from '../../../../platform/git/common/localGitService.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 
@@ -8,13 +9,19 @@ export function createGitComparisonEditorInput(source: URI, root: URI, files: re
 	const items = files.map(file => {
 		const originalPath = file.originalPath ?? file.path;
 		const modifiedResource = URI.joinPath(root, file.path);
+		const unavailableMessage = file.omission === 'fileSizeLimit'
+			? localize({ bundle: 'ash.sessions', key: 'sessions.changes.fileSizeLimit' }, 'A version of this file exceeds the preview size limit.')
+			: file.omission === 'comparisonSizeLimit'
+				? localize({ bundle: 'ash.sessions', key: 'sessions.changes.comparisonSizeLimit' }, 'Partial comparison. This preview was omitted because of the total size limit.')
+				: undefined;
 		// Two groups can compare the same worktree before and after an external edit.
-		const revision = hash([file.original, file.modified]);
+		const revision = hash(file.omission ?? [file.original, file.modified]);
 		return {
 			id: file.path,
 			label: file.originalPath ? `${file.originalPath} → ${file.path}` : file.path,
 			fileList: { path: file.path, originalPath: file.originalPath ?? undefined },
 			binary: file.original.kind === 'binary' || file.modified.kind === 'binary',
+			unavailableMessage,
 			contextKeys: { 'sessions.changesGitFile': true },
 			original: {
 				resource: URI.joinPath(source, originalPath).with({ query: `side=before&revision=${revision}` }),

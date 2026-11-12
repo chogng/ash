@@ -200,7 +200,9 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	}
 
 	public getAccessibleContent(): string {
-		return this.comparisonInput?.items.map(item => localize('sessions.changes.editorComparison', '{0}\nBefore:\n{1}\nAfter:\n{2}', item.label ?? item.modified.resource.path, item.original.initialText ?? '', item.modified.initialText ?? '')).join('\n\n')
+		return this.comparisonInput?.items.map(item => item.unavailableMessage
+			? `${item.label}\n${item.unavailableMessage}`
+			: localize('sessions.changes.editorComparison', '{0}\nBefore:\n{1}\nAfter:\n{2}', item.label, item.original.initialText ?? '', item.modified.initialText ?? '')).join('\n\n')
 			?? this.messageDomNode.textContent;
 	}
 

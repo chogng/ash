@@ -14,6 +14,7 @@ use ash_app_server_protocol::protocol::git::GitCommitFileContentDto;
 use ash_app_server_protocol::protocol::git::GitCommitFileResult;
 use ash_app_server_protocol::protocol::git::GitCommitSummaryDto;
 use ash_app_server_protocol::protocol::git::GitCompareChangesResult;
+use ash_app_server_protocol::protocol::git::GitComparisonOmissionDto;
 use ash_app_server_protocol::protocol::git::GitConflictFileResult;
 use ash_app_server_protocol::protocol::git::GitConflictResolutionDto;
 use ash_app_server_protocol::protocol::git::GitDiffStatisticsDto;
@@ -451,26 +452,7 @@ fn repository_diff(
     branch: Option<(String, String)>,
 ) -> Result<Vec<GitSessionComparisonFileDto>, GitRuntimeError> {
     let mut files = Vec::new();
-    let mut remaining: usize = 8 * 1024 * 1024;
-    let mut push = |path, original_path, original: Option<&[u8]>, modified: Option<&[u8]>| {
-        let size = original.map_or(0, <[u8]>::len) + modified.map_or(0, <[u8]>::len);
-        remaining = remaining
-            .checked_sub(size)
-            .ok_or(GitRuntimeError::Boundary)?;
-        let content = |bytes| match commit_file_content(bytes) {
-            GitCommitFileContentDto::Binary { .. } => {
-                GitCommitFileContentDto::Binary { data: None }
-            }
-            content => content,
-        };
-        files.push(GitSessionComparisonFileDto {
-            path,
-            original_path,
-            original: content(original),
-            modified: content(modified),
-        });
-        Ok(())
-    };
+    let mut remaining = 8 * 1024 * 1024;
     if let Some((base_object_id, head_object_id)) = branch {
         let valid_oid = |id: &str| {
             matches!(id.len(), 40 | 64) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
@@ -494,20 +476,21 @@ fn repository_diff(
             .filter_map(|change| dir_commit_change(change, prefix))
         {
             let change = change?;
-            let contents = service
-                .commit_file(
-                    repository,
-                    &head_object_id,
-                    Path::new(&change.path),
-                    Some(&base_object_id),
-                )
-                .map_err(GitRuntimeError::Service)?;
-            push(
+            files.push(repository_diff_file(
+                &mut remaining,
                 change.path,
                 change.original_path,
-                contents.original(),
-                contents.modified(),
-            )?;
+                |path, original| {
+                    service.commit_file_at_paths(
+                        repository,
+                        &head_object_id,
+                        &base_object_id,
+                        original.map(Path::new),
+                        Path::new(path),
+                    )
+                },
+                |contents| (contents.original(), contents.modified()),
+            )?);
         }
     } else {
         for change in snapshot
@@ -516,69 +499,109 @@ fn repository_diff(
             .filter_map(|change| dir_change(change, prefix))
         {
             let change = change?;
-            let path = Path::new(&change.path);
-            let original = change.original_path.as_deref().map_or(path, Path::new);
-            if change.conflicted {
-                let contents = service
-                    .conflict_file(path)
-                    .map_err(GitRuntimeError::Service)?;
-                push(
+            let file = if change.conflicted {
+                repository_diff_file(
+                    &mut remaining,
                     change.path,
                     change.original_path,
-                    contents.current(),
-                    contents.result(),
-                )?;
-                continue;
-            }
-            let staged = (change.index_status != GitChangeStatusDto::Unmodified)
-                .then(|| {
-                    service.change_file_at_paths(
-                        repository,
-                        if matches!(
-                            change.index_status,
-                            GitChangeStatusDto::Renamed | GitChangeStatusDto::Copied
-                        ) {
-                            original
-                        } else {
-                            path
-                        },
-                        path,
-                        GitChangeFileComparison::Staged,
-                    )
-                })
-                .transpose()
-                .map_err(GitRuntimeError::Service)?;
-            let unstaged = (change.worktree_status != GitChangeStatusDto::Unmodified)
-                .then(|| {
-                    service.change_file_at_paths(
-                        repository,
-                        if matches!(
-                            change.worktree_status,
-                            GitChangeStatusDto::Renamed | GitChangeStatusDto::Copied
-                        ) {
-                            original
-                        } else {
-                            path
-                        },
-                        path,
-                        GitChangeFileComparison::Unstaged,
-                    )
-                })
-                .transpose()
-                .map_err(GitRuntimeError::Service)?;
-            let before = staged
-                .as_ref()
-                .or(unstaged.as_ref())
-                .and_then(|file| file.original());
-            let after = unstaged
-                .as_ref()
-                .or(staged.as_ref())
-                .and_then(|file| file.modified());
-            push(change.path, change.original_path, before, after)?;
+                    |path, _| service.conflict_file(Path::new(path)),
+                    |contents| (contents.current(), contents.result()),
+                )
+            } else {
+                repository_diff_file(
+                    &mut remaining,
+                    change.path,
+                    change.original_path,
+                    |path, original| {
+                        let path = Path::new(path);
+                        let original = original.map_or(path, Path::new);
+                        let read = |status, comparison| {
+                            (status != GitChangeStatusDto::Unmodified)
+                                .then(|| {
+                                    service.change_file_at_paths(
+                                        repository,
+                                        if matches!(
+                                            status,
+                                            GitChangeStatusDto::Renamed
+                                                | GitChangeStatusDto::Copied
+                                        ) {
+                                            original
+                                        } else {
+                                            path
+                                        },
+                                        path,
+                                        comparison,
+                                    )
+                                })
+                                .transpose()
+                        };
+                        Ok((
+                            read(change.index_status, GitChangeFileComparison::Staged)?,
+                            read(change.worktree_status, GitChangeFileComparison::Unstaged)?,
+                        ))
+                    },
+                    |(staged, unstaged)| {
+                        let staged = staged.as_ref();
+                        let unstaged = unstaged.as_ref();
+                        (
+                            staged.or(unstaged).and_then(|file| file.original()),
+                            unstaged.or(staged).and_then(|file| file.modified()),
+                        )
+                    },
+                )
+            };
+            files.push(file?);
         }
     }
     Ok(files)
 }
+
+fn repository_diff_file<T>(
+    remaining: &mut usize,
+    path: String,
+    original_path: Option<String>,
+    read: impl FnOnce(&str, Option<&str>) -> Result<T, GitServiceError>,
+    sides: impl FnOnce(&T) -> (Option<&[u8]>, Option<&[u8]>),
+) -> Result<GitSessionComparisonFileDto, GitRuntimeError> {
+    let mut file = GitSessionComparisonFileDto {
+        path,
+        original_path,
+        original: GitCommitFileContentDto::Missing,
+        modified: GitCommitFileContentDto::Missing,
+        omission: Some(GitComparisonOmissionDto::ComparisonSizeLimit),
+    };
+    if *remaining == 0 {
+        return Ok(file);
+    }
+    let contents = match read(&file.path, file.original_path.as_deref()) {
+        Ok(contents) => contents,
+        Err(GitServiceError::Git(ash_git::GitError::OutputLimitExceeded {
+            stream: "file" | "stdout",
+            ..
+        })) => {
+            file.omission = Some(GitComparisonOmissionDto::FileSizeLimit);
+            return Ok(file);
+        }
+        Err(error) => return Err(GitRuntimeError::Service(error)),
+    };
+    let (original, modified) = sides(&contents);
+    let size = original.map_or(0, <[u8]>::len) + modified.map_or(0, <[u8]>::len);
+    // An omitted file consumes none of the remaining budget, so a later file can still fit.
+    if let Some(remaining_bytes) = remaining.checked_sub(size) {
+        *remaining = remaining_bytes;
+        let content = |bytes| match commit_file_content(bytes) {
+            GitCommitFileContentDto::Binary { .. } => {
+                GitCommitFileContentDto::Binary { data: None }
+            }
+            content => content,
+        };
+        file.original = content(original);
+        file.modified = content(modified);
+        file.omission = None;
+    }
+    Ok(file)
+}
+
 impl GitRuntime {
     pub(super) fn new(
         authorization: Authorization,

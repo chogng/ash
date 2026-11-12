@@ -1799,6 +1799,8 @@
     "sessions.hosts.help": "使用命令面板中的“Agents：管理已连接宿主”打开远程环境。在表格中按 Tab 到达各宿主的操作，按 Escape 关闭对话框。在对话框中可连接已保存的 SSH 宿主或断开额外宿主。“运行位置”菜单会将检测到的 WSL 2 分发版与本机一起列出。“新建环境”会打开名称、运行位置和文件夹表单。按 Tab 在表单中移动。在“运行位置”或工作树选项上，按 Enter、空格键、上箭头或下箭头打开菜单。用方向键浏览，按 Enter 选择。按 Escape 关闭菜单并将焦点返回到对应控件。本地包含此电脑和 WSL 发行版。用“添加”选择多个文件夹，并用文件夹旁的工作树选项选择检出目录。“环境变量”会在同一对话框中打开 .env 编辑器。按“完成”返回表单，再按“创建环境”将其选为当前草稿的环境。“Ash 隧道”接受 SSH 转发启动后的认证 URL。每个宿主分别保留自己的会话和工作区文件。"
   },
   "ash.sessions": {
+    "sessions.changes.fileSizeLimit": "此文件的一个版本超出了预览大小上限。",
+    "sessions.changes.comparisonSizeLimit": "当前显示部分对比结果。由于对比总量超出上限，此文件的预览已省略。",
     "sessions.environment.reviewUncommitted": "未提交的更改（{0}）",
     "sessions.environment.uncommittedHelp": "所选工作树有未提交的文件时，按 Tab 到达环境卡片中的“未提交的更改”，按 Enter 或空格打开差异。",
     "sessions.storage.title": "存储空间",

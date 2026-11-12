@@ -134,7 +134,7 @@ export class MultiDiffEditorWithFileListWidget extends Disposable {
 	}
 
 	private renderStatistics(row: HTMLElement, file: IMultiDiffFile): IDisposable | void {
-		if (file.item.binary) return;
+		if (file.item.binary || file.item.unavailableMessage) return;
 		const render = (additions: number, deletions: number): void => {
 			if (!additions && !deletions) return;
 			const document = row.ownerDocument;

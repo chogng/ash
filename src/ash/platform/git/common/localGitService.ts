@@ -22,6 +22,7 @@ export interface GitComparisonFile {
 	readonly originalPath: string | null;
 	readonly original: GitSessionComparisonContent;
 	readonly modified: GitSessionComparisonContent;
+	readonly omission?: 'fileSizeLimit' | 'comparisonSizeLimit';
 }
 
 export type GitSessionComparisonSnapshot =

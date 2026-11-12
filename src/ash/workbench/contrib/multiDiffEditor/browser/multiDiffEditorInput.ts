@@ -20,6 +20,7 @@ EditorInputSerializers.registerStatic({
 				original: registry.serialize(item.original),
 				modified: registry.serialize(item.modified),
 				...(item.binary === undefined ? {} : { binary: item.binary }),
+				...(item.unavailableMessage === undefined ? {} : { unavailableMessage: item.unavailableMessage }),
 				...(item.goToFile === undefined ? {} : { goToFile: registry.serialize(item.goToFile) }),
 				...(item.actions === undefined ? {} : { actions: item.actions }),
 				...(item.contextKeys === undefined ? {} : { contextKeys: item.contextKeys }),
@@ -39,6 +40,7 @@ EditorInputSerializers.registerStatic({
 				original: registry.deserialize(requireSerializedEditorInput(entry.original, 'serialized multi-diff original input')),
 				modified: registry.deserialize(requireSerializedEditorInput(entry.modified, 'serialized multi-diff modified input')),
 				...(entry.binary === undefined ? {} : { binary: requireBinary(entry.binary) }),
+				...(entry.unavailableMessage === undefined ? {} : { unavailableMessage: requireString(entry.unavailableMessage, 'multi-diff unavailable message') }),
 				...(entry.goToFile === undefined ? {} : { goToFile: registry.deserialize(requireSerializedEditorInput(entry.goToFile, 'serialized multi-diff Open File input')) }),
 				...(entry.actions === undefined ? {} : { actions: requireActions(entry.actions) }),
 				// The input factory validates this metadata before publishing the comparisons.
@@ -68,6 +70,8 @@ export interface MultiDiffEditorInputItem {
 	readonly id?: string;
 	readonly label: string;
 	readonly binary?: boolean;
+	/** A user-visible explanation for a file whose comparison contents were omitted. */
+	readonly unavailableMessage?: string;
 	readonly original: IResourceEditorInput;
 	readonly modified: IResourceEditorInput;
 	/** Resource opened by the per-file Open File action. Defaults to the modified side. */
@@ -113,6 +117,7 @@ export function createMultiDiffEditorInput(resource: URI, items: readonly MultiD
 			original: item.original,
 			modified: item.modified,
 			...(item.binary === undefined ? {} : { binary: item.binary }),
+			...(item.unavailableMessage === undefined ? {} : { unavailableMessage: requireString(item.unavailableMessage, 'multi-diff unavailable message') }),
 			...(item.goToFile ? { goToFile: item.goToFile } : {}),
 			...(item.actions ? { actions: requireActions(item.actions) } : {}),
 			...(item.contextKeys === undefined ? {} : { contextKeys: requireContextKeys(item.contextKeys) }),
@@ -128,7 +133,7 @@ export function createMultiDiffEditorInput(resource: URI, items: readonly MultiD
 		contentType: MULTI_DIFF_EDITOR_CONTENT_TYPE,
 		items: Object.freeze(normalizedItems),
 		label: label.trim(),
-		readOnly: normalizedItems.every(item => item.binary || item.modified.readOnly === true),
+		readOnly: normalizedItems.every(item => item.binary || item.unavailableMessage || item.modified.readOnly === true),
 		showBreadcrumbs: false,
 		...(source ? { source } : {}),
 	});
@@ -158,6 +163,7 @@ function isMultiDiffEditorInputItem(value: unknown): value is MultiDiffEditorInp
 		(!('goToFile' in value) || value.goToFile === undefined || isTextResourceInput(value.goToFile)) &&
 		(!('actions' in value) || value.actions === undefined || Array.isArray(value.actions)) &&
 		(!('binary' in value) || value.binary === undefined || typeof value.binary === 'boolean') &&
+		(!('unavailableMessage' in value) || value.unavailableMessage === undefined || typeof value.unavailableMessage === 'string' && value.unavailableMessage.trim().length > 0) &&
 		(!('fileList' in value) || value.fileList === undefined || isFileListEntry(value.fileList));
 }
 

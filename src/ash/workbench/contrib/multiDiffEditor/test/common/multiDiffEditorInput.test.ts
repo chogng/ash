@@ -79,6 +79,20 @@ test('restored comparisons retain disabled file capabilities and reject corrupte
 	assert.throws(() => EditorInputSerializers.deserialize(serialized), /Invalid multi-diff context keys/u);
 });
 
+test('an omitted comparison keeps its explanation and read-only state after reopening', () => {
+	const item = {
+		label: 'large.txt',
+		original: { resource: URI.parse('snapshot:/large.txt') },
+		modified: { resource: URI.file('/workspace/large.txt') },
+		unavailableMessage: 'Preview omitted because of the size limit.',
+	};
+	const input = createMultiDiffEditorInput(URI.parse('ash-multi-diff:/partial'), [item], 'Changes');
+	const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input))));
+	assert.ok(isMultiDiffEditorInput(restored));
+	assert.equal(restored.readOnly, true);
+	assert.equal(restored.items[0].unavailableMessage, item.unavailableMessage);
+});
+
 test('restores file list paths and line statistics independently of decorated diff labels', () => {
 	const fileList = {
 		path: 'src/nested/file.ts', originalPath: 'old/file.ts', group: { id: 'repository', label: 'Repository 1' }, statistics: { additions: 2, deletions: 0 },

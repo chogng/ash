@@ -292,6 +292,18 @@ pub struct GitSessionComparisonFileDto {
     pub original_path: Option<String>,
     pub original: GitCommitFileContentDto,
     pub modified: GitCommitFileContentDto,
+    /// The path is changed, but its before and after contents were omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub omission: Option<GitComparisonOmissionDto>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum GitComparisonOmissionDto {
+    FileSizeLimit,
+    ComparisonSizeLimit,
 }
 
 /// Reads uncommitted changes in an explicitly granted checkout before a Session exists.

@@ -8027,6 +8027,7 @@ typescript_bindings! {
     crate::protocol::git::GitSessionComparisonDto,
     crate::protocol::git::GitSessionComparisonResult,
     crate::protocol::git::GitSessionComparisonFileDto,
+    crate::protocol::git::GitComparisonOmissionDto,
     crate::protocol::git::GitWorktreeChangesParams,
     crate::protocol::git::GitWorktreeChangesQuery,
     crate::protocol::git::GitWorktreeChangesResult,

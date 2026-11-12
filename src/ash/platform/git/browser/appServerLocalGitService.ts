@@ -86,7 +86,7 @@ export class AppServerLocalGitService implements ILocalGitService {
 		if (signal.aborted || generation !== this.connection.generation || this.connection.state !== 'ready') throw canceled();
 		return result.kind === 'branches'
 			? { kind: 'branches', references: result.references.map(({ name, objectId }) => ({ name, objectId })) }
-			: { kind: 'changes', files: result.files.map(({ path, originalPath, original, modified }) => ({ path, originalPath, original, modified })) };
+			: { kind: 'changes', files: result.files.map(({ path, originalPath, original, modified, omission }) => ({ path, originalPath, original, modified, omission })) };
 	}
 
 	async readWorktreeChanges(sourcePath: string, query: 'summary' | 'diff', signal: AbortSignal): Promise<GitWorktreeChangesSnapshot> {
@@ -95,7 +95,7 @@ export class AppServerLocalGitService implements ILocalGitService {
 		if (signal.aborted || generation !== this.connection.generation || this.connection.state !== 'ready') throw canceled();
 		return result.kind === 'summary'
 			? { kind: 'summary', files: result.files }
-			: { kind: 'diff', files: result.files.map(({ path, originalPath, original, modified }) => ({ path, originalPath, original, modified })) };
+			: { kind: 'diff', files: result.files.map(({ path, originalPath, original, modified, omission }) => ({ path, originalPath, original, modified, omission })) };
 	}
 
 	async cancel(operationId: string): Promise<void> {
