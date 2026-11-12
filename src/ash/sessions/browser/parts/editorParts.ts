@@ -283,14 +283,19 @@ export class EditorParts extends WorkbenchEditorParts {
 	}
 
 	public override async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
+		const tool = editorTool(input);
+		const host = this.hosts.get(tool)!;
 		const groupId = typeof target === 'object' ? target.groupId : undefined;
-		if (groupId !== undefined && !this.hosts.get(editorTool(input))!.groups.some(group => group.id === groupId)) {
+		if (groupId !== undefined && !host.groups.some(group => group.id === groupId)) {
 			target = undefined;
 		}
 		const pane = await super.openEditor(input, options, target);
 		this.syncArea();
 		if (!options.inactive && !options.preserveFocus) {
-			const restored = editorTool(input) === 'search' && this.area.revealTool('search');
+			const group = host.groups.find(group => group.activePane === pane);
+			const restored = group && this.area.revealTool(tool);
+			// Reopening a tool's selected tab may leave another tool active.
+			if (restored) { this.activateGroup(group.id); }
 			this.revealed.fire();
 			if (restored) pane.focus();
 		}
