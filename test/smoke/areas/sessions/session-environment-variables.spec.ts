@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { APP_SERVER_METHODS, APPROVAL_MODE_DEFINITIONS } from '../../../../.build/protocol/typescript/index.js';
-import { connectProfile } from './sessionProfileFixture.js';
+import { connectProfile, enableFixtureModel } from './sessionProfileFixture.js';
 
 test.use({ gitRepository: true });
 
@@ -96,10 +96,11 @@ test('A saved environment reaches the Agent process and stays scoped to its Sess
 			rule: { id: 'environment-fixture-shell', selector: { type: 'source', source: 'built_in_tool', sourceId: 'shell-command' }, effect: { type: 'allowUnsandboxed' }, justification: 'Reads synthetic environment values in this isolated smoke profile.' },
 		});
 		const { project } = await client.request(APP_SERVER_METHODS['project/create'], {
-			commandId: randomUUID(), projectId: randomUUID(),
+			commandId: randomUUID(), projectId: randomUUID(), scope: 'code',
 			name: 'Environment fixture project', description: '',
 			materials: [{ kind: 'folder', name: 'Workspace', path: pathToFileURL(testWorkspace.directory).href }],
 		});
+		await enableFixtureModel(workbench, model, 'en');
 		let page = await workbench.openAgentsWindow(target.kind);
 		const code = async () => page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await code();
@@ -125,8 +126,10 @@ test('A saved environment reaches the Agent process and stays scoped to its Sess
 				await page.locator('[role="menu"]').getByText(project.name, { exact: true }).click();
 				await expect(projectPicker).toHaveText(project.name);
 			}
-			await active().locator('.ash-chat-input-mode-action').click();
-			await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).click();
+			if (!await active().getByRole('button', { name: 'Mode: Agent', exact: true }).count()) {
+				await active().locator('.ash-chat-input-mode-action').click();
+				await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).click();
+			}
 			await active().getByRole('button', { name: /^Permissions:/ }).click();
 			const bypass = APPROVAL_MODE_DEFINITIONS.find(mode => mode.id === 'bypassPermissions')!;
 			await page.getByRole('menuitemradio', { name: bypass.label.english, exact: true }).click();
