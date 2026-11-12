@@ -288,7 +288,10 @@ export async function readThreadChangesComparison(chat: IChatService, sessionId:
 			items.push({
 				label, binary: contents.binary,
 				fileList: {
-					path: file.path, ...(summary.repositories.length > 1 ? {
+					path: file.path,
+					originalPath: file.previousPath,
+					statistics: contents.binary ? undefined : { additions: file.additions, deletions: file.deletions },
+					...(summary.repositories.length > 1 ? {
 						group: { id: JSON.stringify([repository.repositoryId]), label: localize('sessions.changes.repository', 'Repository {0}', index + 1) },
 					} : {})
 				},

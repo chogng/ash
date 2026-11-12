@@ -48,11 +48,22 @@
 	overflow: hidden;
 }
 
+.ash-multi-diff-file-list .ash-multi-diff-file-list-row {
+	flex: 1;
+}
+
 .ash-multi-diff-file-list-label {
 	display: flex;
 	flex: 1;
 	min-width: 0;
 	overflow: hidden;
+}
+
+.ash-multi-diff-file-list-stats {
+	flex: 0 0 auto;
+	flex-wrap: nowrap;
+	margin-inline-start: var(--ash-spacing-size60);
+	font-variant-numeric: tabular-nums;
 }
 
 .stanza-multi-diff-editor-toolbar {

@@ -3,12 +3,9 @@
 }
 
 .ash-desktop-auxiliarybar {
-	position: absolute;
-	box-sizing: border-box;
 	min-width: 0;
 	min-height: 0;
 	background: var(--ash-editor-background);
-	border-left: var(--ash-strokeThickness) solid var(--ash-editorGroup-border);
 }
 
 .ash-desktop-auxiliarybar > .ash-workbench-part-title {

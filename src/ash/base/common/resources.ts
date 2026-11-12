@@ -182,6 +182,11 @@ export function basename(uri: URI): string {
 	return decodeURIComponent(path.slice(path.lastIndexOf('/') + 1));
 }
 
+/** Returns a display name for resources with or without a path segment. */
+export function basenameOrAuthority(uri: URI): string {
+	return basename(uri) || uri.authority || uri.toString();
+}
+
 /**
  * URI identity biased toward the current native file-system path casing.
  *

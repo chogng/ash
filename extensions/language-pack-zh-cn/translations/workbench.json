@@ -603,6 +603,7 @@
     "multiDiff.empty": "此选择中没有更改。",
     "multiDiff.fileActions": "{0} 操作",
     "multiDiff.changedFiles": "变更文件",
+    "multiDiff.fileLineChanges": "新增 {0} 行，删除 {1} 行",
     "multiDiff.toggleFileList": "切换变更文件列表",
     "multiDiff.filesView": "文件视图",
     "multiDiff.viewAsList": "以列表显示",

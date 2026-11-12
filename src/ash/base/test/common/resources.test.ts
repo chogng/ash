@@ -4,6 +4,7 @@ import { ResourceMap, ResourceSet } from '../../common/map.js';
 import {
 	ExtUri,
 	basename,
+	basenameOrAuthority,
 	extUri,
 	DataUri,
 	ResourcePathCasing,
@@ -98,6 +99,12 @@ test('dirname preserves POSIX filename backslashes and Windows drive roots on ev
 test('basename decodes the final path segment after finding its boundary', () => {
 	assert.equal(basename(URI.parse('ash://workspace/project/a%2Fb.txt')), 'a/b.txt');
 	assert.equal(basename(URI.parse('ash://workspace/project/a%20b.txt/')), 'a b.txt');
+});
+
+test('basenameOrAuthority keeps a name for resources without a path segment', () => {
+	assert.equal(basenameOrAuthority(URI.parse('ash://workspace/project/a%2Fb.txt')), 'a/b.txt');
+	assert.equal(basenameOrAuthority(URI.parse('ash://workspace/')), 'workspace');
+	assert.equal(basenameOrAuthority(URI.parse('ash-label:')), 'ash-label:');
 });
 
 test('ResourceMap uses exact URI identity by default', () => {

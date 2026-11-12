@@ -1,10 +1,13 @@
+import '../../../browser/media/changesStatsWidget.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import { SplitView } from '../../../../base/browser/ui/splitview/splitview.js';
-import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { MultiDiffEditorWidget } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
+import type { IMultiDiffEditorModel } from '../../../../editor/browser/widget/multiDiffEditor/model.js';
+import type { DiffModelState } from '../../../../editor/common/diff/diffModel.js';
 import { localize } from '../../../../nls.js';
 import { getFlatContextMenuActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
@@ -37,6 +40,7 @@ export class MultiDiffEditorWithFileListWidget extends Disposable {
 		container: HTMLElement,
 		diffContainer: HTMLElement,
 		private readonly editor: MultiDiffEditorWidget,
+		private readonly statisticsModel: IMultiDiffEditorModel | undefined,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IMenuService private readonly menus: IMenuService,
@@ -45,7 +49,11 @@ export class MultiDiffEditorWithFileListWidget extends Disposable {
 	) {
 		super();
 		this.listContainer = h(container.ownerDocument, 'div', { className: 'ash-multi-diff-file-list' });
-		this.split = this._register(new SplitView(container, { orientation: Orientation.HORIZONTAL, proportionalLayout: false }));
+		this.split = this._register(new SplitView(container, {
+			orientation: Orientation.HORIZONTAL,
+			proportionalLayout: false,
+			styles: { separatorBorder: 'var(--ash-multiDiffEditor-border)' },
+		}));
 		const widget = this;
 		this.split.addView({
 			element: diffContainer, maximumSize: Infinity,
@@ -98,6 +106,7 @@ export class MultiDiffEditorWithFileListWidget extends Disposable {
 			ariaLabel: localize('multiDiff.changedFiles', 'Changed Files'),
 			openOnSingleClick: true, expandOnlyOnTwistieClick: true, scrolling: 'managed',
 			group: (file: IMultiDiffFile) => file.item.fileList?.group,
+			renderDetails: this.statisticsModel && ((row: HTMLElement, file: IMultiDiffFile) => this.renderStatistics(row, file)),
 		});
 		const resources = new DisposableStore();
 		this.fileList.value = Object.assign(resources, { list: resources.add(list) });
@@ -122,6 +131,56 @@ export class MultiDiffEditorWithFileListWidget extends Disposable {
 			const actions = getFlatContextMenuActions(this.menus.getMenuActions(MultiDiffEditorFileListContextMenu, { arg: items }, context));
 			if (actions.length) this.contextMenus.showContextMenu({ getAnchor: () => anchor, getActions: () => actions });
 		}));
+	}
+
+	private renderStatistics(row: HTMLElement, file: IMultiDiffFile): IDisposable | void {
+		if (file.item.binary) return;
+		const render = (additions: number, deletions: number): void => {
+			if (!additions && !deletions) return;
+			const document = row.ownerDocument;
+			const label = localize('multiDiff.fileLineChanges', '{0} additions, {1} deletions', additions, deletions);
+			const stats = h(document, 'span', {
+				className: 'ash-changes-stats ash-multi-diff-file-list-stats',
+				attributes: { role: 'img', 'aria-label': label, title: label },
+			});
+			if (additions) stats.append(h(document, 'span', { className: 'ash-changes-stats-added' }, `+${additions}`));
+			if (deletions) stats.append(h(document, 'span', { className: 'ash-changes-stats-removed' }, `−${deletions}`));
+			row.append(stats);
+		};
+		const statistics = file.item.fileList?.statistics;
+		if (statistics) {
+			render(statistics.additions, statistics.deletions);
+			return;
+		}
+
+		// Composed captures and Git comparisons can reuse the editor's lazy diff for a mounted row.
+		const comparison = this.statisticsModel?.items.find(item => item.id === file.id);
+		if (!comparison || comparison.binary) return;
+		const lifetime = new DisposableStore();
+		const retention = comparison.retain?.();
+		if (retention) lifetime.add(retention);
+		void comparison.resolve().then(model => {
+			if (lifetime.isDisposed) return;
+			if (!model) { lifetime.dispose(); return; }
+			const update = (state: DiffModelState): void => {
+				if (state.kind === 'ready' && !state.quitEarly) {
+					const additions = model.modified.getValueLength()
+						? state.diff.changes.reduce((count, change) => count + change.modified.length, 0) : 0;
+					const deletions = model.original.getValueLength()
+						? state.diff.changes.reduce((count, change) => count + change.original.length, 0) : 0;
+					render(additions, deletions);
+				}
+				lifetime.dispose();
+			};
+			if (model.state.kind === 'loading') {
+				lifetime.add(model.onDidChange(state => {
+					if (state.kind !== 'loading') update(state);
+				}));
+			} else {
+				update(model.state);
+			}
+		}, () => lifetime.dispose());
+		return lifetime;
 	}
 
 	private updateFileList(): void {

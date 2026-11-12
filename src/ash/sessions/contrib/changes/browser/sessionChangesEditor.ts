@@ -36,6 +36,7 @@ import type { DiffEditorWidget } from '../../../../editor/browser/widget/diffEdi
 
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { SessionsConfiguration } from '../../../common/configuration.js';
 import type { GitRepositoryContext, GitSessionComparison } from '../../../../platform/git/common/localGitService.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
 
@@ -360,7 +361,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			return {
 				id: file.path,
 				label: file.originalPath ? `${file.originalPath} → ${file.path}` : file.path,
-				fileList: { path: file.path },
+				fileList: { path: file.path, originalPath: file.originalPath ?? undefined },
 				binary: file.original.kind === 'binary' || file.modified.kind === 'binary',
 				contextKeys: { 'sessions.changesGitFile': true },
 				original: {
@@ -597,7 +598,11 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 				return;
 			}
 			if (!this.comparison) {
-				this.comparison = this._register(this.instantiation.createInstance(MultiDiffEditor, { activeEditorId: this.id }));
+				this.comparison = this._register(this.instantiation.createInstance(MultiDiffEditor, {
+					activeEditorId: this.id,
+					layoutStyleSetting: SessionsConfiguration.layoutStyle,
+					showFileListStatistics: this.options.showFileList,
+				}));
 				this.comparison.create(this.domNode);
 				this.comparison.setVisible(false);
 			}
