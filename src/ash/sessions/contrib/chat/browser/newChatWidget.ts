@@ -33,7 +33,7 @@ import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browse
 import { resolveChatContextAttachment } from '../../../../workbench/services/chat/common/chatContextService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { ChatInputArtifactPill } from '../../artifacts/browser/chatInputArtifactPill.js';
+import { ChatInputArtifactPill } from './chatInputArtifactPill.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
 import './media/newChatEnvironment.css';

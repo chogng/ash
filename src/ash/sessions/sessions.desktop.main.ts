@@ -35,7 +35,7 @@ import '../workbench/contrib/processExplorer/electron-browser/processExplorer.co
 import './browser/parts/menubar.contribution.js';
 import './contrib/openAgentsWindow/electron-browser/openAgentsWindowKeybindingTip.js';
 import { registerOpenAgentsWindowCommand } from './contrib/openAgentsWindow/electron-browser/openAgentsWindowCommand.js';
-import { OpenAshWindowAction } from './electron-browser/actions/ashActions.js';
+import { OpenAshWindowAction, OpenInAshWidgetContribution, OpenSessionInAshAction } from './electron-browser/actions/ashActions.js';
 import { MenusRegistry, registerAction2 } from '../platform/actions/common/actions.js';
 import { Menus } from './browser/menus.js';
 import { IHostService } from '../workbench/services/host/browser/host.js';
@@ -54,7 +54,10 @@ registerChatWorkspace(chatGPTWorkspaceSource);
 registerChatDeveloperActions();
 registerOpenAgentsWindowCommand();
 registerAction2(OpenAshWindowAction);
+registerAction2(OpenSessionInAshAction);
 registerAction2(ReloadWindowAction);
+registerWorkbenchContribution(OpenInAshWidgetContribution.ID, WorkbenchPhase.BlockRestore, accessor =>
+	accessor.get(IInstantiationService).createInstance(OpenInAshWidgetContribution));
 registerWorkbenchContribution(AgentsWindowInvitationContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(AgentsWindowInvitationContribution));
 
 MenusRegistry.appendMenuItem(Menus.MenubarFileMenu, {

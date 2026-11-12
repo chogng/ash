@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../base/browser/ui/styles.css';
 import '../../../../../browser/media/style.css';
 import { bindTestColorTheme } from '../../../../../../../../test/fixtures/browser/themeFixture.js';
@@ -6,7 +7,6 @@ import { lightColorTheme } from '../../../../../../platform/theme/common/colorTh
 import { Event } from '../../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { setNlsMessages } from '../../../../../../nls.js';
-import messages from '../../../../../../../../extensions/language-pack-zh-cn/translations/chat.json' with { type: 'json' };
 import { createAppServerAccountApi, type BrowserAccountLoginHostServices } from '../../../../../../platform/accounts/browser/accountApi.js';
 import { IAccountService } from '../../../../../../platform/accounts/common/accountService.js';
 import type { AppServerProtocolClient } from '../../../../../../platform/agentHost/browser/appServerProtocolClient.js';
@@ -26,7 +26,7 @@ import { ChatStatusBarEntry } from '../../../browser/chatStatus/chatStatusEntry.
 import { decodeAppServerResponse } from '../../../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import type { AppServerMethod } from '../../../../../../../../.build/protocol/typescript/index.js';
 
-if (new URLSearchParams(location.search).has('zh')) { setNlsMessages('zh-CN', messages); }
+if (new URLSearchParams(location.search).has('zh')) { setNlsMessages('zh-CN', chineseCatalog.bundles); }
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
 const root = document.createElement('main');

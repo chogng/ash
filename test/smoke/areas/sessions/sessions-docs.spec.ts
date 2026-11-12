@@ -29,6 +29,21 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		const docs = page.locator('.ash-code-page-group .ash-docs-workspace:visible');
 		const toolbar = docs.getByRole('toolbar', { name: locale === 'en' ? 'Docs actions' : 'Docs 操作' });
 		await expect(toolbar).toBeVisible();
+		const editorFrame = page.locator('.ash-workbench-part-frame.ash-sessions-editor-frame-divider');
+		const titlebarFrame = page.locator('.ash-workbench-part-frame.ash-sessions-titlebar-frame-divider');
+		await expect(page.locator('[data-part="sessions"]')).toBeVisible();
+		await expect(editorFrame).toBeVisible();
+		await expect.poll(() => editorFrame.evaluate(frame => {
+			const edge = getComputedStyle(frame, '::after');
+			return { width: edge.borderLeftWidth, style: edge.borderLeftStyle, pointerEvents: edge.pointerEvents };
+		})).toEqual({ width: '1px', style: 'solid', pointerEvents: 'none' });
+		await expect(titlebarFrame).toBeVisible();
+		const editorBounds = (await editorFrame.boundingBox())!;
+		await expect.poll(() => titlebarFrame.evaluate(frame => {
+			const bounds = frame.getBoundingClientRect();
+			const edge = getComputedStyle(frame, '::after');
+			return { x: bounds.left + parseFloat(edge.left), bottom: bounds.bottom - parseFloat(edge.bottom), width: edge.borderLeftWidth };
+		})).toEqual({ x: editorBounds.x, bottom: editorBounds.y, width: '1px' });
 		await expect(docs.locator('.ash-docs-workspace-title')).toHaveText(locale === 'en' ? 'Docs example' : '文档范例');
 		await expect(docs.locator('.stanza-document-heading').first()).toBeVisible();
 		await expect(docs.locator('.stanza-document-paragraph').first()).toContainText(locale === 'en' ? 'guide the public release.' : /公开发布/u);
@@ -57,6 +72,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		}
 		await toolbar.getByRole('button', { name: locale === 'en' ? 'Back to Artifacts' : '返回 Artifacts' }).press('Enter');
 		await expect(page.locator('[data-artifact-example="docs"]')).toBeVisible();
+		await expect(editorFrame).toHaveCount(0);
+		await expect(titlebarFrame).toHaveCount(0);
 		const chooseEditor = () => quick.runCommand('sessions.creator.chooseDocsEditor');
 		await chooseEditor();
 		await expect(quick.items).toHaveCount(3);
@@ -100,9 +117,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 			const cards = page.locator('.ash-creator-modes');
 			await expect(cards.locator('.ash-artifacts-create')).toHaveText(['文档', '幻灯片', '设计', '电子表格', '白板', '数据', '动效']);
-			await cards.getByRole('button', { name: '动效', exact: true }).press('Enter');
-			await expect(page.locator('.ash-code-page-group .ash-canvas-editor-toolbar:visible')).toBeVisible();
-			await expect(page.locator('.ash-code-page-group .ash-design-motion-widget:visible')).toBeVisible();
+			const motion = cards.getByRole('button', { name: '动效', exact: true });
+			await motion.press('Alt+F1');
+			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/打开新的聊天草稿/u);
+			await page.keyboard.press('Escape');
+			await expect(motion).toBeFocused();
+			await motion.press('Enter');
+			await expect(page.locator('.ash-chat-input-artifact-pill:visible')).toHaveText('Ash 动效');
+			await expect(page.locator('[data-part="editor"]')).toBeHidden();
 			await expect(page.locator('[data-part="sessions"]')).toBeVisible();
 		}
 	});

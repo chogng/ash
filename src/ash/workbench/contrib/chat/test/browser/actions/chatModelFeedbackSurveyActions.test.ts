@@ -1,6 +1,6 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
 import '../../../browser/chat.shared.contribution.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
@@ -121,7 +121,7 @@ suite('Ash model feedback from the standard action', () => {
 		assert.equal(f.form.state.issueTitle, 'Model feedback: model-1'); assert.equal(f.submissions, 0);
 	});
 	test('Chinese reports parameterize model and connection names', async () => {
-		using f = new Fixture(); setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		using f = new Fixture(); setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try { await f.run(); } finally { resetNlsResolver(); }
 		assert.equal(f.form.state.issueTitle, '模型反馈：model-1'); assert.match(f.form.state.issueBody, /连接：connection-1/u); assert.match(f.form.state.issueBody, /复现步骤/u);
 	});

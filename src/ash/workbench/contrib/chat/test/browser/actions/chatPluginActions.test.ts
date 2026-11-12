@@ -1,6 +1,6 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, suiteSetup, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
@@ -18,7 +18,7 @@ import { getChatInputAccessibilityHelp } from '../../../browser/actions/chatAcce
 
 const id = 'workbench.action.chat.managePlugins';
 const updateId = 'workbench.agentPlugins.checkForUpdates';
-const chinese = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8'));
+const chinese = chineseCatalog.bundles;
 let importedWithoutCommands = false;
 
 function fixture() {

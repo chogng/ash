@@ -41,7 +41,6 @@ import { productLanguagePackCatalogs } from '../../../../../../services/localiza
 import { BrowserStorageService } from '../../../../../../services/storage/browser/storageService.js';
 import { IQuickInputService } from '../../../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import workbenchTranslations from '../../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { IExternalUriOpenerService } from '../../../../../externalUriOpener/common/externalUriOpenerService.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../../common/contributions.js';
 import { IEditorService } from '../../../../../../services/editor/common/editorService.js';
@@ -72,9 +71,7 @@ declare global {
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
 	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
-	setNlsMessages(catalog.locale, locale === 'zh-CN'
-		? { ...catalog.bundles, 'ash.workbench': { ...catalog.bundles['ash.workbench'], ...workbenchTranslations['ash.workbench'] } }
-		: catalog.bundles);
+	setNlsMessages(catalog.locale, catalog.bundles);
 }
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());

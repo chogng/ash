@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 import { suite, test } from 'mocha';
 import { expect } from '@playwright/test';
@@ -85,7 +85,7 @@ test('multi-select emits ordered snapshots only for user toggles and provides tr
 		assert.deepEqual(changes, [['a', 'b'], ['b']]);
 		assert.equal(dropdown.isVisible, true);
 		row().focus();
-		const translations = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/editor.json', 'utf8'));
+		const translations = chineseCatalog.bundles;
 		setNlsMessages('zh-CN', translations);
 		const implementation = AccessibleViewRegistry.getImplementations().find(provider => provider.type === AccessibleViewType.Help && provider.name === 'action-widget')!;
 		using help = services.invokeFunction(accessor => implementation.getProvider(accessor))!;

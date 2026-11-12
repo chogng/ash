@@ -62,7 +62,6 @@ import { IThemeService } from '../../../../../platform/theme/common/themeService
 import { HoverService, IHoverService } from '../../../../../platform/hover/browser/hoverService.js';
 import { setNlsMessages } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import chatMessages from '../../../../../../../extensions/language-pack-zh-cn/translations/chat.json' with { type: 'json' };
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Keybinding, logicalKey, physicalKey, resolveKeybinding } from '../../../../../base/common/keybindings.js';
 import { CommandRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -232,10 +231,7 @@ const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
 	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
-	const linkMessages = new URLSearchParams(location.search).has('chatLinks') && locale === 'zh-CN'
-		? chatMessages.ash
-		: {};
-	setNlsMessages(catalog.locale, { ...catalog.bundles, ash: { ...catalog.bundles.ash, ...linkMessages } });
+	setNlsMessages(catalog.locale, catalog.bundles);
 }
 const { createTestEditorServices, registerTestComponentServices } = await import('../../../common/testEditorServices.js');
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

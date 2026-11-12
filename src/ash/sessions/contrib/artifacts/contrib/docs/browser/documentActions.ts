@@ -7,7 +7,7 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { basename } from '../../../../../../base/common/resources.js';
 import { generateUuid } from '../../../../../../base/common/uuid.js';
 import { IFileService } from '../../../../../../platform/files/common/files.js';
-import type { ServicesAccessor } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { IFileTextModelService } from '../../../../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { IUntitledTextEditorService } from '../../../../../../workbench/services/untitled/common/untitledTextEditorService.js';
 import { UntitledTextEditorInput } from '../../../../../../workbench/services/untitled/common/untitledTextEditorInput.js';
@@ -17,6 +17,7 @@ import { localize } from '../../../../../../nls.js';
 import { DocumentEditorPane } from '../../../../../../workbench/contrib/documentEditor/browser/documentEditorPane.js';
 import { EditorPanes } from '../../../../../../workbench/browser/editor.js';
 import type { IResourceEditorInput } from '../../../../../../workbench/common/editor.js';
+import { saveResourceAs } from '../../../../../../workbench/services/files/browser/resourceSave.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
 import { ISessionsEntryService } from '../../../../../services/layout/common/sessionsEntryService.js';
 import { artifactDetailEntry } from '../../../common/artifactWorkspace.js';
@@ -170,7 +171,8 @@ async function resolveGeneralProfile() {
 
 /** Host-owned target selection and binary IO; the admitted package owns all format semantics. */
 export async function exportDocumentArtifact(accessor: ServicesAccessor, formatId?: string): Promise<void> {
-	const editors = accessor.get(IEditorPart), files = accessor.get(IFileService), dialogs = accessor.get(IFileDialogService);
+	const editors = accessor.get(IEditorPart), dialogs = accessor.get(IFileDialogService);
+	const instantiation = accessor.get(IInstantiationService);
 	const pane = editors.activePane;
 	if (!(pane instanceof DocumentEditorPane) || !pane.workingCopy) throw new Error(localize('document.conversion.documentRequired', 'Open a document before exporting its content.'));
 	const formats = pane.getArtifactFormats();
@@ -180,10 +182,14 @@ export async function exportDocumentArtifact(accessor: ServicesAccessor, formatI
 	const bytes = await pane.exportArtifact(format.id, new AbortController().signal);
 	if (!(bytes instanceof Uint8Array) || bytes.length > 64 * 1024 * 1024) throw new RangeError(localize('document.output.tooLarge', 'Document output exceeds 64 MiB.'));
 	const defaultUri = resource.scheme === 'file' ? resource.with({ path: resource.path.replace(/\.[^/.]+$/, '') + '.' + format.extension }) : URI.file('/' + basename(resource).replace(/\.[^/.]+$/, '') + '.' + format.extension);
-	const target = await dialogs.showSaveDialog({ defaultUri, filters: [{ name: format.label, extensions: [format.extension] }] });
-	if (!target || pane.workingCopy !== copy) return;
-	if (target.toString() === resource.toString()) throw new Error(localize('document.output.sourceTarget', 'Choose a separate output file to preserve the open document.'));
-	await files.writeFileBytes(target, bytes, { create: true, overwrite: true });
+	await instantiation.invokeFunction(saveResourceAs, bytes, basename(defaultUri), editors.domNode.ownerDocument, {
+		selectTarget: async () => {
+			const target = await dialogs.showSaveDialog({ defaultUri, filters: [{ name: format.label, extensions: [format.extension] }] });
+			if (!target || pane.workingCopy !== copy) return undefined;
+			if (target.toString() === resource.toString()) throw new Error(localize('document.output.sourceTarget', 'Choose a separate output file to preserve the open document.'));
+			return target;
+		},
+	});
 }
 
 export async function importDocumentArtifact(accessor: ServicesAccessor): Promise<void> {

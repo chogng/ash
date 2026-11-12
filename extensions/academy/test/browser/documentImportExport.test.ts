@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -7,7 +8,6 @@ import type { DocumentNode } from '../../common/model/document.js';
 import { documentToPlainText } from '../../common/model/documentSerialization.js';
 import { DocumentConversionError, exportDocumentText, importDocumentText } from '../../browser/documentImportExport.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../src/ash/nls.js';
-import messages from '../../../language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { generalProfile } from '../../browser/generalProfile.js';
 
 const environment = new JSDOM('<!doctype html>');
@@ -108,7 +108,7 @@ test('Markdown round trips adjacent styled runs and literal syntax characters', 
 });
 
 test('unsupported conversion errors use the active language and retain the source position', () => {
-	setNlsMessages('zh-CN', { ash: messages.ash });
+	setNlsMessages('zh-CN', { ash: chineseCatalog.bundles.ash });
 	try {
 		assert.throws(() => importDocumentText('- [x] task', 'markdown', createDefaultDocumentSchema(), environment.window.document, source), {
 			message: '无法保留 1:1 处的 任务列表。',

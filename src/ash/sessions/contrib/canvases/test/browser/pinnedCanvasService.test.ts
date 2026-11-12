@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -56,7 +56,7 @@ suite('Pinned Canvas ownership', () => {
 		assert.equal(invalid.pins.entries.get().length, 0);
 		assert.equal(invalid.errors.length, 1);
 		try {
-			setNlsMessages('zh-CN', JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+			setNlsMessages('zh-CN', chineseCatalog.bundles);
 			using chinese = fixture();
 			for (let index = 0; index <= MAX_PINNED_CANVASES; index++) { chinese.pins.pin(chinese.reference(index)); }
 			assert.deepEqual(chinese.warnings, ['最多可将 5 个 Canvas 固定到侧栏。']);

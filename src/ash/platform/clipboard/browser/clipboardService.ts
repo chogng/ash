@@ -70,6 +70,17 @@ export class BrowserClipboardService extends Disposable implements IClipboardSer
 		await this.clipboard.write([new ClipboardItem({ 'image/png': png })]);
 	}
 
+	public async writeTextWithHtml(text: string, html: Promise<string>): Promise<void> {
+		if (!this.clipboard?.write || typeof ClipboardItem === 'undefined') {
+			void html.catch(() => undefined);
+			return this.writeText(text);
+		}
+		await this.clipboard.write([new ClipboardItem({
+			'text/plain': new Blob([text], { type: 'text/plain' }),
+			'text/html': html.then(value => new Blob([value], { type: 'text/html' })),
+		})]);
+	}
+
 	async readFindText(): Promise<string> {
 		return this.findText;
 	}

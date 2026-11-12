@@ -14,19 +14,23 @@ import { ChatViewFactory, IChatViewFactory } from './chatViewFactory.js';
 import { ISessionsChatViewStateService, SessionsChatViewStateService } from './chatViewStateService.js';
 import { AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING } from './sessionsChatHistory.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING } from '../common/constants.js';
+import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING, OPEN_ARTIFACT_DRAFT_COMMAND_ID } from '../common/constants.js';
 
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { isArtifactKind } from '../../../common/artifactKind.js';
 import { parseSessionIdentity } from '../../../services/sessions/common/sessionIdentity.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
+import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { IChatTipService } from '../../../../workbench/contrib/chat/browser/chatTipService.js';
 
+import { ChatInputArtifactPill } from './chatInputArtifactPill.js';
 import { SessionsChatCopyActionRendering } from './chatCopyActionRendering.js';
 import { NativeChatModelPreferences } from '../common/nativeChatModelPreferences.js';
 import { INativeChatModelPreferencesService } from '../common/nativeChatModelPreferencesService.js';
@@ -42,6 +46,16 @@ registerSingleton(INativeChatModelPreferencesService, new SyncDescriptor(NativeC
 registerAction2(NewChatInSessionsWindowAction);
 registerAction2(NewSessionFromNavigationAction);
 registerAction2(NewSessionFolderQuickPickAction);
+
+CommandsRegistry.register(OPEN_ARTIFACT_DRAFT_COMMAND_ID, async (accessor, kind) => {
+	if (!isArtifactKind(kind)) {
+		throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.'));
+	}
+	const widgets = accessor.get(IChatWidgetService);
+	await accessor.get(ICommandService).executeCommand('sessions.newSession');
+	const input = widgets.lastFocusedWidget?.input;
+	if (input) ChatInputArtifactPill.select(input, kind);
+});
 
 registerAction2(class ResetDismissedTipsAction extends Action2 {
 	constructor() {

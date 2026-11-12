@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
@@ -6,7 +7,6 @@ import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_S
 import { createTestInitializeResult } from '../../../agentHost/test/common/testAppServerProtocol.js';
 import { AppServerDebugAdapterProcessService } from '../../browser/appServerDebugAdapterProcessService.js';
 import type { IDebugAdapterProcessStartOptions } from '../../common/debugAdapterProcessService.js';
-import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 
 test('Debug adapter handles isolate identical backend IDs across folders and retired sessions', async () => {
@@ -91,7 +91,7 @@ test('Debug adapter handles isolate identical backend IDs across folders and ret
 		failClose = true;
 		await assert.rejects(service.close(second), /injected close failure/);
 		await assert.rejects(service.send(second, {}), /no longer available/);
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try {
 			await assert.rejects(service.read(second, 0, 20), { message: '调试适配器会话已不可用。' });
 		} finally {

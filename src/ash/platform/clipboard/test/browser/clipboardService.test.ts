@@ -65,6 +65,31 @@ test('browser resource clipboard is shared across service instances and follows 
 	}
 });
 
+test('browser rich text copy writes Markdown and pending HTML in a single clipboard item', async () => {
+	const previous = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem');
+	class RichClipboardItem {
+		constructor(public readonly data: Record<string, Blob | Promise<Blob>>) { }
+	}
+	Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: RichClipboardItem });
+	try {
+		let written: readonly ClipboardItem[] = [];
+		using clipboard = new BrowserClipboardService({
+			write: async items => { written = items; },
+		} as Clipboard);
+		const html = new DeferredPromise<string>();
+		const writing = clipboard.writeTextWithHtml('**Caption**', html.p);
+		assert.equal(written.length, 1, 'clipboard write starts before image encoding finishes');
+		await html.complete('<strong>Caption</strong><img src="data:image/png;base64,AA==">');
+		await writing;
+		const item = written[0] as unknown as RichClipboardItem;
+		assert.equal(await (await item.data['text/plain']).text(), '**Caption**');
+		assert.equal(await (await item.data['text/html']).text(), '<strong>Caption</strong><img src="data:image/png;base64,AA==">');
+	} finally {
+		if (previous) Object.defineProperty(globalThis, 'ClipboardItem', previous);
+		else Reflect.deleteProperty(globalThis, 'ClipboardItem');
+	}
+});
+
 test('browser image clipboard reads PNG bytes without consuming text or resource entries', async () => {
 	const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 	const clipboard = {

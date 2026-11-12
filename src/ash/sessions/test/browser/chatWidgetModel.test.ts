@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSettings.js';
 import { ChatRequestQueueKind } from '../../../workbench/services/chat/common/chatService.js';
 import { observableValue } from '../../../base/common/observable.js';
@@ -6,7 +7,6 @@ import { ContextKeyService } from '../../../platform/contextkey/browser/contextK
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import type { IStorageService } from '../../../platform/storage/common/storage.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -270,7 +270,7 @@ test('invalid attachment spans fail before start queue or steering can dispatch'
 test('invalid attachment positions explain recovery in Chinese', async () => {
 	const f = fixture('Code');
 	using resources = f.resources;
-	const messages = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8'));
+	const messages = chineseCatalog.bundles;
 	setNlsMessages('zh-CN', messages);
 	try {
 		await assert.rejects(f.chat.startTurn({
@@ -763,7 +763,7 @@ test('Code keeps a directoryless draft editable and blocks sending and voice unt
 	} as unknown as ISessionsManagementService;
 	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.contextKeys);
 	await model.initialize();
-	const messages = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/sessions.json', 'utf8'));
+	const messages = chineseCatalog.bundles;
 	setNlsMessages('zh-CN', messages);
 	try {
 		const message = '请先选择项目，再发送消息。';

@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { ILoggerService, LogLevel, type LogEntry } from '../../../../../platform/log/common/log.js';
 import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
@@ -6,7 +7,6 @@ import { IChatLayoutService } from '../../common/widget/chatLayoutService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { suite, test } from 'mocha';
@@ -214,7 +214,7 @@ test('a changed media source cancels the original read while retaining the respo
 
 test('a sent image retries a failed attachment read in place and restores its preview', async () => {
 	using resources = new DisposableStore();
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	resources.add(toDisposable(resetNlsResolver));
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
 	resources.add(setARIAContainer(document.body));
@@ -498,7 +498,7 @@ test('provider limit rows dispatch the permitted action once and retire actions 
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`renderer feedback presents plan, Advisor, failures and recovery actions in ${locale} without changing provider text`, () => {
-		if (locale === 'zh-CN') setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		if (locale === 'zh-CN') setNlsMessages(locale, chineseCatalog.bundles);
 		try {
 			const plan = chatTranscriptListItem({ type: 'turnPlan', entryId: 'plan', turnId: 'turn', plan: { explanation: '说明 original', steps: [{ step: '用户步骤 original', status: 'inProgress' }] } });
 			assert.equal(plan.text, locale === 'en' ? '说明 original\n\n- [ ] **In progress:** 用户步骤 original' : '说明 original\n\n- [ ] **进行中：** 用户步骤 original');

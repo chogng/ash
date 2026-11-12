@@ -1,10 +1,10 @@
+import { languagePackCatalog as chineseCatalog } from '../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { rustSyntaxFixture, disconnectRustSyntaxFixture, reconnectRustSyntaxFixture } from '../../fixtures/browser/rustSyntaxHostFixture.js';
 import { createDisconnectedSyntaxApi } from '../../../src/ash/platform/syntax/browser/syntaxApi.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
 import { createBuiltinExtensionFixture } from '../../fixtures/browser/builtinExtensionsFixture.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import chinese from '../../../extensions/language-pack-zh-cn/translations/editor.json' with { type: 'json' };
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { IAccessibleViewService, AccessibleViewType } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
@@ -19,7 +19,7 @@ import { IConfigurationService } from '../../../src/ash/platform/configuration/c
 import { TreeSitterLibraryService, createTreeSitterSyntaxSession } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 
 const locale = new URL(location.href).searchParams.get('locale') ?? 'en';
-setNlsMessages(locale, locale === 'zh-CN' ? chinese : {});
+setNlsMessages(locale, locale === 'zh-CN' ? chineseCatalog.bundles : {});
 const store = new DisposableStore();
 const defaultThemes = store.add(new ExtensionColorThemeService(createBuiltinExtensionFixture(), { subscribe: () => ({ dispose() { } }) }));
 await defaultThemes.start();

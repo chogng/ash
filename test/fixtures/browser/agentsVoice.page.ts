@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import { Event, Emitter } from '../../../src/ash/base/common/event.js';
@@ -5,7 +6,6 @@ import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import translations from '../../../extensions/language-pack-zh-cn/translations/chat.json' with { type: 'json' };
 import { IAgentVoiceService, type IAgentVoiceService as AgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { type AgentVoiceSessionState, type ThreadTranscriptSnapshot, type ThreadTranscriptUpdateEnvelope } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -35,7 +35,7 @@ import { AccessibleViewType } from '../../../src/ash/platform/accessibility/brow
 import { IAgentsVoiceWindowService } from '../../../src/ash/workbench/contrib/agentsVoice/common/agentsVoice.js';
 
 const parameters = new URLSearchParams(location.search);
-if (parameters.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', translations); document.documentElement.lang = 'zh-CN'; }
+if (parameters.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chineseCatalog.bundles); document.documentElement.lang = 'zh-CN'; }
 await import('../../../src/ash/workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js');
 const resources = new DisposableStore();
 const collection = new ServiceCollection();

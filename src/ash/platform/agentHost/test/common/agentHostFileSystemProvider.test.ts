@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -111,7 +111,7 @@ suite('Agent Host filesystem authority routes', () => {
 		using registration = provider.registerAuthority(root.authority, connection(root, 'remote'));
 		const upper = root.with({ authority: 'ssh+HOST' });
 		assert.equal((await files.readFile(URI.joinPath(upper, 'main.ts'), 'utf8')).content, 'remote');
-		const translations = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
+		const translations = chineseCatalog.bundles;
 		setNlsMessages('zh-CN', translations);
 		try {
 			assert.throws(() => provider.registerAuthority(upper.authority, connection(upper, 'conflict')), { message: '已有文件系统连接拥有此资源根目录。' });

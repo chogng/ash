@@ -1,10 +1,10 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import type { IEditorPane } from '../../../../../common/editor.js';
 import '../../../../../../base/browser/ui/button/button.css';
 import '../../../../../../platform/theme/common/sizes/baseSizes.js';
 import { Event, Emitter } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { setNlsMessages } from '../../../../../../nls.js';
-import messages from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { IAccountService, type AccountState } from '../../../../../../platform/accounts/common/accountService.js';
 import { AppServerProtocolClient } from '../../../../../../platform/agentHost/browser/appServerProtocolClient.js';
@@ -84,7 +84,7 @@ class ReporterTransport implements AppServerTransport {
 	releaseSubmit(): void { if (!this.heldSubmit) { throw new Error('No held submission'); } this.finishSubmit(this.heldSubmit); this.heldSubmit = undefined; }
 }
 
-if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', messages); }
+if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chineseCatalog.bundles); }
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), [IIssueFormService, new SyncDescriptor(IssueFormService)])));
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'issue-reporter-integration', flushInterval: 0 })));

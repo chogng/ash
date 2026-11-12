@@ -1,8 +1,8 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { RemoteAgentHostContribution } from '../../../browser/remoteAgentHost/remoteAgentHostChatContribution.js';
 import { AgentHostOpenSessionLinkOpenerContribution } from '../../../browser/agentSessions/agentHost/openSessionLinkOpener.contribution.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { suite, suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -209,7 +209,7 @@ suite('Conversation links', () => {
 	}
 
 	test('Chinese link errors come from the product translation catalog', async () => {
-		const messages = JSON.parse(readFileSync(resolve('extensions/language-pack-zh-cn/translations/chat.json'), 'utf8'));
+		const messages = chineseCatalog.bundles;
 		setNlsMessages('zh-CN', messages);
 		try {
 			// Product commands are registered after localization during startup.

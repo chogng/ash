@@ -18,6 +18,7 @@ import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/edi
 import { IProjectService, type Project } from '../../../src/ash/platform/projects/common/projectService.js';
 import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { IChatSlashCommandService } from '../../../src/ash/workbench/contrib/chat/common/participants/chatSlashCommands.js';
@@ -198,6 +199,7 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IVoiceModeOnboardingService, { showIfNeeded() { }, registerHost: () => toDisposable(() => { }) } as unknown as IVoiceModeOnboardingService],
 	[IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService],
 	[INotificationService, notifications],
+	[ILayoutService, resources.add(new BrowserLayoutService({ root: document.body }))],
 	[IImageEditorService, {} as IImageEditorService],
 	[IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService()],
 	[IChatGPTTransport, {

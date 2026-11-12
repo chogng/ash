@@ -1,7 +1,7 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { MessageChannel } from 'node:worker_threads';
 import { JSDOM } from 'jsdom';
 import { setup, suite, suiteSetup, suiteTeardown, teardown, test } from 'mocha';
@@ -676,7 +676,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('startup connection failures use the selected Chinese language pack', async () => {
-		setNlsMessages('zh-cn', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+		setNlsMessages('zh-cn', chineseCatalog.bundles);
 		try {
 			disabled.add('ash:app-server:acquire');
 			using services = new InstantiationService();

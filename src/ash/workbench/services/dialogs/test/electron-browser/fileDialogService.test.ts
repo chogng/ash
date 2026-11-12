@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { IQuickInputService, type IQuickInputService as QuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -15,7 +16,6 @@ import { INativeHostService } from '../../../../common/services.js';
 import { FileDialogService } from '../../electron-browser/fileDialogService.js';
 import { DialogService } from '../../common/dialogService.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
-import chineseMessages from '../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 test('Save As passes the suggested file name to the owning desktop window', async () => {
 	const calls: Array<{ readonly defaultPath?: string; } | undefined> = [];
@@ -101,7 +101,7 @@ test('desktop file dialogs keep cancellation distinct from returned paths and lo
 		async showSaveDialog(options) { calls.push(options); return { canceled: true, filePath: '/ignored.md' }; },
 	} as INativeHostApi);
 	const service = services.createInstance(FileDialogService);
-	setNlsMessages('zh-CN', chineseMessages);
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		assert.equal(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }), undefined);
 		assert.equal(await service.showSaveDialog({}), undefined);
@@ -113,7 +113,7 @@ test('desktop file dialogs keep cancellation distinct from returned paths and lo
 
 
 for (const locale of ['en', 'zh-CN']) test(`Remote Add Folder keeps its authority and client language (${locale})`, async () => {
-	if (locale === 'zh-CN') setNlsMessages('zh-CN', chineseMessages);
+	if (locale === 'zh-CN') setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		using services = new InstantiationService();
 		using workspace = new TestWorkspaceService({ id: 'remote', uri: createSshRemoteWorkspaceUri('test-host', '/remote/client') });

@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { IWorkspaceFolderLabelService, SessionsWorkspaceFolderLabelService } from '../../../../../services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { Range } from '../../../../../../editor/common/core/range.js';
 import { setIconResolver } from '../../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -55,7 +56,6 @@ import { ChangesViewPane } from '../../../browser/changesView.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
 import { setNlsMessages } from '../../../../../../nls.js';
-import chinese from '../../../../../../../../extensions/language-pack-zh-cn/translations/sessions.json' with { type: 'json' };
 import { IGitHubService as ISessionGitHubService } from '../../../../github/browser/githubService.js';
 import { IGitHubService as IGitHubApi } from '../../../../../../platform/github/common/githubService.js';
 import { IAccountService, type AccountState } from '../../../../../../platform/accounts/common/accountService.js';
@@ -72,7 +72,6 @@ import { IAccessibilityService } from '../../../../../../platform/accessibility/
 import { AccessibilityService } from '../../../../../../platform/accessibility/browser/accessibilityService.js';
 import { AnimatedCounterWidget, type IAnimatedCounterWidgetOptions } from '../../../../../../workbench/browser/animatedCounterWidget.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
-import chineseWorkbench from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { IChecksOperationService } from '../../../../github/common/checksOperationService.js';
 import { ChecksOperationService } from '../../../../github/browser/checksOperationService.js';
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
@@ -87,8 +86,7 @@ import { IWorkspaceContextService } from '../../../../../../platform/workspace/c
 import { TestWorkspaceService } from '../../../../../../workbench/services/configuration/test/common/testServices.js';
 import { ISCMService } from '../../../../../../workbench/contrib/scm/common/scm.js';
 
-const chineseMessages = { ash: { ...chinese.ash, ...chineseWorkbench.ash } };
-if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chineseMessages); }
+if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chineseCatalog.bundles); }
 
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
@@ -514,7 +512,7 @@ window.ashChangesIntegration = {
 	fileReadStarted: () => fileReadStarted,
 	rejectFile: () => { failFile!(new Error('Delayed file read failed')); pendingFileFailure = undefined; failFile = undefined; },
 	fail: value => { fail = value; changed.fire(); },
-	setLocale: () => { setNlsMessages('zh-CN', chineseMessages); changed.fire(); },
+	setLocale: () => { setNlsMessages('zh-CN', chineseCatalog.bundles); changed.fire(); },
 	opened: () => opened,
 	previewCommit: () => {
 		const selected = services.get(ISessionsService).activeSelection;

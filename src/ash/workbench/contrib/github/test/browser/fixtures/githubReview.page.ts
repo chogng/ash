@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
 import type { ITextResourceStore } from '../../../../../services/textmodelResolver/common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
@@ -20,8 +21,6 @@ import { setIconResolver } from '../../../../../../base/browser/ui/lxicons/lxico
 import { getIconDefinition } from '../../../../../../platform/theme/common/iconRegistry.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { setNlsMessages } from '../../../../../../nls.js';
-import messages from '../../../../../../../../extensions/language-pack-zh-cn/translations/github.json' with { type: 'json' };
-import workbenchMessages from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { registerCodeEditorServices } from '../../../../../../editor/test/browser/testCodeEditor.js';
 import { IWebWorkerService } from '../../../../../../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
@@ -56,7 +55,7 @@ import { CommandService } from '../../../../../services/commands/common/commandS
 import { BrowserTextModelService } from '../../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { ITextModelResourceService } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
 
-if (new URL(location.href).searchParams.has('zh')) { setNlsMessages('zh-CN', { ash: { ...workbenchMessages.ash, ...messages.ash } }); }
+if (new URL(location.href).searchParams.has('zh')) { setNlsMessages('zh-CN', chineseCatalog.bundles); }
 interface Request { id: number; method: string; params: Record<string, unknown>; }
 const head = 'a'.repeat(40); const base = 'b'.repeat(40);
 const file = { filename: 'new.rs', previousFilename: 'old.rs', status: 'renamed', additions: 1, deletions: 1, changes: 2, patch: '@@ -1 +1 @@\n-old\n+new' };

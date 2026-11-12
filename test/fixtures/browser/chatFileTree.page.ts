@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
@@ -20,9 +21,8 @@ import { registerChatFileTreeActions } from '../../../src/ash/workbench/contrib/
 import { IChatWidgetService, type IChatWidget, type IChatWidgetService as WidgetService } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
 import type { IChatListItem } from '../../../src/ash/workbench/contrib/chat/common/model/chatViewModel.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import chinese from '../../../extensions/language-pack-zh-cn/translations/chat.json' with { type: 'json' };
 
-if (new URLSearchParams(location.search).has('zh')) setNlsMessages('zh-CN', chinese);
+if (new URLSearchParams(location.search).has('zh')) setNlsMessages('zh-CN', chineseCatalog.bundles);
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
 const files = resources.add(new FileService());

@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
@@ -16,7 +17,6 @@ import {
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { IChatContextPickService } from '../../../chat/browser/attachments/chatContextPickService.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { test, suite, suiteTeardown } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -56,7 +56,7 @@ const change: ISCMHistoryItemChange = { path: 'src/context.ts', status: 'modifie
 
 for (const locale of ['en', 'zh-CN']) test(`SCM history picker filters commits and resolves provider context lazily in ${locale}`, async () => {
 	using resetLocale = toDisposable(() => resetNlsResolver());
-	setNlsMessages(locale, locale === 'zh-CN' ? JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')) : {});
+	setNlsMessages(locale, locale === 'zh-CN' ? chineseCatalog.bundles : {});
 	using owner = resolverServices();
 	let picker: IChatContextPickerItem | undefined;
 	let graphRequests = 0, contextRequests = 0;

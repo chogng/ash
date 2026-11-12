@@ -3725,23 +3725,43 @@ emptyWorkspaceTest('Sessions Activity Bar changes layout while retaining the sam
 	await expectDraft('Edited from Code');
 });
 
-focusTest(
+focusTest.extend({ electronUserSettings: { 'workbench.locale': 'zh-CN' } })(
 	'Open IDE focuses or creates an IDE while keeping the Agents window and draft',
 	{ tag: ['@electron-ui', '@electron-app-server'] },
 	async ({ application, target, workbench }, testInfo) => {
 		if (target.kind !== 'electron' || !('windows' in application)) throw new Error('Open IDE requires Electron');
 		const ide = workbench.page;
 		const agents = await workbench.openAgentsWindow(target.kind);
-		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const modes = agents.locator('.ash-window-mode-control');
+		const code = modes.getByRole('button', { name: '代码', exact: true });
+		const chat = modes.getByRole('button', { name: '聊天 / Agents', exact: true });
+		const titlebarAction = agents.locator('.ash-sessions-titlebar-right').getByRole('button', { name: '打开 IDE', exact: true });
+		await code.click();
+		await expect(titlebarAction).toBeVisible();
+		await expect(titlebarAction.locator('[data-ash-icon-id="ash-mark"]')).toBeVisible();
+		const label = titlebarAction.locator('.ash-icon-label-container');
+		await expect(label).toHaveCSS('opacity', '0');
+		await titlebarAction.hover();
+		await expect(label).toHaveCSS('opacity', '1');
+		await expect(label).toHaveText('打开 IDE');
+		await code.hover();
+		await expect(label).toHaveCSS('opacity', '0');
+		await titlebarAction.press('Shift');
+		await expect(titlebarAction).toBeFocused();
+		await expect(label).toHaveCSS('opacity', '1');
+		await chat.click();
+		await expect(titlebarAction).toHaveCount(0);
+		await code.click();
+		await expect(titlebarAction).toBeVisible();
 		const editor = new Editor(agents.locator('.ash-sessions-chat-slot.active:visible'));
 		const draft = 'Keep this unsent Agent draft while opening the IDE';
 		await replaceChatInput(editor, draft);
 		const input = await editor.input.elementHandle();
-		const accounts = agents.getByRole('button', { name: 'Accounts', exact: true });
-		const openIde = async (): Promise<void> => {
+		const accounts = agents.getByRole('button', { name: '账户', exact: true });
+		const openIdeFromAccounts = async (): Promise<void> => {
 			await agents.bringToFront();
 			await accounts.press('Enter');
-			const action = agents.getByRole('menuitem', { name: 'Open IDE', exact: true });
+			const action = agents.getByRole('menuitem', { name: '打开 IDE', exact: true });
 			await expect(action).toBeVisible();
 			await action.press('Enter');
 			await expect(accounts).toHaveAttribute('aria-expanded', 'false');
@@ -3759,7 +3779,7 @@ focusTest(
 		try {
 			for (let attempt = 0; attempt < 2; attempt++) {
 				if (attempt === 0) {
-					await openIde();
+					await openIdeFromAccounts();
 				} else {
 					await agents.bringToFront();
 					await new QuickAccess(agents).runCommand('agents.openAshWindow');
@@ -3778,7 +3798,8 @@ focusTest(
 			await closed;
 			await expect.poll(async () => (await windowIds()).length).toBe(1);
 			const opened = application.waitForEvent('window');
-			await openIde();
+			await agents.bringToFront();
+			await titlebarAction.press('Enter');
 			const reopened = await opened;
 			await new Workbench(reopened).waitForReady();
 			await expect.poll(async () => (await windowIds()).length).toBe(2);
@@ -3795,7 +3816,8 @@ focusTest(
 					)
 					.toBe(reopenedId);
 				const reopenedIds = await windowIds();
-				await openIde();
+				await agents.bringToFront();
+				await titlebarAction.click();
 				await expect
 					.poll(() =>
 						application.evaluate(

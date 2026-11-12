@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
-import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -234,7 +234,7 @@ test('cancelled dialogs, oversized files and retired connections have no publica
 
 
 test('Chinese imported transcript uses localized role, partial marker and editor label', async () => {
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		using resources = new DisposableStore(); const f = fixture(resources);
 		f.setContent(JSON.stringify({ format: 'ash.chat.transcript', version: 1, title: 'Saved title', messages: [{ role: 'assistant', text: 'Unchanged source', partial: true }] }));
@@ -246,7 +246,7 @@ test('Chinese imported transcript uses localized role, partial marker and editor
 });
 
 test('Chinese export and read-only import preserve localized tool input, status and exit errors', async () => {
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		using resources = new DisposableStore();
 		const f = fixture(resources, {

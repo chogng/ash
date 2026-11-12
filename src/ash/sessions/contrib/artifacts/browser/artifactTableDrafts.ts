@@ -4,7 +4,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
-import { generateUuid, isUuid } from '../../../../base/common/uuid.js';
+import { isUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { FileKind, FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -82,13 +82,6 @@ export class ArtifactTableDrafts extends Disposable {
 		}));
 	}
 
-	public create(kind: TableArtifactKind): ArtifactTableDraft {
-		const draft = new ArtifactTableDraft(generateUuid(), kind, [['', '', '']], undefined, this.queueSave);
-		this.catalog.set(new Map(this.catalog.get()).set(draft.id, draft), undefined);
-		this.queueSave(draft);
-		return draft;
-	}
-
 	private readonly queueSave = (draft: ArtifactTableDraft): void => {
 		this.pending.add(draft);
 		this.saveSoon.schedule();
@@ -116,8 +109,7 @@ export class ArtifactTableDrafts extends Disposable {
 				this.log.warn('creator', 'Could not restore table draft', entry.resource.toString(), error);
 			}
 		}
-		// A user can create a draft while the existing files are still loading.
-		if (!this.isDisposed && restored.size > 0) this.catalog.set(new Map([...restored, ...this.catalog.get()]), undefined);
+		if (!this.isDisposed) this.catalog.set(restored, undefined);
 	}
 
 	private flush(): Promise<void> {

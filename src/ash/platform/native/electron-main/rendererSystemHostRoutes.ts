@@ -159,6 +159,20 @@ export function rendererSystemHostRoutes(
 			}
 		},
 		{
+			channel: 'ash:host:writeClipboardHtml',
+			validate: value => {
+				if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== 2
+					|| !('text' in value) || !('html' in value) || typeof value.html !== 'string' || value.html.length > 16 * 1024 * 1024) {
+					throw new TypeError('Invalid HTML clipboard write');
+				}
+				return { text: text(value.text), html: value.html };
+			},
+			invoke: value => {
+				const { text, html } = value as { text: string; html: string; };
+				return clipboard.writeTextWithHtml(text, Promise.resolve(html));
+			},
+		},
+		{
 			channel: 'ash:host:readClipboardResources', validate: value => { if (value !== undefined) throw new Error('Unexpected clipboard arguments'); }, invoke: async () => {
 				const { resources, operation } = await clipboard.readResources();
 				return { resources: resources.map(resource => resource.toString()), operation };

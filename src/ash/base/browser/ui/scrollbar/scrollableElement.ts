@@ -382,7 +382,7 @@ export class ScrollableElement extends Disposable {
 			deltaX = deltaY;
 			deltaY = 0;
 		}
-		if (this.options.direction === 'horizontal') {
+		if (this.options.direction === 'horizontal' && this.options.wheel.scrollYToX) {
 			if (deltaX === 0) deltaX = deltaY;
 			deltaY = 0;
 		} else if (this.options.direction === 'vertical') {
@@ -396,6 +396,7 @@ export class ScrollableElement extends Disposable {
 			if (Math.abs(deltaX) > Math.abs(deltaY)) deltaY = 0;
 			else deltaX = 0;
 		}
+		if (this.options.direction === 'horizontal') deltaY = 0;
 		const sensitivity = this.options.wheel.sensitivity * (
 			wheel.altKey ? this.options.wheel.fastSensitivity : 1
 		);

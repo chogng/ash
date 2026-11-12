@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
-import { readFileSync } from 'node:fs';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { strict as assert } from 'node:assert';
@@ -86,7 +86,7 @@ class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgent
 
 
 test('a standard remote endpoint has a localized identity and accessible ready state', () => {
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	using restore = toDisposable(resetNlsResolver);
 	using remoteAgentService = new TestRemoteAgentService('connected');
 	remoteAgentService.emitConnection({ kind: 'remote', generation: 1, authority: 'fixture+backend' });

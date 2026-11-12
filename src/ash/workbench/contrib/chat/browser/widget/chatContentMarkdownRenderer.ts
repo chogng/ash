@@ -13,7 +13,8 @@ export function getChatMarkdownRenderOptions(source: string, options: MarkdownRe
 	const sanitizer = {
 		replaceWithPlaintext: true,
 		...options.sanitizerConfig,
-		remoteImageIsAllowed: (uri: URI) => !!options.imageResourceLoader && uri.scheme !== 'http' && uri.scheme !== 'https',
+		remoteImageIsAllowed: (uri: URI) => !!options.imageResourceLoader && uri.scheme !== 'http' && uri.scheme !== 'https'
+			&& (options.sanitizerConfig?.remoteImageIsAllowed?.(uri) ?? true),
 	};
 	return {
 		...options,

@@ -1,13 +1,64 @@
 import { createServer } from 'node:http';
-import { writeFile } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import type { Page } from '@playwright/test';
+import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import { expect, test } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { APP_SERVER_METHODS, type ModelRef } from '../../../../.build/protocol/typescript/index.js';
 import { connectProfile, enableFixtureModel } from './sessionProfileFixture.js';
+
+test('Open IDE opens the selected Code thread in its working folder', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
+	if (!('windows' in application)) throw new Error('Open IDE requires Electron');
+	const directory = join(testWorkspace.directory, 'conversation-project');
+	await mkdir(directory);
+	const { client, close } = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+	try {
+		const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+			commandId: 'open-in-ide-session', kind: 'code', title: 'IDE handoff fixture', agent: { type: 'default' },
+			executionTarget: { type: 'local', root: directory },
+		});
+		const branch = await client.request(APP_SERVER_METHODS['session/request'], {
+			commandId: 'open-in-ide-branch', sessionId: session.sessionId,
+			request: { type: 'forkThread', parentThreadId: session.threads[0]!.threadId, title: 'Thread to open in IDE' },
+		});
+		if (branch.type !== 'thread') throw new Error('Expected a persisted fork Thread');
+		const threadId = branch.value.threadId;
+		const thread = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId: session.sessionId, threadId });
+		if (thread.directory?.type !== 'local') throw new Error('Expected a local working directory for the branch');
+		await writeFile(join(thread.directory.root, 'conversation-worktree.txt'), 'This file belongs to the selected thread.');
+		const agents = await workbench.openAgentsWindow(target.kind);
+		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const sessionRow = agents.locator(`[data-item="session:${session.sessionId}"] > .ash-sessions-list-item`);
+		await sessionRow.press('ArrowRight');
+		await agents.locator('.ash-sessions-list').getByRole('treeitem', { name: /^Thread to open in IDE\b/u }).locator('.ash-sessions-list-item').click();
+		const source = agents.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		await expect(source).toHaveAttribute('data-thread-id', threadId);
+		const openIde = agents.locator('.ash-sessions-titlebar-right').getByRole('button', { name: 'Open IDE', exact: true });
+		const opened = application.waitForEvent('window');
+		await openIde.click();
+		const destination = await opened;
+		const permission = directoryPermissionPrompt(destination);
+		await expect(permission).toContainText(thread.directory.root);
+		await permission.getByRole('button', { name: 'Trust Folder', exact: true }).click();
+		const ide = new Workbench(destination);
+		await ide.waitForReady();
+		const chat = destination.locator('.ash-chat-view-pane .ash-chat:visible');
+		await expect(chat).toHaveAttribute('data-session-id', session.sessionId);
+		await expect(chat).toHaveAttribute('data-thread-id', threadId);
+		await ide.openExplorer();
+		await expect(destination.locator('[data-part="sidebar"]').getByText('conversation-worktree.txt', { exact: true })).toBeVisible();
+		await expect(source).toHaveAttribute('data-thread-id', threadId);
+		await ide.quickaccess.runCommand('workbench.action.chat.newChat');
+		await expect(chat).not.toHaveAttribute('data-thread-id', threadId);
+		await openIde.click();
+		await expect(chat).toHaveAttribute('data-thread-id', threadId);
+	} finally {
+		await close();
+	}
+});
 
 async function chooseWorkspaceProject(page: Page, directory: string): Promise<void> {
 	const chooser = page.locator('.ash-sessions-chat-slot.active .ash-sessions-workspace-picker');

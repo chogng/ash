@@ -156,6 +156,24 @@ test('ScrollableElement exposes a persistent directional content container', () 
 	dom.window.close();
 });
 
+test('a horizontal viewport can leave vertical wheel gestures to its parent', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using scrollable = new ScrollableElement(dom.window.document.body, { direction: 'horizontal', wheel: { scrollYToX: false } });
+		const viewport = scrollable.scrollableElement;
+		installMetrics(viewport, { width: 100, height: 50, scrollWidth: 300, scrollHeight: 50 });
+		scrollable.layout();
+		assert.equal(viewport.dispatchEvent(wheelEvent(dom.window, { deltaX: 1, deltaY: 30 })), true);
+		assert.equal(scrollable.state.left, 0);
+		assert.equal(viewport.dispatchEvent(wheelEvent(dom.window, { deltaX: 24, deltaY: 1 })), false);
+		assert.equal(scrollable.state.left, 24);
+		assert.equal(viewport.dispatchEvent(wheelEvent(dom.window, { deltaY: 12, shiftKey: true })), false);
+		assert.equal(scrollable.state.left, 36);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('ScrollableElement animates wheel targets cumulatively and lets direct input interrupt them', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using clock = animationClock(dom);

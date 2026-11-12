@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../base/browser/ui/styles.css';
 import '../../../../../browser/media/style.css';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
@@ -32,9 +33,8 @@ import { IUserDataProfileService } from '../../../../userDataProfile/common/user
 import { UserDataProfileService } from '../../../../userDataProfile/browser/userDataProfileService.js';
 import { ILayoutService, BrowserLayoutService } from '../../../../../../platform/layout/browser/layoutService.js';
 import { setNlsMessages } from '../../../../../../nls.js';
-import messages from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
-if (new URLSearchParams(location.search).has('zh')) setNlsMessages('zh-CN', messages);
+if (new URLSearchParams(location.search).has('zh')) setNlsMessages('zh-CN', chineseCatalog.bundles);
 
 const resources = new DisposableStore();
 const root = document.createElement('main');

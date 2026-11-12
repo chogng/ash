@@ -188,8 +188,9 @@ export class ContextView
 		this.element.style.visibility = 'hidden';
 		this.element.hidden = false;
 		// The top layer keeps menu coordinates in the viewport under transformed hosts.
-		const followsMenu = options.presentation === 'hover' && isElementAnchor(options.anchor) && options.anchor.closest('.ash-context-view[popover]') !== null;
-		if ((options.presentation === 'menu' || followsMenu) && this.element.isConnected && typeof this.element.showPopover === 'function') {
+		// A view anchored inside an open popover must appear above it.
+		const followsPopover = isElementAnchor(options.anchor) && options.anchor.closest(':popover-open') !== null;
+		if ((options.presentation === 'menu' || followsPopover) && this.element.isConnected && typeof this.element.showPopover === 'function') {
 			this.element.popover = 'manual';
 			this.element.showPopover();
 		} else {

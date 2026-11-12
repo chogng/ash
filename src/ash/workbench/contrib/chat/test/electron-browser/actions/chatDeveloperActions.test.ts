@@ -1,6 +1,6 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, suiteSetup, suiteTeardown, test } from 'mocha';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -93,7 +93,7 @@ suite('Desktop Chat developer commands', () => {
 		};
 		Object.defineProperty(globalThis, 'ash', { configurable: true, value: globals });
 		const { registerChatDeveloperActions } = await import('../../../electron-browser/actions/chatDeveloperActions.js');
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try {
 			registerChatDeveloperActions();
 		} finally {

@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, suiteSetup, test } from 'mocha';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../../../test/unit/browser/context.js';
@@ -65,7 +65,7 @@ suite('Tool activity and input/output presentation', () => {
 		assert.equal(section('stdout').hidden, true);
 		assert.equal(section('stderr').hidden, true);
 		assert.equal(section('result').querySelector('pre')!.textContent, 'Exit code: 0\nNo output.');
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try {
 			widget.render([{ ...item, toolInvocation: { ...invocation, call, result: { ...result, text: resultText('', '', 0) } } }]);
 			assert.equal(section('result').querySelector('pre')!.textContent, '退出码：0\n无输出。');
@@ -157,7 +157,7 @@ suite('Tool activity and input/output presentation', () => {
 	for (const locale of ['en', 'zh-CN']) {
 		test(`tool status follows call evidence and preserves the focused disclosure in ${locale}`, () => {
 			if (locale === 'zh-CN') {
-				setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+				setNlsMessages(locale, chineseCatalog.bundles);
 			}
 			try {
 				using resources = new DisposableStore();
@@ -264,7 +264,7 @@ suite('Tool activity and input/output presentation', () => {
 
 	for (const locale of ['en', 'zh-CN']) {
 		test(`streaming argument evidence binds in place and never implies execution in ${locale}`, () => {
-			if (locale === 'zh-CN') setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+			if (locale === 'zh-CN') setNlsMessages(locale, chineseCatalog.bundles);
 			try {
 				using resources = new DisposableStore();
 				const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
@@ -342,7 +342,7 @@ suite('Tool activity and input/output presentation', () => {
 	});
 
 	test('Chinese activity summaries and region labels retain untranslated evidence', () => {
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try {
 			using resources = new DisposableStore();
 			const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));

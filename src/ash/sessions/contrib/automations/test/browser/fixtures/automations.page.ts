@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
 import { IChatWidgetService } from '../../../../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidgetService } from '../../../../../../workbench/contrib/chat/browser/widget/chatWidgetService.js';
@@ -20,7 +21,6 @@ import { FileService } from '../../../../../../platform/files/common/fileService
 import { IFileService } from '../../../../../../platform/files/common/files.js';
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
 import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService } from '../../../../../../platform/remote/common/remoteConnectionService.js';
-import workbenchTranslations from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import type { IAction } from '../../../../../../base/common/actions.js';
 import { TestNotificationService } from '../../../../../../../../test/fixtures/browser/notificationFixture.js';
 import '../../../../../../base/browser/ui/styles.css';
@@ -32,7 +32,6 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { observableValue, autorun } from '../../../../../../base/common/observable.js';
 import { setNlsMessages } from '../../../../../../nls.js';
-import translations from '../../../../../../../../extensions/language-pack-zh-cn/translations/sessions.json' with { type: 'json' };
 import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../../platform/automations/common/automation.js';
 import { type IWorkbenchHost } from '../../../../../../workbench/browser/rendererApi.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -73,9 +72,7 @@ import { AgentHostAutomationStore } from '../../../../providers/agentHost/browse
 const parameters = new URLSearchParams(location.search);
 
 if (parameters.get('locale') === 'zh-CN') {
-	const bundles: Record<string, Record<string, string>> = { ...translations };
-	for (const [bundle, messages] of Object.entries(workbenchTranslations)) { bundles[bundle] = { ...bundles[bundle], ...messages }; }
-	setNlsMessages('zh-CN', bundles);
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	document.documentElement.lang = 'zh-CN';
 }
 

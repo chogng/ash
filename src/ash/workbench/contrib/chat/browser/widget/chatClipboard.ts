@@ -1,7 +1,14 @@
 import { getDocument } from '../../../../../base/browser/dom.js';
+import { renderWorkbenchMarkdown, sanitizeMarkdownHtmlToFragment } from '../../../../../base/browser/markdownRenderer.js';
+import { decodeBase64, encodeBase64, VSBuffer } from '../../../../../base/common/buffer.js';
 import { appendEscapedMarkdownInlineCode, isPortableLinkTarget, isPortableMarkdownTarget } from '../../../../../base/common/htmlContent.js';
 import { Lexer, type Token, type Tokens } from '../../../../../base/common/marked/marked.js';
 import { escapeRegExpCharacters } from '../../../../../base/common/strings.js';
+import type { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
+import { encodeImageBlobAsPng } from '../../../mediaPreview/browser/imageEncoder.js';
+import type { ChatMarkdownRichContent } from '../../common/model/chatMarkdownRichContent.js';
+import { getChatMarkdownRenderOptions } from './chatContentMarkdownRenderer.js';
+import { chatMarkdownRichContentExtension } from './chatMarkdownRichContent.js';
 
 /** The routing target takes precedence over the browser's fallback href. */
 export function getLinkTarget(element: Element): string {
@@ -40,11 +47,11 @@ export function cloneVisibleSelection(range: Range, root: Node): DocumentFragmen
 }
 
 /** Removes window-local destinations; returns whether native rich copying needs replacing. */
-export function sanitizeChatClipboardFragment(fragment: DocumentFragment): boolean {
+export function sanitizeChatClipboardFragment(fragment: DocumentFragment, embeddedImages?: ReadonlySet<string>): boolean {
 	let changed = false;
 	for (const element of fragment.querySelectorAll('a, img')) {
 		const target = element.tagName === 'A' ? getLinkTarget(element) : element.getAttribute('src') ?? '';
-		if (isPortableLinkTarget(target)) {
+		if (isPortableLinkTarget(target) || element.tagName === 'IMG' && embeddedImages?.has(target)) {
 			if (element.tagName === 'A') {
 				changed ||= element.getAttribute('href') !== target;
 				element.setAttribute('href', target);
@@ -60,6 +67,32 @@ export function sanitizeChatClipboardFragment(fragment: DocumentFragment): boole
 	}
 	for (const element of fragment.querySelectorAll('[data-href]')) { element.removeAttribute('data-href'); }
 	return changed;
+}
+
+/** Produces the rich clipboard flavor without exporting SVG markup or window-owned URLs. */
+export async function renderChatClipboardHtml(markdown: string, content: ChatMarkdownRichContent, document: Document, workers: IWebWorkerService): Promise<string> {
+	const svgPrefix = 'data:image/svg+xml;base64,';
+	const images = new Map<string, string>();
+	const visited = new Set<string>();
+	for (const part of content.parts) {
+		if (part.kind !== 'image' || !part.uri.startsWith(svgPrefix) || visited.has(part.uri)) continue;
+		visited.add(part.uri);
+		try {
+			const svg = new Blob([new Uint8Array(decodeBase64(part.uri.slice(svgPrefix.length)).buffer)], { type: 'image/svg+xml' });
+			const png = await encodeImageBlobAsPng(svg, document, workers);
+			images.set(part.uri, 'data:image/png;base64,' + encodeBase64(VSBuffer.wrap(new Uint8Array(png))));
+		} catch {
+			// An image that cannot be decoded still contributes its label and caption.
+		}
+	}
+	const value = { value: markdown, supportHtml: true };
+	const options = getChatMarkdownRenderOptions(markdown, { markedExtensions: [chatMarkdownRichContentExtension(content, true, images)] });
+	const raw = renderWorkbenchMarkdown(value, false, options);
+	const fragment = sanitizeMarkdownHtmlToFragment({ ownerDocument: document, markdown: value, sanitizerConfig: { ...options.sanitizerConfig, replaceWithPlaintext: false } }, raw);
+	sanitizeChatClipboardFragment(fragment, new Set(images.values()));
+	const container = document.createElement('div');
+	container.append(fragment);
+	return container.innerHTML;
 }
 
 function plainLabel(tokens: readonly Token[]): string {

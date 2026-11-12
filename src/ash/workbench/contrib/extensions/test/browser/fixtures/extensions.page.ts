@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { createTestLanguageModelToolsService } from '../../../../chat/test/common/tools/testLanguageModelToolsService.js';
 import { BrowserClipboardService } from '../../../../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
@@ -22,7 +23,6 @@ import { localize } from '../../../../../../nls.js';
 import { ICustomizationMarketplaceService } from '../../../../../../platform/customizationMarketplace/common/customizationMarketplaceService.js';
 import { CustomizationMarketplaceWorkbenchService } from '../../../../chat/browser/aiCustomization/customizationMarketplaceWorkbenchService.js';
 import '../../../../chat/browser/aiCustomization/customizationMarketplace.contribution.js';
-import chineseSettingsMessages from '../../../../../../../../extensions/language-pack-zh-cn/translations/settings.json' with { type: 'json' };
 import '../../../../../../base/browser/ui/styles.css';
 import { IGlobalExtensionEnablementService } from '../../../../../../platform/extensionManagement/common/extensionManagement.js';
 import { GlobalExtensionEnablementService } from '../../../../../../platform/extensionManagement/common/extensionEnablementService.js';
@@ -134,15 +134,9 @@ import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../..
 import { AgentCapabilitiesSettings } from '../../../../preferences/browser/agentCapabilitiesSettings.js';
 import { SettingsNavigation } from '../../../../preferences/browser/settingsLayout.js';
 import type { IWorkspaceTrustApi } from '../../../../../../platform/workspace/common/workspaceTrust.js';
-import chineseMessages from '../../../../../../../../extensions/language-pack-zh-cn/translations/extensions.json' with { type: 'json' };
-import chineseWorkbenchMessages from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 if (new URLSearchParams(window.location.search).get('locale') === 'zh-CN') {
-	const bundles: Record<string, Record<string, string>> = {};
-	for (const resource of [chineseWorkbenchMessages, chineseMessages, chineseSettingsMessages]) {
-		for (const [bundle, messages] of Object.entries(resource)) { bundles[bundle] = { ...bundles[bundle], ...messages }; }
-	}
-	setNlsMessages('zh-CN', bundles);
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 }
 
 const disposables = new DisposableStore();

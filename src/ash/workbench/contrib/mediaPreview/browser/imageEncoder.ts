@@ -17,7 +17,17 @@ export async function encodeImageBlobAsPng(source: Blob, document: Document, wor
 export async function encodeImageAsPng(image: HTMLImageElement, workers: IWebWorkerService): Promise<Uint8Array> {
 	try {
 		await image.decode();
-		const bitmap = await getWindow(image).createImageBitmap(image);
+		const window = getWindow(image);
+		const bitmap = await window.createImageBitmap(image).catch((error: unknown) => {
+			// For SVGs without an intrinsic size, draw into an explicit viewport.
+			// Resizing createImageBitmap alone can produce a transparent bitmap.
+			if (!(error instanceof window.DOMException) || error.name !== 'InvalidStateError' || !image.naturalWidth || !image.naturalHeight) throw error;
+			const canvas = new window.OffscreenCanvas(image.naturalWidth, image.naturalHeight);
+			const context = canvas.getContext('2d');
+			if (!context) throw error;
+			context.drawImage(image, 0, 0, canvas.width, canvas.height);
+			return canvas.transferToImageBitmap();
+		});
 		try {
 			using worker = workers.createWorkerClient<ImageEncoderWorker>(new WebWorkerDescriptor({
 				label: 'ash-image-encoder',

@@ -1,6 +1,6 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
@@ -521,7 +521,7 @@ test('Browsing a remote conversation preserves its host instead of opening a loc
 });
 
 test('Workspace cancellation keeps the draft and the Chinese picker exposes translated worktree actions', async () => {
-	const translations = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/sessions.json', 'utf8'));
+	const translations = chineseCatalog.bundles;
 	setNlsMessages('zh-CN', translations);
 	try {
 		assert.match(getSessionsChatAccessibilityHelp(), /打开不受信任的本地文件夹时会出现信任对话框/);

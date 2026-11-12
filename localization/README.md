@@ -9,13 +9,25 @@ Electron 的 Workbench 和 Sessions 在加载贡献注册模块前读取语言�
 - 普通文案在功能代码中调用 `localize(key, 'English message')`。
 - 命令标题等同时需要英文原文和译文的地方调用 `localize2(key, 'English message')`；返回 `{ original, value }`，两者都在调用时确定。命令面板显示译文，并支持按英文原名、译文或命令 ID 搜索。
 - 跨 bundle 的文案使用 `{ bundle, key }`。已有 bundle/key 是稳定标识，不随文件移动改名。
-- `extensions/language-pack-zh-cn/translations/*.json` 按 Editor、Workbench、Settings、Sessions 等较大的领域维护译文。不要为每个组件建一个文件。
 - 英文原文由功能代码拥有。普通文案直接使用 `localize/localize2`；数据表可通过 getter 或函数声明静态调用，避免另存一份英文。
 - 生成器也提取本地化服务的静态调用、同类中转发 key 和英文参数的多层包装方法，以及视图和区域描述符中配对的翻译 key 与英文文案。
 - 枚举和动态 key 的数据表在所属模块通过静态 `localize2` 声明文案。需要保留英文供指定窗口的本地化服务使用时，取其 `.original`，避免在模块初始化时固定为当前语言。英文 JSON 字典已退出生成链；新增英文词条必须回到所属源码，校验会拒绝 `en/*.json` 中的非空声明。
 - 主题颜色说明由主题注册代码声明。审批模式的英中说明和产品 Slash Command 的英文说明来自生成的协议元数据，不在客户端另存副本。
 
-`build/resources/localization.ts` 提取英文、合并领域资源，生成 `.build/desktop/localization/` 中的语言目录和加载器。产品用元数据列出语言，并按需加载所选语言的消息。需要同步读取多份目录的测试使用 `localizationCatalogs.ts`。生成文件不提交到 Git，也不要手工修改。
+`extensions/language-pack-zh-cn/translations/` 按功能领域维护简中译文。更新已有文案时，先用 bundle/key 找到现有条目。新增条目时，优先放进对应的功能文件：
+
+| 功能                                     | 文件                                                                                                                             |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 聊天输入、上下文和语音                   | `chat-input.json`                                                                                                                |
+| 模型、连接和用量                         | `chat-models.json`                                                                                                               |
+| 聊天工具、审批和调试                     | `chat-tools.json`                                                                                                                |
+| 回复、Markdown 和资源操作                | `chat-transcript.json`                                                                                                           |
+| 会话聊天、变更、自动化和工作区           | `sessions-chat.json`、`sessions-changes.json`、`sessions-automations.json`、`sessions-workspaces.json`                           |
+| 终端、调试、文件与搜索、外观和内置浏览器 | `workbench-terminal.json`、`workbench-debug.json`、`workbench-files.json`、`workbench-appearance.json`、`workbench-browser.json` |
+| 文档、PDF、媒体预览和参考资料            | `editor-documents.json`                                                                                                          |
+| 项目、创作入口和制品                     | `artifacts.json`                                                                                                                 |
+
+`build/resources/localization.ts` 提取英文、合并并排序译文，生成 `.build/desktop/localization/` 中的语言目录和加载器。产品按需加载所选语言，生成模块按消息体积分块，源码 JSON 的文件边界只用于维护。测试需要简中译文时读取生成的 `localizationCatalog.zh-CN.js`，需要同步读取多份目录时使用 `localizationCatalogs.ts`。生成文件不提交到 Git，也不要手工修改。
 
 ## 生成与校验
 
@@ -27,7 +39,7 @@ pnpm localization:check
 pnpm localization:check --report-missing
 ```
 
-`localization:check` 只校验源词条，不要求已有生成文件，也不写入产物。生成和校验均拒绝冲突的英文声明、重复译文、未知翻译 key 和不匹配的参数。没有语言条目的文案显示代码中的原文，并报告数量；`--report-missing` 列出具体 key。
+`localization:check` 只校验源词条，不要求已有生成文件，也不写入产物。生成和校验均拒绝冲突的英文声明、重复译文、未知翻译 key 和不匹配的参数。没有语言条目的文案显示代码中的原文，并报告数量。`--report-missing` 为每条缺译列出 bundle/key、英文声明位置和建议的目标 JSON。建议优先参考同一命名空间已有译文的位置，无法唯一确定时按简中功能目录或该语言包的默认文件给出建议。
 
 不是所有内容都需要翻译。产品名、技术名称、颜色通道符号等可以保留原文，在所属语言 JSON 中显式填写相同内容，例如 `"hueShort": "H"`。生成器分别报告没有语言条目的文案与显式保留原文的条目。配置键、命令标识、协议字段、路径和用户内容保持原样，不作为界面文案翻译。
 
