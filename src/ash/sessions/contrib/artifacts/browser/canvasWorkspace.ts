@@ -22,7 +22,7 @@ import type { CanvasArtifactExample } from './artifactExamples.js';
 
 const ActiveCanvasWorkspace = new RawContextKey<ArtifactWorkspaceId | undefined>('sessions.artifacts.activeCanvasWorkspace', undefined);
 const CanvasWorkspaceCanEdit = new RawContextKey<boolean>('sessions.artifacts.canvasWorkspaceCanEdit', false);
-const CanvasWorkspaceIsSlidesArtifact = new RawContextKey<boolean>('sessions.artifacts.canvasWorkspaceIsSlidesArtifact', false);
+const CanvasWorkspaceHasManagedDocument = new RawContextKey<boolean>('sessions.artifacts.canvasWorkspaceHasManagedDocument', false);
 
 interface CanvasWorkspaceAction<T> {
 	readonly id: string;
@@ -38,7 +38,6 @@ export class CanvasWorkspace extends Disposable implements IArtifactWorkspace {
 	public readonly usesCanvasPanels: boolean = true;
 	protected editorHost!: DesignEditorHost;
 	protected contentDomNode!: HTMLElement;
-	private pageNavigationDomNode: HTMLElement | undefined;
 	private toolbarContext: IContextKeyService | undefined;
 	private activeWorkspace: IContextKey<ArtifactWorkspaceId | undefined> | undefined;
 	private initialFrame: string | undefined;
@@ -67,9 +66,9 @@ export class CanvasWorkspace extends Disposable implements IArtifactWorkspace {
 			ContextKeyExpr.notEquals(ActiveCanvasWorkspace.key, ArtifactWorkspaceId.Design),
 		);
 		CanvasWorkspace.registerActions(CanvasWorkspace, 'sessions.creator.canvas', 'file', when, [
-			{ id: 'open', title: localize2('sessions.creator.open', 'Open document'), when: CanvasWorkspaceIsSlidesArtifact.isEqualTo(false), run: workspace => workspace.document.openDocument() },
-			{ id: 'save', title: localize2('sessions.creator.save', 'Save document'), when: CanvasWorkspaceIsSlidesArtifact.isEqualTo(false), run: workspace => workspace.editor.saveDocument() },
-			{ id: 'exportCopy', title: localize2('sessions.creator.slides.exportCopy', 'Export editable copy'), when: CanvasWorkspaceIsSlidesArtifact.isEqualTo(true), run: workspace => workspace.document.saveCopy() },
+			{ id: 'open', title: localize2('sessions.creator.open', 'Open document'), when: CanvasWorkspaceHasManagedDocument.isEqualTo(false), run: workspace => workspace.document.openDocument() },
+			{ id: 'save', title: localize2('sessions.creator.save', 'Save document'), when: CanvasWorkspaceHasManagedDocument.isEqualTo(false), run: workspace => workspace.editor.saveDocument() },
+			{ id: 'exportCopy', title: localize2('sessions.creator.slides.exportCopy', 'Export editable copy'), when: CanvasWorkspaceHasManagedDocument.isEqualTo(true), run: workspace => workspace.document.saveCopy() },
 			{ id: 'exportSvg', title: localize2('sessions.design.export', 'Export SVG'), run: workspace => workspace.document.exportDocument() },
 		]);
 	}
@@ -116,11 +115,15 @@ export class CanvasWorkspace extends Disposable implements IArtifactWorkspace {
 		const scopedInstantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, scope])));
 		this.editorHost = this._register(scopedInstantiation.createInstance(DesignEditorHost, this.mode));
 		this.editorHost.create(this.contentDomNode, example, document);
-		CanvasWorkspaceIsSlidesArtifact.bindTo(scope).set(this.document.isSlidesArtifact);
+		CanvasWorkspaceHasManagedDocument.bindTo(scope).set(this.document.artifactKind !== undefined);
 		this.editor.setWorkspaceToolbarContext(this);
 		this.createModeContent();
+		const title = h(this.ownerDocument, 'h1', { className: 'ash-canvas-editor-title' }, this.document.name);
+		this.editor.prependToolbarControl(title);
+		this._register(this.document.onDidChangeLabel(() => { title.textContent = this.document.name; }));
 		if (example || document) { this.initialFrame = this.document.model.value.shapes[0]?.id; }
-		if (example?.editorMode) { this.editor.setMode(example.editorMode); }
+		const editorMode = document?.artifactKind === 'motion' ? DesignMode.Motion : example?.editorMode;
+		if (editorMode) { this.editor.setMode(editorMode); }
 		const updateModeContext = this.bindToolbarContext?.(scope);
 		const updateContext = () => scope.bufferChangeEvents(() => {
 			canEdit.set(!this.document.isBusy);
@@ -136,8 +139,7 @@ export class CanvasWorkspace extends Disposable implements IArtifactWorkspace {
 
 	protected createPageNavigation(): HTMLElement {
 		const navigation = h(this.ownerDocument, 'div', { className: 'ash-creator-workspace-navigation' });
-		this.contentDomNode.before(navigation);
-		this.pageNavigationDomNode = navigation;
+		this.editor.prependToolbarControl(navigation);
 		return navigation;
 	}
 
@@ -158,7 +160,7 @@ export class CanvasWorkspace extends Disposable implements IArtifactWorkspace {
 	}
 	public layout(dimension: IDimension): void {
 		this.domNode.classList.toggle('narrow', dimension.width < 600);
-		this.editorHost.layout({ width: dimension.width, height: Math.max(0, dimension.height - (this.pageNavigationDomNode?.offsetHeight ?? 0)) });
+		this.editorHost.layout(dimension);
 	}
 	public revealInitialContent(): void {
 		const { clientWidth, clientHeight } = this.contentDomNode;

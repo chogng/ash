@@ -45,8 +45,7 @@ test('Real Prompt catalog pins nested resources, reports diagnostics and preserv
 		const disabled = await backend.read(sessionId);
 		expect(disabled.catalog.skills.find(item => item.id.name === 'c-review')!.enabled).toBe(false);
 		await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
-		const list = page.locator('[data-view-id="ash.extensions.skills"]').getByRole('listbox');
-		await list.getByRole('option').filter({ hasText: 'c-review' }).click();
+		await page.locator('.ash-customize').getByRole('button', { name: 'c-review', exact: true }).click();
 		const detail = page.locator('.ash-extension-editor');
 		await expect(detail.getByRole('heading', { name: 'c-review', exact: true })).toBeVisible();
 		await expect(detail.getByRole('status')).toHaveText('Disabled');
@@ -59,7 +58,8 @@ test('Real Prompt catalog pins nested resources, reports diagnostics and preserv
 		await testInfo.attach('c-real-skill-snapshot', { path: image, contentType: 'image/png' });
 		const reopened = await workbench.reopenAgentsWindow(application, page);
 		await new QuickAccess(reopened).runCommand('workbench.action.chat.configure.skills');
-		await expect(reopened.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').filter({ hasText: 'c-review' })).toContainText('Disabled');
+		await reopened.locator('.ash-customize').getByRole('button', { name: 'c-review', exact: true }).click();
+		await expect(reopened.locator('.ash-extension-editor').getByRole('status')).toHaveText('Disabled');
 	} finally { await connection.close(); }
 });
 

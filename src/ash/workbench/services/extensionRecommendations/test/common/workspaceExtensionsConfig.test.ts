@@ -199,13 +199,14 @@ suite('Workspace extension recommendations', () => {
 
 	test('shared editor intents keep their audience and recent history within the initiating window', async () => {
 		const f = fixture([], ExtensionUiTarget.Agents); using lifetime = f.lifetime;
-		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-doc'));
+		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-paper'));
 		const recommendation = (await f.recommendations.getRecommendations()).recommendations[0]!;
 		assert.equal(recommendation.extensionId, 'ash.academy@ash');
 		assert.deepEqual(recommendation.uiTargets, [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
 		const reopened = lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.Agents));
 		assert.equal((await reopened.getRecommendations()).recommendations[0]!.extensionId, 'ash.academy@ash');
 		const ide = lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE));
+		ide.recommendForResource(URI.parse('untitled:/document.ash-paper'));
 		assert.deepEqual((await ide.getRecommendations()).recommendations, []);
 	});
 
@@ -335,14 +336,16 @@ suite('Workspace extension recommendations', () => {
 	});
 
 	test('file types, explicit Docs intents and model language changes share discovery and exclude internal models', async () => {
-		const f = fixture(); using lifetime = f.lifetime;
+		const f = fixture([], ExtensionUiTarget.Agents); using lifetime = f.lifetime;
 		const signal = new AbortController().signal;
-		const reference = lifetime.add(await f.models.acquire({ resource: URI.parse('untitled:/draft'), initialText: '', languageId: 'python' }, signal));
-		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-doc'));
+		const draft = URI.parse('untitled:/draft');
+		const reference = lifetime.add(await f.models.acquire({ resource: draft, initialText: '', languageId: 'python' }, signal));
+		f.setVisibleResources([draft]);
+		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-paper'));
 		f.recommendations.recommendForResource(URI.file('/project/settings.yaml'));
 		let snapshot = await f.recommendations.getRecommendations();
 		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), ['ash.academy@ash', 'support.python@ash', 'support.yaml@ash']);
-		assert.equal(snapshot.recommendations.find(item => item.extensionId === 'ash.academy@ash')!.context!.name, 'Docs');
+		assert.equal(snapshot.recommendations.find(item => item.extensionId === 'ash.academy@ash')!.context!.name, 'research papers');
 		assert.ok(f.queries.some(({ query, options }) => query === '.yaml' && options?.packageType === 'language'));
 		reference.model.setLanguage('rust');
 		snapshot = await f.recommendations.getRecommendations();
@@ -414,7 +417,7 @@ suite('Workspace extension recommendations', () => {
 	test('merges all sources by package identity, honors workspace exclusions and refreshes installed state', async () => {
 		const f = fixture([[URI.file('/project/.ash/extensions.json'), '{"recommendations":["SUPPORT.PYTHON@ash"],"unwantedRecommendations":["ASH.ACADEMY"]}']]); using lifetime = f.lifetime;
 		lifetime.add(await f.models.acquire({ resource: URI.file('/project/main.py'), initialText: '', languageId: 'python' }, new AbortController().signal));
-		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-doc'));
+		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-paper'));
 		let snapshot = await f.recommendations.getRecommendations();
 		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId), ['support.python@ash']);
 		assert.equal(snapshot.recommendations[0]!.reason.reasonId, ExtensionRecommendationReason.Workspace);
@@ -446,10 +449,10 @@ suite('Workspace extension recommendations', () => {
 	});
 
 	test('remembers recent file recommendations across service instances without replaying automatic contexts', async () => {
-		const f = fixture(); using lifetime = f.lifetime;
-		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-doc'));
+		const f = fixture([], ExtensionUiTarget.Agents); using lifetime = f.lifetime;
+		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-paper'));
 		await f.recommendations.getRecommendations();
-		const reopened = lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE));
+		const reopened = lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.Agents));
 		const snapshot = await reopened.getRecommendations();
 		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId), ['ash.academy@ash']);
 		assert.equal(snapshot.recommendations[0]!.context, undefined);
@@ -466,7 +469,7 @@ suite('Workspace extension recommendations', () => {
 	});
 
 	test('global ignore and undo share persistent state while workspace exclusions remain authoritative', async () => {
-		const f = fixture([[URI.file('/project/.ash/extensions.json'), '{"recommendations":["ash.academy@ash"],"unwantedRecommendations":["workspace.hidden"]}']]); using lifetime = f.lifetime;
+		const f = fixture([[URI.file('/project/.ash/extensions.json'), '{"recommendations":["ash.academy@ash"],"unwantedRecommendations":["workspace.hidden"]}']], ExtensionUiTarget.Agents); using lifetime = f.lifetime;
 		await f.recommendations.getRecommendations();
 		f.ignored.toggleGlobalIgnoredRecommendation('ASH.ACADEMY@ash', true);
 		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);

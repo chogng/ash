@@ -11,6 +11,7 @@ import { IOpenerService } from 'ash:editor/platform/opener/common/opener.js';
 import { createDefaultDocumentSchema, type DocumentSchema } from '../common/model/documentSchema.js';
 import type { DocumentPlugin } from '../common/model/documentPlugin.js';
 import type { DocumentNode } from '../common/model/document.js';
+import { createDocumentFragmentFromHtml } from './widget/richTextEditor/htmlDocumentFragment.js';
 
 /** A view constructor captures optional package UI, while the host owns service injection and disposal. */
 export function createEditorProfileConfiguration(schema: DocumentSchema, options: RichTextEditorOptions, plugins?: readonly DocumentPlugin<unknown>[], createEmptyDocument?: () => DocumentNode): DocumentEditorConfiguration {
@@ -35,13 +36,25 @@ export function createEditorProfileConfiguration(schema: DocumentSchema, options
 }
 
 /** Free-form writing and channel notes share Academy semantics, not paper constraints. */
-export const generalProfile: EditorProfile = Object.freeze({
-	id: 'general', contentType: 'application/vnd.ash.document+json',
-	create: () => {
-		const schema = createDefaultDocumentSchema();
-		return createEditorProfileConfiguration(schema, { outlineNavigator: true, contributions: documentContributions }, undefined, () => schema.createDocument([schema.createNode('paragraph')]));
-	},
-});
+function createGeneralProfile(flowingText: boolean): EditorProfile {
+	return Object.freeze({
+		id: 'general', editorId: 'ash.editor.document', contentType: 'application/vnd.ash.document+json',
+		create: () => {
+			const schema = createDefaultDocumentSchema();
+			return createEditorProfileConfiguration(schema, { flowingText, outlineNavigator: true, contributions: documentContributions }, undefined, () => schema.createDocument([schema.createNode('paragraph')]));
+		},
+	});
+}
+
+export const generalProfile = createGeneralProfile(false);
+export const artifactDocumentProfile = createGeneralProfile(true);
+
+/** Import standard rich content through the same schema and sanitizer as rich paste. */
+export function importGeneralDocumentHtml(html: string, ownerDocument: Document): DocumentNode | undefined {
+	const schema = createDefaultDocumentSchema();
+	const fragment = createDocumentFragmentFromHtml(ownerDocument, schema, html);
+	return fragment && schema.createDocument(fragment.content);
+}
 
 export const channelNotesProfile: EditorProfile = Object.freeze({
 	id: 'ash.collaboration.notes', contentType: 'application/vnd.ash.channel-notes+json',

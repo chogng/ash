@@ -162,10 +162,11 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 	}
 	await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
 	await expect(settings).toHaveCount(0);
-	const skills = page.locator('[data-view-id="ash.extensions.skills"]');
-	await expect(skills.getByRole('button', { name: 'Skills', exact: true })).toHaveAttribute('aria-expanded', 'true');
-	await expect(page.locator('[data-view-id="ash.extensions.plugins"]')).toBeVisible();
-	await expect(page.locator('[data-view-id="ash.extensions.mcp"]')).toBeVisible();
+	const categories = page.getByRole('tablist', { name: 'Customization categories' });
+	await expect(categories.getByRole('tab', { name: 'Skills', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(categories.getByRole('tab', { name: 'Plugins', exact: true })).toBeVisible();
+	await expect(categories.getByRole('tab', { name: 'Connectors', exact: true })).toBeVisible();
+	await expect(page.locator('.ash-extensions-view-container')).toHaveCount(0);
 	expect(failures).toEqual([]);
 });
 
@@ -208,6 +209,11 @@ test('Sessions Customize uses Chinese labels and localized Hooks controls', asyn
 	await expect(hooks.getByRole('searchbox', { name: '搜索事件、Hook、命令或路径' })).toBeFocused();
 	await hooks.getByRole('searchbox').press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/配置 Hooks[\s\S]*不会发送/u);
+	await page.keyboard.press('Escape');
+	await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
+	const connectors = page.locator('.ash-customize').getByRole('tab', { name: '连接器', exact: true });
+	await connectors.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/打开“添加”并选择“添加连接”/u);
 });
 
 

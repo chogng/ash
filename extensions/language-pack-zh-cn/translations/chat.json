@@ -672,6 +672,7 @@
     "chat.requests.help": "点击可编辑的请求即可原地修改。使用键盘时，按 Tab 聚焦编辑控件，再按 Enter 或空格。按 Enter 换行。按 Tab 移至编辑框下方的“取消”和“发送”。点击“发送”或按 Ctrl 或 Command+Enter，会将修改后的请求连同原上下文和附件发送到新聊天。点击“取消”、点击编辑框外部或按 Escape 可保留原请求与草稿。命令面板中的“分叉对话”会复制当前历史而不发送消息。使用“新聊天”可开始空白对话。这些操作均保留原对话。",
     "chat.chart.label": "图表",
     "chat.richContent.details": "内容",
+    "chat.writing.editInDocs": "在 Docs 中编辑",
     "chat.citation.source": "{0} 个来源",
     "chat.citation.sources": "{0} 个来源",
     "chat.responseCitations.sources": "来源（{0}）",

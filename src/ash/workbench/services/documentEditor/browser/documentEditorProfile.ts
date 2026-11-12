@@ -7,9 +7,15 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import type { DocumentCollaborationConnection } from '../../documentCollaboration/common/documentCollaborationService.js';
 
+/** Optional host for the same editor-owned controls outside the document body. */
+export interface DocumentEditorControlsHost {
+	readonly container: HTMLElement;
+	reveal(): Promise<void>;
+}
+
 export interface DocumentEditorWidget extends IDisposable {
 	readonly isDisposed: boolean;
-	create(parent: HTMLElement): void;
+	create(parent: HTMLElement, controls?: DocumentEditorControlsHost): void;
 	setModel(model: DocumentTextModel, input: { readonly resource: URI; readonly readOnly?: boolean; }): void;
 	setReadOnly(readOnly: boolean): void;
 	clearInput(): void;

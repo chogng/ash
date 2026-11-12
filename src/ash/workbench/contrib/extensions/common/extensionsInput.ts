@@ -5,7 +5,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { encodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
 import type { ExtensionsPackageSummary } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
-import { EditorInputSerializers, requireRecord, requireString, optionalString } from '../../../services/editor/common/editorInputSerializer.js';
+import { requireRecord, requireString, optionalString, type EditorInputSerializer } from '../../../services/editor/common/editorInputSerializer.js';
 import { EditorInput } from '../../../common/editor/editorInput.js';
 
 export enum ExtensionsInputSource {
@@ -58,7 +58,7 @@ export class ExtensionsInput extends EditorInput {
 }
 
 // Persist identity and inert metadata, then resolve the installation from the backend on restore.
-EditorInputSerializers.registerStatic({
+export const extensionsInputSerializer: EditorInputSerializer = {
 	typeId: 'ash.extensions.input',
 	canSerialize: input => input instanceof ExtensionsInput && input.typeId === 'ash.extensions.input',
 	serialize: input => {
@@ -79,7 +79,7 @@ EditorInputSerializers.registerStatic({
 			description: optionalString(record.description, 'extension description') ?? '',
 		}, optionalString(record.installationId, 'extension installation ID'), source as ExtensionsInputSource);
 	},
-});
+};
 
 export type ExtensionsCapabilityTarget =
 	| { readonly kind: 'skill'; readonly source: string; readonly name: string; readonly sessionId?: string; }
@@ -103,7 +103,7 @@ export class ExtensionsCapabilityInput extends EditorInput {
 	public getName(): string { return this.target.kind === 'skill' ? this.target.name : this.target.kind === 'connector' ? this.target.connectorId : this.target.serverId; }
 }
 
-EditorInputSerializers.registerStatic({
+export const extensionsCapabilityInputSerializer: EditorInputSerializer = {
 	typeId: 'ash.extensions.capabilityInput',
 	canSerialize: input => input instanceof ExtensionsCapabilityInput,
 	serialize: input => {
@@ -123,4 +123,4 @@ EditorInputSerializers.registerStatic({
 		}
 		throw new TypeError('Invalid capability kind');
 	},
-});
+};

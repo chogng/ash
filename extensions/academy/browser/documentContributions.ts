@@ -38,6 +38,7 @@ export interface DocumentFormattingContribution extends IDisposable {
 export interface DocumentEditorContributionContext {
 	readonly kind: 'document';
 	readonly container: HTMLElement;
+	readonly revealControls?: () => Promise<void>;
 	readonly documentActions: readonly { readonly id: string; readonly label: string; }[];
 	readonly onToggleMark: (markType: 'strong' | 'em') => void;
 	readonly onSetTextStyle: (attrs: DocumentTextStyleAttributes) => void;

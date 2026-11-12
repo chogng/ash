@@ -136,7 +136,7 @@ import { ILocalizationService } from '../../workbench/services/localization/comm
 import { WorkbenchLocalizationService } from '../../workbench/services/localization/browser/workbenchLocalizationService.js';
 import { builtinLanguagePackSources, preinstalledLanguagePacks } from '../../../../.build/desktop/localization/localizationCatalogLoader.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../platform/agentHost/common/appServerApi.js';
-import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, type ExtensionsOpenOptions } from '../../platform/extensionManagement/common/extensionManagementService.js';
+import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, validateExtensionsOpenOptions, type ExtensionsOpenOptions } from '../../platform/extensionManagement/common/extensionManagementService.js';
 import { registerExtensionManagementActions } from '../../workbench/contrib/extensions/browser/extensionsActions.js';
 import { AppServerExtensionManagementService } from '../../workbench/services/extensionManagement/browser/appServerExtensionManagementService.js';
 import { IPluginManagementService } from '../../platform/extensionManagement/common/pluginManagementService.js';
@@ -170,7 +170,6 @@ import { DeferredPromise } from '../../base/common/async.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
-import { openExtensionsView, registerExtensionsViewContainer } from '../../workbench/contrib/extensions/browser/extensionsViewlet.js';
 import { ViewContainerLocation } from '../../workbench/common/views.js';
 import { DesignEditorService, IDesignEditorService } from '../contrib/artifacts/browser/designEditorService.js';
 import { Disposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
@@ -394,6 +393,7 @@ export interface IWorkbenchOptions {
 	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
 	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
 	readonly returnToWorkbench: () => void;
+	readonly openIdeExtensions: (options: ExtensionsOpenOptions) => void | Promise<void>;
 	readonly initialConfiguration?: IConfigurationModel;
 	readonly createUserDataFileSystemProvider: () => Promise<IFileSystemProvider & IDisposable>;
 	readonly createContextMenuService: (services: IInstantiationService) => IContextMenuService & IDisposable;
@@ -456,7 +456,7 @@ export abstract class Workbench extends Disposable {
 		const { layout, keybindingsReady } = this.registerWindowServices(services, options, layoutConstructor, ownerWindow);
 		this.layoutService = layout;
 
-		const preferences = this.registerPreferences(services);
+		const preferences = this.registerPreferences(services, options.openIdeExtensions);
 		const accountMenu = services.createInstance(SessionsAccountMenu, preferences);
 		const { titlebar, sidebar, flatLayout } = this.createNavigationParts(services, options);
 		const notifications = services.get(INotificationService);
@@ -1015,7 +1015,7 @@ export abstract class Workbench extends Disposable {
 		return { layout, keybindingsReady };
 	}
 
-	private registerPreferences(services: InstantiationService): SessionsPreferences {
+	private registerPreferences(services: InstantiationService, openIdeExtensions: IWorkbenchOptions['openIdeExtensions']): SessionsPreferences {
 		const commandService = services.get(ICommandService);
 		this._register(registerExtensionManagementActions());
 		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, async () => {
@@ -1023,15 +1023,29 @@ export abstract class Workbench extends Disposable {
 			// Code may start with only its tab strip. An explicit Preferences handoff needs visible editor content.
 			this.layoutService.showPart('editor');
 		}));
-		this._register(registerExtensionsViewContainer(SessionsViewRegistry, ViewContainerLocation.Sidebar));
 		const openExtensions = async (options: ExtensionsOpenOptions): Promise<void> => {
-			await commandService.executeCommand('sessions.open.code');
-			await openExtensionsView(services.get(IViewsService), options);
+			const filter = /^@(plugins|skills|connections|connectors)(?:\s+|$)/iu.exec(options.query ?? '');
+			const section = filter?.[1]?.toLowerCase() ?? options.view ?? options.capabilityKind;
+			const category = section === 'plugins' ? 'plugins'
+				: section === 'skills' || section === 'skill' ? 'skills'
+					: section === 'mcp' || section === 'connector' || section === 'connectors' || section === 'connections' ? 'connectors' : undefined;
+			if (category && options.mode !== 'builtIn') {
+				await commandService.executeCommand('sessions.open.customize', {
+					category,
+					collection: options.mode === 'browse' ? 'discover' : 'yours',
+					query: filter ? options.query!.slice(filter[0].length) : options.query,
+				});
+			} else {
+				await openIdeExtensions(options);
+			}
 		};
-		this._register(CommandsRegistry.register(OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, (_accessor, options) => openExtensions({ ...options as ExtensionsOpenOptions | undefined, view: 'plugins', mode: 'installed' })));
+		this._register(CommandsRegistry.register(OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, (_accessor, value: unknown) => {
+			const options = validateExtensionsOpenOptions(value ?? {});
+			const installed = { ...options, view: options.view ?? 'plugins', mode: 'installed' } as const;
+			return options.query && !options.view ? openIdeExtensions(installed) : openExtensions(installed);
+		}));
 		this._register(CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, value: unknown) => {
-			const options = value as ExtensionsOpenOptions | string | undefined;
-			return openExtensions(typeof options === 'string' ? { query: options.trim() } : options ?? {});
+			return openExtensions(validateExtensionsOpenOptions(typeof value === 'string' ? { query: value.trim() } : value ?? {}));
 		}));
 		return preferences;
 	}
@@ -1304,6 +1318,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IDiffService, diffService);
 		const editorArea = this._register(services.createInstance(DesktopEditorArea, this.domNode));
 		const titlebarHeight = observableFromEvent(this, titlebar.onDidChangeConstraints, () => titlebar.minimumHeight);
+		const fileDialogService = services.get(IFileDialogService);
 		const editorOptions: IEditorPartOptions = {
 			headerRowHeight: derived(reader => flatLayout.read(reader) ? titlebarHeight.read(reader) : undefined),
 			configurationService: this.configurationService,
@@ -1319,7 +1334,9 @@ export abstract class Workbench extends Disposable {
 			workingCopyService: services.get(IWorkingCopyService),
 			accessibilityService: services.get(IAccessibilityService),
 			dialogService: services.get(IDialogService),
-			fileDialogService: services.get(IFileDialogService),
+			fileDialogService,
+			saveAsResource: defaultName => fileDialogService.pickFileToSave(URI.file(`/${defaultName}`)),
+			replaceEditorResource: (source, input, replacement) => services.get(ISessionsEntryService).replaceEditorResource(source.id, input, replacement),
 			titleActions: { menuService: menus, contextMenuProvider: contextMenus },
 		};
 		return this._register(services.createInstance(EditorParts, editorArea, editorOptions, flatLayout));

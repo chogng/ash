@@ -254,8 +254,8 @@ export async function openExtensionsView(views: IViewsService, options: Extensio
 	if (composite instanceof ExtensionsViewPaneContainer) { void composite.open(options); }
 }
 
-/** Both product hosts use the same capability panes with their own view registry and location. */
-export function registerExtensionsViewContainer(registry: WorkbenchViewRegistry, location = ViewContainerLocation.Sidebar): DisposableStore {
+/** Registers the IDE Extensions sidebar and its capability panes. */
+export function registerExtensionsViewContainer(registry: WorkbenchViewRegistry): DisposableStore {
 	const registrations = new DisposableStore();
 	registrations.add(registerAction2(class RefreshExtensions extends Action2 {
 		constructor() {
@@ -270,7 +270,7 @@ export function registerExtensionsViewContainer(registry: WorkbenchViewRegistry,
 			if (container instanceof ExtensionsViewPaneContainer) { await container.refresh(); }
 		}
 	}));
-	registrations.add(registry.registerViewContainer({ id: 'ash.extensions', title: localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), location, icon: Lxicon.extensions, order: 8, ctorDescriptor: new SyncDescriptor(ExtensionsViewPaneContainer) }));
+	registrations.add(registry.registerViewContainer({ id: 'ash.extensions', title: localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), location: ViewContainerLocation.Sidebar, icon: Lxicon.extensions, order: 8, ctorDescriptor: new SyncDescriptor(ExtensionsViewPaneContainer) }));
 	registrations.add(registry.registerViews('ash.extensions', [
 		{ id: 'ash.extensions.view', title: localize({ bundle: 'ash.extensions', key: 'marketplacePane' }, 'Marketplace'), canToggleVisibility: false, order: 0, ctorDescriptor: new SyncDescriptor(ExtensionsListView) },
 		{ id: 'ash.extensions.skills', title: localize({ bundle: 'ash.extensions', key: 'filterSkills' }, 'Skills'), collapsed: true, canToggleVisibility: false, order: 1, ctorDescriptor: new SyncDescriptor(SkillsViewPane) },

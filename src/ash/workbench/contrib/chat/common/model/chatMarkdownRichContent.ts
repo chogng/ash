@@ -1,6 +1,8 @@
 import type { Icon } from '../../../../../base/common/icon.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 
+export const EDIT_CHAT_WRITING_COMMAND_ID = 'chat.response.editWriting';
+
 export type ChatMarkdownRichStyle = Readonly<Partial<Record<
 	'radius' | 'padding' | 'gap' | 'align' | 'justify' | 'background' | 'color' | 'size' | 'border' | 'borderColor',
 	string
@@ -24,6 +26,7 @@ export interface ChatMarkdownEntity {
 
 export type ChatMarkdownRichPart =
 	| ({ readonly kind: 'markdown'; } & ChatMarkdownRichBody)
+	| ({ readonly kind: 'writing'; readonly title?: string; } & ChatMarkdownRichBody)
 	| ({ readonly kind: 'box' | 'row' | 'text'; readonly style: ChatMarkdownRichStyle; readonly fallback?: ChatMarkdownRichLink; } & ChatMarkdownRichBody)
 	| ({ readonly kind: 'grid'; readonly columns: 1 | 2 | 3 | 4; readonly style: ChatMarkdownRichStyle; } & ChatMarkdownRichBody)
 	| ({ readonly kind: 'gridItem'; } & ChatMarkdownRichBody)

@@ -88,7 +88,8 @@ export class MainThreadClientEditors extends Disposable {
 			const owner = findRuntimePackage(enabledCatalog.extensions, runtime);
 			if (!owner?.rendererClient) continue;
 			const editors = declarations.find(entry => entry.description.id === owner.id)?.value.filter(editor =>
-				!editor.documentType || DocumentTypes.fileEditorsEnabled || !editor.selector.some(selector => selector.filenamePattern));
+				!editor.documentType || !EditorPanes.hasStaticEditor(editor.viewType)
+				&& (DocumentTypes.fileEditorsEnabled || !editor.selector.some(selector => selector.filenamePattern)));
 			if (!editors?.length) continue;
 			dormant.add(runtime.id);
 			const identity = JSON.stringify([runtime.activationGeneration, owner.packageSha256, owner.manifestSha256, owner.rendererClient]);
@@ -267,61 +268,63 @@ export class MainThreadClientEditors extends Disposable {
 				return;
 			}
 			// Register only after the entire declaration is valid. No static factory supplies a fallback.
-			const descriptors = editors.filter(editor => DocumentTypes.fileEditorsEnabled || editor.selectors.length === 0).map((editor): IEditorPaneDescriptor => {
-				const resolveDocumentProfile = async () => {
-					const component = await resolveComponent();
-					if (!('getEditorProfile' in component) || typeof component.getEditorProfile !== 'function') {
-						throw new Error(localize('extensions.clientEditor.versionMismatch', 'The editor component and extension versions do not match.'));
-					}
-					const profile = component.getEditorProfile(editor.editorId);
-					if (profile.id !== editor.documentType || profile.contentType !== editor.contentType) {
-						throw new Error(localize('extensions.clientEditor.profileMismatch', 'The editor profile does not match its extension declaration.'));
-					}
-					return {
-						...profile, editorId: editor.editorId, create: () => {
-							signal.throwIfAborted();
-							const configuration = profile.create();
-							const formats = configuration.artifactFormats;
-							if (formats !== undefined) {
-								if (!Array.isArray(formats) || formats.length > 16) throw new TypeError('Invalid document artifact formats');
-								const ids = new Set<string>();
-								for (const format of formats) {
-									if (!format || typeof format.id !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(format.id) || ids.has(format.id) || typeof format.extension !== 'string' || !/^[a-z0-9]{1,12}$/.test(format.extension) || typeof format.label !== 'string' || !format.label || format.label.length > 200 || typeof format.mimeType !== 'string' || !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(format.mimeType) || typeof format.canImport !== 'boolean') throw new TypeError('Invalid document artifact format');
-									ids.add(format.id);
-								}
-							}
-							const importBinary = configuration.importBinary;
-							if (importBinary !== undefined && typeof importBinary !== 'function' || formats?.some(format => format.canImport) && !importBinary) throw new TypeError('Invalid document artifact importer');
-							return {
-								...configuration, artifactFormats: formats?.map(format => Object.freeze({ ...format })), importBinary: importBinary ? async (bytes: Uint8Array, format: string, ownerDocument: Document, requestSignal: AbortSignal) => {
-									const lifetime = AbortSignal.any([signal, requestSignal]); lifetime.throwIfAborted();
-									const document = await importBinary.call(configuration, bytes, format, ownerDocument, lifetime);
-									lifetime.throwIfAborted(); return document;
-								} : undefined
-							};
+			// A previous package version can still declare an editor now supplied by the product.
+			const descriptors = editors.filter(editor => !EditorPanes.hasStaticEditor(editor.editorId)
+				&& (DocumentTypes.fileEditorsEnabled || editor.selectors.length === 0)).map((editor): IEditorPaneDescriptor => {
+					const resolveDocumentProfile = async () => {
+						const component = await resolveComponent();
+						if (!('getEditorProfile' in component) || typeof component.getEditorProfile !== 'function') {
+							throw new Error(localize('extensions.clientEditor.versionMismatch', 'The editor component and extension versions do not match.'));
 						}
+						const profile = component.getEditorProfile(editor.editorId);
+						if (profile.id !== editor.documentType || profile.contentType !== editor.contentType) {
+							throw new Error(localize('extensions.clientEditor.profileMismatch', 'The editor profile does not match its extension declaration.'));
+						}
+						return {
+							...profile, editorId: editor.editorId, create: () => {
+								signal.throwIfAborted();
+								const configuration = profile.create();
+								const formats = configuration.artifactFormats;
+								if (formats !== undefined) {
+									if (!Array.isArray(formats) || formats.length > 16) throw new TypeError('Invalid document artifact formats');
+									const ids = new Set<string>();
+									for (const format of formats) {
+										if (!format || typeof format.id !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(format.id) || ids.has(format.id) || typeof format.extension !== 'string' || !/^[a-z0-9]{1,12}$/.test(format.extension) || typeof format.label !== 'string' || !format.label || format.label.length > 200 || typeof format.mimeType !== 'string' || !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(format.mimeType) || typeof format.canImport !== 'boolean') throw new TypeError('Invalid document artifact format');
+										ids.add(format.id);
+									}
+								}
+								const importBinary = configuration.importBinary;
+								if (importBinary !== undefined && typeof importBinary !== 'function' || formats?.some(format => format.canImport) && !importBinary) throw new TypeError('Invalid document artifact importer');
+								return {
+									...configuration, artifactFormats: formats?.map(format => Object.freeze({ ...format })), importBinary: importBinary ? async (bytes: Uint8Array, format: string, ownerDocument: Document, requestSignal: AbortSignal) => {
+										const lifetime = AbortSignal.any([signal, requestSignal]); lifetime.throwIfAborted();
+										const document = await importBinary.call(configuration, bytes, format, ownerDocument, lifetime);
+										lifetime.throwIfAborted(); return document;
+									} : undefined
+								};
+							}
+						};
 					};
-				};
-				return {
-					id: editor.editorId,
-					name: editor.displayName,
-					documentType: {
-						id: editor.documentType!, contentType: editor.contentType,
-						extensions: editor.selectors.filter(pattern => /^\*\.[A-Za-z0-9-]+$/u.test(pattern)).map(pattern => pattern.slice(1).toLowerCase()),
-					},
-					canOpen: input => {
-						if (isResourceDiffEditorInput(input)) return EditorPaneMatch.None;
-						const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
-						const matches = editor.selectors.some(pattern => {
-							const path = pattern.includes('/') ? input.resource.path : basename(input.resource);
-							return match(pattern.toLowerCase(), path.toLowerCase());
-						}) || mediaType === editor.contentType;
-						return matches ? EditorPaneMatch.Default : EditorPaneMatch.None;
-					},
-					resolveDocumentProfile,
-					create: async options => createDocumentEditorPane(await resolveDocumentProfile(), options, signal, `${owner.id}@${owner.version}/${clientDigest}/${editor.documentType}`),
-				};
-			});
+					return {
+						id: editor.editorId,
+						name: editor.displayName,
+						documentType: {
+							id: editor.documentType!, contentType: editor.contentType,
+							extensions: editor.selectors.filter(pattern => /^\*\.[A-Za-z0-9-]+$/u.test(pattern)).map(pattern => pattern.slice(1).toLowerCase()),
+						},
+						canOpen: input => {
+							if (isResourceDiffEditorInput(input)) return EditorPaneMatch.None;
+							const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
+							const matches = editor.selectors.some(pattern => {
+								const path = pattern.includes('/') ? input.resource.path : basename(input.resource);
+								return match(pattern.toLowerCase(), path.toLowerCase());
+							}) || mediaType === editor.contentType;
+							return matches ? EditorPaneMatch.Default : EditorPaneMatch.None;
+						},
+						resolveDocumentProfile,
+						create: async options => createDocumentEditorPane(await resolveDocumentProfile(), options, signal, `${owner.id}@${owner.version}/${clientDigest}/${editor.documentType}`),
+					};
+				});
 			lifetime.add(EditorPanes.registerEditorPanes(descriptors));
 		} catch (error) {
 			const cancelled = signal.aborted;

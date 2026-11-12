@@ -20,7 +20,7 @@ for (const surface of ['IDE', 'Agent Window']) {
 		}));
 		await writeEditorExtensionFixture(root, 'exports.activate = () => {};');
 		const source = workbench.page;
-		await expect(source.getByRole('tab', { name: /Welcome/u }).first()).toBeVisible();
+		await workbench.waitForReady();
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = source.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('chat-plugin-fixture');
@@ -38,6 +38,18 @@ for (const surface of ['IDE', 'Agent Window']) {
 		await page.keyboard.insertText('Plugin draft');
 		await expect(chat.locator('.stanza-editor-line-text')).toHaveText('Plugin draft');
 		await commands.runCommand('workbench.action.chat.managePlugins');
+		if (surface === 'Agent Window') {
+			const customize = page.locator('.ash-customize');
+			await expect(customize.getByRole('tab', { name: 'Plugins', exact: true })).toHaveAttribute('aria-selected', 'true');
+			await expect(page.locator('.ash-extensions-view-container')).toHaveCount(0);
+			await customize.getByRole('button', { name: 'Chat plugin fixture', exact: true }).press('Enter');
+			const details = customize.locator('.ash-extension-editor:visible');
+			await expect(details.locator('.extension-detail-header')).toContainText('Chat plugin fixture');
+			await expect(details.getByRole('switch')).not.toBeChecked();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+			await expect(chat.locator('.stanza-editor-line-text')).toHaveText('Plugin draft');
+			return;
+		}
 		const container = page.locator('.ash-extensions-view-container');
 		const search = container.getByRole('searchbox');
 		const plugins = container.locator('[data-view-id="ash.extensions.plugins"]');
@@ -84,7 +96,7 @@ for (const surface of ['IDE', 'Agent Window']) {
 		const asset = new Uint8Array([0, 1, 2, 255]);
 		await writeFile(join(source, 'SKILL.md'), instructions);
 		await writeFile(join(source, 'scripts', 'check.txt'), asset);
-		await expect(workbench.page.getByRole('tab', { name: /Welcome/u }).first()).toBeVisible();
+		await workbench.waitForReady();
 		const page = surface === 'Agent Window' ? await workbench.openAgentsWindow(target.kind) : workbench.page;
 		await page.bringToFront();
 		if (surface === 'Agent Window') await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -114,7 +126,9 @@ for (const surface of ['IDE', 'Agent Window']) {
 		expect(new Uint8Array(await readFile(join(output, 'skills', 'created-skill', 'scripts', 'check.txt')))).toEqual(asset);
 		expect((await readdir(testWorkspace.directory)).some(name => name.startsWith('.ash-plugin-'))).toBe(false);
 		await window.quickaccess.runCommand('workbench.action.chat.managePlugins');
-		await expect(page.locator('[data-view-id="ash.extensions.plugins"]').getByRole('option').filter({ hasText: 'created-skill' })).toHaveCount(0);
+		const catalog = surface === 'Agent Window' ? page.locator('.ash-customize') : page.locator('[data-view-id="ash.extensions.plugins"]');
+		await expect(catalog).toBeVisible();
+		await expect(catalog.getByText('created-skill', { exact: true })).toHaveCount(0);
 		await window.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('created-skill');

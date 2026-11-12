@@ -14,6 +14,7 @@ import { ILanguageFeaturesService } from '../../../../editor/common/services/lan
 import { ILanguageServerService } from '../../../../platform/language/common/languageServerService.js';
 import { ExtensionUiTarget, IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { RecommendationSource } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
+import { isAcademyExtension } from '../common/academyExtension.js';
 import { IFileService, FileKind, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -113,6 +114,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 		]);
 		const recommendations = new Map<string, ExtensionRecommendation>();
 		const add = (recommendation: ExtensionRecommendation): void => {
+			if (this.target === ExtensionUiTarget.IDE && isAcademyExtension(recommendation.extensionId)) return;
 			if (recommendation.uiTargets && !recommendation.uiTargets.includes(this.target)) { return; }
 			const key = identity(recommendation.extensionId);
 			if (!excluded.has(key) && !recommendations.has(key)) { recommendations.set(key, recommendation); }
@@ -170,7 +172,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			const tip = editorTips.find(tip => (tip.extensions as readonly string[]).includes(extension));
 			if (tip) {
 				const uiTargets = await targetsFor(tip.id);
-				const name = tip.kind === 'docs' ? localize({ bundle: 'ash.extensions', key: 'recommendationDocs' }, 'Docs') : localize({ bundle: 'ash.extensions', key: 'recommendationPdf' }, 'PDF');
+				const name = tip.kind === 'docs' ? localize({ bundle: 'ash.extensions', key: 'recommendationDocs' }, 'research papers') : localize({ bundle: 'ash.extensions', key: 'recommendationPdf' }, 'PDF');
 				add({ extensionId: tip.id, uiTargets, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'fileRecommendationReason' }, 'Recommended for {0} files', extension) }, ...(uiTargets?.includes(this.target) ? { context: { source: RecommendationSource.FILE, name, searchValue: tip.query } } : {}) });
 			}
 			const language = languageId && languageId !== 'plaintext' ? languageId : this.languages.guessLanguageIdByFilepathOrFirstLine(resource);

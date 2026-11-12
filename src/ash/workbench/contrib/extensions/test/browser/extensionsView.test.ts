@@ -934,11 +934,11 @@ suite('extensions browser component', () => {
 
 		test(`Context recommendations display file reasons in ${locale}`, async function () {
 			const { page } = browserTests;
-			await page.goto(`/extensions.html?locale=${locale}`);
-			await page.evaluate(() => window.ashExtensionsIntegration.recommendResource('untitled:/document.ash-doc'));
+			await page.goto(`/extensions.html?agentsRecommendations&locale=${locale}`);
+			await page.evaluate(() => window.ashExtensionsIntegration.recommendResource('untitled:/document.ash-paper'));
 			await page.locator('#extensions').getByRole('button', { name: title, exact: true }).click();
 			const row = page.locator('[data-view-id="ash.extensions.recommended"]').getByRole('option').filter({ hasText: 'ash.academy@ash' });
-			await expect(row).toContainText(locale === 'zh-CN' ? '为 .ash-doc 文件推荐' : 'Recommended for .ash-doc files');
+			await expect(row).toContainText(locale === 'zh-CN' ? '为 .ash-paper 文件推荐' : 'Recommended for .ash-paper files');
 			await expect(row.locator('.extension-metadata')).toHaveText('ash.academy@ash');
 		});
 
@@ -1863,14 +1863,14 @@ suite('extensions browser component', () => {
 			await page.evaluate(() => window.ashExtensionsIntegration.open({ capabilityKind: 'editorExtension' }));
 			await page.locator('[data-view-id="ash.extensions.view"] .ash-extensions').getByRole('option').click();
 			const editor = page.locator('.ash-extension-editor');
-			await expect(editor.getByRole('heading', { name: 'Academy', exact: true })).toBeVisible();
+			await expect(editor.getByRole('heading', { name: 'Native editor sample', exact: true })).toBeVisible();
 			await expect(editor).toContainText('Tools for working with your project.');
 			const install = locale === 'en' ? 'Install' : '安装';
 			await editor.getByRole('button', { name: install, exact: true }).click();
 			await page.getByRole('dialog', { name: install, exact: true }).getByRole('button', { name: install, exact: true }).click();
 			const authorize = locale === 'en' ? 'Authorize execution' : '授权执行';
 			await editor.getByRole('button', { name: authorize, exact: true }).press('Enter');
-			const review = page.getByRole('dialog', { name: 'ash.academy@ash', exact: true });
+			const review = page.getByRole('dialog', { name: 'ash.native-editor-sample@ash', exact: true });
 			await expect(review).toContainText(locale === 'en' ? 'native program and trusted editor client' : '原生程序和可信编辑器客户端');
 			await expect(review).toContainText(locale === 'en' ? 'unsaved text' : '未保存文本');
 			await expect(review).not.toContainText('Node');
@@ -2078,9 +2078,9 @@ suite('extensions browser component', () => {
 			await page.locator('.ash-extension-editor').getByRole('button', { name: install, exact: true }).click();
 			await page.getByRole('dialog', { name: install, exact: true }).getByRole('button', { name: install, exact: true }).click();
 			const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
-			await expect(plugins.getByRole('option').filter({ hasText: 'Academy' })).toHaveCount(1);
-			await expect(plugins.getByRole('option').filter({ hasText: 'Academy' }).locator('.extension-metadata')).toHaveText('Fixture author');
-			await page.locator('#extensions').getByRole('searchbox').fill('@installed Academy');
+			await expect(plugins.getByRole('option').filter({ hasText: 'Native editor sample' })).toHaveCount(1);
+			await expect(plugins.getByRole('option').filter({ hasText: 'Native editor sample' }).locator('.extension-metadata')).toHaveText('Fixture author');
+			await page.locator('#extensions').getByRole('searchbox').fill('@installed Native editor sample');
 			const installations = await page.evaluate(() => window.ashExtensionsIntegration.installationSnapshot());
 			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.browse'));
 			await expect(titles).toHaveText([locale === 'en' ? 'Marketplace' : '扩展市场']);
@@ -2088,7 +2088,7 @@ suite('extensions browser component', () => {
 			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.showInstalled'));
 			await expect(titles).toHaveText(labels);
 			await expect(page.locator('#extensions').getByRole('searchbox')).toHaveValue('');
-			await expect(plugins.getByRole('option').filter({ hasText: 'Academy' })).toHaveCount(1);
+			await expect(plugins.getByRole('option').filter({ hasText: 'Native editor sample' })).toHaveCount(1);
 			expect(await page.evaluate(() => window.ashExtensionsIntegration.installationSnapshot())).toEqual(installations);
 		});
 

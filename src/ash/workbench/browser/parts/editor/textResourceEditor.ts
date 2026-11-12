@@ -83,6 +83,7 @@ export interface EditorPanePartOptions extends CodeEditorWidgetOptions {
 }
 
 export interface EditorPaneOptions {
+	readonly editorId?: string;
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly createPart?: (options: EditorPanePartOptions) => EditorPanePart;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
@@ -128,12 +129,12 @@ export interface EditorPaneOptions {
 	readonly showUnicodeHighlights?: boolean;
 	readonly onSave?: () => Promise<void | boolean>;
 	/** Uses the current working copy because the pane can be reused for another resource. */
-	readonly onSaveError?: (error: unknown, resource: URI | undefined) => void | Promise<void>;
+	readonly onSaveError?: (error: unknown, resource: URI | undefined) => void | boolean | Promise<void | boolean>;
 }
 
 /** Workbench pane that composes the text model, input, view, and language services. */
 export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> implements IEditorPaneWithSelection {
-	readonly id = CODE_EDITOR_ID;
+	readonly id: string;
 	readonly viewStateTypeId = 'stanza.code.textView';
 	private readonly selectionChangeEmitter = this._register(new Emitter<EditorPaneSelectionChangeReason>());
 	readonly onDidChangeSelection = this.selectionChangeEmitter.event;
@@ -176,7 +177,8 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
-		super(CODE_EDITOR_ID, themeService, storageService);
+		super(options.editorId ?? CODE_EDITOR_ID, themeService, storageService);
+		this.id = options.editorId ?? CODE_EDITOR_ID;
 		if (!resourceStore || typeof resourceStore.resolve !== 'function' || typeof resourceStore.save !== 'function' || typeof resourceStore.onDidChange !== 'function') {
 			this.dispose();
 			throw new TypeError('Code editor pane requires a text resource store');

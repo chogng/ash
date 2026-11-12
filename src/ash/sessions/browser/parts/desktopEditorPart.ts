@@ -187,11 +187,12 @@ export class DesktopMainEditorPart extends EditorPart {
 		const files = this.auxiliary.value;
 		if (product) {
 			files?.setVisible(false);
+			const minimumWidth = DockedAuxiliaryBarController.MIN_WIDTH;
 			this.getDockedAuxiliaryBar().layout(this.detailsDimension, {
 				part: product.part,
 				requestedWidth: this.hostVisible && this.isGroupVisible(this.pageGroupId) ? this.productDetailsWidth : undefined,
-				minimumWidth: DockedAuxiliaryBarController.MIN_WIDTH,
-				minimumEditorWidth: EDITOR_PART_MINIMUM_WIDTH,
+				minimumWidth,
+				minimumEditorWidth: Math.min(EDITOR_PART_MINIMUM_WIDTH, Math.max(MINIMUM_NARROW_EDITOR_WIDTH, this.detailsDimension.width - minimumWidth)),
 				editorVisible: true,
 				hideWhenConstrained: true,
 			});

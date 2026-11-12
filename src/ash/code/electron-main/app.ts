@@ -47,7 +47,8 @@ import { basename, dirname, isAbsolute, join, parse } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { CancellationTokenSource, throwIfCancelled, type CancellationToken } from '../../base/common/cancellation.js';
+import { CancellationToken, CancellationTokenSource, throwIfCancelled } from '../../base/common/cancellation.js';
+import { OPEN_IDE_EXTENSIONS_CHANNEL, validateExtensionsOpenOptions } from '../../platform/extensionManagement/common/extensionManagementService.js';
 import { CancellationError, isCancellationError } from '../../base/common/errors.js';
 import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableDisposable, installDisposableTracker, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { Lazy } from '../../base/common/lazy.js';
@@ -2313,6 +2314,22 @@ export class AshApplication extends Disposable {
 							channel: AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL,
 							validate: validateAgentsWindowHandoffComplete,
 							invoke: (result: unknown) => this.windowsMainService.completeManagedWindowHandoff(AGENTS_WINDOW_KEY, result as IAgentsWindowHandoffResult),
+						},
+						{
+							channel: OPEN_IDE_EXTENSIONS_CHANNEL,
+							validate: validateExtensionsOpenOptions,
+							invoke: async (options: unknown) => {
+								const workspace = session.workspaceContext.getWorkspace();
+								const active = this.windowsMainService.getLastActiveWindow('workbench');
+								const activeWorkspace = active && this.workbenchWindowData.get(active.id)?.workspaceContext.getWorkspace();
+								const window = activeWorkspace && getWorkspaceRemoteAuthority(activeWorkspace) === getWorkspaceRemoteAuthority(workspace)
+									? active
+									: (await this.openWorkspace(workspace, workspaces))?.window;
+								if (!window) return;
+								const ide = this.windowsMainService.getWindowById(window.id);
+								ide?.sendWhenReady(OPEN_IDE_EXTENSIONS_CHANNEL, CancellationToken.None, options);
+								ide?.focus();
+							},
 						},
 						{
 							channel: RETURN_TO_WORKBENCH_CHANNEL,

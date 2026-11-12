@@ -82,7 +82,11 @@ export class DocumentFindContribution extends DocumentFormattingControls impleme
 	handleKeydown(event: KeyboardEvent): void {
 		if (!event.defaultPrevented && !event.isComposing && (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'f') {
 			event.preventDefault();
-			this.open();
+			if (this.context.revealControls) {
+				void this.context.revealControls().then(() => { if (!this.isDisposed && this.element.isConnected) this.open(); });
+			} else {
+				this.open();
+			}
 		}
 	}
 

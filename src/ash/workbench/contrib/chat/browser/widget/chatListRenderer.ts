@@ -4,7 +4,8 @@ import { isPortableLinkTarget } from '../../../../../base/common/htmlContent.js'
 import { equals } from '../../../../../base/common/objects.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { openLinkFromMarkdown } from '../../../../../platform/markdown/browser/markdownRenderer.js';
-import { CHAT_RESPONSE_DOWNLOAD_SCHEME, CHAT_RESPONSE_ENTITY_SCHEME } from './chatMarkdownRichContent.js';
+import { CHAT_RESPONSE_DOWNLOAD_SCHEME, CHAT_RESPONSE_ENTITY_SCHEME, CHAT_RESPONSE_WRITING_SCHEME, renderChatRichContentHtml } from './chatMarkdownRichContent.js';
+import { EDIT_CHAT_WRITING_COMMAND_ID } from '../../common/model/chatMarkdownRichContent.js';
 import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichContent.js';
 import { ChatErrorContentPart } from './chatContentParts/chatErrorContentPart.js';
 import { ChatQuotaExceededPart } from './chatContentParts/chatQuotaExceededPart.js';
@@ -268,6 +269,7 @@ export class ChatListItemRenderer extends Disposable {
 			canDownload: !!this.options.readResponseResource && !!parts?.some(part => part.kind === 'resource' && part.uri),
 			canInspect: !!this.options.inspectResponseEntity && !!parts?.some(part => part.kind === 'entity'),
 			canReadGallery: !!this.options.readResponseResource && !!parts?.some(part => part.kind === 'imageGallery'),
+			canEditWriting: item.type === 'agentMessage' && !!parts?.some(part => part.kind === 'writing'),
 		};
 	}
 
@@ -840,6 +842,16 @@ export class ChatListItemRenderer extends Disposable {
 	}
 
 	private async openResponseLink(target: string, externalLinks: boolean, signal: AbortSignal): Promise<void> {
+		if (target.startsWith(CHAT_RESPONSE_WRITING_SCHEME + ':')) {
+			const index = target.slice(CHAT_RESPONSE_WRITING_SCHEME.length + 1);
+			if (!/^\d+$/u.test(index) || signal.aborted) return;
+			const content = this.item.markdown?.richContent;
+			const part = content?.parts[Number(index)];
+			if (content && part?.kind === 'writing') {
+				await this.commands.executeCommand(EDIT_CHAT_WRITING_COMMAND_ID, renderChatRichContentHtml(part.markdown, content), part.title);
+			}
+			return;
+		}
 		if (target.startsWith(CHAT_RESPONSE_ENTITY_SCHEME + ':')) {
 			const index = target.slice(CHAT_RESPONSE_ENTITY_SCHEME.length + 1);
 			if (!/^\d+$/u.test(index) || signal.aborted) return;
@@ -979,10 +991,10 @@ export class ChatListItemRenderer extends Disposable {
 			part.render(item.plan);
 			body.append(part.domNode);
 		} else if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
-			const { canDownload, canInspect, canReadGallery } = this.richActions(item);
+			const { canDownload, canInspect, canReadGallery, canEditWriting } = this.richActions(item);
 			const linkPolicy = item.markdown?.linkPolicy;
 			const externalLinks = linkPolicy === 'external';
-			const linkLifetime = canDownload || canInspect || externalLinks ? new AbortController() : undefined;
+			const linkLifetime = canDownload || canInspect || canEditWriting || externalLinks ? new AbortController() : undefined;
 			if (linkLifetime) disposables.add(toDisposable(() => linkLifetime.abort()));
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
@@ -1022,6 +1034,7 @@ export class ChatListItemRenderer extends Disposable {
 							...(externalLinks ? [] : [OPEN_SESSION_LINK_SCHEME]),
 							...(canDownload ? [CHAT_RESPONSE_DOWNLOAD_SCHEME] : []),
 							...(canInspect ? [CHAT_RESPONSE_ENTITY_SCHEME] : []),
+							...(canEditWriting ? [CHAT_RESPONSE_WRITING_SCHEME] : []),
 						]
 					},
 					resolveFileLink: !externalLinks && item.type === 'agentMessage' && this.options.onDidRequestLink

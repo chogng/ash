@@ -12,6 +12,7 @@ import { AppServerTextDocumentHost } from '../../workbench/services/textfile/bro
 import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
 import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { IFileService } from '../../platform/files/common/files.js';
+import { IDE_EXTENSIONS_FRAGMENT } from '../../platform/extensionManagement/common/extensionManagementService.js';
 import { IDialogService } from '../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService } from '../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
@@ -168,6 +169,11 @@ export class SessionsBrowserMain extends Disposable {
 				returnToWorkbench: () => {
 					const location = container.ownerDocument.location;
 					location.assign(new URL(profile.workbenchRelativePath, location.href).href);
+				},
+				openIdeExtensions: options => {
+					const url = new URL(profile.workbenchRelativePath, ownerWindow.location.href);
+					url.hash = new URLSearchParams({ [IDE_EXTENSIONS_FRAGMENT]: JSON.stringify(options) }).toString();
+					ownerWindow.open(url.href, '_blank', 'noopener');
 				},
 				createContextMenuService: services => services.createInstance(BrowserContextMenuService),
 				createHostColorSchemeService: () => new BrowserHostColorSchemeService(ownerWindow),

@@ -2,9 +2,6 @@ import { testWorkbenchHostServices } from '../../../../../test/common/workbenchH
 import { Orientation } from '../../../../../../base/browser/ui/sash/sash.js';
 import { LocalSelectionTransfer } from '../../../../../../platform/dnd/browser/dnd.js';
 import { DraggedEditorIdentifier } from '../../editorTabDragAndDrop.js';
-import type { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
-import type { IExtensionHostApi } from '../../../../../../platform/extensions/common/extensionHostApi.js';
-import type { ExtensionDescriptor, IExtensionApi } from '../../../../../../platform/extensions/common/extensionApi.js';
 import { ILabelService } from '../../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../../services/label/common/labelService.js';
 import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
@@ -5993,67 +5990,37 @@ test('general document commands preserve dirty source text, create a backed-up d
 		using models = new DocumentEditorTextModelService(files, copies);
 		services.registerInstance(IDocumentEditorTextModelService, models);
 		using registry = new EditorPaneRegistry();
-		const { startAcademyExtension } = await import('../../../../../../../../test/fixtures/academyExtension.js');
-		const { MainThreadClientEditors } = await import('../../../../../api/browser/mainThreadClientEditors.js');
-		const { readFile } = await import('node:fs/promises');
-		const entry: ExtensionDescriptor = {
-			id: 'ash.academy',
-			name: 'academy',
-			publisher: 'ash',
-			version: '1.0.0',
-			displayName: 'Academy',
-			sourceKind: 'registry',
-			manifestJson: await readFile('extensions/academy/package.json', 'utf8'),
-			manifestSha256: `sha256:${'a'.repeat(64)}`,
-			packageSha256: `sha256:${'a'.repeat(64)}`,
-			rendererClient: {
-				runtimeId: 'ash.academy',
-				apiVersion: 1,
-				entry: 'dist/editor.js',
-				digest: `sha256:${'b'.repeat(64)}`,
-				style: 'dist/editor.css',
-				styleDigest: `sha256:${'c'.repeat(64)}`,
-				sourceDigest: `sha256:${'d'.repeat(64)}`,
+		const { DOCS_ARTIFACT_EDITOR_ID, GENERAL_DOCUMENT_CONTENT_TYPE } = await import('../../../../../../sessions/contrib/artifacts/contrib/docs/common/docs.js');
+		const { ISessionsEntryService } = await import('../../../../../../sessions/services/layout/common/sessionsEntryService.js');
+		const { IContextMenuService } = await import('../../../../../../platform/contextview/browser/contextView.js');
+		const { INotificationService } = await import('../../../../../../platform/notification/common/notification.js');
+		const { IWorkbenchLayoutService } = await import('../../../../../services/layout/browser/layoutService.js');
+		const { IViewsService } = await import('../../../../../services/views/common/viewsService.js');
+		services.registerInstance(IContextMenuService, {
+			showContextMenu() { },
+		} as unknown as import('../../../../../../platform/contextview/browser/contextView.js').IContextMenuService);
+		services.registerInstance(INotificationService, {
+			error(message: unknown) { assert.fail(String(message)); },
+		} as unknown as import('../../../../../../platform/notification/common/notification.js').INotificationService);
+		services.registerInstance(IWorkbenchLayoutService, {
+			isPartVisible: () => false,
+			onDidChangePartVisibility: Event.None,
+		} as unknown as import('../../../../../services/layout/browser/layoutService.js').IWorkbenchLayoutService);
+		services.registerInstance(IViewsService, {
+			getVisibleViewContainer: () => undefined,
+			onDidChangeViewContainerVisibility: Event.None,
+		} as unknown as import('../../../../../services/views/common/viewsService.js').IViewsService);
+		const paneRequested = new DeferredPromise<void>();
+		const allowPane = new DeferredPromise<void>();
+		const documentPane = EditorPanes.getEditorPane({ resource: target, editorId: DOCS_ARTIFACT_EDITOR_ID, contentType: GENERAL_DOCUMENT_CONTENT_TYPE })!;
+		registry.registerEditorPane({
+			...documentPane,
+			async create(options) {
+				void paneRequested.complete();
+				await allowPane.p;
+				return documentPane.create(options);
 			},
-		};
-		const provider = await startAcademyExtension();
-		const moduleRequested = new DeferredPromise<void>();
-		const allowModule = new DeferredPromise<void>();
-		await using runtimeCleanup = { [Symbol.asyncDispose]: () => provider.dispose() };
-		using bridge = new MainThreadClientEditors(
-			30_000,
-			async () => {
-				moduleRequested.complete();
-				await allowModule.p;
-				return import('../../../../../../../../extensions/academy/browser/editor.js');
-			},
-			{
-				invoke: (request, signal) =>
-					provider.invoke(request.registrationId, request.operation, request.payload, signal),
-			} as IExtensionHostApi,
-			{ list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }) } as unknown as IExtensionApi,
-			emptyEditorDeclarations,
-		);
-		await bridge.update({
-			generation: 1,
-			extensions: [
-				{
-					id: 'ash.academy',
-					version: '1.0.0',
-					packageDigest: `sha256:${'a'.repeat(64)}`,
-					runtimeApiVersion: 1,
-					activationGeneration: 1,
-					incarnation: 1,
-					lifecycle: 'ready',
-					failure: undefined,
-					stderr: '',
-					outputEvents: [],
-					registrations: provider.registrations,
-				},
-			],
 		});
-		const documentPane = EditorPanes.getEditorPane({ resource: target })!;
-		registry.registerEditorPane({ ...documentPane, documentType: undefined });
 		registry.registerEditorPane({
 			id: 'test.source',
 			name: 'Text',
@@ -6071,6 +6038,15 @@ test('general document commands preserve dirty source text, create a backed-up d
 			services,
 		);
 		services.registerInstance(IEditorPart, main);
+		using editorService = new BrowserEditorService(main);
+		services.registerInstance(IEditorService, editorService);
+		services.registerInstance(ISessionsEntryService, {
+			async openEntry(entry, initialize) {
+				await main.openEditor(entry.editorInput!, { pinned: true });
+				initialize?.();
+			},
+		} satisfies Pick<import('../../../../../../sessions/services/layout/common/sessionsEntryService.js').ISessionsEntryService, 'openEntry'> as import('../../../../../../sessions/services/layout/common/sessionsEntryService.js').ISessionsEntryService);
+
 		using text = await services
 			.get(IFileTextModelService)
 			.acquire(
@@ -6082,10 +6058,10 @@ test('general document commands preserve dirty source text, create a backed-up d
 		await main.openEditor({ resource: source }, { pinned: true });
 		const commands = services.get(ICommandService);
 		const conversion = commands.executeCommand('workbench.action.document.import.markdown');
-		await moduleRequested.p;
-		const subsequentSource = draftText + '\n\nEdited while the package loads.';
+		await paneRequested.p;
+		const subsequentSource = draftText + '\n\nEdited while Docs opens.';
 		text.model.setValue(subsequentSource);
-		allowModule.complete();
+		await allowPane.complete();
 		await conversion;
 		assert.ok(main.activePane instanceof DocumentEditorPane);
 		assert.equal(DocumentTypes.find(main.activeInput!)?.id, 'general');
@@ -7370,5 +7346,3 @@ test('ordered editor state reads do not resolve every tab identity again', async
 		reordered.map((input, index) => ({ input, index, active: index === 0 })),
 	);
 });
-
-const emptyEditorDeclarations = { getExtensionPointContributions: () => [] } as unknown as IExtensionService;

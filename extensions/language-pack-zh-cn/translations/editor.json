@@ -1048,6 +1048,7 @@
     "document.list.format": "编号格式",
     "document.find.group": "查找与替换",
     "document.find.open": "查找与替换",
+    "document.checklist.item": "清单项",
     "document.find.query": "查找文本",
     "document.find.replacement": "替换为",
     "document.find.matchCase": "区分大小写",

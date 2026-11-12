@@ -493,6 +493,60 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 
+	test('opens a ChatGPT Web writing block as an editable Docs copy', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }, testInfo) => {
+		const electron = application as ElectronApplication;
+		const suffix = [
+			'', '', ':::writing{title="First copy"}', 'First block only', ':::', '',
+			':::writing{title="Travel draft"}', '## Weekend itinerary', '',
+			'**Start early** and bring an [offline map](https://example.com/map).', '',
+			'3. Take the train', '   - Pack lunch', '', '| Stop | Time |', '| --- | ---: |', '| Station | 08:30 |', '',
+			'```sh', 'echo ready', '```', ':::',
+		].join('\n');
+		await installService(electron, false, suffix);
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.getByRole('button', { name: 'First native history', exact: true }).click();
+		const chat = page.getByRole('region', { name: 'ChatGPT', exact: true });
+		const edit = chat.getByRole('link', { name: '在 Docs 中编辑', exact: true });
+		await expect(edit).toHaveCount(2);
+		await edit.nth(1).press('Enter');
+		const workspace = page.locator('.ash-code-page-group .ash-docs-workspace:visible');
+		const docs = workspace.locator('.stanza-structured-editor-pane');
+		await expect(docs).toBeVisible();
+		await expect(workspace.locator('.ash-docs-workspace-title')).toHaveText('Travel draft.ash-doc');
+		await expect(page.getByRole('tab', { name: /^Travel draft\.ash-doc/u })).toHaveCount(0);
+		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await expect(docs.locator('table')).toBeVisible();
+		await expect(docs.locator('ol.stanza-document-list')).toHaveAttribute('start', '3');
+		await expect(docs.locator('ol.stanza-document-list ul')).toBeVisible();
+		await expect(docs.locator('.stanza-document-mark-strong')).toHaveText('Start early');
+		await expect(docs.getByText('First block only')).toHaveCount(0);
+		await expect(docs.locator('.stanza-document-rich-text-input').first()).toBeFocused();
+		await docs.locator('.stanza-document-rich-text-input').first().fill('Edited weekend itinerary');
+		await page.screenshot({ path: testInfo.outputPath('chatgpt-writing-in-docs.png') });
+
+		const path = join(await realpath(testWorkspace.directory), 'Travel draft.ash-doc');
+		await electron.evaluate(({ dialog }, filePath) => {
+			dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+		}, path);
+		await workspace.getByRole('button', { name: '保存文档' }).press('Enter');
+		await expect.poll(() => readFile(path, 'utf8').catch(() => '')).toContain('Edited weekend itinerary');
+		const saved = await readFile(path, 'utf8');
+		expect(saved).toContain('echo ready');
+		expect(saved).toContain('"language":"sh"');
+		expect(saved).toContain('"textAlign":"end"');
+		expect(saved).toContain('https://example.com/map');
+		expect(saved).not.toContain('First block only');
+		await expect(workspace.locator('.ash-docs-workspace-title')).toHaveText('Travel draft.ash-doc');
+		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await workspace.getByRole('button', { name: '返回 Artifacts' }).press('Enter');
+		await expect(docs).toHaveCount(0);
+		await page.locator('.ash-artifacts-card.docs:not([data-artifact-example])').getByText('Travel draft', { exact: true }).click();
+		await expect(docs.locator('.stanza-document-rich-text-input').first()).toHaveText('Edited weekend itinerary');
+		await page.getByRole('button', { name: 'First native history', exact: true }).click();
+		await expect(chat).toContainText('Weekend itinerary');
+		expect(await electron.evaluate(() => ashNativeFixture.sends)).toBe(0);
+	});
+
 	test('splits the Chat titlebar at the resizable Entity details column', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 		const suffix = '\n\n<Entity category="software" value="GPUI" disambig="Zed Rust GPU UI framework"/>';
 		await installService(application as ElectronApplication, false, { suffix, sources: [] });

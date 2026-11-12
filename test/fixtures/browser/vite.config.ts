@@ -69,7 +69,7 @@ export default defineConfig({
 	},
 	// Fixtures use plain CSS; keep dev transforms independent of ancestor PostCSS config discovery.
 	css: { postcss: { plugins: [] } },
-	resolve: { alias: [{ find: /^ash:editor\//u, replacement: resolve(import.meta.dirname, '../../../src/ash') + '/' }, ...rendererDependencyAliases] },
+	resolve: { alias: rendererDependencyAliases },
 	root,
 	plugins: [fixturePageUrls(), fixtureBaselineSources(), webUpdatePlugin(), workbenchEntryPlugin('/themeEditor.html', [...fixturePages.map(path => ({
 		url: '/' + basename(path), inputFile: resolve(root, path), sourceFile: resolve(root, path),

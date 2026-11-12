@@ -111,11 +111,11 @@ export class CanvasEditorWidget extends Disposable {
 		this.motion = contributions.motion;
 		this.code = contributions.code;
 		this.prototype = contributions.prototype;
-		stage.append(this.canvas.domNode, this.code.domNode, this.motion.domNode, this.toolbar.domNode, this.prototype.previewDomNode);
+		stage.append(this.canvas.domNode, this.code.domNode, this.motion.domNode, this.prototype.previewDomNode);
 
 		this.contentDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-content', attributes: { 'aria-hidden': 'true' } });
 		this.messageDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-message', attributes: { role: 'status', 'aria-live': 'polite' } });
-		this.domNode.append(stage, this.messageDomNode, this.contentDomNode);
+		this.domNode.append(this.toolbar.domNode, stage, this.messageDomNode, this.contentDomNode);
 		const scopedContext = this._register(contextKeys.createScoped(this.domNode));
 		scopedContext.createKey('sessionsDesignCanvasFocused', true);
 		const active = scopedContext.createKey<boolean>('sessionsDesignCanvasActive', false);
@@ -202,6 +202,9 @@ export class CanvasEditorWidget extends Disposable {
 
 	public setWorkspaceToolbarContext(context: unknown): void {
 		this.toolbar.setWorkspaceContext(context);
+	}
+	public prependToolbarControl(control: HTMLElement): void {
+		this.toolbar.domNode.prepend(control);
 	}
 
 	public static getFocused(element: HTMLElement): CanvasEditorWidget | undefined {
@@ -444,9 +447,9 @@ export class CanvasEditorWidget extends Disposable {
 			this.action('addFrame', localize('sessions.design.addFrame', 'Add frame (F)'), () => this.addFrame(), !this.documentController.isBusy && this.mode !== DesignMode.Code && this.mode !== DesignMode.Motion),
 			this.action('importImage', localize('sessions.design.importImage', 'Import image'), () => this.importImage(), !this.documentController.isBusy && this.mode !== DesignMode.Code && this.mode !== DesignMode.Motion),
 			this.action('export', localize('sessions.design.export', 'Export SVG'), () => this.runFileOperation(() => this.documentController.exportDocument()), !this.documentController.isBusy && shapes.length > 0),
-			...(!this.documentController.isSlidesArtifact ? [this.action('open', localize('sessions.design.open', 'Open design'), () => this.runFileOperation(() => this.documentController.openDocument()), !this.documentController.isBusy)] : []),
+			...(!this.documentController.artifactKind ? [this.action('open', localize('sessions.design.open', 'Open design'), () => this.runFileOperation(() => this.documentController.openDocument()), !this.documentController.isBusy)] : []),
 			...(this.documentController.needsSaveRetry ? [this.action('retrySave', localize('sessions.design.retrySave', 'Retry saving'), () => this.documentController.flushAutoSave(), !this.documentController.isRestoring)] : []),
-			...(this.documentController.automaticallySaves ? [this.action('saveCopy', this.documentController.isSlidesArtifact ? localize('sessions.creator.slides.exportCopy', 'Export editable copy') : localize('sessions.design.saveCopy', 'Save a copy'), () => this.runFileOperation(() => this.documentController.saveCopy()), !this.documentController.isBusy)] : []),
+			...(this.documentController.automaticallySaves ? [this.action('saveCopy', this.documentController.artifactKind === 'slides' ? localize('sessions.creator.slides.exportCopy', 'Export editable copy') : localize('sessions.design.saveCopy', 'Save a copy'), () => this.runFileOperation(() => this.documentController.saveCopy()), !this.documentController.isBusy)] : []),
 		];
 	}
 

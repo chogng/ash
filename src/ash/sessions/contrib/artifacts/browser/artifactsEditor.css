@@ -23,9 +23,13 @@
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size240);
 }
 .ash-creator-title {
+	min-width: 0;
+	overflow: hidden;
 	margin: 0;
 	font-size: var(--ash-fontSize-heading2);
 	font-weight: var(--ash-fontWeight-semiBold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 .ash-creator-home {
 	display: flex;

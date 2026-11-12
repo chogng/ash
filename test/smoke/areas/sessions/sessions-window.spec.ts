@@ -29,6 +29,49 @@ import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/ele
 const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined });
 const emptyWorkspaceTest = test.extend({ openWorkspace: false });
 
+test('Sessions routes agent resources to Customize and editor extensions to the IDE', { tag: ['@electron-ui', '@browser-ui'] }, async ({ target, workbench }) => {
+	const source = workbench.page;
+	const page = await workbench.openAgentsWindow(target.kind);
+	const quick = new QuickAccess(page);
+	const customize = page.locator('.ash-customize');
+	const categories = customize.getByRole('tablist', { name: 'Customization categories' });
+	const extensions = page.locator('.ash-extensions-view-container');
+
+	await quick.runCommand('workbench.action.chat.managePlugins');
+	await expect(categories.getByRole('tab', { name: 'Plugins', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await quick.runCommand('workbench.action.chat.configure.skills');
+	await expect(categories.getByRole('tab', { name: 'Skills', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await categories.getByRole('tab', { name: 'Connectors', exact: true }).click();
+	await customize.getByRole('button', { name: 'Add', exact: true }).click();
+	await expect(page.getByRole('menuitem', { name: 'Add connection', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await quick.runCommand('ash.extensions.showInstalled');
+	await expect(categories.getByRole('tab', { name: 'Plugins', exact: true })).toHaveAttribute('aria-selected', 'true');
+
+	const ideReady = target.kind === 'browser' ? page.context().waitForEvent('page') : Promise.resolve(source);
+	await quick.runCommand('ash.extensions.manageBuiltIn');
+	const ide = await ideReady;
+	const search = ide.locator('[data-part="sidebar"] .ash-extensions-view-container').getByRole('searchbox');
+	await expect(search).toHaveValue('@builtin');
+	await expect(search).toBeEditable();
+	if (target.kind === 'electron') await expect(search).toBeFocused();
+	await expect(customize).toBeVisible();
+	await expect(extensions).toHaveCount(0);
+});
+
+const agentsStartupTest = test.extend({ electronArgs: ['--agents-window'] });
+agentsStartupTest('Editor extension commands create an IDE when only Sessions is open', { tag: ['@electron-ui'] }, async ({ application, workbench }) => {
+	if (!('windows' in application)) throw new Error('Opening the standalone IDE requires Electron');
+	const agents = workbench.page;
+	await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+	const opened = application.waitForEvent('window');
+	await workbench.quickaccess.runCommand('ash.extensions.manageBuiltIn');
+	const ide = await opened;
+	await expect(ide.locator('[data-part="sidebar"] .ash-extensions-view-container').getByRole('searchbox')).toHaveValue('@builtin');
+	await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+	await expect(agents.locator('.ash-extensions-view-container')).toHaveCount(0);
+});
+
 test('Agents Window can publish and clear its application badge', { tag: ['@electron-ui'] }, async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.evaluate(async channel => {

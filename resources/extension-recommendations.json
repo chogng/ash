@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "editors": [
     {
-      "extensions": [".ash-doc", ".ash-academy", ".ash-paper"],
+      "extensions": [".ash-academy", ".ash-paper"],
       "id": "ash.academy@ash",
       "kind": "docs",
       "query": "academy"

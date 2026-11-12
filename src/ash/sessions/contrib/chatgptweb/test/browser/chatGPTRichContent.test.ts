@@ -40,16 +40,20 @@ suite('ChatGPT rich content', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('renders writing bodies as shared Markdown without displaying envelope metadata', () => {
 		const source = 'Before\n\n:::writing{variant="chat_message" id="64821" title="A } quoted title"}**杭州周末**\n\n两间房共1160元。:::\n\nAfter';
+		assert.equal(decodeChatGPTReply(source).richContent?.parts.find(part => part.kind === 'writing')?.title, 'A } quoted title');
 		const html = render(source);
 		assert.match(html, /Before[\s\S]*<strong>杭州周末<\/strong>[\s\S]*两间房共1160元。[\s\S]*After/u);
 		assert.doesNotMatch(html, /:::|variant=|64821|quoted title/u);
 		const text = getChatGPTRichContentText(source);
 		assert.match(text, /Before[\s\S]*杭州周末[\s\S]*1160[\s\S]*After/u);
 		assert.doesNotMatch(text, /:::|variant=|64821/u);
+		assert.doesNotMatch(text, /Edit in Docs/u);
 	});
 
 	test('keeps writing text while streaming and preserves writing examples inside code', () => {
 		assert.match(render(':::writing{variant="chat_message"}**Visible draft**'), /<strong>Visible draft<\/strong>/u);
+		assert.ok(!decodeChatGPTReply(':::writing{variant="chat_message"}**Visible draft**').richContent?.parts.some(part => part.kind === 'writing'));
+		assert.match(render(':::writing{title="Indented example"}\n    echo ready\n:::'), /<pre[\s\S]*<code>echo ready/u);
 		assert.doesNotMatch(render('Before\n\n:::writing{variant="chat_message'), /:::|variant=/u);
 		const source = '`:::writing{id="inline"}literal:::`\n\n```text\n:::writing{id="fenced"}example:::\n```';
 		const root = document.createElement('div'); root.innerHTML = render(source);

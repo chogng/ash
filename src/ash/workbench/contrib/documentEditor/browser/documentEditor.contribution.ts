@@ -33,7 +33,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const editors = accessor.get(IEditorPart);
 			const pane = editors.activePane;
 			const active = getActiveElement(editors.domNode.ownerDocument);
-			if (!(pane instanceof DocumentEditorPane) || !pane.workingCopy || !isHTMLElement(active) || !active.closest('.stanza-structured-editor-pane')) return undefined;
+			if (!(pane instanceof DocumentEditorPane) || !pane.workingCopy || !isHTMLElement(active) || !pane.containsAccessibilityFocus(active)) return undefined;
 			const provider = new AccessibleContentProvider(AccessibleViewProviderId.Document, { type }, () => type === AccessibleViewType.View
 				? pane.workingCopy ? pane.getAccessibleContent() : ''
 				: [

@@ -5,6 +5,7 @@ import { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import { DesignMode } from '../common/config/designEditorConfiguration.js';
 import type { DesignShape, DesignShapeGeometry } from '../common/model/designDocument.js';
 import { getArtifactTitle } from './artifactKindPresentation.js';
+import type { TableArtifactKind } from './artifactTableWorkspace.js';
 
 export const OPEN_ARTIFACT_EXAMPLE = 'sessions.creator.openExample';
 export const ARTIFACT_EXAMPLE_SCHEME = 'ash-artifact-example';
@@ -24,6 +25,7 @@ export interface CanvasArtifactExample extends ExampleCard {
 
 export interface TableArtifactExample extends ExampleCard {
 	readonly type: 'table';
+	readonly kind: TableArtifactKind;
 	readonly columns: readonly string[];
 	readonly rows: readonly (readonly (string | number)[])[];
 	readonly summary?: readonly { readonly label: string; readonly value: number; }[];

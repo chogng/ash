@@ -289,7 +289,11 @@ function defaultNodeSpecs(): Readonly<Record<string, DocumentNodeSpec>> {
 				if (attrs.numbering !== undefined && !['decimal', 'lower-alpha', 'upper-alpha', 'lower-roman', 'upper-roman'].includes(String(attrs.numbering))) throw new TypeError('Invalid list numbering format');
 			}
 		},
-		listItem: { kind: 'block', allowedChildren: listBlocks, minChildren: 1 },
+		listItem: {
+			kind: 'block', allowedChildren: listBlocks, minChildren: 1, validateAttributes: attrs => {
+				if (attrs.checked !== undefined && typeof attrs.checked !== 'boolean') throw new TypeError('Invalid checklist state');
+			}
+		},
 		codeBlock: { kind: 'block', content: [{ type: 'text', min: 0, max: 1 }], defaultAttrs: { language: 'text' }, validateAttributes: attrs => validateStringAttribute(attrs, 'language', false) },
 		table: { kind: 'block', allowedChildren: ['tableRow'], minChildren: 1 },
 		tableRow: { kind: 'block', allowedChildren: ['tableCell'], minChildren: 1 },

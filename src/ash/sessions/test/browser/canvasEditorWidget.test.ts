@@ -139,7 +139,7 @@ services.registerInstance(IFileDialogService, {
 });
 services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
 services.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: unexpected });
-services.registerInstance(ISessionsEntryService, { ...Disposable.None, setConversationVisible: unexpected, checkpointEditorLayout: unexpected, openEntry: unexpected, restore: unexpected });
+services.registerInstance(ISessionsEntryService, { ...Disposable.None, setConversationVisible: unexpected, checkpointEditorLayout: unexpected, openEntry: unexpected, replaceEditorResource: unexpected, restore: unexpected });
 const fileProvider: IFileSystemProvider = {
 	capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
 	onDidChangeCapabilities: Event.None,
@@ -2465,10 +2465,10 @@ test('Slides examples create independent artifacts that autosave, export and reo
 	const expected = deck.model.value;
 	view.dispose();
 	using restarted = new CreatorFixture(fixture.child);
-	await restarted.editors.loadSlidesArtifacts();
+	await restarted.editors.loadCanvasArtifacts();
 	assert.equal(restarted.page.domNode.querySelectorAll('[data-slides-artifact]').length, 2);
-	const restored = restarted.editors.slidesArtifacts.get().get(id)!;
-	restarted.page.openSlidesArtifact(restored);
+	const restored = restarted.editors.canvasArtifacts.get().get(id)!;
+	restarted.page.openCanvasArtifact(restored);
 	assert.equal(restarted.editors.activeEditor.get()?.documentController, restored);
 	assert.deepEqual(restored.model.value, expected);
 });

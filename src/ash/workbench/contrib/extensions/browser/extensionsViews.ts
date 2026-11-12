@@ -1,4 +1,5 @@
 import { AgentPluginEditorInput } from '../common/agentPluginEditorInput.js';
+import { isAcademyExtension } from '../common/academyExtension.js';
 import { localAgentPluginItem } from './agentPluginEditor/agentPluginItems.js';
 import {
 	defaultButtonStyles,
@@ -257,7 +258,7 @@ class ExtensionsContent extends Disposable {
 		if (!force || !this.list.items.length) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'loading' }, 'Loading Extensions…'); }
 		this.domNode.setAttribute('aria-busy', 'true');
 		try {
-			const installed = this.options.mode === 'builtIn' ? [] : await this.extensionManagement.listInstalled();
+			const installed = this.options.mode === 'builtIn' ? [] : (await this.extensionManagement.listInstalled()).filter(entry => !isAcademyExtension(entry.package.id));
 			// Package execution policy applies to marketplace installations. Local
 			// plugins have their own owner and remain manageable from a Web client.
 			const policies = installed.length ? await this.extensionManagement.listEditorExtensions() : { extensions: [] };
@@ -299,7 +300,7 @@ class ExtensionsContent extends Disposable {
 			} else {
 				const options = { limit: 200, packageType: this.isPluginsPane ? 'plugin' : undefined, capabilityKind: this.options.capabilityKind, languageId: this.options.languageId };
 				const snapshot = await (force ? this.extensionManagement.refreshBrowse(query, options) : this.extensionManagement.browse(query, options));
-				items = snapshot.packages.map(entry => {
+				items = snapshot.packages.filter(entry => !isAcademyExtension(entry.summary.id)).map(entry => {
 					const installation = installed.find(value => value.package.id === entry.summary.id && value.package.version === entry.summary.version);
 					const policy = policies.extensions.find(value => value.installationId === installation?.installationId);
 					return { summary: entry.summary, installation, enabled: policy?.enabled, canChangeEnablement: !!policy };

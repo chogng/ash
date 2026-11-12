@@ -1,5 +1,6 @@
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
+import { isRecord } from '../../../../base/common/types.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -8,6 +9,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
+import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
 import { Menus } from '../../../browser/menus.js';
@@ -29,7 +31,9 @@ registerAction2(class OpenCustomize extends Action2 {
 		});
 	}
 	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> {
-		await accessor.get(ISessionsEntryService).openEntry({
+		const entries = accessor.get(ISessionsEntryService);
+		const editors = accessor.get(IEditorPart);
+		await entries.openEntry({
 			id: 'customize', workspaceMode: 'current', activityContext: 'sessions.activity.customizeSelected', content: 'editor', showEditorTabs: false,
 			restoreCommand: 'sessions.open.customize', focus: 'editor',
 			editorInput: {
@@ -37,6 +41,12 @@ registerAction2(class OpenCustomize extends Action2 {
 				showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
 			},
 		}, undefined, source === 'restore' ? { source } : undefined);
+		if (!isRecord(source) || !(editors.activePane instanceof CustomizeEditorPane)) return;
+		const { category, collection, query } = source;
+		if ((category === 'skills' || category === 'connectors' || category === 'plugins') && (collection === 'yours' || collection === 'discover')
+			&& (query === undefined || typeof query === 'string')) {
+			editors.activePane.openCatalog(category, collection, query);
+		}
 	}
 });
 

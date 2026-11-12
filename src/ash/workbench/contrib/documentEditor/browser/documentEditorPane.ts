@@ -1,5 +1,5 @@
 import type { IEditorExtensionApi } from '../../../common/editor.js';
-import type { DocumentEditorConfiguration, DocumentEditorWidget } from '../../../services/documentEditor/browser/documentEditorProfile.js';
+import type { DocumentEditorConfiguration, DocumentEditorControlsHost, DocumentEditorWidget } from '../../../services/documentEditor/browser/documentEditorProfile.js';
 import type { DocumentCodec, DocumentTextFormat } from '../../../services/documentEditor/common/documentCodec.js';
 import { IChannelService, type ChannelReference } from '../../../../platform/collab/common/channelService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -111,6 +111,12 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		return this.options.accessibilityHelp?.() ?? [];
 	}
 
+	public containsAccessibilityFocus(target: HTMLElement): boolean {
+		return this.container?.contains(target) ?? false;
+	}
+
+	protected getControlsHost(): DocumentEditorControlsHost | undefined { return undefined; }
+
 	/** A conversion populates the already-open untitled working copy without acquiring a second model. */
 	public restoreDraft(document: DocumentNode): void {
 		const reference = this.requireWorkingCopy();
@@ -125,9 +131,11 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		parent.append(container);
 		super.create(container);
 		this.container = container;
+		const controls = this.getControlsHost();
+		const controlsParent = controls?.container ?? container;
 		const { createDocumentCollaborationService } = this.options;
 		this.collaborationService = createDocumentCollaborationService ? this._register(createDocumentCollaborationService()) : undefined;
-		const collaboration = this._register(new CollaborationContribution(container, {
+		const collaboration = this._register(new CollaborationContribution(controlsParent, {
 			fixedRoom: () => this.channel ? `channel-notes-${this.channel.channelId}` : undefined,
 			onStart: roomId => this.startCollaboration(roomId, this.channel?.serverUrl, this.channel),
 			onStop: () => this.stopCollaboration(),
@@ -137,11 +145,11 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 			onRevokeMember: principalId => this.requireRoom().revokeMember(principalId, this.roomRequest!.signal),
 		}, this.dialogs));
 		this.collaboration = collaboration;
-		container.append(collaboration.element);
+		controlsParent.append(collaboration.element);
 		collaboration.setState(this.collaborationService ? 'inactive' : 'unavailable');
 		const editor = this._register(this.instantiation.createInstance(this.options.widget));
 		this.editor = editor;
-		editor.create(container);
+		editor.create(container, controls);
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {

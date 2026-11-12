@@ -6,6 +6,8 @@ export const artifactDetailEntry = {
 	activityContext: 'sessions.activity.creatorSelected',
 	content: 'editor',
 	conversation: 'visible',
+	showEditorTabs: false,
+	showDetailsByDefault: false,
 	focus: 'editor',
 } as const satisfies Partial<ISessionsEntry>;
 
@@ -18,6 +20,15 @@ export enum ArtifactWorkspaceId {
 	Make = 'make',
 	Prototype = 'prototype',
 }
+
+export const canvasArtifactModes = {
+	slides: ArtifactWorkspaceId.Slides,
+	design: ArtifactWorkspaceId.Design,
+	whiteboard: ArtifactWorkspaceId.Whiteboard,
+	motion: ArtifactWorkspaceId.Design,
+} as const;
+
+export type CanvasArtifactKind = keyof typeof canvasArtifactModes;
 
 export function getArtifactWorkspaceTitle(mode: ArtifactWorkspaceId): string {
 	switch (mode) {

@@ -20,11 +20,11 @@ export function createDocumentEditorPaneOptions(profile: EditorProfile, runtime:
 	};
 }
 
-/** Optional document packages reuse the Workbench model and collaboration owners. */
-export function createDocumentEditorPane(profile: EditorProfile, options: EditorPaneCreationOptions, providerSignal?: AbortSignal, modelCompatibility?: string): DocumentEditorPane {
+/** Product presentations and installed clients share the same document and collaboration services. */
+export function resolveDocumentPaneOptions(profile: EditorProfile, options: EditorPaneCreationOptions, providerSignal?: AbortSignal, modelCompatibility?: string): EditorPaneOptions {
 	const instantiationService = options.instantiationService;
 	if (!instantiationService) throw new Error('Document editor requires the Workbench instantiation service');
-	const paneOptions = createDocumentEditorPaneOptions(profile, {
+	return createDocumentEditorPaneOptions(profile, {
 		onSave: options.onSave,
 		providerSignal,
 		modelCompatibility,
@@ -35,5 +35,9 @@ export function createDocumentEditorPane(profile: EditorProfile, options: Editor
 			return instantiationService.createInstance(DocumentCollaborationService, appServerService);
 		},
 	});
-	return instantiationService.createInstance(DocumentEditorPane, paneOptions);
+}
+
+export function createDocumentEditorPane(profile: EditorProfile, options: EditorPaneCreationOptions, providerSignal?: AbortSignal, modelCompatibility?: string): DocumentEditorPane {
+	const paneOptions = resolveDocumentPaneOptions(profile, options, providerSignal, modelCompatibility);
+	return options.instantiationService!.createInstance(DocumentEditorPane, paneOptions);
 }

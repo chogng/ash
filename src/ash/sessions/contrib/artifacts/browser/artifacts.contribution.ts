@@ -13,7 +13,6 @@ import { IViewsService } from '../../../../workbench/services/views/common/views
 import { ISessionsEntryService, type ISessionsEntry } from '../../../services/layout/common/sessionsEntryService.js';
 import { artifactDetailEntry, ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import { DESIGN_PROPERTIES_CONTAINER_ID, IDesignEditorService } from './designEditorService.js';
-import type { DesignDocumentController } from './designDocumentController.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -22,99 +21,81 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Menus } from '../../../browser/menus.js';
-import { ArtifactsEditorView, ArtifactsEditorPane, OPEN_ARTIFACT_DRAFT, OPEN_SLIDES_ARTIFACT } from './artifactsEditor.js';
+import { ArtifactsEditorView, ArtifactsEditorPane, NEW_ARTIFACT, OPEN_CANVAS_ARTIFACT } from './artifactsEditor.js';
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { SessionsEntryDetailsContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
-import { ChatInputArtifactPill } from './chatInputArtifactPill.js';
 import { isArtifactKind } from '../../../common/artifactKind.js';
 import { CanvasWorkspace } from './canvasWorkspace.js';
-import { ARTIFACT_EXAMPLE_SCHEME, getArtifactExample, OPEN_ARTIFACT_EXAMPLE, type CanvasArtifactExample, type TableArtifactExample } from './artifactExamples.js';
+import { getArtifactExample, OPEN_ARTIFACT_EXAMPLE } from './artifactExamples.js';
+import { openDocsExample } from '../contrib/docs/browser/documentActions.js';
 
 CanvasWorkspace.registerFileActions();
 registerEditorPane({ id: 'sessions.editor.creator', name: 'Artifacts', canOpen: input => input.resource.scheme === 'ash-creator' && input.resource.path === '/page' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(ArtifactsEditorPane) });
 
-async function openArtifacts(accessor: ServicesAccessor, workspace?: ArtifactWorkspaceId | 'home' | CanvasArtifactExample | TableArtifactExample | DesignDocumentController, source?: 'restore'): Promise<void> {
+async function openArtifacts(accessor: ServicesAccessor, select?: (page: ArtifactsEditorView) => void, options: { source?: 'restore'; restoreCommand?: string; reveal?: boolean; } = {}): Promise<void> {
 	const editor = accessor.get(IEditorPart);
 	const entry: ISessionsEntry = {
 		id: 'creator.home', workspaceMode: 'current', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
 		showEditorTabs: false,
-		restoreCommand: typeof workspace === 'object' ? 'sessions.show.creator' : 'sessions.restore.creator',
+		restoreCommand: options.restoreCommand ?? 'sessions.show.creator',
 		focus: 'editor',
 		editorInput: {
 			resource: URI.from({ scheme: 'ash-creator', path: '/page' }), label: localize('sessions.creator.title', 'Artifacts'),
 			showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
 		},
 	};
-	let examplePage: ArtifactsEditorView | undefined;
+	let page: ArtifactsEditorView | undefined;
 	await accessor.get(ISessionsEntryService).openEntry(entry, () => {
-		const page = (editor.activePane as ArtifactsEditorPane).page;
-		if (workspace === 'home') { page.showHome(); }
-		else if (typeof workspace === 'object') {
-			if ('type' in workspace) { page.openExample(workspace); }
-			else { page.openSlidesArtifact(workspace); }
-			examplePage = page;
-		}
-		else if (workspace) { page.openMode(workspace); }
+		page = (editor.activePane as ArtifactsEditorPane).page;
+		select?.(page);
 		if (page.isHome) return entry;
-		const design = page.activeMode === ArtifactWorkspaceId.Design;
 		return {
 			...entry,
 			...artifactDetailEntry,
-			id: design ? 'creator.design' : page.usesCanvasPanels ? 'creator.canvas' : 'creator.detail',
-			showEditorTabs: page.usesCanvasPanels && !design,
+			id: `creator.workspace.${page.activeKind ?? page.activeMode}`,
 			detailsContainerId: page.usesCanvasPanels ? DESIGN_PROPERTIES_CONTAINER_ID : undefined,
 			conversationKind: page.activeMode === ArtifactWorkspaceId.Make ? 'code' : undefined,
 		};
-	}, source ? { source } : undefined);
-	if (typeof workspace === 'object') {
-		// The properties pane can resize the editor as the entry opens.
-		examplePage?.revealInitialContent();
+	}, { source: options.source, preserveChatSource: true });
+	if (options.reveal) {
+		// Wait for the entry's editor geometry before framing the content.
+		page?.revealInitialContent();
 	}
 }
 
-CommandsRegistry.register('sessions.show.creator', (accessor, source) => openArtifacts(accessor, 'home', source === 'restore' ? source : undefined));
-CommandsRegistry.register('sessions.restore.creator', (accessor, source) => openArtifacts(accessor, undefined, source === 'restore' ? source : undefined));
-CommandsRegistry.register('sessions.restore.creatorDesign', (accessor, source) => openArtifacts(accessor, ArtifactWorkspaceId.Design, source === 'restore' ? source : undefined));
-CommandsRegistry.register(OPEN_ARTIFACT_DRAFT, async (accessor, kind) => {
+CommandsRegistry.register('sessions.show.creator', (accessor, source) => openArtifacts(accessor, page => page.showHome(), { source: source === 'restore' ? source : undefined }));
+CommandsRegistry.register('sessions.restore.creator', (accessor, source) => openArtifacts(accessor, undefined, { source: source === 'restore' ? source : undefined, restoreCommand: 'sessions.restore.creator' }));
+CommandsRegistry.register('sessions.restore.creatorDesign', (accessor, source) => openArtifacts(accessor, page => page.openMode(ArtifactWorkspaceId.Design), { source: source === 'restore' ? source : undefined, restoreCommand: 'sessions.restore.creator' }));
+CommandsRegistry.register(NEW_ARTIFACT, (accessor, kind) => {
 	if (!isArtifactKind(kind)) {
 		throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.'));
 	}
-	const widgets = accessor.get(IChatWidgetService);
-	await accessor.get(ICommandService).executeCommand('sessions.newSession');
-	const input = widgets.lastFocusedWidget?.input;
-	if (input) ChatInputArtifactPill.show(input, kind);
+	if (kind === 'docs') return accessor.get(ICommandService).executeCommand('sessions.creator.newDocument');
+	if (kind === 'sheet' || kind === 'data') return openArtifacts(accessor, page => page.createTable(kind));
+	const document = accessor.get(IDesignEditorService).createCanvasArtifact(kind, []);
+	return openArtifacts(accessor, page => page.openCanvasArtifact(document));
 });
 CommandsRegistry.register('sessions.creator.openMode', (accessor, value) => {
 	if (!Object.values(ArtifactWorkspaceId).includes(value as ArtifactWorkspaceId)) { throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.')); }
-	return openArtifacts(accessor, value as ArtifactWorkspaceId);
+	return openArtifacts(accessor, page => page.openMode(value as ArtifactWorkspaceId), { restoreCommand: 'sessions.restore.creator' });
 });
-CommandsRegistry.register(OPEN_SLIDES_ARTIFACT, (accessor, id) => {
-	const document = isUuid(id) ? accessor.get(IDesignEditorService).slidesArtifacts.get().get(id) : undefined;
-	if (document) { return openArtifacts(accessor, document); }
+CommandsRegistry.register(OPEN_CANVAS_ARTIFACT, (accessor, id) => {
+	const document = isUuid(id) ? accessor.get(IDesignEditorService).canvasArtifacts.get().get(id) : undefined;
+	if (document) { return openArtifacts(accessor, page => page.openCanvasArtifact(document), { reveal: true }); }
+});
+CommandsRegistry.register('sessions.creator.openTable', (accessor, key) => {
+	if (typeof key === 'string' && key.startsWith('table:') && isUuid(key.slice('table:'.length))) {
+		return openArtifacts(accessor, page => page.openTable(key));
+	}
 });
 CommandsRegistry.register(OPEN_ARTIFACT_EXAMPLE, (accessor, kind) => {
 	if (!isArtifactKind(kind)) {
 		throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.'));
 	}
 	const example = getArtifactExample(kind);
-	if (example.type !== 'docs') { return openArtifacts(accessor, example); }
-	return accessor.get(ISessionsEntryService).openEntry({
-		...artifactDetailEntry,
-		id: 'creator.example.docs',
-		restoreCommand: 'sessions.show.creator',
-		editorInput: {
-			resource: URI.from({ scheme: ARTIFACT_EXAMPLE_SCHEME, path: '/studio-launch.md' }),
-			label: example.title,
-			contentType: 'text/markdown',
-			languageId: 'markdown',
-			initialText: example.text,
-			readOnly: true,
-			showBreadcrumbs: false,
-		},
-	});
+	return example.type === 'docs' ? openDocsExample(accessor, example) : openArtifacts(accessor, page => page.openExample(example), { reveal: true });
 });
 
 registerAction2(class OpenCreator extends Action2 {
@@ -133,7 +114,7 @@ registerAction2(class ToggleArtifactDetails extends Action2 {
 			id: 'sessions.creator.toggleDetails', title: show, tooltip: show, icon: Lxicon.layoutSidebarRightOff,
 			toggled: { condition: AuxiliaryBarVisibleContext.isEqualTo(true), title: hide, tooltip: hide, icon: Lxicon.layoutSidebarRight },
 			precondition: when, f1: true,
-			menu: { id: Menus.TitleBarRightLayout, when, group: 'navigation', order: 10 },
+			menu: { id: Menus.ArtifactCanvasToolbar, when, group: 'navigation', order: -1 },
 		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
@@ -143,8 +124,20 @@ registerAction2(class ToggleArtifactDetails extends Action2 {
 			layout.hidePart('auxiliarybar');
 			if (hadFocus) accessor.get(IEditorService).focusActiveEditor();
 		} else {
-			await accessor.get(IViewsService).openViewContainer(DESIGN_PROPERTIES_CONTAINER_ID);
+			await accessor.get(IViewsService).openViewContainer(DESIGN_PROPERTIES_CONTAINER_ID, false);
 		}
+	}
+});
+
+registerAction2(class BackToArtifacts extends Action2 {
+	constructor() {
+		super({
+			id: 'sessions.creator.canvas.home', title: localize2('sessions.creator.home', 'Artifacts home'), icon: Lxicon.arrowLeft,
+			menu: { id: Menus.ArtifactCanvasToolbar, group: 'navigation', order: -2 },
+		});
+	}
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(ICommandService).executeCommand('sessions.show.creator');
 	}
 });
 
@@ -168,7 +161,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
 			const page = ArtifactsEditorView.getFocused(focused);
 			if (!page) { return undefined; }
-			return new AccessibleContentProvider(AccessibleViewProviderId.Creator, { type }, () => type === AccessibleViewType.Help ? `${localize('sessions.creator.help', 'Artifacts\nUse Tab and Shift+Tab to reach filters, search, view options, creation cards and your existing work. Press Enter on a creation card to open a new chat with that artifact type shown below the input. Press Enter on existing work to open it. Use Left and Right to move between All, Yours and Shared with you. Press Enter or Space to apply the focused filter. Search filters titles; sort changes title order. Layout grid switches your work between grid and list views. The Artifacts navigation item returns home and retains each workspace. In the Command Palette, Choose Docs editor sets the editor preference and can open a blank document. Switch Docs editor in the editor title opens a converted copy and keeps the original. Missing rich document extensions can be recommended; dismiss the notification or hide future suggestions. Design saves automatically. Use Save document for files opened in the Slides workspace. Preview supports Left and Right to change slides and Escape to return.')}\n${localize('sessions.artifacts.examplesHelp', 'In All, press Enter on the Slides example to create a deck. The deck saves automatically and can be reopened from Yours. Use Export editable copy to create a file package. Other canvas examples keep edits for this window. Docs, Sheet and Data examples are read-only.')}\n\n${page.getAccessibleContent()}` : page.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.Creator);
+			return new AccessibleContentProvider(AccessibleViewProviderId.Creator, { type }, () => type === AccessibleViewType.Help ? `${localize('sessions.creator.help', 'Artifacts\nUse Tab and Shift+Tab to reach filters, search, view options, creation cards and your existing work. Press Enter on a creation card to open its editor. The toolbar is above the content. Show Secondary Side Bar opens canvas properties when available. Press Enter on existing work to open it. Use Left and Right to move between All, Yours and Shared with you. Press Enter or Space to apply the focused filter. Search filters titles; sort changes title order. Layout grid switches your work between grid and list views. The Artifacts navigation item returns home and retains each workspace. In the Command Palette, Choose Docs editor sets the editor preference and can open a blank document. Docs uses rich document or Markdown format according to the Docs editor preference. Design saves automatically. Use Save document for files opened in the Slides workspace. Preview supports Left and Right to change slides and Escape to return.')}\n${localize('sessions.artifacts.examplesHelp', 'In All, press Enter on the Slides example to create a deck. The deck saves automatically and can be reopened from Yours. Use Export editable copy to create a file package. Other canvas examples keep edits for this window. Docs, Sheet and Data examples are read-only.')}\n\n${page.getAccessibleContent()}` : page.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.Creator);
 		},
 	});
 }

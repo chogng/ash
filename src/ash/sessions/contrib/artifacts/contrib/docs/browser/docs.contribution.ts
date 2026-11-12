@@ -1,80 +1,116 @@
 import { URI } from '../../../../../../base/common/uri.js';
-import { generateUuid } from '../../../../../../base/common/uuid.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../../../platform/configuration/common/configurationRegistry.js';
-import { ContextKeyExpr } from '../../../../../../platform/contextkey/common/contextkey.js';
-import { OPEN_EXTENSIONS_COMMAND_ID } from '../../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import type { ServicesAccessor } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { SyncDescriptor } from '../../../../../../platform/instantiation/common/descriptors.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { Registry } from '../../../../../../platform/registry/common/platform.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
-import { EditorPanes } from '../../../../../../workbench/browser/editor.js';
+import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
+import { registerEditorPane } from '../../../../../../workbench/browser/editor.js';
 import { IEditorPart } from '../../../../../../workbench/browser/parts/editor/editorPart.js';
-import { ActiveEditorContext } from '../../../../../../workbench/common/contextkeys.js';
-import { DocumentEditorPane } from '../../../../../../workbench/contrib/documentEditor/browser/documentEditorPane.js';
+import { EditorPaneMatch } from '../../../../../../workbench/browser/parts/editor/editorPane.js';
+import type { EditorPaneOptions as TextEditorPaneOptions } from '../../../../../../workbench/browser/parts/editor/textResourceEditor.js';
+import { isResourceDiffEditorInput } from '../../../../../../workbench/common/editor.js';
+import { createBrowserEditorPart } from '../../../../../../workbench/contrib/codeEditor/browser/browserEditorPart.js';
+import { getBrowserTextResourceStore } from '../../../../../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
+import { TextFileSaveErrorHandler } from '../../../../../../workbench/contrib/files/browser/editors/textFileSaveErrorHandler.js';
+import { ViewContainerLocation, type IView } from '../../../../../../workbench/common/views.js';
+import { EDIT_CHAT_WRITING_COMMAND_ID } from '../../../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import { DocumentTypes } from '../../../../../../workbench/services/documentEditor/common/documentTypes.js';
-import { IExtensionRecommendationsService } from '../../../../../../workbench/services/extensionRecommendations/common/extensionRecommendations.js';
-import { ISessionsEntryService } from '../../../../../services/layout/common/sessionsEntryService.js';
-import { artifactDetailEntry } from '../../../common/artifactWorkspace.js';
-import { DOCS_EDITOR_SETTING, GENERAL_DOCUMENT_CONTENT_TYPE, type DocsEditorPreference } from '../common/docs.js';
-import { convertActiveTextToDocument, createGeneralDocument, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact } from './documentActions.js';
+import { SessionsViewRegistry } from '../../../../../common/views.js';
+import { DOCS_ARTIFACT_EDITOR_ID, DOCS_EDITOR_SETTING, DOCS_MARKDOWN_EDITOR_ID, DOCS_TOOLS_CONTAINER_ID, GENERAL_DOCUMENT_CONTENT_TYPE, GENERAL_DOCUMENT_EDITOR_ID, type DocsEditorPreference } from '../common/docs.js';
+import { convertActiveTextToDocument, createDocsInput, createDocsOpener, createGeneralDocument, createMarkdownDocsInput, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact, newDocsResource, openWritingDraft, restoredDocsResource } from './documentActions.js';
+import { DocsArtifactPane, DocsToolsView } from './docsArtifactPane.js';
+import { MarkdownDocsArtifactPane } from './markdownDocsArtifactPane.js';
 
 DocumentTypes.enableFileEditors();
 
-function createDocumentOpener(accessor: ServicesAccessor): (resource: URI, source?: 'restore') => Promise<void> {
-	const editors = accessor.get(IEditorPart);
-	const storage = accessor.get(IStorageService);
-	const layout = accessor.get(ISessionsEntryService);
-	return (resource, source) => {
-		const input = editors.groups.flatMap(group => group.editors.map(editor => editor.input)).find(input => input.resource.toString() === resource.toString())
-			?? {
-			resource,
-			...(resource.scheme === 'untitled' ? { initialText: '' } : {}),
-			...(resource.path.endsWith('.ash-doc') ? { contentType: GENERAL_DOCUMENT_CONTENT_TYPE } : { languageId: 'markdown', contentType: 'text/markdown' }),
-		};
-		storage.store('sessions.creator.activeDocument', resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-		return layout.openEntry({
-			...artifactDetailEntry,
-			id: 'creator.docs', editorInput: input, restoreCommand: 'sessions.restore.creatorDocs',
-		}, undefined, source ? { source } : undefined);
-	};
-}
+const resolveDocumentProfile = async () => (await import('../../../../../../../../extensions/academy/browser/generalProfile.js')).generalProfile;
+registerEditorPane({
+	id: GENERAL_DOCUMENT_EDITOR_ID,
+	get name() { return localize('sessions.artifacts.rich', 'Rich document'); },
+	documentType: { id: 'general', contentType: GENERAL_DOCUMENT_CONTENT_TYPE, extensions: ['.ash-doc'] },
+	canOpen: input => !isResourceDiffEditorInput(input) &&
+		(input.contentType?.split(';', 1)[0].trim().toLowerCase() === GENERAL_DOCUMENT_CONTENT_TYPE || input.resource.path.toLowerCase().endsWith('.ash-doc'))
+		? EditorPaneMatch.Builtin : EditorPaneMatch.None,
+	resolveDocumentProfile,
+	async create(options) {
+		const [{ createDocumentEditorPane }, profile] = await Promise.all([
+			import('../../../../../../workbench/contrib/documentEditor/browser/editorProfile.js'),
+			resolveDocumentProfile(),
+		]);
+		return createDocumentEditorPane(profile, options);
+	},
+});
 
-function hasRichDocumentEditor(): boolean {
-	return EditorPanes.getEditorPanesForInput({ resource: URI.parse('untitled:/document.ash-doc'), contentType: GENERAL_DOCUMENT_CONTENT_TYPE })
-		.some(pane => pane.resolveDocumentProfile !== undefined);
-}
+registerEditorPane({
+	id: DOCS_ARTIFACT_EDITOR_ID,
+	get name() { return localize('sessions.artifacts.docs', 'Docs'); },
+	canOpen: input => !isResourceDiffEditorInput(input) && input.editorId === DOCS_ARTIFACT_EDITOR_ID && input.contentType === GENERAL_DOCUMENT_CONTENT_TYPE
+		? EditorPaneMatch.Default : EditorPaneMatch.None,
+	createInput: createDocsInput,
+	resolveDocumentProfile,
+	async create(options) {
+		const [{ resolveDocumentPaneOptions }, { artifactDocumentProfile }] = await Promise.all([
+			import('../../../../../../workbench/contrib/documentEditor/browser/editorProfile.js'),
+			import('../../../../../../../../extensions/academy/browser/generalProfile.js'),
+		]);
+		return options.instantiationService!.createInstance(DocsArtifactPane, resolveDocumentPaneOptions({ ...artifactDocumentProfile, editorId: DOCS_ARTIFACT_EDITOR_ID }, options));
+	},
+});
 
-function recommendRichDocuments(accessor: ServicesAccessor): void {
-	accessor.get(IExtensionRecommendationsService).recommendForResource(URI.parse('untitled:/document.ash-doc'));
-}
+registerEditorPane({
+	id: DOCS_MARKDOWN_EDITOR_ID,
+	get name() { return localize('sessions.artifacts.markdown', 'Markdown'); },
+	canOpen: input => input.editorId === DOCS_MARKDOWN_EDITOR_ID && !isResourceDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	createInput: createMarkdownDocsInput,
+	create(options) {
+		const { instantiationService, textFileService } = options;
+		if (!instantiationService || !textFileService) throw new Error('Docs Markdown requires the Workbench text file service');
+		const saveErrors = instantiationService.createInstance(TextFileSaveErrorHandler);
+		return instantiationService.createInstance(MarkdownDocsArtifactPane, getBrowserTextResourceStore(textFileService), {
+			createPart: partOptions => createBrowserEditorPart(instantiationService, partOptions),
+			workingCopyService: options.workingCopyService,
+			accessibilityService: options.accessibilityService,
+			onSave: options.onSave,
+			onSaveError: (error, resource) => saveErrors.onSaveError(error, resource),
+		} satisfies TextEditorPaneOptions);
+	},
+});
+
+const docsToolsTitle = { title: 'Document tools', localizationKey: { bundle: 'ash.docs', key: 'tools' } };
+SessionsViewRegistry.registerStaticViewContainer({ id: DOCS_TOOLS_CONTAINER_ID, ...docsToolsTitle, location: ViewContainerLocation.AuxiliaryBar });
+SessionsViewRegistry.registerStaticViews(DOCS_TOOLS_CONTAINER_ID, [{
+	id: `${DOCS_TOOLS_CONTAINER_ID}.view`, ...docsToolsTitle, ctorDescriptor: new SyncDescriptor<IView>(DocsToolsView), canToggleVisibility: false,
+}]);
+
+CommandsRegistry.register(EDIT_CHAT_WRITING_COMMAND_ID, (accessor, html, title) => {
+	if (typeof html !== 'string' || title !== undefined && typeof title !== 'string') {
+		throw new TypeError(localize('sessions.artifacts.writingImportFailed', 'This writing block could not be opened in Docs.'));
+	}
+	return openWritingDraft(accessor, html, title);
+});
 
 CommandsRegistry.register('sessions.creator.newDocument', accessor => {
-	// Rich document providers are optional. The built-in Markdown editor also owns real drafts and saves.
-	const richDocuments = hasRichDocumentEditor();
-	const preference = accessor.get(IConfigurationService).getValue<DocsEditorPreference>(DOCS_EDITOR_SETTING) ?? 'automatic';
-	const useRich = preference !== 'markdown' && !!richDocuments;
-	if (preference !== 'markdown' && !richDocuments) { recommendRichDocuments(accessor); }
-	return createDocumentOpener(accessor)(URI.from({
-		scheme: 'untitled', path: `/${generateUuid()}/${localize('sessions.artifacts.untitledDocument', 'Untitled document')}.${useRich ? 'ash-doc' : 'md'}`,
-	}));
+	const preference = accessor.get(IConfigurationService).getValue<DocsEditorPreference>(DOCS_EDITOR_SETTING);
+	return createDocsOpener(accessor)(newDocsResource(localize('sessions.artifacts.untitledDocument', 'Untitled document'), preference === 'markdown' ? '.md' : '.ash-doc'));
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<DocsEditorPreference>({
-	key: DOCS_EDITOR_SETTING, scope: ConfigurationScope.APPLICATION, defaultValue: 'automatic',
+	key: DOCS_EDITOR_SETTING, scope: ConfigurationScope.APPLICATION, defaultValue: 'rich',
 	parse(value: unknown): DocsEditorPreference {
-		if (value !== 'automatic' && value !== 'rich' && value !== 'markdown') { throw new TypeError(localize('sessions.artifacts.invalidEditor', 'Choose Automatic, Rich document or Markdown for Docs.')); }
+		if (value === 'automatic') return 'rich';
+		if (value !== 'rich' && value !== 'markdown') { throw new TypeError(localize('sessions.artifacts.invalidEditor', 'Choose Rich document or Markdown for Docs.')); }
 		return value;
 	},
 	setting: {
 		valueType: 'select', title: localize('sessions.artifacts.docsEditor', 'Docs editor'),
-		description: localize('sessions.artifacts.docsEditorDescription', 'Choose how to create Docs. Automatic uses an available rich document extension and otherwise opens Markdown.'),
+		description: localize('sessions.artifacts.docsEditorDescription', 'Choose whether new Docs open as a rich document or a Markdown file.'),
 		options: [
-			{ value: 'automatic', label: localize('sessions.artifacts.automatic', 'Automatic') },
 			{ value: 'rich', label: localize('sessions.artifacts.rich', 'Rich document') },
 			{ value: 'markdown', label: localize('sessions.artifacts.markdown', 'Markdown') },
 		],
@@ -86,68 +122,37 @@ registerAction2(class ChooseDocsEditor extends Action2 {
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const configuration = accessor.get(IConfigurationService);
 		const commands = accessor.get(ICommandService);
-		const current = configuration.getValue<DocsEditorPreference>(DOCS_EDITOR_SETTING) ?? 'automatic';
-		const richAvailable = hasRichDocumentEditor();
+		const current = configuration.getValue<DocsEditorPreference>(DOCS_EDITOR_SETTING) ?? 'rich';
 		using store = new DisposableStore();
-		const picker = store.add(accessor.get(IQuickInputService).createQuickPick<{ readonly id: DocsEditorPreference | 'extensions' | 'blank'; readonly label: string; readonly detail?: string; readonly picked?: boolean; }>());
+		const picker = store.add(accessor.get(IQuickInputService).createQuickPick<{ readonly id: DocsEditorPreference | 'blank'; readonly label: string; readonly picked?: boolean; }>());
 		picker.placeholder = picker.ariaLabel = localize('sessions.artifacts.chooseEditor', 'Choose Docs editor');
 		picker.items = [
-			{ id: 'automatic', label: localize('sessions.artifacts.automatic', 'Automatic'), picked: current === 'automatic', detail: localize('sessions.artifacts.automaticDetail', 'Use a rich document extension when available, otherwise Markdown.') },
-			{ id: 'rich', label: localize('sessions.artifacts.rich', 'Rich document'), picked: current === 'rich', detail: richAvailable ? undefined : localize('sessions.artifacts.richUnavailable', 'Requires a rich document extension. Markdown stays available while you install one.') },
+			{ id: 'rich', label: localize('sessions.artifacts.rich', 'Rich document'), picked: current === 'rich' },
 			{ id: 'markdown', label: localize('sessions.artifacts.markdown', 'Markdown'), picked: current === 'markdown' },
-			{ id: 'extensions', label: localize('sessions.artifacts.findRichEditor', 'Find rich document extensions') },
 			{ id: 'blank', label: localize('sessions.artifacts.newBlankDocument', 'New blank document') },
 		];
-		const selected = await new Promise<DocsEditorPreference | 'extensions' | 'blank' | undefined>(resolve => {
+		const selected = await new Promise<DocsEditorPreference | 'blank' | undefined>(resolve => {
 			store.add(picker.onDidAccept(() => { resolve(picker.selectedItems[0]?.id); picker.hide(); }));
 			store.add(picker.onDidHide(() => resolve(undefined)));
 			picker.show();
 		});
 		if (!selected) { return; }
 		if (selected === 'blank') { await commands.executeCommand('sessions.creator.newDocument'); return; }
-		if (selected === 'extensions') { await commands.executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { mode: 'browse', query: 'academy' }); return; }
 		await configuration.updateValue(DOCS_EDITOR_SETTING, selected, ConfigurationTarget.USER_LOCAL);
 	}
 });
 
-registerAction2(class SwitchDocsEditor extends Action2 {
-	constructor() {
-		super({
-			id: 'sessions.creator.switchDocsEditor', title: localize2('sessions.artifacts.switchEditor', 'Switch Docs editor'), f1: true,
-			menu: { id: MenuId.EditorTitle, group: 'navigation', order: 20, when: ContextKeyExpr.or(ActiveEditorContext.isEqualTo('ash.editor.document'), ContextKeyExpr.equals('resourceExtname', '.md')) },
-		});
-	}
-	public override async run(accessor: ServicesAccessor): Promise<void> {
-		const editors = accessor.get(IEditorPart);
-		const commands = accessor.get(ICommandService);
-		const openConverted = createDocumentOpener(accessor);
-		const source = editors.activeInput;
-		if (!source) { return; }
-		const rich = editors.activePane instanceof DocumentEditorPane;
-		if (!rich && !source.resource.path.endsWith('.md')) { return; }
-		if (!rich && !hasRichDocumentEditor()) {
-			recommendRichDocuments(accessor);
-			await commands.executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { mode: 'browse', query: 'academy' });
-			return;
-		}
-		await commands.executeCommand(rich ? 'workbench.action.document.export.markdown' : 'workbench.action.document.import.markdown');
-		const converted = editors.activeInput;
-		if (converted && converted !== source) { await openConverted(converted.resource); }
-	}
-});
 CommandsRegistry.register('sessions.creator.openDocument', (accessor, value) => {
 	// Card targets must still belong to a retained document editor.
 	const input = accessor.get(IEditorPart).groups.flatMap(group => group.editors.map(editor => editor.input)).find(input =>
 		input.resource.toString() === value && (input.contentType === GENERAL_DOCUMENT_CONTENT_TYPE || input.resource.path.endsWith('.md')));
 	if (!input) { throw new TypeError(localize('sessions.artifacts.unavailableDocument', 'This document is no longer open.')); }
-	return createDocumentOpener(accessor)(input.resource);
+	return createDocsOpener(accessor)(input.resource);
 });
 CommandsRegistry.register('sessions.restore.creatorDocs', (accessor, source) => {
-	const saved = accessor.get(IStorageService).get('sessions.creator.activeDocument', StorageScope.WORKSPACE);
-	if (!saved) { return accessor.get(ICommandService).executeCommand('sessions.show.creator', source); }
-	const resource = URI.parse(saved);
-	if (!['file', 'untitled'].includes(resource.scheme) || !/\.(?:ash-doc|md)$/u.test(resource.path)) { return accessor.get(ICommandService).executeCommand('sessions.show.creator', source); }
-	return createDocumentOpener(accessor)(resource, source === 'restore' ? source : undefined);
+	const resource = restoredDocsResource(accessor.get(IStorageService));
+	if (!resource) { return accessor.get(ICommandService).executeCommand('sessions.show.creator', source); }
+	return createDocsOpener(accessor)(resource, { source: source === 'restore' ? source : undefined });
 });
 
 registerAction2(class NewDocumentAction extends Action2 {

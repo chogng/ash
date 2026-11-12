@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { EditorInputSerializers } from '../../../../services/editor/common/editorInputSerializer.js';
-import { ExtensionsInput, ExtensionsCapabilityInput, ExtensionsInputSource } from '../../common/extensionsInput.js';
-import { AgentPluginEditorInput } from '../../common/agentPluginEditorInput.js';
+import { EditorInputSerializerRegistry } from '../../../../services/editor/common/editorInputSerializer.js';
+import { ExtensionsInput, ExtensionsCapabilityInput, ExtensionsInputSource, extensionsInputSerializer, extensionsCapabilityInputSerializer } from '../../common/extensionsInput.js';
+import { AgentPluginEditorInput, agentPluginEditorInputSerializer } from '../../common/agentPluginEditorInput.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
+
+const serializers = new EditorInputSerializerRegistry();
+serializers.registerStatic(extensionsInputSerializer);
+serializers.registerStatic(extensionsCapabilityInputSerializer);
+serializers.registerStatic(agentPluginEditorInputSerializer);
 
 test('Extension tabs publish pane icon changes without persisting temporary image URLs', () => {
 	const summary = { id: 'ash.bat', version: '1.0.0', displayName: 'Batch', description: '', packageType: 'editorExtension' };
@@ -17,9 +22,9 @@ test('Extension tabs publish pane icon changes without persisting temporary imag
 	const first = URI.parse('blob:first-icon');
 	input.setIcon(first);
 	assert.equal(input.getIcon(), first);
-	const saved = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
+	const saved = JSON.parse(JSON.stringify(serializers.serialize(input)));
 	assert.equal(JSON.stringify(saved).includes('blob:'), false);
-	using restored = EditorInputSerializers.deserialize(saved) as ExtensionsInput;
+	using restored = serializers.deserialize(saved) as ExtensionsInput;
 	assert.equal(restored.getIcon().toString(), fallback.toString());
 	input.setIcon(URI.parse('blob:second-icon'));
 	input.setIcon(undefined);
@@ -36,9 +41,9 @@ test('Extension tabs publish pane icon changes without persisting temporary imag
 test('Extensions tabs restore the selected installation without persisting capability authority', () => {
 	const summary = { id: 'demo@vendor', version: '1.2.3', displayName: 'Demo', description: 'A skill bundle', packageType: 'plugin' };
 	using input = new ExtensionsInput(summary, 'installation-one');
-	const serialized = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
+	const serialized = JSON.parse(JSON.stringify(serializers.serialize(input)));
 	assert.deepEqual(serialized, { typeId: input.typeId, value: { ...summary, installationId: 'installation-one', source: 'registry' } });
-	using restored = EditorInputSerializers.deserialize(serialized) as ExtensionsInput;
+	using restored = serializers.deserialize(serialized) as ExtensionsInput;
 	assert.ok(restored instanceof ExtensionsInput);
 	assert.ok(input.matches(restored));
 	assert.deepEqual(restored.summary, summary);
@@ -46,35 +51,35 @@ test('Extensions tabs restore the selected installation without persisting capab
 	assert.equal(restored.readOnly, true);
 	using otherVersion = new ExtensionsInput({ ...summary, version: '2.0.0' }, 'installation-two');
 	assert.equal(restored.matches(otherVersion), false);
-	assert.throws(() => EditorInputSerializers.deserialize({ typeId: input.typeId, value: { ...summary, installationId: 12 } }), TypeError);
+	assert.throws(() => serializers.deserialize({ typeId: input.typeId, value: { ...summary, installationId: 12 } }), TypeError);
 });
 
 test('Extensions restores built-in and local sources separately and accepts older registry tabs', () => {
 	const summary = { id: 'ash.demo', version: '1.0.0', displayName: 'Demo', description: '', packageType: 'editorExtension' };
 	for (const source of ['builtIn', 'local']) {
-		using restored = EditorInputSerializers.deserialize({ typeId: 'ash.extensions.input', value: { ...summary, source } }) as ExtensionsInput;
+		using restored = serializers.deserialize({ typeId: 'ash.extensions.input', value: { ...summary, source } }) as ExtensionsInput;
 		assert.equal(restored.source, source);
 		assert.equal(restored.resource.path, `/${source}/ash.demo`);
-		assert.equal(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(restored))).value.source, source);
+		assert.equal(JSON.parse(JSON.stringify(serializers.serialize(restored))).value.source, source);
 	}
-	using legacy = EditorInputSerializers.deserialize({ typeId: 'ash.extensions.input', value: summary }) as ExtensionsInput;
+	using legacy = serializers.deserialize({ typeId: 'ash.extensions.input', value: summary }) as ExtensionsInput;
 	assert.equal(legacy.source, 'registry');
-	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.input', value: { ...summary, source: 'untrusted' } }), TypeError);
+	assert.throws(() => serializers.deserialize({ typeId: 'ash.extensions.input', value: { ...summary, source: 'untrusted' } }), TypeError);
 });
 
 test('Local plugin tabs restore the reviewed package digest and distinguish replacements', () => {
 	const summary = { id: 'ash.demo', version: '1.0.0', displayName: 'Demo', description: '', packageType: 'editorExtension' };
 	using input = new AgentPluginEditorInput(summary, 'original');
 	using replacement = new AgentPluginEditorInput(summary, 'replacement');
-	const saved = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
+	const saved = JSON.parse(JSON.stringify(serializers.serialize(input)));
 	assert.equal(saved.typeId, 'ash.extensions.agentPluginInput');
 	assert.deepEqual(saved.value, { ...summary, digest: 'original' });
-	using restored = EditorInputSerializers.deserialize(saved) as AgentPluginEditorInput;
+	using restored = serializers.deserialize(saved) as AgentPluginEditorInput;
 	assert.ok(restored instanceof AgentPluginEditorInput);
 	assert.equal(restored.source, ExtensionsInputSource.Local);
 	assert.ok(input.matches(restored));
 	assert.equal(restored.matches(replacement), false);
-	assert.throws(() => EditorInputSerializers.deserialize({ typeId: saved.typeId, value: { ...saved.value, digest: '' } }), TypeError);
+	assert.throws(() => serializers.deserialize({ typeId: saved.typeId, value: { ...saved.value, digest: '' } }), TypeError);
 });
 
 test('Capability tabs restore Skill, Connector and MCP identities without catalog state', () => {
@@ -84,21 +89,21 @@ test('Capability tabs restore Skill, Connector and MCP identities without catalo
 		{ kind: 'connector' as const, connectorId: 'github-account' },
 	]) {
 		using input = new ExtensionsCapabilityInput(target);
-		const serialized = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
+		const serialized = JSON.parse(JSON.stringify(serializers.serialize(input)));
 		assert.deepEqual(serialized.value, target);
-		using restored = EditorInputSerializers.deserialize(serialized) as ExtensionsCapabilityInput;
+		using restored = serializers.deserialize(serialized) as ExtensionsCapabilityInput;
 		assert.deepEqual(restored.target, target);
 		assert.ok(input.matches(restored));
 	}
-	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'skill', name: 'review', source: 12 } }), TypeError);
-	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'connector', connectorId: 12 } }), TypeError);
-	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'other' } }), TypeError);
+	assert.throws(() => serializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'skill', name: 'review', source: 12 } }), TypeError);
+	assert.throws(() => serializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'connector', connectorId: 12 } }), TypeError);
+	assert.throws(() => serializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'other' } }), TypeError);
 });
 
 test('legacy built-in Rust tabs restore and persist the Ash identity', () => {
 	const summary = { id: 'vscode.rust', version: '10.0.0', displayName: 'rust', description: '', packageType: 'editorExtension' };
 	const saved = { typeId: 'ash.extensions.input', value: { ...summary, source: 'builtIn' } };
-	using restored = EditorInputSerializers.deserialize(saved) as ExtensionsInput;
+	using restored = serializers.deserialize(saved) as ExtensionsInput;
 	using current = new ExtensionsInput({ ...summary, id: 'ash.rust' }, undefined, ExtensionsInputSource.BuiltIn);
 	assert.deepEqual(restored.summary, current.summary);
 	assert.equal(restored.source, ExtensionsInputSource.BuiltIn);
@@ -106,10 +111,10 @@ test('legacy built-in Rust tabs restore and persist the Ash identity', () => {
 	assert.equal(restored.resource.query, '10.0.0');
 	assert.ok(restored.matches(current));
 	assert.equal(saved.value.id, 'vscode.rust');
-	const migrated = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(restored)));
+	const migrated = JSON.parse(JSON.stringify(serializers.serialize(restored)));
 	assert.deepEqual(migrated, { typeId: saved.typeId, value: { ...summary, id: 'ash.rust', source: 'builtIn' } });
-	using reopened = EditorInputSerializers.deserialize(migrated) as ExtensionsInput;
-	assert.deepEqual(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(reopened))), migrated);
+	using reopened = serializers.deserialize(migrated) as ExtensionsInput;
+	assert.deepEqual(JSON.parse(JSON.stringify(serializers.serialize(reopened))), migrated);
 	assert.ok(reopened.matches(current));
 });
 
@@ -123,10 +128,10 @@ test('Rust tab migration is restricted to the exact legacy built-in identity', (
 		['builtIn', 'vscode.css'],
 	]) {
 		const value = { id, version: '1.0.0', displayName: 'Rust', description: '', packageType: 'editorExtension', source, installationId: 'installed-version' };
-		using restored = EditorInputSerializers.deserialize({ typeId: 'ash.extensions.input', value }) as ExtensionsInput;
+		using restored = serializers.deserialize({ typeId: 'ash.extensions.input', value }) as ExtensionsInput;
 		assert.equal(restored.summary.id, id);
 		assert.equal(restored.source, source ?? ExtensionsInputSource.Registry);
 		assert.equal(restored.installationId, value.installationId);
 	}
-	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.input', value: { id: 12, source: 'builtIn' } }), TypeError);
+	assert.throws(() => serializers.deserialize({ typeId: 'ash.extensions.input', value: { id: 12, source: 'builtIn' } }), TypeError);
 });

@@ -82,7 +82,7 @@ function codeEnd(source: string, index: number): number | undefined {
 }
 
 /** Writing metadata is a transport envelope, not Markdown or executable attributes. */
-function readWriting(source: string): { raw: string; body: string; } | undefined {
+function readWriting(source: string): { raw: string; body: string; complete?: true; title?: string; } | undefined {
 	const prefix = /^ {0,3}:::writing\{/u.exec(source);
 	if (!prefix) { return undefined; }
 	let quote = false;
@@ -92,16 +92,25 @@ function readWriting(source: string): { raw: string; body: string; } | undefined
 		if (character === '"') { quote = !quote; }
 		if (character !== '}' || quote) { continue; }
 		const start = index + 1;
+		// Strip surrounding blank lines without removing the first block's indentation.
+		const body = (end: number) => source.slice(start, end).replace(/^(?:[ \t]*\n)+|(?:\n[ \t]*)+$/gu, '');
 		for (index = start; index < source.length;) {
 			const end = codeEnd(source, index);
 			if (end !== undefined) { index = end; continue; }
 			if (source.startsWith(':::', index) && /^(?:\s|$)/u.test(source.slice(index + 3))) {
-				return { raw: source.slice(0, index + 3), body: source.slice(start, index).trim() };
+				const metadata = source.slice(prefix[0].length, start - 1);
+				const quotedTitle = /(?:^|\s)title=("(?:\\.|[^"\\])*")/u.exec(metadata)?.[1];
+				let title: string | undefined;
+				if (quotedTitle) {
+					try { title = (JSON.parse(quotedTitle) as string).trim(); }
+					catch { /* A malformed title does not affect the draft body. */ }
+				}
+				return { raw: source.slice(0, index + 3), body: body(index), complete: true, title };
 			}
 			index++;
 		}
 		// The body is useful before its closing delimiter arrives during streaming.
-		return { raw: source, body: source.slice(start).trim() };
+		return { raw: source, body: body(source.length) };
 	}
 	return source.length < 8192 ? { raw: source, body: '' } : undefined;
 }
@@ -293,7 +302,7 @@ function richContentLexer(): Marked {
 				const writing = readWriting(source);
 				if (!writing) return undefined;
 				lexerDepth.set(this.lexer, depth + 1);
-				try { return { type: 'chatgptWriting', raw: writing.raw, body: writing.body, tokens: this.lexer.blockTokens(writing.body) }; }
+				try { return { type: 'chatgptWriting', ...writing, tokens: this.lexer.blockTokens(writing.body) }; }
 				finally { lexerDepth.set(this.lexer, depth); }
 			},
 		}],
@@ -567,7 +576,10 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		if (token.type === 'chatgptRichContent') return projectComponent(token);
 		if (token.type === 'chatgptWebReference') return projectReference(token);
 		if (token.type === 'chatgptWriting') {
-			return { kind: 'markdown', markdown: decode(token.body, token.tokens ?? [], false), block: true };
+			const markdown = decode(token.body, token.tokens ?? [], false);
+			return token.complete && markdown.trim()
+				? { kind: 'writing', markdown, title: token.title, block: true }
+				: { kind: 'markdown', markdown, block: true };
 		}
 		if (token.type === 'html' && /^\s*<\/?(?:script|style)\b/iu.test(token.raw)) return '';
 		if (token.type === 'image' && !token.href.startsWith('data:image/')) {

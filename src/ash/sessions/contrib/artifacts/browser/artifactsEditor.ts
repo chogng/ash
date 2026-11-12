@@ -27,30 +27,35 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import { GENERAL_DOCUMENT_CONTENT_TYPE } from '../contrib/docs/common/docs.js';
 import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
+import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { ToolbarSearchActionViewItem } from '../../../browser/ui/toolbarSearchActionViewItem.js';
 import { appendArtifactIcon, getArtifactTitle } from './artifactKindPresentation.js';
 import { artifactKinds, isArtifactKind, type ArtifactKind } from '../../../common/artifactKind.js';
 import { ARTIFACT_EXAMPLE_SCHEME, getArtifactExamples, OPEN_ARTIFACT_EXAMPLE, type CanvasArtifactExample, type TableArtifactExample } from './artifactExamples.js';
-import { ArtifactTableExample } from './artifactTableExample.js';
+import { ArtifactTableWorkspace, type TableArtifactKind } from './artifactTableWorkspace.js';
 
-export const OPEN_ARTIFACT_DRAFT = 'sessions.creator.openDraft';
-export const OPEN_SLIDES_ARTIFACT = 'sessions.creator.openSlidesArtifact';
+export const NEW_ARTIFACT = 'sessions.creator.newArtifact';
+export const OPEN_CANVAS_ARTIFACT = 'sessions.creator.openCanvasArtifact';
 
 interface ArtifactCard {
 	readonly title: string;
 	readonly kind: ArtifactKind;
 	readonly detail: string;
 	readonly slidesArtifactId?: string;
+	readonly workspaceKey?: ArtifactWorkspaceKey;
 	readonly open: () => void;
 }
 
 type ArtifactFilter = 'all' | 'yours' | 'shared';
-type ArtifactWorkspaceKey = ArtifactWorkspaceId | `example:${ArtifactKind}` | `slides:${string}`;
+type ArtifactWorkspaceKey = ArtifactWorkspaceId | `example:${ArtifactKind}` | `canvas:${string}` | `table:${string}`;
 
 interface ActiveArtifactWorkspace {
 	readonly key: ArtifactWorkspaceKey;
 	readonly title: string;
 	readonly mode?: ArtifactWorkspaceId;
+	readonly kind?: ArtifactKind;
 }
 
 const pages = new WeakMap<Element, ArtifactsEditorView>();
@@ -96,6 +101,7 @@ export class ArtifactsEditorView extends Disposable {
 	private readonly titleDomNode: HTMLElement;
 	private readonly headerDomNode: HTMLElement;
 	private readonly back: Button;
+	private tableActions: WorkbenchToolBar | undefined;
 	private readonly docsButton: Button;
 	private readonly artifactsDomNode: HTMLElement;
 	private readonly artifactCards = this._register(new DisposableStore());
@@ -107,6 +113,7 @@ export class ArtifactsEditorView extends Disposable {
 	private activeWorkspace: ActiveArtifactWorkspace | undefined;
 	private readonly examples = getArtifactExamples();
 	public get activeMode(): ArtifactWorkspaceId | undefined { return this.activeWorkspace?.mode; }
+	public get activeKind(): ArtifactKind | undefined { return this.activeWorkspace?.kind; }
 	private visible = false;
 	private dimension: IDimension = { width: 0, height: 0 };
 	public get usesCanvasPanels(): boolean { return this.activeWorkspace !== undefined && this.workspaces.get(this.activeWorkspace.key)!.usesCanvasPanels; }
@@ -121,6 +128,7 @@ export class ArtifactsEditorView extends Disposable {
 		@ICommandService private readonly commands: ICommandService,
 		@IEditorPart private readonly editors: IEditorPart,
 		@IDesignEditorService private readonly designs: IDesignEditorService,
+		@IContextMenuService private readonly contextMenus: IContextMenuService,
 	) {
 		super();
 		this.domNode = h(ownerDocument, 'section', { className: 'ash-creator', attributes: { role: 'region', 'aria-label': localize('sessions.creator.title', 'Artifacts') } });
@@ -235,16 +243,16 @@ export class ArtifactsEditorView extends Disposable {
 			void document.ready.then(() => { if (!this.isDisposed) { this.renderArtifacts(); } });
 		}
 		this._register(autorun(reader => {
-			designs.slidesArtifacts.read(reader);
+			designs.canvasArtifacts.read(reader);
 			this.renderArtifacts();
 		}));
-		void designs.loadSlidesArtifacts();
+		void designs.loadCanvasArtifacts();
 	}
 
 	private createTile(container: HTMLElement, kind: ArtifactKind): Button {
 		const button = this._register(new Button(container, {
 			...defaultButtonStyles, label: getArtifactTitle(kind),
-			onClick: () => { void this.commands.executeCommand(OPEN_ARTIFACT_DRAFT, kind); },
+			onClick: () => { void this.commands.executeCommand(NEW_ARTIFACT, kind); },
 		}));
 		button.domNode.classList.add('ash-artifacts-create', kind);
 		button.domNode.prepend(this.createIllustration(kind));
@@ -287,14 +295,24 @@ export class ArtifactsEditorView extends Disposable {
 				open: () => { void this.commands.executeCommand('sessions.creator.openMode', mode); },
 			});
 		}
-		for (const [id, document] of this.designs.slidesArtifacts.get()) {
+		for (const [id, document] of this.designs.canvasArtifacts.get()) {
+			const kind = document.artifactKind!;
 			cards.push({
 				title: document.name,
-				kind: ArtifactWorkspaceId.Slides,
-				detail: localize('sessions.creator.slides.title', 'Slides'),
-				slidesArtifactId: id,
-				open: () => { void this.commands.executeCommand(OPEN_SLIDES_ARTIFACT, id); },
+				kind,
+				detail: getArtifactTitle(kind),
+				slidesArtifactId: kind === 'slides' ? id : undefined,
+				workspaceKey: `canvas:${id}`,
+				open: () => { void this.commands.executeCommand(OPEN_CANVAS_ARTIFACT, id); },
 			});
+		}
+		for (const [key, workspace] of this.workspaces) {
+			if (workspace instanceof ArtifactTableWorkspace && key.startsWith('table:')) {
+				cards.push({
+					title: workspace.title, kind: workspace.kind, detail: getArtifactTitle(workspace.kind), workspaceKey: key,
+					open: () => { void this.commands.executeCommand('sessions.creator.openTable', key); }
+				});
+			}
 		}
 		return cards;
 	}
@@ -339,6 +357,7 @@ export class ArtifactsEditorView extends Disposable {
 		const button = this.artifactCards.add(new Button(container, { ...defaultButtonStyles, label: card.title, title: card.title, onClick: card.open }));
 		button.domNode.classList.add('ash-artifacts-card', card.kind);
 		if (card.slidesArtifactId) { button.domNode.dataset.slidesArtifact = card.slidesArtifactId; }
+		if (card.workspaceKey) { button.domNode.dataset.artifactWorkspace = card.workspaceKey; }
 		button.domNode.prepend(this.createIllustration(card.kind));
 		button.domNode.append(h(this.domNode.ownerDocument, 'span', { className: 'ash-artifacts-card-detail' }, card.detail));
 		return button.domNode;
@@ -369,7 +388,7 @@ export class ArtifactsEditorView extends Disposable {
 
 	public openExample(example: CanvasArtifactExample | TableArtifactExample): void {
 		if (example.type === 'canvas' && example.mode === ArtifactWorkspaceId.Slides) {
-			this.openSlidesArtifact(this.designs.createSlidesArtifact(example.createShapes()));
+			this.openCanvasArtifact(this.designs.createCanvasArtifact('slides', example.createShapes()));
 			return;
 		}
 		const key = `example:${example.kind}` as const;
@@ -380,17 +399,17 @@ export class ArtifactsEditorView extends Disposable {
 				workspace = contribution.create(this.instantiation, this.domNode.ownerDocument);
 				workspace.create(this.workspacesDomNode, example);
 			} else {
-				workspace = new ArtifactTableExample(this.domNode.ownerDocument, example);
+				workspace = this.instantiation.createInstance(ArtifactTableWorkspace, this.domNode.ownerDocument, example.kind, example.title, example);
 				workspace.create(this.workspacesDomNode);
 			}
 			this.workspaces.set(key, workspace);
 		}
-		this.activateWorkspace({ key, title: example.title, mode: example.type === 'canvas' ? example.mode : undefined }, workspace);
+		this.activateWorkspace({ key, title: example.title, kind: example.kind, mode: example.type === 'canvas' ? example.mode : undefined }, workspace);
 	}
 
-	public openSlidesArtifact(document: DesignDocumentController): void {
-		const mode = ArtifactWorkspaceId.Slides;
-		const key = `slides:${document.model.value.documentId}` as const;
+	public openCanvasArtifact(document: DesignDocumentController): void {
+		const mode = document.mode;
+		const key = `canvas:${document.model.value.documentId}` as const;
 		let workspace = this.workspaces.get(key);
 		if (!workspace) {
 			workspace = ArtifactWorkspaces.get(mode)!.create(this.instantiation, this.domNode.ownerDocument);
@@ -398,7 +417,23 @@ export class ArtifactsEditorView extends Disposable {
 			workspace.create(this.workspacesDomNode, undefined, document);
 		}
 		this.storage.remove('sessions.creator.activeMode', StorageScope.WORKSPACE);
-		this.activateWorkspace({ key, title: document.name, mode }, workspace);
+		this.activateWorkspace({ key, title: document.name, kind: document.artifactKind, mode }, workspace);
+	}
+
+	public createTable(kind: TableArtifactKind): void {
+		const key = `table:${generateUuid()}` as const;
+		const title = localize('sessions.creator.untitled', 'Untitled {0}', getArtifactTitle(kind));
+		const workspace = this.instantiation.createInstance(ArtifactTableWorkspace, this.domNode.ownerDocument, kind, title, undefined);
+		this.workspaces.set(key, workspace);
+		workspace.create(this.workspacesDomNode);
+		this.activateWorkspace({ key, title, kind }, workspace);
+	}
+
+	public openTable(key: string): void {
+		if (!key.startsWith('table:')) { return; }
+		const workspaceKey = key as `table:${string}`;
+		const workspace = this.workspaces.get(workspaceKey);
+		if (workspace instanceof ArtifactTableWorkspace) this.activateWorkspace({ key: workspaceKey, title: workspace.title, kind: workspace.kind }, workspace);
 	}
 
 	public revealInitialContent(): void {
@@ -410,6 +445,10 @@ export class ArtifactsEditorView extends Disposable {
 	private activateWorkspace(active: ActiveArtifactWorkspace, workspace: IArtifactWorkspace): void {
 		this.activeWorkspace = active;
 		this.titleDomNode.textContent = active.title;
+		if (workspace instanceof ArtifactTableWorkspace) {
+			this.tableActions ??= this._register(new WorkbenchToolBar(this.headerDomNode, this.contextMenus, { ariaLabel: localize('sessions.creator.workspaceActions', 'Workspace actions') }));
+			this.tableActions.setActions([...workspace.toolbarActions]);
+		}
 		this.updateVisibility();
 		this.layout(this.dimension);
 		if (this.visible) { workspace.focus(); status(localize('sessions.creator.entered', '{0} workspace', active.title)); }
@@ -417,6 +456,7 @@ export class ArtifactsEditorView extends Disposable {
 	public showHome(): void {
 		const previous = this.activeWorkspace;
 		this.activeWorkspace = undefined;
+		this.tableActions?.setActions([]);
 		this.titleDomNode.textContent = localize('sessions.creator.title', 'Artifacts');
 		this.storage.remove('sessions.creator.activeMode', StorageScope.WORKSPACE);
 		this.updateVisibility();
@@ -425,18 +465,16 @@ export class ArtifactsEditorView extends Disposable {
 			const example = previous.key.startsWith('example:')
 				? this.artifactsDomNode.querySelector<HTMLElement>(`[data-artifact-example="${previous.key.slice('example:'.length)}"]`)
 				: undefined;
-			const slides = previous.key.startsWith('slides:')
-				? this.artifactsDomNode.querySelector<HTMLElement>(`[data-slides-artifact="${previous.key.slice('slides:'.length)}"]`)
-				: undefined;
+			const artifact = this.artifactsDomNode.querySelector<HTMLElement>(`[data-artifact-workspace="${previous.key}"]`);
 			const button = isArtifactKind(previous.mode) ? this.creationButtons.get(previous.mode) : undefined;
-			(example ?? slides ?? button ?? this.docsButton).focus();
+			(example ?? artifact ?? button ?? this.docsButton).focus();
 		}
 	}
 	private updateVisibility(): void {
 		this.homeDomNode.hidden = this.activeWorkspace !== undefined;
 		this.workspacesDomNode.hidden = this.activeWorkspace === undefined;
 		this.back.hidden = this.activeWorkspace === undefined;
-		this.headerDomNode.hidden = this.activeWorkspace?.key === ArtifactWorkspaceId.Design;
+		this.headerDomNode.hidden = this.activeWorkspace?.mode !== undefined;
 		for (const [key, workspace] of this.workspaces) {
 			const active = key === this.activeWorkspace?.key;
 			workspace.domNode.hidden = !active;

@@ -12,6 +12,7 @@ import { getChatMarkdownExtensions } from './chatCjkMarkdown.js';
 
 export const CHAT_RESPONSE_DOWNLOAD_SCHEME = 'chat-response-download';
 export const CHAT_RESPONSE_ENTITY_SCHEME = 'chat-response-entity';
+export const CHAT_RESPONSE_WRITING_SCHEME = 'chat-response-writing';
 export const chatSourcePreviewClass = 'ash-chat-source-preview';
 export const chatCitationLinkClass = 'ash-chat-citation-link';
 export const chatCitationClass = 'ash-chat-citation';
@@ -100,6 +101,8 @@ function renderCitations(part: Extract<ChatMarkdownRichPart, { kind: 'citations'
 function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inLink: boolean, textOnly: boolean): string {
 	switch (part.kind) {
 		case 'markdown': return body;
+		case 'writing':
+			return textOnly || inLink ? body : `<div>${body}${link(`${CHAT_RESPONSE_WRITING_SCHEME}:${index}`, localize('chat.writing.editInDocs', 'Edit in Docs'))}</div>`;
 		case 'textLiteral': return escapeHTML(part.label);
 		case 'entity': return textOnly || inLink ? escapeHTML(part.entity.label) : link(`${CHAT_RESPONSE_ENTITY_SCHEME}:${index}`, part.entity.label);
 		case 'imageGallery': {
@@ -195,8 +198,12 @@ export function chatMarkdownRichContentExtension(content: ChatMarkdownRichConten
 
 export function renderChatRichContentText(markdown: string, content: ChatMarkdownRichContent | undefined): string {
 	if (!content) return renderChatMarkdownPlaintext(markdown, true);
-	const html = renderWorkbenchMarkdown({ value: markdown, supportHtml: true }, false, { markedExtensions: getChatMarkdownExtensions(markdown, [chatMarkdownRichContentExtension(content, true)]) });
-	return renderAsPlaintext(html, { useLinkFormatter: true });
+	return renderAsPlaintext(renderChatRichContentHtml(markdown, content), { useLinkFormatter: true });
+}
+
+/** Projects a fragment as portable markup, without transcript-only controls or remote actions. */
+export function renderChatRichContentHtml(markdown: string, content: ChatMarkdownRichContent): string {
+	return renderWorkbenchMarkdown({ value: markdown, supportHtml: true }, false, { markedExtensions: getChatMarkdownExtensions(markdown, [chatMarkdownRichContentExtension(content, true)]) });
 }
 
 export function renderChatMarkdownPlaintext(markdown: string, useLinkFormatter = false): string {

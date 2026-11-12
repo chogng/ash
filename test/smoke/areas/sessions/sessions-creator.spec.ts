@@ -1,6 +1,6 @@
 import { clickCanvasMenu, paintColor, paintPixel } from '../../../automation/design.js';
 import { readFile, readdir, realpath } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { Menus } from '../../../automation/menus.js';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 import type { Page } from '@playwright/test';
@@ -9,15 +9,20 @@ import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifacts/common/model/designDocument.js';
 
-test('Sessions mode and page-tab activation reuse Parts while retaining the conversation and dirty document', async ({ target, workbench }) => {
+test('Sessions mode and page-tab activation reuse Parts while retaining the conversation and dirty document', async ({ target, workbench, testWorkspace }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await navigation.getByRole('button', { name: 'New', exact: true }).click();
+	const recent = page.getByRole('group', { name: 'Recent projects', exact: true });
+	const projectName = basename(testWorkspace.directory);
+	await recent.getByRole('button', { name: projectName, exact: true }).click();
+	await expect(page.locator('.ash-sessions-workspace-picker:visible')).toHaveText(projectName);
 	const chat = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 	await chat.waitForEditorFocus();
 	await chat.waitForTypeInEditor('Retained conversation draft');
-	const parts = await page.locator('[data-part]').elementHandles();
+	const selectors = ['[data-part="sidebar"]', '[data-part="sessions"]', '[data-part="editor"]:not(.ash-sessions-chat-grid)', '[data-part="auxiliarybar"]:not(.ash-desktop-auxiliarybar)'];
+	const parts = await Promise.all(selectors.map(selector => page.locator(selector).elementHandle()));
 	await new QuickAccess(page).runCommand('workbench.action.files.newUntitledFile');
 	const document = new Editor(page.locator('[data-part="editor"]'));
 	await document.waitForEditorFocus();
@@ -37,6 +42,7 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 	await expect(creatorNavigation.getByRole('button', { name: 'Design', exact: true })).toBeFocused();
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	expect(await sidebarContent.evaluate((element, retained) => element === retained, retainedSidebar)).toBe(true);
+	await new QuickAccess(page).runCommand('sessions.creator.toggleDetails');
 	await expect(page.locator('[data-part="auxiliarybar"]')).toContainText('Page');
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
@@ -49,16 +55,17 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 	await expect(page.locator('.ash-projects')).toBeVisible();
 	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
-	for (const part of parts) {
-		try { expect(await part.evaluate(element => element.isConnected && element === element.ownerDocument!.querySelector(`[data-part="${(element as HTMLElement).dataset.part}"]`))).toBe(true); }
-		finally { await part.dispose(); }
+	for (const [index, part] of parts.entries()) {
+		try { expect(await page.locator(selectors[index]).evaluate((element, original) => element === original, part)).toBe(true); }
+		finally { await part!.dispose(); }
 	}
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await chat.waitForEditorContents(text => text === 'Retained conversation draft');
 	await document.waitForEditorContents(text => text === 'Retained dirty document');
 	await expect(page.getByRole('dialog', { name: 'Save Changes', exact: true })).toHaveCount(0);
 	await retainedSidebar!.dispose();
-	await page.locator('[data-part="editor"]').getByRole('tab', { name: /^Untitled-1(?:,|$)/u }).press('Delete');
+	await document.waitForEditorFocus();
+	await new QuickAccess(page).runCommand('workbench.action.closeActiveEditor');
 	await page.getByRole('dialog', { name: 'Save Changes', exact: true }).getByRole('button', { name: "Don't Save", exact: true }).click();
 });
 
@@ -114,19 +121,7 @@ test('Sessions Artifacts retains Design and Slides canvases independently', asyn
 
 test('Sessions Creator resets side panel widths and retains them across page changes and reopening', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await new QuickAccess(page).runCommand('sessions.creator.open.design');
-	await new QuickAccess(page).runCommand('workbench.sessions.sidebar.designLayers');
-	const sidebar = page.locator('[data-part="sidebar"]');
-	const leftSash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash:not(.ash-sash-disabled):visible').first();
-	const rightSash = page.locator('[data-part="auxiliarybar"]').locator('xpath=../../..').locator(':scope > .ash-sash:not(.ash-sash-disabled):visible').last();
-	const panelWidths = () => page.locator('.ash-workbench-part-frame').evaluateAll(frames => frames.filter(frame => frame.querySelector(':scope > [data-part="sidebar"], :scope > [data-part="auxiliarybar"]')).map(frame => Math.round(frame.getBoundingClientRect().width)));
-	await expect.poll(panelWidths).toHaveLength(2);
-	// Establish the reset baseline after explicitly activating the tool view.
-	await leftSash.dblclick();
-	await rightSash.dblclick();
-	const initialWidths = await panelWidths();
-	for (const width of [1226, 1400, 1100]) {
+	const resize = async (width: number) => {
 		let contentWidth = width;
 		if ('windows' in application) {
 			const window = await application.browserWindow(page);
@@ -139,10 +134,28 @@ test('Sessions Creator resets side panel widths and retains them across page cha
 		} else {
 			await page.setViewportSize({ width, height: 800 });
 		}
-		// Electron DIP sizes and Chromium viewport sizes can round to adjacent pixels under Windows display scaling.
 		await expect.poll(async () => Math.abs(await page.evaluate(() => window.innerWidth) - contentWidth)).toBeLessThanOrEqual(1);
-		await expect.poll(panelWidths).toEqual(initialWidths);
-	}
+	};
+	await resize(1440);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
+	await new QuickAccess(page).runCommand('workbench.sessions.sidebar.designLayers');
+	await new QuickAccess(page).runCommand('sessions.creator.toggleDetails');
+	const sidebar = () => page.locator('[data-part="sidebar"]');
+	const leftSash = sidebar().locator('xpath=../../..').locator(':scope > .ash-sash:not(.ash-sash-disabled):visible').first();
+	const details = () => page.locator('[data-part="auxiliarybar"].ash-editor-docked-auxiliarybar');
+	const rightSash = page.locator('.ash-editor-docked-auxiliarybar-sash:visible').last();
+	const panelWidths = async () => Promise.all([sidebar(), details()].map(part => part.evaluate(element => Math.round(element.getBoundingClientRect().width))));
+	await expect(details()).toBeVisible();
+	// Establish the reset baseline after explicitly activating the tool view.
+	await leftSash.dblclick();
+	await rightSash.dblclick();
+	const initialWidths = await panelWidths();
+	await resize(1100);
+	await expect(sidebar()).toBeVisible();
+	await expect(page.locator('[data-part="sessions"]')).toBeVisible();
+	await resize(1440);
+	await expect.poll(panelWidths).toEqual(initialWidths);
 	await leftSash.focus();
 	await leftSash.press('ArrowRight');
 	await expect.poll(panelWidths).not.toEqual(initialWidths);
@@ -171,6 +184,7 @@ test('Sessions Creator resets side panel widths and retains them across page cha
 	await leftSash.press('ArrowRight');
 	const resized = await panelWidths();
 	page = await workbench.reopenAgentsWindow(application, page);
+	await resize(1440);
 	await expect(page.getByRole('region', { name: 'Design canvas', exact: true })).toBeVisible();
 	await expect.poll(panelWidths).toEqual(resized);
 });

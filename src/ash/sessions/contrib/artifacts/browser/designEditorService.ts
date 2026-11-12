@@ -13,7 +13,7 @@ import { IWorkingCopyService } from '../../../../workbench/services/workingCopy/
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { DesignDocumentController, getDesignDraftHome } from './designDocumentController.js';
 import type { CanvasEditorWidget } from './widget/canvasEditorWidget.js';
-import { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
+import { ArtifactWorkspaceId, canvasArtifactModes, type CanvasArtifactKind } from '../common/artifactWorkspace.js';
 import type { DesignShape } from '../common/model/designDocument.js';
 
 export const DESIGN_LAYERS_CONTAINER_ID = 'workbench.sessions.sidebar.designLayers';
@@ -23,10 +23,10 @@ export const DESIGN_PROPERTIES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.d
 export interface IDesignEditorService {
 	readonly document: DesignDocumentController;
 	readonly activeEditor: IObservable<CanvasEditorWidget | undefined>;
-	readonly slidesArtifacts: IObservable<ReadonlyMap<string, DesignDocumentController>>;
+	readonly canvasArtifacts: IObservable<ReadonlyMap<string, DesignDocumentController>>;
 	getDocument(mode: ArtifactWorkspaceId): DesignDocumentController;
-	loadSlidesArtifacts(): Promise<void>;
-	createSlidesArtifact(shapes: readonly DesignShape[]): DesignDocumentController;
+	loadCanvasArtifacts(): Promise<void>;
+	createCanvasArtifact(kind: CanvasArtifactKind, shapes: readonly DesignShape[]): DesignDocumentController;
 	adoptExampleDocument(document: DesignDocumentController, ownerWindow: Window): void;
 	setActiveEditor(editor: CanvasEditorWidget | undefined): void;
 }
@@ -36,12 +36,12 @@ export const IDesignEditorService = createServiceIdentifier<IDesignEditorService
 export class DesignEditorService extends Disposable implements IDesignEditorService {
 	private readonly documents = new Map<ArtifactWorkspaceId, DesignDocumentController>();
 	private readonly adoptedExamples = new Set<DesignDocumentController>();
-	private readonly slides = observableValue<ReadonlyMap<string, DesignDocumentController>>(this, new Map());
-	public readonly slidesArtifacts: IObservable<ReadonlyMap<string, DesignDocumentController>> = this.slides;
-	private readonly slidesHome: URI;
-	private slidesLoading: Promise<void> | undefined;
+	private readonly artifacts = observableValue<ReadonlyMap<string, DesignDocumentController>>(this, new Map());
+	public readonly canvasArtifacts: IObservable<ReadonlyMap<string, DesignDocumentController>> = this.artifacts;
+	private readonly draftHome: URI;
+	private canvasLoading: Promise<void> | undefined;
 	private get managedDocuments(): readonly DesignDocumentController[] {
-		return [...this.documents.values(), ...this.adoptedExamples, ...this.slides.get().values()];
+		return [...this.documents.values(), ...this.adoptedExamples, ...this.artifacts.get().values()];
 	}
 	public get document(): DesignDocumentController { return this.getDocument(ArtifactWorkspaceId.Design); }
 	private readonly active = observableValue<CanvasEditorWidget | undefined>(this, undefined);
@@ -56,10 +56,10 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 		@IUserDataProfileService profiles: IUserDataProfileService,
 	) {
 		super();
-		this.slidesHome = getDesignDraftHome(profiles.currentProfile.location, workspace.getWorkspace().id).joinPathSegment('slides');
+		this.draftHome = getDesignDraftHome(profiles.currentProfile.location, workspace.getWorkspace().id);
 		// Browser reload cannot wait for the final asynchronous write.
 		this._register(addDisposableListener(mainWindow, 'beforeunload', (event: BeforeUnloadEvent) => {
-			if (!this.lifecycle.willShutdown && [...this.slides.get().values()].some(document => document.isDirty || document.needsSaveRetry)) {
+			if (!this.lifecycle.willShutdown && [...this.artifacts.get().values()].some(document => document.isDirty || document.needsSaveRetry)) {
 				event.preventDefault();
 				event.returnValue = '';
 			}
@@ -71,45 +71,57 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 			}
 		}, 'Creator automatic save', () => this.managedDocuments.every(document => !document.automaticallySaves || (!document.isDirty && !document.needsSaveRetry && !document.isRestoring)))));
 	}
-	public loadSlidesArtifacts(): Promise<void> {
-		return this.slidesLoading ??= this.restoreSlidesArtifacts().catch(error => {
-			this.slidesLoading = undefined;
-			this.log.error('creator', 'Failed to load Slides artifacts', error);
+	public loadCanvasArtifacts(): Promise<void> {
+		return this.canvasLoading ??= this.restoreCanvasArtifacts().catch(error => {
+			this.canvasLoading = undefined;
+			this.log.error('creator', 'Failed to load canvas artifacts', error);
 		});
 	}
 
-	private async restoreSlidesArtifacts(): Promise<void> {
-		const entries = await this.files.readDirectory(this.slidesHome).catch(error => {
+	private async restoreCanvasArtifacts(): Promise<void> {
+		for (const kind of Object.keys(canvasArtifactModes) as CanvasArtifactKind[]) {
+			await this.restoreCanvasKind(kind);
+		}
+	}
+
+	private async restoreCanvasKind(kind: CanvasArtifactKind): Promise<void> {
+		const entries = await this.files.readDirectory(this.draftHome.joinPathSegment(kind)).catch(error => {
 			if (error instanceof FileNotFoundError) { return []; }
 			throw error;
 		});
 		for (const entry of entries) {
 			if (this.isDisposed) { return; }
 			const id = entry.name.slice(0, -'.ash-design'.length);
-			if (entry.kind !== FileKind.Directory || !entry.name.endsWith('.ash-design') || !isUuid(id) || this.slides.get().has(id)) { continue; }
-			const document = this.instantiation.createInstance(DesignDocumentController, { id, resource: entry.resource });
+			if (entry.kind !== FileKind.Directory || !entry.name.endsWith('.ash-design') || !isUuid(id) || this.artifacts.get().has(id)) { continue; }
+			const document = this.instantiation.createInstance(DesignDocumentController, { kind, id, resource: entry.resource });
 			await document.ready;
-			if (this.isDisposed || document.needsSaveRetry || this.slides.get().has(id)) {
-				if (document.needsSaveRetry) { this.log.warn('creator', 'Failed to restore Slides artifact', entry.resource.toString()); }
+			if (this.isDisposed || document.needsSaveRetry || this.artifacts.get().has(id)) {
+				if (document.needsSaveRetry) { this.log.warn('creator', 'Failed to restore canvas artifact', entry.resource.toString()); }
 				document.dispose();
 				continue;
 			}
-			this.addSlidesArtifact(id, document);
+			this.addCanvasArtifact(id, document);
 		}
 	}
 
-	public createSlidesArtifact(shapes: readonly DesignShape[]): DesignDocumentController {
+	public createCanvasArtifact(kind: CanvasArtifactKind, shapes: readonly DesignShape[]): DesignDocumentController {
 		const id = generateUuid();
-		const resource = this.slidesHome.joinPathSegment(`${id}.ash-design`);
-		const document = this.instantiation.createInstance(DesignDocumentController, { id, resource, shapes });
-		this.addSlidesArtifact(id, document);
+		const resource = this.draftHome.joinPathSegment(kind).joinPathSegment(`${id}.ash-design`);
+		const document = this.instantiation.createInstance(DesignDocumentController, { kind, id, resource, shapes });
+		this.addCanvasArtifact(id, document);
 		return document;
 	}
 
-	private addSlidesArtifact(id: string, document: DesignDocumentController): void {
+	private addCanvasArtifact(id: string, document: DesignDocumentController): void {
 		this._register(document);
+		let title = document.name;
+		this._register(document.onDidChangeLabel(() => {
+			if (document.name === title) { return; }
+			title = document.name;
+			this.artifacts.set(new Map(this.artifacts.get()), undefined);
+		}));
 		this._register(this.workingCopies.register(document));
-		this.slides.set(new Map(this.slides.get()).set(id, document));
+		this.artifacts.set(new Map(this.artifacts.get()).set(id, document));
 	}
 	public getDocument(mode: ArtifactWorkspaceId): DesignDocumentController {
 		let document = this.documents.get(mode);

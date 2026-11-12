@@ -391,3 +391,15 @@
 	background: var(--ash-search-matchBackground);
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
+.stanza-document-checklist-item {
+	position: relative;
+	list-style: none;
+}
+
+.stanza-document-checklist-checkbox {
+	position: absolute;
+	inset-inline-start: -1.4em;
+	inset-block-start: 0.25em;
+	margin: 0;
+	accent-color: var(--ash-focusBorder);
+}

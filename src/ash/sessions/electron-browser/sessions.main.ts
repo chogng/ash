@@ -32,6 +32,7 @@ import { onUnexpectedError } from '../../base/common/errors.js';
 import { createElectronRendererApi } from '../../workbench/electron-browser/rendererApi.js';
 import { registerLocalTranscriptionService } from '../../workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 import { throwIfCancelled, type CancellationToken } from '../../base/common/cancellation.js';
+import { OPEN_IDE_EXTENSIONS_CHANNEL } from '../../platform/extensionManagement/common/extensionManagementService.js';
 import { createAppServerWorkspaceTrustApi } from '../../platform/workspace/browser/workspaceTrustApi.js';
 import { DEVELOPMENT_DIR_PERMISSIONS, hasDevelopmentPermissions } from '../../platform/workspace/common/workspaceTrust.js';
 import { ISessionFolderAuthorizationService } from '../common/sessionWorkspace.js';
@@ -444,6 +445,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				returnToWorkbench: () => {
 					void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError);
 				},
+				openIdeExtensions: options => invoke<void>(OPEN_IDE_EXTENSIONS_CHANNEL, options),
 				createUserDataFileSystemProvider: async () =>
 					new FileUserDataProvider(api.localFiles, api.userDataHome),
 				// Keep content menus in the window's themed DOM, independently of IDE menu preferences.

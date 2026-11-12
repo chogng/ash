@@ -24,8 +24,7 @@ import { IExtensionManagementService, type ExtensionsInstalledPackage, type Exte
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import { registerEditorPane } from '../../../browser/editor.js';
-import { EditorPane, EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { ExtensionsInput, ExtensionsInputSource, ExtensionsCapabilityInput } from '../common/extensionsInput.js';
 import { getExtensionAttribution } from '../common/extensionAttribution.js';
@@ -66,6 +65,7 @@ interface ExtensionEditorOptions {
 	readonly accessibilityHelp?: string;
 	/** Keeps resource links in the embedding host's navigation, while document links use the editor. */
 	readonly openDetails?: (input: ExtensionsInput | ExtensionsCapabilityInput) => Promise<void>;
+	readonly openInstalledVersions?: (query: string) => void;
 }
 
 /** Package review and mutations share the same exact-version confirmation in rows and editor. */
@@ -713,7 +713,12 @@ export class ExtensionEditor extends EditorPane {
 				}
 			}
 		}
-		if (hasInstalled) { button(localize({ bundle: 'ash.extensions', key: 'showInstalled' }, 'Show installed versions'), () => this.commands.executeCommand('ash.extensions.installed', { query: input.summary.id })); }
+		if (hasInstalled) {
+			button(localize({ bundle: 'ash.extensions', key: 'showInstalled' }, 'Show installed versions'), async () => {
+				if (this.options.openInstalledVersions) return this.options.openInstalledVersions(input.summary.id);
+				return this.commands.executeCommand('ash.extensions.installed', { query: input.summary.id });
+			});
+		}
 	}
 
 	private renderEnablement(options: { readonly label: string; readonly checked: boolean; readonly enabled?: boolean; readonly change?: (checked: boolean) => Promise<unknown>; }): void {
@@ -925,12 +930,3 @@ export class ExtensionEditor extends EditorPane {
 		target.focus();
 	}
 }
-
-registerEditorPane({
-	id: 'ash.extensions.editor', name: localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'),
-	canOpen: input => (input instanceof ExtensionsInput || input instanceof ExtensionsCapabilityInput) ? EditorPaneMatch.Default : EditorPaneMatch.None,
-	create: options => {
-		if (!options.instantiationService) { throw new Error('Extensions editor requires the Instantiation Service'); }
-		return options.instantiationService.createInstance(ExtensionEditor, {});
-	},
-});
