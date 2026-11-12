@@ -357,6 +357,36 @@ test('Session option loading retires with the input and can reopen for the next 
 	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
 });
 
+test('Attachment menus preserve submission and stay honest across provider tool capabilities and conversations', async () => {
+	const submissions: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		send: async (text, mode, skills, contexts) => { submissions.push({ text, mode, skills, contexts: await Promise.all((contexts ?? []).map(context => context.resolve())) }); },
+	});
+	const ready: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	for (const [provider, toolCalling] of [['openai', 'supported'], ['ollama', 'unsupported'], ['custom', 'unknown']] as const) {
+		const model = { provider, model: 'fixture' };
+		const entry = { model, displayName: provider, longContext: null, capabilities: { toolCalling, agentMode: toolCalling } };
+		part.render({ ...ready, conversation: { sessionId: provider, threadId: provider }, selectedModel: model, selectedModelEntry: entry, models: [entry] });
+		edit(part, `Review ${provider}`);
+		const attachment: ChatContextAttachment = { id: 'fixture', kind: 'file', name: 'brief.txt', resolve: async () => ({ name: 'brief.txt', content: 'Synthetic brief' }) };
+		part.addContext(attachment);
+		const draft = part.element.querySelector('textarea')!.value;
+		for (let attempt = 0; attempt < 2; attempt++) {
+			part.openAttachMenu();
+			const menu = document.querySelector<HTMLElement>('.ash-menu[aria-label="Add content or context"]')!;
+			assert.ok(menu);
+			assert.equal(menu.querySelector('[aria-label="Web search"], [aria-label="Memory"]'), null);
+			assert.ok(menu.querySelector('[aria-label="Upload or add files"]'));
+			document.activeElement!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+			assert.equal(menu.isConnected, false);
+			assert.equal(part.element.querySelector('textarea')!.value, draft);
+		}
+		assert.equal(submissions.length, 0);
+		await part.acceptInput();
+		assert.deepEqual(submissions.splice(0), [{ text: draft, mode: 'agent', skills: undefined, contexts: [{ name: 'brief.txt', content: 'Synthetic brief' }] }]);
+	}
+});
+
 test('All context kinds insert at the cursor without an attachment bar; tool configuration persists without enabling Send', async () => {
 	const sent: ChatContextAttachment[][] = [];
 	const commands: string[] = [];
