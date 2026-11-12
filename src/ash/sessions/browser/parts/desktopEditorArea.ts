@@ -286,7 +286,6 @@ export class DesktopEditorArea extends Part {
 	public setToolHeaderHost(host: HTMLElement | undefined): void {
 		if (this.titlebarHost === host) return;
 		this.titlebarHost = host;
-		this.domNode.classList.toggle('ash-desktop-editor-area-titlebar-docked', !!host);
 		this.layoutHeaders();
 	}
 
