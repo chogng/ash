@@ -4,6 +4,10 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
+## Docs · 空段落首次输入修复集成
+
+- [ ] **集成** · Mac Studio 已修复空白富文本段落首次输入的模型同步、选区恢复与输入法组合提交；新增工作副本备份／恢复回归及真实 Electron 输入、保存重开场景。定向编辑器测试 51 项通过，新增备份跟踪器回归 3 项通过，Electron UI 与连接 App Server 场景各 1 项通过。当前 checkout 的 `main` 基线为 `f06080352e`，远端 `origin/main` 为 `b98e8522fe`，另有 105 个既有修改／未跟踪文件；原内容已核对保留。按提交规范不能自动 stash 或切换工作区以 rebase，故本次只准备本地任务提交。由现有修改的 owner 收尾后，fetch 最新 main，仅 rebase 本任务未发布提交，复验受影响场景并通过 `just commit-check origin/main`，再串行非强制推送并核验远端；完成后删除本条。备份覆盖使用生产工作副本跟踪器与内存存储，Sessions 窗口当前未接入自动备份跟踪器，未验证其整窗崩溃恢复。
+
 ## 终端恢复 · macOS 验收
 
 - [ ] **验收 · 断线期间退出的 PTY** · Linux 已验证重连后能读到末尾输出和退出码 `7`。Windows 上针对 macOS 的交叉检查在构建 `libsqlite3-sys` 时因缺少目标 C 编译器中止。在装有 Xcode Command Line Tools 的 macOS 上运行 `just verify ash-exec-server --lib --filter attach_replays_final_output_and_status_after_disconnected_child_exits`，通过后移除此条。
