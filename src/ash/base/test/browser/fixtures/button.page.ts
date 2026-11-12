@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { ButtonWithDropdown } from '../../../browser/ui/button/button.js';
 import { ToolBar } from '../../../browser/ui/toolbar/toolbar.js';
 import { ActionRunner } from '../../../common/actions.js';
@@ -6,8 +7,6 @@ import { Disposable, DisposableStore } from '../../../common/lifecycle.js';
 import { Event } from '../../../common/event.js';
 import { Lxicon } from '../../../common/lxicons.js';
 import { localize, setNlsMessages } from '../../../../nls.js';
-import chinese from '../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
-import chineseSessions from '../../../../../../extensions/language-pack-zh-cn/translations/sessions.json' with { type: 'json' };
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../platform/actions/common/menuService.js';
 import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
@@ -39,7 +38,7 @@ declare global {
 }
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
-	setNlsMessages('zh-CN', { ...chinese, ...chineseSessions, ash: { ...chinese.ash, ...chineseSessions.ash } });
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 }
 const resources = new DisposableStore();
 const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };

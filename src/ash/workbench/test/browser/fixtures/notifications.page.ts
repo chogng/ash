@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewService } from '../../../contrib/accessibility/browser/accessibleView.js';
 import { setHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
@@ -15,7 +16,6 @@ import { ILayoutService, BrowserLayoutService } from '../../../../platform/layou
 import partStyles from '../../../browser/media/part.css?inline';
 import { h } from '../../../../base/browser/dom.js';
 import { setNlsMessages } from '../../../../nls.js';
-import messages from '../../../../../../extensions/language-pack-zh-cn/translations/editor.json' with { type: 'json' };
 import { Event, Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
@@ -56,7 +56,6 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { StatusbarPart, StatusbarService } from '../../../browser/parts/statusbar/statusbarPart.js';
 import { IStatusbarService, StatusbarAlignment } from '../../../services/statusbar/browser/statusbar.js';
 import { MainThreadMessageService } from '../../../api/browser/mainThreadMessageService.js';
-import chatMessages from '../../../../../../extensions/language-pack-zh-cn/translations/chat.json' with { type: 'json' };
 import { AgentsWindowInvitationContribution } from '../../../contrib/chat/electron-browser/agentSessions/agentsWindowInvitation.js';
 import { AgentsWindowInvitationState } from '../../../../platform/chat/common/agentsWindowInvitation.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
@@ -69,7 +68,7 @@ import { IHostService } from '../../../services/host/browser/host.js';
 import { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 
-if (new URL(location.href).searchParams.has('zh')) setNlsMessages('zh-CN', { ...messages, ...chatMessages, ash: { ...messages.ash, ...chatMessages.ash } });
+if (new URL(location.href).searchParams.has('zh')) setNlsMessages('zh-CN', chineseCatalog.bundles);
 
 const resources = new DisposableStore();
 const root = h(document, 'main');

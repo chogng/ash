@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 import { expect } from '@playwright/test';
 import type { IChatListItem } from '../../common/model/chatViewModel.js';
@@ -44,7 +45,6 @@ import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/commo
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
-import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -483,7 +483,7 @@ test('streaming tool content preserves disclosure focus, failure state and resto
 });
 
 test('Skill activity uses the Chinese locale', () => {
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		const items = chatTranscriptListItems([
 			{ type: 'skillLoad', entryId: 'one', turnId: 'turn', skill: { name: 'review', source: 'project', reason: 'explicit' } },
@@ -495,7 +495,7 @@ test('Skill activity uses the Chinese locale', () => {
 });
 
 test('tool invocation summaries and sections use the Chinese locale', () => {
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		using resources = new DisposableStore();
 		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
@@ -615,7 +615,7 @@ test('renders finalized web sources with response actions and code matches in a 
 	const reply = { type: 'agentMessage', itemId: 'reply', turnId: 'turn', text: 'Example reply' } as const;
 	const url = 'https://github.com/example/repo/blob/main/lib.rs';
 	const snippet = '<img src=x onerror=alert(1)>';
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		widget.render([chatListItem(reply, true)]);
 		const body = widget.element.querySelector('.ash-chat-markdown-part');

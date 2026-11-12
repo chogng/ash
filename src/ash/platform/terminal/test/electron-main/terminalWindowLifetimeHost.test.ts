@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
@@ -13,7 +13,7 @@ suite('Terminal window lifetime preparation', () => {
 
 	test('closing a window during executable preparation rejects late ownership without spawning and uses the selected locale', async () => {
 		using localization = toDisposable(resetNlsResolver);
-		setNlsMessages('zh-CN', JSON.parse(await readFile(resolve('extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		const preparation = new DeferredPromise<{ executable: string; profile: string; environment: Record<string, string>; }>();
 		using owner = new TerminalWindowLifetimeHost(() => preparation.p);
 		const route = owner.routes()[0]!;

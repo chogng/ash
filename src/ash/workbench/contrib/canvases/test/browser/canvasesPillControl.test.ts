@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -10,14 +11,13 @@ import { CanvasesPillControl } from '../../browser/canvasesPillControl.js';
 import type { ICanvas } from '../../../../common/canvasReference.js';
 import type { ICanvasContext, ICanvasService } from '../../common/canvas.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { readFile } from 'node:fs/promises';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 
 suite('Canvas composer controls', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('Canvas controls use translated action labels while preserving provider titles', async () => {
 		try {
-			setNlsMessages('zh-CN', JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+			setNlsMessages('zh-CN', chineseCatalog.bundles);
 			using lifetime = new DisposableStore();
 			const container = document.createElement('div');
 			const context: ICanvasContext = { owner: { providerId: 'local-agent-host', session: URI.parse('ash-session:/one'), chat: URI.parse('ash-thread:/one') }, canvases: constObservable([{ resource: URI.parse('canvas:/one'), instanceId: 'board', title: '画板', source: URI.parse('https://example.test') }]), closeCanvas: async () => { } };

@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 import { suite, test } from 'mocha';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
@@ -152,7 +152,7 @@ suite('CanvasView presentation', () => {
 
 	test('cancellation does not spin or become a page error; translated pending content remains readable', async () => {
 		try {
-			setNlsMessages('zh-CN', JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+			setNlsMessages('zh-CN', chineseCatalog.bundles);
 			using f = fixture();
 			const view = f.view();
 			f.resolve = () => { throw new CancellationError(); };

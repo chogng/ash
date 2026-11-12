@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, suiteSetup, test } from 'mocha';
 import { Disposable, type IDisposable } from '../../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -21,7 +21,7 @@ import { registerCreatePluginAction } from '../../../browser/actions/createPlugi
 
 const id = 'workbench.action.chat.createPlugin';
 const root = URI.parse('memory:/workspace');
-const chinese = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8'));
+const chinese = chineseCatalog.bundles;
 
 class Fixture extends Disposable {
 	readonly services = this._register(new InstantiationService());

@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -97,7 +97,7 @@ test('Calls links references and opens a new document without touching a dirty l
 });
 
 test('Calls exposes translated shared-document actions and keeps management controls owner-only', () => {
-	const translations = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')) as Record<string, Record<string, string>>;
+	const translations = chineseCatalog.bundles;
 	setNlsMessages('zh-CN', translations);
 	const test = fixture();
 	try {

@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { BrowserPasswordMainService, IBrowserPasswordMainService } from '../../electron-main/browserPasswordMainService.js';
 import { browserPasswordChannel } from '../../electron-main/browserPasswordMainService.js';
 import { IConfigurationService } from '../../../configuration/common/configuration.js';
@@ -8,7 +9,6 @@ import { IEncryptionMainService } from '../../../encryption/common/encryptionSer
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { EventEmitter } from 'node:events';
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { BrowserWindow, WebContentsView } from 'electron/main';
 import { suite, test } from 'mocha';
@@ -1124,7 +1124,7 @@ suite('Browser webpage context menu', () => {
 	test('keyboard editing menus target the page, retain disabled actions and follow client language and zoom', async () => {
 		using f = fixture();
 		await f.create();
-		f.messages = JSON.parse(await readFile(join(process.cwd(), 'extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8'))['ash.workbench'];
+		f.messages = chineseCatalog.bundles['ash.workbench'];
 		await f.manager.layout(id, { x: 20, y: 30, width: 400, height: 300 });
 		f.popupMenu = async () => ({ selectedId: 'paste' });
 		f.contents.emit('context-menu', {}, context({ isEditable: true, menuSourceType: 'keyboard' }));

@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
@@ -213,7 +213,7 @@ suite('SettingsChangeRelauncher', () => {
 	});
 
 	test('restart confirmation uses the Chinese language pack', async () => {
-		const bundles = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
+		const bundles = chineseCatalog.bundles;
 		setNlsMessages('zh-CN', bundles);
 		try {
 			using f = fixture();

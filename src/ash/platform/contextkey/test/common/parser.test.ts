@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { test } from 'mocha';
 import { ContextKeyService } from '../../browser/contextKeyService.js';
 import { ContextKeyExpr, Parser, type ContextKeyValue } from '../../common/contextkey.js';
@@ -94,7 +94,7 @@ test('deserialization distinguishes absent, malformed and false conditions', () 
 });
 
 test('parser and scanner report translated diagnostics with token locations', () => {
-	const catalog = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
+	const catalog = chineseCatalog.bundles;
 	setNlsMessages('zh-CN', catalog);
 	try {
 		const parser = new Parser();

@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, suiteSetup, test } from 'mocha';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../../../test/unit/browser/context.js';
@@ -96,7 +96,7 @@ suite('Chat thinking transcript lifecycle', () => {
 	});
 
 	test('Chinese accessible reasoning includes current collapsed text and canonical completion', () => {
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try {
 			using resources = new DisposableStore();
 			const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));

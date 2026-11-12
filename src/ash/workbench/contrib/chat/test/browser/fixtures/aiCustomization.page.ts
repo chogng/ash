@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { IWorkbenchHostService } from '../../../../../services/host/common/workbenchHostService.js';
 import '../../../../../../base/browser/ui/styles.css';
 import '../../../../../browser/media/style.css';
@@ -32,11 +33,9 @@ import { PromptsService } from '../../../common/promptSyntax/service/promptsServ
 import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import { ITextFileService } from '../../../../../services/textfile/common/textfiles.js';
 import type { ITextFileSaveEvent } from '../../../../../services/textfile/common/textFileService.js';
-import settings from '../../../../../../../../extensions/language-pack-zh-cn/translations/settings.json' with { type: 'json' };
-import chat from '../../../../../../../../extensions/language-pack-zh-cn/translations/chat.json' with { type: 'json' };
 
 const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
-const catalogs: Readonly<Record<string, Readonly<Record<string, string>>>> = locale === 'zh-CN' ? { ...settings, ...chat } : {};
+const catalogs: Readonly<Record<string, Readonly<Record<string, string>>>> = locale === 'zh-CN' ? chineseCatalog.bundles : {};
 setNlsMessages(locale, catalogs);
 document.documentElement.lang = locale;
 const resources = new DisposableStore();

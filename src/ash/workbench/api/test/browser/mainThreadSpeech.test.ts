@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 import { ExtensionResourceLoaderService } from '../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { TestExtensionService } from '../../../test/common/testExtensionServices.js';
@@ -259,7 +259,7 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 	});
 
 	test('synthesis failure without provider text uses the installed Chinese translation', async () => {
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try {
 			using owner = new DisposableStore();
 			const host = owner.add(new Host()); const speech = owner.add(new SpeechService(undefined));

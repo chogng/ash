@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { registerTestCodeEditorFeatures } from '../../../../../../../../test/fixtures/codeEditorFeatures.js';
 const codeFeatures = registerTestCodeEditorFeatures();
 import '../../../../../../editor/editor.all.js';
@@ -35,7 +36,6 @@ import { ITrustedDomainService } from '../../../common/trustedDomainService.js';
 import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
-import chineseMessages from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { TestNotificationService } from '../../../../../../../../test/fixtures/browser/notificationFixture.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { BrowserStorageService } from '../../../../../services/storage/browser/storageService.js';
@@ -145,7 +145,7 @@ window.ashURLIntegration = {
 	edit: content => { editor.getControl()!.getModel()!.setValue(content); },
 	setTheme: index => theme.setColorTheme(themes[index]!),
 	setChinese: () => {
-		setNlsMessages('zh-CN', chineseMessages);
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 	},
 	disposeContribution: () => host.dispose(),
 };

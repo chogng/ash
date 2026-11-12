@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { setup, teardown, test } from 'mocha';
@@ -17,7 +18,6 @@ import { LifecycleMainService, ILifecycleMainService } from '../../../lifecycle/
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { WINDOW_PREPARE_RELOAD_CHANNEL } from '../../../window/common/window.js';
-import { readFile } from 'node:fs/promises';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { WindowMode, LoadReason, type IWindowBounds } from '../../../window/electron-main/window.js';
 import { CodeWindow, type ICodeWindowHandle, type IWindowConstructorOptions } from '../../electron-main/windowImpl.js';
@@ -422,7 +422,7 @@ test('CodeWindow diagnostics distinguish native unresponsiveness from a shutdown
 });
 
 test('CodeWindow offers localized crash recovery and replaces the window without a dead-renderer handshake', async () => {
-	const messages = JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')) as Record<string, Record<string, string>>;
+	const messages = chineseCatalog.bundles;
 	setNlsMessages('zh-CN', messages);
 	const result = new DeferredPromise<MessageBoxReturnValue>();
 	const shown = new DeferredPromise<MessageBoxOptions>();

@@ -1,3 +1,4 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -21,7 +22,6 @@ import { InMemoryFileSystemProvider } from '../../../../../platform/files/common
 import { SearchService } from '../../common/searchService.js';
 import { QueryBuilder } from '../../common/queryBuilder.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
-import translatedWorkbench from '../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 const folders = [
 	{ id: 'first', name: 'first', index: 0, uri: URI.file('/workspace') },
@@ -177,7 +177,7 @@ test('Workbench search requires model registration and localizes an empty worksp
 	services.registerInstance(IFileSearchService, new BrowserFileSearchService(fixture.files));
 	assert.throws(() => services.createInstance(SearchService), /fileTextModelService/);
 	services.registerInstance(IFileTextModelService, fixture.models);
-	setNlsMessages('zh-CN', { ash: translatedWorkbench.ash });
+	setNlsMessages('zh-CN', { ash: chineseCatalog.bundles.ash });
 	try {
 		using service = services.createInstance(SearchService);
 		assert.deepEqual(await service.textSearch(new QueryBuilder().text(pattern)), { results: [], limitHit: false, messages: [{ text: '请打开文件夹以搜索文件。' }] });

@@ -1,5 +1,5 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -74,7 +74,7 @@ class Fixture extends Disposable {
 suite('Chat code mapper through the Core execution owner', () => {
 	test('the UTF-8 size boundary rejects an oversized file before creating a task and explains it in Chinese', async () => {
 		using f = new Fixture();
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try {
 			f.model.setValue('界'.repeat(400_000));
 			const result = await f.map();

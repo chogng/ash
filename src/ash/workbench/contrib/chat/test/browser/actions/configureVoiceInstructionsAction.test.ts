@@ -1,6 +1,6 @@
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
 import '../../../browser/chat.shared.contribution.js';
 import { DeferredPromise, timeout } from '../../../../../../base/common/async.js';
@@ -119,7 +119,7 @@ suite('Speech instructions through the registered editor actions', () => {
 	});
 	test('invalid and oversized saves retain the original text and report Chinese diagnostics', async () => {
 		using f = new Fixture(); f.start(); await f.run();
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		setNlsMessages('zh-CN', chineseCatalog.bundles);
 		try {
 			await assert.rejects(f.files.writeFileBytes(voice, new Uint8Array([255]), { create: false, overwrite: true }), /必须是 UTF-8 Markdown/u);
 			await assert.rejects(f.files.writeFileBytes(voice, new Uint8Array(65537), { create: false, overwrite: true }), /最大为 64 KiB/u);

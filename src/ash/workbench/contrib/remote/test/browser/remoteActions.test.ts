@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { IAppServerApi, type IAppServerConnectionRecovery } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IBannerService, type IBannerItem } from '../../../../services/banner/browser/bannerService.js';
@@ -211,7 +211,7 @@ async function waitUntil(predicate: () => boolean): Promise<void> {
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Agent Host recovery banner and command use the same owner and disappear on recovery (${locale})`, async () => {
-		if (locale === 'zh-CN') setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+		if (locale === 'zh-CN') setNlsMessages(locale, chineseCatalog.bundles);
 		try {
 			using services = new InstantiationService();
 			const notices = new Map<string, IBannerItem>();

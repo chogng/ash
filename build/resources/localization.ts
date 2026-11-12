@@ -44,14 +44,22 @@ async function localizationFingerprint(): Promise<string> {
 
 type Bundles = Record<string, Record<string, string>>;
 export interface LocalizationSource { readonly path: string; readonly text: string; }
+type RecordMessageLocation = (id: string, path: string, line: number, column: number) => void;
 
 /** Stable bundle/key IDs are retained when source files move between domains. */
-export function extractLocalizationMessages(sources: readonly LocalizationSource[]): Bundles {
+export function extractLocalizationMessages(sources: readonly LocalizationSource[], recordLocation?: RecordMessageLocation): Bundles {
 	const bundles: Bundles = {};
 	for (const input of sources) {
 		// Escapes can spell either an NLS import or registerColor, so keep those files on the parser path.
 		if (!/nls\.js|localizationService\.js|localizationKey|ariaLabelKey|registerColor|\\/u.test(input.text)) { continue; }
 		const source = ts.createSourceFile(input.path, input.text, ts.ScriptTarget.Latest, true);
+		const declareMessage = (bundle: string, key: string, message: string, node: ts.Node): void => {
+			addMessage(bundles, bundle, key, message, input.path);
+			if (recordLocation) {
+				const { line, character } = source.getLineAndCharacterOfPosition(node.getStart(source));
+				recordLocation(`${bundle}/${key}`, input.path, line + 1, character + 1);
+			}
+		};
 		const names = new Map<string, string>();
 		const namespaces = new Set<string>();
 		const serviceTypes = new Set<string>();
@@ -136,7 +144,7 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 					const fields = info.properties.filter(ts.isPropertyAssignment);
 					const bundle = literal(fields.find(field => field.name.getText(source) === 'bundle')?.initializer);
 					const key = literal(fields.find(field => field.name.getText(source) === 'key')?.initializer);
-					if (bundle && key) addMessage(bundles, bundle, key, message, input.path);
+					if (bundle && key) declareMessage(bundle, key, message, info);
 				}
 			}
 			if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
@@ -209,18 +217,18 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 						const property = node.arguments[2].properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(source) === 'description');
 						if (property && ts.isPropertyAssignment(property)) { description = literal(property.initializer); }
 					}
-					if (id && description !== undefined) { addMessage(bundles, 'ash', `color.${id}`, description, input.path); }
+					if (id && description !== undefined) { declareMessage('ash', `color.${id}`, description, node); }
 				}
 				const call = messageCall(node, services);
 				if (!call && ts.isPropertyAccessExpression(expression) && expression.expression.kind === ts.SyntaxKind.ThisKeyword) {
 					for (const wrapper of wrappers.get(expression.name.text) ?? []) {
 						const key = literal(node.arguments[wrapper.key]), message = literal(node.arguments[wrapper.message]);
-						if (key && message !== undefined) addMessage(bundles, wrapper.bundle, wrapper.prefix + key, message, input.path);
+						if (key && message !== undefined) declareMessage(wrapper.bundle, wrapper.prefix + key, message, node);
 					}
 				}
 				if (call) {
 					const key = literal(call.key), message = literal(call.message);
-					if (key && message !== undefined) addMessage(bundles, call.bundle, key, message, input.path);
+					if (key && message !== undefined) declareMessage(call.bundle, key, message, node);
 				}
 			}
 			ts.forEachChild(node, child => visit(child, services, wrappers));
@@ -245,13 +253,13 @@ export function validateLocalizationTranslation(english: Bundles, translations: 
 }
 
 /** Validates sources; check mode does not require or write build outputs. */
-export async function generateLocalization(check = false): Promise<boolean> {
-	if (check) { return generate(true); }
+export async function generateLocalization(check = false, reportMissing = false): Promise<boolean> {
+	if (check || reportMissing) { return generate(check, reportMissing); }
 	return localizationInputs.prepare(localizationFingerprint,
 		() => fingerprintPaths([resolve(repository, '.build/desktop/localization')]), () => generate(false));
 }
 
-async function generate(check: boolean): Promise<boolean> {
+async function generate(check: boolean, reportMissing = false): Promise<boolean> {
 	// Load only after protocol preparation, including a changed contract in a long-lived dev server.
 	const approvalModes = resolve(repository, '.build/protocol/typescript/ApprovalModes.ts');
 	const { APPROVAL_MODE_DEFINITIONS } = await import(`${pathToFileURL(approvalModes).href}?v=${await fingerprintPaths([approvalModes])}`) as typeof import('../../.build/protocol/typescript/ApprovalModes.ts');
@@ -259,7 +267,7 @@ async function generate(check: boolean): Promise<boolean> {
 	const { PRODUCT_SLASH_COMMANDS } = await import(`${pathToFileURL(slashCommands).href}?v=${await fingerprintPaths([slashCommands])}`) as typeof import('../../.build/protocol/typescript/ProductSlashCommands.ts');
 	const sourceRoot = resolve(repository, 'src/ash');
 	const resourceRoot = resolve(repository, 'localization');
-	const sources = await readSources(sourceRoot);
+	const sources = await readSources(sourceRoot, repository);
 	for (const entry of await readdir(resolve(repository, 'extensions'), { withFileTypes: true })) {
 		if (!entry.isDirectory()) continue;
 		const packageRoot = resolve(repository, 'extensions', entry.name);
@@ -276,13 +284,21 @@ async function generate(check: boolean): Promise<boolean> {
 		});
 		if (client === undefined) continue;
 		for (const directory of ['browser', 'common']) {
-			sources.push(...await readSources(resolve(packageRoot, directory)).catch(error => {
+			sources.push(...await readSources(resolve(packageRoot, directory), repository).catch(error => {
 				if (error.code === 'ENOENT') return [];
 				throw error;
 			}));
 		}
 	}
-	const english = extractLocalizationMessages(sources);
+	const locations = reportMissing ? new Map<string, MessageLocation[]>() : undefined;
+	const recordLocation = (id: string, path: string, line?: number, column?: number) => {
+		if (!locations) return;
+		const location = { path: path.split(sep).join('/'), line, column };
+		const previous = locations.get(id);
+		if (previous) previous.push(location);
+		else locations.set(id, [location]);
+	};
+	const english = extractLocalizationMessages(sources, locations ? recordLocation : undefined);
 	const declarations = await readDomains(resolve(resourceRoot, 'en')).catch(error => {
 		if (error.code === 'ENOENT') return {};
 		throw error;
@@ -295,11 +311,14 @@ async function generate(check: boolean): Promise<boolean> {
 	for (const definition of APPROVAL_MODE_DEFINITIONS) {
 		addMessage(english, 'ash', definition.label.key, definition.label.english, 'ApprovalModes');
 		addMessage(english, 'ash', definition.description.key, definition.description.english, 'ApprovalModes');
+		recordLocation(`ash/${definition.label.key}`, 'crates/protocol/src/approval_mode.rs');
+		recordLocation(`ash/${definition.description.key}`, 'crates/protocol/src/approval_mode.rs');
 	}
 	// The clients translate these shared product descriptions; their English
 	// originals are owned by protocol metadata and follow its generation lifecycle.
 	for (const id of ['permission', 'guardian'] as const) {
 		addMessage(english, 'ash', `slash.${id}.description`, PRODUCT_SLASH_COMMANDS[id].description, 'ProductSlashCommands');
+		recordLocation(`ash/slash.${id}.description`, 'crates/slash-commands/src/definition.rs');
 	}
 	const languages: LanguageMetadata[] = JSON.parse(await readFile(resolve(resourceRoot, 'languages.json'), 'utf8'));
 	if (languages.length !== 1 || languages[0]?.locale !== 'en') throw new Error('Core localization must contain only English');
@@ -326,7 +345,8 @@ async function generate(check: boolean): Promise<boolean> {
 	const catalogs: LanguagePackCatalog[] = [];
 	for (const language of [...languages, ...languagePacks.map(extension => extension.language)]) {
 		const extension = languagePacks.find(value => value.language.locale === language.locale);
-		const bundles = extension ? await readDomains(resolve(extension.packageRoot, 'translations')) : english;
+		const domains: TranslationDomains | undefined = locations && { files: new Set(), prefixes: new Map() };
+		const bundles = extension ? await readDomains(resolve(extension.packageRoot, 'translations'), domains) : english;
 		if (language.locale === 'zh-CN') {
 			for (const definition of APPROVAL_MODE_DEFINITIONS) {
 				addMessage(bundles, 'ash', definition.label.key, definition.label.chinese, 'ApprovalModes');
@@ -336,7 +356,15 @@ async function generate(check: boolean): Promise<boolean> {
 		if (extension) {
 			const { missing, unchanged } = validateLocalizationTranslation(english, bundles, language.locale);
 			console.log(`Localization ${language.locale}: ${missing.length} missing locale entries; ${unchanged} entries unchanged from source.`);
-			if (process.argv.includes('--report-missing')) console.log(missing.join('\n'));
+			if (locations && domains) {
+				for (const id of missing) {
+					const declarations = locations.get(id) ?? [];
+					const sources = declarations.map(({ path, line, column }) => line === undefined ? path : `${path}:${line}:${column}`);
+					const file = suggestTranslationFile(language.locale, id, declarations, domains);
+					const target = relative(repository, resolve(extension.packageRoot, 'translations', file)).split(sep).join('/');
+					console.log(`${id}\t${[...new Set(sources)].join(', ')}\t-> ${target}`);
+				}
+			}
 		}
 		const extensionTranslations: Record<string, { package: Record<string, string>; bundle: Record<string, string>; }> = {};
 		for (const target of extension?.manifest.contributes.localizations[0].translations ?? []) {
@@ -589,26 +617,85 @@ function sortBundles(bundles: Bundles): Bundles {
 	return Object.fromEntries(Object.entries(bundles).sort(([a], [b]) => a.localeCompare(b)).map(([bundle, messages]) => [bundle, Object.fromEntries(Object.entries(messages).sort(([a], [b]) => a.localeCompare(b)))]));
 }
 
-async function readDomains(directory: string): Promise<Bundles> {
+interface MessageLocation {
+	readonly path: string;
+	readonly line?: number;
+	readonly column?: number;
+}
+
+interface TranslationDomains {
+	readonly files: Set<string>;
+	readonly prefixes: Map<string, string | null>;
+}
+
+function* messagePrefixes(id: string): Iterable<string> {
+	const bundleEnd = id.indexOf('/');
+	for (let end = id.lastIndexOf('.'); end > bundleEnd; end = id.lastIndexOf('.', end - 1)) {
+		yield id.slice(0, end);
+	}
+}
+
+function chineseTranslationDomain(path: string): string {
+	if (/^src\/ash\/(?:platform\/terminal|workbench\/contrib\/terminal(?:Contrib)?)\//u.test(path)) return 'workbench-terminal';
+	if (path.startsWith('src/ash/workbench/contrib/chat/')) {
+		return path.startsWith('src/ash/workbench/contrib/chat/browser/widget/input/') ? 'chat-input' : 'chat';
+	}
+	if (/^src\/ash\/sessions\/contrib\/(?:chat|chatgptweb)\//u.test(path)) return 'sessions-chat';
+	if (/^src\/ash\/sessions\/contrib\/(?:changes|github)\//u.test(path)) return 'sessions-changes';
+	if (/^src\/ash\/sessions\/contrib\/(?:automations|symphony)\//u.test(path)) return 'sessions-automations';
+	if (path.startsWith('src/ash/sessions/contrib/workspace/')) return 'sessions-workspaces';
+	if (path.startsWith('src/ash/sessions/contrib/artifacts/')) return 'artifacts';
+	if (path.startsWith('src/ash/sessions/')) return 'sessions';
+	if (path.startsWith('src/ash/editor/')) return 'editor';
+	return 'workbench';
+}
+
+function suggestTranslationFile(locale: string, id: string, locations: readonly MessageLocation[], domains: TranslationDomains): string {
+	// Existing translations determine how a feature is subdivided. A prefix
+	// shared by several files gives no evidence for any of them.
+	for (const prefix of messagePrefixes(id)) {
+		const file = domains.prefixes.get(prefix);
+		if (file !== undefined) {
+			if (file !== null) return file;
+			break;
+		}
+	}
+	if (locale !== 'zh-CN') {
+		const onlyFile = domains.files.size === 1 ? domains.files.values().next().value : undefined;
+		return onlyFile ?? 'messages.json';
+	}
+	const owners = new Set(locations.map(({ path }) => chineseTranslationDomain(path)));
+	const owner = owners.size === 1 ? owners.values().next().value : undefined;
+	return `${owner ?? 'workbench'}.json`;
+}
+
+async function readDomains(directory: string, domains?: TranslationDomains): Promise<Bundles> {
 	const bundles: Bundles = {};
 	for (const name of (await readdir(directory)).filter(name => name.endsWith('.json')).sort()) {
 		const path = resolve(directory, name);
 		const text = await readFile(path, 'utf8');
 		validateJsonProperties(path, text);
 		const value = JSON.parse(text);
+		domains?.files.add(name);
 		for (const [bundle, messages] of Object.entries(value)) {
 			if (!messages || typeof messages !== 'object' || Array.isArray(messages)) { throw new Error(`Invalid translation bundle: ${path}/${bundle}`); }
 			for (const [key, message] of Object.entries(messages)) {
 				if (typeof message !== 'string' || !key) { throw new Error(`Invalid translation: ${path}/${bundle}/${key}`); }
 				if (Object.hasOwn(bundles[bundle] ?? {}, key)) { throw new Error(`Duplicate translation: ${path}/${bundle}/${key}`); }
 				addMessage(bundles, bundle, key, message, path);
+				if (domains) {
+					for (const prefix of messagePrefixes(`${bundle}/${key}`)) {
+						const previous = domains.prefixes.get(prefix);
+						domains.prefixes.set(prefix, previous === undefined || previous === name ? name : null);
+					}
+				}
 			}
 		}
 	}
 	return bundles;
 }
 
-async function readSources(sourceRoot: string): Promise<LocalizationSource[]> {
+async function readSources(sourceRoot: string, pathRoot = sourceRoot): Promise<LocalizationSource[]> {
 	const files: string[] = [];
 	async function collect(directory: string): Promise<void> {
 		for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -624,11 +711,11 @@ async function readSources(sourceRoot: string): Promise<LocalizationSource[]> {
 	const sources: LocalizationSource[] = [];
 	// Bound open files while preserving traversal order for conflict diagnostics and generated catalogs.
 	for (let offset = 0; offset < files.length; offset += 32) {
-		sources.push(...await Promise.all(files.slice(offset, offset + 32).map(async path => ({ path: relative(sourceRoot, path), text: await readFile(path, 'utf8') }))));
+		sources.push(...await Promise.all(files.slice(offset, offset + 32).map(async path => ({ path: relative(pathRoot, path), text: await readFile(path, 'utf8') }))));
 	}
 	return sources;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-	await generateLocalization(process.argv.includes('--check'));
+	await generateLocalization(process.argv.includes('--check'), process.argv.includes('--report-missing'));
 }
