@@ -2,7 +2,7 @@ import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { h } from '../../../../../base/browser/dom.js';
 import { BrowserEditor, BrowserEditorContribution, BrowserWidgetLocation, CONTEXT_BROWSER_HAS_ERROR, CONTEXT_BROWSER_HAS_URL, type IBrowserEditorWidget } from '../browserEditor.js';
-import type { IBrowserViewModel } from '../../common/browserView.js';
+import { IBrowserViewWorkbenchService, type IBrowserViewModel } from '../../common/browserView.js';
 import { BrowserHistoryFeature } from './browserHistoryFeature.js';
 import { BrowserPermissionsFeature } from './browserPermissionsFeature.js';
 import { BrowserEditorZoomSupport } from './browserEditorZoomFeature.js';
@@ -72,6 +72,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IMenuService menuService: IMenuService,
 		@IContextKeyService contexts: IContextKeyService,
+		@IBrowserViewWorkbenchService browsers: IBrowserViewWorkbenchService,
 	) {
 		super(editor);
 		const container = this.container = h(editor.browserContainer.ownerDocument, 'div');
@@ -102,7 +103,8 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		this.favorites = this._register(instantiation.createInstance(BrowserFavoritesFeature, () => this.setPageActions(), this.report));
 		this.permissions = this._register(instantiation.createInstance(BrowserPermissionsFeature, (message: string) => editor.setStatus(message), this.report));
 		this.address.mountContributions([this.history, this.favorites]);
-		this.remoteIndicator = this._register(new BrowserRemoteIndicatorContribution(container));
+		this.remoteIndicator = this._register(instantiation.createInstance(BrowserRemoteIndicatorContribution, container));
+		this._register(browsers.onDidChangeBrowserViews(() => this.remoteIndicator.update(editor.model)));
 		const sharing = h(container.ownerDocument, 'div');
 		sharing.className = 'ash-browser-page-actions';
 		container.append(sharing);
@@ -147,6 +149,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		this.update(model.state);
 		this.setPageActions();
 		store.add(model.onDidChangeState(state => {
+			this.remoteIndicator.update(model);
 			this.update(state);
 			if (this.actionsUrl !== state.url) { this.setPageActions(); }
 		}));

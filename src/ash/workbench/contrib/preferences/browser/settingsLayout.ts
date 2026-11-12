@@ -1,5 +1,7 @@
 import '../../../services/language/common/languageServerLifecycleService.js';
 import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
+import { BrowserOpenLocalhostLinksSettingId } from '../../../../platform/browserView/common/browserView.js';
+import { BrowserNewTabPlacementSettingId } from '../../browserView/common/browserView.js';
 import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
@@ -192,7 +194,7 @@ export const SettingsNavigation = [
 						id: 'url-opening',
 						label: localize('externalUriOpener.settings.group', 'Links'),
 						description: localize('externalUriOpener.settings.groupDescription', 'Choose where website links open.'),
-						settings: ['workbench.externalUriOpeners'],
+						settings: [BrowserOpenLocalhostLinksSettingId, BrowserNewTabPlacementSettingId, 'workbench.externalUriOpeners'],
 					},
 					{
 						id: 'browser-controls',
@@ -203,7 +205,6 @@ export const SettingsNavigation = [
 							'workbench.browser.pageZoom',
 							'workbench.browser.autoReloadOnFileChange',
 							'workbench.browser.dataStorage',
-							'workbench.browser.openLocalhostLinks',
 							'workbench.browser.savePasswords',
 							'workbench.browser.autofillPasswords',
 						],

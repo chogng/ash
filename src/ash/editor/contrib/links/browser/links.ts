@@ -1,3 +1,4 @@
+import { getWindowId } from '../../../../base/browser/window.js';
 import './links.css';
 import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { addDisposableListener, stopEvent, ModifierKeyEmitter, type IModifierKeyStatus } from '../../../../base/browser/dom.js';
@@ -93,6 +94,7 @@ export class LinkDetector extends Disposable {
 	public openLinkOccurrence(occurrence: LanguageLink, openToSide: boolean, fromUserGesture = false): void {
 		void this.openerService.open(occurrence.target, {
 			openToSide,
+			sourceWindowId: getWindowId(this.viewport.domNode.domNode.ownerDocument.defaultView!),
 			fromUserGesture,
 			allowContributedOpeners: true,
 		}).catch(this.onError);

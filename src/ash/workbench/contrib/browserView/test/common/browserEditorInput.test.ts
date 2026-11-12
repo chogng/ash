@@ -228,6 +228,7 @@ function fixture() {
 		initialize: async () => { }, getKnownBrowserViews: () => new Map(), getContextualBrowserViews: () => new Map(),
 		registerContextualFilter: () => Disposable.None, registerOpenHandler: () => Disposable.None,
 		registerNetworkResolver: () => Disposable.None, resolveNetwork: () => f.network,
+		getNetworkStatus: network => ({ label: network.authority, connected: true, proxySupported: true }),
 		replaceBrowserView: async input => input,
 		getOrCreateLazy: input, createBrowserView: async () => { throw new Error('Not used in serializer fixture'); },
 	});

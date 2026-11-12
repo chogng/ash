@@ -1999,7 +1999,11 @@ export class AshApplication extends Disposable {
 		window.webContents.setWindowOpenHandler(details => {
 			if (details.url !== 'about:blank') {
 				// The owning workbench selects URL rules; auxiliary windows share that owner.
-				try { this.windowsMainService.getWindowById(openerWindow.id)?.send(WINDOW_OPEN_EXTERNAL_URI_CHANNEL, normalizeExternalUrl(details.url)); }
+				try {
+					const url = normalizeExternalUrl(details.url);
+					const sourceWindowName = window === openerWindow ? undefined : window.webContents.mainFrame.name;
+					this.windowsMainService.getWindowById(openerWindow.id)?.send(WINDOW_OPEN_EXTERNAL_URI_CHANNEL, sourceWindowName ? { url, sourceWindowName } : url);
+				}
 				catch (error) { console.error('Could not request external link opening', error); }
 				return { action: 'deny' };
 			}
@@ -2062,6 +2066,8 @@ export class AshApplication extends Disposable {
 		browserServices.registerInstance(IClipboardService, new ElectronMainClipboardService(window));
 		const browserViewMainService = windowDisposables.add(browserServices.createInstance(BrowserViewMainService, {
 			window,
+			findAuxiliaryWindow: (name: string) => this.auxiliaryWindowsMainService.getWindows().find(auxiliary =>
+				auxiliary.parentId === window.id && !auxiliary.win.isDestroyed() && auxiliary.win.webContents.mainFrame.name === name)?.win,
 			contextMenu,
 			getNlsMessages: () => this.activeLanguagePack.bundles['ash.workbench'] ?? {},
 			getWorkspaceId: () => workspaceContext.getWorkspace().id,

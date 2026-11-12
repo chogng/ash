@@ -57,6 +57,6 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 	private update(): void {
 		this.welcome.update(this.model?.state);
 		// Chromium paints above the DOM: the welcome content requires hiding the blank native view.
-		this.host.setVisible(this.visible && !!this.model && (this.model.state.url !== 'about:blank' || this.model.state.loading));
+		this.host.setVisible(this.visible, this.visible && !!this.model && (this.model.state.url !== 'about:blank' || this.model.state.loading));
 	}
 }

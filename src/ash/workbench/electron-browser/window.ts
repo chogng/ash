@@ -1,4 +1,5 @@
 import { getErrorMessage, isCancellationError, onUnexpectedError } from '../../base/common/errors.js';
+import { getWindowId, getWindows, mainWindow } from '../../base/browser/window.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
 import { WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING } from '../../platform/window/common/window.js';
@@ -130,8 +131,9 @@ export class NativeWindow extends Disposable {
 		@IOpenerService private readonly opener: IOpenerService,
 	) {
 		super();
-		const externalLinks = this.host.onDidRequestOpenExternalUri(target => {
-			void this.opener.open(target, { openExternal: true, allowContributedOpeners: true }).catch(onUnexpectedError);
+		const externalLinks = this.host.onDidRequestOpenExternalUri((target, sourceWindowName) => {
+			const sourceWindowId = sourceWindowName === undefined ? getWindowId(mainWindow) : getWindows().find(entry => entry.window.name === sourceWindowName)?.id;
+			void this.opener.open(target, { openExternal: true, allowContributedOpeners: true, ...(sourceWindowId === undefined ? {} : { sourceWindowId }) }).catch(onUnexpectedError);
 		});
 		this._register(toDisposable(() => externalLinks.dispose()));
 		const updateZoom = (level: number): void => {

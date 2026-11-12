@@ -32,6 +32,8 @@ suite('Trusted domain rules', () => {
 		['http://dev.localhost:3000', [], true],
 		['http://127.0.0.1:3000', [], true],
 		['http://[::1]:3000', [], true],
+		['http://0.0.0.0:3000', [], false],
+		['http://[::]:3000', [], false],
 		['https://localhost.evil.test', [], false],
 		['https://example.test\\@evil.test/path', ['evil.test'], false],
 		['https://example.test\\@evil.test/path', ['example.test'], true],

@@ -2,6 +2,7 @@ import '../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { MarkdownString } from '../../../../base/common/htmlContent.js';
+import { getWindowId } from '../../../../base/browser/window.js';
 import type { OpenOptions } from '../../../opener/common/opener.js';
 import { IOpenerService } from '../../../opener/common/opener.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
@@ -35,7 +36,7 @@ suite('Markdown renderer service', () => {
 		anchors[2].click();
 		assert.deepEqual(opened, ['command:ash.open', 'https://example.com'].map(href => ({
 			href,
-			options: { fromUserGesture: true, allowContributedOpeners: true, allowCommands: ['ash.open'], skipValidation: undefined },
+			options: { fromUserGesture: true, allowContributedOpeners: true, allowCommands: ['ash.open'], skipValidation: undefined, sourceWindowId: getWindowId(window) },
 		})));
 	});
 

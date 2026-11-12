@@ -11,6 +11,10 @@ import { IBrowserViewService, BrowserViewStorageScope, type BrowserViewEvent, ty
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
+import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
+import { IAgentHostConnectionsService, type IAgentHostConnectionInfo } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
+import { createProviderRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { DialogsModel, IDialogsModel } from '../../../../common/dialogs.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
@@ -105,6 +109,28 @@ suite('Browser Workbench page lifecycle', () => {
 		assert.equal((await create()).model!.info.session.scope, BrowserViewStorageScope.Ephemeral);
 		const agent = await f.views.createBrowserView({ initialUrl: 'https://example.test/', owner: { type: 'agent', sessionId: 'thread-one' }, session: { scope: BrowserViewStorageScope.Agent, affinity: 'thread-one' } });
 		assert.deepEqual(agent.model!.info.session, { scope: BrowserViewStorageScope.Agent, affinity: 'thread-one' });
+	});
+
+	test('provider network status follows its backing host instead of the opaque runtime authority', () => {
+		using f = fixture();
+		const ambient: IAgentHostConnectionInfo = {
+			id: 'local', authority: 'local', address: undefined, name: 'Current Window', isAmbient: true,
+			state: 'ready', connection: undefined, remoteConnection: undefined, directory: undefined,
+		};
+		const remote = { ...ambient, id: 'build', authority: 'ssh+build', name: 'Build host', isAmbient: false };
+		f.hosts.push(ambient, remote);
+		const localRuntime = createProviderRemoteWorkspaceUri('containers', 'local-container', '/work');
+		const remoteRuntime = createProviderRemoteWorkspaceUri('containers', 'remote-container', '/work', 'ssh+build');
+		assert.deepEqual(f.views.getNetworkStatus({ authority: localRuntime.authority, root: '/work' }), {
+			label: 'Current Window', connected: true, proxySupported: undefined,
+		});
+		assert.deepEqual(f.views.getNetworkStatus({ authority: remoteRuntime.authority, root: '/work' }), {
+			label: 'Build host', connected: true, proxySupported: undefined,
+		});
+		f.hosts[1] = { ...remote, state: 'crashed' };
+		assert.deepEqual(f.views.getNetworkStatus({ authority: remoteRuntime.authority, root: '/work' }), {
+			label: 'Build host', connected: false, proxySupported: undefined,
+		});
 	});
 
 	test('registered navigation commands call the current page owner and hard reload preserves cache bypass', async () => {
@@ -359,6 +385,7 @@ function fixture() {
 	const editorEvents = resources.add(new Emitter<EditorPartChangeEvent>());
 	const f = {
 		trusted: true, trustUnavailable: false, remote: undefined as string | undefined, state: WorkbenchState.FOLDER, active: undefined as IResourceEditorInput | undefined,
+		hosts: [] as IAgentHostConnectionInfo[],
 		info, events, editorEvents, groupInputs: [] as IResourceEditorInput[], opened: [] as IResourceEditorInput[], destroyed: [] as string[],
 		editorOpened: promiseWithResolvers<void>(),
 		closeEditor: async (input: IResourceEditorInput): Promise<boolean> => { f.groupInputs.splice(f.groupInputs.indexOf(input), 1); return true; },
@@ -405,7 +432,12 @@ function fixture() {
 			onDidChangeWorkbenchState: Event.None,
 			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'browser-test', folders: [], ...(f.remote ? { remoteAuthority: f.remote } : {}) }), getWorkbenchState: () => f.state, getWorkspaceFolder: () => null
 		}],
-		[IWorkspaceTrustManagementService, resources.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => { if (f.trustUnavailable) { throw new Error('Backend unavailable'); } return { isTrusted: f.trusted, isReadOnly: false }; } } satisfies Partial<IWorkspaceTrustManagementService>))], [IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, service], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs], [ITelemetryService, telemetry])));
+		[IWorkspaceTrustManagementService, resources.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => { if (f.trustUnavailable) { throw new Error('Backend unavailable'); } return { isTrusted: f.trusted, isReadOnly: false }; } } satisfies Partial<IWorkspaceTrustManagementService>))], [IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, service], [IEditorService, editors], [IEditorPart, editorPart], [IEditorPartsService, editorPart as IEditorPartsService], [IContextKeyService, { getValue: () => undefined } as unknown as IContextKeyService], [IAgentHostConnectionsService, {
+			_serviceBrand: undefined,
+			get ambientConnection(): never { throw new Error('Unexpected connection acquisition'); },
+			onDidChangeConnections: Event.None, get connections() { return f.hosts; },
+			resolveConnection: resource => f.hosts.find(host => !host.isAmbient && host.authority === resource.authority),
+		} satisfies IAgentHostConnectionsService], [IDialogsModel, dialogs], [ITelemetryService, telemetry])));
 	const views = resources.add(services.createInstance(BrowserViewWorkbenchService));
 	return Object.assign(f, { [Symbol.dispose]: () => resources.dispose(), views, service, services, telemetryEvents, configuration });
 }

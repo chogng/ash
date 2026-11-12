@@ -259,7 +259,7 @@ export interface INativeHostApi extends ICommonNativeHostService {
 	releaseAgentsWindowInvitation(id: string): Promise<void>;
 	syncSystemWideKeybindings(keybindings: readonly INativeSystemWideKeybinding[]): Promise<INativeSystemWideKeybindingResult>;
 	openExternal(target: string): Promise<boolean>;
-	onDidRequestOpenExternalUri(listener: (target: string) => void): DisposableHandle;
+	onDidRequestOpenExternalUri(listener: (target: string, sourceWindowName?: string) => void): DisposableHandle;
 	revealFile(path: string): Promise<void>;
 	setWindowTheme(theme: INativeWindowTheme): Promise<void>;
 	setWindowDimmed(dimmed: boolean): Promise<void>;

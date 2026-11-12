@@ -11,7 +11,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { ITrustedDomainService } from '../common/trustedDomainService.js';
 import { configureOpenerTrustedDomainsHandler } from './trustedDomains.js';
 
-/** Installs window policy before links can reach host or contributed openers. */
+/** Confirms web links before they leave the workbench. */
 export class OpenerValidatorContributions extends Disposable {
 	private readonly token = cancelOnDispose(this._store);
 	constructor(
@@ -23,7 +23,7 @@ export class OpenerValidatorContributions extends Disposable {
 		@IEditorService private readonly editors: IEditorService,
 	) {
 		super();
-		this._register(opener.registerValidator({ shouldOpen: target => this.validateLink(target) }));
+		this._register(opener.registerValidator({ externalOnly: true, shouldOpen: target => this.validateLink(target) }));
 	}
 
 	async validateLink(target: URI | string): Promise<boolean> {

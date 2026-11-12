@@ -1,4 +1,5 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { mainWindow } from '../../../../base/browser/window.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -26,6 +27,7 @@ export class WebContentsViewHost extends Disposable {
 	private container: HTMLElement | undefined;
 	private model: IBrowserViewModel | undefined;
 	private visible = false;
+	private showPage = false;
 	private focusRequested = false;
 	private readonly modelListeners = this._register(new DisposableStore());
 	private readonly overlays: BrowserOverlayManager;
@@ -77,8 +79,9 @@ export class WebContentsViewHost extends Disposable {
 		}
 	}
 
-	public setVisible(visible: boolean): void {
+	public setVisible(visible: boolean, showPage = visible): void {
 		this.visible = visible;
+		this.showPage = showPage;
 		if (visible && this.model) { this.claim(this.model); }
 		this.layout();
 	}
@@ -88,7 +91,7 @@ export class WebContentsViewHost extends Disposable {
 	}
 
 	public tryFocus(): boolean {
-		if (!this.model || !this.visible || !this.container || this.overlays.getOverlappingOverlays(this.container).length > 0) { return false; }
+		if (!this.model || !this.showPage || !this.container || this.overlays.getOverlappingOverlays(this.container).length > 0) { return false; }
 		this.claim(this.model);
 		this.focusRequested = true;
 		if (this.container.ownerDocument.activeElement !== this.container) { focusWebContentsViewContainer(this.container); }
@@ -125,9 +128,12 @@ export class WebContentsViewHost extends Disposable {
 			const host = WebContentsViewHost.getActiveHost(model);
 			const container = host?.container;
 			const bounds = container?.getBoundingClientRect();
-			const visible = !!(host && container && bounds && bounds.width > 0 && bounds.height > 0 && host.overlays.getOverlappingOverlays(container).length === 0);
-			if (visible && bounds) {
-				await model.layout({ x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.round(bounds.width), height: Math.round(bounds.height) });
+			const canLayout = !!(host && container && bounds && bounds.width > 0 && bounds.height > 0 && host.overlays.getOverlappingOverlays(container).length === 0);
+			const visible = canLayout && host.showPage;
+			if (canLayout) {
+				const targetWindow = container.ownerDocument.defaultView;
+				const windowName = targetWindow && targetWindow !== mainWindow ? targetWindow.name || undefined : undefined;
+				await model.layout({ x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.round(bounds.width), height: Math.round(bounds.height) }, windowName);
 			}
 			if (presentation.closed || revision !== presentation.revision) { return; }
 			await model.setVisible(visible);

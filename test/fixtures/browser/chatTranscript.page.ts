@@ -1361,7 +1361,13 @@ window.ashChatTranscriptIntegration = {
 		if (requestEditMode) {
 			chatServices.registerSingleton(ICommandService, () => chatServices.createInstance(StandaloneCommandService));
 		}
-		chatServices.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected link opening'); } } as unknown as IOpenerService);
+		chatServices.registerInstance(IOpenerService, {
+			open: async (uri: URI | string, options: unknown) => {
+				if (!new URLSearchParams(location.search).has('recordChatLinks')) throw new Error('Unexpected link opening');
+				openedAppLinks.push({ uri: uri.toString(), options });
+				return true;
+			},
+		} as unknown as IOpenerService);
 		if (!builtinBackend) chatServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 		chatServices.registerInstance(IAgentVoiceService, voice ? voiceFixture : undefined);
 		registerTestVoiceInputServices(chatServices);
@@ -1417,7 +1423,7 @@ window.ashChatTranscriptIntegration = {
 		const container = document.createElement('main');
 		container.style.cssText = 'height:700px;width:800px;background:var(--ash-editor-background);color:var(--ash-foreground);font-family:system-ui';
 		document.body.append(container);
-		appChat = cowork ? resources.add(chatServices.createInstance(NativeChatWidget, container, 'app-chat', model, () => { }, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(ReplyChatInputFactory).createSessionInput(host, delegate, model, resources))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined, virtualizeHistory ? { virtualizeHistoryFrom: constObservable(48) } : undefined));
+		appChat = cowork ? resources.add(chatServices.createInstance(NativeChatWidget, container, 'app-chat', model, () => { }, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(ReplyChatInputFactory).createSessionInput(host, delegate, model, resources))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), chatServices.get(IOpenerService), undefined, undefined, undefined, virtualizeHistory ? { virtualizeHistoryFrom: constObservable(48) } : undefined));
 		appChat.setVisible(true);
 	},
 	showLongCodeHistory: (turns, virtualizeHistory, withTools = false) => {

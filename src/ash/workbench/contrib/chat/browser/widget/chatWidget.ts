@@ -15,6 +15,7 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 import { applyAgentHostCompletionAction } from '../agentHostCompletionAction.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { localize } from '../../../../../nls.js';
+import { getWindowId } from '../../../../../base/browser/window.js';
 import './media/chat.css';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../../base/common/observable.js';
@@ -327,7 +328,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				},
 			} satisfies IChatMcpAppDelegate,
 			onDidRequestLink: (target: string) => {
-				void openChatMarkdownLink(target, openerService, editorService, configuration).catch(error => console.error('Could not open Markdown link', error));
+				void openChatMarkdownLink(target, openerService, editorService, configuration, getWindowId(this.element.ownerDocument.defaultView!)).catch(error => console.error('Could not open Markdown link', error));
 			},
 			get memoryNamespace() { return model.memoryNamespace; },
 			onDidRequestMemoryReference: (reference: string) => { void commandService.executeCommand('ash.memories.openReference', reference).catch(error => console.error('Could not open memory reference', error)); },
@@ -841,6 +842,7 @@ export async function openChatMarkdownLink(
 	openerService: IOpenerService | undefined,
 	editorService: Pick<IEditorService, 'openEditor'> | undefined,
 	configuration?: IConfigurationService,
+	sourceWindowId?: number,
 ): Promise<void> {
 	if (target.startsWith('#') || target.startsWith(`${Schemas.internal}:`)) return;
 	if (target.startsWith(`${Schemas.command}:`)) {
@@ -880,7 +882,7 @@ export async function openChatMarkdownLink(
 		}
 		return;
 	}
-	if (openerService) await openerService.open(target, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });
+	if (openerService) await openerService.open(target, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true, ...(sourceWindowId === undefined ? {} : { sourceWindowId }) });
 }
 
 function isEditorResourceScheme(scheme: string): boolean {

@@ -1,7 +1,7 @@
 import './media/chatMarkdownPart.css';
 import { chatMarkdownTableScrollClass, wrapTableWithScrollable } from './chatMarkdownTableScrolling.js';
 import { Emitter } from '../../../../../../base/common/event.js';
-import { addDisposableListener, getWindow, h } from '../../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, getWindowId, h } from '../../../../../../base/browser/dom.js';
 import { renderWorkbenchMarkdown, sanitizeMarkdownHtmlToFragment, type MarkdownRenderOptions } from '../../../../../../base/browser/markdownRenderer.js';
 import { observeResize } from '../../../../../../base/browser/observer.js';
 import { Dialog } from '../../../../../../base/browser/ui/dialog/dialog.js';
@@ -484,7 +484,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 					event.stopPropagation();
 					const href = anchor.getAttribute('href')!;
 					if (options.actionHandler) { options.actionHandler(href, markdown); }
-					else { void openLinkFromMarkdown(this.opener, href, markdown.isTrusted); }
+					else { void openLinkFromMarkdown(this.opener, href, markdown.isTrusted, undefined, getWindowId(getWindow(this.domNode))); }
 				}));
 			} else {
 				lifetime.add(this.markdownRenderer.render(markdown, options, element));
@@ -727,7 +727,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 
 	private openMarkdownLink(href: string, markdown: IMarkdownString): void {
 		if (this.options.actionHandler) this.options.actionHandler(href, markdown);
-		else void openLinkFromMarkdown(this.opener, href, markdown.isTrusted);
+		else void openLinkFromMarkdown(this.opener, href, markdown.isTrusted, undefined, getWindowId(getWindow(this.domNode)));
 	}
 
 	private mountContentActions(container: HTMLElement, lifetime: DisposableStore, options: {

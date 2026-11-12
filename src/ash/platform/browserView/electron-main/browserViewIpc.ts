@@ -29,7 +29,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 		['getBrowserViews', []],
 		['getOrCreateBrowserView', ['targetId', 'options']],
 		['getState', ['targetId']],
-		['layout', ['targetId', 'bounds']],
+		['layout', ['targetId', 'bounds', 'windowName']],
 		['setVisible', ['targetId', 'visible']],
 		['loadURL', ['targetId', 'url']],
 		['getBrowserHistory', ['targetId']],
@@ -114,10 +114,11 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 			const route = routes.get(command);
 			const keys = parameters.get(command);
 			if (!route || !keys) { throw new Error('Unknown browser view command: ' + command); }
-			const minimum = command === 'deleteBrowserHistory' ? 1 : keys.length;
+			const minimum = command === 'deleteBrowserHistory' || command === 'layout' ? keys.length - 1 : keys.length;
 			if (!Array.isArray(arg) || arg.length < minimum || arg.length > keys.length) { throw new TypeError('Invalid browser view arguments'); }
 			// JSON encodes an explicitly omitted positional argument as null.
-			const values = command === 'deleteBrowserHistory' && arg[1] === null ? [arg[0], undefined] : arg;
+			const values = arg.slice();
+			if ((command === 'deleteBrowserHistory' || command === 'layout') && values[minimum] === null) values[minimum] = undefined;
 			const request = keys.length ? Object.fromEntries(keys.map((key, index) => [key, values[index]])) : undefined;
 			return await route.invoke(route.validate(request)) as T;
 		},
@@ -345,7 +346,7 @@ function browserViewIpcRoutes(
 			channel: 'layout',
 			validate: validateBrowserViewLayoutRequest,
 			invoke: (request) =>
-				service.layout((request as IBrowserViewLayoutRequest).targetId, (request as IBrowserViewLayoutRequest).bounds),
+				service.layout((request as IBrowserViewLayoutRequest).targetId, (request as IBrowserViewLayoutRequest).bounds, (request as IBrowserViewLayoutRequest).windowName),
 		},
 		{
 			channel: 'setVisible',

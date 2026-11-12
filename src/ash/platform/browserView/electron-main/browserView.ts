@@ -1,6 +1,6 @@
 import type { BrowserWindow, WebContentsView, WebContents, WebFrameMain, IpcMainEvent, ContextMenuParams, Event as ElectronEvent } from 'electron/main';
 import { addAbortListener, type EventEmitter } from 'node:events';
-import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { promiseWithResolvers, raceCancellationError } from '../../../base/common/async.js';
 import { browserViewIsolatedWorldId, type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewState, type IBrowserViewInfo, type IBrowserViewCreateOptions, normalizeBrowserViewUrl } from '../common/browserView.js';
@@ -265,6 +265,8 @@ export class BrowserView extends Disposable {
 	private readonly creation: IBrowserViewCreateOptions;
 	private readonly remoteAuthority: string | undefined;
 	private readonly window: BrowserWindow;
+	private presentationWindow: BrowserWindow;
+	private readonly presentationWindowListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly cancellation = new AbortController();
 	readonly signal = this.cancellation.signal;
 	private operationTurn: Promise<void> = Promise.resolve();
@@ -653,6 +655,7 @@ export class BrowserView extends Disposable {
 		this.canvas = options.creation.canvas;
 		this.remoteAuthority = options.remoteAuthority;
 		this.window = options.window;
+		this.presentationWindow = options.window;
 		this.url = options.initialUrl;
 		if (options.network) { this._register(options.network); }
 		if (options.network || this.creation.owner.type === 'agent') {
@@ -697,8 +700,21 @@ export class BrowserView extends Disposable {
 		// Retiring authority also fails in-flight HTTP requests and clears pooled connections.
 		await this.session.electronSession.closeAllConnections();
 	}
-	layout(bounds: IBrowserViewBounds): void {
-		const scale = this.window.webContents.getZoomFactor();
+	public get attachedWindow(): BrowserWindow { return this.presentationWindow; }
+	layout(bounds: IBrowserViewBounds, window = this.window): void {
+		if (window !== this.presentationWindow) {
+			this.setVisible(false);
+			this.presentationWindowListener.clear();
+			if (!this.presentationWindow.isDestroyed()) this.presentationWindow.contentView.removeChildView(this.view);
+			window.contentView.addChildView(this.view);
+			this.presentationWindow = window;
+			if (window !== this.window) {
+				const close = () => this.dispose();
+				window.once('closed', close);
+				this.presentationWindowListener.value = toDisposable(() => window.removeListener('closed', close));
+			}
+		}
+		const scale = window.webContents.getZoomFactor();
 		this.view.setBounds({ x: Math.round(bounds.x * scale), y: Math.round(bounds.y * scale), width: Math.round(bounds.width * scale), height: Math.round(bounds.height * scale) });
 		this.laidOut = true;
 	}
@@ -996,7 +1012,7 @@ export class BrowserView extends Disposable {
 	protected override disposeCore(): void {
 		this.cancellation.abort(new Error('BrowserTargetUnavailable'));
 		super.disposeCore();
-		if (!this.window.isDestroyed()) this.window.contentView.removeChildView(this.view);
+		if (!this.presentationWindow.isDestroyed()) this.presentationWindow.contentView.removeChildView(this.view);
 		if (!this.webContents.isDestroyed()) this.webContents.close();
 		this.emit({ type: 'closed', targetId: this.id });
 	}

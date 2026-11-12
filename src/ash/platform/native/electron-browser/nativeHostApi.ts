@@ -130,8 +130,12 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		syncSystemWideKeybindings: async keybindings => validateSystemWideKeybindingsResult(await invoke<unknown>(NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, keybindings)),
 		openExternal: target => invoke<boolean>('ash:host:openExternal', target),
 		onDidRequestOpenExternalUri: listener => subscribe<unknown>(WINDOW_OPEN_EXTERNAL_URI_CHANNEL, value => {
-			if (typeof value !== 'string') { throw new TypeError('Invalid external URL request'); }
-			listener(normalizeExternalUrl(value));
+			if (typeof value === 'string') { listener(normalizeExternalUrl(value)); return; }
+			if (typeof value !== 'object' || !value || !('url' in value) || typeof value.url !== 'string'
+				|| !('sourceWindowName' in value) || typeof value.sourceWindowName !== 'string') {
+				throw new TypeError('Invalid external URL request');
+			}
+			listener(normalizeExternalUrl(value.url), value.sourceWindowName);
 		}),
 		revealFile: path => invoke<void>(NATIVE_HOST_REVEAL_FILE_CHANNEL, path),
 		setWindowTheme: (theme) => invoke<void>(NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, theme),

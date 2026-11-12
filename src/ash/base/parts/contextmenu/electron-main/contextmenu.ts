@@ -12,6 +12,7 @@ import {
 } from '../common/contextmenu.js';
 
 interface IMenuPopup {
+	readonly window: BrowserWindow;
 	readonly menu: Menu;
 	readonly settle: (result: INativeContextMenuResult) => void;
 	readonly onWindowClosed: () => void;
@@ -31,9 +32,10 @@ export class ElectronContextMenu extends Disposable {
 
 	popup(
 		request: INativeContextMenuRequest,
+		window = this.window,
 	): Promise<INativeContextMenuResult> {
 		// A closing OS menu still owns the window until its callback confirms closure.
-		if (this.activePopup || this.isDisposed || this.window.isDestroyed()) return Promise.resolve({});
+		if (this.activePopup || this.isDisposed || window.isDestroyed()) return Promise.resolve({});
 
 		let selectedId: string | undefined;
 		const menu = Menu.buildFromTemplate(toTemplate(
@@ -43,15 +45,15 @@ export class ElectronContextMenu extends Disposable {
 			},
 		));
 		const result = promiseWithResolvers<INativeContextMenuResult>();
-		const popup: IMenuPopup = { menu, settle: result.resolve, closeRequested: false, onWindowClosed: () => this.finish(menu, {}) };
+		const popup: IMenuPopup = { window, menu, settle: result.resolve, closeRequested: false, onWindowClosed: () => this.finish(menu, {}) };
 		this.activePopup = popup;
 		// This listener follows the pending OS popup, including closure after synchronous disposal.
-		this.window.once('closed', popup.onWindowClosed);
+		window.once('closed', popup.onWindowClosed);
 		try {
 			// Electron positions menus in unzoomed window coordinates; renderer anchors use CSS pixels.
-			const zoom = this.window.webContents.getZoomFactor();
+			const zoom = window.webContents.getZoomFactor();
 			menu.popup({
-				window: this.window,
+				window,
 				x: Math.floor(request.x * zoom),
 				y: Math.floor(request.y * zoom) + (request.elementAnchor ? 4 : 0),
 				positioningItem: request.positioningItem,
@@ -70,19 +72,19 @@ export class ElectronContextMenu extends Disposable {
 		const popup = this.activePopup;
 		if (!popup) return;
 		popup.closeRequested = true;
-		if (this.window.isDestroyed()) {
+		if (popup.window.isDestroyed()) {
 			this.finish(popup.menu, {});
 			return;
 		}
 		// A failed close retains the owner for retry; success still waits for the popup callback.
-		popup.menu.closePopup(this.window);
+		popup.menu.closePopup(popup.window);
 	}
 
 	private finish(menu: Menu, result: INativeContextMenuResult): void {
 		const popup = this.activePopup;
 		if (!popup || popup.menu !== menu) return;
 		this.activePopup = undefined;
-		this.window.removeListener('closed', popup.onWindowClosed);
+		popup.window.removeListener('closed', popup.onWindowClosed);
 		popup.settle(result);
 	}
 }

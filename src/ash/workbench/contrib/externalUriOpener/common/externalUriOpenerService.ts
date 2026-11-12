@@ -21,8 +21,10 @@ export interface IExternalOpenerProvider {
 export interface IExternalUriOpener {
 	readonly id: string;
 	readonly label: string;
+	/** Reserved for built-in handlers that open links inside the workbench. */
+	readonly opensInWorkbench?: true;
 	canOpen(uri: URI, token: CancellationToken): Promise<ExternalUriOpenerPriority>;
-	openExternalUri(uri: URI, ctx: { sourceUri: URI; }, token: CancellationToken): Promise<boolean>;
+	openExternalUri(uri: URI, ctx: Pick<OpenerContext, 'sourceUri' | 'openToSide' | 'sourceWindowId'>, token: CancellationToken): Promise<boolean>;
 }
 
 export interface IExternalUriOpenerService {
@@ -34,12 +36,13 @@ export interface IExternalUriOpenerService {
 
 export const IExternalUriOpenerService = createServiceIdentifier<IExternalUriOpenerService>('externalUriOpenerService');
 
-type OpenerContext = { sourceUri: URI; preferredOpenerId?: string; };
+type OpenerContext = Parameters<IExternalOpener['openExternal']>[1];
 type OpenerPick = IQuickPickItem & { opener: IExternalUriOpener | 'default' | 'configure'; };
 
 /** Owns provider selection; the platform opener retains validation, resolution and host execution. */
 export class ExternalUriOpenerService extends Disposable implements IExternalUriOpenerService, IExternalOpener {
 	declare public readonly _serviceBrand: undefined;
+	readonly selectsWorkbenchDestination = true;
 	private readonly providers = new LinkedList<IExternalOpenerProvider>();
 	private readonly prompts = this._register(new DisposableStore());
 
@@ -74,7 +77,7 @@ export class ExternalUriOpenerService extends Disposable implements IExternalUri
 			return false;
 		}
 		if (openers.length === 1) {
-			return openers[0]!.openExternalUri(uri, ctx, token);
+			return this.openSelected(openers[0]!, uri, ctx, token);
 		}
 		const picked = await this.prompt(openers, uri, token);
 		// Dismissing the chooser consumes this request; it must not launch the browser.
@@ -88,7 +91,13 @@ export class ExternalUriOpenerService extends Disposable implements IExternalUri
 			await this.preferencesService.openUserSettings({ jsonEditor: true, revealSetting: { key: externalUriOpenersSettingId, edit: true } });
 			return true;
 		}
-		return picked.opener.openExternalUri(uri, ctx, token);
+		return this.openSelected(picked.opener, uri, ctx, token);
+	}
+
+	private async openSelected(opener: IExternalUriOpener, uri: URI, ctx: OpenerContext, token: CancellationToken): Promise<boolean> {
+		if (!opener.opensInWorkbench && ctx.confirmExternal && !await ctx.confirmExternal()) return false;
+		if (token.isCancellationRequested || this.isDisposed) return true;
+		return opener.openExternalUri(uri, { sourceUri: ctx.sourceUri, openToSide: ctx.openToSide, sourceWindowId: ctx.sourceWindowId }, token);
 	}
 
 	private async selectOpeners(uri: URI, ctx: OpenerContext, token: CancellationToken, includeOptions: boolean): Promise<IExternalUriOpener[]> {
@@ -127,8 +136,14 @@ export class ExternalUriOpenerService extends Disposable implements IExternalUri
 				}
 			}
 		}
-		const choices: { opener: IExternalUriOpener; priority: ExternalUriOpenerPriority; }[] = [];
-		for (const opener of candidates.values()) {
+		const choices = new Map<IExternalUriOpener, ExternalUriOpenerPriority>();
+		// Workbench destinations can decide locally, before an extension receives
+		// the URL or asks the user to approve an external handoff.
+		const probingOrder = [...candidates.values()].sort((left, right) => Number(!!right.opensInWorkbench) - Number(!!left.opensInWorkbench));
+		for (const opener of probingOrder) {
+			// An extension's capability probe also receives the destination URL.
+			if (!opener.opensInWorkbench && ctx.confirmExternal && !await ctx.confirmExternal()) return [];
+			if (token.isCancellationRequested || this.isDisposed) return [];
 			try {
 				const priority = await opener.canOpen(ctx.sourceUri, token);
 				if (token.isCancellationRequested || this.isDisposed) {
@@ -138,13 +153,15 @@ export class ExternalUriOpenerService extends Disposable implements IExternalUri
 					return [opener];
 				}
 				if (priority === ExternalUriOpenerPriority.Default || priority === ExternalUriOpenerPriority.Option) {
-					choices.push({ opener, priority });
+					choices.set(opener, priority);
 				}
 			} catch (error) {
 				this.logService.error('externalUriOpener', error);
 			}
 		}
-		return includeOptions || choices.some(choice => choice.priority === ExternalUriOpenerPriority.Default) ? choices.map(choice => choice.opener) : [];
+		return includeOptions || [...choices.values()].includes(ExternalUriOpenerPriority.Default)
+			? [...candidates.values()].filter(opener => choices.has(opener))
+			: [];
 	}
 
 	private async prompt(openers: readonly IExternalUriOpener[], uri: URI, token: CancellationToken): Promise<OpenerPick | undefined> {
