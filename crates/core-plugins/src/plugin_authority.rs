@@ -200,6 +200,9 @@ impl Persistence {
 
 struct PluginActivationAuthorityInner {
     store: PluginPackageStore,
+    // Lock before state: an installation owns its object until its authority commit,
+    // including the gap between materializing the object and acquiring state.
+    package_lifecycle: Mutex<()>,
     state: Mutex<AuthorityState>,
     drained: Condvar,
     persistence: Persistence,
@@ -345,6 +348,7 @@ impl PluginActivationAuthority {
         Ok(Self {
             inner: Arc::new(PluginActivationAuthorityInner {
                 store,
+                package_lifecycle: Mutex::new(()),
                 state: Mutex::new(AuthorityState {
                     revision: persisted.revision,
                     activation_generation: persisted.activation_generation,
@@ -426,6 +430,10 @@ impl PluginActivationAuthority {
         expected_revision: u64,
         package: &LocalPluginPackage,
     ) -> Result<PluginInstallResult, PluginError> {
+        let package_lifecycle =
+            self.inner.package_lifecycle.lock().map_err(|_| {
+                authority_unavailable("Plugin package lifecycle lock is unavailable")
+            })?;
         let installed = self.inner.store.install_local(package)?;
         let command = self.apply(PluginAuthorityCommandRequest {
             command_id,
@@ -434,17 +442,11 @@ impl PluginActivationAuthority {
                 package: installed.clone(),
             },
         });
+        drop(package_lifecycle);
         let command = match command {
             Ok(command) => command,
             Err(error) => {
-                if !self
-                    .snapshot()
-                    .installed()
-                    .iter()
-                    .any(|package| package.digest == installed.digest)
-                {
-                    let _ = self.inner.store.remove_object(&installed.digest);
-                }
+                let _ = self.remove_unreferenced_object(&installed.digest);
                 return Err(error);
             }
         };
@@ -566,13 +568,35 @@ impl PluginActivationAuthority {
         self.publish(result_revision, activation_generation);
         self.wait_for_drain(drained)?;
         if let Some(digest) = removed_object {
-            let _ = self.inner.store.remove_object(&digest);
+            let _ = self.remove_unreferenced_object(&digest);
         }
         Ok(PluginAuthorityCommandResult {
             revision: result_revision,
             activation_generation,
             disposition: PluginAuthorityDisposition::Updated,
         })
+    }
+
+    fn remove_unreferenced_object(&self, digest: &PluginPackageDigest) -> Result<(), PluginError> {
+        let _package_lifecycle =
+            self.inner.package_lifecycle.lock().map_err(|_| {
+                authority_unavailable("Plugin package lifecycle lock is unavailable")
+            })?;
+        let state = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| authority_unavailable("Plugin authority lock is unavailable"))?;
+        // A reinstall may have overtaken the operation that nominated this object.
+        // Keep state locked through removal so a new reference cannot commit after the check.
+        if !state
+            .installed
+            .values()
+            .any(|package| &package.digest == digest)
+        {
+            self.inner.store.remove_object(digest)?;
+        }
+        Ok(())
     }
 
     /// Creates an exact dispatch fence for one package in the current active snapshot.

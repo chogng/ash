@@ -290,6 +290,242 @@ fn failed_install_authority_commit_removes_the_unreferenced_object() {
     assert!(!profile.path().join("objects").join(digest).exists());
 }
 
+fn wait_for_revision(authority: &PluginActivationAuthority, revision: u64) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while authority.snapshot().revision() != revision {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "authority did not reach revision {revision}"
+        );
+        thread::yield_now();
+    }
+}
+
+#[test]
+fn delayed_uninstall_preserves_the_same_digest_reinstalled_from_another_directory() {
+    let profile = tempdir().unwrap();
+    let first_source = tempdir().unwrap();
+    let second_source = tempdir().unwrap();
+    let first = package(first_source.path(), "acme/reinstalled", "1.0.0");
+    let second = package(second_source.path(), "acme/reinstalled", "1.0.0");
+    assert_eq!(first.package_digest(), second.package_digest());
+    let authority = PluginActivationAuthority::open(profile.path()).unwrap();
+    let installed = authority
+        .install_local(
+            PluginAuthorityCommandId::new("first-install").unwrap(),
+            0,
+            &first,
+        )
+        .unwrap()
+        .package;
+
+    thread::scope(|scope| {
+        // Stop both commands at publication, after their authority commits. This makes
+        // the new reference visible before the old uninstall can attempt object cleanup.
+        let publication = authority.inner.subscribers.lock().unwrap();
+        let uninstall_request = request(
+            &authority,
+            "uninstall",
+            PluginAuthorityCommand::Uninstall {
+                package: installed.clone(),
+            },
+        );
+        let uninstall = scope.spawn(|| authority.apply(uninstall_request));
+        wait_for_revision(&authority, 2);
+        let reinstall = scope.spawn(|| {
+            authority.install_local(
+                PluginAuthorityCommandId::new("second-install").unwrap(),
+                2,
+                &second,
+            )
+        });
+        wait_for_revision(&authority, 3);
+        drop(publication);
+        assert_eq!(reinstall.join().unwrap().unwrap().package, installed);
+        uninstall.join().unwrap().unwrap();
+    });
+
+    assert_eq!(
+        authority.snapshot().installed(),
+        std::slice::from_ref(&installed)
+    );
+    assert_eq!(
+        authority.installed_manifest(&installed).unwrap().id,
+        installed.id
+    );
+    authority
+        .apply(request(
+            &authority,
+            "grant-reinstalled",
+            PluginAuthorityCommand::Grant {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    authority
+        .apply(request(
+            &authority,
+            "enable-reinstalled",
+            PluginAuthorityCommand::Enable {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    drop(authority);
+    let reopened = PluginActivationAuthority::open(profile.path()).unwrap();
+    assert_eq!(
+        reopened.snapshot().installed(),
+        std::slice::from_ref(&installed)
+    );
+    assert_eq!(reopened.snapshot().activation().packages().len(), 1);
+}
+
+#[test]
+fn uninstall_waits_for_a_pending_installation_before_collecting_its_object() {
+    let profile = tempdir().unwrap();
+    let first_source = tempdir().unwrap();
+    let second_source = tempdir().unwrap();
+    let first = package(first_source.path(), "acme/reinstalled", "1.0.0");
+    let second = package(second_source.path(), "acme/reinstalled", "1.0.0");
+    let authority = PluginActivationAuthority::open(profile.path()).unwrap();
+    let installed = authority
+        .install_local(
+            PluginAuthorityCommandId::new("first-install").unwrap(),
+            0,
+            &first,
+        )
+        .unwrap()
+        .package;
+    let subscription = authority.subscribe();
+
+    thread::scope(|scope| {
+        // Hold the same ownership used by install_local between object materialization
+        // and the Install commit, while Uninstall removes the previous reference.
+        let installation = authority.inner.package_lifecycle.lock().unwrap();
+        let pending = authority.inner.store.install_local(&second).unwrap();
+        assert_eq!(pending, installed);
+        let uninstall_request = request(
+            &authority,
+            "uninstall",
+            PluginAuthorityCommand::Uninstall {
+                package: installed.clone(),
+            },
+        );
+        let (completed_sender, completed_receiver) = mpsc::channel();
+        let uninstall_authority = &authority;
+        let uninstall = scope.spawn(move || {
+            let result = uninstall_authority.apply(uninstall_request);
+            completed_sender.send(()).unwrap();
+            result
+        });
+        assert_eq!(
+            subscription
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .revision,
+            2
+        );
+        assert!(authority.snapshot().installed().is_empty());
+        let completion = completed_receiver.recv_timeout(Duration::from_millis(50));
+        let pending_object = authority.inner.store.read(&pending);
+        let committed = authority.apply(request(
+            &authority,
+            "pending-install",
+            PluginAuthorityCommand::Install { package: pending },
+        ));
+        drop(installation);
+        uninstall.join().unwrap().unwrap();
+        assert!(matches!(completion, Err(mpsc::RecvTimeoutError::Timeout)));
+        pending_object.unwrap();
+        committed.unwrap();
+    });
+
+    assert_eq!(
+        authority.installed_manifest(&installed).unwrap().id,
+        installed.id
+    );
+    drop(authority);
+    assert_eq!(
+        PluginActivationAuthority::open(profile.path())
+            .unwrap()
+            .snapshot()
+            .installed(),
+        std::slice::from_ref(&installed)
+    );
+}
+
+#[test]
+fn failed_concurrent_same_digest_install_preserves_the_committed_object() {
+    let profile = tempdir().unwrap();
+    let first_source = tempdir().unwrap();
+    let second_source = tempdir().unwrap();
+    let first = package(first_source.path(), "acme/reinstalled", "1.0.0");
+    let second = package(second_source.path(), "acme/reinstalled", "1.0.0");
+    assert_eq!(first.package_digest(), second.package_digest());
+    let authority = PluginActivationAuthority::open(profile.path()).unwrap();
+
+    let installed = thread::scope(|scope| {
+        let publication = authority.inner.subscribers.lock().unwrap();
+        let successful = scope.spawn(|| {
+            authority.install_local(
+                PluginAuthorityCommandId::new("successful").unwrap(),
+                0,
+                &first,
+            )
+        });
+        wait_for_revision(&authority, 1);
+        let rejected = scope.spawn(|| {
+            authority.install_local(
+                PluginAuthorityCommandId::new("rejected").unwrap(),
+                0,
+                &second,
+            )
+        });
+        drop(publication);
+        let installed = successful.join().unwrap().unwrap().package;
+        assert_eq!(
+            rejected.join().unwrap().unwrap_err().kind(),
+            PluginErrorKind::GenerationConflict
+        );
+        installed
+    });
+
+    assert_eq!(
+        authority.installed_manifest(&installed).unwrap().id,
+        installed.id
+    );
+    drop(authority);
+    let reopened = PluginActivationAuthority::open(profile.path()).unwrap();
+    assert_eq!(
+        reopened.snapshot().installed(),
+        std::slice::from_ref(&installed)
+    );
+    reopened
+        .apply(request(
+            &reopened,
+            "uninstall",
+            PluginAuthorityCommand::Uninstall {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    assert!(reopened.snapshot().installed().is_empty());
+    assert_eq!(
+        fs::read_dir(profile.path().join("objects"))
+            .unwrap()
+            .count(),
+        0
+    );
+    drop(reopened);
+    assert!(
+        PluginActivationAuthority::open(profile.path())
+            .unwrap()
+            .snapshot()
+            .installed()
+            .is_empty()
+    );
+}
+
 #[test]
 fn reopening_file_authority_clears_staging_without_removing_pending_objects() {
     let profile = tempdir().unwrap();
