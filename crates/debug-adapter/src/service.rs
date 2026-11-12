@@ -149,6 +149,7 @@ pub struct DebugAdapterRead {
     pub next_sequence: u64,
     pub output_gap: bool,
     pub stderr: String,
+    /// The transport has ended and its output readers have finished buffering output.
     pub exited: bool,
     pub exit_code: Option<i32>,
     pub protocol_error: Option<String>,
@@ -619,20 +620,25 @@ fn refresh_process_state(
     runtime: &Runtime,
     session: &DebugAdapterSession,
 ) -> Result<(), DebugAdapterError> {
-    let process = Arc::clone(&session.process);
-    let status = runtime.block_on(async move {
-        let mut process = process.lock().await;
-        match process.as_mut() {
-            Some(child) => child.try_wait(),
-            None => Ok(None),
+    runtime.block_on(async {
+        let mut process = session.process.lock().await;
+        // A reaped child may still have output in either pipe. Keep reads nonblocking
+        // while the readers finish so the consumer can process that output before exit.
+        if let Some(child) = process.as_mut()
+            && let Some(status) = child.try_wait()?
+            && session
+                .readers
+                .lock()
+                .await
+                .iter()
+                .all(JoinHandle::is_finished)
+        {
+            let mut state = session.state.lock().map_err(|_| DebugAdapterError::Busy)?;
+            state.exited = true;
+            state.exit_code = status.code();
         }
-    })?;
-    if let Some(status) = status {
-        let mut state = session.state.lock().map_err(|_| DebugAdapterError::Busy)?;
-        state.exited = true;
-        state.exit_code = status.code();
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 fn terminate(runtime: &Runtime, session: DebugAdapterSession) {
