@@ -44,7 +44,6 @@ use crate::scanner::read_relative_file;
 use crate::scanner::scan_dir;
 use crate::store::CodebaseIndexStore;
 use crate::store::FileUpdate;
-use crate::store::StoredSource;
 use ash_language::detect_language;
 
 /// One directory Codebase backed by rebuildable local data.
@@ -175,6 +174,8 @@ impl Codebase {
                 .map(RefreshOutcome::Rebuilt);
         }
 
+        let mut retained_source_bytes = snapshot.indexed_source_bytes;
+        let mut remaining_source_budget = self.limits.max_total_source_bytes;
         let mut updates = Vec::new();
         for relative_path in relative_paths {
             cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
@@ -208,21 +209,35 @@ impl Codebase {
                 if stored.revision == file.revision {
                     continue;
                 }
-                if exceeds_source_limit(&snapshot, &stored, file.content.len(), &self.limits) {
+                // The replacement contents must fit even if later paths free more space.
+                let Some(remaining_budget) =
+                    remaining_source_budget.checked_sub(file.content.len())
+                else {
+                    drop(updates);
                     return self
                         .reconcile_with_cancellation(cancellation)
                         .map(RefreshOutcome::Rebuilt);
-                }
+                };
+                remaining_source_budget = remaining_budget;
+                retained_source_bytes = retained_source_bytes.saturating_sub(stored.source_bytes);
                 updates.push(FileUpdate::Upsert(file.prepare(&self.limits)));
                 continue;
             }
-            if self.store.source(&relative_path)?.is_some() {
+            if let Some(stored) = self.store.source(&relative_path)? {
+                retained_source_bytes = retained_source_bytes.saturating_sub(stored.source_bytes);
                 updates.push(FileUpdate::Remove(relative_path));
             } else if self.store.has_descendants(&relative_path)? {
                 return self
                     .reconcile_with_cancellation(cancellation)
                     .map(RefreshOutcome::Rebuilt);
             }
+        }
+        // Publication is atomic, so deletions and shrinkage anywhere in the batch count.
+        if retained_source_bytes > remaining_source_budget {
+            drop(updates);
+            return self
+                .reconcile_with_cancellation(cancellation)
+                .map(RefreshOutcome::Rebuilt);
         }
         if updates.is_empty() {
             return Ok(RefreshOutcome::NoChange);
@@ -595,19 +610,6 @@ fn read_source_for_verification(
             std::io::Error::new(std::io::ErrorKind::InvalidData, source),
         )
     })
-}
-
-fn exceeds_source_limit(
-    snapshot: &CodebaseSnapshot,
-    stored: &StoredSource,
-    replacement_bytes: usize,
-    limits: &CodebaseLimits,
-) -> bool {
-    snapshot
-        .indexed_source_bytes
-        .saturating_sub(stored.source_bytes)
-        .saturating_add(replacement_bytes)
-        > limits.max_total_source_bytes
 }
 
 fn is_ignore_control_path(relative_path: &Path) -> bool {
