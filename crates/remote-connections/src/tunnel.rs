@@ -1,23 +1,23 @@
 use std::fmt;
 use std::io;
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Read;
 use std::net::Ipv4Addr;
 use std::net::SocketAddrV4;
 use std::net::TcpListener;
-use std::net::TcpStream;
 use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::process::Child;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
-use std::time::Duration;
-use std::time::Instant;
+use std::sync::mpsc;
 
 use ash_remote::SshHost;
 
 const DEFAULT_CONNECT_TIMEOUT_SECONDS: NonZeroU16 = NonZeroU16::new(10).expect("non-zero");
-const READINESS_STABILITY: Duration = Duration::from_millis(50);
-const READINESS_CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
+const FORWARD_READY: &str = "ash-ssh-forward-ready";
 
 /// Selects a currently unused TCP port on the local loopback interface.
 ///
@@ -129,6 +129,12 @@ impl SshTunnelOptions {
                 "ExitOnForwardFailure=yes".into(),
                 "-o".into(),
                 format!("ConnectTimeout={}", self.connect_timeout_seconds),
+                "-S".into(),
+                "none".into(),
+                "-o".into(),
+                "PermitLocalCommand=yes".into(),
+                "-o".into(),
+                format!("LocalCommand=echo {FORWARD_READY}"),
                 "-L".into(),
                 self.forward_spec(),
                 self.host.as_str().into(),
@@ -146,18 +152,38 @@ impl SshTunnelOptions {
         let mut child = Command::new(&command.executable)
             .args(&command.arguments)
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
+            .stdout(Stdio::piped())
             .stderr(stderr)
             .spawn()
             .map_err(SshTunnelError::Spawn)?;
-        if let Some(status) = child.try_wait().map_err(SshTunnelError::Wait)? {
-            return Err(SshTunnelError::ProcessExited(status));
-        }
-        Ok(SshTunnel {
+        let stdout = child.stdout.take().expect("piped SSH stdout");
+        let (ready, confirmation) = mpsc::channel();
+        let mut tunnel = SshTunnel {
             child: Some(child),
             local_port: self.local_port,
-            listener_observed_at: None,
-        })
+            confirmation: Some(confirmation),
+        };
+        if let Some(status) = tunnel.try_wait()? {
+            return Err(SshTunnelError::ProcessExited(status));
+        }
+        // A dedicated connection runs LocalCommand after creating its local
+        // forwards. With -N there is no remote session writing to this stdout pipe.
+        std::thread::Builder::new()
+            .name("ash-ssh-forward-ready".into())
+            .spawn(move || {
+                let mut line = Vec::new();
+                let mut stdout = BufReader::new(stdout.take((FORWARD_READY.len() + 2) as u64));
+                if stdout.read_until(b'\n', &mut line).is_ok()
+                    && line
+                        .strip_suffix(b"\r\n")
+                        .or_else(|| line.strip_suffix(b"\n"))
+                        == Some(FORWARD_READY.as_bytes())
+                {
+                    let _ = ready.send(());
+                }
+            })
+            .map_err(SshTunnelError::Spawn)?;
+        Ok(tunnel)
     }
 
     fn forward_spec(&self) -> String {
@@ -191,7 +217,7 @@ impl SshTunnelCommand {
 pub struct SshTunnel {
     child: Option<Child>,
     local_port: NonZeroU16,
-    listener_observed_at: Option<Instant>,
+    confirmation: Option<mpsc::Receiver<()>>,
 }
 
 impl SshTunnel {
@@ -200,31 +226,22 @@ impl SshTunnel {
         self.local_port
     }
 
-    /// Polls whether OpenSSH has established a stable local loopback listener.
+    /// Polls whether the live OpenSSH child has confirmed its local forward.
     ///
-    /// Readiness requires two successful loopback connections separated by a short stability
-    /// interval while the SSH child remains alive. The probe opens no public listener and sends no
-    /// application bytes. It confirms the local forward, not the availability of the service at
-    /// the Remote endpoint. Product hosts own timeout and cancellation policy around this poll.
+    /// The confirmation comes from OpenSSH's post-forwarding LocalCommand. This does not send
+    /// any data to the remote service. Product hosts own timeout and cancellation policy.
     pub fn poll_readiness(&mut self) -> Result<SshTunnelReadiness, SshTunnelError> {
         if let Some(status) = self.try_wait()? {
             return Err(SshTunnelError::ProcessExited(status));
         }
-        let address = SocketAddrV4::new(Ipv4Addr::LOCALHOST, self.local_port.get());
-        if TcpStream::connect_timeout(&address.into(), READINESS_CONNECT_TIMEOUT).is_err() {
-            self.listener_observed_at = None;
-            return Ok(SshTunnelReadiness::Pending);
-        }
-        let now = Instant::now();
-        let Some(observed_at) = self.listener_observed_at else {
-            self.listener_observed_at = Some(now);
-            return Ok(SshTunnelReadiness::Pending);
-        };
-        if now.duration_since(observed_at) < READINESS_STABILITY {
-            return Ok(SshTunnelReadiness::Pending);
-        }
-        if let Some(status) = self.try_wait()? {
-            return Err(SshTunnelError::ProcessExited(status));
+        if let Some(confirmation) = &self.confirmation {
+            if confirmation.try_recv().is_err() {
+                return Ok(SshTunnelReadiness::Pending);
+            }
+            if let Some(status) = self.try_wait()? {
+                return Err(SshTunnelError::ProcessExited(status));
+            }
+            self.confirmation = None;
         }
         Ok(SshTunnelReadiness::Ready)
     }
@@ -256,9 +273,9 @@ impl SshTunnel {
 /// Current readiness of an SSH local port forward.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SshTunnelReadiness {
-    /// OpenSSH is still running but a stable local listener has not been observed yet.
+    /// OpenSSH is still running and has not confirmed its local forward yet.
     Pending,
-    /// The local loopback listener is accepting connections and OpenSSH remains alive.
+    /// The live OpenSSH child confirmed that it created the local forward.
     Ready,
 }
 
