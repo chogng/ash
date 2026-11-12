@@ -1035,7 +1035,11 @@ impl AppServer {
     fn symphony_tracker_processor(
         &self,
     ) -> symphony_tracker::SymphonyTrackerRequestProcessor<'_, Self> {
-        symphony_tracker::SymphonyTrackerRequestProcessor::new(self, &self.symphony_http)
+        symphony_tracker::SymphonyTrackerRequestProcessor::new(
+            self,
+            self.symphony.as_deref(),
+            &self.symphony_http,
+        )
     }
     fn terminal_processor(&self) -> terminal_operations::TerminalRequestProcessor<'_, Self> {
         terminal_operations::TerminalRequestProcessor::new(self)

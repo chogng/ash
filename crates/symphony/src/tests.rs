@@ -182,7 +182,9 @@ fn failed_poll_does_not_retire_jobs_but_full_snapshot_reconciles_removals() {
         .ingest(&plan, vec![issue("1", "open", 1)], 1000)
         .unwrap();
     let reserved = store.reserve(1000).unwrap().remove(0);
-    store.poll_error(&plan.id, "offline".into(), 2000).unwrap();
+    store
+        .poll_error(&plan.id, &plan.digest, "offline".into(), 2000)
+        .unwrap();
     assert_eq!(
         store.job(&reserved.id).unwrap().desired,
         SymphonyControl::Run
@@ -608,6 +610,50 @@ fn literal_linear_credentials_are_resolved_from_the_source_without_being_saved()
             .windows(b"fixture-secret".len())
             .any(|item| item == b"fixture-secret")
     );
+}
+
+#[test]
+fn linear_credentials_reject_a_changed_workflow_source() {
+    let root = tempfile::tempdir().unwrap();
+    let old = workflow(
+        &root,
+        "tracker:\n  kind: linear\n  project_slug: test\n  endpoint: https://old.example/graphql\n  api_key: fixture-old-key",
+    );
+    let source = std::fs::read(&old.path).unwrap();
+    let store = Store::open(&root.path().join("state.db")).unwrap();
+    store.configure("configure", old.clone()).unwrap();
+    let current = workflow(
+        &root,
+        "tracker:\n  kind: linear\n  project_slug: test\n  endpoint: https://new.example/graphql\n  api_key: fixture-new-key",
+    );
+
+    assert!(matches!(
+        store.linear_connection(&old),
+        Err(Error::StaleWorkflow)
+    ));
+    let reloaded = store.reload(&old, Ok(current.clone())).unwrap();
+    assert_eq!(reloaded.workflow, current);
+    assert_eq!(
+        store.linear_connection(&reloaded.workflow).unwrap(),
+        (
+            "https://new.example/graphql",
+            String::from("fixture-new-key")
+        ),
+    );
+
+    store
+        .poll_error(&old.id, &old.digest, "late poll".into(), 2000)
+        .unwrap();
+    let plan = store.plans().unwrap().remove(0);
+    assert_eq!(plan.polled_at, 0);
+    assert_eq!(plan.error, None);
+
+    // Restoring the source alone cannot make an older poll current again.
+    std::fs::write(&old.path, source).unwrap();
+    assert!(matches!(
+        store.linear_connection(&old),
+        Err(Error::StaleWorkflow)
+    ));
 }
 
 #[test]
