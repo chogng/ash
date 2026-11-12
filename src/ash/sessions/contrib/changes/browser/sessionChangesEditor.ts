@@ -4,7 +4,6 @@ import type { IResourceEditorInput } from '../../../../workbench/common/editor.j
 import { Dimension, h, addDisposableListener, type IDimension } from '../../../../base/browser/dom.js';
 import './media/sessionChangesEditor.css';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { hash } from '../../../../base/common/hash.js';
 import { extUri, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
 import { IChatService, createThreadChangeFileResource } from '../../../../workbench/services/chat/common/chatService.js';
@@ -14,7 +13,6 @@ import { ISessionsManagementService } from '../../../services/sessions/common/se
 import { createTurnChangesSelectionInput, createTurnMultiDiffEditorInput } from '../../../browser/turnMultiDiffSource.js';
 import { createThreadMultiDiffEditorInput } from '../../../../workbench/contrib/chat/browser/chatEditing/chatEditingActions.js';
 import type { MultiDiffEditorInput, MultiDiffEditorInputItem } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
-import { createMultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { MultiDiffEditor } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -27,6 +25,7 @@ import { IFileService } from '../../../../platform/files/common/files.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
+import { createGitComparisonEditorInput } from './gitComparisonEditorInput.js';
 import { getChangesViewMode, getCapturedTurnIds, type IChangesThreadFileItem } from '../common/changes.js';
 import { chatExecutionWorkspace, matchesSessionFileChange, type ISessionFileChange } from '../../../services/sessions/common/session.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
@@ -353,29 +352,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		provider.assertCurrent();
 		if (result.kind !== 'changes') throw new TypeError('Expected Git comparison files');
 		const source = resource.with({ scheme: 'ash-session-git-diff', fragment: JSON.stringify([repository.id, comparison]) });
-		const items = result.files.map(file => {
-			const originalPath = file.originalPath ?? file.path;
-			const modifiedResource = URI.joinPath(root, file.path);
-			// Two groups can compare the same worktree before and after an external edit.
-			const revision = hash([file.original, file.modified]);
-			return {
-				id: file.path,
-				label: file.originalPath ? `${file.originalPath} → ${file.path}` : file.path,
-				fileList: { path: file.path, originalPath: file.originalPath ?? undefined },
-				binary: file.original.kind === 'binary' || file.modified.kind === 'binary',
-				contextKeys: { 'sessions.changesGitFile': true },
-				original: {
-					resource: URI.joinPath(source, originalPath).with({ query: `side=before&revision=${revision}` }),
-					preferredResource: URI.joinPath(root, originalPath), readOnly: true, initialText: file.original.kind === 'text' ? file.original.text : ''
-				},
-				modified: {
-					resource: URI.joinPath(source, file.path).with({ query: `side=after&revision=${revision}` }),
-					preferredResource: modifiedResource, readOnly: true, initialText: file.modified.kind === 'text' ? file.modified.text : ''
-				},
-				goToFile: file.modified.kind === 'missing' ? undefined : { resource: modifiedResource },
-			};
-		});
-		return createMultiDiffEditorInput(source, items, label);
+		return createGitComparisonEditorInput(source, root, result.files, label);
 	}
 
 	private setGitComparison(comparison: GitComparison | undefined): Promise<void> {

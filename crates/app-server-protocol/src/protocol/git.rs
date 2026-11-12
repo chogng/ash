@@ -294,6 +294,36 @@ pub struct GitSessionComparisonFileDto {
     pub modified: GitCommitFileContentDto,
 }
 
+/// Reads uncommitted changes in an explicitly granted checkout before a Session exists.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase")]
+pub struct GitWorktreeChangesParams {
+    #[schemars(length(min = 1, max = 32768))]
+    pub source_path: String,
+    pub query: GitWorktreeChangesQuery,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum GitWorktreeChangesQuery {
+    Summary,
+    Diff,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[ts(rename_all = "camelCase")]
+pub enum GitWorktreeChangesResult {
+    Summary {
+        files: usize,
+    },
+    Diff {
+        files: Vec<GitSessionComparisonFileDto>,
+    },
+}
+
 /// Stable, directory-relative identity for one discovered Git repository projection.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

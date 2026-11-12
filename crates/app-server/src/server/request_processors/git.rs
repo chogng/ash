@@ -797,6 +797,34 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         result(&comparison)
     }
 
+    pub(super) fn git_worktree_changes(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::git::GitWorktreeChangesParams;
+        let params: GitWorktreeChangesParams = decode(value)?;
+        connection.require_directory_grants_host()?;
+        validate_path(
+            Path::new(&params.source_path),
+            DirectoryPathRequirement::Absolute,
+        )?;
+        if params.source_path.len() > 32_768 || params.source_path.contains('\0') {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let authorization = self
+            .context
+            .authorize_worktree_source(PathBuf::from(params.source_path))?;
+        let changes =
+            super::git_runtime::worktree_changes(&authorization, params.query, cancellation)
+                .map_err(git_error)?;
+        authorization
+            .ensure_active()
+            .map_err(|_| RpcError::new(-32073, AppServerErrorName::PermissionRequired))?;
+        result(&changes)
+    }
+
     pub(super) fn git_repositories(&self, value: &Value) -> Result<Value, RpcError> {
         let params: ash_app_server_protocol::protocol::git::GitDiscoveryParams = decode(value)?;
         let folders = params

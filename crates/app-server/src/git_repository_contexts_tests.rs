@@ -179,6 +179,9 @@ fn draft_worktrees_use_the_explicit_source_grant_without_activating_a_workspace(
     let query = |id| json!({"jsonrpc":"2.0","id":id,"method":"git/worktree/list","params":{"sourcePath":repo}});
     let denied = call(&server, &mut connection, query(2));
     assert_eq!(denied["error"]["message"], "PermissionRequired", "{denied}");
+    let changes = |id, query| json!({"jsonrpc":"2.0","id":id,"method":"git/worktree/changes","params":{"sourcePath":repo,"query":query}});
+    let denied = call(&server, &mut connection, changes(7, "diff"));
+    assert_eq!(denied["error"]["message"], "PermissionRequired", "{denied}");
 
     let granted = call(
         &server,
@@ -198,6 +201,18 @@ fn draft_worktrees_use_the_explicit_source_grant_without_activating_a_workspace(
         listed["result"]["worktrees"][0]["current"], true,
         "{listed}"
     );
+    let clean = call(&server, &mut connection, changes(8, "summary"));
+    assert_eq!(clean["result"], json!({"kind":"summary","files":0}));
+    std::fs::write(repo.join("draft.txt"), "An uncommitted change\n").unwrap();
+    let dirty = call(&server, &mut connection, changes(9, "summary"));
+    assert_eq!(dirty["result"], json!({"kind":"summary","files":1}));
+    let diff = call(&server, &mut connection, changes(10, "diff"));
+    assert_eq!(diff["result"]["kind"], "diff", "{diff}");
+    let files = diff["result"]["files"].as_array().unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0]["path"], "draft.txt");
+    assert_eq!(files[0]["original"]["kind"], "missing");
+    assert_eq!(files[0]["modified"]["text"], "An uncommitted change\n");
     let catalog = call(
         &server,
         &mut connection,

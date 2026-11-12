@@ -2127,6 +2127,7 @@
     "prompt.import.allowAccess": "允许目录访问"
   },
   "ash.workbench": {
+    "chat.input.conversationChangesHelp": "会话有变更时，按 Tab 到达输入框上方的“更改”，按 Enter 或空格打开当前检查点的净变更。撤销和重做会更新摘要。",
     "command.OpenCalls": "打开通话",
     "command.OpenMemories": "打开记忆",
     "command.SaveMemory": "保存记忆",

@@ -17,16 +17,19 @@ export type GitSessionComparison = { readonly kind: 'branches'; } | { readonly k
 
 export type GitSessionComparisonContent = { readonly kind: 'text'; readonly text: string; } | { readonly kind: 'binary' | 'missing'; };
 
+export interface GitComparisonFile {
+	readonly path: string;
+	readonly originalPath: string | null;
+	readonly original: GitSessionComparisonContent;
+	readonly modified: GitSessionComparisonContent;
+}
+
 export type GitSessionComparisonSnapshot =
 	| { readonly kind: 'branches'; readonly references: readonly { readonly name: string; readonly objectId: string; }[]; }
-	| {
-		readonly kind: 'changes'; readonly files: readonly {
-			readonly path: string;
-			readonly originalPath: string | null;
-			readonly original: GitSessionComparisonContent;
-			readonly modified: GitSessionComparisonContent;
-		}[];
-	};
+	| { readonly kind: 'changes'; readonly files: readonly GitComparisonFile[]; };
+
+export type GitWorktreeChangesSnapshot = { readonly kind: 'summary'; readonly files: number; }
+	| { readonly kind: 'diff'; readonly files: readonly GitComparisonFile[]; };
 
 /** Host Git operations for App workflows, independent of the optional SCM extension. */
 export interface ILocalGitService {
@@ -36,6 +39,8 @@ export interface ILocalGitService {
 	/** Read-only repository metadata for this Session's execution directory. Returns an empty list when inspection is not authorized. */
 	readRepositoryContexts(directory: { readonly sessionId: string; readonly path: string; }, token?: CancellationToken): Promise<readonly GitRepositoryContext[]>;
 	readSessionComparison(directory: { readonly sessionId: string; readonly path: string; }, repositoryId: string, comparison: GitSessionComparison, signal: AbortSignal): Promise<GitSessionComparisonSnapshot>;
+	/** Reads uncommitted changes within the selected checkout's existing directory grant. */
+	readWorktreeChanges(sourcePath: string, query: 'summary' | 'diff', signal: AbortSignal): Promise<GitWorktreeChangesSnapshot>;
 	/** Clones into a new absolute host path. Ref selects a branch, tag or full commit ID. */
 	clone(operationId: string, cloneUrl: string, targetPath: string, ref?: string): Promise<void>;
 	/** Cancels only an operation issued by this connection, including before execution starts. */

@@ -461,6 +461,7 @@ services.registerInstance(ILocalGitService, {
 	listWorktrees: async () => [],
 	readRepositoryContexts: async () => [],
 	readSessionComparison: async () => { throw new Error('Unexpected session comparison in the local installation fixture'); },
+	readWorktreeChanges: async () => { throw new Error('Unexpected worktree changes in the local installation fixture'); },
 	clone: async (operationId, url, targetPath, reference) => {
 		if (!new URLSearchParams(location.search).has('holdGitClone')) { throw new Error('Unexpected Git clone in the local installation fixture'); }
 		requests.push(['gitClone', { operationId, url, targetPath, reference }]);

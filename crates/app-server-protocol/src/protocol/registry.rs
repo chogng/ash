@@ -5588,6 +5588,11 @@ client_methods! {
         response: crate::protocol::git::GitSessionComparisonResult,
         serialization: None,
     },
+    GitWorktreeChanges => "git/worktree/changes" {
+        params: crate::protocol::git::GitWorktreeChangesParams,
+        response: crate::protocol::git::GitWorktreeChangesResult,
+        serialization: None,
+    },
     GitRepositories => "git/repositories" {
         params: GitDiscoveryParams,
         response: GitRepositoriesResult,
@@ -8022,6 +8027,9 @@ typescript_bindings! {
     crate::protocol::git::GitSessionComparisonDto,
     crate::protocol::git::GitSessionComparisonResult,
     crate::protocol::git::GitSessionComparisonFileDto,
+    crate::protocol::git::GitWorktreeChangesParams,
+    crate::protocol::git::GitWorktreeChangesQuery,
+    crate::protocol::git::GitWorktreeChangesResult,
     GitRepositoriesResult,
     GitRepositoryChangeDto,
     GitStatusResult,
