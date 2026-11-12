@@ -573,7 +573,7 @@ impl<'env> RequestDispatchHandle<'env> {
             let completion_sender = Arc::clone(&self.ready[lane.index()]);
             PendingJob::Network(Box::new(move |admission| {
                 let started_at = Instant::now();
-                let future = server.prepare_network_request(&mut prepared, &admission);
+                let future = server.prepare_network_request(&connection, &mut prepared, &admission);
                 NetworkWork {
                     future,
                     completion_sender,

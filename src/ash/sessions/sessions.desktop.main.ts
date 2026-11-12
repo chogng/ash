@@ -14,6 +14,7 @@ import './contrib/canvases/electron-browser/sessionCanvases.contribution.js';
 import '../workbench/services/browserView/electron-browser/playwrightWorkbenchService.js';
 import './contrib/browserView/browser/sessionBrowserView.contribution.js';
 import { registerChatWorkspace } from './contrib/chat/electron-browser/chatWorkspace.contribution.js';
+import './contrib/chatgptweb/common/chatGPTAccountLabel.js';
 import { chatGPTWorkspaceSource } from './contrib/chatgptweb/electron-browser/chatGPTWeb.contribution.js';
 import './sessions.common.main.js';
 import '../platform/update/common/update.config.contribution.js';

@@ -136,6 +136,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	let logger: NativeLogService;
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	let documentClient: AppServerProtocolClient | undefined;
+	let localBrowserClient: AppServerProtocolClient | undefined;
 	let restoreEntry: boolean;
 	let promptForWorkspaceTrust: boolean;
 	try {
@@ -166,7 +167,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			readOverview: async () => { throw new Error('Local App Server is unavailable'); },
 			cleanWorktree: async () => { throw new Error('Local App Server is unavailable'); },
 		});
-		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, (_client, _appServer, localClient) => {
+		api = await createElectronRendererApi([(client, _appServer, localClient) => { documentClient = client; localBrowserClient = localClient; return {}; }, (_client, _appServer, localClient) => {
 			serviceCollection.set(IProfileStorageService, new DesktopProfileStorageService(localClient, mainProcessService.getChannel(desktopStorageChannelName)));
 			const localTrust = createAppServerWorkspaceTrustApi(localClient);
 			serviceCollection.set(ISessionFolderAuthorizationService, {
@@ -288,7 +289,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				createBrowserHost: documentClient
 					? services => {
 						const browsers = services.get(IBrowserViewWorkbenchService);
-						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp);
+						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp, localBrowserClient);
 						const browserHost = registerAppServerBrowserHost(
 							documentClient!,
 							services.get(IPlaywrightService),

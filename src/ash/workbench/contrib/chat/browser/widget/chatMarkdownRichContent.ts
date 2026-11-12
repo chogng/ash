@@ -1,7 +1,6 @@
 import { renderAsPlaintext, renderWorkbenchMarkdown } from '../../../../../base/browser/markdownRenderer.js';
 import { escapeIcons } from '../../../../../base/common/iconLabels.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { getLxiconDefinition } from '../../../../../base/common/lxiconsUtil.js';
 import { Marked, type MarkedExtension, type Token } from '../../../../../base/common/marked/marked.js';
 import { extname } from '../../../../../base/common/path.js';
 import { escapeRegExpCharacters, htmlAttributeEncodeValue as escapeHTML } from '../../../../../base/common/strings.js';
@@ -18,13 +17,6 @@ export const chatCitationLinkClass = 'ash-chat-citation-link';
 export const chatCitationClass = 'ash-chat-citation';
 export const chatExternalLinkClass = 'ash-chat-external-link';
 
-const iconText = new Map(Object.entries({ 'arrow-down': '↓', 'arrow-up': '↑', 'arrow-left': '←', 'arrow-right': '→', 'arrow-down-up': '⇅', check: '✓', x: '×', plus: '+', minus: '−', info: 'ⓘ', warning: '⚠' }));
-const iconAliases = new Map([
-	['arrow-down-up', Lxicon.sort.id],
-	['minus', Lxicon.remove.id],
-	['plus', Lxicon.add.id],
-	['x', Lxicon.close.id],
-]);
 const fileIcons = new Map([
 	['.csv', Lxicon.csvGreen],
 	['.doc', Lxicon.docxBlue],
@@ -147,11 +139,10 @@ function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inL
 			return textOnly ? `<${tag}>${body}</${tag}>` : `<${tag} class="ash-chat-rich-grid-item">${body}</${tag}>`;
 		}
 		case 'icon': {
-			const label = iconText.get(part.name) ?? (part.label || part.name);
-			const iconId = iconAliases.get(part.name) ?? part.name;
-			const content = !textOnly && getLxiconDefinition(iconId)
-				? `$(${iconId})<span class="ash-chat-rich-icon-text">${escapeHTML(label)}</span>`
-				: label ? escapeHTML(label) : link(part.fallback.href, part.fallback.label);
+			const label = escapeHTML(part.label);
+			const content = !textOnly && part.icon
+				? `$(${part.icon.id})<span class="ash-chat-rich-icon-text">${label}</span>`
+				: label || link(part.fallback.href, part.fallback.label);
 			return `<span class="${classes('icon', part.style)}">${content}</span>`;
 		}
 		case 'details':

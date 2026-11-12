@@ -2,6 +2,9 @@ import { Lexer, Marked, type Token, type TokenizerThis, type Tokens } from '../.
 import { basicMarkupHtmlTags, sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { getDocument } from '../../../../base/browser/dom.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
+import { Icon } from '../../../../base/common/icon.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { renderAsPlaintext } from '../../../../base/browser/markdownRenderer.js';
 import { escapeRegExpCharacters, htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
@@ -28,6 +31,13 @@ const mediaTags = new Set(['img', 'video', 'audio', 'iframe', 'canvas']);
 const htmlTags = new Set<string>([...basicMarkupHtmlTags, 'script', 'style', 'svg', 'path', 'line', 'title', 'desc', 'canvas', 'iframe', 'audio', 'math']);
 const hiddenTags = new Set(['cite']);
 const fallbackText = (): string => localize('sessions.chatgpt.viewContent', 'View this content in ChatGPT');
+const iconText = new Map(Object.entries({ 'arrow-down': '↓', 'arrow-up': '↑', 'arrow-left': '←', 'arrow-right': '→', 'arrow-down-up': '⇅', check: '✓', x: '×', plus: '+', minus: '−', info: 'ⓘ', warning: '⚠' }));
+const iconAliases = new Map([
+	['arrow-down-up', Lxicon.sort.id],
+	['minus', Lxicon.remove.id],
+	['plus', Lxicon.add.id],
+	['x', Lxicon.close.id],
+]);
 
 interface RichContent {
 	readonly tag: RichTag;
@@ -411,7 +421,12 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 			}
 			return { kind: 'unavailableMedia', fallback, block };
 		}
-		if (tag.name === 'icon') return { kind: 'icon', name: values.get('name') ?? '', label, style: style(values), fallback, block };
+		if (tag.name === 'icon') {
+			const name = values.get('name') ?? '';
+			const iconId = iconAliases.get(name) ?? name;
+			const icon = getLxiconDefinition(iconId) ? Icon.fromId(iconId) : undefined;
+			return { kind: 'icon', icon, label: iconText.get(name) ?? (label || name), style: style(values), fallback, block };
+		}
 		if (typeof token.literal === 'string') return { kind: 'textLiteral', label: token.literal, block };
 		const markdown = decode(token.body, token.tokens ?? [], !block);
 		if (tag.name === 'box' || tag.name === 'row' || tag.name === 'text') {

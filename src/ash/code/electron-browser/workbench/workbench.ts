@@ -27,6 +27,7 @@ try {
 	const loadContributions = async (): Promise<void> => {
 		performance.mark('ash.desktop.contributions-start');
 		await import('../../../workbench/workbench.desktop.main.js');
+		await import('../../../sessions/contrib/chatgptweb/common/chatGPTAccountLabel.js');
 		await import('../../../sessions/common/configuration.js');
 		await import('../../../sessions/common/theme.js');
 		await import('../../../sessions/contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js');

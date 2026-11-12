@@ -9,6 +9,10 @@ import { ASH_REMOTE_SCHEME, getProviderRemoteWorkspace } from '../../remote/comm
 import type { ITcpService, TcpExecutionTarget } from '../../network/common/tcp.js';
 import { validateBrowserViewNetwork } from '../common/browserView.js';
 import { isRecord } from '../../../base/common/types.js';
+import { generateUuid } from '../../../base/common/uuid.js';
+import { CancellationToken } from '../../../base/common/cancellation.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 
 /** Resolves proxy streams through backend connections; local device access is supplied by the window owner. */
 export function registerBrowserNetworkHost(
@@ -16,6 +20,7 @@ export function registerBrowserNetworkHost(
 	hosts: IAgentHostConnectionsService,
 	workspace: IWorkspaceContextService,
 	localTcp?: ITcpService,
+	localClient?: AppServerProtocolClient,
 ) {
 	const lifetime = new DisposableStore();
 	const ambient = hosts.ambientConnection;
@@ -46,8 +51,20 @@ export function registerBrowserNetworkHost(
 	};
 	main.registerChannel('browserNetwork', {
 		listen: () => { throw new Error('Browser network has no events'); },
-		call: async <T>(_context: string, command: string, value: unknown): Promise<T> => {
+		call: async <T>(_context: string, command: string, value: unknown, cancellation = CancellationToken.None): Promise<T> => {
 			if (lifetime.isDisposed || !isRecord(value)) { throw new Error('BrowserRemoteNetworkUnavailable'); }
+			if (command === 'readPublicFavicon') {
+				if (typeof value.url !== 'string' || !value.url || value.url.length > 8192) { throw new TypeError('Invalid favicon URL'); }
+				if (!localClient || localClient.state !== 'ready' || cancellation.isCancellationRequested) { return undefined as T; }
+				const operationId = generateUuid();
+				const generation = localClient.generation;
+				const request = appServerRequest(localClient, 'browser/favicon/read', { operationId, url: value.url });
+				const listener = cancellation.onCancellationRequested(() => {
+					if (localClient.generation === generation) { void appServerRequest(localClient, 'browser/favicon/cancel', { operationId }).catch(() => undefined); }
+				});
+				try { return (await request).dataUrl as T; }
+				finally { listener.dispose(); }
+			}
 			if (command === 'probe') { select(value.network); return undefined as T; }
 			const id = value.id;
 			if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/u.test(id)) { throw new TypeError('Invalid browser TCP identity'); }

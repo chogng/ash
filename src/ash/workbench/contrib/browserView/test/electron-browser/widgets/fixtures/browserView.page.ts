@@ -135,6 +135,7 @@ const pageEvents = resources.add(new Emitter<BrowserViewEvent>());
 // Main-owned page operations stop at the service boundary; renderer, toolbar and context menu remain real.
 services.registerInstance(IBrowserViewService, {
 	getBrowserHistory: async () => ({ items: [{ id: 1, url: 'https://example.com/visited', title: 'Visited page', time: 1 }] }),
+	getWebsiteFavicon: async () => undefined,
 	deleteBrowserHistory: async () => { calls.push('clearHistory'); },
 	loadURL: async (_id: string, url: string) => { calls.push(url); },
 	onDidEvent: pageEvents.event, getOrCreateBrowserView: async (id: string) => ({ ...info, id, state: { ...info.state, targetId: id } }), getState: async (id: string) => ({ ...info.state, targetId: id }),

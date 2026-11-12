@@ -309,6 +309,8 @@ export interface IBrowserViewService {
 	toggleAreaSelection(id: string, enabled?: boolean): Promise<void>;
 	captureScreenshot(id: string, options?: IBrowserViewCaptureScreenshotOptions): Promise<VSBuffer>;
 	getBrowserHistory(id: string): Promise<ISerializedBrowserHistoryEntriesSnapshot>;
+	/** Resolve a site icon using this window's browser history and public icon resources. */
+	getWebsiteFavicon(origin: string): Promise<string | undefined>;
 	deleteBrowserHistory(id: string, entryIds?: readonly number[]): Promise<void>;
 	getSharing(id: string): Promise<readonly string[]>;
 	setSharing(id: string, threadIds: readonly string[]): Promise<void>;

@@ -1,6 +1,17 @@
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
+const accountProviderLabels = new Map<string, () => string>();
+
+export function registerAccountProviderLabel(provider: string, label: () => string): void {
+	if (accountProviderLabels.has(provider)) throw new Error(`Account provider label already registered: ${provider}`);
+	accountProviderLabels.set(provider, label);
+}
+
+export function getAccountProviderLabel(provider: string): string | undefined {
+	return accountProviderLabels.get(provider)?.();
+}
+
 export type AccountStatus = 'ready' | 'reauthenticationRequired' | 'unavailable';
 
 export interface Account {

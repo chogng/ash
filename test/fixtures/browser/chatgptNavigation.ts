@@ -1,6 +1,7 @@
 import './chatFixtureLocalization.js';
 import { projectMaterialFilesScheme } from '../../../src/ash/platform/projects/common/projectMaterialFiles.js';
 import { IWorkbenchEnvironmentService } from '../../../src/ash/workbench/services/environment/common/environmentService.js';
+import { IBrowserViewService } from '../../../src/ash/platform/browserView/common/browserView.js';
 import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import '../../../src/ash/sessions/browser/actions/sessionsChatActions.js';
 import '../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js';
@@ -40,6 +41,7 @@ import { ServiceCollection } from '../../../src/ash/platform/instantiation/commo
 import { IStorageService, StorageScope, StorageTarget } from '../../../src/ash/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
+import { OpenerService } from '../../../src/ash/editor/browser/services/openerService.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { ChatGPTService, IChatGPTService, chatGPTProjectConversationId } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
@@ -228,10 +230,6 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	} satisfies IExtensionHostApi],
 	[IConfigurationService, configuration],
 	[IContextKeyService, resources.add(new ContextKeyService())],
-	[IOpenerService, { open: async (url: string, options?: { openExternal?: boolean }) => {
-		if (options?.openExternal) document.body.dataset.openedExternal = url;
-		return true;
-	} } as unknown as IOpenerService],
 	[ISessionsConversationService, { focus: () => widget.focus() } as ISessionsConversationService],
 	[IEditorService, {
 		openEditor: async ({ resource }: { resource: URI }) => {
@@ -258,6 +256,26 @@ services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageM
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
+if (parameters.has('websiteFavicons')) {
+	services.registerInstance(IBrowserViewService, {
+		async getWebsiteFavicon(origin: string) {
+			document.body.dataset.faviconOrigins = [document.body.dataset.faviconOrigins, origin].filter(Boolean).join(' ');
+			return origin === 'https://docs.python.org'
+				? 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGNgAAIAAAUAAen63NgAAAAASUVORK5CYII='
+				: undefined;
+		},
+	} as IBrowserViewService);
+}
+services.registerSingleton(IOpenerService, () => {
+	const opener = services.createInstance(OpenerService);
+	opener.setDefaultExternalOpener({
+		openExternal: async url => {
+			document.body.dataset.openedExternal = url;
+			return true;
+		},
+	});
+	return opener;
+});
 services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 services.registerSingleton(IProjectDialogService, () => services.createInstance(ProjectDialogService, { readEnabled: async () => true }));
 registerTestVoiceInputServices(services);

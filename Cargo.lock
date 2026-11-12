@@ -703,6 +703,7 @@ dependencies = [
  "ash-tools",
  "ash-uds",
  "ash-utils-absolute-path",
+ "ash-utils-cache",
  "ash-utils-home-dir",
  "ash-utils-image",
  "ash-utils-path",
@@ -854,6 +855,7 @@ dependencies = [
 name = "ash-attachments"
 version = "0.1.0"
 dependencies = [
+ "ash-async-utils",
  "ash-attachment-store",
  "ash-http-client",
  "ash-protocol",

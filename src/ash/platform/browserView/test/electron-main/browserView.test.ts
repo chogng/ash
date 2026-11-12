@@ -295,6 +295,65 @@ suite('Browser view ownership and operations', () => {
 		assert.deepEqual(await f.manager.getBrowserHistory(id), { items: [] });
 	});
 
+	test('site favicon lookup reuses the icon discovered by the browser page', async () => {
+		using f = fixture();
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
+		f.contents.emit('did-navigate', {}, 'https://example.test/');
+		const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGNgAAIAAAUAAen63NgAAAAASUVORK5CYII=';
+		const bytes = Buffer.from(image.slice(image.indexOf(',') + 1), 'base64');
+		const late = promiseWithResolvers<Response>();
+		const requests: string[] = [];
+		const session = f.manager.tryGetBrowserView(id)!.session.electronSession;
+		Object.assign(session, {
+			fetch: async (href: string, options: RequestInit) => {
+				assert.equal(options.cache, 'force-cache');
+				assert.equal(options.credentials, 'omit');
+				assert.equal(options.mode, 'same-origin');
+				assert.equal(new Headers(options.headers).get('origin'), 'https://example.test');
+				requests.push(href);
+				switch (new URL(href).pathname) {
+					case '/slow.png': return late.promise;
+					case '/brand.png': return new Response(bytes);
+					default: return new Response(null, { status: 404 });
+				}
+			}
+		});
+		const crossOriginImage = 'data:image/x-icon;base64,AAABAA==';
+		const read = mock.method(f, 'readPublicFavicon', async (url: URL) => url.hostname === 'cdn.example.test' ? crossOriginImage : undefined);
+		try {
+			const channel = browserViewChannel(f.manager, { call: async <T>() => null as T, listen: () => Event.None });
+			f.contents.emit('page-favicon-updated', {}, ['https://example.test/missing.ico', 'https://example.test/brand.png']);
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(await channel.call('window:1', 'getWebsiteFavicon', ['https://example.test']), image);
+			assert.deepEqual(requests, ['https://example.test/missing.ico', 'https://example.test/brand.png']);
+			assert.equal(read.mock.callCount(), 0);
+			f.contents.emit('page-favicon-updated', {}, ['https://cdn.example.test/brand.png']);
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(read.mock.calls[0]?.arguments[0].href, 'https://cdn.example.test/brand.png');
+			assert.equal(await channel.call('window:1', 'getWebsiteFavicon', ['https://example.test']), crossOriginImage);
+			f.contents.emit('page-favicon-updated', {}, ['https://example.test/slow.png']);
+			f.contents.emit('did-navigate', {}, 'https://other.test/');
+			late.resolve(new Response(bytes));
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal((await f.manager.getBrowserHistory(id)).items.at(-1)?.icon, undefined);
+			assert.equal(await channel.call('window:1', 'getWebsiteFavicon', ['https://unvisited.test']), undefined);
+			assert.equal(read.mock.calls.at(-1)?.arguments[0].href, 'https://unvisited.test/favicon.ico');
+		} finally { read.mock.restore(); }
+	});
+
+	test('the favicon channel accepts only origins and sends the canonical icon URL', async () => {
+		using f = fixture();
+		const channel = browserViewChannel(f.manager, { call: async <T>() => null as T, listen: () => Event.None });
+		for (const target of ['https://example.com/library?file_id=private', 'https://user:password@example.com', 'http://example.com:8080', 'file:///favicon.ico']) {
+			await assert.rejects(channel.call('window:1', 'getWebsiteFavicon', [target]), /Invalid website favicon origin/);
+		}
+		const read = mock.method(f, 'readPublicFavicon');
+		try {
+			assert.equal(await channel.call('window:1', 'getWebsiteFavicon', ['https://example.test']), undefined);
+			assert.equal(read.mock.calls[0]?.arguments[0].href, 'https://example.test/favicon.ico');
+		} finally { read.mock.restore(); }
+	});
+
 	test('agent navigation does not enter the user visit history', async () => {
 		using f = fixture();
 		await f.create();
@@ -751,6 +810,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 		command: async (_method: string, _params?: unknown): Promise<unknown> => ({}),
 		load: async (url: string): Promise<void> => { f.url = url; },
 		capture: async () => ({ toPNG: () => Buffer.from('png') }),
+		readPublicFavicon: async (_url: URL): Promise<string | undefined> => undefined,
 		remote: false, networks: new Set<string>(), networkRequests: [] as string[], encryptionAvailable: true, authCacheClears: 0,
 		menuRequests: [] as INativeContextMenuRequest[],
 		popupMenu: async (_request: INativeContextMenuRequest): Promise<INativeContextMenuResult> => ({}),
@@ -814,6 +874,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 			close: () => { f.menuCloses++; },
 		} as unknown as ElectronContextMenu,
 		getNlsMessages: () => f.messages,
+		readPublicFavicon: (url: URL) => f.readPublicFavicon(url),
 		getWindowNetwork: () => f.remote ? { authority: 'ssh-remote+test' } : undefined,
 		getRemoteNetwork(network: { authority: string; }) { const authority = network.authority; f.networkRequests.push(authority); return (f.remote && authority === 'ssh-remote+test') || f.networks.has(authority) ? { authority, tunnels: { openProxy: () => f.proxy() } } : undefined; }, createSession: (partition: string) => {
 			let session = partitions.get(partition);

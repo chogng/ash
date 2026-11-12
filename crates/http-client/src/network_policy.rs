@@ -119,6 +119,11 @@ impl OutboundNetworkPolicy {
         }
     }
 
+    /// Changes whenever outbound host access changes, invalidating policy-dependent cached results.
+    pub fn revision(&self) -> u64 {
+        *self.state.changes.borrow()
+    }
+
     pub fn acquire(&self, url: &str) -> Result<NetworkPermit, HttpClientError> {
         let host = host(url)?;
         let mut current = self

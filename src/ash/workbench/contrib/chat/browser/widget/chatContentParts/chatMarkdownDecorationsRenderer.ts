@@ -92,6 +92,7 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 				const scope = active.value = new DisposableStore();
 				const anchors = [...sources].map(source => source.cloneNode(true) as HTMLAnchorElement);
 				const preview = createChatLinkPreview(document, anchors);
+				this.richLinks.loadPreviewIcons(preview, scope);
 				scope.add(bindChatLinkPreviewActivation(preview, button, () => hover.hide(), this.openLink));
 				for (const anchor of anchors) {
 					const href = anchor.getAttribute('href')!;

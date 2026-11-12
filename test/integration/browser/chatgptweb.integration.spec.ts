@@ -969,7 +969,7 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 					parent: null, message: {
 						id: 'reply', author: { role: 'assistant' }, content: {
 							content_type: 'text', parts: [
-								`Source ${citation} urlPython docsturn0search1\n\n<iframe title="Inline preview" srcdoc="${srcdoc}"/>\n\n<iframe title="External preview" src="https://frame.example.invalid/demo"/>\n\n<Chart title="Dataset chart" data={${JSON.stringify({ labels: ['May', 'June'], datasets: [{ label: 'Amount', data: [42, 64] }] })}}/>\n\n**完整可筛选表格：**[实验结果.csv](sandbox:/mnt/data/report.csv) · [在线查看](https://example.com/report?view=compact&utm_source=chatgpt.com#table)`
+								`Source ${citation} urlPython docsturn0search1\n\n<Link url="https://docs.python.org/3/" title="Python website"/>\n\n<iframe title="Inline preview" srcdoc="${srcdoc}"/>\n\n<iframe title="External preview" src="https://frame.example.invalid/demo"/>\n\n<Chart title="Dataset chart" data={${JSON.stringify({ labels: ['May', 'June'], datasets: [{ label: 'Amount', data: [42, 64] }] })}}/>\n\n**完整可筛选表格：**[实验结果.csv](sandbox:/mnt/data/report.csv) · [在线查看](https://example.com/report?view=compact&utm_source=chatgpt.com#table)`
 							]
 						}, metadata: { search_result_groups: [{ entries: references }] },
 					}
@@ -978,7 +978,7 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 		}
 	}));
 	await page.route('**/service/.resource?*', route => route.fulfill({ contentType: 'text/csv', body: 'name,value\nMay,42\n' }));
-	await page.goto('/chatgptNavigation.html?locale=zh-CN');
+	await page.goto('/chatgptNavigation.html?locale=zh-CN&websiteFavicons');
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 	const footerSources = page.locator('.ash-chat-message-actions').getByRole('button', { name: '来源（2）', exact: true });
 	await expect(footerSources).toBeVisible();
@@ -990,8 +990,12 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 	const linkOffset = () => adjacentLink.evaluate(element => element.getBoundingClientRect().top - element.closest('.ash-chat-markdown-part')!.getBoundingClientRect().top);
 	const restingY = await linkOffset();
 	await expect(sources).toHaveAttribute('aria-expanded', 'false');
+	expect(await page.locator('body').getAttribute('data-favicon-origins')).toBeNull();
 	await sources.hover();
 	await expect(sourceCard).toBeVisible();
+	await expect(sourceLinks.first().locator('.ash-chat-link-favicon')).toBeVisible();
+	await expect(sourceLinks.last().locator('[data-ash-icon-id="github"]')).toBeVisible();
+	await expect(page.locator('body')).toHaveAttribute('data-favicon-origins', 'https://docs.python.org https://github.com');
 	await expect(sources).toHaveAttribute('aria-expanded', 'true');
 	await expect(sourceLinks.first()).toHaveAccessibleName('docs.python.org CSV documentation');
 	await expect(sourceLinks.first()).toHaveAttribute('href', 'https://docs.python.org/3/library/csv.html');
@@ -1016,6 +1020,11 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 	await expect(page.locator('body')).toHaveAttribute('data-opened-external', references[1]!.url);
 	await expect(sourceCard).toBeHidden();
 	await expect(adjacentLink).toHaveAttribute('href', 'https://docs.python.org/3/library/csv.html');
+	await page.getByRole('link', { name: 'Python website', exact: true }).hover();
+	const linkPreview = page.getByRole('dialog', { name: '链接预览', exact: true });
+	await expect(linkPreview.getByRole('link').locator('.ash-chat-link-favicon')).toBeVisible();
+	await page.mouse.move(1, 1);
+	await expect(linkPreview).toBeHidden();
 	const inline = page.frameLocator('iframe[title="Inline preview"]').frameLocator('iframe');
 	await inline.getByRole('button', { name: 'Increment' }).click();
 	await expect(inline.locator('output')).toHaveText('1');

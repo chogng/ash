@@ -20,6 +20,7 @@ ash-utils-plugins = { workspace = true }
 ash-language = { workspace = true }
 external-ext-protocol.workspace = true
 ash-utils-image = { workspace = true }
+ash-utils-cache = { workspace = true }
 assets = { workspace = true }
 testing = { workspace = true }
 rfd = { workspace = true }

@@ -123,9 +123,10 @@ export class DesktopMain extends Disposable {
 			profileServices.registerInstance(IRemoteAuthorityResolverService, resolver);
 			const resolverScope = this._register(new MutableDisposable<DisposableStore>());
 			let documentClient: AppServerProtocolClient | undefined;
+			let localBrowserClient: AppServerProtocolClient | undefined;
 			let localResolver: NativeExtensionService | undefined;
 			const apiReady = createElectronRendererApi([
-				client => { documentClient = client; return {}; },
+				(client, _appServer, localClient) => { documentClient = client; localBrowserClient = localClient; return {}; },
 				...this.rendererCapabilities,
 				(_client, _appServer, localClient) => registerLocalTranscriptionService(transcriptionServices, localClient),
 			], { browser: true, textDocuments: true, agentHosts: true, transportHandshake: true }, workspaceTrust, mainProcessService, async (localApi, factories, authority, attempt) => {
@@ -263,7 +264,7 @@ export class DesktopMain extends Disposable {
 					} : undefined,
 					createBrowserHost: documentClient ? services => {
 						const browsers = services.get(IBrowserViewWorkbenchService);
-						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp);
+						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp, localBrowserClient);
 						const browserHost = registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService), services.get(IAgentHostCanvasCollection), owner => browsers.resolveNetwork(owner));
 						return toDisposable(() => { browserHost.dispose(); networkHost.dispose(); });
 					} : undefined,

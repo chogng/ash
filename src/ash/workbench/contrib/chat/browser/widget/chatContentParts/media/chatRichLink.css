@@ -63,6 +63,13 @@
 	margin: var(--ash-spacing-size20) 0 0;
 }
 
+.ash-chat-link-favicon {
+	inline-size: var(--ash-lxiconFontSize);
+	block-size: var(--ash-lxiconFontSize);
+	margin-block-start: var(--ash-spacing-size20);
+	object-fit: contain;
+}
+
 .ash-chat-link-source-preview {
 	margin-block-start: var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);

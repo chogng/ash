@@ -22,6 +22,7 @@ declare global {
 		releaseNextUpload(): void;
 		readonly projectMemoryBodies: readonly string[];
 	};
+	var ashLibraryLinkFixture: { readonly opened: string[]; restore(): void; };
 }
 
 interface FixtureReply {
@@ -850,9 +851,11 @@ test.describe('Unified Chat sidebar', () => {
 		const workbook = { name: '二维磁性材料_合成气氛与温度.xlsx', bytes: [0x50, 0x4b, 0x03, 0x04, 0x00, 0xff] };
 		const source = { ref_id: 'turn2search1', url: 'https://example.com/workbook?view=full&utm_source=chatgpt.com#data', title: 'Workbook source', snippet: '' };
 		const sourceUrl = 'https://example.com/workbook?view=full#data';
+		const libraryUrl = 'https://chatgpt.com/library?file_id=libfile_example&account_id=personal';
+		const externalUrl = 'https://example.com/report?view=compact#table';
 		const citation = '\uE200genui\uE202{"citation":{"ref":"turn2search1"}}\uE201';
 		await installService(electron, false, {
-			suffix: `\n\n**完整可筛选表格：**[实验结果.xlsx](sandbox:/mnt/data/report.xlsx) · [在线查看](https://example.com/report?view=compact&utm_source=chatgpt.com#table) ${citation}`,
+			suffix: `\n\n**完整可筛选表格：**[实验结果.xlsx](sandbox:/mnt/data/report.xlsx) · [在线查看](${libraryUrl}) ${citation}\n\n[报告](https://example.com/report?view=compact&utm_source=chatgpt.com#table)`,
 			workbook,
 			sources: [source],
 			timestamp: 1_793_003_940,
@@ -861,7 +864,7 @@ test.describe('Unified Chat sidebar', () => {
 		await page.locator('[data-item="chatgpt:history-one"] .ash-sessions-list-item').click();
 		const fileLink = page.getByRole('link', { name: '实验结果.xlsx', exact: true });
 		const webLink = page.getByRole('link', { name: '在线查看', exact: true });
-		await expect(webLink).toHaveAttribute('href', 'https://example.com/report?view=compact#table');
+		await expect(webLink).toHaveAttribute('href', libraryUrl);
 		const paragraph = fileLink.locator('..');
 		await expect(paragraph.locator('strong')).toHaveText('完整可筛选表格：');
 		await expect(fileLink.locator('[data-ash-icon-id="xls-green"][aria-hidden="true"]')).toBeVisible();
@@ -877,6 +880,27 @@ test.describe('Unified Chat sidebar', () => {
 		await page.keyboard.press('Tab');
 		await expect(webLink).toBeFocused();
 		await expect(webLink).toHaveCSS('outline-style', 'solid');
+		await electron.evaluate(({ shell }) => {
+			const original = shell.openExternal;
+			globalThis.ashLibraryLinkFixture = { opened: [], restore: () => { shell.openExternal = original; } };
+			shell.openExternal = async url => { globalThis.ashLibraryLinkFixture.opened.push(url); };
+		});
+		try {
+			const opened = () => electron.evaluate(() => globalThis.ashLibraryLinkFixture.opened);
+			const confirmation = page.getByRole('dialog', { name: '打开外部链接', exact: true });
+			await webLink.press('Enter');
+			await expect.poll(opened).toEqual([libraryUrl]);
+			await expect(confirmation).toHaveCount(0);
+			const reportLink = page.getByRole('link', { name: '报告', exact: true });
+			await expect(reportLink).toHaveAttribute('href', externalUrl);
+			await reportLink.click();
+			await expect(confirmation).toContainText(externalUrl);
+			await page.keyboard.press('Escape');
+			await expect(confirmation).toHaveCount(0);
+			expect(await opened()).toEqual([libraryUrl]);
+		} finally {
+			await electron.evaluate(() => globalThis.ashLibraryLinkFixture.restore());
+		}
 		const attachment = page.getByRole('link', { name: `下载 ${workbook.name}`, exact: true });
 		await expect(attachment.locator('[data-ash-icon-id="xls-green"][aria-hidden="true"]')).toBeVisible();
 		await expect(attachment).toHaveCSS('text-decoration-style', 'dotted');

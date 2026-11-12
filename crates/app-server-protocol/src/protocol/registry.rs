@@ -417,6 +417,12 @@ use crate::protocol::browser::BrowserCreateResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserElementTargetDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserFaviconCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserFaviconReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserFaviconReadResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserListResult;
@@ -3921,6 +3927,13 @@ client_methods! {
     BrowserTcpRead => "browser/tcp/read" { params: BrowserTcpParams, response: BrowserTcpReadResult, serialization: None, },
     BrowserTcpWrite => "browser/tcp/write" { params: BrowserTcpWriteParams, response: BrowserTcpWriteResult, serialization: None, },
     BrowserTcpClose => "browser/tcp/close" { params: BrowserTcpParams, response: (), serialization: None, },
+    BrowserFaviconRead => "browser/favicon/read" {
+        params: BrowserFaviconReadParams, response: BrowserFaviconReadResult, serialization: ResourceExclusive("url"),
+        cancellation: "operationId",
+    },
+    BrowserFaviconCancel => "browser/favicon/cancel" {
+        params: BrowserFaviconCancelParams, response: (), serialization: None,
+    },
     BrowserConfigure => "browser/configure" {
         params: BrowserConfigureParams,
         response: (),
@@ -6776,6 +6789,9 @@ typescript_bindings! {
     AgentInteractionCapability,
     BrowserCapability,
     BrowserTcpParams,
+    BrowserFaviconCancelParams,
+    BrowserFaviconReadParams,
+    BrowserFaviconReadResult,
     BrowserTcpOpenParams,
     BrowserTcpWriteParams,
     BrowserTcpReadResult,

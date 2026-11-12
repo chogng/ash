@@ -47,7 +47,7 @@ import { basename, dirname, isAbsolute, join, parse } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { throwIfCancelled, type CancellationToken } from '../../base/common/cancellation.js';
+import { CancellationTokenSource, throwIfCancelled, type CancellationToken } from '../../base/common/cancellation.js';
 import { CancellationError, isCancellationError } from '../../base/common/errors.js';
 import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableDisposable, installDisposableTracker, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { Lazy } from '../../base/common/lazy.js';
@@ -64,6 +64,7 @@ import { remoteExecutablePath, remoteHostExecutablePath } from '../../platform/r
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from '../../platform/ipc/electron-main/trustedIpcRouter.js';
 import { ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { browserViewChannel } from '../../platform/browserView/electron-main/browserViewIpc.js';
+import { isBrowserFavicon } from '../../platform/browserView/common/browserHistory.js';
 import { BrowserViewMainService, IBrowserViewMainService } from '../../platform/browserView/electron-main/browserViewMainService.js';
 import { projectMaterialFilesChannel } from '../../platform/projects/common/projectMaterialFiles.js';
 import { ProjectMaterialFilesChannel } from '../../platform/projects/electron-main/projectMaterialFilesChannel.js';
@@ -2063,6 +2064,20 @@ export class AshApplication extends Disposable {
 			contextMenu,
 			getNlsMessages: () => this.activeLanguagePack.bundles['ash.workbench'] ?? {},
 			getWorkspaceId: () => workspaceContext.getWorkspace().id,
+			readPublicFavicon: async (url: URL, signal: AbortSignal) => {
+				signal.throwIfAborted();
+				const cancellation = new CancellationTokenSource();
+				const abort = () => cancellation.cancel();
+				signal.addEventListener('abort', abort, { once: true });
+				try {
+					const network = this.mainProcessIpcServer.getChannel('browserNetwork', client => client.ctx === context);
+					const icon = await network.call<unknown>('readPublicFavicon', { url: url.href }, cancellation.token);
+					return isBrowserFavicon(icon) ? icon : undefined;
+				} finally {
+					signal.removeEventListener('abort', abort);
+					cancellation.dispose();
+				}
+			},
 			getWindowNetwork: () => {
 				const authority = getWorkspaceRemoteAuthority(workspaceContext.getWorkspace());
 				return authority ? { authority } : undefined;

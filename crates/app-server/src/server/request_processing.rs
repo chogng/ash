@@ -72,7 +72,7 @@ impl RequestIds {
 impl RequestLane {
     fn for_method(method: Option<ClientMethod>) -> Self {
         match method {
-            Some(ClientMethod::SessionRuntimeInvoke) => Self::Network,
+            Some(ClientMethod::SessionRuntimeInvoke | ClientMethod::BrowserFaviconRead) => Self::Network,
             Some(method) if super::github_processor::GitHubRequestProcessor::handles(method)
                 || super::issue_operations::IssueRequestProcessor::handles(method) => Self::Network,
             Some(
@@ -83,6 +83,7 @@ impl RequestLane {
                 | ClientMethod::VoiceRejectDelegation
                 | ClientMethod::ToolAppCancel
                 | ClientMethod::ToolResourceCancel
+                | ClientMethod::BrowserFaviconCancel
                 | ClientMethod::GitHubCancel
                 | ClientMethod::SessionRuntimeCancel
                 | ClientMethod::ApprovalEnvironmentCancel
@@ -170,6 +171,7 @@ impl AppServer {
     /// Connection state, resource admission and response delivery remain with its dispatcher.
     pub(super) fn prepare_network_request(
         &self,
+        connection: &ConnectionState,
         prepared: &mut PreparedRequest,
         admission: &request_dispatch::RequestAdmission,
     ) -> request_dispatch::NetworkFuture {
@@ -178,6 +180,24 @@ impl AppServer {
         let token = prepared.cancellation.clone();
         if admission.permit.is_err() || token.is_cancelled() {
             return Box::pin(async { None });
+        }
+        if method == ClientMethod::BrowserFaviconRead {
+            let authority = connection.authority;
+            let favicons = self.browser_favicons.clone();
+            let policy = self.calls.network_policy();
+            return Box::pin(async move {
+                Some(
+                    tokio::task::spawn_blocking(move || {
+                        super::browser_processor::BrowserRequestProcessor::read_favicon(
+                            authority, &favicons, policy, &params, &token,
+                        )
+                    })
+                    .await
+                    .unwrap_or_else(|_| {
+                        Err(RpcError::new(-32603, AppServerErrorName::InternalError))
+                    }),
+                )
+            });
         }
         if method == ClientMethod::SessionRuntimeInvoke {
             let runtimes = self.session_runtimes.clone();

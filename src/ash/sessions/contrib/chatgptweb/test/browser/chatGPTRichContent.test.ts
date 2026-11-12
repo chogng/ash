@@ -333,11 +333,12 @@ suite('ChatGPT rich content', () => {
 	test('maps ChatGPT icons to registered Ash glyphs and retains accessible text', () => {
 		const names = ['check', 'x', 'arrow-down', 'arrow-up', 'arrow-left', 'arrow-right', 'arrow-down-up', 'plus', 'minus', 'info', 'warning', 'file'];
 		const markers = [...names.map(name => `<icon name="${name}"/>`), '<icon name="key-round" label="Key"/>'];
+		const iconIds = ['check', 'close', 'arrow-down', 'arrow-up', 'arrow-left', 'arrow-right', 'sort', 'add', 'remove', 'info', 'warning', 'file'];
+		const parts = decodeChatGPTReply(markers.join(' ')).richContent!.parts;
+		assert.deepEqual(parts.map(part => part.kind === 'icon' && part.icon?.id), [...iconIds, undefined]);
 		const root = document.createElement('div');
 		root.innerHTML = render(markers.join(' '));
-		assert.deepEqual(Array.from(root.querySelectorAll<HTMLElement>('[data-ash-icon-id]'), icon => icon.dataset.ashIconId), [
-			'check', 'close', 'arrow-down', 'arrow-up', 'arrow-left', 'arrow-right', 'sort', 'add', 'remove', 'info', 'warning', 'file',
-		]);
+		assert.deepEqual(Array.from(root.querySelectorAll<HTMLElement>('[data-ash-icon-id]'), icon => icon.dataset.ashIconId), iconIds);
 		assert.equal(root.querySelector('.ash-chat-rich-icon:last-child')?.textContent, 'Key');
 		assert.deepEqual(markers.map(marker => getChatGPTRichContentText(marker).trim()), ['✓', '×', '↓', '↑', '←', '→', '⇅', '+', '−', 'ⓘ', '⚠', 'file', 'Key']);
 	});

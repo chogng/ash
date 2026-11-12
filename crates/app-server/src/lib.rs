@@ -2,6 +2,7 @@
 
 mod app_tools_host;
 mod attachment_upload_store;
+mod browser_favicons;
 mod browser_host;
 mod browser_tool;
 mod client_host;
