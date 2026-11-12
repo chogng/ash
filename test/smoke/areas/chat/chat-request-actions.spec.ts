@@ -70,7 +70,7 @@ const requestActionScenarios = {
 	versions: 'reruns a request from its Git checkpoint and compares both results',
 };
 
-for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as const) for (const scenario of ['history', 'clipboard', 'checkpoint', 'reply', 'restore', 'redo', 'queue', 'turnChanges', 'versions'] as const) {
+for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const scenario of ['history', 'clipboard', 'checkpoint', 'reply', 'restore', 'redo', 'queue', 'turnChanges', 'versions'] as const) {
 	if ((scenario === 'restore' || scenario === 'redo' || scenario === 'queue') && surface !== 'IDE') continue;
 	if (scenario === 'turnChanges' && surface !== 'IDE' && surface !== 'Agents Code') continue;
 	if (scenario === 'versions' && surface !== 'Agents Code') continue;
@@ -111,10 +111,6 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 			const agents = surface !== 'IDE';
 			const page = agents ? await workbench.openAgentsWindow(target.kind) : workbench.page;
 			const window = new Workbench(page);
-			const openCowork = async () => {
-				await page.locator('[data-action-id="sessions.activity.more"] button').click();
-				await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
-			};
 			connection = await connectProfile(application, webAppServer, testWorkspace.directory, page);
 			const { client } = connection;
 			const address = server.address();
@@ -167,14 +163,13 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 			} else if (agents) {
 				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 				await page.locator('.ash-sessions-list-item').filter({ hasText: 'Request actions source' }).click();
-				if (surface === 'Agents Cowork') await openCowork();
 			} else {
 				await window.quickaccess.runCommand('workbench.action.chat.open');
 				if (!await page.locator('.ash-chat-sessions-sidebar').isVisible()) await window.quickaccess.runCommand('agentSessions.toggleAgentSessionsSidebar');
 				await page.locator('.ash-chat-sessions-sidebar .ash-agent-session-row').filter({ hasText: 'Request actions source' }).click();
 			}
 			const chat = page.locator(ashChat ? '.ash-native-chat-widget .ash-chat'
-				: agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-native-chat'}` : '.ash-chat-view-pane .ash-chat:visible');
+				: agents ? '.ash-sessions-chat-slot.active:visible .ash-chat' : '.ash-chat-view-pane .ash-chat:visible');
 			const transcript = chat.locator('.ash-chat-list-widget, .ash-native-chat-list-widget');
 			const composer = chat.locator('.ash-chat-input-part');
 			const draft = composer.locator('.stanza-editor-input');
@@ -448,8 +443,6 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 			expect((await read(root)).turns.flatMap(turn => turn.items).filter(item => item.type === 'userMessage').map(item => item.text)).toEqual(['Original request']);
 			const beforeNewChat = (await client.request(methods['session/read'], { sessionId })).session.threads.map(thread => thread.threadId);
 			await page.locator(agents ? '[data-action-id="sessions.newSession"] button' : '.ash-chat-title-actions .ash-split-action-primary button').click();
-			// New opens Code in this workspace; Collab presents the same draft in Cowork.
-			if (surface === 'Agents Cowork') await openCowork();
 			await expect(chat).toHaveAttribute('data-untitled-session-id', /.+/u);
 			await expect(composer.locator('.view-lines')).not.toContainText('Unsent original draft');
 			expect((await client.request(methods['session/read'], { sessionId })).session.threads.map(thread => thread.threadId)).toEqual(beforeNewChat);

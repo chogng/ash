@@ -482,6 +482,7 @@
 		"--ash-select-style-select-foreground",
 		"--ash-select-style-select-list-background",
 		"--ash-sessions-chat-content-bottom",
+		"--ash-sessions-editor-divider-offset",
 		"--ash-sessions-editor-tool-inset",
 		"--ash-sessions-inverse-zoom-factor",
 		"--ash-sessions-sidebar-hover-background",

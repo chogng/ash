@@ -39,6 +39,7 @@ export class ChatFindModel extends Disposable {
 	private results: readonly IChatFindMatch[] = [];
 	private index = -1;
 	private truncated = false;
+	private suspendedMatch: Pick<IChatFindMatch, 'itemId' | 'partIndex' | 'start' | 'end'> | undefined;
 
 	constructor(
 		private readonly getItems: () => readonly IChatListItem[],
@@ -67,6 +68,7 @@ export class ChatFindModel extends Disposable {
 		this.pattern = undefined;
 		this.index = -1;
 		this.results = [];
+		this.suspendedMatch = undefined;
 		if (query) {
 			let source = options.isRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 			try {
@@ -86,7 +88,8 @@ export class ChatFindModel extends Disposable {
 
 	public recompute(): void {
 		if (this.isDisposed) { return; }
-		const active = this.activeMatch;
+		const active = this.activeMatch ?? this.suspendedMatch;
+		this.suspendedMatch = undefined;
 		const matches: IChatFindMatch[] = [];
 		const live = new Set<string>();
 		this.truncated = false;
@@ -142,13 +145,15 @@ export class ChatFindModel extends Disposable {
 		return this.activeMatch;
 	}
 
-	public clear(): void {
-		this.search = '';
-		this.pattern = undefined;
+	/** Drops derived transcript data while retaining the query and position for reopening. */
+	public suspend(): void {
+		if (this.activeMatch) {
+			const { itemId, partIndex, start, end } = this.activeMatch;
+			this.suspendedMatch = { itemId, partIndex, start, end };
+		}
 		this.results = [];
 		this.parts.clear();
 		this.index = -1;
-		this.invalid = false;
 		this.truncated = false;
 		this.changed.fire();
 	}

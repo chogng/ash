@@ -1,0 +1,84 @@
+.ash-simple-find {
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size40);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	box-shadow: 0 4px 12px var(--ash-widget-shadow);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-simple-find[hidden] {
+	display: none;
+}
+
+.ash-simple-find-row,
+.ash-simple-find-query,
+.ash-simple-find-options,
+.ash-simple-find-actions {
+	display: flex;
+	align-items: center;
+}
+
+.ash-simple-find-row {
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-simple-find-query {
+	flex: 1 0 min(100%, 172px);
+	min-width: 0;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-simple-find-query > .ash-input-box {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.ash-simple-find-options,
+.ash-simple-find-actions {
+	flex: none;
+}
+
+.ash-simple-find-actions {
+	margin-inline-start: auto;
+}
+
+.ash-simple-find-row .ash-button.icon-only {
+	width: var(--ash-spacing-size240);
+	height: var(--ash-spacing-size240);
+	padding: 0;
+}
+
+.ash-simple-find-status {
+	min-width: 0;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+	color: var(--ash-description-foreground);
+}
+
+.ash-simple-find-status:empty {
+	position: absolute;
+}
+
+.ash-simple-find-status.detail {
+	order: 1;
+	flex: 1 0 100%;
+}
+
+.ash-simple-find.invalid .ash-simple-find-status {
+	color: var(--ash-error-foreground);
+}
+
+:is(
+		.hc-black,
+		.hc-light,
+		[data-color-scheme="hcDark"],
+		[data-color-scheme="hcLight"]
+	)
+	.ash-simple-find {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}

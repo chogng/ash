@@ -351,15 +351,15 @@ async function readComposerShadow(
 	});
 }
 
-async function openSessionsComposer(page: Page, presentation: 'Cowork' | 'Code'): Promise<Locator> {
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	if (presentation === 'Cowork') {
-		// Desktop's Chat mode opens ChatGPT; Collab hosts the shared Cowork composer.
+async function openSessionsComposer(page: Page, presentation: 'Collab' | 'Code'): Promise<Locator> {
+	const mode = presentation === 'Collab' ? 'Chat / Agents' : 'Code';
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: mode, exact: true }).click();
+	if (presentation === 'Collab') {
 		await page.locator('[data-action-id="sessions.activity.more"] button').click();
 		await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 	}
 	const chat = page
-		.locator(`.ash-sessions-chat-slot .${presentation === 'Cowork' ? 'ash-native-chat' : 'ash-chat'}:visible`)
+		.locator(`.ash-sessions-chat-slot .${presentation === 'Collab' ? 'ash-native-chat' : 'ash-chat'}:visible`)
 		.first();
 	await expect(chat).toBeVisible();
 	return chat;
@@ -369,7 +369,7 @@ async function expectFloatingComposerHover(
 	card: Locator,
 	input: Locator,
 	blurTarget: Locator,
-	presentation: 'Cowork' | 'Code',
+	presentation: 'Collab' | 'Code',
 ): Promise<void> {
 	await blurTarget.hover();
 	await blurTarget.focus();
@@ -394,7 +394,7 @@ async function expectFloatingComposerHover(
 	await expect.poll(() => card.evaluate(element => element.getAnimations().length)).toBe(0);
 	const resting = await readComposerShadow(card);
 	const restingShadow = resting.shadow;
-	// Cowork retains its two-layer elevation; Code only raises during interaction.
+	// Collab retains its two-layer elevation; Code only raises during interaction.
 	expect(resting.themeOpacity).toBeGreaterThan(0.05);
 	expect(resting.layerOpacities).toHaveLength(presentation === 'Code' ? 0 : 2);
 	for (const [index, opacity] of resting.layerOpacities.entries()) {
@@ -1687,7 +1687,7 @@ focusTest(
 		}
 		await settings.locator('.ash-modal-editor-close').click();
 		const page = await workbench.openAgentsWindow(target.kind);
-		for (const presentation of ['Cowork', 'Code'] as const) {
+		for (const presentation of ['Collab', 'Code'] as const) {
 			const chat = await openSessionsComposer(page, presentation);
 			const card = chat.locator('.ash-chat-input-container');
 			await expect
@@ -1730,7 +1730,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const setColorScheme = (colorScheme: 'light' | 'dark') => workbench.setAppearance(application, colorScheme, page);
-	await openSessionsComposer(page, 'Cowork');
+	await openSessionsComposer(page, 'Collab');
 	const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-native-chat):visible').first();
 	const card = chat.locator(':is(.ash-chat-input-container,.ash-native-chat-input-container):visible');
 	const editor = new Editor(chat);
@@ -1778,7 +1778,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 			card,
 			input,
 			page.getByRole('button', { name: 'Hide sidebar', exact: true }),
-			'Cowork',
+			'Collab',
 		);
 		await editor.waitForEditorContents(contents => contents === 'Keep this draft');
 		await expect(card).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
@@ -1821,7 +1821,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	await page.keyboard.press('Shift+Enter');
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft\n');
 	await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
-	await openSessionsComposer(page, 'Cowork');
+	await openSessionsComposer(page, 'Collab');
 	await expect(chat.locator(':is(.chat-composer,.native-chat-composer)')).toBeVisible();
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft\n');
 });
@@ -1848,7 +1848,7 @@ focusTest(
 			).toBe(1);
 			await expect(sidebar).toHaveCSS('border-right-style', 'solid');
 			await expect(sidebar).not.toHaveCSS('border-right-color', 'rgba(0, 0, 0, 0)');
-			for (const presentation of ['Cowork', 'Code'] as const) {
+			for (const presentation of ['Collab', 'Code'] as const) {
 				const chat = await openSessionsComposer(page, presentation);
 				const card = chat.locator('.ash-chat-input-container');
 				expect(

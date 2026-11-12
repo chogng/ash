@@ -123,7 +123,7 @@ for (const scenario of [
 		subscription: false,
 	},
 	{
-		title: 'Rust subscription notifications update open Code and Cowork model pickers within the same account',
+		title: 'Rust subscription notifications update open Code and Collab model pickers within the same account',
 		subscription: true,
 	},
 ]) {
@@ -440,8 +440,8 @@ async function verifySubscriptionUpdates(
 	client: AppServerProtocolClient,
 	source: Page,
 	sourceChat: ReturnType<Page['locator']>,
-	cowork: Page,
-	coworkChat: ReturnType<Page['locator']>,
+	collab: Page,
+	collabChat: ReturnType<Page['locator']>,
 	profileModel: ModelRef,
 	testInfo: TestInfo,
 ): Promise<void> {
@@ -599,24 +599,25 @@ async function verifySubscriptionUpdates(
 	const accountCount = accountUpdates;
 	const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 	expect(config.model).toEqual(profileModel);
-	// Code and Cowork retain separate composer modes. Keep an explicit Auto
+	// Code and Collab retain separate composer modes. Keep an explicit Auto
 	// choice in Agents Code while both manually selected pickers remain open.
-	await cowork.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await coworkChat.locator('.ash-chat-input-model-action').press('ArrowDown');
-	const codeAuto = cowork.getByRole('dialog', { name: 'Choose a chat model', exact: true }).getByRole('switch', { name: 'Auto', exact: true });
+	await collab.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await collabChat.locator('.ash-chat-input-model-action').press('ArrowDown');
+	const codeAuto = collab.getByRole('dialog', { name: 'Choose a chat model', exact: true }).getByRole('switch', { name: 'Auto', exact: true });
 	if (!(await codeAuto.isChecked())) await codeAuto.press('Space');
 	await expect(codeAuto).toBeChecked();
-	await cowork.keyboard.press('Escape');
-	await cowork.locator('[data-action-id="sessions.activity.more"] button').click();
-	await cowork.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
+	await collab.keyboard.press('Escape');
+	await collab.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await collab.locator('[data-action-id="sessions.activity.more"] button').click();
+	await collab.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 	await selectModel(source, sourceChat, initial);
-	await selectModel(cowork, coworkChat, initial);
+	await selectModel(collab, collabChat, initial);
 	await expect(sourceChat.locator('.ash-chat-input-configuration-action')).toHaveText('Medium');
-	await expect(coworkChat.locator('.ash-chat-input-configuration-action')).toHaveText('Medium');
+	await expect(collabChat.locator('.ash-chat-input-configuration-action')).toHaveText('Medium');
 	const picker = (page: Page): ReturnType<Page['getByRole']> => page.getByRole('dialog', { name: 'Choose a chat model', exact: true });
 	for (const [page, chat] of [
 		[source, sourceChat],
-		[cowork, coworkChat],
+		[collab, collabChat],
 	] as const) {
 		await chat.locator('.ash-chat-input-model-action').press('ArrowDown');
 		await picker(page).getByRole('combobox').fill('Synthetic catalog');
@@ -625,18 +626,19 @@ async function verifySubscriptionUpdates(
 	}
 	const reads = (page: Page): Promise<number> => page.evaluate(() => (window as Window & { sessionModelTraffic?: ModelTraffic; }).sessionModelTraffic!.modelReads.length);
 	const expectCodeAuto = async (): Promise<void> => {
-		await cowork.keyboard.press('Escape');
-		await cowork.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		await coworkChat.locator('.ash-chat-input-model-action').press('ArrowDown');
+		await collab.keyboard.press('Escape');
+		await collab.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await collabChat.locator('.ash-chat-input-model-action').press('ArrowDown');
 		await expect(codeAuto).toBeChecked();
-		await cowork.keyboard.press('Escape');
-		await cowork.locator('[data-action-id="sessions.activity.more"] button').click();
-		await cowork.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
-		await expect(coworkChat.locator('.ash-chat-input-model-action')).toHaveText(updated);
-		await coworkChat.locator('.ash-chat-input-model-action').press('ArrowDown');
-		await picker(cowork).getByRole('combobox').fill('Synthetic catalog');
+		await collab.keyboard.press('Escape');
+		await collab.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+		await collab.locator('[data-action-id="sessions.activity.more"] button').click();
+		await collab.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
+		await expect(collabChat.locator('.ash-chat-input-model-action')).toHaveText(updated);
+		await collabChat.locator('.ash-chat-input-model-action').press('ArrowDown');
+		await picker(collab).getByRole('combobox').fill('Synthetic catalog');
 	};
-	const beforeMetadataReads = await Promise.all([reads(source), reads(cowork)]);
+	const beforeMetadataReads = await Promise.all([reads(source), reads(collab)]);
 	const beforeMetadata = updates.length;
 	await writeCache(updated, 'high', false);
 	console.log('Waiting for unchanged-account metadata at the real five-minute observer tick.');
@@ -651,7 +653,7 @@ async function verifySubscriptionUpdates(
 	});
 	for (const [page, chat] of [
 		[source, sourceChat],
-		[cowork, coworkChat],
+		[collab, collabChat],
 	] as const) {
 		await expect(picker(page)).toBeVisible();
 		await expect(picker(page).getByRole('menuitemradio')).toHaveCount(1);
@@ -660,7 +662,7 @@ async function verifySubscriptionUpdates(
 		await expect(chat.locator('.ash-chat-input-model-action')).toHaveText(updated);
 		await expect(chat.locator('.ash-chat-input-configuration-action')).toHaveText('High');
 	}
-	for (const [index, page] of [source, cowork].entries()) await expect.poll(() => reads(page)).toBeGreaterThan(beforeMetadataReads[index]!);
+	for (const [index, page] of [source, collab].entries()) await expect.poll(() => reads(page)).toBeGreaterThan(beforeMetadataReads[index]!);
 	await expectCodeAuto();
 	expect(accountUpdates).toBe(accountCount);
 	expect(await client.request(APP_SERVER_METHODS['account/read'], {})).toEqual(account);
@@ -684,13 +686,13 @@ async function verifySubscriptionUpdates(
 	});
 	for (const [name, page] of [
 		['code', source],
-		['cowork', cowork],
+		['collab', collab],
 	] as const) {
 		const path = testInfo.outputPath(`subscription-${name}-updated.png`);
 		await page.screenshot({ path });
 		await testInfo.attach(`subscription-${name}-updated`, { path, contentType: 'image/png' });
 	}
-	const beforeFailureReads = await Promise.all([reads(source), reads(cowork)]);
+	const beforeFailureReads = await Promise.all([reads(source), reads(collab)]);
 	const beforeFailure = updates.length;
 	await writeCache(updated, 'high', true);
 	console.log('Waiting for unchanged-account invalidResponse at the next real five-minute observer tick.');
@@ -701,11 +703,11 @@ async function verifySubscriptionUpdates(
 		plan: changed.plan,
 		result: { type: 'failed', failure: { code: 'invalidResponse' } },
 	});
-	for (const [index, page] of [source, cowork].entries()) await expect.poll(() => reads(page)).toBeGreaterThan(beforeFailureReads[index]!);
+	for (const [index, page] of [source, collab].entries()) await expect.poll(() => reads(page)).toBeGreaterThan(beforeFailureReads[index]!);
 	await expectCodeAuto();
 	for (const [page, chat] of [
 		[source, sourceChat],
-		[cowork, coworkChat],
+		[collab, collabChat],
 	] as const) {
 		await expect(picker(page)).toBeVisible();
 		await expect(picker(page).getByRole('menuitemradio')).toContainText(updated);
@@ -733,7 +735,7 @@ async function verifySubscriptionUpdates(
 		cacheVersion,
 		beforeMetadataReads,
 		beforeFailureReads,
-		finalReads: await Promise.all([reads(source), reads(cowork)]),
+		finalReads: await Promise.all([reads(source), reads(collab)]),
 	});
 }
 

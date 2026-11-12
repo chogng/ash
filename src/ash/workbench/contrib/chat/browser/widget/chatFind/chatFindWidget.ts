@@ -1,9 +1,8 @@
 import './chatFindWidget.css';
 import { revealMarkdownTableRange } from '../chatContentParts/chatMarkdownTableScrolling.js';
 import '../../../common/widget/chatColors.js';
-import { addDisposableListener, isHTMLElement, h, stopEvent } from '../../../../../../base/browser/dom.js';
+import { addDisposableListener, isHTMLElement } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
-import { InputBox } from '../../../../../../base/browser/ui/inputbox/inputbox.js';
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
 import type { Event } from '../../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
@@ -16,7 +15,8 @@ import { localize } from '../../../../../../nls.js';
 import { IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibilityService } from '../../../../../../platform/accessibility/common/accessibility.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
-import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
+import { SimpleFindWidget } from '../../../../codeEditor/browser/find/simpleFindWidget.js';
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
 import type { IChatFindController } from '../../chat.js';
 import type { IChatListItem } from '../../../common/model/chatViewModel.js';
@@ -106,10 +106,7 @@ export function computeRevealScrollTop(scrollTop: number, renderHeight: number, 
 /** Shared Find presentation. The host retains message, history and scroll ownership. */
 export class ChatFindWidget extends Disposable implements IChatFindController {
 	private readonly domNode: HTMLElement;
-	private readonly input: InputBox;
-	private readonly result: HTMLElement;
-	private readonly previousButton: Button;
-	private readonly nextButton: Button;
+	private readonly view: SimpleFindWidget;
 	private readonly historyButton: Button;
 	private readonly toggles = new Map<keyof IChatFindOptions, Button>();
 	private readonly model: ChatFindModel;
@@ -138,78 +135,50 @@ export class ChatFindWidget extends Disposable implements IChatFindController {
 		const document = host.element.ownerDocument;
 		this.highlights = getChatFindHighlightRegistry(document.defaultView as IChatFindHighlightWindow);
 		this.model = this._register(new ChatFindModel(() => host.getItems(), () => host.getViewportAnchorItemId()));
-		this.domNode = h(document, 'section', { className: 'ash-chat-find' });
-		this.domNode.hidden = true;
-		this.domNode.setAttribute('role', 'search');
-		this.domNode.setAttribute('aria-label', localize('chat.find', 'Find in Chat'));
-		host.element.append(this.domNode);
+		this.view = this._register(new SimpleFindWidget(host.element, {
+			label: localize('chat.find', 'Find in Chat'),
+			placeholder: localize('chat.find.input', 'Find in conversation'),
+			previousLabel: localize('chat.find.previous', 'Previous match'),
+			nextLabel: localize('chat.find.next', 'Next match'),
+			closeLabel: localize('chat.find.close', 'Close Find'),
+			onInput: value => {
+				if (this.visible && value !== this.model.query) { this.search(value, this.model.options); }
+			},
+			onNavigate: previous => this.navigate(previous),
+			onClose: () => this.hide(),
+		}));
+		this.domNode = this.view.getDomNode();
+		this.domNode.classList.add('ash-chat-find');
 		const scope = this._register(contextKeys.createScoped(this.domNode));
 		ChatContextKeys.findWidgetFocused.bindTo(scope).set(true);
 		const inputFocused = ChatContextKeys.findInputFocused.bindTo(scope);
-		const query = h(document, 'div', { className: 'ash-chat-find-query' });
-		const controls = h(document, 'div', { className: 'ash-chat-find-controls' });
-		this.domNode.append(query, controls);
-		this.input = this._register(new InputBox(query, {
-			inputBoxStyles: defaultInputBoxStyles, presentation: 'compact',
-			ariaLabel: localize('chat.find.input', 'Find in conversation'),
-			placeholder: localize('chat.find.input', 'Find in conversation'),
-		}));
-		this.previousButton = this._register(new Button(query, {
-			...defaultButtonStyles, size: 'small', iconOnly: true, icon: Lxicon.chevronUp,
-			label: localize('chat.find.previous', 'Previous match'), onClick: () => this.previous(),
-		}));
-		this.nextButton = this._register(new Button(query, {
-			...defaultButtonStyles, size: 'small', iconOnly: true, icon: Lxicon.chevronDown,
-			label: localize('chat.find.next', 'Next match'), onClick: () => this.next(),
-		}));
-		this._register(new Button(query, {
-			...defaultButtonStyles, size: 'small', iconOnly: true, icon: Lxicon.close,
-			label: localize('chat.find.close', 'Close Find'), onClick: () => this.hide(),
-		}));
-		for (const [key, label] of [
-			['matchCase', localize('chat.find.case', 'Match case')],
-			['wholeWord', localize('chat.find.word', 'Whole word')],
-			['isRegex', localize('chat.find.regex', 'Regular expression')],
+		for (const [key, icon, label] of [
+			['matchCase', Lxicon.caseSensitive, localize('chat.find.case', 'Match case')],
+			['wholeWord', Lxicon.wholeWord, localize('chat.find.word', 'Whole word')],
+			['isRegex', Lxicon.regex, localize('chat.find.regex', 'Regular expression')],
 		] as const) {
-			this.toggles.set(key, this._register(new Button(controls, {
-				...defaultButtonStyles, size: 'small', label, checked: false,
+			this.toggles.set(key, this._register(new Button(this.view.optionsElement, {
+				...defaultButtonStyles, size: 'small', label, title: label, icon, iconOnly: true, checked: false,
 				onClick: () => this.changeOptions({ [key]: !this.model.options[key] }),
 			})));
 		}
-		this.result = h(document, 'span', { className: 'ash-chat-find-status' });
-		this.result.setAttribute('role', 'status');
-		this.result.setAttribute('aria-live', 'polite');
-		controls.append(this.result);
 		this.historyButton = this._register(new Button(this.domNode, {
 			...defaultButtonStyles, size: 'small', label: localize('chat.find.earlier', 'Search earlier messages'),
 			onClick: () => { void this.loadHistory(); },
 		}));
-		this._register(this.input.onDidChange(value => {
-			this.generation++;
-			this.historyLoading = false;
-			this.historyError = undefined;
-			this.model.setQuery(value, this.model.options);
-			this.searchHistory.schedule();
-		}));
-		this._register(this.input.onDidFocus(() => {
+		this.historyButton.domNode.classList.add('ash-chat-find-history');
+		const input = this.view.getFindInputDomNode();
+		this._register(addDisposableListener(input, 'focus', () => {
 			inputFocused.set(true);
 			if (this.accessibility.isScreenReaderOptimized()) {
 				const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Find);
 				if (hint) { this.accessibility.status(hint); }
 			}
 		}));
-		this._register(this.input.onDidBlur(() => inputFocused.set(false)));
+		this._register(addDisposableListener(input, 'blur', () => inputFocused.set(false)));
 		this._register(addDisposableListener(this.domNode, 'focusin', () => {
 			const active = document.activeElement;
 			if (isHTMLElement(active)) { this.lastFocus = active; }
-		}));
-		this._register(addDisposableListener(this.domNode, 'keydown', event => {
-			if (event.isComposing || event.keyCode === 229) { return; }
-			if (event.key === 'Escape') { stopEvent(event); this.hide(); }
-			else if (event.key === 'Enter' && event.target === this.input.inputElement) {
-				stopEvent(event);
-				if (event.shiftKey) { this.previous(); } else { this.next(); }
-			}
 		}));
 		const Resize = document.defaultView?.ResizeObserver;
 		if (Resize) {
@@ -225,7 +194,6 @@ export class ChatFindWidget extends Disposable implements IChatFindController {
 			this.generation++;
 			this.clearHighlights();
 			host.setFindVisible(false);
-			this.domNode.remove();
 		}));
 		this.update();
 	}
@@ -239,12 +207,16 @@ export class ChatFindWidget extends Disposable implements IChatFindController {
 			this.previousFocus = isHTMLElement(active) ? active : undefined;
 		}
 		this.domNode.hidden = false;
-		this.host.setFindVisible(true);
-		if (seedText !== undefined) { this.input.value = seedText.replace(/\r\n|\r|\n/gu, ' '); }
-		this.model.setQuery(this.input.value, this.model.options);
-		this.model.recompute();
-		if (focus) { this.input.focus(); this.input.select(); }
-		this.searchHistory.schedule();
+		if (seedText !== undefined) {
+			this.view.inputValue = seedText.replace(/\r\n|\r|\n/gu, ' ');
+		}
+		if (!this.view.isComposing && this.view.inputValue !== this.model.query) {
+			this.search(this.view.inputValue, this.model.options);
+		} else {
+			this.model.recompute();
+			this.searchHistory.schedule();
+		}
+		if (focus) { this.view.focusFindBox(); }
 	}
 
 	public hide(): void {
@@ -253,8 +225,10 @@ export class ChatFindWidget extends Disposable implements IChatFindController {
 		this.refresh.cancel();
 		this.searchHistory.cancel();
 		this.historyLoading = false;
+		this.historyError = undefined;
 		this.domNode.hidden = true;
-		this.model.clear();
+		this.view.inputValue = this.model.query;
+		this.model.suspend();
 		this.current = undefined;
 		this.pendingReveal = false;
 		this.host.setFindVisible(false);
@@ -265,37 +239,52 @@ export class ChatFindWidget extends Disposable implements IChatFindController {
 		}
 	}
 
-	public next(): void { if (this.visible) { this.model.next(); } }
-	public previous(): void { if (this.visible) { this.model.previous(); } }
-	public focus(): void { if (this.visible) { (this.lastFocus?.isConnected ? this.lastFocus : this.input.inputElement).focus(); } }
+	public next(): void { this.navigate(false); }
+	public previous(): void { this.navigate(true); }
+	public focus(): void { if (this.visible) { (this.lastFocus?.isConnected ? this.lastFocus : this.view.getFindInputDomNode()).focus(); } }
 	public toggleCaseSensitive(): void { this.changeOptions({ matchCase: !this.model.options.matchCase }); }
 	public toggleWholeWord(): void { this.changeOptions({ wholeWord: !this.model.options.wholeWord }); }
 	public toggleRegex(): void { this.changeOptions({ isRegex: !this.model.options.isRegex }); }
 
 	private changeOptions(options: Partial<IChatFindOptions>): void {
 		if (!this.visible) { return; }
+		this.search(this.model.query, { ...this.model.options, ...options });
+	}
+
+	private navigate(previous: boolean): void {
+		if (this.view.isComposing) { return; }
+		if (!this.visible) { this.show(undefined, false); }
+		if (!this.visible) { return; }
+		if (previous) { this.model.previous(); }
+		else { this.model.next(); }
+	}
+
+	private search(query: string, options: IChatFindOptions): void {
 		this.generation++;
 		this.historyLoading = false;
-		this.model.setQuery(this.input.value, { ...this.model.options, ...options });
+		this.historyError = undefined;
+		this.model.setQuery(query, options);
 		this.searchHistory.schedule();
 	}
 
 	private update(): void {
 		for (const [key, button] of this.toggles) { button.checked = this.model.options[key]; }
-		this.input.inputElement.setAttribute('aria-invalid', String(this.model.isInvalidRegex));
-		this.domNode.setAttribute('aria-invalid', String(this.model.isInvalidRegex));
-		this.domNode.classList.toggle('invalid', this.model.isInvalidRegex);
-		this.previousButton.enabled = this.nextButton.enabled = this.model.matches.length > 0;
-		let message = !this.model.query ? localize('chat.find.empty', 'Enter text to find')
-			: this.model.isInvalidRegex ? localize('chat.find.invalidRegex', 'Invalid regular expression')
+		const invalid = this.model.isInvalidRegex;
+		const hasMatches = this.model.matches.length > 0;
+		const hasHistory = !!this.host.getHistoryState?.();
+		let message = !this.model.query ? ''
+			: invalid ? localize('chat.find.invalidRegex', 'Invalid regular expression')
 				: !this.model.matches.length ? localize('chat.find.noResults', 'No results')
 					: this.model.isTruncated ? localize('chat.find.truncated', '{0} of {1}+ matches', this.model.activeIndex + 1, this.model.matches.length)
 						: localize('chat.find.count', '{0} of {1} matches', this.model.activeIndex + 1, this.model.matches.length);
+		const canSearchHistory = !!this.model.query && !invalid && hasHistory;
 		if (this.historyLoading) { message = localize('chat.find.loading', '{0} · Searching earlier messages…', message); }
 		else if (this.historyError) { message = localize('chat.find.historyFailed', '{0} · Earlier history could not be searched: {1}', message, this.historyError); }
-		else if (this.model.query && this.host.getHistoryState?.()) { message = localize('chat.find.partial', '{0} · More history available', message); }
-		if (this.result.textContent !== message) { this.result.textContent = message; }
-		this.historyButton.domNode.hidden = !this.model.query || this.model.isInvalidRegex || this.historyLoading || !this.host.getHistoryState?.();
+		else if (canSearchHistory) { message = localize('chat.find.partial', '{0} · More history available', message); }
+		this.view.setResult(message, {
+			hasMatches, invalid, detail: invalid || this.historyLoading || !!this.historyError || canSearchHistory,
+		});
+		this.historyButton.hidden = !canSearchHistory || this.historyLoading;
 		if (!this.visible) { return; }
 		this.host.setFindVisible(true);
 		const active = this.model.activeMatch;

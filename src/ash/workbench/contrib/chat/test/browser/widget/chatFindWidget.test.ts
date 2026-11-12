@@ -59,10 +59,10 @@ suite('ChatFindWidget', () => {
 			changed.fire();
 		};
 		const waitForStatus = async (expected: string): Promise<void> => {
-			if (root.querySelector('.ash-chat-find-status')?.textContent === expected) { return; }
+			if (root.querySelector('.ash-chat-find [role="status"]')?.textContent === expected) { return; }
 			await new Promise<void>((resolve, reject) => {
 				const observer = new dom.window.MutationObserver(() => {
-					if (root.querySelector('.ash-chat-find-status')?.textContent !== expected) { return; }
+					if (root.querySelector('.ash-chat-find [role="status"]')?.textContent !== expected) { return; }
 					cleanup();
 					resolve();
 				});
@@ -75,7 +75,7 @@ suite('ChatFindWidget', () => {
 		return {
 			widget, root, before, revealed, document, render, waitForStatus,
 			input: () => root.querySelector<HTMLInputElement>('.ash-chat-find input')!,
-			status: () => root.querySelector('.ash-chat-find-status')!.textContent,
+			status: () => root.querySelector('.ash-chat-find [role="status"]')!.textContent,
 			history: (value: typeof history, operation: typeof load) => { history = value; load = operation; },
 			setHistory: (value: typeof history) => { history = value; },
 			hideHost: () => { visible = false; widget.hide(); },
@@ -213,6 +213,44 @@ suite('ChatFindWidget', () => {
 suite('Chat Find browser presentation', () => {
 	const browserTests = useBrowserTests();
 
+	test('the shared Chat command releases Find on hide and resets it when the conversation changes', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		await page.evaluate(() => {
+			const chat = window.ashChatTranscriptIntegration;
+			chat.showChatApp();
+			chat.appendChatItem({ id: 'first-chat-message', type: 'agentMessage', text: 'Shared needle', transient: false });
+		});
+		const row = page.locator('#app-chat [data-item-id="first-chat-message"]');
+		await row.focus();
+		const openFind = () => page.evaluate(id => window.ashChatTranscriptIntegration.runChatCommand(id), ChatFindCommandId.Find);
+		await openFind();
+		const find = page.locator('#app-chat .ash-chat-find');
+		const input = find.locator('input');
+		await expect(input).toBeFocused();
+		await input.fill('needle');
+		await expect(find.getByRole('status')).toHaveText('1 of 1 matches');
+		await input.press('Escape');
+		await expect(row).toBeFocused();
+
+		await openFind();
+		await expect(input).toHaveValue('needle');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setChatVisible(false));
+		await expect(find).toBeHidden();
+		await expect(row).not.toHaveClass(/ash-chat-find-active/u);
+
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setChatVisible(true));
+		await row.focus();
+		await openFind();
+		await expect(find.getByRole('status')).toHaveText('1 of 1 matches');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.retireChat());
+		await expect(find).toHaveCount(0);
+		await expect(row).not.toHaveClass(/ash-chat-find-active/u);
+		await row.focus();
+		await openFind();
+		await expect(input).toHaveValue('');
+	});
+
 	test('opening Find on whitespace preserves its previous query and returns focus to the search input', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');
@@ -247,7 +285,7 @@ suite('Chat Find browser presentation', () => {
 		});
 		const strong = await page.locator('[data-item-id="reply"] strong').elementHandle();
 		await page.evaluate(() => window.ashChatTranscriptIntegration.showFind('needle'));
-		const status = page.locator('.ash-chat-find-status');
+		const status = page.locator('.ash-chat-find [role="status"]');
 		await expect(status).toHaveText('1 of 3 matches');
 		expect(await page.evaluate(() => (CSS as unknown as { highlights: Map<string, Set<Range>>; }).highlights.get('ash-chat-find-match')?.size)).toBe(3);
 		expect(await strong!.evaluate(element => element.isConnected)).toBe(true);
@@ -276,7 +314,7 @@ suite('Chat Find browser presentation', () => {
 			]);
 		});
 		await page.evaluate(() => window.ashChatTranscriptIntegration.showFind('old_code_needle'));
-		await expect(page.locator('.ash-chat-find-status')).toHaveText('1 of 2 matches');
+		await expect(page.locator('.ash-chat-find [role="status"]')).toHaveText('1 of 2 matches');
 		const current = page.locator('[data-item-id="old-code"] .ash-chat-find-code-current');
 		const other = page.locator('[data-item-id="old-code"] .ash-chat-find-code-match');
 		await expect(current).toBeVisible();
@@ -302,12 +340,27 @@ suite('Chat Find browser presentation', () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html?locale=zh-CN');
 		await page.evaluate(() => {
-			window.ashChatTranscriptIntegration.renderItems([{ id: 'message', type: 'userMessage', text: '中文测试 中文', transient: false }]);
-			window.ashChatTranscriptIntegration.showFind('中文');
+			window.ashChatTranscriptIntegration.renderItems([{ id: 'message', type: 'userMessage', text: '测试 中文 中文 zhong', transient: false }]);
+			window.ashChatTranscriptIntegration.showFind('测试');
 		});
 		const find = page.getByRole('search', { name: '在聊天中查找', exact: true });
 		const query = find.getByRole('textbox', { name: '在对话中查找', exact: true });
 		await expect(query).toBeFocused();
+		await expect(find.getByRole('status')).toHaveText('第 1 个，共 1 个匹配');
+		const ime = await page.context().newCDPSession(page);
+		try {
+			await query.selectText();
+			await ime.send('Input.imeSetComposition', { text: 'zhong', selectionStart: 5, selectionEnd: 5 });
+			await expect(query).toHaveValue('zhong');
+			await expect(find.getByRole('status')).toHaveText('第 1 个，共 1 个匹配');
+			expect(await page.evaluate(() => {
+				const registry = CSS as unknown as { highlights: Map<string, Set<Range>>; };
+				return [...registry.highlights.get('ash-chat-find-current-match')!].map(range => range.toString());
+			})).toEqual(['测试']);
+			await ime.send('Input.insertText', { text: '中文' });
+		} finally {
+			await ime.detach();
+		}
 		await expect(find.getByRole('status')).toHaveText('第 1 个，共 2 个匹配');
 		await find.getByRole('button', { name: '正则表达式', exact: true }).click();
 		await query.fill('[');
@@ -341,4 +394,40 @@ suite('Chat Find browser presentation', () => {
 			await page.screenshot({ path: browserTests.info.outputPath(`chat-find-${theme}.png`) });
 		});
 	}
+
+	test('query, options, count and navigation share one row and fit a narrow transcript', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		await page.evaluate(() => {
+			const chat = window.ashChatTranscriptIntegration;
+			chat.renderItems([{ id: 'message', type: 'userMessage', text: 'Needle needle', transient: false }]);
+			chat.showFind('needle');
+		});
+		const find = page.getByRole('search', { name: 'Find in Chat' });
+		const input = find.getByRole('textbox');
+		const status = find.getByRole('status');
+		const matchCase = find.getByRole('button', { name: 'Match case', exact: true });
+		const next = find.getByRole('button', { name: 'Next match', exact: true });
+		await expect(status).toHaveText('1 of 2 matches');
+		await input.press('Tab');
+		await expect(matchCase).toBeFocused();
+		await matchCase.press('Space');
+		await expect(matchCase).toHaveAttribute('aria-pressed', 'true');
+		await expect(status).toHaveText('1 of 1 matches');
+		const centers = await Promise.all([input, status, matchCase, next].map(async control => {
+			const bounds = (await control.boundingBox())!;
+			return bounds.y + bounds.height / 2;
+		}));
+		expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(2);
+
+		await page.locator('main').evaluate(element => { element.style.width = '250px'; });
+		await expect.poll(async () => (await find.boundingBox())!.width).toBeLessThanOrEqual(234);
+		const panel = (await find.boundingBox())!;
+		for (const control of [input, status, ...await find.getByRole('button').all()]) {
+			const bounds = (await control.boundingBox())!;
+			expect(bounds.x).toBeGreaterThanOrEqual(panel.x);
+			expect(bounds.x + bounds.width).toBeLessThanOrEqual(panel.x + panel.width + 1);
+		}
+		await expect(matchCase).toBeFocused();
+	});
 });

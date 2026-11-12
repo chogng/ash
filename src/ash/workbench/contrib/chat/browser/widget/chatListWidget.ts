@@ -25,7 +25,7 @@ import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatStreamingResponseUpdate, ChatTurnErrorAction, IChatListItem } from '../../common/model/chatViewModel.js';
@@ -47,7 +47,7 @@ import { localize } from '../../../../../nls.js';
 import { ChatAccessibilityProvider } from '../accessibility/chatAccessibilityProvider.js';
 import { ChatResponseAccessibleView } from '../accessibility/chatResponseAccessibleView.js';
 import { getChatLinkPreviewAccessibilityHelp } from '../actions/chatAccessibilityHelp.js';
-import { ChatFindWidget, computeRevealScrollTop, type IChatFindHost } from './chatFind/chatFindWidget.js';
+import { computeRevealScrollTop } from './chatFind/chatFindWidget.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { ChatVirtualRows } from './chatVirtualRows.js';
 import type { ChatToolDisclosureState } from './chatContentParts/toolInvocationParts/chatToolProgressPart.js';
@@ -67,9 +67,6 @@ interface ChatListWidgetOptions {
 	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	readonly getResponseActions?: (item: IChatListItem) => ChatResponseActions | undefined;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
-	readonly onDidChangeFindVisibility?: (visible: boolean) => void;
-	readonly getHistoryState?: () => { readonly loading: boolean; readonly error?: string; } | undefined;
-	readonly loadOlderHistory?: () => Promise<void>;
 	/** The host owns its transcript layout; content parts keep their shared styles. */
 	readonly classPrefix?: string;
 	readonly mcpAppDelegate?: IChatMcpAppDelegate;
@@ -114,7 +111,6 @@ interface ChatListViewState {
 export class ChatListWidget extends DomWidget {
 	// Disposed after the row collection so the final batch includes every row release.
 	private readonly layoutTraceStore = this._register(new DisposableStore());
-	private readonly findWidget = this._register(new MutableDisposable<ChatFindWidget>());
 	private pendingDrag: ChatPendingDragController | undefined;
 	private items: IChatListItem[] = [];
 	private lastFocusedItemId: string | undefined;
@@ -136,6 +132,9 @@ export class ChatListWidget extends DomWidget {
 	private readonly classPrefix: string;
 	private readonly accessibilityProvider = new ChatAccessibilityProvider();
 	private readonly _onDidChangeContent = this._register(new Emitter<void>());
+	private readonly _onDidChangeRenderedRows = this._register(new Emitter<void>());
+	/** Remounting rows can change the DOM ranges without changing the transcript text. */
+	public readonly onDidChangeFindableContent = Event.any(this._onDidChangeContent.event, this._onDidChangeRenderedRows.event);
 	private readonly advisorExpansion = new Map<string, boolean>();
 	private readonly contextExpansion = new Map<string, boolean>();
 	private readonly thinkingExpansion = new Map<string, boolean>();
@@ -226,21 +225,9 @@ export class ChatListWidget extends DomWidget {
 		}
 	}
 
-	public getFindController(): ChatFindWidget {
-		return this.findWidget.value ??= this.instantiationService.createInstance(ChatFindWidget, {
-			element: this.element,
-			onDidChange: this._onDidChangeContent.event,
-			getItems: () => this.items,
-			getRowElement: id => this.renderedItems.get(id)?.element,
-			getViewportAnchorItemId: () => this.readingAnchor()?.id,
-			reveal: (id, target) => this.revealItem(id, target),
-			focus: () => this.focusReadingPosition(),
-			isVisible: () => this.visible,
-			setFindVisible: visible => this.setFindVisible(visible),
-			getHistoryState: this.options.getHistoryState,
-			loadOlderHistory: this.options.loadOlderHistory,
-		} satisfies IChatFindHost);
-	}
+	public getItems(): readonly IChatListItem[] { return this.items; }
+	public getRowElement(id: string): HTMLElement | undefined { return this.renderedItems.get(id)?.element; }
+	public getViewportAnchorItemId(): string | undefined { return this.readingAnchor()?.id; }
 
 	public focusCodeBlock(reverse = false): void {
 		if (this.isDisposed || !this.visible) { return; }
@@ -303,9 +290,6 @@ export class ChatListWidget extends DomWidget {
 		const row = anchor && this.renderedItems.get(anchor.id);
 		(row?.element ?? this.transcript).focus({ preventScroll: true });
 	}
-
-	/** Source changes retire the query, its pending history work and borrowed render ranges together. */
-	public resetFind(): void { this.findWidget.clear(); }
 
 	constructor(
 		container: HTMLElement, private readonly options: ChatListWidgetOptions,
@@ -455,7 +439,7 @@ export class ChatListWidget extends DomWidget {
 					if (row.markdownPart) rows.push(row);
 				}
 				this.updateRowViewports(rows);
-				if (this.findWidget.value?.visible) { this._onDidChangeContent.fire(); }
+				this._onDidChangeRenderedRows.fire();
 			}, { root: this.scrollable.scrollableElement, rootMargin: `${viewportMargin}px 0px` });
 			this._register(toDisposable(() => this.viewportObserver?.disconnect()));
 			this._register(addDisposableListener(this.transcript, 'focusout', () => this.refreshViewport.schedule()));
@@ -790,7 +774,8 @@ export class ChatListWidget extends DomWidget {
 				if (this.visible) this.layout(anchor, false);
 				if (this.pendingViewportMeasurements.size) this.refreshRowViewports();
 			}
-			if (!viewportOnly || this.findWidget.value?.visible) this._onDidChangeContent.fire();
+			if (viewportOnly) this._onDidChangeRenderedRows.fire();
+			else this._onDidChangeContent.fire();
 		} else if (this.visible) {
 			this.renderPromptTimeline();
 		}
@@ -1047,7 +1032,6 @@ export class ChatListWidget extends DomWidget {
 		this.workingStatus?.setVisible(visible);
 		for (const [, entry] of this.imageBatches) { entry.part.setVisible(visible && this.transcript.contains(entry.part.domNode)); }
 		if (!visible) {
-			this.findWidget.value?.hide();
 			this.updateStickyPrompt();
 			this.updateScrollToLatestVisibility();
 			this.renderPromptTimeline();
@@ -1091,8 +1075,7 @@ export class ChatListWidget extends DomWidget {
 		this.updateRowViewports(rows);
 	}
 
-	private setFindVisible(visible: boolean): void {
-		this.options.onDidChangeFindVisibility?.(visible);
+	public setFindVisible(visible: boolean): void {
 		const height = visible ? this.element.querySelector<HTMLElement>('.ash-chat-find')?.getBoundingClientRect().height ?? 0 : 0;
 		const padding = visible ? `${height + 16}px` : '';
 		if (this.transcript.style.paddingTop === padding) { return; }
@@ -1102,7 +1085,7 @@ export class ChatListWidget extends DomWidget {
 		if (this.visible) { this.layout(anchor, false); }
 	}
 
-	private revealItem(id: string, target?: { readonly top: number; readonly bottom: number; }, alignToTop = false): void {
+	public revealItem(id: string, target?: { readonly top: number; readonly bottom: number; }, alignToTop = false): void {
 		const row = this.ensureRow(id);
 		if (!row || !this.visible) { return; }
 		row.markdownPart?.setViewportVisible(true);

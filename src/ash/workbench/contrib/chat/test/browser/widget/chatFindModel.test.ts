@@ -103,15 +103,18 @@ suite('ChatFindModel', () => {
 		assert.deepEqual(model.matches.map(match => match.text), ['new label']);
 	});
 
-	test('caps matches and releases the derived index on clear', () => {
+	test('caps matches and releases the derived index while Find is closed', () => {
 		using model = new ChatFindModel(() => [item('many', 'userMessage', 'a '.repeat(MAX_FIND_MATCHES + 2))]);
 		model.setQuery('a', defaults);
 		assert.equal(model.matches.length, MAX_FIND_MATCHES);
 		assert.equal(model.isTruncated, true);
-		model.clear();
-		assert.equal(model.query, '');
+		model.next();
+		model.suspend();
+		assert.equal(model.query, 'a');
 		assert.equal(model.activeIndex, -1);
 		assert.equal(model.isTruncated, false);
 		assert.equal(model.matches.length, 0);
+		model.recompute();
+		assert.equal(model.activeIndex, 1);
 	});
 });

@@ -3,50 +3,17 @@
 	top: var(--ash-spacing-size40);
 	right: var(--ash-spacing-size80);
 	z-index: 2;
-	box-sizing: border-box;
-	width: 420px;
-	max-width: calc(100% - 16px);
-	padding: var(--ash-spacing-size80);
-	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-small);
-	background: var(--ash-editor-background);
-	color: var(--ash-foreground);
-	box-shadow: 0 4px 12px var(--ash-widget-shadow);
-	font-size: var(--ash-fontSize-label1);
+	width: 404px;
+	max-width: calc(100% - 2 * var(--ash-spacing-size80));
 }
 
-.ash-chat-find[hidden],
-.ash-chat-find > [hidden] {
-	display: none;
-}
-
-.ash-chat-find-query,
-.ash-chat-find-controls {
-	display: flex;
-	align-items: center;
-	gap: var(--ash-spacing-size40);
-	min-width: 0;
-}
-
-.ash-chat-find-query > .ash-input-box {
-	flex: 1 1 auto;
-	min-width: 0;
-}
-
-.ash-chat-find-controls {
-	flex-wrap: wrap;
+.ash-chat-find-history {
 	margin-top: var(--ash-spacing-size40);
 }
 
-.ash-chat-find-status {
-	flex: 1 1 auto;
-	min-width: 0;
-	overflow-wrap: anywhere;
-	color: var(--ash-description-foreground);
-}
-
-.ash-chat-find.invalid .ash-chat-find-status {
-	color: var(--ash-error-foreground);
+.ash-chat-find .ash-button.checked {
+	border-color: var(--ash-accent-background);
+	background: var(--ash-button-hoverBackground);
 }
 
 ::highlight(ash-chat-find-match) {

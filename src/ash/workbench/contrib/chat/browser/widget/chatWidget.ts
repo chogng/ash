@@ -24,6 +24,7 @@ import { canceled, isCancellationError } from '../../../../../base/common/errors
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import type { IContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
@@ -33,6 +34,7 @@ import type { SkillReference } from '../../../../../platform/agentHost/common/ap
 import { ChatInputPart, type IChatInputPart, type IChatDraftStorage } from './input/chatInputPart.js';
 import type { ChatStreamingResponseUpdate, ChatTurnErrorAction } from '../../common/model/chatViewModel.js';
 import { ChatListWidget } from './chatListWidget.js';
+import { ChatFindWidget, type IChatFindHost } from './chatFind/chatFindWidget.js';
 import type { ChatInputState } from './input/chatInput.js';
 import { chatResponseFollowups } from '../../common/model/chatFollowup.js';
 import type { ModelReasoningEffort } from '../../../../services/chat/common/modelCatalog.js';
@@ -127,6 +129,9 @@ export interface IChatWidgetModel extends IDisposable {
 export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> extends Disposable implements IChatWidget {
 	readonly element: HTMLElement;
 	protected readonly scopedContextKeys: IScopedContextKeyService;
+	private readonly scopedInstantiation: IInstantiationService;
+	private readonly findController = this._register(new MutableDisposable<ChatFindWidget>());
+	private readonly findVisible: IContextKey<boolean>;
 	private readonly hidden = this._register(new Emitter<void>());
 	readonly onDidHide = this.hidden.event;
 	private readonly visibilityChanged = this._register(new Emitter<void>());
@@ -207,9 +212,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		transcriptProgress.set(this.isTranscriptProgressActive);
 		this._register(model.onDidChange(() => transcriptProgress.set(this.isTranscriptProgressActive)));
 		ChatContextKeys.findSupported.bindTo(context).set(true);
-		const findVisible = ChatContextKeys.findWidgetVisible.bindTo(context);
+		this.findVisible = ChatContextKeys.findWidgetVisible.bindTo(context);
 		// Detached Markdown fragments still inherit this conversation's command scope.
 		const scopedInstantiation = this._register(instantiationService.createChild(new ServiceCollection([IContextKeyService, context])));
+		this.scopedInstantiation = scopedInstantiation;
 		const inQuickChat = ChatContextKeys.inQuickChat.bindTo(context);
 		if (model.reportRecapPresence) {
 			this.recapBlurListener = this._register(new ChatWindowBlurListener(this.element, () => this.syncRecapPresence()));
@@ -298,9 +304,6 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			inspectResponseEntity: this.viewOptions?.inspectResponseEntity,
 			getResponseActions: model.getResponseActions?.bind(model),
 			openTurnChanges,
-			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
-			getHistoryState: () => this.model.olderHistory,
-			loadOlderHistory: async () => { await this.model.loadOlderHistory?.(); },
 			imageResourceLoader,
 			mcpAppDelegate: {
 				updateModelContext: (source, text, images = []) => {
@@ -429,12 +432,17 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this._register(listWidgets.onDidChange(widget => {
 			const previous = this.listWidget;
 			const state = previous.getViewState();
+			// The controller borrows this list's DOM, ranges and events.
+			this.findController.clear();
 			previous.element.replaceWith(widget.element);
 			this.listWidget = widget;
 			widget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm, this.input.changesSummaryVisible, this.voiceWidget?.element);
 			widget.restoreViewState(state, this.model.items, this.responseWorking);
 		}));
-		this._register(this.model.onDidChangeComposer(() => { this.input.invalidatePendingInput(); this.listWidget.resetFind(); }));
+		this._register(this.model.onDidChangeComposer(() => {
+			this.input.invalidatePendingInput();
+			this.findController.clear();
+		}));
 		this._register((this.model.onDidChangePresentation ?? this.model.onDidChange)(update => {
 			if (this.model.inputState.aiDisabled && voiceClient?.isActive) void this.runVoice(() => voiceClient.disconnect());
 			if (!update || !this.listWidget.tryQueueStreamingResponse(update)) this.render();
@@ -463,7 +471,25 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		void this.model.interrupt().catch(error => { if (!this.isDisposed && this.visible && generation === this.model.composerGeneration && !isCancellationError(error)) { this.notifications.error(error); } });
 		return true;
 	}
-	public getFindController(): IChatFindController { return this.listWidget.getFindController(); }
+	public getFindController(): IChatFindController {
+		const list = this.listWidget;
+		return this.findController.value ??= this.scopedInstantiation.createInstance(ChatFindWidget, {
+			element: list.element,
+			onDidChange: list.onDidChangeFindableContent,
+			getItems: () => list.getItems(),
+			getRowElement: id => list.getRowElement(id),
+			getViewportAnchorItemId: () => list.getViewportAnchorItemId(),
+			reveal: (id, target) => list.revealItem(id, target),
+			focus: () => list.focusReadingPosition(),
+			isVisible: () => this.visible,
+			setFindVisible: visible => {
+				this.findVisible.set(visible);
+				list.setFindVisible(visible);
+			},
+			getHistoryState: () => this.model.olderHistory,
+			loadOlderHistory: async () => { await this.model.loadOlderHistory?.(); },
+		} satisfies IChatFindHost);
+	}
 	public focusResponseItem(lastFocused?: boolean): void { this.listWidget.focusResponseItem(lastFocused); }
 	public focusCodeBlock(reverse = false): void { this.listWidget.focusCodeBlock(reverse); }
 	public focusInput(): void {
@@ -495,6 +521,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		// Capture the transcript's reading position while its viewport can still be measured.
 		if (!visible) this.listWidget.setVisible(false);
 		this.element.hidden = !visible;
+		if (!visible && this.findController.value?.visible) this.findController.value.hide();
 		if (wasVisible !== visible) { this.visibilityChanged.fire(); }
 		if (wasVisible && !visible) this.hidden.fire();
 		if (!visible && this.model.voice?.isActive) void this.runVoice(() => this.model.voice!.stop());
