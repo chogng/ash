@@ -203,7 +203,12 @@ export class CallViewPane extends ViewPane {
 		this.formDomNode.hidden = active;
 		this.actionsDomNode.hidden = !active;
 		this.buttons.get('start')!.textContent = this.modeDomNode.value === 'invitation' ? localize('call.join', 'Join call') : localize('call.create', 'Create call');
-		this.statusDomNode.textContent = state?.error ?? (state ? localize('call.state', '{0} · {1}', connectionLabels[state.connection], state.muted ? localize('call.micOff', 'Microphone off') : localize('call.micOn', 'Microphone on')) : localize('call.idle', 'Start a call. Your microphone stays off until you unmute.'));
+		if (state?.error && (state.connection === 'connected' || state.connection === 'reconnecting')) {
+			// During an active call, the backend uses this error for a failed screen share.
+			this.statusDomNode.textContent = localize('call.screenShareStopped', 'Screen sharing stopped: {0}', state.error);
+		} else {
+			this.statusDomNode.textContent = state?.error ?? (state ? localize('call.state', '{0} · {1}', connectionLabels[state.connection], state.muted ? localize('call.micOff', 'Microphone off') : localize('call.micOn', 'Microphone on')) : localize('call.idle', 'Start a call. Your microphone stays off until you unmute.'));
+		}
 		for (const [id, button] of this.buttons) {
 			button.disabled = this.working || (id === 'start' ? active : !active);
 			if (id === 'invite' || id === 'end' || id === 'link-document') { button.hidden = !state?.canManage; }

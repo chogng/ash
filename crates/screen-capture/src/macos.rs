@@ -7,8 +7,8 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use std::time::Instant;
 use tokio::task::JoinHandle;
+use tokio::time::Instant;
 
 use core_graphics::display::CGDisplay;
 use core_graphics::display::CGPoint;
@@ -31,6 +31,7 @@ use crate::WindowInfo;
 
 const K_CF_NUMBER_S_INT64_TYPE: i32 = 4;
 const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
+const CAPTURE_FAILURE_GRACE: Duration = Duration::from_secs(2);
 
 #[link(name = "CoreGraphics", kind = "framework")]
 unsafe extern "C" {
@@ -339,6 +340,7 @@ where
 
     let handle = tokio::spawn(async move {
         let mut ticker = tokio::time::interval(interval);
+        let mut first_failure = None;
         while active_clone.load(Ordering::Relaxed) {
             ticker.tick().await;
             if !active_clone.load(Ordering::Relaxed) {
@@ -346,18 +348,30 @@ where
             }
 
             let timestamp = start_time.elapsed();
-            match capture_fn(timestamp) {
-                Ok(frame) => on_frame(frame),
-                Err(CaptureError::PermissionDenied) => {
-                    if let Ok(mut slot) = worker_error.lock() {
-                        *slot = Some(CaptureError::PermissionDenied.to_string());
+            let error = match capture_fn(timestamp) {
+                Ok(frame) => {
+                    first_failure = None;
+                    on_frame(frame);
+                    continue;
+                }
+                Err(error @ CaptureError::Backend(_)) => {
+                    // Resizing or occlusion can temporarily prevent capture. Give the
+                    // source time to recover before ending the share for everyone.
+                    let failed_at = Instant::now();
+                    if failed_at.duration_since(*first_failure.get_or_insert(failed_at))
+                        < CAPTURE_FAILURE_GRACE
+                    {
+                        continue;
                     }
-                    break;
+                    error
                 }
-                Err(_) => {
-                    // Transient capture errors (e.g. window resizing or occlusion)
-                }
+                Err(error @ (CaptureError::PermissionDenied | CaptureError::NotFound(_))) => error,
+                Err(CaptureError::Closed) => break,
+            };
+            if let Ok(mut slot) = worker_error.lock() {
+                *slot = Some(error.to_string());
             }
+            break;
         }
         active_clone.store(false, Ordering::SeqCst);
     });
@@ -370,28 +384,8 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn capture_stream_reports_inactive_after_capture_ends() {
-        let mut stream = start_capture_stream(60, Box::new(|_| {}), |_| {
-            Err(CaptureError::PermissionDenied)
-        })
-        .expect("capture stream should start");
-
-        let finished = tokio::time::timeout(Duration::from_secs(1), async {
-            while stream.is_active() {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await;
-
-        assert!(finished.is_ok(), "capture stream did not finish");
-        assert!(!stream.is_active());
-        stream.stop();
-    }
-}
+#[path = "macos_tests.rs"]
+mod tests;
 
 fn capture_display_frame(
     display_id: u32,

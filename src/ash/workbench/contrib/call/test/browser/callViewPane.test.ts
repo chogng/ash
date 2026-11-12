@@ -58,6 +58,7 @@ function fixture() {
 	return {
 		browser, view, linked, joined, opened, originalCopy,
 		setOwner(owner: boolean) { state = { ...state, canManage: owner }; changed.fire(); },
+		setScreenSharing(screenSharing: boolean, error: string | null = null) { state = { ...state, screenSharing, error }; changed.fire(); },
 		dispose() {
 			view.dispose(); configuration.dispose(); registration.dispose(); changed.dispose(); browser.window.close();
 			for (const [name, descriptor] of descriptors) {
@@ -107,5 +108,27 @@ test('Calls exposes translated shared-document actions and keeps management cont
 		assert.equal(button(test.view, '关联当前文档').hidden, true);
 		assert.equal(button(test.view, '取消文档关联').hidden, true);
 		assert.equal(button(test.view, '打开文档').disabled, false);
+	} finally { test.dispose(); resetNlsResolver(); }
+});
+
+test('Calls announces a stopped screen share and offers sharing again in Chinese', () => {
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
+	const test = fixture();
+	try {
+		const status = test.view.element.querySelector('[role="status"]');
+		const share = button(test.view, '共享屏幕');
+		const stop = button(test.view, '停止共享');
+		test.setScreenSharing(true);
+		assert.equal(share.hidden, true);
+		assert.equal(stop.hidden, false);
+
+		test.setScreenSharing(false, 'capture backend failed');
+		assert.equal(status?.textContent, '屏幕共享已停止：capture backend failed');
+		assert.equal(share.hidden, false);
+		assert.equal(share.disabled, false);
+		assert.equal(stop.hidden, true);
+
+		test.setScreenSharing(true);
+		assert.equal(status?.textContent?.includes('屏幕共享已停止'), false);
 	} finally { test.dispose(); resetNlsResolver(); }
 });

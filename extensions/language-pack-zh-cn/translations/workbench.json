@@ -270,6 +270,7 @@
     "call.micOn": "麦克风已开启",
     "call.screen": "共享画面",
     "call.sharing": "你正在共享屏幕。",
+    "call.screenShareStopped": "屏幕共享已停止：{0}",
     "call.display": "显示器",
     "call.window": "窗口",
     "call.helpHint": "按 Tab 导航，按 Alt+F1 查看帮助。",
