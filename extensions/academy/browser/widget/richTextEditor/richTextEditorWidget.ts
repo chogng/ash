@@ -744,7 +744,7 @@ export class RichTextEditorWidget extends Disposable {
 		editor.replaceChildren(fragment);
 	}
 
-	private handleRichEditContext(editor: HTMLDivElement, model: DocumentTextModel): void {
+	private handleRichEditContext(editor: HTMLDivElement, model: DocumentTextModel, historyGroup = 'typing'): void {
 		if (this.model !== model) return;
 		if (this.isReadOnly() || !this.requireContainer().contains(editor) || this.composition?.element === editor) return;
 		const blockId = editor.dataset.blockId;
@@ -761,27 +761,55 @@ export class RichTextEditorWidget extends Disposable {
 			nodeRuns.push(run);
 			runsById.set(nodeId, nodeRuns);
 		}
-		if (textNodes.every(textNode => runsById.has(textNode.id)) && runsById.size === textNodes.length) {
+		// Empty blocks have no inline runs: native first input creates bare DOM text.
+		if (textNodes.length > 0 && textNodes.every(textNode => runsById.has(textNode.id)) && runsById.size === textNodes.length) {
 			let transaction = new DocumentTransaction();
+			const selection = readInlineDocumentTextSelection(editor, true)?.selection;
+			const lengths = new Map<string, number>();
 			for (const textNode of textNodes) {
 				const nextText = (runsById.get(textNode.id) ?? []).map(run => run.textContent ?? '').join('');
+				lengths.set(textNode.id, nextText.length);
 				if (nextText !== textNode.text) transaction = transaction.replaceText(textNode.id, 0, textNode.text!.length, nextText);
 			}
-			if (transaction.steps.length > 0) model.dispatch(transaction.withHistoryGroup('typing').withMeta('review.author', this.reviewAuthor));
+			if (transaction.steps.length > 0) {
+				if (selection && lengths.get(selection.anchor.nodeId) && lengths.get(selection.head.nodeId)) {
+					transaction = transaction.withSelection(textSelection(
+						{ nodeId: selection.anchor.nodeId, offset: Math.min(selection.anchor.offset, lengths.get(selection.anchor.nodeId)!) },
+						{ nodeId: selection.head.nodeId, offset: Math.min(selection.head.offset, lengths.get(selection.head.nodeId)!) },
+					));
+				}
+				if (historyGroup === 'composition') transaction = transaction.withMeta('inputType', 'insertCompositionText');
+				this.dispatchCommand(model, { transaction, focus: { blockId } }, historyGroup);
+			}
 			return;
 		}
 		const text = editor.textContent ?? '';
+		const selection = editor.ownerDocument.getSelection();
+		const anchor = selection && editor.contains(selection.anchorNode) ? offsetWithinInlineRun(editor, editor, selection.anchorNode, selection.anchorOffset) : text.length;
+		const head = selection && editor.contains(selection.focusNode) ? offsetWithinInlineRun(editor, editor, selection.focusNode, selection.focusOffset) : anchor;
 		let transaction = new DocumentTransaction();
 		for (const textNode of textNodes) transaction = transaction.deleteNode(textNode.id);
-		if (text.length > 0) transaction = transaction.insertNode(node.id, 0, model.schema.createText(text, textNodes[0] ? { id: textNodes[0].id } : {}));
-		if (transaction.steps.length > 0) model.dispatch(transaction.withHistoryGroup('typing').withMeta('review.author', this.reviewAuthor));
+		if (text.length > 0) {
+			const inserted = model.schema.createText(text, { ...(textNodes[0] ? { id: textNodes[0].id } : {}), marks: documentInsertionMarks(model, model.selection) ?? textNodes[0]?.marks ?? [] });
+			transaction = transaction.insertNode(node.id, 0, inserted).withSelection(textSelection(
+				{ nodeId: inserted.id, offset: Math.min(anchor, text.length) },
+				{ nodeId: inserted.id, offset: Math.min(head, text.length) },
+			));
+		}
+		if (transaction.steps.length > 0) {
+			if (historyGroup === 'composition') transaction = transaction.withMeta('inputType', 'insertCompositionText');
+			this.dispatchCommand(model, { transaction, focus: { blockId } }, historyGroup);
+		}
 	}
 
 	private beginComposition(model: DocumentTextModel, blockId: string, element: HTMLTextAreaElement | HTMLDivElement, selection: DocumentTextSelection | undefined): void {
-		if (this.isReadOnly() || this.model !== model || !selection || selection.kind !== 'text') return;
-		if (findTextBearingBlockId(model.document, selection.anchor.nodeId) !== blockId) return;
+		if (this.isReadOnly() || this.model !== model) return;
+		// An empty rich paragraph cannot carry a text selection until commit creates a run.
+		const emptyRichBlock = element.tagName === 'DIV' && findNode(model.document, blockId)?.content.length === 0;
+		if (emptyRichBlock) selection = undefined;
+		else if (!selection || findTextBearingBlockId(model.document, selection.anchor.nodeId) !== blockId) return;
 		this.composition = { model, blockId, element, selection, baseText: readCompositionText(element), version: model.version };
-		if (model.selection?.kind !== 'text' || model.selection.anchor.nodeId !== selection.anchor.nodeId || model.selection.anchor.offset !== selection.anchor.offset || model.selection.head.nodeId !== selection.head.nodeId || model.selection.head.offset !== selection.head.offset) model.setSelection(selection);
+		model.setSelection(selection);
 	}
 
 	private endComposition(event: CompositionEvent, element: HTMLTextAreaElement | HTMLDivElement): void {
@@ -806,6 +834,10 @@ export class RichTextEditorWidget extends Disposable {
 		}
 		if (replacement.length === 0 && currentText === composition.baseText) {
 			this.relayoutPages();
+			return;
+		}
+		if (!selection) {
+			this.handleRichEditContext(element as HTMLDivElement, model, 'composition');
 			return;
 		}
 		const command = createReplaceTextCommand(model.schema, model.document, composition.blockId, selection, replacement, documentInsertionMarks(model, selection));
@@ -1755,7 +1787,7 @@ interface DocumentComposition {
 	readonly model: DocumentTextModel;
 	readonly blockId: string;
 	readonly element: HTMLTextAreaElement | HTMLDivElement;
-	readonly selection: DocumentTextSelection;
+	readonly selection: DocumentTextSelection | undefined;
 	readonly baseText: string;
 	readonly version: number;
 }
