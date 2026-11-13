@@ -22,6 +22,7 @@ import { IViewsService } from '../../../../workbench/services/views/common/views
 import { DOCS_TOOLS_CONTAINER_ID } from '../common/docs.js';
 import type { ISessionsEditorPage } from '../../../browser/parts/editorPart.js';
 import { ArtifactTitleBarWidget } from '../../artifact/browser/artifactTitleBarWidget.js';
+import { ArtifactTitleActions } from '../../artifact/browser/artifactTitleActions.js';
 
 /** The Artifacts presentation borrows the same document working copy and editor controls. */
 export class DocsArtifactPane extends DocumentEditorPane implements ISessionsEditorPage {
@@ -29,7 +30,6 @@ export class DocsArtifactPane extends DocumentEditorPane implements ISessionsEdi
 	private titlebar!: ArtifactTitleBarWidget;
 	public get titlebarContent(): HTMLElement { return this.titlebar.domNode; }
 	public controlsElement!: HTMLElement;
-	private back!: Action;
 	private saveAction!: Action;
 	private tools!: Action;
 	private readOnly = false;
@@ -54,12 +54,23 @@ export class DocsArtifactPane extends DocumentEditorPane implements ISessionsEdi
 		this.root = h(document, 'section', { className: 'ash-docs-workspace', attributes: { 'data-creator-mode': 'docs' } });
 		this.titlebar = this._register(this.artifactInstantiation.createInstance(ArtifactTitleBarWidget, document,
 			localize({ bundle: 'ash.docs', key: 'actions' }, 'Docs actions'), undefined));
+		const titleActions = this.artifactInstantiation.createInstance(ArtifactTitleActions);
+		this._register(titleActions.onDidChangeHandoffAvailability(() => {
+			this.titlebar.closeTitleMenu();
+			this.titlebar.refreshTitleActions();
+		}));
+		this.titlebar.setTitleActions(() => {
+			const copy = this.workingCopy;
+			if (!copy) return [];
+			const title = basename(copy.resource);
+			return titleActions.getActions({
+				title, getCodeAttachment: () => ({ name: title.replace(/\.ash-doc$/iu, '') + '.md', content: this.exportText('markdown') }),
+			});
+		});
 		const body = h(document, 'div', { className: 'ash-docs-workspace-body' });
 		this.controlsElement = h(document, 'div', { className: 'ash-docs-workspace-controls' });
 		this.root.append(body);
 		parent.append(this.root);
-		this.back = this._register(new Action('sessions.docs.back', localize({ bundle: 'ash.docs', key: 'back' }, 'Back to Artifacts'), '', true, () => this.run(() => this.commands.executeCommand('sessions.show.creator'))));
-		this.back.icon = Lxicon.arrowLeft;
 		this.saveAction = this._register(new Action('sessions.docs.save', localize('sessions.creator.save', 'Save document'), '', true, () => this.run(() => this.save())));
 		this.saveAction.icon = Lxicon.save;
 		this.tools = this._register(new Action('sessions.docs.tools', localize({ bundle: 'ash.docs', key: 'tools' }, 'Document tools'), '', true, () => {
@@ -78,15 +89,25 @@ export class DocsArtifactPane extends DocumentEditorPane implements ISessionsEdi
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+		this.titlebar.closeTitleMenu();
 		await super.setInput(input, signal);
 		signal.throwIfAborted();
 		this.readOnly = input.readOnly === true;
 		this.titlebar.setTitle(input.label ?? basename(input.resource));
-		this.titlebar.setActions(this.readOnly ? [this.back, this.tools] : [this.saveAction, this.back, this.tools]);
+		this.titlebar.refreshTitleActions();
+		this.titlebar.setActions(this.readOnly ? [this.tools] : [this.saveAction, this.tools], this.getArtifactFormats().map(format => ({
+			id: `sessions.docs.export.${format.id}`, label: format.label, enabled: true, tooltip: format.label,
+			run: () => this.commands.executeCommand('workbench.action.document.export.file', format.id),
+		})));
 	}
 
 	public override async save(): Promise<void> {
 		if (!this.readOnly) await super.save();
+	}
+
+	public override setVisible(visible: boolean): void {
+		if (!visible) this.titlebar?.closeTitleMenu();
+		super.setVisible(visible);
 	}
 
 	public override containsAccessibilityFocus(target: HTMLElement): boolean {
@@ -95,7 +116,7 @@ export class DocsArtifactPane extends DocumentEditorPane implements ISessionsEdi
 
 	public override getAccessibilityHelp(): readonly string[] {
 		return [
-			localize({ bundle: 'ash.docs', key: 'workspaceHelp' }, 'Use the Docs actions in the window title bar to return to Artifacts or open Document tools. Document tools opens formatting, find, and the outline in the right sidebar.'),
+			localize({ bundle: 'ash.docs', key: 'workspaceHelp' }, 'When the title is a button, press Enter to open its artifact actions and Escape to return to the title. In the window title bar, use Export, Maximize artifact, or Close artifact. Document tools opens formatting, find, and the outline in the right sidebar.'),
 			...super.getAccessibilityHelp(),
 		];
 	}

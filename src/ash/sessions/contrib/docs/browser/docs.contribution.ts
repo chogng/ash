@@ -221,5 +221,5 @@ for (const format of ['text', 'markdown'] as const) {
 
 for (const operation of ['import', 'export'] as const) registerAction2(class DocumentArtifactAction extends Action2 {
 	constructor() { super({ id: `workbench.action.document.${operation}.file`, title: operation === 'import' ? localize2('document.output.import', 'Import Document File…') : localize2('document.output.export', 'Export Document File…'), f1: true, menu: { id: MenuId.MenubarFileMenu, group: '2_files', order: operation === 'import' ? 10 : 11 } }); }
-	override run(accessor: ServicesAccessor): Promise<void> { return operation === 'import' ? importDocumentArtifact(accessor) : exportDocumentArtifact(accessor); }
+	override run(accessor: ServicesAccessor, format?: unknown): Promise<void> { return operation === 'import' ? importDocumentArtifact(accessor) : exportDocumentArtifact(accessor, typeof format === 'string' ? format : undefined); }
 });

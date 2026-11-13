@@ -1,6 +1,15 @@
 import { localize } from '../../../../nls.js';
 import type { ISessionsEntry } from '../../../services/layout/common/sessionsEntryService.js';
 
+export const handoffArtifactToCodeCommand = 'sessions.artifacts.handoffToCode';
+export const openLinkedArtifactCommand = 'sessions.artifacts.openLinked';
+export const openArtifactCommands = { canvas: 'sessions.creator.openCanvasArtifact', table: 'sessions.creator.openTable' } as const;
+export const artifactNameMaxLength = 200;
+
+export function isArtifactName(value: unknown): value is string {
+	return typeof value === 'string' && value.length > 0 && value.length <= artifactNameMaxLength && value === value.trim() && !/[\r\n\u0000]/u.test(value);
+}
+
 export const artifactDetailEntry = {
 	workspaceMode: 'current',
 	activityContext: 'sessions.activity.creatorSelected',

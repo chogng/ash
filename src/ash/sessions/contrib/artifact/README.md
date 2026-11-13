@@ -33,13 +33,13 @@ Brand、Sites、Make、Prototype 也可以通过命令面板打开。画布工�
 | Make       | 生成代码与场景 JSON 查看、HTML 运行预览、附带代码的 Agent 对话草稿 |
 | Prototype  | 手机屏幕、热点连线、分支流程、浮层和过渡动画                       |
 
-Sites 尚未提供网站布局重排、路由文档和发布，完整领域约定见 [Creator Sites](../../CREATOR_SITES.md)。Make 的 Agent 操作在预览旁准备未发送的 Code 草稿，由用户在对话里检查并发送。
+Sites 尚未提供网站布局重排、路由文档和发布，完整领域约定见 [Creator Sites](../../CREATOR_SITES.md)。Make 的 Agent 操作打开 Code，附上当前预览的 HTML，由用户在 Code 中检查并发送草稿。
 
 上表是画布工作区的当前操作。[设计方案](DESIGN.md#七项工作区的-part-分工)记录这些工作区的目标布局和验收要求。
 
 ### Design 画布布局
 
-Design 的标题和窗口操作使用共用的 Artifact 标题栏，编辑工具位于画布工具栏。添加画板和导入图片可使用快捷键或右键菜单。打开设计、保存副本与导出 SVG 使用画布快捷键或右键菜单；自动保存失败时，右键菜单提供重试保存。点击左侧 Artifacts 导航返回创作主页。
+Design 的标题和窗口操作使用共用的 Artifact 标题栏，编辑工具位于画布工具栏。保存副本和导出 SVG 可从标题栏的「导出」菜单打开，也可使用画布右键菜单。添加画板和导入图片可使用快捷键或右键菜单；自动保存失败时，右键菜单提供重试保存。点击左侧 Artifacts 导航返回创作主页。
 
 画布工作区共用顶部工具栏。编辑器提供当前工具与编辑模式的动作。各工作区在各自的 `.contribution.ts` 中向 `ArtifactEditorToolbar` 注册命令，菜单通过工作区实例的上下文键确定显示和启用状态。Slides 和 Sites 的页码导航由各自的页面导航组件挂载到工具栏。
 

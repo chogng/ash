@@ -222,7 +222,8 @@ import { AgentHostConnectionsService } from '../../platform/agentHost/browser/ag
 import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
 import { IExtensionResourceLoaderService } from '../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
-import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
+import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
+import type { AgentsWindowHandoff } from '../../platform/window/common/window.js';
 import { IStorageService, WillSaveStateReason, StorageScope } from '../../platform/storage/common/storage.js';
 import { IThemeService } from '../../platform/theme/common/themeService.js';
 import { WorkbenchState, IWorkspaceContextService, type IWorkspace } from '../../platform/workspace/common/workspace.js';
@@ -353,6 +354,10 @@ import { SessionsManagementService } from '../services/sessions/browser/sessions
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { ISessionsService, SessionsService } from '../services/sessions/browser/sessionsService.js';
 import { ISessionsEntryService } from '../services/layout/common/sessionsEntryService.js';
+import { handoffArtifactToCodeCommand, openLinkedArtifactCommand } from '../contrib/artifact/common/artifactWorkspace.js';
+import { IArtifactPins } from '../contrib/artifact/browser/artifactPins.js';
+import { isArtifactLink } from '../../platform/artifactIntegrations/common/artifactLink.js';
+import { ChatAIDisabledSettingId } from '../../platform/chat/common/chatSettings.js';
 import { registerLayoutActions } from './layoutActions.js';
 import { registerSessionsTerminalContribution } from '../contrib/terminal/browser/sessionsTerminalContribution.js';
 import { ITerminalProcessService, TerminalLocation } from '../../platform/terminal/common/terminal.js';
@@ -393,6 +398,7 @@ export interface IWorkbenchOptions {
 	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable>;
 	readonly createLogService: () => LogService;
 	readonly nativeHostApi?: INativeHostApi;
+	readonly openArtifactLinkInHost?: (resource: URI) => Promise<boolean>;
 	readonly createAuxiliaryWindowService?: (opener: Window, root: HTMLElement, services: IInstantiationService) => IAuxiliaryWindowService;
 	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
 	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
@@ -424,6 +430,7 @@ export abstract class Workbench extends Disposable {
 	private sessionsView!: SessionsService;
 	private sessionsPart!: SessionsPart;
 	private showChat!: () => Promise<void>;
+	private openLinkedArtifact!: (resource: string) => Promise<boolean>;
 	private _whenRestored!: Promise<void>;
 	/** Saved session layouts are restored before the host completes startup. */
 	get whenRestored(): Promise<void> { return this._whenRestored; }
@@ -469,6 +476,7 @@ export abstract class Workbench extends Disposable {
 		this.registerConversationCommands(services);
 		const commandService = services.get(ICommandService);
 		this.showChat = () => commandService.executeCommand<void>('sessions.open.chat');
+		this.openLinkedArtifact = resource => commandService.executeCommand<boolean>(openLinkedArtifactCommand, resource);
 		const activityBar = this.createActivityBar(services, sidebar, titlebar, accountMenu, !!options.api.agentHosts);
 
 		this.sessionsPart = this.createSessionsPart(services);
@@ -491,8 +499,12 @@ export abstract class Workbench extends Disposable {
 		});
 	}
 
-	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
+	async acceptHandoff(options: AgentsWindowHandoff): Promise<void> {
 		await this.whenRestored;
+		if (options.artifact) {
+			if (!await this.openLinkedArtifact(options.artifact)) throw new Error(localize({ bundle: 'ash.artifacts', key: 'linkWorkspace' }, 'The artifact’s original workspace is unavailable.'));
+			return;
+		}
 		await this.showChat();
 		if (options.conversation) {
 			await this.sessionsView.openThread(options.conversation.sessionId, options.conversation.threadId);
@@ -939,6 +951,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IContextKeyService, contextKeys);
 		const layout = this._register(services.createInstance(layoutConstructor, this.domNode, {
 			focus: () => this.sessionsPart?.focus(),
+			auxiliaryWindows: services.get(IAuxiliaryWindowService),
 		}));
 		services.registerInstance(IAgentWorkbenchLayoutService, layout);
 		const notificationService = this._register(services.createInstance(NotificationService));
@@ -949,6 +962,17 @@ export abstract class Workbench extends Disposable {
 		this.domNode.append(feedbackHost);
 		this._register(toDisposable(() => feedbackHost.remove()));
 		const openerService = this._register(services.createInstance(OpenerService));
+		this._register(openerService.registerOpener({
+			open: async target => {
+				const resource = typeof target === 'string' ? URI.parse(target) : target;
+				if (!isArtifactLink(resource)) return false;
+				const handled = options.openArtifactLinkInHost
+					? await options.openArtifactLinkInHost(resource)
+					: await this.openLinkedArtifact(resource.toString());
+				if (handled) return true;
+				throw new Error(localize({ bundle: 'ash.artifacts', key: 'linkWorkspace' }, 'The artifact’s original workspace is unavailable.'));
+			},
+		}));
 		if (options.nativeHostApi) {
 			openerService.setDefaultExternalOpener({ openExternal: options.nativeHostApi.openExternal.bind(options.nativeHostApi) });
 		}
@@ -1084,6 +1108,24 @@ export abstract class Workbench extends Disposable {
 	}
 
 	private registerConversationCommands(services: InstantiationService): void {
+		this._register(CommandsRegistry.register(handoffArtifactToCodeCommand, async (accessor, value) => {
+			if (!value || typeof value !== 'object' || !('name' in value) || !('content' in value)
+				|| typeof value.name !== 'string' || !value.name.trim() || typeof value.content !== 'string') {
+				throw new TypeError('Invalid artifact attachment');
+			}
+			if (!accessor.get(IContextKeyService).getValue(AppServerAvailableContext.key)
+				|| this.configurationService.getValue<boolean>(ChatAIDisabledSettingId) === true) return;
+			const { name, content } = value;
+			const commands = accessor.get(ICommandService);
+			const management = accessor.get(ISessionsManagementService);
+			const target = await management.resolveNewSessionTarget();
+			if (this.isDisposed) return;
+			await commands.executeCommand('sessions.open.code', 'conversation');
+			if (this.isDisposed) return;
+			this.sessionsView.openNewSession(undefined, target);
+			this.sessionsPart.addContext({ id: 'artifact-handoff', name, kind: 'file', resolve: async () => ({ name, content }) });
+			this.sessionsPart.focus();
+		}));
 		this._register(CommandsRegistry.register('sessions.creator.buildWithAgent', async (_accessor, value) => {
 			const request = value as { readonly prompt: string; readonly content: string; };
 			await services.get(ISessionsEntryService).setConversationVisible(true);
@@ -1537,6 +1579,7 @@ export abstract class Workbench extends Disposable {
 		const configurationService = this.configurationService;
 		// Browser integration resolves editor and view services; install it after the window graph is complete.
 		if (options.createAppToolsHost) this._register(options.createAppToolsHost(services));
+		services.get(IArtifactPins);
 		this._register(new SessionsModernUIContribution(this.domNode, configurationService));
 		this._register(registerLayoutActions(layout, this.sessionsView, contextKeys, editor, configurationService, this.sessionsPart.hasDesktopChatSource));
 		this._register(registerAddFileAsContextAction(this.sessionsPart));

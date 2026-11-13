@@ -9,6 +9,7 @@ import { ArtifactWorkspace, registerArtifactWorkspaceMode } from '../../artifact
 import { ArtifactWorkspaceId, getArtifactWorkspaceTitle } from '../../artifact/common/artifactWorkspace.js';
 import { DesignMode } from '../../artifact/common/config/designEditorConfiguration.js';
 import { generateDesignCode } from '../../artifact/browser/code/designCodeGenerator.js';
+import { IDesignEditorService } from '../../artifact/browser/designEditorService.js';
 
 class MakeWorkspace extends ArtifactWorkspace {
 	public override readonly detailsContainerId = undefined;
@@ -21,8 +22,9 @@ class MakeWorkspace extends ArtifactWorkspace {
 		mode: ArtifactWorkspaceId,
 		@IInstantiationService instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IDesignEditorService designEditors: IDesignEditorService,
 		@ICommandService private readonly commandService: ICommandService,
-	) { super(ownerDocument, mode, instantiation, contextKeys); }
+	) { super(ownerDocument, mode, instantiation, contextKeys, designEditors); }
 
 	public static registerToolbarActions(): void {
 		this.registerWorkspaceActions(ArtifactWorkspaceId.Make, [

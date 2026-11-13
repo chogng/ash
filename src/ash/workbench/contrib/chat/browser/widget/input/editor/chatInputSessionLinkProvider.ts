@@ -6,13 +6,14 @@ import { ILanguageFeaturesService } from '../../../../../../../editor/common/ser
 import { localize, localize2 } from '../../../../../../../nls.js';
 import { MenuId, MenusRegistry } from '../../../../../../../platform/actions/common/actions.js';
 import { OPEN_SESSION_LINK_SCHEME, parseOpenSessionLinkUri } from '../../../../../../../platform/agentHost/common/openSessionLink.js';
+import { isArtifactLink, parseArtifactLink } from '../../../../../../../platform/artifactIntegrations/common/artifactLink.js';
 import { ChatContextKeys } from '../../../../common/actions/chatContextKeys.js';
 import { CHAT_INPUT_LANGUAGE_ID } from './chatInputCompletions.js';
 
-const sessionLinkPattern = new RegExp(`${OPEN_SESSION_LINK_SCHEME}://[^\\s<>"'\x60]+`, 'gu');
+const chatLinkPattern = new RegExp(`(?:${OPEN_SESSION_LINK_SCHEME}://|ash://artifact/|ash-artifact://open/)[^\\s<>"'\x60]+`, 'gu');
 const closingBrackets = new Map([['(', ')'], ['[', ']'], ['{', '}']]);
 
-/** Detects canonical conversation links for the existing session-link opener. */
+/** Detects internal conversation and artifact links in the composer. */
 export class ChatInputSessionLinkProvider extends Disposable implements LanguageLinkProvider {
 	constructor(@ILanguageFeaturesService features: ILanguageFeaturesService) {
 		super();
@@ -28,22 +29,29 @@ export class ChatInputSessionLinkProvider extends Disposable implements Language
 		const lines = request.snapshot.getText().split('\n');
 		for (const [index, line] of lines.entries()) {
 			if (signal.aborted) return [];
-			for (const match of line.matchAll(sessionLinkPattern)) {
+			for (const match of line.matchAll(chatLinkPattern)) {
 				const preceding = line[match.index - 1];
 				// A nested URL or identifier owns its entire token; do not turn its suffix into navigation.
 				if (preceding && !/[\s([{<"'\x60]/u.test(preceding)) continue;
 				let target = match[0];
 				const closing = preceding ? closingBrackets.get(preceding) : undefined;
 				if (closing && target.endsWith(closing)) target = target.slice(0, -1);
+				let artifact: boolean;
 				try {
-					parseOpenSessionLinkUri(URI.parse(target));
+					const resource = URI.parse(target);
+					artifact = isArtifactLink(resource);
+					if (artifact) {
+						if (!parseArtifactLink(resource)) continue;
+					} else {
+						parseOpenSessionLinkUri(resource);
+					}
 				} catch {
 					continue;
 				}
 				links.push({
 					range: new Range(index + 1, match.index + 1, index + 1, match.index + target.length + 1),
 					target,
-					tooltip: localize('chat.sessionLink.open', 'Open conversation'),
+					tooltip: artifact ? localize('chat.artifactLink.open', 'Open artifact') : localize('chat.sessionLink.open', 'Open conversation'),
 				});
 			}
 		}

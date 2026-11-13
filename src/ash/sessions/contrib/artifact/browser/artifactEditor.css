@@ -22,6 +22,60 @@
 	padding: var(--ash-spacing-size200) var(--ash-spacing-size240)
 		var(--ash-spacing-size240);
 }
+
+.ash-artifact-popout {
+	display: flex;
+	flex-direction: column;
+}
+
+.ash-artifact-popout-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex: none;
+	height: 44px;
+	padding-inline: var(--ash-spacing-size120);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+	background: var(--ash-editor-background);
+	-webkit-app-region: drag;
+}
+
+.ash-artifact-popout[data-runtime="electron"][data-os="mac"]
+	.ash-artifact-popout-header {
+	padding-inline-start: calc(2 * var(--ash-spacing-size400));
+}
+
+.ash-artifact-popout[data-runtime="electron"]:not([data-os="mac"])
+	.ash-artifact-popout-header {
+	padding-inline-end: calc(
+		3 * var(--ash-spacing-size400) + var(--ash-spacing-size200)
+	);
+}
+
+.ash-artifact-popout-header > h1 {
+	overflow: hidden;
+	margin: 0;
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-artifact-popout-header > button {
+	-webkit-app-region: no-drag;
+}
+
+.ash-artifact-popout-body {
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+}
+
+.ash-artifact-popout-placeholder:not([hidden]) {
+	display: grid;
+	place-content: center;
+	height: 100%;
+}
 .ash-artifacts-toolbar {
 	display: flex;
 	align-items: center;

@@ -1,4 +1,5 @@
 import './promptTimeline/promptTimeline.contribution.js';
+import { ChatInputSessionLinkProvider } from './widget/input/editor/chatInputSessionLinkProvider.js';
 import './aiCustomization/aiCustomizationManagement.contribution.js';
 import { ISessionSummaryHoverService, SessionSummaryHoverService } from './agentSessions/sessionSummaryHoverService.js';
 import { BtwSlashCommandContribution } from './btwSlashCommand.js';
@@ -203,6 +204,7 @@ registerSingleton(IChatSideChatService, ChatSideChatService, InstantiationType.D
 registerSingleton(IChatSlashCommandService, ChatSlashCommandService, InstantiationType.Delayed);
 registerWorkbenchContribution(BtwSlashCommandContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(BtwSlashCommandContribution));
 registerWorkbenchContribution(ChatSideChatProvider.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatSideChatProvider));
+registerWorkbenchContribution('workbench.contrib.chatInputSessionLinks', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatInputSessionLinkProvider));
 registerChatQueueActions();
 registerWorkbenchContribution(ChatQueuePickerRendering.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatQueuePickerRendering));
 registerChatAccessibilityActions();

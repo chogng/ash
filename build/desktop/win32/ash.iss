@@ -46,6 +46,11 @@ Source: "{#BundleDir}\resources\installation-files.json"; Flags: dontcopy
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\Ash.exe"; IconFilename: "{app}\Ash.exe"; AppUserModelID: "{#AppUserId}"; AppUserModelToastActivatorCLSID: "{#ToastActivatorClsid}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Ash.exe"; IconFilename: "{app}\Ash.exe"; AppUserModelID: "{#AppUserId}"; AppUserModelToastActivatorCLSID: "{#ToastActivatorClsid}"; Tasks: desktopicon
 
+[Registry]
+Root: HKCU; Subkey: "Software\Classes\ash"; ValueType: string; ValueData: "URL:Ash"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\ash"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\ash\shell\open\command"; ValueType: string; ValueData: """{app}\Ash.exe"" ""%1"""
+
 [Run]
 Filename: "{app}\Ash.exe"; Flags: nowait postinstall skipifsilent; Description: "{code:LaunchDescription}"
 Filename: "{app}\Ash.exe"; Flags: nowait skipifnotsilent; Check: ShouldRestart

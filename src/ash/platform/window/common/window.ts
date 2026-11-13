@@ -6,6 +6,7 @@ import { URI } from '../../../base/common/uri.js';
 import { parseOpenSessionLinkUri } from '../../agentHost/common/openSessionLink.js';
 import { ASH_REMOTE_SCHEME, getRemoteWorkspacePath } from '../../remote/common/remote.js';
 import { parseWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../workspace/common/workspace.js';
+import type { IOpenAgentsWindowOptions } from '../../native/common/nativeHost.js';
 
 export interface IRectangle {
 	readonly x: number;
@@ -84,6 +85,10 @@ export function validateOpenIdeSessionRequest(value: unknown): { folder?: URI; c
 export const AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL = 'ash:sessions:handoff-available';
 export const AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL = 'ash:sessions:handoff-take';
 export const AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL = 'ash:sessions:handoff-complete';
+
+/** Main can deliver a validated artifact URL after opening its owning workspace. */
+export type AgentsWindowHandoff = (IOpenAgentsWindowOptions & { readonly artifact?: never; })
+	| { readonly artifact: string; readonly conversation?: never; readonly draft?: never; };
 
 export interface IAgentsWindowHandoffResult {
 	readonly id: string;

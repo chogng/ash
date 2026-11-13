@@ -94,6 +94,7 @@ try {
 		executableName: 'Ash',
 		appBundleId: AshApplicationId,
 		platform: 'darwin',
+		protocols: [{ name: 'Ash links', schemes: ['ash'] }],
 		arch,
 		electronVersion: electronMetadata.version,
 		icon: [

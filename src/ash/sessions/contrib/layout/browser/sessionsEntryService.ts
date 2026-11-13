@@ -314,10 +314,11 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		entry.onEditorInputReplaced?.(input, replacement);
 	}
 
-	public setConversationVisible(visible: boolean): Promise<void> {
+	public setConversationVisible(visible: boolean, options?: { readonly preserveFocus?: boolean; }): Promise<void> {
 		return this.runOperation(async () => {
 			if (!this.activeEntry.get()?.conversation) { throw new Error('The active entry does not support a conversation beside its editor.'); }
 			this.layout.updateParts(() => this.layout.setPartAvailable('sessions', visible));
+			if (options?.preserveFocus) return;
 			if (visible) { this.layout.focus(); }
 			else { this.editors.focusActiveEditor(); }
 		});

@@ -255,7 +255,7 @@ test('Artifact editors keep the same conversation when opening Docs and canvas w
 		expect(headerBounds.y).toBe(titlebarBounds.y);
 		expect(headerBounds.x).toBeCloseTo((await editor.boundingBox())!.x, 0);
 		expect(headerBounds.y + headerBounds.height).toBeLessThanOrEqual((await body.boundingBox())!.y);
-		await expect(editor.getByRole('button', { name: /^(Artifacts home|Back to Artifacts|Document tools|Show Secondary Side Bar)$/u })).toHaveCount(0);
+		await expect(editor.getByRole('button', { name: /^(Close artifact|Document tools|Show Secondary Side Bar)$/u })).toHaveCount(0);
 		const toggle = header.getByRole('button', { name: toolsLabel, exact: true });
 		await toggle.click();
 		await expect(details).toBeVisible();
@@ -330,12 +330,14 @@ test('Artifacts restores editable Sheet and Data drafts after reopening', { tag:
 	const openArtifacts = () => page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const openTable = (kind: string) => page.locator(`.ash-artifacts-card.${kind}[data-artifact-workspace]`).press('Enter');
 	const table = (kind: string) => page.locator(`.ash-artifact-table-workspace.editable.${kind}:visible`);
-	const exportCsv = () => page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Export CSV', exact: true });
+	const title = () => page.locator('.ash-sessions-titlebar-editor-page h1').getByRole('button');
+	const exportMenu = () => page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Export', exact: true });
+	const pin = () => page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Budget sheet', exact: true });
 	for (const [kind, value] of drafts) {
 		await openArtifacts();
 		await openTable(kind);
 		const body = table(kind);
-		await expect(exportCsv()).toBeVisible();
+		await expect(exportMenu()).toBeVisible();
 		await expect(body.getByRole('textbox', { name: 'Cell A1', exact: true })).toHaveValue(value);
 		await body.getByRole('button', { name: 'Add row', exact: true }).press('Enter');
 		const cell = body.getByRole('textbox', { name: 'Cell A2', exact: true });
@@ -344,11 +346,21 @@ test('Artifacts restores editable Sheet and Data drafts after reopening', { tag:
 		await body.getByRole('button', { name: 'Add column', exact: true }).press('Enter');
 		await expect(body.getByRole('textbox', { name: 'Cell D1', exact: true })).toBeFocused();
 		if (kind === 'sheet' && target.appServerMode === 'required' && 'windows' in application) {
+			await title().click();
+			await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+			const name = page.getByRole('textbox', { name: 'Rename artifact', exact: true });
+			await name.fill('Budget sheet');
+			await name.press('Enter');
+			await expect(title()).toHaveText('Budget sheet');
+			await title().click();
+			await page.getByRole('menuitem', { name: 'Pin to sidebar', exact: true }).click();
+			await expect(pin()).toBeVisible();
 			const output = join(await realpath(testWorkspace.directory), 'artifact-sheet.csv');
 			await application.evaluate(({ dialog }, filePath) => {
 				dialog.showSaveDialog = async () => ({ canceled: false, filePath });
 			}, output);
-			await exportCsv().click();
+			await exportMenu().click();
+			await page.getByRole('menuitem', { name: 'Export CSV', exact: true }).click();
 			await expect.poll(() => readFile(output, 'utf8').catch(() => '')).toBe('"Quarterly budget","","",""\r\n"Quarterly budget details","","",""');
 		}
 	}
@@ -358,7 +370,12 @@ test('Artifacts restores editable Sheet and Data drafts after reopening', { tag:
 	for (const [kind, value] of drafts) {
 		await openArtifacts();
 		await page.getByRole('tab', { name: 'Yours', exact: true }).press('Enter');
-		await openTable(kind);
+		if (kind === 'sheet' && target.appServerMode === 'required' && 'windows' in application) {
+			await pin().click();
+			await expect(title()).toHaveText('Budget sheet');
+		} else {
+			await openTable(kind);
+		}
 		const body = table(kind);
 		await expect(body.getByRole('textbox', { name: 'Cell A1', exact: true })).toHaveValue(value);
 		await expect(body.getByRole('textbox', { name: 'Cell A2', exact: true })).toHaveValue(`${value} details`);

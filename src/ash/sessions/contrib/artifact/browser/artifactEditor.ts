@@ -19,6 +19,7 @@ import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { localize } from '../../../../nls.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { parseArtifactKey } from '../../../../platform/artifactIntegrations/common/artifactLink.js';
 import { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import { createArtifactCatalogSources, getArtifactWorkspace, type ArtifactCard, type ArtifactCatalogSource, type ArtifactWorkspaceRequest, type IArtifactWorkspace } from './artifactWorkspaceRegistry.js';
 import { ArtifactTitleBarWidget } from './artifactTitleBarWidget.js';
@@ -31,6 +32,9 @@ import { ChatCreationWidget } from '../../chat/browser/chatCreationWidget.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ISessionsEditorPage } from '../../../browser/parts/editorPart.js';
 import { Menus } from '../../../browser/menus.js';
+import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { ArtifactTitleActions } from './artifactTitleActions.js';
+import { IArtifactPins } from './artifactPins.js';
 
 type ArtifactFilter = 'all' | 'yours' | 'shared';
 
@@ -86,6 +90,10 @@ export class ArtifactEditorView extends Disposable {
 	private readonly sortAction: Action;
 	private filter: ArtifactFilter = 'all';
 	private readonly workspaces = this._register(new DisposableMap<string, IArtifactWorkspace>());
+	private readonly popouts = this._register(new DisposableMap<IArtifactWorkspace, DisposableStore>());
+	private readonly openingPopouts = new Map<IArtifactWorkspace, Promise<void>>();
+	private readonly popoutPlaceholders = new Map<IArtifactWorkspace, HTMLElement>();
+	private readonly titleActions: ArtifactTitleActions;
 	private activeWorkspace: ArtifactWorkspaceRequest | undefined;
 	private readonly examples = getArtifactExamples();
 	private visible = false;
@@ -105,6 +113,8 @@ export class ArtifactEditorView extends Disposable {
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
 		@ICommandService private readonly commands: ICommandService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IAuxiliaryWindowService private readonly auxiliaryWindows: IAuxiliaryWindowService,
+		@IArtifactPins private readonly pins: IArtifactPins,
 	) {
 		super();
 		this.catalogSources = createArtifactCatalogSources(instantiation);
@@ -117,6 +127,8 @@ export class ArtifactEditorView extends Disposable {
 			localize('sessions.creator.workspaceActions', 'Workspace actions'), Menus.ArtifactTitleBar));
 		this.titlebar.setTitle(localize('sessions.creator.title', 'Artifacts'));
 		this.titlebar.setActionsVisible(false);
+		this.titleActions = instantiation.createInstance(ArtifactTitleActions);
+		this._register(this.titleActions.onDidChangeHandoffAvailability(() => this.titlebar.closeTitleMenu()));
 		const header = this.titlebar.domNode;
 		pages.set(header, this);
 		this._register(contextKeys.createScoped(header)).createKey('sessionsCreatorFocused', true);
@@ -296,10 +308,36 @@ export class ArtifactEditorView extends Disposable {
 		}
 		this.storage.store('sessions.creator.activeMode', request.restoreMode, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		this.activeWorkspace = request;
-		const updateTitle = () => this.titlebar.setTitle(workspace.title);
+		const identity = parseArtifactKey(request.key);
+		const currentWorkspace = workspace;
+		this.titlebar.setTitleActions(() => {
+			const remove = currentWorkspace.delete;
+			return this.titleActions.getActions({
+				title: currentWorkspace.title,
+				identity,
+				getCodeAttachment: currentWorkspace.getCodeAttachment?.bind(currentWorkspace),
+				popOut: () => this.popOut(currentWorkspace),
+				rename: currentWorkspace.rename && (() => this.titlebar.beginRename()),
+				delete: remove && (async () => {
+					currentWorkspace.domNode.inert = true;
+					try { await remove(); }
+					catch (error) {
+						currentWorkspace.domNode.inert = false;
+						throw error;
+					}
+					if (identity) this.pins.setPinned(identity, false);
+					this.popouts.deleteAndDispose(currentWorkspace);
+					this.workspaces.deleteAndDispose(request.key);
+					if (this.activeWorkspace?.key === request.key) {
+						await this.commands.executeCommand('sessions.show.creator');
+					}
+				}),
+			});
+		}, () => currentWorkspace.rename);
+		const updateTitle = () => this.titlebar.setTitle(currentWorkspace.title);
 		this.titleListener.value = workspace.onDidChangeTitle?.(updateTitle);
 		updateTitle();
-		this.titlebar.setActions(workspace.titlebarActions ?? []);
+		this.titlebar.setActions([], workspace.exportActions);
 		this.updateVisibility();
 		this.layout(this.dimension);
 		if (this.visible) {
@@ -316,6 +354,7 @@ export class ArtifactEditorView extends Disposable {
 		const previous = this.activeWorkspace;
 		this.activeWorkspace = undefined;
 		this.titleListener.clear();
+		this.titlebar.setTitleActions(undefined);
 		this.titlebar.setActions([]);
 		this.titlebar.setTitle(localize('sessions.creator.title', 'Artifacts'));
 		this.storage.remove('sessions.creator.activeMode', StorageScope.WORKSPACE);
@@ -338,20 +377,98 @@ export class ArtifactEditorView extends Disposable {
 		this.titlebar.setActionsVisible(this.activeWorkspace !== undefined);
 		for (const [key, workspace] of this.workspaces) {
 			const active = key === this.activeWorkspace?.key;
-			workspace.domNode.hidden = !active;
-			workspace.setVisible(this.visible && active);
+			const detached = this.popouts.has(workspace);
+			const placeholder = this.popoutPlaceholders.get(workspace);
+			if (placeholder) placeholder.hidden = !active;
+			workspace.domNode.hidden = !active && !detached;
+			workspace.setVisible(detached || this.visible && active);
 		}
 	}
-	public setVisible(visible: boolean): void { this.visible = visible; this.updateVisibility(); }
+	public setVisible(visible: boolean): void {
+		this.visible = visible;
+		if (!visible) this.titlebar.resetTitleInteraction();
+		this.updateVisibility();
+	}
 	public layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		this.domNode.classList.toggle('narrow', dimension.width < 600);
 		this.domNode.classList.toggle('compact', dimension.width < 420);
-		this.currentWorkspace?.layout(dimension);
+		if (this.currentWorkspace && !this.popouts.has(this.currentWorkspace)) this.currentWorkspace.layout(dimension);
 	}
 	public focus(): void {
-		if (this.activeWorkspace) { this.workspaces.get(this.activeWorkspace.key)!.focus(); }
+		if (this.currentWorkspace) { this.currentWorkspace.focus(); }
 		else { this.creation.focus(); }
+	}
+
+	private async popOut(workspace: IArtifactWorkspace): Promise<void> {
+		if (this.popouts.has(workspace)) {
+			workspace.domNode.ownerDocument.defaultView?.focus();
+			workspace.focus();
+			return;
+		}
+		const pending = this.openingPopouts.get(workspace);
+		if (pending) return pending;
+		const opening = this.auxiliaryWindows.open({ title: workspace.title }).then(window => this.mountPopout(window, workspace));
+		this.openingPopouts.set(workspace, opening);
+		try { await opening; }
+		finally { this.openingPopouts.delete(workspace); }
+	}
+
+	private mountPopout(window: IAuxiliaryWindow, workspace: IArtifactWorkspace): void {
+		if (this.isDisposed || ![...this.workspaces].some(([, candidate]) => candidate === workspace)) {
+			window.dispose();
+			return;
+		}
+		const resources = this.popouts.set(workspace, new DisposableStore());
+		const document = window.window.document;
+		try {
+			window.container.classList.add('ash-sessions-window', 'ash-artifact-popout');
+			const header = h(document, 'header', { className: 'ash-artifact-popout-header' });
+			const title = h(document, 'h1');
+			header.append(title);
+			const updateTitle = () => { title.textContent = title.title = document.title = workspace.title; };
+			updateTitle();
+			if (workspace.onDidChangeTitle) resources.add(workspace.onDidChangeTitle(updateTitle));
+			const returnLabel = localize('sessions.artifacts.returnToWindow', 'Return to main window');
+			resources.add(new Button(header, {
+				...defaultButtonStyles, label: returnLabel, icon: Lxicon.screenNormal, iconOnly: true,
+				onClick: () => window.window.close(),
+			}));
+			const body = h(document, 'div', { className: 'ash-artifact-popout-body' });
+			const main = this.workspacesDomNode;
+			const placeholder = h(main.ownerDocument, 'div', { className: 'ash-artifact-popout-placeholder' });
+			const focusPopup = () => { window.window.focus(); workspace.focus(); };
+			resources.add(new Button(placeholder, {
+				...defaultButtonStyles, label: localize('sessions.artifacts.focusWindow', 'Artifact is open in another window'),
+				onClick: focusPopup,
+			}));
+			main.insertBefore(placeholder, workspace.domNode);
+			this.popoutPlaceholders.set(workspace, placeholder);
+			window.container.append(header, body);
+			resources.add(toDisposable(() => {
+				this.popoutPlaceholders.delete(workspace);
+				if (!this.isDisposed) {
+					main.insertBefore(workspace.domNode, placeholder);
+					this.updateVisibility();
+					this.layout(this.dimension);
+					if (this.visible && this.currentWorkspace === workspace) workspace.focus();
+				}
+				placeholder.remove();
+				window.dispose();
+			}));
+			resources.add(window.onDidClose(() => this.popouts.deleteAndDispose(workspace)));
+			resources.add(window.onWillLayout(dimension => workspace.layout({
+				width: dimension.width, height: Math.max(0, dimension.height - header.offsetHeight),
+			})));
+			body.append(workspace.domNode);
+			this.updateVisibility();
+			window.layout();
+			focusPopup();
+		} catch (error) {
+			this.popouts.deleteAndDispose(workspace);
+			window.dispose();
+			throw error;
+		}
 	}
 	public getWorkspaceAccessibilityHelp(): string | undefined {
 		return this.currentWorkspace?.getAccessibilityHelp?.() ?? (!this.activeWorkspace && this.filter === 'all' ? this.examples?.accessibilityHelp : undefined);
@@ -359,8 +476,8 @@ export class ArtifactEditorView extends Disposable {
 
 	public getAccessibleContent(): string {
 		if (this.activeWorkspace) {
-			const { title, help } = this.activeWorkspace;
-			return [title, help, this.currentWorkspace?.getAccessibleContent()].filter(Boolean).join('\n');
+			const { help } = this.activeWorkspace;
+			return [this.currentWorkspace?.title, help, this.currentWorkspace?.getAccessibleContent()].filter(Boolean).join('\n');
 		}
 		const cards = this.filter === 'all' ? [...this.getArtifacts(), ...(this.examples?.cards ?? [])] : this.filter === 'yours' ? this.getArtifacts() : [];
 		return [localize('sessions.creator.title', 'Artifacts'), ...artifactKinds.map(getArtifactTitle), ...cards.map(card => `${card.title}: ${card.detail}`)].join('\n');

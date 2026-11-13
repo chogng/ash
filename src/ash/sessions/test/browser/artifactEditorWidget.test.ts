@@ -51,6 +51,14 @@ import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { ISessionsEntryService } from '../../services/layout/common/sessionsEntryService.js';
+import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
+import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
+import { BrowserClipboardService } from '../../../platform/clipboard/browser/clipboardService.js';
+import { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
+import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
+import { BrowserLayoutService, ILayoutService } from '../../../platform/layout/browser/layoutService.js';
+import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
+import { TestQuickInputService } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 browser.window.HTMLElement.prototype.scrollTo = function (left: number | ScrollToOptions = {}, top?: number): void {
@@ -76,6 +84,8 @@ const { DesignEditorService, IDesignEditorService } = await import('../../contri
 const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/artifact/browser/designPanelViews.js');
 const { ArtifactWorkspaceId } = await import('../../contrib/artifact/common/artifactWorkspace.js');
 const { ArtifactEditorView } = await import('../../contrib/artifact/browser/artifactEditor.js');
+const { ArtifactPins, IArtifactPins } = await import('../../contrib/artifact/browser/artifactPins.js');
+const { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } = await import('../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js');
 const { IEditorPart } = await import('../../../workbench/browser/parts/editor/editorPart.js');
 await import('../../contrib/artifact/browser/artifact.contribution.js');
 await import('../../contrib/docs/browser/docsArtifactCatalog.js');
@@ -1270,9 +1280,19 @@ class CreatorFixture extends Disposable {
 			openEntry: async (_entry, initialize) => { initialize?.(); },
 			replaceEditorResource: unexpected, restore: unexpected,
 		});
+		const root = browser.window.document.body;
+		const layout = this._register(new BrowserLayoutService({ root }));
+		child.registerInstance(ILayoutService, Object.assign(layout, { onDidChangePartVisibility: Event.None, isPartAvailable: () => true }));
+		child.registerInstance(IAccessibilityService, this._register(new AccessibilityService({ root, configurationService: configuration, contextKeyService: contextKeys })));
+		child.registerInstance(IClipboardService, this._register(new BrowserClipboardService(undefined)));
+		child.registerInstance(IHoverService, this._register(new HoverService(configuration, child.get(IContextViewService), child.get(IContextMenuService))));
+		child.registerInstance(IQuickInputService, this._register(new TestQuickInputService({ container: root, instantiationService: child, contextKeyService: contextKeys, layoutService: layout })));
+		child.registerInstance(IAuxiliaryWindowService, this._register(child.createInstance(BrowserAuxiliaryWindowService, browser.window as unknown as Window, root)));
+		child.registerInstance(IArtifactPins, this._register(child.createInstance(ArtifactPins)));
 		this.commands = this._register(new CommandService(child));
 		this.page = this._register(child.createInstance(ArtifactEditorView, browser.window.document));
 		browser.window.document.body.append(this.page.domNode);
+		browser.window.document.body.prepend(this.page.titlebarContent);
 		this.page.initialize();
 		this.page.layout({ width: 1000, height: 720 });
 		this.page.setVisible(true);
@@ -1282,7 +1302,8 @@ class CreatorFixture extends Disposable {
 	}
 
 	click(label: string): void {
-		const button = [...this.page.domNode.querySelectorAll<HTMLElement>('button, [role="button"]')].find(element => element.getAttribute('aria-label') === label && !element.closest('[hidden]'));
+		const buttons = [this.page.domNode, this.page.titlebarContent].flatMap(root => Array.from(root.querySelectorAll<HTMLElement>('button, [role="button"]')));
+		const button = buttons.find(element => element.getAttribute('aria-label') === label && !element.closest('[hidden]'));
 		assert.ok(button, label);
 		button.click();
 	}
@@ -1459,7 +1480,7 @@ test('Creator menu commands use their originating workspace and reject hidden wo
 	first.click('More Actions');
 	const menu = contextMenu!;
 	const actions = menu.getActions();
-	assert.deepEqual(actions.map(action => action.label), ['Open document', 'Save document', 'Export SVG']);
+	assert.deepEqual(actions.map(action => action.label), ['Open document', 'Save document']);
 	const menuContext = menu.getActionsContext?.();
 	assert.equal(menuContext, source);
 	const addButton = () => first.page.domNode.querySelector<HTMLButtonElement>(`[data-action-id="${addSlide}"] button`)!;
@@ -2516,7 +2537,7 @@ test('Slides examples create independent artifacts that autosave, export and reo
 	await saved;
 	assert.equal(fixture.saveDialogs, 0);
 
-	view.click('More Actions');
+	view.click('Export');
 	const menu = contextMenu!;
 	const actions = menu.getActions();
 	assert.deepEqual(actions.map(action => action.label), ['Export editable copy', 'Export SVG']);

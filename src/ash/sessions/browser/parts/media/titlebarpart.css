@@ -130,7 +130,7 @@
 	flex: 1;
 	min-width: 0;
 	gap: var(--ash-spacing-size80);
-	padding-inline: var(--ash-spacing-size120) var(--ash-spacing-size40);
+	padding-inline: var(--ash-spacing-size40);
 	border-bottom: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, var(--ash-border));
 }
@@ -140,10 +140,16 @@
 	min-width: 0;
 	overflow: hidden;
 	margin: 0;
-	font-size: var(--ash-fontSize-body1);
-	font-weight: var(--ash-fontWeight-semiBold);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.ash-artifact-title-text {
+	padding-inline-start: calc(
+		var(--ash-spacing-size40) + var(--ash-strokeThickness)
+	);
 }
 
 .ash-sessions-titlebar-editor-page .ash-toolbar {

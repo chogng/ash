@@ -16,8 +16,7 @@ import { focusWindow, type IFocusableWindow, type WorkspaceContextMainService } 
 import type { WindowsStateHandler } from './windowsStateHandler.js';
 import { CodeWindow, type ICodeWindowHandle, type IWindowCreationOptions, type IWindowConstructorOptions, type IWindowWebPreferences } from './windowImpl.js';
 import { createUuid } from '../../../base/common/uuid.js';
-import type { IOpenAgentsWindowOptions } from '../../native/common/nativeHost.js';
-import type { IAgentsWindowHandoffResult } from '../../window/common/window.js';
+import type { AgentsWindowHandoff, IAgentsWindowHandoffResult } from '../../window/common/window.js';
 import { WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, type IWindowClientSize } from '../../window/common/window.js';
 import type { IOpenConfiguration, IWindowsMainService } from './windows.js';
 import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesResponse, type IWindowFilesRequest, type WindowFilesResponse } from '../../window/common/window.js';
@@ -84,7 +83,7 @@ export interface IManagedWindowOpenOptions<TWindow extends IWorkbenchWindow<TWin
 
 /** Pending handoffs belong to the receiving window's current renderer document. */
 class ManagedWindowHandoffs<TWindow extends IWorkbenchWindow<TWindow>> extends Disposable {
-	private readonly pending = new Map<string, { readonly options: IOpenAgentsWindowOptions; readonly resolve: () => void; readonly reject: (error: Error) => void; }>();
+	private readonly pending = new Map<string, { readonly options: AgentsWindowHandoff; readonly resolve: () => void; readonly reject: (error: Error) => void; }>();
 	private readonly queue: string[] = [];
 
 	constructor(host: ICodeWindow<TWindow>) {
@@ -101,7 +100,7 @@ class ManagedWindowHandoffs<TWindow extends IWorkbenchWindow<TWindow>> extends D
 		this._register(toDisposable(() => this.rejectPending(new Error('Agents Window closed before the handoff completed'))));
 	}
 
-	public enqueue(options: IOpenAgentsWindowOptions): Promise<void> {
+	public enqueue(options: AgentsWindowHandoff): Promise<void> {
 		this.assertNotDisposed();
 		const id = createUuid();
 		return new Promise<void>((resolve, reject) => {
@@ -110,7 +109,7 @@ class ManagedWindowHandoffs<TWindow extends IWorkbenchWindow<TWindow>> extends D
 		});
 	}
 
-	public take(): { readonly id: string; readonly options: IOpenAgentsWindowOptions; } | undefined {
+	public take(): { readonly id: string; readonly options: AgentsWindowHandoff; } | undefined {
 		const id = this.queue.shift();
 		const handoff = id ? this.pending.get(id) : undefined;
 		return handoff && id ? { id, options: handoff.options } : undefined;
@@ -253,7 +252,7 @@ class ManagedWindowHost<TWindow extends IWorkbenchWindow<TWindow>> extends Dispo
 		if (this.currentWindow === window) this.rejectClosing?.(new Error(message));
 	}
 
-	public enqueueHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
+	public enqueueHandoff(options: AgentsWindowHandoff): Promise<void> {
 		const window = this.currentWindow;
 		if (!window) {
 			return Promise.reject(new Error('Agents Window is unavailable for handoff'));
@@ -264,7 +263,7 @@ class ManagedWindowHost<TWindow extends IWorkbenchWindow<TWindow>> extends Dispo
 		return this.handoffs.value.enqueue(options);
 	}
 
-	public takeHandoff(): { readonly id: string; readonly options: IOpenAgentsWindowOptions; } | undefined {
+	public takeHandoff(): { readonly id: string; readonly options: AgentsWindowHandoff; } | undefined {
 		return this.handoffs.value?.take();
 	}
 
@@ -539,12 +538,12 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		return this.managedWindows.get(key)?.currentWindow;
 	}
 
-	public enqueueManagedWindowHandoff(key: string, options: IOpenAgentsWindowOptions): Promise<void> {
+	public enqueueManagedWindowHandoff(key: string, options: AgentsWindowHandoff): Promise<void> {
 		const host = this.managedWindows.get(key);
 		return host ? host.enqueueHandoff(options) : Promise.reject(new Error('Agents Window is unavailable for handoff'));
 	}
 
-	public takeManagedWindowHandoff(key: string): { readonly id: string; readonly options: IOpenAgentsWindowOptions; } | undefined {
+	public takeManagedWindowHandoff(key: string): { readonly id: string; readonly options: AgentsWindowHandoff; } | undefined {
 		return this.managedWindows.get(key)?.takeHandoff();
 	}
 

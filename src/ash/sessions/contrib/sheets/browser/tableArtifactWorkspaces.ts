@@ -5,19 +5,20 @@ import { IInstantiationService, type ServicesAccessor } from '../../../../platfo
 import { getArtifactTitle } from '../../artifact/browser/artifactKindPresentation.js';
 import { openArtifactWorkspace } from '../../artifact/browser/artifactWorkspaceOpener.js';
 import { registerArtifactCatalogSource } from '../../artifact/browser/artifactWorkspaceRegistry.js';
+import { openArtifactCommands } from '../../artifact/common/artifactWorkspace.js';
 import { ArtifactTableWorkspace, type TableArtifactExample } from './artifactTableWorkspace.js';
 import { ArtifactTableDraft, IArtifactTableDrafts, type TableArtifactKind } from './artifactTableDrafts.js';
 
-const openTableCommand = 'sessions.creator.openTable';
+const openTableCommand = openArtifactCommands.table;
 
 export function registerTableArtifactCatalog(kind: TableArtifactKind): void {
 	registerArtifactCatalogSource(accessor => {
 		const tables = accessor.get(IArtifactTableDrafts);
 		return {
-			cards: tables.drafts.map(drafts => [...drafts.values()].filter(draft => draft.kind === kind).map(draft => {
+			cards: tables.drafts.map((drafts, reader) => [...drafts.values()].filter(draft => draft.kind === kind).map(draft => {
 				const key = `table:${draft.id}`;
 				return {
-					kind, title: getTableTitle(kind), detail: getArtifactTitle(kind), workspaceKey: key,
+					kind, title: draft.title.read(reader) ?? getTableTitle(kind), detail: getArtifactTitle(kind), workspaceKey: key,
 					command: { id: openTableCommand, args: [key] },
 				};
 			})),
@@ -40,12 +41,14 @@ export function openTableArtifact(accessor: ServicesAccessor, source: TableArtif
 }
 
 CommandsRegistry.register(openTableCommand, async (accessor, key) => {
-	if (typeof key !== 'string' || !key.startsWith('table:') || !isUuid(key.slice('table:'.length))) return;
+	if (typeof key !== 'string' || !key.startsWith('table:') || !isUuid(key.slice('table:'.length))) return false;
 	const tables = accessor.get(IArtifactTableDrafts);
 	const instantiation = accessor.get(IInstantiationService);
 	await tables.ready;
 	const draft = tables.drafts.get().get(key.slice('table:'.length));
-	if (draft) await instantiation.invokeFunction(accessor => openTableArtifact(accessor, draft));
+	if (!draft) return false;
+	await instantiation.invokeFunction(accessor => openTableArtifact(accessor, draft));
+	return true;
 });
 
 function getTableTitle(kind: TableArtifactKind): string {

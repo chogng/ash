@@ -89,6 +89,7 @@ export class SessionsBrowserMain extends Disposable {
 					'chat.queuePickerRendering',
 					'workbench.contrib.btwSlashCommand',
 					'workbench.contrib.chatSideChat',
+					'workbench.contrib.chatInputSessionLinks',
 					'workbench.contrib.policyTelemetry',
 					'workbench.contrib.limitIndicator',
 					'status.languageStatus',

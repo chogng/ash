@@ -6,12 +6,18 @@ import { mountArtifactWorkspace } from './artifactWorkspace.js';
 import type { DesignDocumentController } from './designDocumentController.js';
 import { IDesignEditorService } from './designEditorService.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { openArtifactCommands } from '../common/artifactWorkspace.js';
 
-export const OPEN_CANVAS_ARTIFACT = 'sessions.creator.openCanvasArtifact';
-
-CommandsRegistry.register(OPEN_CANVAS_ARTIFACT, (accessor, id) => {
-	const document = isUuid(id) ? accessor.get(IDesignEditorService).artifactDocuments.get().get(id) : undefined;
-	if (document) return openManagedCanvasArtifact(accessor, document);
+CommandsRegistry.register(openArtifactCommands.canvas, async (accessor, id) => {
+	if (!isUuid(id)) return false;
+	const designs = accessor.get(IDesignEditorService);
+	const instantiation = accessor.get(IInstantiationService);
+	await designs.loadArtifactDocuments();
+	const document = designs.artifactDocuments.get().get(id);
+	if (!document) return false;
+	await instantiation.invokeFunction(accessor => openManagedCanvasArtifact(accessor, document));
+	return true;
 });
 
 export function openManagedCanvasArtifact(accessor: ServicesAccessor, document: DesignDocumentController): Promise<void> {

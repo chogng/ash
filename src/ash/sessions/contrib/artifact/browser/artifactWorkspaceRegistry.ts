@@ -18,7 +18,10 @@ export interface IArtifactWorkspace extends IDisposable {
 	readonly onDidChangeTitle?: Event<void>;
 	readonly detailsContainerId?: string;
 	readonly conversationKind?: ISessionsEntry['conversationKind'];
-	readonly titlebarActions?: readonly IAction[];
+	readonly exportActions?: readonly IAction[];
+	getCodeAttachment?(): { readonly name: string; readonly content: string; };
+	rename?(title: string): Promise<void>;
+	delete?(): Promise<void>;
 	getAccessibilityHelp?(): string;
 	setVisible(visible: boolean): void;
 	layout(dimension: IDimension): void;

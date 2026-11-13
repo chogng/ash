@@ -14,20 +14,33 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
+import { isArtifactName } from '../../artifact/common/artifactWorkspace.js';
 
 export type TableArtifactKind = 'sheet' | 'data';
 
 export class ArtifactTableDraft {
+	private readonly titleValue;
+	public readonly title: IObservable<string | undefined>;
+
 	constructor(
 		public readonly id: string,
 		public readonly kind: TableArtifactKind,
 		private readonly cells: string[][],
 		public revision: string | undefined,
 		private readonly onChange: (draft: ArtifactTableDraft) => void,
-	) { }
+		title?: string,
+	) {
+		this.titleValue = observableValue(this, title);
+		this.title = this.titleValue;
+	}
 
 	public get rows(): readonly (readonly string[])[] { return this.cells; }
 	public get columnCount(): number { return this.cells[0].length; }
+
+	public rename(title: string): void {
+		this.titleValue.set(title, undefined);
+		this.onChange(this);
+	}
 
 	public setCell(row: number, column: number, value: string): void {
 		if (this.cells[row][column] === value) { return; }
@@ -52,6 +65,8 @@ export interface IArtifactTableDrafts {
 	readonly drafts: IObservable<ReadonlyMap<string, ArtifactTableDraft>>;
 	readonly isRestoring: IObservable<boolean>;
 	readonly ready: Promise<void>;
+	rename(draft: ArtifactTableDraft, title: string): Promise<void>;
+	delete(draft: ArtifactTableDraft): Promise<void>;
 }
 
 /** Owns editable tables and their workspace-local copies. The gallery lists these same drafts. */
@@ -63,6 +78,7 @@ export class ArtifactTableDrafts extends Disposable implements IArtifactTableDra
 	private readonly restoring = observableValue(this, true);
 	public readonly isRestoring: IObservable<boolean> = this.restoring;
 	private readonly pending = new Set<ArtifactTableDraft>();
+	private readonly deleting = new Set<ArtifactTableDraft>();
 	private saving: Promise<void> | undefined;
 	private readonly saveSoon = this._register(new RunOnceScheduler(() => {
 		void this.flush().catch(error => {
@@ -95,6 +111,7 @@ export class ArtifactTableDrafts extends Disposable implements IArtifactTableDra
 	}
 
 	private readonly queueSave = (draft: ArtifactTableDraft): void => {
+		if (this.deleting.has(draft)) return;
 		this.pending.add(draft);
 		this.saveSoon.schedule();
 	};
@@ -113,15 +130,41 @@ export class ArtifactTableDrafts extends Disposable implements IArtifactTableDra
 			try {
 				const { content, revision } = await this.files.readFile(entry.resource);
 				const value: unknown = JSON.parse(content);
-				if (!isRecord(value) || (value.kind !== 'sheet' && value.kind !== 'data') || !isTableRows(value.rows)) {
+				if (!isRecord(value) || (value.kind !== 'sheet' && value.kind !== 'data') || !isTableRows(value.rows)
+					|| value.title !== undefined && !isArtifactName(value.title)) {
 					throw new TypeError('Invalid artifact table draft');
 				}
-				restored.set(id, new ArtifactTableDraft(id, value.kind, value.rows, revision, this.queueSave));
+				restored.set(id, new ArtifactTableDraft(id, value.kind, value.rows, revision, this.queueSave, value.title));
 			} catch (error) {
 				this.log.warn('creator', 'Could not restore table draft', entry.resource.toString(), error);
 			}
 		}
 		if (!this.isDisposed) this.catalog.set(restored, undefined);
+	}
+
+	public async rename(draft: ArtifactTableDraft, title: string): Promise<void> {
+		if (this.catalog.get().get(draft.id) !== draft || this.deleting.has(draft)) return;
+		draft.rename(title);
+		await this.flush();
+	}
+
+	public async delete(draft: ArtifactTableDraft): Promise<void> {
+		if (this.catalog.get().get(draft.id) !== draft || this.deleting.has(draft)) return;
+		this.deleting.add(draft);
+		try {
+			await this.saving?.catch(() => undefined);
+			this.pending.delete(draft);
+			await this.files.delete(this.home.joinPathSegment(`${draft.id}.json`), 'ignore', 'fileOrEmptyDirectory');
+			const remaining = new Map(this.catalog.get());
+			remaining.delete(draft.id);
+			this.catalog.set(remaining, undefined);
+		} catch (error) {
+			this.deleting.delete(draft);
+			this.queueSave(draft);
+			throw error;
+		} finally {
+			this.deleting.delete(draft);
+		}
 	}
 
 	private flush(): Promise<void> {
@@ -135,11 +178,11 @@ export class ArtifactTableDrafts extends Disposable implements IArtifactTableDra
 	private async writePending(): Promise<void> {
 		await this.files.createDirectory(this.home);
 		while (this.pending.size > 0) {
-			const batch = [...this.pending];
+			const batch = [...this.pending].filter(draft => !this.deleting.has(draft));
 			this.pending.clear();
 			const results = await Promise.allSettled(batch.map(async draft => {
 				const resource = this.home.joinPathSegment(`${draft.id}.json`);
-				const content = JSON.stringify({ kind: draft.kind, rows: draft.rows });
+				const content = JSON.stringify({ kind: draft.kind, rows: draft.rows, title: draft.title.get() });
 				try {
 					const result = await this.files.writeFile({ resource, content, expectedRevision: draft.revision });
 					draft.revision = result.revision;

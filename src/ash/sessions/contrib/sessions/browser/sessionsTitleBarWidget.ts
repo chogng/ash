@@ -1,10 +1,12 @@
 import './media/sessionsTitleBarWidget.css';
 import { getActiveElement, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import { Separator, type IAction } from '../../../../base/common/actions.js';
+import { ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
+import { Action, Separator, type IAction } from '../../../../base/common/actions.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
-import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { autorun, derived, observableFromEvent, observableValue } from '../../../../base/common/observable.js';
 import { environment } from '../../../../base/common/platform.js';
@@ -27,6 +29,7 @@ import { IChatSessionNavigationService } from '../../../../workbench/services/ch
 import { SHOW_SESSIONS_PICKER_COMMAND_ID } from './sessionsActions.js';
 import { createSessionItemActions, createSessionWorkspaceActions } from '../../../browser/agentSessionsModel.js';
 import { renderInlineRenameInput, showInlineRenameInput } from '../../../browser/parts/titlebar/inlineRenameInput.js';
+import { TitleMenuActionViewItem } from '../../../browser/parts/titlebar/titleMenuActionViewItem.js';
 import { getSessionsTitlebarPart } from '../../../browser/parts/titlebarPart.js';
 import { ITitleService } from '../../../../workbench/services/title/browser/titleService.js';
 import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
@@ -116,11 +119,6 @@ export class SessionsTitleBarWidget extends Disposable {
 			size: 'small',
 			label: '',
 			onClick: event => {
-				if (desktopChat.get()) {
-					const entry = activeChat.get();
-					if (entry?.rename && canAct(entry)) beginEdit({ key: chatTitleKey(entry), title: entry.title, rename: entry.rename }, event.detail === 0);
-					return;
-				}
 				if (indicator.blockedSessions.get().length) {
 					picker.value = showBlockedSessionsList(quickInput, navigation, indicator, fixes, notifications, button.domNode);
 					return;
@@ -134,7 +132,17 @@ export class SessionsTitleBarWidget extends Disposable {
 			},
 		}));
 		button.domNode.classList.add('ash-titlebar-interactive-region');
-		const hover = this._register(hovers.setupHover({ target: button.domNode, content: undefined }));
+		const titleMenuHost = h(element.ownerDocument, 'div');
+		titleContainer.append(titleMenuHost);
+		const titleAction = this._register(new Action('sessions.titlebar.chatActions'));
+		const titleMenu = this._register(new TitleMenuActionViewItem(titleAction, () => {
+			return desktopChat.get() ? getDesktopChatActions() : getSessionActions(true);
+		}, contextMenus, () => getRenameAction()));
+		titleMenu.render(titleMenuHost);
+		const menuOpen = observableValue('sessionTitleMenuOpen', false);
+		this._register(titleMenu.onDidChangeVisibility(visible => menuOpen.set(visible, undefined)));
+		let combinedMenu = false;
+		const titleHovers = [button.domNode, titleMenu.element].map(target => this._register(hovers.setupHover({ target, content: undefined })));
 		let edit: { readonly target: TitleRename; readonly restoreFocus: boolean; saving: boolean; } | undefined;
 		const input = renderInlineRenameInput(titleContainer, {
 			label: localize('sessions.titlebar.sessionName', 'Session name'),
@@ -145,9 +153,10 @@ export class SessionsTitleBarWidget extends Disposable {
 		const beginEdit = (target: TitleRename, restoreFocus: boolean) => {
 			if (edit?.saving) return;
 			edit = { target, restoreFocus, saving: false };
-			hover.hide();
+			for (const hover of titleHovers) hover.hide();
 			showInlineRenameInput(input, target.title);
 			button.hidden = true;
+			titleMenuHost.hidden = true;
 		};
 		const beginSessionEdit = (target: NonNullable<ReturnType<typeof renameTarget>>, restoreFocus: boolean) => {
 			try {
@@ -164,10 +173,14 @@ export class SessionsTitleBarWidget extends Disposable {
 			const draft = edit;
 			if (!draft) return;
 			edit = undefined;
-			button.hidden = false;
-			if (restoreFocus && draft.restoreFocus) button.focus();
+			updateTitleVisibility();
+			if (restoreFocus && draft.restoreFocus) (combinedMenu ? titleMenu : button).focus();
 			input.hidden = true;
 			input.setCustomValidity('');
+		};
+		const updateTitleVisibility = () => {
+			button.hidden = !!edit || combinedMenu;
+			titleMenuHost.hidden = !!edit || !combinedMenu;
 		};
 		const saveEdit = async () => {
 			const draft = edit;
@@ -196,19 +209,106 @@ export class SessionsTitleBarWidget extends Disposable {
 				}
 			}
 		};
-		const menuOpen = observableValue('sessionTitleMenuOpen', false);
-		let menuChatKey: string | undefined;
-		const showMenu = (actions: readonly IAction[]) => {
+		let activeMenu: { readonly key: string; readonly cancellation: CancellationTokenSource; } | undefined;
+		this._register(toDisposable(() => activeMenu?.cancellation.cancel()));
+		const showCodeMenu = (keyboard: boolean) => {
+			if (activeMenu) {
+				activeMenu.cancellation.cancel();
+				return;
+			}
+			const key = activeKey();
+			const actions = getSessionActions(keyboard);
+			if (!key || !actions.length) return;
+			const cancellation = new CancellationTokenSource();
+			const request = { key, cancellation };
+			activeMenu = request;
 			menuOpen.set(true, undefined);
-			contextMenus.showContextMenu({
-				getAnchor: () => menuButton.domNode,
-				getActions: () => actions,
-				autoSelectFirstItem: true,
-				onHide: () => {
-					menuChatKey = undefined;
-					menuOpen.set(false, undefined);
-				},
+			const anchor = menuButton.domNode;
+			anchor.setAttribute('aria-expanded', 'true');
+			const close = (reason?: ContextViewHideReason) => {
+				if (activeMenu !== request) return;
+				activeMenu = undefined;
+				cancellation.dispose();
+				menuOpen.set(false, undefined);
+				anchor.setAttribute('aria-expanded', 'false');
+				if (reason === ContextViewHideReason.Escape && anchor.isConnected && !element.hidden && !menuButton.hidden) menuButton.focus();
+			};
+			try {
+				contextMenus.showContextMenu({
+					getAnchor: () => anchor,
+					getActions: () => actions,
+					cancellationToken: cancellation.token,
+					autoSelectFirstItem: true,
+					onHide: (_cancelled, reason) => close(reason),
+				});
+			} catch (error) {
+				close();
+				throw error;
+			}
+		};
+		const getRenameAction = (): (() => void) | undefined => {
+			const entry = activeChat.get();
+			if (entry) {
+				const { rename } = entry;
+				if (!rename || !canAct(entry)) return undefined;
+				const key = chatTitleKey(entry);
+				return () => {
+					if (activeKey() === key) beginEdit({ key, title: entry.title, rename }, true);
+				};
+			}
+			if (desktopChat.get()) return undefined;
+			const target = renameTarget(sessions.activeSelection);
+			if (target === undefined) return undefined;
+			return () => beginSessionEdit(target, true);
+		};
+		const getDesktopChatActions = (): IAction[] => {
+			const entry = activeChat.get();
+			if (!entry || !canAct(entry)) return [];
+			const key = chatTitleKey(entry);
+			const actions: IAction[] = [];
+			const { setPinned } = entry;
+			const rename = getRenameAction();
+			if (setPinned) actions.push({
+				id: 'sessions.list.togglePin',
+				label: entry.pinned ? localize('sessions.list.unpin', 'Unpin') : localize('sessions.list.pin', 'Pin'),
+				icon: entry.pinned ? Lxicon.unpin : Lxicon.pin, enabled: true, tooltip: '',
+				run: () => activeKey() === key ? setPinned(!entry.pinned) : undefined,
 			});
+			if (rename) actions.push({
+				id: 'agentSession.rename', label: localize('sessions.list.rename', 'Rename'),
+				icon: Lxicon.edit, enabled: true, tooltip: '',
+				run: rename,
+			});
+			if (actions.length && (entry.sessionId || entry.archive || entry.remove)) actions.push(new Separator());
+			if (entry.sessionId || entry.archive) {
+				const archive = getChatSessionArchiveActionPresentation(getChatSessionArchiveActionWording(configuration)).archive;
+				actions.push({
+					id: 'agentSession.archive', label: archive.title.value, icon: archive.icon, enabled: true, tooltip: '',
+					run: () => activeKey() === key ? commands.executeCommand('agentSession.archive', entry.sessionId ?? { catalogId: entry.id }) : undefined,
+				});
+			}
+			if (entry.sessionId || entry.remove) actions.push({
+				id: 'agentSession.delete', label: localize('sessions.list.delete', 'Delete'),
+				icon: Lxicon.trash, class: 'ash-session-delete-action', enabled: true, tooltip: '',
+				run: () => activeKey() === key ? commands.executeCommand('agentSession.delete', entry.sessionId ?? { catalogId: entry.id, preferenceKey: entry.preferenceKey }) : undefined,
+			});
+			return actions;
+		};
+		const getSessionActions = (restoreFocus: boolean): IAction[] => {
+			const selection = sessions.activeSelection;
+			const target = renameTarget(selection);
+			if (!selection || target === undefined) return [];
+			const targetKey = JSON.stringify(target);
+			const workspaceActions = selection.kind === 'session'
+				? createSessionWorkspaceActions(selection.active.session.sessionId, selection.active.threadId, management, commands)
+				: [];
+			const actions = Separator.join(workspaceActions, [...createSessionItemActions(selection, commands, listModel, notifications,
+				() => commands.executeCommand('sessions.openInNewWindow', selection))]);
+			return actions.map(action => action.id === 'agentSession.rename' ? {
+				...action, run: () => {
+					if (activeKey() === targetKey) beginSessionEdit(target, restoreFocus);
+				},
+			} : action);
 		};
 		const menuButton = this._register(new Button(element, {
 			...defaultButtonStyles,
@@ -217,70 +317,11 @@ export class SessionsTitleBarWidget extends Disposable {
 			icon: Lxicon.chevronDown,
 			iconOnly: true,
 			label: localize('sessions.list.moreActions', 'More Sessions Actions'),
-			onClick: event => {
-				if (menuOpen.get()) {
-					contextMenus.hideContextMenu();
-					return;
-				}
-				if (desktopChat.get()) {
-					const entry = activeChat.get();
-					if (!entry || !canAct(entry)) return;
-					const key = chatTitleKey(entry);
-					const actions: IAction[] = [];
-					const { rename, setPinned } = entry;
-					if (setPinned) actions.push({
-						id: 'sessions.list.togglePin',
-						label: entry.pinned ? localize('sessions.list.unpin', 'Unpin') : localize('sessions.list.pin', 'Pin'),
-						icon: entry.pinned ? Lxicon.unpin : Lxicon.pin, enabled: true, tooltip: '',
-						run: () => activeKey() === key ? setPinned(!entry.pinned) : undefined,
-					});
-					if (rename) actions.push({
-						id: 'agentSession.rename', label: localize('sessions.list.rename', 'Rename'),
-						icon: Lxicon.edit, enabled: true, tooltip: '',
-						run: () => {
-							if (activeKey() === key) beginEdit({ key, title: entry.title, rename }, event.detail === 0);
-						},
-					});
-					if (actions.length && (entry.sessionId || entry.archive || entry.remove)) actions.push(new Separator());
-					if (entry.sessionId || entry.archive) {
-						const archive = getChatSessionArchiveActionPresentation(getChatSessionArchiveActionWording(configuration)).archive;
-						actions.push({
-							id: 'agentSession.archive', label: archive.title.value, icon: archive.icon, enabled: true, tooltip: '',
-							run: () => activeKey() === key ? commands.executeCommand('agentSession.archive', entry.sessionId ?? { catalogId: entry.id }) : undefined,
-						});
-					}
-					if (entry.sessionId || entry.remove) actions.push({
-						id: 'agentSession.delete', label: localize('sessions.list.delete', 'Delete'),
-						icon: Lxicon.trash, class: 'ash-session-delete-action', enabled: true, tooltip: '',
-						run: () => activeKey() === key ? commands.executeCommand('agentSession.delete', entry.sessionId ?? { catalogId: entry.id, preferenceKey: entry.preferenceKey }) : undefined,
-					});
-					if (actions.length) {
-						menuChatKey = key;
-						showMenu(actions);
-					}
-					return;
-				}
-				const selection = sessions.activeSelection;
-				const target = renameTarget(selection);
-				if (!selection || target === undefined) return;
-				const targetKey = JSON.stringify(target);
-				const workspaceActions = selection.kind === 'session'
-					? createSessionWorkspaceActions(selection.active.session.sessionId, selection.active.threadId, management, commands)
-					: [];
-				const actions = Separator.join(workspaceActions, [...createSessionItemActions(selection, commands, listModel, notifications,
-					() => commands.executeCommand('sessions.openInNewWindow', selection))]);
-				showMenu(actions.map(action => action.id === 'agentSession.rename' ? {
-					...action, run: () => {
-						if (activeKey() === targetKey) beginSessionEdit(target, event.detail === 0);
-					},
-				} : action));
-			},
+			onClick: event => showCodeMenu(event.detail === 0),
 		}));
 		menuButton.domNode.classList.add('ash-titlebar-interactive-region', 'ash-sessions-titlebar-menu');
 		menuButton.domNode.setAttribute('aria-haspopup', 'menu');
-		this._register(autorun(reader => {
-			menuButton.domNode.setAttribute('aria-expanded', String(menuOpen.read(reader)));
-		}));
+		menuButton.domNode.setAttribute('aria-expanded', 'false');
 		const sharing = observableValue('sessionTitleSharing', false);
 		const shareButton = this._register(new Button(element, {
 			...defaultButtonStyles,
@@ -303,41 +344,52 @@ export class SessionsTitleBarWidget extends Disposable {
 		}));
 		shareButton.domNode.classList.add('ash-titlebar-interactive-region', 'ash-sessions-titlebar-share');
 		const folders = observableFromEvent(this, workspace.onDidChangeWorkspaceFolders, () => workspace.getWorkspace().folders);
+		let displayedKey: string | undefined;
 		this._register(autorun(reader => {
 			const selection = sessions.getSelection(reader).activeSelection;
 			const codeMode = mode.read(reader) === 'code';
-			const chatMode = desktopChat.read(reader);
+			const useDesktopCatalog = desktopChat.read(reader);
 			const entry = activeChat.read(reader);
-			const count = chatMode ? 0 : indicator.blockedSessions.read(reader).length;
+			const count = useDesktopCatalog ? 0 : indicator.blockedSessions.read(reader).length;
 			const covered = !!customViews.activeCustomView.read(reader);
 			const key = entry ? chatTitleKey(entry) : JSON.stringify(renameTarget(selection));
 			const sharePending = sharing.read(reader);
-			element.classList.toggle('ash-sessions-titlebar-chat', chatMode);
-			element.hidden = covered || (chatMode && !entry)
+			const hasActions = useDesktopCatalog
+				? !!(entry && (entry.rename || entry.setPinned || entry.archive || entry.sessionId || entry.remove))
+				: !!selection && count === 0;
+			combinedMenu = !codeMode && hasActions;
+			element.classList.toggle('ash-sessions-titlebar-chat', useDesktopCatalog);
+			element.hidden = covered || (useDesktopCatalog && !entry)
 				|| (codeMode && selection?.kind === 'untitled' && count === 0);
-			menuButton.hidden = chatMode ? !entry || !(entry.rename || entry.setPinned || entry.archive || entry.sessionId || entry.remove) : !selection || count > 0;
-			menuButton.enabled = !entry || canAct(entry);
-			button.enabled = !entry || !!entry.rename && canAct(entry);
-			button.domNode.classList.toggle('ash-sessions-titlebar-editable', entry ? !!entry.rename : !menuButton.hidden);
+			menuButton.hidden = !codeMode || !hasActions;
+			button.enabled = !entry || hasActions && canAct(entry);
+			titleAction.enabled = button.enabled;
+			button.domNode.classList.toggle('ash-sessions-titlebar-editable', hasActions);
+			updateTitleVisibility();
+			if (!combinedMenu || element.hidden || !titleAction.enabled || key !== displayedKey) titleMenu.hide();
+			displayedKey = key;
 			shareButton.hidden = !entry?.share;
 			// Keep the trigger focusable while the share dialog is open so it can restore focus.
 			shareButton.enabled = sharePending || !!entry && canAct(entry);
 			if (sharePending) shareButton.domNode.setAttribute('aria-disabled', 'true');
 			else shareButton.domNode.removeAttribute('aria-disabled');
-			if (menuChatKey && (element.hidden || key !== menuChatKey)) contextMenus.hideContextMenu();
+			if (activeMenu && (element.hidden || key !== activeMenu.key || menuButton.hidden)) {
+				activeMenu.cancellation.cancel();
+			}
 			if (edit && (element.hidden || count || edit.target.key !== key)) {
 				finishEdit(!element.hidden && edit.saving && getActiveElement(input.ownerDocument) === input);
 			}
 			if (element.hidden) {
 				picker.clear();
-				hover.hide();
+				for (const hover of titleHovers) hover.hide();
 				return;
 			}
 			if (entry) {
 				button.icon = undefined;
 				button.label = entry.title;
-				button.domNode.setAttribute('aria-label', entry.rename ? localize('sessions.titlebar.renameSession', 'Rename session ({0})', entry.title) : entry.title);
-				hover.update(entry.title);
+				button.domNode.setAttribute('aria-label', entry.title);
+				titleMenu.setLabel(entry.title, localize('sessions.titlebar.chatActions', 'Chat actions ({0})', entry.title));
+				for (const hover of titleHovers) hover.update(entry.title);
 				return;
 			}
 			if (count) {
@@ -347,7 +399,7 @@ export class SessionsTitleBarWidget extends Disposable {
 				button.icon = Lxicon.warning;
 				button.label = attention;
 				button.domNode.setAttribute('aria-label', attention);
-				hover.update(attention);
+				for (const hover of titleHovers) hover.update(attention);
 				return;
 			}
 			let label: string | undefined;
@@ -382,16 +434,19 @@ export class SessionsTitleBarWidget extends Disposable {
 			button.icon = undefined;
 			const title = selection?.kind === 'session' ? selection.active.session.title : selection?.session.title;
 			button.label = title ?? contextLabel;
-			button.domNode.setAttribute('aria-label', title === undefined
+			const accessibleName = title === undefined
 				? localize('sessions.titlebar.showHistory', 'Show Session History ({0})', contextLabel)
-				: localize('sessions.titlebar.renameSession', 'Rename session ({0})', title));
+				: localize('sessions.titlebar.renameSession', 'Rename session ({0})', title);
+			button.domNode.setAttribute('aria-label', accessibleName);
+			titleMenu.setLabel(button.label, localize('sessions.titlebar.chatActions', 'Chat actions ({0})', button.label));
 			const workspaceDetails = path && branch ? localize('sessions.titlebar.branch', '{0} · {1}', path, branch) : path || contextLabel;
-			hover.update(() => {
-				const titleLabel = button.domNode.querySelector('.ash-button-label');
+			const hoverContent = () => {
+				const titleLabel = (combinedMenu ? titleMenu.element : button.domNode).querySelector('.ash-button-label');
 				return titleLabel && titleLabel.scrollWidth > titleLabel.clientWidth
 					? button.label
 					: workspaceDetails;
-			});
+			};
+			for (const hover of titleHovers) hover.update(hoverContent);
 		}));
 		this._register(getSessionsTitlebarPart(titleService, layout.mainContainer).setSessionContent(element, menuOpen));
 	}

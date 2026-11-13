@@ -65,7 +65,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			expect(await header.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 			await page.setViewportSize(viewport);
 		}
-		await toolbar.getByRole('button', { name: locale === 'en' ? 'Back to Artifacts' : '返回 Artifacts' }).press('Enter');
+		await toolbar.getByRole('button', { name: locale === 'en' ? 'Close artifact' : '关闭作品区域' }).press('Enter');
+		await expect(page.locator('[data-part="sessions"]')).toBeVisible();
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).press('Enter');
 		await expect(page.locator('.ash-creator-home')).toBeVisible();
 		await expect(editorFrame).toHaveCount(0);
 		await expect(titlebarFrame).toHaveCount(0);
@@ -95,7 +97,17 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.locator('.ash-artifacts-card.docs .ash-button-content').getByText(draft, { exact: true }).click();
 		await markdown.waitForEditorContents(text => text === '# Retained Docs draft');
 		if (locale === 'en' && target.appServerMode === 'required' && 'windows' in application) {
-			const output = join(await realpath(testWorkspace.directory), 'retained-docs.md');
+			const workspace = await realpath(testWorkspace.directory);
+			const copy = join(workspace, 'exported-docs.md');
+			await application.evaluate(({ dialog }, filePath) => {
+				dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+			}, copy);
+			const draftTitle = await header.getByRole('heading').textContent();
+			await toolbar.getByRole('button', { name: 'Export', exact: true }).press('Enter');
+			await page.getByRole('menuitem', { name: 'Markdown file (.md)', exact: true }).click();
+			await expect.poll(() => readFile(copy, 'utf8').catch(() => '')).toBe('# Retained Docs draft');
+			await expect(header.getByRole('heading')).toHaveText(draftTitle!);
+			const output = join(workspace, 'retained-docs.md');
 			await application.evaluate(({ dialog }, filePath) => {
 				dialog.showSaveDialog = async () => ({ canceled: false, filePath });
 			}, output);

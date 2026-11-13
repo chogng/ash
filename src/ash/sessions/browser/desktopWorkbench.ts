@@ -1,6 +1,7 @@
 import { Orientation } from '../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../base/browser/ui/splitview/splitview.js';
-import { Dimension, h, type IDimension } from '../../base/browser/dom.js';
+import { addDisposableListener, Dimension, h, type IDimension } from '../../base/browser/dom.js';
+import { getWindowId } from '../../base/browser/window.js';
 import { observeResize } from '../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../base/browser/scheduler.js';
 import type { IPositionedRectangle } from '../../base/browser/geometry.js';
@@ -10,7 +11,7 @@ import {
 	type SerializedGridDescriptor,
 } from '../../base/browser/ui/grid/grid.js';
 import { Emitter, Event } from '../../base/common/event.js';
-import { combinedDisposable, MutableDisposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { combinedDisposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import {
 	BrowserLayoutService,
 	getContainerDimension,
@@ -40,6 +41,7 @@ import { SessionsPart } from './parts/sessionsPart.js';
 import { TitlebarPart } from './parts/titlebarPart.js';
 import { EDITOR_PART_DEFAULT_WIDTH, EDITOR_PART_MINIMUM_WIDTH } from './parts/editorPartSizing.js';
 import { Position } from '../../workbench/services/layout/browser/layoutService.js';
+import type { IAuxiliaryWindow, IAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 
 /** Selects the desktop layout while the shared Workbench owns window services and Parts. */
 export class DesktopWorkbench extends Workbench {
@@ -286,6 +288,7 @@ export interface SessionsWorkbenchLayoutOptions {
 	readonly initialDimension?: IDimension;
 	readonly initialState?: SessionsWorkbenchLayoutState;
 	readonly focus?: () => void;
+	readonly auxiliaryWindows?: IAuxiliaryWindowService;
 }
 
 /** Adapts retained Workbench Parts to the window Grid. */
@@ -380,13 +383,15 @@ export class DesktopWorkbenchLayout
 	private customViewVisible = false;
 	private mainEditor: DesktopMainEditorPart | undefined;
 	private auxiliaryBarDocked = false;
+	private readonly auxiliaryContainers = this._register(new DisposableMap<IAuxiliaryWindow, DisposableStore>());
+	private focusedContainer: HTMLElement | undefined;
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	readonly domNode: HTMLDivElement;
 
 	constructor(
 		container: HTMLElement,
-		options: SessionsWorkbenchLayoutOptions,
+		private readonly options: SessionsWorkbenchLayoutOptions,
 		@IStorageService private readonly storageService: IStorageService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
@@ -424,6 +429,63 @@ export class DesktopWorkbenchLayout
 			editor: state.editor.visible,
 		};
 		this._register(storageService.onWillSaveState(() => this.saveState()));
+		if (options.auxiliaryWindows) {
+			this._register(options.auxiliaryWindows.onDidOpenWindow(window => this.trackAuxiliaryWindow(window)));
+			const mainWindow = container.ownerDocument.defaultView!;
+			for (const event of ['focus', 'keydown', 'pointerdown'] as const) {
+				this._register(addDisposableListener(mainWindow, event, () => this.activateContainer(container), true));
+			}
+		}
+	}
+
+	private getAuxiliaryWindow(targetWindow: Window) {
+		const id = getWindowId(targetWindow);
+		return id === undefined ? undefined : this.options.auxiliaryWindows?.getWindow(id);
+	}
+
+	override get activeContainer(): HTMLElement {
+		return this.focusedContainer ?? this.mainContainer;
+	}
+
+	override get activeContainerDimension(): IDimension {
+		const container = this.activeContainer;
+		return container === this.mainContainer ? this.mainContainerDimension : getContainerDimension(container);
+	}
+
+	override get containers(): Iterable<HTMLElement> {
+		return [this.mainContainer, ...[...this.auxiliaryContainers].map(([window]) => window.container)];
+	}
+
+	override getContainer(targetWindow: Window): HTMLElement {
+		return this.getAuxiliaryWindow(targetWindow)?.container ?? super.getContainer(targetWindow);
+	}
+
+	override whenContainerStylesLoaded(targetWindow: Window): Promise<void> | undefined {
+		return this.getAuxiliaryWindow(targetWindow)?.whenStylesHaveLoaded ?? super.whenContainerStylesLoaded(targetWindow);
+	}
+
+	private activateContainer(container: HTMLElement): void {
+		if (this.activeContainer === container) return;
+		this.focusedContainer = container;
+		this._onDidChangeActiveContainer.fire();
+		this._onDidLayoutActiveContainer.fire(this.activeContainerDimension);
+	}
+
+	private trackAuxiliaryWindow(window: IAuxiliaryWindow): void {
+		const resources = this.auxiliaryContainers.set(window, new DisposableStore());
+		const { container } = window;
+		for (const event of ['focus', 'keydown', 'pointerdown'] as const) {
+			resources.add(addDisposableListener(window.window, event, () => this.activateContainer(container), true));
+		}
+		resources.add(window.onDidLayout(dimension => {
+			this._onDidLayoutContainer.fire({ container, dimension });
+			if (this.activeContainer === container) this._onDidLayoutActiveContainer.fire(dimension);
+		}));
+		resources.add(window.onDidClose(() => {
+			this.auxiliaryContainers.deleteAndDispose(window);
+			if (this.activeContainer === container) this.activateContainer(this.mainContainer);
+		}));
+		if (window.window.document.hasFocus()) this.activateContainer(container);
 	}
 
 	public createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>, mainEditor?: DesktopMainEditorPart): void {

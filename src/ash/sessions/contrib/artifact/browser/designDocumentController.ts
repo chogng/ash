@@ -150,6 +150,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 
 	public get name(): string {
+		if (this.model.value.title) return this.model.value.title;
 		if (this.artifact?.kind === 'slides') {
 			const title = this.model.value.shapes.find(shape => shape.kind === 'frame' && shape.name?.trim())?.name;
 			if (title) { return title; }
@@ -161,6 +162,32 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 	public get isBusy(): boolean { return this.restoring || this.restoreFailed || (this.isFileOperationRunning && !this.autoSaveRunning); }
 	public get isDirty(): boolean { return serializeDesignDocument(this.model.value) !== this.savedContent; }
+
+	public async rename(title: string): Promise<void> {
+		await this.ready;
+		if (this.isDisposed || this.isBusy) throw new Error(this.saveStatus);
+		this.model.setTitle(title);
+		if (this.automaticallySaves && !await this.flushAutoSave()) throw new Error(this.saveStatus);
+	}
+
+	public async deleteManagedArtifact(): Promise<void> {
+		if (!this.artifact) throw new Error('Only managed artifacts can be deleted here.');
+		await this.ready;
+		this.autoSaveTimer.clear();
+		await this.autoSavePromise;
+		if (this.isDisposed || this.isBusy) throw new Error(this.saveStatus);
+		this.isFileOperationRunning = true;
+		try {
+			await this.files.delete(this.artifact.resource, 'ignore', 'recursive');
+			// Retire the working copy before releasing the write lock so it cannot recreate the package.
+			this.dispose();
+		} finally {
+			if (!this.isDisposed) {
+				this.isFileOperationRunning = false;
+				this.scheduleAutoSave();
+			}
+		}
+	}
 	public backup(): string {
 		const document = this.model.value;
 		return JSON.stringify({ manifest: serializeDesignDocument(document), media: Object.fromEntries(document.assets.flatMap(asset => asset.versions.map(version => [version.sha256, encodeDesignMedia(this.readMedia(version))]))) });

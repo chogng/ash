@@ -37,6 +37,7 @@ import { formatChatMessageTime, type ChatTurnErrorAction, type IChatListItem } f
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { parseMemoryReference, type MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
+import { parseArtifactLink } from '../../../../../platform/artifactIntegrations/common/artifactLink.js';
 import { ChatMarkdownContentPart } from './chatContentParts/chatMarkdownContentPart.js';
 import { markdownFrameThreshold } from './chatContentParts/chatIncrementalRendering/chatIncrementalRendering.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -1053,11 +1054,12 @@ export class ChatListItemRenderer extends Disposable {
 					} : undefined,
 					allowedLinkSchemes: {
 						augment: [
-							...(externalLinks ? [] : [OPEN_SESSION_LINK_SCHEME]),
+							...(externalLinks ? [] : [OPEN_SESSION_LINK_SCHEME, 'ash', 'ash-artifact']),
 							...(canDownload ? [CHAT_RESPONSE_DOWNLOAD_SCHEME] : []),
 							...(canInspect ? [CHAT_RESPONSE_ENTITY_SCHEME] : []),
 							...(canEditWriting ? [CHAT_RESPONSE_WRITING_SCHEME] : []),
-						]
+						],
+						accepts: (resource: URI) => resource.scheme !== 'ash' && resource.scheme !== 'ash-artifact' || !!parseArtifactLink(resource),
 					},
 					resolveFileLink: !externalLinks && item.type === 'agentMessage' && this.options.onDidRequestLink
 						? (href: string) => parseInlineFileReference(href) ? href : undefined

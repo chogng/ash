@@ -3,7 +3,7 @@ import { designBlendModes, parseDesignPaints, type DesignBlendMode, type DesignP
 import { parseDesignVectorNetwork, freezeDesignVectorNetwork, designNetworkStrokeContours, type DesignVectorNetwork } from './designVectorNetwork.js';
 import { isDesignVector, type DesignBooleanOperation, type DesignPathContour } from './designVector.js';
 import { designTextKeys, parseDesignTextProperties, type DesignTextProperties } from './designText.js';
-import { ArtifactWorkspaceId } from '../artifactWorkspace.js';
+import { ArtifactWorkspaceId, isArtifactName } from '../artifactWorkspace.js';
 import { localize } from '../../../../../nls.js';
 import { isRecord } from '../../../../../base/common/types.js';
 import { generateUuid, isUuid } from '../../../../../base/common/uuid.js';
@@ -171,6 +171,7 @@ export interface DesignDocument {
 	readonly mode: ArtifactWorkspaceId;
 	readonly documentId: string;
 	readonly artifactId: string;
+	readonly title?: string;
 	/** Page background is canvas presentation, independent of exported object fills. */
 	readonly background?: string;
 	/** Array order is paint order, from back to front. */
@@ -214,7 +215,7 @@ function freezeShape(shape: DesignShape): DesignShape {
 	return Object.freeze({ ...shape });
 }
 
-export function documentFromShapes(shapes: readonly DesignShape[], identity: Pick<DesignDocument, 'documentId' | 'artifactId'> & Partial<Pick<DesignDocument, 'mode' | 'resources' | 'background'>> = { documentId: generateUuid(), artifactId: generateUuid() }, assets: readonly DesignAsset[] = []): DesignDocument {
+export function documentFromShapes(shapes: readonly DesignShape[], identity: Pick<DesignDocument, 'documentId' | 'artifactId'> & Partial<Pick<DesignDocument, 'mode' | 'resources' | 'background' | 'title'>> = { documentId: generateUuid(), artifactId: generateUuid() }, assets: readonly DesignAsset[] = []): DesignDocument {
 	return Object.freeze({ schemaVersion: 2, ...identity, mode: identity.mode ?? ArtifactWorkspaceId.Design, ...(identity.resources ? { resources: freezeDesignResources(identity.resources) } : {}), shapes: Object.freeze(shapes.map(freezeShape)), assets: Object.freeze(assets.map(asset => Object.freeze({ ...asset, versions: Object.freeze(asset.versions.map(version => Object.freeze({ ...version }))) }))) });
 }
 
@@ -232,7 +233,8 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 		return documentFromShapes(shapes);
 	}
 	if (value.schemaVersion !== 2 || !isUuid(value.documentId) || !Array.isArray(value.artifactOrder) || value.artifactOrder.length !== 1 || !isUuid(value.artifactOrder[0]) || !isRecord(value.artifacts) || !isRecord(value.assets)
-		|| Object.keys(value).some(key => !['schemaVersion', 'documentId', 'artifactOrder', 'artifacts', 'assets', 'resources'].includes(key))) { throw new TypeError(localize('sessions.design.invalidDocument', 'Invalid design document')); }
+		|| value.title !== undefined && !isArtifactName(value.title)
+		|| Object.keys(value).some(key => !['schemaVersion', 'documentId', 'title', 'artifactOrder', 'artifacts', 'assets', 'resources'].includes(key))) { throw new TypeError(localize('sessions.design.invalidDocument', 'Invalid design document')); }
 	const artifactId = value.artifactOrder[0];
 	const artifact = value.artifacts[artifactId];
 	if (Object.keys(value.artifacts).length !== 1 || !isRecord(artifact) || artifact.kind !== 'composition' || !Array.isArray(artifact.roots) || !isRecord(artifact.objects)
@@ -287,7 +289,7 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 	validatePrototypeExpressions(shapes, resources);
 	validateDesignComponents(allShapes);
 	validateDesignShapeResources(allShapes, resources);
-	return documentFromShapes(shapes, { documentId: value.documentId, artifactId, mode: mode as ArtifactWorkspaceId, ...(artifact.background === undefined ? {} : { background: artifact.background as string }), ...(resources ? { resources } : {}) }, assets);
+	return documentFromShapes(shapes, { documentId: value.documentId, artifactId, mode: mode as ArtifactWorkspaceId, ...(value.title === undefined ? {} : { title: value.title }), ...(artifact.background === undefined ? {} : { background: artifact.background as string }), ...(resources ? { resources } : {}) }, assets);
 }
 
 /** Containers retain the only copy of their children; consumers derive identity lookup from this tree. */
@@ -485,7 +487,7 @@ export function serializeDesignDocument(document: DesignDocument): string {
 		} else if (shape.kind === 'path' && shape.network) { const { nodes: _nodes, closed: _closed, ...networkPath } = shape; objects[shape.id] = networkPath; } else { objects[shape.id] = shape; }
 	}
 	document.shapes.forEach(writeObject);
-	return JSON.stringify({ schemaVersion: 2, documentId: document.documentId, ...(document.resources ? { resources: { ...document.resources, libraries: document.resources.libraries.map(library => ({ ...library, document: JSON.parse(serializeDesignDocument(library.document)) })) } } : {}), artifactOrder: [document.artifactId], artifacts: { [document.artifactId]: { kind: 'composition', ...(document.background === undefined ? {} : { background: document.background }), ...(document.mode === ArtifactWorkspaceId.Design ? {} : { mode: document.mode }), roots: document.shapes.map(shape => shape.id), objects } }, assets: Object.fromEntries(document.assets.map(asset => [asset.id, asset])) }, null, '\t') + '\n';
+	return JSON.stringify({ schemaVersion: 2, documentId: document.documentId, title: document.title, ...(document.resources ? { resources: { ...document.resources, libraries: document.resources.libraries.map(library => ({ ...library, document: JSON.parse(serializeDesignDocument(library.document)) })) } } : {}), artifactOrder: [document.artifactId], artifacts: { [document.artifactId]: { kind: 'composition', ...(document.background === undefined ? {} : { background: document.background }), ...(document.mode === ArtifactWorkspaceId.Design ? {} : { mode: document.mode }), roots: document.shapes.map(shape => shape.id), objects } }, assets: Object.fromEntries(document.assets.map(asset => [asset.id, asset])) }, null, '\t') + '\n';
 }
 
 function parseComponent(value: unknown): DesignComponent {

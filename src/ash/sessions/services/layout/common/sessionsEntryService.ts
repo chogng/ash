@@ -46,7 +46,7 @@ export interface ISessionsEntryService extends IDisposable {
 	/** Saves the restored editor layout after startup attaches retained tool editors. */
 	checkpointEditorLayout(): Promise<void>;
 	readonly newSessionCommand?: string;
-	setConversationVisible(visible: boolean): Promise<void>;
+	setConversationVisible(visible: boolean, options?: { readonly preserveFocus?: boolean; }): Promise<void>;
 	/** Initialize retained content after its editor is created. Restoration preserves any covering Custom View and its focus. */
 	openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: ISessionsEntryOpenOptions): Promise<void>;
 	replaceEditorResource(sourceGroupId: number, input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void>;

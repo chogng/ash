@@ -1,15 +1,17 @@
 import './artifactTableWorkspace.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { Action } from '../../../../base/common/actions.js';
-import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { autorun } from '../../../../base/common/observable.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { ArtifactTableDraft } from './artifactTableDrafts.js';
+import { ArtifactTableDraft, IArtifactTableDrafts } from './artifactTableDrafts.js';
 import type { TableArtifactKind } from './artifactTableDrafts.js';
 import type { IArtifactWorkspace } from '../../artifact/browser/artifactWorkspaceRegistry.js';
 
@@ -24,37 +26,56 @@ export interface TableArtifactExample {
 
 export class ArtifactTableWorkspace extends Disposable implements IArtifactWorkspace {
 	public readonly domNode: HTMLElement;
-	public readonly titlebarActions: readonly Action[];
+	public readonly exportActions: readonly Action[];
 	private readonly tableControls = this._register(new DisposableStore());
+	private readonly titleChanged = this._register(new Emitter<void>());
+	public readonly onDidChangeTitle = this.titleChanged.event;
+	public get title(): string {
+		return this.source instanceof ArtifactTableDraft ? this.source.title.get() ?? this.defaultTitle : this.defaultTitle;
+	}
+	public get rename(): ((title: string) => Promise<void>) | undefined {
+		const { source } = this;
+		return source instanceof ArtifactTableDraft ? title => this.drafts.rename(source, title) : undefined;
+	}
+	public get delete(): (() => Promise<void>) | undefined {
+		const { source } = this;
+		return source instanceof ArtifactTableDraft ? () => this.drafts.delete(source) : undefined;
+	}
 
 	constructor(
 		ownerDocument: Document,
-		public readonly title: string,
+		private readonly defaultTitle: string,
 		private readonly source: TableArtifactExample | ArtifactTableDraft,
 		@IFileDialogService private readonly dialogs: IFileDialogService,
 		@IFileService private readonly files: IFileService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IArtifactTableDrafts private readonly drafts: IArtifactTableDrafts,
 	) {
 		super();
 		const { kind } = source;
 		this.domNode = h(ownerDocument, 'section', {
 			className: `ash-artifact-table-workspace ${kind}`,
-			attributes: { 'aria-label': title, 'data-creator-mode': kind, tabindex: '0' },
+			attributes: { 'aria-label': this.title, 'data-creator-mode': kind, tabindex: '0' },
 		});
+		this._register(toDisposable(() => this.domNode.remove()));
+		this.exportActions = [this._register(new Action('sessions.artifacts.table.exportCsv',
+			localize({ bundle: 'ash.artifacts', key: 'exportCsv' }, 'Export CSV'), '', true, () => this.exportCsv()))];
 		if (source instanceof ArtifactTableDraft) {
 			this.domNode.classList.add('editable');
-			const exportCsv = this._register(new Action('sessions.artifacts.table.exportCsv', localize({ bundle: 'ash.artifacts', key: 'exportCsv' }, 'Export CSV'), '', true, () => this.exportCsv(source)));
-			exportCsv.icon = Lxicon.export;
-			this.titlebarActions = [exportCsv];
 			this.renderDraft(source);
+			this._register(autorun(reader => {
+				source.title.read(reader);
+				this.domNode.setAttribute('aria-label', this.title);
+				this.domNode.querySelector('table')?.setAttribute('aria-label', this.title);
+				this.titleChanged.fire();
+			}));
 		} else {
-			this.titlebarActions = [];
 			this.renderExample(source);
 		}
 	}
 
 	public getAccessibilityHelp(): string {
-		return localize({ bundle: 'ash.artifacts', key: 'tableHelp' }, 'In an editable table, use Tab to move between cells and reach Add row and Add column. Export CSV is in the window title bar. Changes save automatically and you can reopen the table from Artifacts.') + '\n\n';
+		return localize({ bundle: 'ash.artifacts', key: 'tableHelp' }, 'In an editable table, use Tab to move between cells and reach Add row and Add column. Choose Export CSV from Export in the window title bar. Changes save automatically and you can reopen the table from Artifacts.') + '\n\n';
 	}
 
 	private renderExample(example: TableArtifactExample): void {
@@ -142,18 +163,26 @@ export class ArtifactTableWorkspace extends Disposable implements IArtifactWorks
 		button.icon = Lxicon.add;
 	}
 
-	private async exportCsv(draft: ArtifactTableDraft): Promise<void> {
+	private async exportCsv(): Promise<void> {
 		try {
 			const resource = await this.dialogs.showSaveDialog({
 				title: localize({ bundle: 'ash.artifacts', key: 'exportCsv' }, 'Export CSV'),
 				filters: [{ name: 'CSV', extensions: ['csv'] }],
 			});
 			if (!resource || this.isDisposed) { return; }
-			const content = draft.rows.map(row => row.map(value => `"${value.replaceAll('"', '""')}"`).join(',')).join('\r\n');
-			await this.files.writeFile({ resource, content });
+			await this.files.writeFile({ resource, content: this.toCsv() });
 		} catch (error) {
 			this.notifications.error(error instanceof Error ? error : String(error));
 		}
+	}
+
+	public getCodeAttachment(): { readonly name: string; readonly content: string; } {
+		return { name: `${this.title}.csv`, content: this.toCsv() };
+	}
+
+	private toCsv(): string {
+		const rows = this.source instanceof ArtifactTableDraft ? this.source.rows : [this.source.columns, ...this.source.rows];
+		return rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n');
 	}
 
 	public create(container: HTMLElement): void { container.append(this.domNode); }

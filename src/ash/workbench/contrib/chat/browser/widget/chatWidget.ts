@@ -14,6 +14,7 @@ import type { ChatSubmissionOptions, ChatRequestQueueKind, QueuedMessage } from 
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { applyAgentHostCompletionAction } from '../agentHostCompletionAction.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
+import { isArtifactLink } from '../../../../../platform/artifactIntegrations/common/artifactLink.js';
 import { localize } from '../../../../../nls.js';
 import { getWindowId } from '../../../../../base/browser/window.js';
 import './media/chat.css';
@@ -903,7 +904,7 @@ export async function openChatMarkdownLink(
 		return;
 	}
 	const resource = URI.parse(target);
-	if (resource.scheme === OPEN_SESSION_LINK_SCHEME) {
+	if (resource.scheme === OPEN_SESSION_LINK_SCHEME || isArtifactLink(resource)) {
 		if (openerService) await openerService.open(resource, { fromUserGesture: true });
 		return;
 	}

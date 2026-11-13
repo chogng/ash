@@ -1,6 +1,8 @@
 import './artifactWorkspace.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
+import { Action } from '../../../../base/common/actions.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Event } from '../../../../base/common/event.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -18,7 +20,7 @@ import { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import { registerArtifactWorkspace, type ArtifactWorkspaceContribution, type IArtifactWorkspace } from './artifactWorkspaceRegistry.js';
 import type { ArtifactEditorWidget } from './widget/artifactEditorWidget.js';
 import type { DesignDocumentController } from './designDocumentController.js';
-import { DESIGN_PROPERTIES_CONTAINER_ID } from './designEditorService.js';
+import { DESIGN_PROPERTIES_CONTAINER_ID, IDesignEditorService } from './designEditorService.js';
 
 export interface ArtifactDesignExample {
 	readonly title: string;
@@ -75,7 +77,17 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 	protected get editor(): ArtifactEditorWidget { return this.editorHost.editor; }
 	protected get document(): DesignDocumentController { return this.editorHost.workingCopy; }
 	public get title(): string { return this.document.name; }
-	public get onDidChangeTitle() { return this.document.onDidChangeLabel; }
+	public get onDidChangeTitle() { return Event.any(this.document.onDidChangeLabel, this.document.onDidChangeContent); }
+	public get rename(): ((title: string) => Promise<void>) | undefined {
+		return this.document.artifactKind && !this.document.isBusy ? title => this.document.rename(title) : undefined;
+	}
+	public get delete(): (() => Promise<void>) | undefined {
+		return this.document.artifactKind && !this.document.isBusy ? () => this.designEditors.deleteArtifactDocument(this.document) : undefined;
+	}
+	public getCodeAttachment(): { readonly name: string; readonly content: string; } {
+		return { name: `${this.title}.ash-design.json`, content: this.document.backup() };
+	}
+	public exportActions: readonly Action[] = [];
 	protected get commands(): DocumentCommands { return new DocumentCommands(this.document.model); }
 
 	constructor(
@@ -83,6 +95,7 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		public readonly mode: ArtifactWorkspaceId,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
+		@IDesignEditorService private readonly designEditors: IDesignEditorService,
 	) { super(); }
 
 	protected static registerWorkspaceActions<T extends ArtifactWorkspace>(
@@ -101,8 +114,6 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		ArtifactWorkspace.registerActions(ArtifactWorkspace, 'sessions.creator.canvas', 'file', when, [
 			{ id: 'open', title: localize2('sessions.creator.open', 'Open document'), when: ArtifactWorkspaceHasManagedDocument.isEqualTo(false), run: workspace => workspace.document.openDocument() },
 			{ id: 'save', title: localize2('sessions.creator.save', 'Save document'), when: ArtifactWorkspaceHasManagedDocument.isEqualTo(false), run: workspace => workspace.editor.saveDocument() },
-			{ id: 'exportCopy', title: localize2('sessions.creator.slides.exportCopy', 'Export editable copy'), when: ArtifactWorkspaceHasManagedDocument.isEqualTo(true), run: workspace => workspace.document.saveCopy() },
-			{ id: 'exportSvg', title: localize2('sessions.design.export', 'Export SVG'), run: workspace => workspace.document.exportDocument() },
 		]);
 	}
 
@@ -148,6 +159,13 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		const scopedInstantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, scope])));
 		this.editorHost = this._register(scopedInstantiation.createInstance(DesignEditorHost, this.mode));
 		this.editorHost.create(this.contentDomNode, example, document);
+		const exportSvg = this._register(new Action('sessions.creator.canvas.exportSvg', localize2('sessions.design.export', 'Export SVG').value,
+			'', true, () => this.document.exportDocument()));
+		this.exportActions = this.mode === ArtifactWorkspaceId.Design || this.document.artifactKind !== undefined
+			? [this._register(new Action('sessions.creator.canvas.exportCopy', this.document.artifactKind === 'slides'
+				? localize2('sessions.creator.slides.exportCopy', 'Export editable copy').value
+				: localize2('sessions.design.saveCopy', 'Save a copy').value, '', true, () => this.document.saveCopy())), exportSvg]
+			: [exportSvg];
 		ArtifactWorkspaceHasManagedDocument.bindTo(scope).set(this.document.artifactKind !== undefined);
 		this.editor.setWorkspaceToolbarContext(this);
 		this.createModeContent();
@@ -157,6 +175,7 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		const updateModeContext = this.bindToolbarContext?.(scope);
 		const updateContext = () => scope.bufferChangeEvents(() => {
 			canEdit.set(!this.document.isBusy);
+			for (const action of this.exportActions) action.enabled = !this.document.isBusy;
 			updateModeContext?.();
 		});
 		this._register(this.document.onDidChange(updateContext));

@@ -26,6 +26,7 @@ import { IGPUProcessMainService } from '../../platform/gpu/electron-main/gpuProc
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { URLHandlerChannel, URLHandlerChannelClient } from '../../platform/url/common/urlIpc.js';
 import type { IOpenURLOptions } from '../../platform/url/common/url.js';
+import { isArtifactLink, parseArtifactLink } from '../../platform/artifactIntegrations/common/artifactLink.js';
 import { userConfigurationIpcRoute, openUserConfigurationTextFile } from '../../platform/configuration/electron-main/userConfigurationIpc.js';
 import { IThemeMainService } from '../../platform/theme/electron-main/themeMainService.js';
 import { ThemeMainService } from '../../platform/theme/electron-main/themeMainServiceImpl.js';
@@ -101,11 +102,11 @@ import { applicationBadgeIpcRoute } from '../../platform/native/electron-main/ap
 import type { IApplicationBadge } from '../../platform/native/common/native.js';
 import { UpdateMainService } from '../../platform/update/electron-main/updateMainService.js';
 import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
-import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_TERMINAL_REQUEST_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
+import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_TERMINAL_REQUEST_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding } from '../../platform/native/common/nativeHost.js';
 import { DialogMainService, IDialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
 import { AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL, AGENTS_WINDOW_READY_CHANNEL, AGENTS_WINDOW_STARTUP_INTENT_CHANNEL, AGENTS_WINDOW_WORKSPACE_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
-import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, type IAgentsWindowHandoffResult } from '../../platform/window/common/window.js';
+import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, type AgentsWindowHandoff, type IAgentsWindowHandoffResult } from '../../platform/window/common/window.js';
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID, ScreenshotCommandId, ScreenshotShortcutId } from '../../workbench/contrib/chat/common/constants.js';
 import { StateService } from '../../platform/state/node/stateService.js';
@@ -128,8 +129,8 @@ import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntr
 import { WindowsMainService, windowOperationIpcRoute, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from '../../platform/windows/electron-main/windowsMainService.js';
 import { LifecycleMainService, ILifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
 import { defaultWindowState, WorkspaceContextMainService, type IWindowState } from '../../platform/window/electron-main/window.js';
-import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, hasWorkspaceFileExtension, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState, workspaceFromIdentifier } from '../../platform/workspace/common/workspace.js';
-import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } from '../../platform/workspaces/node/workspaces.js';
+import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, hasWorkspaceFileExtension, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState, workspaceFromIdentifier } from '../../platform/workspace/common/workspace.js';
+import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier } from '../../platform/workspaces/node/workspaces.js';
 import { packagedRemoteRuntimeCatalogSource } from '../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js';
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from '../../platform/remote/electron-main/remoteRuntimeInstaller.js';
 import { RemoteRuntimeProvisioner } from '../../platform/remote/electron-main/remoteRuntimeProvisioner.js';
@@ -232,7 +233,7 @@ class SessionsWindowRecord extends Disposable {
 	readonly remoteConnections: IRemoteConnectionApi;
 	readonly runtimeResources = this._register(new MutableDisposable<DisposableStore>());
 	supervisor: AppServerConnectionRelay | undefined;
-	windowState: { readonly window: BrowserWindow; readonly handler: WindowsStateHandler; readonly tracking: IDisposable; } | undefined;
+	windowState: { readonly window: BrowserWindow; readonly workspaceId: string; readonly handler: WindowsStateHandler; readonly tracking: IDisposable; } | undefined;
 
 	constructor(workspaceContext: WorkspaceContextMainService, remoteConnections: IRemoteConnectionApi) {
 		super();
@@ -995,6 +996,10 @@ export class AshApplication extends Disposable {
 	}
 
 	private async handleProtocolUrl(uri: URI, options?: IOpenURLOptions): Promise<boolean> {
+		if (isArtifactLink(uri)) {
+			await this.openArtifactLink(uri);
+			return true;
+		}
 		if (uri.scheme !== 'ash') {
 			return false;
 		}
@@ -1030,6 +1035,37 @@ export class AshApplication extends Disposable {
 		await this.windowsMainService.getWindowById(window.id)!.ready();
 		const handler = new URLHandlerChannelClient(this.mainProcessIpcServer.getChannel('urlHandler', client => client.ctx === `window:${window.id}`));
 		return handler.handleURL(uri, options);
+	}
+
+	private async openArtifactLink(uri: URI): Promise<void> {
+		const link = parseArtifactLink(uri);
+		if (!link) throw new Error(localize({ bundle: 'ash.artifacts', key: 'invalidLink' }, 'This artifact link is invalid.'));
+		const workspaces = this.workspaces;
+		assertDefined(workspaces, 'Workspace service is not initialized');
+		const unavailable = () => new Error(localize({ bundle: 'ash.artifacts', key: 'linkWorkspace' }, 'The artifact’s original workspace is unavailable.'));
+		const known = [...this.getOpenWindowSessions().map(({ entry }) => entry), ...(this.windowSessionStateHandler.readSession()?.windows ?? [])]
+			.find(entry => entry.workspace.id === link.workspace.id)?.workspace;
+		let workspace = known ?? link.workspace;
+		let resolved: IWorkspace;
+		try {
+			if (isSingleFolderWorkspaceIdentifier(workspace) && workspace.uri.scheme === 'file') {
+				workspace = await workspaces.resolveFolder(workspace.uri.fsPath);
+			} else if (!known) {
+				if (isWorkspaceIdentifier(workspace) && workspace.configPath.scheme === 'file' && hasWorkspaceFileExtension(workspace.configPath)) {
+					workspace = getWorkspaceIdentifier(workspace.configPath, workspace.remoteAuthority);
+				} else if (isSingleFolderWorkspaceIdentifier(workspace)) {
+					workspace = getSingleFolderWorkspaceIdentifier(workspace.uri);
+				} else if (!/^empty-window-[0-9a-f-]{36}$/u.test(workspace.id) || isWorkspaceIdentifier(workspace)) {
+					throw unavailable();
+				}
+			}
+			if (workspace.id !== link.workspace.id) throw unavailable();
+			resolved = await workspaces.resolveWorkspace(workspace);
+		} catch {
+			throw unavailable();
+		}
+		if (resolved.configuration && resolved.folders.length === 0) throw unavailable();
+		await this.openSessionsWindow(workspace, resolved, { artifact: uri.toString() });
 	}
 
 	private configureWindowsTaskbar(): void {
@@ -1130,6 +1166,7 @@ export class AshApplication extends Disposable {
 
 	/** Electron does not finish a macOS quit after the state-save retry closes the last window. */
 	handleWindowAllClosed(): void {
+		if (this.reopeningAgentsForArtifact && !this.quitRequested) return;
 		if (this.quitRequested || process.platform !== 'darwin') app.quit();
 	}
 
@@ -2166,7 +2203,7 @@ export class AshApplication extends Disposable {
 		return browserServices;
 	}
 
-	private openSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, handoff?: IOpenAgentsWindowOptions, promptForWorkspaceTrust = handoff !== undefined): Promise<void> {
+	private openSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, handoff?: AgentsWindowHandoff, promptForWorkspaceTrust = handoff !== undefined): Promise<void> {
 		if (resolvedWorkspace.configuration && resolvedWorkspace.folders.length === 0) {
 			const remoteAuthority = getWorkspaceRemoteAuthority(resolvedWorkspace);
 			workspace = { ...createEmptyWorkspaceIdentifier(), ...(remoteAuthority ? { remoteAuthority } : {}) };
@@ -2177,10 +2214,24 @@ export class AshApplication extends Disposable {
 		return opening;
 	}
 
+	private reopeningAgentsForArtifact = false;
+
 	/** Opens the one Agents window and selects the requesting Workspace before a handoff. */
-	private async performOpenSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, handoff: IOpenAgentsWindowOptions | undefined, promptForWorkspaceTrust: boolean): Promise<void> {
+	private async performOpenSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, handoff: AgentsWindowHandoff | undefined, promptForWorkspaceTrust: boolean): Promise<void> {
 		const workspaces = this.workspaces;
 		if (!workspaces) throw new Error('Workspace service is not initialized');
+		const existing = this.sessionsWindow.value;
+		if (handoff?.artifact && existing?.windowState && (existing.workspaceId !== workspace.id || existing.windowState.workspaceId !== workspace.id)) {
+			// Artifact stores are scoped to the renderer's startup workspace. Let its normal
+			// shutdown save pending edits before creating a renderer in the destination.
+			this.reopeningAgentsForArtifact = true;
+			try {
+				await this.windowsMainService.closeManagedWindow(AGENTS_WINDOW_KEY);
+				return await this.performOpenSessionsWindow(workspace, resolvedWorkspace, handoff, promptForWorkspaceTrust);
+			} finally {
+				this.reopeningAgentsForArtifact = false;
+			}
+		}
 		let sessions = this.sessionsWindow.value;
 		if (!sessions) {
 			const remoteConnections = this.remoteConnections ?? UnavailableRemoteConnectionApi;
@@ -2214,7 +2265,7 @@ export class AshApplication extends Disposable {
 				initialize: async (window, windowDisposables) => {
 					this.configureWindowNavigation(window, windowDisposables, titleBarStyle);
 					const tracking = windowDisposables.add(sessionsWindowState.trackWindow(window));
-					session.windowState = { window, handler: sessionsWindowState, tracking };
+					session.windowState = { window, workspaceId: session.workspaceId, handler: sessionsWindowState, tracking };
 					windowDisposables.add(toDisposable(() => this.globalKeybindings.removeWindow(window.id)));
 					windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
 					const onFocus = (): void => {

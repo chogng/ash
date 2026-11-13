@@ -1,7 +1,7 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { generateUuid, isUuid } from '../../../../base/common/uuid.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { FileKind, FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
@@ -27,6 +27,7 @@ export interface IDesignEditorService {
 	getDocument(mode: ArtifactWorkspaceId): DesignDocumentController;
 	loadArtifactDocuments(): Promise<void>;
 	createArtifactDocument(kind: ArtifactCanvasKind, shapes: readonly DesignShape[]): DesignDocumentController;
+	deleteArtifactDocument(document: DesignDocumentController): Promise<void>;
 	adoptExampleDocument(document: DesignDocumentController, ownerWindow: Window): void;
 	setActiveEditor(editor: ArtifactEditorWidget | undefined): void;
 }
@@ -37,6 +38,7 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 	private readonly documents = new Map<ArtifactWorkspaceId, DesignDocumentController>();
 	private readonly adoptedExamples = new Set<DesignDocumentController>();
 	private readonly artifacts = observableValue<ReadonlyMap<string, DesignDocumentController>>(this, new Map());
+	private readonly artifactLifetimes = this._register(new DisposableMap<string, DisposableStore>());
 	public readonly artifactDocuments: IObservable<ReadonlyMap<string, DesignDocumentController>> = this.artifacts;
 	private readonly draftHome: URI;
 	private artifactLoading: Promise<void> | undefined;
@@ -113,15 +115,28 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 	}
 
 	private addArtifactDocument(id: string, document: DesignDocumentController): void {
-		this._register(document);
+		const lifetime = this.artifactLifetimes.set(id, new DisposableStore());
 		let title = document.name;
-		this._register(document.onDidChangeLabel(() => {
+		const updateTitle = () => {
 			if (document.name === title) { return; }
 			title = document.name;
 			this.artifacts.set(new Map(this.artifacts.get()), undefined);
-		}));
-		this._register(this.workingCopies.register(document));
+		};
+		lifetime.add(document.onDidChangeLabel(updateTitle));
+		lifetime.add(document.onDidChangeContent(updateTitle));
+		lifetime.add(this.workingCopies.register(document));
+		lifetime.add(document);
 		this.artifacts.set(new Map(this.artifacts.get()).set(id, document));
+	}
+
+	public async deleteArtifactDocument(document: DesignDocumentController): Promise<void> {
+		const id = document.model.value.documentId;
+		if (this.artifacts.get().get(id) !== document) return;
+		await document.deleteManagedArtifact();
+		const remaining = new Map(this.artifacts.get());
+		remaining.delete(id);
+		this.artifacts.set(remaining, undefined);
+		this.artifactLifetimes.deleteAndDispose(id);
 	}
 	public getDocument(mode: ArtifactWorkspaceId): DesignDocumentController {
 		let document = this.documents.get(mode);

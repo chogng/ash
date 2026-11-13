@@ -267,7 +267,7 @@ function registerAshChatAccessibility(): void {
 						+ '\n\n' + getSessionArtifactsAccessibilityHelp()
 						+ '\n\n' + localize('sessions.chat.versionsHelp', 'For a conversation with edits, open More actions on its sidebar row and choose Conversation versions. Use Right Arrow to open the submenu and Enter to open a version.')
 						+ '\n\n' + localize('sessions.list.forkSidebarHelp', 'In the sidebar, Tab to the Fork icon and press Enter to open its source conversation. Focus Conversation branches and press Enter to expand or collapse the tree. On the conversation row, Right Arrow expands the tree or moves to its first branch, and Left Arrow collapses it.')
-						+ '\n\n' + localize('sessions.titlebar.ashChatHelp', 'For a saved chat, focus its title and press Enter to rename it. Use More Sessions Actions beside the title to pin, archive, or delete it. Share at the right of the title bar asks for confirmation before creating and copying a link to the conversation text.')
+						+ '\n\n' + localize('sessions.titlebar.ashChatHelp', 'For a saved chat, focus its title and press Enter or Down Arrow to open the actions menu. Choose Rename or double-click the title to edit it in place. Press Enter to save or Escape to cancel. The menu also offers pin, archive, and delete actions when available. Share at the right of the title bar asks for confirmation before creating and copying a link to the conversation text.')
 						: model.items.filter(item => !item.transient).map(item => item.text).filter(Boolean).join('\n\n'),
 					() => focused.isConnected ? focused.focus() : widget.focusInput(), AccessibilityVerbositySettingId.Chat);
 			},
