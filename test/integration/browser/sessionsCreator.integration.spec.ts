@@ -46,6 +46,93 @@ test('Fixture artifacts share one catalog and opening or reloading preserves the
 	await expect(slidesDate).toHaveAttribute('datetime', savedDate!);
 });
 
+for (const kind of ['sheet', 'data'] as const) {
+	for (const chinese of [false, true]) {
+		test(`${kind} files open in the table editor and retain cell edits in ${chinese ? 'Chinese' : 'English'}`, { tag: chinese ? ['@artifact-examples', '@zh-CN'] : '@artifact-examples' }, async ({ page }) => {
+			const home = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true });
+			await home.click();
+			const card = page.locator(`.ash-artifacts-card.${kind}`);
+			await expect(card).toHaveCount(1);
+			const resource = await card.getAttribute('data-artifact-id');
+			expect(resource).toMatch(/\.json$/u);
+			await expect(card).not.toHaveAttribute('data-artifact-workspace');
+			await card.click();
+			const editor = page.locator('.ash-table-editor-pane:visible');
+			const cell = editor.getByRole('textbox', { name: chinese ? '单元格 A1' : 'Cell A1', exact: true });
+			await cell.focus();
+			await page.keyboard.press('Alt+F1');
+			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /修改会自动保存/u : /Changes save automatically/u);
+			await page.keyboard.press('Escape');
+			await expect(cell).toBeFocused();
+			await cell.fill('Edited table file');
+			await editor.getByRole('button', { name: chinese ? '添加行' : 'Add row', exact: true }).click();
+			await expect(editor.getByRole('textbox').nth((await editor.getByRole('textbox').count()) - (await editor.getByRole('columnheader').count() - 1))).toBeFocused();
+			await home.click();
+			await expect(card).toHaveAttribute('data-artifact-id', resource!);
+			await page.locator(`.ash-artifacts-card.${kind === 'sheet' ? 'data' : 'sheet'}`).click();
+			await expect(editor.locator(`[data-creator-mode="${kind === 'sheet' ? 'data' : 'sheet'}"]`)).toBeVisible();
+			await home.click();
+			await card.click();
+			await expect(cell).toHaveValue('Edited table file');
+			const box = await editor.boundingBox();
+			expect(box!.width).toBeGreaterThan(300);
+			expect(box!.height).toBeGreaterThan(200);
+		});
+	}
+}
+
+for (const kind of ['sheet', 'data'] as const) {
+	test(`${kind} shares Table resizing, navigation, rectangular paste and row and column edits`, { tag: '@artifact-examples' }, async ({ page }, testInfo) => {
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
+		await page.locator(`.ash-artifacts-card.${kind}`).click();
+		const editor = page.locator('.ash-table-editor-pane:visible');
+		const grid = editor.getByRole('grid');
+		await expect(grid).toHaveCount(1);
+		const cell = (address: string) => editor.getByRole('textbox', { name: `Cell ${address}`, exact: true });
+		await cell('A1').focus();
+		await cell('A1').press('Shift+Tab');
+		await expect(editor.getByRole('button', { name: 'Delete column', exact: true })).toBeFocused();
+		await cell('A1').focus();
+		await cell('A1').press('Tab'); await expect(cell('B1')).toBeFocused();
+		await cell('B1').press('Enter'); await expect(cell('B2')).toBeFocused();
+		await cell('B2').press('ArrowUp'); await expect(cell('B1')).toBeFocused();
+		await cell('B1').press('Shift+Tab'); await expect(cell('A1')).toBeFocused();
+		const rowCount = Number(await grid.getAttribute('aria-rowcount')) - 1;
+		const columnCount = Number(await grid.getAttribute('aria-colcount')) - 1;
+		const last = editor.getByRole('textbox').last();
+		await last.evaluate(input => {
+			input.dispatchEvent(new ClipboardEvent('paste', {
+				bubbles: true, cancelable: true,
+				clipboardData: (() => { const data = new DataTransfer(); data.setData('text/plain', 'alpha\tbeta\ngamma\tdelta\n'); return data; })()
+			}));
+		});
+		await expect(grid).toHaveAttribute('aria-rowcount', String(rowCount + 2));
+		await expect(grid).toHaveAttribute('aria-colcount', String(columnCount + 2));
+		await expect(editor.getByRole('textbox').last()).toHaveValue('delta');
+		await editor.getByRole('textbox').last().focus();
+		await editor.getByRole('button', { name: 'Delete row', exact: true }).click();
+		await expect(grid).toHaveAttribute('aria-rowcount', String(rowCount + 1));
+		await editor.getByRole('button', { name: 'Delete column', exact: true }).click();
+		await expect(editor.getByRole('grid')).toHaveAttribute('aria-colcount', String(columnCount + 1));
+		const header = editor.getByRole('columnheader').nth(1);
+		const bodyCell = editor.locator('.ash-table-row').first().getByRole('gridcell').nth(1);
+		expect((await header.boundingBox())!.width).toBeCloseTo((await bodyCell.boundingBox())!.width, 0);
+		const before = (await header.boundingBox())!.width;
+		const sash = editor.locator('.ash-table-header .ash-sash-vertical').nth(1);
+		const sashBox = (await sash.boundingBox())!;
+		await page.mouse.move(sashBox.x + sashBox.width / 2, sashBox.y + sashBox.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(sashBox.x + sashBox.width / 2 + 30, sashBox.y + sashBox.height / 2);
+		await page.mouse.up();
+		await expect.poll(async () => (await header.boundingBox())!.width).toBeGreaterThan(before + 20);
+		expect((await header.boundingBox())!.width).toBeCloseTo((await bodyCell.boundingBox())!.width, 0);
+		await page.screenshot({ path: testInfo.outputPath('artifact-table-desktop.png') });
+		await page.setViewportSize({ width: 600, height: 700 });
+		await expect(editor.getByRole('button', { name: 'Add row', exact: true })).toBeInViewport();
+		await page.screenshot({ path: testInfo.outputPath('artifact-table-narrow.png') });
+	});
+}
+
 for (const chinese of [false, true]) {
 	test(`Artifact catalog dates and nested sort filters work in ${chinese ? 'Chinese' : 'English'}`, { tag: chinese ? ['@artifact-examples', '@zh-CN'] : '@artifact-examples' }, async ({ page }) => {
 		const home = page.locator('.ash-sessions-activity-content').getByRole('button', { name: chinese ? '作品' : 'Artifacts', exact: true });

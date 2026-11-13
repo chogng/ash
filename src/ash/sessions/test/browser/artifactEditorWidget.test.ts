@@ -2517,7 +2517,7 @@ class AutoSaveFixture extends Disposable {
 test('Artifact fixtures restore as ordinary editable documents and never overwrite edits or deleted work', async () => {
 	using fixture = new AutoSaveFixture();
 	const { prepareArtifactFixtures } = await import('./fixtures/artifactExamples.contribution.js');
-	const { ArtifactTableDrafts } = await import('../../contrib/sheets/browser/artifactTableDrafts.js');
+	const { ArtifactTableService } = await import('../../contrib/artifact/browser/artifactTableService.js');
 	const profile = fixture.child.get(IUserDataProfileService).currentProfile.location;
 	const workspace = fixture.child.get(IWorkspaceContextService).getWorkspace().id;
 	const docs = await prepareArtifactFixtures(fixture.files, profile, workspace, browser.window.document);
@@ -2531,7 +2531,7 @@ test('Artifact fixtures restore as ordinary editable documents and never overwri
 	await view.runCommand('sessions.creator.openCanvasArtifact', deck.model.value.documentId);
 	view.click('Add slide');
 	await deck.flushAutoSave();
-	using tables = fixture.child.createInstance(ArtifactTableDrafts);
+	using tables = fixture.child.createInstance(ArtifactTableService);
 	await tables.ready;
 	assert.equal(tables.drafts.get().size, 2);
 	const sheet = [...tables.drafts.get().values()].find(draft => draft.kind === 'sheet')!;
@@ -2544,7 +2544,7 @@ test('Artifact fixtures restore as ordinary editable documents and never overwri
 	await restored.editors.loadArtifactDocuments();
 	assert.equal(restored.editors.artifactDocuments.get().size, 4);
 	assert.equal(restored.editors.artifactDocuments.get().get(deck.model.value.documentId)!.model.value.shapes.length, 3);
-	using restoredTables = fixture.child.createInstance(ArtifactTableDrafts);
+	using restoredTables = fixture.child.createInstance(ArtifactTableService);
 	await restoredTables.ready;
 	assert.equal(restoredTables.drafts.get().size, 1);
 	assert.equal(restoredTables.drafts.get().get(sheet.id)!.rows[1][0], 'Edited fixture');
@@ -2916,4 +2916,67 @@ test('Stroke and both shadow types share color controls, keep alpha and close pi
 		editor.setVisible(false); assert.equal(browser.window.document.querySelector('.ash-color-picker'), null);
 		editor.setVisible(true);
 	}
+});
+
+test('Table cell edits persist in the file model after disposing and reopening the editor widget', async () => {
+	using fixture = new AutoSaveFixture();
+	const { prepareArtifactFixtures } = await import('./fixtures/artifactExamples.contribution.js');
+	const { ArtifactTableService } = await import('../../contrib/artifact/browser/artifactTableService.js');
+	const { ArtifactTableEditorWidget } = await import('../../contrib/artifact/browser/artifactTableEditorWidget.js');
+	await prepareArtifactFixtures(fixture.files, fixture.child.get(IUserDataProfileService).currentProfile.location,
+		fixture.child.get(IWorkspaceContextService).getWorkspace().id, browser.window.document);
+	using tables = fixture.child.createInstance(ArtifactTableService);
+	await tables.ready;
+	for (const source of tables.drafts.get().values()) {
+		const widget = new ArtifactTableEditorWidget(browser.window.document, 'Table', source);
+		browser.window.document.body.append(widget.domNode);
+		const cell = widget.domNode.querySelector('input')!;
+		cell.value = `Edited ${source.kind}`;
+		cell.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
+		widget.dispose();
+		// Renaming flushes the same pending file model, without an editor-owned copy.
+		await tables.rename(source, `Saved ${source.kind}`);
+		assert.equal(JSON.parse((await fixture.files.readFile(tables.resource(source))).content).rows[0][0], `Edited ${source.kind}`);
+	}
+	using restored = fixture.child.createInstance(ArtifactTableService);
+	await restored.ready;
+	for (const source of restored.drafts.get().values()) {
+		using widget = new ArtifactTableEditorWidget(browser.window.document, source.title.get()!, source);
+		assert.equal(widget.domNode.querySelector('input')!.value, `Edited ${source.kind}`);
+		assert.equal(widget.domNode.getAttribute('aria-label'), `Saved ${source.kind}`);
+	}
+});
+
+test('Table artifact commands open resource inputs and restore the same file without mounting a workspace', async () => {
+	using fixture = new AutoSaveFixture();
+	const { prepareArtifactFixtures } = await import('./fixtures/artifactExamples.contribution.js');
+	const { ArtifactTableService } = await import('../../contrib/artifact/browser/artifactTableService.js');
+	const { IArtifactTableService } = await import('../../contrib/artifact/common/artifactTableService.js');
+	const { ArtifactTableEditor } = await import('../../contrib/artifact/browser/artifactTableEditor.js');
+	await import('../../contrib/artifact/browser/artifactTableCatalog.js');
+	await prepareArtifactFixtures(fixture.files, fixture.child.get(IUserDataProfileService).currentProfile.location,
+		fixture.child.get(IWorkspaceContextService).getWorkspace().id, browser.window.document);
+	using tables = fixture.child.createInstance(ArtifactTableService);
+	fixture.child.registerInstance(IArtifactTableService, tables);
+	const entries: import('../../services/layout/common/sessionsEntryService.js').ISessionsEntry[] = [];
+	fixture.child.registerInstance(ISessionsEntryService, {
+		...Disposable.None, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
+		replaceEditorResource: unexpected, restore: unexpected,
+		openEntry: async (entry, initialize) => { entries.push(entry); initialize?.(); },
+	});
+	using commands = new CommandService(fixture.child);
+	await tables.ready;
+	for (const source of tables.drafts.get().values()) {
+		const resource = tables.resource(source).toString();
+		assert.equal(await commands.executeCommand('sessions.creator.openTable', resource), true);
+		assert.equal(await commands.executeCommand('sessions.creator.openTable', `table:${source.id}`), true);
+		await commands.executeCommand('sessions.restore.creatorTable');
+		for (const entry of entries.splice(0)) {
+			assert.equal(entry.editorInput?.resource.toString(), resource);
+			assert.equal(entry.editorInput?.editorId, ArtifactTableEditor.ID);
+			assert.equal(entry.restoreCommand, 'sessions.restore.creatorTable');
+		}
+	}
+	assert.equal(await commands.executeCommand('sessions.creator.openTable', URI.file('/unrelated.json').toString()), false);
+	assert.equal(entries.length, 0);
 });

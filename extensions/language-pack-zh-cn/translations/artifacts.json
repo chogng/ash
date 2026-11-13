@@ -360,11 +360,14 @@
     "generatedFilePublishFailed": "无法保存生成的 Markdown 文件：{0}",
     "generatedFileSaveFailed": "无法将修改保存到 {0}。你的编辑仍保持打开。请先处理保存错误，再关闭文件。",
     "untitledMotion": "未命名动效",
+    "deleteRow": "删除行",
+    "deleteColumn": "删除列",
+    "tablePasteTooLarge": "粘贴的表格过大。",
     "addRow": "添加行",
     "addColumn": "添加列",
     "exportCsv": "导出 CSV",
     "tableSaveFailed": "无法保存表格修改。你的编辑仍在 Artifacts 中打开。",
-    "tableHelp": "在可编辑表格中，按 Tab 可在单元格间移动，也可访问「添加行」和「添加列」。在窗口标题栏的「导出」菜单中选择「导出 CSV」。修改会自动保存，可从 Artifacts 重新打开表格。",
+    "tableHelp": "在可编辑表格中，按 Tab 和 Shift+Tab 在单元格间移动；在首尾单元格可离开表格。按上、下方向键和 Enter 在行间移动，左、右方向键移动文本光标。粘贴由制表符分隔的多行文本可填充单元格区域，表格按需扩展。「添加行」和「添加列」扩展表格；「删除行」和「删除列」删除当前单元格所在的行或列，始终保留至少一行一列。在窗口标题栏的「导出」菜单中选择「导出 CSV」。修改会自动保存，可从 Artifacts 重新打开表格。",
     "cell": "单元格 {0}"
   }
 }

@@ -1,3 +1,3 @@
-import { registerTableArtifactCatalog } from '../../sheets/browser/tableArtifactWorkspaces.js';
+import { registerArtifactTableCatalog } from '../../artifact/browser/artifactTableCatalog.js';
 
-registerTableArtifactCatalog('data');
+registerArtifactTableCatalog('data');

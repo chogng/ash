@@ -1,17 +1,19 @@
-# Artifacts 工作空间
+# Artifacts
 
 Artifacts 是 Sessions 的创作主页。七项新建入口打开 Chat 草稿，并在输入框下方显示对应的作品类型。Chat 生成的 Markdown 卡片返回来源对话，文件可从该对话用 Ash Docs 打开。其他已有作品卡片打开对应编辑器。主页保留窗口原有的对话侧栏，不注册单独的分类导航，也不显示编辑器标签栏。作品列表从生成文件目录、已有文档编辑器、画布文档和表格草稿派生，不持久化第二份目录。
 
 ## 作品页的承载关系
 
+作品是文件，canvas 是文件编辑器的承载区域，不表示 workspace。七种文件类型可复用编辑器和内部组件，文件内容及保存状态由对应模型持有。Artifacts 负责作品目录和打开入口。
+
 七类作品共用同一个 Sessions [`EditorPart`](../../browser/parts/editorPart.ts) 的产品页面组。打开作品时，`EditorPart` 切换活动 `EditorPane` 并给它分配正文区域。七类指作品类型，多个类型可以复用同一个 Pane 和正文组件。
 
-| 作品类型                   | `EditorPane`                                                                                                                           | 正文                                                                                                                                                  |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Docs                       | [`DocsArtifactPane`](../docs/browser/docsArtifactPane.ts) 或 [`MarkdownDocsArtifactPane`](../docs/browser/markdownDocsArtifactPane.ts) | 富文档或 Markdown 编辑器直接挂在 `.ash-docs-workspace-body`。                                                                                         |
-| Slides、Design、Whiteboard | [`ArtifactEditorPane`](browser/artifactEditor.ts)                                                                                      | `ArtifactEditorView` 保留对应工作区，`ArtifactEditorWidget` 组织编辑交互，[`DesignCanvasView`](../design/browser/designCanvasView.ts) 渲染 SVG 图层。 |
-| Motion                     | `ArtifactEditorPane`                                                                                                                   | 复用 Design 的 `DesignCanvasView`，以 Motion 模式打开，由 Motion contribution 提供时间线和关键帧编辑。                                                |
-| Sheet、Data                | `ArtifactEditorPane`                                                                                                                   | `ArtifactEditorView` 挂载 [`ArtifactTableWorkspace`](../sheets/browser/artifactTableWorkspace.ts)。                                                   |
+| 作品类型                   | `EditorPane`                                                                                                                           | 正文                                                                                                                                                                                                                                       |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Docs                       | [`DocsArtifactPane`](../docs/browser/docsArtifactPane.ts) 或 [`MarkdownDocsArtifactPane`](../docs/browser/markdownDocsArtifactPane.ts) | 富文档或 Markdown 编辑器直接挂在 `.ash-docs-workspace-body`。                                                                                                                                                                              |
+| Slides、Design、Whiteboard | [`ArtifactEditorPane`](browser/artifactEditor.ts)                                                                                      | `ArtifactEditorView` 保留对应工作区，`ArtifactEditorWidget` 组织编辑交互，[`DesignCanvasView`](../design/browser/designCanvasView.ts) 渲染 SVG 图层。                                                                                      |
+| Motion                     | `ArtifactEditorPane`                                                                                                                   | 复用 Design 的 `DesignCanvasView`，以 Motion 模式打开，由 Motion contribution 提供时间线和关键帧编辑。                                                                                                                                     |
+| Sheet、Data                | `ArtifactTableEditor`                                                                                                                  | [`ArtifactTableEditor`](browser/artifactTableEditor.ts) 按文件 URI 解析 `ArtifactTableModel`，以 `ArtifactTableEditorWidget` 复用基础 `Table` 编辑单元格。Sheets、Data 只注册各自目录入口，共用模型、文件服务和编辑器均归 Artifacts 持有。 |
 
 每个 Pane 通过 `titlebarContent` 提供自己的 [`ArtifactTitleBarWidget`](browser/artifactTitleBarWidget.ts)。桌面窗口的 `TitlebarPart` 将活动 Pane 的标题和操作放到 `EditorPart` 上方并对齐。标题栏和正文视觉上属于同一列，各自由窗口标题栏和编辑区挂载。左侧 `SessionsPart` 保留对话，作品注册的详情视图按需显示在 `EditorPart` 右侧停靠的 `AuxiliaryBarPart`。参见 [Sessions 布局](../../LAYOUT.md#creator-conversation-and-editor-composition)。
 

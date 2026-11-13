@@ -330,8 +330,6 @@ test("Artifacts host consumes mode contracts and modes do not import each other'
 	const root = join(contributions, 'artifact');
 	const modes = ['docs', 'design', 'whiteboard', 'slides', 'sheets', 'data', 'motion', 'brand', 'sites', 'make', 'prototype'];
 	const roots = modes.map(mode => join(contributions, mode));
-	const dataContribution = join(contributions, 'data/browser/data.contribution.ts');
-	const tableWorkspaces = join(contributions, 'sheets/browser/tableArtifactWorkspaces.ts');
 	const violations: string[] = [];
 	for (const file of productionTypeScriptFiles(root)) {
 		for (const target of localImports(file)) {
@@ -341,7 +339,6 @@ test("Artifacts host consumes mode contracts and modes do not import each other'
 	for (const modeRoot of roots) {
 		for (const file of productionTypeScriptFiles(modeRoot)) {
 			for (const target of localImports(file)) {
-				if (file === dataContribution && target === tableWorkspaces) continue;
 				if (roots.some(other => other !== modeRoot && target.startsWith(other + sep))) violations.push(sourceName(file) + ' -> ' + sourceName(target));
 			}
 		}

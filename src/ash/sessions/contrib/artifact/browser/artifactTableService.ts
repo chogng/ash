@@ -1,10 +1,11 @@
+import { ArtifactTableModel } from '../common/artifactTableModel.js';
+import { IArtifactTableService } from '../common/artifactTableService.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { mainWindow } from '../../../../base/browser/window.js';
-import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { URI } from '../../../../base/common/uri.js';
 import { isUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
@@ -14,73 +15,18 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
-import { isArtifactName } from '../../artifact/common/artifactWorkspace.js';
-
-export type TableArtifactKind = 'sheet' | 'data';
-
-export class ArtifactTableDraft {
-	private readonly titleValue;
-	public readonly title: IObservable<string | undefined>;
-
-	constructor(
-		public readonly id: string,
-		public readonly kind: TableArtifactKind,
-		private readonly cells: string[][],
-		public revision: string | undefined,
-		private readonly onChange: (draft: ArtifactTableDraft) => void,
-		title?: string,
-		public readonly createdAt?: number,
-	) {
-		this.titleValue = observableValue(this, title);
-		this.title = this.titleValue;
-	}
-
-	public get rows(): readonly (readonly string[])[] { return this.cells; }
-	public get columnCount(): number { return this.cells[0].length; }
-
-	public rename(title: string): void {
-		this.titleValue.set(title, undefined);
-		this.onChange(this);
-	}
-
-	public setCell(row: number, column: number, value: string): void {
-		if (this.cells[row][column] === value) { return; }
-		this.cells[row][column] = value;
-		this.onChange(this);
-	}
-
-	public addRow(): void {
-		this.cells.push(Array<string>(this.columnCount).fill(''));
-		this.onChange(this);
-	}
-
-	public addColumn(): void {
-		for (const row of this.cells) { row.push(''); }
-		this.onChange(this);
-	}
-}
-
-export const IArtifactTableDrafts = createServiceIdentifier<IArtifactTableDrafts>('artifactTableDrafts');
-
-export interface IArtifactTableDrafts {
-	readonly drafts: IObservable<ReadonlyMap<string, ArtifactTableDraft>>;
-	readonly isRestoring: IObservable<boolean>;
-	readonly ready: Promise<void>;
-	resource(draft: ArtifactTableDraft): URI;
-	rename(draft: ArtifactTableDraft, title: string): Promise<void>;
-	delete(draft: ArtifactTableDraft): Promise<void>;
-}
+import { isArtifactName } from '../common/artifactWorkspace.js';
 
 /** Owns editable tables and their workspace-local copies. The gallery lists these same drafts. */
-export class ArtifactTableDrafts extends Disposable implements IArtifactTableDrafts {
+export class ArtifactTableService extends Disposable implements IArtifactTableService {
 	private readonly home: URI;
-	private readonly catalog = observableValue<ReadonlyMap<string, ArtifactTableDraft>>(this, new Map());
-	public readonly drafts: IObservable<ReadonlyMap<string, ArtifactTableDraft>> = this.catalog;
+	private readonly catalog = observableValue<ReadonlyMap<string, ArtifactTableModel>>(this, new Map());
+	public readonly drafts: IObservable<ReadonlyMap<string, ArtifactTableModel>> = this.catalog;
 	public readonly ready: Promise<void>;
 	private readonly restoring = observableValue(this, true);
 	public readonly isRestoring: IObservable<boolean> = this.restoring;
-	private readonly pending = new Set<ArtifactTableDraft>();
-	private readonly deleting = new Set<ArtifactTableDraft>();
+	private readonly pending = new Set<ArtifactTableModel>();
+	private readonly deleting = new Set<ArtifactTableModel>();
 	private saving: Promise<void> | undefined;
 	private readonly saveSoon = this._register(new RunOnceScheduler(() => {
 		void this.flush().catch(error => {
@@ -112,7 +58,7 @@ export class ArtifactTableDrafts extends Disposable implements IArtifactTableDra
 		}));
 	}
 
-	private readonly queueSave = (draft: ArtifactTableDraft): void => {
+	private readonly queueSave = (draft: ArtifactTableModel): void => {
 		if (this.deleting.has(draft)) return;
 		this.pending.add(draft);
 		this.saveSoon.schedule();
@@ -123,7 +69,7 @@ export class ArtifactTableDrafts extends Disposable implements IArtifactTableDra
 			if (error instanceof FileNotFoundError) { return []; }
 			throw error;
 		});
-		const restored = new Map<string, ArtifactTableDraft>();
+		const restored = new Map<string, ArtifactTableModel>();
 		for (const entry of entries) {
 			if (this.isDisposed) { return; }
 			if (entry.kind !== FileKind.File || !entry.name.endsWith('.json')) { continue; }
@@ -137,7 +83,7 @@ export class ArtifactTableDrafts extends Disposable implements IArtifactTableDra
 					|| value.createdAt !== undefined && (typeof value.createdAt !== 'number' || !Number.isFinite(value.createdAt) || value.createdAt < 0)) {
 					throw new TypeError('Invalid artifact table draft');
 				}
-				restored.set(id, new ArtifactTableDraft(id, value.kind, value.rows, revision, this.queueSave, value.title, value.createdAt as number | undefined));
+				restored.set(id, new ArtifactTableModel(id, value.kind, value.rows, revision, this.queueSave, value.title, value.createdAt as number | undefined));
 			} catch (error) {
 				this.log.warn('creator', 'Could not restore table draft', entry.resource.toString(), error);
 			}
@@ -145,15 +91,15 @@ export class ArtifactTableDrafts extends Disposable implements IArtifactTableDra
 		if (!this.isDisposed) this.catalog.set(restored, undefined);
 	}
 
-	public resource(draft: ArtifactTableDraft): URI { return this.home.joinPathSegment(`${draft.id}.json`); }
+	public resource(draft: ArtifactTableModel): URI { return this.home.joinPathSegment(`${draft.id}.json`); }
 
-	public async rename(draft: ArtifactTableDraft, title: string): Promise<void> {
+	public async rename(draft: ArtifactTableModel, title: string): Promise<void> {
 		if (this.catalog.get().get(draft.id) !== draft || this.deleting.has(draft)) return;
 		draft.rename(title);
 		await this.flush();
 	}
 
-	public async delete(draft: ArtifactTableDraft): Promise<void> {
+	public async delete(draft: ArtifactTableModel): Promise<void> {
 		if (this.catalog.get().get(draft.id) !== draft || this.deleting.has(draft)) return;
 		this.deleting.add(draft);
 		try {

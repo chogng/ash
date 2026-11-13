@@ -74,6 +74,7 @@ import './contrib/docs/browser/docs.contribution.js';
 import './contrib/design/browser/design.contribution.js';
 import './contrib/whiteboard/browser/whiteboard.contribution.js';
 import './contrib/slides/browser/slides.contribution.js';
+import './contrib/artifact/browser/artifactTable.contribution.js';
 import './contrib/sheets/browser/sheets.contribution.js';
 import './contrib/data/browser/data.contribution.js';
 import './contrib/motion/browser/motion.contribution.js';
