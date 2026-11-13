@@ -51,3 +51,7 @@ pub use types::SourceRevision;
 #[cfg(test)]
 #[path = "codebase_tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+#[path = "source_read_tests.rs"]
+mod source_read_tests;
