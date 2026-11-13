@@ -1,3 +1,4 @@
+import type { ImageViewCompletion } from '../../../../platform/imageView/common/imageView.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -13,7 +14,12 @@ export interface CodeImageSnapshot {
 	readonly fontSize: number;
 	readonly tabSize: number;
 }
-export interface ImageEditorView { readonly html: string; readonly state?: unknown; }
+export interface ImageEditorView {
+	readonly html: string;
+	readonly state?: unknown;
+	readonly renderer?: 'builtin';
+	readonly mount?: (image: Uint8Array | undefined, complete: (result: ImageViewCompletion) => Promise<boolean>, signal: AbortSignal) => Promise<IDisposable>;
+}
 interface ImageEditorProviderIdentity {
 	readonly id: string;
 	readonly displayName: string;

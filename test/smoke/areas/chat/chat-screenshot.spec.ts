@@ -26,7 +26,7 @@ test('Agents screenshot shortcut survives initial navigation, reload and reopeni
 async function screenOverlay(application: ElectronApplication, chinese = false): Promise<Page> {
 	await expect.poll(() => application.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBeGreaterThan(0);
 	const page = application.windows().find(page => page.url().includes('/imageView/imageView.html'))!;
-	await expect(page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toBeVisible();
+	await expect(page.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toBeVisible();
 	return page;
 }
 
@@ -59,9 +59,9 @@ test('standalone capture copies on Enter while Chat stays closed', { tag: ['@ele
 	try {
 		await workbench.page.keyboard.press(screenshotShortcut);
 		const overlay = await screenOverlay(application);
-		await overlay.frameLocator('iframe').getByRole('button', { name: 'Entire screen', exact: true }).click();
-		await expect(overlay.frameLocator('iframe').getByRole('button', { name: 'Copy', exact: true })).toHaveClass(/primary/);
-		const surface = overlay.frameLocator('iframe').getByRole('group', { name: 'Frozen screen and region selection' });
+		await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
+		await expect(overlay.getByRole('button', { name: 'Copy', exact: true })).toHaveClass(/primary/);
+		const surface = overlay.getByRole('group', { name: 'Frozen screen and region selection' });
 		await surface.press('Enter').catch(error => { if (!overlay.isClosed()) throw error; });
 		await expect.poll(() => application.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
 		expect(await application.evaluate(async ({ clipboard }) => {
@@ -159,12 +159,12 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Screenshot draft');
 			await input.press(screenshotShortcut);
 			overlay = await screenOverlay(desktop, chinese);
-			const image = (await overlay.frameLocator('iframe').locator('canvas').boundingBox())!;
+			const image = (await overlay.locator('canvas').boundingBox())!;
 			await overlay.mouse.move(image.x + 100, image.y + 150);
 			await overlay.mouse.down();
 			await overlay.mouse.move(image.x + 500, image.y + 350, { steps: 4 });
 			await overlay.mouse.up();
-			const toolbar = overlay.frameLocator('iframe').getByRole('group', { name: chinese ? '截图工具' : 'Screenshot tools' });
+			const toolbar = overlay.getByRole('group', { name: chinese ? '截图工具' : 'Screenshot tools' });
 			await expect(toolbar).toBeVisible();
 			expect(await toolbar.getByRole('button').allTextContents()).toEqual(Array(14).fill(''));
 			// Native image views inherit their host CSP; a browser fixture alone cannot catch blocked inline fonts.
@@ -176,7 +176,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const raw = await page.evaluate(async () => [...(await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:host:screenshot', { x: 0, y: 0, width: 80, height: 60 }) as Uint8Array).slice(0, 8)]);
 			expect(raw).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
 			expect(desktop.windows().filter(page => page.url().includes('/imageView/imageView.html'))).toHaveLength(overlayCount);
-			const pixels = await overlay.frameLocator('iframe').locator('canvas').evaluate(canvas => {
+			const pixels = await overlay.locator('canvas').evaluate(canvas => {
 				const image = canvas as HTMLCanvasElement;
 				const context = image.getContext('2d')!;
 				return [0.25, 0.75].map(x => [...context.getImageData(Math.floor(image.width * x), Math.floor(image.height / 2), 1, 1).data]);
@@ -191,7 +191,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const path = testInfo.outputPath(`manual-capture-${locale}.png`);
 			await overlay.screenshot({ path });
 			await testInfo.attach('synthetic desktop selection', { path, contentType: 'image/png' });
-			await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+			await overlay.getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
 			await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
 			await expect(input).toBeFocused();
 			await expect(page.getByRole('button', { name: chinese ? '预览 截图' : 'Preview Screenshot', exact: true })).toBeVisible();
@@ -203,11 +203,11 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
 				await input.press(screenshotShortcut);
 				overlay = await screenOverlay(desktop, chinese);
-				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
+				await overlay.getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
 				await desktop.evaluate(({ dialog }) => { dialog.showSaveDialog = async () => ({ canceled: true, filePath: '' }); });
-				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '保存' : 'Save', exact: true }).click();
-				await expect(overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '保存' : 'Save', exact: true })).toBeEnabled();
-				await expect(overlay.frameLocator('iframe').getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toBeVisible();
+				await overlay.getByRole('button', { name: chinese ? '保存' : 'Save', exact: true }).click();
+				await expect(overlay.getByRole('button', { name: chinese ? '保存' : 'Save', exact: true })).toBeEnabled();
+				await expect(overlay.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toBeVisible();
 				const destination = testInfo.outputPath('saved-screenshot.png');
 				const savedDialogs = await desktop.evaluateHandle(({ dialog }, path) => {
 					const calls: { title?: string; defaultPath?: string; }[] = [];
@@ -218,20 +218,20 @@ for (const locale of ['en', 'zh-CN']) {
 					};
 					return calls;
 				}, destination);
-				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '保存' : 'Save', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+				await overlay.getByRole('button', { name: chinese ? '保存' : 'Save', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
 				await expect.poll(() => readFile(destination).then(bytes => [...bytes.subarray(0, 8)]).catch(error => { if (error.code === 'ENOENT') return []; throw error; })).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
 				expect(await savedDialogs.jsonValue()).toEqual([{ title: chinese ? '保存图像' : 'Save image', defaultPath: 'Image.png' }]);
 				await savedDialogs.dispose();
 				await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
 				await input.press(screenshotShortcut);
 				overlay = await screenOverlay(desktop, chinese);
-				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
+				await overlay.getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
 				const previous = overlay;
-				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '重新截图' : 'Retake', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+				await overlay.getByRole('button', { name: chinese ? '重新截图' : 'Retake', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
 				await expect.poll(() => previous.isClosed()).toBe(true);
 				overlay = await screenOverlay(desktop, chinese);
-				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
-				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '复制' : 'Copy', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+				await overlay.getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
+				await overlay.getByRole('button', { name: chinese ? '复制' : 'Copy', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
 				await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
 				const copied = await desktop.evaluate(async ({ clipboard }) => {
 					for (const item of await clipboard.read()) {
@@ -477,7 +477,7 @@ test('built-in code images annotate and copy in a native window without screen p
 	try {
 		await workbench.quickaccess.runCommand('snapshot.code');
 		const overlay = await screenOverlay(desktop);
-		const frame = overlay.frameLocator('iframe');
+		const frame = overlay;
 		const toolbar = frame.getByRole('group', { name: 'Screenshot tools' });
 		await expect(toolbar).toBeVisible();
 		await expect.poll(() => toolbar.evaluate(element => [...element.ownerDocument.fonts].some(font => font.family.includes('Ash Snapshot Icons') && font.status === 'loaded'))).toBe(true);

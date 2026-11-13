@@ -37,7 +37,7 @@ test('app window screenshot captures a separate synthetic application and preser
 			await picker.press('Enter');
 			await expect.poll(() => desktop.windows().filter(window => window.url().includes('/imageView/imageView.html')).length).toBe(1);
 			const overlay = desktop.windows().find(window => window.url().includes('/imageView/imageView.html'))!;
-			await expect(overlay.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true })).toBeVisible();
+			await expect(overlay.getByRole('dialog', { name: 'Screen Capture', exact: true })).toBeVisible();
 			return overlay;
 		};
 		let overlay = await pickWindow();
@@ -47,8 +47,8 @@ test('app window screenshot captures a separate synthetic application and preser
 		await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Keep the app screenshot draft');
 		await expect(page.getByRole('button', { name: 'Preview Screenshot', exact: true })).toHaveCount(0);
 		overlay = await pickWindow();
-		await overlay.frameLocator('iframe').getByRole('button', { name: 'Entire screen', exact: true }).click();
-		const pixels = await overlay.frameLocator('iframe').locator('canvas').evaluate(element => {
+		await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
+		const pixels = await overlay.locator('canvas').evaluate(element => {
 			const canvas = element as HTMLCanvasElement;
 			return { width: canvas.width, height: canvas.height, pixel: [...canvas.getContext('2d')!.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data] };
 		});
@@ -57,7 +57,7 @@ test('app window screenshot captures a separate synthetic application and preser
 		expect(pixels.pixel[2]).toBeGreaterThan(pixels.pixel[0] + 80);
 		expect(pixels.pixel[3]).toBe(255);
 		await testInfo.attach('synthetic app screenshot editor', { body: await overlay.screenshot(), contentType: 'image/png' });
-		await overlay.frameLocator('iframe').getByRole('button', { name: 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+		await overlay.getByRole('button', { name: 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
 		await expect.poll(() => desktop.windows().filter(window => window.url().includes('/imageView/imageView.html')).length).toBe(0);
 		await expect(input).toBeFocused();
 		await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Keep the app screenshot draft');

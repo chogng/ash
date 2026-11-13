@@ -1,5 +1,6 @@
+import type { ImageViewCompletion } from '../../../../platform/imageView/common/imageView.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
-import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { IHostService } from '../../host/browser/host.js';
 import { IImageEditorService, type ImageEditorOptions } from '../common/imageEditorService.js';
@@ -22,7 +23,7 @@ export class BrowserImageEditorService extends ImageEditorService {
 		try {
 			const resolved = await this.resolveInput(options, AbortSignal.any([signal, controller.signal]));
 			return await new Promise<VSBuffer | undefined>((resolve, reject) => {
-				let frame: ReturnType<typeof createImageViewFrame> | undefined;
+				let frame: IDisposable | undefined;
 				let finished = false;
 				const finish = (image?: Uint8Array, error?: unknown): void => {
 					if (finished) return;
@@ -37,11 +38,12 @@ export class BrowserImageEditorService extends ImageEditorService {
 						const image = options?.image?.buffer ?? (options?.code ? undefined : (await this.host.getScreenshot())?.buffer);
 						if (finished) return;
 						if (!image && !options?.code) { finish(); return; }
-						frame = createImageViewFrame(document, resolved.displayName, resolved.view.html, {
+						const input = {
 							defaultAction: options?.defaultAction ?? 'attach',
 							image, code: options?.code, state: resolved.view.state, theme: readImageEditorTheme(document),
 							colorScheme: (document.querySelector('.ash-workbench') ?? document.body)?.getAttribute('data-color-scheme') ?? 'dark',
-						}, async result => {
+						};
+						const complete = async (result: ImageViewCompletion): Promise<boolean> => {
 							if (result.kind === 'error') { finish(undefined, new Error(result.message)); return true; }
 							if (result.kind === 'retake') {
 								frame?.dispose(); frame = undefined;
@@ -57,7 +59,11 @@ export class BrowserImageEditorService extends ImageEditorService {
 							}
 							finish(result.kind === 'attach' ? result.image : undefined);
 							return true;
-						}, () => { });
+						};
+						if (resolved.view.mount) {
+							const mounted = await resolved.view.mount(image, complete, resolved.signal);
+							if (finished) mounted.dispose(); else frame = mounted;
+						} else frame = createImageViewFrame(document, resolved.displayName, resolved.view.html, input, complete, () => { });
 					} catch (error) { finish(undefined, error); }
 				};
 				if (resolved.signal.aborted) finish(); else void open();

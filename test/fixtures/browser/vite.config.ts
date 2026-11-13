@@ -1,4 +1,3 @@
-import { screenshotToolViewPlugin } from '../../../build/desktop/vite/screenshotToolViewPlugin.js';
 import { globSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { resolve } from "node:path";
@@ -72,7 +71,7 @@ export default defineConfig({
 	css: { postcss: { plugins: [] } },
 	resolve: { alias: rendererDependencyAliases },
 	root,
-	plugins: [screenshotToolViewPlugin(root), fixturePageUrls(), fixtureBaselineSources(), webUpdatePlugin(), workbenchEntryPlugin('/themeEditor.html', [...fixturePages.map(path => ({
+	plugins: [fixturePageUrls(), fixtureBaselineSources(), webUpdatePlugin(), workbenchEntryPlugin('/themeEditor.html', [...fixturePages.map(path => ({
 		url: '/' + basename(path), inputFile: resolve(root, path), sourceFile: resolve(root, path),
 	})), ...themePreviewPages])],
 	server: {

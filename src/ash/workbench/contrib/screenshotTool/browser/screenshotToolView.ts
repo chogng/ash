@@ -2,39 +2,21 @@ import { addDisposableListener } from '../../../../base/browser/dom.js';
 import type { ImageViewCompletion as ImageEditorCompletion } from '../../../../platform/imageView/common/imageView.js';
 import type { CodeImageSnapshot } from '../../../services/imageEditor/common/imageEditorService.js';
 import type { readImageEditorTheme } from '../../../services/imageEditor/browser/imageEditorTheme.js';
-interface ImageEditorInput {
+export interface ScreenshotToolInput {
 	readonly image?: Uint8Array;
 	readonly code?: CodeImageSnapshot;
 	readonly defaultAction: 'copy' | 'attach';
 	readonly theme: ReturnType<typeof readImageEditorTheme>;
 	readonly colorScheme: string;
-	readonly state?: { readonly locale: string; readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>; readonly help: string; readonly accessibilityHints?: boolean; readonly code?: Parameters<typeof renderCodeImage>[2]; };
+	readonly state?: { readonly help: string; readonly accessibilityHints?: boolean; readonly code?: Parameters<typeof renderCodeImage>[2]; };
 }
 import { ScreenshotAnnotationEditor } from './screenshotAnnotation.js';
 import { renderCodeImage } from './codeImage.js';
-import { setNlsMessages } from '../../../../nls.js';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
 
-const lifetime = new DisposableStore();
-let editor: ScreenshotAnnotationEditor | undefined;
-let completion: { resolve(value: boolean): void; reject(error: Error): void; } | undefined;
-let initialized = false;
-lifetime.add(addDisposableListener<MessageEvent>(window, 'message', event => {
-	if (event.source !== parent || !event.data || typeof event.data !== 'object') return;
-	if (event.data.type === 'completed') {
-		if (event.data.error) completion?.reject(new Error(event.data.error)); else completion?.resolve(event.data.accepted === true);
-		completion = undefined;
-	} else if (event.data.type === 'initialize' && !initialized) {
-		initialized = true;
-		void open(event.data as ImageEditorInput).catch(error => { parent.postMessage({ type: 'complete', result: { kind: 'error', message: String(error).slice(0, 4096) } }, '*'); });
-	}
-}));
-lifetime.add(addDisposableListener(window, 'pagehide', () => { editor?.dispose(); lifetime.dispose(); }));
-parent.postMessage({ type: 'initialize' }, '*');
-
-async function open(input: ImageEditorInput): Promise<void> {
+/** Mounts the product component directly; extension HTML keeps its separate sandbox. */
+export async function mountScreenshotTool(document: Document, input: ScreenshotToolInput, complete: (result: ImageEditorCompletion) => Promise<boolean>, signal: AbortSignal) {
 	const state = input.state;
-	setNlsMessages(state?.locale ?? 'en', state?.bundles ?? {});
+	signal.throwIfAborted();
 	const { colors, metrics } = input.theme;
 	const appearance = {
 		foreground: colors.foreground,
@@ -58,20 +40,18 @@ async function open(input: ImageEditorInput): Promise<void> {
 		'large-radius': metrics.largeRadius,
 		shadow: input.theme.shadow,
 	};
-	for (const [key, value] of Object.entries(appearance)) document.documentElement.style.setProperty(`--snapshot-${key}`, value);
-	for (const [index, value] of metrics.spacing.entries()) document.documentElement.style.setProperty(`--snapshot-spacing-${index + 1}`, value);
-	document.documentElement.dataset.colorScheme = input.colorScheme;
 	const image = input.code ? await renderCodeImage(document, input.code, state!.code!) : input.image!;
-	editor = await ScreenshotAnnotationEditor.create(document, image, {
+	const editor = await ScreenshotAnnotationEditor.create(document, image, {
 		defaultAction: input.defaultAction,
 		accessibilityHints: state?.accessibilityHints !== false,
 		help: state?.help ?? '',
 		selectEntire: !!input.code,
 		description: input.code ? input.code.lines.map(line => line.map(token => token.text).join('')).join('\n') : undefined,
-		complete: (result: ImageEditorCompletion) => new Promise<boolean>((resolve, reject) => {
-			completion = { resolve, reject };
-			parent.postMessage({ type: 'complete', result }, '*');
-		}),
+		complete,
 	});
-	parent.postMessage({ type: 'ready' }, '*');
+	if (signal.aborted) { editor.dispose(); signal.throwIfAborted(); }
+	for (const [key, value] of Object.entries(appearance)) editor.element.style.setProperty(`--snapshot-${key}`, value);
+	for (const [index, value] of metrics.spacing.entries()) editor.element.style.setProperty(`--snapshot-spacing-${index + 1}`, value);
+	editor.element.dataset.colorScheme = input.colorScheme;
+	return editor;
 }

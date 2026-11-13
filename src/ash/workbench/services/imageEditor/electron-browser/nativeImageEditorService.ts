@@ -29,6 +29,7 @@ export class NativeImageEditorService extends ImageEditorService {
 			const colorScheme = root?.getAttribute('data-color-scheme');
 			const request: ImageViewRequest = {
 				id, title: resolved.displayName, html: resolved.view.html,
+				...(resolved.view.renderer ? { renderer: resolved.view.renderer } : {}),
 				source: options?.image ? 'image' : options?.code ? 'content' : 'screen',
 				...(options?.image ? { image: options.image.buffer } : {}),
 				input: {

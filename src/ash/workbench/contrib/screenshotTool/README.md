@@ -4,7 +4,7 @@
 
 Chat、独立区域截图和代码图片通过 `ScreenshotToolService` 进入同一标注界面。服务持有配置与请求取消，`screenshotAnnotation.ts` 持有冻结图片、选区、绘制和撤销历史，`screenshotSelection.ts` 处理图片坐标。支持矩形、箭头、画笔、文字、马赛克、撤销、复制、保存与加入 Chat。Chat 发起的截图继承原草稿取消信号；独立截图在请求加入 Chat 后才获取附件目标。
 
-`codeImage.ts` 根据截图配置渲染代码图片。`screenshotToolView.ts` 启动隔离视图，使用产品 NLS、主题快照和本地字体资源。构建插件打包同一组脚本和样式，Browser 与原生窗口按需加载。内置截图直接提供呈现，不经过扩展 Provider 选择，多个扩展默认注册不会影响内置截图。
+`codeImage.ts` 根据截图配置渲染代码图片。`screenshotToolView.ts` 直接挂载标注组件，使用当前 Renderer 的 NLS、主题快照和本地字体资源；主题变量只写入组件根节点。脚本、CSS 和字体沿标准 Vite 模块依赖构建，没有专用虚拟模块或内联 HTML 打包。Browser 在当前文档挂载，桌面截图通过标准 imageView Renderer 入口在原生窗口挂载，同一份组件实现处理选区与标注。内置截图不经过扩展 Provider 选择，多个扩展默认注册不会影响它。
 
 通用 `services/imageEditor` 保留外部 Provider 注册、代码图片快照、主题数据和隔离窗口承载。`platform/imageView` 持有原生呈现窗口、复制和文件输出；权限检查与系统操作由 Native 层提供。Snapshot 扩展及其启动链已移除。
 
@@ -22,7 +22,7 @@ VS Code 的普通截图通过 `webContents.capturePage()` 获取自身窗口，�
 
 Setup 服务每个 Workbench 窗口只打开一份界面，操作取消或窗口释放时关闭。设置跳转、返回复查、受限提示和显式重启共用 Ash Dialog、Button 与无障碍入口；权限状态始终重新读取 OS。授权后关闭 Setup，截图由用户重新发起。
 
-全局快捷键在已授权时继续由 Main 直接采集桌面，保留后台取屏行为。权限不足时回到原 Workbench 命令，由该窗口显示 Setup。标注隔离帧只接收图片，通用图片协议没有权限卡片、设置跳转、拖拽应用或复制应用路径的能力。
+全局快捷键在已授权时继续由 Main 直接采集桌面，保留后台取屏行为。权限不足时回到原 Workbench 命令，由该窗口显示 Setup。标注组件只接收图片，外部扩展 HTML 继续由通用图片窗口的隔离 iframe 承载。通用图片协议没有权限卡片、设置跳转、拖拽应用或复制应用路径的能力。
 
 Pin 常驻贴图尚未实现。现有窗口已有置顶机制；常驻贴图需要独立于截图交互的窗口生命周期，避免被下一次截图、草稿取消或发起窗口关闭一并释放。
 

@@ -1,5 +1,5 @@
 {
-  "files": ["src/typings/thenable.d.ts", "src/typings/screenshotToolView.d.ts"],
+  "files": ["src/typings/thenable.d.ts"],
   "compilerOptions": {
     "strict": true,
     "experimentalDecorators": true,

@@ -96,8 +96,8 @@ pnpm icons:build
 
 ### 内置截图工具栏图标
 
-- 内置截图工具栏运行在隔离 Webview 中，不能继承宿主文档的字体，也不能导入宿主 UI 模块；它使用视图内 `AshSnapshotIcons.woff2` 和独立的[语义映射清单](../../../src/ash/workbench/contrib/screenshotTool/browser/media/icons.json)。这份字体是隔离视图的资源加载选择，不是截图功能或系统权限的要求。
-- 只调整截图图标时，修改该清单的 `source`，保留既有 `id` 和 `unicode`；例如仅替换 `pen` 的图稿，可将 SVG 放入 `src/ash/workbench/contrib/screenshotTool/browser/media/icons/pen.svg` 并将其 `source` 指向 `icons/pen.svg`。需要专属外观时使用视图内 SVG，不修改 `resources/icons/` 的共享原稿，也不重建 IDE 或 Sessions 字体；仍复用共享外观时可继续引用现有原稿。
+- 内置截图工具栏直接挂载在 Workbench 或原生截图 Renderer 中，使用组件 CSS 加载的 `AshSnapshotIcons.woff2` 和独立的[语义映射清单](../../../src/ash/workbench/contrib/screenshotTool/browser/media/icons.json)。这份字体是截图组件的资源选择，不是截图功能或系统权限的要求。
+- 只调整截图图标时，修改该清单的 `source`，保留既有 `id` 和 `unicode`；例如仅替换 `pen` 的图稿，可将 SVG 放入 `src/ash/workbench/contrib/screenshotTool/browser/media/icons/pen.svg` 并将其 `source` 指向 `icons/pen.svg`。需要专属外观时使用组件内 SVG，不修改 `resources/icons/` 的共享原稿，也不重建 IDE 或 Sessions 字体；仍复用共享外观时可继续引用现有原稿。
 - 按钮的语义绑定由 [screenshotAnnotation.ts](../../../src/ash/workbench/contrib/screenshotTool/browser/screenshotAnnotation.ts) 消费清单，字体、尺寸和布局由 [screenshotAnnotation.css](../../../src/ash/workbench/contrib/screenshotTool/browser/media/screenshotAnnotation.css) 拥有。工具栏保持纯图标按钮，保留本地化 tooltip、可访问名称、焦点和状态；仅更换图稿无需逐按钮修改字符。
 
 使用已安装本 skill `requirements.txt` 的隔离 Python 环境，从仓库根目录重建；先检查生成预览和验证结果，再复制字体成品：

@@ -106,7 +106,7 @@ macOS 权限不足时打开 Setup。允许设置跳转、只读复查、返回�
 
 `screenshotToolView.ts` 启动用户确认的增强编辑界面；从 Ash 自有 Snapshot 实现迁移，保持画布、坐标和历史模型，不复制 VS Code 标注实现。`imageEditorSelection.ts` 将代码快照从扩展适配器归还图片编辑领域，内置命令和扩展适配器复用同一读取逻辑。`snapshot.code`、`snapshot.code.*` 和截图快捷键配置保留现有身份；设置导航改为 Workbench 的 Screenshot 分类。
 
-`extensions/snapshot` 已移除，产品构建直接打包隔离界面；默认截图不再经过扩展目录、SDK 或 Worker 激活。字体、主题、无障碍帮助与中英文文案随内置界面加载。Pin、OCR 与翻译不在本次迁移范围。
+`extensions/snapshot` 已移除，产品构建通过标准 Renderer 模块加载内置组件；默认截图不再经过扩展目录、SDK 或 Worker 激活。字体、主题、无障碍帮助与中英文文案随内置界面加载。Pin、OCR 与翻译不在本次迁移范围。
 
 权限职责归位后，32 项定向单元／浏览器测试与 10 个 Ash Desktop 自托管场景分批通过。覆盖通用图片协议拒绝旧权限卡片、隔离帧忽略权限操作、桌面截图准入与取消、Chat 命令回退、标注导出、中英文 Setup、权限不足时的后台快捷键，以及已有图片和代码图片不取屏。Main、Renderer、Common、自动化类型、七环境分层、构建和 CSS 检查通过，中文缺失项为零。4 个真实桌面／其他应用像素场景因测试宿主缺少 macOS 屏幕录制权限跳过，保留根目录既有实机验收条目。
 
@@ -120,7 +120,7 @@ macOS 权限不足时打开 Setup。允许设置跳转、只读复查、返回�
 | `screenshotTool/browser/screenshotToolService.ts`，仅上游原有                                  | 迁入内置界面生成、截图会话取消与编辑编排；Chat 和代码图片直接消费该服务。                 |
 | `screenshotTool/browser/screenshotAnnotation.ts`、`media/screenshotAnnotation.css`，仅上游原有 | 将 Ash 自有画布编辑器、标注历史和绘制实现原地迁入，无第二份编辑模型。                     |
 | `screenshotTool/browser/screenshotSelection.ts`，仅上游原有                                    | 迁入现有图片坐标与裁剪几何，保留反向框选、像素取整和边界行为。                            |
-| `screenshotTool/browser/screenshotToolView.ts`、代码图片及配置，Ash 增强职责                   | 隔离视图启动、代码图片渲染与内置截图设置随截图贡献归位。                                  |
+| `screenshotTool/browser/screenshotToolView.ts`、代码图片及配置，Ash 增强职责                   | 直接挂载标注组件、代码图片渲染与内置截图设置随截图贡献归位。                              |
 | `services/imageEditor`，Ash 通用服务                                                           | 保留外部 Provider 注册、代码图片快照、主题数据和隔离窗口承载；退出内置截图默认 Provider。 |
 | Chat 调用方、Native imageView 产品入口、构建插件、测试与文档                                   | 同批迁移真实依赖；平台权限、IPC 校验、窗口与输出 owner 保持不变。                         |
 

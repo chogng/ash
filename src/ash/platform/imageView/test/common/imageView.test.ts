@@ -54,3 +54,9 @@ test('frozen window images require PNG bytes and cannot be smuggled into screen 
 	assert.equal(validateImageViewInitialization({ image: request.image, presentation: request, locale: 'en', bundles: {} }).image, request.image);
 	for (const invalid of [{ ...request, image: undefined }, { ...request, image: new Uint8Array() }, { ...request, source: 'screen' }, { ...request, source: 'content' }]) assert.throws(() => validateImageViewRequest(invalid));
 });
+
+test('bundled renderer requests use a fixed renderer identity and exclude provider HTML', () => {
+	const request = { ...presentation(), html: '', renderer: 'builtin' };
+	assert.equal(validateImageViewRequest(request), request);
+	for (const invalid of [{ ...request, renderer: 'file:///private.js' }, { ...request, html: '<script>host()</script>' }]) assert.throws(() => validateImageViewRequest(invalid));
+});

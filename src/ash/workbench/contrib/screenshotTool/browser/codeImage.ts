@@ -1,7 +1,7 @@
 import type { CodeImageSnapshot } from '../../../services/imageEditor/common/imageEditorService.js';
 import { localize } from '../../../../nls.js';
 
-interface CodeImageOptions {
+export interface CodeImageOptions {
 	readonly padding: number;
 	readonly scale: number;
 	readonly background: string;

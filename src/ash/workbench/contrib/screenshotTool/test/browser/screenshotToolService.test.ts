@@ -12,7 +12,7 @@ suite('chatScreenshot browser component', () => {
 		await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
 		await page.getByRole('menuitem', { name: chinese ? '搜索附件' : 'Search attachments', exact: true }).click();
 		await page.getByRole('dialog').getByRole('option', { name: chinese ? '截图…' : 'Screenshot…', exact: true }).click();
-		await expect(page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toBeVisible();
+		await expect(page.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toBeVisible();
 	}
 
 	test('the existing screenshot shortcut opens the built-in editor and preserves the draft', async function () {
@@ -23,14 +23,14 @@ suite('chatScreenshot browser component', () => {
 		await input.focus();
 		await page.keyboard.insertText('Shortcut draft');
 		await page.keyboard.press(process.platform === 'darwin' ? 'Control+Meta+A' : 'Control+Alt+S');
-		const overlay = page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true });
+		const overlay = page.getByRole('dialog', { name: 'Screen Capture', exact: true });
 		await expect(overlay).toBeVisible();
 		await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
 		await expect(overlay.getByRole('button', { name: 'Copy', exact: true })).toHaveClass(/primary/);
 		await expect(overlay.getByRole('button', { name: 'Add to Chat', exact: true })).not.toHaveClass(/primary/);
 		expect(await page.evaluate(() => window.ashScreenshotIntegration.state().pending)).toBe(false);
 		await page.keyboard.press('Escape');
-		await expect(page.locator('iframe')).toHaveCount(0);
+		await expect(page.locator('.ash-screenshot-overlay')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashScreenshotIntegration.draft())).toBe('Shortcut draft');
 	});
 
@@ -39,7 +39,7 @@ suite('chatScreenshot browser component', () => {
 		await openFixture(page, '/chatInput.html?screenshotFixture=1&inlineCode=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await page.getByRole('button', { name: 'Create code image', exact: true }).click();
-		const overlay = page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true });
+		const overlay = page.getByRole('dialog', { name: 'Screen Capture', exact: true });
 		await expect(overlay).toBeVisible();
 		const greenPixels = await overlay.locator('canvas').evaluate(canvas => {
 			const element = canvas as HTMLCanvasElement;
@@ -51,7 +51,7 @@ suite('chatScreenshot browser component', () => {
 		expect(greenPixels).toBeGreaterThan(10);
 		const surface = overlay.getByRole('group', { name: 'Frozen screen and region selection' });
 		await surface.press('Alt+F2');
-		const summary = page.frameLocator('iframe').getByRole('dialog', { name: 'Screenshot selection', exact: true });
+		const summary = page.getByRole('dialog', { name: 'Screenshot selection', exact: true });
 		await expect(summary.getByRole('textbox')).toHaveValue(/const unsaved = 42;\nreturn unsaved;/);
 		await page.keyboard.press('Escape');
 		await overlay.getByRole('button', { name: 'Add to Chat', exact: true }).click();
@@ -61,16 +61,14 @@ suite('chatScreenshot browser component', () => {
 		expect(await page.evaluate(() => window.ashScreenshotIntegration.state().calls)).toBe(0);
 	});
 
-	test('retiring the screenshot service closes its isolated view and prevents further capture', async function () {
+	test('retiring the screenshot service closes its direct component and prevents further capture', async function () {
 		const { page } = browserTests;
 		await openFixture(page, '/chatInput.html?screenshotFixture=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await openScreenshot(page);
-		expect(await page.frameLocator('iframe').locator('body').evaluate(() => {
-			try { return !!parent.document; } catch { return false; }
-		})).toBe(false);
-		await page.evaluate(() => window.ashScreenshotIntegration.stopImageEditor());
 		await expect(page.locator('iframe')).toHaveCount(0);
+		await page.evaluate(() => window.ashScreenshotIntegration.stopImageEditor());
+		await expect(page.locator('.ash-screenshot-overlay')).toHaveCount(0);
 		await expect.poll(() => page.evaluate(() => window.ashScreenshotIntegration.state().pending)).toBe(false);
 		await page.getByRole('button', { name: 'Add context', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Search attachments', exact: true }).click();
@@ -84,13 +82,13 @@ suite('chatScreenshot browser component', () => {
 		await openFixture(page, '/chatInput.html?screenshotFixture=1&inlineCode=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await page.getByRole('button', { name: 'Create code image', exact: true }).click();
-		await expect(page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true })).toBeVisible();
+		await expect(page.getByRole('dialog', { name: 'Screen Capture', exact: true })).toBeVisible();
 		expect(await page.evaluate(() => window.ashScreenshotIntegration.state().pending)).toBe(false);
 		await page.evaluate(() => window.ashScreenshotIntegration.switchDraft());
-		const overlay = page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true });
+		const overlay = page.getByRole('dialog', { name: 'Screen Capture', exact: true });
 		await expect(overlay).toBeVisible();
 		await overlay.getByRole('button', { name: 'Add to Chat', exact: true }).click();
-		await expect(page.locator('iframe')).toHaveCount(0);
+		await expect(page.locator('.ash-screenshot-overlay')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashScreenshotIntegration.draft())).toMatch(/^Next conversation/);
 		expect(await page.evaluate(() => window.ashScreenshotIntegration.state().pending)).toBe(false);
 		expect((await submittedImage(page)).width).toBeGreaterThan(400);
@@ -119,7 +117,7 @@ suite('chatScreenshot browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const chinese = locale === 'zh-CN';
 			await openScreenshot(page, chinese);
-			const overlay = page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true });
+			const overlay = page.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true });
 			const surface = overlay.getByRole('group', { name: chinese ? '冻结的屏幕与区域选择' : 'Frozen screen and region selection' });
 			await expect(surface).toBeFocused();
 			const bounds = (await overlay.locator('canvas').boundingBox())!;
@@ -130,7 +128,7 @@ suite('chatScreenshot browser component', () => {
 			await page.mouse.up();
 			const toolbar = overlay.getByRole('group', { name: chinese ? '截图工具' : 'Screenshot tools' });
 			await expect(toolbar).toBeVisible();
-			// The isolated built-in view must load its own font; labels remain discoverable without visible text.
+			// The directly mounted component must load its bundled font; labels remain discoverable without visible text.
 			await expect.poll(() => toolbar.evaluate(element => {
 				return [...element.ownerDocument.fonts].some(font => font.family.replaceAll(/["']/g, '') === 'Ash Snapshot Icons' && font.status === 'loaded');
 			})).toBe(true);
@@ -158,18 +156,18 @@ suite('chatScreenshot browser component', () => {
 			await surface.press('ArrowLeft');
 			await surface.press('Shift+ArrowLeft');
 			await surface.press('Alt+F1');
-			const help = page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '截图帮助' : 'Screenshot Help', exact: true });
+			const help = page.getByRole('dialog', { name: chinese ? '截图帮助' : 'Screenshot Help', exact: true });
 			await expect(help.getByRole('textbox')).toHaveValue(new RegExp(chinese ? 'Shift\\+方向键' : 'Shift\\+arrow keys'));
 			await page.keyboard.press('Escape');
 			await expect(surface).toBeFocused();
 			await surface.press('Alt+F2');
-			const summary = page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '截图选区' : 'Screenshot selection', exact: true });
+			const summary = page.getByRole('dialog', { name: chinese ? '截图选区' : 'Screenshot selection', exact: true });
 			await expect(summary.getByRole('textbox')).toHaveValue(new RegExp(chinese ? '宽度 200' : 'Width 200'));
 			await page.keyboard.press('Escape');
 			expect(await overlay.locator('.ash-screenshot-toolbar').evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
 			await page.screenshot({ path: browserTests.info.outputPath(`screen-selection-${locale}-${theme}.png`) });
 			await overlay.getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click();
-			await expect(page.locator('iframe')).toHaveCount(0);
+			await expect(page.locator('.ash-screenshot-overlay')).toHaveCount(0);
 			await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
 			expect(await submittedImage(page)).toEqual({ width: 200, height: 120, pixel: [255, 255, 0, 255] });
 		});
@@ -181,7 +179,7 @@ suite('chatScreenshot browser component', () => {
 		await openFixture(page, '/chatInput.html?screenshotFixture=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await openScreenshot(page);
-		const overlay = page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true });
+		const overlay = page.getByRole('dialog', { name: 'Screen Capture', exact: true });
 		await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
 		const image = (await overlay.locator('canvas').boundingBox())!;
 		const point = (x: number, y: number) => ({ x: image.x + x * image.width / 800, y: image.y + y * image.height / 480 });
@@ -222,11 +220,11 @@ suite('chatScreenshot browser component', () => {
 		await openFixture(page, '/chatInput.html?screenshotFixture=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await openScreenshot(page);
-		let overlay = page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true });
+		let overlay = page.getByRole('dialog', { name: 'Screen Capture', exact: true });
 		await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
 		await overlay.getByRole('button', { name: 'Retake', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.ashScreenshotIntegration.state().calls)).toBe(2);
-		overlay = page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true });
+		overlay = page.getByRole('dialog', { name: 'Screen Capture', exact: true });
 		await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
 		await overlay.getByRole('button', { name: 'Add to Chat', exact: true }).click();
 		expect(await page.evaluate(() => window.ashScreenshotIntegration.state().overlays)).toEqual([0, 0]);

@@ -16,6 +16,7 @@ export interface ImageViewRequest {
 	readonly source: 'screen' | 'content' | 'image';
 	readonly image?: Uint8Array;
 	readonly html: string;
+	readonly renderer?: 'builtin';
 	readonly input: Readonly<Record<string, JsonValue>>;
 }
 
@@ -37,12 +38,13 @@ export function validateImageViewId(value: unknown): string {
 }
 
 export function validateImageViewRequest(value: unknown): ImageViewRequest {
-	if (!isRecord(value) || !['html,id,input,source,title', 'html,id,image,input,source,title'].includes(Object.keys(value).sort().join(','))
+	if (!isRecord(value) || !['html,id,input,source,title', 'html,id,image,input,source,title', 'html,id,input,renderer,source,title', 'html,id,image,input,renderer,source,title'].includes(Object.keys(value).sort().join(','))
 		|| typeof value.title !== 'string' || value.title.length > 1024
 		|| !['screen', 'content', 'image'].includes(value.source as string)
 		|| typeof value.html !== 'string' || value.html.length > 8 * 1024 * 1024 || !isRecord(value.input)) {
 		throw new TypeError('Invalid image view request');
 	}
+	if ('renderer' in value && (value.renderer !== 'builtin' || value.html !== '')) throw new TypeError('Invalid image view renderer');
 	if (value.source === 'image') validateImageViewImage(value.image);
 	else if ('image' in value) throw new TypeError('Unexpected image view pixels');
 	validateImageViewId(value.id);
