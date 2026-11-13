@@ -1,6 +1,6 @@
 # Ash Agent Instructions
 
-This is your repo, you have the most full priority to implement various architechtural approaches, all with the goal of making the code more robust, stable, highly cohesive and loosely coupled.
+This is your repo, you have the most full priority to implement various architectural approaches, all with the goal of making the code more robust, stable, highly cohesive and loosely coupled.
 
 If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `../zed`, `../warp`, `../livekit`
 
