@@ -1,3 +1,4 @@
+import { IScreenshotToolService } from '../../../../screenshotTool/browser/screenshotTool.js';
 import { CancellationTokenSource } from '../../../../../../base/common/cancellation.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
@@ -93,7 +94,7 @@ suite('Registered attachment source contracts', () => {
 		services.registerInstance(IChatContextPickService, contexts);
 		services.registerInstance(IClipboardService, {} as IClipboardService);
 		services.registerInstance(IChatAttachmentResolveService, {} as IChatAttachmentResolveService);
-		assert.throws(() => services.createInstance(ChatContextContributions), /imageEditorService/);
+		assert.throws(() => services.createInstance(ChatContextContributions), /screenshotToolService/);
 		assert.deepEqual([...contexts.items], [], 'A missing dependency must not leave partially registered sources');
 		const requests: AbortSignal[] = [];
 		class ManualImageEditors extends ImageEditorService {
@@ -102,6 +103,7 @@ suite('Registered attachment source contracts', () => {
 		}
 		const editors = resources.add(new ManualImageEditors());
 		services.registerInstance(IImageEditorService, editors);
+		services.registerInstance(IScreenshotToolService, { isSupported: true, accessibilityHelp: '', captureAndEdit: signal => editors.capture(signal), show: async () => { } });
 		services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
 		services.registerInstance(IChatService, {} as IChatService);
 		services.registerInstance(ILanguageModelToolsService, { isAvailable: false, onDidChangeTools: Event.None } as ILanguageModelToolsService);

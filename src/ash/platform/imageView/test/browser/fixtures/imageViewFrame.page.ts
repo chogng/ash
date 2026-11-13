@@ -1,45 +1,27 @@
 import { createImageViewFrame } from '../../../browser/imageViewFrame.js';
-import type { ImageViewPermissionAction } from '../../../common/imageView.js';
+import type { ImageViewCompletion } from '../../../common/imageView.js';
 
-const calls: ImageViewPermissionAction[] = [];
-const waiting = new Map<ImageViewPermissionAction, (accepted: boolean) => void>();
-const html = `<button data-action="settings">Open Settings</button>
-<button data-action="drag">Drag application</button>
-<button data-action="copyPath">Copy path</button>
-<output></output>
-<script>
+const completions: ImageViewCompletion[] = [];
+const html = `<button>Send messages</button><output></output><script>
 window.addEventListener('message', event => {
-	if (event.source !== parent) return;
-	if (event.data.type === 'initialize') parent.postMessage({ type: 'ready' }, '*');
-	if (event.data.type === 'permissionResult') {
-		const result = document.createElement('p');
-		result.textContent = event.data.action + ':' + (event.data.error || event.data.accepted);
-		document.querySelector('output').append(result);
-	}
+ if (event.source !== parent) return;
+ if (event.data.type === 'initialize') parent.postMessage({type:'ready'}, '*');
+ if (event.data.type === 'permissionResult' || event.data.type === 'completed') {
+  const result=document.createElement('p'); result.textContent=event.data.type; document.querySelector('output').append(result);
+ }
 });
-document.addEventListener('click', event => {
-	const action = event.target.dataset.action;
-	if (action) parent.postMessage({ type: 'permission', action }, '*');
-});
-parent.postMessage({ type: 'initialize' }, '*');
+document.querySelector('button').onclick=()=>{
+ for(const action of ['settings','drag','copyPath','retry','cancel']) parent.postMessage({type:'permission',action}, '*');
+ parent.postMessage({type:'complete',result:{kind:'cancel'}}, '*');
+};
+parent.postMessage({type:'initialize'}, '*');
 </script>`;
-const view = createImageViewFrame(document, 'Screen permission fixture', html, {}, async () => true,
-	() => { document.body.dataset.ready = 'true'; }, async action => {
-		calls.push(action);
-		if (action === 'settings' || action === 'copyPath') return new Promise<boolean>(resolve => waiting.set(action, resolve));
-		return true;
-	});
+const view = createImageViewFrame(document, 'Image message fixture', html, {}, async result => {
+	completions.push(result); return true;
+}, () => { document.body.dataset.ready = 'true'; });
 
 declare global {
-	interface Window {
-		imageViewPermissionFixture: {
-			calls(): readonly ImageViewPermissionAction[];
-			release(action: ImageViewPermissionAction, accepted: boolean): void;
-		};
-	}
+	interface Window { imageViewMessageFixture: { completions(): readonly ImageViewCompletion[]; }; }
 }
-window.imageViewPermissionFixture = {
-	calls: () => calls,
-	release(action, accepted) { waiting.get(action)?.(accepted); waiting.delete(action); }
-};
+window.imageViewMessageFixture = { completions: () => completions };
 window.addEventListener('pagehide', () => view.dispose(), { once: true });

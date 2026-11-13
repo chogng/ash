@@ -4,6 +4,10 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
+## Chat 应用窗口截图 · macOS 实机验收
+
+- [ ] **验收** · 应用窗口截图已接入选窗、快捷键、权限 Setup 和原草稿附件管线；Snapshot 已迁为内置编辑器并移除扩展包，标注、复制、保存和代码图片继续共用一条链路。4 个真实桌面／其他应用像素场景因测试宿主缺少 macOS 屏幕录制权限跳过，尚缺真实其他应用窗口到聊天附件的整链证据。授予测试用 Ash 屏幕录制权限后，运行 `pnpm test:smoke:desktop:no-compile test/smoke/areas/chat/chat-screenshot.spec.ts test/smoke/areas/chat/chat-app-window-screenshot.spec.ts`；用例使用仅包含测试色块的窗口，检查选窗、区域捕获、取消保留草稿、编辑和附件回填，通过后移除此条。
+
 ## Chat 输入框 · 布局切换验收
 
 - [ ] **验收** · 已将两个 Chat 入口默认统一为单行自适应，在设置 → 外观增加「Chat 输入框布局」单行／分层选项，切换保留草稿。配置、设置页面与 Chat 测试共 259 项通过，渲染器、自动化和测试类型检查及中文翻译检查通过。真实窗口测试入口因进程枚举触发 `spawn EPERM`，尚未完成视觉验收。在允许启动测试进程的环境运行 `pnpm test:smoke:ui test/smoke/areas/sessions/sessions-window.spec.ts --grep 'Chat input layout switches live|Sessions empty chat centers'`，检查默认单行、即时切换、长文本展开、重开保留和设置控件与背景色选项的视觉一致性；通过后删除本条。

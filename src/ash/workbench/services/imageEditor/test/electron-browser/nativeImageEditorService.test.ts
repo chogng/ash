@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, suiteSetup, suiteTeardown, setup, test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IMAGE_VIEW_CANCEL_CHANNEL, IMAGE_VIEW_OPEN_CHANNEL, type ImageViewRequest } from '../../../../../platform/imageView/common/imageView.js';
@@ -48,6 +49,18 @@ suite('Native image editor request lifetime', () => {
 	});
 
 	setup(() => { opened.length = 0; cancelled.length = 0; output = undefined; windowOpened = new DeferredPromise(); });
+
+	test('frozen application pixels reach the native editor without requesting a screen capture', async () => {
+		using service = new Service();
+		using provider = service.register({ id: 'test.image', displayName: 'Image', default: true, accessibilityHelp: '', signal: new AbortController().signal, resolve: async () => ({ html: 'editor' }) });
+		const bytes = new Uint8Array(33);
+		bytes.set([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
+		const header = new DataView(bytes.buffer); header.setUint32(16, 1); header.setUint32(20, 1);
+		await service.capture(new AbortController().signal, { image: VSBuffer.wrap(bytes) });
+		assert.equal(opened.length, 1);
+		assert.equal(opened[0].source, 'image');
+		assert.deepEqual(opened[0].image, bytes);
+	});
 
 	test('a superseded provider resolution cannot open a late native window', async () => {
 		using service = new Service();

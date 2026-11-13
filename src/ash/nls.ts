@@ -26,6 +26,10 @@ export type NlsResolver = (
 ) => string;
 
 let language = 'en';
+let messages: Readonly<Record<string, Readonly<Record<string, string>>>> = {};
+
+/** Snapshot for client-owned isolated views that cannot share this realm's resolver. */
+export function getNlsMessages(): typeof messages { return messages; }
 const fallbackResolver: NlsResolver = (_bundle, _key, fallback, parameters) =>
 	formatNlsMessage(fallback, parameters);
 let resolver: NlsResolver = fallbackResolver;
@@ -35,6 +39,7 @@ export function getNLSLanguage(): string { return language; }
 /** Bootstrap must finish before importing modules that register translated metadata. */
 export function setNlsMessages(locale: string, bundles: Readonly<Record<string, Readonly<Record<string, string>>>>): void {
 	language = locale;
+	messages = bundles;
 	resolver = (bundle, key, original, parameters) => formatNlsMessage(bundles[bundle]?.[key] ?? original, parameters);
 }
 
@@ -68,6 +73,7 @@ export function setNlsResolver(next: NlsResolver): void {
 export function resetNlsResolver(): void {
 	resolver = fallbackResolver;
 	language = 'en';
+	messages = {};
 }
 
 export function formatNlsMessage(

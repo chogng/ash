@@ -1,3 +1,4 @@
+import './contrib/screenshotTool/browser/screenshotTool.web.contribution.js';
 import './services/imageEditor/browser/browserImageEditorService.js';
 import './contrib/splash/browser/splash.contribution.js';
 import '../platform/meteredConnection/browser/meteredConnectionService.js';

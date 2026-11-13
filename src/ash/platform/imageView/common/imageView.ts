@@ -7,14 +7,14 @@ export const IMAGE_VIEW_CANCEL_CHANNEL = 'ash:image-view:cancel';
 export const IMAGE_VIEW_INITIALIZE_CHANNEL = 'ash:image-view:initialize';
 export const IMAGE_VIEW_COMPLETE_CHANNEL = 'ash:image-view:complete';
 export const IMAGE_VIEW_READY_CHANNEL = 'ash:image-view:ready';
-export const IMAGE_VIEW_PERMISSION_CHANNEL = 'ash:image-view:permission';
 export const IMAGE_VIEW_ATTACH_CHANNEL = 'ash:image-view:attach';
 
 /** Native presentation carries opaque client data, never editor models or feature settings. */
 export interface ImageViewRequest {
 	readonly id: string;
 	readonly title: string;
-	readonly source: 'screen' | 'content';
+	readonly source: 'screen' | 'content' | 'image';
+	readonly image?: Uint8Array;
 	readonly html: string;
 	readonly input: Readonly<Record<string, JsonValue>>;
 }
@@ -23,20 +23,9 @@ export interface ImageViewInitialization {
 	readonly image: Uint8Array;
 	/** The desktop host requested its bundled screenshot presentation. */
 	readonly desktopCapture?: true;
-	/** Host-owned metadata for a consent guide, instead of screen pixels. */
-	readonly permission?: { readonly applicationName: string; readonly icon: Uint8Array; };
 	readonly presentation: ImageViewRequest;
 	readonly locale: string;
 	readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>;
-}
-
-export type ImageViewPermissionAction = 'settings' | 'drag' | 'copyPath' | 'retry' | 'cancel';
-
-export function validateImageViewPermissionAction(value: unknown): ImageViewPermissionAction {
-	if (typeof value !== 'string' || !['settings', 'drag', 'copyPath', 'retry', 'cancel'].includes(value)) {
-		throw new TypeError('Invalid screen permission action');
-	}
-	return value as ImageViewPermissionAction;
 }
 
 export type ImageViewCompletion =
@@ -48,12 +37,14 @@ export function validateImageViewId(value: unknown): string {
 }
 
 export function validateImageViewRequest(value: unknown): ImageViewRequest {
-	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'html,id,input,source,title'
+	if (!isRecord(value) || !['html,id,input,source,title', 'html,id,image,input,source,title'].includes(Object.keys(value).sort().join(','))
 		|| typeof value.title !== 'string' || value.title.length > 1024
-		|| !['screen', 'content'].includes(value.source as string)
+		|| !['screen', 'content', 'image'].includes(value.source as string)
 		|| typeof value.html !== 'string' || value.html.length > 8 * 1024 * 1024 || !isRecord(value.input)) {
 		throw new TypeError('Invalid image view request');
 	}
+	if (value.source === 'image') validateImageViewImage(value.image);
+	else if ('image' in value) throw new TypeError('Unexpected image view pixels');
 	validateImageViewId(value.id);
 	validateJsonValue(value.input, { maxDepth: 32, maxNodes: 1_000_000, maxCollectionSize: 65536, maxStringLength: 256 * 1024 });
 	if (JSON.stringify(value.input).length > 8 * 1024 * 1024) throw new RangeError('Image view input is too large');
@@ -94,19 +85,12 @@ export function validateImageViewCompletion(value: unknown): ImageViewCompletion
 }
 
 export function validateImageViewInitialization(value: unknown): ImageViewInitialization {
-	if (!isRecord(value) || !['bundles,image,locale,presentation', 'bundles,image,locale,permission,presentation',
-		'bundles,desktopCapture,image,locale,presentation', 'bundles,desktopCapture,image,locale,permission,presentation'].includes(Object.keys(value).sort().join(','))) {
+	if (!isRecord(value) || !['bundles,image,locale,presentation', 'bundles,desktopCapture,image,locale,presentation'].includes(Object.keys(value).sort().join(','))) {
 		throw new TypeError('Invalid image view initialization');
 	}
 	const presentation = validateImageViewRequest(value.presentation);
 	if ('desktopCapture' in value && (value.desktopCapture !== true || presentation.source !== 'screen' || presentation.html !== '')) throw new TypeError('Invalid desktop screenshot initialization');
-	if (value.permission !== undefined) {
-		if (presentation.source !== 'screen' || !isRecord(value.permission)
-			|| Object.keys(value.permission).sort().join(',') !== 'applicationName,icon'
-			|| typeof value.permission.applicationName !== 'string' || !value.permission.applicationName.length || value.permission.applicationName.length > 1024
-			|| !(value.image instanceof Uint8Array) || value.image.length !== 0) throw new TypeError('Invalid screen permission initialization');
-		validateImageViewImage(value.permission.icon);
-	} else if (presentation.source === 'screen') validateImageViewImage(value.image);
+	if (presentation.source !== 'content') validateImageViewImage(value.image);
 	else if (!(value.image instanceof Uint8Array) || value.image.length !== 0) throw new TypeError('Content views cannot include screen pixels');
 	validateLocalization(value);
 	return value as unknown as ImageViewInitialization;

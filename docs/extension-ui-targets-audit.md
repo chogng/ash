@@ -55,7 +55,6 @@
 | [ruby](../extensions/ruby/package.json)                                             | IDE          | 提供 ruby 的语法、语言配置或编辑片段；主要入口是源码编辑器。                                           |
 | [rust](../extensions/rust/package.json)                                             | IDE          | Rust 源码语言贡献及 rust-analyzer 路由，服务 IDE 编辑工作流。                                          |
 | [shellscript](../extensions/shellscript/package.json)                               | IDE          | 提供 shellscript 的语法、语言配置或编辑片段；主要入口是源码编辑器。                                    |
-| [snapshot](../extensions/snapshot/package.json)                                     | 通用         | IDE Chat 和 Agent Window 附件使用同一截图/图像编辑 Provider，亦支持独立截图。                          |
 | [sql](../extensions/sql/package.json)                                               | IDE          | 提供 sql 的语法、语言配置或编辑片段；主要入口是源码编辑器。                                            |
 | [swift](../extensions/swift/package.json)                                           | IDE          | 提供 swift 的语法、语言配置或编辑片段；主要入口是源码编辑器。                                          |
 | [theme-defaults](../extensions/theme-defaults/package.json)                         | 通用         | 颜色主题作用于整个 Workbench，两种窗口都消费主题设置。                                                 |

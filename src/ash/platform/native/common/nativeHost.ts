@@ -9,7 +9,7 @@ import type { AgentHostEditorUpdate, IAgentHostEditorState, IAgentsWindowInvitat
 import { URI, type UriComponents } from '../../../base/common/uri.js';
 import { buildOpenSessionLinkUri, parseOpenSessionLinkUri } from '../../agentHost/common/openSessionLink.js';
 import { isRecord } from '../../../base/common/types.js';
-import type { ICommonNativeHostService } from './native.js';
+import type { ICommonNativeHostService, INativeAppWindow, INativeAppWindows } from './native.js';
 import type { IRectangle, IWindowClientSize } from '../../window/common/window.js';
 
 /** The IPC boundary accepts only a rectangle in the sender's own window. */
@@ -527,3 +527,28 @@ function validateHexColor(value: unknown, name: string): string {
 	if (typeof value !== 'string' || !/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value)) throw new TypeError(`${name} must be a hexadecimal color`);
 	return value.toLowerCase();
 }
+
+export const NATIVE_HOST_APP_WINDOWS_CHANNEL = 'ash:native-host:app-windows';
+export const NATIVE_HOST_CAPTURE_APP_WINDOW_CHANNEL = 'ash:native-host:capture-app-window';
+export const NATIVE_HOST_SCREEN_CAPTURE_ACCESS_CHANNEL = 'ash:native-host:screen-capture-access';
+
+export function validateAppWindow(value: unknown): INativeAppWindow {
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'sourceId,title'
+		|| typeof value.sourceId !== 'string' || value.sourceId.length > 128 || !/^window:\d+:\d+$/u.test(value.sourceId)
+		|| typeof value.title !== 'string' || value.title.length > 8192) {
+		throw new TypeError('Invalid application window');
+	}
+	return { sourceId: value.sourceId, title: value.title };
+}
+
+export function validateAppWindows(value: unknown): INativeAppWindows {
+	if (!isRecord(value)) throw new TypeError('Invalid application windows');
+	if (value.kind === 'permissionRequired' && Object.keys(value).length === 1) return { kind: 'permissionRequired' };
+	if (value.kind !== 'windows' || Object.keys(value).sort().join(',') !== 'kind,windows'
+		|| !Array.isArray(value.windows) || value.windows.length > 10000) {
+		throw new TypeError('Invalid application windows');
+	}
+	return { kind: 'windows', windows: value.windows.map(validateAppWindow) };
+}
+
+export const NATIVE_HOST_MEDIA_ACCESS_STATUS_CHANNEL = 'ash:native-host:media-access-status';

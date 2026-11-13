@@ -41,6 +41,13 @@ export abstract class ImageEditorService extends Disposable implements IImageEdi
 		requestSignal.throwIfAborted();
 		return { view, displayName: provider.displayName, signal: requestSignal };
 	}
+	protected resolveInput(options: ImageEditorOptions | undefined, signal: AbortSignal) {
+		if (options?.presentation) {
+			signal.throwIfAborted();
+			return Promise.resolve({ view: options.presentation, displayName: options.presentation.displayName, signal });
+		}
+		return this.resolve(options?.code ? 'selection' : 'screen', signal, options?.editorId);
+	}
 	registerAttachmentHandler(handler: (capture: ImageEditorCapture) => Promise<void>) {
 		this.assertNotDisposed();
 		if (this.attachmentHandler) throw new Error('An image attachment target is already registered');

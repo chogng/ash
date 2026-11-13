@@ -14,7 +14,7 @@ description: Develop or change Ash extensions through the public SDK, from packa
 | 当前实现形态 | 作者入口与起点 |
 | --- | --- |
 | 普通 TS/JS 扩展 | [`@ash/sdk`](../../../sdk/typescript/README.md)、[`inspect`](../../../examples/extensions/inspect/README.md)；依照包声明与授权选择宿主 |
-| 可信 Browser 扩展及其隔离视图 | 同一个 TS SDK；[`Snapshot`](../../../extensions/snapshot/README.md) 是图像 Provider 的实例，不是通用 Webview 或第三方沙箱承诺 |
+| 可信 Browser 扩展及其隔离视图 | 同一个 TS SDK；图片 Provider 使用公开图像能力；内置截图位于 Workbench，不是扩展实例 |
 | 独立 Rust Provider | [`sdk/rust`](../../../sdk/rust/README.md)；使用公开能力契约和现有监管入口 |
 | 已准入的 Rust 编辑器客户端 | [独立开发 SDK](../../../sdk/docs/development.md)；`ash:editor/*` 只适用于该客户端契约，不能拿来替代普通扩展 SDK |
 
@@ -31,7 +31,7 @@ description: Develop or change Ash extensions through the public SDK, from packa
 
 按 SDK 的 [Extension development](../../../sdk/typescript/README.md#extension-development) 约定分配界面和宿主机制。界面设计使用 [design-philosophy](../design-philosophy/SKILL.md) 与 [accessibility](../accessibility/SKILL.md)；主题和布局分别使用 [ux-theming](../ux-theming/SKILL.md)、[ux-css-layout](../ux-css-layout/SKILL.md)，通过公开主题数据应用到包内，不引入宿主私有 CSS。
 
-Snapshot 的权限引导是具体参照：扩展拥有卡片、步骤、翻译和键盘替代操作；宿主拥有独立窗口、当前应用身份、原生拖动和系统权限查询。需要 Electron 不能成为把这些业务界面放进宿主的理由；也不能承诺把自定义控件插入系统设置。图像 Provider 的阶段性动作契约见 [SDK](../../../sdk/typescript/README.md)，不要把它泛化为所有扩展都可调用的原生窗口接口。
+图片 Provider 的权限引导由其视图拥有卡片、步骤、翻译和键盘替代操作；宿主拥有独立窗口、当前应用身份、原生拖动和系统权限查询。需要 Electron 不能成为把这些业务界面放进宿主的理由；也不能承诺把自定义控件插入系统设置。图像 Provider 的阶段性动作契约见 [SDK](../../../sdk/typescript/README.md)，不要把它泛化为所有扩展都可调用的原生窗口接口。
 
 新增图标、字体、脚本等资源时，同时检查包的资源声明、编译输出和产品分发中的实际文件。开发目录能读取资源不证明打包后可读。清理逻辑覆盖交互关闭和 Provider 退役；有跨窗口监听、Blob URL、计时器或在途请求时按 [memory-leak-audit](../memory-leak-audit/SKILL.md) 检查其生命周期。
 

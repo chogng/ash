@@ -21,7 +21,7 @@ export class NativeImageEditorService extends ImageEditorService {
 		const lifetime = toDisposable(() => controller.abort());
 		this.desktopCaptureLifetime.value = lifetime;
 		try {
-			const resolved = await this.resolve(options?.code ? 'selection' : 'screen', AbortSignal.any([signal, controller.signal]), options?.editorId);
+			const resolved = await this.resolveInput(options, AbortSignal.any([signal, controller.signal]));
 			signal = resolved.signal;
 			if (signal.aborted) return undefined;
 			const id = createUuid();
@@ -29,7 +29,8 @@ export class NativeImageEditorService extends ImageEditorService {
 			const colorScheme = root?.getAttribute('data-color-scheme');
 			const request: ImageViewRequest = {
 				id, title: resolved.displayName, html: resolved.view.html,
-				source: options?.code ? 'content' : 'screen',
+				source: options?.image ? 'image' : options?.code ? 'content' : 'screen',
+				...(options?.image ? { image: options.image.buffer } : {}),
 				input: {
 					defaultAction: options?.defaultAction ?? 'attach',
 					...(options?.code ? { code: options.code } : {}),

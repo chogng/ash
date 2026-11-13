@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { validateImageViewRequest, validateImageViewCompletion, validateImageViewImage, validateImageViewInitialization, validateImageViewPermissionAction } from '../../common/imageView.js';
+import { validateImageViewRequest, validateImageViewCompletion, validateImageViewImage, validateImageViewInitialization } from '../../common/imageView.js';
 
 function image(): Uint8Array {
 	const bytes = new Uint8Array(33);
@@ -40,11 +40,17 @@ test('image view output is finite and cannot choose arbitrary native operations'
 });
 
 
-test('permission guide can only act on the host-selected application bundle', () => {
-	for (const action of ['settings', 'drag', 'copyPath', 'retry', 'cancel']) assert.equal(validateImageViewPermissionAction(action), action);
-	for (const invalid of [{ action: 'drag', path: '/tmp/other.app' }, 'grant', 'restart', undefined]) assert.throws(() => validateImageViewPermissionAction(invalid));
-	const permission = { applicationName: 'Ash.app', icon: image() };
-	const initial = { permission, image: new Uint8Array(), presentation: presentation(), locale: 'zh-CN', bundles: { ash: {} } };
+test('image initialization rejects legacy permission guides and OS operation metadata', () => {
+	const initial = { image: image(), presentation: presentation(), locale: 'en', bundles: {} };
 	assert.equal(validateImageViewInitialization(initial), initial);
-	for (const invalid of [{ ...initial, path: '/tmp/other.app' }, { ...initial, image: image() }, { ...initial, permission: { ...permission, path: '/tmp/other.app' } }, { ...initial, permission: { ...permission, icon: new Uint8Array() } }, { ...initial, permission: { ...permission, applicationName: '' } }, { ...initial, presentation: presentation('content') }]) assert.throws(() => validateImageViewInitialization(invalid));
+	for (const extra of [{ permission: { applicationName: 'Ash.app', icon: image() } }, { action: 'settings' }, { path: '/tmp/private.app' }]) {
+		assert.throws(() => validateImageViewInitialization({ ...initial, ...extra }));
+	}
+});
+
+test('frozen window images require PNG bytes and cannot be smuggled into screen or content requests', () => {
+	const request = { ...presentation('image'), image: image() };
+	assert.equal(validateImageViewRequest(request), request);
+	assert.equal(validateImageViewInitialization({ image: request.image, presentation: request, locale: 'en', bundles: {} }).image, request.image);
+	for (const invalid of [{ ...request, image: undefined }, { ...request, image: new Uint8Array() }, { ...request, source: 'screen' }, { ...request, source: 'content' }]) assert.throws(() => validateImageViewRequest(invalid));
 });

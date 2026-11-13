@@ -1,4 +1,4 @@
-import { SCREENSHOT_MAX_BYTES, SCREENSHOT_MAX_PIXELS, type DesktopScreenshot } from '../common/native.js';
+import { SCREENSHOT_MAX_BYTES, SCREENSHOT_MAX_PIXELS, type INativeAppWindows, type DesktopScreenshot } from '../common/native.js';
 import type { BrowserWindow } from 'electron/main';
 import type { IRectangle } from '../../window/common/window.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -182,4 +182,25 @@ export class TerminalWindowTransferHost extends Disposable {
 		if (outcome instanceof Error) pending.reject(outcome);
 		else pending.resolve(outcome);
 	}
+}
+
+/** Enumeration acquires metadata only. Pixel capture remains an explicit, separate request. */
+export async function getAppWindows(): Promise<INativeAppWindows> {
+	const { BrowserWindow, desktopCapturer, systemPreferences } = await import('electron/main');
+	if (process.platform === 'darwin') {
+		if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') return { kind: 'permissionRequired' };
+		const { getMacScreenWindows } = await import('./macScreenWindows.js');
+		return { kind: 'windows', windows: await getMacScreenWindows() };
+	}
+	const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 }, fetchWindowIcons: false });
+	const own = new Set(BrowserWindow.getAllWindows().filter(window => !window.isDestroyed()).map(window => window.getMediaSourceId().split(':')[1]));
+	return { kind: 'windows', windows: sources.filter(source => !own.has(source.id.split(':')[1])).map(source => ({ sourceId: source.id, title: source.name })) };
+}
+
+export async function captureAppWindow(sourceId: string): Promise<VSBuffer | undefined> {
+	if (process.platform !== 'darwin') return undefined;
+	const { captureMacWindow } = await import('./macScreenWindows.js');
+	const bytes = await captureMacWindow(sourceId);
+	const { validateImageViewImage } = await import('../../imageView/common/imageView.js');
+	return VSBuffer.wrap(new Uint8Array(validateImageViewImage(bytes)));
 }

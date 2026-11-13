@@ -1,3 +1,5 @@
+import '../../screenshotTool/browser/screenshotTool.contribution.js';
+import { ChatUserImageAttachmentService, IChatUserImageAttachmentService } from './attachments/chatUserImageAttachments.js';
 import './promptTimeline/promptTimeline.contribution.js';
 import { ChatInputSessionLinkProvider } from './widget/input/editor/chatInputSessionLinkProvider.js';
 import './aiCustomization/aiCustomizationManagement.contribution.js';
@@ -732,3 +734,5 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 		},
 	});
 }
+
+registerSingleton(IChatUserImageAttachmentService, ChatUserImageAttachmentService, InstantiationType.Delayed);

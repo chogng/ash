@@ -101,6 +101,14 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 		}
 		await this.channel.call('flush');
 	}
+	public async compareAndSwapApplicationSharedValue(key: string, expectedValue: string | undefined, newValue: string | undefined): Promise<boolean> {
+		await this.flush();
+		const result = await this.channel.call<unknown>('compareAndSwapApplicationSharedValue', { key, expectedValue, newValue });
+		if (!isRecord(result) || typeof result.exchanged !== 'boolean') { throw new TypeError('Invalid storage comparison result'); }
+		this.accept(validateStorageSnapshot(result.snapshot));
+		return result.exchanged;
+	}
+
 	public async switchWorkspace(workspaceId: string): Promise<void> {
 		await this.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 		this.workspaceId = workspaceId;

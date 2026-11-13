@@ -632,3 +632,19 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	parse: value => { if (typeof value !== 'boolean') { throw new TypeError(localize('agentTrace.invalidVerbosity', 'Trace accessibility verbosity must be boolean.')); } return value; },
 	setting: { valueType: 'boolean', title: localize('agentTrace.verbosity', 'Agent Debug Logs accessibility help'), description: localize('agentTrace.verbosityDescription', 'Announce keyboard help when Agent Debug Logs receives focus.') },
 });
+
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.AppWindowScreenshotSetup,
+	defaultValue: true,
+	schema: { type: 'boolean' },
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') { throw new TypeError(localize('appWindowScreenshotSetup.verbosityInvalid', 'Screenshot setup accessibility verbosity must be a boolean.')); }
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('appWindowScreenshotSetup.verbosityTitle', 'Screenshot setup accessibility help'); },
+		get description() { return localize('appWindowScreenshotSetup.verbosityDescription', 'Announce how to open accessibility help in app window screenshot setup.'); },
+	},
+});

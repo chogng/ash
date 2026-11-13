@@ -1,3 +1,4 @@
+import '../workbench/contrib/screenshotTool/electron-browser/screenshotTool.contribution.js';
 import './contrib/projects/electron-browser/projectMaterialFiles.contribution.js';
 import '../workbench/contrib/splash/electron-browser/nativeSplashStorageService.js';
 import './contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.js';

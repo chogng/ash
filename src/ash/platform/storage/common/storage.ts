@@ -52,6 +52,8 @@ export interface IStorageService {
 	/** Whether the current scope did not exist before this service session. */
 	isNew(scope: StorageScope): boolean;
 	flush(reason?: WillSaveStateReason): Promise<void>;
+	/** Desktop's single writer can atomically claim application-wide onboarding. Other runtimes omit this capability. */
+	compareAndSwapApplicationSharedValue?(key: string, expectedValue: string | undefined, newValue: string | undefined): Promise<boolean>;
 }
 
 export const IStorageService = createServiceIdentifier<IStorageService>('storageService');

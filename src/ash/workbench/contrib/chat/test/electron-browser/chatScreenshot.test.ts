@@ -9,17 +9,19 @@ import type { IConfigurationService } from '../../../../../platform/configuratio
 import type { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { ILogService } from '../../../../../platform/log/common/log.js';
-import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, type GlobalKeybindingResult } from '../../../../../platform/globalKeybindings/common/globalKeybindings.js';
+import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL, type GlobalKeybindingResult } from '../../../../../platform/globalKeybindings/common/globalKeybindings.js';
 import { IMAGE_VIEW_ATTACH_CHANNEL } from '../../../../../platform/imageView/common/imageView.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
-import { ImageEditorService } from '../../../../services/imageEditor/browser/imageEditorService.js';
+import type { IScreenshotToolService } from '../../../screenshotTool/browser/screenshotTool.js';
 import type { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
-import { ScreenshotCommandId } from '../../common/constants.js';
+import { ScreenshotCommandId, ScreenshotShortcutId } from '../../common/constants.js';
 
-class TestImageEditorService extends ImageEditorService {
-	constructor() { super(); }
-	async capture(): Promise<never> { return assert.fail('Checking a shortcut must not capture the screen'); }
+class TestScreenshotToolService implements IScreenshotToolService {
+	isSupported = true;
+	readonly accessibilityHelp = '';
+	async captureAndEdit(): Promise<never> { return assert.fail('Checking a shortcut must not capture the screen'); }
+	async show(): Promise<never> { return assert.fail('Checking a shortcut must not open the editor'); }
 }
 
 suite('Chat screenshot shortcut policy', () => {
@@ -28,6 +30,7 @@ suite('Chat screenshot shortcut policy', () => {
 	let response: GlobalKeybindingResult | Error;
 	const requests: unknown[] = [];
 	const listeners = new Set<(value: unknown) => void>();
+	const triggers = new Set<(value: unknown) => void>();
 	suiteSetup(async () => {
 		Object.defineProperty(globalThis, 'ash', {
 			configurable: true, value: {
@@ -38,8 +41,10 @@ suite('Chat screenshot shortcut policy', () => {
 						return response;
 					},
 					on: (channel: string, listener: (value: unknown) => void) => {
-						assert.equal(channel, IMAGE_VIEW_ATTACH_CHANNEL); listeners.add(listener);
-						return { dispose: () => { listeners.delete(listener); } };
+						assert.ok([IMAGE_VIEW_ATTACH_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL].includes(channel));
+						const group = channel === IMAGE_VIEW_ATTACH_CHANNEL ? listeners : triggers;
+						group.add(listener);
+						return { dispose: () => { group.delete(listener); } };
 					},
 				}
 			}
@@ -52,21 +57,21 @@ suite('Chat screenshot shortcut policy', () => {
 		response = { available: false, activeLabel: '' }; requests.length = 0;
 		const resources = new DisposableStore();
 		const changes = resources.add(new Emitter<void>());
-		const editors = resources.add(new TestImageEditorService());
-		const provider = resources.add(editors.register({ id: 'test.editor', displayName: 'Test', default: true, accessibilityHelp: '', signal: new AbortController().signal, resolve: async () => ({ html: '' }) }));
+		const screenshots = new TestScreenshotToolService();
 		const notifications = resources.add(new TestNotificationService());
 		let global = false;
 		let binding: ResolvedKeybinding | undefined = resolveKeybinding(Keybinding.single(logicalKey('a', { ctrlKey: true, metaKey: true })), OperatingSystem.Macintosh);
 		const queries: unknown[] = [];
 		const commands: string[] = [];
+		const argumentsByCommand: unknown[][] = [];
 		const contribution = resources.add(new Contribution(
 			{ getValue: () => global, onDidChangeConfiguration: changes.event } as unknown as IConfigurationService,
 			{ onDidUpdateKeybindings: changes.event, lookupKeybinding: () => binding } as unknown as IKeybindingService,
-			{ executeCommand: async (id: string) => { commands.push(id); } } as unknown as ICommandService,
-			{ error: () => { } } as unknown as ILogService, editors, notifications,
+			{ executeCommand: async (id: string, ...args: unknown[]) => { commands.push(id); argumentsByCommand.push(args); } } as unknown as ICommandService,
+			{ error: () => { } } as unknown as ILogService, screenshots, notifications,
 			{ openGlobalKeybindingSettings: async (textual, options) => { queries.push([textual, options]); } } as IPreferencesService,
 		));
-		return { notifications, contribution, editors, queries, commands, retireProvider: () => provider.dispose(), check: () => contribution.checkShortcut(), set global(value: boolean) { global = value; }, set binding(value: ResolvedKeybinding | undefined) { binding = value; }, [Symbol.dispose]: () => resources.dispose() };
+		return { notifications, contribution, queries, commands, argumentsByCommand, disableScreenshotTool: () => { screenshots.isSupported = false; }, check: () => contribution.checkShortcut(), set global(value: boolean) { global = value; }, set binding(value: ResolvedKeybinding | undefined) { binding = value; }, [Symbol.dispose]: () => resources.dispose() };
 	}
 
 	test('conflicts retain the active shortcut and Chat receives only a completed screenshot', async () => {
@@ -94,13 +99,28 @@ suite('Chat screenshot shortcut policy', () => {
 		response = { available: true, activeLabel: 'Control+Command+B' };
 		await value.check();
 		assert.deepEqual(value.notifications.model.getNotifications(), []);
-		value.retireProvider(); response = { available: false, activeLabel: '' };
+		value.disableScreenshotTool(); response = { available: false, activeLabel: '' };
 		await value.check();
 		assert.equal((requests.at(-1) as { global: boolean; }).global, false);
 		assert.deepEqual(value.notifications.model.getNotifications(), []);
 		value.contribution.dispose();
 		assert.equal(listeners.size, 0);
 		assert.deepEqual(requests.at(-1), { id: 'chat.screenshot', commandId: ScreenshotCommandId, accelerator: '', label: '', global: false });
+	});
+
+	test('native permission fallback invokes the standalone entry and ignores unrelated leases', async () => {
+		using value = fixture();
+		for (const trigger of triggers) {
+			trigger(undefined);
+			trigger({ id: 'other' });
+			trigger({ id: ScreenshotShortcutId, image: new Uint8Array() });
+		}
+		assert.deepEqual(value.commands, []);
+		for (const trigger of triggers) trigger({ id: ScreenshotShortcutId });
+		assert.deepEqual(value.commands, [ScreenshotCommandId]);
+		assert.deepEqual(value.argumentsByCommand, [[]]);
+		value.contribution.dispose();
+		assert.equal(triggers.size, 0);
 	});
 
 	test('registration failures and their edit action use the Chinese catalog', async () => {

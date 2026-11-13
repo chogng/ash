@@ -1,3 +1,4 @@
+import { ChatUserImageAttachmentService, IChatUserImageAttachmentService } from '../../browser/attachments/chatUserImageAttachments.js';
 import { IChatSlashCommandService, ChatSlashCommandService } from '../../common/participants/chatSlashCommands.js';
 import { IVoiceInputModeService } from '../../browser/voiceInputMode/voiceInputMode.js';
 import { IChatSideChatService, ChatSideChatService } from '../../common/chatSideChatService.js';
@@ -149,6 +150,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	}
 	const partServices = inputResources.add(services.createChild());
 	if (mcp) partServices.registerInstance(IMcpServerManagementService, mcp);
+	if (!partServices.has(IChatUserImageAttachmentService)) partServices.registerSingleton(IChatUserImageAttachmentService, () => partServices.createInstance(ChatUserImageAttachmentService));
 	if (!partServices.has(IChatContextPickService)) partServices.registerInstance(IChatContextPickService, new ChatContextPickService());
 	if (!partServices.has(IExtensionService)) registerTestExtensionService(inputResources, partServices);
 	if (!partServices.has(IChatContextService)) partServices.registerSingleton(IChatContextService, () => partServices.createInstance(ChatContextService));

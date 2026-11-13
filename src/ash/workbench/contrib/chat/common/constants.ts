@@ -7,6 +7,7 @@ import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTra
 export const MANAGE_CHAT_COMMAND_ID = 'workbench.action.chat.manage';
 
 export enum ChatConfiguration {
+	AppWindowScreenshotsEnabled = 'chat.appWindowScreenshots.enabled',
 	NotifyWindowOnConfirmation = 'chat.notifyWindowOnConfirmation',
 	NotifyWindowOnResponseReceived = 'chat.notifyWindowOnResponseReceived',
 	ChatViewSessionsOrientation = 'chat.viewSessions.orientation',
@@ -135,3 +136,5 @@ export const DictationConfiguration = Object.freeze({
 	model: 'dictation.model',
 	modelLoadTiming: 'dictation.modelLoadTiming',
 });
+
+export const ATTACH_APP_WINDOW_SCREENSHOT_COMMAND_ID = 'workbench.action.chat.attachAppWindowScreenshot';

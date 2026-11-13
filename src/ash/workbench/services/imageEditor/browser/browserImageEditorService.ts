@@ -20,7 +20,7 @@ export class BrowserImageEditorService extends ImageEditorService {
 		const lifetime = toDisposable(() => controller.abort());
 		this.interactionLifetime.value = lifetime;
 		try {
-			const resolved = await this.resolve(options?.code ? 'selection' : 'screen', AbortSignal.any([signal, controller.signal]), options?.editorId);
+			const resolved = await this.resolveInput(options, AbortSignal.any([signal, controller.signal]));
 			return await new Promise<VSBuffer | undefined>((resolve, reject) => {
 				let frame: ReturnType<typeof createImageViewFrame> | undefined;
 				let finished = false;
@@ -34,7 +34,7 @@ export class BrowserImageEditorService extends ImageEditorService {
 				const cancellation = addDisposableListener(resolved.signal, 'abort', abort, { once: true });
 				const open = async (): Promise<void> => {
 					try {
-						const image = options?.code ? undefined : (await this.host.getScreenshot())?.buffer;
+						const image = options?.image?.buffer ?? (options?.code ? undefined : (await this.host.getScreenshot())?.buffer);
 						if (finished) return;
 						if (!image && !options?.code) { finish(); return; }
 						frame = createImageViewFrame(document, resolved.displayName, resolved.view.html, {

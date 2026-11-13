@@ -1,3 +1,5 @@
+import { IScreenshotToolService } from '../../contrib/screenshotTool/browser/screenshotTool.js';
+import { ChatUserImageAttachmentService, IChatUserImageAttachmentService } from '../../contrib/chat/browser/attachments/chatUserImageAttachments.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { IVoiceInputModeService, VoiceInputModeService } from '../../contrib/chat/browser/voiceInputMode/voiceInputMode.js';
@@ -142,6 +144,10 @@ export function installTestDictationAudio(target: Window & typeof globalThis): I
 
 /** Test profile storage is isolated from the browser's persistent user profile. */
 export function registerTestVoiceInputServices(services: InstantiationService, voiceIntroductionSeen = true): void {
+	if (!services.has(IScreenshotToolService)) services.registerInstance(IScreenshotToolService, {
+		isSupported: false, accessibilityHelp: '',
+		captureAndEdit: async () => undefined, show: async () => { },
+	});
 	if (!services.has(IAgentVoiceService)) services.registerInstance(IAgentVoiceService, undefined);
 	if (!services.has(IVoiceInputModeService)) services.registerSingleton(IVoiceInputModeService, () => services.createInstance(VoiceInputModeService));
 	if (!services.has(IChatInputNoticeHubService)) services.registerSingleton(IChatInputNoticeHubService, () => services.createInstance(ChatInputNoticeHubService));
@@ -158,6 +164,7 @@ export function registerTestVoiceInputServices(services: InstantiationService, v
 	if (!services.has(IConfigurationService)) services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	if (!services.has(IExtensionService)) services.registerSingleton(IExtensionService, () => new TestExtensionService());
+	if (!services.has(IChatUserImageAttachmentService)) services.registerSingleton(IChatUserImageAttachmentService, () => services.createInstance(ChatUserImageAttachmentService));
 	if (!services.has(IChatContextPickService)) services.registerSingleton(IChatContextPickService, () => new ChatContextPickService());
 	if (!services.has(IChatContextService)) services.registerSingleton(IChatContextService, () => services.createInstance(ChatContextService));
 	if (!services.has(IThemeService)) services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));

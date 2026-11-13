@@ -1,9 +1,9 @@
 import { addDisposableListener } from '../../../base/browser/dom.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import { validateImageViewCompletion, validateImageViewPermissionAction, type ImageViewCompletion, type ImageViewPermissionAction } from '../common/imageView.js';
+import { validateImageViewCompletion, type ImageViewCompletion } from '../common/imageView.js';
 
-/** Extension HTML runs in an opaque sandbox. Only the finite image-view message contract crosses it. */
-export function createImageViewFrame(document: Document, title: string, html: string, input: object, complete: (result: ImageViewCompletion) => Promise<boolean>, ready: () => void, permissionAction?: (action: ImageViewPermissionAction) => Promise<boolean>) {
+/** Image editor HTML runs in an opaque sandbox. Only the finite image-view message contract crosses it. */
+export function createImageViewFrame(document: Document, title: string, html: string, input: object, complete: (result: ImageViewCompletion) => Promise<boolean>, ready: () => void) {
 	const lifetime = new DisposableStore();
 	const originalFocus = document.activeElement as HTMLElement | null;
 	const container = document.createElement('dialog');
@@ -16,7 +16,6 @@ export function createImageViewFrame(document: Document, title: string, html: st
 	frame.srcdoc = html;
 	let initialized = false;
 	let pending = false;
-	const pendingPermissions = new Set<ImageViewPermissionAction>();
 	lifetime.add(addDisposableListener(document.defaultView!, 'message', rawEvent => {
 		const event = rawEvent as MessageEvent;
 		if (event.source !== frame.contentWindow || !event.data || typeof event.data !== 'object') return;
@@ -25,26 +24,6 @@ export function createImageViewFrame(document: Document, title: string, html: st
 			frame.contentWindow!.postMessage({ ...input, type: 'initialize' }, '*');
 		} else if (event.data.type === 'ready' && initialized) {
 			ready();
-		} else if (event.data.type === 'permission' && initialized && !pending) {
-			let action: ImageViewPermissionAction;
-			try { action = validateImageViewPermissionAction(event.data.action); }
-			catch (error) {
-				frame.contentWindow?.postMessage({ type: 'permissionResult', error: String(error) }, '*');
-				return;
-			}
-			if (pendingPermissions.has(action)) return;
-			// Settings can take time to open. Serializing unrelated actions would silently discard a drag.
-			pendingPermissions.add(action);
-			void (async () => {
-				try {
-					// Only a host-created consent window receives this capability. Ordinary image
-					// editors cannot invoke OS actions by posting a permission message themselves.
-					if (!permissionAction) throw new Error('Screen permission actions are unavailable');
-					const accepted = await permissionAction(action);
-					frame.contentWindow?.postMessage({ type: 'permissionResult', action, accepted }, '*');
-				} catch (error) { frame.contentWindow?.postMessage({ type: 'permissionResult', action, error: String(error) }, '*'); }
-				finally { pendingPermissions.delete(action); }
-			})();
 		} else if (event.data.type === 'complete' && initialized && !pending) {
 			pending = true;
 			void (async () => {

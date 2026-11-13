@@ -155,19 +155,9 @@ PDF.js 和 Worker 随扩展客户端打包，JS／CSS 摘要覆盖其字节。�
 
 ### 浏览器 Worker 与后端宿主的生命周期
 
-截图由预装的 [`ash.snapshot`](../extensions/snapshot/README.md) Browser 扩展拥有。
-普通 TS 扩展通过 `@ash/sdk` 的 `window.registerImageEditorProvider` 注册图片编辑器，
-内部沿既有 `image.editor.v1` capability 的注册、调用和撤销链接入；宿主只承载隔离视图、
-采集屏幕及执行输出。界面脚本不在 Workbench 或原生窗口的可信 realm 中执行。
-`window.showImageEditor` 可请求屏幕或代码选区输入；选区快照由客户端编辑器提供，
-扩展不能访问内部模型或复制其状态。公开接口与视图消息见 [TS SDK](../sdk/typescript/README.md)。
-`workbench/services/imageEditor` 拥有 Provider 注册与交互生命周期；
-`platform/imageView` 只负责系统取屏、隔离原生窗口和图像输出，不解释代码选区或 Chat 数据。
-macOS 权限引导的布局、文案与交互由 Snapshot 扩展拥有；宿主提供当前应用标识、图标和有限的系统设置、拖动、路径复制及权限检查操作，只向权限引导窗口开放。
-Chat 通过图像服务注册附件接收逻辑，自己绑定草稿取消、截图命令和既有快捷键偏好；
-全局按键使用 `platform/globalKeybindings` 的窗口租约。SDK adapter 不导入 Chat 贡献或调用其命令。
+截图是内置 Workbench 功能，由 [`workbench/contrib/screenshotTool`](../src/ash/workbench/contrib/screenshotTool/README.md) 拥有截图编排、配置、选区与标注界面。通用 `services/imageEditor` 保留外部 Provider、代码图片快照和隔离窗口承载，Chat 持有附件目标与草稿取消，`platform/imageView` 负责原生呈现窗口与图像输出，Native 层提供取屏和权限操作，截图入口协调权限 Setup。区域截图、应用窗口截图和代码图片共用一份标注界面，不启动 Snapshot 扩展或 Worker。
 
-执行位置与 Provider 类型决定生命周期机制，不能因实现语言是 TS 或 Rust 就把它们合并：
+普通 TS 扩展仍可通过 `@ash/sdk` 的 `window.registerImageEditorProvider`、`window.showImageEditor` 和既有 `image.editor.v1` capability 提供显式选择的图片编辑器。扩展只接收选区快照，不访问内部编辑器模型；注册、调用、撤销和隔离视图沿已有契约处理。内置截图不依赖扩展注册。
 
 | 路径                                      | 启动与激活 owner                                | 当前机制                                                                                                                                                             |
 | ----------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -176,7 +166,7 @@ Chat 通过图像服务注册附件接收逻辑，自己绑定草稿取消、截
 | 独立 Rust capability Provider             | 共享运行时、来源授权与对应 supervisor           | 按 Provider 声明、scope 和能力需求启动/握手，按自身声明激活，不套用浏览器包的事件计划                                                                                |
 | 共享 Git 后端                             | App Server 的目录级 `GitRuntime` / `GitService` | 由共享后端管理仓库、监听和状态；不依赖 `ash.git` Rust 扩展的启用或激活事件                                                                                           |
 
-随安装包分发与启动时执行是独立的决定。普通文本打开、编辑和保存由工作台文本模型及共享文件服务负责。首文件恢复需要工作区授权、编辑器选择、保存相关配置和草稿恢复，普通窗格可并行恢复。扩展提供的语言和自定义编辑器声明仍通过已验证的目录注册，JSON 的诊断和补全在打开匹配语言后启动。Markdown 预览按请求打开。窗口恢复后的后台阶段发布 Snapshot 的图像能力声明和代码图片菜单，桌面在此阶段注册已启用的系统热键。桌面主进程在首次请求时加载截图服务，隔离窗口按需加载随包的 Snapshot 界面。代码图片和工作台内的图像 Provider 由首次使用激活，独立截图只在用户选择添加附件后向 Chat 交付图像。
+随安装包分发与启动时执行是独立的决定。普通文本打开、编辑和保存由工作台文本模型及共享文件服务负责。首文件恢复需要工作区授权、编辑器选择、保存相关配置和草稿恢复，普通窗格可并行恢复。扩展提供的语言和自定义编辑器声明仍通过已验证的目录注册，JSON 的诊断和补全在打开匹配语言后启动。Markdown 预览按请求打开。内置截图在工作台恢复前注册，桌面主进程和隔离编辑界面仍按首次请求加载。独立截图只在用户选择添加附件后向 Chat 交付图像。
 
 浏览器 reconcile 是增量刷新：包版本、package/manifest digest、来源、执行位置/平台和窗口语言
 不变时保留健康 Worker、激活代次、进行中的调用及 SCM provider。移除、禁用或身份变更先撤销旧

@@ -73,3 +73,59 @@
 2026-11-02 本轮验证：167 项定向前端测试（15 个文件）、IDE／Agent Window 共 8 个 Electron/App Server 场景及 6 个 Browser/App Server 场景、七环境类型与分层检查通过。Rust 侧 Profile 文件与 RPC 5 项、原生提示 WebSocket 1 项、协议 181 项、ash-api 100 项通过，另有 1 项原有 ash-api 测试忽略；受影响 Rust 包 all-targets 警告检查通过。指令测试覆盖原文与 Profile 隔离、冲突、权限、超限、无效 UTF-8、符号链接、连接代次和编辑器观察生命周期。界面验证未使用真实语音账户或物理麦克风，不构成音质验收。
 
 文件树与映射审阅的收尾验证：116 项定向前端测试（8 个文件），Electron/App Server 与 Browser/App Server 各覆盖 IDE、Agent Window 两个场景，七环境类型和分层检查通过。真实 MCP structuredContent 经 Core 保存为原 artifact，再由树命令打开原文件；受控模型端点经真实 Core side chat 生成文本编辑，原审阅命令拒绝后恢复 working copy，源草稿保留。取消、执行刚接受时取消、AI 隐藏、连接更换、用户在保存期间修改、UTF-8 大小及中文提示均有定向验证。树控件在 Light、Dark、HC Dark、HC Light 下覆盖键盘、焦点轮廓、几何和文本溢出；Chat 的 40 个 CSS 文件 ownership audit 无复制、品牌替换或新增上游品牌引用。
+
+## 应用窗口截图链路
+
+桌面入口 `chatScreenshot.contribution.ts` 在 IDE 和 Agents Window 恢复输入框前注册应用窗口截图服务、action 和提示监听，避免漏掉首次粘贴。`chatAppWindowScreenshotActions.ts` 原路径新增，承担两个命令、Add Context 和后台快捷键；`screenshotTool/electron-browser/appWindowScreenshot.ts` 原路径新增，负责选窗和获取窗口图片。截图返回窗口身份、来源、像素和尺寸，聊天 action 再调用内置截图服务，附件继续进入原输入模型的 acquisition lease。
+
+| 路径与对应关系                                                                                                                               | 本批职责与验证                                                                                                          |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `chat/electron-browser/actions/chatAppWindowScreenshotActions.ts`，仅上游原有                                                                | 自动截图、手动选窗、显式 `sessionResource`、模型能力和 AI 配置准入；真实命令注册测试及中文标签测试。                    |
+| `chat/electron-browser/actions/chatAppWindowScreenshotHint.ts`、`chatAppWindowScreenshotSetup.ts`，仅上游原有                                | 首次图片粘贴／拖入提示、共享存储原子认领、权限状态、设置跳转和返回复查；复用输入通知仲裁、Dialog、Button 和无障碍入口。 |
+| `screenshotTool/electron-browser/appWindowScreenshot.ts`、`browser/screenshotTool.ts`，仅上游原有                                            | 窗口截图结果与图片数据契约；独立实现选窗、取消和像素获取，不迁入上游私有控制流。                                        |
+| `platform/native/common/native.ts`、`nativeHost.ts`、`electron-browser/nativeHostApi.ts`、`electron-main/nativeHostMainService.ts`，双方都有 | 加入真实调用的窗口枚举与截图 API；元数据枚举不批量获取窗口像素，Renderer IPC 校验身份及 PNG。                           |
+| `platform/native/electron-main/macScreenWindows.ts`，仅上游原有                                                                              | Core Graphics 元数据与系统窗口 PNG 捕获；排除当前 Ash 进程、限制进程运行时间、清理私有临时目录。                        |
+| `platform/native/electron-main/rendererSystemHostRoutes.ts`，Ash IPC owner                                                                   | 将窗口身份限定为发送窗口最近枚举所得的集合；已有 screenshot endpoint 仍只截发送方自身窗口。                             |
+| `platform/imageView` 与 `workbench/services/imageEditor`，Ash 图片编辑 owner                                                                 | 已有图片输入不触发整屏捕获，也不检查屏幕录制权限；原编辑器与原插件生命周期继续生效。                                    |
+| `code/electron-main/app.ts`，双方都有                                                                                                        | 系统快捷键在 Ash 失焦时选择最后活动窗口；各窗口租约仍由平台 registry 管理。                                             |
+| 原测试替身、中文语言包与 Chat 无障碍帮助                                                                                                     | 同批补齐 Native Host 依赖，覆盖权限、取消、草稿退役、目标会话、图片传递和中文命令。                                     |
+
+`chat.appWindowScreenshots.enabled` 默认开启，同时受 Chat AI 开关约束。macOS 使用 Core Graphics 的窗口顺序并优先屏幕上的窗口；其他桌面平台使用 Electron 枚举和单窗口媒体流。编辑在附件加入草稿前完成。命令支持失焦时通过全局快捷键发起截图，只有用户触发才获取窗口像素。现有整屏选区命令保持独立，不重复持有聊天草稿。窗口捕获反馈与飞入动画不在本批范围。
+
+首次提示只响应当前输入框实际接收的图片粘贴或拖入，不响应草稿恢复。提示使用现有 Tip 通知层，向更高优先级内容让位；图片移除、草稿退役、禁用功能或已成功捕获后关闭。应用级共享存储 writer 原子认领一次显示，IDE 和 Agents Window 不各自持有一次性状态；未显示就失效的认领可释放。
+
+macOS 权限不足时打开 Setup。允许设置跳转、只读复查、返回窗口时复查，系统限制状态提供对应说明；从设置返回仍未生效时提供显式重启。授权完成仅关闭 Setup，不自动继续截图。关闭和 Escape 保留原草稿并恢复焦点。新界面复用 Ash 控件、主题 token、Accessible View／Help 和 verbosity 设置，文案含中文翻译。
+
+真实 OS 截图场景使用独立 Electron 测试应用，只包含测试色块。宿主缺少 macOS 屏幕录制权限时，该场景明确跳过；IPC 权限边界与已有图片的原生编辑场景仍可独立运行。完整实机截图验收状态见根目录 TODO。
+
+本轮 Hint／Setup 验证：`pnpm build`、Renderer／Main／自动化类型检查、中文翻译生成、5 个文件共 38 项定向测试和 10 项输入框定向测试通过。连接 App Server 的 Ash 实机验证通过权限拒绝／受限／恢复、单实例 Setup、草稿与焦点保留，以及 IDE／Agents Window 提示仅显示一次；同时验证四种主题下的按钮边界与 Setup 无障碍帮助返回焦点。权限状态与系统设置调用由测试控制。全局截图快捷键在 Agents Window 初次导航、刷新和重开后也通过回归。此前 2 项 Electron UI 场景通过。真实外部窗口像素捕获仍因宿主权限不足跳过。
+
+## 内置截图编辑器
+
+已确认的 Ash 扩展能力归入 `workbench/contrib/screenshotTool`：截图后停留、矩形、箭头、画笔、文字、马赛克、撤销、复制、保存与加入 Chat。`screenshotTool.contribution.ts` 注册窗口级 `IScreenshotToolService`；服务编排内置呈现与取消，通用 Native／Browser 图片适配器承载交互，`platform/imageView` 持有原生窗口和输出，Native 层检查权限，截图入口协调 Setup。
+
+`screenshotToolView.ts` 启动用户确认的增强编辑界面；从 Ash 自有 Snapshot 实现迁移，保持画布、坐标和历史模型，不复制 VS Code 标注实现。`imageEditorSelection.ts` 将代码快照从扩展适配器归还图片编辑领域，内置命令和扩展适配器复用同一读取逻辑。`snapshot.code`、`snapshot.code.*` 和截图快捷键配置保留现有身份；设置导航改为 Workbench 的 Screenshot 分类。
+
+`extensions/snapshot` 已移除，产品构建直接打包隔离界面；默认截图不再经过扩展目录、SDK 或 Worker 激活。字体、主题、无障碍帮助与中英文文案随内置界面加载。Pin、OCR 与翻译不在本次迁移范围。
+
+权限职责归位后，32 项定向单元／浏览器测试与 10 个 Ash Desktop 自托管场景分批通过。覆盖通用图片协议拒绝旧权限卡片、隔离帧忽略权限操作、桌面截图准入与取消、Chat 命令回退、标注导出、中英文 Setup、权限不足时的后台快捷键，以及已有图片和代码图片不取屏。Main、Renderer、Common、自动化类型、七环境分层、构建和 CSS 检查通过，中文缺失项为零。4 个真实桌面／其他应用像素场景因测试宿主缺少 macOS 屏幕录制权限跳过，保留根目录既有实机验收条目。
+
+## screenshotTool 职责归位
+
+当前行为链为：Chat／独立截图／代码图片 → `IScreenshotToolService` → 选区与标注界面 → 通用图片窗口承载 → 原生输出或 Chat 原草稿。
+
+| 路径关系                                                                                       | 本批处理                                                                                  |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `screenshotTool/browser/screenshotTool.ts`，双方都有                                           | 定义实际使用的增强截图服务端口，不铺没有调用方的接口。                                    |
+| `screenshotTool/browser/screenshotToolService.ts`，仅上游原有                                  | 迁入内置界面生成、截图会话取消与编辑编排；Chat 和代码图片直接消费该服务。                 |
+| `screenshotTool/browser/screenshotAnnotation.ts`、`media/screenshotAnnotation.css`，仅上游原有 | 将 Ash 自有画布编辑器、标注历史和绘制实现原地迁入，无第二份编辑模型。                     |
+| `screenshotTool/browser/screenshotSelection.ts`，仅上游原有                                    | 迁入现有图片坐标与裁剪几何，保留反向框选、像素取整和边界行为。                            |
+| `screenshotTool/browser/screenshotToolView.ts`、代码图片及配置，Ash 增强职责                   | 隔离视图启动、代码图片渲染与内置截图设置随截图贡献归位。                                  |
+| `services/imageEditor`，Ash 通用服务                                                           | 保留外部 Provider 注册、代码图片快照、主题数据和隔离窗口承载；退出内置截图默认 Provider。 |
+| Chat 调用方、Native imageView 产品入口、构建插件、测试与文档                                   | 同批迁移真实依赖；平台权限、IPC 校验、窗口与输出 owner 保持不变。                         |
+
+本批不复刻上游私有实现，也不把尚未在 Ash 使用的附件二次编辑和遥测接口当作迁移清单。
+
+内置界面测试同时注册两个冲突的扩展默认 Provider，仍通过截图、代码图片、标注与取消场景；外部 Provider 的惰性激活、资源约束和撤销测试继续通过。分层检查覆盖七种运行环境，未发现反向依赖。
+
+全桌面框选是 Ash 增强入口。权限卡片已退出图片标注与通用图片 IPC；权限不足由 Native 返回，`NativeScreenshotToolService` 或 Chat action 协调共享 `ScreenCaptureSetupService`，Chat 文案仍归 `chatAppWindowScreenshotSetup.ts`。全局快捷键在授权不足时回到 Workbench 命令。授权后结束本次操作，不自动续截。完整取像范围与生命周期见 [截图说明](../src/ash/workbench/contrib/screenshotTool/README.md#取像范围与权限)。

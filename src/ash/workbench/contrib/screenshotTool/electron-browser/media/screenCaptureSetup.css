@@ -1,0 +1,32 @@
+.ash-screen-capture-setup-dialog {
+	width: min(100%, 520px);
+}
+
+.ash-screen-capture-setup {
+	display: grid;
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-screen-capture-setup p {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-screen-capture-setup-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-screen-capture-setup [role="status"] {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-screen-capture-setup [role="alert"] {
+	color: var(--ash-error-foreground);
+}
+
+.ash-screen-capture-setup button[hidden],
+.ash-screen-capture-setup [role="alert"]:empty {
+	display: none;
+}

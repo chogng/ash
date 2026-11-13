@@ -10,7 +10,7 @@ import { TraceSettingsModel } from '../../trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from './settingsSectionRenderer.js';
 import { trustedDomainsSetting } from '../../url/browser/trustedDomains.js';
 import { ITrustedDomainService } from '../../url/common/trustedDomainService.js';
-import { SnapshotSettingsRenderer } from './snapshotSettingsRenderer.js';
+import { ScreenshotSettingsRenderer } from './screenshotSettingsRenderer.js';
 import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
@@ -274,7 +274,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const sandboxSettings = this._register(this.instantiationService.createInstance(SandboxSettingsModel));
 		this.contents.push(
 			this._register(this.instantiationService.createInstance(AgentRolesSettingsRenderer, settingsContent)),
-			this._register(this.instantiationService.createInstance(SnapshotSettingsRenderer, settingsContent)),
+			this._register(this.instantiationService.createInstance(ScreenshotSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(BrowserPasswordSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, sandboxSettings, AccessibleViewProviderId.SandboxSettings, AccessibilityVerbositySettingId.SandboxSettings)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings)),

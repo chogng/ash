@@ -1,17 +1,15 @@
+import { readCodeImageSelection } from '../../services/imageEditor/browser/imageEditorSelection.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { EditorOption } from '../../../editor/common/config/editorOptions.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { CancellationError } from '../../../base/common/errors.js';
 import { localize } from '../../../nls.js';
 import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
-import { IImageEditorService, type CodeImageSnapshot } from '../../services/imageEditor/common/imageEditorService.js';
+import { IImageEditorService } from '../../services/imageEditor/common/imageEditorService.js';
 import { ICodeEditorService } from '../../../editor/browser/services/codeEditorService.js';
-import { resolveSemanticTokenPresentation } from '../../../editor/common/services/semanticTokensStyling.js';
 import { EditorSemanticHighlightingConfiguration } from '../../../editor/common/config/editorConfigurationSchema.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
-import { basename } from '../../../base/common/resources.js';
 
 /** Adapts the public image capability to client-owned capture and sandbox services. No extension code runs here. */
 export class MainThreadImageEditors extends Disposable {
@@ -141,71 +139,13 @@ export class MainThreadImageEditors extends Disposable {
 		}
 		const binding = this.bindings.get(id);
 		if (!binding || binding.source.incarnation !== source.incarnation || binding.source.activationGeneration !== source.activationGeneration) throw new Error('Image editor registration has retired');
-		const code = value.source === 'selection' ? await this.selection(signal) : undefined;
+		const code = value.source === 'selection' ? await readCodeImageSelection(this.codeEditors.getActiveCodeEditor(), this.theme.getColorTheme(), this.configuration.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration), signal) : undefined;
 		signal.throwIfAborted();
 		if (this.bindings.get(id) !== binding) throw new Error('Image editor registration has retired');
 		// Opening a view transfers its lifetime to the registered provider and window.
 		// The initiating command can finish without imposing its RPC deadline on annotation.
 		void this.editors.show({ editorId: id, code }, binding.signal)
 			.catch(error => { if (!binding.signal.aborted) this.notifications.error(error); });
-	}
-
-	private async selection(signal: AbortSignal): Promise<CodeImageSnapshot> {
-		const editor = this.codeEditors.getActiveCodeEditor();
-		const model = editor?.getModel();
-		const selection = editor?.getSelection();
-		if (!editor || !model || !selection || selection.isEmpty()) {
-			throw new Error(localize('imageEditor.noSelection', 'Select code in an editor before creating a code image.'));
-		}
-		const version = model.getVersionId();
-		await model.tokenization.whenReady(signal);
-		signal.throwIfAborted();
-		if (model.isDisposed() || model.getVersionId() !== version || editor.getModel() !== model) {
-			throw new Error(localize('imageEditor.noSelection', 'Select code in an editor before creating a code image.'));
-		}
-		const lastLine = selection.endColumn === 1 ? selection.endLineNumber - 1 : selection.endLineNumber;
-		if (lastLine - selection.startLineNumber > 2000 || model.getValueInRange(selection).length > 256 * 1024) throw new Error(localize('imageEditor.selectionTooLarge', 'Select less code to create an image.'));
-		const theme = this.theme.getColorTheme();
-		const preference = this.configuration.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
-		const semanticHighlighting = preference === true || (preference !== false && theme.semanticHighlighting === true);
-		const font = editor.getOption(EditorOption.fontInfo);
-		const element = editor.getDomNode();
-		const style = element ? getComputedStyle(element) : undefined;
-		const foreground = style?.getPropertyValue('--ash-editor-foreground').trim() || '#d4d4d4';
-		const lines: CodeImageSnapshot['lines'][number][] = [];
-		for (let line = selection.startLineNumber; line <= lastLine; line++) {
-			model.tokenization.forceTokenization(line);
-			const tokens = model.tokenization.renderedTokens.getLineTokens(line - 1);
-			const content = model.getLineContent(line);
-			const start = line === selection.startLineNumber ? selection.startColumn - 1 : 0;
-			const end = line === selection.endLineNumber ? selection.endColumn - 1 : content.length;
-			const result: CodeImageSnapshot['lines'][number][number][] = [];
-			const append = (text: string, presentation: ReturnType<typeof resolveSemanticTokenPresentation> = {}): void => {
-				if (!text) return;
-				const flags = presentation.fontStyle ?? [];
-				result.push({
-					text, color: presentation.foreground ?? foreground,
-					italic: flags.includes('italic'), bold: flags.includes('bold'),
-					underline: flags.includes('underline'), strikethrough: flags.includes('strikethrough'),
-				});
-			};
-			let offset = start;
-			for (const token of tokens) {
-				const tokenStart = Math.max(start, token.startColumn);
-				const tokenEnd = Math.min(end, token.endColumn);
-				if (tokenStart >= tokenEnd) continue;
-				append(content.slice(offset, tokenStart));
-				append(content.slice(tokenStart, tokenEnd), resolveSemanticTokenPresentation(token, theme, semanticHighlighting));
-				offset = tokenEnd;
-			}
-			append(content.slice(offset, end));
-			lines.push(result);
-		}
-		return {
-			title: basename(model.uri), firstLine: selection.startLineNumber, lines, foreground,
-			background: style?.getPropertyValue('--ash-editor-background').trim() || '#1e1e1e',
-			fontFamily: font.fontFamily, fontSize: font.fontSize, tabSize: model.getOptions().tabSize,
-		};
 	}
 }
 

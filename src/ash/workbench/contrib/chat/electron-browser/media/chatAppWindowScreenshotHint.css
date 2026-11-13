@@ -1,0 +1,14 @@
+.ash-app-window-screenshot-hint {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-app-window-screenshot-hint > span {
+	flex: 1 1 100%;
+	overflow-wrap: anywhere;
+}

@@ -2,10 +2,18 @@ import type { VSBuffer } from '../../../base/common/buffer.js';
 import type { IRectangle } from '../../window/common/window.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 
+/** Native acquisition failed because screen recording is unavailable; the caller owns setup. */
+export const SCREEN_CAPTURE_PERMISSION_REQUIRED = 'ScreenCapturePermissionRequired';
+
 /** Window-scoped platform operations shared by the desktop host adapters. */
 export interface ICommonNativeHostService {
 	/** Captures this host's window as PNG, independent of desktop focus. Rectangle coordinates use renderer CSS pixels. */
 	getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined>;
+	getAppWindows(): Promise<INativeAppWindows>;
+	/** Captures a window from the sender's latest enumeration. */
+	captureAppWindow(window: INativeAppWindow): Promise<VSBuffer | undefined>;
+	requestScreenCaptureAccess(): Promise<void>;
+	getMediaAccessStatus(mediaType: 'screen'): Promise<'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown'>;
 	showToast(options: IToastOptions, token: CancellationToken): Promise<IToastResult>;
 }
 
@@ -44,3 +52,12 @@ export interface IApplicationBadge {
 	readonly description: string;
 	readonly iconDataURL?: string;
 }
+
+export interface INativeAppWindow {
+	readonly sourceId: string;
+	readonly title: string;
+}
+
+export type INativeAppWindows =
+	| { readonly kind: 'windows'; readonly windows: readonly INativeAppWindow[]; }
+	| { readonly kind: 'permissionRequired'; };

@@ -1,3 +1,4 @@
+import { IChatUserImageAttachmentService, getAddedImageIds } from '../attachments/chatUserImageAttachments.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
@@ -37,6 +38,7 @@ export class ChatDragAndDrop extends Disposable {
 		private readonly supportsImages: () => boolean,
 		private readonly getConversation: () => ChatInputState['conversation'],
 		private readonly prepareFiles: (files: readonly File[], signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>,
+		@IChatUserImageAttachmentService private readonly userImages: IChatUserImageAttachmentService,
 		@IFileService private readonly files: IFileService,
 		@IChatAttachmentResolveService private readonly resolver: IChatAttachmentResolveService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -129,6 +131,7 @@ export class ChatDragAndDrop extends Disposable {
 
 	private async accept(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, isChatReference = false): Promise<void> {
 		try {
+			const before = this.target.attachmentModel.attachments;
 			const accepted = await this.target.acquireContext(async signal => {
 				const batch = new AbortController();
 				signal = AbortSignal.any([signal, batch.signal]);
@@ -145,6 +148,7 @@ export class ChatDragAndDrop extends Disposable {
 				}
 			});
 			if (!this.isDisposed && accepted.length) {
+				this.userImages.didAttachImages({ inputUri: this.target.inputUri, attachmentIds: getAddedImageIds(before, this.target.attachmentModel.attachments), gesture: 'drop' });
 				status(localize('chat.context.filesAdded', 'Added {0} attachments', accepted.length));
 				this.target.focus();
 			}

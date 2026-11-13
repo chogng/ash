@@ -11,6 +11,14 @@ export class StorageDatabaseChannel implements IServerChannel {
 	public async call<T>(_context: string, command: string, arg: unknown): Promise<T> {
 		if (command === 'flush' && arg === undefined) { await this.storage.flush(); return undefined as T; }
 		if (!isRecord(arg)) { throw new TypeError('Invalid storage request'); }
+		if (command === 'compareAndSwapApplicationSharedValue') {
+			if (Object.keys(arg).some(key => !['expectedValue', 'key', 'newValue'].includes(key))
+				|| typeof arg.key !== 'string' || !arg.key.trim() || arg.key.length > 1024
+				|| [arg.expectedValue, arg.newValue].some(value => value !== undefined && (typeof value !== 'string' || value.length > 1024 * 1024))) {
+				throw new TypeError('Invalid application storage comparison');
+			}
+			return await this.storage.compareAndSwapApplicationSharedValue(arg.key, arg.expectedValue as string | undefined, arg.newValue as string | undefined) as T;
+		}
 		const identity = validateStorageIdentity(arg.identity);
 		switch (command) {
 			case 'getItems': return await this.storage.getItems(identity, arg.legacy === undefined ? undefined : validateStorageEntries(arg.legacy)) as T;

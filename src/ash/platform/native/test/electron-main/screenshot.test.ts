@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { BrowserWindow } from 'electron/main';
 import { getScreenshot } from '../../electron-main/nativeHostMainService.js';
-import { validateScreenshotRectangle } from '../../common/nativeHost.js';
+import { validateScreenshotRectangle, validateAppWindow, validateAppWindows } from '../../common/nativeHost.js';
 
 test('screenshot rectangles reject malformed IPC and cannot select another window', () => {
 	assert.equal(validateScreenshotRectangle(undefined), undefined);
@@ -52,4 +52,13 @@ test('a window closed during capture produces no late screenshot', async () => {
 		},
 	} as unknown as BrowserWindow;
 	assert.equal(await getScreenshot(window), undefined);
+});
+
+
+test('app window IPC accepts only bounded window identities and explicit permission results', () => {
+	const window = { sourceId: 'window:42:0', title: 'Synthetic app' };
+	assert.deepEqual(validateAppWindows({ kind: 'windows', windows: [window] }), { kind: 'windows', windows: [window] });
+	assert.deepEqual(validateAppWindows({ kind: 'permissionRequired' }), { kind: 'permissionRequired' });
+	for (const value of [null, { ...window, sourceId: 'screen:0:0' }, { ...window, sourceId: '../42' }, { ...window, title: 'x'.repeat(8193) }, { ...window, windowId: 1 }]) assert.throws(() => validateAppWindow(value));
+	for (const value of [{ kind: 'windows', windows: [null] }, { kind: 'permissionRequired', windows: [] }, { kind: 'unknown' }]) assert.throws(() => validateAppWindows(value));
 });

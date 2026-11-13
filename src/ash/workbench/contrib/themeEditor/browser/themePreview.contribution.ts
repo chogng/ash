@@ -1,3 +1,4 @@
+import '../../screenshotTool/browser/screenshotTool.web.contribution.js';
 // The preview uses production chrome and editor registrations without loading
 // the entire Web product (terminal add-ons, tasks, testing and extension hosts).
 // Keep this as one import boundary after the preview host initializes NLS.

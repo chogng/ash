@@ -1,3 +1,5 @@
+import { SCREEN_CAPTURE_PERMISSION_REQUIRED } from '../../platform/native/common/native.js';
+import { GLOBAL_KEYBINDING_TRIGGER_CHANNEL } from '../../platform/globalKeybindings/common/globalKeybindings.js';
 import { TerminalWindowRecovery } from './terminalWindowRecovery.js';
 import { BrowserNetworkProxy } from '../../platform/browserView/electron-main/browserNetworkProxy.js';
 import { WSLRemoteAgentHostService } from '../../platform/agentHost/node/wslRemoteAgentHostService.js';
@@ -39,7 +41,7 @@ import { OAuthCallbackHost } from '../../platform/connectors/electron-main/oauth
 import { RendererWorkspaceHost } from '../../platform/workspaces/electron-main/rendererWorkspaceHost.js';
 import { AppServerBrowserHost } from '../../platform/agentHost/electron-main/appServerBrowserHost.js';
 import { rendererSystemHostRoutes } from '../../platform/native/electron-main/rendererSystemHostRoutes.js';
-import { nativeImage, nativeTheme, shell } from 'electron';
+import { nativeImage, nativeTheme, shell, systemPreferences } from 'electron';
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, powerMonitor, safeStorage, type BrowserWindowConstructorOptions, type Event as ElectronEvent, type MenuItemConstructorOptions } from 'electron/main';
 import { IEncryptionMainService } from '../../platform/encryption/common/encryptionService.js';
 import { IBrowserPasswordMainService, BrowserPasswordMainService, browserPasswordChannel } from '../../platform/browserView/electron-main/browserPasswordMainService.js';
@@ -429,7 +431,8 @@ export class AshApplication extends Disposable {
 		this.nativeKeyboardLayout = this._register(new NativeKeyboardLayoutMainService());
 		this.globalKeybindings = this._register(new GlobalKeybindingsMainService({
 			shortcuts: globalShortcut,
-			activeWindowId: () => BrowserWindow.getFocusedWindow()?.id,
+			// Global shortcuts also run while another application has focus.
+			activeWindowId: () => BrowserWindow.getFocusedWindow()?.id ?? this.windowsMainService.getLastActiveWindow()?.id,
 			runCommand: (windowId, commandId, args) => {
 				if (commandId !== OPEN_AGENTS_WINDOW_COMMAND_ID) return;
 				const options = validateOpenAgentsWindow(args);
@@ -1978,6 +1981,7 @@ export class AshApplication extends Disposable {
 			},
 			...this.globalKeybindings.createWindowRoutes(window, lifetime, (id, commandId) => {
 				if (id !== ScreenshotShortcutId || commandId !== ScreenshotCommandId) return false;
+				if (process.platform === 'darwin' && systemPreferences.getMediaAccessStatus('screen') !== 'granted') return false;
 				const colorScheme = nativeTheme.shouldUseHighContrastColors
 					? (nativeTheme.shouldUseDarkColors ? 'hcDark' : 'hcLight') : (nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
 				const hints = this.persistentServices?.configuration.getValue<boolean>('accessibility.verbosity.chatScreenshot') !== false;
@@ -1987,7 +1991,11 @@ export class AshApplication extends Disposable {
 					if (window.isMinimized()) window.restore();
 					window.show();
 					window.webContents.send(IMAGE_VIEW_ATTACH_CHANNEL, image);
-				}).catch(error => this.logService.error('screenshot', 'Could not capture the desktop', error));
+				}).catch(error => {
+					if (String(error).includes(SCREEN_CAPTURE_PERMISSION_REQUIRED) && !window.isDestroyed() && !window.webContents.isDestroyed()) {
+						window.webContents.send(GLOBAL_KEYBINDING_TRIGGER_CHANNEL, { id: ScreenshotShortcutId });
+					} else this.logService.error('screenshot', 'Could not capture the desktop', error);
+				});
 				return true;
 			}),
 		];

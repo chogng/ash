@@ -1,15 +1,16 @@
+import { shell } from 'electron';
 import type { IAuxiliaryWindowsMainService } from '../../auxiliaryWindow/electron-main/auxiliaryWindows.js';
 import { collectElectronMemory } from '../../memory/electron-main/electronMemoryCollector.js';
 import { URI } from '../../../base/common/uri.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { Notification, systemPreferences, type BrowserWindow } from 'electron/main';
+import { desktopCapturer, Notification, systemPreferences, type BrowserWindow } from 'electron/main';
 import { ElectronMainClipboardService } from '../../clipboard/electron-main/electronMainClipboardService.js';
 import { type ElectronOpenerService, validateImageOpenExtension, validateImageOpenRequest } from '../../opener/electron-main/electronOpenerService.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { DialogRequest } from '../../dialogs/common/dialogs.js';
-import { NATIVE_HOST_IMAGE_APPLICATIONS_CHANNEL, NATIVE_HOST_OPEN_IMAGE_CHANNEL, validateScreenshotRectangle } from '../common/nativeHost.js';
-import { getScreenshot } from './nativeHostMainService.js';
+import { NATIVE_HOST_MEDIA_ACCESS_STATUS_CHANNEL, NATIVE_HOST_APP_WINDOWS_CHANNEL, NATIVE_HOST_CAPTURE_APP_WINDOW_CHANNEL, NATIVE_HOST_SCREEN_CAPTURE_ACCESS_CHANNEL, validateAppWindow, NATIVE_HOST_IMAGE_APPLICATIONS_CHANNEL, NATIVE_HOST_OPEN_IMAGE_CHANNEL, validateScreenshotRectangle } from '../common/nativeHost.js';
+import { getAppWindows, captureAppWindow, getScreenshot } from './nativeHostMainService.js';
 import { nativeToastRoutes, type INativeToast } from './nativeToast.js';
 import { REQUEST_MICROPHONE_ACCESS_CHANNEL, type IToastOptions } from '../common/native.js';
 import type { DirectoryPermissionRequest } from '../../workspace/common/workspaceTrust.js';
@@ -54,6 +55,8 @@ export function rendererSystemHostRoutes(
 	directoryPermissionPrompt?: (request: DirectoryPermissionRequest) => DialogRequest,
 ): readonly IpcRoute<unknown, unknown>[] {
 	const clipboard = new ElectronMainClipboardService(window);
+	// Window IDs are capabilities granted by this sender's most recent enumeration.
+	let appWindowSources = new Set<string>();
 	const text = (value: unknown): string => { if (typeof value !== 'string' || value.length > 1_000_000) { throw new Error('Invalid host text'); } return value; };
 	const clipboardType = (value: unknown): 'clipboard' | 'selection' | undefined => {
 		if (value !== undefined && value !== 'clipboard' && value !== 'selection') {
@@ -77,6 +80,39 @@ export function rendererSystemHostRoutes(
 		return { resources, operation };
 	};
 	return [
+		{
+			channel: NATIVE_HOST_MEDIA_ACCESS_STATUS_CHANNEL,
+			validate: value => { if (value !== 'screen') { throw new TypeError('Invalid media access type'); } },
+			invoke: () => process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted',
+		},
+		{
+			channel: NATIVE_HOST_APP_WINDOWS_CHANNEL,
+			validate: value => { if (value !== undefined) throw new TypeError('Unexpected application window arguments'); },
+			invoke: async () => {
+				appWindowSources.clear();
+				const result = await getAppWindows();
+				if (!window.isDestroyed() && result.kind === 'windows') appWindowSources = new Set(result.windows.map(item => item.sourceId));
+				return result;
+			},
+		},
+		{
+			channel: NATIVE_HOST_CAPTURE_APP_WINDOW_CHANNEL,
+			validate: validateAppWindow,
+			invoke: async input => {
+				const value = input as ReturnType<typeof validateAppWindow>;
+				if (window.isDestroyed() || !appWindowSources.has(value.sourceId)) throw new Error('Application window is no longer available');
+				return (await captureAppWindow(value.sourceId))?.buffer;
+			},
+		},
+		{
+			channel: NATIVE_HOST_SCREEN_CAPTURE_ACCESS_CHANNEL,
+			validate: value => { if (value !== undefined) throw new TypeError('Unexpected screen permission arguments'); },
+			invoke: async () => {
+				if (process.platform !== 'darwin') return;
+				await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } }).catch(() => undefined);
+				await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+			},
+		},
 		{
 			channel: REQUEST_MICROPHONE_ACCESS_CHANNEL,
 			validate: value => { if (value !== undefined) throw new TypeError('Unexpected microphone permission arguments'); },

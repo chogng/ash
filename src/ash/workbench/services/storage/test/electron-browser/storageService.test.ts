@@ -75,7 +75,7 @@ suite('Desktop window storage', () => {
 				getChannel: () => ({
 					call: (command, arg) => {
 						if (command === 'updateItems') { sentWrites++; }
-						return channel.call('window:1', command, arg);
+						return channel.call('window:1', command, arg === undefined ? undefined : JSON.parse(JSON.stringify(arg)));
 					},
 					listen: (event, arg) => channel.listen('window:1', event, arg),
 				}),
@@ -85,6 +85,16 @@ suite('Desktop window storage', () => {
 			using first = services.createInstance(NativeWorkbenchStorageService, options);
 			using second = services.createInstance(NativeWorkbenchStorageService, options);
 			await Promise.all([first.initialize(), second.initialize()]);
+			const claims = await Promise.all([
+				first.compareAndSwapApplicationSharedValue('screenshot-hint', undefined, 'first'),
+				second.compareAndSwapApplicationSharedValue('screenshot-hint', undefined, 'second'),
+			]);
+			assert.deepEqual(claims.sort(), [false, true]);
+			assert.equal(first.get('screenshot-hint', StorageScope.APPLICATION), second.get('screenshot-hint', StorageScope.APPLICATION));
+			const winner = first.get('screenshot-hint', StorageScope.APPLICATION)!;
+			assert.equal(await second.compareAndSwapApplicationSharedValue('screenshot-hint', 'not-the-owner', undefined), false);
+			assert.equal(await first.compareAndSwapApplicationSharedValue('screenshot-hint', winner, undefined), true);
+
 			assert.equal(first.get('constructor', StorageScope.APPLICATION), undefined);
 			first.store('__proto__', 'ordinary-key', StorageScope.APPLICATION, StorageTarget.USER);
 			first.store('first', 'one', StorageScope.APPLICATION, StorageTarget.USER);

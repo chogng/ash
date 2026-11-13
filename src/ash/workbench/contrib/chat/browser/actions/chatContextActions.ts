@@ -1,3 +1,4 @@
+import { IScreenshotToolService } from '../../../screenshotTool/browser/screenshotTool.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { IImageEditorService } from '../../../../services/imageEditor/common/imageEditorService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -135,7 +136,7 @@ export function registerChatContextActions(imageEditors: IImageEditorService, co
 		override async run(accessor: ServicesAccessor, capture?: ChatImageCapture): Promise<void> {
 			if (capture !== undefined && typeof capture !== 'function') throw new TypeError('Expected a host-owned image capture');
 			if (!capture) {
-				await accessor.get(IImageEditorService).show({}, new AbortController().signal);
+				await accessor.get(IScreenshotToolService).show({}, new AbortController().signal);
 				return;
 			}
 			const target = await accessor.get(IViewsService).openView<IView & IChatContextTarget>(CHAT_VIEW_ID);

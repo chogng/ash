@@ -1,3 +1,5 @@
+import { IScreenshotToolService } from '../../../src/ash/workbench/contrib/screenshotTool/browser/screenshotTool.js';
+import { ScreenshotToolService } from '../../../src/ash/workbench/contrib/screenshotTool/browser/screenshotToolService.js';
 import { registerTestWorkbenchHostServices } from '../../../src/ash/workbench/test/common/workbenchHostTestServices.js';
 import { constObservable } from '../../../src/ash/base/common/observable.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
@@ -19,7 +21,7 @@ import { IChatWidgetService, type IChatWidget, type IWorkspacePickerItem } from 
 import { OpenWorkspacePickerAction } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatExecuteActions.js';
 import { ChatContextContributions, ChatReferenceContextContribution } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatContext.js';
 import { ChatReferenceAttachmentWidgetContribution } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatReferenceAttachmentWidget.contribution.js';
-import { startSnapshotFixture } from './snapshotFixture.js';
+import { startImageEditorFixture } from './imageEditorFixture.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 const codeFeatures = registerTestCodeEditorFeatures();
 import { BrowserImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/browserImageEditorService.js';
@@ -627,6 +629,7 @@ services.registerInstance(IVoiceCodeTranscriptionBackendService, dictationFixtur
 	},
 }) : undefined);
 services.registerSingleton(IImageEditorService, () => services.createInstance(BrowserImageEditorService));
+services.registerSingleton(IScreenshotToolService, () => services.createInstance(ScreenshotToolService));
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 const notifications = resources.add(new TestNotificationService());
@@ -955,7 +958,7 @@ if (inlineCode || new URLSearchParams(location.search).has('screenshotFixture'))
 }
 let inlineEditor: ChatInputEditor | undefined;
 const editorProvider = inlineCode ? { create: (options: Parameters<typeof ChatInputEditors.create>[0]) => inlineEditor = services.createInstance(ChatInputEditor, { ...options, hostCompletions: hostInputCompletions }) } : ChatInputEditors;
-const snapshotFixture = new URLSearchParams(location.search).has('screenshotFixture') ? await startSnapshotFixture(services, resources) : undefined;
+const imageEditorFixture = new URLSearchParams(location.search).has('screenshotFixture') ? await startImageEditorFixture(services, resources) : undefined;
 
 const workspaceChanged = resources.add(new Emitter<IWorkspacePickerItem | undefined>());
 let selectedWorkspace: IWorkspacePickerItem | undefined;
@@ -990,7 +993,7 @@ if (new URLSearchParams(location.search).has('notices')) {
 	registerChatActions();
 }
 if (inlineCode) {
-	if (snapshotFixture) resources.add(languageFeatures.syntaxProvider.register({
+	if (imageEditorFixture) resources.add(languageFeatures.syntaxProvider.register({
 		id: 'test.snapshot.syntax', languageIds: ['typescript'],
 		provideTokens: () => ({
 			tokens: [
@@ -1005,7 +1008,7 @@ if (inlineCode) {
 	document.body.append(source);
 	let model: ITextModel = resources.add(new TextModel('first\nsecond\nconst unsaved = 42;\nreturn unsaved;\nlast', {
 		resource: URI.file('/workspace/example.ts'), languageId: 'typescript',
-		...(snapshotFixture ? { tokenization: { syntaxProviderRegistry: languageFeatures.syntaxProvider } } : {}),
+		...(imageEditorFixture ? { tokenization: { syntaxProviderRegistry: languageFeatures.syntaxProvider } } : {}),
 	}));
 	if (new URLSearchParams(location.search).has('outputSelection')) {
 		const output = services.get(IOutputService);
@@ -1036,11 +1039,11 @@ if (inlineCode) {
 		void services.get(ICommandService).executeCommand('workbench.action.chat.attachSelection');
 	};
 	document.body.append(add);
-	if (snapshotFixture) {
+	if (imageEditorFixture) {
 		const capture = document.createElement('button'); capture.id = 'create-code-image'; capture.textContent = 'Create code image';
 		resources.add(addDisposableListener(capture, 'click', () => {
 			editor.setSelection(new Selection(3, 1, 5, 1)); editor.focus();
-			void snapshotFixture.runCode().catch(error => { document.querySelector<HTMLOutputElement>('[aria-label="Context error"]')!.textContent = String(error); });
+			void imageEditorFixture.runCode().catch(error => { document.querySelector<HTMLOutputElement>('[aria-label="Context error"]')!.textContent = String(error); });
 		}));
 		document.body.append(capture);
 	}
@@ -1385,7 +1388,7 @@ declare global {
 		ashScreenshotIntegration: {
 			state(): { calls: number; overlays: number[]; pending: boolean; };
 			release(): void;
-			stopExtension(): Promise<void> | undefined;
+			stopImageEditor(): Promise<void> | undefined;
 			draft(): Promise<string | undefined>;
 			switchDraft(): void;
 		};
@@ -1394,7 +1397,7 @@ declare global {
 window.ashScreenshotIntegration = {
 	state: () => ({ calls: screenshotCalls, overlays: screenshotVisibleOverlays, pending: part.attachmentModel.hasPendingContext }),
 	release: () => { releaseScreenshot?.(); releaseScreenshot = undefined; },
-	stopExtension: () => snapshotFixture?.stop(),
+	stopImageEditor: () => imageEditorFixture?.stop(),
 	draft: async () => (await part.captureDraft())?.draft.text,
 	switchDraft: () => { part.invalidatePendingInput(); part.restoreDraft({ mode: state.mode, text: 'Next conversation', contexts: [] }); },
 };

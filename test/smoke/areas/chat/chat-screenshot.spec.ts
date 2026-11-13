@@ -50,8 +50,10 @@ async function uncoverDisplays(application: ElectronApplication, ids: number[]):
 
 test('standalone capture copies on Enter while Chat stays closed', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
 	if (!('browserWindow' in application)) throw new Error('Expected an Electron window');
+	const permission = await application.evaluate(({ systemPreferences }) => process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted');
+	test.skip(permission !== 'granted', 'Screen Recording permission is required for actual desktop pixels.');
 	await workbench.quickaccess.runCommand('workbench.action.closeAuxiliaryBar');
-	const chat = workbench.page.locator('.ash-chat-input-editor');
+	const chat = workbench.page.locator('[data-view-id="ash.chat.view"] .ash-chat-input-editor');
 	await expect(chat).toBeHidden();
 	const covers = await coverDisplays(application);
 	try {
@@ -131,6 +133,8 @@ test('Agent window screenshots retain their target with another window open and 
 for (const locale of ['en', 'zh-CN']) {
 	test(`manual screenshot selects another window's desktop pixels and cancels safely in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application, workbench, restartWorkbench }, testInfo) => {
 		if (!('browserWindow' in application)) throw new Error('Expected an Electron window');
+		const permission = await application.evaluate(({ systemPreferences }) => process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted');
+		test.skip(permission !== 'granted', 'Screen Recording permission is required for actual desktop pixels.');
 		const chinese = locale === 'zh-CN';
 		if (chinese) {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
@@ -248,9 +252,9 @@ for (const locale of ['en', 'zh-CN']) {
 		} finally { await uncoverDisplays(desktop, covers); }
 	});
 
-	test(`screen permission guidance identifies the running app and offers recovery in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application, workbench, restartWorkbench }, testInfo) => {
+	test(`desktop screenshot setup handles permissions before annotation in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application, workbench, restartWorkbench }, testInfo) => {
 		test.skip(process.platform !== 'darwin', 'macOS screen recording permission');
-		if (!('browserWindow' in application)) throw new Error('Expected an Electron window');
+		if (!('browserWindow' in application)) throw new Error('Expected Electron');
 		const chinese = locale === 'zh-CN';
 		if (chinese) {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
@@ -258,106 +262,83 @@ for (const locale of ['en', 'zh-CN']) {
 			await picker.getByRole('combobox').fill('简体中文');
 			await picker.getByRole('combobox').press('Enter');
 			({ application, workbench } = await restartWorkbench());
-			if (!('browserWindow' in application)) throw new Error('Expected an Electron window');
+			if (!('browserWindow' in application)) throw new Error('Expected Electron');
 		}
 		const desktop = application;
 		const page = workbench.page;
 		await workbench.quickaccess.runCommand('workbench.action.chat.open');
 		const input = page.locator('.ash-chat-input-editor').getByRole('textbox').last();
-		await input.focus();
-		await page.keyboard.insertText('Permission draft');
-		const saved = await desktop.evaluateHandle(({ app, systemPreferences, desktopCapturer, dialog, shell }) => {
-			const originals = { access: systemPreferences.getMediaAccessStatus, capture: desktopCapturer.getSources, message: dialog.showMessageBox, open: shell.openExternal, reveal: shell.showItemInFolder };
-			const state = {
-				permission: 'denied' as 'denied' | 'not-determined' | 'granted', response: 0, captures: 0,
-				dialogs: [] as { message: string; detail: string; buttons: string[]; cancelId?: number; }[],
-				opened: [] as string[], revealed: [] as string[], executable: app.getPath('exe'),
-				originals,
+		await input.focus(); await page.keyboard.insertText('Permission draft');
+		const composer = await input.evaluateHandle(element => element.closest('.ash-chat-input-editor')!);
+		const state = await desktop.evaluateHandle(({ systemPreferences, desktopCapturer, shell }) => {
+			const original = { access: systemPreferences.getMediaAccessStatus, capture: desktopCapturer.getSources, open: shell.openExternal };
+			const state = { original, captures: 0, consentRequests: 0, opened: [] as string[], permission: 'denied' as 'denied' | 'granted' | 'restricted' };
+			systemPreferences.getMediaAccessStatus = type => type === 'screen' ? state.permission : original.access.call(systemPreferences, type);
+			desktopCapturer.getSources = async options => {
+				if (options.thumbnailSize?.width === 0 && options.thumbnailSize.height === 0) state.consentRequests++;
+				else state.captures++;
+				throw new Error('The fixture permits consent requests but no desktop pixels');
 			};
-			systemPreferences.getMediaAccessStatus = media => media === 'screen' ? state.permission : originals.access.call(systemPreferences, media);
-			desktopCapturer.getSources = async () => { state.captures++; throw new Error('Deliberate permission capture failure'); };
-			dialog.showMessageBox = (async (_window: unknown, options: { message: string; detail: string; buttons: string[]; cancelId?: number; }) => {
-				state.dialogs.push({ message: options.message, detail: options.detail, buttons: options.buttons, cancelId: options.cancelId });
-				return { response: state.response, checkboxChecked: false };
-			}) as typeof dialog.showMessageBox;
-			shell.openExternal = async target => { state.opened.push(target); };
-			shell.showItemInFolder = target => { state.revealed.push(target); };
+			shell.openExternal = async url => { state.opened.push(url); };
 			return state;
 		});
 		try {
-			await workbench.settingsEditor.openUserSettingsUI();
-			await workbench.settingsEditor.selectGroup('extensions');
-			await workbench.settingsEditor.selectCategory('extension.ash.snapshot');
-			const settings = page.getByRole('dialog', { name: chinese ? 'Ash 设置' : 'Ash Settings', exact: true });
-			const screen = settings.locator('[data-settings-tree-group-id="extension.ash.snapshot.group.screen"]');
-			const code = settings.locator('[data-settings-tree-group-id="extension.ash.snapshot.group.code"]');
-			await expect(screen).toContainText(chinese ? '屏幕截图' : 'Screen capture');
-			await expect(code).toContainText(chinese ? '代码截图' : 'Code images');
-			await expect(code.locator('[data-settings-item-id="snapshot.code.shortcut"]')).toContainText(chinese ? '未设置' : 'Not set');
-			await page.screenshot({ path: testInfo.outputPath(`screenshot-settings-${locale}.png`) });
-			await code.getByRole('button', { name: chinese ? '修改快捷键' : 'Change Shortcut', exact: true }).click();
-			await expect(page.locator('.ash-keybindings-search input')).toHaveValue('@command:snapshot.code');
-			await workbench.settingsEditor.openUserSettingsUI();
-			await workbench.settingsEditor.selectGroup('extensions');
-			await workbench.settingsEditor.selectCategory('extension.ash.snapshot');
-			const background = settings.getByRole('switch', { name: chinese ? 'Ash 在后台时也可截图' : 'Capture while Ash is in the background', exact: true });
-			await expect(background).not.toBeChecked();
-			await expect(settings.locator('[data-configuration-key="snapshot.code.padding"]')).toBeVisible();
-			await expect(settings.getByRole('button', { name: chinese ? '打开系统设置' : 'Open System Settings', exact: true })).toHaveCount(0);
-			await background.focus();
-			await background.press('Space');
-			await expect(background).toBeChecked();
-			await background.press('Space');
-			await expect(background).not.toBeChecked();
-			expect(await saved.evaluate(state => state.captures)).toBe(0);
-			expect(await saved.evaluate(state => state.dialogs)).toHaveLength(0);
-			expect(await saved.evaluate(state => state.opened)).toHaveLength(0);
-			await settings.locator('.ash-modal-editor-close').click();
-			await workbench.quickaccess.runCommand('workbench.action.chat.open');
-			await input.focus();
-
-			await input.press(screenshotShortcut);
-			await expect.poll(() => saved.evaluate(state => state.opened)).toEqual(['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture']);
-			const state = await saved.evaluate(state => ({ captures: state.captures, dialogs: state.dialogs, executable: state.executable }));
-			expect(state.captures).toBe(0);
-			expect(state.dialogs).toHaveLength(1);
-			expect(state.dialogs[0]).toMatchObject({ message: chinese ? '需要屏幕录制权限' : 'Screen recording permission needed', buttons: chinese ? ['打开系统设置', '在 Finder 中显示应用程序', '取消'] : ['Open System Settings', 'Show Application in Finder', 'Cancel'], cancelId: 2 });
-			const bundle = state.executable.slice(0, state.executable.lastIndexOf('/Contents/MacOS/'));
-			expect(state.dialogs[0].detail).toContain(basename(bundle));
-			expect(state.dialogs[0].detail).not.toContain(bundle);
-			expect(state.dialogs[0].detail).toContain(chinese ? 'macOS 需要屏幕录制权限' : 'macOS requires screen recording permission');
-			await expect(input).toBeFocused();
-			await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Permission draft');
-			await expect(page.getByRole('button', { name: chinese ? '预览 截图' : 'Preview Screenshot', exact: true })).toHaveCount(0);
+			const denied = await page.evaluate(async () => {
+				try {
+					await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:image-view:open', {
+						id: crypto.randomUUID(), title: 'Permission boundary probe', source: 'screen', html: '', input: {},
+					});
+					return '';
+				} catch (error) { return String(error); }
+			});
+			expect(denied).toContain('ScreenCapturePermissionRequired');
 			expect(desktop.windows().filter(page => page.url().includes('/imageView/imageView.html'))).toHaveLength(0);
-			await expect(page.getByText(/Could not add context|无法添加上下文/)).toHaveCount(0);
-
-			await saved.evaluate(state => { state.response = 1; });
-			await input.press(screenshotShortcut);
-			await expect.poll(() => saved.evaluate(state => state.revealed)).toEqual([bundle]);
+			await workbench.quickaccess.runCommand('workbench.action.openSettings');
+			const settings = workbench.settingsEditor.element;
+			await expect(settings).toBeVisible();
+			await workbench.settingsEditor.selectGroup('workbench');
+			await workbench.settingsEditor.selectCategory('screenshot');
+			await expect(settings.locator('[data-settings-tree-group-id="screenshot.group.screen"]')).toContainText(chinese ? '屏幕截图' : 'Screen capture');
+			await expect(settings.locator('[data-configuration-key="snapshot.code.padding"]')).toBeVisible();
+			await page.screenshot({ path: testInfo.outputPath(`screenshot-settings-${locale}.png`) });
+			await settings.locator('.ash-modal-editor-close').click();
+			await input.focus(); await input.press(screenshotShortcut);
+			const setup = page.getByRole('dialog', { name: chinese ? '设置桌面截图' : 'Set Up Desktop Screenshots', exact: true });
+			await expect(setup).toBeVisible();
+			expect(desktop.windows().filter(page => page.url().includes('/imageView/imageView.html'))).toHaveLength(0);
+			expect(await state.evaluate(state => state.opened)).toEqual([]);
+			expect(await state.evaluate(state => state.captures)).toBe(0);
+			const recheck = setup.getByRole('button', { name: chinese ? '重新检查' : 'Check Again', exact: true });
+			await recheck.focus();
+			await page.keyboard.press('Alt+F1');
+			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /授权后重新发起截图/ : /start a new screenshot/);
+			await page.keyboard.press('Escape');
+			await expect(recheck).toBeFocused();
+			await setup.getByRole('button', { name: chinese ? '在设置中允许' : 'Allow in Settings', exact: true }).click();
+			await expect.poll(() => state.evaluate(state => state.opened)).toEqual(['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture']);
+			expect(await state.evaluate(state => state.consentRequests)).toBe(1);
+			await state.evaluate(state => { state.permission = 'granted'; });
+			await recheck.click();
+			await expect(setup).toBeHidden();
+			expect(await state.evaluate(state => state.captures)).toBe(0);
+			expect(desktop.windows().filter(page => page.url().includes('/imageView/imageView.html'))).toHaveLength(0);
+			await state.evaluate(state => { state.permission = 'restricted'; });
+			await input.focus(); await input.press(screenshotShortcut);
+			await expect(setup).toBeVisible();
+			await expect(setup.getByRole('button', { name: chinese ? '在设置中允许' : 'Allow in Settings', exact: true })).toBeHidden();
+			await page.screenshot({ path: testInfo.outputPath(`screenshot-permission-${locale}.png`) });
+			await setup.press('Escape');
+			await expect(setup).toBeHidden();
 			await expect(input).toBeFocused();
-
-			// The first OS request must still run when consent has never been determined.
-			await saved.evaluate(state => { state.permission = 'not-determined'; state.response = 2; });
-			await input.press(screenshotShortcut);
-			await expect.poll(() => saved.evaluate(state => state.dialogs.length)).toBe(3);
-			expect(await saved.evaluate(state => state.captures)).toBe(1);
-			await expect(input).toBeFocused();
-
-			// An actual acquisition failure with permission granted must retain its error instead of blaming permissions.
-			await saved.evaluate(state => { state.permission = 'granted'; });
-			await input.press(screenshotShortcut);
-			await expect(page.getByLabel(chinese ? '通知' : 'Notifications', { exact: true }).getByText(/Screen capture is unavailable|无法截取屏幕/)).toBeVisible();
-			expect(await saved.evaluate(state => state.dialogs.length)).toBe(3);
+			await expect.poll(() => composer.evaluate(element => element.isConnected ? element.textContent : '')).toContain('Permission draft');
 		} finally {
-			await desktop.evaluate(({ systemPreferences, desktopCapturer, dialog, shell }, state) => {
-				systemPreferences.getMediaAccessStatus = state.originals.access;
-				desktopCapturer.getSources = state.originals.capture;
-				dialog.showMessageBox = state.originals.message;
-				shell.openExternal = state.originals.open;
-				shell.showItemInFolder = state.originals.reveal;
-			}, saved);
-			await saved.dispose();
+			await desktop.evaluate(({ systemPreferences, desktopCapturer, shell }, state) => {
+				systemPreferences.getMediaAccessStatus = state.original.access;
+				desktopCapturer.getSources = state.original.capture;
+				shell.openExternal = state.original.open;
+			}, state);
+			await state.dispose();
+			await composer.dispose();
 		}
 	});
 
@@ -371,8 +352,9 @@ test('screenshot shortcut reports occupancy, retains a working global binding an
 	await workbench.quickaccess.runCommand('workbench.action.chat.open');
 	const input = page.locator('.ash-chat-input-editor').getByRole('textbox').last();
 	await input.focus(); await page.keyboard.insertText('Global capture draft');
-	const saved = await desktop.evaluateHandle(({ globalShortcut }) => {
-		const originals = { register: globalShortcut.register, unregister: globalShortcut.unregister, isRegistered: globalShortcut.isRegistered };
+	const saved = await desktop.evaluateHandle(({ globalShortcut, shell }) => {
+		const originals = { register: globalShortcut.register, unregister: globalShortcut.unregister, isRegistered: globalShortcut.isRegistered, open: shell.openExternal };
+		shell.openExternal = async () => { };
 		const state = { originals, blocked: new Set(['Command+Control+A']), callbacks: new Map<string, () => void>(), operations: [] as string[] };
 		globalShortcut.register = (accelerator, callback) => {
 			state.operations.push(`register:${accelerator}`);
@@ -388,16 +370,17 @@ test('screenshot shortcut reports occupancy, retains a working global binding an
 	});
 	let covers: number[] = [];
 	try {
-		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectGroup('extensions');
-		await workbench.settingsEditor.selectCategory('extension.ash.snapshot');
+		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		await expect(workbench.settingsEditor.element).toBeVisible();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('screenshot');
 		let settings = page.getByRole('dialog', { name: 'Ash Settings', exact: true });
 		const background = settings.getByRole('switch', { name: 'Capture while Ash is in the background', exact: true });
 		await expect(background).not.toBeChecked();
 		await background.focus();
 		await background.press('Space');
 		await expect(background).toBeChecked();
-		const notifications = page.getByLabel('Notifications', { exact: true });
+		const notifications = page.getByRole('region', { name: 'Notifications', exact: true });
 		await expect(notifications).toContainText('The global screenshot shortcut could not be registered.');
 		expect(await saved.evaluate(state => state.callbacks.size)).toBe(0);
 		await notifications.getByRole('button', { name: 'Change Shortcut', exact: true }).click();
@@ -408,9 +391,10 @@ test('screenshot shortcut reports occupancy, retains a working global binding an
 		await expect(shortcuts.locator('.ash-keybindings-row')).toHaveCount(1);
 		await expect(shortcuts.locator('.ash-keybindings-command-id')).toHaveText('workbench.action.chat.attachScreenshot');
 
-		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectGroup('extensions');
-		await workbench.settingsEditor.selectCategory('extension.ash.snapshot');
+		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		await expect(workbench.settingsEditor.element).toBeVisible();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('screenshot');
 		await saved.evaluate(state => state.blocked.clear());
 		await background.focus(); await background.press('Space');
 		await expect(background).not.toBeChecked();
@@ -441,15 +425,24 @@ test('screenshot shortcut reports occupancy, retains a working global binding an
 		covers = await coverDisplays(desktop);
 		await desktop.evaluate(({ BrowserWindow }, ids) => BrowserWindow.fromId(ids[0])!.focus(), covers);
 		await saved.evaluate(state => state.callbacks.get('Command+Control+B')!());
-		const overlay = await screenOverlay(desktop);
-		await overlay.keyboard.press('Escape').catch(error => { if (!overlay.isClosed()) throw error; });
+		const granted = await desktop.evaluate(({ systemPreferences }) => systemPreferences.getMediaAccessStatus('screen') === 'granted');
+		if (granted) {
+			const overlay = await screenOverlay(desktop);
+			await overlay.keyboard.press('Escape').catch(error => { if (!overlay.isClosed()) throw error; });
+		} else {
+			const setup = page.getByRole('dialog', { name: 'Set Up Desktop Screenshots', exact: true });
+			await expect(setup).toBeVisible();
+			await setup.press('Escape');
+			await expect(setup).toBeHidden();
+		}
 		await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
 		await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Global capture draft');
 		await uncoverDisplays(desktop, covers); covers = [];
 
-		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectGroup('extensions');
-		await workbench.settingsEditor.selectCategory('extension.ash.snapshot');
+		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		await expect(workbench.settingsEditor.element).toBeVisible();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('screenshot');
 		settings = page.getByRole('dialog', { name: 'Ash Settings', exact: true });
 		const disableBackground = settings.getByRole('switch', { name: 'Capture while Ash is in the background', exact: true });
 		await disableBackground.focus(); await disableBackground.press('Space');
@@ -458,9 +451,55 @@ test('screenshot shortcut reports occupancy, retains a working global binding an
 		if (covers.length) await uncoverDisplays(desktop, covers);
 		// Release this contribution's registration before restoring the registry mock.
 		await page.evaluate(async () => { await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:global-keybinding:update', { id: 'chat.screenshot', commandId: 'workbench.action.chat.attachScreenshot', accelerator: '', label: '', global: false }); });
-		await desktop.evaluate(({ globalShortcut }, state) => {
+		await desktop.evaluate(({ globalShortcut, shell }, state) => {
+			shell.openExternal = state.originals.open;
 			globalShortcut.register = state.originals.register; globalShortcut.unregister = state.originals.unregister; globalShortcut.isRegistered = state.originals.isRegistered;
 		}, saved);
 		await saved.dispose();
+	}
+});
+
+test('built-in code images annotate and copy in a native window without screen permission', { tag: ['@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
+	if (!('browserWindow' in application)) throw new Error('Expected Electron');
+	const desktop = application;
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await editor.waitForTypeInEditor('const screenshot = "Built-in image editor";');
+	await workbench.page.keyboard.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a');
+	const probe = await desktop.evaluateHandle(({ desktopCapturer, systemPreferences }) => {
+		const original = { capture: desktopCapturer.getSources, access: systemPreferences.getMediaAccessStatus };
+		const state = { original, calls: 0 };
+		desktopCapturer.getSources = async () => { state.calls++; throw new Error('Code images must not acquire desktop pixels'); };
+		systemPreferences.getMediaAccessStatus = type => type === 'screen' ? 'denied' : original.access.call(systemPreferences, type);
+		return state;
+	});
+	try {
+		await workbench.quickaccess.runCommand('snapshot.code');
+		const overlay = await screenOverlay(desktop);
+		const frame = overlay.frameLocator('iframe');
+		const toolbar = frame.getByRole('group', { name: 'Screenshot tools' });
+		await expect(toolbar).toBeVisible();
+		await expect.poll(() => toolbar.evaluate(element => [...element.ownerDocument.fonts].some(font => font.family.includes('Ash Snapshot Icons') && font.status === 'loaded'))).toBe(true);
+		const before = await frame.locator('canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL());
+		await toolbar.getByRole('button', { name: 'Arrow', exact: true }).click();
+		const bounds = (await frame.locator('canvas').boundingBox())!;
+		await overlay.mouse.move(bounds.x + bounds.width * 0.2, bounds.y + bounds.height * 0.4);
+		await overlay.mouse.down();
+		await overlay.mouse.move(bounds.x + bounds.width * 0.8, bounds.y + bounds.height * 0.6, { steps: 5 });
+		await overlay.mouse.up();
+		await expect(toolbar.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled();
+		expect(await frame.locator('canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL())).not.toBe(before);
+		expect(await probe.evaluate(state => state.calls)).toBe(0);
+		await overlay.screenshot({ path: testInfo.outputPath('builtin-code-image-annotated.png') });
+		await toolbar.getByRole('button', { name: 'Copy', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+		await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
+		expect(await desktop.evaluate(async ({ clipboard }) => (await clipboard.read()).some(item => item.types.includes('image/png')))).toBe(true);
+	} finally {
+		await desktop.evaluate(({ desktopCapturer, systemPreferences }, state) => {
+			desktopCapturer.getSources = state.original.capture;
+			systemPreferences.getMediaAccessStatus = state.original.access;
+		}, probe);
+		await probe.dispose();
 	}
 });

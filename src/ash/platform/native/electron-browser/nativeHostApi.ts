@@ -1,6 +1,7 @@
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import type { IMainProcessService } from '../../ipc/common/mainProcessService.js';
 import {
+	NATIVE_HOST_MEDIA_ACCESS_STATUS_CHANNEL, NATIVE_HOST_APP_WINDOWS_CHANNEL, NATIVE_HOST_CAPTURE_APP_WINDOW_CHANNEL, NATIVE_HOST_SCREEN_CAPTURE_ACCESS_CHANNEL, validateAppWindows,
 	NATIVE_HOST_IS_ADMIN_CHANNEL,
 	NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL,
 	NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL,
@@ -39,6 +40,7 @@ import {
 import { showMessageBox } from '../../dialogs/electron-browser/dialog.js';
 import { normalizeExternalUrl } from '../../opener/common/opener.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
+import { validateImageViewImage } from '../../imageView/common/imageView.js';
 import { CANCEL_TOAST_CHANNEL, SHOW_TOAST_CHANNEL } from '../common/native.js';
 import { isRecord } from '../../../base/common/types.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
@@ -67,6 +69,20 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		},
 		onDidSuspendOS: listener => power.listen<void>('onDidSuspendOS')(listener),
 		onDidResumeOS: listener => power.listen<void>('onDidResumeOS')(listener),
+		async getMediaAccessStatus(mediaType) {
+			const result = await invoke<unknown>(NATIVE_HOST_MEDIA_ACCESS_STATUS_CHANNEL, mediaType);
+			if (result !== 'not-determined' && result !== 'granted' && result !== 'denied' && result !== 'restricted' && result !== 'unknown') {
+				throw new TypeError('Invalid media access status');
+			}
+			return result;
+		},
+		getAppWindows: async () => validateAppWindows(await invoke<unknown>(NATIVE_HOST_APP_WINDOWS_CHANNEL)),
+		requestScreenCaptureAccess: () => invoke<void>(NATIVE_HOST_SCREEN_CAPTURE_ACCESS_CHANNEL),
+		async captureAppWindow(window) {
+			const image = await invoke<unknown>(NATIVE_HOST_CAPTURE_APP_WINDOW_CHANNEL, window);
+			if (image !== undefined) return VSBuffer.wrap(new Uint8Array(validateImageViewImage(image)));
+			return captureDesktopMediaWindow(window.sourceId);
+		},
 		async getScreenshot(rect) {
 			const value = await invoke<unknown>('ash:host:screenshot', rect);
 			if (value === undefined) return undefined;
@@ -151,4 +167,48 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 			return subscribe<unknown>(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, (value) => listener(validateAccessibilitySupport(value)));
 		},
 	};
+}
+
+/** Windows/Linux expose a selected window as a desktop stream; stop every track after one frame. */
+async function captureDesktopMediaWindow(sourceId: string): Promise<VSBuffer> {
+	const video = document.createElement('video');
+	video.muted = true;
+	let closed = false;
+	let stream: MediaStream | undefined;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		const capture = async (): Promise<VSBuffer> => {
+			const acquired = await navigator.mediaDevices.getUserMedia({
+				audio: false, video: {
+					mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId, maxWidth: 8192, maxHeight: 8192 },
+				} as MediaTrackConstraints
+			});
+			if (closed) {
+				acquired.getTracks().forEach(track => track.stop());
+				throw new Error('Application window capture timed out');
+			}
+			stream = acquired;
+			video.srcObject = stream;
+			await video.play();
+			await new Promise<void>(resolve => video.requestVideoFrameCallback(() => resolve()));
+			if (closed) throw new Error('Application window capture timed out');
+			const canvas = document.createElement('canvas');
+			canvas.width = video.videoWidth;
+			canvas.height = video.videoHeight;
+			if (!canvas.width || !canvas.height || canvas.width * canvas.height > 67_108_864) throw new Error('Invalid application window dimensions');
+			canvas.getContext('2d')!.drawImage(video, 0, 0);
+			const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+			if (!blob) throw new Error('Application window capture failed');
+			return VSBuffer.wrap(new Uint8Array(validateImageViewImage(new Uint8Array(await blob.arrayBuffer()))));
+		};
+		return await Promise.race([capture(), new Promise<never>((_resolve, reject) => {
+			timer = setTimeout(() => reject(new Error('Application window capture timed out')), 5000);
+		})]);
+	} finally {
+		closed = true;
+		clearTimeout(timer);
+		video.pause();
+		video.srcObject = null;
+		stream?.getTracks().forEach(track => track.stop());
+	}
 }

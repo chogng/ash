@@ -132,6 +132,13 @@ export const SettingsNavigation = [
 				],
 			},
 			{
+				id: 'screenshot',
+				label: localize('screenshot.settings.label', 'Screenshot'),
+				description: localize('screenshot.settings.description', 'Capture, annotate and export screen and code images.'),
+				presentation: 'general',
+				groups: [{ id: 'capture', label: localize('screenshot.settings.label', 'Screenshot'), description: '', settings: ['screenshot.globalShortcut', 'chat.appWindowScreenshots.enabled', 'accessibility.verbosity.chatScreenshot', 'snapshot.code.*'] }],
+			},
+			{
 				id: 'debugging',
 				label: localize('settings.debugging.label', 'Debugging'),
 				description: localize('settings.debugging.description', 'Configure breakpoints, inline values and confirmation when closing a debug session.'),

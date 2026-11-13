@@ -24,8 +24,6 @@ import { createTestLanguageModelToolsService } from '../../../chat/test/common/t
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import gitMessages from '../../../../../../../extensions/git/package.nls.json' with { type: 'json' };
-import snapshotMessages from '../../../../../../../extensions/snapshot/package.nls.json' with { type: 'json' };
-import snapshotManifest from '../../../../../../../extensions/snapshot/package.json' with { type: 'json' };
 import { localizeManifest } from '../../../../../platform/extensionManagement/common/extensionNls.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { IMemoriesService, type Memory } from '../../../../../platform/memories/common/memoriesService.js';
@@ -197,17 +195,8 @@ configurationRegistry.updateConfigurations({
 	],
 	remove: [],
 });
-configurationRegistry.updateConfigurations({
-	add: [
-		...parseExtensionManifest(JSON.stringify(localizeManifest(snapshotManifest, snapshotMessages)), {
-			id: 'ash.snapshot',
-			name: 'snapshot',
-			publisher: 'ash',
-			version: '0.1.0',
-		}).contributes.configuration,
-	],
-	remove: [],
-});
+await import('../../../screenshotTool/browser/screenshotToolConfiguration.js');
+await import('../../../screenshotTool/browser/screenshotTool.contribution.js');
 const { EditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
 const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/editor.js');
 const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
@@ -3504,7 +3493,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(applicationGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'true');
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser', 'display-language', 'updates', 'network', 'interaction'],
+		['appearance', 'layout', 'screenshot', 'debugging', 'settings-editor', 'startup', 'browser', 'display-language', 'updates', 'network', 'interaction'],
 	);
 	for (const categoryId of ['display-language', 'updates', 'network', 'interaction']) {
 		assert.equal(root.querySelector(`[data-settings-category-id="${categoryId}"]`)?.closest('.ash-tree-row')?.getAttribute('aria-level'), '2');
@@ -3580,14 +3569,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('.ash-agent-roles-settings'), null, 'GitHub settings must not contain Agent definitions');
 	await nextTurn();
 	await configuration.updateValue(AccessibilityVerbositySettingId.ChatScreenshot, false);
-	await preferences.openSettings({ section: 'extension.ash.snapshot' });
+	await preferences.openSettings({ section: 'screenshot' });
 	await nextTurn();
 	assert.equal(root.querySelector('[data-settings-item-id="screenshot.section"]'), null);
-	assert.equal(root.querySelector('[data-settings-category-id="screenshot"]'), null);
-	assert.equal(root.querySelector('[data-settings-category-id="extension.ash.snapshot"]')?.textContent, 'Snapshot');
-	const screenSettings = root.querySelector<HTMLElement>('[data-settings-tree-group-id="extension.ash.snapshot.group.screen"]')!;
-	const codeSettings = root.querySelector<HTMLElement>('[data-settings-tree-group-id="extension.ash.snapshot.group.code"]')!;
+	assert.equal(root.querySelector('[data-settings-category-id="screenshot"]')?.textContent, 'Screenshot');
+	const screenSettings = root.querySelector<HTMLElement>('[data-settings-tree-group-id="screenshot.group.screen"]')!;
+	const codeSettings = root.querySelector<HTMLElement>('[data-settings-tree-group-id="screenshot.group.code"]')!;
 	assert.ok(screenSettings);
+	assert.ok(screenSettings.querySelector('[data-configuration-key="chat.appWindowScreenshots.enabled"]'));
 	assert.ok(codeSettings);
 	assert.ok(screenSettings.querySelector('[data-settings-item-id="snapshot.screen.shortcut"]')?.textContent?.includes('Not set'));
 	assert.ok(codeSettings.querySelector('[data-settings-item-id="snapshot.code.shortcut"]')?.textContent?.includes('Not set'));

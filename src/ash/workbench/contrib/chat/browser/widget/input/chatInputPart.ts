@@ -1,3 +1,4 @@
+import { IChatUserImageAttachmentService, getAddedImageIds } from '../../attachments/chatUserImageAttachments.js';
 import { ChatToolConfirmationCarouselPart } from '../chatContentParts/toolInvocationParts/chatToolConfirmationCarouselPart.js';
 import { ExtensionsInstallConfirmationWidgetSubPart } from '../chatContentParts/toolInvocationParts/chatExtensionsInstallToolSubPart.js';
 import { ChatToolAuthenticationSubPart } from '../chatContentParts/toolInvocationParts/chatToolAuthenticationSubPart.js';
@@ -32,7 +33,7 @@ import type { IChatWidgetModel } from '../chatWidget.js';
 import type { ILifecycleService } from '../../../../../services/lifecycle/common/lifecycle.js';
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { Event } from '../../../../../../base/common/event.js';
-import { IImageEditorService } from '../../../../../services/imageEditor/common/imageEditorService.js';
+import { IScreenshotToolService } from '../../../../screenshotTool/browser/screenshotTool.js';
 import { convertBufferToScreenshotVariable } from '../../attachments/chatScreenshotContext.js';
 import { ChatPasteProvidersFeature } from './editor/chatPasteProviders.js';
 import { AgentHostInputCompletions, type AgentHostInputCompletionHost } from './editor/agentHostInputCompletions.js';
@@ -231,6 +232,9 @@ export interface IChatDraftStorage {
 
 /** Input operations consumed by a Chat pane, independent of its product's composer layout. */
 export interface IChatInputPart extends IDisposable {
+	readonly inputUri: URI;
+	readonly noticeHost: ChatInputNoticeHost;
+	readonly attachmentHintContainerElement: HTMLElement;
 	readonly inputEditor?: IChatInputEditor['codeEditor'];
 	readonly isSubmitting?: boolean;
 	readonly changesActionsHost?: HTMLElement;
@@ -293,6 +297,8 @@ type HistorySearchItem = IQuickPickItem & ({ readonly kind: 'entry'; readonly en
 /** Owns the complete input region and all user-facing interactions for one Chat pane. */
 export class ChatInputPart extends Disposable implements IChatInputPart {
 	private toolConfirmation: ChatTerminalToolConfirmationSubPart | ChatToolAuthenticationSubPart | ChatToolPostExecuteConfirmationPart | undefined;
+	public readonly attachmentHintContainerElement: HTMLElement;
+	public get inputUri(): URI { return this.input.getModel?.().uri ?? this.notificationUri; }
 	readonly noticeHost = this._register(new ChatInputNoticeHost(() => { if (!this.isDisposed && this.visible) this.focus(); }));
 	private readonly notificationUri = URI.from({ scheme: 'ash-chat-input', path: `/${createUuid()}` });
 	private readonly notificationVisible = observableValue(this, true);
@@ -416,7 +422,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		@IChatWidgetService private readonly chatWidgets: IChatWidgetService,
 		@ICommandService private readonly commands: ICommandService,
 		@IChatSlashCommandService private readonly clientCommands: IChatSlashCommandService,
-		@IImageEditorService private readonly imageEditors: IImageEditorService,
+		@IScreenshotToolService private readonly imageEditors: IScreenshotToolService,
+		@IChatUserImageAttachmentService private readonly userImages: IChatUserImageAttachmentService,
 		@IChatContextService private readonly providedContexts: IChatContextService,
 		@ILanguageModelToolsService readonly languageModelTools: ILanguageModelToolsService,
 	) {
@@ -445,6 +452,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			modelSelection: { openPicker: () => this.openModelPicker() },
 		}));
 		this._register(toDisposable(() => this.clearInputNotifications()));
+		this.attachmentHintContainerElement = h(ownerDocument, 'div', { className: `ash-chat-input-notice-slot ${chatInputStackSlotClass}` });
+		this.element.append(this.attachmentHintContainerElement);
 		this.voiceOnboardingContainer = h(ownerDocument, 'div', { className: `ash-chat-input-notice-slot ${chatInputStackSlotClass}` });
 		this.element.append(this.voiceOnboardingContainer);
 		const context = this._register(contextKeys.createScoped(this.element));
@@ -781,7 +790,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const files = [...(event.clipboardData?.files ?? [])];
 			if (files.length === 0) return;
 			stopEvent(event);
-			void this.attachFiles(files);
+			const before = this.attachmentModel.attachments;
+			const signal = this.inputLifecycle.signal;
+			void this.attachFiles(files, signal).then(() => {
+				if (!signal.aborted && !this.isDisposed) {
+					this.userImages.didAttachImages({ inputUri: this.inputUri, attachmentIds: getAddedImageIds(before, this.attachmentModel.attachments), gesture: 'paste' });
+				}
+			});
 		}, true));
 		this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages(), () => this.state.conversation,
 			(files: readonly File[], signal: AbortSignal) => this.prepareFiles(files, signal)))
@@ -1117,7 +1132,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		try {
 			if (!capture && !this.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 			const attachments = await this.acquireContext(async signal => {
-				const image = await (capture ? capture(signal) : this.imageEditors.capture(signal));
+				const image = await (capture ? capture(signal) : this.imageEditors.captureAndEdit(signal));
 				const selection = image && !signal.aborted ? await convertBufferToScreenshotVariable(image) : undefined;
 				if (selection && !this.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 				return selection ? [selection] : [];

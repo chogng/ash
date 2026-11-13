@@ -1,6 +1,6 @@
 ---
 name: svg-icon-font
-description: Import or update Ash UI icons from SVG sources, build static or variable WOFF2 fonts with explicitly classified solid-color layers, and integrate semantic glyphs with the icon registry and themes. Use for SVG icon imports, icon-font migrations, and independent Snapshot extension toolbar icon changes; complex illustrations remain with their image consumers.
+description: Import or update Ash UI icons from SVG sources, build static or variable WOFF2 fonts with explicitly classified solid-color layers, and integrate semantic glyphs with the icon registry and themes. Use for SVG icon imports, icon-font migrations, and built-in screenshot toolbar icon changes; complex illustrations remain with their image consumers.
 ---
 
 # SVG 图标 → WOFF2
@@ -94,19 +94,19 @@ pnpm icons:build
 
 ## Learnings
 
-### Snapshot 工具栏独立图标
+### 内置截图工具栏图标
 
-- Snapshot 的截图工具栏运行在隔离 Webview 中，不能继承宿主文档的字体，也不能导入宿主 UI 模块；它使用包内 `AshSnapshotIcons.woff2` 和独立的[语义映射清单](../../../extensions/snapshot/media/icons.json)。这份字体是插件资源边界的实现选择，不是截图功能或系统权限的要求。
-- 只调整插件图标时，修改该清单的 `source`，保留既有 `id` 和 `unicode`；例如仅替换 `pen` 的图稿，可将 SVG 放入 `extensions/snapshot/media/icons/pen.svg` 并将其 `source` 指向 `icons/pen.svg`。需要专属外观时使用包内 SVG，不修改 `resources/icons/` 的共享原稿，也不重建 IDE 或 Sessions 字体；仍复用共享外观时可继续引用现有原稿。
-- 按钮的语义绑定由 [screenshotEditor.ts](../../../extensions/snapshot/browser/screenshotEditor.ts) 消费清单，字体、尺寸和布局由 [screenshotEditor.css](../../../extensions/snapshot/browser/screenshotEditor.css) 拥有。工具栏保持纯图标按钮，保留本地化 tooltip、可访问名称、焦点和状态；仅更换图稿无需逐按钮修改字符。
+- 内置截图工具栏运行在隔离 Webview 中，不能继承宿主文档的字体，也不能导入宿主 UI 模块；它使用视图内 `AshSnapshotIcons.woff2` 和独立的[语义映射清单](../../../src/ash/workbench/contrib/screenshotTool/browser/media/icons.json)。这份字体是隔离视图的资源加载选择，不是截图功能或系统权限的要求。
+- 只调整截图图标时，修改该清单的 `source`，保留既有 `id` 和 `unicode`；例如仅替换 `pen` 的图稿，可将 SVG 放入 `src/ash/workbench/contrib/screenshotTool/browser/media/icons/pen.svg` 并将其 `source` 指向 `icons/pen.svg`。需要专属外观时使用视图内 SVG，不修改 `resources/icons/` 的共享原稿，也不重建 IDE 或 Sessions 字体；仍复用共享外观时可继续引用现有原稿。
+- 按钮的语义绑定由 [screenshotAnnotation.ts](../../../src/ash/workbench/contrib/screenshotTool/browser/screenshotAnnotation.ts) 消费清单，字体、尺寸和布局由 [screenshotAnnotation.css](../../../src/ash/workbench/contrib/screenshotTool/browser/media/screenshotAnnotation.css) 拥有。工具栏保持纯图标按钮，保留本地化 tooltip、可访问名称、焦点和状态；仅更换图稿无需逐按钮修改字符。
 
 使用已安装本 skill `requirements.txt` 的隔离 Python 环境，从仓库根目录重建；先检查生成预览和验证结果，再复制字体成品：
 
 ```sh
-python3 .agents/skills/svg-icon-font/scripts/build_font.py extensions/snapshot/media/icons.json --out .build/snapshot-icons
+python3 .agents/skills/svg-icon-font/scripts/build_font.py src/ash/workbench/contrib/screenshotTool/browser/media/icons.json --out .build/snapshot-icons
 # 完成上述字体与预览检查后执行：
-cp .build/snapshot-icons/AshSnapshotIcons.woff2 extensions/snapshot/media/AshSnapshotIcons.woff2
+cp .build/snapshot-icons/AshSnapshotIcons.woff2 src/ash/workbench/contrib/screenshotTool/browser/media/AshSnapshotIcons.woff2
 ```
 
-- 扩展资源变更后，按自托管流程构建并运行 `pnpm prepare:backend`，确保 Ash 使用新打包的扩展资源；仅更新 renderer 可能仍加载旧工具栏。复用 [Snapshot 组件测试](../../../extensions/snapshot/test/browser/snapshot.test.ts) 和 [原生截图 smoke](../../../test/smoke/areas/chat/chat-screenshot.spec.ts)，在真实截图窗口框选后检查工具栏及字体实际加载，并保留截图证据。
+- 截图资源变更后，构建 Ash，确保原生窗口和浏览器帧加载当前的内置编辑器资源。复用 [截图组件测试](../../../src/ash/workbench/contrib/screenshotTool/test/browser/screenshotToolService.test.ts) 和 [原生截图 smoke](../../../test/smoke/areas/chat/chat-screenshot.spec.ts)，在真实截图窗口框选后检查工具栏及字体实际加载，并保留截图证据。
 - Webview 打包会将字体内联为 `data:` URL，原生 [imageView.html](../../../src/ash/code/electron-browser/imageView/imageView.html) 的 CSP 必须保留 `font-src 'self' data:`；普通浏览器组件测试不能替代这层验证。这是应用内部字体加载策略，不是用户授权弹窗或系统屏幕录制许可；替换字形无需增加授权流程，也不要为字体放宽脚本或网络策略。

@@ -26,7 +26,11 @@ export type ImageEditorProvider = ImageEditorProviderIdentity & (
 	| { activate(signal: AbortSignal): Promise<void>; }
 );
 export interface ImageEditorOptions {
+	/** Trusted product presentation; extension callers continue to resolve their exact provider. */
+	readonly presentation?: ImageEditorView & { readonly displayName: string; };
 	readonly editorId?: string;
+	/** A frozen app-window capture to annotate without capturing the desktop again. */
+	readonly image?: VSBuffer;
 	readonly code?: CodeImageSnapshot;
 	/** Chat-originated captures attach on Enter; standalone images copy on Enter. */
 	readonly defaultAction?: 'attach' | 'copy';

@@ -24,14 +24,14 @@ suite('extensions browser component', () => {
 		const { page } = browserTests;
 		await page.goto('/extensions.html?locale=zh-CN');
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
-		const row = page.locator('[data-view-id="ash.extensions.plugins"] [data-package-id="ash.snapshot"]');
+		const row = page.locator('[data-view-id="ash.extensions.plugins"] [data-package-id="ash.cpp"]');
 		await row.scrollIntoViewIfNeeded();
 		const icon = row.locator('.extension-icon img');
 		await expect(icon).toBeVisible();
 		await expect.poll(() => icon.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 		await expect(row.locator('.extension-icon')).toHaveAttribute('aria-hidden', 'true');
 		const source = (await icon.getAttribute('src'))!;
-		const size = await icon.evaluate(image => ({ width: image.clientWidth, height: image.clientHeight }));
+		const size = await row.locator('.extension-icon').evaluate(container => ({ width: container.clientWidth, height: container.clientHeight }));
 		expect(size.width).toBe(size.height);
 		await row.click();
 		const detail = page.locator('.ash-extension-editor .extension-detail-icon img');

@@ -1,17 +1,12 @@
 import { openImageViewWindow } from '../../../platform/imageView/electron-browser/imageViewWindow.js';
 import { defaultImageEditorTheme } from '../../../workbench/services/imageEditor/browser/imageEditorTheme.js';
+import { createScreenshotToolView } from '../../../workbench/contrib/screenshotTool/browser/screenshotToolService.js';
+import { localize } from '../../../nls.js';
 
-await openImageViewWindow(async ({ locale, presentation }) => {
-	const { default: assets } = await import('virtual:ash-snapshot-view');
-	const chinese = locale.toLowerCase() === 'zh-cn';
-	const messages = chinese ? assets.zh : assets.en;
+await openImageViewWindow(async ({ presentation }) => {
+	const view = await createScreenshotToolView({ accessibilityHints: presentation.input.accessibilityHints !== false });
 	return {
-		title: messages.displayName,
-		html: `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob: data:; font-src data:"><style>${assets.style.replace(/<\/style/gi, '<\\/style')}</style><script>${assets.script.replace(/<\/script/gi, '<\\/script')}</script>`,
-		input: {
-			...presentation.input,
-			state: { messages: chinese ? assets.messages : {}, help: messages['capture.help'], accessibilityHints: presentation.input.accessibilityHints },
-			theme: defaultImageEditorTheme(presentation.input.colorScheme),
-		},
+		title: localize('screenshot.builtin.title', 'Screenshot'), html: view.html,
+		input: { ...presentation.input, state: view.state, theme: defaultImageEditorTheme(presentation.input.colorScheme) },
 	};
 });

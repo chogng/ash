@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
-import { StorageScope, WillSaveStateReason, type IWillSaveStateEvent } from '../common/storage.js';
+import { StorageScope, StorageTarget, WillSaveStateReason, type IWillSaveStateEvent } from '../common/storage.js';
 import { storageIdentityKey, validateStorageEntries, validateStorageSnapshot, type IStorageIdentity, type IStorageEntry, type IStorageSnapshot } from '../common/storageIpc.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
@@ -100,6 +100,23 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 			await this.persist(identityKey, snapshot);
 			this.changes.fire(snapshot);
 			return snapshot;
+		});
+	}
+
+	/** Compare and persistence share the writer queue, so two windows cannot both win a claim. */
+	public compareAndSwapApplicationSharedValue(key: string, expectedValue: string | undefined, newValue: string | undefined): Promise<{ exchanged: boolean; snapshot: IStorageSnapshot; }> {
+		return this.run(async () => {
+			const identityKey = storageIdentityKey({ scope: StorageScope.APPLICATION, id: 'application' });
+			const current = this.storages.get(identityKey);
+			if (!current) { throw new Error('Application storage has not been initialized'); }
+			if (current.entries[key]?.value !== expectedValue) { return { exchanged: false, snapshot: current }; }
+			const entries: Record<string, IStorageEntry> = Object.assign(Object.create(null), current.entries);
+			if (newValue === undefined) { delete entries[key]; }
+			else { entries[key] = { value: newValue, target: StorageTarget.MACHINE }; }
+			const snapshot = { ...current, revision: current.revision + 1, entries };
+			await this.persist(identityKey, snapshot);
+			this.changes.fire(snapshot);
+			return { exchanged: true, snapshot };
 		});
 	}
 
