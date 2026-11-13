@@ -322,7 +322,8 @@
 		}
 		host = document.createElement('div');
 		host.className = 'ash-browser-selection';
-		host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:none;';
+		// The shadow tree isolates its contents, but page rules can still match the host.
+		host.style.cssText = 'all:initial;position:fixed;inset:0;z-index:2147483647;pointer-events:none;';
 		shadow = host.attachShadow({ mode: 'closed' });
 		const style = document.createElement('style');
 		style.textContent = `

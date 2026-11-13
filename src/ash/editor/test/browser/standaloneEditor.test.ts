@@ -983,6 +983,37 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
+	test('editor context menu isolates its styles and restores focus when using Shadow DOM', async function () {
+		const { page } = browserTests;
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
+		const input = page.locator('#caller > .stanza-editor .stanza-editor-input').first();
+		const menu = page.getByRole('menu');
+		const definition = menu.getByRole('menuitem', { name: 'Go to Definition', exact: true });
+		const externalStyles = await page.addStyleTag({ content: '.ash-menu .ash-button { visibility: hidden; }' });
+		await input.press('Shift+F10');
+		await expect(definition).toBeVisible();
+		await expect(definition).toHaveCSS('display', 'flex');
+		expect(await menu.evaluate(element => element.getRootNode() instanceof ShadowRoot)).toBe(true);
+		const surface = page.locator('.ash-context-view-menu:popover-open');
+		await page.evaluate(() => window.ashStandaloneIntegration.setActionMenuTheme('ash-high-contrast-dark'));
+		await expect(surface).toHaveCSS('box-shadow', 'none');
+		await expect(surface).toHaveCSS('border-top-color', 'rgb(255, 255, 255)');
+		await page.keyboard.press('ArrowDown');
+		await expect(menu.getByRole('menuitem').first()).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(input).toBeFocused();
+		await expect(menu).toHaveCount(0);
+
+		await externalStyles.evaluate(element => element.parentNode?.removeChild(element));
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ useShadowDOM: false }));
+		await input.press('Shift+F10');
+		await expect(definition).toBeVisible();
+		expect(await menu.evaluate(element => element.getRootNode() === document)).toBe(true);
+		await page.keyboard.press('Escape');
+		await expect(input).toBeFocused();
+	});
+
 	test('editor context menu runs navigation, rename and formatting through the focused editor', async function () {
 		const { page } = browserTests;
 

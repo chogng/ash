@@ -5,17 +5,28 @@
 		var(--ash-menu-background)
 	);
 	border: var(--ash-strokeThickness) solid
-		var(--ash-menu-style-border-color, var(--ash-border));
+		var(
+			--ash-menu-contrast-border,
+			var(--ash-menu-style-border-color, var(--ash-border))
+		);
 	border-radius: var(--ash-cornerRadius-large);
-	box-shadow: 0 2px 8px
-		var(--ash-menu-style-shadow-color, var(--ash-widget-shadow));
+	box-shadow: var(
+		--ash-menu-contrast-shadow,
+		0 2px 8px var(--ash-menu-style-shadow-color, var(--ash-widget-shadow))
+	);
 	overflow: auto;
 }
 
-[data-color-scheme="hcDark"] .ash-context-view-menu,
-[data-color-scheme="hcLight"] .ash-context-view-menu {
-	border-color: var(--ash-contrastBorder);
-	box-shadow: none;
+[data-color-scheme] {
+	--ash-menu-contrast-border: initial;
+	--ash-menu-contrast-shadow: initial;
+}
+
+/* Menus can live in a shadow root while their theme scope is outside it. */
+[data-color-scheme="hcDark"],
+[data-color-scheme="hcLight"] {
+	--ash-menu-contrast-border: var(--ash-contrastBorder);
+	--ash-menu-contrast-shadow: none;
 }
 
 .ash-menu {

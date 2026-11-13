@@ -3,7 +3,7 @@ import { findLast } from '../../../common/arraysFind.js';
 import { Emitter } from '../../../common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../common/lifecycle.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, type IRectangle, layout2d } from '../../../common/layout.js';
-import { addDisposableListener, getActiveElement, getWindow, isHTMLElement, isNode, h } from '../../dom.js';
+import { addDisposableListener, getActiveElement, getShadowRoot, getWindow, isHTMLElement, isNode, h } from '../../dom.js';
 import { isAncestorOfActiveElement, isFocusable, restoreFocus } from '../../focus.js';
 import { getViewport } from '../../geometry.js';
 import { observeResize } from '../../observer.js';
@@ -420,7 +420,11 @@ function isTargetInAnotherModal(target: EventTarget | null, view: HTMLElement): 
 	if (!isNode(target)) return false;
 	const element = target.nodeType === 1 ? target as Element : target.parentElement;
 	const modal = element?.closest('dialog:modal');
-	return !!modal && !modal.contains(view);
+	if (!modal) return false;
+	for (let host: Element | undefined = view; host; host = getShadowRoot(host)?.host) {
+		if (modal.contains(host)) return false;
+	}
+	return true;
 }
 
 function getAnchorDocument(

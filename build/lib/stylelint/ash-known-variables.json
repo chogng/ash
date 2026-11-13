@@ -430,6 +430,8 @@
 		"--ash-markdown-preview-font-size",
 		"--ash-markdown-preview-line-height",
 		"--ash-menu-check-foreground",
+		"--ash-menu-contrast-border",
+		"--ash-menu-contrast-shadow",
 		"--ash-menu-divider-color",
 		"--ash-menu-divider-gap",
 		"--ash-menu-divider-inset",

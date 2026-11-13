@@ -16,6 +16,15 @@
 	z-index: -1;
 }
 
+.ash-context-view-plain:popover-open {
+	/* The inner surface owns its chrome, even when the shell uses the top layer. */
+	color: inherit;
+	background: transparent;
+	border: 0;
+	padding: 0;
+	overflow: visible;
+}
+
 .ash-context-view-default {
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
