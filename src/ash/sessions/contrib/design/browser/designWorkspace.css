@@ -1,0 +1,20 @@
+.ash-design-html-preview {
+	box-sizing: border-box;
+	width: 45%;
+	height: 100%;
+	border: 0;
+	border-inline-start: var(--ash-strokeThickness) solid var(--ash-border);
+	background: var(--ash-editor-background);
+}
+.ash-design-html-preview[hidden] {
+	display: none;
+}
+.ash-design-workspace.narrow > .ash-artifacts-workspace-content {
+	flex-direction: column;
+}
+.ash-design-workspace.narrow .ash-design-html-preview {
+	width: 100%;
+	height: 40%;
+	border-inline-start: 0;
+	border-block-start: var(--ash-strokeThickness) solid var(--ash-border);
+}

@@ -57,7 +57,7 @@ test('Optional Academy opens research papers alongside built-in Docs', { tag: ['
 	}, paper);
 	await quick.runCommand('workbench.action.files.openFile');
 	await expect(page.locator('.stanza-structured-editor-pane[data-ash-editor-client]:visible')).toBeVisible();
-	await quick.runCommand('sessions.creator.chooseDocsEditor');
+	await quick.runCommand('sessions.docs.chooseEditor');
 	await quick.select('New blank document');
 	const rich = page.locator('.ash-docs-workspace:visible .stanza-document-rich-text-input').first();
 	await expect(rich).toBeVisible({ timeout: 20_000 });

@@ -17,7 +17,7 @@ import {
 	drawImageAnnotation,
 	rightClickCanvasShape,
 } from '../../../automation/design.js';
-import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifact/common/model/designDocument.js';
+import { parseArtifactCanvasDocument } from '../../../../src/ash/sessions/contrib/artifact/common/model/artifactCanvasDocument.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
 import type { IKeyboardLayoutDefinition } from '../../../../src/ash/platform/keyboardLayout/common/keyboardLayout.js';
@@ -458,7 +458,7 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const openDesign = async (): Promise<void> => {
 		await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
-		await new QuickAccess(page).runCommand('sessions.creator.open.design');
+		await new QuickAccess(page).runCommand('sessions.artifacts.open.design');
 	};
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const world = canvas.locator('.ash-canvas-world');
@@ -584,7 +584,7 @@ test(
 			.locator('.ash-sessions-activity-content')
 			.getByRole('button', { name: 'Artifacts', exact: true })
 			.click();
-		await new QuickAccess(page).runCommand('sessions.creator.open.design');
+		await new QuickAccess(page).runCommand('sessions.artifacts.open.design');
 		const canvas = page.getByRole('region', { name: 'Design canvas' });
 		const tools = canvas.locator('.ash-artifact-toolbar');
 		await tools.getByRole('button', { name: 'Select (V)', exact: true }).focus();
@@ -698,7 +698,7 @@ test(
 			.locator('.ash-sessions-activity-content')
 			.getByRole('button', { name: 'Artifacts', exact: true })
 			.click();
-		await new QuickAccess(page).runCommand('sessions.creator.open.design');
+		await new QuickAccess(page).runCommand('sessions.artifacts.open.design');
 		const canvas = page.getByRole('region', { name: 'Design canvas' });
 		await canvas.focus();
 		await page.keyboard.press('f');
@@ -741,9 +741,9 @@ test(
 		await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Saved design.ash-design');
 		await expect(canvas).not.toHaveClass(/\bdirty\b/u);
 		const saved = await readFile(join(directory, 'design.ash-design/manifest.json'), 'utf8');
-		const designDocument = parseDesignDocument(saved);
-		expect(designDocument.assets).toHaveLength(1);
-		const asset = designDocument.assets[0];
+		const artifactCanvasDocument = parseArtifactCanvasDocument(saved);
+		expect(artifactCanvasDocument.assets).toHaveLength(1);
+		const asset = artifactCanvasDocument.assets[0];
 		expect(asset.versions).toHaveLength(1);
 		const originalBytes = await readFile(join(directory, 'design.ash-design', asset.versions[0].path));
 		expect(originalBytes).toEqual(Buffer.from(encoded, 'base64'));
@@ -815,7 +815,7 @@ test(
 			.locator('.ash-sessions-activity-content')
 			.getByRole('button', { name: 'Artifacts', exact: true })
 			.click();
-		await new QuickAccess(page).runCommand('sessions.creator.open.design');
+		await new QuickAccess(page).runCommand('sessions.artifacts.open.design');
 		const canvas = page.getByRole('region', { name: 'Design canvas' });
 		await canvas.focus();
 		await page.keyboard.press('r');
@@ -834,7 +834,7 @@ test(
 		await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Saved design.ash-design');
 		const saved = JSON.parse(await readFile(filePath, 'utf8'));
 		expect(saved.schemaVersion).toBe(2);
-		expect(parseDesignDocument(JSON.stringify(saved)).shapes).toMatchObject([
+		expect(parseArtifactCanvasDocument(JSON.stringify(saved)).shapes).toMatchObject([
 			{ kind: 'rectangle', width: 120.5, fill: '#2670ee80' },
 		]);
 		await expect(canvas).not.toHaveClass(/\bdirty\b/u);
@@ -853,7 +853,7 @@ test(
 		await canvas.focus();
 		await page.keyboard.press('ControlOrMeta+s');
 		await expect(canvas).not.toHaveClass(/\bdirty\b/u);
-		expect(parseDesignDocument(await readFile(filePath, 'utf8')).shapes[0].width).toBe(240.5);
+		expect(parseArtifactCanvasDocument(await readFile(filePath, 'utf8')).shapes[0].width).toBe(240.5);
 		await writeFile(filePath, JSON.stringify(saved));
 		await width.fill('360.5');
 		await width.press('Tab');
@@ -894,7 +894,7 @@ test(
 			.locator('.ash-sessions-activity-content')
 			.getByRole('button', { name: 'Artifacts', exact: true })
 			.click();
-		await new QuickAccess(page).runCommand('sessions.creator.open.design');
+		await new QuickAccess(page).runCommand('sessions.artifacts.open.design');
 		const folderName = await page.evaluate(async () => {
 			const name = `ash-design-${crypto.randomUUID()}`;
 			const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name, { create: true });
@@ -916,7 +916,7 @@ test(
 			return JSON.parse(await (await (await design.getFileHandle('manifest.json')).getFile()).text());
 		}, folderName);
 		expect(saved.schemaVersion).toBe(2);
-		expect(parseDesignDocument(JSON.stringify(saved)).shapes).toMatchObject([
+		expect(parseArtifactCanvasDocument(JSON.stringify(saved)).shapes).toMatchObject([
 			{ kind: 'ellipse', width: 120, height: 80 },
 		]);
 		await canvas.focus();
@@ -979,7 +979,7 @@ test(
 			};
 		}, folderName);
 		expect(migrated.legacy).toBe(legacy);
-		expect(parseDesignDocument(migrated.manifest).shapes).toEqual(JSON.parse(legacy).shapes);
+		expect(parseArtifactCanvasDocument(migrated.manifest).shapes).toEqual(JSON.parse(legacy).shapes);
 	},
 );
 
@@ -1016,7 +1016,7 @@ test(
 			.locator('.ash-sessions-activity-content')
 			.getByRole('button', { name: 'Artifacts', exact: true })
 			.click();
-		await new QuickAccess(page).runCommand('sessions.creator.open.design');
+		await new QuickAccess(page).runCommand('sessions.artifacts.open.design');
 		const canvas = page.getByRole('region', { name: 'Design canvas' });
 		await canvas.focus();
 		await page.keyboard.press('t');
@@ -1070,7 +1070,7 @@ test(
 					{ folderName, filename },
 				);
 		const svg = await read('design.svg');
-		const saved = parseDesignDocument(await read('design.ash-design/manifest.json'));
+		const saved = parseArtifactCanvasDocument(await read('design.ash-design/manifest.json'));
 		expect(saved.shapes[0]).toMatchObject({
 			kind: 'group',
 			children: [{ kind: 'text', text: '中文 <script>' }, { kind: 'path' }],
@@ -1078,7 +1078,7 @@ test(
 		const parsed = await page.evaluate(content => {
 			const svg = new DOMParser().parseFromString(content, 'image/svg+xml');
 			return {
-				text: svg.querySelector('[data-design-text]')?.textContent,
+				text: svg.querySelector('[data-artifact-canvas-text]')?.textContent,
 				path: svg.querySelector('path')?.getAttribute('d'),
 				selection: svg.querySelector('.ash-sessions-design-selection') !== null,
 				script: svg.querySelector('script') !== null,
@@ -1115,7 +1115,7 @@ test(
 		}
 		await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Opened design.ash-design');
 		await expect(canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]')).toHaveCount(1);
-		await expect(canvas.locator('[data-design-text]')).toContainText('中文 <script>');
+		await expect(canvas.locator('[data-artifact-canvas-text]')).toContainText('中文 <script>');
 		await expect(canvas.locator('path[data-shape-id]')).toHaveCount(1);
 	},
 );
@@ -2218,7 +2218,7 @@ test(
 		const activityBar = page.locator('.ash-sessions-activity-content');
 		await expect(activityBar).toBeVisible();
 		await activityBar.getByRole('button', { name: 'Artifacts', exact: true }).click();
-		await new QuickAccess(page).runCommand('sessions.creator.open.design');
+		await new QuickAccess(page).runCommand('sessions.artifacts.open.design');
 		await expect(page.getByRole('region', { name: 'Design canvas' })).toBeVisible();
 		await activityBar.getByRole('button', { name: 'New', exact: true }).click();
 		await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();

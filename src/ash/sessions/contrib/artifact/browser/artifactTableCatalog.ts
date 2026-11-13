@@ -1,3 +1,4 @@
+import { readArtifactState } from './artifactStorage.js';
 import { isUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
@@ -31,13 +32,13 @@ export function registerArtifactTableCatalog(kind: ArtifactTableKind): void {
 	});
 }
 
-const activeTableKey = 'sessions.creator.activeTable';
+const activeTableKey = 'sessions.artifacts.activeTable';
 
 function openTableArtifact(accessor: ServicesAccessor, source: ArtifactTableModel, origin?: 'restore'): Promise<void> {
 	const resource = accessor.get(IArtifactTableService).resource(source);
 	const storage = accessor.get(IStorageService);
 	const entry = {
-		...artifactDetailEntry, id: 'creator.table', restoreCommand: 'sessions.restore.creatorTable',
+		...artifactDetailEntry, id: 'artifacts.table', restoreCommand: 'sessions.restore.artifactsTable',
 		editorInput: { resource, editorId: ArtifactTableEditor.ID, label: source.title.get() ?? getTableTitle(source.kind), showBreadcrumbs: false },
 	};
 	return accessor.get(ISessionsEntryService).openEntry(entry, () => {
@@ -64,8 +65,8 @@ CommandsRegistry.register(openTableCommand, async (accessor, value) => {
 	return true;
 });
 
-CommandsRegistry.register('sessions.restore.creatorTable', async accessor => {
-	const stored = accessor.get(IStorageService).get(activeTableKey, StorageScope.WORKSPACE);
+CommandsRegistry.register('sessions.restore.artifactsTable', async accessor => {
+	const stored = readArtifactState(accessor.get(IStorageService), activeTableKey);
 	if (!stored) return;
 	let resource: URI;
 	try { resource = URI.parse(stored); } catch { return; }
@@ -76,5 +77,5 @@ CommandsRegistry.register('sessions.restore.creatorTable', async accessor => {
 });
 
 function getTableTitle(kind: ArtifactTableKind): string {
-	return localize('sessions.creator.untitled', 'Untitled {0}', getArtifactTitle(kind));
+	return localize('sessions.artifacts.untitled', 'Untitled {0}', getArtifactTitle(kind));
 }

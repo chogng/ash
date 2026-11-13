@@ -11,12 +11,12 @@ import type { ArtifactWorkspaceRequest } from './artifactWorkspaceRegistry.js';
 export async function openArtifacts(accessor: ServicesAccessor, select?: (page: ArtifactEditorView) => void, options: { source?: 'restore'; restoreCommand?: string; reveal?: boolean; } = {}): Promise<void> {
 	const editor = accessor.get(IEditorPart);
 	const entry: ISessionsEntry = {
-		id: 'creator.home', workspaceMode: 'chat', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
+		id: 'artifacts.home', workspaceMode: 'chat', activityContext: 'sessions.activity.artifactsSelected', content: 'editor',
 		showEditorTabs: false,
-		restoreCommand: options.restoreCommand ?? 'sessions.show.creator',
+		restoreCommand: options.restoreCommand ?? 'sessions.show.artifacts',
 		focus: 'editor',
 		editorInput: {
-			resource: URI.from({ scheme: 'ash-creator', path: '/page' }), label: localize('sessions.creator.title', 'Artifacts'),
+			resource: URI.from({ scheme: 'ash-artifacts', path: '/page' }), label: localize('sessions.artifacts.title', 'Artifacts'),
 			showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
 		},
 	};
@@ -29,7 +29,7 @@ export async function openArtifacts(accessor: ServicesAccessor, select?: (page: 
 		return {
 			...entry,
 			...artifactDetailEntry,
-			id: `creator.workspace.${workspaceId}`,
+			id: `artifacts.workspace.${workspaceId}`,
 			detailsContainerId: page.detailsContainerId,
 		};
 	}, { source: options.source });

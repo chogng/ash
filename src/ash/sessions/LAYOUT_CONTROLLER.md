@@ -4,11 +4,11 @@
 
 This document specifies the intended controller boundaries and session-switch behavior.
 
-BaseLayoutController owns per-session document working sets and panel view selection. DesktopLayoutController coordinates session document restoration and the desktop Editor/Details states. Feature contributions own entry commands; the Sessions entry service applies their container IDs and central content without branching on product names. Creator aggregates contributed creation tools, while Projects presents the durable project catalog with materials inside each project. Chat, Code and Collaboration keep the same selection, conversation views and input drafts.
+BaseLayoutController owns per-session document working sets and panel view selection. DesktopLayoutController coordinates session document restoration and the desktop Editor/Details states. Feature contributions own entry commands; the Sessions entry service applies their container IDs and central content without branching on product names. Artifacts aggregates contributed creation tools, while Projects presents the durable project catalog with materials inside each project. Chat, Code and Collaboration keep the same selection, conversation views and input drafts.
 
-SessionsPart permanently owns Agent conversation content and its grid. Projects and Creator use retained EditorPanes in the Sessions EditorPart product-page group. Applying a session working set excludes and preserves that group, including its live panes, workspaces and documents.
+SessionsPart permanently owns Agent conversation content and its grid. Projects and Artifacts use retained EditorPanes in the Sessions EditorPart product-page group. Applying a session working set excludes and preserves that group, including its live panes, workspaces and documents.
 
-The last entry's owning command is stored at `sessions.layout.activeEntry` in workspace storage; entry content visibility preferences use `sessions.layout.entryVisibility` in profile storage. Sidebar visibility and width belong only to the Workbench layout and persist across entries; legacy per-entry sidebar preferences are discarded. Creator workspace selection remains at `sessions.creator.activeMode` and is interpreted by Creator. Project selection and browsing state remain with the feature's window-local service and never become layout entries. Existing activeMode, modeState and older page keys migrate once to the entry state.
+The last entry's owning command is stored at `sessions.layout.activeEntry` in workspace storage; entry content visibility preferences use `sessions.layout.entryVisibility` in profile storage. Sidebar visibility and width belong only to the Workbench layout and persist across entries; legacy per-entry sidebar preferences are discarded. Artifacts workspace selection remains at `sessions.artifacts.activeMode` and is interpreted by Artifacts. Project selection and browsing state remain with the feature's window-local service and never become layout entries. Existing activeMode, modeState and older page keys migrate once to the entry state.
 
 Code tools use retained EditorParts with one tab group per tool in the active working set. Files navigation belongs to its tool. Changes, Browser and Terminal are ordinary editor inputs. Hiding a tool or switching entries retains its panes, terminal processes, browser pages and dirty working copies. Actual close and shutdown use the input-specific confirmation lifecycle.
 
@@ -40,7 +40,7 @@ The Agents window keeps a single active selection but lets the user move between
 | Tool topology and dimensions   | Editor working-set group layout     | Same Session or Session/Thread owner as the editor working set |
 | Entry content visibility       | `sessions.layout.entryVisibility`   | Profile, per entry                                             |
 | Active entry's restore command | `sessions.layout.activeEntry`       | Workspace                                                      |
-| Creator workspace selection    | `sessions.creator.activeMode`       | Workspace, owned by Creator                                    |
+| Artifacts workspace selection  | `sessions.artifacts.activeMode`     | Workspace, owned by Artifacts                                  |
 | Files navigation visibility    | `sessions.code.filesVisible`        | Profile; does not close its group or documents                 |
 | Last open Code side pane       | `sessions.layout.sidePane.lastOpen` | Profile                                                        |
 | Side-pane and panel visibility | Workbench part visibility           | Window; Editor/Details also restore per Chat in `chat` scope   |
@@ -90,7 +90,7 @@ Closing or archiving a session removes its working set and panel-view state. Rep
 
 ## 6. Persistence
 
-`BaseLayoutController` persists session entries with `StorageTarget.MACHINE` in workspace storage. Session working sets and panel views use `sessions.singlePane.layoutState`. The layout service owns entry visibility and the restore command. It imports `sessions.layout.modeState` and `sessions.singlePane.sidePaneVisibility` once, then removes those old keys. Old active-mode, page and activity keys are read only for migration and removed after successful restoration; Creator interprets legacy Design entry restoration.
+`BaseLayoutController` persists session entries with `StorageTarget.MACHINE` in workspace storage. Session working sets and panel views use `sessions.singlePane.layoutState`. The layout service owns entry visibility and the restore command. It imports `sessions.layout.modeState` and `sessions.singlePane.sidePaneVisibility` once, then removes those old keys. Old active-mode, page and activity keys are read only for migration and removed after successful restoration; Artifacts interprets legacy Design entry restoration.
 
 Persisted state is validated by its owner before use. Legacy page resources are removed from session working sets; feature-editor restoration belongs to the feature's command.
 

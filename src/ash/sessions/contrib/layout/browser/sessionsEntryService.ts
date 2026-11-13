@@ -391,12 +391,16 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			?? (oldEditor ? URI.parse(oldEditor).scheme.replace(/^ash-/, '') : undefined);
 		const oldCommands: Readonly<Record<string, string>> = {
 			chat: 'sessions.open.chat', code: 'sessions.open.code', teams: 'sessions.open.teams', colab: 'sessions.open.teams',
-			creator: 'sessions.restore.creator', design: 'sessions.restore.creatorDesign',
+			creator: 'sessions.restore.artifacts', design: 'sessions.restore.artifactsDesign',
 		};
 		if (!saved && oldEntry !== undefined && !Object.hasOwn(oldCommands, oldEntry)) {
 			throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 		}
-		const requested = saved ?? (oldEntry ? oldCommands[oldEntry]! : defaultEntry);
+		// Normalize saved navigation state without registering the retired command IDs again.
+		const requested = (saved ?? (oldEntry ? oldCommands[oldEntry]! : defaultEntry))
+			.replace(/^sessions\.(show|open|restore)\.creator/u, 'sessions.$1.artifacts')
+			.replace(/^sessions\.creator\./u, 'sessions.artifacts.')
+			.replace(/^sessions\.restore\.artifactsDocs$/u, 'sessions.restore.docs');
 		const available = CommandsRegistry.hasCommand(requested);
 		// Entry commands can disappear during development or when a contribution is
 		// removed. Discard stale navigation state without invoking an unknown command.

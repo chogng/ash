@@ -295,12 +295,12 @@ test('Design editor stays within its Sessions contribution and keeps document co
 	const sharedBrowserFiles = [
 		...productionTypeScriptFiles(join(designRoot, 'browser/widget')),
 		...productionTypeScriptFiles(join(designRoot, 'browser/controller')),
-		join(sourceRoot, 'sessions/contrib/design/browser/designCanvasView.ts'),
-		join(designRoot, 'browser/designEditorBrowser.ts'),
+		join(sourceRoot, 'sessions/contrib/design/browser/artifactCanvasView.ts'),
+		join(designRoot, 'browser/artifactCanvasEditorBrowser.ts'),
 	];
 	for (const file of sharedBrowserFiles) {
 		for (const target of localImports(file)) {
-			if (target === join(designRoot, 'browser/designEditorContributions.ts')) {
+			if (target === join(designRoot, 'browser/artifactCanvasEditorContributions.ts')) {
 				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
 			}
 		}
@@ -308,7 +308,7 @@ test('Design editor stays within its Sessions contribution and keeps document co
 	assert.deepEqual(violations, []);
 });
 
-test('Shared canvas does not depend on Creator modes or Sessions composition', () => {
+test('Shared canvas does not depend on Artifacts modes or Sessions composition', () => {
 	const canvasRoot = join(sourceRoot, 'sessions/contrib/canvas');
 	const violations: string[] = [];
 	for (const file of productionTypeScriptFiles(canvasRoot)) {

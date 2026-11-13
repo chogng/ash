@@ -122,7 +122,7 @@ for (const [name, value] of Object.entries({
 Object.defineProperty(browserEnvironment.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
 const { registerTitleService } = await import('../../services/title/browser/titleService.js');
-await import('../../contrib/artifact/browser/designEditor.contribution.js');
+await import('../../contrib/artifact/browser/artifactCanvasEditor.contribution.js');
 await import('../../../workbench/contrib/chat/browser/chat.shared.contribution.js');
 await import('../../../workbench/contrib/chatWindow/browser/chatWindow.contribution.js');
 await import('../../contrib/sessions/browser/views/sessionsViewActions.js');
@@ -578,7 +578,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(workspaceChangesReads, 0, 'The Chat composer must not ask Git for the window workspace');
 	assert.equal(coworkView.querySelector('.ash-chat-changes-pill:not([hidden])'), null);
 	assert.equal(coworkView.querySelector('[data-action-id="ash.chat.input.mode"]'), null);
-	assert.ok(coworkView.querySelector('.ash-chat-input-container [data-action-id="ash.chat.input.model"]'));
+	assert.ok(coworkView.querySelector('.ash-chat-input-model-action'));
 	assert.equal(coworkView.querySelector('.ash-chat'), null);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	assert.equal(codeView, coworkView);

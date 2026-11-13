@@ -133,7 +133,7 @@ export class ArtifactTableEditor extends EditorPane implements ISessionsEditorPa
 	public getAccessibleContent(): string { return this.widget.value?.getAccessibleContent() ?? ''; }
 
 	private getDocumentTitle(source: ArtifactTableModel): string {
-		return source.title.get() ?? localize('sessions.creator.untitled', 'Untitled {0}', getArtifactTitle(source.kind));
+		return source.title.get() ?? localize('sessions.artifacts.untitled', 'Untitled {0}', getArtifactTitle(source.kind));
 	}
 	private toCsv(source: ArtifactTableModel): string {
 		return source.rows.map(row => row.map(value => `"${value.replaceAll('"', '""')}"`).join(',')).join('\r\n');

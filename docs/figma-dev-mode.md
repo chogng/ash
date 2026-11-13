@@ -33,7 +33,7 @@ Dev Mode 与 Design Mode 使用同一份设计文件。Design Mode 主要用于�
 
 ### 查看设计时可以做哪些修改
 
-Dev Mode 的主要工作是查看和检查。组件 playground 的试验配置，以及 focus view 的临时尺寸和变量模式调整，不会把试验结果写回原设计；focus view 有单独的方案要求。标注、固定测量和交接状态则是共享协作内容，能否修改取决于对应席位与文件权限。[组件 playground](https://help.figma.com/hc/en-us/articles/5579474826519-Explore-component-properties)、[Focus view](https://help.figma.com/hc/en-us/articles/23919923330455-Dev-Mode-focus-view)、[标注权限](https://help.figma.com/hc/en-us/articles/20774752502935-Add-measurements-and-annotate-designs)
+Dev Mode 的主要工作是查看和检查。组件 playground 的试验配置，以及 focus view 的临时尺寸和变量模式调整，不会把试验结果写回原设计；focus view 有单独的方案要求。标注、固定测量和交接状态则是共享协作内容，能否修改取决于对应席位与文件权限。[组件 playground](https://help.figma.com/hc/en-us/articles/5579474826519-Explore-component-properties)、[Focus view](https://help.figma.com/hc/en-us/articles/23919923330455-Dev-Mode-focus-view)、[标注权限](https://help.figma.com/hc/en-us/articles/20774752502935-Add-measurements-and-annotate-canvases)
 
 因此，理解它时需要区分“临时试着看”和“修改共享交接信息”。真正修改设计对象的布局、文字和组件定义，仍属于设计编辑工作。
 
@@ -81,7 +81,7 @@ Ready for dev 与 Completed 是交接状态；设计被修改时可出现 Change
 
 Compare changes 支持并排和叠加查看，列出新增、删除及修改的图层，还能比较选中图层的属性和生成片段。例如按钮高度从 32 改到 36，开发者可以定位到变更处，而不必重新检查整张页面。[设计变更比较](https://help.figma.com/hc/en-us/articles/15023193382935-Compare-changes-in-Dev-Mode)
 
-标注承载画面不能完整表达的要求。例如“这一区域应随内容增长”“图标按钮需要无障碍名称”“提交期间保留按钮位置”。这些是说明用途的例子，Figma 不会自动生成或验证这些约定。添加标注或固定测量需要 Full 席位及文件编辑权限；有 Dev 席位并能查看文件的用户可以阅读它们。[标注与测量](https://help.figma.com/hc/en-us/articles/20774752502935-Add-measurements-and-annotate-designs)
+标注承载画面不能完整表达的要求。例如“这一区域应随内容增长”“图标按钮需要无障碍名称”“提交期间保留按钮位置”。这些是说明用途的例子，Figma 不会自动生成或验证这些约定。添加标注或固定测量需要 Full 席位及文件编辑权限；有 Dev 席位并能查看文件的用户可以阅读它们。[标注与测量](https://help.figma.com/hc/en-us/articles/20774752502935-Add-measurements-and-annotate-canvases)
 
 ## 从按钮设计到项目实现的完整例子
 
@@ -119,7 +119,7 @@ Code Connect、Dev Mode 和 MCP 可以配合，也可以分别使用：开发者
 
 ## 对 Ash Design 的产品建议
 
-Ash Creator 的目标与当前能力分别由 [Creator 设计方案](../src/ash/sessions/contrib/artifact/DESIGN.md)和 [Creator README](../src/ash/sessions/contrib/artifact/README.md)维护。本节讨论 Dev Mode 对长期产品设计的启发，不把 Figma 的功能或以下建议写成 Ash 已有能力。
+Ash Artifacts 的目标与当前能力分别由 [Artifacts 设计方案](../src/ash/sessions/contrib/artifact/DESIGN.md)和 [Artifacts README](../src/ash/sessions/contrib/artifact/README.md)维护。本节讨论 Dev Mode 对长期产品设计的启发，不把 Figma 的功能或以下建议写成 Ash 已有能力。
 
 ### 编辑和开发检查读取同一份设计
 

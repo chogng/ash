@@ -900,7 +900,7 @@ test('Artifacts canvas responds to wheel, drag and keyboard input', async ({ pag
 	await expect(creator.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'artifacts');
 	await expect(creator).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
-	await new QuickAccess(page).runCommand('sessions.creator.open.design');
+	await new QuickAccess(page).runCommand('sessions.artifacts.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await expect(canvas).toBeVisible();
 	const tools = page.locator('.ash-artifact-toolbar');

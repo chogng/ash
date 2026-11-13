@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { DeferredPromise } from '../../../base/common/async.js';
 import { observableValue, autorun } from '../../../base/common/observable.js';
 import { URI } from '../../../base/common/uri.js';
 import { InMemoryFileSystemProvider } from '../../../platform/files/common/inMemoryFilesystemProvider.js';
@@ -70,4 +71,54 @@ test('Catalog reads file metadata without writing and observes saved edits witho
 	assert.equal(writes, 1);
 	source.set([], undefined);
 	assert.deepEqual(catalog.cards.get(), []);
+});
+
+test('Catalog preserves dates and order during metadata refresh and ignores equivalent source updates', async () => {
+	let timestamp = 1000;
+	let pending: { started: DeferredPromise<void>; finish: DeferredPromise<void>; } | undefined;
+	using provider = new class extends InMemoryFileSystemProvider {
+		override async stat(resource: URI) {
+			const result = { ...await super.stat(resource), modifiedAtMillis: timestamp };
+			if (pending) {
+				const { started, finish } = pending;
+				await started.complete();
+				await finish.p;
+			}
+			return result;
+		}
+	}();
+	using files = createTestFileService(provider);
+	const resource = URI.file('/draft.md');
+	await files.createDirectory(URI.file('/'));
+	await files.writeFile({ resource, content: 'original' });
+	const draft = card('Draft', { resource, createdAt: 100 });
+	const other = card('Other', { modifiedAt: 500 });
+	const source = observableValue<readonly ArtifactCard[]>('test', [draft, other]);
+	using catalog = new ArtifactCatalog([{ cards: source }], files);
+	await waitForCards(catalog, cards => cards[0]?.modifiedAt === 1000);
+	const snapshots: { dates: (number | undefined)[]; order: string[]; }[] = [];
+	using observation = autorun(reader => {
+		const cards = catalog.cards.read(reader);
+		snapshots.push({ dates: cards.map(card => card.modifiedAt), order: selectArtifactCards(cards, options, '').map(card => card.title) });
+	});
+	const initial = { dates: [1000, 500], order: ['Draft', 'Other'] };
+	source.set([{ ...draft, command: { id: 'open', args: [] } }, { ...other }], undefined);
+	assert.deepEqual(snapshots, [initial]);
+
+	// A slow metadata read must not temporarily fall back to the older creation date.
+	await files.writeFile({ resource, content: 'edited' });
+	timestamp = 2000;
+	pending = { started: new DeferredPromise<void>(), finish: new DeferredPromise<void>() };
+	try {
+		await pending.started.p;
+		assert.deepEqual(snapshots, [initial]);
+		// Navigation can publish equivalent source cards while the read is in flight.
+		source.set([{ ...draft }, { ...other }], undefined);
+		assert.deepEqual(snapshots, [initial]);
+	} finally {
+		await pending.finish.complete();
+		pending = undefined;
+	}
+	await waitForCards(catalog, cards => cards[0]?.modifiedAt === 2000);
+	assert.deepEqual(snapshots, [initial, { dates: [2000, 500], order: ['Draft', 'Other'] }]);
 });

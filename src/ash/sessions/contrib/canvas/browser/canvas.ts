@@ -6,6 +6,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { foreground } from '../../../../platform/theme/common/colors/baseColors.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { CanvasViewport } from '../common/canvasViewport.js';
+import type { CanvasFrame } from '../common/canvasGeometry.js';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
@@ -13,14 +14,6 @@ export enum CanvasCursor {
 	Select = 'select',
 	Pan = 'pan',
 	Draw = 'draw',
-}
-
-export interface CanvasSelectionBounds {
-	readonly x: number;
-	readonly y: number;
-	readonly width: number;
-	readonly height: number;
-	readonly rotation: number;
 }
 
 /** Owns the spatial surface; the editor owns its content, model and accessible description. */
@@ -67,7 +60,7 @@ export class Canvas extends Disposable {
 		this.domNode.style.setProperty('--ash-canvas-scale', `${viewport.scale}`);
 	}
 
-	public renderSelection(bounds: readonly CanvasSelectionBounds[]): void {
+	public renderSelection(bounds: readonly CanvasFrame[]): void {
 		for (const rect of this.selectionBoundsDomNodes.splice(bounds.length)) { rect.remove(); }
 		for (const [index, bound] of bounds.entries()) {
 			let rect = this.selectionBoundsDomNodes[index];

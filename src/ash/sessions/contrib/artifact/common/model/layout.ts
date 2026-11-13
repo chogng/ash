@@ -1,33 +1,33 @@
-import type { DesignTextMeasurer } from './designText.js';
-import type { DesignAutoLayout, DesignConstraint, DesignGrid, DesignGridTrack, DesignShape } from './designDocument.js';
+import type { ArtifactCanvasTextMeasurer } from './artifactCanvasText.js';
+import type { ArtifactCanvasAutoLayout, ArtifactCanvasConstraint, ArtifactCanvasGrid, ArtifactCanvasGridTrack, ArtifactCanvasShape } from './artifactCanvasDocument.js';
 
 type Axis = 'width' | 'height';
-type Frame = Extract<DesignShape, { kind: 'frame'; }>;
+type Frame = Extract<ArtifactCanvasShape, { kind: 'frame'; }>;
 type Dimensions = Partial<Record<Axis, number>>;
 const minimumSize = 0.001;
 
 /** Resolve at the history boundary so canvas, hit testing, files and exports share one geometry. */
-export function resolveDesignLayout(shapes: readonly DesignShape[], previous: readonly DesignShape[] = [], measureText?: DesignTextMeasurer): readonly DesignShape[] {
+export function resolveArtifactCanvasLayout(shapes: readonly ArtifactCanvasShape[], previous: readonly ArtifactCanvasShape[] = [], measureText?: ArtifactCanvasTextMeasurer): readonly ArtifactCanvasShape[] {
 	const before = new Map(previous.map(shape => [shape.id, shape]));
 	return shapes.map(shape => layoutShape(shape, before.get(shape.id), {}, measureText));
 }
 
-function lowerBound(shape: DesignShape, axis: Axis): number {
+function lowerBound(shape: ArtifactCanvasShape, axis: Axis): number {
 	const padding = shape.kind === 'frame' ? shape.autoLayout?.padding : undefined;
 	return Math.max(minimumSize, shape.sizeLimits?.[axis === 'width' ? 'minWidth' : 'minHeight'] ?? 0,
 		padding ? axis === 'width' ? padding.left + padding.right : padding.top + padding.bottom : 0);
 }
 
-function limit(shape: DesignShape, axis: Axis, value: number): number {
+function limit(shape: ArtifactCanvasShape, axis: Axis, value: number): number {
 	return Math.max(lowerBound(shape, axis), Math.min(value, shape.sizeLimits?.[axis === 'width' ? 'maxWidth' : 'maxHeight'] ?? Infinity));
 }
 
-function move(shape: DesignShape, x: number, y: number): DesignShape {
+function move(shape: ArtifactCanvasShape, x: number, y: number): ArtifactCanvasShape {
 	if (shape.x === x && shape.y === y) { return shape; }
 	return { ...shape, x, y, ...(shape.motion ? { motion: { ...shape.motion, keyframes: shape.motion.keyframes.map(frame => ({ ...frame, x: frame.x + x - shape.x, y: frame.y + y - shape.y })) } } : {}) };
 }
 
-function constrain(position: number, size: number, oldSize: number, newSize: number, mode: DesignConstraint): [number, number] {
+function constrain(position: number, size: number, oldSize: number, newSize: number, mode: ArtifactCanvasConstraint): [number, number] {
 	const delta = newSize - oldSize;
 	switch (mode) {
 		case 'center': return [position + delta / 2, size];
@@ -38,7 +38,7 @@ function constrain(position: number, size: number, oldSize: number, newSize: num
 	}
 }
 
-function layoutShape(input: DesignShape, previous?: DesignShape, imposed: Dimensions = {}, measureText?: DesignTextMeasurer): DesignShape {
+function layoutShape(input: ArtifactCanvasShape, previous?: ArtifactCanvasShape, imposed: Dimensions = {}, measureText?: ArtifactCanvasTextMeasurer): ArtifactCanvasShape {
 	const shape = layoutContents(input, previous, imposed, measureText);
 	if (shape.kind !== 'frame' && shape.kind !== 'group') { return shape; }
 	// Fixed layers must leave auto layout before they can be pinned. Paint order is canonical.
@@ -46,10 +46,10 @@ function layoutShape(input: DesignShape, previous?: DesignShape, imposed: Dimens
 	return { ...shape, children: [...children.filter(child => child.scrollPosition !== 'fixed'), ...children.filter(child => child.scrollPosition === 'fixed')] };
 }
 
-function layoutContents(input: DesignShape, previous?: DesignShape, imposed: Dimensions = {}, measureText?: DesignTextMeasurer): DesignShape {
+function layoutContents(input: ArtifactCanvasShape, previous?: ArtifactCanvasShape, imposed: Dimensions = {}, measureText?: ArtifactCanvasTextMeasurer): ArtifactCanvasShape {
 	const shape = { ...input, width: limit(input, 'width', imposed.width ?? input.width), height: limit(input, 'height', imposed.height ?? input.height) };
 	if (shape.kind === 'group') {
-		return { ...shape, children: resolveDesignLayout(shape.children, previous?.kind === 'group' ? previous.children : [], measureText) };
+		return { ...shape, children: resolveArtifactCanvasLayout(shape.children, previous?.kind === 'group' ? previous.children : [], measureText) };
 	}
 	if (shape.kind === 'text' && measureText && shape.textAutoResize && shape.textAutoResize !== 'none') {
 		const autoWidth = shape.textAutoResize === 'width' && imposed.width === undefined;
@@ -63,7 +63,7 @@ function layoutContents(input: DesignShape, previous?: DesignShape, imposed: Dim
 	const oldFrame = previous?.kind === 'frame' ? previous : undefined;
 	const before = new Map(oldFrame?.children.map(child => [child.id, child]) ?? []);
 	const layout = shape.autoLayout;
-	const freeChild = (child: DesignShape, frame: Frame): DesignShape => {
+	const freeChild = (child: ArtifactCanvasShape, frame: Frame): ArtifactCanvasShape => {
 		let resized = child;
 		if (oldFrame && before.has(child.id) && (oldFrame.width !== frame.width || oldFrame.height !== frame.height)) {
 			const [x, width] = constrain(child.x, child.width, oldFrame.width, frame.width, child.constraints?.horizontal ?? 'start');
@@ -77,7 +77,7 @@ function layoutContents(input: DesignShape, previous?: DesignShape, imposed: Dim
 	const measured = visible.map(child => layoutShape(child, before.get(child.id), {}, measureText));
 	// Each allocation starts from the input tree, not an already resized subtree: free-frame
 	// constraints and animation offsets must be applied only once to the final dimensions.
-	const resize = (index: number, size: Dimensions): DesignShape => layoutShape(visible[index], before.get(visible[index].id), size, measureText);
+	const resize = (index: number, size: Dimensions): ArtifactCanvasShape => layoutShape(visible[index], before.get(visible[index].id), size, measureText);
 	const result = layout.direction === 'grid' && layout.grid
 		? layoutGrid({ ...shape, children: visible }, layout, layout.grid, measured, imposed, resize)
 		: layoutFlow({ ...shape, children: visible }, layout, measured, imposed, resize);
@@ -90,8 +90,8 @@ function offset(alignment: 'start' | 'center' | 'end' | 'space-between', availab
 }
 
 /** Equal fill shares are reallocated when a sibling reaches a minimum or maximum. */
-function allocateFill(children: readonly DesignShape[], axis: Axis, available: number): Map<DesignShape, number> {
-	const result = new Map<DesignShape, number>();
+function allocateFill(children: readonly ArtifactCanvasShape[], axis: Axis, available: number): Map<ArtifactCanvasShape, number> {
+	const result = new Map<ArtifactCanvasShape, number>();
 	let pending = [...children];
 	while (pending.length) {
 		const share = available / pending.length;
@@ -107,7 +107,7 @@ function allocateFill(children: readonly DesignShape[], axis: Axis, available: n
 	return result;
 }
 
-function layoutFlow(shape: Frame, layout: DesignAutoLayout, measured: readonly DesignShape[], imposed: Dimensions, resize: (index: number, size: Dimensions) => DesignShape): Frame {
+function layoutFlow(shape: Frame, layout: ArtifactCanvasAutoLayout, measured: readonly ArtifactCanvasShape[], imposed: Dimensions, resize: (index: number, size: Dimensions) => ArtifactCanvasShape): Frame {
 	const horizontal = layout.direction === 'horizontal';
 	const main: Axis = horizontal ? 'width' : 'height';
 	const cross: Axis = horizontal ? 'height' : 'width';
@@ -118,7 +118,7 @@ function layoutFlow(shape: Frame, layout: DesignAutoLayout, measured: readonly D
 	const crossPadding = horizontal ? pad.top + pad.bottom : pad.left + pad.right;
 	const dimensions = { width: shape.width, height: shape.height };
 	const hug = (axis: Axis): boolean => layout[axis] === 'hug' && imposed[axis] === undefined;
-	const fills = (child: DesignShape, axis: Axis): boolean => child.kind !== 'group' && child.sizing?.[axis] === 'fill' && !hug(axis);
+	const fills = (child: ArtifactCanvasShape, axis: Axis): boolean => child.kind !== 'group' && child.sizing?.[axis] === 'fill' && !hug(axis);
 	const allocations: Dimensions[] = measured.map(() => ({}));
 	if (!layout.wrap && !hug(cross)) {
 		measured = measured.map((child, index) => {
@@ -178,7 +178,7 @@ function layoutFlow(shape: Frame, layout: DesignAutoLayout, measured: readonly D
 }
 
 /** Shared with HTML export; positions are zero-based, spans include occupied gaps. */
-export function getDesignGridCells(children: readonly DesignShape[], grid: DesignGrid): { column: number; row: number; columnSpan: number; rowSpan: number; }[] {
+export function getArtifactCanvasGridCells(children: readonly ArtifactCanvasShape[], grid: ArtifactCanvasGrid): { column: number; row: number; columnSpan: number; rowSpan: number; }[] {
 	const columns = grid.columns.length;
 	const occupied = new Map<number, Set<number>>();
 	let cursor = 0;
@@ -206,7 +206,7 @@ export function getDesignGridCells(children: readonly DesignShape[], grid: Desig
 	});
 }
 
-function trackSizes(tracks: readonly DesignGridTrack[], contributions: readonly { start: number; span: number; size: number; }[], gap: number, available?: number): number[] {
+function trackSizes(tracks: readonly ArtifactCanvasGridTrack[], contributions: readonly { start: number; span: number; size: number; }[], gap: number, available?: number): number[] {
 	const sizes = tracks.map(track => track.sizing === 'fixed' ? track.value : 0);
 	// Single-cell contributions establish track minima before spanning items distribute
 	// their remaining content over flexible tracks. Fixed tracks never grow implicitly.
@@ -226,15 +226,15 @@ function trackSizes(tracks: readonly DesignGridTrack[], contributions: readonly 
 	return sizes;
 }
 
-function layoutGrid(shape: Frame, layout: DesignAutoLayout, grid: DesignGrid, measured: readonly DesignShape[], imposed: Dimensions, resize: (index: number, size: Dimensions) => DesignShape): Frame {
-	const cells = getDesignGridCells(measured, grid);
+function layoutGrid(shape: Frame, layout: ArtifactCanvasAutoLayout, grid: ArtifactCanvasGrid, measured: readonly ArtifactCanvasShape[], imposed: Dimensions, resize: (index: number, size: Dimensions) => ArtifactCanvasShape): Frame {
+	const cells = getArtifactCanvasGridCells(measured, grid);
 	const rowCount = Math.max(grid.autoRows ? 0 : grid.rows.length, ...cells.map(cell => cell.row + cell.rowSpan));
 	const rows = Array.from({ length: rowCount }, (_, index) => grid.rows[index] ?? { sizing: 'fill', value: 1 } as const);
 	const pad = layout.padding;
 	const rowGap = layout.crossGap ?? layout.gap;
 	const dimensions = { width: shape.width, height: shape.height };
 	const children = [...measured];
-	const sizes = (axis: Axis, tracks: readonly DesignGridTrack[], gap: number, padding: number): number[] => {
+	const sizes = (axis: Axis, tracks: readonly ArtifactCanvasGridTrack[], gap: number, padding: number): number[] => {
 		const contributions = cells.map((cell, index) => ({ start: axis === 'width' ? cell.column : cell.row, span: axis === 'width' ? cell.columnSpan : cell.rowSpan, size: children[index][axis] }));
 		if (layout[axis] === 'hug' && imposed[axis] === undefined) {
 			const natural = trackSizes(tracks, contributions, gap);

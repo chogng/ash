@@ -1,12 +1,12 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { prototypeScrollRange, type PrototypeScrollPositions } from '../../artifact/common/model/prototypeScroll.js';
-import type { DesignPoint } from '../../artifact/common/core/geometry.js';
+import type { CanvasPoint } from '../../canvas/common/canvasGeometry.js';
 import { addDisposableListener, h, svg } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { renderDesignShape } from '../../artifact/browser/designSvgRenderer.js';
-import type { DesignEditorContributionContext } from '../../artifact/browser/designEditorBrowser.js';
+import { renderArtifactCanvasShape } from '../../artifact/browser/rendering/artifactCanvasSvgRenderer.js';
+import type { ArtifactCanvasEditorContributionContext } from '../../artifact/browser/artifactCanvasEditorBrowser.js';
 import { defaultPrototypeTransition, prototypeFrames, prototypeOwner, type PrototypeFrame, type PrototypeInteraction, type PrototypeTransition, type PrototypeTrigger } from '../../artifact/common/model/prototype.js';
 import { PrototypePlayback, samplePrototypeTransition, prototypeTransitionDuration, prototypeProgress, springProgress, type PrototypeEffect, type PrototypeSnapshot } from '../../artifact/common/model/prototypePlayback.js';
 import { actionLabels, triggerLabels } from './prototypeLabels.js';
@@ -32,7 +32,7 @@ export class PrototypePreview extends Disposable {
 	private pointer: { id: string; sourceId: string; x: number; y: number; pointerId: number; } | undefined;
 	private suppressClick = false;
 	private pan: { id: string; pointerId: number; x: number; y: number; moved: boolean; } | undefined;
-	constructor(private readonly context: DesignEditorContributionContext, private readonly openExternal: (url: string) => void) {
+	constructor(private readonly context: ArtifactCanvasEditorContributionContext, private readonly openExternal: (url: string) => void) {
 		super();
 		const doc = context.ownerDocument;
 		this.domNode = h(doc, 'section', { className: 'ash-prototype-preview', attributes: { role: 'region', 'aria-label': localize('sessions.design.prototype.preview', 'Prototype preview'), tabindex: '0' } });
@@ -52,7 +52,7 @@ export class PrototypePreview extends Disposable {
 		}));
 		this._register(new Button(controls, {
 			...defaultButtonStyles,
-			label: localize('sessions.creator.closePreview', 'Close preview'),
+			label: localize('sessions.artifacts.closePreview', 'Close preview'),
 			onClick: () => this.close(),
 		}));
 		this.status = h(doc, 'span', { attributes: { role: 'status', 'aria-live': 'polite' } });
@@ -219,12 +219,12 @@ export class PrototypePreview extends Disposable {
 		if (target instanceof this.context.ownerDocument.defaultView!.Element) { for (let element: Element | null = target; element && element !== this.scene; element = element.parentElement) { const id = element.getAttribute('data-shape-id'); if (id && this.playback?.scrollFrames.some(frame => frame.id === id)) { return id; } } }
 		return this.playback?.activeFrame.id ?? '';
 	}
-	private designDelta(x: number, y: number): DesignPoint {
+	private designDelta(x: number, y: number): CanvasPoint {
 		const element = this.scene.querySelector<SVGGraphicsElement>(`[data-shape-id="${this.playback?.activeFrame.id}"]`), matrix = element?.getScreenCTM?.()?.inverse();
 		return matrix ? { x: matrix.a * x + matrix.c * y, y: matrix.b * x + matrix.d * y } : { x, y };
 	}
-	private renderShape(shape: PrototypeFrame | import('../../artifact/common/model/designDocument.js').DesignShape): SVGGraphicsElement {
-		const element = renderDesignShape(shape, undefined, this.context.documentController.getEmbeddedImageSources());
+	private renderShape(shape: PrototypeFrame | import('../../artifact/common/model/artifactCanvasDocument.js').ArtifactCanvasShape): SVGGraphicsElement {
+		const element = renderArtifactCanvasShape(shape, undefined, this.context.documentController.getEmbeddedImageSources());
 		for (const guide of element.querySelectorAll('[data-layout-guide]')) { guide.remove(); }
 		return element;
 	}

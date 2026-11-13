@@ -89,7 +89,7 @@ test('A Docs request publishes a Markdown file that can be edited and reopened a
 		page = await agentsWorkbench.openAgentsWindow(target.kind);
 		const showArtifacts = async () => page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 		await showArtifacts();
-		await page.locator('.ash-chat-creation').getByRole('button', { name: 'Docs', exact: true }).press('Enter');
+		await page.locator('.ash-new-artifact').getByRole('button', { name: 'Docs', exact: true }).press('Enter');
 		const chat = () => page.locator('[data-part="sessions"] :is(.chat-composer, .native-chat-composer):visible');
 		const pill = () => chat().locator('.ash-chat-input-artifact-pill:visible');
 		await expect(pill()).toHaveText('Ash Docs');

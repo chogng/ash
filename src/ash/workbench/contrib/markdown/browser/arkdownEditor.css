@@ -1,0 +1,56 @@
+.stanza-arkdown-editor {
+	height: 100%;
+	min-height: 0;
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-background);
+}
+
+.stanza-arkdown-prose {
+	box-sizing: border-box;
+	height: 100%;
+	overflow: auto;
+	padding: var(--ash-spacing-size240);
+	font-size: var(--ash-fontSize-body1);
+	line-height: 1.65;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	outline: none;
+}
+
+.stanza-arkdown-prose > * {
+	max-width: 820px;
+	margin-inline: auto;
+}
+.stanza-arkdown-prose p {
+	min-height: 1em;
+}
+.stanza-arkdown-prose table {
+	border-collapse: collapse;
+}
+.stanza-arkdown-prose td {
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	padding: var(--ash-spacing-size40);
+}
+.stanza-arkdown-prose pre {
+	white-space: pre-wrap;
+	background: var(--ash-text-codeBlockBackground);
+}
+.stanza-arkdown-prose code {
+	font-family: var(--ash-font-family-monospace, monospace);
+}
+.stanza-arkdown-prose a {
+	color: var(--ash-link-foreground);
+}
+.stanza-arkdown-prose blockquote {
+	border-inline-start: var(--ash-strokeThickness) solid var(--ash-border);
+	padding-inline-start: var(--ash-spacing-size120);
+}
+
+.stanza-arkdown-source {
+	height: 100%;
+	min-height: 0;
+}
+
+.stanza-arkdown-editor [hidden] {
+	display: none;
+}

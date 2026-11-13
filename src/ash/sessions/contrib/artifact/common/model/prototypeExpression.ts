@@ -1,7 +1,7 @@
 import { isRecord } from '../../../../../base/common/types.js';
 import { isUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
-import type { DesignVariable, DesignVariableType } from './designResources.js';
+import type { ArtifactCanvasVariable, ArtifactCanvasVariableType } from './artifactCanvasResources.js';
 
 export type PrototypeValue = string | number | boolean;
 type Operator = '+' | '-' | '*' | '/' | '==' | '!=' | '<' | '<=' | '>' | '>=' | 'and' | 'or';
@@ -29,12 +29,12 @@ export function readPrototypeExpression(value: unknown): PrototypeExpression {
 }
 
 /** Missing library variables are unresolved; known type errors are rejected at the input boundary. */
-export function prototypeExpressionType(expression: PrototypeExpression, variables: readonly DesignVariable[]): DesignVariableType | undefined {
+export function prototypeExpressionType(expression: PrototypeExpression, variables: readonly ArtifactCanvasVariable[]): ArtifactCanvasVariableType | undefined {
 	if (expression.kind === 'literal') { return typeof expression.value as 'string' | 'number' | 'boolean'; }
 	if (expression.kind === 'variable') { return variables.find(variable => variable.id === expression.id)?.type; }
 	if (expression.kind === 'unary') { const type = prototypeExpressionType(expression.operand, variables); const expected = expression.operator === 'not' ? 'boolean' : 'number'; if (type && type !== expected) { invalid(); } return expected; }
 	const a = prototypeExpressionType(expression.left, variables), b = prototypeExpressionType(expression.right, variables);
-	const requireTypes = (allowed: readonly DesignVariableType[]): void => { if (a && !allowed.includes(a) || b && !allowed.includes(b)) { invalid(); } };
+	const requireTypes = (allowed: readonly ArtifactCanvasVariableType[]): void => { if (a && !allowed.includes(a) || b && !allowed.includes(b)) { invalid(); } };
 	if (expression.operator === 'and' || expression.operator === 'or') { requireTypes(['boolean']); return 'boolean'; }
 	if (expression.operator === '==' || expression.operator === '!=') { if (a && b && a !== b) { invalid(); } return 'boolean'; }
 	if (['<', '<=', '>', '>='].includes(expression.operator)) { requireTypes(['number']); return 'boolean'; }
@@ -67,7 +67,7 @@ export function evaluatePrototypeExpression(expression: PrototypeExpression, res
 }
 
 /** Names with spaces or punctuation use backticks; duplicate names require a variable ID token. */
-export function formatPrototypeExpression(expression: PrototypeExpression, variables: readonly DesignVariable[]): string {
+export function formatPrototypeExpression(expression: PrototypeExpression, variables: readonly ArtifactCanvasVariable[]): string {
 	if (expression.kind === 'literal') { return JSON.stringify(expression.value); }
 	if (expression.kind === 'variable') {
 		const variable = variables.find(variable => variable.id === expression.id);
@@ -78,7 +78,7 @@ export function formatPrototypeExpression(expression: PrototypeExpression, varia
 	return `(${formatPrototypeExpression(expression.left, variables)} ${expression.operator} ${formatPrototypeExpression(expression.right, variables)})`;
 }
 
-export function parsePrototypeExpression(text: string, variables: readonly DesignVariable[]): PrototypeExpression {
+export function parsePrototypeExpression(text: string, variables: readonly ArtifactCanvasVariable[]): PrototypeExpression {
 	if (!text.trim() || text.length > 8192) { invalid(); }
 	const tokens: string[] = [];
 	let position = 0;

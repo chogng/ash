@@ -1,11 +1,11 @@
-import type { DesignTextMeasurer } from './designText.js';
+import type { ArtifactCanvasTextMeasurer } from './artifactCanvasText.js';
 import { applyPrototypeScroll, prototypePath, prototypeScrollVector, prototypeScrollFrames, prototypeScrollOffset, prototypeScrollRange, prototypeScrollTo, prototypeVisibleShapes, type PrototypeScrollPositions } from './prototypeScroll.js';
-import type { DesignPoint } from '../core/geometry.js';
+import type { CanvasPoint } from '../../../canvas/common/canvasGeometry.js';
 import { evaluatePrototypeExpression, type PrototypeValue } from './prototypeExpression.js';
-import { resolveDesignLayout } from './layout.js';
-import { flattenDesignShapes, type DesignShape } from './designDocument.js';
-import { remapDesignInstance, resolveDesignComponents } from './components.js';
-import { emptyDesignResources, getDesignResourceCatalog, resolveDesignVariable, getDesignLibraryShapes, resolveDesignResources, type DesignResources } from './designResources.js';
+import { resolveArtifactCanvasLayout } from './layout.js';
+import { flattenArtifactCanvasShapes, type ArtifactCanvasShape } from './artifactCanvasDocument.js';
+import { remapArtifactCanvasInstance, resolveArtifactCanvasComponents } from './components.js';
+import { emptyArtifactCanvasResources, getArtifactCanvasResourceCatalog, resolveArtifactCanvasVariable, getArtifactCanvasLibraryShapes, resolveArtifactCanvasResources, type ArtifactCanvasResources } from './artifactCanvasResources.js';
 import { prototypeComponent, prototypeVariants, prototypeFrames, type PrototypeFrame, type PrototypeInteraction, type PrototypeTransition, type PrototypeStep, type PrototypeSpring } from './prototype.js';
 
 interface OverlayState { readonly frame: PrototypeFrame; readonly settings: NonNullable<PrototypeStep['overlay']>; }
@@ -20,9 +20,9 @@ export class PrototypePlayback {
 	private values: Readonly<Record<string, PrototypeValue>> = {};
 	private modes: Readonly<Record<string, string>> = {};
 	private scroll: PrototypeScrollPositions = {};
-	private readonly sources: readonly DesignShape[];
-	constructor(private readonly shapes: readonly DesignShape[], start: string, private readonly resources: DesignResources = emptyDesignResources, private readonly measureText?: DesignTextMeasurer) {
-		this.sources = resolveDesignResources([...shapes, ...getDesignLibraryShapes(resources)], resources);
+	private readonly sources: readonly ArtifactCanvasShape[];
+	constructor(private readonly shapes: readonly ArtifactCanvasShape[], start: string, private readonly resources: ArtifactCanvasResources = emptyArtifactCanvasResources, private readonly measureText?: ArtifactCanvasTextMeasurer) {
+		this.sources = resolveArtifactCanvasResources([...shapes, ...getArtifactCanvasLibraryShapes(resources)], resources);
 		const frames = prototypeFrames(shapes);
 		this.state = { frame: frames.find(frame => frame.id === start) ?? frames[0], overlays: [] };
 	}
@@ -46,21 +46,21 @@ export class PrototypePlayback {
 				const from = this.scene;
 				if (action.action === 'scrollTo') {
 					const component = sourceId ? prototypeComponent([this.activeFrame], sourceId) : undefined;
-					const target = component && flattenDesignShapes([component]).find(shape => shape.sourceId === action.destination)?.id || action.destination!;
+					const target = component && flattenArtifactCanvasShapes([component]).find(shape => shape.sourceId === action.destination)?.id || action.destination!;
 					const before = this.scroll; this.scroll = prototypeScrollTo(this.activeFrame, target, this.scroll);
 					if (before !== this.scroll) { yield { from, transition: action.transition, scroll: { from: before, to: this.scroll } }; }
 					continue;
 				}
 				if (action.action === 'url') { if (action.url) { yield { from, transition: action.transition, url: action.url }; } continue; }
 				if (action.action === 'setVariable') {
-					const variable = getDesignResourceCatalog(this.resources).variables.find(item => item.id === action.variableId);
+					const variable = getArtifactCanvasResourceCatalog(this.resources).variables.find(item => item.id === action.variableId);
 					const value = evaluatePrototypeExpression(action.value!, id => this.variable(id));
 					const valid = variable && value !== undefined && (variable.type === 'color' ? typeof value === 'string' && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(value) : typeof value === variable.type);
 					if (valid) { this.values = { ...this.values, [variable.id]: value! }; }
 					yield { from, transition: action.transition, ...(!valid ? { failed: true } : {}) }; continue;
 				}
 				if (action.action === 'setMode') {
-					const collection = getDesignResourceCatalog(this.resources).collections.find(item => item.id === action.collectionId);
+					const collection = getArtifactCanvasResourceCatalog(this.resources).collections.find(item => item.id === action.collectionId);
 					const valid = collection?.modes.some(mode => mode.id === action.modeId);
 					if (valid) { this.modes = { ...this.modes, [collection!.id]: action.modeId! }; }
 					yield { from, transition: action.transition, ...(!valid ? { failed: true } : {}) }; continue;
@@ -70,8 +70,8 @@ export class PrototypePlayback {
 		};
 		yield* visit.call(this, interaction.actions);
 	}
-	private variable(id: string): PrototypeValue | undefined { return resolveDesignVariable(this.resources, id, { ...this.resources.modes, ...this.modes }, undefined, this.values); }
-	private materialize(frame: PrototypeFrame): PrototypeFrame { return resolveDesignLayout(resolveDesignResources([frame], { ...this.resources, modes: { ...this.resources.modes, ...this.modes } }, this.values), [frame], this.measureText)[0] as PrototypeFrame; }
+	private variable(id: string): PrototypeValue | undefined { return resolveArtifactCanvasVariable(this.resources, id, { ...this.resources.modes, ...this.modes }, undefined, this.values); }
+	private materialize(frame: PrototypeFrame): PrototypeFrame { return resolveArtifactCanvasLayout(resolveArtifactCanvasResources([frame], { ...this.resources, modes: { ...this.resources.modes, ...this.modes } }, this.values), [frame], this.measureText)[0] as PrototypeFrame; }
 	private execute(interaction: PrototypeStep, sourceId?: string): boolean {
 		const { action } = interaction;
 		if (action === 'changeTo') { return sourceId ? this.changeVariant(sourceId, interaction.destination!) : false; }
@@ -109,20 +109,20 @@ export class PrototypePlayback {
 		const instance = prototypeComponent([active], sourceId);
 		const target = prototypeVariants(trees, sourceId).find(frame => frame.id === destination);
 		if (!instance?.instance || !target) { return false; }
-		const previous = flattenDesignShapes(this.sources).find(shape => shape.id === instance.instance!.componentId) as PrototypeFrame | undefined;
-		const remapped = remapDesignInstance(instance, target, previous, true);
-		const resolved = resolveDesignResources(resolveDesignComponents([remapped], this.sources), this.resources)[0];
-		const update = (shape: DesignShape): DesignShape => shape.id === instance.id ? resolved : shape.kind === 'frame' || shape.kind === 'group' ? { ...shape, children: shape.children.map(update) } : shape;
-		if (this.state.overlays.length) { this.state = { ...this.state, overlays: this.state.overlays.map((overlay, index) => index === this.state.overlays.length - 1 ? { ...overlay, frame: resolveDesignResources([update(overlay.frame)], this.resources)[0] as PrototypeFrame } : overlay) }; }
-		else { this.state = { ...this.state, frame: resolveDesignResources([update(this.state.frame)], this.resources)[0] as PrototypeFrame }; }
+		const previous = flattenArtifactCanvasShapes(this.sources).find(shape => shape.id === instance.instance!.componentId) as PrototypeFrame | undefined;
+		const remapped = remapArtifactCanvasInstance(instance, target, previous, true);
+		const resolved = resolveArtifactCanvasResources(resolveArtifactCanvasComponents([remapped], this.sources), this.resources)[0];
+		const update = (shape: ArtifactCanvasShape): ArtifactCanvasShape => shape.id === instance.id ? resolved : shape.kind === 'frame' || shape.kind === 'group' ? { ...shape, children: shape.children.map(update) } : shape;
+		if (this.state.overlays.length) { this.state = { ...this.state, overlays: this.state.overlays.map((overlay, index) => index === this.state.overlays.length - 1 ? { ...overlay, frame: resolveArtifactCanvasResources([update(overlay.frame)], this.resources)[0] as PrototypeFrame } : overlay) }; }
+		else { this.state = { ...this.state, frame: resolveArtifactCanvasResources([update(this.state.frame)], this.resources)[0] as PrototypeFrame }; }
 		return true;
 	}
 
 	/** Offsets are session state, including remembered screens, and never become authored geometry. */
 	public get scrollRegions(): readonly PrototypeFrame[] { return prototypeVisibleShapes(applyPrototypeScroll(this.activeFrame, this.scroll)).filter((shape): shape is PrototypeFrame => shape.kind === 'frame' && !!shape.overflowDirection && shape.overflowDirection !== 'none'); }
 	public get scrollFrames(): readonly PrototypeFrame[] { return prototypeScrollFrames([this.activeFrame]); }
-	public scrollOffset(id: string): DesignPoint { const frame = this.scrollFrames.find(frame => frame.id === id); return frame ? prototypeScrollOffset(frame, this.scroll) : { x: 0, y: 0 }; }
-	public scrollBy(id: string, delta: DesignPoint): boolean {
+	public scrollOffset(id: string): CanvasPoint { const frame = this.scrollFrames.find(frame => frame.id === id); return frame ? prototypeScrollOffset(frame, this.scroll) : { x: 0, y: 0 }; }
+	public scrollBy(id: string, delta: CanvasPoint): boolean {
 		let x = delta.x, y = delta.y, changed = false;
 		const path = prototypePath([this.activeFrame], id);
 		for (const shape of [...path].reverse()) {
@@ -147,7 +147,7 @@ export class PrototypePlayback {
 			const source = this.activeFrame;
 			const family = (frame: PrototypeFrame): string => frame.name?.split('/')[0].trim() ?? '';
 			if (source.id !== destination.id && family(source) && family(source) === family(destination)) {
-				const match = (from: DesignShape, to: DesignShape): void => {
+				const match = (from: ArtifactCanvasShape, to: ArtifactCanvasShape): void => {
 					if (from.kind === 'frame' && to.kind === 'frame') { next[to.id] = prototypeScrollOffset(to, { [to.id]: prototypeScrollOffset(from, this.scroll) }); }
 					if ((from.kind === 'frame' || from.kind === 'group') && (to.kind === 'frame' || to.kind === 'group')) {
 						const remaining = [...from.children];
@@ -161,12 +161,12 @@ export class PrototypePlayback {
 	public sceneAtScroll(positions: PrototypeScrollPositions): PrototypeFrame { return prototypeScene({ frame: applyPrototypeScroll(this.materialize(this.state.frame), positions), overlays: this.state.overlays.map(overlay => ({ ...overlay, frame: applyPrototypeScroll(this.materialize(overlay.frame), positions) })) }); }
 	public get scene(): PrototypeFrame { return this.sceneAtScroll(this.scroll); }
 	/** Delay clocks belong to the screen, even when the trigger layer is outside its viewport. */
-	public get delayHotspots(): readonly DesignShape[] {
+	public get delayHotspots(): readonly ArtifactCanvasShape[] {
 		const frame = this.activeFrame;
-		const visit = (shape: DesignShape): readonly DesignShape[] => shape.visible === false ? [] : [shape, ...(shape.kind === 'frame' || shape.kind === 'group' ? shape.children.flatMap(visit) : [])];
+		const visit = (shape: ArtifactCanvasShape): readonly ArtifactCanvasShape[] => shape.visible === false ? [] : [shape, ...(shape.kind === 'frame' || shape.kind === 'group' ? shape.children.flatMap(visit) : [])];
 		return visit(frame).filter(shape => shape.interactions?.some(item => item.trigger === 'delay'));
 	}
-	public get hotspots(): readonly DesignShape[] {
+	public get hotspots(): readonly ArtifactCanvasShape[] {
 		return prototypeVisibleShapes(applyPrototypeScroll(this.activeFrame, this.scroll)).filter(shape => shape.interactions?.length);
 	}
 }
@@ -201,9 +201,9 @@ function blendColor(from: string, to: string, t: number): string {
 }
 
 /** Matching stays within each parent and pairs duplicate names by paint order. Unmatched layers dissolve. */
-export function smartAnimate(from: DesignShape, to: DesignShape, t: number): DesignShape {
+export function smartAnimate(from: ArtifactCanvasShape, to: ArtifactCanvasShape, t: number): ArtifactCanvasShape {
 	const lerp = (a: number, b: number): number => a + (b - a) * t;
-	let result: DesignShape = { ...to, x: lerp(from.x, to.x), y: lerp(from.y, to.y), width: Math.max(0.001, lerp(from.width, to.width)), height: Math.max(0.001, lerp(from.height, to.height)), rotation: lerp(from.rotation, to.rotation), fill: blendColor(from.fill, to.fill, t), opacity: Math.max(0, Math.min(1, lerp(from.visible === false ? 0 : from.opacity ?? 1, to.visible === false ? 0 : to.opacity ?? 1))), visible: true };
+	let result: ArtifactCanvasShape = { ...to, x: lerp(from.x, to.x), y: lerp(from.y, to.y), width: Math.max(0.001, lerp(from.width, to.width)), height: Math.max(0.001, lerp(from.height, to.height)), rotation: lerp(from.rotation, to.rotation), fill: blendColor(from.fill, to.fill, t), opacity: Math.max(0, Math.min(1, lerp(from.visible === false ? 0 : from.opacity ?? 1, to.visible === false ? 0 : to.opacity ?? 1))), visible: true };
 	if ((from.kind === 'frame' || from.kind === 'group') && (result.kind === 'frame' || result.kind === 'group')) {
 		const remaining = [...from.children];
 		const children = result.children.flatMap(child => {
@@ -221,10 +221,10 @@ export function smartAnimate(from: DesignShape, to: DesignShape, t: number): Des
 	return result;
 }
 
-export interface PrototypeAnimationLayer { readonly shape: DesignShape; readonly x: number; readonly y: number; readonly opacity: number; }
+export interface PrototypeAnimationLayer { readonly shape: ArtifactCanvasShape; readonly x: number; readonly y: number; readonly opacity: number; }
 export function samplePrototypeTransition(from: PrototypeFrame, to: PrototypeFrame, transition: PrototypeTransition, progress: number): readonly PrototypeAnimationLayer[] {
 	const t = transition.easing === 'spring' && transition.spring ? springProgress(progress * prototypeTransitionDuration(transition) / 1000, transition.spring) : prototypeProgress(progress, transition.easing);
-	const layer = (shape: DesignShape, x = 0, y = 0, opacity = 1): PrototypeAnimationLayer => ({ shape, x: x || 0, y: y || 0, opacity: Math.max(0, Math.min(1, opacity)) });
+	const layer = (shape: ArtifactCanvasShape, x = 0, y = 0, opacity = 1): PrototypeAnimationLayer => ({ shape, x: x || 0, y: y || 0, opacity: Math.max(0, Math.min(1, opacity)) });
 	if (transition.type === 'instant' || progress >= 1) { return [layer(to)]; }
 	if (transition.type === 'smart') { return [layer(smartAnimate(from, to, t))]; }
 	if (transition.type === 'dissolve') { return [layer(from, 0, 0, 1 - t), layer(to, 0, 0, t)]; }

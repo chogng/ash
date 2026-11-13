@@ -1,3 +1,4 @@
+import { readArtifactState } from './artifactStorage.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
@@ -32,8 +33,8 @@ import { ArtifactTitleBarWidget } from './artifactTitleBarWidget.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ToolbarSearchActionViewItem } from '../../../browser/ui/toolbarSearchActionViewItem.js';
 import { appendArtifactIcon, getArtifactTitle } from './artifactKindPresentation.js';
-import { artifactKinds, isArtifactKind, type ArtifactKind } from '../../../common/artifactKind.js';
-import { ChatCreationWidget } from '../../chat/browser/chatCreationWidget.js';
+import { artifactKinds, type ArtifactKind } from '../../../common/artifactKind.js';
+import { NewArtifactWidget } from './newArtifactWidget.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ISessionsEditorPage } from '../../../browser/parts/editorPart.js';
 import { Menus } from '../../../browser/menus.js';
@@ -56,14 +57,14 @@ class ArtifactToggleActionViewItem extends ButtonActionViewItem {
 }
 
 export class ArtifactEditorPane extends EditorPane implements ISessionsEditorPage {
-	public readonly id = 'sessions.editor.creator';
+	public readonly id = 'sessions.editor.artifacts';
 	public page!: ArtifactEditorView;
 	public get titlebarContent(): HTMLElement { return this.page.titlebarContent; }
 	constructor(
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
-	) { super('sessions.editor.creator', themeService, storageService); }
+	) { super('sessions.editor.artifacts', themeService, storageService); }
 	public override create(parent: HTMLElement): void {
 		this.page = this._register(this.instantiation.createInstance(ArtifactEditorView, parent.ownerDocument));
 		parent.append(this.page.domNode);
@@ -88,7 +89,6 @@ export class ArtifactEditorView extends Disposable {
 	private readonly titlebar: ArtifactTitleBarWidget;
 	private readonly titleListener = this._register(new MutableDisposable());
 	private readonly catalogSources: readonly ArtifactCatalogSource[];
-	private readonly creation: ChatCreationWidget;
 	private readonly artifactsDomNode: HTMLElement;
 	private readonly artifactCards = this._register(new DisposableStore());
 	private readonly search: HTMLInputElement;
@@ -134,22 +134,22 @@ export class ArtifactEditorView extends Disposable {
 		super();
 		this.catalogSources = createArtifactCatalogSources(instantiation);
 		this.catalog = this._register(instantiation.createInstance(ArtifactCatalog, this.catalogSources));
-		this.domNode = h(ownerDocument, 'section', { className: 'ash-creator', attributes: { role: 'region', 'aria-label': localize('sessions.creator.title', 'Artifacts') } });
+		this.domNode = h(ownerDocument, 'section', { className: 'ash-artifacts', attributes: { role: 'region', tabindex: '-1', 'aria-label': localize('sessions.artifacts.title', 'Artifacts') } });
 		pages.set(this.domNode, this);
-		this._register(contextKeys.createScoped(this.domNode)).createKey('sessionsCreatorFocused', true);
-		const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Creator);
+		this._register(contextKeys.createScoped(this.domNode)).createKey('sessionsArtifactsFocused', true);
+		const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Artifacts);
 		if (hint) { this.domNode.setAttribute('aria-description', hint); }
 		this.titlebar = this._register(instantiation.createInstance(ArtifactTitleBarWidget, ownerDocument,
-			localize('sessions.creator.workspaceActions', 'Workspace actions'), Menus.ArtifactTitleBar));
-		this.titlebar.setTitle(localize('sessions.creator.title', 'Artifacts'));
+			localize('sessions.artifacts.workspaceActions', 'Workspace actions'), Menus.ArtifactTitleBar));
+		this.titlebar.setTitle(localize('sessions.artifacts.title', 'Artifacts'));
 		this.titlebar.setActionsVisible(false);
 		this.titleActions = instantiation.createInstance(ArtifactTitleActions);
 		this._register(this.titleActions.onDidChangeHandoffAvailability(() => this.titlebar.closeTitleMenu()));
 		const header = this.titlebar.domNode;
 		pages.set(header, this);
-		this._register(contextKeys.createScoped(header)).createKey('sessionsCreatorFocused', true);
+		this._register(contextKeys.createScoped(header)).createKey('sessionsArtifactsFocused', true);
 		this._register(toDisposable(() => { pages.delete(header); }));
-		this.homeDomNode = h(ownerDocument, 'div', { className: 'ash-creator-home' });
+		this.homeDomNode = h(ownerDocument, 'div', { className: 'ash-artifacts-home' });
 		const toolbar = h(ownerDocument, 'div', { className: 'ash-artifacts-toolbar' });
 		const panelId = artifactResultsIds.nextId();
 		const filterTabs = [
@@ -230,11 +230,11 @@ export class ArtifactEditorView extends Disposable {
 		this.sortButton = actionBar.domNode.querySelector(`[data-action-id="${this.sortAction.id}"] button`)!;
 		this.sortButton.classList.add('ash-artifacts-sort');
 		actionBar.domNode.querySelector(`[data-action-id="${layoutAction.id}"] button`)!.setAttribute('aria-controls', panelId);
-		const introduction = h(ownerDocument, 'h2', { className: 'ash-creator-introduction' }, localize('sessions.creator.introduction', 'Make something new'));
-		this.creation = this._register(instantiation.createInstance(ChatCreationWidget, ownerDocument));
+		const introduction = h(ownerDocument, 'h2', { className: 'ash-artifacts-introduction' }, localize('sessions.artifacts.introduction', 'Make something new'));
+		const creation = this._register(instantiation.createInstance(NewArtifactWidget, ownerDocument));
 		this.artifactsDomNode = h(ownerDocument, 'section', { className: 'ash-artifacts-results', attributes: { id: panelId, role: 'tabpanel', 'aria-labelledby': `${panelId}-${this.filter}`, 'aria-live': 'polite' } });
-		this.homeDomNode.append(toolbar, introduction, this.creation.domNode, this.artifactsDomNode);
-		this.workspacesDomNode = h(ownerDocument, 'div', { className: 'ash-creator-workspaces' });
+		this.homeDomNode.append(toolbar, introduction, creation.domNode, this.artifactsDomNode);
+		this.workspacesDomNode = h(ownerDocument, 'div', { className: 'ash-artifacts-workspaces' });
 		this.workspacesDomNode.hidden = true;
 		this.domNode.append(this.homeDomNode, this.workspacesDomNode);
 		this._register(autorun(reader => {
@@ -365,14 +365,15 @@ export class ArtifactEditorView extends Disposable {
 	}
 
 	public initialize(): void {
-		const restored = this.storage.get('sessions.creator.activeMode', StorageScope.WORKSPACE);
+		const restored = readArtifactState(this.storage, 'sessions.artifacts.activeMode');
 		if (restored !== undefined) {
-			if (!getArtifactWorkspace(restored)) { throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.')); }
+			if (restored === 'make') { this.storage.remove('sessions.artifacts.activeMode', StorageScope.WORKSPACE); return; }
+			if (!getArtifactWorkspace(restored)) { throw new TypeError(localize('sessions.artifacts.invalidMode', 'Invalid Artifacts document mode.')); }
 			this.openMode(restored as ArtifactWorkspaceId);
 		}
 	}
 	public static getFocused(element: HTMLElement): ArtifactEditorView | undefined {
-		const root = element.closest('.ash-creator, .ash-sessions-titlebar-editor-page');
+		const root = element.closest('.ash-artifacts, .ash-sessions-titlebar-editor-page');
 		return root ? pages.get(root) : undefined;
 	}
 	public openMode(mode: ArtifactWorkspaceId): void {
@@ -386,7 +387,7 @@ export class ArtifactEditorView extends Disposable {
 			workspace = request.mount(this.instantiation, this.workspacesDomNode);
 			this.workspaces.set(request.key, workspace);
 		}
-		this.storage.store('sessions.creator.activeMode', request.restoreMode, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		this.storage.store('sessions.artifacts.activeMode', request.restoreMode, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		this.activeWorkspace = request;
 		const identity = parseArtifactKey(request.key);
 		const currentWorkspace = workspace;
@@ -409,7 +410,7 @@ export class ArtifactEditorView extends Disposable {
 					this.popouts.deleteAndDispose(currentWorkspace);
 					this.workspaces.deleteAndDispose(request.key);
 					if (this.activeWorkspace?.key === request.key) {
-						await this.commands.executeCommand('sessions.show.creator');
+						await this.commands.executeCommand('sessions.show.artifacts');
 					}
 				}),
 			});
@@ -422,7 +423,7 @@ export class ArtifactEditorView extends Disposable {
 		this.layout(this.dimension);
 		if (this.visible) {
 			workspace.focus();
-			status(localize('sessions.creator.entered', '{0} workspace', request.title));
+			status(localize('sessions.artifacts.entered', '{0} workspace', request.title));
 		}
 	}
 
@@ -436,15 +437,15 @@ export class ArtifactEditorView extends Disposable {
 		this.titleListener.clear();
 		this.titlebar.setTitleActions(undefined);
 		this.titlebar.setActions([]);
-		this.titlebar.setTitle(localize('sessions.creator.title', 'Artifacts'));
-		this.storage.remove('sessions.creator.activeMode', StorageScope.WORKSPACE);
+		this.titlebar.setTitle(localize('sessions.artifacts.title', 'Artifacts'));
+		this.storage.remove('sessions.artifacts.activeMode', StorageScope.WORKSPACE);
 		this.updateVisibility();
 		this.renderArtifacts();
 		if (previous) {
 			const artifact = Array.from(this.artifactsDomNode.querySelectorAll<HTMLElement>('[data-artifact-workspace]'))
 				.find(card => card.dataset.artifactWorkspace === previous.key);
 			if (artifact) artifact.focus();
-			else this.creation.focus(isArtifactKind(previous.restoreMode) ? previous.restoreMode : undefined);
+			else this.domNode.focus();
 		}
 	}
 	private updateVisibility(): void {
@@ -478,7 +479,8 @@ export class ArtifactEditorView extends Disposable {
 	}
 	public focus(): void {
 		if (this.currentWorkspace) { this.currentWorkspace.focus(); }
-		else { this.creation.focus(); }
+		// Enter the page without making the first creation type look selected.
+		else { this.domNode.focus(); }
 	}
 
 	private async popOut(workspace: IArtifactWorkspace): Promise<void> {
@@ -561,7 +563,7 @@ export class ArtifactEditorView extends Disposable {
 			return [this.currentWorkspace?.title, help, this.currentWorkspace?.getAccessibleContent()].filter(Boolean).join('\n');
 		}
 		const cards = this.filter === 'shared' ? [] : selectArtifactCards(this.getArtifacts(), { sort: this.sort, descending: this.descending, owner: this.owner, kind: this.kind }, this.search.value);
-		return [localize('sessions.creator.title', 'Artifacts'), ...artifactKinds.map(getArtifactTitle), ...cards.map(card => `${card.title}: ${card.detail}, ${artifactDate(card.modifiedAt ?? card.createdAt).label}`)].join('\n');
+		return [localize('sessions.artifacts.title', 'Artifacts'), ...artifactKinds.map(getArtifactTitle), ...cards.map(card => `${card.title}: ${card.detail}, ${artifactDate(card.modifiedAt ?? card.createdAt).label}`)].join('\n');
 	}
 	protected override disposeCore(): void { pages.delete(this.domNode); super.disposeCore(); this.domNode.remove(); }
 }

@@ -1,20 +1,20 @@
 import { prototypeScrollTargets, prototypeShapeEntries } from '../../artifact/common/model/prototypeScroll.js';
 import { addDisposableListener, svg } from '../../../../base/browser/dom.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { toDesignLocal, type DesignPoint } from '../../artifact/common/core/geometry.js';
+import { toCanvasLocal, type CanvasPoint } from '../../canvas/common/canvasGeometry.js';
 import { flattenPrototypeActions, prototypeFrames, prototypeScrollScope, prototypeVariants } from '../../artifact/common/model/prototype.js';
-import type { DesignEditorContributionContext } from '../../artifact/browser/designEditorBrowser.js';
+import type { ArtifactCanvasEditorContributionContext } from '../../artifact/browser/artifactCanvasEditorBrowser.js';
 
 /** The canvas retains its coordinate system; this contribution only owns connection marks and its drag. */
 export class PrototypeConnections extends Disposable {
 	private readonly marks: SVGGElement;
-	private start: DesignPoint | undefined;
+	private start: CanvasPoint | undefined;
 	private pointer: number | undefined;
 	private draggedIds: ReadonlySet<string> = new Set();
 	private scale = 1;
 	private enabled = false;
-	private end: DesignPoint | undefined;
-	constructor(private readonly context: DesignEditorContributionContext, private readonly focusProperties: (interactionId?: string) => void) {
+	private end: CanvasPoint | undefined;
+	constructor(private readonly context: ArtifactCanvasEditorContributionContext, private readonly focusProperties: (interactionId?: string) => void) {
 		super();
 		this.marks = svg(context.ownerDocument, 'g', { className: 'ash-prototype-connections' });
 		context.overlayDomNode.append(this.marks);
@@ -39,7 +39,7 @@ export class PrototypeConnections extends Disposable {
 			event.preventDefault(); event.stopImmediatePropagation();
 			const point = context.toDesignPoint(event);
 			const entries = prototypeShapeEntries(context.documentController.model.value.shapes);
-			const target = [...entries].reverse().find(entry => { const frame = entry.world; const eligible = [...this.draggedIds].some(id => prototypeScrollTargets(context.documentController.model.value.shapes, id, false).some(target => target.id === entry.shape.id)) || frame.kind === 'frame' && (frame.component?.kind === 'main' || !entry.ancestors.length && !frame.component); const local = toDesignLocal(frame, point); return eligible && entry.ancestors.every(ancestor => { if (ancestor.visible === false) { return false; } if (ancestor.kind !== 'frame' || !ancestor.clip) { return true; } const bounds = entries.find(item => item.shape.id === ancestor.id)!.world, pointInParent = toDesignLocal(bounds, point); return pointInParent.x >= 0 && pointInParent.y >= 0 && pointInParent.x <= bounds.width && pointInParent.y <= bounds.height; }) && frame.visible !== false && local.x >= 0 && local.y >= 0 && local.x <= frame.width && local.y <= frame.height; });
+			const target = [...entries].reverse().find(entry => { const frame = entry.world; const eligible = [...this.draggedIds].some(id => prototypeScrollTargets(context.documentController.model.value.shapes, id, false).some(target => target.id === entry.shape.id)) || frame.kind === 'frame' && (frame.component?.kind === 'main' || !entry.ancestors.length && !frame.component); const local = toCanvasLocal(frame, point); return eligible && entry.ancestors.every(ancestor => { if (ancestor.visible === false) { return false; } if (ancestor.kind !== 'frame' || !ancestor.clip) { return true; } const bounds = entries.find(item => item.shape.id === ancestor.id)!.world, pointInParent = toCanvasLocal(bounds, point); return pointInParent.x >= 0 && pointInParent.y >= 0 && pointInParent.x <= bounds.width && pointInParent.y <= bounds.height; }) && frame.visible !== false && local.x >= 0 && local.y >= 0 && local.x <= frame.width && local.y <= frame.height; });
 			const ids = this.draggedIds; this.cancel();
 			if (target && !context.documentController.isBusy) { context.commands.prototype.connect(ids, target.shape.id); this.focusProperties(); }
 		}, true));
@@ -61,7 +61,7 @@ export class PrototypeConnections extends Disposable {
 		const frames = prototypeFrames(shapes);
 		const entries = prototypeShapeEntries(shapes);
 		const ownerDocument = this.context.ownerDocument;
-		const wire = (from: DesignPoint, to: DesignPoint, source?: string, interaction?: string): void => {
+		const wire = (from: CanvasPoint, to: CanvasPoint, source?: string, interaction?: string): void => {
 			const bend = Math.max(48 / this.scale, Math.abs(to.x - from.x) / 2);
 			this.marks.append(svg(ownerDocument, 'path', { className: source ? 'ash-prototype-wire' : '', attributes: { ...(source ? { 'data-prototype-source': source, 'data-prototype-interaction': interaction! } : {}), d: `M ${from.x} ${from.y} C ${from.x + bend} ${from.y}, ${to.x - bend} ${to.y}, ${to.x} ${to.y}` } }));
 			this.marks.append(svg(ownerDocument, 'path', { attributes: { d: `M ${to.x - 6 / this.scale} ${to.y - 4 / this.scale} L ${to.x} ${to.y} L ${to.x - 6 / this.scale} ${to.y + 4 / this.scale}` } }));

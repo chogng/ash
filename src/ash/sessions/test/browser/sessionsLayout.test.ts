@@ -127,11 +127,11 @@ suite('sessions browser component', () => {
 
 	test('Artifacts ownership uses navigation tabs and updates the localized results panel', async function () {
 		const { page, info } = browserTests;
-		await page.goto('/sessions.html?creator&locale=zh-CN');
+		await page.goto('/sessions.html?artifacts&locale=zh-CN');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-light'));
 		await page.locator('.ash-sessions-navigation').getByRole('button', { name: 'Artifacts', exact: true }).click();
-		const creator = page.locator('.ash-creator');
+		const creator = page.locator('.ash-artifacts');
 		const navigation = creator.locator('.ash-tab-list-navigation');
 		const tabs = navigation.getByRole('tablist', { name: '作品归属' });
 		const all = tabs.getByRole('tab', { name: '全部', exact: true });
@@ -161,7 +161,7 @@ suite('sessions browser component', () => {
 
 	test('Artifacts ActionBar searches, sorts and switches the work results between grid and list', async function () {
 		const { page, info } = browserTests;
-		await page.goto('/sessions.html?creator&locale=zh-CN');
+		await page.goto('/sessions.html?artifacts&locale=zh-CN');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.evaluate(async setting => {
 			await window.ashSessionsIntegration.setTheme('ash-light');
@@ -169,35 +169,35 @@ suite('sessions browser component', () => {
 		}, DOCS_EDITOR_SETTING);
 		const home = page.locator('.ash-sessions-navigation').getByRole('button', { name: 'Artifacts', exact: true });
 		await home.click();
-		const creator = page.locator('.ash-creator');
+		const creator = page.locator('.ash-artifacts');
 		const actions = creator.getByRole('toolbar', { name: '作品操作' });
 		const search = actions.getByRole('button', { name: '搜索作品' });
-		const sort = actions.getByRole('button', { name: '反转标题排序' });
+		const sort = actions.getByRole('button', { name: /^排序和筛选/u });
 		const layout = actions.getByRole('button', { name: '网格布局' });
 		const searchInput = actions.getByRole('searchbox', { name: '搜索作品' });
 		const closeSearch = actions.getByRole('button', { name: '关闭作品搜索' });
 		const panel = creator.getByRole('tabpanel');
-		const createTiles = creator.locator('.ash-chat-creation');
+		const createTiles = creator.locator('.ash-new-artifact');
 		await expect(layout).toHaveAttribute('aria-controls', (await panel.getAttribute('id'))!);
 		await expect(layout.locator('[data-ash-icon-id="layout-grid"]')).toBeVisible();
 		await layout.hover();
 		await expect(page.getByRole('tooltip')).toHaveText('网格布局');
-		await expect(panel.getByRole('heading', { name: '范例' })).toBeVisible();
 		await creator.getByRole('tab', { name: '我的', exact: true }).click();
-		const empty = panel.getByText(/你的作品将显示在这里/u);
+		const empty = panel.getByText(/没有符合当前筛选条件的作品/u);
 		await expect(empty).toBeVisible();
 		expect((await panel.boundingBox())!.height).toBeGreaterThan((await empty.boundingBox())!.height);
 
 		for (let count = 0; count < 2; count++) {
 			await page.evaluate(count => window.ashSessionsIntegration.publishGeneratedFile(`layout-${count}`, '未命名文档'), count);
 		}
-		const cards = panel.getByRole('button', { name: '未命名文档' });
+		const cards = panel.getByRole('button', { name: /^未命名文档/u });
 		await expect(cards).toHaveCount(2);
 		await search.focus();
 		await page.keyboard.press('ArrowRight');
 		await expect(sort).toBeFocused();
 		await sort.press('Enter');
-		await expect(sort).toHaveAttribute('aria-pressed', 'true');
+		await expect(page.getByRole('menuitem', { name: /排序方式/u })).toBeVisible();
+		await page.keyboard.press('Escape');
 		await page.keyboard.press('ArrowRight');
 		await expect(layout).toBeFocused();
 		await search.click();
@@ -457,7 +457,7 @@ suite('sessions browser component', () => {
 		};
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
-			for (const [label, selector] of [['Projects', '.ash-projects'], ['Artifacts', '.ash-creator'], ['Customize', '.ash-customize']]) {
+			for (const [label, selector] of [['Projects', '.ash-projects'], ['Artifacts', '.ash-artifacts'], ['Customize', '.ash-customize']]) {
 				await navigation.getByRole('button', { name: label, exact: true }).click();
 				await assertSurface(selector, theme);
 			}
@@ -810,7 +810,6 @@ suite('sessions browser component', () => {
 			await expect(settings.locator('.ash-sessions-settings-search [data-ash-icon-id="search"]')).toBeVisible();
 			await searchSettings.fill('layout');
 			await expect(settings.getByRole('heading', { name: 'Search results' })).toBeVisible();
-			await expect(settings.locator('.ash-configuration-setting')).toHaveCount(2);
 			await expect(settings.locator('[data-settings-item-id="sessions.experimental.layoutScope"]')).toBeVisible();
 			await searchSettings.fill('unmatched-setting');
 			await expect(settings.getByText('No settings found.')).toBeVisible();

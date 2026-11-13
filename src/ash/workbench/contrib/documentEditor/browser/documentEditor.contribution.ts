@@ -12,6 +12,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/c
 import { localize } from '../../../../nls.js';
 import { DocumentEditorPane } from './documentEditorPane.js';
 import { DocumentTypes } from '../../../services/documentEditor/common/documentTypes.js';
+import { isDocumentAccessibleEditor } from './documentEditorAccessibility.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Document, defaultValue: true,
@@ -33,12 +34,12 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const editors = accessor.get(IEditorPart);
 			const pane = editors.activePane;
 			const active = getActiveElement(editors.domNode.ownerDocument);
-			if (!(pane instanceof DocumentEditorPane) || !pane.workingCopy || !isHTMLElement(active) || !pane.containsAccessibilityFocus(active)) return undefined;
+			if (!isDocumentAccessibleEditor(pane) || !pane.workingCopy || !isHTMLElement(active) || !pane.containsAccessibilityFocus(active)) return undefined;
 			const provider = new AccessibleContentProvider(AccessibleViewProviderId.Document, { type }, () => type === AccessibleViewType.View
 				? pane.workingCopy ? pane.getAccessibleContent() : ''
 				: [
 					...pane.getAccessibilityHelp(),
-					...(DocumentTypes.fileEditorsEnabled ? [
+					...(DocumentTypes.fileEditorsEnabled && pane instanceof DocumentEditorPane ? [
 						localize('document.accessibility.actions', '<keybinding:workbench.action.files.save> saves the document. New Document creates a general document. Convert Active Text to Document and Convert Active Markdown to Document create separate drafts and preserve the source.'),
 						localize('document.accessibility.export', 'Export Document as Markdown or Export Document as Plain Text creates a separate text draft. Markdown conversion reports unsupported content with its source position or node ID.'),
 					] : []),
@@ -62,7 +63,7 @@ class DocumentAccessibilityContribution extends Disposable {
 				if (listeners.has(container)) continue;
 				listeners.set(container, addDisposableListener(container, 'focusin', event => {
 					if (!isHTMLElement(event.target)) return;
-					const pane = event.target.closest('.stanza-structured-editor-pane');
+					const pane = event.target.closest('.stanza-structured-editor-pane, .stanza-arkdown-editor');
 					if (!pane || event.relatedTarget instanceof container.ownerDocument.defaultView!.Node && pane.contains(event.relatedTarget)) return;
 					if (!accessibility.isScreenReaderOptimized()) return;
 					const hint = views.getOpenAriaHint(AccessibilityVerbositySettingId.Document);

@@ -1,36 +1,36 @@
-import { toDesignLocal, type DesignPoint } from '../core/geometry.js';
-import { flattenDesignShapes, type DesignShape } from './designDocument.js';
+import { toCanvasLocal, type CanvasPoint } from '../../../canvas/common/canvasGeometry.js';
+import { flattenArtifactCanvasShapes, type ArtifactCanvasShape } from './artifactCanvasDocument.js';
 import { prototypeScrollScope, type PrototypeFrame } from './prototype.js';
 
-export type PrototypeScrollPositions = Readonly<Record<string, DesignPoint>>;
-const zero: DesignPoint = Object.freeze({ x: 0, y: 0 });
-export function prototypePath(shapes: readonly DesignShape[], id: string): readonly DesignShape[] {
+export type PrototypeScrollPositions = Readonly<Record<string, CanvasPoint>>;
+const zero: CanvasPoint = Object.freeze({ x: 0, y: 0 });
+export function prototypePath(shapes: readonly ArtifactCanvasShape[], id: string): readonly ArtifactCanvasShape[] {
 	for (const shape of shapes) {
 		if (shape.id === id) { return [shape]; }
 		if (shape.kind === 'frame' || shape.kind === 'group') { const path = prototypePath(shape.children, id); if (path.length) { return [shape, ...path]; } }
 	}
 	return [];
 }
-export function prototypeScrollFrames(shapes: readonly DesignShape[]): readonly PrototypeFrame[] {
-	return flattenDesignShapes(shapes).filter((shape): shape is PrototypeFrame => shape.kind === 'frame' && !!shape.overflowDirection && shape.overflowDirection !== 'none');
+export function prototypeScrollFrames(shapes: readonly ArtifactCanvasShape[]): readonly PrototypeFrame[] {
+	return flattenArtifactCanvasShapes(shapes).filter((shape): shape is PrototypeFrame => shape.kind === 'frame' && !!shape.overflowDirection && shape.overflowDirection !== 'none');
 }
-function localPoint(shape: DesignShape, point: DesignPoint): DesignPoint {
-	const local = toDesignLocal(shape, point);
+function localPoint(shape: ArtifactCanvasShape, point: CanvasPoint): CanvasPoint {
+	const local = toCanvasLocal(shape, point);
 	return shape.kind === 'group' ? { x: local.x * shape.contentWidth / shape.width, y: local.y * shape.contentHeight / shape.height } : local;
 }
-function parentPoint(shape: DesignShape, point: DesignPoint): DesignPoint {
+function parentPoint(shape: ArtifactCanvasShape, point: CanvasPoint): CanvasPoint {
 	const x = (shape.kind === 'group' ? point.x * shape.width / shape.contentWidth : point.x) - shape.width / 2;
 	const y = (shape.kind === 'group' ? point.y * shape.height / shape.contentHeight : point.y) - shape.height / 2;
 	const angle = shape.rotation * Math.PI / 180;
 	return { x: shape.x + shape.width / 2 + x * Math.cos(angle) - y * Math.sin(angle), y: shape.y + shape.height / 2 + x * Math.sin(angle) + y * Math.cos(angle) };
 }
-function corners(shape: DesignShape): readonly DesignPoint[] {
+function corners(shape: ArtifactCanvasShape): readonly CanvasPoint[] {
 	const width = shape.kind === 'group' ? shape.contentWidth : shape.width, height = shape.kind === 'group' ? shape.contentHeight : shape.height;
 	return [{ x: 0, y: 0 }, { x: width, y: 0 }, { x: width, y: height }, { x: 0, y: height }].map(point => parentPoint(shape, point));
 }
 /** A nested viewport contributes its bounds, not the independently scrollable content behind it. */
-export function prototypeScrollRange(frame: PrototypeFrame): DesignPoint {
-	const extent = (shape: DesignShape): readonly DesignPoint[] => {
+export function prototypeScrollRange(frame: PrototypeFrame): CanvasPoint {
+	const extent = (shape: ArtifactCanvasShape): readonly CanvasPoint[] => {
 		if (shape.visible === false || shape.scrollPosition === 'fixed') { return []; }
 		const own = corners(shape);
 		if (shape.kind === 'group' || shape.kind === 'frame' && !shape.clip && (!shape.overflowDirection || shape.overflowDirection === 'none')) { return [...own, ...shape.children.flatMap(extent).map(point => parentPoint(shape, point))]; }
@@ -39,15 +39,15 @@ export function prototypeScrollRange(frame: PrototypeFrame): DesignPoint {
 	const points = frame.children.flatMap(extent);
 	return { x: frame.overflowDirection === 'horizontal' || frame.overflowDirection === 'both' ? Math.max(0, ...points.map(point => point.x - frame.width)) : 0, y: frame.overflowDirection === 'vertical' || frame.overflowDirection === 'both' ? Math.max(0, ...points.map(point => point.y - frame.height)) : 0 };
 }
-export function prototypeScrollOffset(frame: PrototypeFrame, positions: PrototypeScrollPositions): DesignPoint {
+export function prototypeScrollOffset(frame: PrototypeFrame, positions: PrototypeScrollPositions): CanvasPoint {
 	const range = prototypeScrollRange(frame), value = positions[frame.id] ?? zero;
 	return { x: Math.max(0, Math.min(range.x, value.x)), y: Math.max(0, Math.min(range.y, value.y)) };
 }
 
 /** Geometry is derived for playback only. Sticky layers keep paint order and their direct parent's bounds. */
 export function applyPrototypeScroll(frame: PrototypeFrame, positions: PrototypeScrollPositions): PrototypeFrame {
-	type Viewport = { origin: DesignPoint; compensation: DesignPoint; vertical: boolean; owner: boolean; };
-	const visit = (shape: DesignShape, inherited?: Viewport): DesignShape => {
+	type Viewport = { origin: CanvasPoint; compensation: CanvasPoint; vertical: boolean; owner: boolean; };
+	const visit = (shape: ArtifactCanvasShape, inherited?: Viewport): ArtifactCanvasShape => {
 		if (shape.kind !== 'frame' && shape.kind !== 'group') { return shape; }
 		const scrolls = shape.kind === 'frame' && shape.overflowDirection && shape.overflowDirection !== 'none';
 		const offset = scrolls ? prototypeScrollOffset(shape as PrototypeFrame, positions) : zero;
@@ -72,10 +72,10 @@ export function applyPrototypeScroll(frame: PrototypeFrame, positions: Prototype
 }
 
 /** Picker targets are direct children of scrolling frames; wires may target deeper descendants. */
-export function prototypeScrollTargets(shapes: readonly DesignShape[], source: string, direct = true): readonly DesignShape[] {
+export function prototypeScrollTargets(shapes: readonly ArtifactCanvasShape[], source: string, direct = true): readonly ArtifactCanvasShape[] {
 	const owner = prototypeScrollScope(shapes, source);
 	if (!owner) { return []; }
-	return flattenDesignShapes([owner]).filter(shape => {
+	return flattenArtifactCanvasShapes([owner]).filter(shape => {
 		const path = prototypePath([owner], shape.id);
 		return shape.id !== source && path.every(item => item.visible !== false) && path.slice(0, -1).some((item, index) => item.kind === 'frame' && !!item.overflowDirection && item.overflowDirection !== 'none' && (!direct || index === path.length - 2));
 	});
@@ -100,8 +100,8 @@ export function prototypeScrollTo(frame: PrototypeFrame, target: string, positio
 }
 
 /** Clipping also limits keyboard hotspots; invisible controls must not receive focus. */
-export function prototypeVisibleShapes(frame: PrototypeFrame): readonly DesignShape[] {
-	return flattenDesignShapes([frame]).filter(shape => {
+export function prototypeVisibleShapes(frame: PrototypeFrame): readonly ArtifactCanvasShape[] {
+	return flattenArtifactCanvasShapes([frame]).filter(shape => {
 		const path = prototypePath([frame], shape.id);
 		if (path.some(item => item.visible === false)) { return false; }
 		let points = corners(shape);
@@ -114,7 +114,7 @@ export function prototypeVisibleShapes(frame: PrototypeFrame): readonly DesignSh
 }
 
 /** Convert scroll input vectors through rotated frames and scaled groups without translating them. */
-export function prototypeScrollVector(path: readonly DesignShape[], delta: DesignPoint, toRoot = false): DesignPoint {
+export function prototypeScrollVector(path: readonly ArtifactCanvasShape[], delta: CanvasPoint, toRoot = false): CanvasPoint {
 	let result = delta;
 	for (const shape of toRoot ? [...path].reverse() : path) {
 		const transform = toRoot ? parentPoint : localPoint, a = transform(shape, zero), b = transform(shape, result);
@@ -124,8 +124,8 @@ export function prototypeScrollVector(path: readonly DesignShape[], delta: Desig
 }
 
 /** Wires can reach descendants inside groups without changing the editor's group selection contract. */
-export function prototypeShapeEntries(shapes: readonly DesignShape[]): readonly { shape: DesignShape; world: DesignShape; ancestors: readonly DesignShape[]; }[] {
-	return flattenDesignShapes(shapes).map(shape => {
+export function prototypeShapeEntries(shapes: readonly ArtifactCanvasShape[]): readonly { shape: ArtifactCanvasShape; world: ArtifactCanvasShape; ancestors: readonly ArtifactCanvasShape[]; }[] {
+	return flattenArtifactCanvasShapes(shapes).map(shape => {
 		const ancestors = prototypePath(shapes, shape.id).slice(0, -1);
 		let center = { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 }, scale = 1, rotation = shape.rotation;
 		for (const parent of [...ancestors].reverse()) { center = parentPoint(parent, center); rotation += parent.rotation; if (parent.kind === 'group') { scale *= parent.width / parent.contentWidth; } }

@@ -1,23 +1,23 @@
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
-import { designBlendLabel as blendLabel } from '../designPaintLabels.js';
+import { artifactCanvasBlendLabel as blendLabel } from '../artifactCanvasPaintLabels.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
-import type { DesignDocumentController } from '../designDocumentController.js';
+import type { ArtifactCanvasDocumentController } from '../artifactCanvasDocumentController.js';
 import type { DocumentCommands } from '../../common/commands/documentCommands.js';
-import { createDesignPaint, designBlendModes, designPaints, sampleDesignPaint, type DesignBlendMode, type DesignPaint } from '../../common/model/designPaint.js';
-import { flattenDesignShapes } from '../../common/model/designDocument.js';
-import type { DesignSelection } from '../../common/designSelection.js';
+import { createArtifactCanvasPaint, artifactCanvasBlendModes, artifactCanvasPaints, sampleArtifactCanvasPaint, type ArtifactCanvasBlendMode, type ArtifactCanvasPaint } from '../../common/model/artifactCanvasPaint.js';
+import { flattenArtifactCanvasShapes } from '../../common/model/artifactCanvasDocument.js';
+import type { ArtifactCanvasSelection } from '../../common/artifactCanvasSelection.js';
 
 export class PaintPropertiesWidget extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly updates: (() => void)[] = [];
 	constructor(
-		private readonly controller: DesignDocumentController,
+		private readonly controller: ArtifactCanvasDocumentController,
 		private readonly commands: DocumentCommands,
-		private readonly selection: DesignSelection,
+		private readonly selection: ArtifactCanvasSelection,
 		document: Document,
 		private readonly refresh: () => void,
 		private readonly focusCanvas: () => void,
@@ -91,10 +91,10 @@ export class PaintPropertiesWidget extends Disposable {
 				}
 			});
 		};
-		select(localize('sessions.design.layerBlend', 'Layer blend mode'), [['pass-through', blendLabel('pass-through')], ...designBlendModes.map(mode => [mode, blendLabel(mode)] as const)], () => this.shape?.blendMode ?? 'pass-through', value => {
+		select(localize('sessions.design.layerBlend', 'Layer blend mode'), [['pass-through', blendLabel('pass-through')], ...artifactCanvasBlendModes.map(mode => [mode, blendLabel(mode)] as const)], () => this.shape?.blendMode ?? 'pass-through', value => {
 			const shape = this.shape;
 			if (shape) {
-				this.commands.updateShape({ ...shape, blendMode: value as DesignBlendMode | 'pass-through' });
+				this.commands.updateShape({ ...shape, blendMode: value as ArtifactCanvasBlendMode | 'pass-through' });
 			}
 		});
 		number(localize('sessions.design.layerOpacityPercent', 'Layer opacity (%)'), () => (this.shape?.opacity ?? 1) * 100, value => {
@@ -111,7 +111,7 @@ export class PaintPropertiesWidget extends Disposable {
 			paints.value = this.paint?.id ?? '';
 		});
 		action(localize('sessions.design.paintAdd', 'Add fill'), () => {
-			const paint = { ...createDesignPaint('solid', '#000000'), opacity: .2 };
+			const paint = { ...createArtifactCanvasPaint('solid', '#000000'), opacity: .2 };
 			this.setPaints([paint, ...this.paints]);
 			this.selection.paintId = paint.id;
 		}, () => this.canFill && this.paints.length < 64);
@@ -154,7 +154,7 @@ export class PaintPropertiesWidget extends Disposable {
 			if (!paint) {
 				return;
 			}
-			const next = createDesignPaint(value as DesignPaint['type'], paint.type === 'solid' ? paint.color : paint.stops[0].color);
+			const next = createArtifactCanvasPaint(value as ArtifactCanvasPaint['type'], paint.type === 'solid' ? paint.color : paint.stops[0].color);
 			this.edit({
 				...next,
 				id: paint.id,
@@ -172,9 +172,9 @@ export class PaintPropertiesWidget extends Disposable {
 				this.edit({ ...this.paint, opacity: value / 100 });
 			}
 		}, () => this.canFill && !!this.paint);
-		select(localize('sessions.design.paintBlend', 'Fill blend mode'), designBlendModes.map(mode => [mode, blendLabel(mode)]), () => this.paint?.blendMode ?? 'normal', value => {
+		select(localize('sessions.design.paintBlend', 'Fill blend mode'), artifactCanvasBlendModes.map(mode => [mode, blendLabel(mode)]), () => this.paint?.blendMode ?? 'normal', value => {
 			if (this.paint) {
-				this.edit({ ...this.paint, blendMode: value as DesignBlendMode });
+				this.edit({ ...this.paint, blendMode: value as ArtifactCanvasBlendMode });
 			}
 		}, () => this.canFill && !!this.paint, () => !this.shape?.styleBindings?.fill);
 		const stops = select(localize('sessions.design.gradientStop', 'Gradient stop'), [], () => this.stop?.id ?? '', value => {
@@ -192,7 +192,7 @@ export class PaintPropertiesWidget extends Disposable {
 		action(localize('sessions.design.gradientStopAdd', 'Add gradient stop'), () => {
 			const paint = this.gradient!;
 			const position = Math.min(1, (this.stop?.position ?? 0) + .1);
-			const color = '#' + sampleDesignPaint(paint, position).map(value => Math.round(value).toString(16).padStart(2, '0')).join('');
+			const color = '#' + sampleArtifactCanvasPaint(paint, position).map(value => Math.round(value).toString(16).padStart(2, '0')).join('');
 			const stop = { id: generateUuid(), position, color };
 			this.edit({ ...paint, stops: [...paint.stops, stop].sort((a, b) => a.position - b.position) });
 			this.selection.gradientStopId = stop.id;
@@ -231,7 +231,7 @@ export class PaintPropertiesWidget extends Disposable {
 			this.focusCanvas();
 		}, () => !!this.gradient, () => this.selection.editingGradient, () => !!this.gradient);
 	}
-	private typeLabel(type: DesignPaint['type']): string {
+	private typeLabel(type: ArtifactCanvasPaint['type']): string {
 		return ({
 			solid: localize('sessions.design.paintSolid', 'Solid'),
 			linear: localize('sessions.design.paintLinear', 'Linear gradient'),
@@ -241,7 +241,7 @@ export class PaintPropertiesWidget extends Disposable {
 		})[type];
 	}
 	private get shape() {
-		return this.selection.ids.size === 1 ? flattenDesignShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
+		return this.selection.ids.size === 1 ? flattenArtifactCanvasShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
 	}
 	private get editable(): boolean {
 		return !!this.shape && !this.controller.isBusy && !this.commands.components.isInstanceChild(this.shape.id);
@@ -249,10 +249,10 @@ export class PaintPropertiesWidget extends Disposable {
 	private get canFill(): boolean {
 		return !!this.shape && (this.shape.kind !== 'group' || !!this.shape.booleanOperation) && this.shape.kind !== 'image';
 	}
-	private get paints(): readonly DesignPaint[] {
-		return this.shape ? designPaints(this.shape) : [];
+	private get paints(): readonly ArtifactCanvasPaint[] {
+		return this.shape ? artifactCanvasPaints(this.shape) : [];
 	}
-	public get paint(): DesignPaint | undefined {
+	public get paint(): ArtifactCanvasPaint | undefined {
 		return this.paints.find(paint => paint.id === this.selection.paintId) ?? this.paints[0];
 	}
 	private get gradient() {
@@ -265,13 +265,13 @@ export class PaintPropertiesWidget extends Disposable {
 	public get color(): string {
 		return this.paint?.type === 'solid' ? this.paint.color : this.stop?.color ?? this.shape?.fill ?? '#808080';
 	}
-	private setPaints(fills: readonly DesignPaint[]): void {
+	private setPaints(fills: readonly ArtifactCanvasPaint[]): void {
 		const shape = this.shape;
 		if (shape) {
 			this.commands.updateShape({ ...shape, fills });
 		}
 	}
-	private edit(paint: DesignPaint): void {
+	private edit(paint: ArtifactCanvasPaint): void {
 		this.setPaints(this.paints.map(value => value.id === paint.id ? paint : value));
 	}
 	public update(): void {

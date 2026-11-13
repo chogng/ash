@@ -38,7 +38,7 @@ suite('Sessions input stack browser layout', () => {
 
 	test('the real Sessions composer keeps empty PR and onboarding slots out of its layout', async () => {
 		const { page } = browserTests;
-		await page.goto('/sessions.html?creator');
+		await page.goto('/sessions.html?artifacts');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: /^New(?:\.|$)/u }).click();

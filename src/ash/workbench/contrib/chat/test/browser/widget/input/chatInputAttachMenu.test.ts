@@ -281,7 +281,7 @@ suite('ChatInputAttachMenu', () => {
 		const submenu = f.popup('Design system')!;
 		assert.deepEqual([...submenu.querySelectorAll('button')].map(button => button.textContent), ['Artifacts', 'Theme editor']);
 		menuItem(submenu, 'Artifacts').click();
-		assert.deepEqual(f.executedCommands, ['sessions.open.creator']);
+		assert.deepEqual(f.executedCommands, ['sessions.open.artifacts']);
 		assert.equal(f.popup(), null);
 		assert.equal(f.popup('Design system'), null);
 	});

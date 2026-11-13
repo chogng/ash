@@ -1,5 +1,5 @@
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
-import { designEffectTypeLabel } from '../designEffectLabels.js';
+import { artifactCanvasEffectTypeLabel } from '../artifactCanvasEffectLabels.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -8,28 +8,28 @@ import { Color } from '../../../../../base/common/color.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
-import type { DesignDocumentController } from '../designDocumentController.js';
+import type { ArtifactCanvasDocumentController } from '../artifactCanvasDocumentController.js';
 import type { DocumentCommands } from '../../common/commands/documentCommands.js';
 import {
-	canAddDesignEffect,
-	createDesignEffect,
-	designEffects,
-	supportsDesignShadowSpread,
-	type DesignEffect
-} from '../../common/model/designEffects.js';
-import { designBlendModes, type DesignBlendMode } from '../../common/model/designPaint.js';
-import { flattenDesignShapes } from '../../common/model/designDocument.js';
-import type { DesignSelection } from '../../common/designSelection.js';
-import { designBlendLabel } from '../designPaintLabels.js';
-const types: readonly DesignEffect['type'][] = ['drop-shadow', 'inner-shadow', 'layer-blur', 'background-blur'];
+	canAddArtifactCanvasEffect,
+	createArtifactCanvasEffect,
+	artifactCanvasEffects,
+	supportsArtifactCanvasShadowSpread,
+	type ArtifactCanvasEffect
+} from '../../common/model/artifactCanvasEffects.js';
+import { artifactCanvasBlendModes, type ArtifactCanvasBlendMode } from '../../common/model/artifactCanvasPaint.js';
+import { flattenArtifactCanvasShapes } from '../../common/model/artifactCanvasDocument.js';
+import type { ArtifactCanvasSelection } from '../../common/artifactCanvasSelection.js';
+import { artifactCanvasBlendLabel } from '../artifactCanvasPaintLabels.js';
+const types: readonly ArtifactCanvasEffect['type'][] = ['drop-shadow', 'inner-shadow', 'layer-blur', 'background-blur'];
 
 export class EffectPropertiesWidget extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly updates: (() => void)[] = [];
 	constructor(
-		private readonly controller: DesignDocumentController,
+		private readonly controller: ArtifactCanvasDocumentController,
 		private readonly commands: DocumentCommands,
-		private readonly selection: DesignSelection,
+		private readonly selection: ArtifactCanvasSelection,
 		document: Document,
 		private readonly refresh: () => void,
 		private readonly focusCanvas: () => void,
@@ -50,24 +50,24 @@ export class EffectPropertiesWidget extends Disposable {
 					'sessions.design.effectListEntry',
 					'{0}: {1}',
 					index + 1,
-					designEffectTypeLabel(effect.type)
+					artifactCanvasEffectTypeLabel(effect.type)
 				)
 			)));
 			effectList.value = this.effect?.id ?? '';
 		});
 		this.action(localize('sessions.design.effectAdd', 'Add effect'), () => {
-			const type = types.find(type => canAddDesignEffect(this.effects, type))!;
-			const effect = createDesignEffect(type);
+			const type = types.find(type => canAddArtifactCanvasEffect(this.effects, type))!;
+			const effect = createArtifactCanvasEffect(type);
 			this.selection.effectId = effect.id;
 			this.setEffects([effect, ...this.effects]);
-		}, () => types.some(type => canAddDesignEffect(this.effects, type)));
+		}, () => types.some(type => canAddArtifactCanvasEffect(this.effects, type)));
 		this.action(localize('sessions.design.effectDuplicate', 'Duplicate effect'), () => {
 			const effect = this.effect!, copy = { ...effect, id: generateUuid() };
 			const effects = [...this.effects];
 			effects.splice(effects.indexOf(effect), 0, copy);
 			this.selection.effectId = copy.id;
 			this.setEffects(effects);
-		}, () => !!this.effect && canAddDesignEffect(this.effects, this.effect.type));
+		}, () => !!this.effect && canAddArtifactCanvasEffect(this.effects, this.effect.type));
 		this.action(localize('sessions.design.effectRemove', 'Remove effect'), () => {
 			this.selection.editingBlur = false;
 			this.setEffects(this.effects.filter(effect => effect.id !== this.effect?.id));
@@ -80,12 +80,12 @@ export class EffectPropertiesWidget extends Disposable {
 				this.setEffects(effects);
 			}, () => !!this.effect && this.effects.indexOf(this.effect) + direction >= 0 && this.effects.indexOf(this.effect) + direction < this.effects.length);
 		}
-		const type = this.select(localize('sessions.design.effectType', 'Effect type'), types.map(type => [type, designEffectTypeLabel(type)]), () => this.effect?.type ?? 'drop-shadow', value => {
-			const effect = this.effect!, next = value as DesignEffect['type'];
-			if (next === effect.type || !canAddDesignEffect(this.effects, next)) {
+		const type = this.select(localize('sessions.design.effectType', 'Effect type'), types.map(type => [type, artifactCanvasEffectTypeLabel(type)]), () => this.effect?.type ?? 'drop-shadow', value => {
+			const effect = this.effect!, next = value as ArtifactCanvasEffect['type'];
+			if (next === effect.type || !canAddArtifactCanvasEffect(this.effects, next)) {
 				return;
 			}
-			const replacement = createDesignEffect(next);
+			const replacement = createArtifactCanvasEffect(next);
 			const shadow = this.shadow;
 			this.edit({
 				...replacement,
@@ -104,7 +104,7 @@ export class EffectPropertiesWidget extends Disposable {
 		});
 		this.updates.push(() => {
 			for (const option of type.options) {
-				option.disabled = option.value !== this.effect?.type && !canAddDesignEffect(this.effects, option.value as DesignEffect['type']);
+				option.disabled = option.value !== this.effect?.type && !canAddArtifactCanvasEffect(this.effects, option.value as ArtifactCanvasEffect['type']);
 			}
 		});
 		this.checkbox(
@@ -187,7 +187,7 @@ export class EffectPropertiesWidget extends Disposable {
 				...this.shadow,
 				spread: value
 			}),
-			() => !!this.shadow && !!this.shape && supportsDesignShadowSpread(this.shape)
+			() => !!this.shadow && !!this.shape && supportsArtifactCanvasShadowSpread(this.shape)
 		);
 		const spreadHint = h(
 			document,
@@ -197,7 +197,7 @@ export class EffectPropertiesWidget extends Disposable {
 		);
 		this.domNode.append(spreadHint);
 		this.updates.push(() => {
-			spreadHint.hidden = !this.shadow || !this.shape || supportsDesignShadowSpread(this.shape);
+			spreadHint.hidden = !this.shadow || !this.shape || supportsArtifactCanvasShadowSpread(this.shape);
 		});
 		this.checkbox(
 			localize('sessions.design.effectShowBehind', 'Show shadow behind transparent areas'),
@@ -210,11 +210,11 @@ export class EffectPropertiesWidget extends Disposable {
 		);
 		this.select(
 			localize('sessions.design.effectBlend', 'Shadow blend mode'),
-			designBlendModes.map(mode => [mode, designBlendLabel(mode)]),
+			artifactCanvasBlendModes.map(mode => [mode, artifactCanvasBlendLabel(mode)]),
 			() => this.shadow?.blendMode ?? 'normal',
 			value => this.shadow && this.edit({
 				...this.shadow,
-				blendMode: value as DesignBlendMode
+				blendMode: value as ArtifactCanvasBlendMode
 			}),
 			() => !!this.shadow
 		);
@@ -230,15 +230,15 @@ export class EffectPropertiesWidget extends Disposable {
 	}
 
 	private get shape() {
-		return this.selection.ids.size === 1 ? flattenDesignShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
+		return this.selection.ids.size === 1 ? flattenArtifactCanvasShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
 	}
 
 	private get editable(): boolean {
 		return !!this.shape && !this.controller.isBusy && !this.commands.components.isInstanceChild(this.shape.id);
 	}
 
-	private get effects(): readonly DesignEffect[] {
-		return this.shape ? designEffects(this.shape) : [];
+	private get effects(): readonly ArtifactCanvasEffect[] {
+		return this.shape ? artifactCanvasEffects(this.shape) : [];
 	}
 
 	private get effect() {
@@ -255,7 +255,7 @@ export class EffectPropertiesWidget extends Disposable {
 		return effect?.type === 'drop-shadow' || effect?.type === 'inner-shadow' ? effect : undefined;
 	}
 
-	private setEffects(effects: readonly DesignEffect[]): void {
+	private setEffects(effects: readonly ArtifactCanvasEffect[]): void {
 		if (this.shape && this.editable) {
 			this.commands.updateShape({
 				...this.shape,
@@ -264,7 +264,7 @@ export class EffectPropertiesWidget extends Disposable {
 		}
 	}
 
-	private edit(effect: DesignEffect): void {
+	private edit(effect: ArtifactCanvasEffect): void {
 		this.setEffects(this.effects.map(value => value.id === effect.id ? effect : value));
 	}
 

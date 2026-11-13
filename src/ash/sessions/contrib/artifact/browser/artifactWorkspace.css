@@ -1,4 +1,4 @@
-.ash-creator-workspace {
+.ash-artifacts-workspace {
 	display: flex;
 	flex-direction: column;
 	width: 100%;
@@ -6,22 +6,22 @@
 	min-width: 0;
 	min-height: 0;
 }
-.ash-creator-workspace-navigation {
+.ash-artifacts-workspace-navigation {
 	display: flex;
 	flex: none;
 	align-items: center;
 }
-.ash-creator-workspace-content {
+.ash-artifacts-workspace-content {
 	position: relative;
 	display: flex;
 	flex: 1;
 	min-height: 0;
 	min-width: 0;
 }
-.ash-creator-workspace-content > .ash-sessions-design-view {
+.ash-artifacts-workspace-content > .ash-sessions-design-view {
 	flex: 1;
 	min-width: 0;
 }
-.ash-creator-workspace[hidden] {
+.ash-artifacts-workspace[hidden] {
 	display: none;
 }

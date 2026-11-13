@@ -21,19 +21,15 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import type { EditorPaneOptions as TextEditorPaneOptions } from '../../../../workbench/browser/parts/editor/textResourceEditor.js';
 import { isResourceDiffEditorInput } from '../../../../workbench/common/editor.js';
-import { createBrowserEditorPart } from '../../../../workbench/contrib/codeEditor/browser/browserEditorPart.js';
-import { getBrowserTextResourceStore } from '../../../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
-import { TextFileSaveErrorHandler } from '../../../../workbench/contrib/files/browser/editors/textFileSaveErrorHandler.js';
 import { ViewContainerLocation, type IView } from '../../../../workbench/common/views.js';
 import { EDIT_CHAT_WRITING_COMMAND_ID } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import { DocumentTypes } from '../../../../workbench/services/documentEditor/common/documentTypes.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
-import { DOCS_ARTIFACT_EDITOR_ID, DOCS_EDITOR_SETTING, DOCS_MARKDOWN_EDITOR_ID, DOCS_TOOLS_CONTAINER_ID, GENERAL_DOCUMENT_CONTENT_TYPE, GENERAL_DOCUMENT_EDITOR_ID, type DocsEditorPreference } from '../common/docs.js';
+import { DOCS_EDITOR_ID, DOCS_EDITOR_SETTING, DOCS_MARKDOWN_EDITOR_ID, DOCS_TOOLS_CONTAINER_ID, GENERAL_DOCUMENT_CONTENT_TYPE, GENERAL_DOCUMENT_EDITOR_ID, type DocsEditorPreference } from '../common/docs.js';
 import { convertActiveTextToDocument, createDocsInput, createDocsOpener, createGeneralDocument, createMarkdownDocsInput, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact, newDocsResource, openWritingDraft, restoredDocsResource } from './documentActions.js';
-import { DocsArtifactPane, DocsToolsView } from './docsArtifactPane.js';
-import { MarkdownDocsArtifactPane } from './markdownDocsArtifactPane.js';
+import { DocsEditorPane, DocsToolsView } from './docsEditorPane.js';
+import { MarkdownDocsEditorPane } from './markdownDocsEditorPane.js';
 
 DocumentTypes.enableFileEditors();
 
@@ -73,18 +69,18 @@ registerEditorPane({
 });
 
 registerEditorPane({
-	id: DOCS_ARTIFACT_EDITOR_ID,
+	id: DOCS_EDITOR_ID,
 	get name() { return localize('sessions.artifacts.docs', 'Docs'); },
-	canOpen: input => !isResourceDiffEditorInput(input) && input.editorId === DOCS_ARTIFACT_EDITOR_ID && input.contentType === GENERAL_DOCUMENT_CONTENT_TYPE
+	canOpen: input => !isResourceDiffEditorInput(input) && input.editorId === DOCS_EDITOR_ID && input.contentType === GENERAL_DOCUMENT_CONTENT_TYPE
 		? EditorPaneMatch.Default : EditorPaneMatch.None,
 	createInput: createDocsInput,
 	resolveDocumentProfile,
 	async create(options) {
-		const [{ resolveDocumentPaneOptions }, { artifactDocumentProfile }] = await Promise.all([
+		const [{ resolveDocumentPaneOptions }, { docsEditorProfile }] = await Promise.all([
 			import('../../../../workbench/contrib/documentEditor/browser/editorProfile.js'),
-			import('../../../../../../extensions/academy/browser/generalProfile.js'),
+			import('./docsEditorProfile.js'),
 		]);
-		return options.instantiationService!.createInstance(DocsArtifactPane, resolveDocumentPaneOptions({ ...artifactDocumentProfile, editorId: DOCS_ARTIFACT_EDITOR_ID }, options));
+		return options.instantiationService!.createInstance(DocsEditorPane, resolveDocumentPaneOptions({ ...docsEditorProfile, editorId: DOCS_EDITOR_ID }, options));
 	},
 });
 
@@ -94,16 +90,8 @@ registerEditorPane({
 	canOpen: input => input.editorId === DOCS_MARKDOWN_EDITOR_ID && !isResourceDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	createInput: createMarkdownDocsInput,
 	create(options) {
-		const { instantiationService, textFileService } = options;
-		if (!instantiationService || !textFileService) throw new Error('Docs Markdown requires the Workbench text file service');
-		const saveErrors = instantiationService.createInstance(TextFileSaveErrorHandler);
-		return instantiationService.createInstance(MarkdownDocsArtifactPane, getBrowserTextResourceStore(textFileService), {
-			createPart: partOptions => createBrowserEditorPart(instantiationService, partOptions),
-			workingCopyService: options.workingCopyService,
-			accessibilityService: options.accessibilityService,
-			onSave: options.onSave,
-			onSaveError: (error, resource) => saveErrors.onSaveError(error, resource),
-		} satisfies TextEditorPaneOptions);
+		if (!options.instantiationService) throw new Error('Docs requires the Workbench instantiation service');
+		return options.instantiationService.createInstance(MarkdownDocsEditorPane, options.onSave);
 	},
 });
 
@@ -120,9 +108,8 @@ CommandsRegistry.register(EDIT_CHAT_WRITING_COMMAND_ID, (accessor, html, title) 
 	return openWritingDraft(accessor, html, title);
 });
 
-CommandsRegistry.register('sessions.creator.newDocument', accessor => {
-	const preference = accessor.get(IConfigurationService).getValue<DocsEditorPreference>(DOCS_EDITOR_SETTING);
-	return createDocsOpener(accessor)(newDocsResource(localize('sessions.artifacts.untitledDocument', 'Untitled document'), preference === 'markdown' ? '.md' : '.ash-doc'));
+CommandsRegistry.register('sessions.docs.newDocument', accessor => {
+	return createDocsOpener(accessor)(newDocsResource(localize('sessions.artifacts.untitledDocument', 'Untitled document'), '.md'));
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<DocsEditorPreference>({
@@ -134,7 +121,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 	setting: {
 		valueType: 'select', title: localize('sessions.artifacts.docsEditor', 'Docs editor'),
-		description: localize('sessions.artifacts.docsEditorDescription', 'Choose whether new Docs open as a rich document or a Markdown file.'),
+		description: localize({ bundle: 'ash.docs', key: 'editorDescription' }, 'Choose formatted document editing or Markdown source editing for new Docs.'),
 		options: [
 			{ value: 'rich', label: localize('sessions.artifacts.rich', 'Rich document') },
 			{ value: 'markdown', label: localize('sessions.artifacts.markdown', 'Markdown') },
@@ -145,7 +132,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 const chatWorkspace = ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code');
 
 registerAction2(class ChooseDocsEditor extends Action2 {
-	constructor() { super({ id: 'sessions.creator.chooseDocsEditor', title: localize2('sessions.artifacts.chooseEditor', 'Choose Docs editor'), f1: true, precondition: chatWorkspace }); }
+	constructor() { super({ id: 'sessions.docs.chooseEditor', title: localize2('sessions.artifacts.chooseEditor', 'Choose Docs editor'), f1: true, precondition: chatWorkspace }); }
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const contextKeys = accessor.get(IContextKeyService);
 		if (!contextKeys.contextMatchesRules(chatWorkspace)) return;
@@ -166,12 +153,12 @@ registerAction2(class ChooseDocsEditor extends Action2 {
 			picker.show();
 		});
 		if (!selected || !contextKeys.contextMatchesRules(chatWorkspace)) { return; }
-		if (selected === 'blank') { await commands.executeCommand('sessions.creator.newDocument'); return; }
+		if (selected === 'blank') { await commands.executeCommand('sessions.docs.newDocument'); return; }
 		await configuration.updateValue(DOCS_EDITOR_SETTING, selected, ConfigurationTarget.USER_LOCAL);
 	}
 });
 
-CommandsRegistry.register('sessions.creator.openDocument', (accessor, value) => {
+CommandsRegistry.register('sessions.docs.openDocument', (accessor, value) => {
 	// Card targets must still belong to a retained document editor.
 	const generated = accessor.get(IGeneratedFilesService);
 	const input = accessor.get(IEditorPart).groups.flatMap(group => group.editors.map(editor => editor.input)).find(input =>
@@ -179,17 +166,17 @@ CommandsRegistry.register('sessions.creator.openDocument', (accessor, value) => 
 	if (!input) { throw new TypeError(localize('sessions.artifacts.unavailableDocument', 'This document is no longer open.')); }
 	return createDocsOpener(accessor)(input.resource);
 });
-CommandsRegistry.register('sessions.restore.creatorDocs', async (accessor, source) => {
+CommandsRegistry.register('sessions.restore.docs', async (accessor, source) => {
 	const resource = restoredDocsResource(accessor.get(IStorageService));
 	const commands = accessor.get(ICommandService);
-	if (!resource) return commands.executeCommand('sessions.show.creator', source);
+	if (!resource) return commands.executeCommand('sessions.show.artifacts', source);
 	const open = createDocsOpener(accessor);
 	if (resource.scheme === Schemas.vscodeUserData) {
 		const generated = accessor.get(IGeneratedFilesService);
 		if (generated.isProfileGeneratedPath(resource)) {
 			await generated.refresh().catch(() => undefined);
 			const file = generated.files.find(file => file.resource.toString() === resource.toString());
-			if (!file) return commands.executeCommand('sessions.show.creator', source);
+			if (!file) return commands.executeCommand('sessions.show.artifacts', source);
 			return open(resource, { label: file.title, source: source === 'restore' ? source : undefined });
 		}
 	}

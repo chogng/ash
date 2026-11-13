@@ -27,9 +27,9 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement | null;
 			const pane = focused && ArtifactTableEditor.getFocused(focused);
 			if (!pane) return undefined;
-			return new AccessibleContentProvider(AccessibleViewProviderId.Creator, { type },
+			return new AccessibleContentProvider(AccessibleViewProviderId.Artifacts, { type },
 				() => type === AccessibleViewType.Help ? pane.getAccessibilityHelp() : pane.getAccessibleContent(),
-				() => focused.focus(), AccessibilityVerbositySettingId.Creator);
+				() => focused.focus(), AccessibilityVerbositySettingId.Artifacts);
 		},
 	});
 }

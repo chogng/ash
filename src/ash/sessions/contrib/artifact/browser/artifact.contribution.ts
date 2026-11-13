@@ -60,45 +60,45 @@ CommandsRegistry.register(OPEN_ARTIFACT_CONVERSATION_COMMAND_ID, async (accessor
 	throw new Error(localize('sessions.artifacts.sourceConversationUnavailable', 'The conversation that created this artifact is unavailable.'));
 });
 
-registerEditorPane({ id: 'sessions.editor.creator', name: 'Artifacts', canOpen: input => input.resource.scheme === 'ash-creator' && input.resource.path === '/page' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(ArtifactEditorPane) });
+registerEditorPane({ id: 'sessions.editor.artifacts', name: 'Artifacts', canOpen: input => input.resource.scheme === 'ash-artifacts' && input.resource.path === '/page' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(ArtifactEditorPane) });
 
-CommandsRegistry.register('sessions.show.creator', (accessor, source) => openArtifacts(accessor, page => page.showHome(), { source: source === 'restore' ? source : undefined }));
-CommandsRegistry.register('sessions.restore.creator', (accessor, source) => openArtifacts(accessor, undefined, { source: source === 'restore' ? source : undefined, restoreCommand: 'sessions.restore.creator' }));
-CommandsRegistry.register('sessions.creator.openMode', (accessor, value) => {
-	if (typeof value !== 'string' || !getArtifactWorkspace(value)) { throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.')); }
-	return openArtifacts(accessor, page => page.openMode(value as ArtifactWorkspaceId), { restoreCommand: 'sessions.restore.creator' });
+CommandsRegistry.register('sessions.show.artifacts', (accessor, source) => openArtifacts(accessor, page => page.showHome(), { source: source === 'restore' ? source : undefined }));
+CommandsRegistry.register('sessions.restore.artifacts', (accessor, source) => openArtifacts(accessor, undefined, { source: source === 'restore' ? source : undefined, restoreCommand: 'sessions.restore.artifacts' }));
+CommandsRegistry.register('sessions.artifacts.openMode', (accessor, value) => {
+	if (typeof value !== 'string' || !getArtifactWorkspace(value)) { throw new TypeError(localize('sessions.artifacts.invalidMode', 'Invalid Artifacts document mode.')); }
+	return openArtifacts(accessor, page => page.openMode(value as ArtifactWorkspaceId), { restoreCommand: 'sessions.restore.artifacts' });
 });
-registerAction2(class OpenCreator extends Action2 {
+registerAction2(class OpenArtifacts extends Action2 {
 	constructor() {
-		super({ id: 'sessions.open.creator', title: localize2('sessions.creator.title', 'Artifacts'), icon: Lxicon.artifacts, toggled: ContextKeyExpr.has('sessions.activity.creatorSelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 50, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') } });
+		super({ id: 'sessions.open.artifacts', title: localize2('sessions.artifacts.title', 'Artifacts'), icon: Lxicon.artifacts, toggled: ContextKeyExpr.has('sessions.activity.artifactsSelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 50, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') } });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		if (accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) !== 'chat') return;
-		await accessor.get(ICommandService).executeCommand('sessions.show.creator');
+		await accessor.get(ICommandService).executeCommand('sessions.show.artifacts');
 	}
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
-	key: AccessibilityVerbositySettingId.Creator,
+	key: AccessibilityVerbositySettingId.Artifacts,
 	defaultValue: true,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean') { throw new TypeError(localize('sessions.creator.verbosityInvalid', 'Artifacts accessibility verbosity must be boolean.')); }
+		if (typeof value !== 'boolean') { throw new TypeError(localize('sessions.artifacts.verbosityInvalid', 'Artifacts accessibility verbosity must be boolean.')); }
 		return value;
 	},
-	setting: { valueType: 'boolean', get title() { return localize('sessions.creator.verbosityTitle', 'Artifacts accessibility help'); }, get description() { return localize('sessions.creator.verbosityDescription', 'Announce how to open accessibility help in Artifacts.'); } },
+	setting: { valueType: 'boolean', get title() { return localize('sessions.artifacts.verbosityTitle', 'Artifacts accessibility help'); }, get description() { return localize('sessions.artifacts.verbosityDescription', 'Announce how to open accessibility help in Artifacts.'); } },
 });
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({
 		type,
 		priority: 90,
-		name: `sessionsCreator${type}`,
-		when: ContextKeyExpr.has('sessionsCreatorFocused'),
+		name: `sessionsArtifacts${type}`,
+		when: ContextKeyExpr.has('sessionsArtifactsFocused'),
 		getProvider: accessor => {
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
 			const page = ArtifactEditorView.getFocused(focused);
 			if (!page) { return undefined; }
-			return new AccessibleContentProvider(AccessibleViewProviderId.Creator, { type }, () => type === AccessibleViewType.Help ? `${localize('sessions.creator.help', 'Artifacts\nUse Tab and Shift+Tab to reach filters, search, view options, creation cards and your existing work. Press Enter on a creation card to open a new chat with that artifact type shown below the input. When the title is a button, press Enter to open the available artifact actions. Use Up and Down to move through the menu and Escape to return to the title. If Rename is available, choose it or double-click the title to edit it in place. Press Enter to save or Escape to cancel. In the window title bar, use Left and Right to reach Export, Maximize artifact, Restore artifact size, or Close artifact. Close artifact returns to the conversation. Show Secondary Side Bar opens canvas properties when available. Press Enter on a generated artifact to return to the conversation that created it. Open its file from that conversation. Other saved work opens in its editor. Use Left and Right to move between All, Yours and Shared with you. Press Enter or Space to apply the focused filter. Search filters titles. Sort and filter opens a menu with Sort by, Owner and Type submenus. Use Right to open a submenu and Left to return; Escape closes the menu and returns focus to its button. Sort by Last edited, Date created or Name, in ascending or descending order. Owner and Type filters combine with search. Reset filters restores the defaults. Cards show the last modified date, or the creation date when no modification date is available; opening a file does not change its date. Missing dates sort last. Layout grid switches your work between grid and list views. The Artifacts navigation item returns home and retains each workspace. In the Command Palette, Choose Docs editor sets the editor preference and can open a blank document. Docs uses rich document or Markdown format according to the Docs editor preference. Design saves automatically. Use Save document for files opened in the Slides workspace. Preview supports Left and Right to change slides and Escape to return.')}\n\n${page.getWorkspaceAccessibilityHelp() ?? ''}${page.getAccessibleContent()}` : page.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.Creator);
+			return new AccessibleContentProvider(AccessibleViewProviderId.Artifacts, { type }, () => type === AccessibleViewType.Help ? `${localize('sessions.artifacts.help', 'Artifacts\nUse Tab and Shift+Tab to reach filters, search, view options, creation cards and your existing work. Press Enter on a creation card to open a new chat with that artifact type shown below the input. When the title is a button, press Enter to open the available artifact actions. Use Up and Down to move through the menu and Escape to return to the title. If Rename is available, choose it or double-click the title to edit it in place. Press Enter to save or Escape to cancel. In the window title bar, use Left and Right to reach Export, Maximize artifact, Restore artifact size, or Close artifact. Close artifact returns to the conversation. Show Secondary Side Bar opens canvas properties when available. Press Enter on a generated artifact to return to the conversation that created it. Open its file from that conversation. Other saved work opens in its editor. Use Left and Right to move between All, Yours and Shared with you. Press Enter or Space to apply the focused filter. Search filters titles. Sort and filter opens a menu with Sort by, Owner and Type submenus. Use Right to open a submenu and Left to return; Escape closes the menu and returns focus to its button. Sort by Last edited, Date created or Name, in ascending or descending order. Owner and Type filters combine with search. Reset filters restores the defaults. Cards show the last modified date, or the creation date when no modification date is available; opening a file does not change its date. Missing dates sort last. Layout grid switches your work between grid and list views. The Artifacts navigation item returns home and retains each workspace. In the Command Palette, Choose Docs editor sets the editor preference and can open a blank document. New Docs use Markdown with formatted document or source editing according to the Docs editor preference. Design saves automatically. Use Save document for files opened in the Slides workspace. Preview supports Left and Right to change slides and Escape to return.')}\n\n${page.getWorkspaceAccessibilityHelp() ?? ''}${page.getAccessibleContent()}` : page.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.Artifacts);
 		},
 	});
 }

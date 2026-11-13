@@ -1,6 +1,6 @@
 # Sessions：布局、工作集与 Changes
 
-Sessions 复用 Workbench 的 Part、编辑器和 ViewContainer 基座。Creator 聚合各贡献的创作入口；Library 是统一的分类文件和素材仓库，其分类、收藏、集合和搜索属于库内浏览状态。各功能向 Sessions 布局服务提供容器 ID 和中央内容，窗口布局负责共享宿主的尺寸与显隐。DesktopLayoutController 负责会话文档恢复及 Editor／Details 行为。窗口始终保留 SessionsPart，用于 Agent 对话和会话分屏。
+Sessions 复用 Workbench 的 Part、编辑器和 ViewContainer 基座。Artifacts 聚合各贡献的创作入口；Library 是统一的分类文件和素材仓库，其分类、收藏、集合和搜索属于库内浏览状态。各功能向 Sessions 布局服务提供容器 ID 和中央内容，窗口布局负责共享宿主的尺寸与显隐。DesktopLayoutController 负责会话文档恢复及 Editor／Details 行为。窗口始终保留 SessionsPart，用于 Agent 对话和会话分屏。
 
 本文概括边界。完整契约见 [LAYOUT.md](../src/ash/sessions/LAYOUT.md)，会话工作集和入口存储见 [LAYOUT_CONTROLLER.md](../src/ash/sessions/LAYOUT_CONTROLLER.md)。
 
@@ -15,21 +15,21 @@ Sessions 复用 Workbench 的 Part、编辑器和 ViewContainer 基座。Creator
 | 对话区域       | [sessionsPart.ts](../src/ash/sessions/browser/parts/sessionsPart.ts)                                | SessionsPart 拥有独立 SessionGridLayout，每个会话由 SessionView 承载；Chat/Code 共用容器和分屏几何 |
 | 编辑区域       | [parts/editor/](../src/ash/sessions/browser/parts/editor)                                           | 复用 Workbench EditorPart，保留产品页面编辑组；会话文档组独立恢复                                  |
 | 底部工具       | [parts/panel/](../src/ash/sessions/browser/parts/panel)                                             | 使用共享 PanelPart 和工具 ViewContainer                                                            |
-| 左侧区域       | [parts/sidebar/](../src/ash/sessions/browser/parts/sidebar)                                         | 使用共享 SidebarPart，挂载会话、团队、Library、Creator 的 ViewContainer                            |
+| 左侧区域       | [parts/sidebar/](../src/ash/sessions/browser/parts/sidebar)                                         | 使用共享 SidebarPart，挂载会话、团队、Library、Artifacts 的 ViewContainer                          |
 | 会话身份       | [sessionsService.ts](../src/ash/sessions/services/sessions/browser/sessionsService.ts)              | 窗口唯一的活动会话、可见排列和导航历史                                                             |
 
 组件和样式跟随所属 Part；会话宿主位于 browser/parts，样式位于相邻 media。模式页面放在 contrib，由 EditorInput / EditorPane 或 ViewPane 注册提供内容；页面名不产生新的窗口 Part。Workbench 和更低层不依赖 Sessions。
 
 ## 中间区域与模式
 
-| 模式                | 左侧                       | 中间                              | 右侧                            |
-| ------------------- | -------------------------- | --------------------------------- | ------------------------------- |
-| Chat                | 会话 ViewContainer         | SessionsPart                      | 按该模式的显隐偏好              |
-| Code                | 会话 ViewContainer         | SessionsPart 与文档 EditorPart    | Files / Changes，按活动文档选择 |
-| Collaboration       | 团队 ViewContainer         | SessionsPart                      | 按该模式的显隐偏好              |
-| Library             | 分类 ViewContainer         | LibraryEditorPane                 | 素材详情 ViewContainer          |
-| Creator 画布        | Layers ViewContainer       | ArtifactEditorPane 保留的工作空间 | Shape properties ViewContainer  |
-| Creator 首页 / Make | Creator 导航 ViewContainer | ArtifactEditorPane                | 默认收起属性                    |
+| 模式                  | 左侧                         | 中间                              | 右侧                            |
+| --------------------- | ---------------------------- | --------------------------------- | ------------------------------- |
+| Chat                  | 会话 ViewContainer           | SessionsPart                      | 按该模式的显隐偏好              |
+| Code                  | 会话 ViewContainer           | SessionsPart 与文档 EditorPart    | Files / Changes，按活动文档选择 |
+| Collaboration         | 团队 ViewContainer           | SessionsPart                      | 按该模式的显隐偏好              |
+| Library               | 分类 ViewContainer           | LibraryEditorPane                 | 素材详情 ViewContainer          |
+| Artifacts 画布        | Layers ViewContainer         | ArtifactEditorPane 保留的工作空间 | Shape properties ViewContainer  |
+| Artifacts 首页 / Make | Artifacts 导航 ViewContainer | ArtifactEditorPane                | 默认收起属性                    |
 
 Sidebar 在每种桌面模式中都可用。用户显隐偏好按入口保存。Code 的 Panel 在其他模式不可用，回到 Code 恢复原显隐及工具视图。聚焦 Code 内的对话不改变模式；激活已打开的产品标签时恢复其对应的入口布局。
 
@@ -180,4 +180,4 @@ ChangesViewService 只拥有 Turn 展示状态和修订绑定的 read marker。A
 
 2026-10-19 在 Windows 11 23H2 x64（22631.6199）、Node 24.21.0／pnpm 12.8.0，以 `01325b8c1ea3c2fb11c6e889dc72d79620a70fbb` 加本次测试 fixture 修正验证标准 unit runner。编译入口 `pnpm test:unit --run src/ash/sessions/test/browser/sessionsCommon.test.ts` 通过 6 项；修正菜单注册基线、Trace 命令装配和配置元数据断言后，复用新编译产物执行 `pnpm test:unit:no-compile --runGlob 'src/ash/sessions/**/test/**/*.test.js'`，76 个文件共 939 项通过，退出码 0。`node --test build/processes.test.ts` 的两个 Windows 清理回归通过、四个 Unix 专用用例跳过，未复现历史 CIM 超时；没有增加超时或绕过标准进程清理。日志与环境记录在 `.build/todo-windows-20261019/` 的 `sessions-common.log`、`editor-contribution-fixed.log`、`common-fixtures-fixed.log`、`sessions-all-fixed.log`、`processes.log` 和 `environment.json`。原直接 Mocha 203 项仅保留为历史范围，不再作为标准命令通过的依据。
 
-布局回归入口为 [sessions-layout.spec.ts](../test/smoke/areas/sessions/sessions-layout.spec.ts)、[sessions-navigation.spec.ts](../test/smoke/areas/sessions/sessions-navigation.spec.ts) 和 Creator／Library／Code 场景，覆盖真实切换、DOM 实例、未保存文档、键盘帮助、resize 和 reload。历史结果不代表整个上游 API、两端配对场景或当前 HEAD 均已验收。
+布局回归入口为 [sessions-layout.spec.ts](../test/smoke/areas/sessions/sessions-layout.spec.ts)、[sessions-navigation.spec.ts](../test/smoke/areas/sessions/sessions-navigation.spec.ts) 和 Artifacts／Library／Code 场景，覆盖真实切换、DOM 实例、未保存文档、键盘帮助、resize 和 reload。历史结果不代表整个上游 API、两端配对场景或当前 HEAD 均已验收。

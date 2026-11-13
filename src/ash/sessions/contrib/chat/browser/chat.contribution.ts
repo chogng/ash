@@ -50,7 +50,7 @@ registerAction2(NewSessionFolderQuickPickAction);
 
 CommandsRegistry.register(OPEN_CHAT_CREATION_COMMAND_ID, async (accessor, kind) => {
 	if (!isChatCreationKind(kind)) {
-		throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.'));
+		throw new TypeError(localize('sessions.artifacts.invalidMode', 'Invalid Artifacts document mode.'));
 	}
 	const widgets = accessor.get(IChatWidgetService);
 	const commands = accessor.get(ICommandService);

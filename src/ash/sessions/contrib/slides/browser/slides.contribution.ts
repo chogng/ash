@@ -14,10 +14,10 @@ class SlidesWorkspace extends ArtifactWorkspace {
 	private pages!: ArtifactFrameNavigator;
 	public static registerToolbarActions(): void {
 		this.registerWorkspaceActions(ArtifactWorkspaceId.Slides, [
-			{ id: 'add', title: localize2('sessions.creator.slides.add', 'Add slide'), run: workspace => workspace.pages.select(workspace.addFrame(1280, 720)) },
-			{ id: 'earlier', title: localize2('sessions.creator.slides.earlier', 'Move slide earlier'), precondition: CanMoveSlideEarlier.isEqualTo(true), run: workspace => workspace.reorder(-1) },
-			{ id: 'later', title: localize2('sessions.creator.slides.later', 'Move slide later'), precondition: CanMoveSlideLater.isEqualTo(true), run: workspace => workspace.reorder(1) },
-			{ id: 'present', title: localize2('sessions.creator.slides.present', 'Present'), precondition: HasSlides.isEqualTo(true), run: workspace => workspace.pages.showPreview(true) },
+			{ id: 'add', title: localize2('sessions.artifacts.slides.add', 'Add slide'), run: workspace => workspace.pages.select(workspace.addFrame(1280, 720)) },
+			{ id: 'earlier', title: localize2('sessions.artifacts.slides.earlier', 'Move slide earlier'), precondition: CanMoveSlideEarlier.isEqualTo(true), run: workspace => workspace.reorder(-1) },
+			{ id: 'later', title: localize2('sessions.artifacts.slides.later', 'Move slide later'), precondition: CanMoveSlideLater.isEqualTo(true), run: workspace => workspace.reorder(1) },
+			{ id: 'present', title: localize2('sessions.artifacts.slides.present', 'Present'), precondition: HasSlides.isEqualTo(true), run: workspace => workspace.pages.showPreview(true) },
 		]);
 	}
 	protected override createModeContent(): void {
@@ -56,9 +56,9 @@ SlidesWorkspace.registerToolbarActions();
 registerArtifactWorkspaceMode({
 	id: ArtifactWorkspaceId.Slides,
 	title: getArtifactWorkspaceTitle(ArtifactWorkspaceId.Slides),
-	description: localize('sessions.creator.slides.description', 'Build a slide deck, arrange pages and present your work.'),
+	description: localize('sessions.artifacts.slides.description', 'Build a slide deck, arrange pages and present your work.'),
 	icon: Lxicon.layout,
-	help: localize('sessions.creator.slides.help', 'Add slide creates a 16:9 slide. Pages selects a slide for editing. Move slide earlier and Move slide later change presentation order and support Undo. Present plays the deck; use Left and Right on the preview to change pages and Escape to return to editing.'),
+	help: localize('sessions.artifacts.slides.help', 'Add slide creates a 16:9 slide. Pages selects a slide for editing. Move slide earlier and Move slide later change presentation order and support Undo. Present plays the deck; use Left and Right on the preview to change pages and Escape to return to editing.'),
 }, (instantiation, ownerDocument) => instantiation.createInstance(SlidesWorkspace, ownerDocument, ArtifactWorkspaceId.Slides));
 
 registerArtifactCanvasDocument('slides', () => getArtifactWorkspaceTitle(ArtifactWorkspaceId.Slides));

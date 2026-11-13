@@ -195,7 +195,7 @@ if (new URL(location.href).searchParams.has('remoteManagement')) {
 		},
 	} };
 }
-if (new URL(location.href).searchParams.has('creator') || new URL(location.href).searchParams.has('catalog')) {
+if (new URL(location.href).searchParams.has('artifacts') || new URL(location.href).searchParams.has('catalog')) {
 	// Layout scenarios need a successful catalog, rather than transient errors
 	// from an intentionally disconnected host changing the notice lane's height.
 	const model = { provider: 'fixture', model: 'layout-model' };

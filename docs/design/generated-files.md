@@ -196,10 +196,10 @@ sessions/common/
 
 sessions/contrib/chat/
   browser/chat.contribution.ts          创建 Chat 并设置创作选择
-  browser/chatCreationWidget.ts         上方创建入口的公开 UI
   browser/chatInputArtifactPill.ts      输入框中已选创作类型
 
 sessions/contrib/artifact/
+  browser/newArtifactWidget.ts          上方创建入口的 UI
   browser/artifactKindPresentation.ts   Artifact 分类的标签、图标及配色入口
   browser/artifact.contribution.ts      作品库入口与来源对话命令
   browser/artifactEditor.ts             作品库 EditorPane 与页面组合

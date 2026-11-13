@@ -4,12 +4,12 @@ import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
-import type { DesignDocumentController } from '../designDocumentController.js';
+import type { ArtifactCanvasDocumentController } from '../artifactCanvasDocumentController.js';
 import type { ComponentCommands } from '../../common/commands/componentCommands.js';
-import { flattenDesignShapes, type DesignOverride, type DesignShape } from '../../common/model/designDocument.js';
-import { designPropertyLabel } from './resourcePropertiesWidget.js';
-import { getDesignResourceCatalog, type DesignResources, type DesignBindableProperty } from '../../common/model/designResources.js';
-import type { DesignSelection } from '../../common/designSelection.js';
+import { flattenArtifactCanvasShapes, type ArtifactCanvasOverride, type ArtifactCanvasShape } from '../../common/model/artifactCanvasDocument.js';
+import { artifactCanvasPropertyLabel } from './resourcePropertiesWidget.js';
+import { getArtifactCanvasResourceCatalog, type ArtifactCanvasResources, type ArtifactCanvasBindableProperty } from '../../common/model/artifactCanvasResources.js';
+import type { ArtifactCanvasSelection } from '../../common/artifactCanvasSelection.js';
 
 /** Local component authoring shares the same properties surface and document command boundary. */
 export class ComponentPropertiesWidget extends Disposable {
@@ -17,7 +17,7 @@ export class ComponentPropertiesWidget extends Disposable {
 	private readonly fields: HTMLElement;
 	public readonly domNode: HTMLDetailsElement;
 	private revision = '';
-	constructor(private readonly documentController: DesignDocumentController, private readonly commands: ComponentCommands, private readonly selection: DesignSelection, ownerDocument: Document, private readonly refresh: () => void) {
+	constructor(private readonly documentController: ArtifactCanvasDocumentController, private readonly commands: ComponentCommands, private readonly selection: ArtifactCanvasSelection, ownerDocument: Document, private readonly refresh: () => void) {
 		super();
 		this.fields = h(ownerDocument, 'div', { className: 'ash-design-property-fields ash-design-component-fields' });
 		this.domNode = h(ownerDocument, 'details', { className: 'ash-design-property-section', properties: { open: true } }, h(ownerDocument, 'summary', {}, localize('sessions.design.components', 'Components'), h(ownerDocument, 'span', { className: 'ash-design-property-disclosure', attributes: { 'aria-hidden': 'true' } })), this.fields);
@@ -30,7 +30,7 @@ export class ComponentPropertiesWidget extends Disposable {
 		const focusKey = active && this.fields.contains(active) ? active.getAttribute('data-component-control') : undefined;
 		const focusIndex = [...this.fields.querySelectorAll('[data-component-control]')].findIndex(control => control === active);
 		this.controls.clear(); this.fields.replaceChildren();
-		const selected = this.selection.ids.size === 1 ? flattenDesignShapes(this.documentController.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
+		const selected = this.selection.ids.size === 1 ? flattenArtifactCanvasShapes(this.documentController.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
 		const frame = selected?.kind === 'frame' ? selected : undefined;
 		const main = selected ? this.commands.getMain(selected.id) : undefined;
 		const instance = selected ? this.commands.getInstance(selected.id) : undefined;
@@ -65,9 +65,9 @@ export class ComponentPropertiesWidget extends Disposable {
 					}
 				}
 			}
-			const overrides = [...new Set(flattenDesignShapes([selected]).flatMap(shape => shape.overrides ?? []))];
+			const overrides = [...new Set(flattenArtifactCanvasShapes([selected]).flatMap(shape => shape.overrides ?? []))];
 			if (main && overrides.length) {
-				this.select('resetField', localize('sessions.design.resetProperty', 'Reset property'), '', [['', localize('sessions.design.chooseOverride', 'Choose an override')], ...overrides.map(field => [field, overrideLabel(field, this.documentController.model.value.resources)] as const)], value => { if (value) { this.commands.reset(selected.id, value as DesignOverride); } });
+				this.select('resetField', localize('sessions.design.resetProperty', 'Reset property'), '', [['', localize('sessions.design.chooseOverride', 'Choose an override')], ...overrides.map(field => [field, overrideLabel(field, this.documentController.model.value.resources)] as const)], value => { if (value) { this.commands.reset(selected.id, value as ArtifactCanvasOverride); } });
 			}
 		}
 		if (!instance && set?.component?.kind === 'set') {
@@ -123,16 +123,16 @@ export class ComponentPropertiesWidget extends Disposable {
 	}
 }
 
-function componentLabel(shape: Extract<DesignShape, { kind: 'frame'; }>): string {
+function componentLabel(shape: Extract<ArtifactCanvasShape, { kind: 'frame'; }>): string {
 	const name = shape.name || localize('sessions.design.component', 'Component');
 	return shape.component?.kind === 'main' && shape.component.variant ? `${name} (${Object.entries(shape.component.variant).map(([key, value]) => `${key}=${value}`).join(', ')})` : name;
 }
 
-function overrideLabel(field: DesignOverride, resources: DesignResources | undefined): string {
-	if (field.startsWith('bindings:')) { return localize('sessions.design.bindingOverride', 'Variable: {0}', designPropertyLabel(field.slice(9) as DesignBindableProperty)); }
+function overrideLabel(field: ArtifactCanvasOverride, resources: ArtifactCanvasResources | undefined): string {
+	if (field.startsWith('bindings:')) { return localize('sessions.design.bindingOverride', 'Variable: {0}', artifactCanvasPropertyLabel(field.slice(9) as ArtifactCanvasBindableProperty)); }
 	if (field.startsWith('styleBindings:')) { return localize('sessions.design.styleOverride', 'Style: {0}', ({ fill: localize('sessions.design.fillStyle', 'Paint style'), text: localize('sessions.design.textStyle', 'Text style'), effect: localize('sessions.design.effectStyle', 'Effect style'), grid: localize('sessions.design.gridStyle', 'Layout guide style') })[field.slice(14) as 'fill']); }
-	if (field.startsWith('variableModes:')) { return localize('sessions.design.modeOverride', 'Mode: {0}', getDesignResourceCatalog(resources).collections.find(collection => collection.id === field.slice(14))?.name ?? localize('sessions.design.collection', 'Collection')); }
-	const labels: Partial<Record<DesignOverride, string>> = {
+	if (field.startsWith('variableModes:')) { return localize('sessions.design.modeOverride', 'Mode: {0}', getArtifactCanvasResourceCatalog(resources).collections.find(collection => collection.id === field.slice(14))?.name ?? localize('sessions.design.collection', 'Collection')); }
+	const labels: Partial<Record<ArtifactCanvasOverride, string>> = {
 		visible: localize('sessions.design.visibility', 'Visibility'), opacity: localize('sessions.design.opacity', 'Opacity'), fontFamily: localize('sessions.design.fontFamily', 'Font family'), fontWeight: localize('sessions.design.fontWeight', 'Font weight'), lineHeight: localize('sessions.design.lineHeight', 'Line height'), letterSpacing: localize('sessions.design.letterSpacing', 'Letter spacing'), effects: localize('sessions.design.effectStyle', 'Effect style'), layoutGuide: localize('sessions.design.gridStyle', 'Layout guide style'), bindings: localize('sessions.design.variables', 'Variables'), styleBindings: localize('sessions.design.styles', 'Styles'), variableModes: localize('sessions.design.variableModes', 'Variable modes'),
 		name: localize('sessions.design.layerName', 'Layer name'), width: localize('sessions.design.width', 'Width'), height: localize('sessions.design.height', 'Height'), fill: localize('sessions.design.fill', 'Fill'), text: localize('sessions.design.text', 'Text'), fontSize: localize('sessions.design.fontSize', 'Font size'), strokeWidth: localize('sessions.design.strokeWidth', 'Stroke width'), crop: localize('sessions.design.imageCrop', 'Image crop'), assetId: localize('sessions.design.image', 'Image'), assetVersionId: localize('sessions.design.imageVersion', 'Image version'), autoLayout: localize('sessions.design.autoLayout', 'Auto layout'), sizeLimits: localize('sessions.design.sizeLimits', 'Size limits'), motion: localize('sessions.design.animation', 'Animation'), interactions: localize('sessions.design.prototype.interactions', 'Prototype interactions'), instance: localize('sessions.design.instance', 'Instance'),
 	};

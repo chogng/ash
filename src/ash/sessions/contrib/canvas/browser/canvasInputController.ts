@@ -1,7 +1,8 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { StandardWheelEvent } from '../../../../base/browser/mouseEvent.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { CanvasPoint, CanvasViewport } from '../common/canvasViewport.js';
+import type { CanvasViewport } from '../common/canvasViewport.js';
+import type { CanvasPoint } from '../common/canvasGeometry.js';
 
 const WHEEL_ZOOM_SENSITIVITY = 0.005;
 

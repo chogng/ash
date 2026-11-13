@@ -6,10 +6,10 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import type { DocumentCommands } from '../../artifact/common/commands/documentCommands.js';
-import type { DesignModel } from '../../artifact/common/model/designModel.js';
-import type { DesignKeyframe, DesignMotion, DesignShape } from '../../artifact/common/model/designDocument.js';
+import type { ArtifactCanvasModel } from '../../artifact/common/model/artifactCanvasModel.js';
+import type { ArtifactCanvasKeyframe, ArtifactCanvasMotion, ArtifactCanvasShape } from '../../artifact/common/model/artifactCanvasDocument.js';
 import { designMotionDuration, sampleDesignMotion } from '../common/motion.js';
-import type { DesignScene } from '../../artifact/browser/designEditorBrowser.js';
+import type { ArtifactCanvasScene } from '../../artifact/browser/artifactCanvasEditorBrowser.js';
 
 /** The document owns keyframes; this contribution owns only playback time and timeline DOM. */
 export class DesignMotionWidget extends Disposable {
@@ -26,14 +26,14 @@ export class DesignMotionWidget extends Disposable {
 	private readonly frameSelect: HTMLSelectElement;
 	private readonly fields = new Map<'x' | 'y' | 'rotation' | 'opacity', HTMLInputElement>();
 	private readonly timeLabel: HTMLElement;
-	private shape: DesignShape | undefined;
+	private shape: ArtifactCanvasShape | undefined;
 	private frameIndex = 0;
 	private time = 0;
 	private animationFrame: number | undefined;
 	private isActive = false;
 	private isBusy = false;
 
-	constructor(ownerDocument: Document, private readonly model: DesignModel, private readonly commands: DocumentCommands) {
+	constructor(ownerDocument: Document, private readonly model: ArtifactCanvasModel, private readonly commands: DocumentCommands) {
 		super();
 		this.domNode = h(ownerDocument, 'section', { className: 'ash-design-motion-widget', attributes: { 'aria-label': localize('sessions.design.motionTimeline', 'Animation timeline') } });
 		const playback = h(ownerDocument, 'div', { className: 'ash-design-motion-row' });
@@ -110,9 +110,9 @@ export class DesignMotionWidget extends Disposable {
 		this._register(toDisposable(() => this.stop()));
 	}
 
-	public getScene(): DesignScene {
+	public getScene(): ArtifactCanvasScene {
 		const opacity = new Map<string, number>();
-		const sample = (shape: DesignShape): DesignShape => {
+		const sample = (shape: ArtifactCanvasShape): ArtifactCanvasShape => {
 			const frame = sampleDesignMotion(shape, this.time);
 			opacity.set(shape.id, frame.opacity);
 			const geometry = { ...shape, x: frame.x, y: frame.y, rotation: frame.rotation };
@@ -127,7 +127,7 @@ export class DesignMotionWidget extends Disposable {
 		if (!isActive) { this.stop(); this.setTime(0); }
 	}
 
-	public update(shape: DesignShape | undefined, isBusy: boolean): void {
+	public update(shape: ArtifactCanvasShape | undefined, isBusy: boolean): void {
 		if (this.shape?.id !== shape?.id) { this.frameIndex = 0; }
 		this.shape = shape;
 		this.isBusy = isBusy;
@@ -151,11 +151,11 @@ export class DesignMotionWidget extends Disposable {
 		this.timeLabel.textContent = localize('sessions.design.motionTimeValue', '{0} ms', Math.round(this.time));
 	}
 
-	private hasMotion(shapes: readonly DesignShape[]): boolean {
+	private hasMotion(shapes: readonly ArtifactCanvasShape[]): boolean {
 		return shapes.some(shape => !!shape.motion || ((shape.kind === 'group' || shape.kind === 'frame') && this.hasMotion(shape.children)));
 	}
 
-	private hasLoop(shapes: readonly DesignShape[]): boolean {
+	private hasLoop(shapes: readonly ArtifactCanvasShape[]): boolean {
 		return shapes.some(shape => shape.motion?.loop || ((shape.kind === 'group' || shape.kind === 'frame') && this.hasLoop(shape.children)));
 	}
 
@@ -167,7 +167,7 @@ export class DesignMotionWidget extends Disposable {
 			motion = { duration: 1000, loop: false, keyframes: [{ ...frame, offset: 0 }, { ...frame, offset: 1 }] };
 			this.frameIndex = 1;
 		} else {
-			const frame: DesignKeyframe = { ...sampleDesignMotion({ ...shape, motion: { ...motion, loop: false } }, this.time), offset: Math.min(1, this.time / motion.duration) };
+			const frame: ArtifactCanvasKeyframe = { ...sampleDesignMotion({ ...shape, motion: { ...motion, loop: false } }, this.time), offset: Math.min(1, this.time / motion.duration) };
 			const keyframes = [...motion.keyframes.filter(current => current.offset !== frame.offset), frame].sort((a, b) => a.offset - b.offset);
 			this.frameIndex = keyframes.indexOf(frame);
 			motion = { ...motion, keyframes };
@@ -176,7 +176,7 @@ export class DesignMotionWidget extends Disposable {
 		this.commit(motion);
 	}
 
-	private commit(motion: DesignMotion): void {
+	private commit(motion: ArtifactCanvasMotion): void {
 		this.stop();
 		this.commands.updateShape({ ...this.shape!, motion });
 	}

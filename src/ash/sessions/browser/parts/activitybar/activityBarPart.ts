@@ -385,7 +385,7 @@ export class ActivityBar extends Disposable {
 		// Keep the established Chat order and append entries that were saved only in Code.
 		const migrated = [...new Set([...chatOrder, ...read(oldCode)].map(id => {
 			if (id === 'sessions.open.chat') return 'sessions.newSession';
-			return id === 'sessions.open.design' ? 'sessions.open.creator' : id;
+			return id === 'sessions.open.design' ? 'sessions.open.artifacts' : id;
 		}).filter(id => id !== 'sessions.open.code' && id !== 'sessions.open.teams'))];
 		const newIndex = migrated.indexOf('sessions.newSession');
 		if (newIndex >= 0 && !migrated.includes('sessions.search')) migrated.splice(newIndex + 1, 0, 'sessions.search');

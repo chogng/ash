@@ -9,8 +9,8 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
 import { createDocsInput } from '../../../contrib/docs/browser/documentActions.js';
 import { artifactCanvasModes } from '../../../contrib/artifact/common/artifactWorkspace.js';
-import { getDesignDraftHome } from '../../../contrib/artifact/browser/designDocumentController.js';
-import { documentFromShapes, serializeDesignDocument, type DesignShape } from '../../../contrib/artifact/common/model/designDocument.js';
+import { getArtifactDraftHome } from '../../../contrib/artifact/browser/artifactStorage.js';
+import { documentFromShapes, serializeArtifactCanvasDocument, type ArtifactCanvasShape } from '../../../contrib/artifact/common/model/artifactCanvasDocument.js';
 import { createSlides, frame, geometry, text } from './artifactExampleShapes.js';
 import { getArtifactTitle } from '../../../contrib/artifact/browser/artifactKindPresentation.js';
 import { exampleText } from './artifactExampleText.js';
@@ -35,7 +35,7 @@ registerWorkbenchServiceContribution({
 
 /** Seed once, including a completion marker so deleted fixtures stay deleted and edits survive reload. */
 export async function prepareArtifactFixtures(files: IFileService, profile: URI, workspaceId: string, ownerDocument: Document): Promise<URI> {
-	const home = getDesignDraftHome(profile, workspaceId);
+	const home = getArtifactDraftHome(profile, workspaceId);
 	const marker = home.joinPathSegment('test-data-v1');
 	const docs = home.joinPathSegment('studio-launch.ash-doc');
 	try { await files.stat(marker); return docs; } catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
@@ -44,7 +44,7 @@ export async function prepareArtifactFixtures(files: IFileService, profile: URI,
 		const id = fixtureCanvasIds[kind];
 		const resource = home.joinPathSegment(kind).joinPathSegment(`${id}.ash-design`);
 		await files.createDirectory(resource);
-		await writeMissing(files, resource.joinPathSegment('manifest.json'), serializeDesignDocument(documentFromShapes(shapes, {
+		await writeMissing(files, resource.joinPathSegment('manifest.json'), serializeArtifactCanvasDocument(documentFromShapes(shapes, {
 			documentId: id, artifactId: generateUuid(), mode: artifactCanvasModes[kind], title: shapes[0].name, createdAt: Date.now(),
 		})));
 	}
@@ -57,8 +57,9 @@ export async function prepareArtifactFixtures(files: IFileService, profile: URI,
 	] as const) {
 		await writeMissing(files, tables.joinPathSegment(`${fixtureTableIds[kind]}.json`), JSON.stringify({ kind, rows, createdAt: Date.now(), title: exampleText('exampleTitle', '{0} example', getArtifactTitle(kind)) }));
 	}
-	const { generalProfile, importGeneralDocumentHtml } = await import('../../../../../../extensions/academy/browser/generalProfile.js');
-	const document = importGeneralDocumentHtml(renderWorkbenchMarkdown(exampleText('exampleDocsContent', '# Studio launch brief\n\nLaunch a shared home for the studio’s work. Start with a small pilot and use feedback to guide the public release.\n\n## Readiness checklist\n\n- [x] Review the visual direction\n- [ ] Invite the pilot group\n- [ ] Publish the launch notes\n\n## Schedule\n\n| Milestone | Target |\n| --- | --- |\n| Pilot | Tuesday |\n| Feedback review | Thursday |\n| Public launch | Next Monday |')), ownerDocument);
+	const { generalProfile } = await import('../../../../../../extensions/academy/browser/generalProfile.js');
+	const { importDocsHtml } = await import('../../../contrib/docs/browser/docsEditorProfile.js');
+	const document = importDocsHtml(renderWorkbenchMarkdown(exampleText('exampleDocsContent', '# Studio launch brief\n\nLaunch a shared home for the studio’s work. Start with a small pilot and use feedback to guide the public release.\n\n## Readiness checklist\n\n- [x] Review the visual direction\n- [ ] Invite the pilot group\n- [ ] Publish the launch notes\n\n## Schedule\n\n| Milestone | Target |\n| --- | --- |\n| Pilot | Tuesday |\n| Feedback review | Thursday |\n| Public launch | Next Monday |')), ownerDocument);
 	if (!document) throw new Error('Invalid document fixture');
 	await writeMissing(files, docs, generalProfile.create().codec.serialize(document));
 	await files.writeFile({ resource: marker, content: '1' });
@@ -76,7 +77,7 @@ const fixtureCanvasIds = {
 };
 const fixtureTableIds = { sheet: 'b0b272fa-4d83-4ae6-b20d-438e8b2ebc05', data: 'b0b272fa-4d83-4ae6-b20d-438e8b2ebc06' };
 
-function createDesign(): readonly DesignShape[] {
+function createDesign(): readonly ArtifactCanvasShape[] {
 	return [frame(0, 960, 560, '#f3efe7', exampleText('exampleLandingPage', 'Landing page'), [
 		text(56, 38, 600, 'STUDIO / 01', 22, '#434434', 700),
 		{ ...geometry(547, 88, 356, 394, '#dfecb5'), kind: 'rectangle' },
@@ -89,7 +90,7 @@ function createDesign(): readonly DesignShape[] {
 	])];
 }
 
-function createWhiteboard(): readonly DesignShape[] {
+function createWhiteboard(): readonly ArtifactCanvasShape[] {
 	const stages = [
 		[exampleText('examplePilot', 'Pilot'), exampleText('exampleInvite', 'Invite five teammates'), '#fff0a6'],
 		[exampleText('exampleFeedback', 'Review feedback'), exampleText('exampleDiscuss', 'Discuss the pilot notes'), '#d8edc2'],
@@ -99,7 +100,7 @@ function createWhiteboard(): readonly DesignShape[] {
 		text(16, 22, 189, name, 22, '#33342b', 700),
 		text(16, 90, 189, body, 18, '#33342b'),
 	]));
-	const connectors = [0, 1].map((index): DesignShape => {
+	const connectors = [0, 1].map((index): ArtifactCanvasShape => {
 		const a = { x: 0, y: 0 }, b = { x: 1, y: 0 };
 		return {
 			...geometry(255 + index * 280, 86, 60, 1, '#687461'), kind: 'path', closed: false, strokeWidth: 2,
@@ -109,7 +110,7 @@ function createWhiteboard(): readonly DesignShape[] {
 	return [frame(0, 860, 204, '#f8f8f3', exampleText('exampleSchedule', 'Launch schedule'), [...connectors, ...notes])];
 }
 
-function createMotion(): readonly DesignShape[] {
+function createMotion(): readonly ArtifactCanvasShape[] {
 	return [frame(0, 660, 360, '#191e33', exampleText('exampleLaunch', 'Studio launch'), [
 		text(44, 32, 530, exampleText('exampleLaunch', 'Studio launch'), 34, '#ffffff', 600),
 		{ ...geometry(44, 245, 560, 3, '#596484'), kind: 'rectangle' },

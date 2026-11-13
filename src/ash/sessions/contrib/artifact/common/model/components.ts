@@ -1,26 +1,26 @@
-import type { DesignTextMeasurer } from './designText.js';
+import type { ArtifactCanvasTextMeasurer } from './artifactCanvasText.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
-import { getDesignOverrideFields, getDesignOverrideValue, copyDesignOverride, flattenDesignShapes, type DesignOverride, type DesignShape } from './designDocument.js';
-import { designStyleFields } from './designResources.js';
-import { resolveDesignLayout } from './layout.js';
+import { getArtifactCanvasOverrideFields, getArtifactCanvasOverrideValue, copyArtifactCanvasOverride, flattenArtifactCanvasShapes, type ArtifactCanvasOverride, type ArtifactCanvasShape } from './artifactCanvasDocument.js';
+import { artifactCanvasStyleFields } from './artifactCanvasResources.js';
+import { resolveArtifactCanvasLayout } from './layout.js';
 
-type Frame = Extract<DesignShape, { kind: 'frame'; }>;
+type Frame = Extract<ArtifactCanvasShape, { kind: 'frame'; }>;
 const placement = ['x', 'y', 'rotation', 'constraints', 'sizing', 'gridCell', 'layoutPositioning', 'scrollPosition'] as const;
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 /** Capture direct edits before layout changes derived geometry. Explicit reset/swap commands supply their own override list. */
-export function recordDesignOverrides(shapes: readonly DesignShape[], previous: readonly DesignShape[]): readonly DesignShape[] {
-	const before = new Map(flattenDesignShapes(previous).map(shape => [shape.id, shape]));
-	const visit = (shape: DesignShape, inherited: boolean): DesignShape => {
+export function recordArtifactCanvasOverrides(shapes: readonly ArtifactCanvasShape[], previous: readonly ArtifactCanvasShape[]): readonly ArtifactCanvasShape[] {
+	const before = new Map(flattenArtifactCanvasShapes(previous).map(shape => [shape.id, shape]));
+	const visit = (shape: ArtifactCanvasShape, inherited: boolean): ArtifactCanvasShape => {
 		const old = before.get(shape.id);
 		const root = shape.kind === 'frame' && !!shape.instance;
 		let updated = shape;
 		if ((inherited || root) && old && shape.overrides === old.overrides) {
 			const overrides = new Set(shape.overrides);
-			for (const field of getDesignOverrideFields(shape, old)) {
+			for (const field of getArtifactCanvasOverrideFields(shape, old)) {
 				if (shape.kind === 'text' && (field === 'width' || field === 'height')) { continue; }
-				if (!same(getDesignOverrideValue(shape, field), getDesignOverrideValue(old, field))) { overrides.add(field); }
+				if (!same(getArtifactCanvasOverrideValue(shape, field), getArtifactCanvasOverrideValue(old, field))) { overrides.add(field); }
 			}
 			if (overrides.size) { updated = { ...shape, overrides: [...overrides] }; }
 		}
@@ -32,11 +32,11 @@ export function recordDesignOverrides(shapes: readonly DesignShape[], previous: 
 /** The main tree owns inherited values; instance objects own only placement and listed overrides.
  * Materialized children keep stable IDs for selection, undo, orphan recovery, canvas and exports.
  */
-export function resolveDesignComponents(shapes: readonly DesignShape[], libraryShapes: readonly DesignShape[] = [], measureText?: DesignTextMeasurer): readonly DesignShape[] {
-	const objects = new Map(flattenDesignShapes([...shapes, ...libraryShapes]).map(shape => [shape.id, shape]));
-	const cache = new Map<string, DesignShape>();
+export function resolveArtifactCanvasComponents(shapes: readonly ArtifactCanvasShape[], libraryShapes: readonly ArtifactCanvasShape[] = [], measureText?: ArtifactCanvasTextMeasurer): readonly ArtifactCanvasShape[] {
+	const objects = new Map(flattenArtifactCanvasShapes([...shapes, ...libraryShapes]).map(shape => [shape.id, shape]));
+	const cache = new Map<string, ArtifactCanvasShape>();
 	const active = new Set<string>();
-	const resolve = (shape: DesignShape): DesignShape => {
+	const resolve = (shape: ArtifactCanvasShape): ArtifactCanvasShape => {
 		const cached = cache.get(shape.id);
 		if (cached) { return cached; }
 		if (active.has(shape.id)) { throw new TypeError(localize('sessions.design.componentCycle', 'A component cannot contain an instance of itself.')); }
@@ -49,19 +49,19 @@ export function resolveDesignComponents(shapes: readonly DesignShape[], libraryS
 				result = inherit(source, shape, true);
 				// Free-frame constraints are relative to the source dimensions, not the
 				// instance's last rendered bounds. This avoids cumulative resize drift.
-				result = resolveDesignLayout([result], [{ ...result, width: source.width, height: source.height }], measureText)[0];
+				result = resolveArtifactCanvasLayout([result], [{ ...result, width: source.width, height: source.height }], measureText)[0];
 			}
 		} else if (shape.kind === 'frame' || shape.kind === 'group') {
 			result = { ...shape, children: shape.children.map(resolve) };
-			result = resolveDesignLayout([result], [shape], measureText)[0];
+			result = resolveArtifactCanvasLayout([result], [shape], measureText)[0];
 		}
 		active.delete(shape.id); cache.set(shape.id, result);
 		return result;
 	};
-	const inherit = (source: DesignShape, previous: DesignShape | undefined, root = false): DesignShape => {
+	const inherit = (source: ArtifactCanvasShape, previous: ArtifactCanvasShape | undefined, root = false): ArtifactCanvasShape => {
 		const compatible = previous?.kind === source.kind ? previous : undefined;
 		const overrides = compatible?.overrides ?? [];
-		const result = { ...source, id: previous?.id ?? generateUuid() } as DesignShape;
+		const result = { ...source, id: previous?.id ?? generateUuid() } as ArtifactCanvasShape;
 		Reflect.deleteProperty(result, 'component'); Reflect.deleteProperty(result, 'sourceId'); Reflect.deleteProperty(result, 'overrides');
 		if (root && previous?.kind === 'frame') {
 			Reflect.set(result, 'instance', previous.instance);
@@ -74,7 +74,7 @@ export function resolveDesignComponents(shapes: readonly DesignShape[], libraryS
 		} else { Reflect.set(result, 'sourceId', source.id); }
 		if (overrides.length) { Reflect.set(result, 'overrides', overrides); }
 		for (const field of overrides) {
-			copyDesignOverride(result, compatible!, field);
+			copyArtifactCanvasOverride(result, compatible!, field);
 		}
 		const bindings = { ...result.bindings }; const styles = { ...result.styleBindings };
 		for (const field of overrides) {
@@ -83,7 +83,7 @@ export function resolveDesignComponents(shapes: readonly DesignShape[], libraryS
 				for (const property of properties) { if (!(overrides as readonly string[]).includes(`bindings:${property}`)) { Reflect.deleteProperty(bindings, property); } }
 			}
 			if (!overrides.includes('styleBindings')) {
-				for (const [kind, fields] of Object.entries(designStyleFields)) { if ((fields as readonly string[]).includes(field) && !(overrides as readonly string[]).includes(`styleBindings:${kind}`)) { Reflect.deleteProperty(styles, kind); } }
+				for (const [kind, fields] of Object.entries(artifactCanvasStyleFields)) { if ((fields as readonly string[]).includes(field) && !(overrides as readonly string[]).includes(`styleBindings:${kind}`)) { Reflect.deleteProperty(styles, kind); } }
 			}
 		}
 		if (result.bindings) { Reflect.set(result, 'bindings', bindings); }
@@ -105,11 +105,11 @@ export function resolveDesignComponents(shapes: readonly DesignShape[], libraryS
 }
 
 /** Match structural peers by name and kind, including duplicate-name occurrence, when swapping variants. */
-export function remapDesignInstance(instance: Frame, source: Frame, previousSource?: Frame, variant = false): Frame {
-	const match = (current: DesignShape, target: DesignShape, oldSource?: DesignShape, root = false): DesignShape => {
+export function remapArtifactCanvasInstance(instance: Frame, source: Frame, previousSource?: Frame, variant = false): Frame {
+	const match = (current: ArtifactCanvasShape, target: ArtifactCanvasShape, oldSource?: ArtifactCanvasShape, root = false): ArtifactCanvasShape => {
 		// Variant-specific styles take precedence when their original values differ.
 		// Text content, interactions and explicit instance sizing remain user intent across variants.
-		const overrides = (current.overrides ?? []).filter(field => !variant || !oldSource || field === 'text' || (field === 'textRuns' && current.overrides?.includes('text')) || field === 'name' || field === 'instance' || field === 'interactions' || (root && (field === 'width' || field === 'height')) || same(getDesignOverrideValue(oldSource, field), getDesignOverrideValue(target, field)));
+		const overrides = (current.overrides ?? []).filter(field => !variant || !oldSource || field === 'text' || (field === 'textRuns' && current.overrides?.includes('text')) || field === 'name' || field === 'instance' || field === 'interactions' || (root && (field === 'width' || field === 'height')) || same(getArtifactCanvasOverrideValue(oldSource, field), getArtifactCanvasOverrideValue(target, field)));
 		let result = { ...current, sourceId: target.id, overrides };
 		if (root) { const { sourceId: _source, ...rest } = result; result = { ...rest, ...(current.sourceId ? { sourceId: current.sourceId } : {}) } as typeof result; }
 		if ((current.kind === 'frame' || current.kind === 'group') && (target.kind === 'frame' || target.kind === 'group')) {
@@ -131,15 +131,15 @@ export function remapDesignInstance(instance: Frame, source: Frame, previousSour
 	return { ...match(instance, source, previousSource, true) as Frame, instance: { componentId: source.id } };
 }
 
-export function detachDesignInstance(shape: Frame, shapes: readonly DesignShape[]): Frame {
-	const objects = new Map(flattenDesignShapes(shapes).map(node => [node.id, node]));
-	const unwrap = (node: DesignShape): DesignShape => {
+export function detachArtifactCanvasInstance(shape: Frame, shapes: readonly ArtifactCanvasShape[]): Frame {
+	const objects = new Map(flattenArtifactCanvasShapes(shapes).map(node => [node.id, node]));
+	const unwrap = (node: ArtifactCanvasShape): ArtifactCanvasShape => {
 		const source = node.sourceId ? objects.get(node.sourceId) : undefined;
 		const { sourceId: _source, ...rest } = node;
 		const updated = { ...rest, ...(source?.sourceId ? { sourceId: source.sourceId } : {}), overrides: [...new Set([...(source?.overrides ?? []), ...(node.overrides ?? [])])] };
 		return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(unwrap) } : updated;
 	};
-	const detach = (node: DesignShape, root: boolean): DesignShape => {
+	const detach = (node: ArtifactCanvasShape, root: boolean): ArtifactCanvasShape => {
 		const { sourceId: _source, overrides: _overrides, ...rest } = node;
 		if (!root && rest.kind === 'frame' && rest.instance) {
 			const source = node.sourceId ? objects.get(node.sourceId) : undefined;
@@ -152,7 +152,7 @@ export function detachDesignInstance(shape: Frame, shapes: readonly DesignShape[
 	return detach(shape, true) as Frame;
 }
 
-export function resetDesignOverrides(shape: DesignShape, field?: DesignOverride): DesignShape {
+export function resetArtifactCanvasOverrides(shape: ArtifactCanvasShape, field?: ArtifactCanvasOverride): ArtifactCanvasShape {
 	const updated = { ...shape, overrides: field ? (shape.overrides ?? []).filter(value => value !== field && !(field === 'text' && value === 'textRuns')) : [] };
-	return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(child => resetDesignOverrides(child, field)) } : updated;
+	return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(child => resetArtifactCanvasOverrides(child, field)) } : updated;
 }

@@ -1,10 +1,10 @@
-.ash-creator-frame-selector {
+.ash-artifacts-frame-selector {
 	display: flex;
 	align-items: center;
 	gap: var(--ash-spacing-size80);
 	font-size: var(--ash-fontSize-label1);
 }
-.ash-creator-frame-selector > select {
+.ash-artifacts-frame-selector > select {
 	max-width: 180px;
 	min-height: 28px;
 	color: var(--ash-input-foreground);
@@ -12,7 +12,7 @@
 	border: var(--ash-strokeThickness) solid var(--ash-input-border);
 	border-radius: var(--ash-cornerRadius-small);
 }
-.ash-creator-frame-preview {
+.ash-artifacts-frame-preview {
 	position: absolute;
 	inset: 0;
 	z-index: 1;
@@ -20,23 +20,23 @@
 	flex-direction: column;
 	background: var(--ash-editor-background);
 }
-.ash-creator-frame-preview[hidden] {
+.ash-artifacts-frame-preview[hidden] {
 	display: none;
 }
-.ash-creator-preview-controls {
+.ash-artifacts-preview-controls {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--ash-spacing-size120);
 	padding: var(--ash-spacing-size120);
 }
-.ash-creator-preview-scene {
+.ash-artifacts-preview-scene {
 	flex: 1;
 	width: 100%;
 	min-height: 0;
 }
-.ash-creator-frame-selector > select:focus-visible,
-.ash-creator-frame-preview:focus-visible {
+.ash-artifacts-frame-selector > select:focus-visible,
+.ash-artifacts-frame-preview:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

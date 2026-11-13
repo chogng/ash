@@ -1,5 +1,5 @@
 export const NEW_SESSION_ACTION_ID = 'workbench.action.sessions.newChat';
-export const OPEN_CHAT_CREATION_COMMAND_ID = 'sessions.creator.openDraft';
+export const OPEN_CHAT_CREATION_COMMAND_ID = 'sessions.artifacts.openDraft';
 export const OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID = 'sessions.chat.openExternalConversation';
 export const NEW_SESSION_WELCOME_PHRASES_SETTING = 'sessions.chat.experimental.welcomePhrases';
 export const NEW_SESSION_WELCOME_NAME_SETTING = 'sessions.chat.experimental.welcomeName';
@@ -18,4 +18,4 @@ export const CHAT_WORKSPACE_NAVIGATION_ID = 'sessions.chatgpt.navigation';
 export const CHAT_NAVIGATION_FOCUS_CONTEXT = 'chatNavigationFocused';
 export const CHAT_WORKSPACE_LAST_BACKEND_KEY = 'sessions.chat.lastBackend';
 
-export const OPEN_ARTIFACT_CONVERSATION_COMMAND_ID = 'sessions.creator.openArtifactConversation';
+export const OPEN_ARTIFACT_CONVERSATION_COMMAND_ID = 'sessions.artifacts.openArtifactConversation';

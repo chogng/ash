@@ -5997,7 +5997,7 @@ test('general document commands preserve dirty source text, create a backed-up d
 		using models = new DocumentEditorTextModelService(files, copies);
 		services.registerInstance(IDocumentEditorTextModelService, models);
 		using registry = new EditorPaneRegistry();
-		const { DOCS_ARTIFACT_EDITOR_ID, GENERAL_DOCUMENT_CONTENT_TYPE } = await import('../../../../../../sessions/contrib/docs/common/docs.js');
+		const { DOCS_EDITOR_ID, GENERAL_DOCUMENT_CONTENT_TYPE } = await import('../../../../../../sessions/contrib/docs/common/docs.js');
 		const { ISessionsEntryService } = await import('../../../../../../sessions/services/layout/common/sessionsEntryService.js');
 		const { IContextMenuService } = await import('../../../../../../platform/contextview/browser/contextView.js');
 		const { INotificationService } = await import('../../../../../../platform/notification/common/notification.js');
@@ -6019,7 +6019,7 @@ test('general document commands preserve dirty source text, create a backed-up d
 		} as unknown as import('../../../../../services/views/common/viewsService.js').IViewsService);
 		const paneRequested = new DeferredPromise<void>();
 		const allowPane = new DeferredPromise<void>();
-		const documentPane = EditorPanes.getEditorPane({ resource: target, editorId: DOCS_ARTIFACT_EDITOR_ID, contentType: GENERAL_DOCUMENT_CONTENT_TYPE })!;
+		const documentPane = EditorPanes.getEditorPane({ resource: target, editorId: DOCS_EDITOR_ID, contentType: GENERAL_DOCUMENT_CONTENT_TYPE })!;
 		registry.registerEditorPane({
 			...documentPane,
 			async create(options) {

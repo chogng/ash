@@ -2674,7 +2674,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const viewport = history.locator('.ash-scrollbar-viewport').first();
 			const pages = [
 				{ action: 'sessions.open.projects', content: '.ash-projects' },
-				{ action: 'sessions.open.creator', content: '.ash-creator-home' },
+				{ action: 'sessions.open.artifacts', content: '.ash-artifacts-home' },
 				{ action: 'sessions.open.customize', content: '.ash-customize' },
 			];
 			for (const entry of pages) {
@@ -2688,8 +2688,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await expect(pinned).toHaveAttribute('aria-expanded', 'false');
 				await expect(history.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');
 				await expect(viewport).toHaveJSProperty('scrollTop', 96);
-				if (entry.action === 'sessions.open.creator') {
-					await commands.runCommand('sessions.creator.open.design');
+				if (entry.action === 'sessions.open.artifacts') {
+					await commands.runCommand('sessions.artifacts.open.design');
 					await expect(page.locator('.ash-sessions-design-view')).toBeVisible();
 					await expect(history).toBeVisible();
 					expect(await history.evaluate((element, retained) => element === retained, retainedHistory)).toBe(true);

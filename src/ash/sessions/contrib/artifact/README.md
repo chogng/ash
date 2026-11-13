@@ -8,36 +8,35 @@ Artifacts 是 Sessions 的创作主页。七项新建入口打开 Chat 草稿，
 
 七类作品共用同一个 Sessions [`EditorPart`](../../browser/parts/editorPart.ts) 的产品页面组。打开作品时，`EditorPart` 切换活动 `EditorPane` 并给它分配正文区域。七类指作品类型，多个类型可以复用同一个 Pane 和正文组件。
 
-| 作品类型                   | `EditorPane`                                                                                                                           | 正文                                                                                                                                                                                                                                       |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Docs                       | [`DocsArtifactPane`](../docs/browser/docsArtifactPane.ts) 或 [`MarkdownDocsArtifactPane`](../docs/browser/markdownDocsArtifactPane.ts) | 富文档或 Markdown 编辑器直接挂在 `.ash-docs-workspace-body`。                                                                                                                                                                              |
-| Slides、Design、Whiteboard | [`ArtifactEditorPane`](browser/artifactEditor.ts)                                                                                      | `ArtifactEditorView` 保留对应工作区，`ArtifactEditorWidget` 组织编辑交互，[`DesignCanvasView`](../design/browser/designCanvasView.ts) 渲染 SVG 图层。                                                                                      |
-| Motion                     | `ArtifactEditorPane`                                                                                                                   | 复用 Design 的 `DesignCanvasView`，以 Motion 模式打开，由 Motion contribution 提供时间线和关键帧编辑。                                                                                                                                     |
-| Sheet、Data                | `ArtifactTableEditor`                                                                                                                  | [`ArtifactTableEditor`](browser/artifactTableEditor.ts) 按文件 URI 解析 `ArtifactTableModel`，以 `ArtifactTableEditorWidget` 复用基础 `Table` 编辑单元格。Sheets、Data 只注册各自目录入口，共用模型、文件服务和编辑器均归 Artifacts 持有。 |
+| 作品类型                   | `EditorPane`                                                                                                                   | 正文                                                                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Docs                       | [`DocsEditorPane`](../docs/browser/docsEditorPane.ts) 或 [`MarkdownDocsEditorPane`](../docs/browser/markdownDocsEditorPane.ts) | 富文档或 Markdown 编辑器直接挂在 `.ash-docs-workspace-body`。                                                                                                                                                                              |
+| Slides、Design、Whiteboard | [`ArtifactEditorPane`](browser/artifactEditor.ts)                                                                              | `ArtifactEditorView` 保留对应工作区，`ArtifactEditorWidget` 组织编辑交互，[`ArtifactCanvasView`](browser/view/artifactCanvasView.ts) 渲染 SVG 图层。                                                                                       |
+| Motion                     | `ArtifactEditorPane`                                                                                                           | 复用共享的 `ArtifactCanvasView`，以 Motion 模式打开，由 Motion contribution 提供时间线和关键帧编辑。                                                                                                                                       |
+| Sheet、Data                | `ArtifactTableEditor`                                                                                                          | [`ArtifactTableEditor`](browser/artifactTableEditor.ts) 按文件 URI 解析 `ArtifactTableModel`，以 `ArtifactTableEditorWidget` 复用基础 `Table` 编辑单元格。Sheets、Data 只注册各自目录入口，共用模型、文件服务和编辑器均归 Artifacts 持有。 |
 
-每个 Pane 通过 `titlebarContent` 提供自己的 [`ArtifactTitleBarWidget`](browser/artifactTitleBarWidget.ts)。桌面窗口的 `TitlebarPart` 将活动 Pane 的标题和操作放到 `EditorPart` 上方并对齐。标题栏和正文视觉上属于同一列，各自由窗口标题栏和编辑区挂载。左侧 `SessionsPart` 保留对话，作品注册的详情视图按需显示在 `EditorPart` 右侧停靠的 `AuxiliaryBarPart`。参见 [Sessions 布局](../../LAYOUT.md#creator-conversation-and-editor-composition)。
+每个 Pane 通过 `titlebarContent` 提供自己的 [`ArtifactTitleBarWidget`](browser/artifactTitleBarWidget.ts)。桌面窗口的 `TitlebarPart` 将活动 Pane 的标题和操作放到 `EditorPart` 上方并对齐。标题栏和正文视觉上属于同一列，各自由窗口标题栏和编辑区挂载。左侧 `SessionsPart` 保留对话，作品注册的详情视图按需显示在 `EditorPart` 右侧停靠的 `AuxiliaryBarPart`。参见 [Sessions 布局](../../LAYOUT.md#artifacts-conversation-and-editor-composition)。
 
-`EditorPart` 管布局和切换，编辑器及其模型管内容、交互、保存和导出。`DesignCanvasView` 是画布类作品的正文组件。会话 Canvases 是另一条打开路径，由 [`CanvasEditor`](../../../workbench/contrib/canvases/electron-browser/canvasEditor.ts) 通过 Electron `WebContentsView` 呈现交互网页。
+`EditorPart` 管布局和切换，编辑器及其模型管内容、交互、保存和导出。`ArtifactCanvasView` 是画布类作品的正文组件。会话 Canvases 是另一条打开路径，由 [`CanvasEditor`](../../../workbench/contrib/canvases/electron-browser/canvasEditor.ts) 通过 Electron `WebContentsView` 呈现交互网页。
 
-在命令面板中运行 Choose Docs editor 可以新建空白文档，或选择富文档和 Markdown。Agent Window 随产品提供按需加载的 `.ash-doc` 富文档编辑器，偏好由 UI profile 的 `sessions.docs.editor` 设置持有。Docs 复用 Workbench 的工作副本、保存和备份，排版、查找和大纲按需显示在详情视图。ChatGPT Web 已登记的写作块打开原有 Markdown；编辑副本会打开独立草稿。Sheet 和 Data 的草稿自动保存在当前工作区，重开后可从 Artifacts 继续编辑。导出 CSV 会生成独立文件。
+在命令面板中运行 Choose Docs editor 可以新建空白文档，或选择富文档和 Markdown。Agent Window 随产品提供按需加载的 `.ash-doc` 富文档编辑器，偏好由 UI profile 的 `sessions.docs.editor` 设置持有。[Docs](../docs/README.md) 持有文档产品能力，复用 Workbench 的工作副本、保存和备份，排版、查找和大纲按需显示在详情视图。ChatGPT Web 已登记的写作块打开原有 Markdown；编辑副本会打开独立草稿。Sheet 和 Data 的草稿自动保存在当前工作区，重开后可从 Artifacts 继续编辑。导出 CSV 会生成独立文件。
 
 ## 画布工作区
 
-Brand、Sites、Make、Prototype 也可以通过命令面板打开。画布工作空间各自拥有文档、保存基准和撤销历史，选区、视口及编辑工具由各自的编辑器实例持有。画布模式复用图层和属性面板，以及现有的配置、主题、快捷键、文件访问、对话框和窗口生命周期服务。
+Brand、Sites、Prototype 也可以通过命令面板打开。画布工作空间各自拥有文档、保存基准和撤销历史，选区、视口及编辑工具由各自的编辑器实例持有。画布模式复用图层和属性面板，以及现有的配置、主题、快捷键、文件访问、对话框和窗口生命周期服务。
 
-| 模式       | 当前操作                                                           |
-| ---------- | ------------------------------------------------------------------ |
-| Design     | 画板、图片和图形编辑；自动保存与恢复未命名草稿                     |
-| Whiteboard | 便签、自由绘图和固定连接线                                         |
-| Slides     | 16:9 页面、排序和演示                                              |
-| Brand      | 常用素材尺寸、整批尺寸变体                                         |
-| Sites      | 网页画板、页面预览和包含导航的 HTML 导出                           |
-| Make       | 生成代码与场景 JSON 查看、HTML 运行预览、附带代码的 Agent 对话草稿 |
-| Prototype  | 手机屏幕、热点连线、分支流程、浮层和过渡动画                       |
+| 模式       | 当前操作                                                                         |
+| ---------- | -------------------------------------------------------------------------------- |
+| Design     | 画板、图片和图形编辑；代码查看、HTML 预览与 Agent 对话；自动保存与恢复未命名草稿 |
+| Whiteboard | 便签、自由绘图和固定连接线                                                       |
+| Slides     | 16:9 页面、排序和演示                                                            |
+| Brand      | 常用素材尺寸、整批尺寸变体                                                       |
+| Sites      | 网页画板、页面预览和包含导航的 HTML 导出                                         |
+| Prototype  | 手机屏幕、热点连线、分支流程、浮层和过渡动画                                     |
 
-Sites 尚未提供网站布局重排、路由文档和发布，完整领域约定见 [Creator Sites](../../CREATOR_SITES.md)。Make 的 Agent 操作打开 Code，附上当前预览的 HTML，由用户在 Code 中检查并发送草稿。
+Sites 尚未提供网站布局重排、路由文档和发布，完整领域约定见 [Artifacts Sites](../../ARTIFACT_SITES.md)。Design 的 Agent 操作保留当前设计页，打开共享对话并附上当前 HTML 草稿；预览和生成代码由同一文档派生。
 
-上表是画布工作区的当前操作。[设计方案](DESIGN.md#七项工作区的-part-分工)记录这些工作区的目标布局和验收要求。
+上表是画布工作区的当前操作。[设计方案](DESIGN.md#六项画布工作区的-part-分工)记录这些工作区的目标布局和验收要求。
 
 ### Design 画布布局
 
@@ -51,77 +50,77 @@ Design 的标题和窗口操作使用共用的 Artifact 标题栏，编辑工具
 
 ## 目录与命名
 
-Sessions 的 `artifact` contribution 负责 Agent Window 的作品目录、工作区生命周期、共享编辑器和标题栏。类型 contribution 向 [工作区注册表](browser/artifactWorkspaceRegistry.ts) 提供打开行为及从所属模型派生的作品列表。[画布作品目录](browser/artifactCanvasCatalog.ts) 从画布文档派生卡片，[画布工作区入口](browser/artifactCanvasWorkspaces.ts) 用文档身份打开对应工作区。共享画布编辑器提供文档模型、编辑命令和工作区装配。Design、Slides、Whiteboard、Brand、Sites、Make 和 Prototype 在 Sessions 同级 contribution 注册工作区。Motion 和 Prototype 通过编辑器贡献契约分别注册时间线和原型工具。
+Sessions 的 `artifact` contribution 负责 Agent Window 的作品目录、工作区生命周期、共享编辑器和标题栏。类型 contribution 向 [工作区注册表](browser/artifactWorkspaceRegistry.ts) 提供打开行为及从所属模型派生的作品列表。[画布作品目录](browser/artifactCanvasCatalog.ts) 从画布文档派生卡片，[画布工作区入口](browser/artifactCanvasWorkspaces.ts) 用文档身份打开对应工作区。共享画布编辑器提供文档模型、编辑命令和工作区装配。Design、Slides、Whiteboard、Brand、Sites 和 Prototype 在 Sessions 同级 contribution 注册工作区。Motion 和 Prototype 通过编辑器贡献契约分别注册时间线和原型工具。
 
-职责划分参考 [Editor browser](../../../editor/browser/README.md)：主 Widget 拥有编辑器实例与组件组合，View 拥有内容显示，Controller 拥有输入。`designDocument.ts` 表达文档，`designModel.ts` 对应文本编辑器的 `textModel.ts`，`documentCommands.ts` 承接编辑操作。Design 的对象几何、选区和历史由本目录实现；视口及空间输入由平级的 [Canvas contrib](../canvas/README.md) 拥有。
+职责划分参考 [Editor browser](../../../editor/browser/README.md)：主 Widget 拥有编辑器实例与组件组合，View 拥有内容显示，Controller 拥有输入。`artifactCanvasDocument.ts` 表达文档，`artifactCanvasModel.ts` 对应文本编辑器的 `textModel.ts`，`documentCommands.ts` 承接编辑操作。Design 的对象几何、选区和历史由本目录实现；视口及空间输入由平级的 [Canvas contrib](../canvas/README.md) 拥有。
 
-`browser/widget` 放主编辑器、共享工具栏和颜色选择器。Design contribution 提供画布视图，编辑器通过贡献契约创建它。`browser/controller` 负责选区输入和绘制手势，`browser/properties`、`browser/text` 和 `browser/code` 分别负责属性、文本编辑和代码生成及预览。公共画布容器、网格、视口和指针捕获位于同级 `canvas`。
+`browser/widget` 放主编辑器、共享工具栏和颜色选择器。Artifacts 直接创建共享画布视图。Design contribution 提供代码面板，Motion 和 Prototype 提供各自的编辑能力。`browser/controller` 负责选区输入和绘制手势，`browser/properties` 和 `browser/text` 负责共享属性及文本编辑，`browser/rendering` 持有共享渲染实现。代码生成、代码面板和 HTML 预览由 [Design](../design/README.md) 持有。公共画布容器、网格、视口和指针捕获位于同级 `canvas`。
 
-核心 Widget、View 和输入控制器通过 [designEditorBrowser.ts](browser/designEditorBrowser.ts) 消费贡献契约。[designEditorContributions.ts](browser/designEditorContributions.ts) 创建各个能力，由 [DesignEditorHost](browser/designEditorHost.ts) 传给 Widget。贡献更新文档或提供显示数据，画布统一呈现这些数据。文档与历史由公共模型持有。
+核心 Widget、View 和输入控制器通过 [artifactCanvasEditorBrowser.ts](browser/artifactCanvasEditorBrowser.ts) 消费贡献契约。[artifactCanvasEditorContributions.ts](browser/artifactCanvasEditorContributions.ts) 创建各个能力，由 [ArtifactCanvasEditorHost](browser/artifactCanvasEditorHost.ts) 传给 Widget。贡献更新文档或提供显示数据，画布统一呈现这些数据。文档与历史由公共模型持有。
 
-| 文件                                                                                                                                           | 拥有的职责                                                                                                                       |
-| ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| [common/core/geometry.ts](common/core/geometry.ts)                                                                                             | 点、对象框、坐标变换、贝塞尔计算和包围框；仅处理空间数学                                                                         |
-| [common/model/designDocument.ts](common/model/designDocument.ts)                                                                               | 设计文档与对象类型、不可变快照、文件解析和序列化                                                                                 |
-| [common/model/designModel.ts](common/model/designModel.ts)                                                                                     | `DesignModel`，已提交文档和撤销重做历史的唯一持有者                                                                              |
-| [common/model/hitTest.ts](common/model/hitTest.ts)                                                                                             | 根据对象种类、绘制顺序和几何判断命中                                                                                             |
-| [common/commands/documentCommands.ts](common/commands/documentCommands.ts)                                                                     | `DocumentCommands`，创建、修改、删除、分组和解组操作                                                                             |
-| [common/config/designEditorConfiguration.ts](common/config/designEditorConfiguration.ts)                                                       | Design 的配置键、默认值、作用域和校验                                                                                            |
-| [common/designSelection.ts](common/designSelection.ts)                                                                                         | 每个编辑器实例的对象选区和路径节点选择                                                                                           |
-| [browser/widget/artifactEditorWidget.ts](browser/widget/artifactEditorWidget.ts)                                                               | `ArtifactEditorWidget`，编辑器根 DOM、组件组合、实例状态、公共快捷键和贡献生命周期                                               |
-| [browser/widget/artifactToolbar.ts](browser/widget/artifactToolbar.ts)                                                                         | 共享浮动工具栏外壳、动作分组、菜单与键盘导航                                                                                     |
-| [designCanvasView.ts](../design/browser/designCanvasView.ts)、[designCanvasView.css](../design/browser/designCanvasView.css)                   | `DesignCanvasView`，挂载公共 Canvas，显示对象、绘制预览和路径控制点；只显示输入数据，不提交文档编辑                              |
-| [browser/controller/designInputController.ts](browser/controller/designInputController.ts)                                                     | 参与公共画布输入，拥有对象选择、移动和路径控制点编辑；通过输入契约调用绘制贡献                                                   |
-| [browser/designEditorBrowser.ts](browser/designEditorBrowser.ts)、[browser/designEditorContributions.ts](browser/designEditorContributions.ts) | 前者定义核心与贡献之间的契约，后者装配产品所需的能力实例                                                                         |
-| [browser/controller/designDrawingController.ts](browser/controller/designDrawingController.ts)                                                 | 矩形、椭圆、文字放置、钢笔锚点及自由线条的绘制预览和提交                                                                         |
-| [browser/properties/designPropertiesWidget.ts](browser/properties/designPropertiesWidget.ts)                                                   | 几何、填色、文字和路径属性控件与节点操作                                                                                         |
-| [designMotionWidget.ts](../motion/browser/designMotionWidget.ts)                                                                               | 关键帧编辑、时间线、播放时钟和动画采样数据；插值位于同贡献的 `common/motion.ts`，画布呈现由共享 View 负责                        |
-| [browser/code/designCodeWidget.ts](browser/code/designCodeWidget.ts)、[designCodeGenerator.ts](browser/code/designCodeGenerator.ts)            | 从已提交文档生成、显示和导出可运行代码                                                                                           |
-| [browser/designSvgRenderer.ts](browser/designSvgRenderer.ts)                                                                                   | 画布与 SVG 导出共用的对象渲染                                                                                                    |
-| [browser/designMedia.ts](browser/designMedia.ts)                                                                                               | 媒体备份与导出编码、内容摘要；按设计引用管理每个实例的共享图片资源                                                               |
-| [browser/designDocumentController.ts](browser/designDocumentController.ts)                                                                     | `DesignDocumentController`，文件身份、读取版本、保存基准、异步文件操作和共享 `IWorkingCopy` 契约                                 |
-| [browser/designEditorHost.ts](browser/designEditorHost.ts)                                                                                     | `DesignEditorHost`，借用窗口文档，拥有编辑器装配、布局、焦点和浏览器关闭检查                                                     |
-| [browser/designEditorService.ts](browser/designEditorService.ts)、[designPanelViews.ts](browser/designPanelViews.ts)                           | 按模式持有的窗口文档、工作副本注册与当前编辑器的可观察引用，以及借用该实例文档、选区和属性组件的 Layers 与 Shape properties 视图 |
-| [browser/artifactEditor.ts](browser/artifactEditor.ts)、[artifactWorkspaceRegistry.ts](browser/artifactWorkspaceRegistry.ts)                   | ArtifactEditorPane、模式导航、工作空间保留与模式注册契约                                                                         |
-| [browser/artifact.contribution.ts](browser/artifact.contribution.ts)、[designEditor.contribution.ts](browser/designEditor.contribution.ts)     | 前者注册 Artifacts 导航及帮助，后者注册共享画布面板、快捷键和帮助                                                                |
+| 文件                                                                                                                                                                           | 拥有的职责                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| [canvasGeometry.ts](../canvas/common/canvasGeometry.ts)                                                                                                                        | 由公共 Canvas 持有的点、对象框、坐标变换、贝塞尔计算和包围框；作品模型直接消费该契约                                             |
+| [common/model/artifactCanvasDocument.ts](common/model/artifactCanvasDocument.ts)                                                                                               | 设计文档与对象类型、不可变快照、文件解析和序列化                                                                                 |
+| [common/model/artifactCanvasModel.ts](common/model/artifactCanvasModel.ts)                                                                                                     | `ArtifactCanvasModel`，已提交文档和撤销重做历史的唯一持有者                                                                      |
+| [common/model/hitTest.ts](common/model/hitTest.ts)                                                                                                                             | 根据对象种类、绘制顺序和几何判断命中                                                                                             |
+| [common/commands/documentCommands.ts](common/commands/documentCommands.ts)                                                                                                     | `DocumentCommands`，创建、修改、删除、分组和解组操作                                                                             |
+| [common/config/artifactCanvasEditorConfiguration.ts](common/config/artifactCanvasEditorConfiguration.ts)                                                                       | Design 的配置键、默认值、作用域和校验                                                                                            |
+| [common/artifactCanvasSelection.ts](common/artifactCanvasSelection.ts)                                                                                                         | 每个编辑器实例的对象选区和路径节点选择                                                                                           |
+| [browser/widget/artifactEditorWidget.ts](browser/widget/artifactEditorWidget.ts)                                                                                               | `ArtifactEditorWidget`，编辑器根 DOM、组件组合、实例状态、公共快捷键和贡献生命周期                                               |
+| [browser/widget/artifactToolbar.ts](browser/widget/artifactToolbar.ts)                                                                                                         | 共享浮动工具栏外壳、动作分组、菜单与键盘导航                                                                                     |
+| [artifactCanvasView.ts](browser/view/artifactCanvasView.ts)、[artifactCanvasView.css](browser/view/artifactCanvasView.css)                                                     | `ArtifactCanvasView`，挂载公共 Canvas，显示对象、绘制预览和路径控制点；只显示输入数据，不提交文档编辑                            |
+| [browser/controller/artifactCanvasInputController.ts](browser/controller/artifactCanvasInputController.ts)                                                                     | 参与公共画布输入，拥有对象选择、移动和路径控制点编辑；通过输入契约调用绘制贡献                                                   |
+| [browser/artifactCanvasEditorBrowser.ts](browser/artifactCanvasEditorBrowser.ts)、[browser/artifactCanvasEditorContributions.ts](browser/artifactCanvasEditorContributions.ts) | 前者定义核心与贡献之间的契约，后者装配产品所需的能力实例                                                                         |
+| [browser/controller/artifactCanvasDrawingController.ts](browser/controller/artifactCanvasDrawingController.ts)                                                                 | 矩形、椭圆、文字放置、钢笔锚点及自由线条的绘制预览和提交                                                                         |
+| [browser/properties/artifactCanvasPropertiesWidget.ts](browser/properties/artifactCanvasPropertiesWidget.ts)                                                                   | 几何、填色、文字和路径属性控件与节点操作                                                                                         |
+| [designMotionWidget.ts](../motion/browser/designMotionWidget.ts)                                                                                                               | 关键帧编辑、时间线、播放时钟和动画采样数据；插值位于同贡献的 `common/motion.ts`，画布呈现由共享 View 负责                        |
+| [../design/browser/code/designCodeWidget.ts](../design/browser/code/designCodeWidget.ts)、[designCodeGenerator.ts](../design/browser/code/designCodeGenerator.ts)              | 从已提交文档生成、显示和导出可运行代码                                                                                           |
+| [browser/artifactCanvasSvgRenderer.ts](browser/rendering/artifactCanvasSvgRenderer.ts)                                                                                         | 画布与 SVG 导出共用的对象渲染                                                                                                    |
+| [browser/artifactCanvasMedia.ts](browser/rendering/artifactCanvasMedia.ts)                                                                                                     | 媒体备份与导出编码、内容摘要；按设计引用管理每个实例的共享图片资源                                                               |
+| [browser/artifactCanvasDocumentController.ts](browser/artifactCanvasDocumentController.ts)                                                                                     | `ArtifactCanvasDocumentController`，文件身份、读取版本、保存基准、异步文件操作和共享 `IWorkingCopy` 契约                         |
+| [browser/artifactCanvasEditorHost.ts](browser/artifactCanvasEditorHost.ts)                                                                                                     | `ArtifactCanvasEditorHost`，借用窗口文档，拥有编辑器装配、布局、焦点和浏览器关闭检查                                             |
+| [browser/artifactCanvasEditorService.ts](browser/artifactCanvasEditorService.ts)、[artifactCanvasPanelViews.ts](browser/artifactCanvasPanelViews.ts)                           | 按模式持有的窗口文档、工作副本注册与当前编辑器的可观察引用，以及借用该实例文档、选区和属性组件的 Layers 与 Shape properties 视图 |
+| [browser/artifactEditor.ts](browser/artifactEditor.ts)、[artifactWorkspaceRegistry.ts](browser/artifactWorkspaceRegistry.ts)                                                   | ArtifactEditorPane、模式导航、工作空间保留与模式注册契约                                                                         |
+| [browser/artifact.contribution.ts](browser/artifact.contribution.ts)、[artifactCanvasEditor.contribution.ts](browser/artifactCanvasEditor.contribution.ts)                     | 前者注册 Artifacts 导航及帮助，后者注册共享画布面板、快捷键和帮助                                                                |
 
 一个文件可以承接紧密相关的完整职责。几何和文档序列化目前各自保持在小模块中；新增能力时按实际职责拆分。
 
 ## 与 Editor 的关系
 
-Design 与 Editor 共用 Base、Platform 提供的生命周期、控件、配置、主题和快捷键设施。文件与窗口关闭通过已有服务接入 Sessions。`DesignModel` 使用对象层级、空间变换和路径节点表达内容；Editor 的 `TextModel` 使用文本位置与文本编辑语义，两者各自拥有模型和历史。
+Design 与 Editor 共用 Base、Platform 提供的生命周期、控件、配置、主题和快捷键设施。文件与窗口关闭通过已有服务接入 Sessions。`ArtifactCanvasModel` 使用对象层级、空间变换和路径节点表达内容；Editor 的 `TextModel` 使用文本位置与文本编辑语义，两者各自拥有模型和历史。
 
-文本的内容、字符范围样式和排版属性由 Design 文档持有。`TextCommands` 与 `DesignModel` 提交原子编辑及连续输入的撤销分组；`contrib/text` 只持有当前光标、选区、输入样式和尚未提交的 IME 组合输入。画布文字编辑复用浏览器的选区和输入法，独立于代码编辑器的 `TextModel`。双击或 Enter／F2 可编辑文本，包括缩放与旋转分组、组件实例中的文本；T 工具点击创建自动宽度文本，拖拽创建固定框。
+文本的内容、字符范围样式和排版属性由 Design 文档持有。`TextCommands` 与 `ArtifactCanvasModel` 提交原子编辑及连续输入的撤销分组；`contrib/text` 只持有当前光标、选区、输入样式和尚未提交的 IME 组合输入。画布文字编辑复用浏览器的选区和输入法，独立于代码编辑器的 `TextModel`。双击或 Enter／F2 可编辑文本，包括缩放与旋转分组、组件实例中的文本；T 工具点击创建自动宽度文本，拖拽创建固定框。
 
 Typography 面板面向整层或当前字符选区，显示混合值，支持字体、粗细、斜体、颜色、装饰、大小写、行高／字距及 px／% 换算、段落、列表、方向、换行策略和垂直裁剪。字体列表按用户点击通过 Base 的 `getFonts` 查询；字体、OpenType 特性和可变字体轴使用运行环境实际可用的字体。选区可引用本地或已接受的库样式，局部强调保留引用；复制使用文本和受限富文本，外部 HTML 只读取文本与允许的排版属性。
 
-`designTextRendering.ts` 统一画布、编辑覆盖层和 HTML 导出的字体排版。浏览器测量通过模型端口进入 Auto Layout、尺寸限制与原型场景；字体载入后重算当前文档和历史的派生几何，不添加撤销步骤。自动宽度保留显式段落，自动高度随固定宽度换行，固定尺寸允许溢出；截断与最大行数只影响显示。SVG 的文字使用 XHTML `foreignObject` 保留浏览器排版，依赖支持该 SVG 特性及相同字体的查看器；HTML 使用可重排的文本 DOM。
+`artifactCanvasTextRendering.ts` 统一画布、编辑覆盖层和 HTML 导出的字体排版。浏览器测量通过模型端口进入 Auto Layout、尺寸限制与原型场景；字体载入后重算当前文档和历史的派生几何，不添加撤销步骤。自动宽度保留显式段落，自动高度随固定宽度换行，固定尺寸允许溢出；截断与最大行数只影响显示。SVG 的文字使用 XHTML `foreignObject` 保留浏览器排版，依赖支持该 SVG 特性及相同字体的查看器；HTML 使用可重排的文本 DOM。
 
 ## 依赖与状态归属
 
 `common/core` 只定义空间值与计算，文档类型和可变模型依赖它。`common/model` 拥有文档及历史，命令依赖模型。`common` 使用基础 JavaScript 与所属公共服务契约；DOM、文件操作和页面装配留在 `browser`。
 
-编辑器组件使用本目录的公共模型、命令和文件控制器，通过公共契约调用贡献。窗口编辑器服务按 Creator 模式创建并注册文档控制器；`ArtifactEditorView` 的每个工作空间通过设计页面组件借用自己的文档，把能力装配函数传给 Widget，并转交编辑器布局与焦点。左右面板读取当前画布的同一份文档和选区；属性 View 只挂载 Widget 拥有的属性组件，视图切换不会创建第二份文档、选区或属性状态。Widget 创建 View、共享工具栏、输入控制器和一组贡献实例；各组件持有自己的 DOM、样式和订阅。宿主只定位直接挂载的组件根节点。
+编辑器组件使用本目录的公共模型、命令和文件控制器，通过公共契约调用贡献。窗口编辑器服务按 Artifacts 模式创建并注册文档控制器；`ArtifactEditorView` 的每个工作空间通过设计页面组件借用自己的文档，把能力装配函数传给 Widget，并转交编辑器布局与焦点。左右面板读取当前画布的同一份文档和选区；属性 View 只挂载 Widget 拥有的属性组件，视图切换不会创建第二份文档、选区或属性状态。Widget 创建 View、共享工具栏、输入控制器和一组贡献实例；各组件持有自己的 DOM、样式和订阅。宿主只定位直接挂载的组件根节点。
 
-| 状态                                     | 持有者                              | 保存进文件                     |
-| ---------------------------------------- | ----------------------------------- | ------------------------------ |
-| 对象内容、几何、层级和绘制顺序           | `DesignModel` 的文档快照            | 是                             |
-| 素材身份、不可变版本、图片引用和裁切     | `DesignModel` 的文档快照            | 是                             |
-| 原始图片字节                             | `DesignDocumentController`          | 素材文件；恢复备份同时保留字节 |
-| 图片预览 URL                             | 每个 Widget 的 `DesignMediaPreview` | 否；不作为永久引用             |
-| 撤销重做历史                             | `DesignModel`                       | 否                             |
-| 选中对象、当前路径节点                   | 每个 Widget 的 `DesignSelection`    | 否                             |
-| 缩放和平移                               | 每个 Widget 的 `CanvasViewport`     | 否                             |
-| 指针捕获、视口手势                       | `CanvasInputController`             | 否                             |
-| 对象拖拽预览                             | `DesignInputController`             | 否                             |
-| 未提交绘制预览                           | 绘制 contribution                   | 否                             |
-| 动画播放时间                             | Motion contribution                 | 否                             |
-| 当前工具与模式                           | 每个 Widget                         | 否                             |
-| 文件 URI、读取版本、已保存内容和操作状态 | `DesignDocumentController`          | 否                             |
+| 状态                                     | 持有者                                      | 保存进文件                     |
+| ---------------------------------------- | ------------------------------------------- | ------------------------------ |
+| 对象内容、几何、层级和绘制顺序           | `ArtifactCanvasModel` 的文档快照            | 是                             |
+| 素材身份、不可变版本、图片引用和裁切     | `ArtifactCanvasModel` 的文档快照            | 是                             |
+| 原始图片字节                             | `ArtifactCanvasDocumentController`          | 素材文件；恢复备份同时保留字节 |
+| 图片预览 URL                             | 每个 Widget 的 `ArtifactCanvasMediaPreview` | 否；不作为永久引用             |
+| 撤销重做历史                             | `ArtifactCanvasModel`                       | 否                             |
+| 选中对象、当前路径节点                   | 每个 Widget 的 `ArtifactCanvasSelection`    | 否                             |
+| 缩放和平移                               | 每个 Widget 的 `CanvasViewport`             | 否                             |
+| 指针捕获、视口手势                       | `CanvasInputController`                     | 否                             |
+| 对象拖拽预览                             | `ArtifactCanvasInputController`             | 否                             |
+| 未提交绘制预览                           | 绘制 contribution                           | 否                             |
+| 动画播放时间                             | Motion contribution                         | 否                             |
+| 当前工具与模式                           | 每个 Widget                                 | 否                             |
+| 文件 URI、读取版本、已保存内容和操作状态 | `ArtifactCanvasDocumentController`          | 否                             |
 
-多个 Widget 可以使用同一个文档控制器，共享已提交内容与历史，同时保留各自的选区和视口。Widget 借用控制器的模型；单独释放 Widget 会取消手势，释放 View、输入控制器、共享工具栏及该实例的全部贡献，并清理订阅和命令查找记录。View 释放画布的主题与配置订阅，Motion 释放播放时钟；文档仍由控制器持有。活动页切换隐藏对应编辑组或 EditorPane，`ArtifactEditorView` 保留页面组件与 Widget；隐藏画布会取消手势并停止动画播放，回到设计页时恢复原选区和视口。Creator 页面使用 EditorPart 中保留的产品编辑组，不进入会话 Code 工作集，页面切换不会触发关闭确认。Design 文档由控制器自动保存：未命名草稿以现有设计文件包格式保存在当前 UI profile 的 `creator/<workspace-id>/<document-id>.ash-design`；工作空间机器状态只记录上次文档 URI，重新进入 Design 时加载该文件包。已打开的文件保留版本检查并自动写回。正常关闭等待全部修改保存，不询问保存；失败时保留画布内容并阻止关闭，可重试。保存副本、导出与发布仍需显式操作。其他 Creator 模式继续通过关闭生命周期确认保存、放弃或取消；窗口关闭后释放文档。
+多个 Widget 可以使用同一个文档控制器，共享已提交内容与历史，同时保留各自的选区和视口。Widget 借用控制器的模型；单独释放 Widget 会取消手势，释放 View、输入控制器、共享工具栏及该实例的全部贡献，并清理订阅和命令查找记录。View 释放画布的主题与配置订阅，Motion 释放播放时钟；文档仍由控制器持有。活动页切换隐藏对应编辑组或 EditorPane，`ArtifactEditorView` 保留页面组件与 Widget；隐藏画布会取消手势并停止动画播放，回到设计页时恢复原选区和视口。Artifacts 页面使用 EditorPart 中保留的产品编辑组，不进入会话 Code 工作集，页面切换不会触发关闭确认。Design 文档由控制器自动保存：未命名草稿以现有设计文件包格式保存在当前 UI profile 的兼容磁盘路径 `creator/<workspace-id>/<document-id>.ash-design`（运行时状态使用 `artifacts.*`）；工作空间机器状态只记录上次文档 URI，重新进入 Design 时加载该文件包。已打开的文件保留版本检查并自动写回。正常关闭等待全部修改保存，不询问保存；失败时保留画布内容并阻止关闭，可重试。保存副本、导出与发布仍需显式操作。其他 Artifacts 模式继续通过关闭生命周期确认保存、放弃或取消；窗口关闭后释放文档。
 
-文档文件保存所属模式；打开和恢复备份必须匹配当前工作空间。原有未记录模式的 Design 文件保持 Design 语义。每种模式的工作副本资源为 `ash-creator:/<mode>`，窗口导航迁移旧的 Design 命令顺序与页面选择。
+文档文件保存所属模式；打开和恢复备份必须匹配当前工作空间。原有未记录模式的 Design 文件保持 Design 语义。每种模式的工作副本资源为 `ash-artifacts:/<mode>`，窗口导航迁移旧的 Design 命令顺序与页面选择。
 
 Design 通过 `sessions.common.main.ts` 加载，当前使用方是 Sessions。Design 消费 Workbench 的工作副本与窗口生命周期契约；其基础层和共享服务保持既有依赖方向，不能导入本目录。
 
@@ -149,17 +148,17 @@ Shift+A 为所选画板添加横向自动布局，或将同级选区包入新画
 
 `sizeLimits` 为自动布局画板及非分组子对象保存可选最小／最大宽高；清空属性输入可删除限制，最小值大于最大值的输入被拒绝。固定、适应内容和填充均受限制；填充对象达到边界后，剩余空间重新分配给其他填充对象。空间不足时保留最小尺寸，是否裁切由画板决定。画板至少容纳自己的内边距。HTML 导出使用对应的 flex-wrap、grid 轨道／跨格与 min/max CSS，并保留可编辑 JSON；SVG 使用同一份已解析几何。
 
-共享工具栏、属性贡献和键盘修改通过 `DocumentCommands` 到达 `DesignModel.applyEdit`。模型每次提交一个不可变快照，清除 redo 分支并通知 Widget 更新。撤销与重做由同一个模型执行。
+共享工具栏、属性贡献和键盘修改通过 `DocumentCommands` 到达 `ArtifactCanvasModel.applyEdit`。模型每次提交一个不可变快照，清除 redo 分支并通知 Widget 更新。撤销与重做由同一个模型执行。
 
 填充色块打开共享 `base/browser/ui/colorPicker` 组件。颜色组件拥有二维选色、色相、不透明度和 Hex、RGB、CSS、HSL、HSB 输入；Design 属性贡献提供文档色板和当前编辑器最近使用的颜色，并拥有填色预览。切换格式不提交文档编辑。拖动只更新当前画布预览，松手时通过公共命令一次提交；取消或隐藏编辑器丢弃尚未提交的预览，其他文档编辑会关闭面板。浮层由窗口 ContextView 托管，键盘帮助和颜色文本视图沿用 Design 的无障碍详细程度设置。
 
 拖拽过程中，共享输入层和绘制贡献只更新预览。指针释放时一次提交全部受影响对象；Escape、取消捕获或取消手势丢弃预览。其他视图提交文档或开始文件操作时，会取消当前视图的预览，保持渲染与已提交状态一致。文件替换会清空编辑历史并重置每个视图的选区；普通编辑保留仍存在的对象选择。
 
-组件继续使用 `frame`，通过 `component.kind` 区分主组件与组件集，实例通过 `instance.componentId` 引用本地或已接受库版本中的主组件。`DesignModel` 在同一个提交中记录显式覆盖、解析布局并同步实例；继承子对象用 `sourceId` 对应主组件图层，`overrides` 只列出自有字段，值仍保存在对象上。实例展开后的不可变树用于画布、导出和删除来源后的恢复，不另建组件内容仓库。实例子对象保持稳定 ID；主组件结构变更同步增删，实例内部禁止增删、重排、位置及约束编辑。
+组件继续使用 `frame`，通过 `component.kind` 区分主组件与组件集，实例通过 `instance.componentId` 引用本地或已接受库版本中的主组件。`ArtifactCanvasModel` 在同一个提交中记录显式覆盖、解析布局并同步实例；继承子对象用 `sourceId` 对应主组件图层，`overrides` 只列出自有字段，值仍保存在对象上。实例展开后的不可变树用于画布、导出和删除来源后的恢复，不另建组件内容仓库。实例子对象保持稳定 ID；主组件结构变更同步增删，实例内部禁止增删、重排、位置及约束编辑。
 
 组件集只包含主组件；命名属性与各变体的属性值组合均需唯一，允许不完整的组合矩阵。实例切换按图层名称和层级匹配覆盖；文字内容保持，原始样式不同的变体采用目标样式。嵌套实例继承外层主组件已应用的覆盖，显式替换才改用新来源；分离保留内层关联。恢复主组件、重置单项或全部覆盖、推送到主组件都经过文档历史。循环引用在文件解析和组件替换／推送边界拒绝。组件能力由 `ComponentCommands` 提供，属性面板与快捷键只调用命令；可编辑 JSON 保留全部关系，HTML/SVG 导出使用已解析的外观。
 
-变量集合、四类变量（颜色、数值、字符串、布尔值）、样式和已接受的组件库版本保存在文档的可选 `resources` 中。集合拥有模式和默认模式；属性绑定只保存变量身份，同类型别名可跨集合，按目标集合的有效模式解析，循环别名在提交前拒绝。页面模式经图层树继承，图层显式模式优先。`DesignModel` 在同一个提交中解析资源、组件和布局，画布、命中检测、保存与导出共同使用已解析外观。隐藏子图层保留归属，但不占自动布局空间。
+变量集合、四类变量（颜色、数值、字符串、布尔值）、样式和已接受的组件库版本保存在文档的可选 `resources` 中。集合拥有模式和默认模式；属性绑定只保存变量身份，同类型别名可跨集合，按目标集合的有效模式解析，循环别名在提交前拒绝。页面模式经图层树继承，图层显式模式优先。`ArtifactCanvasModel` 在同一个提交中解析资源、组件和布局，画布、命中检测、保存与导出共同使用已解析外观。隐藏子图层保留归属，但不占自动布局空间。
 
 填充、文本、阴影和布局网格样式保存属性组合，可在样式内部引用变量。修改样式定义更新所有引用，直接编辑图层属性解除受影响的绑定或样式；删除引用保留当前外观。实例的变量绑定、样式引用和模式覆盖按单个属性记录，避免阻断其他属性从主组件继承。样式、变量和库操作均由 `ResourceCommands` 提交，不在属性控件内维护文档内容。
 
@@ -179,9 +178,9 @@ Design 仍可导入版本 1 的 `.ash-design.json`，保留原对象、分组、
 
 独立的 Slides 作品自动保存到当前 UI profile 的 `creator/<workspace-id>/slides/<document-id>.ash-design`。Artifacts 从这些文件包加载作品，可在「我的」重新打开。导出可编辑副本会创建独立文件包，导出 SVG 会生成单独文件。常规 Slides 工作区通过文件包打开已有幻灯片。
 
-`DesignDocumentController` 调用已有文件与对话框服务。桌面和连接 App Server 的浏览器沿已有文件服务访问工作区；独立浏览器通过用户选定的文件夹访问文件。手动保存模式在打开其他文档和桌面关闭时会提供保存、放弃或取消；浏览器关闭使用同步的未保存提示。跨窗口写入使用文件版本检查。
+`ArtifactCanvasDocumentController` 调用已有文件与对话框服务。桌面和连接 App Server 的浏览器沿已有文件服务访问工作区；独立浏览器通过用户选定的文件夹访问文件。手动保存模式在打开其他文档和桌面关闭时会提供保存、放弃或取消；浏览器关闭使用同步的未保存提示。跨窗口写入使用文件版本检查。
 
-画布和 SVG 导出都使用 `designSvgRenderer.ts`。对象从文档读取，用户文字作为文本节点写入；导出仅包含作品，省略网格与选区，并保留可编辑文档的保存状态。图片导出为内嵌数据，离开 Ash 后仍可显示；关闭画板裁切时，导出范围包含伸出画板的内容。
+画布和 SVG 导出都使用 `artifactCanvasSvgRenderer.ts`。对象从文档读取，用户文字作为文本节点写入；导出仅包含作品，省略网格与选区，并保留可编辑文档的保存状态。图片导出为内嵌数据，离开 Ash 后仍可显示；关闭画板裁切时，导出范围包含伸出画板的内容。
 
 ## 模式与 Agent 使用
 
@@ -206,7 +205,7 @@ Code 模式从同一已提交快照生成 HTML/CSS/SVG：矩形、椭圆和画�
 ```sh
 pnpm run typecheck:renderer
 pnpm run build:renderer
-pnpm run test:unit --run src/ash/sessions/test/common/designText.test.ts --run src/ash/sessions/test/common/designModel.test.ts --run src/ash/sessions/test/common/designComponents.test.ts --run src/ash/sessions/test/common/designResources.test.ts --run src/ash/sessions/test/browser/artifactEditorWidget.test.ts --run test/architecture/layer-boundaries.test.ts --run test/architecture/ui-styling-ownership.test.ts
+pnpm run test:unit --run src/ash/sessions/test/common/artifactCanvasText.test.ts --run src/ash/sessions/test/common/artifactCanvasModel.test.ts --run src/ash/sessions/test/common/designComponents.test.ts --run src/ash/sessions/test/common/artifactCanvasResources.test.ts --run src/ash/sessions/test/browser/artifactEditorWidget.test.ts --run test/architecture/layer-boundaries.test.ts --run test/architecture/ui-styling-ownership.test.ts
 pnpm run test:smoke:browser --grep 'Sessions Design'
 pnpm run test:smoke:ui --grep 'Sessions Design'
 pnpm run test:smoke:desktop --grep 'Sessions Design'
@@ -216,23 +215,23 @@ pnpm run test:smoke:desktop --grep 'Sessions Design'
 
 ### 矢量与路径
 
-`designDocument.ts` 保存主轮廓及额外 `subpaths`、控制柄镜像和描边属性；`designVector.ts` 负责纯曲线编辑，`VectorCommands` 经 `DesignModel` 提交拓扑与转换。节点选区和框选留在编辑器选区／输入控制器，不进入文档。钢笔点击闭合、精确插点、角点／平滑、切开／连接／反向和节点多选共用撤销历史。
+`artifactCanvasDocument.ts` 保存主轮廓及额外 `subpaths`、控制柄镜像和描边属性；`artifactCanvasVector.ts` 负责纯曲线编辑，`VectorCommands` 经 `ArtifactCanvasModel` 提交拓扑与转换。节点选区和框选留在编辑器选区／输入控制器，不进入文档。钢笔点击闭合、精确插点、角点／平滑、切开／连接／反向和节点多选共用撤销历史。
 
-布尔运算以带 `booleanOperation` 的组保留原始子图层，减法从底层减去上层，其他运算采用顶层外观。`designVectorGeometry.ts` 首次使用时加载 Paper.js 与描边轮廓算法，处理曲线、孔洞、子层变换和描边；临时计算对象不进入模型，结果缓存以不可变图层为键。SVG 画布、扁平化与导出共享轮廓结果。删除操作数可以留下单子层组，空组随最后一个子层删除。
+布尔运算以带 `booleanOperation` 的组保留原始子图层，减法从底层减去上层，其他运算采用顶层外观。`artifactCanvasVectorGeometry.ts` 首次使用时加载 Paper.js 与描边轮廓算法，处理曲线、孔洞、子层变换和描边；临时计算对象不进入模型，结果缓存以不可变图层为键。SVG 画布、扁平化与导出共享轮廓结果。删除操作数可以留下单子层组，空组随最后一个子层删除。
 
-节点圆角以像素保存在锚点和网络顶点上，`designVectorCorners.ts` 从相邻直线推导相切圆弧并约束重叠半径；编辑锚点和原始控制柄保留。`designVariableWidth.ts` 按轮廓弧长解释宽度点，以描边宽度的倍数保存厚度；插入控制点保留宽度插值的导数，不改变原外观。画布拖动、数值输入、命中检测、轮廓化与 SVG 导出共用派生轮廓。分叉网络和虚线不使用可变宽度。圆角平滑度以图层属性保存，范围 0–1，iOS 预设为 0.6；直线与圆弧之间使用三次曲线过渡，边长不足时先减少平滑度再约束半径。
+节点圆角以像素保存在锚点和网络顶点上，`artifactCanvasVectorCorners.ts` 从相邻直线推导相切圆弧并约束重叠半径；编辑锚点和原始控制柄保留。`artifactCanvasVariableWidth.ts` 按轮廓弧长解释宽度点，以描边宽度的倍数保存厚度；插入控制点保留宽度插值的导数，不改变原外观。画布拖动、数值输入、命中检测、轮廓化与 SVG 导出共用派生轮廓。分叉网络和虚线不使用可变宽度。圆角平滑度以图层属性保存，范围 0–1，iOS 预设为 0.6；直线与圆弧之间使用三次曲线过渡，边长不足时先减少平滑度再约束半径。
 
-`designVectorStroke.ts` 统一解释闭合轮廓的内外描边和开放端点。SVG 以双倍居中描边和填充规则裁切内／外侧，轮廓化用相同轮廓执行交集／差集，孔洞遵循 nonzero／evenodd。开放子路径保持居中。箭头及独立端帽保存在锚点上，只有网络度数为 1 的顶点生成端点外观；反向与网络转换保留端点归属。宽度轮廓会移除箭头并将描边居中。
+`artifactCanvasVectorStroke.ts` 统一解释闭合轮廓的内外描边和开放端点。SVG 以双倍居中描边和填充规则裁切内／外侧，轮廓化用相同轮廓执行交集／差集，孔洞遵循 nonzero／evenodd。开放子路径保持居中。箭头及独立端帽保存在锚点上，只有网络度数为 1 的顶点生成端点外观；反向与网络转换保留端点归属。宽度轮廓会移除箭头并将描边居中。
 
 路径偏移复用浏览器几何引擎，先处理填充规则和孔洞，再按正负距离及方角／圆角生成路径。`VectorAppearanceWidget` 持有版本和选区约束下的临时预览；确认后重算曲线边界并通过模型提交一次编辑，取消不写入历史。偏移后完全消失的路径在确认时删除，撤销可恢复。
 
 ### 原型文档与预览
 
-图层的 `interactions` 和顶层画板的 `flowStart` 随设计文档保存，共用 `DesignModel` 的撤销历史；实例继承主组件交互，实例编辑可以覆盖交互。页面跳转目标是顶层画板，Change to 目标是同组件集的其他变体；删除目标同时清除连接，撤销恢复两者。未知外部目标保持不可执行。原型贡献只通过编辑器的坐标转换与覆盖层接口绘制连线，不让共享 Canvas 依赖 Creator。
+图层的 `interactions` 和顶层画板的 `flowStart` 随设计文档保存，共用 `ArtifactCanvasModel` 的撤销历史；实例继承主组件交互，实例编辑可以覆盖交互。页面跳转目标是顶层画板，Change to 目标是同组件集的其他变体；删除目标同时清除连接，撤销恢复两者。未知外部目标保持不可执行。原型贡献只通过编辑器的坐标转换与覆盖层接口绘制连线，不让共享 Canvas 依赖 Artifacts。
 
 交互的 `actions` 是有序动作树，条件分支与变量表达式随同保存，表达式引用变量 ID。读取旧版单动作记录时只在文件边界迁移到动作数组；复制、删除目标和实例覆盖均遍历同一动作树。表达式采用受限语法与类型检查，不执行脚本。
 
-`PrototypePlayback` 为每次预览单独持有导航历史、浮层栈、变量覆盖值和模式。变量绑定及别名复用资源解析器；运行时写值不修改资源定义。动作按序求值，浏览器在一个动画完成后才继续迭代下一动作；条件采用首个匹配分支。重启丢弃运行状态，临时悬停/按压恢复快照。自定义弹簧保存质量、刚度、阻尼和初速度，由物理响应决定回弹及收敛时长。Change to 复用组件实例的继承与覆盖解析，只替换触发热点最近的实例，其他实例及文档保持原状。预览不写入文档；关闭、切换工作空间、替换或编辑文档均释放计时器和动画。Smart Animate 在相同父层级内按图层名称匹配，未匹配内容溶解；系统减少动态效果时即时完成过渡。Creator 无障碍帮助及可访问内容同时覆盖原型作者面板和当前播放状态。
+`PrototypePlayback` 为每次预览单独持有导航历史、浮层栈、变量覆盖值和模式。变量绑定及别名复用资源解析器；运行时写值不修改资源定义。动作按序求值，浏览器在一个动画完成后才继续迭代下一动作；条件采用首个匹配分支。重启丢弃运行状态，临时悬停/按压恢复快照。自定义弹簧保存质量、刚度、阻尼和初速度，由物理响应决定回弹及收敛时长。Change to 复用组件实例的继承与覆盖解析，只替换触发热点最近的实例，其他实例及文档保持原状。预览不写入文档；关闭、切换工作空间、替换或编辑文档均释放计时器和动画。Smart Animate 在相同父层级内按图层名称匹配，未匹配内容溶解；系统减少动态效果时即时完成过渡。Artifacts 无障碍帮助及可访问内容同时覆盖原型作者面板和当前播放状态。
 
 画板的 `overflowDirection` 选择无滚动、水平、垂直或双向；图层的 `scrollPosition` 选择随父层滚动、固定或粘性，`layoutPositioning: absolute` 在自动布局中忽略流式尺寸和排布。固定层排在同级滚动内容上方；粘性层保持原有顺序，到视口顶端停住，并受直接父层的下边界约束。`scrollTo` 可指向同屏任意后代图层，属性选择器列出滚动画板的直接子层，连线可指向更深的图层。滚动过渡保存即时或动画设置，复用缓动与自定义弹簧。
 
@@ -240,27 +239,27 @@ pnpm run test:smoke:desktop --grep 'Sessions Design'
 
 ### 分叉矢量网络与文字轮廓
 
-路径可以切换为共享顶点与独立三次贝塞尔边组成的网络。`designVectorNetwork.ts` 拥有拓扑、精确拆分、节点移动及面遍历；网络模式不再保存原始 contour 坐标。区域填充引用边界标识，渲染时推导封闭面和孔洞，描边按分支连续遍历一次。画布钢笔可从任意节点分叉或连接已有节点，属性区提供节点、线段控制柄、区域填充与拆分／删除的键盘入口。所有修改经 DesignModel 提交并进入同一撤销历史。
+路径可以切换为共享顶点与独立三次贝塞尔边组成的网络。`artifactCanvasVectorNetwork.ts` 拥有拓扑、精确拆分、节点移动及面遍历；网络模式不再保存原始 contour 坐标。区域填充引用边界标识，渲染时推导封闭面和孔洞，描边按分支连续遍历一次。画布钢笔可从任意节点分叉或连接已有节点，属性区提供节点、线段控制柄、区域填充与拆分／删除的键盘入口。所有修改经 ArtifactCanvasModel 提交并进入同一撤销历史。
 
-`designTextOutlines.ts` 在明确转换操作时读取本地字体，或使用用户加载的字体文件。浏览器的文本范围保留换行与对齐，HarfBuzz 负责字形替换、OpenType 特性和定位，Fontkit 读取字体变体与二次／三次轮廓。扁平化形成一个复合矢量层，轮廓化按字形生成子图层；字体不可用或字形只有位图时保留原文本并显示原因。异步操作检查文档版本和选区，保存结果只包含路径，不依赖字体文件。字体解析依赖按需加载。
+`artifactCanvasTextOutlines.ts` 在明确转换操作时读取本地字体，或使用用户加载的字体文件。浏览器的文本范围保留换行与对齐，HarfBuzz 负责字形替换、OpenType 特性和定位，Fontkit 读取字体变体与二次／三次轮廓。扁平化形成一个复合矢量层，轮廓化按字形生成子图层；字体不可用或字形只有位图时保留原文本并显示原因。异步操作检查文档版本和选区，保存结果只包含路径，不依赖字体文件。字体解析依赖按需加载。
 
 ### 渐变、多重填充与混合
 
-`designPaint.ts` 定义从上到下排列的 `fills`；每项独立保存可见性、不透明度和混合模式。未提供 `fills` 的旧文件继续使用 `fill`；显式空数组表示无填充，设置填充叠层后不再回写旧颜色。填充样式、变量、组件实例和库更新沿用同一模型和撤销历史。线性、径向、角度、菱形渐变保存稳定色标 ID 和三个归一化控制柄；色标允许重合形成硬边，透明颜色采用预乘插值。
+`artifactCanvasPaint.ts` 定义从上到下排列的 `fills`；每项独立保存可见性、不透明度和混合模式。未提供 `fills` 的旧文件继续使用 `fill`；显式空数组表示无填充，设置填充叠层后不再回写旧颜色。填充样式、变量、组件实例和库更新沿用同一模型和撤销历史。线性、径向、角度、菱形渐变保存稳定色标 ID 和三个归一化控制柄；色标允许重合形成硬边，透明颜色采用预乘插值。
 
 `PaintPropertiesWidget` 提供填充增删、复制、排序、色标与数值控制；选中的色标共用颜色选择器。画布控制柄、色标拖拽和轴上插点只预览派生结果，结束时提交一次编辑；键盘可以移动或删除色标。图层默认穿透，填充默认正常；图层正常模式隔离内部混合，填充不能选择穿透。引用颜色样式时禁用单独修改填充混合模式。
 
-`designPaintRendering.ts` 与画布、原型及导出共用渲染：线性和径向使用 SVG 渐变，角度和菱形使用嵌入式 PNG 纹理（最长边上限 2048 像素，编辑参数仍保持矢量数据）。18 种混合模式使用浏览器合成；Chromium 不支持的 Plus darker 由 sRGB 背景滤镜实现，并在 SVG 滤镜源中嵌入图片数据。此模式的 SVG 外观依赖支持 CSS backdrop-filter 的浏览器。图层不透明度在渲染前应用，避免画布刷新或动画覆盖已保存的外观。
+`artifactCanvasPaintRendering.ts` 与画布、原型及导出共用渲染：线性和径向使用 SVG 渐变，角度和菱形使用嵌入式 PNG 纹理（最长边上限 2048 像素，编辑参数仍保持矢量数据）。18 种混合模式使用浏览器合成；Chromium 不支持的 Plus darker 由 sRGB 背景滤镜实现，并在 SVG 滤镜源中嵌入图片数据。此模式的 SVG 外观依赖支持 CSS backdrop-filter 的浏览器。图层不透明度在渲染前应用，避免画布刷新或动画覆盖已保存的外观。
 
 行为依据：[Figma 渐变](https://help.figma.com/hc/en-us/articles/34208860210199-Use-gradients-as-a-fill-or-stroke)、[填充叠层](https://help.figma.com/hc/en-us/articles/360041003694-Guide-to-fills)、[混合与穿透](https://help.figma.com/hc/en-us/articles/360040667874-Apply-blend-modes-to-layers-fills-and-effects)。
 
 ### 阴影与模糊
 
-`designEffects.ts` 拥有从上到下排列的效果列表。每个图层最多包含八个投影、八个内阴影、一个图层模糊和一个背景模糊；隐藏效果仍占用对应名额。阴影保存颜色与透明度、偏移、模糊、正负扩展及混合模式，投影另有透明区域后方显示开关。旧的单投影对象继续按原有外观渲染，第一次编辑时转换成列表。效果样式、库更新、组件覆盖、保存和撤销共用这个字段。
+`artifactCanvasEffects.ts` 拥有从上到下排列的效果列表。每个图层最多包含八个投影、八个内阴影、一个图层模糊和一个背景模糊；隐藏效果仍占用对应名额。阴影保存颜色与透明度、偏移、模糊、正负扩展及混合模式，投影另有透明区域后方显示开关。旧的单投影对象继续按原有外观渲染，第一次编辑时转换成列表。效果样式、库更新、组件覆盖、保存和撤销共用这个字段。
 
 `EffectPropertiesWidget` 提供增删、复制、排序、显隐、数值输入和颜色选择器，所有控制可用键盘操作。矩形和椭圆支持扩展；画框、组件及实例需要启用内容裁切，并具有至少 1% 不透明度的可见填充。其他图层保留扩展参数，但不应用到渲染。
 
-`designEffectRendering.ts` 在填充后、整层混合前组合 SVG 效果。投影位于内容后方，内阴影位于填充上方和路径描边下方，图层模糊作用于合成后的图层。背景模糊采样前方图层出现前的场景，排除已有背景模糊后再按当前轮廓裁切，避免重叠模糊累加。嵌入的背景快照保留旋转和容器坐标；原型滚动和动画重绘时重新采样。阴影与蒙版副本不携带交互图层标识。
+`artifactCanvasEffectRendering.ts` 在填充后、整层混合前组合 SVG 效果。投影位于内容后方，内阴影位于填充上方和路径描边下方，图层模糊作用于合成后的图层。背景模糊采样前方图层出现前的场景，排除已有背景模糊后再按当前轮廓裁切，避免重叠模糊累加。嵌入的背景快照保留旋转和容器坐标；原型滚动和动画重绘时重新采样。阴影与蒙版副本不携带交互图层标识。
 
 支持均匀与渐进式图层／背景模糊。渐进式效果保存起点半径、终点半径和相对图层的两端位置；允许反向模糊、相等半径和范围外端点。属性面板可键盘输入半径与百分比坐标；画布支持端点与轴线拖动、Shift 方向吸附、Enter 切换端点、方向键微调及 Escape 取消，一次拖动形成一次撤销。方向重合时使用终点半径。SVG 使用最多 33 个高斯采样和权重插值近似连续半径，超出轴线两端采用对应端点半径，半径相同时直接使用均匀模糊。此近似共享于各输出，不宣称与 Figma 私有渲染器逐像素一致。画布、原型、SVG 和生成代码共用效果渲染；包含效果列表的图层及其容器在生成的 HTML 中使用 SVG，以保留叠加与裁切结果。导出边界包含阴影、模糊和未裁切子层的扩展范围。
 

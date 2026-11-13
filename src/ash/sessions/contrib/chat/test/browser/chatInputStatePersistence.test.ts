@@ -21,7 +21,7 @@ suite('Sessions input state persistence browser recovery', () => {
 				},
 			}));
 		}, draft);
-		await page.goto('/sessions.html?creator');
+		await page.goto('/sessions.html?artifacts');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await expect(page.getByRole('region', { name: 'Notifications', exact: true }).getByText(/^Could not restore the Chat draft:/u)).toBeVisible();
 		const saved = await page.evaluate(() => {

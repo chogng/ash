@@ -17,9 +17,9 @@ test('Connected Code edits text and Artifacts owns document authoring', { tag: [
 	await quick.open('>workbench.action.document.new');
 	await expect(quick.element.locator('.ash-quick-pick-row-description').getByText('workbench.action.document.new', { exact: true })).toHaveCount(1);
 	await quick.close();
-	await quick.runCommand('sessions.creator.chooseDocsEditor');
+	await quick.runCommand('sessions.docs.chooseEditor');
 	await quick.select('Markdown');
-	await quick.runCommand('sessions.creator.chooseDocsEditor');
+	await quick.runCommand('sessions.docs.chooseEditor');
 	await quick.select('New blank document');
 	const document = new Editor(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)'));
 	await document.waitForEditorFocus();

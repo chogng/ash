@@ -34,7 +34,7 @@ Sites 的代码层与 AI 能力见 [Sites AI 工具](https://help.figma.com/hc/e
 
 ## 转换内容不等于自动同步
 
-Design 的画板可以复制到 Sites，之后仍需检查网页布局。[Design 转到 Sites](https://help.figma.com/hc/en-us/articles/35895740494231-Figma-Sites-collection-Move-designs-from-Figma-Design-to-Figma-Sites)
+Design 的画板可以复制到 Sites，之后仍需检查网页布局。[Design 转到 Sites](https://help.figma.com/hc/en-us/articles/35895740494231-Figma-Sites-collection-Move-canvases-from-Figma-Design-to-Figma-Sites)
 
 Make 可以把已有设计作为生成输入；付费用户还可以把运行预览复制为 Design 图层。复制后的 Design 修改不会自动回写到 Make，图层也不会自动关联设计系统。两种编辑方式之间的内容转换，不能当作同一份内容的双向同步。[Make 内容转换说明](https://help.figma.com/hc/en-us/articles/31722591905559-Figma-Make-FAQs)
 
@@ -46,12 +46,12 @@ Dev Mode 与 Design Mode 使用同一份设计文件。它集中提供设计检�
 
 ## 对 Ash 的使用建议
 
-以下是依据上述差异给出的使用建议，Ash Creator 的目标与当前实现分别见 [Creator 设计方案](../src/ash/sessions/contrib/artifact/DESIGN.md)和 [Creator 当前能力](../src/ash/sessions/contrib/artifact/README.md)。
+以下是依据上述差异给出的使用建议，Ash Artifacts 的目标与当前实现分别见 [Artifacts 设计方案](../src/ash/sessions/contrib/artifact/DESIGN.md)和 [Artifacts 当前能力](../src/ash/sessions/contrib/artifact/README.md)。
 
 | 任务              | 更合适的方式                                                 | 原因                                             |
 | ----------------- | ------------------------------------------------------------ | ------------------------------------------------ |
 | 实现 Ash 正式界面 | Design 提供设计，Dev Mode 或 MCP 提供上下文，在 Ash 仓库实现 | 需要接入现有组件、状态、服务、主题、无障碍与测试 |
-| 快速试验一套交互  | Make 生成可运行版本并继续修改                                | 可以较快验证操作流程和应用行为                   |
+| 快速试验一套交互  | Design 通过对话生成代码并查看运行预览                        | 可以较快验证操作流程和应用行为                   |
 | 制作 Ash 宣传官网 | Sites 编辑页面、内容并发布                                   | 主要工作是网页排版、响应式适配和内容维护         |
 
-如果从长期产品设计看 Ash 的入口，值得借鉴的是这些工作方式的区别，而非按输出格式复制菜单：Design 负责设计内容，开发查看能力帮助实现设计；Sites 围绕网站编辑和维护组织工具；Make 围绕代码、对话和运行结果组织工具。它们可以共享素材、组件信息、预览和发布设施，具体功能归属仍由 Ash 的现有设计契约确定。
+如果从长期产品设计看 Ash 的入口，值得借鉴的是这些工作方式的区别，而非按输出格式复制菜单：Ash Design 统一负责设计内容、代码、对话和运行预览；开发查看能力帮助实现设计；Sites 围绕网站编辑和维护组织工具。它们可以共享素材、组件信息、预览和发布设施，具体功能归属仍由 Ash 的现有设计契约确定。

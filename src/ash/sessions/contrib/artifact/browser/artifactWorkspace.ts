@@ -12,23 +12,23 @@ import { ServiceCollection } from '../../../../platform/instantiation/common/ser
 import { localize2, type ILocalizedString } from '../../../../nls.js';
 import { Menus } from '../../../browser/menus.js';
 
-import { DesignEditorHost } from './designEditorHost.js';
+import { ArtifactCanvasEditorHost } from './artifactCanvasEditorHost.js';
 import { DocumentCommands } from '../common/commands/documentCommands.js';
-import { flattenDesignShapes, type DesignShape } from '../common/model/designDocument.js';
-import { DesignMode } from '../common/config/designEditorConfiguration.js';
+import { flattenArtifactCanvasShapes, type ArtifactCanvasShape } from '../common/model/artifactCanvasDocument.js';
+import { ArtifactCanvasMode } from '../common/config/artifactCanvasEditorConfiguration.js';
 import { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import { registerArtifactWorkspace, type ArtifactWorkspaceContribution, type IArtifactWorkspace } from './artifactWorkspaceRegistry.js';
 import type { ArtifactEditorWidget } from './widget/artifactEditorWidget.js';
-import type { DesignDocumentController } from './designDocumentController.js';
-import { DESIGN_PROPERTIES_CONTAINER_ID, IDesignEditorService } from './designEditorService.js';
+import type { ArtifactCanvasDocumentController } from './artifactCanvasDocumentController.js';
+import { ARTIFACT_CANVAS_PROPERTIES_CONTAINER_ID, IArtifactCanvasEditorService } from './artifactCanvasEditorService.js';
 
-const artifactWorkspaces = new Map<ArtifactWorkspaceId, (instantiation: IInstantiationService, container: HTMLElement, document?: DesignDocumentController) => ArtifactWorkspace>();
+const artifactWorkspaces = new Map<ArtifactWorkspaceId, (instantiation: IInstantiationService, container: HTMLElement, document?: ArtifactCanvasDocumentController) => ArtifactWorkspace>();
 
 export function registerArtifactWorkspaceMode(
 	mode: Omit<ArtifactWorkspaceContribution, 'mount'>,
 	create: (instantiation: IInstantiationService, document: Document) => ArtifactWorkspace,
 ): void {
-	const mount = (instantiation: IInstantiationService, container: HTMLElement, document?: DesignDocumentController) => {
+	const mount = (instantiation: IInstantiationService, container: HTMLElement, document?: ArtifactCanvasDocumentController) => {
 		const workspace = create(instantiation, container.ownerDocument);
 		try {
 			workspace.create(container, document);
@@ -42,7 +42,7 @@ export function registerArtifactWorkspaceMode(
 	registerArtifactWorkspace({ ...mode, mount: (instantiation, container) => mount(instantiation, container) });
 }
 
-export function mountArtifactWorkspace(instantiation: IInstantiationService, container: HTMLElement, mode: ArtifactWorkspaceId, document?: DesignDocumentController): ArtifactWorkspace {
+export function mountArtifactWorkspace(instantiation: IInstantiationService, container: HTMLElement, mode: ArtifactWorkspaceId, document?: ArtifactCanvasDocumentController): ArtifactWorkspace {
 	return artifactWorkspaces.get(mode)!(instantiation, container, document);
 }
 
@@ -61,21 +61,21 @@ interface ArtifactWorkspaceAction<T> {
 /** Canvas modes borrow document lifecycle and geometry; their contribution owns all mode-specific controls. */
 export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace {
 	public domNode!: HTMLElement;
-	public readonly detailsContainerId: string | undefined = DESIGN_PROPERTIES_CONTAINER_ID;
-	protected editorHost!: DesignEditorHost;
+	public readonly detailsContainerId: string | undefined = ARTIFACT_CANVAS_PROPERTIES_CONTAINER_ID;
+	protected editorHost!: ArtifactCanvasEditorHost;
 	protected contentDomNode!: HTMLElement;
 	private toolbarContext: IContextKeyService | undefined;
 	private activeWorkspace: IContextKey<ArtifactWorkspaceId | undefined> | undefined;
 	private initialFrame: string | undefined;
 	protected get editor(): ArtifactEditorWidget { return this.editorHost.editor; }
-	protected get document(): DesignDocumentController { return this.editorHost.workingCopy; }
+	protected get document(): ArtifactCanvasDocumentController { return this.editorHost.workingCopy; }
 	public get title(): string { return this.document.name; }
 	public get onDidChangeTitle() { return Event.any(this.document.onDidChangeLabel, this.document.onDidChangeContent); }
 	public get rename(): ((title: string) => Promise<void>) | undefined {
 		return this.document.artifactKind && !this.document.isBusy ? title => this.document.rename(title) : undefined;
 	}
 	public get delete(): (() => Promise<void>) | undefined {
-		return this.document.artifactKind && !this.document.isBusy ? () => this.designEditors.deleteArtifactDocument(this.document) : undefined;
+		return this.document.artifactKind && !this.document.isBusy ? () => this.artifactCanvasEditors.deleteArtifactDocument(this.document) : undefined;
 	}
 	public getCodeAttachment(): { readonly name: string; readonly content: string; } {
 		return { name: `${this.title}.ash-design.json`, content: this.document.backup() };
@@ -88,7 +88,7 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		public readonly mode: ArtifactWorkspaceId,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
-		@IDesignEditorService private readonly designEditors: IDesignEditorService,
+		@IArtifactCanvasEditorService private readonly artifactCanvasEditors: IArtifactCanvasEditorService,
 	) { super(); }
 
 	protected static registerWorkspaceActions<T extends ArtifactWorkspace>(
@@ -96,7 +96,7 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		mode: ArtifactWorkspaceId,
 		actions: readonly ArtifactWorkspaceAction<T>[],
 	): void {
-		ArtifactWorkspace.registerActions(this, `sessions.creator.${mode}`, 'navigation', ActiveArtifactWorkspace.isEqualTo(mode), actions);
+		ArtifactWorkspace.registerActions(this, `sessions.artifacts.${mode}`, 'navigation', ActiveArtifactWorkspace.isEqualTo(mode), actions);
 	}
 
 	public static registerFileActions(): void {
@@ -104,9 +104,9 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 			ContextKeyExpr.has(ActiveArtifactWorkspace.key),
 			ContextKeyExpr.notEquals(ActiveArtifactWorkspace.key, ArtifactWorkspaceId.Design),
 		);
-		ArtifactWorkspace.registerActions(ArtifactWorkspace, 'sessions.creator.canvas', 'file', when, [
-			{ id: 'open', title: localize2('sessions.creator.open', 'Open document'), when: ArtifactWorkspaceHasManagedDocument.isEqualTo(false), run: workspace => workspace.document.openDocument() },
-			{ id: 'save', title: localize2('sessions.creator.save', 'Save document'), when: ArtifactWorkspaceHasManagedDocument.isEqualTo(false), run: workspace => workspace.editor.saveDocument() },
+		ArtifactWorkspace.registerActions(ArtifactWorkspace, 'sessions.artifacts.canvas', 'file', when, [
+			{ id: 'open', title: localize2('sessions.artifacts.open', 'Open document'), when: ArtifactWorkspaceHasManagedDocument.isEqualTo(false), run: workspace => workspace.document.openDocument() },
+			{ id: 'save', title: localize2('sessions.artifacts.save', 'Save document'), when: ArtifactWorkspaceHasManagedDocument.isEqualTo(false), run: workspace => workspace.editor.saveDocument() },
 		]);
 	}
 
@@ -140,9 +140,9 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		});
 	}
 
-	public create(container: HTMLElement, document?: DesignDocumentController): void {
-		this.domNode = h(this.ownerDocument, 'section', { className: 'ash-creator-workspace', attributes: { 'data-creator-mode': this.mode } });
-		this.contentDomNode = h(this.ownerDocument, 'div', { className: 'ash-creator-workspace-content' });
+	public create(container: HTMLElement, document?: ArtifactCanvasDocumentController): void {
+		this.domNode = h(this.ownerDocument, 'section', { className: 'ash-artifacts-workspace', attributes: { 'data-artifact-mode': this.mode } });
+		this.contentDomNode = h(this.ownerDocument, 'div', { className: 'ash-artifacts-workspace-content' });
 		this.domNode.append(this.contentDomNode);
 		container.append(this.domNode);
 		const scope = this._register(this.contextKeys.createScoped(this.domNode));
@@ -150,20 +150,20 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		this.activeWorkspace = ActiveArtifactWorkspace.bindTo(scope);
 		const canEdit = ArtifactWorkspaceCanEdit.bindTo(scope);
 		const scopedInstantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, scope])));
-		this.editorHost = this._register(scopedInstantiation.createInstance(DesignEditorHost, this.mode));
+		this.editorHost = this._register(scopedInstantiation.createInstance(ArtifactCanvasEditorHost, this.mode));
 		this.editorHost.create(this.contentDomNode, document);
-		const exportSvg = this._register(new Action('sessions.creator.canvas.exportSvg', localize2('sessions.design.export', 'Export SVG').value,
+		const exportSvg = this._register(new Action('sessions.artifacts.canvas.exportSvg', localize2('sessions.design.export', 'Export SVG').value,
 			'', true, () => this.document.exportDocument()));
 		this.exportActions = this.mode === ArtifactWorkspaceId.Design || this.document.artifactKind !== undefined
-			? [this._register(new Action('sessions.creator.canvas.exportCopy', this.document.artifactKind === 'slides'
-				? localize2('sessions.creator.slides.exportCopy', 'Export editable copy').value
+			? [this._register(new Action('sessions.artifacts.canvas.exportCopy', this.document.artifactKind === 'slides'
+				? localize2('sessions.artifacts.slides.exportCopy', 'Export editable copy').value
 				: localize2('sessions.design.saveCopy', 'Save a copy').value, '', true, () => this.document.saveCopy())), exportSvg]
 			: [exportSvg];
 		ArtifactWorkspaceHasManagedDocument.bindTo(scope).set(this.document.artifactKind !== undefined);
 		this.editor.setWorkspaceToolbarContext(this);
 		this.createModeContent();
 		if (document) { this.initialFrame = this.document.model.value.shapes[0]?.id; }
-		const editorMode = document?.artifactKind === 'motion' ? DesignMode.Motion : undefined;
+		const editorMode = document?.artifactKind === 'motion' ? ArtifactCanvasMode.Motion : undefined;
 		if (editorMode) { this.editor.setMode(editorMode); }
 		const updateModeContext = this.bindToolbarContext?.(scope);
 		const updateContext = () => scope.bufferChangeEvents(() => {
@@ -180,7 +180,7 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 	}
 
 	protected createPageNavigation(): HTMLElement {
-		const navigation = h(this.ownerDocument, 'div', { className: 'ash-creator-workspace-navigation' });
+		const navigation = h(this.ownerDocument, 'div', { className: 'ash-artifacts-workspace-navigation' });
 		this.editor.prependToolbarControl(navigation);
 		return navigation;
 	}
@@ -188,10 +188,10 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 	protected createModeContent(): void { }
 	protected bindToolbarContext?(contextKeys: IContextKeyService): () => void;
 	protected addFrame(width: number, height: number): string {
-		this.editor.setMode(DesignMode.Design);
+		this.editor.setMode(ArtifactCanvasMode.Design);
 		const frames = this.document.model.value.shapes;
 		const x = Math.max(0, ...frames.map(shape => shape.x + shape.width + 40));
-		const frame: DesignShape = { id: generateUuid(), kind: 'frame', x, y: 0, width, height, rotation: 0, fill: '#ffffff', clip: true, children: [] };
+		const frame: ArtifactCanvasShape = { id: generateUuid(), kind: 'frame', x, y: 0, width, height, rotation: 0, fill: '#ffffff', clip: true, children: [] };
 		this.commands.insertShape(frame);
 		this.editor.revealShape(frame.id);
 		return frame.id;
@@ -210,7 +210,7 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 			this.editorHost.layout({ width: clientWidth, height: clientHeight });
 			this.editor.revealShape(this.initialFrame);
 			this.initialFrame = undefined;
-			const animatedShape = flattenDesignShapes(this.document.model.value.shapes).find(shape => shape.motion);
+			const animatedShape = flattenArtifactCanvasShapes(this.document.model.value.shapes).find(shape => shape.motion);
 			if (animatedShape) { this.editor.selectShape(animatedShape.id); }
 		}
 	}

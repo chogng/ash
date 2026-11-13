@@ -3,7 +3,7 @@ import type { ISessionsEntry } from '../../../services/layout/common/sessionsEnt
 
 export const handoffArtifactToCodeCommand = 'sessions.artifacts.handoffToCode';
 export const openLinkedArtifactCommand = 'sessions.artifacts.openLinked';
-export const openArtifactCommands = { canvas: 'sessions.creator.openCanvasArtifact', table: 'sessions.creator.openTable' } as const;
+export const openArtifactCommands = { canvas: 'sessions.artifacts.openCanvasArtifact', table: 'sessions.artifacts.openTable' } as const;
 export const artifactNameMaxLength = 200;
 
 export function isArtifactName(value: unknown): value is string {
@@ -12,7 +12,7 @@ export function isArtifactName(value: unknown): value is string {
 
 export const artifactDetailEntry = {
 	workspaceMode: 'chat',
-	activityContext: 'sessions.activity.creatorSelected',
+	activityContext: 'sessions.activity.artifactsSelected',
 	content: 'editor',
 	conversation: 'visible',
 	showEditorTabs: false,
@@ -26,7 +26,6 @@ export enum ArtifactWorkspaceId {
 	Slides = 'slides',
 	Brand = 'brand',
 	Sites = 'sites',
-	Make = 'make',
 	Prototype = 'prototype',
 }
 
@@ -41,12 +40,11 @@ export type ArtifactCanvasKind = keyof typeof artifactCanvasModes;
 
 export function getArtifactWorkspaceTitle(mode: ArtifactWorkspaceId): string {
 	switch (mode) {
-		case ArtifactWorkspaceId.Design: return localize('sessions.creator.design.title', 'Design');
-		case ArtifactWorkspaceId.Whiteboard: return localize('sessions.creator.whiteboard.title', 'Whiteboard');
-		case ArtifactWorkspaceId.Slides: return localize('sessions.creator.slides.title', 'Slides');
-		case ArtifactWorkspaceId.Brand: return localize('sessions.creator.brand.title', 'Brand');
-		case ArtifactWorkspaceId.Sites: return localize('sessions.creator.sites.title', 'Sites');
-		case ArtifactWorkspaceId.Make: return localize('sessions.creator.make.title', 'Make');
-		case ArtifactWorkspaceId.Prototype: return localize('sessions.creator.prototype.title', 'Prototype');
+		case ArtifactWorkspaceId.Design: return localize('sessions.artifacts.design.title', 'Design');
+		case ArtifactWorkspaceId.Whiteboard: return localize('sessions.artifacts.whiteboard.title', 'Whiteboard');
+		case ArtifactWorkspaceId.Slides: return localize('sessions.artifacts.slides.title', 'Slides');
+		case ArtifactWorkspaceId.Brand: return localize('sessions.artifacts.brand.title', 'Brand');
+		case ArtifactWorkspaceId.Sites: return localize('sessions.artifacts.sites.title', 'Sites');
+		case ArtifactWorkspaceId.Prototype: return localize('sessions.artifacts.prototype.title', 'Prototype');
 	}
 }

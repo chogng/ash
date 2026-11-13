@@ -1,9 +1,9 @@
-import { designCanvasShortcutKeys, designVectorShortcutKeys } from '../designShortcutKeys.js';
-import { describeDesignEffect } from '../designEffectLabels.js';
-import { designEffects } from '../../common/model/designEffects.js';
-import { designPaints } from '../../common/model/designPaint.js';
-import { designNetworkRegions } from '../../common/model/designVectorNetwork.js';
-import { designPathEditingContours, moveDesignPathNode } from '../../common/model/designVector.js';
+import { artifactCanvasShortcutKeys, artifactCanvasVectorShortcutKeys } from '../artifactCanvasShortcutKeys.js';
+import { describeArtifactCanvasEffect } from '../artifactCanvasEffectLabels.js';
+import { artifactCanvasEffects } from '../../common/model/artifactCanvasEffects.js';
+import { artifactCanvasPaints } from '../../common/model/artifactCanvasPaint.js';
+import { artifactCanvasNetworkRegions } from '../../common/model/artifactCanvasVectorNetwork.js';
+import { artifactCanvasPathEditingContours, moveArtifactCanvasPathNode } from '../../common/model/artifactCanvasVector.js';
 import type { AssetVersion } from '../../../../../platform/assets/common/assetService.js';
 import './artifactEditorWidget.css';
 import { addDisposableListener, h, type IDimension } from '../../../../../base/browser/dom.js';
@@ -13,24 +13,24 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { localize } from '../../../../../nls.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
-import { DesignMode, DesignTool } from '../../common/config/designEditorConfiguration.js';
-import type { DesignShape } from '../../common/model/designDocument.js';
-import { getDesignShapeEntries, hitTestDesignShapes } from '../../common/model/hitTest.js';
+import { ArtifactCanvasMode, ArtifactCanvasTool } from '../../common/config/artifactCanvasEditorConfiguration.js';
+import type { ArtifactCanvasShape } from '../../common/model/artifactCanvasDocument.js';
+import { getArtifactCanvasShapeEntries, hitTestArtifactCanvasShapes } from '../../common/model/hitTest.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
-import type { DesignPoint } from '../../common/core/geometry.js';
+import type { CanvasPoint } from '../../../canvas/common/canvasGeometry.js';
 import { DocumentCommands } from '../../common/commands/documentCommands.js';
-import { DesignSelection } from '../../common/designSelection.js';
-import type { DesignDocumentController } from '../designDocumentController.js';
+import { ArtifactCanvasSelection } from '../../common/artifactCanvasSelection.js';
+import type { ArtifactCanvasDocumentController } from '../artifactCanvasDocumentController.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { DesignMediaPreview } from '../designMedia.js';
+import { ArtifactCanvasMediaPreview } from '../rendering/artifactCanvasMedia.js';
 import { CanvasViewport } from '../../../canvas/common/canvasViewport.js';
-import { DesignInputController } from '../controller/designInputController.js';
+import { ArtifactCanvasInputController } from '../controller/artifactCanvasInputController.js';
 import { ArtifactToolbar } from './artifactToolbar.js';
 import type { WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { ArtifactEditorActions } from '../artifactEditorActions.js';
-import type { DesignEditorContributionFactory, IDesignCanvasView, IDesignDrawingContribution, IDesignMotionContribution, IDesignPropertiesContribution, IDesignCodeContribution, IDesignPrototypeContribution } from '../designEditorBrowser.js';
+import type { ArtifactCanvasEditorContributionFactory, IArtifactCanvasView, IArtifactCanvasDrawingContribution, IArtifactCanvasMotionContribution, IArtifactCanvasPropertiesContribution, IArtifactCanvasCodeContribution, IArtifactCanvasPrototypeContribution } from '../artifactCanvasEditorBrowser.js';
 
 const KEYBOARD_ZOOM_FACTOR = 1.2;
 const KEYBOARD_PAN_DISTANCE = 60;
@@ -39,13 +39,13 @@ const focusedViews = new WeakMap<Element, ArtifactEditorWidget>();
 export class ArtifactEditorWidget extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly commands: DocumentCommands;
-	public readonly selection = new DesignSelection();
+	public readonly selection = new ArtifactCanvasSelection();
 	private readonly viewChange = this._register(new Emitter<void>());
 	public readonly onDidChangeView = this.viewChange.event;
-	private readonly mediaPreview = this._register(new DesignMediaPreview());
+	private readonly mediaPreview = this._register(new ArtifactCanvasMediaPreview());
 	private readonly camera = new CanvasViewport();
-	private readonly canvas: IDesignCanvasView;
-	private readonly properties: IDesignPropertiesContribution;
+	private readonly canvas: IArtifactCanvasView;
+	private readonly properties: IArtifactCanvasPropertiesContribution;
 	private readonly contentDomNode: HTMLElement;
 	private readonly messageDomNode: HTMLElement;
 	private contextMenuVisible = false;
@@ -54,20 +54,20 @@ export class ArtifactEditorWidget extends Disposable {
 	private readonly toolActions: WorkbenchToolBar;
 	private readonly modeActions: WorkbenchToolBar;
 	private readonly editorActions: ArtifactEditorActions;
-	private readonly text: import('../designEditorBrowser.js').IDesignTextContribution;
-	private readonly drawing: IDesignDrawingContribution;
-	private readonly motion: IDesignMotionContribution;
-	private readonly code: IDesignCodeContribution;
-	private readonly prototype: IDesignPrototypeContribution;
-	private tool = DesignTool.Select;
-	private mode = DesignMode.Design;
-	private readonly input: DesignInputController;
+	private readonly text: import('../artifactCanvasEditorBrowser.js').IArtifactCanvasTextContribution;
+	private readonly drawing: IArtifactCanvasDrawingContribution;
+	private readonly motion: IArtifactCanvasMotionContribution;
+	private readonly code: IArtifactCanvasCodeContribution;
+	private readonly prototype: IArtifactCanvasPrototypeContribution;
+	private tool = ArtifactCanvasTool.Select;
+	private mode = ArtifactCanvasMode.Design;
+	private readonly input: ArtifactCanvasInputController;
 	private dimension: IDimension = { width: 0, height: 0 };
 
 	constructor(
 		ownerDocument: Document,
-		public readonly documentController: DesignDocumentController,
-		contributionsFactory: DesignEditorContributionFactory,
+		public readonly documentController: ArtifactCanvasDocumentController,
+		contributionsFactory: ArtifactCanvasEditorContributionFactory,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
@@ -124,14 +124,14 @@ export class ArtifactEditorWidget extends Disposable {
 		scopedContext.createKey('sessionsDesignCanvasFocused', true);
 		const active = scopedContext.createKey<boolean>('sessionsDesignCanvasActive', false);
 		const textEditing = scopedContext.createKey<boolean>('sessionsDesignTextEditing', false);
-		this._register(addDisposableListener(this.domNode, 'focusin', event => textEditing.set(!!(event.target as Element).closest('[contenteditable][data-design-text]'))));
+		this._register(addDisposableListener(this.domNode, 'focusin', event => textEditing.set(!!(event.target as Element).closest('[contenteditable][data-artifact-canvas-text]'))));
 		this._register(addDisposableListener(this.domNode, 'focusout', () => textEditing.set(false)));
 		this._register(addDisposableListener(this.domNode, 'focus', () => { active.set(true); this.canvas.setFocused(this.domNode.matches(':focus-visible')); }));
 		this._register(addDisposableListener(this.domNode, 'blur', () => { active.set(false); this.canvas.setFocused(false); }));
 		this._register(this.documentController.model.onDidChange(kind => {
 			this.cancelGesture();
 			if (kind === 'replace') { this.text.finish(false); this.select([]); }
-			else if (this.selection.retain(getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape))) { this.announceSelection(); }
+			else if (this.selection.retain(getArtifactCanvasShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape))) { this.announceSelection(); }
 			this.render();
 		}));
 		this._register(documentController.onDidChange(event => {
@@ -144,12 +144,12 @@ export class ArtifactEditorWidget extends Disposable {
 		}));
 		this._register(this.drawing.onDidChange(() => this.renderShapes()));
 		this._register(this.motion.onDidChangeTime(() => this.renderShapes()));
-		this.input = this._register(new DesignInputController({
+		this.input = this._register(new ArtifactCanvasInputController({
 			viewport: this.canvas.domNode,
 			domNode: this.domNode,
 			getTool: () => this.tool,
 			getMode: () => this.mode,
-			getShapesForHitTesting: () => this.mode === DesignMode.Motion ? this.motion.getScene().shapes : this.documentController.model.value.shapes,
+			getShapesForHitTesting: () => this.mode === ArtifactCanvasMode.Motion ? this.motion.getScene().shapes : this.documentController.model.value.shapes,
 			render: () => this.render(),
 			applyTransform: () => this.applyTransform(),
 			selectionChanged: () => this.announceSelection(),
@@ -170,7 +170,7 @@ export class ArtifactEditorWidget extends Disposable {
 	public layout(dimension: IDimension): void { this.dimension = dimension; }
 	public focusProperties(): void { this.properties.focus(); }
 	public get propertiesDomNode(): HTMLElement { return this.properties.domNode; }
-	public get hasProperties(): boolean { return this.mode === DesignMode.Design || this.mode === DesignMode.Draw; }
+	public get hasProperties(): boolean { return this.mode === ArtifactCanvasMode.Design || this.mode === ArtifactCanvasMode.Draw; }
 	public selectShape(id: string): void {
 		this.selectShapes([id]);
 	}
@@ -181,15 +181,13 @@ export class ArtifactEditorWidget extends Disposable {
 		this.render();
 	}
 	public revealShape(id: string): void {
-		const entry = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === id);
+		const entry = getArtifactCanvasShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === id);
 		if (!entry) { return; }
 		this.selectShapes([id]);
-		const height = this.mode === DesignMode.Motion && this.motion.domNode.offsetTop > 0
+		const height = this.mode === ArtifactCanvasMode.Motion && this.motion.domNode.offsetTop > 0
 			? this.motion.domNode.offsetTop
 			: this.canvas.domNode.clientHeight;
-		this.camera.scale = Math.max(0.2, Math.min(1, (this.dimension.width - 48) / entry.world.width, (height - 100) / entry.world.height));
-		this.camera.panX = this.dimension.width / 2 - (entry.world.x + entry.world.width / 2) * this.camera.scale;
-		this.camera.panY = height / 2 - (entry.world.y + entry.world.height / 2) * this.camera.scale;
+		this.camera.fitBounds(entry.world, this.dimension.width, height, { x: 24, y: 50 });
 		this.applyTransform();
 	}
 	public setVisible(visible: boolean): void {
@@ -201,7 +199,7 @@ export class ArtifactEditorWidget extends Disposable {
 			this.properties.cancel();
 			if (this.contextMenuVisible) this.contextMenus.hideContextMenu();
 		}
-		this.motion.setActive(visible && this.mode === DesignMode.Motion);
+		this.motion.setActive(visible && this.mode === ArtifactCanvasMode.Motion);
 	}
 
 	public setWorkspaceToolbarContext(context: unknown): void {
@@ -216,13 +214,13 @@ export class ArtifactEditorWidget extends Disposable {
 		return root ? focusedViews.get(root) : undefined;
 	}
 
-	public getAccessibleContent(): string { return (this.documentController.automaticallySaves ? this.documentController.saveStatus + '\n' : '') + (this.mode === DesignMode.Code ? this.code.getAccessibleContent() : this.contentDomNode.textContent! + '\n' + this.text.getAccessibleContent() + '\n' + this.prototype.getAccessibleContent()); }
+	public getAccessibleContent(): string { return (this.documentController.automaticallySaves ? this.documentController.saveStatus + '\n' : '') + (this.mode === ArtifactCanvasMode.Code ? this.code.getAccessibleContent() : this.contentDomNode.textContent! + '\n' + this.text.getAccessibleContent() + '\n' + this.prototype.getAccessibleContent()); }
 	public undo(): void { if (this.documentController.isBusy) { return; } this.cancelGesture(); this.documentController.model.undo(); }
 	public redo(): void { if (this.documentController.isBusy) { return; } this.cancelGesture(); this.documentController.model.redo(); }
 	public formatText(format: 'bold' | 'italic' | 'underline'): void { this.text.toggleFormat(format); }
 	public selectAll(): void {
 		if (this.text.editingId) { this.text.selectAll(); return; }
-		if (this.selection.editingVector && this.selectedShape?.kind === 'path') { this.selection.nodeIndices.clear(); designPathEditingContours(this.selectedShape)[this.selection.contourIndex].nodes.forEach((_, index) => this.selection.nodeIndices.add(index)); this.render(); return; }
+		if (this.selection.editingVector && this.selectedShape?.kind === 'path') { this.selection.nodeIndices.clear(); artifactCanvasPathEditingContours(this.selectedShape)[this.selection.contourIndex].nodes.forEach((_, index) => this.selection.nodeIndices.add(index)); this.render(); return; }
 		if (this.documentController.isBusy) { return; }
 		this.cancelGesture();
 		this.select(this.documentController.model.value.shapes.map(shape => shape.id));
@@ -230,8 +228,8 @@ export class ArtifactEditorWidget extends Disposable {
 		this.focus();
 	}
 
-	private get selectedShape(): DesignShape | undefined { return this.selection.ids.size === 1 ? this.selectedShapes[0] : undefined; }
-	private get selectedShapes(): readonly DesignShape[] { return getDesignShapeEntries(this.documentController.model.value.shapes).filter(entry => this.selection.ids.has(entry.shape.id) && !entry.ancestors.some(id => this.selection.ids.has(id))).map(entry => entry.shape); }
+	private get selectedShape(): ArtifactCanvasShape | undefined { return this.selection.ids.size === 1 ? this.selectedShapes[0] : undefined; }
+	private get selectedShapes(): readonly ArtifactCanvasShape[] { return getArtifactCanvasShapeEntries(this.documentController.model.value.shapes).filter(entry => this.selection.ids.has(entry.shape.id) && !entry.ancestors.some(id => this.selection.ids.has(id))).map(entry => entry.shape); }
 
 	private select(ids: readonly string[]): void {
 		this.selection.set(ids);
@@ -249,14 +247,14 @@ export class ArtifactEditorWidget extends Disposable {
 	private addShape(kind: 'rectangle' | 'ellipse' | 'text' | 'path'): void {
 		if (this.documentController.isBusy) { return; }
 		// A direct insertion selects its result, including when the text tool was active.
-		this.setTool(DesignTool.Select);
+		this.setTool(ArtifactCanvasTool.Select);
 		this.select([this.commands.addShape(kind, this.camera.toWorld({ x: this.dimension.width / 2, y: this.canvas.domNode.clientHeight / 2 }), localize('sessions.design.text', 'Text'))]);
 		this.render();
 		this.focus();
 	}
 
-	public setTool(tool: DesignTool): void {
-		if (this.documentController.isBusy || this.mode === DesignMode.Code) { return; }
+	public setTool(tool: ArtifactCanvasTool): void {
+		if (this.documentController.isBusy || this.mode === ArtifactCanvasMode.Code) { return; }
 		this.text.finish();
 		this.cancelGesture();
 		this.tool = tool; this.selection.editingGradient = false; this.selection.editingBlur = false; this.selection.paintingVector = false; this.selection.editingWidth = false;
@@ -264,31 +262,31 @@ export class ArtifactEditorWidget extends Disposable {
 		this.render();
 	}
 
-	public setMode(mode: DesignMode): void {
+	public setMode(mode: ArtifactCanvasMode): void {
 		this.cancelGesture();
 		this.mode = mode; this.selection.editingGradient = false; this.selection.editingBlur = false; this.selection.editingWidth = false;
-		this.domNode.classList.toggle('code-mode', mode === DesignMode.Code);
-		this.domNode.classList.toggle('motion-mode', mode === DesignMode.Motion);
-		this.motion.setActive(mode === DesignMode.Motion);
-		this.tool = mode === DesignMode.Draw ? DesignTool.Pen : DesignTool.Select;
+		this.domNode.classList.toggle('code-mode', mode === ArtifactCanvasMode.Code);
+		this.domNode.classList.toggle('motion-mode', mode === ArtifactCanvasMode.Motion);
+		this.motion.setActive(mode === ArtifactCanvasMode.Motion);
+		this.tool = mode === ArtifactCanvasMode.Draw ? ArtifactCanvasTool.Pen : ArtifactCanvasTool.Select;
 		this.canvas.setTool(this.tool);
 		this.render();
 	}
 
 	public addFrame(): void {
-		if (this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion) { return; }
+		if (this.documentController.isBusy || this.mode === ArtifactCanvasMode.Code || this.mode === ArtifactCanvasMode.Motion) { return; }
 		this.cancelGesture();
 		this.select([this.commands.addFrame(this.viewportCenter())]);
 		this.render();
 		this.focus();
 	}
 
-	private viewportCenter(): DesignPoint { return this.camera.toWorld({ x: this.dimension.width / 2, y: this.canvas.domNode.clientHeight / 2 }); }
+	private viewportCenter(): CanvasPoint { return this.camera.toWorld({ x: this.dimension.width / 2, y: this.canvas.domNode.clientHeight / 2 }); }
 
 	public async importImage(): Promise<void> {
-		if (this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion) { return; }
+		if (this.documentController.isBusy || this.mode === ArtifactCanvasMode.Code || this.mode === ArtifactCanvasMode.Motion) { return; }
 		this.cancelGesture();
-		const selected = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => this.selection.ids.has(entry.shape.id));
+		const selected = getArtifactCanvasShapeEntries(this.documentController.model.value.shapes).find(entry => this.selection.ids.has(entry.shape.id));
 		const center = selected?.world.kind === 'frame' ? { x: selected.world.x + selected.world.width / 2, y: selected.world.y + selected.world.height / 2 } : this.viewportCenter();
 		const id = await this.documentController.importImage(center);
 		if (this.isDisposed) { return; }
@@ -297,7 +295,7 @@ export class ArtifactEditorWidget extends Disposable {
 	}
 
 	public async adoptAssetVersion(version: AssetVersion): Promise<void> {
-		this.setMode(DesignMode.Design);
+		this.setMode(ArtifactCanvasMode.Design);
 		this.cancelGesture();
 		const id = await this.documentController.adoptAssetVersion(version, this.viewportCenter());
 		if (this.isDisposed) { return; }
@@ -306,7 +304,7 @@ export class ArtifactEditorWidget extends Disposable {
 	}
 
 	public duplicateSelected(): void {
-		if (this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion) { return; }
+		if (this.documentController.isBusy || this.mode === ArtifactCanvasMode.Code || this.mode === ArtifactCanvasMode.Motion) { return; }
 		this.cancelGesture();
 		const ids = this.commands.duplicate(this.selection.ids);
 		if (ids.length) { this.select(ids); }
@@ -314,7 +312,7 @@ export class ArtifactEditorWidget extends Disposable {
 	}
 
 	public addAutoLayout(): void {
-		if (this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion) { return; }
+		if (this.documentController.isBusy || this.mode === ArtifactCanvasMode.Code || this.mode === ArtifactCanvasMode.Motion) { return; }
 		this.cancelGesture();
 		const id = this.commands.addAutoLayout(this.selection.ids);
 		if (id) { this.select([id]); this.render(); }
@@ -322,7 +320,7 @@ export class ArtifactEditorWidget extends Disposable {
 	}
 
 	public createComponent(): void {
-		if (this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion) { return; }
+		if (this.documentController.isBusy || this.mode === ArtifactCanvasMode.Code || this.mode === ArtifactCanvasMode.Motion) { return; }
 		this.cancelGesture();
 		const id = this.commands.components.create(this.selection.ids);
 		if (id) { this.select([id]); this.render(); }
@@ -330,30 +328,30 @@ export class ArtifactEditorWidget extends Disposable {
 	}
 
 	public detachInstance(): void {
-		if (this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion || !this.selectedShape) { return; }
+		if (this.documentController.isBusy || this.mode === ArtifactCanvasMode.Code || this.mode === ArtifactCanvasMode.Motion || !this.selectedShape) { return; }
 		this.cancelGesture();
 		this.commands.components.detach(this.selectedShape.id);
 		this.focus();
 	}
 
 	public reorderSelected(order: 'front' | 'back' | 'forward' | 'backward'): void {
-		if (this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion) { return; }
+		if (this.documentController.isBusy || this.mode === ArtifactCanvasMode.Code || this.mode === ArtifactCanvasMode.Motion) { return; }
 		this.cancelGesture();
 		this.commands.reorder(this.selection.ids, order);
 	}
 
 	/** Layers and canvas share editing shortcuts while retaining their own navigation keys. */
 	public handleLayerKeyDown(event: KeyboardEvent): boolean {
-		if (event.defaultPrevented || this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion || this.input.isGesturing) { return false; }
+		if (event.defaultPrevented || this.documentController.isBusy || this.mode === ArtifactCanvasMode.Code || this.mode === ArtifactCanvasMode.Motion || this.input.isGesturing) { return false; }
 		const vectorKey = event.code.startsWith('Key') ? event.code.slice(3).toLowerCase() : event.key.toLowerCase();
 		const vectorAction = event.altKey && event.shiftKey ? ({
-			[designVectorShortcutKeys.flatten]: 'vectorFlatten',
-			[designVectorShortcutKeys.union]: 'vectorunion',
-			[designVectorShortcutKeys.subtract]: 'vectorsubtract',
-			[designVectorShortcutKeys.intersect]: 'vectorintersect',
-			[designVectorShortcutKeys.exclude]: 'vectorexclude',
-		} as Record<string, string>)[vectorKey] : (event.ctrlKey || event.metaKey) && event.altKey && vectorKey === designVectorShortcutKeys.outline
-			? 'vectorOutline' : (event.ctrlKey || event.metaKey) && vectorKey === designVectorShortcutKeys.transform
+			[artifactCanvasVectorShortcutKeys.flatten]: 'vectorFlatten',
+			[artifactCanvasVectorShortcutKeys.union]: 'vectorunion',
+			[artifactCanvasVectorShortcutKeys.subtract]: 'vectorsubtract',
+			[artifactCanvasVectorShortcutKeys.intersect]: 'vectorintersect',
+			[artifactCanvasVectorShortcutKeys.exclude]: 'vectorexclude',
+		} as Record<string, string>)[vectorKey] : (event.ctrlKey || event.metaKey) && event.altKey && vectorKey === artifactCanvasVectorShortcutKeys.outline
+			? 'vectorOutline' : (event.ctrlKey || event.metaKey) && vectorKey === artifactCanvasVectorShortcutKeys.transform
 				? event.shiftKey ? 'vectorOutline' : 'vectorFlatten' : undefined;
 		if (vectorAction) { const action = this.properties.getActions().find(action => action.id === `sessions.design.${vectorAction}`); if (action?.enabled) { void action.run(); } event.preventDefault(); event.stopPropagation(); return true; }
 		if ((event.ctrlKey || event.metaKey) && event.altKey && (event.code === 'KeyK' || event.key.toLowerCase() === 'k')) { this.createComponent(); }
@@ -368,14 +366,14 @@ export class ArtifactEditorWidget extends Disposable {
 
 	private renderShapes(): void {
 		this.canvas.domNode.style.backgroundColor = this.properties.background;
-		const scene = this.mode === DesignMode.Motion ? this.motion.getScene() : undefined;
-		const preview = (shape: DesignShape): DesignShape => {
+		const scene = this.mode === ArtifactCanvasMode.Motion ? this.motion.getScene() : undefined;
+		const preview = (shape: ArtifactCanvasShape): ArtifactCanvasShape => {
 			const fillPreview = this.properties.preview;
 			const updated = fillPreview?.id === shape.id ? fillPreview : this.input.preview.find(preview => preview.id === shape.id) ?? shape;
 			if (updated.kind !== 'frame' && updated.kind !== 'group') { return updated; } const children = updated.children.map(preview); return children.every((child, index) => child === updated.children[index]) ? updated : { ...updated, children };
 		};
 		const shapes = (scene?.shapes ?? this.documentController.model.value.shapes).map(preview);
-		const selected = getDesignShapeEntries(shapes).filter(entry => this.selection.ids.has(entry.shape.id));
+		const selected = getArtifactCanvasShapeEntries(shapes).filter(entry => this.selection.ids.has(entry.shape.id));
 		this.canvas.render({
 			shapes,
 			selectedShapes: selected.map(entry => entry.world),
@@ -385,7 +383,7 @@ export class ArtifactEditorWidget extends Disposable {
 			gradient: this.selection.editingGradient ? { paintId: this.selection.paintId, stopId: this.selection.gradientStopId } : undefined,
 			blur: this.selection.editingBlur ? { effectId: this.selection.effectId, handle: this.selection.blurHandle } : undefined,
 			showWidthHandles: this.selection.editingVector && this.selection.editingWidth && !selected.some(entry => this.commands.components.isInstanceChild(entry.shape.id)), selectedWidthPoints: this.selection.widthPointIds,
-			showPathHandles: !this.selection.editingWidth && this.selection.editingVector && this.mode !== DesignMode.Motion && !selected.some(entry => this.commands.components.isInstanceChild(entry.shape.id)),
+			showPathHandles: !this.selection.editingWidth && this.selection.editingVector && this.mode !== ArtifactCanvasMode.Motion && !selected.some(entry => this.commands.components.isInstanceChild(entry.shape.id)),
 			scale: this.camera.scale,
 			opacity: scene?.opacity,
 		});
@@ -394,10 +392,10 @@ export class ArtifactEditorWidget extends Disposable {
 		this.vectorSelectionStatus = vectorStatus;
 		this.text.update();
 		if (this.text.editingId) { this.canvas.domNode.querySelector<SVGElement>(`[data-shape-id="${this.text.editingId}"]`)?.setAttribute('visibility', 'hidden'); }
-		const showProperties = this.mode === DesignMode.Design || this.mode === DesignMode.Draw;
+		const showProperties = this.mode === ArtifactCanvasMode.Design || this.mode === ArtifactCanvasMode.Draw;
 		// A properties preview changes the canvas, not the committed anchors addressed by the other editing controls.
 		this.properties.update(showProperties && selected.length === 1 ? this.properties.preview ? this.selectedShape : selected[0].shape : undefined, showProperties);
-		this.prototype.update(this.camera.scale, this.mode === DesignMode.Design);
+		this.prototype.update(this.camera.scale, this.mode === ArtifactCanvasMode.Design);
 		this.viewChange.fire();
 	}
 
@@ -407,8 +405,8 @@ export class ArtifactEditorWidget extends Disposable {
 		this.cancelGesture();
 		const bounds = this.canvas.domNode.getBoundingClientRect();
 		const point = this.camera.toWorld({ x: event.clientX - bounds.left, y: event.clientY - bounds.top });
-		const shapes = this.mode === DesignMode.Motion ? this.motion.getScene().shapes : this.documentController.model.value.shapes;
-		const shape = hitTestDesignShapes(shapes, point);
+		const shapes = this.mode === ArtifactCanvasMode.Motion ? this.motion.getScene().shapes : this.documentController.model.value.shapes;
+		const shape = hitTestArtifactCanvasShapes(shapes, point);
 		// Keep a multi-selection when opening its menu, including on empty canvas space.
 		if (!this.documentController.isBusy && shape && !this.selection.ids.has(shape.id)) {
 			this.select([shape.id]);
@@ -448,12 +446,12 @@ export class ArtifactEditorWidget extends Disposable {
 			this.action('ungroup', localize('sessions.design.ungroup', 'Ungroup'), () => this.ungroupSelected(), !this.documentController.isBusy && selected?.kind === 'group' && !selected.motion),
 			...this.properties.getActions(),
 			new Separator(),
-			this.action('addFrame', localize('sessions.design.addFrame', 'Add frame (F)'), () => this.addFrame(), !this.documentController.isBusy && this.mode !== DesignMode.Code && this.mode !== DesignMode.Motion),
-			this.action('importImage', localize('sessions.design.importImage', 'Import image'), () => this.importImage(), !this.documentController.isBusy && this.mode !== DesignMode.Code && this.mode !== DesignMode.Motion),
+			this.action('addFrame', localize('sessions.design.addFrame', 'Add frame (F)'), () => this.addFrame(), !this.documentController.isBusy && this.mode !== ArtifactCanvasMode.Code && this.mode !== ArtifactCanvasMode.Motion),
+			this.action('importImage', localize('sessions.design.importImage', 'Import image'), () => this.importImage(), !this.documentController.isBusy && this.mode !== ArtifactCanvasMode.Code && this.mode !== ArtifactCanvasMode.Motion),
 			this.action('export', localize('sessions.design.export', 'Export SVG'), () => this.runFileOperation(() => this.documentController.exportDocument()), !this.documentController.isBusy && shapes.length > 0),
 			...(!this.documentController.artifactKind ? [this.action('open', localize('sessions.design.open', 'Open design'), () => this.runFileOperation(() => this.documentController.openDocument()), !this.documentController.isBusy)] : []),
 			...(this.documentController.needsSaveRetry ? [this.action('retrySave', localize('sessions.design.retrySave', 'Retry saving'), () => this.documentController.flushAutoSave(), !this.documentController.isRestoring)] : []),
-			...(this.documentController.automaticallySaves ? [this.action('saveCopy', this.documentController.artifactKind === 'slides' ? localize('sessions.creator.slides.exportCopy', 'Export editable copy') : localize('sessions.design.saveCopy', 'Save a copy'), () => this.runFileOperation(() => this.documentController.saveCopy()), !this.documentController.isBusy)] : []),
+			...(this.documentController.automaticallySaves ? [this.action('saveCopy', this.documentController.artifactKind === 'slides' ? localize('sessions.artifacts.slides.exportCopy', 'Export editable copy') : localize('sessions.design.saveCopy', 'Save a copy'), () => this.runFileOperation(() => this.documentController.saveCopy()), !this.documentController.isBusy)] : []),
 		];
 	}
 
@@ -467,9 +465,9 @@ export class ArtifactEditorWidget extends Disposable {
 			this.modeActions.setActions(editorActions.modes);
 		}
 		this.motion.update(selected, this.documentController.isBusy);
-		this.code.update(this.documentController.model.value, this.mode === DesignMode.Code, this.documentController.isBusy);
+		this.code.update(this.documentController.model.value, this.mode === ArtifactCanvasMode.Code, this.documentController.isBusy);
 
-		const describe = (shape: DesignShape, index: number): string => {
+		const describe = (shape: ArtifactCanvasShape, index: number): string => {
 			const labels = {
 				rectangle: localize('sessions.design.rectangle', 'Rectangle'),
 				ellipse: localize('sessions.design.ellipse', 'Ellipse'),
@@ -501,11 +499,11 @@ export class ArtifactEditorWidget extends Disposable {
 			if (shape.gridCell) { content += '\n' + localize('sessions.design.cellDescription', 'Column span {0}; row span {1}.', shape.gridCell.columnSpan ?? 1, shape.gridCell.rowSpan ?? 1); }
 			if (shape.sizeLimits) { content += '\n' + localize('sessions.design.limitsDescription', 'Width limits: {0} to {1}; height limits: {2} to {3}.', shape.sizeLimits.minWidth ?? localize('sessions.design.noLimit', 'None'), shape.sizeLimits.maxWidth ?? localize('sessions.design.noLimit', 'None'), shape.sizeLimits.minHeight ?? localize('sessions.design.noLimit', 'None'), shape.sizeLimits.maxHeight ?? localize('sessions.design.noLimit', 'None')); }
 			if (shape.kind === 'text') { content += `\n${shape.text}`; }
-			if (shape.kind === 'path' && shape.network) { content += '\n' + localize('sessions.design.networkDescription', '{0} shared nodes; {1} segments; {2} filled regions.', shape.network.vertices.length, shape.network.edges.length, designNetworkRegions(shape.network).filter(region => region.filled).length); }
+			if (shape.kind === 'path' && shape.network) { content += '\n' + localize('sessions.design.networkDescription', '{0} shared nodes; {1} segments; {2} filled regions.', shape.network.vertices.length, shape.network.edges.length, artifactCanvasNetworkRegions(shape.network).filter(region => region.filled).length); }
 			else if (shape.kind === 'path') { content += '\n' + localize('sessions.design.pathDescription', '{0} nodes; closed: {1}', shape.network?.vertices.length ?? shape.nodes.length, shape.closed ? localize('sessions.design.yes', 'Yes') : localize('sessions.design.no', 'No')); }
 			if (shape.kind === 'image') { content += '\n' + this.documentController.model.value.assets.find(asset => asset.id === shape.assetId)!.name; }
 			if (shape.kind === 'group' || shape.kind === 'frame') { content += '\n' + shape.children.map(describe).join('\n'); }
-			if (designEffects(shape).length) { content += '\n' + localize('sessions.design.effectsReview', 'Effects: {0}', designEffects(shape).map(describeDesignEffect).join('; ')); }
+			if (artifactCanvasEffects(shape).length) { content += '\n' + localize('sessions.design.effectsReview', 'Effects: {0}', artifactCanvasEffects(shape).map(describeArtifactCanvasEffect).join('; ')); }
 			if (shape.motion) { content += '\n' + localize('sessions.design.motionDescription', '{0} keyframes, duration {1} ms, loop: {2}', shape.motion.keyframes.length, shape.motion.duration, shape.motion.loop ? localize('sessions.design.yes', 'Yes') : localize('sessions.design.no', 'No')); }
 			return content;
 		};
@@ -551,7 +549,7 @@ export class ArtifactEditorWidget extends Disposable {
 		}
 		const shape = this.selectedShape;
 		if (!shape || this.commands.components.isInstanceChild(shape.id)) { return false; }
-		const effects = designEffects(shape), effect = effects.find(effect => effect.id === this.selection.effectId);
+		const effects = artifactCanvasEffects(shape), effect = effects.find(effect => effect.id === this.selection.effectId);
 		if (!effect || !('progressive' in effect) || !effect.progressive || effect.visible === false) { return false; }
 		if (event.key === 'Enter') {
 			this.selection.blurHandle = this.selection.blurHandle === 'start' ? 'end' : 'start';
@@ -585,16 +583,16 @@ export class ArtifactEditorWidget extends Disposable {
 			this.showContextMenu(this.canvas.domNode);
 			return;
 		}
-		if (this.documentController.isBusy || this.mode === DesignMode.Code) { return; }
+		if (this.documentController.isBusy || this.mode === ArtifactCanvasMode.Code) { return; }
 		if (this.handleBlurKeyDown(event)) { return; }
 		if (event.key === 'Enter' && this.properties.preview) { const apply = this.properties.getActions().find(action => action.id === 'sessions.design.offsetApply' && action.enabled); if (apply) { void apply.run(); event.preventDefault(); return; } }
 		if (this.selection.editingWidth && this.selectedShape?.kind === 'path' && ['Delete', 'Backspace'].includes(event.key) && !this.commands.components.isInstanceChild(this.selectedShape.id)) {
 			const path = this.selectedShape; this.commands.vector.update({ ...path, widthPoints: path.widthPoints?.filter(point => !this.selection.widthPointIds.has(point.id)) }); this.selection.widthPointIds.clear(); this.render(); event.preventDefault(); return;
 		}
 		if ((event.key === 'Enter' || event.key === 'F2') && this.selectedShapes.length === 1 && this.selectedShapes[0].kind === 'text') { event.preventDefault(); this.text.edit(this.selectedShapes[0].id); return; }
-		if (event.shiftKey && event.code === designVectorShortcutKeys.paintRegions && this.selection.editingVector && this.selectedShape?.kind === 'path' && this.selectedShape.network) { this.selection.paintingVector = !this.selection.paintingVector; this.render(); event.preventDefault(); return; }
+		if (event.shiftKey && event.code === artifactCanvasVectorShortcutKeys.paintRegions && this.selection.editingVector && this.selectedShape?.kind === 'path' && this.selectedShape.network) { this.selection.paintingVector = !this.selection.paintingVector; this.render(); event.preventDefault(); return; }
 		if (this.selection.editingGradient && this.selectedShape && !this.commands.components.isInstanceChild(this.selectedShape.id)) {
-			const shape = this.selectedShape, paints = designPaints(shape), paint = paints.find(paint => paint.id === this.selection.paintId) ?? paints[0];
+			const shape = this.selectedShape, paints = artifactCanvasPaints(shape), paint = paints.find(paint => paint.id === this.selection.paintId) ?? paints[0];
 			if (paint && paint.type !== 'solid') {
 				const stop = paint.stops.find(stop => stop.id === this.selection.gradientStopId) ?? paint.stops[0];
 				if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) { const delta = (event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -1 : 1) * (event.shiftKey ? .1 : .01); this.commands.updateShape({ ...shape, fills: paints.map(value => value.id === paint.id ? { ...paint, stops: paint.stops.map(value => value.id === stop.id ? { ...value, position: Math.max(0, Math.min(1, value.position + delta)) } : value).sort((a, b) => a.position - b.position) } : value) }); event.preventDefault(); return; }
@@ -614,21 +612,21 @@ export class ArtifactEditorWidget extends Disposable {
 		}
 		const shapes = this.selectedShapes;
 		const distance = event.shiftKey ? 10 : 1;
-		const directions: Record<string, DesignPoint> = { ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 } };
+		const directions: Record<string, CanvasPoint> = { ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 } };
 		const direction = directions[event.key];
 		if (this.selection.editingVector && this.selectedShape?.kind === 'path' && !this.commands.components.isInstanceChild(this.selectedShape.id) && (direction || ['Delete', 'Backspace'].includes(event.key))) {
 			const path = this.selectedShape;
 			if (direction) {
-				const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world;
+				const placed = getArtifactCanvasShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world;
 				const angle = -placed.rotation * Math.PI / 180;
-				this.commands.vector.editContour(path, this.selection.contourIndex, contour => ({ ...contour, nodes: contour.nodes.map((node, index) => this.selection.nodeIndices.has(index) ? moveDesignPathNode(node, 'anchor', { x: node.x + (direction.x * Math.cos(angle) - direction.y * Math.sin(angle)) * distance / placed.width, y: node.y + (direction.x * Math.sin(angle) + direction.y * Math.cos(angle)) * distance / placed.height }, path.width, path.height) : node) }));
+				this.commands.vector.editContour(path, this.selection.contourIndex, contour => ({ ...contour, nodes: contour.nodes.map((node, index) => this.selection.nodeIndices.has(index) ? moveArtifactCanvasPathNode(node, 'anchor', { x: node.x + (direction.x * Math.cos(angle) - direction.y * Math.sin(angle)) * distance / placed.width, y: node.y + (direction.x * Math.sin(angle) + direction.y * Math.cos(angle)) * distance / placed.height }, path.width, path.height) : node) }));
 			} else if (event.shiftKey) { this.commands.vector.healNodes(path, this.selection.contourIndex, this.selection.nodeIndices); this.selection.selectNode(0, 0); this.render(); }
 			else { this.commands.vector.removeNodes(path, this.selection.contourIndex, this.selection.nodeIndices); }
 			event.preventDefault(); return;
 		}
 		if (direction) {
 			if (shapes.length) {
-				const entries = getDesignShapeEntries(this.documentController.model.value.shapes);
+				const entries = getArtifactCanvasShapeEntries(this.documentController.model.value.shapes);
 				this.commands.updateShapes(shapes.map(shape => {
 					const entry = entries.find(entry => entry.shape.id === shape.id)!;
 					const radians = -(entry.world.rotation - shape.rotation) * Math.PI / 180;
@@ -639,25 +637,25 @@ export class ArtifactEditorWidget extends Disposable {
 			else { this.camera.panBy(-direction.x * KEYBOARD_PAN_DISTANCE, -direction.y * KEYBOARD_PAN_DISTANCE); this.applyTransform(); }
 		} else {
 			switch (event.key.toLowerCase()) {
-				case designCanvasShortcutKeys.addFrame: this.addFrame(); break;
-				case designCanvasShortcutKeys.importImage: void this.importImage(); break;
-				case designCanvasShortcutKeys.selectTool: this.setTool(DesignTool.Select); break;
-				case designCanvasShortcutKeys.handTool: this.setTool(DesignTool.Hand); break;
-				case designCanvasShortcutKeys.addRectangle: this.addShape('rectangle'); break;
-				case designCanvasShortcutKeys.addEllipse: this.addShape('ellipse'); break;
-				case designCanvasShortcutKeys.textTool: this.setTool(DesignTool.Text); break;
-				case designCanvasShortcutKeys.penTool: this.setTool(DesignTool.Pen); break;
-				case designCanvasShortcutKeys.group: this.groupSelected(); break;
-				case designCanvasShortcutKeys.ungroup: this.ungroupSelected(); break;
-				case designCanvasShortcutKeys.addToSelection: {
-					const shapes = getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape);
+				case artifactCanvasShortcutKeys.addFrame: this.addFrame(); break;
+				case artifactCanvasShortcutKeys.importImage: void this.importImage(); break;
+				case artifactCanvasShortcutKeys.selectTool: this.setTool(ArtifactCanvasTool.Select); break;
+				case artifactCanvasShortcutKeys.handTool: this.setTool(ArtifactCanvasTool.Hand); break;
+				case artifactCanvasShortcutKeys.addRectangle: this.addShape('rectangle'); break;
+				case artifactCanvasShortcutKeys.addEllipse: this.addShape('ellipse'); break;
+				case artifactCanvasShortcutKeys.textTool: this.setTool(ArtifactCanvasTool.Text); break;
+				case artifactCanvasShortcutKeys.penTool: this.setTool(ArtifactCanvasTool.Pen); break;
+				case artifactCanvasShortcutKeys.group: this.groupSelected(); break;
+				case artifactCanvasShortcutKeys.ungroup: this.ungroupSelected(); break;
+				case artifactCanvasShortcutKeys.addToSelection: {
+					const shapes = getArtifactCanvasShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape);
 					const next = shapes.find(shape => !this.selection.ids.has(shape.id));
 					if (next) { this.selection.add(next.id); this.announceSelection(); this.render(); }
 					break;
 				}
 				case 'delete': case 'backspace': this.deleteSelected(); break;
 				case 'tab': {
-					const shapes = getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape);
+					const shapes = getArtifactCanvasShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape);
 					const index = shapes.findIndex(item => item.id === this.selectedShapes.at(-1)?.id);
 					const next = index + (event.shiftKey ? -1 : 1);
 					if (next < 0 || next >= shapes.length) { return; }
@@ -665,9 +663,9 @@ export class ArtifactEditorWidget extends Disposable {
 					this.render();
 					break;
 				}
-				case designCanvasShortcutKeys.zoomIn: case designCanvasShortcutKeys.zoomInAlternate: this.zoomAtCenter(KEYBOARD_ZOOM_FACTOR); break;
-				case designCanvasShortcutKeys.zoomOut: case designCanvasShortcutKeys.zoomOutAlternate: this.zoomAtCenter(1 / KEYBOARD_ZOOM_FACTOR); break;
-				case designCanvasShortcutKeys.resetZoom: this.camera.reset(); this.applyTransform(); break;
+				case artifactCanvasShortcutKeys.zoomIn: case artifactCanvasShortcutKeys.zoomInAlternate: this.zoomAtCenter(KEYBOARD_ZOOM_FACTOR); break;
+				case artifactCanvasShortcutKeys.zoomOut: case artifactCanvasShortcutKeys.zoomOutAlternate: this.zoomAtCenter(1 / KEYBOARD_ZOOM_FACTOR); break;
+				case artifactCanvasShortcutKeys.resetZoom: this.camera.reset(); this.applyTransform(); break;
 				default: return;
 			}
 		}

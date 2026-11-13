@@ -2,18 +2,18 @@ import { defaultButtonStyles } from '../../../../../platform/theme/browser/defau
 import { Color } from '../../../../../base/common/color.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { createArtifactColorPicker } from '../widget/artifactColorPicker.js';
-import { describeDesignEffect } from '../designEffectLabels.js';
+import { describeArtifactCanvasEffect } from '../artifactCanvasEffectLabels.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
-import { getDesignRenderBounds, renderDesignShape } from '../designSvgRenderer.js';
-import type { DesignDocumentController } from '../designDocumentController.js';
+import { getArtifactCanvasRenderBounds, renderArtifactCanvasShape } from '../rendering/artifactCanvasSvgRenderer.js';
+import type { ArtifactCanvasDocumentController } from '../artifactCanvasDocumentController.js';
 import type { DocumentCommands } from '../../common/commands/documentCommands.js';
-import { flattenDesignShapes, type DesignDocument, type DesignShape } from '../../common/model/designDocument.js';
-import { designPropertyTypes, getDesignResourceCatalog, supportsDesignProperty, getDesignProperty, type DesignLibrary, type DesignBindableProperty, type DesignStyleKind, type DesignVariableType } from '../../common/model/designResources.js';
-import type { DesignSelection } from '../../common/designSelection.js';
+import { flattenArtifactCanvasShapes, type ArtifactCanvasDocument, type ArtifactCanvasShape } from '../../common/model/artifactCanvasDocument.js';
+import { artifactCanvasPropertyTypes, getArtifactCanvasResourceCatalog, supportsArtifactCanvasProperty, getArtifactCanvasProperty, type ArtifactCanvasLibrary, type ArtifactCanvasBindableProperty, type ArtifactCanvasStyleKind, type ArtifactCanvasVariableType } from '../../common/model/artifactCanvasResources.js';
+import type { ArtifactCanvasSelection } from '../../common/artifactCanvasSelection.js';
 
 /** Only editor choices live here; all definitions, links and accepted versions belong to the document. */
 export class ResourcePropertiesWidget extends Disposable {
@@ -22,12 +22,12 @@ export class ResourcePropertiesWidget extends Disposable {
 	private readonly controls = this._register(new DisposableStore());
 	private collectionId = '';
 	private variableId = '';
-	private variableType: DesignVariableType = 'color';
-	private property: DesignBindableProperty = 'fill';
-	private styleKind: DesignStyleKind = 'fill';
+	private variableType: ArtifactCanvasVariableType = 'color';
+	private property: ArtifactCanvasBindableProperty = 'fill';
+	private styleKind: ArtifactCanvasStyleKind = 'fill';
 	private styleId = '';
 	private revision = '';
-	constructor(private readonly controller: DesignDocumentController, private readonly commands: DocumentCommands, private readonly selection: DesignSelection, ownerDocument: Document, @IInstantiationService private readonly instantiation: IInstantiationService) {
+	constructor(private readonly controller: ArtifactCanvasDocumentController, private readonly commands: DocumentCommands, private readonly selection: ArtifactCanvasSelection, ownerDocument: Document, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		this.fields = h(ownerDocument, 'div', { className: 'ash-design-resource-fields' });
 		this.domNode = h(ownerDocument, 'details', { className: 'ash-design-property-section ash-design-resources' }, h(ownerDocument, 'summary', {}, localize('sessions.design.resources', 'Design resources'), h(ownerDocument, 'span', { className: 'ash-design-property-disclosure', attributes: { 'aria-hidden': 'true' } })), this.fields);
@@ -42,18 +42,18 @@ export class ResourcePropertiesWidget extends Disposable {
 		const index = [...this.fields.querySelectorAll('[data-resource-control]')].findIndex(control => control === active);
 		const open = new Set([...this.fields.querySelectorAll<HTMLDetailsElement>('details[open]')].map(detail => detail.dataset.resourceSection ?? ''));
 		this.controls.clear(); this.fields.replaceChildren();
-		const shape = this.selection.ids.size === 1 ? flattenDesignShapes(document.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
-		const catalog = getDesignResourceCatalog(resources, true);
+		const shape = this.selection.ids.size === 1 ? flattenArtifactCanvasShapes(document.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
+		const catalog = getArtifactCanvasResourceCatalog(resources, true);
 		const bindings = this.section('bindings', localize('sessions.design.resourceBindings', 'Bindings and modes'), open);
 		if (shape) {
-			const properties = (Object.keys(designPropertyTypes) as DesignBindableProperty[]).filter(property => supportsDesignProperty(shape, property));
+			const properties = (Object.keys(artifactCanvasPropertyTypes) as ArtifactCanvasBindableProperty[]).filter(property => supportsArtifactCanvasProperty(shape, property));
 			if (!properties.includes(this.property)) { this.property = 'fill'; }
-			this.select(bindings, 'property', localize('sessions.design.bindProperty', 'Bind property'), this.property, properties.map(property => [property, designPropertyLabel(property)]), value => { this.property = value as DesignBindableProperty; this.update(true); });
-			const variables = catalog.variables.filter(variable => variable.type === designPropertyTypes[this.property]);
-			const styleVariable = getDesignResourceCatalog(resources).styles.find(style => shape.styleBindings?.[style.kind] === style.id && style.bindings?.[this.property])?.bindings?.[this.property];
+			this.select(bindings, 'property', localize('sessions.design.bindProperty', 'Bind property'), this.property, properties.map(property => [property, artifactCanvasPropertyLabel(property)]), value => { this.property = value as ArtifactCanvasBindableProperty; this.update(true); });
+			const variables = catalog.variables.filter(variable => variable.type === artifactCanvasPropertyTypes[this.property]);
+			const styleVariable = getArtifactCanvasResourceCatalog(resources).styles.find(style => shape.styleBindings?.[style.kind] === style.id && style.bindings?.[this.property])?.bindings?.[this.property];
 			const currentId = shape.bindings?.[this.property] ?? (styleVariable ? '@style' : '');
 			const choices: [string, string][] = [['', localize('sessions.design.literalValue', 'Literal value')], ...variables.map(variable => [variable.id, variable.name] as [string, string])];
-			if (styleVariable) { choices.push(['@style', localize('sessions.design.fromStyle', 'From style: {0}', getDesignResourceCatalog(resources).variables.find(variable => variable.id === styleVariable)?.name ?? localize('sessions.design.variable', 'Variable'))]); }
+			if (styleVariable) { choices.push(['@style', localize('sessions.design.fromStyle', 'From style: {0}', getArtifactCanvasResourceCatalog(resources).variables.find(variable => variable.id === styleVariable)?.name ?? localize('sessions.design.variable', 'Variable'))]); }
 			if (currentId && currentId !== '@style' && !variables.some(variable => variable.id === currentId)) { choices.push([currentId, localize('sessions.design.unavailableResource', 'Unavailable resource (last value retained)')]); }
 			this.select(bindings, 'binding', localize('sessions.design.variable', 'Variable'), currentId, choices, value => this.commands.resources.bind(this.selection.ids, this.property, value === '@style' ? '' : value, value === '@style'));
 		}
@@ -76,7 +76,7 @@ export class ResourcePropertiesWidget extends Disposable {
 				if (collection.modes.length > 1) { this.button(variables, `deleteMode:${mode.id}`, localize('sessions.design.deleteMode', 'Delete mode: {0}', mode.name), () => this.commands.resources.deleteMode(collection.id, mode.id)); }
 			}
 			this.button(variables, 'addMode', localize('sessions.design.addMode', 'Add mode'), () => this.commands.resources.addMode(collection.id, unique(localize('sessions.design.mode', 'Mode'), collection.modes.map(mode => mode.name))));
-			this.select(variables, 'type', localize('sessions.design.variableType', 'Variable type'), this.variableType, Object.entries(typeLabels()), value => { this.variableType = value as DesignVariableType; });
+			this.select(variables, 'type', localize('sessions.design.variableType', 'Variable type'), this.variableType, Object.entries(typeLabels()), value => { this.variableType = value as ArtifactCanvasVariableType; });
 			const local = resources.variables.filter(variable => variable.collectionId === collection.id);
 			this.button(variables, 'addVariable', localize('sessions.design.createVariable', 'Create variable'), () => { this.variableId = this.commands.resources.addVariable(collection.id, unique(localize('sessions.design.variable', 'Variable'), local.map(variable => variable.name)), this.variableType); this.update(true); });
 			const variable = local.find(variable => variable.id === this.variableId) ?? local[0];
@@ -104,7 +104,7 @@ export class ResourcePropertiesWidget extends Disposable {
 		}
 
 		const styles = this.section('styles', localize('sessions.design.styles', 'Styles'), open);
-		this.select(styles, 'styleKind', localize('sessions.design.styleType', 'Style type'), this.styleKind, Object.entries(styleLabels()), value => { this.styleKind = value as DesignStyleKind; this.styleId = ''; this.update(true); });
+		this.select(styles, 'styleKind', localize('sessions.design.styleType', 'Style type'), this.styleKind, Object.entries(styleLabels()), value => { this.styleKind = value as ArtifactCanvasStyleKind; this.styleId = ''; this.update(true); });
 		const applicable = !!shape && (this.styleKind !== 'text' || shape.kind === 'text') && (this.styleKind !== 'grid' || shape.kind === 'frame');
 		if (shape && applicable) {
 			this.appearance(styles, shape);
@@ -147,19 +147,19 @@ export class ResourcePropertiesWidget extends Disposable {
 		}
 		if (key) { const controls = [...this.fields.querySelectorAll<HTMLElement>('[data-resource-control]')]; (controls.find(control => control.dataset.resourceControl === key) ?? controls[Math.min(index, controls.length - 1)])?.focus(); }
 	}
-	private preview(shape: DesignShape, library: DesignLibrary, caption: string): HTMLElement {
+	private preview(shape: ArtifactCanvasShape, library: ArtifactCanvasLibrary, caption: string): HTMLElement {
 		const doc = this.domNode.ownerDocument;
 		const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
-		const bounds = getDesignRenderBounds([shape]);
+		const bounds = getArtifactCanvasRenderBounds([shape]);
 		svg.setAttribute('viewBox', `${bounds.x - 8} ${bounds.y - 8} ${bounds.width + 16} ${bounds.height + 16}`);
 		svg.setAttribute('aria-hidden', 'true');
-		svg.append(renderDesignShape(shape, undefined, this.controller.getLibraryImageSources(library)));
+		svg.append(renderArtifactCanvasShape(shape, undefined, this.controller.getLibraryImageSources(library)));
 		for (const guide of svg.querySelectorAll('[data-layout-guide]')) { guide.remove(); }
 		return h(doc, 'figure', {}, h(doc, 'figcaption', {}, caption), svg);
 	}
 
-	private appearance(parent: HTMLElement, shape: DesignShape): void {
-		const edit = (patch: Partial<DesignShape>): void => this.commands.updateShape({ ...shape, ...patch } as DesignShape);
+	private appearance(parent: HTMLElement, shape: ArtifactCanvasShape): void {
+		const edit = (patch: Partial<ArtifactCanvasShape>): void => this.commands.updateShape({ ...shape, ...patch } as ArtifactCanvasShape);
 		this.select(parent, 'visible', localize('sessions.design.visibility', 'Visibility'), String(shape.visible !== false), [['true', localize('sessions.design.visible', 'Visible')], ['false', localize('sessions.design.hidden', 'Hidden')]], value => edit({ visible: value === 'true' }));
 		this.input(parent, 'opacity', localize('sessions.design.layerOpacity', 'Layer opacity (0–1)'), String(shape.opacity ?? 1), value => edit({ opacity: this.numeric(value, 0, 1) }), 'number');
 		if (this.styleKind === 'grid' && shape.kind === 'frame') {
@@ -203,17 +203,17 @@ export class ResourcePropertiesWidget extends Disposable {
 	private invalid(): never { throw new TypeError(localize('sessions.design.invalidResourceValue', 'Enter a valid value. Names must be non-empty and unique; colors use six or eight hex digits.')); }
 }
 function unique(base: string, names: readonly string[]): string { let name = base; let index = 1; while (names.includes(name)) { name = `${base} ${++index}`; } return name; }
-function typeLabels(): Record<DesignVariableType, string> { return { color: localize('sessions.design.colorVariable', 'Color'), number: localize('sessions.design.numberVariable', 'Number'), string: localize('sessions.design.stringVariable', 'String'), boolean: localize('sessions.design.booleanVariable', 'Boolean') }; }
-function styleLabels(): Record<DesignStyleKind, string> { return { fill: localize('sessions.design.fillStyle', 'Paint style'), text: localize('sessions.design.textStyle', 'Text style'), effect: localize('sessions.design.effectStyle', 'Effect style'), grid: localize('sessions.design.gridStyle', 'Layout guide style') }; }
+function typeLabels(): Record<ArtifactCanvasVariableType, string> { return { color: localize('sessions.design.colorVariable', 'Color'), number: localize('sessions.design.numberVariable', 'Number'), string: localize('sessions.design.stringVariable', 'String'), boolean: localize('sessions.design.booleanVariable', 'Boolean') }; }
+function styleLabels(): Record<ArtifactCanvasStyleKind, string> { return { fill: localize('sessions.design.fillStyle', 'Paint style'), text: localize('sessions.design.textStyle', 'Text style'), effect: localize('sessions.design.effectStyle', 'Effect style'), grid: localize('sessions.design.gridStyle', 'Layout guide style') }; }
 
-export function designPropertyLabel(property: DesignBindableProperty): string {
-	const labels: Record<DesignBindableProperty, string> = {
+export function artifactCanvasPropertyLabel(property: ArtifactCanvasBindableProperty): string {
+	const labels: Record<ArtifactCanvasBindableProperty, string> = {
 		fill: localize('sessions.design.fill', 'Fill'), width: localize('sessions.design.width', 'Width'), height: localize('sessions.design.height', 'Height'), opacity: localize('sessions.design.opacity', 'Opacity'), visible: localize('sessions.design.visibility', 'Visibility'), text: localize('sessions.design.text', 'Text'), fontFamily: localize('sessions.design.fontFamily', 'Font family'), fontSize: localize('sessions.design.fontSize', 'Font size'), fontWeight: localize('sessions.design.fontWeight', 'Font weight'), lineHeight: localize('sessions.design.lineHeight', 'Line height'), letterSpacing: localize('sessions.design.letterSpacing', 'Letter spacing'), strokeWidth: localize('sessions.design.strokeWidth', 'Stroke width'), minWidth: localize('sessions.design.minWidth', 'Min width'), maxWidth: localize('sessions.design.maxWidth', 'Max width'), minHeight: localize('sessions.design.minHeight', 'Min height'), maxHeight: localize('sessions.design.maxHeight', 'Max height'), gap: localize('sessions.design.gap', 'Gap'), crossGap: localize('sessions.design.lineGap', 'Line gap'), paddingTop: localize('sessions.design.paddingTop', 'Padding top'), paddingRight: localize('sessions.design.paddingRight', 'Padding right'), paddingBottom: localize('sessions.design.paddingBottom', 'Padding bottom'), paddingLeft: localize('sessions.design.paddingLeft', 'Padding left'),
 	}; return labels[property];
 }
-function libraryEntries(document: DesignDocument): Map<string, { readonly name: string; readonly value: unknown; readonly description: string; readonly shape?: DesignShape; }> {
-	const result = new Map<string, { name: string; value: unknown; description: string; shape?: DesignShape; }>();
-	const catalog = getDesignResourceCatalog(document.resources);
+function libraryEntries(document: ArtifactCanvasDocument): Map<string, { readonly name: string; readonly value: unknown; readonly description: string; readonly shape?: ArtifactCanvasShape; }> {
+	const result = new Map<string, { name: string; value: unknown; description: string; shape?: ArtifactCanvasShape; }>();
+	const catalog = getArtifactCanvasResourceCatalog(document.resources);
 	const variableName = (id: string): string => catalog.variables.find(variable => variable.id === id)?.name ?? localize('sessions.design.unavailableResource', 'Unavailable resource (last value retained)');
 	for (const collection of catalog.collections) { result.set(collection.id, { name: collection.name, value: collection, description: localize('sessions.design.collectionReview', 'Modes: {0}\nDefault: {1}', collection.modes.map(mode => mode.name).join(', '), collection.modes.find(mode => mode.id === collection.defaultMode)!.name) }); }
 	for (const variable of catalog.variables) {
@@ -221,17 +221,17 @@ function libraryEntries(document: DesignDocument): Map<string, { readonly name: 
 		result.set(variable.id, { name: variable.name, value: variable, description: [typeLabels()[variable.type], ...collection.modes.map(mode => `${mode.name}: ${typeof variable.values[mode.id] === 'object' ? variableName((variable.values[mode.id] as { alias: string; }).alias) : variable.values[mode.id]}`)].join('\n') });
 	}
 	for (const style of catalog.styles) {
-		const values = Object.entries(style.values).map(([key, value]) => key === 'effects' && Array.isArray(value) ? localize('sessions.design.effectsReview', 'Effects: {0}', value.map(describeDesignEffect).join('; ')) : key === 'effects' ? localize('sessions.design.shadowReview', 'Shadow: X {0}, Y {1}, blur {2}, color {3}', value.x, value.y, value.blur, value.color) : key === 'layoutGuide' ? localize('sessions.design.guideReview', 'Layout guide: {0} px, {1}', value.size, value.color) : `${designPropertyLabel(key as DesignBindableProperty)}: ${value}`);
-		result.set(style.id, { name: style.name, value: style, description: [styleLabels()[style.kind], ...values, ...Object.entries(style.bindings ?? {}).map(([key, id]) => `${designPropertyLabel(key as DesignBindableProperty)}: ${variableName(id)}`)].join('\n') });
+		const values = Object.entries(style.values).map(([key, value]) => key === 'effects' && Array.isArray(value) ? localize('sessions.design.effectsReview', 'Effects: {0}', value.map(describeArtifactCanvasEffect).join('; ')) : key === 'effects' ? localize('sessions.design.shadowReview', 'Shadow: X {0}, Y {1}, blur {2}, color {3}', value.x, value.y, value.blur, value.color) : key === 'layoutGuide' ? localize('sessions.design.guideReview', 'Layout guide: {0} px, {1}', value.size, value.color) : `${artifactCanvasPropertyLabel(key as ArtifactCanvasBindableProperty)}: ${value}`);
+		result.set(style.id, { name: style.name, value: style, description: [styleLabels()[style.kind], ...values, ...Object.entries(style.bindings ?? {}).map(([key, id]) => `${artifactCanvasPropertyLabel(key as ArtifactCanvasBindableProperty)}: ${variableName(id)}`)].join('\n') });
 	}
-	const describe = (shape: DesignShape, depth = 0): string => [
+	const describe = (shape: ArtifactCanvasShape, depth = 0): string => [
 		'  '.repeat(depth) + localize('sessions.design.componentLayerReview', '{0}: {1} × {2}, fill {3}', shape.name || localize('sessions.design.layer', 'Layer'), shape.width, shape.height, shape.fill),
-		...Object.keys(designPropertyTypes).filter(key => !['width', 'height', 'fill'].includes(key) && getDesignProperty(shape, key as DesignBindableProperty) !== undefined).map(key => `${designPropertyLabel(key as DesignBindableProperty)}: ${getDesignProperty(shape, key as DesignBindableProperty)}`),
-		...Object.entries(shape.bindings ?? {}).map(([key, id]) => `${designPropertyLabel(key as DesignBindableProperty)}: ${variableName(id)}`),
-		...Object.entries(shape.styleBindings ?? {}).map(([kind, id]) => `${styleLabels()[kind as DesignStyleKind]}: ${catalog.styles.find(style => style.id === id)?.name ?? localize('sessions.design.unavailableResource', 'Unavailable resource (last value retained)')}`),
+		...Object.keys(artifactCanvasPropertyTypes).filter(key => !['width', 'height', 'fill'].includes(key) && getArtifactCanvasProperty(shape, key as ArtifactCanvasBindableProperty) !== undefined).map(key => `${artifactCanvasPropertyLabel(key as ArtifactCanvasBindableProperty)}: ${getArtifactCanvasProperty(shape, key as ArtifactCanvasBindableProperty)}`),
+		...Object.entries(shape.bindings ?? {}).map(([key, id]) => `${artifactCanvasPropertyLabel(key as ArtifactCanvasBindableProperty)}: ${variableName(id)}`),
+		...Object.entries(shape.styleBindings ?? {}).map(([kind, id]) => `${styleLabels()[kind as ArtifactCanvasStyleKind]}: ${catalog.styles.find(style => style.id === id)?.name ?? localize('sessions.design.unavailableResource', 'Unavailable resource (last value retained)')}`),
 		...(shape.kind === 'frame' && shape.component?.kind === 'main' && shape.component.variant ? Object.entries(shape.component.variant).map(([key, value]) => `${key}: ${value}`) : []),
 		...(shape.kind === 'frame' || shape.kind === 'group' ? shape.children.map(child => describe(child, depth + 1)) : []),
 	].join('\n');
-	for (const shape of flattenDesignShapes(document.shapes)) { if (shape.kind === 'frame' && shape.component) { result.set(shape.id, { name: shape.name || localize('sessions.design.component', 'Component'), value: shape, description: describe(shape), shape }); } }
+	for (const shape of flattenArtifactCanvasShapes(document.shapes)) { if (shape.kind === 'frame' && shape.component) { result.set(shape.id, { name: shape.name || localize('sessions.design.component', 'Component'), value: shape, description: describe(shape), shape }); } }
 	return result;
 }

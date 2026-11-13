@@ -234,7 +234,7 @@ test('Sessions loads its full WOFF2 profile without changing the IDE window', as
 		await projects.click();
 		await expect(projects).toHaveAttribute('aria-current', 'page');
 		await expect(projects.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'projects');
-		const creator = navigation.getByRole('button', { name: 'Creator', exact: true });
+		const creator = navigation.getByRole('button', { name: 'Artifacts', exact: true });
 		await creator.click();
 		await expect(creator).toHaveAttribute('aria-current', 'page');
 		await expect(creator.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'symbol-color');

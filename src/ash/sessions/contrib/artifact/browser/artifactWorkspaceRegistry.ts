@@ -92,11 +92,11 @@ export function registerArtifactWorkspace(contribution: ArtifactWorkspaceContrib
 	artifactWorkspaces.set(contribution.id, contribution);
 	registerAction2(class OpenWorkspace extends Action2 {
 		constructor() {
-			super({ id: `sessions.creator.open.${contribution.id}`, title: localize2('sessions.artifacts.openMode', 'Open {0}', contribution.title), f1: true, precondition: SessionsWorkspaceModeContext.isEqualTo('chat') });
+			super({ id: `sessions.artifacts.open.${contribution.id}`, title: localize2('sessions.artifacts.openMode', 'Open {0}', contribution.title), f1: true, precondition: SessionsWorkspaceModeContext.isEqualTo('chat') });
 		}
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			if (accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) !== 'chat') return;
-			await accessor.get(ICommandService).executeCommand('sessions.creator.openMode', contribution.id);
+			await accessor.get(ICommandService).executeCommand('sessions.artifacts.openMode', contribution.id);
 		}
 	});
 }

@@ -396,11 +396,12 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	}
 
 	appendToDraft(text: string): void {
-		if (!this.activeAgentView)
+		const view = this.desktopChatView ?? this.activeAgentView;
+		if (!view)
 			throw new Error(
 				localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'),
 			);
-		this.activeAgentView.activeChat.appendToDraft(text);
+		view.activeChat.appendToDraft(text);
 	}
 
 	startVoiceConversation(): Promise<void> {

@@ -1,5 +1,6 @@
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { structuralEquals } from '../../../../base/common/equals.js';
 import { autorun, observableValue } from '../../../../base/common/observable.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
@@ -10,6 +11,7 @@ export class ArtifactCatalog extends Disposable {
 	private readonly value = observableValue<readonly ArtifactCard[]>(this, []);
 	public readonly cards = this.value;
 	private readonly modified = new Map<string, number | undefined>();
+	private readonly stale = new Set<string>();
 	private generation = 0;
 	private readonly refreshSoon = this._register(new RunOnceScheduler(() => this.refresh(), 0));
 
@@ -26,11 +28,15 @@ export class ArtifactCatalog extends Disposable {
 			let affected = false;
 			for (const card of this.value.get()) {
 				if (card.resource && (!event.resources || event.resources.some(resource => extUri.isEqualOrParent(card.resource!, resource) || extUri.isEqualOrParent(resource, card.resource!)))) {
-					this.modified.delete(card.resource.toString());
+					// Keep the last known date while revalidating so notifications cannot reorder the grid twice.
+					this.stale.add(card.resource.toString());
 					affected = true;
 				}
 			}
-			if (affected) this.refreshSoon.schedule();
+			if (affected) {
+				this.generation++;
+				this.refreshSoon.schedule();
+			}
 		}));
 	}
 
@@ -39,9 +45,14 @@ export class ArtifactCatalog extends Disposable {
 		const cards = this.sources.flatMap(source => source.cards.get());
 		const resources = new Map(cards.flatMap(card => card.resource ? [[card.resource.toString(), card.resource] as const] : []));
 		for (const key of this.modified.keys()) if (!resources.has(key)) this.modified.delete(key);
-		const publish = () => this.value.set(cards.map(card => ({ ...card, modifiedAt: card.resource ? this.modified.get(card.resource.toString()) ?? card.modifiedAt : card.modifiedAt })), undefined);
+		for (const key of this.stale) if (!resources.has(key)) this.stale.delete(key);
+		const publish = () => {
+			const next = cards.map(card => ({ ...card, modifiedAt: card.resource ? this.modified.get(card.resource.toString()) ?? card.modifiedAt : card.modifiedAt }));
+			// Editor visibility and broad file notifications can refresh an otherwise unchanged catalog.
+			if (!structuralEquals(this.value.get(), next)) this.value.set(next, undefined);
+		};
 		publish();
-		const missing = [...resources].filter(([key]) => !this.modified.has(key));
+		const missing = [...resources].filter(([key]) => !this.modified.has(key) || this.stale.has(key));
 		if (!missing.length) return;
 		void Promise.all(missing.map(async ([key, resource]) => {
 			// A missing or inaccessible timestamp does not make the artifact itself unavailable.
@@ -52,7 +63,10 @@ export class ArtifactCatalog extends Disposable {
 			}
 		})).then(results => {
 			if (this.isDisposed || generation !== this.generation) return;
-			for (const [key, modifiedAt] of results) this.modified.set(key, modifiedAt);
+			for (const [key, modifiedAt] of results) {
+				this.modified.set(key, modifiedAt);
+				this.stale.delete(key);
+			}
 			publish();
 		});
 	}

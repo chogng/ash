@@ -34,9 +34,10 @@ const { ContextKeyService, IContextKeyService } = await import('../../../platfor
 const { CommandRegistry, CommandsRegistry, ICommandService } = await import('../../../platform/commands/common/commands.js');
 const { CommandService } = await import('../../../workbench/services/commands/common/commandService.js');
 const { IEditorService } = await import('../../../workbench/services/editor/common/editorService.js');
+const { IEditorPart } = await import('../../../workbench/browser/parts/editor/editorPart.js');
 const { ISessionsEntryService } = await import('../../services/layout/common/sessionsEntryService.js');
 const { IProjectsService } = await import('../../contrib/projects/browser/projectsService.js');
-const { IDesignEditorService } = await import('../../contrib/artifact/browser/designEditorService.js');
+const { IArtifactCanvasEditorService } = await import('../../contrib/artifact/browser/artifactCanvasEditorService.js');
 const { URI } = await import('../../../base/common/uri.js');
 const { DisposableStore } = await import('../../../base/common/lifecycle.js');
 const { Menus } = await import('../../browser/menus.js');
@@ -113,7 +114,7 @@ test('Sessions common entry supplies the shared editor Worker service in each wi
 	assert.notEqual(secondWindow.get(IWebWorkerService), first);
 });
 
-test('Chat navigation includes Search and selects New, Projects, Creator and Customize with retained Accounts', async () => {
+test('Chat navigation includes Search and selects New, Projects, Artifacts and Customize with retained Accounts', async () => {
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();
 	let accountAnchor: HTMLElement | undefined;
@@ -177,7 +178,7 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		assert.equal(buttons[4]?.getAttribute('aria-current'), 'page');
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		buttons[0]?.click();
-		assert.deepEqual(selectedActions, ['chat', 'projects', 'creator', 'customize', 'chat']);
+		assert.deepEqual(selectedActions, ['chat', 'projects', 'artifacts', 'customize', 'chat']);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		assert.equal(buttons[4]?.getAttribute('aria-current'), null);
 		buttons[6]?.click();
@@ -249,7 +250,7 @@ test('Sessions Activity Bar context menu changes its own position with a fixed s
 	using menuServices = registerMenus(services);
 	using itemMenu = MenusRegistry.appendMenuItem(Menus.ActivityBarContext, {
 		command: { id: 'test.activity.context', title: 'Code action' },
-		when: ActivityBarItemContext.isEqualTo('sessions.open.creator'),
+		when: ActivityBarItemContext.isEqualTo('sessions.open.artifacts'),
 	});
 	const bar = registerTestComponentServices(services).createInstance(ActivityBar, ownerDocument.body, { async showAccountMenu() { } });
 	try {
@@ -265,7 +266,7 @@ test('Sessions Activity Bar context menu changes its own position with a fixed s
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarCompact), false);
 		bar.domNode.querySelector('button')?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 		assert.deepEqual(shownActions.map(action => action.label), ['Move earlier', 'Move later', '', 'Activity Bar Position']);
-		bar.domNode.querySelector('[data-action-id="sessions.open.creator"] button')?.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, button: 2 }));
+		bar.domNode.querySelector('[data-action-id="sessions.open.artifacts"] button')?.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, button: 2 }));
 		assert.equal(shownActions[0]!.id, 'test.activity.context');
 		assert.equal(services.get(IContextKeyService).getContext().getValue(ActivityBarItemContext.key), undefined);
 		bar.domNode.querySelector('[data-action-id="sessions.newSession"] button')?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
@@ -310,7 +311,7 @@ test('navigation order survives a new window and includes new menu contributions
 	using menuServices = registerMenus(services);
 	storage.store('sessions.activityBar.actionOrder', JSON.stringify(['sessions.open.chat', 'sessions.newSession', 'sessions.open.teams', 'sessions.open.projects', 'sessions.open.code', 'sessions.open.design']), StorageScope.PROFILE, StorageTarget.USER);
 	using bar = registerTestComponentServices(services).createInstance(ActivityBar, document.body, { showAccountMenu() { } });
-	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(['sessions.newSession', 'sessions.search', 'sessions.open.projects', 'sessions.open.creator']));
+	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(['sessions.newSession', 'sessions.search', 'sessions.open.projects', 'sessions.open.artifacts']));
 	setARIAContainer(document.body);
 	const buttons = [...bar.domNode.querySelectorAll<HTMLButtonElement>('button.ash-sessions-activity-item')];
 	buttons[3]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
@@ -377,7 +378,7 @@ test('Chat and Code show their own actions and retain shared navigation preferen
 	contexts.setContext('sessions.automationsAvailable', true);
 	contexts.setContext('sessions.scheduledAvailable', true);
 	contexts.setContext('sessions.workspaceMode', 'chat');
-	const chatOrder = ['sessions.open.creator', 'sessions.newSession', 'sessions.search', 'sessions.open.projects'];
+	const chatOrder = ['sessions.open.artifacts', 'sessions.newSession', 'sessions.search', 'sessions.open.projects'];
 	const codeOrder = ['sessions.newSession', 'sessions.open.customize', 'sessions.open.symphony', 'sessions.open.collaboration'];
 	storage.store('sessions.activityBar.actionOrder', JSON.stringify(chatOrder), StorageScope.PROFILE, StorageTarget.USER);
 	storage.store('sessions.activityBar.codeActionOrder', JSON.stringify(codeOrder), StorageScope.PROFILE, StorageTarget.USER);
@@ -482,23 +483,30 @@ function registerMenus(services: InstanceType<typeof InstantiationService>): Ins
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, services.createInstance(MenuService));
 	contexts.setContext('sessions.activity.newSessionDraftVisible', true);
-	const keys = new Map(['chat', 'collaboration', 'teams', 'projects', 'code', 'creator', 'symphony', 'customize'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
+	contexts.setContext('sessions.workspaceMode', 'chat');
+	const keys = new Map(['chat', 'collaboration', 'teams', 'projects', 'code', 'artifacts', 'symphony', 'customize'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
 	const select = (id: string): void => contexts.bufferChangeEvents(() => {
 		contexts.setContext('sessions.workspaceMode', ['code', 'collaboration', 'teams', 'symphony'].includes(id) ? 'code' : 'chat');
 		contexts.setContext('sessions.activity.newSessionDraftVisible', id === 'chat' || id === 'code');
 		for (const [candidate, key] of keys) { key.set(candidate === id); }
 	});
-	services.registerInstance(ISessionsEntryService, { openEntry: async (entry: { id: string; }) => select(entry.id) } as unknown as import('../../services/layout/common/sessionsEntryService.js').ISessionsEntryService);
+	services.registerInstance(ISessionsEntryService, {
+		openEntry: async (entry: { activityContext?: string; }) => {
+			const id = entry.activityContext?.match(/^sessions\.activity\.(.+)Selected$/u)?.[1];
+			if (id) select(id);
+		}
+	} as unknown as import('../../services/layout/common/sessionsEntryService.js').ISessionsEntryService);
+	services.registerInstance(IEditorPart, { activePane: undefined } as unknown as import('../../../workbench/browser/parts/editor/editorPart.js').IEditorPart);
 	services.registerInstance(IProjectsService, { state: { get: () => ({ selectedId: undefined, conversationProjectId: undefined }) } } as import('../../contrib/projects/browser/projectsService.js').IProjectsService);
 	resources.add(registry.register('sessions.open.customize', CommandsRegistry.getCommand('sessions.open.customize')!));
 	resources.add(registry.register('sessions.newSession', () => select(contexts.getValue('sessions.workspaceMode') === 'code' ? 'code' : 'chat')));
 	for (const id of ['chat', 'collaboration', 'teams', 'code', 'symphony']) { resources.add(registry.register(`sessions.open.${id}`, () => select(id))); }
-	for (const id of ['projects', 'creator']) {
+	for (const id of ['projects', 'artifacts']) {
 		resources.add(registry.register(`sessions.open.${id}`, CommandsRegistry.getCommand(`sessions.open.${id}`)!));
 	}
 	resources.add(registry.register('sessions.show.projects', CommandsRegistry.getCommand('sessions.show.projects')!));
-	resources.add(registry.register('sessions.show.creator', () => select('creator')));
-	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string; }; }) => select(input.resource.scheme === 'ash-projects' ? 'projects' : 'creator') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
-	services.registerInstance(IDesignEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/artifact/browser/designEditorService.js').IDesignEditorService);
+	resources.add(registry.register('sessions.show.artifacts', () => select('artifacts')));
+	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string; }; }) => select(input.resource.scheme === 'ash-projects' ? 'projects' : 'artifacts') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
+	services.registerInstance(IArtifactCanvasEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/artifact/browser/artifactCanvasEditorService.js').IArtifactCanvasEditorService);
 	return resources;
 }

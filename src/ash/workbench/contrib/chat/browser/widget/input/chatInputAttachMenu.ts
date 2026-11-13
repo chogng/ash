@@ -382,7 +382,7 @@ export class ChatInputAttachMenu extends Disposable {
 				id: 'artifacts',
 				label: localize('chat.attach.artifacts', 'Artifacts'),
 				icon: Lxicon.artifacts,
-				run: () => void this.commandService.executeCommand('sessions.open.creator').catch(() => undefined),
+				run: () => void this.commandService.executeCommand('sessions.open.artifacts').catch(() => undefined),
 			},
 			{
 				id: 'theme-editor',

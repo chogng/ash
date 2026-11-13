@@ -1,21 +1,21 @@
 import { prototypePath, prototypeScrollTargets } from '../model/prototypeScroll.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
-import { flattenDesignShapes, type DesignShape } from '../model/designDocument.js';
-import { getDesignLibraryShapes } from '../model/designResources.js';
-import type { DesignModel } from '../model/designModel.js';
+import { flattenArtifactCanvasShapes, type ArtifactCanvasShape } from '../model/artifactCanvasDocument.js';
+import { getArtifactCanvasLibraryShapes } from '../model/artifactCanvasResources.js';
+import type { ArtifactCanvasModel } from '../model/artifactCanvasModel.js';
 import { defaultPrototypeTransition, prototypeVariants, prototypeFrames, prototypeOwner, type PrototypeInteraction } from '../model/prototype.js';
 
 /** Wires, hotspot settings and flow names are ordinary immutable document edits. */
 export class PrototypeCommands {
-	constructor(private readonly model: DesignModel) { }
+	constructor(private readonly model: ArtifactCanvasModel) { }
 	public connect(ids: ReadonlySet<string>, destination: string): void {
 		const shapes = this.model.value.shapes;
 		const isScreen = prototypeFrames(shapes).some(frame => frame.id === destination);
-		const sources = [...shapes, ...getDesignLibraryShapes(this.model.value.resources)];
-		const updates = new Map<string, DesignShape>();
+		const sources = [...shapes, ...getArtifactCanvasLibraryShapes(this.model.value.resources)];
+		const updates = new Map<string, ArtifactCanvasShape>();
 		const hasFlow = prototypeFrames(shapes).some(frame => frame.flowStart);
-		for (const shape of flattenDesignShapes(shapes)) {
+		for (const shape of flattenArtifactCanvasShapes(shapes)) {
 			const owner = prototypeOwner(shapes, shape.id);
 			if (!ids.has(shape.id) || (shape.interactions?.length ?? 0) >= 100) { continue; }
 			const isScroll = prototypeScrollTargets(shapes, shape.id, false).some(target => target.id === destination);
@@ -26,7 +26,7 @@ export class PrototypeCommands {
 		}
 		this.commit(updates);
 	}
-	public setScroll(id: string, settings: Pick<Partial<DesignShape>, 'overflowDirection' | 'scrollPosition' | 'layoutPositioning'>): void {
+	public setScroll(id: string, settings: Pick<Partial<ArtifactCanvasShape>, 'overflowDirection' | 'scrollPosition' | 'layoutPositioning'>): void {
 		const path = prototypePath(this.model.value.shapes, id), shape = path.at(-1), parent = path.at(-2);
 		if (!shape) { return; }
 		const next = { ...shape, ...settings };
@@ -34,15 +34,15 @@ export class PrototypeCommands {
 		this.commit(new Map([[id, next]]));
 	}
 	public setInteractions(id: string, interactions: readonly PrototypeInteraction[]): void {
-		const shape = flattenDesignShapes(this.model.value.shapes).find(shape => shape.id === id);
+		const shape = flattenArtifactCanvasShapes(this.model.value.shapes).find(shape => shape.id === id);
 		if (shape) { this.commit(new Map([[id, { ...shape, interactions }]])); }
 	}
 	public setFlow(id: string, name: string | undefined): void {
 		const shape = prototypeFrames(this.model.value.shapes).find(shape => shape.id === id);
 		if (shape) { const { flowStart: _flowStart, ...rest } = shape; const flowStart = name?.trim().slice(0, 1024); this.commit(new Map([[id, { ...rest, ...(flowStart ? { flowStart } : {}) }]])); }
 	}
-	private commit(updates: ReadonlyMap<string, DesignShape>): void {
-		const update = (shape: DesignShape): DesignShape => {
+	private commit(updates: ReadonlyMap<string, ArtifactCanvasShape>): void {
+		const update = (shape: ArtifactCanvasShape): ArtifactCanvasShape => {
 			const result = updates.get(shape.id) ?? shape;
 			return result.kind === 'frame' || result.kind === 'group' ? { ...result, children: result.children.map(update) } : result;
 		};

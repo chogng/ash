@@ -2,11 +2,11 @@ import { expect } from '@playwright/test';
 import { suite, test, setup } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 
-suite('sessionsCreator browser component', () => {
+suite('sessionsArtifacts browser component', () => {
 	const browserTests = useBrowserTests();
 	setup(async function () {
 		const { page } = browserTests;
-		await page.goto('/sessions.html?creator'); await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.goto('/sessions.html?artifacts'); await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 	});
 	test('Sessions chat fills its content area without a duplicate session title', async function () {
 		const { page } = browserTests;

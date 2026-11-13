@@ -1,3 +1,4 @@
+import { getArtifactDraftHome } from './artifactStorage.js';
 import { ArtifactTableModel } from '../common/artifactTableModel.js';
 import { IArtifactTableService } from '../common/artifactTableService.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
@@ -30,7 +31,7 @@ export class ArtifactTableService extends Disposable implements IArtifactTableSe
 	private saving: Promise<void> | undefined;
 	private readonly saveSoon = this._register(new RunOnceScheduler(() => {
 		void this.flush().catch(error => {
-			this.log.error('creator', 'Failed to save table drafts', error);
+			this.log.error('artifacts', 'Failed to save table drafts', error);
 			if (!this.isDisposed) this.notifications.error(localize({ bundle: 'ash.artifacts', key: 'tableSaveFailed' }, 'Could not save table changes. Your edits are still open in Artifacts.'));
 		});
 	}, 150));
@@ -44,8 +45,8 @@ export class ArtifactTableService extends Disposable implements IArtifactTableSe
 		@IUserDataProfileService profiles: IUserDataProfileService,
 	) {
 		super();
-		this.home = URI.joinPath(profiles.currentProfile.location, 'creator', encodeURIComponent(workspace.getWorkspace().id), 'tables');
-		this.ready = this.restore().catch(error => this.log.error('creator', 'Failed to load table drafts', error))
+		this.home = getArtifactDraftHome(profiles.currentProfile.location, workspace.getWorkspace().id).joinPathSegment('tables');
+		this.ready = this.restore().catch(error => this.log.error('artifacts', 'Failed to load table drafts', error))
 			.finally(() => { if (!this.isDisposed) this.restoring.set(false); });
 		this._register(lifecycle.onWillShutdown(event => {
 			event.join(() => this.flush(), 'Save artifact table drafts', () => !this.saving && this.pending.size === 0);
@@ -85,7 +86,7 @@ export class ArtifactTableService extends Disposable implements IArtifactTableSe
 				}
 				restored.set(id, new ArtifactTableModel(id, value.kind, value.rows, revision, this.queueSave, value.title, value.createdAt as number | undefined));
 			} catch (error) {
-				this.log.warn('creator', 'Could not restore table draft', entry.resource.toString(), error);
+				this.log.warn('artifacts', 'Could not restore table draft', entry.resource.toString(), error);
 			}
 		}
 		if (!this.isDisposed) this.catalog.set(restored, undefined);

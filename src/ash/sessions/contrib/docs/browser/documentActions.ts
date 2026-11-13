@@ -21,19 +21,25 @@ import { saveResourceAs } from '../../../../workbench/services/files/browser/res
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { artifactDetailEntry } from '../../artifact/common/artifactWorkspace.js';
-import { DOCS_ARTIFACT_EDITOR_ID, DOCS_MARKDOWN_EDITOR_ID, DOCS_TOOLS_CONTAINER_ID, GENERAL_DOCUMENT_CONTENT_TYPE } from '../common/docs.js';
+import { DOCS_EDITOR_ID, DOCS_MARKDOWN_EDITOR_ID, DOCS_TOOLS_CONTAINER_ID, GENERAL_DOCUMENT_CONTENT_TYPE } from '../common/docs.js';
+import { MarkdownDocsEditorPane } from './markdownDocsEditorPane.js';
 
 export async function createGeneralDocument(accessor: ServicesAccessor): Promise<void> {
-	await createDocsOpener(accessor)(newDocsResource(localize('document.untitled', 'Untitled')));
+	await createDocsOpener(accessor)(newDocsResource(localize('document.untitled', 'Untitled'), '.md'));
 }
 
-const activeDocsKey = 'sessions.creator.activeDocument';
+const activeDocsKey = 'sessions.docs.activeDocument';
 
 export function restoredDocsResource(storage: IStorageService): URI | undefined {
-	const saved = storage.get(activeDocsKey, StorageScope.WORKSPACE);
+	const saved = storage.get(activeDocsKey, StorageScope.WORKSPACE)
+		?? storage.get('sessions.artifacts.activeDocument', StorageScope.WORKSPACE)
+		?? storage.get('sessions.creator.activeDocument', StorageScope.WORKSPACE);
 	if (!saved) return undefined;
 	const resource = URI.parse(saved);
-	return [Schemas.file, Schemas.untitled, Schemas.vscodeUserData].includes(resource.scheme) && /\.(?:ash-doc|md)$/iu.test(resource.path) ? resource : undefined;
+	if (![Schemas.file, Schemas.untitled, Schemas.vscodeUserData].includes(resource.scheme) || !/\.(?:ash-doc|md)$/iu.test(resource.path)) return undefined;
+	storage.store(activeDocsKey, saved, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	for (const legacy of ['sessions.artifacts.activeDocument', 'sessions.creator.activeDocument']) storage.remove(legacy, StorageScope.WORKSPACE);
+	return resource;
 }
 
 export function newDocsResource(name: string, extension = '.ash-doc'): URI {
@@ -44,7 +50,7 @@ export function createDocsInput(source: IResourceEditorInput): IResourceEditorIn
 	if (source.rename) return source;
 	return {
 		...source,
-		editorId: DOCS_ARTIFACT_EDITOR_ID,
+		editorId: DOCS_EDITOR_ID,
 		contentType: GENERAL_DOCUMENT_CONTENT_TYPE,
 		showBreadcrumbs: false,
 		rename: target => createDocsInput({ resource: target }),
@@ -68,11 +74,11 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 	return async (resource: URI, options: { source?: 'restore'; label?: string; initialText?: string; document?: DocumentNode; } = {}) => {
 		const rich = resource.path.toLowerCase().endsWith('.ash-doc');
 		const input = rich ? createDocsInput({ resource, label: options.label, initialText: options.initialText })
-			: createMarkdownDocsInput({ resource, label: options.label });
+			: createMarkdownDocsInput({ resource, label: options.label, initialText: options.initialText });
 		const entry = {
-			...artifactDetailEntry, id: 'creator.docs',
+			...artifactDetailEntry, id: 'docs',
 			detailsContainerId: rich ? DOCS_TOOLS_CONTAINER_ID : undefined,
-			restoreCommand: 'sessions.restore.creatorDocs',
+			restoreCommand: 'sessions.restore.docs',
 			editorInput: input,
 			onEditorInputReplaced: (previous: IResourceEditorInput, replacement: IResourceEditorInput) => {
 				if (storage.get(activeDocsKey, StorageScope.WORKSPACE) === previous.resource.toString()) remember(replacement.resource);
@@ -95,13 +101,14 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 export async function openWritingDraft(accessor: ServicesAccessor, html: string, title?: string): Promise<void> {
 	const open = createDocsOpener(accessor);
 	const editors = accessor.get(IEditorPart);
-	const { importGeneralDocumentHtml } = await import('../../../../../../extensions/academy/browser/generalProfile.js');
-	const document = importGeneralDocumentHtml(html, editors.domNode.ownerDocument);
+	const { importDocsHtml } = await import('./docsEditorProfile.js');
+	const document = importDocsHtml(html, editors.domNode.ownerDocument);
 	if (!document) throw new Error(localize('sessions.artifacts.writingImportFailed', 'This writing block could not be opened in Docs.'));
 	// Provider titles are untrusted display text, but this name also becomes the proposed filename.
 	const safeTitle = title?.replace(/[<>:"/\\|?*\p{Cc}\p{Cf}\p{Cs}]/gu, ' ').trim();
 	const name = safeTitle && Array.from(safeTitle).slice(0, 60).join('').trimEnd();
-	await open(newDocsResource(name || localize('sessions.artifacts.untitledDocument', 'Untitled document')), { document });
+	const { docsEditorProfile } = await import('./docsEditorProfile.js');
+	await open(newDocsResource(name || localize('sessions.artifacts.untitledDocument', 'Untitled document'), '.md'), { initialText: docsEditorProfile.create().exportText!(document, 'markdown') });
 }
 
 export async function convertActiveTextToDocument(accessor: ServicesAccessor, format: DocumentTextFormat): Promise<void> {
@@ -125,7 +132,7 @@ export async function convertActiveTextToDocument(accessor: ServicesAccessor, fo
 export async function exportActiveDocument(accessor: ServicesAccessor, format: DocumentTextFormat): Promise<void> {
 	const editors = accessor.get(IEditorPart);
 	const pane = editors.activePane;
-	if (!(pane instanceof DocumentEditorPane)) throw new Error(localize('document.conversion.documentRequired', 'Open a document before exporting its content.'));
+	if (!(pane instanceof DocumentEditorPane) && !(pane instanceof MarkdownDocsEditorPane)) throw new Error(localize('document.conversion.documentRequired', 'Open a document before exporting its content.'));
 	const copy = pane.workingCopy;
 	if (!copy) return;
 	const text = pane.exportText(format);
@@ -160,7 +167,7 @@ export async function exportDocumentArtifact(accessor: ServicesAccessor, formatI
 	const editors = accessor.get(IEditorPart), dialogs = accessor.get(IFileDialogService);
 	const instantiation = accessor.get(IInstantiationService);
 	const pane = editors.activePane;
-	if (!(pane instanceof DocumentEditorPane) || !pane.workingCopy) throw new Error(localize('document.conversion.documentRequired', 'Open a document before exporting its content.'));
+	if (!(pane instanceof DocumentEditorPane) && !(pane instanceof MarkdownDocsEditorPane) || !pane.workingCopy) throw new Error(localize('document.conversion.documentRequired', 'Open a document before exporting its content.'));
 	const formats = pane.getArtifactFormats();
 	const id = formatId ?? await chooseArtifactFormat(accessor, formats);
 	const format = formats.find(format => format.id === id); if (!format) return;

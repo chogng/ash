@@ -1,12 +1,12 @@
-import { parseDesignTextStyle, type DesignTextRun, type DesignTextStyle } from '../../common/model/designText.js';
+import { parseArtifactCanvasTextStyle, type ArtifactCanvasTextRun, type ArtifactCanvasTextStyle } from '../../common/model/artifactCanvasText.js';
 
 /** Read only text and supported typography from an inert fragment; never insert clipboard markup. */
-export function readDesignTextHtml(document: Document, html: string): { text: string; runs: readonly DesignTextRun[]; } {
+export function readArtifactCanvasTextHtml(document: Document, html: string): { text: string; runs: readonly ArtifactCanvasTextRun[]; } {
 	const template = document.createElement('template'); template.innerHTML = html;
 	let text = '';
-	const runs: DesignTextRun[] = [];
-	const append = (value: string, style: DesignTextStyle): void => { if (value) { const start = text.length; text += value; runs.push({ start, end: text.length, style }); } };
-	const walk = (node: Node, inherited: DesignTextStyle): void => {
+	const runs: ArtifactCanvasTextRun[] = [];
+	const append = (value: string, style: ArtifactCanvasTextStyle): void => { if (value) { const start = text.length; text += value; runs.push({ start, end: text.length, style }); } };
+	const walk = (node: Node, inherited: ArtifactCanvasTextStyle): void => {
 		if (node.nodeType === 3) {
 			const value = node.textContent ?? '';
 			const betweenBlocks = /^\s*$/u.test(value) && [...(node.parentElement?.children ?? [])].some(child => ['DIV', 'P', 'LI', 'UL', 'OL'].includes(child.tagName));
@@ -19,7 +19,7 @@ export function readDesignTextHtml(document: Document, html: string): { text: st
 		if (tag === 'br') { append('\n', inherited); return; }
 		const block = ['p', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'].includes(tag);
 		if (block && text && !text.endsWith('\n')) { append('\n', inherited); }
-		const css = element.style; const style: DesignTextStyle = { ...inherited };
+		const css = element.style; const style: ArtifactCanvasTextStyle = { ...inherited };
 		if (['b', 'strong'].includes(tag)) { Reflect.set(style, 'fontWeight', 700); }
 		if (['i', 'em'].includes(tag)) { Reflect.set(style, 'fontStyle', 'italic'); }
 		if (tag === 'u') { Reflect.set(style, 'textDecoration', 'underline'); }
@@ -40,7 +40,7 @@ export function readDesignTextHtml(document: Document, html: string): { text: st
 		if (rgb) { Reflect.set(style, 'fill', '#' + rgb.slice(1, 4).map(channel => Math.min(255, Number(channel)).toString(16).padStart(2, '0')).join('') + (rgb[4] === undefined ? '' : Math.round(Math.max(0, Math.min(1, Number(rgb[4]))) * 255).toString(16).padStart(2, '0'))); }
 		else if (/^#[\da-f]{6}(?:[\da-f]{2})?$/iu.test(css.color)) { Reflect.set(style, 'fill', css.color); }
 		let validated = inherited;
-		try { validated = parseDesignTextStyle(style); } catch { /* Invalid formatting does not discard clipboard text. */ }
+		try { validated = parseArtifactCanvasTextStyle(style); } catch { /* Invalid formatting does not discard clipboard text. */ }
 		for (const child of element.childNodes) { walk(child, validated); }
 		if (block && !text.endsWith('\n')) { append('\n', validated); }
 	};

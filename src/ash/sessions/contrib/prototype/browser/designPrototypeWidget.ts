@@ -9,10 +9,10 @@ import { generateUuid } from '../../../../base/common/uuid.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { localize } from '../../../../nls.js';
-import type { DesignEditorContributionContext, IDesignPrototypeContribution } from '../../artifact/browser/designEditorBrowser.js';
+import type { ArtifactCanvasEditorContributionContext, IArtifactCanvasPrototypeContribution } from '../../artifact/browser/artifactCanvasEditorBrowser.js';
 import { ArtifactWorkspaceId } from '../../artifact/common/artifactWorkspace.js';
-import { flattenDesignShapes, type DesignShape } from '../../artifact/common/model/designDocument.js';
-import { getDesignLibraryShapes, getDesignResourceCatalog } from '../../artifact/common/model/designResources.js';
+import { flattenArtifactCanvasShapes, type ArtifactCanvasShape } from '../../artifact/common/model/artifactCanvasDocument.js';
+import { getArtifactCanvasLibraryShapes, getArtifactCanvasResourceCatalog } from '../../artifact/common/model/artifactCanvasResources.js';
 import { defaultPrototypeSpring, defaultPrototypeTransition, flattenPrototypeActions, prototypeVariants, isPrototypeUrl, prototypeFrames, prototypeOwner, type PrototypeInteraction, type PrototypeStep } from '../../artifact/common/model/prototype.js';
 import { parsePrototypeExpression, formatPrototypeExpression, prototypeExpressionType, type PrototypeExpression } from '../../artifact/common/model/prototypeExpression.js';
 import { springProgress, prototypeTransitionDuration } from '../../artifact/common/model/prototypePlayback.js';
@@ -21,7 +21,7 @@ import { PrototypePreview } from './prototypePreview.js';
 import { actionLabels, transitionLabels, triggerLabels } from './prototypeLabels.js';
 
 /** Authoring UI stores only choices and focus. Settings are written through PrototypeCommands. */
-export class DesignPrototypeWidget extends Disposable implements IDesignPrototypeContribution {
+export class DesignPrototypeWidget extends Disposable implements IArtifactCanvasPrototypeContribution {
 	public readonly domNode: HTMLDetailsElement;
 	public readonly previewDomNode: HTMLElement;
 	private readonly fields: HTMLElement;
@@ -34,7 +34,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 	private showConnections = false;
 	private scale = 1;
 	private active = true;
-	constructor(private readonly context: DesignEditorContributionContext, @IOpenerService opener: IOpenerService) {
+	constructor(private readonly context: ArtifactCanvasEditorContributionContext, @IOpenerService opener: IOpenerService) {
 		super();
 		this.fields = h(context.ownerDocument, 'div', { className: 'ash-prototype-fields' });
 		this.domNode = h(context.ownerDocument, 'details', { className: 'ash-design-property-section ash-prototype-properties' }, h(context.ownerDocument, 'summary', {}, localize('sessions.design.prototype.title', 'Prototype'), h(context.ownerDocument, 'span', { className: 'ash-design-property-disclosure', attributes: { 'aria-hidden': 'true' } })), this.fields);
@@ -58,7 +58,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 		const doc = this.context.documentController.model.value;
 		const frames = prototypeFrames(doc.shapes);
 		const selected = this.context.selection.ids;
-		const shape = selected.size === 1 ? flattenDesignShapes(doc.shapes).find(shape => selected.has(shape.id)) : undefined;
+		const shape = selected.size === 1 ? flattenArtifactCanvasShapes(doc.shapes).find(shape => selected.has(shape.id)) : undefined;
 		this.button('preview', localize('sessions.design.prototype.preview', 'Prototype preview'), () => this.showPreview(), !!frames.length);
 		this.check('connections', localize('sessions.design.prototype.connections', 'Show connections'), this.showConnections, value => { this.showConnections = value; this.connections.update(this.scale, this.active && value); });
 		if (shape && frames.some(frame => frame.id === shape.id)) {
@@ -67,13 +67,13 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 		}
 		if (!shape) { this.fields.append(h(this.context.ownerDocument, 'p', {}, localize('sessions.design.prototype.selectHotspot', 'Select a layer to add an interaction. Drag its connection handle to a destination screen, or use the fields below.'))); return; }
 		this.renderScroll(shape);
-		const variants = prototypeVariants([...doc.shapes, ...getDesignLibraryShapes(doc.resources)], shape.id);
+		const variants = prototypeVariants([...doc.shapes, ...getArtifactCanvasLibraryShapes(doc.resources)], shape.id);
 		this.button('add', localize('sessions.design.prototype.add', 'Add interaction'), () => {
 			const owner = prototypeOwner(doc.shapes, shape.id);
 			const destination = (owner ? frames.find(frame => frame.id !== owner.id) : undefined) ?? variants[0];
 			if (destination) { this.context.commands.prototype.connect(new Set([shape.id]), destination.id); }
 			else { this.context.commands.prototype.setInteractions(shape.id, [...shape.interactions ?? [], { id: generateUuid(), trigger: 'click', actions: [{ action: 'back', transition: defaultPrototypeTransition }] }]); }
-			this.interactionId = flattenDesignShapes(this.context.documentController.model.value.shapes).find(item => item.id === shape.id)?.interactions?.at(-1)?.id ?? ''; this.update(this.scale, this.active, true);
+			this.interactionId = flattenArtifactCanvasShapes(this.context.documentController.model.value.shapes).find(item => item.id === shape.id)?.interactions?.at(-1)?.id ?? ''; this.update(this.scale, this.active, true);
 		}, (shape.interactions?.length ?? 0) < 100);
 		const interactions = shape.interactions ?? [];
 		const interaction = interactions.find(item => item.id === this.interactionId) ?? interactions[0];
@@ -91,13 +91,13 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 	}
 	private createAction(type: PrototypeStep['action'], shapeId: string): PrototypeStep {
 		const doc = this.context.documentController.model.value;
-		const catalog = getDesignResourceCatalog(doc.resources);
+		const catalog = getArtifactCanvasResourceCatalog(doc.resources);
 		const variable = catalog.variables[0];
 		return {
 			action: type, transition: defaultPrototypeTransition,
 			...(['navigate', 'overlay', 'swap'].includes(type) ? { destination: prototypeFrames(doc.shapes)[0]?.id } : {}),
 			...(type === 'scrollTo' ? { destination: prototypeScrollTargets(doc.shapes, shapeId)[0]?.id } : {}),
-			...(type === 'changeTo' ? { destination: prototypeVariants([...doc.shapes, ...getDesignLibraryShapes(doc.resources)], shapeId)[0]?.id } : {}),
+			...(type === 'changeTo' ? { destination: prototypeVariants([...doc.shapes, ...getArtifactCanvasLibraryShapes(doc.resources)], shapeId)[0]?.id } : {}),
 			...(type === 'url' ? { url: '' } : {}),
 			...(type === 'setVariable' ? { variableId: variable.id, value: { kind: 'literal', value: variable.type === 'number' ? 0 : variable.type === 'boolean' ? false : variable.type === 'color' ? '#000000' : '' } as const } : {}),
 			...(type === 'setMode' ? { collectionId: catalog.collections[0].id, modeId: catalog.collections[0].defaultMode } : {}),
@@ -107,8 +107,8 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 	private renderActions(actions: readonly PrototypeStep[], change: (actions: readonly PrototypeStep[]) => void, shapeId: string, prefix: string, depth: number): void {
 		const parent = this.parent;
 		const doc = this.context.documentController.model.value;
-		const frames = prototypeFrames(doc.shapes), variants = prototypeVariants([...doc.shapes, ...getDesignLibraryShapes(doc.resources)], shapeId);
-		const { variables, collections } = getDesignResourceCatalog(doc.resources);
+		const frames = prototypeFrames(doc.shapes), variants = prototypeVariants([...doc.shapes, ...getArtifactCanvasLibraryShapes(doc.resources)], shapeId);
+		const { variables, collections } = getArtifactCanvasResourceCatalog(doc.resources);
 		for (const [index, action] of actions.entries()) {
 			const path = `${prefix}.${index}`;
 			const group = h(this.context.ownerDocument, 'fieldset', { className: 'ash-prototype-action', attributes: { 'data-prototype-action': path } }, h(this.context.ownerDocument, 'legend', {}, localize('sessions.design.prototype.actionNumber', '{0}. {1}', index + 1, actionLabels()[action.action])));
@@ -172,14 +172,14 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 			this.parent = parent;
 		}
 		this.parent = parent;
-		const total = flattenDesignShapes(doc.shapes).find(shape => shape.id === shapeId)?.interactions?.find(item => item.id === this.interactionId)?.actions ?? [];
+		const total = flattenArtifactCanvasShapes(doc.shapes).find(shape => shape.id === shapeId)?.interactions?.find(item => item.id === this.interactionId)?.actions ?? [];
 		this.button(`${prefix}.add`, localize('sessions.design.prototype.addAction', 'Add action'), () => change([...actions, this.createAction('back', shapeId)]), flattenPrototypeActions(total).length < 1000);
 	}
-	private renderScroll(shape: DesignShape): void {
+	private renderScroll(shape: ArtifactCanvasShape): void {
 		const path = prototypePath(this.context.documentController.model.value.shapes, shape.id), parent = path.at(-2);
-		const edit = (settings: Pick<Partial<DesignShape>, 'overflowDirection' | 'scrollPosition' | 'layoutPositioning'>): void => this.context.commands.prototype.setScroll(shape.id, settings);
+		const edit = (settings: Pick<Partial<ArtifactCanvasShape>, 'overflowDirection' | 'scrollPosition' | 'layoutPositioning'>): void => this.context.commands.prototype.setScroll(shape.id, settings);
 		if (shape.kind === 'frame') {
-			this.select('overflow', localize('sessions.design.prototype.overflow', 'Overflow scrolling'), shape.overflowDirection ?? 'none', [['none', localize('sessions.design.prototype.noScrolling', 'No scrolling')], ['horizontal', localize('sessions.design.prototype.horizontalScroll', 'Horizontal')], ['vertical', localize('sessions.design.prototype.verticalScroll', 'Vertical')], ['both', localize('sessions.design.prototype.bothScroll', 'Horizontal and vertical')]], value => edit({ overflowDirection: value as DesignShape['overflowDirection'] }));
+			this.select('overflow', localize('sessions.design.prototype.overflow', 'Overflow scrolling'), shape.overflowDirection ?? 'none', [['none', localize('sessions.design.prototype.noScrolling', 'No scrolling')], ['horizontal', localize('sessions.design.prototype.horizontalScroll', 'Horizontal')], ['vertical', localize('sessions.design.prototype.verticalScroll', 'Vertical')], ['both', localize('sessions.design.prototype.bothScroll', 'Horizontal and vertical')]], value => edit({ overflowDirection: value as ArtifactCanvasShape['overflowDirection'] }));
 			const range = prototypeScrollRange(shape);
 			if (shape.overflowDirection && shape.overflowDirection !== 'none' && !range.x && !range.y) { this.fields.append(h(this.context.ownerDocument, 'p', {}, localize('sessions.design.prototype.noOverflow', 'Content must extend beyond the frame to scroll.'))); }
 		}
@@ -189,12 +189,12 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 			const options: [string, string][] = [['scroll', localize('sessions.design.prototype.scrollWithParent', 'Scroll with parent')]];
 			if (!(parent?.kind === 'frame' && parent.autoLayout) || shape.layoutPositioning === 'absolute') { options.push(['fixed', localize('sessions.design.prototype.fixed', 'Fixed')]); }
 			if (owner?.overflowDirection !== 'horizontal') { options.push(['sticky', localize('sessions.design.prototype.sticky', 'Sticky')]); }
-			this.select('scrollPosition', localize('sessions.design.prototype.scrollPosition', 'Scroll position'), shape.scrollPosition ?? 'scroll', options, value => edit({ scrollPosition: value as DesignShape['scrollPosition'] }));
+			this.select('scrollPosition', localize('sessions.design.prototype.scrollPosition', 'Scroll position'), shape.scrollPosition ?? 'scroll', options, value => edit({ scrollPosition: value as ArtifactCanvasShape['scrollPosition'] }));
 			if (parent?.kind === 'frame' && parent.autoLayout && shape.layoutPositioning !== 'absolute') { this.fields.append(h(this.context.ownerDocument, 'p', {}, localize('sessions.design.prototype.fixedRequiresAbsolute', 'Enable Ignore auto layout to use fixed positioning.'))); }
 		}
 	}
 	private expression(key: string, label: string, value: PrototypeExpression, expected: string | undefined, change: (value: PrototypeExpression) => void): void {
-		const variables = getDesignResourceCatalog(this.context.documentController.model.value.resources).variables;
+		const variables = getArtifactCanvasResourceCatalog(this.context.documentController.model.value.resources).variables;
 		const input = h(this.context.ownerDocument, 'input', { properties: { type: 'text', value: formatPrototypeExpression(value, variables), maxLength: 8192 } });
 		const error = h(this.context.ownerDocument, 'span', { className: 'ash-prototype-error', attributes: { id: `prototype-expression-${generateUuid()}`, role: 'alert' } });
 		input.setAttribute('aria-describedby', error.id);
@@ -229,8 +229,8 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 	public getAccessibleContent(): string {
 		if (this.preview.isOpen) { return this.preview.getAccessibleContent(); }
 		const doc = this.context.documentController.model.value;
-		const variables = getDesignResourceCatalog(doc.resources).variables;
-		return flattenDesignShapes(doc.shapes).flatMap(shape => [shape.flowStart ? localize('sessions.design.prototype.flowDescription', 'Flow: {0}', shape.flowStart) : '', ...(shape.interactions ?? []).map(item => localize('sessions.design.prototype.connectionDescription', '{0}: {1}, {2}, {3}', shape.name || localize('sessions.design.prototype.hotspot', 'Hotspot'), triggerLabels()[item.trigger], flattenPrototypeActions(item.actions).map(action => actionLabels()[action.action]).join(' → '), flattenPrototypeActions(item.actions).map(action => action.value ? formatPrototypeExpression(action.value, variables) : action.branches ? action.branches.map(branch => branch.condition ? formatPrototypeExpression(branch.condition, variables) : localize('sessions.design.prototype.else', 'Else')).join(', ') : prototypeFrames(doc.shapes).find(frame => frame.id === action.destination)?.name || transitionLabels()[action.transition.type]).join(', ')))]).filter(Boolean).join('\n');
+		const variables = getArtifactCanvasResourceCatalog(doc.resources).variables;
+		return flattenArtifactCanvasShapes(doc.shapes).flatMap(shape => [shape.flowStart ? localize('sessions.design.prototype.flowDescription', 'Flow: {0}', shape.flowStart) : '', ...(shape.interactions ?? []).map(item => localize('sessions.design.prototype.connectionDescription', '{0}: {1}, {2}, {3}', shape.name || localize('sessions.design.prototype.hotspot', 'Hotspot'), triggerLabels()[item.trigger], flattenPrototypeActions(item.actions).map(action => actionLabels()[action.action]).join(' → '), flattenPrototypeActions(item.actions).map(action => action.value ? formatPrototypeExpression(action.value, variables) : action.branches ? action.branches.map(branch => branch.condition ? formatPrototypeExpression(branch.condition, variables) : localize('sessions.design.prototype.else', 'Else')).join(', ') : prototypeFrames(doc.shapes).find(frame => frame.id === action.destination)?.name || transitionLabels()[action.transition.type]).join(', ')))]).filter(Boolean).join('\n');
 	}
 	private button(key: string, label: string, run: () => void, enabled = true): void {
 		const button = this.controls.add(new Button(this.parent ?? this.fields, {

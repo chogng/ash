@@ -8,6 +8,8 @@ const root = resolve(import.meta.dirname, '..');
 
 /** One preparation owner for direct builds and pnpm lifecycle entrypoints. */
 export async function prepareGenerated(): Promise<void> {
+	const { prepareArkdown } = await import('./arkdown.ts');
+	await prepareArkdown();
 	await generateLanguageRegistry();
 	await generateTreeSitterRegistry();
 	await prepareProtocol();

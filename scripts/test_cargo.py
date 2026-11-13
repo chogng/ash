@@ -11,6 +11,46 @@ from scripts.cargo import main, prepare_test_executable, run_process_tests
 
 
 class CodeModeHostTests(unittest.TestCase):
+    @patch(
+        "scripts.cargo.cargo_command_packages",
+        return_value={"ash-arkdown", "wasm-bindgen"},
+    )
+    @patch("scripts.cargo.cargo_environment")
+    @patch("scripts.cargo.subprocess.run")
+    def test_wasm_library_preserves_target_without_native_input_preparation(
+        self, run, environment, packages
+    ):
+        run.return_value = subprocess.CompletedProcess([], 0)
+        arguments = [
+            "check",
+            "-p",
+            "ash-arkdown",
+            "--target",
+            "wasm32-unknown-unknown",
+            "--features",
+            "wasm",
+        ]
+        self.assertEqual(main(arguments), 0)
+        self.assertIn("wasm32-unknown-unknown", run.call_args.args[0])
+        environment.assert_not_called()
+
+    @patch("scripts.cargo.cargo_environment")
+    @patch("scripts.cargo.cargo_command_packages")
+    def test_wasm_rejects_native_artifact_graphs(self, packages, environment):
+        for dependency in [
+            "v8",
+            "sherpa-onnx-sys",
+            "ash-grammars",
+            "ash-cli",
+            "ash-tgrep",
+        ]:
+            with self.subTest(dependency=dependency):
+                packages.return_value = {dependency}
+                with self.assertRaises(SystemExit) as error:
+                    main(["check", "-p", "native", "--target=wasm32-unknown-unknown"])
+                self.assertEqual(error.exception.code, 2)
+        environment.assert_not_called()
+
     def setUp(self) -> None:
         ripgrep = patch("build.lib.ripgrep.resolve_ripgrep")
         self.ripgrep = ripgrep.start()

@@ -110,6 +110,7 @@ export default defineConfig(({ mode, command }) => {
 			'import.meta.env.ASH_DEV_ARTIFACT_EXAMPLES': JSON.stringify(command === 'serve'),
 		},
 		plugins: [
+			{ name: 'ash-arkdown', async buildStart() { const { prepareArkdown } = await import('../../arkdown.ts'); await prepareArkdown(); } },
 			...(webOnly ? [webUpdatePlugin()] : []),
 			...(webOnly ? [] : [{
 				name: 'ash-chatgpt-verification',

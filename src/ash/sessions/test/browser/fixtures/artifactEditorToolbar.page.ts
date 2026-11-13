@@ -20,7 +20,7 @@ import { TestNotificationService } from '../../../../workbench/services/notifica
 import { bindTestColorTheme } from '../../../../../../test/fixtures/browser/themeFixture.js';
 import { ArtifactToolbar } from '../../../contrib/artifact/browser/widget/artifactToolbar.js';
 import { ArtifactEditorActions } from '../../../contrib/artifact/browser/artifactEditorActions.js';
-import { DesignMode, DesignTool } from '../../../contrib/artifact/common/config/designEditorConfiguration.js';
+import { ArtifactCanvasMode, ArtifactCanvasTool } from '../../../contrib/artifact/common/config/artifactCanvasEditorConfiguration.js';
 
 declare global {
 	interface Window {
@@ -53,8 +53,8 @@ services.registerInstance(IKeybindingService, {
 	resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
 });
 services.registerInstance(IContextMenuService, resources.add(services.createInstance(BrowserContextMenuService)));
-let tool = DesignTool.Select;
-let mode = DesignMode.Design;
+let tool = ArtifactCanvasTool.Select;
+let mode = ArtifactCanvasMode.Design;
 let busy = false;
 const update = (): void => {
 	const actions = editorActions.update(tool, mode, busy);
@@ -62,8 +62,8 @@ const update = (): void => {
 	document.querySelector('output')!.textContent = `${tool}/${mode}`;
 };
 const editorActions = new ArtifactEditorActions(
-	(selected: DesignTool) => { tool = selected; update(); },
-	(selected: DesignMode) => { mode = selected; update(); },
+	(selected: ArtifactCanvasTool) => { tool = selected; update(); },
+	(selected: ArtifactCanvasMode) => { mode = selected; update(); },
 	() => { },
 );
 const widget = resources.add(services.createInstance(ArtifactToolbar, document));
@@ -73,7 +73,7 @@ document.querySelector('main')!.append(widget.domNode);
 update();
 window.ashArtifactEditorToolbarFixture = {
 	setBusy(value) { busy = value; update(); },
-	setCodeMode(value) { mode = value ? DesignMode.Code : DesignMode.Design; update(); },
+	setCodeMode(value) { mode = value ? ArtifactCanvasMode.Code : ArtifactCanvasMode.Design; update(); },
 	dispose() { resources.dispose(); },
 };
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

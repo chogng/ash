@@ -1498,7 +1498,7 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 		await expect(activityButtons.first()).toHaveAttribute('aria-current', 'page');
 		await expect(activityButtons.getByText('Projects', { exact: true })).toBeVisible();
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true })).toBeEnabled();
-		const creator = page.getByRole('button', { name: 'Creator', exact: true });
+		const creator = page.getByRole('button', { name: 'Artifacts', exact: true });
 		await expect(creator).toBeEnabled();
 		const creatorBounds = await creator.boundingBox();
 		const accounts = page.getByRole('button', { name: 'Accounts', exact: true });

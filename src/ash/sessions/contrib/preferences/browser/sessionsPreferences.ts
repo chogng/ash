@@ -70,7 +70,7 @@ import { SessionsStorageContent, storageSettingsTitle } from './sessionsStorageC
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import type { TeamRun } from '../../../services/teams/common/team.js';
 import { OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID } from '../../../common/sessionCommands.js';
-import { DesignConfiguration } from '../../artifact/common/config/designEditorConfiguration.js';
+import { ArtifactCanvasConfiguration } from '../../artifact/common/config/artifactCanvasEditorConfiguration.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.SessionsSettings,
@@ -641,7 +641,7 @@ export class SessionsPreferences extends Disposable {
 			displayLanguageSetting(defaults.get(LocalizationConfiguration.locale), this.localeService, this.languagePackService, this.localizationService, this.configurationService),
 		];
 		const designSettings: readonly ISetting[] = [
-			DesignConfiguration.usePointerCursor,
+			ArtifactCanvasConfiguration.usePointerCursor,
 			AccessibilityVerbositySettingId.DesignCanvas
 		].map(id => defaults.get(id));
 		const terminalSettings = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getRegisteredConfigurations()

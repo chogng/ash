@@ -1,7 +1,4 @@
-export interface CanvasPoint {
-	readonly x: number;
-	readonly y: number;
-}
+import type { CanvasPoint, CanvasBounds } from './canvasGeometry.js';
 
 /** Viewport and world coordinates use CSS pixels; display density does not change the document. */
 export class CanvasViewport {
@@ -30,5 +27,12 @@ export class CanvasViewport {
 		this.scale = 1;
 		this.panX = 0;
 		this.panY = 0;
+	}
+
+	/** Centers content in the usable area; callers own the insets occupied by their editor controls. */
+	public fitBounds(bounds: CanvasBounds, width: number, height: number, padding: CanvasPoint): void {
+		this.scale = Math.max(0.2, Math.min(1, (width - 2 * padding.x) / bounds.width, (height - 2 * padding.y) / bounds.height));
+		this.panX = width / 2 - (bounds.x + bounds.width / 2) * this.scale;
+		this.panY = height / 2 - (bounds.y + bounds.height / 2) * this.scale;
 	}
 }

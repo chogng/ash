@@ -12,7 +12,7 @@ import { BrowserViewEditorId } from '../../../../workbench/contrib/browserView/c
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { CONTEXT_DEBUG_STATE } from '../../../../workbench/contrib/debug/common/debug.js';
 import { NewSessionPickersAvailableContext } from '../../chat/browser/newChatPickerKeybinding.js';
-import { designCanvasShortcutKeys, designVectorShortcutKeys } from '../../artifact/browser/designShortcutKeys.js';
+import { artifactCanvasShortcutKeys, artifactCanvasVectorShortcutKeys } from '../../artifact/browser/artifactCanvasShortcutKeys.js';
 
 interface Shortcut {
 	readonly title: string;
@@ -79,8 +79,8 @@ const groupAreas = {
 	diff: 'diff',
 	designCanvas: 'apps',
 	designLayers: 'apps',
-	designVector: 'apps',
-	designText: 'apps',
+	artifactCanvasVector: 'apps',
+	artifactCanvasText: 'apps',
 	designPrototype: 'apps',
 } satisfies Record<string, ShortcutArea>;
 
@@ -89,11 +89,11 @@ type ShortcutGroupId = keyof typeof groupAreas;
 const windowKey = IsSessionsWindowContext.key;
 const canvasKey = 'sessionsDesignCanvasActive';
 const layersKey = 'sessionsDesignLayersFocused';
-const designTextKey = 'sessionsDesignTextEditing';
+const artifactCanvasTextKey = 'sessionsDesignTextEditing';
 const codeKey = 'sessions.desktopCode';
 const editorToolKey = 'sessions.editorTool';
 const pickersKey = NewSessionPickersAvailableContext.key;
-const agentKeys = new Set([windowKey, canvasKey, layersKey, designTextKey, codeKey, pickersKey]);
+const agentKeys = new Set([windowKey, canvasKey, layersKey, artifactCanvasTextKey, codeKey, pickersKey]);
 
 // Resolve the bindings as if the feature owned focus, so shortcuts for hidden
 // panes and inactive editing modes are still discoverable from this modal.
@@ -102,7 +102,7 @@ const scopes: readonly Scope[] = [
 	{ group: 'terminal', keys: [codeKey], values: { [codeKey]: true } },
 	{ group: 'designLayers', keys: [layersKey], values: { [layersKey]: true } },
 	{ group: 'designCanvas', keys: [canvasKey], values: { [canvasKey]: true } },
-	{ group: 'designText', keys: [designTextKey], values: { [designTextKey]: true } },
+	{ group: 'artifactCanvasText', keys: [artifactCanvasTextKey], values: { [artifactCanvasTextKey]: true } },
 	{ group: 'conversations', keys: [editorToolKey], values: { [editorToolKey]: false } },
 	{ group: 'navigation', keys: [windowKey], values: {} },
 ];
@@ -141,15 +141,15 @@ export function getSessionsKeyboardShortcutGroups(keybindings: IKeybindingServic
 		diff: localize('sessions.shortcuts.diff', 'Diff'),
 		designCanvas: localize('sessions.shortcuts.designCanvas', 'Design Canvas'),
 		designLayers: localize('sessions.shortcuts.designLayers', 'Design Layers'),
-		designVector: localize('sessions.shortcuts.designVector', 'Design Vector Editing'),
-		designText: localize('sessions.shortcuts.designText', 'Design Text Editing'),
+		artifactCanvasVector: localize('sessions.shortcuts.artifactCanvasVector', 'Design Vector Editing'),
+		artifactCanvasText: localize('sessions.shortcuts.artifactCanvasText', 'Design Text Editing'),
 		designPrototype: localize('sessions.shortcuts.designPrototype', 'Design Prototype Preview'),
 	};
 
 	const commands = CommandsRegistry.getCommands();
 	const inactive: Readonly<Record<string, ContextKeyValue>> = {
 		[pickersKey]: false, [codeKey]: false, [canvasKey]: false, [layersKey]: false,
-		[designTextKey]: false, [editorToolKey]: undefined,
+		[artifactCanvasTextKey]: false, [editorToolKey]: undefined,
 	};
 	const windowContexts = scopes.map(scope => ({
 		scope,
@@ -227,45 +227,45 @@ function widgetShortcuts(): readonly (readonly [ShortcutGroupId, string, readonl
 		['conversations', localize({ bundle: 'ash.sessions', key: 'sessions.list.inlineSearch' }, 'Search sessions in the sidebar'), keys(['f'], primary)],
 		['conversations', localize('sessions.shortcuts.cancelDictation', 'Cancel active chat dictation'), keys(['Escape'])],
 		['navigation', localize('sessions.shortcuts.moveToolPane', 'Move a focused Code tool pane'), keys(arrows, altShift)],
-		['designCanvas', localize('sessions.shortcuts.addFrame', 'Add a frame'), keys([designCanvasShortcutKeys.addFrame])],
-		['designCanvas', localize('sessions.shortcuts.importImage', 'Import an image'), keys([designCanvasShortcutKeys.importImage])],
-		['designCanvas', localize('sessions.shortcuts.selectTool', 'Switch to the selection tool'), keys([designCanvasShortcutKeys.selectTool])],
-		['designCanvas', localize('sessions.shortcuts.handTool', 'Switch to the hand tool'), keys([designCanvasShortcutKeys.handTool])],
-		['designCanvas', localize('sessions.shortcuts.addRectangle', 'Add a rectangle'), keys([designCanvasShortcutKeys.addRectangle])],
-		['designCanvas', localize('sessions.shortcuts.addEllipse', 'Add an ellipse'), keys([designCanvasShortcutKeys.addEllipse])],
-		['designCanvas', localize('sessions.shortcuts.textTool', 'Switch to the text tool'), keys([designCanvasShortcutKeys.textTool])],
-		['designCanvas', localize('sessions.shortcuts.penTool', 'Switch to the pen tool'), keys([designCanvasShortcutKeys.penTool])],
-		['designCanvas', localize('sessions.shortcuts.zoomIn', 'Zoom in'), keys([designCanvasShortcutKeys.zoomIn, designCanvasShortcutKeys.zoomInAlternate])],
-		['designCanvas', localize('sessions.shortcuts.zoomOut', 'Zoom out'), keys([designCanvasShortcutKeys.zoomOut, designCanvasShortcutKeys.zoomOutAlternate])],
-		['designCanvas', localize('sessions.shortcuts.resetZoom', 'Reset the canvas view'), keys([designCanvasShortcutKeys.resetZoom])],
+		['designCanvas', localize('sessions.shortcuts.addFrame', 'Add a frame'), keys([artifactCanvasShortcutKeys.addFrame])],
+		['designCanvas', localize('sessions.shortcuts.importImage', 'Import an image'), keys([artifactCanvasShortcutKeys.importImage])],
+		['designCanvas', localize('sessions.shortcuts.selectTool', 'Switch to the selection tool'), keys([artifactCanvasShortcutKeys.selectTool])],
+		['designCanvas', localize('sessions.shortcuts.handTool', 'Switch to the hand tool'), keys([artifactCanvasShortcutKeys.handTool])],
+		['designCanvas', localize('sessions.shortcuts.addRectangle', 'Add a rectangle'), keys([artifactCanvasShortcutKeys.addRectangle])],
+		['designCanvas', localize('sessions.shortcuts.addEllipse', 'Add an ellipse'), keys([artifactCanvasShortcutKeys.addEllipse])],
+		['designCanvas', localize('sessions.shortcuts.textTool', 'Switch to the text tool'), keys([artifactCanvasShortcutKeys.textTool])],
+		['designCanvas', localize('sessions.shortcuts.penTool', 'Switch to the pen tool'), keys([artifactCanvasShortcutKeys.penTool])],
+		['designCanvas', localize('sessions.shortcuts.zoomIn', 'Zoom in'), keys([artifactCanvasShortcutKeys.zoomIn, artifactCanvasShortcutKeys.zoomInAlternate])],
+		['designCanvas', localize('sessions.shortcuts.zoomOut', 'Zoom out'), keys([artifactCanvasShortcutKeys.zoomOut, artifactCanvasShortcutKeys.zoomOutAlternate])],
+		['designCanvas', localize('sessions.shortcuts.resetZoom', 'Reset the canvas view'), keys([artifactCanvasShortcutKeys.resetZoom])],
 		['designCanvas', localize('sessions.shortcuts.pan', 'Pan the canvas with no selection'), keys(arrows)],
-		['designLayers', localize('sessions.design.group', 'Group'), keys([designCanvasShortcutKeys.group])],
-		['designLayers', localize('sessions.design.ungroup', 'Ungroup'), keys([designCanvasShortcutKeys.ungroup])],
-		['designLayers', localize('sessions.shortcuts.addToSelection', 'Add the next layer to the selection'), keys([designCanvasShortcutKeys.addToSelection])],
+		['designLayers', localize('sessions.design.group', 'Group'), keys([artifactCanvasShortcutKeys.group])],
+		['designLayers', localize('sessions.design.ungroup', 'Ungroup'), keys([artifactCanvasShortcutKeys.ungroup])],
+		['designLayers', localize('sessions.shortcuts.addToSelection', 'Add the next layer to the selection'), keys([artifactCanvasShortcutKeys.addToSelection])],
 		['designLayers', localize('sessions.shortcuts.nextLayer', 'Select the next layer on the canvas'), keys(['Tab'])],
 		['designLayers', localize('sessions.shortcuts.previousLayer', 'Select the previous layer on the canvas'), keys(['Tab'], shift)],
 		['designLayers', localize('sessions.shortcuts.deleteLayers', 'Delete selected layers'), keys(['Delete', 'Backspace'])],
 		['designLayers', localize('sessions.shortcuts.nudge', 'Move selected layers by one pixel'), keys(arrows)],
 		['designLayers', localize('sessions.shortcuts.nudgeFar', 'Move selected layers by ten pixels'), keys(arrows, shift)],
 		['designLayers', localize('sessions.shortcuts.clearSelection', 'Clear the canvas selection'), keys(['Escape'])],
-		['designVector', localize('sessions.design.vectorFlatten', 'Flatten selection'), [vectorKey(designVectorShortcutKeys.flatten, altShift), vectorKey(designVectorShortcutKeys.transform, primary)]],
-		['designVector', localize('sessions.design.vectorOutline', 'Outline stroke'), [vectorKey(designVectorShortcutKeys.outline, { ...primary, altKey: true }), vectorKey(designVectorShortcutKeys.transform, { ...primary, shiftKey: true })]],
-		['designVector', localize('sessions.design.vectorUnion', 'Union selection'), [vectorKey(designVectorShortcutKeys.union, altShift)]],
-		['designVector', localize('sessions.design.vectorSubtract', 'Subtract selection'), [vectorKey(designVectorShortcutKeys.subtract, altShift)]],
-		['designVector', localize('sessions.design.vectorIntersect', 'Intersect selection'), [vectorKey(designVectorShortcutKeys.intersect, altShift)]],
-		['designVector', localize('sessions.design.vectorExclude', 'Exclude selection'), [vectorKey(designVectorShortcutKeys.exclude, altShift)]],
-		['designVector', localize('sessions.shortcuts.editVector', 'Toggle editing for the selected path'), keys(['Enter'])],
-		['designVector', localize('sessions.shortcuts.paintRegions', 'Toggle painting vector regions'), [physicalKey(designVectorShortcutKeys.paintRegions, shift)]],
-		['designVector', localize('sessions.shortcuts.finishBranch', 'Finish drawing a pen branch'), keys(['Enter', 'Escape'])],
-		['designVector', localize('sessions.shortcuts.deletePoints', 'Delete selected vector nodes, width points, or gradient stops'), keys(['Delete', 'Backspace'])],
-		['designVector', localize('sessions.design.vectorHeal', 'Delete and heal'), keys(['Delete', 'Backspace'], shift)],
-		['designVector', localize('sessions.shortcuts.movePoints', 'Move selected vector nodes, gradient stops, or blur endpoints'), keys(arrows)],
-		['designVector', localize('sessions.shortcuts.movePointsFar', 'Move nodes, stops, or endpoints in larger steps'), keys(arrows, shift)],
-		['designVector', localize('sessions.shortcuts.switchBlurEndpoint', 'Switch the progressive blur endpoint'), keys(['Enter'])],
-		['designVector', localize('sessions.shortcuts.applyOffset', 'Apply the offset preview'), keys(['Enter'])],
-		['designVector', localize('sessions.shortcuts.exitVectorEditing', 'Exit vector, gradient, or blur editing'), keys(['Escape'])],
-		['designText', localize('sessions.shortcuts.editText', 'Edit the selected text layer'), keys(['Enter', 'F2'])],
-		['designText', localize('sessions.shortcuts.finishText', 'Finish editing text'), [logicalKey('Escape'), logicalKey('Enter', primary)]],
+		['artifactCanvasVector', localize('sessions.design.vectorFlatten', 'Flatten selection'), [vectorKey(artifactCanvasVectorShortcutKeys.flatten, altShift), vectorKey(artifactCanvasVectorShortcutKeys.transform, primary)]],
+		['artifactCanvasVector', localize('sessions.design.vectorOutline', 'Outline stroke'), [vectorKey(artifactCanvasVectorShortcutKeys.outline, { ...primary, altKey: true }), vectorKey(artifactCanvasVectorShortcutKeys.transform, { ...primary, shiftKey: true })]],
+		['artifactCanvasVector', localize('sessions.design.vectorUnion', 'Union selection'), [vectorKey(artifactCanvasVectorShortcutKeys.union, altShift)]],
+		['artifactCanvasVector', localize('sessions.design.vectorSubtract', 'Subtract selection'), [vectorKey(artifactCanvasVectorShortcutKeys.subtract, altShift)]],
+		['artifactCanvasVector', localize('sessions.design.vectorIntersect', 'Intersect selection'), [vectorKey(artifactCanvasVectorShortcutKeys.intersect, altShift)]],
+		['artifactCanvasVector', localize('sessions.design.vectorExclude', 'Exclude selection'), [vectorKey(artifactCanvasVectorShortcutKeys.exclude, altShift)]],
+		['artifactCanvasVector', localize('sessions.shortcuts.editVector', 'Toggle editing for the selected path'), keys(['Enter'])],
+		['artifactCanvasVector', localize('sessions.shortcuts.paintRegions', 'Toggle painting vector regions'), [physicalKey(artifactCanvasVectorShortcutKeys.paintRegions, shift)]],
+		['artifactCanvasVector', localize('sessions.shortcuts.finishBranch', 'Finish drawing a pen branch'), keys(['Enter', 'Escape'])],
+		['artifactCanvasVector', localize('sessions.shortcuts.deletePoints', 'Delete selected vector nodes, width points, or gradient stops'), keys(['Delete', 'Backspace'])],
+		['artifactCanvasVector', localize('sessions.design.vectorHeal', 'Delete and heal'), keys(['Delete', 'Backspace'], shift)],
+		['artifactCanvasVector', localize('sessions.shortcuts.movePoints', 'Move selected vector nodes, gradient stops, or blur endpoints'), keys(arrows)],
+		['artifactCanvasVector', localize('sessions.shortcuts.movePointsFar', 'Move nodes, stops, or endpoints in larger steps'), keys(arrows, shift)],
+		['artifactCanvasVector', localize('sessions.shortcuts.switchBlurEndpoint', 'Switch the progressive blur endpoint'), keys(['Enter'])],
+		['artifactCanvasVector', localize('sessions.shortcuts.applyOffset', 'Apply the offset preview'), keys(['Enter'])],
+		['artifactCanvasVector', localize('sessions.shortcuts.exitVectorEditing', 'Exit vector, gradient, or blur editing'), keys(['Escape'])],
+		['artifactCanvasText', localize('sessions.shortcuts.editText', 'Edit the selected text layer'), keys(['Enter', 'F2'])],
+		['artifactCanvasText', localize('sessions.shortcuts.finishText', 'Finish editing text'), [logicalKey('Escape'), logicalKey('Enter', primary)]],
 		['designPrototype', localize('sessions.shortcuts.scrollPrototype', 'Scroll the prototype preview'), keys(arrows)],
 		['designPrototype', localize('sessions.shortcuts.scrollPrototypePage', 'Scroll the prototype preview by a page'), keys(['PageUp', 'PageDown'])],
 		['designPrototype', localize('sessions.shortcuts.scrollPrototypeEdge', 'Jump to the start or end of the scroll region'), keys(['Home', 'End'])],

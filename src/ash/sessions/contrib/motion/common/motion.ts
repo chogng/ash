@@ -1,7 +1,7 @@
-import type { DesignKeyframe, DesignShape } from '../../artifact/common/model/designDocument.js';
+import type { ArtifactCanvasKeyframe, ArtifactCanvasShape } from '../../artifact/common/model/artifactCanvasDocument.js';
 
 /** Linear interpolation matches the CSS animation emitted by the code generator. */
-export function sampleDesignMotion(shape: DesignShape, time: number): DesignKeyframe {
+export function sampleDesignMotion(shape: ArtifactCanvasShape, time: number): ArtifactCanvasKeyframe {
 	const motion = shape.motion;
 	if (!motion) { return { offset: 0, x: shape.x, y: shape.y, rotation: shape.rotation, opacity: 1 }; }
 	const offset = motion.loop ? (time % motion.duration) / motion.duration : Math.min(1, time / motion.duration);
@@ -13,6 +13,6 @@ export function sampleDesignMotion(shape: DesignShape, time: number): DesignKeyf
 	return { offset, x: interpolate('x'), y: interpolate('y'), rotation: interpolate('rotation'), opacity: interpolate('opacity') };
 }
 
-export function designMotionDuration(shapes: readonly DesignShape[]): number {
+export function designMotionDuration(shapes: readonly ArtifactCanvasShape[]): number {
 	return Math.max(1000, ...shapes.map(shape => Math.max(shape.motion?.duration ?? 0, shape.kind === 'group' || shape.kind === 'frame' ? designMotionDuration(shape.children) : 0)));
 }

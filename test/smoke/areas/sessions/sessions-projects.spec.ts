@@ -205,7 +205,7 @@ test('switching modes separates conversations, projects and Activity Bar entries
 			}
 		};
 		await expect(activity.locator('[data-action-id="sessions.open.projects"]')).toBeVisible();
-		await expect(activity.locator('[data-action-id="sessions.open.creator"]')).toBeVisible();
+		await expect(activity.locator('[data-action-id="sessions.open.artifacts"]')).toBeVisible();
 		expect((await newMenu()).some(item => item.label.startsWith('ChatGPT'))).toBe(true);
 		const chat = page.locator('.ash-chat-navigation-list');
 		const projects = chat.locator('[data-section="projects"]');
@@ -265,7 +265,7 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		await codeMode.click();
 		await expect(chat).toBeHidden();
 		await expect(activity.locator('[data-action-id="sessions.open.projects"]')).toHaveCount(0);
-		await expect(activity.locator('[data-action-id="sessions.open.creator"]')).toHaveCount(0);
+		await expect(activity.locator('[data-action-id="sessions.open.artifacts"]')).toHaveCount(0);
 		await expect(activity.locator('[data-action-id="sessions.newSession"]')).toBeVisible();
 		expect((await newMenu()).some(item => item.label.startsWith('ChatGPT'))).toBe(false);
 		const code = page.locator('.ash-sessions-list[data-mode="code"]');

@@ -265,8 +265,8 @@ def main(arguments: list[str] | None = None) -> int:
             )
 
     target = args.v8_target or cargo_target(cargo_arguments) or default_target()
-    if target not in TARGETS:
-        parser.error(f"unsupported V8 target: {target}")
+    if target not in TARGETS and target != "wasm32-unknown-unknown":
+        parser.error(f"unsupported Cargo target: {target}")
     environment = os.environ.copy()
     if (
         "apple-darwin" in target
@@ -274,6 +274,17 @@ def main(arguments: list[str] | None = None) -> int:
     ):
         environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
     packages = cargo_command_packages(args.cargo, cargo_arguments, REPOSITORY_ROOT)
+    if target == "wasm32-unknown-unknown":
+        # Browser libraries use Cargo's WASM target without a native artifact
+        # target. Never resolve host V8/speech/grammar inputs for that graph.
+        native_inputs = packages.intersection(
+            {"v8", "sherpa-onnx-sys", "ash-grammars", "ash-cli", "ash-tgrep"}
+        )
+        if native_inputs:
+            parser.error(
+                "WASM target cannot prepare native build/runtime inputs: "
+                + ", ".join(sorted(native_inputs))
+            )
     # PTY scenarios launch the programs built by `just test-tui`; their embedded
     # issue server still needs the macOS watcher host prepared below.
     tui_process_tests = (
@@ -311,13 +322,14 @@ def main(arguments: list[str] | None = None) -> int:
         and "ASH_CODE_MODE_HOST_BIN" not in environment
         and "ash-code-mode" in packages
     )
-    environment = cargo_environment(
-        TARGETS[target],
-        packages | {"v8"} if needs_code_mode_host else packages,
-        environ=environment,
-        v8_lock_path=args.v8_lock.expanduser().resolve(),
-        v8_cache_root=args.v8_cache_root.expanduser().resolve(),
-    )
+    if target in TARGETS:
+        environment = cargo_environment(
+            TARGETS[target],
+            packages | {"v8"} if needs_code_mode_host else packages,
+            environ=environment,
+            v8_lock_path=args.v8_lock.expanduser().resolve(),
+            v8_cache_root=args.v8_cache_root.expanduser().resolve(),
+        )
     if (
         cargo_arguments[0] in {"test", "run"}
         and "ash-cli" in packages

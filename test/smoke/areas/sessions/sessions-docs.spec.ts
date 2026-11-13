@@ -24,7 +24,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await quick.close();
 		const navigation = page.locator('.ash-sessions-activity-content');
 		await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
-		await expect(navigation.locator('[data-action-id="sessions.open.creator"] .ash-icon')).toHaveAttribute('data-ash-icon-id', 'artifacts');
+		await expect(navigation.locator('[data-action-id="sessions.open.artifacts"] .ash-icon')).toHaveAttribute('data-ash-icon-id', 'artifacts');
 		await quick.runCommand('workbench.action.document.new');
 		const docs = page.locator('.ash-code-page-group .ash-docs-workspace:visible');
 		const header = page.locator('[data-part="titlebar"] .ash-sessions-titlebar-editor-page');
@@ -68,10 +68,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await toolbar.getByRole('button', { name: locale === 'en' ? 'Close artifact' : '关闭作品区域' }).press('Enter');
 		await expect(page.locator('[data-part="sessions"]')).toBeVisible();
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).press('Enter');
-		await expect(page.locator('.ash-creator-home')).toBeVisible();
+		await expect(page.locator('.ash-artifacts-home')).toBeVisible();
 		await expect(editorFrame).toHaveCount(0);
 		await expect(titlebarFrame).toHaveCount(0);
-		const chooseEditor = () => quick.runCommand('sessions.creator.chooseDocsEditor');
+		const chooseEditor = () => quick.runCommand('sessions.docs.chooseEditor');
 		await chooseEditor();
 		await expect(quick.items).toHaveCount(3);
 		await expect(quick.items.first().locator('.ash-quick-pick-row-content')).toHaveClass(/picked/);
@@ -124,8 +124,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(rich).toHaveText('Built-in Docs draft');
 		if (locale === 'zh-CN') {
 			await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
-			const cards = page.locator('.ash-chat-creation');
-			await expect(cards.locator('.ash-chat-creation-button')).toHaveText(['文档', '幻灯片', '设计', '电子表格', '白板', '数据', '动效']);
+			const cards = page.locator('.ash-new-artifact');
+			await expect(cards.locator('.ash-new-artifact-button')).toHaveText(['文档', '幻灯片', '设计', '电子表格', '白板', '数据', '动效']);
 			const motion = cards.getByRole('button', { name: '动效', exact: true });
 			await motion.press('Alt+F1');
 			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/打开新的聊天草稿/u);

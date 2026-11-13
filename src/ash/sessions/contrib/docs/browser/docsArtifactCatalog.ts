@@ -41,7 +41,7 @@ registerArtifactCatalogSource(accessor => {
 					title: input.label ?? basename(input.resource).replace(/\.(?:ash-doc|md)$/u, ''),
 					kind: 'docs', owner: 'you', resource: input.resource,
 					detail: getArtifactTitle('docs'),
-					command: { id: 'sessions.creator.openDocument', args: [identity] },
+					command: { id: 'sessions.docs.openDocument', args: [identity] },
 				});
 			}
 			return cards;

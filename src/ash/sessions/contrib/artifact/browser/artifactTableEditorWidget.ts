@@ -28,7 +28,7 @@ export class ArtifactTableEditorWidget extends Disposable {
 		super();
 		this.domNode = h(ownerDocument, 'section', {
 			className: `ash-artifact-table-editor ${source.kind}`,
-			attributes: { 'aria-label': title, 'data-creator-mode': source.kind },
+			attributes: { 'aria-label': title, 'data-artifact-mode': source.kind },
 		});
 		this._register(toDisposable(() => this.domNode.remove()));
 		const controls = h(ownerDocument, 'div', { className: 'ash-artifact-table-controls', attributes: { role: 'group', 'aria-label': title } });

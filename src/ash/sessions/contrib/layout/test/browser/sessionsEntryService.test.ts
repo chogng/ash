@@ -65,8 +65,8 @@ suite('SessionsEntryService lifecycle and focus', () => {
 	test('Artifacts borrows the ordinary Chat entry from Code and on restore', async () => {
 		const chat: ISessionsEntry = { ...chatEntry, chatSource: 'desktop-chat' };
 		const artifact: ISessionsEntry = {
-			id: 'creator.slides', activityContext: 'sessions.activity.creatorSelected', workspaceMode: 'chat', content: 'editor',
-			conversation: 'visible', restoreCommand: 'sessions.restore.creator', focus: 'editor',
+			id: 'creator.slides', activityContext: 'sessions.activity.artifactsSelected', workspaceMode: 'chat', content: 'editor',
+			conversation: 'visible', restoreCommand: 'sessions.restore.artifacts', focus: 'editor',
 		};
 		for (const source of ['navigation', 'restore'] as const) {
 			using fixture = new EntryFixture();
@@ -537,7 +537,7 @@ suite('SessionsEntryService lifecycle and focus', () => {
 	test('product pages retain the current workspace conversation sidebar', async () => {
 		using fixture = new EntryFixture();
 		await fixture.service.openEntry(chatEntry);
-		for (const id of ['projects', 'creator.home', 'customize']) {
+		for (const id of ['projects', 'artifacts.home', 'customize']) {
 			await fixture.service.openEntry({ id, content: 'editor', activityContext: `sessions.activity.${id}Selected`, restoreCommand: `sessions.show.${id}`, focus: 'editor' });
 			assert.equal(fixture.opened.at(-1)?.id, chatEntry.sidebarContainerId);
 		}

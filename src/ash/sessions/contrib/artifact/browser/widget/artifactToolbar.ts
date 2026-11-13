@@ -62,7 +62,7 @@ export class ArtifactToolbar extends Disposable {
 			this.domNode.remove();
 		}));
 		this.workspaceToolbar = this._register(new MenuWorkbenchToolBar(this.domNode, menuService, this.menuProvider, Menus.ArtifactToolbar, {
-			ariaLabel: localize('sessions.creator.workspaceActions', 'Workspace actions'),
+			ariaLabel: localize('sessions.artifacts.workspaceActions', 'Workspace actions'),
 			contextKeyService: contextKeys,
 			menuOptions: { shouldForwardArgs: true },
 		}));

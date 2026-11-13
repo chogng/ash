@@ -16,3 +16,16 @@ test('Canvas viewport keeps a fractional world point fixed across pan and zoom',
 	camera.reset();
 	assert.deepEqual(camera.toWorld(point), point);
 });
+
+test('Canvas viewport frames content with editor padding without magnifying small content', () => {
+	const viewport = new CanvasViewport();
+	viewport.fitBounds({ x: 100, y: 50, width: 200, height: 100 }, 400, 300, { x: 20, y: 30 });
+	assert.equal(viewport.scale, 1);
+	assert.deepEqual(viewport.toWorld({ x: 200, y: 150 }), { x: 200, y: 100 });
+	viewport.fitBounds({ x: -100, y: -50, width: 2000, height: 1000 }, 500, 400, { x: 50, y: 50 });
+	assert.equal(viewport.scale, .2);
+	assert.deepEqual(viewport.toWorld({ x: 250, y: 200 }), { x: 900, y: 450 });
+	assert.equal(2000 * viewport.scale, 400);
+	viewport.fitBounds({ x: 0, y: 0, width: 10000, height: 10000 }, 500, 400, { x: 50, y: 50 });
+	assert.equal(viewport.scale, .2);
+});

@@ -822,6 +822,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-arkdown"
+version = "0.1.0"
+dependencies = [
+ "pulldown-cmark 0.13.6",
+ "serde",
+ "serde_json",
+ "unicode-segmentation",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "ash-assets"
 version = "0.1.0"
 dependencies = [

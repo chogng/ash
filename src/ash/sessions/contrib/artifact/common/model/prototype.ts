@@ -1,9 +1,9 @@
 import { isRecord } from '../../../../../base/common/types.js';
 import { isUuid } from '../../../../../base/common/uuid.js';
 import { readPrototypeExpression, prototypeExpressionType, type PrototypeExpression } from './prototypeExpression.js';
-import { getDesignResourceCatalog, type DesignResources } from './designResources.js';
+import { getArtifactCanvasResourceCatalog, type ArtifactCanvasResources } from './artifactCanvasResources.js';
 import { localize } from '../../../../../nls.js';
-import { flattenDesignShapes, type DesignShape, type DesignShapeGeometry } from './designDocument.js';
+import { flattenArtifactCanvasShapes, type ArtifactCanvasShape, type ArtifactCanvasShapeGeometry } from './artifactCanvasDocument.js';
 
 export type PrototypeTrigger = 'click' | 'hover' | 'press' | 'drag' | 'enter' | 'leave' | 'down' | 'up' | 'key' | 'delay';
 export type PrototypeAction = 'navigate' | 'back' | 'overlay' | 'swap' | 'close' | 'url' | 'changeTo' | 'setVariable' | 'setMode' | 'conditional' | 'scrollTo';
@@ -46,16 +46,16 @@ export function mapPrototypeActions(actions: readonly PrototypeStep[], map: (act
 }
 
 export const defaultPrototypeTransition: PrototypeTransition = Object.freeze({ type: 'instant', duration: 300, easing: 'easeOut', direction: 'left' });
-export type PrototypeFrame = Extract<DesignShape, { kind: 'frame'; }>;
-export function prototypeFrames(shapes: readonly DesignShape[]): readonly PrototypeFrame[] {
+export type PrototypeFrame = Extract<ArtifactCanvasShape, { kind: 'frame'; }>;
+export function prototypeFrames(shapes: readonly ArtifactCanvasShape[]): readonly PrototypeFrame[] {
 	return shapes.filter((shape): shape is PrototypeFrame => shape.kind === 'frame' && !shape.component);
 }
-export function prototypeOwner(shapes: readonly DesignShape[], id: string): PrototypeFrame | undefined {
-	return prototypeFrames(shapes).find(frame => flattenDesignShapes([frame]).some(shape => shape.id === id));
+export function prototypeOwner(shapes: readonly ArtifactCanvasShape[], id: string): PrototypeFrame | undefined {
+	return prototypeFrames(shapes).find(frame => flattenArtifactCanvasShapes([frame]).some(shape => shape.id === id));
 }
 /** A hotspot switches its nearest containing instance, including nested interactive components. */
-export function prototypeComponent(shapes: readonly DesignShape[], id: string): PrototypeFrame | undefined {
-	const path = (shape: DesignShape): readonly DesignShape[] | undefined => {
+export function prototypeComponent(shapes: readonly ArtifactCanvasShape[], id: string): PrototypeFrame | undefined {
+	const path = (shape: ArtifactCanvasShape): readonly ArtifactCanvasShape[] | undefined => {
 		if (shape.id === id) { return [shape]; }
 		if (shape.kind === 'frame' || shape.kind === 'group') { for (const child of shape.children) { const found = path(child); if (found) { return [shape, ...found]; } } }
 		return;
@@ -63,14 +63,14 @@ export function prototypeComponent(shapes: readonly DesignShape[], id: string): 
 	const chain = shapes.map(path).find(Boolean);
 	return chain && [...chain].reverse().find((shape): shape is PrototypeFrame => shape.kind === 'frame' && (!!shape.instance || shape.component?.kind === 'main'));
 }
-export function prototypeVariants(shapes: readonly DesignShape[], id: string): readonly PrototypeFrame[] {
+export function prototypeVariants(shapes: readonly ArtifactCanvasShape[], id: string): readonly PrototypeFrame[] {
 	const component = prototypeComponent(shapes, id);
 	const mainId = component?.instance?.componentId ?? component?.id;
-	const set = flattenDesignShapes(shapes).find(shape => shape.kind === 'frame' && shape.component?.kind === 'set' && shape.children.some(child => child.id === mainId));
+	const set = flattenArtifactCanvasShapes(shapes).find(shape => shape.kind === 'frame' && shape.component?.kind === 'set' && shape.children.some(child => child.id === mainId));
 	return set?.kind === 'frame' ? set.children.filter((shape): shape is PrototypeFrame => shape.kind === 'frame' && shape.component?.kind === 'main' && shape.id !== mainId) : [];
 }
 /** Scroll actions stay within one screen, or within their reusable component definition. */
-export function prototypeScrollScope(shapes: readonly DesignShape[], id: string): PrototypeFrame | undefined { return prototypeOwner(shapes, id) ?? prototypeComponent(shapes, id); }
+export function prototypeScrollScope(shapes: readonly ArtifactCanvasShape[], id: string): PrototypeFrame | undefined { return prototypeOwner(shapes, id) ?? prototypeComponent(shapes, id); }
 
 export function isPrototypeUrl(value: string): boolean {
 	if (/[\r\n\u0000]/u.test(value)) { return false; }
@@ -78,7 +78,7 @@ export function isPrototypeUrl(value: string): boolean {
 }
 
 /** File boundary: legacy single actions are migrated once; the model only owns action arrays. */
-export function parsePrototypeProperties(value: Record<string, unknown>): Pick<DesignShapeGeometry, 'interactions' | 'flowStart' | 'overflowDirection' | 'scrollPosition' | 'layoutPositioning'> {
+export function parsePrototypeProperties(value: Record<string, unknown>): Pick<ArtifactCanvasShapeGeometry, 'interactions' | 'flowStart' | 'overflowDirection' | 'scrollPosition' | 'layoutPositioning'> {
 	const invalid = (): never => { throw new TypeError(localize('sessions.design.prototype.invalid', 'Invalid prototype interaction or flow starting point.')); };
 	const only = (value: Record<string, unknown>, keys: readonly string[]): boolean => Object.keys(value).every(key => keys.includes(key));
 	const finite = (value: unknown, min: number, max: number): boolean => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
@@ -133,9 +133,9 @@ export function parsePrototypeProperties(value: Record<string, unknown>): Pick<D
 	return { ...Object.fromEntries(['overflowDirection', 'scrollPosition', 'layoutPositioning'].filter(key => value[key] !== undefined).map(key => [key, value[key]])), ...(interactions ? { interactions } : {}), ...(value.flowStart === undefined ? {} : { flowStart: value.flowStart as string }) };
 }
 
-export function validatePrototypeExpressions(shapes: readonly DesignShape[], resources?: DesignResources): void {
-	const catalog = getDesignResourceCatalog(resources);
-	for (const shape of flattenDesignShapes(shapes)) {
+export function validatePrototypeExpressions(shapes: readonly ArtifactCanvasShape[], resources?: ArtifactCanvasResources): void {
+	const catalog = getArtifactCanvasResourceCatalog(resources);
+	for (const shape of flattenArtifactCanvasShapes(shapes)) {
 		for (const interaction of shape.interactions ?? []) {
 			for (const action of flattenPrototypeActions(interaction.actions)) {
 				const invalid = (): never => { throw new TypeError(localize('sessions.design.prototype.invalidExpression', 'Enter a valid expression with compatible values and operators.')); };
@@ -150,16 +150,16 @@ export function validatePrototypeExpressions(shapes: readonly DesignShape[], res
 }
 
 /** Deleting a target removes its wires in the same undo entry. Missing library targets stay inert. */
-export function reconcilePrototypeLinks(shapes: readonly DesignShape[], previous: readonly DesignShape[]): readonly DesignShape[] {
+export function reconcilePrototypeLinks(shapes: readonly ArtifactCanvasShape[], previous: readonly ArtifactCanvasShape[]): readonly ArtifactCanvasShape[] {
 	const roots = new Set(prototypeFrames(shapes).map(shape => shape.id));
-	const targets = new Set([...roots, ...flattenDesignShapes(shapes).filter(shape => shape.kind === 'frame' && shape.component?.kind === 'main').map(shape => shape.id)]);
-	const removed = new Set(flattenDesignShapes(previous).filter(shape => shape.kind === 'frame' && (!shape.component || shape.component.kind === 'main') && !targets.has(shape.id)).map(shape => shape.id));
-	const currentIds = new Set(flattenDesignShapes(shapes).map(shape => shape.id));
-	const removedLayers = new Set(flattenDesignShapes(previous).filter(shape => !currentIds.has(shape.id)).map(shape => shape.id));
-	const update = (shape: DesignShape): DesignShape => {
+	const targets = new Set([...roots, ...flattenArtifactCanvasShapes(shapes).filter(shape => shape.kind === 'frame' && shape.component?.kind === 'main').map(shape => shape.id)]);
+	const removed = new Set(flattenArtifactCanvasShapes(previous).filter(shape => shape.kind === 'frame' && (!shape.component || shape.component.kind === 'main') && !targets.has(shape.id)).map(shape => shape.id));
+	const currentIds = new Set(flattenArtifactCanvasShapes(shapes).map(shape => shape.id));
+	const removedLayers = new Set(flattenArtifactCanvasShapes(previous).filter(shape => !currentIds.has(shape.id)).map(shape => shape.id));
+	const update = (shape: ArtifactCanvasShape): ArtifactCanvasShape => {
 		let result = shape;
 		if (shape.interactions) {
-			const scope = prototypeScrollScope(shapes, shape.id), allowed = new Set(scope ? flattenDesignShapes([scope]).flatMap(shape => [shape.id, shape.sourceId]) : []);
+			const scope = prototypeScrollScope(shapes, shape.id), allowed = new Set(scope ? flattenArtifactCanvasShapes([scope]).flatMap(shape => [shape.id, shape.sourceId]) : []);
 			result = {
 				...result, interactions: shape.interactions.map(interaction => ({
 					...interaction, actions: mapPrototypeActions(interaction.actions, action => {

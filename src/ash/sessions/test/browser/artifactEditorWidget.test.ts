@@ -1,5 +1,5 @@
 import { DocumentCommands } from '../../contrib/artifact/common/commands/documentCommands.js';
-import { flattenDesignShapes, type DesignShape } from '../../contrib/artifact/common/model/designDocument.js';
+import { flattenArtifactCanvasShapes, type ArtifactCanvasShape } from '../../contrib/artifact/common/model/artifactCanvasDocument.js';
 import { InMemoryFileSystemProvider } from '../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { createTestFileService } from '../../../workbench/test/common/testEditorServices.js';
 import { IAssetService } from '../../../platform/assets/common/assetService.js';
@@ -22,7 +22,7 @@ import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { darkColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
-import { DesignConfiguration } from '../../contrib/artifact/common/config/designEditorConfiguration.js';
+import { ArtifactCanvasConfiguration } from '../../contrib/artifact/common/config/artifactCanvasEditorConfiguration.js';
 import { Emitter, Event as AshEvent, Event } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
@@ -39,11 +39,11 @@ import { IWorkingCopyService } from '../../../workbench/services/workingCopy/com
 import { AbstractLifecycleService } from '../../../workbench/services/lifecycle/common/lifecycleService.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { ILifecycleService, LifecyclePhase, StartupKind, type IBeforeShutdownEvent } from '../../../workbench/services/lifecycle/common/lifecycle.js';
-import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
-import { IStorageService, StorageScope } from '../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { IUserDataProfileService } from '../../../workbench/services/userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
@@ -76,12 +76,12 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { documentFromShapes, parseDesignDocument, serializeDesignDocument } = await import('../../contrib/artifact/common/model/designDocument.js');
+const { documentFromShapes, parseArtifactCanvasDocument, serializeArtifactCanvasDocument } = await import('../../contrib/artifact/common/model/artifactCanvasDocument.js');
 const { ArtifactEditorWidget } = await import('../../contrib/artifact/browser/widget/artifactEditorWidget.js');
-const { DesignDocumentController } = await import('../../contrib/artifact/browser/designDocumentController.js');
-const { DesignEditorHost } = await import('../../contrib/artifact/browser/designEditorHost.js');
-const { DesignEditorService, IDesignEditorService } = await import('../../contrib/artifact/browser/designEditorService.js');
-const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/artifact/browser/designPanelViews.js');
+const { ArtifactCanvasDocumentController } = await import('../../contrib/artifact/browser/artifactCanvasDocumentController.js');
+const { ArtifactCanvasEditorHost } = await import('../../contrib/artifact/browser/artifactCanvasEditorHost.js');
+const { ArtifactCanvasEditorService, IArtifactCanvasEditorService } = await import('../../contrib/artifact/browser/artifactCanvasEditorService.js');
+const { ArtifactCanvasLayersView, ArtifactCanvasPropertiesView } = await import('../../contrib/artifact/browser/artifactCanvasPanelViews.js');
 const { ArtifactWorkspaceId } = await import('../../contrib/artifact/common/artifactWorkspace.js');
 const { ArtifactEditorView } = await import('../../contrib/artifact/browser/artifactEditor.js');
 const { ArtifactPins, IArtifactPins } = await import('../../contrib/artifact/browser/artifactPins.js');
@@ -95,12 +95,11 @@ await import('../../contrib/slides/browser/slides.contribution.js');
 await import('../../contrib/motion/browser/motion.contribution.js');
 await import('../../contrib/brand/browser/brand.contribution.js');
 await import('../../contrib/sites/browser/sites.contribution.js');
-await import('../../contrib/make/browser/make.contribution.js');
 await import('../../contrib/prototype/browser/prototype.contribution.js');
 const { createSlides } = await import('./fixtures/artifactExampleShapes.js');
-const DESIGN_EDITOR_RESOURCE = URI.parse('ash-creator:/design');
-await import('../../contrib/artifact/browser/designEditor.contribution.js');
-const { createDesignEditorContributionFactory } = await import('../../contrib/artifact/browser/designEditorContributions.js');
+const DESIGN_EDITOR_RESOURCE = URI.parse('ash-artifacts:/design');
+await import('../../contrib/artifact/browser/artifactCanvasEditor.contribution.js');
+const { createArtifactCanvasEditorContributionFactory } = await import('../../contrib/artifact/browser/artifactCanvasEditorContributions.js');
 const services = new InstantiationService();
 services.registerInstance(ILogService, new NullLoggerService());
 const notifications = new TestNotificationService();
@@ -124,7 +123,7 @@ services.registerInstance(IWorkspaceContextService, new TestWorkspaceService({ i
 const designStorage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 });
 services.registerInstance(IStorageService, designStorage);
 services.registerInstance(IUserDataProfileService, new UserDataProfileService());
-setup(() => designStorage.remove('creator.design.activeDocument', StorageScope.WORKSPACE));
+setup(() => designStorage.remove('artifacts.design.activeDocument', StorageScope.WORKSPACE));
 const resource = URI.file('/design.ash-design');
 const binaryFiles = new Map<string, Uint8Array>();
 const directories = new Set<string>();
@@ -205,8 +204,8 @@ suiteTeardown(() => {
 interface ProjectedTransform { panX: number; panY: number; scale: number; }
 
 class DesignEditorFixture extends Disposable {
-	readonly pane: InstanceType<typeof DesignEditorHost>;
-	readonly designEditors: InstanceType<typeof DesignEditorService>;
+	readonly pane: InstanceType<typeof ArtifactCanvasEditorHost>;
+	readonly artifactCanvasEditors: InstanceType<typeof ArtifactCanvasEditorService>;
 	readonly domNode: HTMLElement;
 	readonly propertiesDomNode: HTMLElement;
 	readonly layersDomNode: HTMLElement;
@@ -215,8 +214,8 @@ class DesignEditorFixture extends Disposable {
 		super();
 		const child = services.createChild();
 		child.registerInstance(IStorageService, this._register(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 })));
-		this.designEditors = this._register(child.createInstance(DesignEditorService));
-		child.registerInstance(IDesignEditorService, this.designEditors);
+		this.artifactCanvasEditors = this._register(child.createInstance(ArtifactCanvasEditorService));
+		child.registerInstance(IArtifactCanvasEditorService, this.artifactCanvasEditors);
 		const ownerDocument = browser.window.document;
 		const editorHost = ownerDocument.createElement('section');
 		editorHost.dataset.part = 'editor';
@@ -225,11 +224,11 @@ class DesignEditorFixture extends Disposable {
 		this.layersDomNode = ownerDocument.createElement('section');
 		this.layersDomNode.dataset.part = 'sidebar';
 		ownerDocument.body.append(editorHost, this.propertiesDomNode, this.layersDomNode);
-		this.pane = this._register(child.createInstance(DesignEditorHost, ArtifactWorkspaceId.Design));
+		this.pane = this._register(child.createInstance(ArtifactCanvasEditorHost, ArtifactWorkspaceId.Design));
 		this.pane.create(editorHost);
 		this.domNode = this.pane.domNode;
-		const properties = this._register(child.createInstance(DesignPropertiesView, this.propertiesDomNode, { id: 'design.properties', title: 'Shape properties' }));
-		const layers = this._register(child.createInstance(DesignLayersView, this.layersDomNode, { id: 'design.layers', title: 'Layers' }));
+		const properties = this._register(child.createInstance(ArtifactCanvasPropertiesView, this.propertiesDomNode, { id: 'design.properties', title: 'Shape properties' }));
+		const layers = this._register(child.createInstance(ArtifactCanvasLayersView, this.layersDomNode, { id: 'design.layers', title: 'Layers' }));
 		properties.setVisible(true);
 		layers.setVisible(true);
 		this.pane.setVisible(true);
@@ -284,22 +283,22 @@ test('Design cursor follows configuration and theme changes and releases its sub
 		theme.setColorTheme(darkColorTheme);
 		await settle();
 		assert.notEqual(cursor(), initialCursor);
-		await configuration.updateValue(DesignConfiguration.usePointerCursor, false);
+		await configuration.updateValue(ArtifactCanvasConfiguration.usePointerCursor, false);
 		assert.equal(viewport.classList.contains('pointer-cursor'), false);
-		assert.equal(configuration.inspect(DesignConfiguration.usePointerCursor).userValue, false);
+		assert.equal(configuration.inspect(ArtifactCanvasConfiguration.usePointerCursor).userValue, false);
 		using nextView = createView();
 		assert.equal(nextView.domNode.querySelector('.ash-canvas-viewport')!.classList.contains('pointer-cursor'), false);
-		await assert.rejects(configuration.updateValue(DesignConfiguration.usePointerCursor, 'false'), /must be boolean/u);
-		await assert.rejects(configuration.updateValue(DesignConfiguration.usePointerCursor, false, ConfigurationTarget.WORKSPACE), /Unable to write/u);
+		await assert.rejects(configuration.updateValue(ArtifactCanvasConfiguration.usePointerCursor, 'false'), /must be boolean/u);
+		await assert.rejects(configuration.updateValue(ArtifactCanvasConfiguration.usePointerCursor, false, ConfigurationTarget.WORKSPACE), /Unable to write/u);
 		view.dispose();
 		const disposedCursor = cursor();
-		await configuration.updateValue(DesignConfiguration.usePointerCursor, true);
+		await configuration.updateValue(ArtifactCanvasConfiguration.usePointerCursor, true);
 		theme.setColorTheme(lightColorTheme);
 		assert.equal(viewport.classList.contains('pointer-cursor'), false);
 		assert.equal(cursor(), disposedCursor);
 	} finally {
 		view.dispose();
-		await configuration.updateValue(DesignConfiguration.usePointerCursor, undefined);
+		await configuration.updateValue(ArtifactCanvasConfiguration.usePointerCursor, undefined);
 		theme.setColorTheme(lightColorTheme);
 		await settle();
 		canvasPrototype.getContext = originalContext;
@@ -412,7 +411,7 @@ test('Design canvas resolves its accessible name from the Chinese language pack'
 test('Design color formats preserve alpha, reject invalid values and share document undo', () => {
 	using view = createView();
 	view.domNode.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'r', bubbles: true }));
-	const model = view.designEditors.document.model;
+	const model = view.artifactCanvasEditors.document.model;
 	view.propertiesDomNode.querySelector<HTMLButtonElement>('button[aria-label="Fill"]')!.click();
 	const picker = browser.window.document.querySelector<HTMLElement>('.ash-color-picker')!;
 	const format = picker.querySelector<HTMLSelectElement>('select')!;
@@ -438,7 +437,7 @@ test('Design color formats preserve alpha, reject invalid values and share docum
 	const brightness = picker.querySelector<HTMLInputElement>('input[aria-label="HSB B"]')!;
 	brightness.value = '50'; brightness.dispatchEvent(new browser.window.Event('change'));
 	assert.equal(model.value.shapes[0].fill, '#80000040');
-	view.designEditors.document.model.undo();
+	view.artifactCanvasEditors.document.model.undo();
 	assert.equal(model.value.shapes[0].fill, '#ff000040');
 	assert.equal(colorContextView.visible, false);
 });
@@ -446,7 +445,7 @@ test('Design color formats preserve alpha, reject invalid values and share docum
 test('Design color preview cancels without editing and one committed range gesture undoes once', () => {
 	using view = createView();
 	view.domNode.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'r', bubbles: true }));
-	const model = view.designEditors.document.model;
+	const model = view.artifactCanvasEditors.document.model;
 	const fillButton = view.propertiesDomNode.querySelector<HTMLButtonElement>('button[aria-label="Fill"]')!;
 	// jsdom has no layout; model the painted trigger without making hidden or detached targets visible.
 	Object.defineProperty(fillButton, 'getClientRects', {
@@ -478,9 +477,9 @@ test('Design color preview cancels without editing and one committed range gestu
 	}
 	alpha.dispatchEvent(new browser.window.Event('change'));
 	assert.equal(model.value.shapes[0].fill, '#80808080');
-	view.designEditors.document.model.undo();
+	view.artifactCanvasEditors.document.model.undo();
 	assert.equal(model.value.shapes[0].fill, '#808080');
-	view.designEditors.document.model.redo();
+	view.artifactCanvasEditors.document.model.redo();
 	assert.equal(model.value.shapes[0].fill, '#80808080');
 });
 
@@ -651,7 +650,7 @@ test('Design edits text and path nodes, groups a selection, and exports safe SVG
 	assert.match(ArtifactEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /中文 <script>/u);
 	assert.equal(view.domNode.querySelector('script'), null);
 	assert.equal(view.domNode.querySelectorAll('[data-text-paragraph]').length, 2);
-	view.pane.editor.selectShape(new DocumentCommands(view.designEditors.document.model).addShape('path', { x: 200, y: 50 })); pressCanvas(view, 'Enter');
+	view.pane.editor.selectShape(new DocumentCommands(view.artifactCanvasEditors.document.model).addShape('path', { x: 200, y: 50 })); pressCanvas(view, 'Enter');
 	const outgoing = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Outgoing handle X"]')!;
 	outgoing.value = '48';
 	outgoing.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
@@ -680,7 +679,7 @@ test('Design edits text and path nodes, groups a selection, and exports safe SVG
 	assert.equal(svg.querySelector('script'), null);
 	assert.equal(svg.querySelector('[data-shape-id]'), null);
 	assert.equal(svg.querySelector('.ash-sessions-design-selection'), null);
-	assert.equal(svg.querySelector('[data-design-text]')!.textContent, '中文 <script>alert(1)</script>\nSecond line');
+	assert.equal(svg.querySelector('[data-artifact-canvas-text]')!.textContent, '中文 <script>alert(1)</script>\nSecond line');
 	assert.equal(svg.querySelector('[contenteditable]'), null);
 	assert.match(svg.querySelector('path')!.getAttribute('d')!, / Z$/u);
 	ArtifactEditorWidget.getFocused(view.domNode)!.undo();
@@ -706,7 +705,7 @@ test('Design property sections follow the selected object and path stroke edits 
 	ArtifactEditorWidget.getFocused(view.domNode)!.focusProperties();
 	assert.equal(position.open, true);
 	assert.equal(browser.window.document.activeElement?.getAttribute('aria-label'), 'X');
-	view.pane.editor.selectShape(new DocumentCommands(view.designEditors.document.model).addShape('path', { x: 200, y: 50 })); pressCanvas(view, 'Enter');
+	view.pane.editor.selectShape(new DocumentCommands(view.artifactCanvasEditors.document.model).addShape('path', { x: 200, y: 50 })); pressCanvas(view, 'Enter');
 	assert.deepEqual(sections(), ['Components', 'Design resources', 'Layer', 'Arrange', 'Position', 'Layout', 'Appearance', 'Effects', 'Bézier path', 'Vector tools', 'Prototype']);
 	const path = view.domNode.querySelector<SVGPathElement>('path[data-shape-id]')!;
 	const original = path.getAttribute('stroke-width');
@@ -768,7 +767,7 @@ test('Chinese Design actions and new property labels are localized', async () =>
 		createText(view);
 		assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties textarea')!.getAttribute('aria-label'), '文字内容');
 		assert.deepEqual([...view.propertiesDomNode.querySelectorAll<HTMLDetailsElement>('details.ash-design-property-section')].filter(section => !section.hidden).map(section => section.querySelector('summary')!.textContent), ['组件', '设计资源', '图层', '排列', '位置', '布局', '外观', '效果', '文字排版', '矢量工具', '原型']);
-		view.pane.editor.selectShape(new DocumentCommands(view.designEditors.document.model).addShape('path', { x: 200, y: 50 })); pressCanvas(view, 'Enter');
+		view.pane.editor.selectShape(new DocumentCommands(view.artifactCanvasEditors.document.model).addShape('path', { x: 200, y: 50 })); pressCanvas(view, 'Enter');
 		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="出控制点 X"]'));
 		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="描边宽度"]'));
 		pressCanvas(view, 'F10', { shiftKey: true });
@@ -781,9 +780,9 @@ test('Chinese Design actions and new property labels are localized', async () =>
 });
 
 test('Design editors share document edits and history while keeping selection, camera and lifetime separate', () => {
-	using document = services.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
-	using first = services.createInstance(ArtifactEditorWidget, browser.window.document, document, createDesignEditorContributionFactory(services));
-	using second = services.createInstance(ArtifactEditorWidget, browser.window.document, document, createDesignEditorContributionFactory(services));
+	using document = services.createInstance(ArtifactCanvasDocumentController, ArtifactWorkspaceId.Design);
+	using first = services.createInstance(ArtifactEditorWidget, browser.window.document, document, createArtifactCanvasEditorContributionFactory(services));
+	using second = services.createInstance(ArtifactEditorWidget, browser.window.document, document, createArtifactCanvasEditorContributionFactory(services));
 	for (const editor of [first, second]) {
 		editor.initialize();
 		editor.layout({ width: 400, height: 300 });
@@ -909,7 +908,7 @@ test('Motion keyframes round trip, scrub without editing, undo and export runnab
 	assert.equal(view.domNode.querySelector<HTMLSelectElement>('select[aria-label="Keyframe"]')!.options.length, 3);
 	await ArtifactEditorWidget.getFocused(view.domNode)!.saveDocument();
 	const saved = fileContent;
-	assert.equal(parseDesignDocument(saved).shapes[0].motion!.keyframes.length, 3);
+	assert.equal(parseArtifactCanvasDocument(saved).shapes[0].motion!.keyframes.length, 3);
 	timeline.value = '750'; timeline.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
 	assert.equal(view.domNode.classList.contains('dirty'), false);
 	await clickAction(view, 'Code');
@@ -954,7 +953,7 @@ test('Code contribution escapes user text and Chinese tool, mode and timeline na
 		const source = view.domNode.querySelector<HTMLTextAreaElement>('textarea[aria-label="生成的代码"]')!.value;
 		const html = new browser.window.DOMParser().parseFromString(source, 'text/html');
 		assert.equal(html.querySelectorAll('script').length, 1);
-		assert.deepEqual(parseDesignDocument(html.querySelector('script')!.textContent!).shapes.map(shape => shape.kind === 'text' ? shape.text : undefined), [text.value]);
+		assert.deepEqual(parseArtifactCanvasDocument(html.querySelector('script')!.textContent!).shapes.map(shape => shape.kind === 'text' ? shape.text : undefined), [text.value]);
 		assert.match(ArtifactEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /doctype html/u);
 	} finally { resetNlsResolver(); }
 });
@@ -968,16 +967,16 @@ test('Design panels share the editor selection and detach when the pane hides', 
 	assert.equal(view.layersDomNode.querySelectorAll('[role="treeitem"]').length, 2);
 	const rectangle = [...view.layersDomNode.querySelectorAll<HTMLElement>('[role="treeitem"]')].find(element => element.textContent?.includes('Rectangle'))!;
 	rectangle.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
-	assert.deepEqual([...view.designEditors.activeEditor.get()!.selection.ids], [view.pane.workingCopy.model.value.shapes[0]!.id]);
+	assert.deepEqual([...view.artifactCanvasEditors.activeEditor.get()!.selection.ids], [view.pane.workingCopy.model.value.shapes[0]!.id]);
 	const ellipse = [...view.layersDomNode.querySelectorAll<HTMLElement>('[role="treeitem"]')].find(element => element.textContent?.includes('Ellipse'))!;
 	ellipse.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true, shiftKey: true }));
-	assert.equal(view.designEditors.activeEditor.get()!.selection.ids.size, 2);
+	assert.equal(view.artifactCanvasEditors.activeEditor.get()!.selection.ids.size, 2);
 	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
 	assert.equal(view.propertiesDomNode.querySelector('.ash-design-properties-heading')!.textContent, '2 objects selected.');
 	rectangle.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
 	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
 	view.pane.setVisible(false);
-	assert.equal(view.designEditors.activeEditor.get(), undefined);
+	assert.equal(view.artifactCanvasEditors.activeEditor.get(), undefined);
 	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties'), null);
 	assert.equal(view.layersDomNode.querySelectorAll('[role="treeitem"]').length, 0);
 	view.pane.setVisible(true);
@@ -989,15 +988,15 @@ test('Design shutdown automatically saves hidden documents without asking to sav
 	using child = services.createChild();
 	using shutdown = new Emitter<IBeforeShutdownEvent>();
 	child.registerInstance(ILifecycleService, { ...services.get(ILifecycleService), onBeforeShutdown: shutdown.event });
-	using designEditors = child.createInstance(DesignEditorService);
-	child.registerInstance(IDesignEditorService, designEditors);
-	using page = child.createInstance(DesignEditorHost, ArtifactWorkspaceId.Design);
+	using artifactCanvasEditors = child.createInstance(ArtifactCanvasEditorService);
+	child.registerInstance(IArtifactCanvasEditorService, artifactCanvasEditors);
+	using page = child.createInstance(ArtifactCanvasEditorHost, ArtifactWorkspaceId.Design);
 	const host = browser.window.document.createElement('section');
 	browser.window.document.body.append(host);
 	using hostCleanup = toDisposable(() => host.remove());
 	page.create(host);
 	page.setVisible(true);
-	const editor = designEditors.activeEditor.get()!;
+	const editor = artifactCanvasEditors.activeEditor.get()!;
 	const isVetoed = async (): Promise<boolean> => {
 		const vetoes: (boolean | Promise<boolean>)[] = [];
 		shutdown.fire({ reason: 'windowClose', veto: value => { vetoes.push(value); } });
@@ -1008,12 +1007,12 @@ test('Design shutdown automatically saves hidden documents without asking to sav
 		page.setVisible(false);
 		saveDecision = ConfirmResult.CANCEL;
 		assert.equal(await isVetoed(), false);
-		assert.equal(designEditors.document.isDirty, false);
+		assert.equal(artifactCanvasEditors.document.isDirty, false);
 		saveDecision = ConfirmResult.SAVE;
 		assert.equal(await isVetoed(), false);
-		assert.equal(parseDesignDocument(fileContent).shapes.length, 1);
-		assert.equal(designEditors.document.isDirty, false);
-		assert.equal(designEditors.activeEditor.get(), undefined);
+		assert.equal(parseArtifactCanvasDocument(fileContent).shapes.length, 1);
+		assert.equal(artifactCanvasEditors.document.isDirty, false);
+		assert.equal(artifactCanvasEditors.activeEditor.get(), undefined);
 		page.setVisible(true);
 		pressCanvas(editor, 'e');
 		saveDecision = ConfirmResult.DONT_SAVE;
@@ -1045,21 +1044,21 @@ test('Design panel labels and empty states follow Chinese localization', async (
 
 test('Design page instances share the window document and retain independent editing state', async () => {
 	using child = services.createChild();
-	using designEditors = child.createInstance(DesignEditorService);
-	child.registerInstance(IDesignEditorService, designEditors);
-	using firstPage = child.createInstance(DesignEditorHost, ArtifactWorkspaceId.Design);
-	using secondPage = child.createInstance(DesignEditorHost, ArtifactWorkspaceId.Design);
+	using artifactCanvasEditors = child.createInstance(ArtifactCanvasEditorService);
+	child.registerInstance(IArtifactCanvasEditorService, artifactCanvasEditors);
+	using firstPage = child.createInstance(ArtifactCanvasEditorHost, ArtifactWorkspaceId.Design);
+	using secondPage = child.createInstance(ArtifactCanvasEditorHost, ArtifactWorkspaceId.Design);
 	const host = browser.window.document.createElement('section');
 	browser.window.document.body.append(host);
 	using hostCleanup = toDisposable(() => host.remove());
 	firstPage.create(host);
 	firstPage.setVisible(true);
-	const first = designEditors.activeEditor.get()!;
+	const first = artifactCanvasEditors.activeEditor.get()!;
 	pressCanvas(first, 'r');
 	pressCanvas(first, '+');
 	secondPage.create(host);
 	secondPage.setVisible(true);
-	const second = designEditors.activeEditor.get()!;
+	const second = artifactCanvasEditors.activeEditor.get()!;
 	assert.notEqual(first, second);
 	assert.equal(first.documentController, second.documentController);
 	assert.equal(services.get(IWorkingCopyService).get(DESIGN_EDITOR_RESOURCE).length, 1);
@@ -1070,7 +1069,7 @@ test('Design page instances share the window document and retain independent edi
 	pressCanvas(second, 'e');
 	assert.equal(first.documentController.model.value.shapes.length, 2);
 	first.focus();
-	assert.equal(designEditors.activeEditor.get(), first);
+	assert.equal(artifactCanvasEditors.activeEditor.get(), first);
 	assert.equal(first.selection.ids.size, 1);
 });
 
@@ -1082,7 +1081,7 @@ test('Frame image properties, package media, backup recovery and SVG export keep
 	const asset = { id: generateUuid(), name: 'product.png', versions: [{ id: generateUuid(), sha256, path: `assets/${sha256}`, mediaType: 'image/png' as const, width: 1, height: 1 }] };
 	const image = { id: generateUuid(), kind: 'image' as const, assetId: asset.id, assetVersionId: asset.versions[0].id, crop: { x: 0, y: 0, width: 1, height: 1 }, x: 20, y: 30, width: 200, height: 100, rotation: 0, fill: '#ffffff' };
 	const frame = { id: generateUuid(), kind: 'frame' as const, clip: true, children: [image], x: 100, y: 200, width: 640, height: 480, rotation: 0, fill: '#ffffff' };
-	controller.restoreBackup(JSON.stringify({ manifest: serializeDesignDocument(documentFromShapes([frame], undefined, [asset])), media: { [sha256]: Buffer.from(bytes).toString('base64') } }));
+	controller.restoreBackup(JSON.stringify({ manifest: serializeArtifactCanvasDocument(documentFromShapes([frame], undefined, [asset])), media: { [sha256]: Buffer.from(bytes).toString('base64') } }));
 	const editor = ArtifactEditorWidget.getFocused(view.domNode)!;
 	editor.selectShape(image.id);
 	assert.deepEqual([...view.propertiesDomNode.querySelectorAll<HTMLDetailsElement>('details.ash-design-property-section')].filter(section => !section.hidden).map(section => section.querySelector('summary')!.textContent), ['Components', 'Design resources', 'Layer', 'Arrange', 'Position', 'Layout', 'Appearance', 'Effects', 'Image crop', 'Constraints', 'Prototype']);
@@ -1100,10 +1099,10 @@ test('Frame image properties, package media, backup recovery and SVG export keep
 	assert.equal(await editor.saveDocument(), true);
 	assert.deepEqual(binaryFiles.get(URI.joinPath(resource, `assets/${sha256}`).toString()), bytes);
 	assert.equal(writes.at(-1)!.resource.path, '/design.ash-design/manifest.json');
-	assert.deepEqual(parseDesignDocument(fileContent), beforeSave);
+	assert.deepEqual(parseArtifactCanvasDocument(fileContent), beforeSave);
 	assert.equal(controller.isDirty, false);
 	const backup = controller.backup();
-	using recovered = services.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
+	using recovered = services.createInstance(ArtifactCanvasDocumentController, ArtifactWorkspaceId.Design);
 	recovered.restoreBackup(backup);
 	assert.deepEqual(recovered.readMedia(asset.versions[0]), bytes);
 	assert.deepEqual(recovered.model.value, beforeSave);
@@ -1116,7 +1115,7 @@ test('Frame image properties, package media, backup recovery and SVG export keep
 	const filterSource = view.domNode.querySelector('feImage')!.getAttribute('href')!;
 	assert.match(decodeURIComponent(filterSource.slice(filterSource.indexOf(',') + 1)), /href="data:image\/png;base64,/u);
 	controller.model.undo();
-	fileContent = serializeDesignDocument(beforeSave);
+	fileContent = serializeArtifactCanvasDocument(beforeSave);
 	await controller.openDocument();
 	assert.deepEqual(controller.model.value, beforeSave);
 	assert.equal(controller.model.canUndo, false);
@@ -1126,7 +1125,7 @@ test('Frame image properties, package media, backup recovery and SVG export keep
 	assert.equal(controller.model.value, active);
 	assert.equal(errors.length, 1);
 	assert.equal(errors[0], 'Could not open the design.');
-	assert.throws(() => recovered.restoreBackup(JSON.stringify({ manifest: serializeDesignDocument(beforeSave), media: {} })), /Missing design backup media/u);
+	assert.throws(() => recovered.restoreBackup(JSON.stringify({ manifest: serializeArtifactCanvasDocument(beforeSave), media: {} })), /Missing design backup media/u);
 	assert.equal(recovered.model.value.documentId, beforeSave.documentId);
 });
 
@@ -1143,11 +1142,11 @@ test('Frame rotation keeps keyboard movement in canvas directions and unclipped 
 	if (updated.kind !== 'frame') { throw new Error('Expected frame'); }
 	assert.equal(updated.children[0].x, 20);
 	assert.equal(updated.children[0].y, 29);
-	const { exportDesignSvg } = await import('../../contrib/artifact/browser/designSvgRenderer.js');
+	const { exportArtifactCanvasSvg } = await import('../../contrib/artifact/browser/rendering/artifactCanvasSvgRenderer.js');
 	const overflowing = { ...frame, rotation: 0, children: [{ ...child, x: -50, y: -20 }] };
-	assert.match(exportDesignSvg(documentFromShapes([overflowing])), /viewBox="50 180 150 120"/u);
-	assert.match(exportDesignSvg(documentFromShapes([{ ...overflowing, clip: true }])), /viewBox="100 200 100 100"/u);
-	const { generateDesignCode } = await import('../../contrib/artifact/browser/code/designCodeGenerator.js');
+	assert.match(exportArtifactCanvasSvg(documentFromShapes([overflowing])), /viewBox="50 180 150 120"/u);
+	assert.match(exportArtifactCanvasSvg(documentFromShapes([{ ...overflowing, clip: true }])), /viewBox="100 200 100 100"/u);
+	const { generateDesignCode } = await import('../../contrib/design/browser/code/designCodeGenerator.js');
 	const motion = { duration: 1000, loop: false, keyframes: [{ offset: 0, x: -50, y: -20, rotation: 0, opacity: 1 }, { offset: 1, x: 40, y: -20, rotation: 0, opacity: 1 }] };
 	const code = generateDesignCode(documentFromShapes([{ ...overflowing, children: [{ ...overflowing.children[0], motion }] }]));
 	assert.match(code, new RegExp(`@keyframes ash-design-object-${child.id}-motion`, 'u'));
@@ -1168,7 +1167,7 @@ test('Saving captures a baseline while later edits and Save As retain dirty stat
 			entered!(); await pending; return files.writeFile(request);
 		},
 	}));
-	using controller = childServices.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
+	using controller = childServices.createInstance(ArtifactCanvasDocumentController, ArtifactWorkspaceId.Design);
 	const shape = { id: generateUuid(), kind: 'rectangle' as const, x: 0, y: 0, width: 50, height: 40, rotation: 0, fill: '#ffffff' };
 	controller.model.applyEdit([shape]);
 	const saving = controller.saveDocument();
@@ -1176,14 +1175,14 @@ test('Saving captures a baseline while later edits and Save As retain dirty stat
 	controller.model.applyEdit([{ ...shape, x: 20 }]);
 	release!();
 	assert.equal(await saving, false);
-	assert.equal(parseDesignDocument(fileContent).shapes[0].x, 0);
+	assert.equal(parseArtifactCanvasDocument(fileContent).shapes[0].x, 0);
 	assert.equal(controller.isDirty, true);
 	controller.model.undo();
 	assert.equal(controller.isDirty, false);
 	controller.model.redo();
 	const originalIdentity = controller.model.value.documentId;
 	assert.equal(await controller.saveDocument(URI.file('/copy.ash-design')), true);
-	const copied = parseDesignDocument(fileContent);
+	const copied = parseArtifactCanvasDocument(fileContent);
 	assert.notEqual(copied.documentId, originalIdentity);
 	controller.model.undo();
 	assert.equal(controller.model.value.documentId, copied.documentId);
@@ -1225,7 +1224,7 @@ test('Design import adopts backend version identities and metadata and packages 
 		getVersion: unexpected,
 		readVersion: async version => { assert.equal(version, backend); return committed; },
 	});
-	using controller = child.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
+	using controller = child.createInstance(ArtifactCanvasDocumentController, ArtifactWorkspaceId.Design);
 	const id = await controller.importImage({ x: 500, y: 400 });
 	assert.ok(id);
 	assert.equal(imports, 1);
@@ -1243,7 +1242,7 @@ test('Design reuses the exact Library version without importing again or duplica
 	const bytes = new Uint8Array([1, 2, 3]);
 	const version = { assetId: generateUuid(), versionId: generateUuid(), name: 'Library image', source: URI.file('/image.png'), sha256: createHash('sha256').update(bytes).digest('hex'), mediaType: 'image/png' as const, size: bytes.length, width: 100, height: 60 };
 	child.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: async selected => { assert.equal(selected, version); return bytes; } });
-	using controller = child.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
+	using controller = child.createInstance(ArtifactCanvasDocumentController, ArtifactWorkspaceId.Design);
 	await controller.adoptAssetVersion(version, { x: 200, y: 200 });
 	await controller.adoptAssetVersion(version, { x: 400, y: 400 });
 	assert.equal(controller.model.value.assets.length, 1);
@@ -1254,16 +1253,16 @@ test('Design reuses the exact Library version without importing again or duplica
 	assert.equal(controller.model.value.shapes.length, 1);
 });
 
-class CreatorFixture extends Disposable {
+class ArtifactFixture extends Disposable {
 	readonly page: InstanceType<typeof ArtifactEditorView>;
 	private readonly commands: CommandService;
-	readonly editors: InstanceType<typeof DesignEditorService>;
+	readonly editors: InstanceType<typeof ArtifactCanvasEditorService>;
 	constructor(parent = services) {
 		super();
 		setARIAContainer(browser.window.document.body);
 		const child = this._register(parent.createChild());
-		this.editors = this._register(child.createInstance(DesignEditorService));
-		child.registerInstance(IDesignEditorService, this.editors);
+		this.editors = this._register(child.createInstance(ArtifactCanvasEditorService));
+		child.registerInstance(IArtifactCanvasEditorService, this.editors);
 		if (!child.has(IGeneratedFilesService)) child.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
 		child.registerInstance(INotificationService, notifications);
 		child.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for help.', show: () => { throw new Error('Unexpected accessible view'); }, disableHint: unexpected, showAccessibleViewHelp: () => { throw new Error('Unexpected accessible view'); }, dispose() { }, [Symbol.dispose]() { } });
@@ -1309,9 +1308,9 @@ class CreatorFixture extends Disposable {
 	}
 }
 
-test('Creator offers Chat creation choices and retains each canvas document, selection and camera', () => {
-	using fixture = new CreatorFixture();
-	assert.equal(fixture.page.domNode.querySelectorAll('.ash-chat-creation-button').length, 7);
+test('Artifacts offers Chat creation choices and retains each canvas document, selection and camera', () => {
+	using fixture = new ArtifactFixture();
+	assert.equal(fixture.page.domNode.querySelectorAll('.ash-new-artifact-button').length, 7);
 	assert.equal(fixture.page.detailsContainerId, undefined);
 	fixture.page.openMode(ArtifactWorkspaceId.Design);
 	const design = fixture.editors.activeEditor.get()!;
@@ -1321,34 +1320,33 @@ test('Creator offers Chat creation choices and retains each canvas document, sel
 	const transform = projectedTransform(design);
 	fixture.page.showHome();
 	assert.equal(fixture.editors.activeEditor.get(), undefined);
-	assert.equal(fixture.page.domNode.ownerDocument.activeElement?.getAttribute('data-creation-kind'), 'design');
+	assert.equal(fixture.page.domNode.ownerDocument.activeElement, fixture.page.domNode);
 	fixture.page.openMode(ArtifactWorkspaceId.Whiteboard);
 	const whiteboardToolbar = fixture.editors.activeEditor.get()!.domNode.querySelector('.ash-artifact-toolbar')!;
-	assert.ok(whiteboardToolbar.querySelector('[data-action-id="sessions.creator.whiteboard.note"]'));
-	assert.equal(whiteboardToolbar.querySelector('[data-action-id="sessions.creator.slides.add"]'), null);
+	assert.ok(whiteboardToolbar.querySelector('[data-action-id="sessions.artifacts.whiteboard.note"]'));
+	assert.equal(whiteboardToolbar.querySelector('[data-action-id="sessions.artifacts.slides.add"]'), null);
 	fixture.click('Add note');
 	const whiteboard = fixture.editors.getDocument(ArtifactWorkspaceId.Whiteboard);
 	assert.equal(whiteboard.model.value.shapes[0].kind, 'group');
 	whiteboard.model.undo();
 	assert.equal(whiteboard.model.value.shapes.length, 0);
 	fixture.page.showHome();
-	assert.equal(fixture.page.domNode.ownerDocument.activeElement?.getAttribute('data-creation-kind'), 'whiteboard');
+	assert.equal(fixture.page.domNode.ownerDocument.activeElement, fixture.page.domNode);
 	assert.equal(design.documentController.model.value.shapes.length, 1);
 	for (const [mode, action] of [
 		[ArtifactWorkspaceId.Slides, 'add'],
 		[ArtifactWorkspaceId.Brand, 'square'],
 		[ArtifactWorkspaceId.Sites, 'page'],
-		[ArtifactWorkspaceId.Make, 'agent'],
 		[ArtifactWorkspaceId.Prototype, 'screen'],
 	] as const) {
 		fixture.page.openMode(mode);
 		const editor = fixture.editors.activeEditor.get()!;
 		assert.equal(editor.documentController.model.value.mode, mode);
 		const toolbar = editor.domNode.querySelector('.ash-artifact-toolbar')!;
-		assert.ok(toolbar.querySelector(`[data-action-id="sessions.creator.${mode}.${action}"]`));
-		assert.equal(toolbar.querySelector('[data-action-id="sessions.creator.whiteboard.note"]'), null);
+		assert.ok(toolbar.querySelector(`[data-action-id="sessions.artifacts.${mode}.${action}"]`));
+		assert.equal(toolbar.querySelector('[data-action-id="sessions.artifacts.whiteboard.note"]'), null);
 		assert.equal(fixture.editors.getDocument(mode).model.value.shapes.length, 0);
-		assert.equal(fixture.page.detailsContainerId !== undefined, mode !== ArtifactWorkspaceId.Make);
+		assert.equal(fixture.page.detailsContainerId !== undefined, true);
 	}
 	fixture.page.openMode(ArtifactWorkspaceId.Design);
 	assert.equal(fixture.editors.activeEditor.get(), design);
@@ -1360,7 +1358,28 @@ test('Creator offers Chat creation choices and retains each canvas document, sel
 	assert.equal(fixture.editors.activeEditor.get(), design);
 });
 
-test('Creator opens the originating conversation from a published artifact card', async () => {
+test('Design owns HTML preview and retires the independent Make entry', () => {
+	using fixture = new ArtifactFixture();
+	fixture.page.openMode(ArtifactWorkspaceId.Design);
+	const preview = fixture.page.domNode.querySelector<HTMLIFrameElement>('.ash-design-html-preview')!;
+	assert.equal(preview.hidden, true);
+	fixture.click('Preview HTML');
+	assert.equal(preview.hidden, false);
+	assert.match(preview.srcdoc, /doctype html/iu);
+	const html = new browser.window.DOMParser().parseFromString(preview.srcdoc, 'text/html');
+	assert.match(html.querySelector('style')!.textContent, /^\.ash-design-scene \{ position: relative;/mu);
+	assert.match(html.querySelector('style')!.textContent, /^\.ash-design-object \{ position: absolute;/mu);
+	fixture.page.setVisible(false);
+	assert.equal(preview.srcdoc, '');
+	fixture.page.setVisible(true);
+	assert.match(preview.srcdoc, /doctype html/iu);
+	fixture.click('Preview HTML');
+	assert.equal(preview.hidden, true);
+	assert.equal(preview.srcdoc, '');
+	assert.equal(CommandsRegistry.hasCommand('sessions.artifacts.open.make'), false);
+});
+
+test('Artifacts opens the originating conversation from a published artifact card', async () => {
 	using scoped = services.createChild();
 	using changed = new Emitter<void>();
 	const file: GeneratedFile = {
@@ -1380,7 +1399,7 @@ test('Creator opens the originating conversation from a published artifact card'
 	});
 	using commands = new CommandService(scoped);
 	scoped.registerInstance(ICommandService, commands);
-	using fixture = new CreatorFixture(scoped);
+	using fixture = new ArtifactFixture(scoped);
 	assert.equal(fixture.page.domNode.querySelector('[data-generated-file-resource]'), null);
 	catalog = [file];
 	changed.fire();
@@ -1395,10 +1414,10 @@ test('Creator opens the originating conversation from a published artifact card'
 	assert.equal(refreshes, 1);
 	assert.ok(URI.isUri(target));
 	assert.deepEqual(parseOpenSessionLinkUri(target), { connectionAuthority: 'local', sessionId: 'session', threadId: 'thread' });
-	assert.equal(fixture.page.domNode.querySelector<HTMLElement>('.ash-creator-home')?.hidden, false);
+	assert.equal(fixture.page.domNode.querySelector<HTMLElement>('.ash-artifacts-home')?.hidden, false);
 });
 
-test('Creator reports generated file open failures and retains the published card', async () => {
+test('Artifacts reports generated file open failures and retains the published card', async () => {
 	using scoped = services.createChild();
 	const file: GeneratedFile = {
 		id: 'b'.repeat(64), title: 'Saved document', resource: URI.file('/generated/saved-document.md'), contentType: 'text/markdown', createdAt: 1,
@@ -1409,7 +1428,7 @@ test('Creator reports generated file open failures and retains the published car
 	scoped.registerInstance(ICommandService, commands);
 	const notified = new DeferredPromise<string>();
 	using listener = notifications.model.onDidAdd(notification => { void notified.complete(notification.message); });
-	using fixture = new CreatorFixture(scoped);
+	using fixture = new ArtifactFixture(scoped);
 	const card = fixture.page.domNode.querySelector<HTMLButtonElement>('[data-generated-file-resource]');
 	assert.ok(card);
 	card.click();
@@ -1417,15 +1436,15 @@ test('Creator reports generated file open failures and retains the published car
 	const retained = fixture.page.domNode.querySelectorAll<HTMLButtonElement>('[data-generated-file-resource]');
 	assert.equal(retained.length, 1);
 	assert.equal(retained[0].dataset.generatedFileResource, file.resource.toString());
-	assert.equal(fixture.page.domNode.querySelector<HTMLElement>('.ash-creator-home')?.hidden, false);
+	assert.equal(fixture.page.domNode.querySelector<HTMLElement>('.ash-artifacts-home')?.hidden, false);
 });
 
-test('Creator Slides order and Brand variants use their own complete undo history', () => {
-	using fixture = new CreatorFixture();
+test('Artifacts Slides order and Brand variants use their own complete undo history', () => {
+	using fixture = new ArtifactFixture();
 	fixture.page.openMode(ArtifactWorkspaceId.Slides);
 	const toolbar = fixture.page.domNode.querySelector('.ash-artifact-toolbar-workspace')!;
-	const earlier = () => toolbar.querySelector<HTMLButtonElement>('[data-action-id="sessions.creator.slides.earlier"] button')!;
-	const later = () => toolbar.querySelector<HTMLButtonElement>('[data-action-id="sessions.creator.slides.later"] button')!;
+	const earlier = () => toolbar.querySelector<HTMLButtonElement>('[data-action-id="sessions.artifacts.slides.earlier"] button')!;
+	const later = () => toolbar.querySelector<HTMLButtonElement>('[data-action-id="sessions.artifacts.slides.later"] button')!;
 	assert.equal(earlier().disabled, true);
 	assert.equal(later().disabled, true);
 	fixture.click('Add slide');
@@ -1440,7 +1459,7 @@ test('Creator Slides order and Brand variants use their own complete undo histor
 	assert.equal(earlier().disabled, true);
 	assert.equal(later().disabled, false);
 	fixture.click('Present');
-	const preview = fixture.page.domNode.querySelector<HTMLElement>('.ash-creator-frame-preview')!;
+	const preview = fixture.page.domNode.querySelector<HTMLElement>('.ash-artifacts-frame-preview')!;
 	preview.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowRight' }));
 	preview.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape' }));
 	assert.equal(preview.hidden, true);
@@ -1453,21 +1472,21 @@ test('Creator Slides order and Brand variants use their own complete undo histor
 	fixture.click('Create size variants');
 	const brand = fixture.editors.getDocument(ArtifactWorkspaceId.Brand).model;
 	assert.deepEqual(brand.value.shapes.map(shape => [shape.width, shape.height]), [[1080, 1080], [1080, 1080], [1080, 1920], [1200, 628]]);
-	assert.equal(parseDesignDocument(serializeDesignDocument(brand.value)).mode, ArtifactWorkspaceId.Brand);
+	assert.equal(parseArtifactCanvasDocument(serializeArtifactCanvasDocument(brand.value)).mode, ArtifactWorkspaceId.Brand);
 	brand.undo();
 	assert.equal(brand.value.shapes.length, 1);
 	assert.equal(slides.value.shapes.length, 2);
 });
 
-test('Creator menu commands use their originating workspace and reject hidden workspaces', async () => {
-	using first = new CreatorFixture();
-	using second = new CreatorFixture();
+test('Artifacts menu commands use their originating workspace and reject hidden workspaces', async () => {
+	using first = new ArtifactFixture();
+	using second = new ArtifactFixture();
 	first.page.openMode(ArtifactWorkspaceId.Slides);
 	second.page.openMode(ArtifactWorkspaceId.Slides);
 	const firstDocument = first.editors.getDocument(ArtifactWorkspaceId.Slides);
 	const firstSlides = firstDocument.model;
 	const secondSlides = second.editors.getDocument(ArtifactWorkspaceId.Slides).model;
-	const addSlide = 'sessions.creator.slides.add';
+	const addSlide = 'sessions.artifacts.slides.add';
 	let source: unknown;
 	using listener = commandService.onWillExecuteCommand(event => {
 		if (event.commandId === addSlide) source = event.args[0];
@@ -1493,7 +1512,7 @@ test('Creator menu commands use their originating workspace and reject hidden wo
 	assert.equal(disabledWhileSaving, true);
 	assert.equal(addButton().disabled, false);
 	assert.equal(firstDocument.isDirty, false);
-	assert.equal(parseDesignDocument(fileContent).documentId, firstSlides.value.documentId);
+	assert.equal(parseArtifactCanvasDocument(fileContent).documentId, firstSlides.value.documentId);
 
 	first.click('More Actions');
 	assert.ok(contextMenu);
@@ -1508,12 +1527,12 @@ test('Creator menu commands use their originating workspace and reject hidden wo
 	assert.equal(secondSlides.value.shapes.length, 1);
 });
 
-test('Creator saves workspace identity and refuses to replace another mode with its file or backup', async () => {
-	using controller = services.createInstance(DesignDocumentController, ArtifactWorkspaceId.Slides);
+test('Artifacts saves workspace identity and refuses to replace another mode with its file or backup', async () => {
+	using controller = services.createInstance(ArtifactCanvasDocumentController, ArtifactWorkspaceId.Slides);
 	new (await import('../../contrib/artifact/common/commands/documentCommands.js')).DocumentCommands(controller.model).addFrame({ x: 0, y: 0 });
 	assert.equal(await controller.saveDocument(), true);
-	assert.equal(parseDesignDocument(fileContent).mode, ArtifactWorkspaceId.Slides);
-	using other = services.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
+	assert.equal(parseArtifactCanvasDocument(fileContent).mode, ArtifactWorkspaceId.Slides);
+	using other = services.createInstance(ArtifactCanvasDocumentController, ArtifactWorkspaceId.Design);
 	const before = other.model.value;
 	await other.openDocument();
 	assert.equal(other.model.value, before);
@@ -1522,11 +1541,11 @@ test('Creator saves workspace identity and refuses to replace another mode with 
 });
 
 
-test('Creator shutdown checks dirty documents in hidden modes', async () => {
+test('Artifacts shutdown checks dirty documents in hidden modes', async () => {
 	using child = services.createChild();
 	using shutdown = new Emitter<IBeforeShutdownEvent>();
 	child.registerInstance(ILifecycleService, { ...services.get(ILifecycleService), onBeforeShutdown: shutdown.event });
-	using editors = child.createInstance(DesignEditorService);
+	using editors = child.createInstance(ArtifactCanvasEditorService);
 	editors.getDocument(ArtifactWorkspaceId.Design);
 	const slides = editors.getDocument(ArtifactWorkspaceId.Slides);
 	const { DocumentCommands } = await import('../../contrib/artifact/common/commands/documentCommands.js');
@@ -1545,7 +1564,7 @@ import { UriIdentityService } from '../../../platform/uriIdentity/common/uriIden
 
 test('Design layout properties edit nested geometry, rename layers and save the same resolved document', async () => {
 	using view = createView();
-	const model = view.designEditors.document.model;
+	const model = view.artifactCanvasEditors.document.model;
 	pressCanvas(view, 'r');
 	pressCanvas(view, 'e');
 	pressCanvas(view, 'a', { ctrlKey: true });
@@ -1576,17 +1595,17 @@ test('Design layout properties edit nested geometry, rename layers and save the 
 	editor.selectShape(frame.id);
 	input('Width').value = '300'; input('Width').dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 	assert.equal((model.value.shapes[0] as typeof frame).children[0].width, 276);
-	const { generateDesignCode } = await import('../../contrib/artifact/browser/code/designCodeGenerator.js');
+	const { generateDesignCode } = await import('../../contrib/design/browser/code/designCodeGenerator.js');
 	const html = generateDesignCode(model.value);
 	assert.match(html, /display: flex; flex-direction: column;[^{]*row-gap: 24px/u);
 	assert.match(html, /width: auto; align-self: stretch/u);
-	await view.designEditors.document.saveDocument();
-	assert.deepEqual(parseDesignDocument(fileContent), model.value);
-	assert.equal(view.designEditors.document.isDirty, false);
+	await view.artifactCanvasEditors.document.saveDocument();
+	assert.deepEqual(parseArtifactCanvasDocument(fileContent), model.value);
+	assert.equal(view.artifactCanvasEditors.document.isDirty, false);
 	editor.undo();
 	assert.equal((model.value.shapes[0] as typeof frame).children[0].width, 120);
 	editor.redo();
-	assert.equal(view.designEditors.document.isDirty, false);
+	assert.equal(view.artifactCanvasEditors.document.isDirty, false);
 	select('Layout flow', 'none');
 	assert.equal((model.value.shapes[0] as typeof frame).autoLayout, undefined);
 	editor.selectShape(frame.children[0].id);
@@ -1601,7 +1620,7 @@ test('Design layer shortcuts duplicate containers and reorder children through t
 	pressCanvas(view, 'r'); pressCanvas(view, 'e');
 	pressCanvas(view, 'a', { ctrlKey: true }); pressCanvas(view, 'A', { shiftKey: true });
 	const editor = ArtifactEditorWidget.getFocused(view.domNode)!;
-	const model = view.designEditors.document.model;
+	const model = view.artifactCanvasEditors.document.model;
 	const frame = model.value.shapes[0];
 	if (frame.kind !== 'frame') { assert.fail('Expected auto layout frame'); }
 	pressCanvas(view, 'd', { metaKey: true });
@@ -1645,8 +1664,8 @@ test('Design grid, wrapping and size limits edit one undoable document and rejec
 	pressCanvas(view, 'r'); pressCanvas(view, 'e'); pressCanvas(view, 'r');
 	pressCanvas(view, 'a', { ctrlKey: true }); pressCanvas(view, 'A', { shiftKey: true });
 	const editor = ArtifactEditorWidget.getFocused(view.domNode)!;
-	const model = view.designEditors.document.model;
-	const frame = (): Extract<DesignShape, { kind: 'frame'; }> => model.value.shapes[0] as Extract<DesignShape, { kind: 'frame'; }>;
+	const model = view.artifactCanvasEditors.document.model;
+	const frame = (): Extract<ArtifactCanvasShape, { kind: 'frame'; }> => model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'frame'; }>;
 	const input = (name: string): HTMLInputElement => view.propertiesDomNode.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`)!;
 	const number = (name: string, value: string): void => { const field = input(name); field.value = value; field.dispatchEvent(new browser.window.Event('change', { bubbles: true })); };
 	const select = (name: string, value: string): void => { const field = view.propertiesDomNode.querySelector<HTMLSelectElement>(`select[aria-label="${name}"]`)!; field.value = value; field.dispatchEvent(new browser.window.Event('change', { bubbles: true })); };
@@ -1685,9 +1704,9 @@ test('Design grid, wrapping and size limits edit one undoable document and rejec
 	assert.equal(frame().children[0].sizeLimits, undefined);
 	editor.redo();
 	assert.equal(frame().children[0].sizeLimits?.maxWidth, 80);
-	await view.designEditors.document.saveDocument();
-	assert.deepEqual(parseDesignDocument(fileContent), model.value);
-	const { generateDesignCode } = await import('../../contrib/artifact/browser/code/designCodeGenerator.js');
+	await view.artifactCanvasEditors.document.saveDocument();
+	assert.deepEqual(parseArtifactCanvasDocument(fileContent), model.value);
+	const { generateDesignCode } = await import('../../contrib/design/browser/code/designCodeGenerator.js');
 	assert.match(generateDesignCode(model.value), /display: grid; grid-template-columns:[^;]+50px/u);
 	assert.match(generateDesignCode(model.value), /grid-column: 1 \/ span 2; grid-row: 2 \/ span 1/u);
 	assert.match(generateDesignCode(model.value), /max-width: 80px/u);
@@ -1701,7 +1720,7 @@ test('Design grid, wrapping and size limits edit one undoable document and rejec
 });
 
 test('Design component controls create variants, preserve text overrides, reset, detach and save through one document', async () => {
-	using view = createView(); const editor = ArtifactEditorWidget.getFocused(view.domNode)!; const model = view.designEditors.document.model;
+	using view = createView(); const editor = ArtifactEditorWidget.getFocused(view.domNode)!; const model = view.artifactCanvasEditors.document.model;
 	const button = (label: string): void => { const button = [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === label)!; assert.ok(button, label); button.click(); };
 	const field = (label: string, value: string): void => { const input = view.propertiesDomNode.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!; input.value = value; input.dispatchEvent(new browser.window.Event('change', { bubbles: true })); };
 	createText(view); pressCanvas(view, 'k', { ctrlKey: true, altKey: true });
@@ -1721,7 +1740,7 @@ test('Design component controls create variants, preserve text overrides, reset,
 	assert.match(editor.getAccessibleContent(), /Instance of[\s\S]*Custom instance/u);
 	button('Reset all overrides'); assert.doesNotMatch(editor.getAccessibleContent(), /Custom instance/u);
 	editor.undo(); assert.match(editor.getAccessibleContent(), /Custom instance/u);
-	await view.designEditors.document.saveDocument(); assert.deepEqual(parseDesignDocument(fileContent), model.value);
+	await view.artifactCanvasEditors.document.saveDocument(); assert.deepEqual(parseArtifactCanvasDocument(fileContent), model.value);
 	pressCanvas(view, 'b', { metaKey: true, altKey: true });
 	assert.equal((model.value.shapes[1] as typeof instance).instance, undefined);
 	editor.undo(); assert.ok((model.value.shapes[1] as typeof instance).instance);
@@ -1763,26 +1782,26 @@ test('Design resource controls bind modes, reject invalid values, create styles 
 	assert.equal(input('binding').value, '@style');
 	change('binding', ''); assert.equal(model.value.shapes[0].fill, '#123456'); assert.equal(model.value.shapes[0].styleBindings?.fill, undefined); editor.undo();
 	assert.match(editor.getAccessibleContent(), /Brand/u);
-	await editor.documentController.saveDocument(); const saved = parseDesignDocument(fileContent); assert.equal(saved.shapes[0].id, id); assert.equal(saved.shapes[0].styleBindings?.fill, saved.resources!.styles[0].id);
+	await editor.documentController.saveDocument(); const saved = parseArtifactCanvasDocument(fileContent); assert.equal(saved.shapes[0].id, id); assert.equal(saved.shapes[0].styleBindings?.fill, saved.resources!.styles[0].id);
 	editor.undo(); assert.equal(model.value.resources!.styles.length, 0); editor.redo(); assert.equal(model.value.resources!.styles.length, 1);
 });
 
 test('Design library files publish media and review updates before changing consumers, preserving overrides and undo', async () => {
 	fileContent = ''; errors = [];
-	using publisher = services.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
+	using publisher = services.createInstance(ArtifactCanvasDocumentController, ArtifactWorkspaceId.Design);
 	const { DocumentCommands } = await import('../../contrib/artifact/common/commands/documentCommands.js');
 	const author = new DocumentCommands(publisher.model);
-	const label: DesignShape = { id: generateUuid(), kind: 'text', text: 'Initial', fontSize: 16, x: 0, y: 0, width: 100, height: 24, fill: '#123456', rotation: 0 };
+	const label: ArtifactCanvasShape = { id: generateUuid(), kind: 'text', text: 'Initial', fontSize: 16, x: 0, y: 0, width: 100, height: 24, fill: '#123456', rotation: 0 };
 	const bytes = new Uint8Array([137, 80, 78, 71]); const sha256 = createHash('sha256').update(bytes).digest('hex');
 	const assetId = generateUuid(); const versionId = generateUuid();
-	const picture: DesignShape = { id: generateUuid(), kind: 'image', assetId, assetVersionId: versionId, x: 110, y: 0, width: 20, height: 20, rotation: 0, fill: '#ffffff', crop: { x: 0, y: 0, width: 1, height: 1 } };
-	const main: DesignShape = { id: generateUuid(), kind: 'frame', name: 'Button', x: 0, y: 0, width: 140, height: 40, rotation: 0, fill: '#ffffff', clip: false, children: [label, picture], component: { kind: 'main' } };
-	publisher.restoreBackup(JSON.stringify({ manifest: serializeDesignDocument(documentFromShapes([main], undefined, [{ id: assetId, name: 'Icon', versions: [{ id: versionId, sha256, path: `assets/${sha256}`, mediaType: 'image/png', width: 20, height: 20 }] }])), media: { [sha256]: Buffer.from(bytes).toString('base64') } }));
+	const picture: ArtifactCanvasShape = { id: generateUuid(), kind: 'image', assetId, assetVersionId: versionId, x: 110, y: 0, width: 20, height: 20, rotation: 0, fill: '#ffffff', crop: { x: 0, y: 0, width: 1, height: 1 } };
+	const main: ArtifactCanvasShape = { id: generateUuid(), kind: 'frame', name: 'Button', x: 0, y: 0, width: 140, height: 40, rotation: 0, fill: '#ffffff', clip: false, children: [label, picture], component: { kind: 'main' } };
+	publisher.restoreBackup(JSON.stringify({ manifest: serializeArtifactCanvasDocument(documentFromShapes([main], undefined, [{ id: assetId, name: 'Icon', versions: [{ id: versionId, sha256, path: `assets/${sha256}`, mediaType: 'image/png', width: 20, height: 20 }] }])), media: { [sha256]: Buffer.from(bytes).toString('base64') } }));
 	author.insertShape({ ...label, id: generateUuid(), text: 'Unpublished notes', x: 1000 });
 	await publisher.publishLibrary(); const initialPublication = fileContent; assert.equal(JSON.parse(fileContent).kind, 'ash-design-library'); assert.equal(JSON.stringify(JSON.parse(fileContent).document).includes('Unpublished notes'), false);
-	using view = createView(); const consumer = view.designEditors.document; const commands = new DocumentCommands(consumer.model);
+	using view = createView(); const consumer = view.artifactCanvasEditors.document; const commands = new DocumentCommands(consumer.model);
 	await consumer.addLibrary(); assert.equal(consumer.model.value.resources!.libraries.length, 1);
-	const id = commands.components.createInstance(main.id)!; const current = () => consumer.model.value.shapes[0] as Extract<DesignShape, { kind: 'frame'; }>;
+	const id = commands.components.createInstance(main.id)!; const current = () => consumer.model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'frame'; }>;
 	const child = current().children[0]; assert.equal(current().instance!.componentId, main.id);
 	commands.updateShape({ ...child, kind: 'text', text: 'My label', fontSize: 16 });
 	author.updateShape({ ...label, text: 'Published', fill: '#ff0000' }); await publisher.publishLibrary();
@@ -1790,14 +1809,14 @@ test('Design library files publish media and review updates before changing cons
 	assert.equal(current().children[0].fill, '#123456'); assert.ok(consumer.getLibraryUpdate(publisher.model.value.documentId));
 	assert.match(view.propertiesDomNode.textContent!, /Review the published changes/u);
 	const accept = [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.startsWith('Accept update:'))!; accept.click();
-	assert.equal(current().children[0].fill, '#ff0000'); assert.equal((current().children[0] as Extract<DesignShape, { kind: 'text'; }>).text, 'My label');
+	assert.equal(current().children[0].fill, '#ff0000'); assert.equal((current().children[0] as Extract<ArtifactCanvasShape, { kind: 'text'; }>).text, 'My label');
 	consumer.model.undo(); assert.equal(current().children[0].fill, '#123456'); consumer.model.redo();
 	const savingFrom = writes.length;
 	assert.equal(await consumer.saveDocument(), true);
 	// The publisher can autosave too; inspect the consumer's write rather than the fixture's last write across all documents.
 	const savedWrite = writes.slice(savingFrom).reverse().find(write => JSON.parse(write.content).documentId === consumer.model.value.documentId);
 	assert.ok(savedWrite);
-	const saved = parseDesignDocument(savedWrite.content);
+	const saved = parseArtifactCanvasDocument(savedWrite.content);
 	assert.deepEqual(saved, consumer.model.value);
 	assert.equal(saved.resources!.libraries[0].document.shapes[0].id, main.id);
 	assert.deepEqual(consumer.readMedia(saved.assets[0].versions[0]), bytes); assert.deepEqual(errors, []);
@@ -1805,20 +1824,20 @@ test('Design library files publish media and review updates before changing cons
 
 test('Design library imports reject corrupt media without changing the active document', async () => {
 	errors = [];
-	using view = createView(); const controller = view.designEditors.document; pressCanvas(view, 'r'); const before = serializeDesignDocument(controller.model.value);
+	using view = createView(); const controller = view.artifactCanvasEditors.document; pressCanvas(view, 'r'); const before = serializeArtifactCanvasDocument(controller.model.value);
 	const assetId = generateUuid(); const versionId = generateUuid(); const hash = '0'.repeat(64);
 	const snapshot = documentFromShapes([], undefined, [{ id: assetId, name: 'Corrupt', versions: [{ id: versionId, sha256: hash, path: `assets/${hash}`, mediaType: 'image/png', width: 10, height: 10 }] }]);
-	fileContent = JSON.stringify({ kind: 'ash-design-library', name: 'Broken', document: JSON.parse(serializeDesignDocument(snapshot)), media: { [hash]: 'YWJj' } });
-	await controller.addLibrary(); assert.equal(serializeDesignDocument(controller.model.value), before); assert.deepEqual(errors, ['Could not update the design library.']); errors = [];
+	fileContent = JSON.stringify({ kind: 'ash-design-library', name: 'Broken', document: JSON.parse(serializeArtifactCanvasDocument(snapshot)), media: { [hash]: 'YWJj' } });
+	await controller.addLibrary(); assert.equal(serializeArtifactCanvasDocument(controller.model.value), before); assert.deepEqual(errors, ['Could not update the design library.']); errors = [];
 });
 
 test('Design text, effect and layout guide styles render safely and artwork exports omit guides', async () => {
-	using view = createView(); const controller = view.designEditors.document;
-	const label: DesignShape = { id: generateUuid(), kind: 'text', x: 0, y: 0, width: 100, height: 80, rotation: 0, fill: '#abcdef', text: 'First\nSecond', fontSize: 20, fontFamily: 'serif', fontWeight: 700, lineHeight: 30, letterSpacing: 2, effects: { x: 0, y: 4, blur: 8, color: '#00000080' } };
+	using view = createView(); const controller = view.artifactCanvasEditors.document;
+	const label: ArtifactCanvasShape = { id: generateUuid(), kind: 'text', x: 0, y: 0, width: 100, height: 80, rotation: 0, fill: '#abcdef', text: 'First\nSecond', fontSize: 20, fontFamily: 'serif', fontWeight: 700, lineHeight: 30, letterSpacing: 2, effects: { x: 0, y: 4, blur: 8, color: '#00000080' } };
 	controller.model.applyEdit([{ id: generateUuid(), kind: 'frame', x: 0, y: 0, width: 200, height: 100, rotation: 0, fill: '#ffffff', clip: false, children: [label], layoutGuide: { size: 8, color: '#ff000040' } }]);
-	const text = view.domNode.querySelector<HTMLElement>('[data-design-text]')!; assert.equal(text.style.fontFamily, 'serif'); assert.equal(text.style.fontWeight, '700'); assert.equal((text.children[1] as HTMLElement).style.lineHeight, '30px'); assert.ok(view.domNode.querySelector('[data-layout-guide]'));
-	const { exportDesignSvg } = await import('../../contrib/artifact/browser/designSvgRenderer.js'); const svg = exportDesignSvg(controller.model.value); assert.ok(!svg.includes('data-layout-guide')); assert.match(svg, /drop-shadow/u); assert.match(svg, /letter-spacing: 2px/u);
-	const { generateDesignCode } = await import('../../contrib/artifact/browser/code/designCodeGenerator.js'); const code = generateDesignCode(controller.model.value); assert.match(code, /filter: drop-shadow\(0px 4px 4px #00000080\)/u);
+	const text = view.domNode.querySelector<HTMLElement>('[data-artifact-canvas-text]')!; assert.equal(text.style.fontFamily, 'serif'); assert.equal(text.style.fontWeight, '700'); assert.equal((text.children[1] as HTMLElement).style.lineHeight, '30px'); assert.ok(view.domNode.querySelector('[data-layout-guide]'));
+	const { exportArtifactCanvasSvg } = await import('../../contrib/artifact/browser/rendering/artifactCanvasSvgRenderer.js'); const svg = exportArtifactCanvasSvg(controller.model.value); assert.ok(!svg.includes('data-layout-guide')); assert.match(svg, /drop-shadow/u); assert.match(svg, /letter-spacing: 2px/u);
+	const { generateDesignCode } = await import('../../contrib/design/browser/code/designCodeGenerator.js'); const code = generateDesignCode(controller.model.value); assert.match(code, /filter: drop-shadow\(0px 4px 4px #00000080\)/u);
 });
 
 test('Chinese Design resource controls and accessibility help use translated names', async () => {
@@ -1836,13 +1855,13 @@ test('Chinese Design resource controls and accessibility help use translated nam
 	} finally { resetNlsResolver(); }
 });
 
-function prototypeScreens(): { home: Extract<DesignShape, { kind: 'frame'; }>; detail: Extract<DesignShape, { kind: 'frame'; }>; dialog: Extract<DesignShape, { kind: 'frame'; }>; } {
-	const frame = (name: string): Extract<DesignShape, { kind: 'frame'; }> => ({ id: generateUuid(), kind: 'frame', name, x: 0, y: 0, width: 390, height: 844, rotation: 0, fill: '#ffffff', clip: true, children: [] });
+function prototypeScreens(): { home: Extract<ArtifactCanvasShape, { kind: 'frame'; }>; detail: Extract<ArtifactCanvasShape, { kind: 'frame'; }>; dialog: Extract<ArtifactCanvasShape, { kind: 'frame'; }>; } {
+	const frame = (name: string): Extract<ArtifactCanvasShape, { kind: 'frame'; }> => ({ id: generateUuid(), kind: 'frame', name, x: 0, y: 0, width: 390, height: 844, rotation: 0, fill: '#ffffff', clip: true, children: [] });
 	return { home: frame('Home'), detail: frame('Detail'), dialog: { ...frame('Dialog'), width: 160, height: 100 } };
 }
 
 test('Prototype properties author interactions and transitions, save them, and retain undo and keyboard focus', async () => {
-	using view = createView(); const editor = view.pane.editor; const controller = view.designEditors.document; const { home, detail } = prototypeScreens();
+	using view = createView(); const editor = view.pane.editor; const controller = view.artifactCanvasEditors.document; const { home, detail } = prototypeScreens();
 	controller.model.replace(documentFromShapes([home, detail])); editor.selectShape(home.id);
 	const root = view.propertiesDomNode.querySelector<HTMLDetailsElement>('.ash-prototype-properties')!; root.open = true;
 	const click = (name: string): void => { const button = [...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === name); assert.ok(button, name); button.click(); };
@@ -1852,17 +1871,17 @@ test('Prototype properties author interactions and transitions, save them, and r
 	assert.equal(browser.window.document.activeElement?.getAttribute('aria-label'), 'Easing');
 	assert.deepEqual(controller.model.value.shapes[0].interactions![0].actions[0].transition, { type: 'smart', duration: 450, easing: 'easeInOut', direction: 'left' });
 	editor.undo(); assert.equal(controller.model.value.shapes[0].interactions![0].actions[0].transition.easing, 'easeOut'); editor.redo();
-	await controller.saveDocument(); assert.deepEqual(parseDesignDocument(fileContent), controller.model.value);
+	await controller.saveDocument(); assert.deepEqual(parseArtifactCanvasDocument(fileContent), controller.model.value);
 	click('Remove interaction'); assert.equal(controller.model.value.shapes[0].interactions?.length, 0); editor.undo();
 	assert.equal(controller.model.value.shapes[0].interactions?.length, 1);
 });
 
 test('Prototype preview follows hotspot branches, overlay dismissal and Back, leaving the saved document unchanged', async () => {
 	const { defaultPrototypeTransition } = await import('../../contrib/artifact/common/model/prototype.js');
-	using view = createView(); const editor = view.pane.editor; const model = view.designEditors.document.model; const { home, detail, dialog } = prototypeScreens();
+	using view = createView(); const editor = view.pane.editor; const model = view.artifactCanvasEditors.document.model; const { home, detail, dialog } = prototypeScreens();
 	const wire = (action: 'navigate' | 'overlay' | 'close', destination?: string) => ({ id: generateUuid(), trigger: 'click' as const, actions: [{ action, destination, transition: defaultPrototypeTransition }] });
 	model.replace(documentFromShapes([{ ...home, interactions: [wire('navigate', detail.id)] }, { ...detail, interactions: [wire('overlay', dialog.id)] }, { ...dialog, interactions: [wire('close')] }]));
-	editor.selectShape(home.id); editor.focus(); const version = model.version; const saved = serializeDesignDocument(model.value);
+	editor.selectShape(home.id); editor.focus(); const version = model.version; const saved = serializeArtifactCanvasDocument(model.value);
 	editor.previewPrototype();
 	const preview = view.domNode.querySelector<HTMLElement>('.ash-prototype-preview')!;
 	const scene = preview.querySelector<SVGSVGElement>('.ash-prototype-preview-scene')!;
@@ -1875,7 +1894,7 @@ test('Prototype preview follows hotspot branches, overlay dismissal and Back, le
 	const back = [...preview.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Back')!; back.click(); assert.equal(scene.dataset.screenId, home.id);
 	preview.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(preview.hidden, true); assert.equal(browser.window.document.activeElement, editor.domNode);
-	assert.equal(model.version, version); assert.equal(serializeDesignDocument(model.value), saved);
+	assert.equal(model.version, version); assert.equal(serializeArtifactCanvasDocument(model.value), saved);
 });
 
 test('Prototype hover and press restore temporary navigation while mouse enter is permanent', async () => {
@@ -1928,7 +1947,7 @@ test('Chinese Prototype properties, triggers and accessible descriptions use tra
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
-		using view = createView(); const { home, detail } = prototypeScreens(); view.designEditors.document.model.replace(documentFromShapes([home, detail])); view.pane.editor.selectShape(home.id);
+		using view = createView(); const { home, detail } = prototypeScreens(); view.artifactCanvasEditors.document.model.replace(documentFromShapes([home, detail])); view.pane.editor.selectShape(home.id);
 		const root = view.propertiesDomNode.querySelector('.ash-prototype-properties')!;
 		[...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '添加交互')!.click();
 		assert.ok(root.querySelector('select[aria-label="触发器"]')); assert.ok(root.querySelector('select[aria-label="过渡"]'));
@@ -1952,7 +1971,7 @@ test('Prototype key, pointer and link triggers use the preview and repeated prev
 		assert.equal(!!view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!.inert, false);
 	}
 	using view = createView(); const { home } = prototypeScreens();
-	view.designEditors.document.model.replace(documentFromShapes([{ ...home, interactions: [{ id: generateUuid(), trigger: 'click', actions: [{ action: 'url', url: 'https://example.com/prototype', transition: defaultPrototypeTransition }] }] }]));
+	view.artifactCanvasEditors.document.model.replace(documentFromShapes([{ ...home, interactions: [{ id: generateUuid(), trigger: 'click', actions: [{ action: 'url', url: 'https://example.com/prototype', transition: defaultPrototypeTransition }] }] }]));
 	view.pane.editor.previewPrototype();
 	const count = openedPrototypeLinks.length;
 	view.domNode.querySelector(`.ash-prototype-preview [data-shape-id="${home.id}"]`)!.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
@@ -1961,8 +1980,8 @@ test('Prototype key, pointer and link triggers use the preview and repeated prev
 
 test('Prototype Change to authoring and preview preserve editable component instances', async () => {
 	const { DocumentCommands } = await import('../../contrib/artifact/common/commands/documentCommands.js');
-	using view = createView(); const editor = view.pane.editor; const model = view.designEditors.document.model; const commands = new DocumentCommands(model); const { home } = prototypeScreens();
-	const main: Extract<DesignShape, { kind: 'frame'; }> = { ...home, name: 'Button', component: { kind: 'main' }, width: 120, height: 40 };
+	using view = createView(); const editor = view.pane.editor; const model = view.artifactCanvasEditors.document.model; const commands = new DocumentCommands(model); const { home } = prototypeScreens();
+	const main: Extract<ArtifactCanvasShape, { kind: 'frame'; }> = { ...home, name: 'Button', component: { kind: 'main' }, width: 120, height: 40 };
 	model.replace(documentFromShapes([main])); const variant = commands.components.addVariant(main.id)!;
 	commands.updateShape({ ...model.value.shapes.flatMap(shape => shape.kind === 'frame' ? shape.children : []).find(shape => shape.id === variant)!, fill: '#ff0000' });
 	editor.selectShape(main.id);
@@ -1971,16 +1990,16 @@ test('Prototype Change to authoring and preview preserve editable component inst
 	assert.equal(properties.querySelector<HTMLSelectElement>('[aria-label="Action"]')!.value, 'changeTo');
 	const instanceId = commands.components.createInstance(main.id)!; const instance = model.value.shapes.find(shape => shape.id === instanceId)!;
 	const page = { ...home, id: generateUuid(), children: [instance] };
-	model.applyEdit([...model.value.shapes.filter(shape => shape.id !== instanceId), page]); editor.selectShape(page.id); const saved = serializeDesignDocument(model.value);
+	model.applyEdit([...model.value.shapes.filter(shape => shape.id !== instanceId), page]); editor.selectShape(page.id); const saved = serializeArtifactCanvasDocument(model.value);
 	editor.previewPrototype(); const scene = view.domNode.querySelector('.ash-prototype-preview-scene')!;
 	scene.querySelector(`[data-shape-id="${instanceId}"]`)!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 	assert.equal(scene.querySelector(`[data-shape-id="${instanceId}"]`)!.getAttribute('fill'), '#ff0000');
-	assert.equal(serializeDesignDocument(model.value), saved);
+	assert.equal(serializeArtifactCanvasDocument(model.value), saved);
 });
 
 test('Prototype action editor authors expressions, branches and custom springs, reorders with undo, and saves stable references', async () => {
 	const { DocumentCommands } = await import('../../contrib/artifact/common/commands/documentCommands.js');
-	using view = createView(); const editor = view.pane.editor, model = view.designEditors.document.model, { home, detail, dialog } = prototypeScreens();
+	using view = createView(); const editor = view.pane.editor, model = view.artifactCanvasEditors.document.model, { home, detail, dialog } = prototypeScreens();
 	model.replace(documentFromShapes([home, detail, dialog])); const commands = new DocumentCommands(model);
 	const collection = commands.resources.addCollection('State'), variable = commands.resources.addVariable(collection, 'count', 'number');
 	editor.selectShape(home.id); const root = view.propertiesDomNode.querySelector<HTMLDetailsElement>('.ash-prototype-properties')!; root.open = true;
@@ -1999,13 +2018,13 @@ test('Prototype action editor authors expressions, branches and custom springs, 
 	control('actions.1.branch.1.remove').click(); control('actions.1.up').click(); assert.equal(model.value.shapes[0].interactions![0].actions[0].action, 'conditional');
 	editor.undo(); assert.equal(model.value.shapes[0].interactions![0].actions[0].action, 'setVariable');
 	commands.resources.renameVariable(variable, 'cart count'); assert.equal((control('actions.0.value') as HTMLInputElement).value, '(`cart count` + 1)');
-	await view.designEditors.document.saveDocument(); assert.deepEqual(parseDesignDocument(fileContent), model.value);
+	await view.artifactCanvasEditors.document.saveDocument(); assert.deepEqual(parseArtifactCanvasDocument(fileContent), model.value);
 	assert.match(editor.getAccessibleContent(), /Set variable.*Conditional.*Navigate to/u);
 });
 
 test('Prototype animated chains defer later effects and cancel the entire continuation when closed or restarted', async () => {
 	const { defaultPrototypeTransition } = await import('../../contrib/artifact/common/model/prototype.js');
-	using view = createView(); const editor = view.pane.editor, model = view.designEditors.document.model, { home, detail, dialog } = prototypeScreens();
+	using view = createView(); const editor = view.pane.editor, model = view.artifactCanvasEditors.document.model, { home, detail, dialog } = prototypeScreens();
 	model.replace(documentFromShapes([{
 		...home, interactions: [{
 			id: generateUuid(), trigger: 'click', actions: [
@@ -2015,7 +2034,7 @@ test('Prototype animated chains defer later effects and cancel the entire contin
 			]
 		}]
 	}, detail, dialog]));
-	const saved = serializeDesignDocument(model.value), callbacks = new Map<number, FrameRequestCallback>(); let next = 0;
+	const saved = serializeArtifactCanvasDocument(model.value), callbacks = new Map<number, FrameRequestCallback>(); let next = 0;
 	const request = browser.window.requestAnimationFrame, cancel = browser.window.cancelAnimationFrame;
 	browser.window.requestAnimationFrame = callback => { callbacks.set(++next, callback); return next; }; browser.window.cancelAnimationFrame = id => { callbacks.delete(id); };
 	try {
@@ -2026,7 +2045,7 @@ test('Prototype animated chains defer later effects and cancel the entire contin
 		assert.equal(preview.querySelector<SVGSVGElement>('.ash-prototype-preview-scene')!.dataset.screenId, dialog.id);
 		const restart = [...preview.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Restart flow')!;
 		restart.click(); click(); assert.equal(callbacks.size, 1); restart.click(); assert.equal(callbacks.size, 0); assert.equal(openedPrototypeLinks.length, opened + 1);
-		click(); editor.setVisible(false); assert.equal(callbacks.size, 0); assert.equal(openedPrototypeLinks.length, opened + 1); assert.equal(serializeDesignDocument(model.value), saved);
+		click(); editor.setVisible(false); assert.equal(callbacks.size, 0); assert.equal(openedPrototypeLinks.length, opened + 1); assert.equal(serializeArtifactCanvasDocument(model.value), saved);
 	} finally { browser.window.requestAnimationFrame = request; browser.window.cancelAnimationFrame = cancel; }
 });
 
@@ -2036,7 +2055,7 @@ test('Chinese Prototype action chains, condition errors and spring parameters us
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
-		using view = createView(); const { home, detail } = prototypeScreens(); view.designEditors.document.model.replace(documentFromShapes([home, detail])); view.pane.editor.selectShape(home.id);
+		using view = createView(); const { home, detail } = prototypeScreens(); view.artifactCanvasEditors.document.model.replace(documentFromShapes([home, detail])); view.pane.editor.selectShape(home.id);
 		const root = view.propertiesDomNode.querySelector('.ash-prototype-properties')!;
 		const click = (text: string) => [...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === text)!.click();
 		const change = (label: string, value: string) => { const input = root.querySelector<HTMLInputElement>(`[aria-label="${label}"]`)!; input.value = value; input.dispatchEvent(new browser.window.Event('change', { bubbles: true })); };
@@ -2047,9 +2066,9 @@ test('Chinese Prototype action chains, condition errors and spring parameters us
 });
 
 test('Prototype scroll controls save undoable settings and preview handles wheel, keyboard and drag without document edits', async () => {
-	using view = createView(); const editor = view.pane.editor, model = view.designEditors.document.model, { home } = prototypeScreens();
-	const target: DesignShape = { id: generateUuid(), kind: 'rectangle', name: 'Destination', x: 20, y: 800, width: 100, height: 60, rotation: 0, fill: '#ff0000' };
-	const fixed: DesignShape = { ...target, id: generateUuid(), name: 'Toolbar', y: 10, height: 30 };
+	using view = createView(); const editor = view.pane.editor, model = view.artifactCanvasEditors.document.model, { home } = prototypeScreens();
+	const target: ArtifactCanvasShape = { id: generateUuid(), kind: 'rectangle', name: 'Destination', x: 20, y: 800, width: 100, height: 60, rotation: 0, fill: '#ff0000' };
+	const fixed: ArtifactCanvasShape = { ...target, id: generateUuid(), name: 'Toolbar', y: 10, height: 30 };
 	model.replace(documentFromShapes([{ ...home, height: 200, children: [fixed, target] }])); editor.selectShape(home.id);
 	const root = view.propertiesDomNode.querySelector('.ash-prototype-properties')!;
 	const control = (key: string) => root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-prototype-control="${key}"]`)!;
@@ -2059,8 +2078,8 @@ test('Prototype scroll controls save undoable settings and preview handles wheel
 	control('add').click(); change('actions.0.action', 'scrollTo'); change('actions.0.destination', target.id); change('actions.0.transition', 'scroll');
 	assert.equal(control('actions.0.direction'), null); assert.equal(browser.window.document.activeElement, control('actions.0.transition'));
 	editor.undo(); assert.equal(control('actions.0.transition').value, 'instant');
-	await editor.documentController.saveDocument(); assert.deepEqual(parseDesignDocument(fileContent), model.value);
-	const saved = serializeDesignDocument(model.value), version = model.version;
+	await editor.documentController.saveDocument(); assert.deepEqual(parseArtifactCanvasDocument(fileContent), model.value);
+	const saved = serializeArtifactCanvasDocument(model.value), version = model.version;
 	editor.previewPrototype(); const preview = view.domNode.querySelector<HTMLElement>('.ash-prototype-preview')!, scene = preview.querySelector('.ash-prototype-preview-scene')!;
 	const frame = () => scene.querySelector<SVGGraphicsElement>(`[data-shape-id="${home.id}"]`)!;
 	const wheel = new browser.window.WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true }); frame().dispatchEvent(wheel);
@@ -2074,13 +2093,13 @@ test('Prototype scroll controls save undoable settings and preview handles wheel
 	scene.querySelector(`[data-shape-id="${fixed.id}"]`)!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); assert.equal(frame().dataset.scrollY, '660');
 	assert.match(editor.getAccessibleContent(), /Home: scroll position 0, 660/u);
 	[...preview.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Restart flow')!.click(); assert.equal(frame().dataset.scrollY, '0');
-	assert.equal(model.version, version); assert.equal(serializeDesignDocument(model.value), saved);
+	assert.equal(model.version, version); assert.equal(serializeArtifactCanvasDocument(model.value), saved);
 });
 
 test('Prototype scroll animation recomputes fixed and sticky positions per frame, sequences actions and cancels on close', async () => {
 	const { defaultPrototypeTransition } = await import('../../contrib/artifact/common/model/prototype.js');
-	using view = createView(); const editor = view.pane.editor, model = view.designEditors.document.model, { home } = prototypeScreens();
-	const target: DesignShape = { id: generateUuid(), kind: 'rectangle', x: 0, y: 800, width: 100, height: 60, rotation: 0, fill: '#ff0000' }, sticky: DesignShape = { ...target, id: generateUuid(), y: 100, scrollPosition: 'sticky' }, fixed: DesignShape = { ...target, id: generateUuid(), y: 10, scrollPosition: 'fixed' };
+	using view = createView(); const editor = view.pane.editor, model = view.artifactCanvasEditors.document.model, { home } = prototypeScreens();
+	const target: ArtifactCanvasShape = { id: generateUuid(), kind: 'rectangle', x: 0, y: 800, width: 100, height: 60, rotation: 0, fill: '#ff0000' }, sticky: ArtifactCanvasShape = { ...target, id: generateUuid(), y: 100, scrollPosition: 'sticky' }, fixed: ArtifactCanvasShape = { ...target, id: generateUuid(), y: 10, scrollPosition: 'fixed' };
 	model.replace(documentFromShapes([{ ...home, height: 200, overflowDirection: 'vertical', children: [target, sticky, fixed], interactions: [{ id: generateUuid(), trigger: 'click', actions: [{ action: 'scrollTo', destination: target.id, transition: { ...defaultPrototypeTransition, type: 'scroll', duration: 1000, easing: 'linear' } }, { action: 'url', url: 'https://example.com/scrolled', transition: defaultPrototypeTransition }] }] }]));
 	const callbacks = new Map<number, FrameRequestCallback>(); let next = 0;
 	const request = browser.window.requestAnimationFrame, cancel = browser.window.cancelAnimationFrame;
@@ -2103,8 +2122,8 @@ test('Chinese Prototype overflow, fixed positioning, Scroll to and keyboard help
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView(); const editor = view.pane.editor, { home } = prototypeScreens();
-		const target: DesignShape = { id: generateUuid(), kind: 'rectangle', name: '页脚', x: 0, y: 900, width: 100, height: 60, rotation: 0, fill: '#ff0000' };
-		view.designEditors.document.model.replace(documentFromShapes([{ ...home, overflowDirection: 'vertical', children: [target] }])); editor.selectShape(home.id);
+		const target: ArtifactCanvasShape = { id: generateUuid(), kind: 'rectangle', name: '页脚', x: 0, y: 900, width: 100, height: 60, rotation: 0, fill: '#ff0000' };
+		view.artifactCanvasEditors.document.model.replace(documentFromShapes([{ ...home, overflowDirection: 'vertical', children: [target] }])); editor.selectShape(home.id);
 		const root = view.propertiesDomNode.querySelector('.ash-prototype-properties')!; assert.ok(root.querySelector('[aria-label="溢出滚动"]'));
 		editor.selectShape(target.id); const field = root.querySelector<HTMLSelectElement>('[aria-label="滚动定位"]')!; assert.deepEqual([...field.options].map(option => option.textContent), ['随父层滚动', '固定', '粘性']);
 		assert.match(chinese.bundles.ash['sessions.design.prototype.scrollHelp'], /粘性.*直接父层边界/u);
@@ -2115,8 +2134,8 @@ test('Chinese Prototype overflow, fixed positioning, Scroll to and keyboard help
 test('Scrolling preview keeps pending delay deadlines and respects reduced motion for Scroll to', async () => {
 	const { defaultPrototypeTransition } = await import('../../contrib/artifact/common/model/prototype.js');
 	using view = createView(); const editor = view.pane.editor, { home } = prototypeScreens();
-	const target: DesignShape = { id: generateUuid(), kind: 'rectangle', x: 0, y: 800, width: 100, height: 60, rotation: 0, fill: '#ff0000' };
-	view.designEditors.document.model.replace(documentFromShapes([{ ...home, height: 200, overflowDirection: 'vertical', children: [target], interactions: [{ id: generateUuid(), trigger: 'delay', delay: 5000, actions: [{ action: 'scrollTo', destination: target.id, transition: { ...defaultPrototypeTransition, type: 'scroll' } }] }] }]));
+	const target: ArtifactCanvasShape = { id: generateUuid(), kind: 'rectangle', x: 0, y: 800, width: 100, height: 60, rotation: 0, fill: '#ff0000' };
+	view.artifactCanvasEditors.document.model.replace(documentFromShapes([{ ...home, height: 200, overflowDirection: 'vertical', children: [target], interactions: [{ id: generateUuid(), trigger: 'delay', delay: 5000, actions: [{ action: 'scrollTo', destination: target.id, transition: { ...defaultPrototypeTransition, type: 'scroll' } }] }] }]));
 	const timers = new Map<number, () => void>(); let next = 0;
 	const timeout = browser.window.setTimeout, clear = browser.window.clearTimeout, media = browser.window.matchMedia;
 	browser.window.setTimeout = ((callback: () => void) => { timers.set(++next, callback); return next; }) as typeof timeout; browser.window.clearTimeout = id => { if (id !== undefined) { timers.delete(id); } };
@@ -2138,18 +2157,18 @@ test('Design inline text commits composition, formats selections and groups typi
 	const input = (text: string) => editor().dispatchEvent(new browser.window.InputEvent('beforeinput', { inputType: 'insertText', data: text, bubbles: true, cancelable: true }));
 	input('Hello'); input(' world');
 	assert.equal(editor().textContent, 'Hello world');
-	view.designEditors.document.model.undo(); assert.equal(editor().textContent, 'Text');
-	view.designEditors.document.model.redo(); assert.equal(editor().textContent, 'Hello world');
+	view.artifactCanvasEditors.document.model.undo(); assert.equal(editor().textContent, 'Text');
+	view.artifactCanvasEditors.document.model.redo(); assert.equal(editor().textContent, 'Hello world');
 	editor().dispatchEvent(new browser.window.CompositionEvent('compositionstart', { bubbles: true }));
 	editor().textContent = '你好 world';
 	editor().dispatchEvent(new browser.window.InputEvent('input', { bubbles: true, isComposing: true }));
-	assert.equal((view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>).text, 'Hello world');
+	assert.equal((view.artifactCanvasEditors.document.model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'text'; }>).text, 'Hello world');
 	editor().dispatchEvent(new browser.window.CompositionEvent('compositionend', { bubbles: true, data: '你好' }));
-	assert.equal((view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>).text, '你好 world');
+	assert.equal((view.artifactCanvasEditors.document.model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'text'; }>).text, '你好 world');
 	const range = browser.window.document.createRange(); const node = editor().querySelector('span')!.firstChild!;
 	range.setStart(node, 0); range.setEnd(node, 2); const selection = browser.window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
 	editor().dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true }));
-	const shape = view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>;
+	const shape = view.artifactCanvasEditors.document.model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'text'; }>;
 	assert.deepEqual(shape.textRuns, [{ start: 0, end: 2, style: { fontWeight: 700 } }]);
 	editor().dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.equal(editor(), null);
@@ -2163,26 +2182,26 @@ test('Design character controls keep canvas selection, report mixed values and p
 	const range = browser.window.document.createRange(); const node = editor().querySelector('span')!.firstChild!; range.setStart(node, 0); range.setEnd(node, 5);
 	const selection = browser.window.getSelection()!; selection.removeAllRanges(); selection.addRange(range); browser.window.document.dispatchEvent(new browser.window.Event('selectionchange'));
 	const size = view.propertiesDomNode.querySelector<HTMLInputElement>('[aria-label="Font size"]')!; size.focus(); size.value = '36'; size.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
-	const shape = view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>;
+	const shape = view.artifactCanvasEditors.document.model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'text'; }>;
 	assert.equal(shape.fontSize, 24); assert.deepEqual(shape.textRuns, [{ start: 0, end: 5, style: { fontSize: 36 } }]);
 	editor().focus(); view.pane.editor.selectAll(); assert.equal(size.value, ''); assert.equal(size.placeholder, 'Mixed');
 	const data = new Map<string, string>();
 	const clipboard = (type: string) => { const event = new browser.window.Event(type, { bubbles: true, cancelable: true }); Object.defineProperty(event, 'clipboardData', { value: { setData: (type: string, value: string) => data.set(type, value), getData: (type: string) => data.get(type) ?? '' } }); editor().dispatchEvent(event); };
 	clipboard('copy'); assert.equal(data.get('text/plain'), 'Hello world'); assert.ok(data.get('text/html')?.includes('36px'));
-	clipboard('paste'); assert.equal((view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>).textRuns?.[0].style.fontSize, 36);
+	clipboard('paste'); assert.equal((view.artifactCanvasEditors.document.model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'text'; }>).textRuns?.[0].style.fontSize, 36);
 	data.clear(); data.set('text/html', '<p><b>Safe</b> <i>text</i><img src="https://invalid.test/image" onerror="alert(1)"><script>bad()</script></p>');
 	view.pane.editor.selectAll(); clipboard('paste');
-	const pasted = view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>;
+	const pasted = view.artifactCanvasEditors.document.model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'text'; }>;
 	assert.equal(pasted.text, 'Safe text'); assert.equal(pasted.textRuns?.[0].style.fontWeight, 700); assert.equal(pasted.textRuns?.at(-1)?.style.fontStyle, 'italic'); assert.equal(editor().querySelector('script, img'), null);
-	assert.deepEqual(parseDesignDocument(serializeDesignDocument(view.designEditors.document.model.value)), view.designEditors.document.model.value);
-	const { readDesignTextHtml } = await import('../../contrib/artifact/browser/text/textClipboard.js');
-	assert.equal(readDesignTextHtml(browser.window.document, '<div><div>A</div>\n<div>B</div></div>').text, 'A\nB');
+	assert.deepEqual(parseArtifactCanvasDocument(serializeArtifactCanvasDocument(view.artifactCanvasEditors.document.model.value)), view.artifactCanvasEditors.document.model.value);
+	const { readArtifactCanvasTextHtml } = await import('../../contrib/artifact/browser/text/textClipboard.js');
+	assert.equal(readArtifactCanvasTextHtml(browser.window.document, '<div><div>A</div>\n<div>B</div></div>').text, 'A\nB');
 });
 
 test('Replacing a document cancels an unfinished text composition without writing into the replacement', () => {
 	using view = createView(); view.layout({ width: 400, height: 300 }); createText(view); pressCanvas(view, 'Enter');
 	const editor = view.domNode.querySelector<HTMLElement>('[contenteditable]')!; editor.dispatchEvent(new browser.window.CompositionEvent('compositionstart', { bubbles: true })); editor.textContent = '尚未提交';
-	const model = view.designEditors.document.model; const original = model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>;
+	const model = view.artifactCanvasEditors.document.model; const original = model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'text'; }>;
 	model.replace(documentFromShapes([{ ...original, text: 'Replacement' }]));
 	assert.equal((model.value.shapes[0] as typeof original).text, 'Replacement'); assert.equal(model.canUndo, false); assert.equal(view.domNode.querySelector('[contenteditable]'), null);
 });
@@ -2204,16 +2223,16 @@ test('Chinese text typography controls and inline editing use the Design accessi
 
 test('Design edits text inside scaled rotated groups and keeps the character editor in local coordinates', () => {
 	using view = createView(); view.layout({ width: 600, height: 400 });
-	const label: Extract<DesignShape, { kind: 'text'; }> = { id: generateUuid(), kind: 'text', text: 'Grouped', fontSize: 20, x: 10, y: 5, width: 100, height: 30, rotation: 0, fill: '#000000', lineHeight: 25, textRuns: [{ start: 0, end: 3, style: { fontSize: 30, letterSpacing: 2 } }] };
-	const group: DesignShape = { id: generateUuid(), kind: 'group', x: 100, y: 80, width: 240, height: 120, contentWidth: 120, contentHeight: 60, rotation: 30, fill: '#808080', children: [label] };
-	const model = view.designEditors.document.model; model.replace(documentFromShapes([group]));
+	const label: Extract<ArtifactCanvasShape, { kind: 'text'; }> = { id: generateUuid(), kind: 'text', text: 'Grouped', fontSize: 20, x: 10, y: 5, width: 100, height: 30, rotation: 0, fill: '#000000', lineHeight: 25, textRuns: [{ start: 0, end: 3, style: { fontSize: 30, letterSpacing: 2 } }] };
+	const group: ArtifactCanvasShape = { id: generateUuid(), kind: 'group', x: 100, y: 80, width: 240, height: 120, contentWidth: 120, contentHeight: 60, rotation: 30, fill: '#808080', children: [label] };
+	const model = view.artifactCanvasEditors.document.model; model.replace(documentFromShapes([group]));
 	// The text centre is (220, 120) before the parent's rotation around (220, 140).
 	const viewport = view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!;
 	viewport.dispatchEvent(new browser.window.MouseEvent('dblclick', { clientX: 230, clientY: 140 - 20 * Math.cos(Math.PI / 6), bubbles: true }));
 	const editor = view.domNode.querySelector<HTMLElement>('[contenteditable]')!; assert.ok(editor);
 	const overlay = editor.closest('.ash-sessions-design-text-editor')!; assert.match(overlay.getAttribute('transform')!, /rotate\(30\) scale\(2\)/u); assert.equal(overlay.getAttribute('width'), '100');
 	editor.dispatchEvent(new browser.window.InputEvent('beforeinput', { inputType: 'insertText', data: 'Edited', bubbles: true, cancelable: true }));
-	const updated = (model.value.shapes[0] as Extract<DesignShape, { kind: 'group'; }>).children[0] as typeof label;
+	const updated = (model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'group'; }>).children[0] as typeof label;
 	assert.equal(updated.text, 'Edited'); assert.equal(updated.fontSize, 20); assert.equal(updated.x, 10); assert.equal(updated.y, 5);
 	view.domNode.querySelector('[contenteditable]')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	view.pane.editor.selectShape(group.id); pressCanvas(view, 'u');
@@ -2232,14 +2251,14 @@ test('Design font picker queries installed families only on request and accepts 
 		await new Promise(resolve => setTimeout(resolve, 0)); assert.equal(calls, 1);
 		const input = view.propertiesDomNode.querySelector<HTMLInputElement>('[aria-label="Font family"]')!; assert.ok(input.list); assert.deepEqual([...input.list.options].map(option => option.value).filter(value => value.startsWith('Test')), ['Test Sans', 'Test Serif']);
 		input.value = 'Test Serif'; input.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
-		assert.equal((view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>).fontFamily, 'Test Serif');
+		assert.equal((view.artifactCanvasEditors.document.model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'text'; }>).fontFamily, 'Test Serif');
 	} finally { if (previous) { Object.defineProperty(browser.window, 'queryLocalFonts', previous); } else { Reflect.deleteProperty(browser.window, 'queryLocalFonts'); } }
 });
 
 test('Linked text styles stay within the character selection and preserve subsequent caret emphasis', () => {
 	using view = createView(); view.layout({ width: 400, height: 300 }); createText(view);
-	const model = view.designEditors.document.model; const commands = new DocumentCommands(model);
-	const original = model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>;
+	const model = view.artifactCanvasEditors.document.model; const commands = new DocumentCommands(model);
+	const original = model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'text'; }>;
 	const styleId = commands.resources.createStyle({ ...original, id: generateUuid(), fontSize: 32, fontWeight: 400, paragraphSpacing: 8 }, 'text', 'Body');
 	pressCanvas(view, 'Enter');
 	const editor = () => view.domNode.querySelector<HTMLElement>('[contenteditable]')!;
@@ -2268,25 +2287,25 @@ test('Linked text styles stay within the character selection and preserve subseq
 
 test('IME emoji replacement preserves Unicode boundaries and the surrounding rich text', () => {
 	using view = createView(); view.layout({ width: 400, height: 300 }); createText(view);
-	const model = view.designEditors.document.model; const commands = new DocumentCommands(model); const id = model.value.shapes[0].id;
+	const model = view.artifactCanvasEditors.document.model; const commands = new DocumentCommands(model); const id = model.value.shapes[0].id;
 	commands.text.replace(id, 0, 4, 'A😀tail'); commands.text.format(id, 3, 7, { fontWeight: 700 }); pressCanvas(view, 'Enter');
 	const editor = view.domNode.querySelector<HTMLElement>('[contenteditable]')!;
 	editor.dispatchEvent(new browser.window.CompositionEvent('compositionstart', { bubbles: true })); editor.textContent = 'A😃tail'; editor.dispatchEvent(new browser.window.CompositionEvent('compositionend', { bubbles: true, data: '😃' }));
-	const shape = model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>;
-	assert.equal(shape.text, 'A😃tail'); assert.deepEqual(shape.textRuns, [{ start: 3, end: 7, style: { fontWeight: 700 } }]); assert.deepEqual(parseDesignDocument(serializeDesignDocument(model.value)), model.value);
+	const shape = model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'text'; }>;
+	assert.equal(shape.text, 'A😃tail'); assert.deepEqual(shape.textRuns, [{ start: 3, end: 7, style: { fontWeight: 700 } }]); assert.deepEqual(parseArtifactCanvasDocument(serializeArtifactCanvasDocument(model.value)), model.value);
 });
 
 test('Vector compound paths save, open and recover with editable handles and localized controls', async () => {
-	const { designShapeContours } = await import('../../contrib/artifact/common/model/designVector.js');
+	const { artifactCanvasShapeContours } = await import('../../contrib/artifact/common/model/artifactCanvasVector.js');
 	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
-		using view = createView(); const controller = view.designEditors.document;
-		const base: DesignShape = { id: generateUuid(), kind: 'rectangle', x: 10, y: 20, width: 200, height: 100, rotation: 30, fill: '#123456' };
-		const contour = designShapeContours(base)[0];
-		const path: DesignShape = { ...base, kind: 'path', ...contour, strokeWidth: 4, strokeCap: 'round', strokeJoin: 'bevel', dashArray: [12, 4], subpaths: [{ ...contour, nodes: contour.nodes.map(node => ({ ...node, x: node.x / 2, incoming: { x: -1, y: node.y } })) }] };
+		using view = createView(); const controller = view.artifactCanvasEditors.document;
+		const base: ArtifactCanvasShape = { id: generateUuid(), kind: 'rectangle', x: 10, y: 20, width: 200, height: 100, rotation: 30, fill: '#123456' };
+		const contour = artifactCanvasShapeContours(base)[0];
+		const path: ArtifactCanvasShape = { ...base, kind: 'path', ...contour, strokeWidth: 4, strokeCap: 'round', strokeJoin: 'bevel', dashArray: [12, 4], subpaths: [{ ...contour, nodes: contour.nodes.map(node => ({ ...node, x: node.x / 2, incoming: { x: -1, y: node.y } })) }] };
 		controller.model.replace(documentFromShapes([path])); view.pane.editor.selectShape(path.id);
 		assert.ok(view.propertiesDomNode.querySelector('[aria-label="控制柄镜像"]')); assert.ok(view.propertiesDomNode.querySelector('[aria-label="描边端点"]'));
 		const input = view.propertiesDomNode.querySelector<HTMLSelectElement>('[aria-label="轮廓"]')!; input.value = '1'; input.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
@@ -2294,11 +2313,11 @@ test('Vector compound paths save, open and recover with editable handles and loc
 		assert.match(chinese.bundles.ash['sessions.design.vectorHelp'], /原始图层仍可编辑/u);
 		view.pane.editor.selectShape(new DocumentCommands(controller.model).addShape('rectangle', { x: 300, y: 300 })); view.pane.editor.selectShapes(controller.model.value.shapes.map(shape => shape.id));
 		assert.ok([...view.propertiesDomNode.querySelectorAll('button')].some(button => button.textContent === '联集')); assert.ok([...view.propertiesDomNode.querySelectorAll('button')].some(button => button.textContent === '减去顶层'));
-		await controller.saveDocument(); const saved = parseDesignDocument(fileContent); assert.deepEqual(saved, controller.model.value);
+		await controller.saveDocument(); const saved = parseArtifactCanvasDocument(fileContent); assert.deepEqual(saved, controller.model.value);
 		const backup = controller.backup(); controller.model.replace(documentFromShapes([])); controller.restoreBackup(backup); assert.deepEqual(controller.model.value, saved);
 		view.pane.editor.selectShape(path.id); await clickAction({ domNode: view.propertiesDomNode }, '转换为矢量网络');
 		assert.ok(view.propertiesDomNode.querySelector('[aria-label="网络线段"]')); assert.ok(view.propertiesDomNode.querySelector('[aria-label="填充此区域"]')); assert.ok(view.propertiesDomNode.querySelector('[aria-label="区域颜色"]'));
-		await controller.saveDocument(); assert.deepEqual(parseDesignDocument(fileContent), controller.model.value);
+		await controller.saveDocument(); assert.deepEqual(parseArtifactCanvasDocument(fileContent), controller.model.value);
 		assert.match(chinese.bundles.ash['sessions.design.networkHelp'], /共享节点/u);
 		assert.match(chinese.bundles.ash['sessions.design.vectorTopologyHelp'], /Shift\+Delete/u);
 		assert.ok(view.propertiesDomNode.querySelector('[aria-label="节点圆角半径"]'));
@@ -2320,7 +2339,7 @@ test('Vector compound paths save, open and recover with editable handles and loc
 
 test('Gradient properties commit stacks and keyboard edits atomically and persist their SVG appearance', async () => {
 	using view = createView(); view.layout({ width: 800, height: 600 });
-	const controller = view.designEditors.document, commands = new DocumentCommands(controller.model), id = commands.addShape('rectangle', { x: 100, y: 100 }); view.pane.editor.selectShape(id);
+	const controller = view.artifactCanvasEditors.document, commands = new DocumentCommands(controller.model), id = commands.addShape('rectangle', { x: 100, y: 100 }); view.pane.editor.selectShape(id);
 	const select = (label: string, value: string) => { const input = view.propertiesDomNode.querySelector<HTMLSelectElement>(`[aria-label="${label}"]`)!; input.value = value; input.dispatchEvent(new browser.window.Event('change', { bubbles: true })); };
 	select('Fill type', 'linear'); assert.equal(controller.model.value.shapes[0].fills?.[0].type, 'linear'); assert.equal(view.domNode.querySelectorAll('linearGradient').length, 1);
 	await clickAction({ domNode: view.propertiesDomNode }, 'Add gradient stop'); const before = controller.model.value.shapes[0];
@@ -2328,7 +2347,7 @@ test('Gradient properties commit stacks and keyboard edits atomically and persis
 	controller.model.undo(); assert.deepEqual(controller.model.value.shapes[0], before);
 	await clickAction({ domNode: view.propertiesDomNode }, 'Duplicate fill'); select('Fill blend mode', 'multiply');
 	assert.equal(controller.model.value.shapes[0].fills!.length, 2); assert.equal(controller.model.value.shapes[0].fills![0].blendMode, 'multiply');
-	await controller.saveDocument(); assert.deepEqual(parseDesignDocument(fileContent), controller.model.value);
+	await controller.saveDocument(); assert.deepEqual(parseArtifactCanvasDocument(fileContent), controller.model.value);
 	const backup = controller.backup(); controller.model.replace(documentFromShapes([])); controller.restoreBackup(backup); view.pane.editor.selectShape(id);
 	assert.equal(view.domNode.querySelectorAll('linearGradient').length, 2);
 	await clickCanvasMenu(view, 'Export SVG'); assert.match(fileContent, /linearGradient/u); assert.match(fileContent, /mix-blend-mode: multiply/u);
@@ -2340,8 +2359,8 @@ test('Gradient properties commit stacks and keyboard edits atomically and persis
 
 test('Plus darker containers retain clipped child prototype hotspots and keyboard navigation', async () => {
 	const { defaultPrototypeTransition } = await import('../../contrib/artifact/common/model/prototype.js');
-	using view = createView(); const editor = view.pane.editor, model = view.designEditors.document.model, { home, detail } = prototypeScreens();
-	const button: DesignShape = { id: generateUuid(), kind: 'rectangle', name: 'Continue', x: 10, y: 20, width: 80, height: 30, rotation: 15, fill: '#c0c0c0', interactions: [{ id: generateUuid(), trigger: 'click', actions: [{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition }] }] };
+	using view = createView(); const editor = view.pane.editor, model = view.artifactCanvasEditors.document.model, { home, detail } = prototypeScreens();
+	const button: ArtifactCanvasShape = { id: generateUuid(), kind: 'rectangle', name: 'Continue', x: 10, y: 20, width: 80, height: 30, rotation: 15, fill: '#c0c0c0', interactions: [{ id: generateUuid(), trigger: 'click', actions: [{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition }] }] };
 	model.replace(documentFromShapes([{ ...home, blendMode: 'plus-darker', clip: true, children: [button] }, detail]));
 	editor.selectShape(home.id); const version = model.version; editor.previewPrototype();
 	const scene = view.domNode.querySelector<SVGSVGElement>('.ash-prototype-preview-scene')!, hotspot = scene.querySelector<SVGElement>(`[data-shape-id="${button.id}"]`)!;
@@ -2352,39 +2371,39 @@ test('Plus darker containers retain clipped child prototype hotspots and keyboar
 
 test('Effect properties save complete stacks, reject invalid input and retain one set of interactive layer IDs', async () => {
 	using view = createView(); view.layout({ width: 800, height: 600 });
-	const controller = view.designEditors.document, commands = new DocumentCommands(controller.model);
+	const controller = view.artifactCanvasEditors.document, commands = new DocumentCommands(controller.model);
 	const id = commands.addShape('rectangle', { x: 100, y: 100 }); view.pane.editor.selectShape(id);
 	const select = (label: string, value: string) => { const input = view.propertiesDomNode.querySelector<HTMLSelectElement>(`[aria-label="${label}"]`)!; input.value = value; input.dispatchEvent(new browser.window.Event('change', { bubbles: true })); };
 	const number = (label: string, value: string) => { const input = view.propertiesDomNode.querySelector<HTMLInputElement>(`[aria-label="${label}"]`)!; input.value = value; input.dispatchEvent(new browser.window.Event('change', { bubbles: true })); };
 	await clickAction({ domNode: view.propertiesDomNode }, 'Add effect');
-	const before = serializeDesignDocument(controller.model.value);
-	number('Effect blur', '-1'); assert.equal(serializeDesignDocument(controller.model.value), before);
+	const before = serializeArtifactCanvasDocument(controller.model.value);
+	number('Effect blur', '-1'); assert.equal(serializeArtifactCanvasDocument(controller.model.value), before);
 	number('Effect blur', '12'); number('Shadow spread', '-4');
 	await clickAction({ domNode: view.propertiesDomNode }, 'Duplicate effect');
 	select('Effect type', 'inner-shadow');
 	await clickAction({ domNode: view.propertiesDomNode }, 'Add effect'); select('Effect type', 'layer-blur');
 	assert.equal(view.propertiesDomNode.querySelector<HTMLButtonElement>('[aria-label="Duplicate effect"]')!.disabled, true);
 	await clickAction({ domNode: view.propertiesDomNode }, 'Add effect'); select('Effect type', 'background-blur');
-	const { designEffects } = await import('../../contrib/artifact/common/model/designEffects.js');
-	const effects = designEffects(controller.model.value.shapes[0]);
+	const { artifactCanvasEffects } = await import('../../contrib/artifact/common/model/artifactCanvasEffects.js');
+	const effects = artifactCanvasEffects(controller.model.value.shapes[0]);
 	assert.deepEqual(effects.map(effect => effect.type), ['background-blur', 'layer-blur', 'inner-shadow', 'drop-shadow']);
 	assert.equal(view.domNode.querySelectorAll(`.ash-sessions-design-shapes [data-shape-id="${id}"]`).length, 1);
-	await controller.saveDocument(); assert.deepEqual(parseDesignDocument(fileContent).shapes[0].effects, effects);
+	await controller.saveDocument(); assert.deepEqual(parseArtifactCanvasDocument(fileContent).shapes[0].effects, effects);
 	await clickCanvasMenu(view, 'Export SVG');
 	assert.match(fileContent, /feGaussianBlur/u); assert.match(fileContent, /shadow-cutout-/u); assert.match(fileContent, /background-mask-/u);
 	assert.ok(!fileContent.includes('data-shape-id'));
-	const { generateDesignCode } = await import('../../contrib/artifact/browser/code/designCodeGenerator.js');
+	const { generateDesignCode } = await import('../../contrib/design/browser/code/designCodeGenerator.js');
 	assert.match(generateDesignCode(controller.model.value), /layer-blur-/u);
-	controller.model.undo(); assert.equal(designEffects(controller.model.value.shapes[0])[0].type, 'drop-shadow');
-	controller.model.redo(); assert.deepEqual(designEffects(controller.model.value.shapes[0]), effects);
+	controller.model.undo(); assert.equal(artifactCanvasEffects(controller.model.value.shapes[0])[0].type, 'drop-shadow');
+	controller.model.redo(); assert.deepEqual(artifactCanvasEffects(controller.model.value.shapes[0]), effects);
 });
 
 test('Shadow and blur containers preserve nested prototype keyboard hotspots without duplicating them in masks', async () => {
 	const { defaultPrototypeTransition } = await import('../../contrib/artifact/common/model/prototype.js');
-	const { createDesignEffect } = await import('../../contrib/artifact/common/model/designEffects.js');
-	using view = createView(); const editor = view.pane.editor, model = view.designEditors.document.model, { home, detail } = prototypeScreens();
-	const button: DesignShape = { id: generateUuid(), kind: 'rectangle', name: 'Continue', x: 10, y: 20, width: 80, height: 30, rotation: 15, fill: '#ffffff80', effects: [{ id: generateUuid(), type: 'background-blur', blur: 24, progressive: { startBlur: 0, start: { x: 0, y: .5 }, end: { x: 1, y: .5 } } }, createDesignEffect('inner-shadow')], interactions: [{ id: generateUuid(), trigger: 'click', actions: [{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition }] }] };
-	model.replace(documentFromShapes([{ ...home, clip: true, children: [button], effects: [createDesignEffect('drop-shadow'), { id: generateUuid(), type: 'layer-blur', blur: 8, progressive: { startBlur: 0, start: { x: .5, y: 0 }, end: { x: .5, y: 1 } } }] }, detail]));
+	const { createArtifactCanvasEffect } = await import('../../contrib/artifact/common/model/artifactCanvasEffects.js');
+	using view = createView(); const editor = view.pane.editor, model = view.artifactCanvasEditors.document.model, { home, detail } = prototypeScreens();
+	const button: ArtifactCanvasShape = { id: generateUuid(), kind: 'rectangle', name: 'Continue', x: 10, y: 20, width: 80, height: 30, rotation: 15, fill: '#ffffff80', effects: [{ id: generateUuid(), type: 'background-blur', blur: 24, progressive: { startBlur: 0, start: { x: 0, y: .5 }, end: { x: 1, y: .5 } } }, createArtifactCanvasEffect('inner-shadow')], interactions: [{ id: generateUuid(), trigger: 'click', actions: [{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition }] }] };
+	model.replace(documentFromShapes([{ ...home, clip: true, children: [button], effects: [createArtifactCanvasEffect('drop-shadow'), { id: generateUuid(), type: 'layer-blur', blur: 8, progressive: { startBlur: 0, start: { x: .5, y: 0 }, end: { x: .5, y: 1 } } }] }, detail]));
 	editor.selectShape(home.id); const version = model.version; editor.previewPrototype();
 	const scene = view.domNode.querySelector<SVGSVGElement>('.ash-prototype-preview-scene')!;
 	assert.equal(scene.querySelectorAll(`[data-shape-id="${button.id}"]`).length, 1);
@@ -2395,13 +2414,13 @@ test('Shadow and blur containers preserve nested prototype keyboard hotspots wit
 });
 
 test('Effect SVG export includes shadows cast by outside strokes and excludes duplicate layer IDs from backdrop images', async () => {
-	const { designShapeContours } = await import('../../contrib/artifact/common/model/designVector.js');
-	const { exportDesignSvg } = await import('../../contrib/artifact/browser/designSvgRenderer.js');
-	const { createDesignEffect } = await import('../../contrib/artifact/common/model/designEffects.js');
-	const base: DesignShape = { id: generateUuid(), kind: 'rectangle', x: 0, y: 0, width: 100, height: 100, rotation: 0, fill: '#ffffff' };
-	const path: DesignShape = { ...base, kind: 'path', ...designShapeContours(base)[0], strokeWidth: 20, strokeAlignment: 'outside', effects: [{ id: generateUuid(), type: 'drop-shadow', x: -100, y: 0, blur: 0, color: '#ff0000' }] };
-	const glass: DesignShape = { ...base, id: generateUuid(), fill: '#ffffff20', effects: [createDesignEffect('background-blur')] };
-	const text = exportDesignSvg(documentFromShapes([path, glass]));
+	const { artifactCanvasShapeContours } = await import('../../contrib/artifact/common/model/artifactCanvasVector.js');
+	const { exportArtifactCanvasSvg } = await import('../../contrib/artifact/browser/rendering/artifactCanvasSvgRenderer.js');
+	const { createArtifactCanvasEffect } = await import('../../contrib/artifact/common/model/artifactCanvasEffects.js');
+	const base: ArtifactCanvasShape = { id: generateUuid(), kind: 'rectangle', x: 0, y: 0, width: 100, height: 100, rotation: 0, fill: '#ffffff' };
+	const path: ArtifactCanvasShape = { ...base, kind: 'path', ...artifactCanvasShapeContours(base)[0], strokeWidth: 20, strokeAlignment: 'outside', effects: [{ id: generateUuid(), type: 'drop-shadow', x: -100, y: 0, blur: 0, color: '#ff0000' }] };
+	const glass: ArtifactCanvasShape = { ...base, id: generateUuid(), fill: '#ffffff20', effects: [createArtifactCanvasEffect('background-blur')] };
+	const text = exportArtifactCanvasSvg(documentFromShapes([path, glass]));
 	const svg = new browser.window.DOMParser().parseFromString(text, 'image/svg+xml').documentElement;
 	const [left, top, width, height] = svg.getAttribute('viewBox')!.split(' ').map(Number);
 	assert.ok(left <= -120 && left + width >= 120 && top <= -20 && top + height >= 120);
@@ -2409,16 +2428,16 @@ test('Effect SVG export includes shadows cast by outside strokes and excludes du
 });
 
 test('Progressive blur edits normalized positions with keyboard and cancels a drag inside a rotated scaled group', async () => {
-	const { designEffects } = await import('../../contrib/artifact/common/model/designEffects.js');
+	const { artifactCanvasEffects } = await import('../../contrib/artifact/common/model/artifactCanvasEffects.js');
 	using view = createView(); view.layout({ width: 800, height: 600 });
-	const model = view.designEditors.document.model;
+	const model = view.artifactCanvasEditors.document.model;
 	const effect = { id: generateUuid(), type: 'layer-blur' as const, blur: 24, progressive: { startBlur: 0, start: { x: .5, y: 0 }, end: { x: .5, y: 1 } } };
-	const child: DesignShape = { id: generateUuid(), kind: 'rectangle', x: 10, y: 10, width: 100, height: 50, rotation: 0, fill: '#00000080', effects: [effect] };
-	const group: DesignShape = { id: generateUuid(), kind: 'group', x: 100, y: 80, width: 240, height: 140, contentWidth: 120, contentHeight: 70, rotation: 90, fill: '#ffffff', children: [child] };
+	const child: ArtifactCanvasShape = { id: generateUuid(), kind: 'rectangle', x: 10, y: 10, width: 100, height: 50, rotation: 0, fill: '#00000080', effects: [effect] };
+	const group: ArtifactCanvasShape = { id: generateUuid(), kind: 'group', x: 100, y: 80, width: 240, height: 140, contentWidth: 120, contentHeight: 70, rotation: 90, fill: '#ffffff', children: [child] };
 	model.replace(documentFromShapes([group])); view.pane.editor.selectShape(child.id);
 	await clickAction({ domNode: view.propertiesDomNode }, 'Edit blur on canvas');
 	assert.equal(view.domNode.querySelectorAll('[data-blur-handle]').length, 3);
-	const read = () => designEffects(flattenDesignShapes(model.value.shapes).find(shape => shape.id === child.id)!)[0];
+	const read = () => artifactCanvasEffects(flattenArtifactCanvasShapes(model.value.shapes).find(shape => shape.id === child.id)!)[0];
 	pressCanvas(view, 'ArrowRight');
 	assert.deepEqual(read(), { ...effect, progressive: { ...effect.progressive, end: { x: .51, y: 1 } } });
 	pressCanvas(view, 'Enter'); pressCanvas(view, 'ArrowUp', { shiftKey: true });
@@ -2431,15 +2450,15 @@ test('Progressive blur edits normalized positions with keyboard and cancels a dr
 	const move = () => viewport.dispatchEvent(new browser.window.PointerEvent('pointermove', {
 		pointerId: 1, button: 0, isPrimary: true, clientX: 150, clientY: 190, bubbles: true
 	}));
-	const before = serializeDesignDocument(model.value);
-	begin(); move(); assert.equal(serializeDesignDocument(model.value), before);
-	pressCanvas(view, 'Escape'); assert.equal(serializeDesignDocument(model.value), before);
+	const before = serializeArtifactCanvasDocument(model.value);
+	begin(); move(); assert.equal(serializeArtifactCanvasDocument(model.value), before);
+	pressCanvas(view, 'Escape'); assert.equal(serializeArtifactCanvasDocument(model.value), before);
 	assert.equal(view.domNode.querySelectorAll('[data-blur-handle]').length, 0);
 	await clickAction({ domNode: view.propertiesDomNode }, 'Edit blur on canvas');
 	begin(); move();
 	viewport.dispatchEvent(new browser.window.PointerEvent('pointerup', { pointerId: 1, button: 0, isPrimary: true, clientX: 150, clientY: 190, bubbles: true }));
 	assert.deepEqual(read(), { ...effect, progressive: { ...effect.progressive, end: { x: .7, y: 1.2 } } });
-	model.undo(); assert.equal(serializeDesignDocument(model.value), before);
+	model.undo(); assert.equal(serializeArtifactCanvasDocument(model.value), before);
 	begin('axis'); move();
 	viewport.dispatchEvent(new browser.window.PointerEvent('pointerup', { pointerId: 1, button: 0, isPrimary: true, clientX: 150, clientY: 190, bubbles: true }));
 	const moved = read();
@@ -2448,32 +2467,32 @@ test('Progressive blur edits normalized positions with keyboard and cancels a dr
 		[moved.progressive.start.x, .7], [moved.progressive.start.y, .2],
 		[moved.progressive.end.x, .7], [moved.progressive.end.y, 1.2]
 	]) { assert.ok(Math.abs(actual - expected) < 1e-12); }
-	model.undo(); assert.equal(serializeDesignDocument(model.value), before);
+	model.undo(); assert.equal(serializeArtifactCanvasDocument(model.value), before);
 	const invalid = view.propertiesDomNode.querySelector<HTMLInputElement>('[aria-label="Start blur"]')!;
 	invalid.value = '-5'; invalid.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
-	assert.equal(serializeDesignDocument(model.value), before);
+	assert.equal(serializeArtifactCanvasDocument(model.value), before);
 	const select = view.propertiesDomNode.querySelector<HTMLSelectElement>('[aria-label="Effect type"]')!;
 	select.value = 'background-blur'; select.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 	assert.deepEqual(read(), { ...effect, type: 'background-blur' });
-	await view.designEditors.document.saveDocument();
-	assert.deepEqual(parseDesignDocument(fileContent), model.value);
+	await view.artifactCanvasEditors.document.saveDocument();
+	assert.deepEqual(parseArtifactCanvasDocument(fileContent), model.value);
 });
 
 test('Chinese progressive blur fields, descriptions and keyboard help are localized', async () => {
 	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
-	const { describeDesignEffect } = await import('../../contrib/artifact/browser/designEffectLabels.js');
+	const { describeArtifactCanvasEffect } = await import('../../contrib/artifact/browser/artifactCanvasEffectLabels.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView(); view.layout({ width: 400, height: 300 });
 		const effect = { id: generateUuid(), type: 'layer-blur' as const, blur: 20, progressive: { startBlur: 0, start: { x: .5, y: 0 }, end: { x: .5, y: 1 } } };
-		const shape: DesignShape = { id: generateUuid(), kind: 'rectangle', x: 0, y: 0, width: 100, height: 100, rotation: 0, fill: '#000000', effects: [effect] };
-		view.designEditors.document.model.replace(documentFromShapes([shape])); view.pane.editor.selectShape(shape.id);
+		const shape: ArtifactCanvasShape = { id: generateUuid(), kind: 'rectangle', x: 0, y: 0, width: 100, height: 100, rotation: 0, fill: '#000000', effects: [effect] };
+		view.artifactCanvasEditors.document.model.replace(documentFromShapes([shape])); view.pane.editor.selectShape(shape.id);
 		for (const label of ['模糊模式', '起点模糊', '终点模糊', '模糊起点 X（%）', '模糊终点 Y（%）', '在画布上编辑模糊']) {
 			assert.ok(view.propertiesDomNode.querySelector(`[aria-label="${label}"]`), label);
 		}
-		assert.match(describeDesignEffect(effect), /渐进式模糊：0 至 20/u);
+		assert.match(describeArtifactCanvasEffect(effect), /渐进式模糊：0 至 20/u);
 		assert.match(chinese.bundles.ash['sessions.design.effectsHelp'], /渐进式.*Enter.*Escape/u);
 	} finally { resetNlsResolver(); }
 });
@@ -2509,9 +2528,9 @@ class AutoSaveFixture extends Disposable {
 			showOpenDialog: async () => [this.copyResource],
 		});
 	}
-	createDocument(): InstanceType<typeof DesignDocumentController> { return this._register(this.child.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design)); }
-	get activeResource(): URI { return URI.parse(this.storage.get('creator.design.activeDocument', StorageScope.WORKSPACE)!); }
-	async readActive(): Promise<ReturnType<typeof parseDesignDocument>> { return parseDesignDocument((await this.files.readFile(URI.joinPath(this.activeResource, 'manifest.json'))).content); }
+	createDocument(): InstanceType<typeof ArtifactCanvasDocumentController> { return this._register(this.child.createInstance(ArtifactCanvasDocumentController, ArtifactWorkspaceId.Design)); }
+	get activeResource(): URI { return URI.parse(this.storage.get('artifacts.design.activeDocument', StorageScope.WORKSPACE)!); }
+	async readActive(): Promise<ReturnType<typeof parseArtifactCanvasDocument>> { return parseArtifactCanvasDocument((await this.files.readFile(URI.joinPath(this.activeResource, 'manifest.json'))).content); }
 }
 
 test('Artifact fixtures restore as ordinary editable documents and never overwrite edits or deleted work', async () => {
@@ -2522,13 +2541,13 @@ test('Artifact fixtures restore as ordinary editable documents and never overwri
 	const workspace = fixture.child.get(IWorkspaceContextService).getWorkspace().id;
 	const docs = await prepareArtifactFixtures(fixture.files, profile, workspace, browser.window.document);
 	assert.ok((await fixture.files.readFile(docs)).content.includes('Studio launch brief'));
-	using view = new CreatorFixture(fixture.child);
+	using view = new ArtifactFixture(fixture.child);
 	await view.editors.loadArtifactDocuments();
 	assert.deepEqual([...view.editors.artifactDocuments.get().values()].map(document => document.artifactKind).sort(), ['design', 'motion', 'slides', 'whiteboard']);
 	assert.equal(view.page.domNode.querySelectorAll('.ash-artifacts-work-grid').length, 1);
 	assert.equal(view.page.domNode.querySelectorAll('.ash-artifacts-examples-grid').length, 0);
 	const deck = [...view.editors.artifactDocuments.get().values()].find(document => document.artifactKind === 'slides')!;
-	await view.runCommand('sessions.creator.openCanvasArtifact', deck.model.value.documentId);
+	await view.runCommand('sessions.artifacts.openCanvasArtifact', deck.model.value.documentId);
 	view.click('Add slide');
 	await deck.flushAutoSave();
 	using tables = fixture.child.createInstance(ArtifactTableService);
@@ -2540,7 +2559,7 @@ test('Artifact fixtures restore as ordinary editable documents and never overwri
 	const data = [...tables.drafts.get().values()].find(draft => draft.kind === 'data')!;
 	await tables.delete(data);
 	await prepareArtifactFixtures(fixture.files, profile, workspace, browser.window.document);
-	using restored = new CreatorFixture(fixture.child);
+	using restored = new ArtifactFixture(fixture.child);
 	await restored.editors.loadArtifactDocuments();
 	assert.equal(restored.editors.artifactDocuments.get().size, 4);
 	assert.equal(restored.editors.artifactDocuments.get().get(deck.model.value.documentId)!.model.value.shapes.length, 3);
@@ -2557,8 +2576,8 @@ test('Slides documents autosave, export and reopen through the artifact catalog'
 	using fixture = new AutoSaveFixture();
 	using lifecycle = new class extends AbstractLifecycleService { }(StartupKind.NewWindow, new NullLoggerService(), fixture.storage);
 	fixture.child.registerInstance(ILifecycleService, lifecycle);
-	using view = new CreatorFixture(fixture.child);
-	await view.runCommand('sessions.creator.openCanvasArtifact', view.editors.createArtifactDocument('slides', createSlides()).model.value.documentId);
+	using view = new ArtifactFixture(fixture.child);
+	await view.runCommand('sessions.artifacts.openCanvasArtifact', view.editors.createArtifactDocument('slides', createSlides()).model.value.documentId);
 	const deck = view.editors.activeEditor.get()!.documentController;
 	const id = deck.model.value.documentId;
 	assert.equal(deck.model.value.shapes.length, 2);
@@ -2583,7 +2602,7 @@ test('Slides documents autosave, export and reopen through the artifact catalog'
 	services.get(IContextMenuService).hideContextMenu();
 	await menu.actionRunner!.run(actions[0], menu.getActionsContext?.());
 	const manifest = fixture.copyResource.joinPathSegment('manifest.json');
-	const exported = parseDesignDocument((await fixture.files.readFile(manifest)).content);
+	const exported = parseArtifactCanvasDocument((await fixture.files.readFile(manifest)).content);
 	assert.notEqual(exported.documentId, id);
 	assert.deepEqual(exported.shapes, deck.model.value.shapes);
 
@@ -2593,7 +2612,7 @@ test('Slides documents autosave, export and reopen through the artifact catalog'
 	assert.equal(unload.defaultPrevented, true);
 	view.page.showHome();
 	assert.equal(view.page.domNode.ownerDocument.activeElement?.getAttribute('data-artifact-workspace'), `canvas:${id}`);
-	await view.runCommand('sessions.creator.openCanvasArtifact', view.editors.createArtifactDocument('slides', createSlides()).model.value.documentId);
+	await view.runCommand('sessions.artifacts.openCanvasArtifact', view.editors.createArtifactDocument('slides', createSlides()).model.value.documentId);
 	const second = view.editors.activeEditor.get()!.documentController;
 	assert.notEqual(second.model.value.documentId, id);
 	assert.equal(second.model.value.shapes.length, 2);
@@ -2601,15 +2620,15 @@ test('Slides documents autosave, export and reopen through the artifact catalog'
 	assert.equal(deck.isDirty, false);
 	assert.equal(second.isDirty, false);
 	assert.equal(fixture.confirmations, 0);
-	assert.deepEqual(parseDesignDocument((await fixture.files.readFile(manifest)).content), exported);
+	assert.deepEqual(parseArtifactCanvasDocument((await fixture.files.readFile(manifest)).content), exported);
 
 	const expected = deck.model.value;
 	view.dispose();
-	using restarted = new CreatorFixture(fixture.child);
+	using restarted = new ArtifactFixture(fixture.child);
 	await restarted.editors.loadArtifactDocuments();
 	assert.equal(restarted.page.domNode.querySelectorAll('.ash-artifacts-card.slides[data-artifact-workspace]').length, 2);
 	const restored = restarted.editors.artifactDocuments.get().get(id)!;
-	await restarted.runCommand('sessions.creator.openCanvasArtifact', id);
+	await restarted.runCommand('sessions.artifacts.openCanvasArtifact', id);
 	assert.equal(restarted.editors.activeEditor.get()?.documentController, restored);
 	assert.deepEqual(restored.model.value, expected);
 });
@@ -2634,18 +2653,34 @@ test('Slides opens packages and rejects standalone JSON', async () => {
 		...services.get(IDialogService),
 		error: async (_message, detail) => { errorDetail = detail; },
 	});
-	using source = child.createInstance(DesignDocumentController, ArtifactWorkspaceId.Slides);
+	using source = child.createInstance(ArtifactCanvasDocumentController, ArtifactWorkspaceId.Slides);
 	new DocumentCommands(source.model).addFrame({ x: 0, y: 0 });
 	await fixture.files.createDirectory(URI.file('/'));
-	await fixture.files.writeFile({ resource: loose, content: serializeDesignDocument(source.model.value) });
+	await fixture.files.writeFile({ resource: loose, content: serializeArtifactCanvasDocument(source.model.value) });
 	assert.equal(await source.saveDocument(fixture.copyResource), true);
-	using opened = child.createInstance(DesignDocumentController, ArtifactWorkspaceId.Slides);
+	using opened = child.createInstance(ArtifactCanvasDocumentController, ArtifactWorkspaceId.Slides);
 	await opened.openDocument();
 	assert.match(errorDetail!, /Choose an Ash Slides file package/u);
 	assert.equal(opened.model.value.shapes.length, 0);
 	selected = fixture.copyResource;
 	await opened.openDocument();
 	assert.deepEqual(opened.model.value, source.model.value);
+});
+
+test('Artifacts migrates a legacy Design draft pointer without relocating the saved package', async () => {
+	using fixture = new AutoSaveFixture();
+	const first = fixture.createDocument();
+	await first.ready;
+	new DocumentCommands(first.model).addShape('rectangle', { x: 0, y: 0 });
+	assert.equal(await first.flushAutoSave(), true);
+	const resource = fixture.activeResource.toString();
+	fixture.storage.remove('artifacts.design.activeDocument', StorageScope.WORKSPACE);
+	fixture.storage.store('creator.design.activeDocument', resource, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	const restored = fixture.createDocument();
+	await restored.ready;
+	assert.equal(restored.model.value.shapes.length, 1);
+	assert.equal(fixture.activeResource.toString(), resource);
+	assert.equal(fixture.storage.get('creator.design.activeDocument', StorageScope.WORKSPACE), undefined);
 });
 
 test('Design automatically saves an untitled draft and restores its document and image bytes after reopening', async () => {
@@ -2655,7 +2690,7 @@ test('Design automatically saves an untitled draft and restores its document and
 	const sha256 = createHash('sha256').update(bytes).digest('hex');
 	const asset = { id: generateUuid(), name: 'draft.png', versions: [{ id: generateUuid(), sha256, path: `assets/${sha256}`, mediaType: 'image/png' as const, width: 1, height: 1 }] };
 	const image = { id: generateUuid(), kind: 'image' as const, assetId: asset.id, assetVersionId: asset.versions[0].id, crop: { x: 0, y: 0, width: 1, height: 1 }, x: 0, y: 0, width: 1, height: 1, rotation: 0, fill: '#ffffff' };
-	document.restoreBackup(JSON.stringify({ manifest: serializeDesignDocument(documentFromShapes([image], document.model.value, [asset])), media: { [sha256]: Buffer.from(bytes).toString('base64') } }));
+	document.restoreBackup(JSON.stringify({ manifest: serializeArtifactCanvasDocument(documentFromShapes([image], document.model.value, [asset])), media: { [sha256]: Buffer.from(bytes).toString('base64') } }));
 	const saved = new Promise<void>(resolve => {
 		const listener = document.onDidChange(() => { if (!document.isDirty) { listener.dispose(); resolve(); } });
 	});
@@ -2704,7 +2739,7 @@ test('Design drains edits made during saving without interrupting editing or ask
 test('Design retains failed edits, refuses to close on failure and retries without a save dialog', async () => {
 	using fixture = new AutoSaveFixture();
 	const document = fixture.createDocument();
-	using editor = fixture.child.createInstance(ArtifactEditorWidget, browser.window.document, document, createDesignEditorContributionFactory(fixture.child));
+	using editor = fixture.child.createInstance(ArtifactEditorWidget, browser.window.document, document, createArtifactCanvasEditorContributionFactory(fixture.child));
 	new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
 	fixture.beforeWrite = async () => { throw new Error('Disk full'); };
 	assert.equal(await document.flushAutoSave(), false);
@@ -2726,7 +2761,7 @@ test('Design autosave preserves an externally changed package instead of overwri
 	new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
 	await document.flushAutoSave();
 	const manifest = URI.joinPath(fixture.activeResource, 'manifest.json');
-	const external = serializeDesignDocument(documentFromShapes([], document.model.value));
+	const external = serializeArtifactCanvasDocument(documentFromShapes([], document.model.value));
 	await fixture.files.writeFile({ resource: manifest, content: external });
 	new DocumentCommands(document.model).addShape('ellipse', { x: 0, y: 0 });
 	assert.equal(await document.flushAutoSave(), false);
@@ -2746,7 +2781,7 @@ test('Design save a copy and export stay manual and keep the automatically saved
 	const original = document.model.value;
 	assert.equal(fixture.saveDialogs, 0);
 	await document.saveCopy();
-	const copy = parseDesignDocument((await fixture.files.readFile(URI.joinPath(fixture.copyResource, 'manifest.json'))).content);
+	const copy = parseArtifactCanvasDocument((await fixture.files.readFile(URI.joinPath(fixture.copyResource, 'manifest.json'))).content);
 	assert.notEqual(copy.documentId, original.documentId);
 	assert.deepEqual(copy.shapes, original.shapes);
 	assert.deepEqual(document.model.value, original);
@@ -2776,7 +2811,7 @@ test('Design failed restoration keeps the original pointer and blocks replacemen
 	await fixture.files.writeFile({ resource: manifest, content: original.content });
 	assert.equal(await restored.flushAutoSave(), true);
 	assert.equal(restored.needsSaveRetry, false);
-	assert.deepEqual(restored.model.value, parseDesignDocument(original.content));
+	assert.deepEqual(restored.model.value, parseArtifactCanvasDocument(original.content));
 });
 
 test('Design autosave status and Slides artifact export use Chinese localization', async () => {
@@ -2793,8 +2828,8 @@ test('Design autosave status and Slides artifact export use Chinese localization
 		assert.equal(document.saveStatus, '所有更改已保存');
 		using view = createView();
 		assert.match(view.pane.editor.getAccessibleContent(), /所有更改已保存/u);
-		using creator = new CreatorFixture(fixture.child);
-		await creator.runCommand('sessions.creator.openCanvasArtifact', creator.editors.createArtifactDocument('slides', createSlides()).model.value.documentId);
+		using creator = new ArtifactFixture(fixture.child);
+		await creator.runCommand('sessions.artifacts.openCanvasArtifact', creator.editors.createArtifactDocument('slides', createSlides()).model.value.documentId);
 		assert.match(creator.page.getAccessibleContent(), /工作室发布/u);
 		pressCanvas(creator.editors.activeEditor.get()!, 'F10', { shiftKey: true });
 		assert.ok(contextMenu?.getActions().some(action => action.label === '导出可编辑副本'));
@@ -2807,7 +2842,7 @@ test('Design close drains edits from final lifecycle joins without confirming sa
 	using fixture = new AutoSaveFixture();
 	using lifecycle = new class extends AbstractLifecycleService { }(StartupKind.NewWindow, new NullLoggerService(), fixture.storage);
 	fixture.child.registerInstance(ILifecycleService, lifecycle);
-	using editors = fixture.child.createInstance(DesignEditorService);
+	using editors = fixture.child.createInstance(ArtifactCanvasEditorService);
 	const document = editors.document;
 	const commands = new DocumentCommands(document.model);
 	commands.addShape('rectangle', { x: 0, y: 0 });
@@ -2849,7 +2884,7 @@ test('Design save a copy rejects the active package as its destination', async (
 test('Page and fill color widgets preserve alpha, validate edits and restore their shared document history', async () => {
 	using fixture = new AutoSaveFixture();
 	const document = fixture.createDocument();
-	using editor = fixture.child.createInstance(ArtifactEditorWidget, browser.window.document, document, createDesignEditorContributionFactory(fixture.child));
+	using editor = fixture.child.createInstance(ArtifactEditorWidget, browser.window.document, document, createArtifactCanvasEditorContributionFactory(fixture.child));
 	editor.initialize();
 	const properties = editor.propertiesDomNode;
 	const field = (label: string): HTMLInputElement => properties.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
@@ -2883,9 +2918,9 @@ test('Page and fill color widgets preserve alpha, validate edits and restore the
 	await restored.ready;
 	assert.equal(restored.model.value.background, '#abcdef40');
 	assert.equal(restored.model.value.shapes[0].fill, '#aabbcc66');
-	const serialized = JSON.parse(serializeDesignDocument(restored.model.value));
+	const serialized = JSON.parse(serializeArtifactCanvasDocument(restored.model.value));
 	serialized.artifacts[restored.model.value.artifactId].background = 'url(untrusted)';
-	assert.throws(() => parseDesignDocument(JSON.stringify(serialized)), /Invalid design composition/u);
+	assert.throws(() => parseArtifactCanvasDocument(JSON.stringify(serialized)), /Invalid design composition/u);
 });
 
 test('Stroke and both shadow types share color controls, keep alpha and close pickers on selection changes', () => {
@@ -2898,10 +2933,10 @@ test('Stroke and both shadow types share color controls, keep alpha and close pi
 	const change = (label: string, value: string): void => { const input = field(label); input.value = value; input.dispatchEvent(new browser.window.Event('change')); };
 	const button = (label: string): HTMLButtonElement => [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.getAttribute('aria-label') === label || button.textContent === label)!;
 	change('Stroke color', '336699'); change('Stroke opacity (%)', '40');
-	assert.equal((model.value.shapes[0] as Extract<DesignShape, { kind: 'path'; }>).stroke, '#33669966');
-	editor.undo(); assert.equal((model.value.shapes[0] as Extract<DesignShape, { kind: 'path'; }>).stroke, '#336699');
+	assert.equal((model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'path'; }>).stroke, '#33669966');
+	editor.undo(); assert.equal((model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'path'; }>).stroke, '#336699');
 	editor.redo(); button('Use fill color for stroke').click();
-	assert.equal((model.value.shapes[0] as Extract<DesignShape, { kind: 'path'; }>).stroke, undefined);
+	assert.equal((model.value.shapes[0] as Extract<ArtifactCanvasShape, { kind: 'path'; }>).stroke, undefined);
 	button('Stroke color').click(); assert.ok(browser.window.document.querySelector('.ash-color-picker'));
 	pressCanvas(view, 'r'); assert.equal(browser.window.document.querySelector('.ash-color-picker'), null);
 	button('Add effect').click();
@@ -2968,15 +3003,15 @@ test('Table artifact commands open resource inputs and restore the same file wit
 	await tables.ready;
 	for (const source of tables.drafts.get().values()) {
 		const resource = tables.resource(source).toString();
-		assert.equal(await commands.executeCommand('sessions.creator.openTable', resource), true);
-		assert.equal(await commands.executeCommand('sessions.creator.openTable', `table:${source.id}`), true);
-		await commands.executeCommand('sessions.restore.creatorTable');
+		assert.equal(await commands.executeCommand('sessions.artifacts.openTable', resource), true);
+		assert.equal(await commands.executeCommand('sessions.artifacts.openTable', `table:${source.id}`), true);
+		await commands.executeCommand('sessions.restore.artifactsTable');
 		for (const entry of entries.splice(0)) {
 			assert.equal(entry.editorInput?.resource.toString(), resource);
 			assert.equal(entry.editorInput?.editorId, ArtifactTableEditor.ID);
-			assert.equal(entry.restoreCommand, 'sessions.restore.creatorTable');
+			assert.equal(entry.restoreCommand, 'sessions.restore.artifactsTable');
 		}
 	}
-	assert.equal(await commands.executeCommand('sessions.creator.openTable', URI.file('/unrelated.json').toString()), false);
+	assert.equal(await commands.executeCommand('sessions.artifacts.openTable', URI.file('/unrelated.json').toString()), false);
 	assert.equal(entries.length, 0);
 });
