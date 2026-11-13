@@ -1182,7 +1182,25 @@ for (const kind of ['Code'] as const) {
 	}
 }
 
-for (const kind of ['Code', 'Cowork'] as const) {
+test('Cowork keeps history without reading the conversation changes checkpoint', async () => {
+	const f = fixture('Cowork');
+	using resources = f.resources;
+	let reads = 0;
+	f.changeApi.summary = async () => {
+		reads++;
+		return { sequence: 1, revision: 'changes', statistics: { files: 3, additions: 4, deletions: 1 }, repositories: [], warnings: [] };
+	};
+	await f.model.initialize();
+	assert.equal(f.model.thread?.threadId, 'A');
+	await f.model.selectThread({ session: f.session, threadId: 'B' });
+	assert.equal(f.model.thread?.threadId, 'B');
+	assert.equal(reads, 0);
+	assert.equal(f.model.inputState.changes, undefined);
+	assert.equal(f.model.inputState.changesScope, undefined);
+});
+
+{
+	const kind = 'Code';
 	for (const failed of [false, true]) test(`${kind} checkpoint summary retires immediately on undo and rejects a delayed ${failed ? 'error' : 'result'}`, async () => {
 		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
 		await waitFor(() => f.model.inputState.changesRevision === 'initial');
@@ -1205,7 +1223,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		await waitFor(() => f.model.thread?.sequence === 3);
 		// Code coalesces summary reads. Settle the invalidated read before
 		// waiting for its replacement, while checking that it never becomes visible.
-		if (kind === 'Code') assert.equal(reads.length, 1);
+		assert.equal(reads.length, 1);
 		if (failed) await reads[0]!.error(new Error('Old summary failure'));
 		else await reads[0]!.complete({ sequence: 2, revision: 'old', statistics: { files: 30, additions: 100, deletions: 1 }, repositories: [], warnings: [] });
 		await waitFor(() => reads.length === 2);

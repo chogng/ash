@@ -65,7 +65,7 @@
     "sessions.creator.make.code": "查看代码",
     "sessions.creator.make.title": "Make",
     "sessions.creator.make.description": "查看生成代码、运行预览，并交给 Agent 继续开发。",
-    "sessions.creator.make.help": "查看代码可查看生成的 HTML、CSS 和场景 JSON。编辑画布可返回可视化编辑，并更新运行预览。描述开发需求后，选择交给 Agent 开发，会准备一个附带当前 HTML 的 Code 对话；请在对话中检查并发送请求。",
+    "sessions.creator.make.help": "查看代码可查看生成的 HTML、CSS 和场景 JSON。编辑画布可返回可视化编辑，并更新运行预览。描述开发需求后，选择交给 Agent 开发，打开 Code 并附上当前 HTML。在 Code 中检查并发送草稿。",
     "sessions.creator.prototype.addScreen": "添加屏幕",
     "sessions.creator.prototype.preview": "预览流程",
     "sessions.creator.prototype.motion": "编辑动画",

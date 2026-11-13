@@ -11,11 +11,11 @@ export interface ISessionsEntry {
 	readonly workspaceMode?: 'chat' | 'code' | 'current';
 	readonly activityContext: string;
 	readonly content: 'conversation' | 'documents' | 'editor';
-	/** A conversation entry can select a renderer independently of its workspace mode. */
+	/** Selects a renderer for entries that host the session grid directly. */
 	readonly conversationKind?: SessionsConversationKind;
 	/** Model source registered with the Chat view factory. */
 	readonly chatSource?: string;
-	/** Whether the shared conversation starts visible beside this editor. */
+	/** Places the ordinary Chat view beside this editor and sets its initial visibility. */
 	readonly conversation?: 'visible' | 'optional';
 	/** Overrides workspace navigation; omission retains its current sidebar or opens the registered default on startup. */
 	readonly sidebarContainerId?: string;
@@ -39,7 +39,6 @@ export interface ISessionsEntry {
 export interface ISessionsEntryOpenOptions {
 	readonly source?: 'restore' | 'startup';
 	readonly focus?: 'conversation';
-	readonly preserveChatSource?: boolean;
 }
 
 export interface ISessionsEntryService extends IDisposable {

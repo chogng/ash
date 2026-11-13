@@ -100,7 +100,6 @@ export class ArtifactEditorView extends Disposable {
 	private dimension: IDimension = { width: 0, height: 0 };
 	public get activeWorkspaceId(): string | undefined { return this.activeWorkspace?.entryId; }
 	public get detailsContainerId(): string | undefined { return this.currentWorkspace?.detailsContainerId; }
-	public get conversationKind() { return this.currentWorkspace?.conversationKind; }
 	private get currentWorkspace(): IArtifactWorkspace | undefined {
 		return this.activeWorkspace && this.workspaces.get(this.activeWorkspace.key);
 	}

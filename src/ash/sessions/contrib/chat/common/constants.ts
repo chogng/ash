@@ -7,6 +7,8 @@ export const NEW_SESSION_WELCOME_MESSAGES_SETTING = 'sessions.chat.experimental.
 export const OPEN_ASH_CHAT_WITH_MODEL_COMMAND = 'sessions.chat.openAshWithModel';
 export const SHOW_ASH_CHAT_COMMAND = 'sessions.show.ashChat';
 export const SHOW_CHAT_WORKSPACE_COMMAND = 'sessions.show.chatWorkspace';
+/** Asks a Chat entry command to prepare its normal view without navigating to it. */
+export const CHAT_WORKSPACE_ENTRY_REQUEST = 'resolveEntry';
 export const ASH_CHAT_SELECTED_CONTEXT = 'sessions.activity.ashChatSelected';
 export const SESSIONS_COMPACT_INPUT_HEIGHT = Object.freeze({ minimum: 0, maximum: 240 });
 // A 20-turn history page can already contain 60 prompt, tool and reply rows.

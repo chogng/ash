@@ -45,6 +45,7 @@ import { ISessionChangesService } from '../../../changes/common/sessionChangesSe
 import { SessionsEntryService, documentEntry } from '../../browser/sessionsEntryService.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
 import type { ISessionsEntry } from '../../../../services/layout/common/sessionsEntryService.js';
+import { CHAT_WORKSPACE_ENTRY_REQUEST, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
 
 suite('SessionsEntryService lifecycle and focus', () => {
 	test('Chat uses the Sessions Part without restoring Code editors, and Code returns to the grid', async () => {
@@ -59,6 +60,40 @@ suite('SessionsEntryService lifecycle and focus', () => {
 		assert.deepEqual(fixture.chatSource, [chatSource, undefined]);
 		assert.deepEqual(fixture.conversationKinds, ['code']);
 		assert.equal(fixture.service.canRestoreSessionEditors, true);
+	});
+
+	test('Artifacts borrows the ordinary Chat entry from Code and on restore', async () => {
+		const chat: ISessionsEntry = { ...chatEntry, chatSource: 'desktop-chat' };
+		const artifact: ISessionsEntry = {
+			id: 'creator.slides', activityContext: 'sessions.activity.creatorSelected', workspaceMode: 'chat', content: 'editor',
+			conversation: 'visible', restoreCommand: 'sessions.restore.creator', focus: 'editor',
+		};
+		for (const source of ['navigation', 'restore'] as const) {
+			using fixture = new EntryFixture();
+			let resolves = 0;
+			using command = CommandsRegistry.register(SHOW_CHAT_WORKSPACE_COMMAND, (_accessor, request) => {
+				assert.equal(request, CHAT_WORKSPACE_ENTRY_REQUEST);
+				resolves++;
+				return chat;
+			});
+			if (source === 'navigation') await fixture.service.openEntry(documentEntry);
+			await fixture.service.openEntry(artifact, undefined, source === 'restore' ? { source } : undefined);
+			assert.equal(resolves, 1);
+			assert.deepEqual(fixture.chatSource, source === 'restore' ? ['desktop-chat'] : [undefined, 'desktop-chat']);
+			assert.deepEqual(fixture.conversationKinds, source === 'restore' ? [] : ['code']);
+			assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'chat');
+			assert.equal(fixture.contextKeys.getValue(artifact.activityContext), true);
+			assert.equal(fixture.contextKeys.getValue(chat.activityContext), true);
+			assert.equal(fixture.opened.at(-1)?.id, chat.sidebarContainerId);
+			assert.equal(fixture.focused, 'editor');
+			assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), artifact.restoreCommand);
+			await fixture.service.openEntry(chat);
+			await fixture.service.openEntry(artifact);
+			assert.equal(resolves, 1, 'Opening from Chat keeps its source');
+			assert.equal(fixture.chatSource.at(-1), chat.chatSource);
+			await fixture.service.openEntry(documentEntry);
+			assert.equal(fixture.contextKeys.getValue(chat.activityContext), false);
+		}
 	});
 
 	test('New follows the active entry draft and clears while a custom view covers it', async () => {

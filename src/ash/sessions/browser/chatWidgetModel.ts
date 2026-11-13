@@ -149,6 +149,8 @@ export class ChatWidgetModel extends Disposable {
 
 	protected get useCodeModelDefaults(): boolean { return true; }
 	protected get initializeInConstructor(): boolean { return true; }
+	/** Chat can still use captured files as artifacts without presenting a changes review. */
+	protected get supportsConversationChangeReview(): boolean { return true; }
 	get commandInterpretation(): 'literal' | undefined { return undefined; }
 	protected get useSkillSelectors(): boolean { return this.commandInterpretation !== 'literal'; }
 	protected get snapshotHistory(): ThreadSnapshotHistory | undefined {
@@ -254,7 +256,7 @@ export class ChatWidgetModel extends Disposable {
 			changes: this.threadChanges?.statistics,
 			changesRevision: this.threadChanges?.revision,
 			changesRepositories: this.threadChanges?.repositories,
-			changesScope: this.selection.kind === 'session' ? 'conversation' : 'workspace',
+			changesScope: this.supportsConversationChangeReview && this.selection.kind === 'session' ? 'conversation' : undefined,
 			changesError: this.threadChangesError,
 			contextUsage: this.contextUsage,
 			approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode ?? this.defaultApprovalMode.get(),
@@ -511,7 +513,7 @@ export class ChatWidgetModel extends Disposable {
 		};
 		let transcript = withSessionSubagentActivities(chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, source, {
 			archived: thread?.status === 'archived', hasOlderTurns: this.historyBoundary?.hasOlderTurns,
-		}, this._changeSets), this.session, thread?.threadId);
+		}, this.supportsConversationChangeReview ? this._changeSets : undefined), this.session, thread?.threadId);
 		if (thread) {
 			transcript = transcript.map(item => {
 				const file = item.feedbackSource && this.generatedFiles.findBySource(this.generatedFileSource(thread, item.feedbackSource.itemId));
@@ -1448,7 +1450,7 @@ export class ChatWidgetModel extends Disposable {
 
 	refreshChanges(): Promise<void> {
 		const owner = this.activeSession;
-		if (!owner || this.isDisposed) return Promise.resolve();
+		if (!this.supportsConversationChangeReview || !owner || this.isDisposed) return Promise.resolve();
 		const generation = this.generation;
 		if (this.summaryRead?.generation === generation) {
 			if (this.durableSequence > this.summaryRead.sequence) this.summaryRead.invalidated = true;

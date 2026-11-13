@@ -319,10 +319,17 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		layout() { },
 	};
 	const commandEvents = resources.add(new Emitter<ICommandEvent>());
+	let workspaceChangesReads = 0;
 	const commandService: ICommandService = {
 		onWillExecuteCommand: commandEvents.event,
 		onDidExecuteCommand: commandEvents.event,
-		async executeCommand() { throw new Error('No commands registered'); },
+		async executeCommand<T>(id: string) {
+			if (id === 'git.getChangesSummary') {
+				workspaceChangesReads++;
+				return { files: 66, additions: 1803, deletions: 313 } as T;
+			}
+			throw new Error('No commands registered');
+		},
 	};
 	const editorRoot = createCodeEditorServices(resources);
 	editorRoot.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
@@ -564,6 +571,9 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	await part.setConversationKind('chat');
 	const coworkView = part.domNode.querySelector('[data-conversation-kind="chat"]')!;
 	assert.ok(coworkView.querySelector('.ash-chat-input-part'));
+	await new Promise<void>(resolve => setTimeout(resolve, 0));
+	assert.equal(workspaceChangesReads, 0, 'The Chat composer must not ask Git for the window workspace');
+	assert.equal(coworkView.querySelector('.ash-chat-changes-pill:not([hidden])'), null);
 	assert.equal(coworkView.querySelector('[data-action-id="ash.chat.input.mode"]'), null);
 	assert.ok(coworkView.querySelector('.ash-chat-input-container [data-action-id="ash.chat.input.model"]'));
 	assert.equal(coworkView.querySelector('.ash-chat'), null);

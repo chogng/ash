@@ -68,7 +68,6 @@ interface ArtifactWorkspaceAction<T> {
 export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace {
 	public domNode!: HTMLElement;
 	public readonly detailsContainerId: string | undefined = DESIGN_PROPERTIES_CONTAINER_ID;
-	public readonly conversationKind?: IArtifactWorkspace['conversationKind'];
 	protected editorHost!: DesignEditorHost;
 	protected contentDomNode!: HTMLElement;
 	private toolbarContext: IContextKeyService | undefined;

@@ -146,7 +146,6 @@ class ChatPreviewPane extends ChatViewPane {
 				send: async () => { throw chatUnavailable(); },
 				executeServerCommand: async () => { throw chatUnavailable(); },
 				interrupt: async () => { throw chatUnavailable(); },
-				refreshChanges: async () => { throw chatUnavailable(); },
 				selectModel: async () => { throw chatUnavailable(); },
 				selectReasoningEffort: async () => { throw chatUnavailable(); },
 				selectAutomaticModel: async () => { throw chatUnavailable(); },

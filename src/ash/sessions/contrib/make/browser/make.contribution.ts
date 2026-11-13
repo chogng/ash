@@ -13,7 +13,6 @@ import { IDesignEditorService } from '../../artifact/browser/designEditorService
 
 class MakeWorkspace extends ArtifactWorkspace {
 	public override readonly detailsContainerId = undefined;
-	public override readonly conversationKind = 'code';
 	private previewDomNode!: HTMLIFrameElement;
 	private promptDomNode!: HTMLTextAreaElement;
 	private visible = false;
@@ -64,5 +63,5 @@ registerArtifactWorkspaceMode({
 	title: getArtifactWorkspaceTitle(ArtifactWorkspaceId.Make),
 	description: localize('sessions.creator.make.description', 'View generated code, run a preview and continue with an Agent.'),
 	icon: Lxicon.code,
-	help: localize('sessions.creator.make.help', 'View code shows generated HTML, CSS and scene JSON. Edit canvas returns to visual editing and updates the running preview. Describe what to build and choose Build with Agent to prepare a Code conversation with the current HTML attached; review and send the request there.'),
+	help: localize('sessions.creator.make.help', 'View code shows generated HTML, CSS and scene JSON. Edit canvas returns to visual editing and updates the running preview. Describe what to build and choose Build with Agent to open Code with the current HTML attached. Review and send the draft in Code.'),
 }, (instantiation, ownerDocument) => instantiation.createInstance(MakeWorkspace, ownerDocument, ArtifactWorkspaceId.Make));

@@ -1,6 +1,7 @@
 import type { ChatResponseFileChangesPresentation } from './chatResponseFileChangesService.js';
 import type { ChatMode } from '../../../services/chat/common/chatService.js';
 import type { IChatInputPart } from './widget/input/chatInputPart.js';
+import type { ChatInputDelegate } from './widget/input/chatInput.js';
 import type { ChatRequestQueueKind, QueuedMessage } from '../../../services/chat/common/chatService.js';
 import type { IView } from '../../../common/views.js';
 import type { AgentSessionsViewerOrientation } from './agentSessions/agentSessions.js';
@@ -181,6 +182,11 @@ export interface IChatWidgetViewOptions {
 	readonly promptTimelineChanges?: ChatResponseFileChangesPresentation['getChangesForPrompt'];
 	readonly getTurnChanges?: ChatResponseFileChangesPresentation['getChangesForResponse'];
 	readonly openTurnChanges?: ChatTurnChangesOpener;
+	readonly changes?: {
+		refreshConversation(): Promise<void>;
+		/** Only hosts that own a window workspace may supply its change summary. */
+		readonly readWorkspace?: ChatInputDelegate['readWorkspaceChanges'];
+	};
 	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	readonly messagePresentation?: ChatMessagePresentation;
 	readonly codeBlockPresentation?: 'card';

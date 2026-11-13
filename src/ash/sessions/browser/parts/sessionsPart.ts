@@ -354,11 +354,12 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
-		if (!this.activeAgentView)
+		const view = this.desktopChatView ?? this.activeAgentView;
+		if (!view)
 			throw new Error(
 				localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'),
 			);
-		this.activeAgentView.activeChat.addContext(attachment);
+		view.activeChat.addContext(attachment);
 	}
 
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>): Promise<readonly ChatContextAttachment[]> {

@@ -6,7 +6,6 @@ import type { Event } from '../../../../base/common/event.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import type { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ArtifactKind } from '../../../common/artifactKind.js';
-import type { ISessionsEntry } from '../../../services/layout/common/sessionsEntryService.js';
 import type { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import { localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -17,7 +16,6 @@ export interface IArtifactWorkspace extends IDisposable {
 	readonly title: string;
 	readonly onDidChangeTitle?: Event<void>;
 	readonly detailsContainerId?: string;
-	readonly conversationKind?: ISessionsEntry['conversationKind'];
 	readonly exportActions?: readonly IAction[];
 	getCodeAttachment?(): { readonly name: string; readonly content: string; };
 	rename?(title: string): Promise<void>;

@@ -11,7 +11,7 @@ import type { ArtifactWorkspaceRequest } from './artifactWorkspaceRegistry.js';
 export async function openArtifacts(accessor: ServicesAccessor, select?: (page: ArtifactEditorView) => void, options: { source?: 'restore'; restoreCommand?: string; reveal?: boolean; } = {}): Promise<void> {
 	const editor = accessor.get(IEditorPart);
 	const entry: ISessionsEntry = {
-		id: 'creator.home', workspaceMode: 'current', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
+		id: 'creator.home', workspaceMode: 'chat', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
 		showEditorTabs: false,
 		restoreCommand: options.restoreCommand ?? 'sessions.show.creator',
 		focus: 'editor',
@@ -31,9 +31,8 @@ export async function openArtifacts(accessor: ServicesAccessor, select?: (page: 
 			...artifactDetailEntry,
 			id: `creator.workspace.${workspaceId}`,
 			detailsContainerId: page.detailsContainerId,
-			conversationKind: page.conversationKind,
 		};
-	}, { source: options.source, preserveChatSource: true });
+	}, { source: options.source });
 	if (options.reveal) {
 		// Wait for the entry's editor geometry before framing the content.
 		page?.revealInitialContent();

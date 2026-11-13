@@ -354,6 +354,7 @@ import { SessionsManagementService } from '../services/sessions/browser/sessions
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { ISessionsService, SessionsService } from '../services/sessions/browser/sessionsService.js';
 import { ISessionsEntryService } from '../services/layout/common/sessionsEntryService.js';
+import { isRecord } from '../../base/common/types.js';
 import { handoffArtifactToCodeCommand, openLinkedArtifactCommand } from '../contrib/artifact/common/artifactWorkspace.js';
 import { IArtifactPins } from '../contrib/artifact/browser/artifactPins.js';
 import { isArtifactLink } from '../../platform/artifactIntegrations/common/artifactLink.js';
@@ -1126,12 +1127,19 @@ export abstract class Workbench extends Disposable {
 			this.sessionsPart.addContext({ id: 'artifact-handoff', name, kind: 'file', resolve: async () => ({ name, content }) });
 			this.sessionsPart.focus();
 		}));
-		this._register(CommandsRegistry.register('sessions.creator.buildWithAgent', async (_accessor, value) => {
-			const request = value as { readonly prompt: string; readonly content: string; };
-			await services.get(ISessionsEntryService).setConversationVisible(true);
-			this.sessionsView.openNewSession(localize('sessions.creator.make.session', 'Make development'));
-			this.sessionsPart.addContext({ id: 'creator-source', name: 'creator.html', kind: 'file', resolve: async () => ({ name: 'creator.html', content: request.content }) });
-			this.sessionsPart.appendToDraft(request.prompt || localize('sessions.creator.make.request', 'Build an application from the attached Creator document.'));
+		this._register(CommandsRegistry.register('sessions.creator.buildWithAgent', async (accessor, value) => {
+			if (!isRecord(value) || typeof value.prompt !== 'string' || typeof value.content !== 'string') {
+				throw new TypeError('Invalid Make request');
+			}
+			const { prompt, content } = value;
+			const commands = accessor.get(ICommandService);
+			const target = await accessor.get(ISessionsManagementService).resolveNewSessionTarget();
+			if (this.isDisposed) return;
+			await commands.executeCommand('sessions.open.code', 'conversation');
+			if (this.isDisposed) return;
+			this.sessionsView.openNewSession(localize('sessions.creator.make.session', 'Make development'), target);
+			this.sessionsPart.addContext({ id: 'creator-source', name: 'creator.html', kind: 'file', resolve: async () => ({ name: 'creator.html', content }) });
+			this.sessionsPart.appendToDraft(prompt || localize('sessions.creator.make.request', 'Build an application from the attached Creator document.'));
 			this.sessionsPart.focus();
 		}));
 		this._register(CommandsRegistry.register('sessions.addContextToAgent', async (_accessor, value) => {

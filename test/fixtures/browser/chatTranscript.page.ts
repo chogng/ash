@@ -1439,13 +1439,16 @@ window.ashChatTranscriptIntegration = {
 				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: responseWorking, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, ...(hasConversationChanges ? conversationChanges : {}) };
 			},
 			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
-			executeServerCommand: async () => { }, interrupt: async () => { }, refreshChanges: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
+			executeServerCommand: async () => { }, interrupt: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
 			listAgents: async () => [], selectAgent() { }, selectMode() { }, selectApprovalMode() { }, resolveInteraction: async () => { }, retryFailedTurn: async () => { }, dispose() { }, [Symbol.dispose]() { },
 		};
 		const container = document.createElement('main');
 		container.style.cssText = 'height:700px;width:800px;background:var(--ash-editor-background);color:var(--ash-foreground);font-family:system-ui';
 		document.body.append(container);
-		appChat = cowork ? resources.add(chatServices.createInstance(NativeChatWidget, container, 'app-chat', model, () => { }, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(ReplyChatInputFactory).createSessionInput(host, delegate, model, resources))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), chatServices.get(IOpenerService), undefined, undefined, undefined, virtualizeHistory ? { virtualizeHistoryFrom: constObservable(48) } : undefined));
+		appChat = cowork ? resources.add(chatServices.createInstance(NativeChatWidget, container, 'app-chat', model, () => { }, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(ReplyChatInputFactory).createSessionInput(host, delegate, model, resources))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), chatServices.get(IOpenerService), undefined, undefined, undefined, {
+			virtualizeHistoryFrom: virtualizeHistory ? constObservable(48) : undefined,
+			changes: { refreshConversation: async () => { } },
+		}));
 		appChat.setVisible(true);
 	},
 	showLongCodeHistory: (turns, virtualizeHistory, withTools = false) => {

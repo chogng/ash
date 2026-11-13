@@ -11,7 +11,7 @@ export function isArtifactName(value: unknown): value is string {
 }
 
 export const artifactDetailEntry = {
-	workspaceMode: 'current',
+	workspaceMode: 'chat',
 	activityContext: 'sessions.activity.creatorSelected',
 	content: 'editor',
 	conversation: 'visible',

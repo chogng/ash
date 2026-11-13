@@ -7,7 +7,6 @@ import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { getEditorOverrideForChatResource } from './chatEditorAssociations.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import type { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
-import { readWorkspaceChanges } from './input/chatInput.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import type { ChatSubmissionOptions, ChatRequestQueueKind, QueuedMessage } from '../../../../services/chat/common/chatService.js';
@@ -113,7 +112,6 @@ export interface IChatWidgetModel extends IDisposable {
 	reportRecapPresence?(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void>;
 	/** Rejects on failure so Stop and Send can preserve the unsent draft. */
 	interrupt(): Promise<void>;
-	refreshChanges?(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
 	selectPreset?(presetId: string): Promise<void>;
 	selectReasoningEffort?(effort: ModelReasoningEffort | undefined): Promise<void>;
@@ -349,6 +347,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => this.handleTurnErrorAction(action),
 		});
 		this.listWidget = listWidgets.get();
+		const changes = viewOptions?.changes;
 		const inputDelegate: ChatInputDelegate = {
 			responseProgressInTranscript: true,
 			draft: model.draft,
@@ -391,11 +390,16 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				}
 			}),
 			interrupt: () => this.model.interrupt(),
-			openChanges: model.refreshChanges && (async (revision, file) => {
-				try { await commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, this.model.sessionId, this.model.threadId, revision, file); }
-				finally { void model.refreshChanges!(); }
+			openChanges: changes && (async (revision, file) => {
+				const { sessionId, threadId, untitledSessionId } = this.model;
+				if (sessionId && threadId) {
+					try { await commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, sessionId, threadId, revision, file); }
+					finally { void changes.refreshConversation(); }
+				} else if (changes.readWorkspace && untitledSessionId) {
+					await commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID);
+				}
 			}),
-			readWorkspaceChanges: model.refreshChanges && (() => readWorkspaceChanges(commandService)),
+			readWorkspaceChanges: changes?.readWorkspace,
 			selectModel: (model) => this.model.selectModel(model),
 			selectPreset: presetId => model.selectPreset?.(presetId) ?? Promise.resolve(),
 			selectReasoningEffort: effort => model.selectReasoningEffort?.(effort) ?? Promise.resolve(),
@@ -756,6 +760,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const inputState = this.model.inputState;
 		this.input.render({
 			...inputState,
+			changesScope: this.viewOptions?.changes?.readWorkspace && this.model.untitledSessionId ? 'workspace' : inputState.changesScope,
 			followups: chatResponseFollowups(this.model.thread?.turns.at(-1)),
 			toolInvocations: items.flatMap(item => item.toolInvocation ? [item.toolInvocation] : []),
 			toolInvocation: items.find(item => item.toolInvocation?.call.itemId === inputState.interaction?.itemId)?.toolInvocation,

@@ -28,7 +28,7 @@ import * as chatInputStatePersistence from '../../../../../workbench/contrib/cha
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 import { ISessionsEntryService, type ISessionsEntry } from '../../../../services/layout/common/sessionsEntryService.js';
-import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
 import { ISessionsService, SessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { loadChatSelection } from '../../../../services/sessions/browser/sessionGridState.js';
 import type { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
@@ -184,7 +184,9 @@ suite('ChatGPT entry', () => {
 		resources.add(services.createInstance(ChatGPTWebContribution));
 		await services.invokeFunction(CommandsRegistry.getCommand('sessions.show.chatgptNative')!, undefined);
 		await services.invokeFunction(CommandsRegistry.getCommand('sessions.show.chatgptNative')!, 'restore');
-		assert.equal(initialized, 2);
+		const embedded = await services.invokeFunction(CommandsRegistry.getCommand('sessions.show.chatgptNative')!, CHAT_WORKSPACE_ENTRY_REQUEST, true);
+		assert.equal(embedded, entries[0]!.entry);
+		assert.equal(initialized, 3);
 		assert.equal(entries.length, 2);
 		assert.equal(entries[1]!.source, 'restore');
 		for (const { entry } of entries) {
@@ -286,9 +288,11 @@ suite('ChatGPT entry', () => {
 			[ISessionsConversationService, {} as ISessionsConversationService],
 			[ISessionsEntryService, { openEntry: async entry => { entries.push(entry); } } as ISessionsEntryService],
 		));
-		using contribution = services.createInstance(ChatWorkspaceContribution, chatGPTWorkspaceSource.openCommand, chatGPTWorkspaceSource.draftModels);
+		using contribution = services.createInstance(ChatWorkspaceContribution, chatGPTWorkspaceSource.resumeCommand, chatGPTWorkspaceSource.draftModels);
 		await services.invokeFunction(CommandsRegistry.getCommand(SHOW_ASH_CHAT_COMMAND)!, 'restore');
 		await services.invokeFunction(CommandsRegistry.getCommand(SHOW_CHAT_WORKSPACE_COMMAND)!);
+		const embedded = await services.invokeFunction(CommandsRegistry.getCommand(SHOW_CHAT_WORKSPACE_COMMAND)!, CHAT_WORKSPACE_ENTRY_REQUEST);
+		assert.equal(embedded, entries[0]);
 		assert.deepEqual(selection.chatSelection.get(), { kind: 'thread', sessionId: 'saved', threadId: 'old-root' });
 		assert.equal(entries.length, 2);
 		for (const entry of entries) {
@@ -341,7 +345,7 @@ suite('ChatGPT entry', () => {
 					},
 				} as ISessionsEntryService],
 			));
-			using contribution = services.createInstance(ChatWorkspaceContribution, chatGPTWorkspaceSource.openCommand, chatGPTWorkspaceSource.draftModels);
+			using contribution = services.createInstance(ChatWorkspaceContribution, chatGPTWorkspaceSource.resumeCommand, chatGPTWorkspaceSource.draftModels);
 			assert.equal(await linkOpener!.open(buildOpenSessionLinkUri('target', 'target-root', 'local')), true);
 			assert.equal(opened, 1);
 			assert.deepEqual(loadChatSelection(storage), target);

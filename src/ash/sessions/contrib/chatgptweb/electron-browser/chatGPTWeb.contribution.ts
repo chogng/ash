@@ -38,7 +38,8 @@ export const chatGPTWorkspaceSource = {
 	additionalCatalog: new SyncDescriptor(ChatGPTNativeList),
 	draftModels: new SyncDescriptor(ChatGPTDraftModelSource),
 	accessibility: chatGPTViewSource.accessibility,
-	openCommand: SHOW_PREFERRED_CHATGPT_COMMAND,
+	resumeCommand: (lastBackend: string | undefined) => lastBackend === 'chatgpt' ? SHOW_CHATGPT_COMMAND
+		: lastBackend === 'chatgpt-native' ? SHOW_EXPERIMENTAL_CHATGPT : SHOW_PREFERRED_CHATGPT_COMMAND,
 	createDraft: (commands: ICommandService, origin: unknown) => commands.executeCommand<void>(SHOW_PREFERRED_CHATGPT_COMMAND, origin, true),
 };
 

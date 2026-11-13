@@ -4,6 +4,7 @@ import { ISessionsListModelService } from '../services/sessions/browser/sessions
 import { ISessionProviderScopeService } from './agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
 import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
+import type { ChatChangesStatistics } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatViewPane, type IChatViewPaneEntry } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
 import { DisposableMap, DisposableStore } from '../../base/common/lifecycle.js';
 import { Emitter } from '../../base/common/event.js';
@@ -384,6 +385,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		let model: ChatWidgetModel | undefined;
 		try {
 			model = services.createInstance(ChatWidgetModel, this.chatService, selection, this.sessionService);
+			const conversation = model;
 			const log = services.getOptional(ILogService);
 			if (log) resources.add(logSessionHistoryBinding(log, model.onDidFinishHistoryBinding));
 			const editor = this.editorService;
@@ -404,7 +406,13 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				this.openerService,
 				this.editorService,
 				(resource: URI) => readMarkdownImageResource(this.fileService, resource),
-				undefined, { ...options, virtualizeHistoryFrom: options?.virtualizeHistoryFrom ?? codeHistoryVirtualizeFrom, configureModelInMenu: true, openTurnChanges },
+				undefined, {
+				...options, virtualizeHistoryFrom: options?.virtualizeHistoryFrom ?? codeHistoryVirtualizeFrom, configureModelInMenu: true, openTurnChanges,
+				changes: {
+					refreshConversation: () => conversation.refreshChanges(),
+					readWorkspace: () => readWorkspaceChanges(this.commandService),
+				},
+			},
 			);
 			this.paneScopes.set(pane, resources);
 			return pane;
@@ -614,6 +622,24 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 
 
 
+}
+
+/** Validates the optional Git extension's command result at its process boundary. */
+async function readWorkspaceChanges(commands: ICommandService): Promise<ChatChangesStatistics | undefined> {
+	let result: unknown;
+	try {
+		result = await commands.executeCommand('git.getChangesSummary');
+	} catch (error) {
+		if (error instanceof Error && error.message === 'Unknown command: git.getChangesSummary') return undefined;
+		throw error;
+	}
+	if (!result || typeof result !== 'object') throw new TypeError('Invalid workspace changes summary');
+	const value = result as Record<string, unknown>;
+	for (const key of ['files', 'additions', 'deletions']) {
+		if (typeof value[key] !== 'number' || !Number.isSafeInteger(value[key]) || value[key] < 0) throw new TypeError('Invalid workspace change statistics');
+	}
+	if (value.partial !== undefined && typeof value.partial !== 'boolean') throw new TypeError('Invalid workspace change coverage');
+	return { files: value.files as number, additions: value.additions as number, deletions: value.deletions as number, partial: value.partial === true };
 }
 
 function isActiveThread(session: ISession, threadId: ThreadId): boolean {

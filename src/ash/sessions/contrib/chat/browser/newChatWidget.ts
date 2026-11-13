@@ -105,8 +105,6 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 				};
 				composer = instantiationService.createInstance(SharedChatInputComposer, inputContainer, {
 					...delegate,
-					// The environment picker owns the selected checkout's pre-session changes.
-					readWorkspaceChanges: undefined,
 					get sendInBackground() { return model.untitledSessionId && !model.isNestedDraft ? sendInBackground : undefined; },
 					send: async (...args: Parameters<ChatInputDelegate['send']>) => {
 						const submissionSignal = args[4];
@@ -131,6 +129,8 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 				}, model, chatPresentation, () => this.focusWorkspacePicker());
 				return composer.input;
 			}, {
+			// Before first send, the environment card reviews the selected checkout.
+			changes: { refreshConversation: () => model.refreshChanges() },
 			promptTimelineChanges: prompt => turnChanges.getChangesForPrompt(prompt),
 			getTurnChanges: source => turnChanges.getChangesForResponse(source),
 			messagePresentation,

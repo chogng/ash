@@ -26,6 +26,7 @@ import { CodeConversationPageContext, NewSessionDraftVisibleContext, SessionsEnt
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
+import { CHAT_WORKSPACE_ENTRY_REQUEST, SHOW_CHAT_WORKSPACE_COMMAND } from '../../chat/common/constants.js';
 
 export const documentEntry: ISessionsEntry = {
 	id: 'code', workspaceMode: 'code', activityContext: CodeConversationPageContext.key, content: 'documents',
@@ -37,6 +38,8 @@ interface EntryVisibility {
 	readonly documents: boolean;
 }
 
+type ActiveEntry = ISessionsEntry & { readonly chatActivityContext?: string; };
+
 const visibilityKey = 'sessions.layout.entryVisibility';
 const activeEntryKey = 'sessions.layout.activeEntry';
 const activeEntryModeKey = 'sessions.layout.activeEntryMode';
@@ -45,7 +48,7 @@ const activeEntryModeKey = 'sessions.layout.activeEntryMode';
 export class SessionsEntryService extends Disposable implements ISessionsEntryService, IDesktopLayoutContext {
 	public checkpointEditorLayout(): Promise<void> { return this.controller.checkpointEditorLayout(); }
 	private readonly controller: DesktopLayoutController;
-	private readonly activeEntry = observableValue<ISessionsEntry | undefined>(this, undefined);
+	private readonly activeEntry = observableValue<ActiveEntry | undefined>(this, undefined);
 	private readonly workspaceMode = derived(reader => this.activeEntry.read(reader)?.workspaceMode === 'code' ? 'code' : 'chat');
 	public readonly documentContent = derived(reader => !this.customViews.activeCustomView.read(reader) && this.activeEntry.read(reader)?.content === 'documents');
 	private readonly visibility = new Map<string, EntryVisibility>();
@@ -152,18 +155,24 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			entryShowsWorkspaceModeControl.reset();
 			entryDetails.reset();
 		}));
-		let activeActivity: IContextKey<boolean> | undefined;
+		let activeActivities = new Set<string>();
 		this._register(autorun(reader => {
 			const entry = this.activeEntry.read(reader);
 			const covered = this.customViews.activeCustomView.read(reader) !== undefined;
 			const draft = entry?.newDraft === 'conversation' ? this.conversation.newDraftVisible : entry?.newDraft;
 			const showingDraft = !covered && (draft?.read(reader) ?? false);
 			this.contextKeys.bufferChangeEvents(() => {
-				let key = entry && this.activityKeys.get(entry.activityContext);
-				if (entry && !key) { key = this.contextKeys.createKey(entry.activityContext, false); this.activityKeys.set(entry.activityContext, key); }
-				if (activeActivity !== key) activeActivity?.reset();
-				activeActivity = key;
-				key?.set(!covered);
+				const activities = new Set(entry ? [entry.activityContext] : []);
+				if (entry?.chatActivityContext) activities.add(entry.chatActivityContext);
+				for (const id of activeActivities) {
+					if (!activities.has(id)) this.activityKeys.get(id)?.reset();
+				}
+				for (const id of activities) {
+					let key = this.activityKeys.get(id);
+					if (!key) { key = this.contextKeys.createKey(id, false); this.activityKeys.set(id, key); }
+					key.set(!covered);
+				}
+				activeActivities = activities;
 				newDraftVisible.set(showingDraft);
 				entryShowsWorkspaceModeControl.set(covered || entry?.showWorkspaceModeControl !== false);
 				entryDetails.set(covered ? undefined : entry?.detailsContainerId);
@@ -208,14 +217,20 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 				}
 				if (this.isDisposed) { return; }
 				entry = initialize ? initialize() : entry;
-				if (options?.preserveChatSource && !entry.chatSource && previousEntry?.chatSource) {
-					entry = { ...entry, chatSource: previousEntry.chatSource };
+				// Keep the editor's entry independent of the Chat source selected when it was opened.
+				const editorEntry = entry;
+				let chatActivityContext: string | undefined;
+				if (entry.content === 'editor' && entry.conversation) {
+					const command = CommandsRegistry.hasCommand(SHOW_CHAT_WORKSPACE_COMMAND) ? SHOW_CHAT_WORKSPACE_COMMAND : 'sessions.open.chat';
+					const chat = previousEntry?.chatSource ? previousEntry
+						: await this.commands.executeCommand<ISessionsEntry>(command, CHAT_WORKSPACE_ENTRY_REQUEST);
+					if (this.isDisposed) return;
+					entry = { ...entry, workspaceMode: 'chat', sidebarContainerId: chat.sidebarContainerId, chatSource: chat.chatSource };
+					if (chat.chatSource) chatActivityContext = previousEntry?.chatActivityContext ?? chat.activityContext;
+					else await this.conversation.setConversationKind(chat.conversationKind ?? 'chat');
 				}
-				if (entry.content === 'editor' && (entry.conversationKind || entry.conversation)) {
-					await this.conversation.setConversationKind(entry.conversationKind ?? (retainedMode === 'code' ? 'code' : 'chat'));
-					if (this.isDisposed) { return; }
-				}
-				if (entry.editorInput) { this.editorEntries.set(extUri.getComparisonKey(entry.editorInput.resource), entry); }
+				if (this.isDisposed) { return; }
+				if (editorEntry.editorInput) { this.editorEntries.set(extUri.getComparisonKey(editorEntry.editorInput.resource), editorEntry); }
 				if (entry.workspaceMode === 'current') {
 					entry = { ...entry, workspaceMode: retainedMode === 'code' ? 'code' : 'chat' };
 				}
@@ -227,7 +242,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 					?? (sameWorkspace ? this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id : undefined)
 					?? defaultNavigation
 					?? SESSIONS_NAVIGATION_CONTAINER_ID;
-				this.activeEntry.set(entry, undefined);
+				this.activeEntry.set(chatActivityContext ? { ...entry, chatActivityContext } : entry, undefined);
 				const productEditor = entry.content === 'editor';
 				const documents = entry.content === 'documents';
 				// Navigation visibility belongs to the window, independently of the page's side content.

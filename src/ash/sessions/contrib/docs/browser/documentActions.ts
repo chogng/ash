@@ -74,7 +74,6 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 			: createMarkdownDocsInput({ resource, label: options.label });
 		const entry = {
 			...artifactDetailEntry, id: example ? 'creator.example.docs' : 'creator.docs',
-			workspaceMode: 'chat', conversationKind: 'chat',
 			detailsContainerId: rich ? DOCS_TOOLS_CONTAINER_ID : undefined,
 			restoreCommand: example ? 'sessions.show.creator' : 'sessions.restore.creatorDocs',
 			editorInput: input,
@@ -92,7 +91,7 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 			}
 			if (!example) remember(resource);
 			return entry;
-		}, { source: options.source, preserveChatSource: true });
+		}, { source: options.source });
 	};
 }
 
