@@ -25,6 +25,7 @@ import '../../contrib/sessions/browser/sessionsActions.js';
 import { groupSessionsForPicker } from '../../contrib/sessions/browser/sessionsPicker.js';
 import '../../contrib/sessions/browser/views/sessionsViewActions.js';
 import { AbstractCustomView } from '../../services/customView/browser/customView.js';
+import { loadSessionGridState, readUntitledSession, saveSessionGridState, storedReference } from '../../services/sessions/browser/sessionGridState.js';
 
 let storageResources: DisposableStore;
 setup(() => { storageResources = new DisposableStore(); });
@@ -746,6 +747,27 @@ test('catalog notifications do not replace the foreground draft', async () => {
 	assert.equal(selectionId(view.activeSelection), draft);
 });
 
+test('Sessions normalizes legacy creation fields on restore and only saves creationKind', () => {
+	const legacy = { untitledSessionId: 'saved-creation', title: 'Draft', workspace: { type: 'current' }, artifactKind: 'docs' };
+	const expected = { untitledSessionId: 'saved-creation', title: 'Draft', workspace: { type: 'current' }, creationKind: 'docs' };
+	for (const version of [1, 2]) {
+		using storage = createTestStorage();
+		const selection = { visible: [{ kind: 'untitled', session: legacy }], active: 0 };
+		storage.store('sessions.viewState', JSON.stringify(version === 1
+			? { version, pages: { chat: selection, code: { visible: [], active: -1 } } }
+			: { version, drafts: [legacy], ...selection }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const restored = loadSessionGridState(storage)!;
+		assert.deepEqual(restored.drafts, [expected]);
+		assert.deepEqual(restored.visible, [{ kind: 'untitled', session: expected }]);
+		saveSessionGridState(storage, { references: restored.visible.map(storedReference), active: 0 }, restored.drafts);
+		const saved = storage.get('sessions.viewState', StorageScope.WORKSPACE)!;
+		assert.doesNotMatch(saved, /artifactKind/u);
+		assert.deepEqual(JSON.parse(saved).drafts, [expected]);
+	}
+	assert.equal(readUntitledSession({ ...legacy, creationKind: 'slides' })?.creationKind, 'slides');
+	assert.equal(readUntitledSession({ ...legacy, creationKind: 'unknown' }), undefined);
+});
+
 test('Sessions merges legacy selections and restores one order, active selection and draft identities after restart', async () => {
 	using storage = createTestStorage();
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
@@ -946,7 +968,7 @@ class FakeSessionService implements ISessionsManagementService {
 		this._onDidChange.fire();
 	}
 
-	setUntitledSessionArtifactKind(): never { throw new Error('Unexpected artifact draft edit'); }
+	setUntitledSessionCreationKind(): never { throw new Error('Unexpected artifact draft edit'); }
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void { }
 	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void { }
 	setUntitledSessionReasoningEffort() { }

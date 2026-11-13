@@ -68,6 +68,8 @@ export interface IChatListItem {
 	readonly id: string;
 	readonly type: ThreadItem['type'] | 'turnError' | 'advisor' | 'hook' | 'skillLoad' | 'voiceTranscript' | 'queuedMessage' | 'historyRedo';
 	readonly content?: readonly ChatContentPart[];
+	/** Published files opened through the host's resource opener. */
+	readonly files?: readonly { readonly resource: string; readonly label: string; }[];
 	/** Resources whose bytes are supplied by the conversation's resource reader. */
 	readonly resources?: readonly {
 		readonly uri: string;
@@ -140,7 +142,7 @@ export function chatQueuedMessageListItems(queue: readonly QueuedMessage[]): rea
 }
 
 /** Projects the canonical durable plan owned by a Turn. */
-export function chatPlanListItem(turn: Turn): IChatListItem | undefined {
+export function chatPlanListItem(turn: Pick<Turn, 'turnId' | 'plan'>): IChatListItem | undefined {
 	if (!turn.plan) return undefined;
 	return chatPlanUpdateListItem(turn.turnId, turn.plan);
 }

@@ -11,6 +11,11 @@ import type { EditorGroupView } from '../../../workbench/browser/parts/editor/ed
 import type { IEditorGroupView } from '../../../workbench/browser/parts/editor/editor.js';
 import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/services/editor/common/editorService.js';
 
+/** An editor page can supply its own window title and actions. The pane retains ownership of the element. */
+export interface ISessionsEditorPage extends IEditorPane {
+	readonly titlebarContent: HTMLElement;
+}
+
 /** Sessions keeps product pages alive independently of per-session document restoration. */
 export class EditorPart extends WorkbenchEditorPart {
 	public readonly pageGroupId: number;

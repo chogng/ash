@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
-import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
-import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifacts/common/model/designDocument.js';
-import { hitTestDesignShapes } from '../../contrib/artifacts/common/model/hitTest.js';
+import { DocumentCommands } from '../../contrib/artifact/common/commands/documentCommands.js';
+import { DesignModel } from '../../contrib/artifact/common/model/designModel.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifact/common/model/designDocument.js';
+import { hitTestDesignShapes } from '../../contrib/artifact/common/model/hitTest.js';
 
 type Frame = Extract<DesignShape, { kind: 'frame'; }>;
 type Text = Extract<DesignShape, { kind: 'text'; }>;

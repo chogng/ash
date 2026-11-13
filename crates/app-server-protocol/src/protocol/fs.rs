@@ -35,6 +35,10 @@ pub enum FsDirectoryTarget {
 pub struct FsResolvePathResult {
     pub root: PathBuf,
     pub target: FsDirectoryTarget,
+    /// The returned route authorizes only the requested file within root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub exact_file: Option<bool>,
 }
 
 /// Stable filesystem entry kind exposed to clients.

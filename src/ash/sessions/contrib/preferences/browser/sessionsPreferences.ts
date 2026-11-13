@@ -68,7 +68,7 @@ import { SessionsStorageContent, storageSettingsTitle } from './sessionsStorageC
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import type { TeamRun } from '../../../services/teams/common/team.js';
 import { OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID } from '../../../common/sessionCommands.js';
-import { DesignConfiguration } from '../../artifacts/common/config/designEditorConfiguration.js';
+import { DesignConfiguration } from '../../artifact/common/config/designEditorConfiguration.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.SessionsSettings,

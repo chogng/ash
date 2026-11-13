@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
@@ -17,7 +18,7 @@ test('Artifact details describes an action before returning its explicit selecti
 	const services = lifetime.add(new InstantiationService());
 	services.registerInstance(IContextViewService, context);
 	const panel = lifetime.add(services.createInstance(ArtifactDetailsContextView, anchor));
-	const action = { id: 'merge', label: 'Merge', description: 'Merge the reviewed head commit', invoke: async () => assert.fail('Selection alone does not invoke an action') };
+	const action = { id: 'merge', label: 'Merge', description: 'Merge the reviewed head commit', prepare: async () => assert.fail('Selection alone does not invoke an action') };
 	const binding = { id: 'binding', artifact: { id: 'pr', resource: 'https://example.test/pr', label: 'PR #12' }, actions: [action] };
 
 	anchor.focus();
@@ -32,6 +33,12 @@ test('Artifact details describes an action before returning its explicit selecti
 	const close = [...document.querySelectorAll<HTMLButtonElement>('[role=dialog] button')].find(button => button.textContent === 'Close artifact details')!;
 	close.click();
 	assert.equal(await dismissed, undefined);
+	assert.equal(document.querySelector('[role=dialog]'), null);
+
+	using cancellation = new CancellationTokenSource();
+	const superseded = panel.choose(binding, undefined, cancellation.token);
+	cancellation.cancel();
+	assert.equal(await superseded, undefined);
 	assert.equal(document.querySelector('[role=dialog]'), null);
 
 	const selected = panel.choose(binding);

@@ -4,7 +4,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionEnvironmentSelection, ModelRef, SessionId, ThreadId, SessionWorkspaceSelection } from './session.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import type { ISessionCreateOptions } from './sessionsProvider.js';
-import type { ArtifactKind } from '../../../common/artifactKind.js';
+import type { ChatCreationKind } from '../../../common/chatCreation.js';
 
 export type SessionsManagementState = 'loading' | 'ready' | 'creating' | 'stopping' | 'archiving' | 'error';
 
@@ -41,7 +41,7 @@ export interface ISessionsManagementService {
 	restoreUntitledSession(session: IUntitledChatSession): void;
 	selectUntitledSession(untitledSessionId: string): void;
 	discardUntitledSession(untitledSessionId: string): void;
-	setUntitledSessionArtifactKind(untitledSessionId: string, kind: ArtifactKind | undefined): void;
+	setUntitledSessionCreationKind(untitledSessionId: string, kind: ChatCreationKind | undefined): void;
 	setUntitledSessionModel(untitledSessionId: string, model: ModelRef | undefined): void;
 	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined, defaults: NonNullable<IUntitledChatSession['modelDefaults']>, unavailableModel?: ModelRef): void;
 	setUntitledSessionReasoningEffort(untitledSessionId: string, effort: NonNullable<IUntitledChatSession['reasoningEffortSelection']> | null): void;

@@ -277,6 +277,7 @@ function fixture(snapshot: readonly IBrowserViewInfo[] = [], pendingSnapshot?: P
 	services.registerInstance(IEditorGroupsService, { getGroup: (id: number) => id === 1 ? group : undefined } as unknown as IEditorGroupsService);
 	services.registerInstance(ICanvasContextService, {
 		contexts: contextOptions.contexts ?? constObservable([]), workingSets: contextOptions.workingSets, onDidRemoveOwner: Event.None,
+		getActiveContext: () => undefined,
 		getContext: owner => contextOptions.contexts?.get().find(context => context.owner.chat.toString() === owner.chat.toString()), getFrontendSessionResource: owner => owner.session,
 		onDidChangeVisibility: visibility.event, isOwnerVisible: owner => visible.has(owner.chat.path.slice(1)), getEditorGroup: () => group as unknown as IEditorGroup,
 	});

@@ -478,19 +478,30 @@ export class DesktopWorkbenchLayout
 		const titlebar = this.view('titlebar').part;
 		const editor = this.view('editor').part;
 		if (titlebar instanceof TitlebarPart && editor instanceof DesktopEditorArea) {
-			this.registerToolHeaderLayout(titlebar, editor);
+			this.registerEditorHeaderLayout(titlebar, editor, mainEditor);
 		}
 	}
 
-	private registerToolHeaderLayout(titlebar: TitlebarPart, editor: DesktopEditorArea): void {
+	private registerEditorHeaderLayout(titlebar: TitlebarPart, editor: DesktopEditorArea, mainEditor: DesktopMainEditorPart | undefined): void {
 		const setHost = (host: HTMLElement | undefined) => editor.setToolHeaderHost(host);
 		const update = this._register(new AnimationFrameScheduler(this.domNode.ownerDocument.defaultView!, () => {
+			const editorVisible = this.isPartVisible('editor');
+			const pageHeader = editorVisible && editor.hasProductPage ? mainEditor?.pageTitlebarContent : undefined;
 			// An empty editor area still owns its side of the split titlebar.
-			const canDock = this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' && !editor.hasProductPage
-				&& this.isPartVisible('sessions') && this.isPartVisible('editor');
-			titlebar.layoutToolHeaders(canDock ? editor.domNode.getBoundingClientRect().left : undefined, setHost);
+			const dockTools = editorVisible && !editor.hasProductPage && this.isPartVisible('sessions')
+				&& this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code';
+			const left = pageHeader || dockTools ? editor.domNode.getBoundingClientRect().left : undefined;
+			titlebar.layoutEditorHeaders(left, pageHeader, setHost);
 		}));
 		this._register(this.onDidLayoutMainContainer(() => update.schedule()));
+		this._register(this.onDidChangePartVisibility(() => update.schedule()));
+		if (mainEditor) {
+			this._register(mainEditor.onDidChangeEditors(event => {
+				if (event.kind === 'groupChanged' && event.groupId === mainEditor.pageGroupId && event.event.kind === 'activeEditorChanged') {
+					update.schedule();
+				}
+			}));
+		}
 		this._register(observeResize([editor.domNode, titlebar.domNode], () => update.schedule(), { box: 'border-box' }));
 		const modeKeys = new Set([SessionsWorkspaceModeContext.key]);
 		this._register(this.contextKeys.onDidChangeContext(event => {

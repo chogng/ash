@@ -897,6 +897,7 @@ pub struct LocalProfileRuntime {
 
 struct LocalProfileStores {
     backup: Arc<ash_state::SqliteBackupStore>,
+    generated_files: Arc<ash_state::SqliteGeneratedFileStore>,
     debug_workspaces: Arc<ash_debug_manager::DebugWorkspaceStore>,
     projects: Arc<ash_projects::ProjectCoordinator>,
     teams: Arc<ash_teams::TeamCoordinator>,
@@ -929,6 +930,9 @@ impl LocalProfileStores {
         };
         Ok(Self {
             backup: Arc::new(ash_state::SqliteBackupStore::open(path).map_err(open_error)?),
+            generated_files: Arc::new(
+                ash_state::SqliteGeneratedFileStore::open(path).map_err(open_error)?,
+            ),
             debug_workspaces: Arc::new(
                 ash_debug_manager::DebugWorkspaceStore::open(path).map_err(open_error)?,
             ),
@@ -2196,6 +2200,10 @@ pub fn open_app_server_with_codebase_providers(
     }
     .with_extension_state_store(extension_state)
     .with_backup_store(stores.backup.clone())
+    .with_generated_file_store(
+        stores.generated_files.clone(),
+        state_runtime.profile_root().join("generated-files"),
+    )
     .with_login_service(login_service)
     .with_chatgpt_account(Arc::new(ash_chatgpt::ChatGptAccount::new(chatgpt_oauth)))
     .with_chatgpt_web_authentication(chatgpt_web)

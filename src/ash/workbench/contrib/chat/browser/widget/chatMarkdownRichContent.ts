@@ -105,8 +105,12 @@ function renderCitations(part: Extract<ChatMarkdownRichPart, { kind: 'citations'
 function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inLink: boolean, textOnly: boolean, clipboardImages?: ReadonlyMap<string, string>): string {
 	switch (part.kind) {
 		case 'markdown': return body;
-		case 'writing':
-			return textOnly || inLink ? body : `<div>${body}${link(`${CHAT_RESPONSE_WRITING_SCHEME}:${index}`, localize('chat.writing.editInDocs', 'Edit in Docs'))}</div>`;
+		case 'writing': {
+			if (textOnly || inLink || part.awaitingPublication) return body;
+			const label = part.resource ? localize('chat.writing.editInDocs', 'Edit in Docs')
+				: localize('chat.writing.editCopyInDocs', 'Edit a copy in Docs');
+			return `<div>${body}${link(`${CHAT_RESPONSE_WRITING_SCHEME}:${index}`, label)}</div>`;
+		}
 		case 'textLiteral': return escapeHTML(part.label);
 		case 'entity': return textOnly || inLink ? escapeHTML(part.entity.label) : link(`${CHAT_RESPONSE_ENTITY_SCHEME}:${index}`, part.entity.label);
 		case 'image': {

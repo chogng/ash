@@ -266,7 +266,7 @@
     "sessions.chatgpt.file": "文件",
     "sessions.chatgpt.interactive": "交互内容",
     "sessions.chatgpt.media": "媒体",
-    "sessions.chatgpt.richContentHelp": "按 Tab 聚焦已完成写作块的「在 Docs 中编辑」，再按 Enter 打开可编辑副本。引用编号可用 Enter 展开来源详情。如果回复中的链接附有来源摘要，可聚焦链接后使用 <keybinding:workbench.action.showHover> 阅读。聚焦回复中的文件链接并按 Enter 可下载文件。媒体内容提供播放控件，附件可在此预览、打开或下载。使用 Tab 在交互预览的控件间移动；图表支持切换类型、缩放和选择数据系列，聚焦图表后可用左右方向键读取数据点。",
+    "sessions.chatgpt.richContentHelp": "按 Tab 聚焦已保存写作块的「在 Docs 中编辑」，再按 Enter 打开已保存的文件。如果看到「在 Docs 中编辑副本」，按 Enter 可打开独立草稿。引用编号可用 Enter 展开来源详情。如果回复中的链接附有来源摘要，可聚焦链接后使用 <keybinding:workbench.action.showHover> 阅读。聚焦回复中的文件链接并按 Enter 可下载文件。媒体内容提供播放控件，附件可在此预览、打开或下载。使用 Tab 在交互预览的控件间移动；图表支持切换类型、缩放和选择数据系列，聚焦图表后可用左右方向键读取数据点。",
     "sessions.chatgpt.imageGalleryHelp": "按 Tab 聚焦图片及其来源链接。按 Enter 预览图片，按 Esc 返回该图片。",
     "sessions.modelPicker.maximumForeground": "突出显示的模型预设的文本颜色。",
     "sessions.modelPicker.maximumBackground": "突出显示的模型预设的主要填充颜色。",

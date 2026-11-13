@@ -106,6 +106,8 @@ export default defineConfig(({ mode, command }) => {
 		define: {
 			__ASH_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled || command === 'build' && !webOnly),
 			'import.meta.env.ASH_SESSIONS_PROFILE': JSON.stringify(codeSessionsProfile),
+			// Product builds drop fixture imports even when NODE_ENV is set to development.
+			'import.meta.env.ASH_DEV_ARTIFACT_EXAMPLES': JSON.stringify(command === 'serve'),
 		},
 		plugins: [
 			...(webOnly ? [webUpdatePlugin()] : []),

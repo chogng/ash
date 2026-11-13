@@ -139,6 +139,8 @@ export class ChatListItemRenderer extends Disposable {
 	private readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement; }>());
 	private readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
 	private readonly mediaChanges = this._register(new MutableDisposable());
+	private readonly fileButtons = this._register(new MutableDisposable<DisposableStore>());
+	private renderedFiles: IChatListItem['files'];
 	private readonly resources = this._register(new MutableDisposable<ChatResourceGroupWidget>());
 	private readonly resourceChanges = this._register(new MutableDisposable());
 	public readonly element: HTMLElement;
@@ -328,6 +330,23 @@ export class ChatListItemRenderer extends Disposable {
 
 	private renderAttachments(): void {
 		if (!this.attachments) return;
+		if (!equals(this.renderedFiles, this.item.files)) {
+			this.fileButtons.clear();
+			this.renderedFiles = this.item.files;
+			if (this.item.files?.length) {
+				const lifetime = this.fileButtons.value = new DisposableStore();
+				const files = h(this.element.ownerDocument, 'div', { className: 'ash-chat-file-buttons' });
+				this.attachments.append(files);
+				lifetime.add(toDisposable(() => files.remove()));
+				for (const file of this.item.files) {
+					lifetime.add(new Button(files, {
+						...defaultButtonStyles, label: file.label, icon: Lxicon.file,
+						presentation: 'secondary',
+						onClick: () => { void this.opener.open(URI.parse(file.resource), { fromUserGesture: true }).catch(error => this.notifications.error(error)); },
+					}));
+				}
+			}
+		}
 		const content = this.item.content ?? [];
 		const changed = () => { this.options.onDidChangeHeight(); this.options.onDidChangeContent(); };
 		const useImagePopup = this.contextKeys.getValue(ChatContextKeys.imagePreviewPresentation.key) === 'popup';
@@ -848,8 +867,9 @@ export class ChatListItemRenderer extends Disposable {
 			if (!/^\d+$/u.test(index) || signal.aborted) return;
 			const content = this.item.markdown?.richContent;
 			const part = content?.parts[Number(index)];
-			if (content && part?.kind === 'writing') {
-				await this.commands.executeCommand(EDIT_CHAT_WRITING_COMMAND_ID, renderChatRichContentHtml(part.markdown, content), part.title);
+			if (content && part?.kind === 'writing' && !part.awaitingPublication) {
+				if (part.resource) await this.opener.open(URI.parse(part.resource), { fromUserGesture: true });
+				else await this.commands.executeCommand(EDIT_CHAT_WRITING_COMMAND_ID, renderChatRichContentHtml(part.markdown, content), part.title);
 			}
 			return;
 		}
@@ -1218,7 +1238,7 @@ function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolea
 		&& (left.loadedSkills?.every((skill, index) => skill === right.loadedSkills?.[index]) ?? true)
 		&& left.hookPart?.run === right.hookPart?.run
 		&& sameFileReferenceDirectory(left, right)
-		&& left.resources === right.resources && equals(left.markdown, right.markdown)
+		&& left.resources === right.resources && equals(left.files, right.files) && equals(left.markdown, right.markdown)
 		&& left.contextEntries === right.contextEntries
 		&& left.conversationLink?.sessionId === right.conversationLink?.sessionId
 		&& left.conversationLink?.threadId === right.conversationLink?.threadId

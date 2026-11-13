@@ -173,7 +173,7 @@ import { mainWindow } from '../../base/browser/window.js';
 import { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
 import { ViewContainerLocation } from '../../workbench/common/views.js';
-import { DesignEditorService, IDesignEditorService } from '../contrib/artifacts/browser/designEditorService.js';
+import { DesignEditorService, IDesignEditorService } from '../contrib/artifact/browser/designEditorService.js';
 import { Disposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { ILanguageService } from '../../editor/common/languages/language.js';
 import { LanguageService } from '../../editor/common/services/languageService.js';
@@ -230,6 +230,8 @@ import { ISessionsWorkspaceContextService } from '../services/workspace/browser/
 import { IMarkerService } from '../../platform/markers/common/markers.js';
 import { MarkerService } from '../../platform/markers/common/markerService.js';
 import { GitHubService as SessionsGitHubService, IGitHubService as ISessionsGitHubService } from '../contrib/github/browser/githubService.js';
+import { ArtifactIntegrationRegistry, IArtifactIntegrationRegistry } from '../../platform/artifactIntegrations/common/artifactIntegrationRegistry.js';
+import { ArtifactIntegrationService, IArtifactIntegrationService } from '../../platform/artifactIntegrations/common/artifactIntegrationService.js';
 import { SessionFileService } from '../contrib/providers/agentHost/browser/sessionFileService.js';
 import { AgentHostFileSystemService, IAgentHostFileSystemService } from '../../workbench/services/agentHost/common/agentHostFileSystemService.js';
 import { IFileService } from '../../platform/files/common/files.js';
@@ -578,6 +580,8 @@ export abstract class Workbench extends Disposable {
 			services, options, configurationService, primary, systemPolicies, extensionReady,
 		);
 		const serviceContributionReady = [configurationReady];
+		services.registerInstance(IArtifactIntegrationRegistry, this._register(new ArtifactIntegrationRegistry()));
+		services.registerInstance(IArtifactIntegrationService, this._register(services.createInstance(ArtifactIntegrationService)));
 		const sessionGitHub = this._register(services.createInstance(SessionsGitHubService));
 		services.registerInstance(ISessionsGitHubService, sessionGitHub);
 		sessionGitHub.initialize();

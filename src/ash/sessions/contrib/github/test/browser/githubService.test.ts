@@ -14,6 +14,8 @@ import type { CancellationToken } from '../../../../../base/common/cancellation.
 import type { IAccountService, AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { GitHubDiffSide, GitHubIssueState, type IGitHubService, type GitHubPullRequest } from '../../../../../platform/github/common/githubService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { ArtifactIntegrationRegistry } from '../../../../../platform/artifactIntegrations/common/artifactIntegrationRegistry.js';
+import { ArtifactIntegrationService } from '../../../../../platform/artifactIntegrations/common/artifactIntegrationService.js';
 // Fixtures expose the public repository-context command consumed by GitHub, independently of Git's runtime.
 interface GitRepository { id: string; label: string; path: string; root: URI; }
 interface GitStatus { repositoryId: string; streamInstanceId: string; historyRevision: number; revision: number; workspacePath: string; head: { type: 'branch'; name: string; objectId: string; upstream: undefined; }; changes: readonly unknown[]; }
@@ -96,10 +98,12 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 		getScopes: () => [...hostScopes.values()],
 		getScope: (sessionId: string) => { const scope = hostScopes.get(parseSessionIdentity(sessionId, 'primary').providerId); if (!scope) throw new CancellationError(); return scope; },
 	} as unknown as ISessionProviderScopeService;
+	const integrations = resources.add(new ArtifactIntegrationRegistry());
+	const artifactIntegrations = resources.add(new ArtifactIntegrationService(integrations));
 	const service = resources.add(new GitHubService(
 		{ get activeSelection() { return selection; }, onDidChange: selectionChanged.event } as ISessionsService,
 		{ get sessions() { return catalog; } } as unknown as ISessionsManagementService,
-		scm, scopes, new NullLoggerService(),
+		scm, scopes, new NullLoggerService(), integrations, artifactIntegrations,
 	));
 	const nextChange = (): Promise<void> => new Promise(resolve => {
 		const listener = resources.add(service.onDidChange(() => { listener.dispose(); resolve(); }));
@@ -416,6 +420,27 @@ suite('Session GitHub associations', () => {
 		assert.deepEqual(merged, []);
 		await context.service.invokePullRequestArtifact('session', request, async binding => binding.actions[0]);
 		assert.deepEqual(merged, ['b'.repeat(40)]);
+	});
+
+	test('PR artifact action is retired when the conversation changes and returns to the same PR', async () => {
+		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7, isArtifact: true };
+		let merges = 0;
+		using context = fixture({
+			listSessionPullRequests: async () => [reference],
+			readPullRequest: async () => ({ ...pullRequest, mergeable: true }),
+			readRepository: async () => ({ defaultBranch: 'main', fullName: 'team/repo', allowMergeCommit: true, allowSquashMerge: false, allowRebaseMerge: false, allowAutoMerge: false }),
+			mergePullRequest: async () => { merges++; return { merged: true, commit: pullRequest.headCommit, message: '' }; },
+		});
+		const [request] = await context.load();
+		await assert.rejects(context.service.invokePullRequestArtifact('session', request, async (binding, token) => {
+			context.select({ kind: 'session', active: { session, threadId: 'another-thread' } });
+			context.select({ kind: 'session', active: { session, threadId: 'thread' } });
+			assert.equal(token.isCancellationRequested, true);
+			return binding.actions[0];
+		}), CancellationError);
+		assert.equal(merges, 0);
+		await context.service.invokePullRequestArtifact('session', request, async binding => binding.actions[0]);
+		assert.equal(merges, 1);
 	});
 
 	test('a required check that has not reported blocks immediate merge but leaves auto-merge available', async () => {
@@ -771,6 +796,36 @@ suite('sessionGitHub browser component', () => {
 		})))).toEqual([{ number: 7, method: 'squash', commit: '7'.repeat(40) }]);
 		await actions.click();
 		await expect(action).toHaveCount(0);
+	});
+
+	test('the shared artifact picker opens conversation results and authorizes PR actions', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessionGitHub.html');
+		await page.evaluate(() => sessionStorage.setItem('test-backend-pr-references', JSON.stringify([{
+			repository: { host: 'github.com', owner: 'team', name: 'one' }, number: 7,
+			isArtifact: true, artifactId: 'a'.repeat(32), artifactOrigin: { chat: 'thread', turnId: 'turn' },
+		}])));
+		await page.goto('/sessionGitHub.html?sessionArtifacts');
+		await expect(page.locator('.ash-session-chat-input-pr').filter({ hasText: 'one #7' })).toBeVisible();
+		const entry = page.getByRole('button', { name: 'Artifacts', exact: true });
+		const picker = page.getByRole('dialog', { name: 'Artifacts', exact: true });
+		for (const label of ['Release plan', 'Screenshot', 'output.txt']) {
+			await entry.press('Enter');
+			await picker.getByRole('option', { name: label, exact: true }).click();
+			await expect(picker).toHaveCount(0);
+		}
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.opened)).toEqual([
+			'ash-chat-artifact:/plan.md', 'ash-chat-artifact:/screenshot.png', 'file:///workspace/output.txt',
+		]);
+		await entry.press('Enter');
+		const pr = picker.getByRole('option', { name: /one #7/ });
+		await expect(pr).toBeVisible();
+		await pr.getByRole('button', { name: 'PR Actions' }).click();
+		await expect(page.getByRole('dialog', { name: 'Merge actions for team/one #7' })).toBeVisible();
+		await page.getByText('Enable GitHub auto-merge (Squash and merge)', { exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/autoMerge').length)).toBe(1);
+		await page.evaluate(() => window.ashSessionGitHub.selectDraft());
+		await expect(entry).toBeHidden();
 	});
 
 	test('Chinese PR Autopilot authorizes and pauses one persisted artifact generation', async function () {

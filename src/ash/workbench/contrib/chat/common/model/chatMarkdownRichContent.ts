@@ -26,7 +26,7 @@ export interface ChatMarkdownEntity {
 
 export type ChatMarkdownRichPart =
 	| ({ readonly kind: 'markdown'; } & ChatMarkdownRichBody)
-	| ({ readonly kind: 'writing'; readonly title?: string; } & ChatMarkdownRichBody)
+	| ({ readonly kind: 'writing'; readonly title?: string; readonly resource?: string; readonly awaitingPublication?: boolean; } & ChatMarkdownRichBody)
 	| ({ readonly kind: 'box' | 'row' | 'text'; readonly style: ChatMarkdownRichStyle; readonly fallback?: ChatMarkdownRichLink; } & ChatMarkdownRichBody)
 	| ({ readonly kind: 'grid'; readonly columns: 1 | 2 | 3 | 4; readonly style: ChatMarkdownRichStyle; } & ChatMarkdownRichBody)
 	| ({ readonly kind: 'gridItem'; } & ChatMarkdownRichBody)

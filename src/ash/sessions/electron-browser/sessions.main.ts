@@ -313,6 +313,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					}
 					: undefined,
 				contributionIds: [
+					'sessions.generatedFileAutoSave',
+					'sessions.generatedFileOpener',
 					'sessions.projectMaterialFiles',
 					'sessions.chat.copyActionRendering',
 					'chat.queuePickerRendering',

@@ -17,7 +17,7 @@ import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/ser
 import type { Part } from '../../../workbench/browser/part.js';
 import { DockedAuxiliaryBarController } from '../dockedAuxiliaryBarController.js';
 import { Menus } from '../menus.js';
-import { EditorPart } from './editorPart.js';
+import { EditorPart, type ISessionsEditorPage } from './editorPart.js';
 import { DesktopAuxiliaryBarPart } from './desktopAuxiliaryBarPart.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import './media/editorPart.css';
@@ -132,6 +132,12 @@ export class DesktopMainEditorPart extends EditorPart {
 	}
 
 	public get detailsOpen(): boolean { return this.detailsRequested; }
+	public get pageTitlebarContent(): HTMLElement | undefined {
+		if (!this.isGroupVisible(this.pageGroupId)) return undefined;
+		const pane: Partial<ISessionsEditorPage> | undefined = this.groups.find(group => group.id === this.pageGroupId)?.activePane;
+		return pane?.titlebarContent;
+	}
+
 	public get detailsVisible(): boolean {
 		return this.detailsRequested && this.hostVisible && !this.isGroupVisible(this.pageGroupId)
 			&& this.fileGroups.some(group => this.isGroupVisible(group.id));

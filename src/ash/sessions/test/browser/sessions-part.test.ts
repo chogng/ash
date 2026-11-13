@@ -20,7 +20,7 @@ import { ISessionChangesService } from '../../contrib/changes/common/sessionChan
 import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
-import { IAgentHostInputCompletionService, IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentHostInputCompletionService, IAgentThreadService, IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { createTestLanguageModelToolsService } from '../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { ISessionGitActionsService, SessionGitActionsService } from '../../services/sessions/browser/sessionGitActionsService.js';
@@ -75,6 +75,8 @@ import type { ISession, IUntitledChatSession } from '../../services/sessions/com
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { ISessionsService, SessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
+import { IGeneratedFilesService } from '../../services/generatedFiles/common/generatedFilesService.js';
+import { createTestGeneratedFilesService } from '../common/testGeneratedFilesService.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -112,7 +114,7 @@ for (const [name, value] of Object.entries({
 Object.defineProperty(browserEnvironment.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
 const { registerTitleService } = await import('../../services/title/browser/titleService.js');
-await import('../../contrib/artifacts/browser/designEditor.contribution.js');
+await import('../../contrib/artifact/browser/designEditor.contribution.js');
 await import('../../../workbench/contrib/chat/browser/chat.shared.contribution.js');
 const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
 const { NativeChatPaneFactory } = await import('../../contrib/chat/browser/nativeChatPaneFactory.js');
@@ -182,7 +184,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 			if (activeUntitledSessionId === untitledSessionId) activeUntitledSessionId = untitledSessions[0]?.untitledSessionId;
 			onDidChange.fire();
 		},
-		setUntitledSessionArtifactKind() { throw new Error('Unexpected artifact draft edit'); },
+		setUntitledSessionCreationKind() { throw new Error('Unexpected artifact draft edit'); },
 		setUntitledSessionModel() { },
 		setUntitledSessionDefaultModel() { },
 		setUntitledSessionReasoningEffort() { },
@@ -321,6 +323,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(IHostService, new TestHostService());
 	registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 	services.registerInstance(IAgentVoiceService, createDisconnectedRendererApi().agentVoice);
+	services.registerInstance(IAgentThreadService, createDisconnectedRendererApi().thread);
 	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -366,6 +369,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(INotificationService, notifications);
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
+	services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
 	services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: dom.window.document.body })));
 	registerTestVoiceInputServices(services);
 	services.registerInstance(ISessionsManagementService, sessionService);

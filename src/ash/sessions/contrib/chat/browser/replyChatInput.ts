@@ -18,10 +18,11 @@ import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browse
 import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
-import { ChatInputArtifactPill, getArtifactDraftHelp, type ArtifactDraftModel } from './chatInputArtifactPill.js';
+import { ChatInputArtifactPill, getChatCreationHelp, type ChatCreationModel } from './chatInputArtifactPill.js';
 import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
 import { getNativeChatAccessibilityHelp } from './nativeChatAccessibilityHelp.js';
+import { getSessionArtifactsAccessibilityHelp, SessionArtifacts, type SessionArtifactSource } from './sessionArtifacts.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
 import './media/nativeChatInput.css';
@@ -52,7 +53,7 @@ export class ReplyChatInputFactory {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) { }
 
-	create(container: HTMLElement, delegate: ChatInputDelegate, model: IChatWidgetModel, options: ReplyChatInputOptions): ChatInputPart {
+	create(container: HTMLElement, delegate: ChatInputDelegate, model: IChatWidgetModel & SessionArtifactSource, options: ReplyChatInputOptions, owner: DisposableStore): ChatInputPart {
 		let draftPicker: ReplyChatDraftPicker | undefined;
 		const createDraftPicker = options.createDraftPicker;
 		const input = this.createInput(container, {
@@ -72,8 +73,9 @@ export class ReplyChatInputFactory {
 			renderLeadingFooter: createDraftPicker && (footer => draftPicker = createDraftPicker(footer)),
 			attachMenuHost: { getProjectActions: () => draftPicker?.getAttachMenuProjectActions?.() },
 			inputLabel: options.inputLabel,
-			accessibilityHelp: options.accessibilityHelp,
+			accessibilityHelp: () => [options.accessibilityHelp?.(), getSessionArtifactsAccessibilityHelp()].filter(Boolean).join('\n'),
 		});
+		owner.add(this.instantiation.createInstance(SessionArtifacts, input, model));
 		const draftScope = options.persistentDraftScope;
 		if (draftScope) {
 			this.bindDraft(input, model, identity => `${draftScope}:${identity}`);
@@ -83,7 +85,7 @@ export class ReplyChatInputFactory {
 		return input;
 	}
 
-	createSessionInput(container: HTMLElement, delegate: ChatInputDelegate, model: IChatWidgetModel & Partial<ArtifactDraftModel>, owner: DisposableStore): ChatInputPart {
+	createSessionInput(container: HTMLElement, delegate: ChatInputDelegate, model: IChatWidgetModel & Partial<ChatCreationModel> & SessionArtifactSource, owner: DisposableStore): ChatInputPart {
 		let submitted = false;
 		const input = this.createInput(container, {
 			...delegate,
@@ -99,9 +101,10 @@ export class ReplyChatInputFactory {
 				}
 			},
 		}, { placeholder: '', height: { minimum: 32, maximum: 240 } }, {
-			accessibilityHelp: () => `${getNativeChatAccessibilityHelp()}\n${getArtifactDraftHelp()}`,
+			accessibilityHelp: () => `${getNativeChatAccessibilityHelp()}\n${getChatCreationHelp()}\n${getSessionArtifactsAccessibilityHelp()}`,
 			statusText: (state, _contexts, text) => !state.aiDisabled && model.untitledSessionId !== undefined && state.phase === 'loading' && !state.error ? '' : text,
 		});
+		owner.add(this.instantiation.createInstance(SessionArtifacts, input, model));
 		const parent = input.element;
 		parent.classList.add('ash-sessions-native-chat-input', 'native-chat-composer');
 		input.composerForm.classList.add('ash-sessions-chat-input-card', 'floating-card', 'stacked');

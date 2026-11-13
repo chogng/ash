@@ -44,6 +44,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					const windowIds = new Set<number>();
 					for (const mode of ['ide', 'agents'] as const) {
 						const page = mode === 'ide' ? workbench.page : await workbench.openAgentsWindow('electron');
+						if (mode === 'agents') {
+							await page.locator('.ash-window-mode-control').getByRole('button', { name: locale === 'zh-CN' ? '代码' : 'Code', exact: true }).click();
+						}
 						await installMainChannelTestClient(page);
 						const commands = new QuickAccess(page);
 						const select = async (title: string, expectedThread: string) => {
@@ -191,6 +194,7 @@ exports.activate = context => {
 		const message = chat.getByRole('textbox', { name: 'Chat message', exact: true });
 		await message.focus(); await page.keyboard.insertText('Keep my draft while opening Canvas');
 		await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await page.getByRole('menuitem', { name: 'Search attachments', exact: true }).press('Enter');
 		await workbench.quickaccess.select('Canvas…');
 		await expect(page.getByRole('option', { name: /Needs input/ })).toHaveCount(0);
 		await workbench.quickaccess.select('Fixture board');
@@ -218,6 +222,7 @@ exports.activate = context => {
 		await expect(page.locator('.ash-browser-editor')).toHaveCount(0);
 		await testInfo.attach('registered-canvas', { body: await page.screenshot(), contentType: 'image/png' });
 		const agents = await workbench.openAgentsWindow('electron');
+		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await agents.locator('.ash-sessions-list-item').filter({ hasText: source.title }).first().click();
 		await expect(agents.locator(`[data-thread-id="${source.threads[0]!.threadId}"]:visible`).first()).toBeVisible();
 		const agentCommands = new QuickAccess(agents);
@@ -276,6 +281,7 @@ exports.activate = context => {
 		await expect.poll(async () => (await agentViews()).some(view => view.id === agentNative.id)).toBe(false);
 		await expect.poll(async () => (await menus.inspect(application, newChatMenu)).some(item => item.label === 'Canvas')).toBe(false);
 		await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await page.getByRole('menuitem', { name: 'Search attachments', exact: true }).press('Enter');
 		await expect(page.getByRole('option', { name: 'Canvas…', exact: true })).toHaveCount(0);
 		await page.keyboard.press('Escape');
 	} finally {
@@ -521,12 +527,20 @@ test('a secondary SSH host presents and pins its own registered Canvas and recon
 		const codeMode = agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
 		if (!await codeMode.isVisible()) { await agents.locator('[data-part="titlebar"]').getByRole('button', { name: 'Show sidebar', exact: true }).click(); }
 		await codeMode.click();
-		const connectHost = async () => {
-			await commands.runCommand('sessions.action.manageAgentHosts');
-			await commands.select('Connect a Saved SSH Host…');
-			await commands.select('canvas-ssh-host');
+		const hosts = agents.getByRole('dialog', { name: 'Remote Environments', exact: true });
+		const host = hosts.getByRole('row').filter({ hasText: 'canvas-ssh-host' });
+		const closeHosts = () => hosts.getByRole('button', { name: 'Close', exact: true }).click();
+		const connectHost = async (trustWorkspace: boolean) => {
+			await host.getByRole('button', { name: 'Connect: canvas-ssh-host', exact: true }).click();
+			if (trustWorkspace) {
+				const trust = agents.getByRole('dialog', { name: 'Trust this workspace?', exact: true });
+				await trust.getByRole('button', { name: 'Trust and Open', exact: true }).click();
+			}
+			await expect(host).toContainText('Connected', { timeout: 30_000 });
+			await closeHosts();
 		};
-		await connectHost();
+		await commands.runCommand('sessions.action.manageAgentHosts');
+		await connectHost(true);
 		await agents.locator('.ash-sessions-list-item').filter({ hasText: source.title }).first().click();
 		const remoteThread = threadIdentity(`ssh-agent-host:${JSON.stringify([ssh.host, remoteRoot])}`, source.threads[0]!.threadId, 'local-agent-host');
 		await expect(agents.locator(`[data-thread-id=${JSON.stringify(remoteThread)}]:visible`).first()).toBeVisible();
@@ -548,11 +562,14 @@ test('a secondary SSH host presents and pins its own registered Canvas and recon
 		await fullPage.locator('.ash-session-canvas-page').focus(); await agents.keyboard.press('Alt+F2');
 		await expect(agents.getByRole('dialog').getByRole('textbox')).toHaveValue(/Remote provider button/);
 		await agents.keyboard.press('Escape');
-		await commands.runCommand('sessions.action.manageAgentHosts'); await commands.select('canvas-ssh-host');
+		await commands.runCommand('sessions.action.manageAgentHosts');
+		await host.getByRole('button', { name: 'Disconnect: canvas-ssh-host', exact: true }).click();
+		await expect(host.getByRole('button', { name: 'Connect: canvas-ssh-host', exact: true })).toBeVisible();
+		await closeHosts();
 		await expect(fullPage.getByRole('status').filter({ hasText: /reconnect/ })).toBeVisible();
 		await expect(pin).toBeVisible();
 		await fullPage.getByRole('button', { name: 'Reconnect Canvas', exact: true }).click();
-		await commands.select('Connect a Saved SSH Host…'); await commands.select('canvas-ssh-host');
+		await connectHost(false);
 		await expect.poll(async () => (await views()).find(view => view.id === native.id)?.state.visible, { timeout: 30_000 }).toBe(true);
 		expect((await views()).filter(view => view.canvas?.canvasId === 'board').map(view => view.id)).toEqual([native.id]);
 		await expectPinnedCanvasBounds(desktop.application, agents, native);

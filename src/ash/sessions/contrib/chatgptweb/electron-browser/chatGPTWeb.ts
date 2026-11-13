@@ -133,7 +133,7 @@ export class ChatGPTDraftModelSource implements ChatDraftModelSource {
 			// Each source owns its draft. Use Ash's text only when the destination has no draft content.
 			if (!destination.draft && !destination.attachments.length && !destination.draftTarget) {
 				if (capture) this.chat.setDraft(capture.draft.text);
-				if (source.artifactDraftKind) this.chat.setDraftArtifactKind(source.artifactDraftKind);
+				if (source.creationKind) this.chat.setDraftCreationKind(source.creationKind);
 			}
 			await this.commands.executeCommand(SHOW_CHATGPT_COMMAND);
 		} finally {

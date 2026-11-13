@@ -61,6 +61,7 @@ import { suite, suiteSetup, test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { createCodeEditorServices, createTestCodeEditor, registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
+import { BrowserLayoutService, ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { chatListItem, chatTranscriptListItems } from '../../common/model/chatViewModel.js';
 import type { ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
@@ -80,9 +81,15 @@ import { createTestPathService } from '../../../../test/common/workbenchHostTest
 
 const document = browserEnvironment.window.document;
 
+function createChatListTestServices(resources: DisposableStore, parent?: Parameters<typeof createCodeEditorServices>[1]) {
+	const services = createTestEditorServices(undefined, createCodeEditorServices(resources, parent));
+	services.registerSingleton(ILayoutService, () => new BrowserLayoutService({ root: document.body }));
+	return services;
+}
+
 test('Chat updates a structured Turn plan in place and keeps step text literal', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 	const plan = { id: 'plan', type: 'plan' as const, text: 'Prepare files', transient: false };
 	const step = 'Review [untrusted](https://example.test)';
@@ -99,7 +106,7 @@ test('Chat updates a structured Turn plan in place and keeps step text literal',
 
 test('Chat renders connection-qualified conversation links without permitting script links', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const opened: string[] = [];
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), { onDidRequestLink: (target: string) => opened.push(target) });
 	const link = buildOpenSessionLinkUri('session-1', 'peer-1', 'local').toString();
@@ -113,7 +120,7 @@ test('Chat renders connection-qualified conversation links without permitting sc
 
 test('Chat exposes explicit file references as streamed destinations complete', async () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const opened: string[] = [];
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), { onDidRequestLink: (target: string) => opened.push(target) });
 	const href = 'file:///workspace/src/main.ts#L12';
@@ -137,7 +144,7 @@ test('Chat exposes explicit file references as streamed destinations complete', 
 
 test('Chat file anchors copy the focused resource and use the most specific editor association in either group', async () => {
 	using resources = new DisposableStore();
-	const workbench = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const workbench = resources.add(createChatListTestServices(resources));
 	const services = resources.add(workbench.createChild());
 	const copy = mock.fn<IClipboardService['writeResources']>(async () => { });
 	const openEditor = mock.fn<IEditorService['openEditor']>(async () => { });
@@ -197,7 +204,7 @@ test('Chat opens explicit and plain-text file references at the correct line in 
 		await writeFile(join(second, 'src/suite.rs'), 'second checkout\nsecond line\nthird line\n');
 
 		using resources = new DisposableStore();
-		const workbench = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		const workbench = resources.add(createChatListTestServices(resources));
 		const services = resources.add(workbench.createChild());
 		const files = resources.add(new FileService());
 		resources.add(files.registerProvider('file', resources.add(new DiskFileSystemProvider([URI.file(first), URI.file(second)]))));
@@ -268,7 +275,7 @@ test('Chat opens explicit and plain-text file references at the correct line in 
 
 test('Chat tips use injected Markdown opening and share dismissal across composers', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const dismissed = resources.add(new Emitter<void>());
 	let visible = true;
 	const tips = {
@@ -306,7 +313,7 @@ suite('Chat hidden response resources', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('hidden response code blocks release documents and restore selection with current content', () => {
 		using resources = new DisposableStore();
-		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		const services = resources.add(createChatListTestServices(resources));
 		services.registerInstance(IAccessibilityService, {
 			onDidChangeScreenReaderOptimized: Event.None,
 			onDidChangeReducedMotion: Event.None,
@@ -348,7 +355,7 @@ suite('Chat hidden response resources', () => {
 
 test('code blocks inherit editor typography, retain their nodes on updates, and reset independently of message input', async () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'Fira Code');
 	await configuration.updateValue(CodeEditorConfiguration.fontSize, 16);
@@ -422,7 +429,7 @@ test('tool evidence is Turn-scoped and keeps result-before-call and orphan outpu
 
 test('accessible transcript reads current retained messages in display order after updates and removals', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const container = document.createElement('main'); document.body.append(container);
 	resources.add(toDisposable(() => container.remove()));
 	using widget = services.createInstance(ChatListWidget, container, {});
@@ -442,7 +449,7 @@ test('accessible transcript reads current retained messages in display order aft
 
 test('streaming tool content preserves disclosure focus, failure state and restored expansion', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	services.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
 	const container = document.createElement('main');
 	document.body.append(container);
@@ -498,7 +505,7 @@ test('tool invocation summaries and sections use the Chinese locale', () => {
 	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		using resources = new DisposableStore();
-		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		const services = resources.add(createChatListTestServices(resources));
 		services.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
 		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 		widget.render(chatTranscriptListItems([{ type: 'item', entryId: 'call', turnId: 'turn', transient: false, item: { type: 'toolCall', itemId: 'call', turnId: 'turn', toolCallId: 'read', name: 'read', argumentsJson: '{}' } }]));
@@ -512,7 +519,7 @@ test('tool invocation summaries and sections use the Chinese locale', () => {
 
 test('streaming Markdown reuses static blocks and code editors, then releases rewritten code', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 	const text = 'Stable text.\n\n```ts\nconst a = 1;';
 	widget.render([{ id: 'reply', type: 'agentMessage', text, transient: true }]);
@@ -531,7 +538,7 @@ test('streaming Markdown reuses static blocks and code editors, then releases re
 
 test('Skill diagnostic contribution handles open, edits, language changes and disposal without removing other markers', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	services.registerInstance(IPathService, createTestPathService({}, services.get(IWorkspaceContextService)));
 	services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 	const models = services.get(IModelService);
@@ -570,7 +577,7 @@ test('Skill diagnostic contribution handles open, edits, language changes and di
 
 test('Skill diagnostics follow shared editor bindings and cancel validation after the last editor detaches', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	services.registerInstance(IPathService, createTestPathService({}, services.get(IWorkspaceContextService)));
 	services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 	const models = services.get(IModelService);
@@ -608,7 +615,7 @@ test('Skill diagnostics follow shared editor bindings and cancel validation afte
 
 test('renders finalized web sources with response actions and code matches in a separate disclosure', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 	document.body.append(widget.element);
 	resources.add(toDisposable(() => widget.element.remove()));
@@ -663,7 +670,7 @@ test('renders finalized web sources with response actions and code matches in a 
 
 test('streamed memory references retain their buttons, code editor and focus as new references arrive', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const opened: string[] = [];
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), { onDidRequestMemoryReference: (value: string) => opened.push(value) });
 	document.body.append(widget.element);
@@ -739,7 +746,7 @@ test('Skill resource content provider shares readonly models and cancels a late 
 for (const classPrefix of ['ash-chat', 'ash-native-chat']) {
 	test(`${classPrefix} shows exact accepted context as inert text and preserves its disclosure and focus`, () => {
 		using resources = new DisposableStore();
-		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		const services = resources.add(createChatListTestServices(resources));
 		const container = document.createElement('main'); document.body.append(container); resources.add(toDisposable(() => container.remove()));
 		using widget = services.createInstance(ChatListWidget, container, { classPrefix });
 		const items = (content: string) => chatTranscriptListItems([{ type: 'item', entryId: 'context', turnId: 'turn', transient: false, item: { type: 'userContext', itemId: 'context', turnId: 'turn', name: 'Context name', content } }]);
@@ -762,7 +769,7 @@ for (const classPrefix of ['ash-chat', 'ash-native-chat']) {
 
 test('a saved pull request context opens the original PR above the first message', async () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const url = 'https://github.com/team/repo/pull/7';
 	const opened: string[] = [];
 	services.get(IOpenerService).setDefaultExternalOpener({ openExternal: async href => { opened.push(href); return true; } });
@@ -798,7 +805,7 @@ suite('Chat message copy ownership', () => {
 			public override async writeText(text: string): Promise<void> { writes++; await entered.complete(text); await completed.p; }
 		}());
 		parent.registerInstance(IClipboardService, clipboard);
-		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources, parent)));
+		const services = resources.add(createChatListTestServices(resources, parent));
 		resources.add(services.createInstance(ChatCopyActionRendering));
 		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 		document.body.append(widget.element);

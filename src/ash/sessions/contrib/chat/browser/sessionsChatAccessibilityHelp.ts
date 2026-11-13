@@ -1,11 +1,13 @@
 import { localize } from '../../../../nls.js';
 import { getSessionsListAttentionHelp, getSessionsListGroupingHelp } from '../../sessions/browser/views/sessionsListActions.js';
-import { getArtifactDraftHelp } from './chatInputArtifactPill.js';
+import { getChatCreationHelp } from './chatInputArtifactPill.js';
+import { getSessionArtifactsAccessibilityHelp } from './sessionArtifacts.js';
 
 /** Product-specific help appended by the shared input's accessibility provider. */
 export function getSessionsChatAccessibilityHelp(): string {
 	return [
-		getArtifactDraftHelp(),
+		getChatCreationHelp(),
+		getSessionArtifactsAccessibilityHelp(),
 		localize('sessions.chat.tipCarouselHelp', 'In a new Code session, use Previous tip and Next tip to browse the tips above the input. Dismiss tip closes the card.'),
 		getSessionsListGroupingHelp(),
 		getSessionsListAttentionHelp(),

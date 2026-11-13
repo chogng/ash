@@ -88,6 +88,8 @@ mod browser_file_access;
 #[path = "server/request_processors/browser.rs"]
 mod browser_processor;
 mod browser_workspace;
+#[path = "server/request_processors/generated_files.rs"]
+mod generated_files_processor;
 mod host_credentials;
 pub(crate) use browser_workspace::WebWorkspaceRollback;
 
@@ -314,6 +316,7 @@ pub struct AppServer {
         Option<Arc<crate::session_runtime_provider::SessionRuntimeProvider>>,
     pub(crate) task_delivery: Option<Arc<task_delivery::Runtime>>,
     backup_processor: backup_processor::BackupRequestProcessor,
+    generated_files_processor: generated_files_processor::GeneratedFileRequestProcessor,
     diff_processor: diff_operations::DiffRequestProcessor,
     queue: Option<Arc<queue::QueueStore>>,
     queue_directory: Option<String>,
@@ -1246,6 +1249,22 @@ impl AppServer {
         self
     }
 
+    pub(crate) fn with_generated_file_store(
+        mut self,
+        store: Arc<ash_state::SqliteGeneratedFileStore>,
+        directory: std::path::PathBuf,
+    ) -> Self {
+        self.generated_files_processor =
+            generated_files_processor::GeneratedFileRequestProcessor::new(store, Some(directory));
+        self.generated_files_processor.publish_native(&self.updates);
+        let executor = self
+            .turn_executor_snapshot()
+            .with_thread_updates(self.thread_update_sink());
+        self.turn_backend.install_executor(executor.clone());
+        self.env_runtime_mut().turn_executor = executor;
+        self
+    }
+
     pub(crate) fn with_backup_store(mut self, backups: Arc<ash_state::SqliteBackupStore>) -> Self {
         self.backup_processor = backup_processor::BackupRequestProcessor::new(backups);
         self
@@ -1341,6 +1360,7 @@ impl AppServer {
             threads: Arc::clone(&threads),
             grants: Arc::clone(&directory_grants),
             updates: updates.clone(),
+            generated_files: Default::default(),
         }))
         .with_extensions(Arc::clone(&agent_extensions));
         let multi_agent = Arc::new(MultiAgentCoordinator::new(
@@ -1431,6 +1451,8 @@ impl AppServer {
             resources,
             asset_processor: asset_operations::AssetsRequestProcessor::default(),
             backup_processor: backup_processor::BackupRequestProcessor::default(),
+            generated_files_processor:
+                generated_files_processor::GeneratedFileRequestProcessor::default(),
             diff_processor: diff_operations::DiffRequestProcessor::new(diff_handler),
             memories: None,
             approval_environment: None,
@@ -2868,17 +2890,7 @@ impl AppServer {
         let mut executor = self
             .turn_executor_snapshot()
             .with_tool_service(tools, policy)
-            .with_thread_updates(Arc::new(AppServerThreadUpdates {
-                client_host: Arc::clone(&self.client_host),
-                threads: Arc::clone(&self.threads),
-                grants: self
-                    .env_runtime
-                    .read()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .dir_grants
-                    .clone(),
-                updates: self.updates.clone(),
-            }));
+            .with_thread_updates(self.thread_update_sink());
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;
@@ -2947,18 +2959,23 @@ impl AppServer {
             self.turn_executor_snapshot(),
             self.turn_backend.as_ref(),
             self.thread_worktree_binder.as_ref(),
-            Arc::new(AppServerThreadUpdates {
-                client_host: Arc::clone(&self.client_host),
-                threads: Arc::clone(&self.threads),
-                grants: self
-                    .env_runtime
-                    .read()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .dir_grants
-                    .clone(),
-                updates: Arc::clone(&self.updates),
-            }),
+            self.thread_update_sink(),
         )
+    }
+
+    fn thread_update_sink(&self) -> Arc<AppServerThreadUpdates> {
+        Arc::new(AppServerThreadUpdates {
+            client_host: Arc::clone(&self.client_host),
+            threads: Arc::clone(&self.threads),
+            grants: self
+                .env_runtime
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .dir_grants
+                .clone(),
+            updates: Arc::clone(&self.updates),
+            generated_files: self.generated_files_processor.clone(),
+        })
     }
 
     pub(super) fn bind_session_runtime(
@@ -4713,6 +4730,16 @@ impl AppServer {
             Some(ClientMethod::FsReadFile) => self
                 .fs_processor()
                 .fs_read_file(connection.connection_id, &request.params),
+            Some(ClientMethod::GeneratedFileRegister) => self.generated_files_processor.register(
+                connection.authority,
+                &request.params,
+                &self.updates,
+            ),
+            Some(ClientMethod::GeneratedFileList) => self.generated_files_processor.list(
+                connection.authority,
+                &request.params,
+                &self.updates,
+            ),
             Some(ClientMethod::BackupWorkspaces) => self
                 .backup_processor
                 .workspaces(connection.authority, &request.params),
@@ -5182,11 +5209,15 @@ struct AppServerThreadUpdates {
     client_host: Arc<crate::client_host::ClientHost>,
     threads: Arc<ThreadController>,
     updates: Arc<UpdateBroker>,
+    generated_files: generated_files_processor::GeneratedFileRequestProcessor,
 }
 
 impl ThreadUpdateSink for AppServerThreadUpdates {
     fn publish(&self, update: ThreadUpdateEnvelope) {
         if let ash_protocol::ThreadUpdate::Committed { event } = &update.update {
+            if matches!(event, ash_protocol::ThreadEvent::TurnCompleted { .. }) {
+                self.generated_files.publish_native(&self.updates);
+            }
             match event {
                 ash_protocol::ThreadEvent::TurnCompleted { turn_id, .. }
                 | ash_protocol::ThreadEvent::TurnFailed { turn_id, .. }

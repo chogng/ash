@@ -18,6 +18,22 @@ use tempfile::NamedTempFile;
 /// the previous destination intact. A parent-directory sync failure is reported
 /// after the replacement has become visible.
 pub fn write_atomically(write_path: &Path, contents: &[u8]) -> io::Result<()> {
+    publish_file(write_path, contents, Publication::Replace)
+}
+
+/// Durably creates a regular file if missing. A retry accepts an existing regular file
+/// without modifying it, but rejects symlinks and directories.
+pub fn ensure_file_atomically(write_path: &Path, contents: &[u8]) -> io::Result<()> {
+    publish_file(write_path, contents, Publication::CreateIfMissing)
+}
+
+#[derive(Clone, Copy)]
+enum Publication {
+    Replace,
+    CreateIfMissing,
+}
+
+fn publish_file(write_path: &Path, contents: &[u8], publication: Publication) -> io::Result<()> {
     #[cfg(windows)]
     let filesystem_path = filesystem_path(write_path)?;
     #[cfg(windows)]
@@ -33,10 +49,18 @@ pub fn write_atomically(write_path: &Path, contents: &[u8]) -> io::Result<()> {
     } else {
         parent
     };
-    let permissions = match std::fs::metadata(write_path) {
-        Ok(metadata) => Some(metadata.permissions()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
-        Err(error) => return Err(error),
+    let permissions = match publication {
+        Publication::Replace => match std::fs::metadata(write_path) {
+            Ok(metadata) => Some(metadata.permissions()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error),
+        },
+        Publication::CreateIfMissing => {
+            if is_existing_file(write_path)? {
+                return sync_parent(parent);
+            }
+            None
+        }
     };
     std::fs::create_dir_all(parent)?;
     let mut temporary = NamedTempFile::new_in(parent)?;
@@ -45,8 +69,33 @@ pub fn write_atomically(write_path: &Path, contents: &[u8]) -> io::Result<()> {
         temporary.as_file().set_permissions(permissions)?;
     }
     temporary.as_file().sync_all()?;
-    temporary.persist(write_path).map_err(|error| error.error)?;
+    match publication {
+        Publication::Replace => {
+            temporary.persist(write_path).map_err(|error| error.error)?;
+        }
+        Publication::CreateIfMissing => match temporary.persist_noclobber(write_path) {
+            Ok(_) => {}
+            Err(error) if error.error.kind() == io::ErrorKind::AlreadyExists => {
+                if !is_existing_file(write_path)? {
+                    return Err(error.error);
+                }
+            }
+            Err(error) => return Err(error.error),
+        },
+    }
     sync_parent(parent)
+}
+
+fn is_existing_file(path: &Path) -> io::Result<bool> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_file() => Ok(true),
+        Ok(_) => Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "the destination is not a regular file",
+        )),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
 }
 
 #[cfg(windows)]

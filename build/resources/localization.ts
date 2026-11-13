@@ -644,7 +644,7 @@ function chineseTranslationDomain(path: string): string {
 	if (/^src\/ash\/sessions\/contrib\/(?:changes|github)\//u.test(path)) return 'sessions-changes';
 	if (/^src\/ash\/sessions\/contrib\/(?:automations|symphony)\//u.test(path)) return 'sessions-automations';
 	if (path.startsWith('src/ash/sessions/contrib/workspace/')) return 'sessions-workspaces';
-	if (path.startsWith('src/ash/sessions/contrib/artifacts/')) return 'artifacts';
+	if (path.startsWith('src/ash/sessions/contrib/artifact/')) return 'artifacts';
 	if (path.startsWith('src/ash/sessions/')) return 'sessions';
 	if (path.startsWith('src/ash/editor/')) return 'editor';
 	return 'workbench';

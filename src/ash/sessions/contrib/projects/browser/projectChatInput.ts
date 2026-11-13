@@ -82,7 +82,7 @@ export class ProjectChatInput extends Disposable {
 					literalServerCommands: true,
 					useWorkbenchModelManagement: local ? true : undefined,
 					persistentDraftScope: local ? 'ash-chat' : undefined,
-				}),
+				}, this._store),
 				{ showWelcome: false },
 			));
 		} catch (error) {

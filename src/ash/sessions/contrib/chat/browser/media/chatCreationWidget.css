@@ -1,0 +1,51 @@
+.ash-chat-creation {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 104px), 1fr));
+	gap: var(--ash-spacing-size120);
+	max-width: 800px;
+}
+.ash-chat-creation > .ash-chat-creation-button {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	justify-content: flex-start;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+	padding: 0 0 var(--ash-spacing-size40);
+	text-align: left;
+	background: transparent;
+}
+.ash-chat-creation-button > .ash-button-content {
+	justify-content: flex-start;
+	padding: 0 var(--ash-spacing-size20);
+}
+.ash-chat-creation-illustration {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 100%;
+	height: 88px;
+	border-radius: var(--ash-cornerRadius-xLarge);
+}
+.ash-chat-creation-illustration > svg {
+	width: 40px;
+	height: 40px;
+}
+.ash-chat-creation-illustration > .ash-icon {
+	--ash-lxiconFontSize: 32px;
+}
+:is(.hc-black, .hc-light) .ash-chat-creation-illustration {
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	box-sizing: border-box;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+	.ash-chat-creation-button:not(.ash-reduce-motion *)
+		> .ash-chat-creation-illustration {
+		transition: transform var(--ash-animation-durationFast) ease-out;
+	}
+	.ash-chat-creation-button:hover:not(.ash-reduce-motion *)
+		> .ash-chat-creation-illustration {
+		transform: scale(1.04);
+	}
+}

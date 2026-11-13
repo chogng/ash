@@ -18,10 +18,11 @@ import { localize } from '../../nls.js';
 import type { SkillReference } from '../../platform/agentHost/common/appServerApi.js';
 import type { ResolvedChatContext } from '../../workbench/services/chat/common/chatContextService.js';
 import type { SessionHistoryBindingDiagnostic } from '../services/sessions/browser/sessionOpenTelemetryService.js';
-import { chatExecutionWorkspace, findAgentNode, type IActiveSessionThread, type ISession, type IUntitledChatSession, type ModelRef, type SessionId, type ThreadId } from '../services/sessions/common/session.js';
+import { chatExecutionWorkspace, findAgentNode, type IActiveSessionThread, type ISession, type ISessionArtifact, type IUntitledChatSession, type ModelRef, type SessionId, type ThreadId } from '../services/sessions/common/session.js';
+import { parseSessionIdentity } from '../services/sessions/common/sessionIdentity.js';
+import { getCapturedSessionArtifacts, getThreadSessionArtifacts } from './sessionArtifactSources.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import { getArtifactRequestContext, isRequestArtifactKind, type ArtifactKind } from '../common/artifactKind.js';
-import { readPendingArtifactKind, writePendingArtifactKind } from '../services/sessions/browser/sessionGridState.js';
+import type { ChatCreationKind } from '../common/chatCreation.js';
 import { chatQueuedMessageListItems, chatStreamingResponseUpdate, chatTranscriptListItems, type ChatStreamingResponseUpdate, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { withSessionSubagentActivities } from '../common/sessionSubagentActivity.js';
 import { ChatHistoryRedoModel } from '../../workbench/contrib/chat/common/model/chatHistoryRedoModel.js';
@@ -43,6 +44,9 @@ import { IContextKeyService } from '../../platform/contextkey/browser/contextKey
 import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
 import { readChatRequestVersions } from './chatRequestVersions.js';
 import { isNative } from '../../base/common/platform.js';
+import { getChatCreationContext } from '../common/chatCreation.js';
+import { readPendingCreationKind, writePendingCreationKind } from '../services/sessions/browser/sessionGridState.js';
+import { getGeneratedFileSessionArtifacts, IGeneratedFilesService, type GeneratedFileSource } from '../services/generatedFiles/common/generatedFilesService.js';
 
 const historyPageTurns = 20;
 
@@ -78,6 +82,7 @@ export class ChatWidgetModel extends Disposable {
 	private _composerGeneration = 0;
 	private materializingComposer: { readonly untitledSessionId: string; readonly generation: number; readonly threadId: ThreadId; } | undefined;
 	private voiceDraft: { readonly id: string; readonly generation: number; } | undefined;
+	// Promotion retires the draft before first send. Keep only that pending request's intent until Core accepts it.
 	private transcriptEntries: ThreadTranscriptEntry[] = [];
 	private transcriptRevision = 0;
 	private historyBoundary: ThreadHistoryBoundary | undefined;
@@ -159,12 +164,13 @@ export class ChatWidgetModel extends Disposable {
 		return composer?.generation === this.composerGeneration && composer.threadId === this.threadId ? composer.untitledSessionId : undefined;
 	}
 
-	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService, @IContextKeyService private readonly contextKeys?: IContextKeyService) {
+	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService, @IGeneratedFilesService private readonly generatedFiles: IGeneratedFilesService, @IContextKeyService private readonly contextKeys?: IContextKeyService) {
 		super();
 		this.chatService = chatService;
 		this.historyRedo = this._register(new ChatHistoryRedoModel(chatService, () => this._onDidChange.fire()));
 		this.sessionService = sessionService;
 		this.selection = selection;
+		this._register(generatedFiles.onDidChange(() => this._onDidChange.fire()));
 		if (contextKeys) {
 			const keys = new Set([SessionsWorkspaceModeContext.key]);
 			this._register(contextKeys.onDidChangeContext(event => {
@@ -243,7 +249,7 @@ export class ChatWidgetModel extends Disposable {
 			inputBlocked: this._thread?.status === 'archived' || modelUnavailableMessage !== undefined || this.requiresWorkspaceSelection || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			status: modelUnavailableMessage,
 			aiDisabled: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
-			error: this.historyStatus ? undefined : this._error,
+			error: this.historyStatus ? undefined : this.error,
 			canInterrupt: this.canInterrupt,
 			changes: this.threadChanges?.statistics,
 			changesRevision: this.threadChanges?.revision,
@@ -376,6 +382,19 @@ export class ChatWidgetModel extends Disposable {
 		return this.selection.kind === 'session' ? this.selection.active.session : undefined;
 	}
 
+	get artifacts(): readonly ISessionArtifact[] {
+		const active = this.activeSession;
+		if (!active) return [];
+		const files = getGeneratedFileSessionArtifacts(this.generatedFiles.files, this.generatedFileChat(active.session.sessionId, active.threadId));
+		const thread = this._thread;
+		if (thread?.sessionId !== active.session.sessionId || thread.threadId !== active.threadId) return files;
+		const captures = this._changeSets.flatMap(summary => {
+			const details = this.changeDetails.get(summary.changeSetId);
+			return details?.summary.revision === summary.revision ? [details] : [];
+		});
+		return [...files, ...getThreadSessionArtifacts(thread, this.transcriptEntries), ...getCapturedSessionArtifacts(thread, captures)];
+	}
+
 	get isNestedDraft(): boolean {
 		return this.selection.kind === 'untitled' && this.selection.session.forkSource !== undefined;
 	}
@@ -384,22 +403,23 @@ export class ChatWidgetModel extends Disposable {
 		return this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : undefined;
 	}
 
-	get artifactDraftKind(): ArtifactKind | undefined {
-		if (this.selection.kind === 'untitled') return this.selection.session.artifactKind;
-		return this._thread?.turns.length ? undefined : readPendingArtifactKind(this.storage, this.selection.active);
+	get creationKind(): ChatCreationKind | undefined {
+		if (this.selection.kind === 'untitled') return this.selection.session.creationKind;
+		if (this._thread?.turns.length) return undefined;
+		return readPendingCreationKind(this.storage, this.selection.active);
 	}
 
-	setArtifactDraftKind(kind: ArtifactKind | undefined): boolean {
+	setCreationKind(kind: ChatCreationKind | undefined): boolean {
 		if (this.selection.kind === 'session') {
-			if (!this.artifactDraftKind || kind !== undefined && !isRequestArtifactKind(kind)) return false;
-			writePendingArtifactKind(this.storage, this.selection.active, kind);
+			if (!this.creationKind) return false;
+			writePendingCreationKind(this.storage, this.selection.active, kind);
 			this._onDidChange.fire();
 			return true;
 		}
 		if (this.isNestedDraft) return false;
-		this.sessionService.setUntitledSessionArtifactKind(this.selection.session.untitledSessionId, kind);
+		this.sessionService.setUntitledSessionCreationKind(this.selection.session.untitledSessionId, kind);
 		this.refreshUntitledSelection();
-		return this.artifactDraftKind === kind;
+		return this.creationKind === kind;
 	}
 
 	get welcomeDraftId(): string | undefined {
@@ -492,6 +512,12 @@ export class ChatWidgetModel extends Disposable {
 		let transcript = withSessionSubagentActivities(chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, source, {
 			archived: thread?.status === 'archived', hasOlderTurns: this.historyBoundary?.hasOlderTurns,
 		}, this._changeSets), this.session, thread?.threadId);
+		if (thread) {
+			transcript = transcript.map(item => {
+				const file = item.feedbackSource && this.generatedFiles.findBySource(this.generatedFileSource(thread, item.feedbackSource.itemId));
+				return file ? { ...item, files: [{ resource: file.resource.toString(), label: file.title }] } : item;
+			});
+		}
 		const firstRequest = this.selection.kind === 'session' && this.selection.firstRequestClientId;
 		if (firstRequest) {
 			const start = transcript.findIndex(item => item.type === 'userMessage' && item.requestClientId === firstRequest);
@@ -775,8 +801,8 @@ export class ChatWidgetModel extends Disposable {
 		this.assertAIEnabled();
 		this.assertWorkspaceSelected();
 		const operation = this.captureOperation(options);
-		const artifactKind = this.artifactDraftKind;
-		const artifactContext = isRequestArtifactKind(artifactKind) ? getArtifactRequestContext(artifactKind) : undefined;
+		const creationKind = this.creationKind;
+		const creationContext = creationKind && getChatCreationContext(creationKind);
 		const stateRequest = ++this.stateRequest;
 		let modelBlock: Error | undefined;
 		try {
@@ -837,7 +863,7 @@ export class ChatWidgetModel extends Disposable {
 				model,
 				...(automatic && { modelRouting: 'auto' as const }),
 				reasoningEffort,
-				contexts: !thread.turns.length && artifactContext ? [...(contexts ?? []), artifactContext] : contexts,
+				contexts: thread.turns.length === 0 && creationContext ? [...(contexts ?? []), creationContext] : contexts,
 				signal: operation.signal,
 				commandId: options?.commandId,
 				source: options?.source,
@@ -865,8 +891,8 @@ export class ChatWidgetModel extends Disposable {
 			} else {
 				await this.chatService.startTurn(submission);
 				// Acceptance consumes the promoted choice even if the composer has since moved.
-				if (submission.isNewSession && readPendingArtifactKind(this.storage, active)) {
-					writePendingArtifactKind(this.storage, active, undefined);
+				if (thread.turns.length === 0 && readPendingCreationKind(this.storage, active)) {
+					writePendingCreationKind(this.storage, active, undefined);
 				}
 			}
 			if (!this.isCurrentOperation(operation)) { this.recoverCancelledSubmission(operation, stateRequest); return; }
@@ -1662,9 +1688,8 @@ export class ChatWidgetModel extends Disposable {
 		const prefix = result.history && overlap > 0 ? this._thread!.turns.slice(0, overlap) : [];
 		if (thread) {
 			const turns = [...prefix, ...result.thread.turns];
-			if (turns.length && !this._thread?.turns.length && this.selection.kind === 'session'
-				&& readPendingArtifactKind(this.storage, this.selection.active)) {
-				writePendingArtifactKind(this.storage, this.selection.active, undefined);
+			if (turns.length && !this._thread?.turns.length && this.selection.kind === 'session') {
+				writePendingCreationKind(this.storage, this.selection.active, undefined);
 			}
 			this._thread = { ...result.thread, turns };
 			void this.refreshModelAvailability();
@@ -1694,6 +1719,20 @@ export class ChatWidgetModel extends Disposable {
 			this.transcriptRevision = result.transcript.revision;
 		}
 		return { thread, transcript };
+	}
+
+	private generatedFileSource(thread: Thread, itemId: string): GeneratedFileSource {
+		return { ...this.generatedFileChat(thread.sessionId, thread.threadId), itemId, partId: 'markdown' };
+	}
+
+	private generatedFileChat(sessionId: SessionId, threadId: ThreadId): Omit<GeneratedFileSource, 'itemId' | 'partId'> {
+		const identity = parseSessionIdentity(sessionId, LOCAL_AGENT_HOST_PROVIDER_ID);
+		return {
+			providerId: this.session?.providerId ?? identity.providerId,
+			accountId: null,
+			sessionId: identity.backendSessionId,
+			threadId: parseSessionIdentity(threadId, LOCAL_AGENT_HOST_PROVIDER_ID).backendSessionId,
+		};
 	}
 
 	/** Reconnection can skip more than one window. Fill that gap in bounded reads before

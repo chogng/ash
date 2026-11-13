@@ -15,7 +15,7 @@ import { ChatAuxiliaryWindow } from '../../workbench/contrib/chat/browser/widget
 import { Button } from '../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
 import { isRecord } from '../../base/common/types.js';
-import { isUntitledSession } from '../services/sessions/browser/sessionGridState.js';
+import { readUntitledSession } from '../services/sessions/browser/sessionGridState.js';
 import { setDisposableOwner, toDisposable } from '../../base/common/lifecycle.js';
 import { IMenuService } from '../../platform/actions/common/actions.js';
 import { IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
@@ -186,13 +186,20 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				this.sessionsSidebarWidth = value.sessionsSidebarWidth;
 			}
 			if (!restoreSelection) return undefined;
-			if (!isRecord(value) || (value.version !== 1 && value.version !== 2) || !Array.isArray(value.drafts) || !value.drafts.every(isUntitledSession)
-				|| new Set(value.drafts.map(draft => draft.untitledSessionId)).size !== value.drafts.length) {
+			if (!isRecord(value) || (value.version !== 1 && value.version !== 2) || !Array.isArray(value.drafts)) {
+				throw new TypeError(localize('chat.selection.invalid', 'Invalid stored Chat selection.'));
+			}
+			const drafts = value.drafts.map(value => {
+				const draft = readUntitledSession(value);
+				if (!draft) throw new TypeError(localize('chat.selection.invalid', 'Invalid stored Chat selection.'));
+				return draft;
+			});
+			if (new Set(drafts.map(draft => draft.untitledSessionId)).size !== drafts.length) {
 				throw new TypeError(localize('chat.selection.invalid', 'Invalid stored Chat selection.'));
 			}
 			const active = value.active;
 			if (active !== undefined && (!isRecord(active) || (active.kind === 'untitled'
-				? typeof active.id !== 'string' || !value.drafts.some(draft => draft.untitledSessionId === active.id)
+				? typeof active.id !== 'string' || !drafts.some(draft => draft.untitledSessionId === active.id)
 				: active.kind !== 'session' || typeof active.sessionId !== 'string' || !active.sessionId || typeof active.threadId !== 'string' || !active.threadId))) {
 				throw new TypeError(localize('chat.selection.invalid', 'Invalid stored Chat selection.'));
 			}
@@ -209,7 +216,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 					for (const [id, thread] of Object.entries(value.threads)) this.restoredThreadIds.set(id, thread as ThreadId);
 				}
 			}
-			for (const draft of value.drafts) this.sessionService.restoreUntitledSession(draft);
+			for (const draft of drafts) this.sessionService.restoreUntitledSession(draft);
 			if (isRecord(value.active) && value.active.kind === 'untitled') this.sessionService.selectUntitledSession(value.active.id as string);
 			if (isRecord(value.active) && value.active.kind === 'session') return { sessionId: value.active.sessionId as string, threadId: value.active.threadId as string };
 		} catch (error) {

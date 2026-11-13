@@ -485,6 +485,7 @@ impl AppServer {
             target: FsDirectoryTarget::Environment {
                 dir_id: CONFIGURATION_ROUTE.into(),
             },
+            exact_file: Some(true),
         })
     }
 

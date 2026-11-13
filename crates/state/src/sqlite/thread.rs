@@ -37,6 +37,7 @@ impl SqliteThreadStore {
         let path = path.into();
         let mut connection = open(&path).map_err(ThreadStoreError::Storage)?;
         super::thread_history::create_schema(&mut connection)?;
+        crate::generated_files::migrate(&mut connection).map_err(ThreadStoreError::Storage)?;
         let catalog_connection = open(&path).map_err(ThreadStoreError::Storage)?;
         Ok(Self {
             path,
@@ -954,6 +955,20 @@ impl SqliteThreadStore {
         let session_changed = session_list_changed(&transaction, &batch.catalog)?;
         if let Some(index) = &batch.history_index {
             super::thread_history::write(&transaction, index, batch.expected_sequence)?;
+            for event in &batch.events {
+                if let ash_protocol::ThreadEvent::TurnCompleted { turn_id, .. } = &event.event
+                    && let Some(entry) = index
+                        .turns
+                        .iter()
+                        .find(|entry| &entry.turn.turn_id == turn_id)
+                {
+                    crate::generated_files::stage_native_turn(
+                        &transaction,
+                        &index.thread,
+                        &entry.turn,
+                    )?;
+                }
+            }
         }
         write_catalog(&transaction, &batch.catalog)?;
         if let Some((source, _)) = moved_from {

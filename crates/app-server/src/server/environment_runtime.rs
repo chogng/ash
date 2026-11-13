@@ -1,5 +1,4 @@
 use super::AppServer;
-use super::AppServerThreadUpdates;
 use super::CodebaseModels;
 use super::EnvStateMode;
 use super::RpcError;
@@ -1772,17 +1771,7 @@ impl AppServer {
             .turn_executor_snapshot()
             .with_tool_service(tools.reloadable.tools(), policy)
             .with_hooks(hooks.clone())
-            .with_thread_updates(Arc::new(AppServerThreadUpdates {
-                client_host: Arc::clone(&self.client_host),
-                threads: Arc::clone(&self.threads),
-                grants: self
-                    .env_runtime
-                    .read()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .dir_grants
-                    .clone(),
-                updates: Arc::clone(&self.updates),
-            }));
+            .with_thread_updates(self.thread_update_sink());
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime
@@ -3564,6 +3553,14 @@ impl AppServer {
     ) -> Result<FsResolvePathResult, RpcError> {
         use std::path::Component;
         let path = dunce::simplified(path);
+        if self
+            .local_env_host
+            .as_ref()
+            .is_some_and(|host| host.grants.is_web_session())
+            && let Some(route) = self.generated_files_processor.web_file_route(path)
+        {
+            return Ok(route);
+        }
         if let Some(route) = self.web_configuration_route(path) {
             return Ok(route);
         }
@@ -3590,6 +3587,7 @@ impl AppServer {
                 candidates.push(FsResolvePathResult {
                     root: root.to_path_buf(),
                     target,
+                    exact_file: None,
                 });
             }
         };
@@ -3701,6 +3699,14 @@ impl AppServer {
                 .ok_or_else(|| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?
                 .reconcile_user_directory_grants(&snapshot.values)
                 .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
+        }
+        if self
+            .local_env_host
+            .as_ref()
+            .is_some_and(|host| host.grants.is_web_session())
+            && let Some(files) = self.generated_files_processor.web_file_system(dir_id)?
+        {
+            return Ok(files);
         }
         if let Some(files) = self.web_configuration_file_system(dir_id)? {
             return Ok(files);

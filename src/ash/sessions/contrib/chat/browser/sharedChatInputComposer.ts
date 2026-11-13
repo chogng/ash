@@ -23,6 +23,7 @@ import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
 import { getSessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import { SessionReferenceCompletions } from './sessionReferenceCompletions.js';
+import { SessionArtifacts } from './sessionArtifacts.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
@@ -115,6 +116,7 @@ export class SharedChatInputComposer extends Disposable {
 			},
 			get primaryPermissionPicker() { return chatPresentation.get() ? undefined : permissionPicker; },
 		} satisfies ChatInputPartOptions);
+		this._register(instantiationService.createInstance(SessionArtifacts, input, model));
 		this._register(instantiationService.createInstance(SessionReferenceCompletions, input, model));
 		this._register(autorun(reader => {
 			chatPresentation.read(reader);

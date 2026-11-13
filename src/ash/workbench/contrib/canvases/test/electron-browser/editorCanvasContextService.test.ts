@@ -7,6 +7,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import type { IChatWidgetService } from '../../../chat/browser/chat.js';
 import type { IChatService } from '../../../../services/chat/common/chatService.js';
+import type { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import type { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { IAgentSessionService } from '../../../../../platform/agentHost/common/agentService.js';
@@ -62,6 +63,7 @@ suite('IDE Canvas conversation contexts', () => {
 			{ createContext: (owner: ICanvasOwner) => ({ owner, canvases: constObservable([]) }), removeOwner: (owner: ICanvasOwner) => removed.push(owner) } as unknown as IAgentHostCanvasCollection,
 			{ readCatalog: () => f.read() } as unknown as IAgentSessionService,
 			{ onDidChangeSession: sessionChanged.event, onDidBecomeReady: Event.None } as unknown as IChatService,
+			{ getActiveConversation: () => widget } as unknown as IChatSessionNavigationService,
 		));
 		return Object.assign(f, { context });
 	}
