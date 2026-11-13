@@ -130,7 +130,7 @@ export class ChangesViewPane extends ViewPane {
 		this.retryCheckout = this._register(new Button(actions, {
 			...defaultButtonStyles,
 			size: 'small',
-			label: localize('sessions.changes.retryCheckout', 'Retry checkout'),
+			label: localize({ bundle: 'ash.sessions', key: 'sessions.changes.retryCheckout' }, 'Retry checkout'),
 			onClick: () => {
 				const epoch = this.ownerEpoch;
 				void this.retryCommitCheckout().catch(error => this.reportOperationError(error, epoch));
@@ -430,7 +430,7 @@ export class ChangesViewPane extends ViewPane {
 			this.statusDomNode.textContent = [
 				message,
 				blocked && checkoutBlockedMessage(blocked),
-				unavailable && localize('sessions.changes.checkoutUnavailable', 'The commit was published, but Ash cannot finish updating the working tree because its recovery log is missing. Check the repository in Git.'),
+				unavailable && localize({ bundle: 'ash.sessions', key: 'sessions.changes.checkoutUnavailable' }, 'The commit was published, but Ash cannot finish updating the working tree because its recovery log is missing. Check the repository in Git.'),
 				...(!this.changesetId ? this.threadSummary?.warnings ?? [] : []),
 			].filter(Boolean).join('\n');
 		}
@@ -637,9 +637,9 @@ function fileState(row: IChangesFileItem): string {
 	switch (summary.commitState) {
 		case 'queued': return localize('sessions.changes.fileQueued', 'Queued');
 		case 'committing': return localize('sessions.changes.fileCommitting', 'Committing');
-		case 'recovering': return localize('sessions.changes.fileCheckoutBlocked', 'Checkout needs attention');
+		case 'recovering': return localize({ bundle: 'ash.sessions', key: 'sessions.changes.fileCheckoutBlocked' }, 'Checkout needs attention');
 		case 'recoveryUnavailable': return summary.conflictPaths.includes(row.file.path)
-			? localize('sessions.changes.fileCheckoutUnavailable', 'Published, checkout incomplete')
+			? localize({ bundle: 'ash.sessions', key: 'sessions.changes.fileCheckoutUnavailable' }, 'Published, checkout incomplete')
 			: localize('sessions.changes.fileRemaining', 'Not committed');
 		case 'conflict': return localize('sessions.changes.fileConflict', 'Conflict — preview again after resolving');
 		case 'failed': return localize('sessions.changes.fileFailed', 'Commit failed: {0}', summary.failureMessage ?? '');
@@ -649,10 +649,10 @@ function fileState(row: IChangesFileItem): string {
 
 function checkoutBlockedMessage(summary: TurnChangeSetSummary): string {
 	if (summary.conflictPaths.length) {
-		return localize('sessions.changes.checkoutBlockedFiles', 'The commit was published, but local changes block checkout for {0}. Resolve them before retrying.', summary.conflictPaths.join(', '));
+		return localize({ bundle: 'ash.sessions', key: 'sessions.changes.checkoutBlockedFiles' }, 'The commit was published, but local changes block checkout for {0}. Resolve them before retrying.', summary.conflictPaths.join(', '));
 	}
 	if (summary.failureMessage) {
-		return localize('sessions.changes.checkoutBlockedError', 'The commit was published, but checkout failed: {0}', summary.failureMessage);
+		return localize({ bundle: 'ash.sessions', key: 'sessions.changes.checkoutBlockedError' }, 'The commit was published, but checkout failed: {0}', summary.failureMessage);
 	}
-	return localize('sessions.changes.checkoutBlockedRef', 'The commit was published, but its branch or checkout changed. Check the branch in Git before retrying checkout.');
+	return localize({ bundle: 'ash.sessions', key: 'sessions.changes.checkoutBlockedRef' }, 'The commit was published, but its branch or checkout changed. Check the branch in Git before retrying checkout.');
 }
