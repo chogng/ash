@@ -127,34 +127,8 @@
 	grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 360px));
 	gap: var(--ash-spacing-size200);
 }
-.ash-artifacts-examples-heading {
-	margin: 0;
-	font-size: var(--ash-fontSize-heading3);
-	font-weight: var(--ash-fontWeight-semiBold);
-}
-.ash-artifacts-examples-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
-	gap: var(--ash-spacing-size160);
-}
-.ash-artifacts-examples-grid .ash-artifacts-card > .ash-artifacts-illustration {
-	height: 76px;
-}
-.ash-artifacts-examples-grid .ash-artifacts-illustration > .ash-icon {
-	--ash-lxiconFontSize: 32px;
-}
-.ash-artifacts-examples-grid .ash-artifacts-illustration > svg {
-	width: 32px;
-	height: 32px;
-}
-.list-view :is(.ash-artifacts-examples-grid, .ash-artifacts-work-grid) {
+.list-view .ash-artifacts-work-grid {
 	grid-template-columns: minmax(0, 1fr);
-}
-.list-view
-	.ash-artifacts-examples-grid
-	.ash-artifacts-card
-	> .ash-artifacts-illustration {
-	height: 56px;
 }
 .ash-creator .ash-artifacts-card {
 	display: flex;
@@ -229,4 +203,22 @@
 	flex: 1;
 	min-width: 0;
 	min-height: 0;
+}
+
+.ash-artifacts-sort .ash-dropdown-menu-indicator {
+	display: none;
+}
+.ash-artifacts-sort {
+	position: relative;
+}
+.ash-artifacts-sort.filtered::after {
+	position: absolute;
+	inset-block-start: var(--ash-spacing-size40);
+	inset-inline-end: var(--ash-spacing-size40);
+	width: var(--ash-spacing-size60);
+	height: var(--ash-spacing-size60);
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-focusBorder);
+	content: "";
+	pointer-events: none;
 }

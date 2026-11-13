@@ -1,59 +1,80 @@
 import { renderWorkbenchMarkdown } from '../../../../base/browser/markdownRenderer.js';
 import { URI } from '../../../../base/common/uri.js';
-import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
-import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
+import { FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { registerWorkbenchServiceContribution } from '../../../../workbench/browser/workbenchServiceContributions.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
-import { getNLSLanguage } from '../../../../nls.js';
-import { artifactKinds, isArtifactKind, type ArtifactKind } from '../../../common/artifactKind.js';
-import { getArtifactTitle } from '../../../contrib/artifact/browser/artifactKindPresentation.js';
-import { registerArtifactExamples } from '../../../contrib/artifact/browser/artifactExamples.js';
-import { openArtifactWorkspace } from '../../../contrib/artifact/browser/artifactWorkspaceOpener.js';
-import { getArtifactWorkspace } from '../../../contrib/artifact/browser/artifactWorkspaceRegistry.js';
-import { mountArtifactWorkspace, type ArtifactDesignExample } from '../../../contrib/artifact/browser/artifactWorkspace.js';
-import { openManagedCanvasArtifact } from '../../../contrib/artifact/browser/artifactCanvasWorkspaces.js';
-import { IDesignEditorService } from '../../../contrib/artifact/browser/designEditorService.js';
-import { ArtifactWorkspaceId } from '../../../contrib/artifact/common/artifactWorkspace.js';
-import { DesignMode } from '../../../contrib/artifact/common/config/designEditorConfiguration.js';
-import type { DesignShape } from '../../../contrib/artifact/common/model/designDocument.js';
-import { ARTIFACT_EXAMPLE_SCHEME, createDocsOpener } from '../../../contrib/docs/browser/documentActions.js';
-import { openTableArtifact } from '../../../contrib/sheets/browser/tableArtifactWorkspaces.js';
+import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
+import { createDocsInput } from '../../../contrib/docs/browser/documentActions.js';
+import { artifactCanvasModes } from '../../../contrib/artifact/common/artifactWorkspace.js';
+import { getDesignDraftHome } from '../../../contrib/artifact/browser/designDocumentController.js';
+import { documentFromShapes, serializeDesignDocument, type DesignShape } from '../../../contrib/artifact/common/model/designDocument.js';
 import { createSlides, frame, geometry, text } from './artifactExampleShapes.js';
+import { getArtifactTitle } from '../../../contrib/artifact/browser/artifactKindPresentation.js';
 import { exampleText } from './artifactExampleText.js';
 
-const openExampleCommand = 'sessions.creator.openExample';
+/** Development hosts already use an isolated profile; test hosts supply their own file provider. */
+registerWorkbenchServiceContribution({
+	service: createServiceIdentifier<Promise<void>>('test.artifactFixtures'),
+	dependencies: [IFileService, IUserDataProfileService, IWorkspaceContextService, IEditorPart],
+	install: ({ container, blockRestorationUntil }) => {
+		const editors = container.get(IEditorPart);
+		const ready = prepareArtifactFixtures(container.get(IFileService), container.get(IUserDataProfileService).currentProfile.location,
+			container.get(IWorkspaceContextService).getWorkspace().id, editors.domNode.ownerDocument).then(async resource => {
+			// Retained Docs use the ordinary editor catalog. Open the file before the host restores its selected page.
+			if (!editors.groups.some(group => group.editors.some(editor => editor.input.resource.toString() === resource.toString()))) {
+				await editors.openEditor(createDocsInput({ resource }), { pinned: true, inactive: true, preserveFocus: true });
+			}
+		});
+		blockRestorationUntil(ready);
+		return ready;
+	},
+});
 
-interface ArtifactExample {
-	readonly detail: string;
-	open(accessor: ServicesAccessor): Promise<void>;
+/** Seed once, including a completion marker so deleted fixtures stay deleted and edits survive reload. */
+export async function prepareArtifactFixtures(files: IFileService, profile: URI, workspaceId: string, ownerDocument: Document): Promise<URI> {
+	const home = getDesignDraftHome(profile, workspaceId);
+	const marker = home.joinPathSegment('test-data-v1');
+	const docs = home.joinPathSegment('studio-launch.ash-doc');
+	try { await files.stat(marker); return docs; } catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
+	await files.createDirectory(home);
+	for (const [kind, shapes] of [['slides', createSlides()], ['design', createDesign()], ['whiteboard', createWhiteboard()], ['motion', createMotion()]] as const) {
+		const id = fixtureCanvasIds[kind];
+		const resource = home.joinPathSegment(kind).joinPathSegment(`${id}.ash-design`);
+		await files.createDirectory(resource);
+		await writeMissing(files, resource.joinPathSegment('manifest.json'), serializeDesignDocument(documentFromShapes(shapes, {
+			documentId: id, artifactId: generateUuid(), mode: artifactCanvasModes[kind], title: shapes[0].name, createdAt: Date.now(),
+		})));
+	}
+	const tables = home.joinPathSegment('tables');
+	await files.createDirectory(tables);
+	for (const [kind, rows] of [
+		['sheet', [[exampleText('exampleItem', 'Item'), exampleText('exampleOwner', 'Owner'), exampleText('exampleBudget', 'Budget'), exampleText('exampleSpent', 'Spent')],
+			[exampleText('exampleVisuals', 'Visuals'), 'Mina', '2400', '1800'], [exampleText('exampleCopy', 'Copy'), 'Leo', '1200', '950'], [exampleText('examplePilot', 'Pilot'), 'Sam', '800', '640']]],
+		['data', [[exampleText('exampleDay', 'Day'), exampleText('exampleVisits', 'Visits'), exampleText('exampleSignups', 'Sign-ups')], ['2026-01-05', '142', '21'], ['2026-01-06', '185', '28'], ['2026-01-07', '213', '38']]],
+	] as const) {
+		await writeMissing(files, tables.joinPathSegment(`${fixtureTableIds[kind]}.json`), JSON.stringify({ kind, rows, createdAt: Date.now(), title: exampleText('exampleTitle', '{0} example', getArtifactTitle(kind)) }));
+	}
+	const { generalProfile, importGeneralDocumentHtml } = await import('../../../../../../extensions/academy/browser/generalProfile.js');
+	const document = importGeneralDocumentHtml(renderWorkbenchMarkdown(exampleText('exampleDocsContent', '# Studio launch brief\n\nLaunch a shared home for the studio’s work. Start with a small pilot and use feedback to guide the public release.\n\n## Readiness checklist\n\n- [x] Review the visual direction\n- [ ] Invite the pilot group\n- [ ] Publish the launch notes\n\n## Schedule\n\n| Milestone | Target |\n| --- | --- |\n| Pilot | Tuesday |\n| Feedback review | Thursday |\n| Public launch | Next Monday |')), ownerDocument);
+	if (!document) throw new Error('Invalid document fixture');
+	await writeMissing(files, docs, generalProfile.create().codec.serialize(document));
+	await files.writeFile({ resource: marker, content: '1' });
+	return docs;
 }
 
-const examples = new Map<ArtifactKind, (title: string) => ArtifactExample>();
-
-function registerArtifactExample(kind: ArtifactKind, create: (title: string) => ArtifactExample): void {
-	examples.set(kind, create);
+async function writeMissing(files: IFileService, resource: URI, content: string): Promise<void> {
+	try { await files.stat(resource); return; } catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
+	await files.writeFile({ resource, content });
 }
 
-function exampleTitle(kind: ArtifactKind): string {
-	return exampleText('exampleTitle', '{0} example', getArtifactTitle(kind));
-}
-
-registerArtifactExample('docs', title => ({
-	detail: exampleText('exampleDocs', 'A launch brief with headings, a checklist and a schedule'),
-	open: accessor => openDocsExample(accessor, {
-		title,
-		text: exampleText('exampleDocsContent', '# Studio launch brief\n\nLaunch a shared home for the studio’s work. Start with a small pilot and use feedback to guide the public release.\n\n## Readiness checklist\n\n- [x] Review the visual direction\n- [ ] Invite the pilot group\n- [ ] Publish the launch notes\n\n## Schedule\n\n| Milestone | Target |\n| --- | --- |\n| Pilot | Tuesday |\n| Feedback review | Thursday |\n| Public launch | Next Monday |'),
-	}),
-}));
-
-registerArtifactExample('slides', () => ({
-	detail: exampleText('exampleSlides', 'A two-slide deck with presentation mode'),
-	open: accessor => openManagedCanvasArtifact(accessor, accessor.get(IDesignEditorService).createArtifactDocument('slides', createSlides())),
-}));
-
-registerArtifactExample('design', title => ({
-	detail: exampleText('exampleDesign', 'A landing page with editable layers'),
-	open: accessor => openArtifactDesignExample(accessor, 'design', ArtifactWorkspaceId.Design, { title, createShapes: createDesign }),
-}));
+const fixtureCanvasIds = {
+	slides: 'b0b272fa-4d83-4ae6-b20d-438e8b2ebc01', design: 'b0b272fa-4d83-4ae6-b20d-438e8b2ebc02',
+	whiteboard: 'b0b272fa-4d83-4ae6-b20d-438e8b2ebc03', motion: 'b0b272fa-4d83-4ae6-b20d-438e8b2ebc04',
+};
+const fixtureTableIds = { sheet: 'b0b272fa-4d83-4ae6-b20d-438e8b2ebc05', data: 'b0b272fa-4d83-4ae6-b20d-438e8b2ebc06' };
 
 function createDesign(): readonly DesignShape[] {
 	return [frame(0, 960, 560, '#f3efe7', exampleText('exampleLandingPage', 'Landing page'), [
@@ -67,30 +88,6 @@ function createDesign(): readonly DesignShape[] {
 		text(78, 430, 168, exampleText('exampleExplore', 'Explore the studio'), 18, '#ffffff', 600),
 	])];
 }
-
-registerArtifactExample('sheet', title => {
-	const detail = exampleText('exampleSheet', 'A read-only launch budget grid');
-	return {
-		detail,
-		open: accessor => openTableArtifact(accessor, {
-			kind: 'sheet', title, detail,
-			columns: [
-				exampleText('exampleItem', 'Item'), exampleText('exampleOwner', 'Owner'),
-				exampleText('exampleBudget', 'Budget'), exampleText('exampleSpent', 'Spent'),
-			],
-			rows: [
-				[exampleText('exampleVisuals', 'Visuals'), 'Mina', 2400, 1800],
-				[exampleText('exampleCopy', 'Copy'), 'Leo', 1200, 950],
-				[exampleText('examplePilot', 'Pilot'), 'Sam', 800, 640],
-			],
-		}),
-	};
-});
-
-registerArtifactExample('whiteboard', title => ({
-	detail: exampleText('exampleWhiteboard', 'A planning board with notes and connectors'),
-	open: accessor => openArtifactDesignExample(accessor, 'whiteboard', ArtifactWorkspaceId.Whiteboard, { title, createShapes: createWhiteboard }),
-}));
 
 function createWhiteboard(): readonly DesignShape[] {
 	const stages = [
@@ -112,34 +109,6 @@ function createWhiteboard(): readonly DesignShape[] {
 	return [frame(0, 860, 204, '#f8f8f3', exampleText('exampleSchedule', 'Launch schedule'), [...connectors, ...notes])];
 }
 
-registerArtifactExample('data', title => {
-	const detail = exampleText('exampleData', 'A read-only overview of pilot activity');
-	return {
-		detail,
-		open: accessor => {
-			const rows = [[142, 21], [185, 28], [213, 38]] as const;
-			const weekdays = new Intl.DateTimeFormat(getNLSLanguage(), { weekday: 'long', timeZone: 'UTC' });
-			return openTableArtifact(accessor, {
-				kind: 'data', title, detail,
-				columns: [
-					exampleText('exampleDay', 'Day'), exampleText('exampleVisits', 'Visits'),
-					exampleText('exampleSignups', 'Sign-ups'),
-				],
-				rows: rows.map(([visits, signups], index) => [weekdays.format(Date.UTC(2026, 0, 5 + index)), visits, signups]),
-				summary: [
-					{ label: exampleText('exampleVisits', 'Visits'), value: rows.reduce((sum, row) => sum + row[0], 0) },
-					{ label: exampleText('exampleSignups', 'Sign-ups'), value: rows.reduce((sum, row) => sum + row[1], 0) },
-				],
-			});
-		},
-	};
-});
-
-registerArtifactExample('motion', title => ({
-	detail: exampleText('exampleMotion', 'A looping animation with editable keyframes'),
-	open: accessor => openArtifactDesignExample(accessor, 'motion', ArtifactWorkspaceId.Design, { title, createShapes: createMotion, editorMode: DesignMode.Motion }),
-}));
-
 function createMotion(): readonly DesignShape[] {
 	return [frame(0, 660, 360, '#191e33', exampleText('exampleLaunch', 'Studio launch'), [
 		text(44, 32, 530, exampleText('exampleLaunch', 'Studio launch'), 34, '#ffffff', 600),
@@ -157,36 +126,3 @@ function createMotion(): readonly DesignShape[] {
 		},
 	])];
 }
-
-function openArtifactDesignExample(accessor: ServicesAccessor, kind: ArtifactKind, mode: ArtifactWorkspaceId, example: ArtifactDesignExample): Promise<void> {
-	return openArtifactWorkspace(accessor, {
-		key: `example:${kind}`, entryId: kind, title: example.title, help: getArtifactWorkspace(mode)?.help,
-		mount: (instantiation, container) => mountArtifactWorkspace(instantiation, container, mode, example),
-	});
-}
-
-async function openDocsExample(accessor: ServicesAccessor, example: { title: string; text: string; }): Promise<void> {
-	const open = createDocsOpener(accessor);
-	const ownerDocument = accessor.get(IEditorPart).domNode.ownerDocument;
-	const { generalProfile, importGeneralDocumentHtml } = await import('../../../../../../extensions/academy/browser/generalProfile.js');
-	const document = importGeneralDocumentHtml(renderWorkbenchMarkdown(example.text), ownerDocument);
-	if (!document) throw new Error('The Docs example could not be opened.');
-	await open(URI.from({ scheme: ARTIFACT_EXAMPLE_SCHEME, path: '/studio-launch.ash-doc' }), {
-		label: example.title, initialText: generalProfile.create().codec.serialize(document),
-	});
-}
-
-CommandsRegistry.register(openExampleCommand, (accessor, kind) => {
-	if (!isArtifactKind(kind)) return;
-	return examples.get(kind)?.(exampleTitle(kind)).open(accessor);
-});
-
-registerArtifactExamples({
-	heading: exampleText('examples', 'Examples'),
-	accessibilityHelp: exampleText('examplesHelp', 'In All, press Enter on the Slides example to create a deck. The deck saves automatically and can be reopened from Yours. Use Export editable copy to create a file package. Other canvas examples keep edits for this window. Docs, Sheet and Data examples are read-only.'),
-	cards: artifactKinds.flatMap(kind => {
-		const title = exampleTitle(kind);
-		const example = examples.get(kind)?.(title);
-		return example ? [{ kind, title, detail: example.detail, command: { id: openExampleCommand, args: [kind] } }] : [];
-	}),
-});

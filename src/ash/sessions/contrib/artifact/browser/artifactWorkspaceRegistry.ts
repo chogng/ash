@@ -5,6 +5,7 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import type { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import type { URI } from '../../../../base/common/uri.js';
 import type { ArtifactKind } from '../../../common/artifactKind.js';
 import type { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import { localize2 } from '../../../../nls.js';
@@ -50,6 +51,12 @@ export interface ArtifactCard {
 	readonly title: string;
 	readonly kind: ArtifactKind;
 	readonly detail: string;
+	/** Ownership relative to the current user. Missing ownership stays unknown. */
+	readonly owner?: 'you' | 'others';
+	/** Persisted content resource; reading metadata must never materialize or save a document. */
+	readonly resource?: URI;
+	readonly createdAt?: number;
+	readonly modifiedAt?: number;
 	readonly workspaceKey?: string;
 	readonly generatedFileResource?: string;
 	readonly command: { readonly id: string; readonly args: readonly unknown[]; };

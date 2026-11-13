@@ -28,12 +28,6 @@ import type { IWorkingCopy } from '../../../../workbench/services/workingCopy/co
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
 
-interface DesignDocumentExample {
-	readonly mode: ArtifactWorkspaceId;
-	readonly title: string;
-	readonly shapes: readonly DesignShape[];
-}
-
 interface ArtifactDesignInput {
 	readonly kind: ArtifactCanvasKind;
 	readonly id: string;
@@ -48,8 +42,10 @@ export function getDesignDraftHome(profileLocation: URI, workspaceId: string): U
 /** Each workspace owns its file identity and saved revision independently of the active canvas. */
 export class DesignDocumentController extends Disposable implements IWorkingCopy {
 	public readonly mode: ArtifactWorkspaceId;
-	private readonly example: { readonly title: string; adopted: boolean; } | undefined;
 	private readonly artifact: ArtifactDesignInput | undefined;
+	public get savedResource(): URI | undefined {
+		return (this.file?.resource ?? this.artifact?.resource)?.joinPathSegment('manifest.json');
+	}
 	public get artifactKind(): ArtifactCanvasKind | undefined { return this.artifact?.kind; }
 	public readonly resource: URI;
 	public readonly backupKind = 'structuredDocument' as const;
@@ -88,10 +84,8 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	private autoSaveError = false;
 	private readonly draftHome: URI;
 	public readonly ready: Promise<void>;
-	public get isTemporaryExample(): boolean { return this.example?.adopted === false; }
 	public get automaticallySaves(): boolean {
-		// A file opened or saved from an example has its own write-back target.
-		return this.artifact !== undefined || (this.example ? this.file !== undefined : this.mode === ArtifactWorkspaceId.Design);
+		return this.artifact !== undefined || this.mode === ArtifactWorkspaceId.Design;
 	}
 	public get needsSaveRetry(): boolean { return this.autoSaveError || this.restoreFailed; }
 	public get isRestoring(): boolean { return this.restoring; }
@@ -110,7 +104,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 
 	constructor(
-		input: ArtifactWorkspaceId | DesignDocumentExample | ArtifactDesignInput,
+		input: ArtifactWorkspaceId | ArtifactDesignInput,
 		@IFileService private readonly files: IFileService,
 		@IAssetService private readonly assets: IAssetService,
 		@IFileDialogService private readonly fileDialogs: IFileDialogService,
@@ -120,19 +114,15 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		@IUserDataProfileService profiles: IUserDataProfileService,
 	) {
 		super();
-		this.artifact = typeof input !== 'string' && 'id' in input ? input : undefined;
-		this.mode = typeof input === 'string' ? input : 'mode' in input ? input.mode : artifactCanvasModes[input.kind];
+		this.artifact = typeof input === 'string' ? undefined : input;
+		this.mode = typeof input === 'string' ? input : artifactCanvasModes[input.kind];
 		this.model = this._register(new DesignModel(this.mode, measureDesignText));
-		if (typeof input !== 'string' && 'title' in input) {
-			this.example = { title: input.title, adopted: false };
-			this.model.replace(documentFromShapes(input.shapes, this.model.value));
-		}
 		if (this.artifact?.shapes) {
 			this.model.replace(documentFromShapes(this.artifact.shapes, { ...this.model.value, documentId: this.artifact.id }));
 		}
 		this.resource = URI.from({
 			scheme: 'ash-creator',
-			path: this.artifact ? `/${this.artifact.kind}/${this.artifact.id}` : this.example ? `/example/${this.model.value.documentId}` : `/${this.mode}`,
+			path: this.artifact ? `/${this.artifact.kind}/${this.artifact.id}` : `/${this.mode}`,
 		});
 		if (mainWindow.document.fonts) { this._register(addDisposableListener(mainWindow.document.fonts, 'loadingdone', () => { clearDesignTextMeasurements(); this.model.refreshTextLayout(); })); }
 		this.savedContent = this.artifact?.shapes ? '' : serializeDesignDocument(this.model.value);
@@ -157,7 +147,6 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		}
 		if (this.artifact?.kind === 'motion') { return localize({ bundle: 'ash.artifacts', key: 'untitledMotion' }, 'Untitled motion'); }
 		if (this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome)) { return basename(this.file.resource); }
-		if (this.example && !this.example.adopted) { return this.example.title; }
 		return this.mode === ArtifactWorkspaceId.Design ? localize('sessions.design.untitled', 'Untitled design') : localize('sessions.creator.untitled', 'Untitled {0}', getArtifactWorkspaceTitle(this.mode));
 	}
 	public get isBusy(): boolean { return this.restoring || this.restoreFailed || (this.isFileOperationRunning && !this.autoSaveRunning); }
@@ -375,7 +364,6 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		}
 		if (this.isDisposed) { return; }
 		this.file = isPackage || basename(selected) === 'manifest.json' ? { resource: root, revision: read.revision } : undefined;
-		if (this.example) { this.example.adopted = true; }
 		this.media = media;
 		this.setExternalChange(false);
 		this.labelChange.fire();
@@ -453,7 +441,6 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 				return true;
 			}
 			this.file = { resource, revision: result.revision };
-			if (this.example) { this.example.adopted = true; }
 			this.labelChange.fire();
 			this.setExternalChange(false);
 			if (isCopy) { this.model.changeIdentity(snapshot.documentId); }
@@ -516,8 +503,8 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 
 	private async rememberDocument(): Promise<void> {
-		// An example owns a separate document and must not replace Design's restore target.
-		if (this.example || this.artifact || !this.automaticallySaves || !this.file) { return; }
+		// Individual artifacts retain their own file identity instead of Design's mode restore target.
+		if (this.artifact || !this.automaticallySaves || !this.file) { return; }
 		this.storage.store(this.activeDocumentKey, this.file.resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		await this.storage.flush();
 	}

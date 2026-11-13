@@ -600,3 +600,21 @@ test('Design persistence rejects malformed grid, wrapping and dimension bounds',
 		assert.throws(() => parseDesignDocument(JSON.stringify(file)), TypeError);
 	}
 });
+
+
+test('Design creation date survives edits, serialization and undo while legacy documents keep an unknown date', () => {
+	using model = new DesignModel();
+	const createdAt = model.value.createdAt;
+	assert.equal(typeof createdAt, 'number');
+	new DocumentCommands(model).addShape('rectangle', { x: 0, y: 0 });
+	model.undo();
+	model.redo();
+	const serialized = serializeDesignDocument(model.value);
+	assert.equal(parseDesignDocument(serialized).createdAt, createdAt);
+	const legacy = JSON.parse(serialized);
+	delete legacy.createdAt;
+	assert.equal(parseDesignDocument(JSON.stringify(legacy)).createdAt, undefined);
+	for (const invalid of [-1, 'today', null]) {
+		assert.throws(() => parseDesignDocument(JSON.stringify({ ...legacy, createdAt: invalid })));
+	}
+});

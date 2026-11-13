@@ -9,12 +9,10 @@ import type { IResourceEditorInput } from '../../../../workbench/common/editor.j
 import { getArtifactTitle } from '../../artifact/browser/artifactKindPresentation.js';
 import { registerArtifactCatalogSource, type ArtifactCard } from '../../artifact/browser/artifactWorkspaceRegistry.js';
 import { GENERAL_DOCUMENT_CONTENT_TYPE } from '../common/docs.js';
-import { ARTIFACT_EXAMPLE_SCHEME } from './documentActions.js';
 
 export function isRetainedDocsInput(input: IResourceEditorInput, generated: IGeneratedFilesService): boolean {
 	const { resource, contentType } = input;
 	return (contentType === GENERAL_DOCUMENT_CONTENT_TYPE || resource.path.endsWith('.md'))
-		&& resource.scheme !== ARTIFACT_EXAMPLE_SCHEME
 		&& !generated.isProfileGeneratedPath(resource) && !generated.isGeneratedResource(resource);
 }
 
@@ -26,7 +24,7 @@ registerArtifactCatalogSource(accessor => {
 		error: observableFromEvent(generated, generated.onDidChange, () => generated.error),
 		cards: observableFromEvent(editors, Event.any(editors.onDidChangeEditors, generated.onDidChange), () => {
 			const cards: ArtifactCard[] = generated.files.map(file => ({
-				title: file.title,
+				title: file.title, owner: 'you', resource: file.resource, createdAt: file.createdAt,
 				kind: 'docs',
 				detail: file.contentType === 'text/markdown' ? localize('sessions.artifacts.markdown', 'Markdown') : file.contentType,
 				generatedFileResource: file.resource.toString(),
@@ -41,7 +39,7 @@ registerArtifactCatalogSource(accessor => {
 				documents.add(identity);
 				cards.push({
 					title: input.label ?? basename(input.resource).replace(/\.(?:ash-doc|md)$/u, ''),
-					kind: 'docs',
+					kind: 'docs', owner: 'you', resource: input.resource,
 					detail: getArtifactTitle('docs'),
 					command: { id: 'sessions.creator.openDocument', args: [identity] },
 				});

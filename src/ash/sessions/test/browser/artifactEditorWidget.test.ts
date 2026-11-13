@@ -97,7 +97,7 @@ await import('../../contrib/brand/browser/brand.contribution.js');
 await import('../../contrib/sites/browser/sites.contribution.js');
 await import('../../contrib/make/browser/make.contribution.js');
 await import('../../contrib/prototype/browser/prototype.contribution.js');
-await import('./fixtures/artifactExamples.contribution.js');
+const { createSlides } = await import('./fixtures/artifactExampleShapes.js');
 const DESIGN_EDITOR_RESOURCE = URI.parse('ash-creator:/design');
 await import('../../contrib/artifact/browser/designEditor.contribution.js');
 const { createDesignEditorContributionFactory } = await import('../../contrib/artifact/browser/designEditorContributions.js');
@@ -1388,7 +1388,7 @@ test('Creator opens the originating conversation from a published artifact card'
 	assert.ok(card);
 	assert.equal(card.dataset.generatedFileResource, file.resource.toString());
 	assert.equal(card.title, file.title);
-	assert.match(card.textContent ?? '', /Markdown/u);
+	assert.equal(card.querySelector('time')?.dateTime, new Date(file.createdAt).toISOString());
 	assert.equal(fixture.page.domNode.querySelectorAll('[data-generated-file-resource]').length, 1);
 	card.click();
 	const target = await opened.p;
@@ -2514,12 +2514,51 @@ class AutoSaveFixture extends Disposable {
 	async readActive(): Promise<ReturnType<typeof parseDesignDocument>> { return parseDesignDocument((await this.files.readFile(URI.joinPath(this.activeResource, 'manifest.json'))).content); }
 }
 
-test('Slides examples create independent artifacts that autosave, export and reopen', async () => {
+test('Artifact fixtures restore as ordinary editable documents and never overwrite edits or deleted work', async () => {
+	using fixture = new AutoSaveFixture();
+	const { prepareArtifactFixtures } = await import('./fixtures/artifactExamples.contribution.js');
+	const { ArtifactTableDrafts } = await import('../../contrib/sheets/browser/artifactTableDrafts.js');
+	const profile = fixture.child.get(IUserDataProfileService).currentProfile.location;
+	const workspace = fixture.child.get(IWorkspaceContextService).getWorkspace().id;
+	const docs = await prepareArtifactFixtures(fixture.files, profile, workspace, browser.window.document);
+	assert.ok((await fixture.files.readFile(docs)).content.includes('Studio launch brief'));
+	using view = new CreatorFixture(fixture.child);
+	await view.editors.loadArtifactDocuments();
+	assert.deepEqual([...view.editors.artifactDocuments.get().values()].map(document => document.artifactKind).sort(), ['design', 'motion', 'slides', 'whiteboard']);
+	assert.equal(view.page.domNode.querySelectorAll('.ash-artifacts-work-grid').length, 1);
+	assert.equal(view.page.domNode.querySelectorAll('.ash-artifacts-examples-grid').length, 0);
+	const deck = [...view.editors.artifactDocuments.get().values()].find(document => document.artifactKind === 'slides')!;
+	await view.runCommand('sessions.creator.openCanvasArtifact', deck.model.value.documentId);
+	view.click('Add slide');
+	await deck.flushAutoSave();
+	using tables = fixture.child.createInstance(ArtifactTableDrafts);
+	await tables.ready;
+	assert.equal(tables.drafts.get().size, 2);
+	const sheet = [...tables.drafts.get().values()].find(draft => draft.kind === 'sheet')!;
+	sheet.setCell(1, 0, 'Edited fixture');
+	await tables.rename(sheet, 'Saved budget');
+	const data = [...tables.drafts.get().values()].find(draft => draft.kind === 'data')!;
+	await tables.delete(data);
+	await prepareArtifactFixtures(fixture.files, profile, workspace, browser.window.document);
+	using restored = new CreatorFixture(fixture.child);
+	await restored.editors.loadArtifactDocuments();
+	assert.equal(restored.editors.artifactDocuments.get().size, 4);
+	assert.equal(restored.editors.artifactDocuments.get().get(deck.model.value.documentId)!.model.value.shapes.length, 3);
+	using restoredTables = fixture.child.createInstance(ArtifactTableDrafts);
+	await restoredTables.ready;
+	assert.equal(restoredTables.drafts.get().size, 1);
+	assert.equal(restoredTables.drafts.get().get(sheet.id)!.rows[1][0], 'Edited fixture');
+	assert.equal(restoredTables.drafts.get().get(sheet.id)!.title.get(), 'Saved budget');
+	assert.equal(typeof sheet.createdAt, 'number');
+	assert.equal(restoredTables.drafts.get().get(sheet.id)!.createdAt, sheet.createdAt);
+});
+
+test('Slides documents autosave, export and reopen through the artifact catalog', async () => {
 	using fixture = new AutoSaveFixture();
 	using lifecycle = new class extends AbstractLifecycleService { }(StartupKind.NewWindow, new NullLoggerService(), fixture.storage);
 	fixture.child.registerInstance(ILifecycleService, lifecycle);
 	using view = new CreatorFixture(fixture.child);
-	await view.runCommand('sessions.creator.openExample', 'slides');
+	await view.runCommand('sessions.creator.openCanvasArtifact', view.editors.createArtifactDocument('slides', createSlides()).model.value.documentId);
 	const deck = view.editors.activeEditor.get()!.documentController;
 	const id = deck.model.value.documentId;
 	assert.equal(deck.model.value.shapes.length, 2);
@@ -2554,7 +2593,7 @@ test('Slides examples create independent artifacts that autosave, export and reo
 	assert.equal(unload.defaultPrevented, true);
 	view.page.showHome();
 	assert.equal(view.page.domNode.ownerDocument.activeElement?.getAttribute('data-artifact-workspace'), `canvas:${id}`);
-	await view.runCommand('sessions.creator.openExample', 'slides');
+	await view.runCommand('sessions.creator.openCanvasArtifact', view.editors.createArtifactDocument('slides', createSlides()).model.value.documentId);
 	const second = view.editors.activeEditor.get()!.documentController;
 	assert.notEqual(second.model.value.documentId, id);
 	assert.equal(second.model.value.shapes.length, 2);
@@ -2755,7 +2794,7 @@ test('Design autosave status and Slides artifact export use Chinese localization
 		using view = createView();
 		assert.match(view.pane.editor.getAccessibleContent(), /所有更改已保存/u);
 		using creator = new CreatorFixture(fixture.child);
-		await creator.runCommand('sessions.creator.openExample', 'slides');
+		await creator.runCommand('sessions.creator.openCanvasArtifact', creator.editors.createArtifactDocument('slides', createSlides()).model.value.documentId);
 		assert.match(creator.page.getAccessibleContent(), /工作室发布/u);
 		pressCanvas(creator.editors.activeEditor.get()!, 'F10', { shiftKey: true });
 		assert.ok(contextMenu?.getActions().some(action => action.label === '导出可编辑副本'));

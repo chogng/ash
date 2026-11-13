@@ -20,6 +20,78 @@ const test = base.extend({
 });
 test.use({ viewport: { width: 1600, height: 900 } });
 
+test('Fixture artifacts share one catalog and opening or reloading preserves their identities', { tag: '@artifact-examples' }, async ({ page }) => {
+	const home = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true });
+	await home.click();
+	const cards = page.locator('.ash-artifacts-work-grid .ash-artifacts-card');
+	await expect(cards).toHaveCount(7);
+	await expect(page.locator('.ash-artifacts-work-grid')).toHaveCount(1);
+	await expect(page.locator('.ash-artifacts-examples-grid')).toHaveCount(0);
+	const identities = await cards.evaluateAll(elements => elements.map(element => element.getAttribute('data-artifact-id')).filter(Boolean).sort());
+	expect(identities).toHaveLength(7);
+	await page.getByRole('tab', { name: 'Yours', exact: true }).click();
+	await expect(cards).toHaveCount(7);
+	const slidesDate = page.locator('.ash-artifacts-work-grid .ash-artifacts-card.slides time');
+	await expect(slidesDate).toHaveAttribute('datetime', /.+/u);
+	const savedDate = await slidesDate.getAttribute('datetime');
+	await page.locator('.ash-artifacts-work-grid .ash-artifacts-card.slides').click();
+	await expect(page.locator('[data-creator-mode="slides"]:visible')).toBeVisible();
+	await home.click();
+	await expect(cards).toHaveCount(7);
+	await page.reload();
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await home.click();
+	await expect(cards).toHaveCount(7);
+	expect(await cards.evaluateAll(elements => elements.map(element => element.getAttribute('data-artifact-id')).filter(Boolean).sort())).toEqual(identities);
+	await expect(slidesDate).toHaveAttribute('datetime', savedDate!);
+});
+
+for (const chinese of [false, true]) {
+	test(`Artifact catalog dates and nested sort filters work in ${chinese ? 'Chinese' : 'English'}`, { tag: chinese ? ['@artifact-examples', '@zh-CN'] : '@artifact-examples' }, async ({ page }) => {
+		const home = page.locator('.ash-sessions-activity-content').getByRole('button', { name: chinese ? '作品' : 'Artifacts', exact: true });
+		// Navigation uses the product's existing Artifacts translation.
+		await (await home.count() ? home : page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true })).click();
+		const cards = page.locator('.ash-artifacts-work-grid .ash-artifacts-card');
+		await expect(cards).toHaveCount(7);
+		await expect.poll(() => cards.locator('time[datetime]').count()).toBe(7);
+		const timestamps = await cards.locator('time').evaluateAll(elements => elements.map(element => ({ date: element.getAttribute('datetime'), title: element.getAttribute('title') })));
+		expect(timestamps.every(timestamp => timestamp.date && timestamp.title && Number.isFinite(Date.parse(timestamp.date)))).toBe(true);
+		const sort = page.locator('.ash-artifacts-sort');
+		await sort.press('ArrowDown');
+		await page.getByRole('menuitem', { name: chinese ? '类型' : 'Type', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemradio', { name: chinese ? '幻灯片' : 'Slides', exact: true }).click();
+		await expect(cards).toHaveCount(1);
+		await expect(sort).toHaveClass(/filtered/u);
+		await expect(page.getByRole('tab', { name: chinese ? '全部' : 'All', exact: true })).toHaveAttribute('aria-selected', 'true');
+		await sort.click();
+		await page.getByRole('menuitem', { name: chinese ? '所有者' : 'Owner', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemradio', { name: chinese ? '自己' : 'You', exact: true }).click();
+		await expect(cards).toHaveCount(1);
+		await expect(page.getByRole('tab', { name: chinese ? '我的' : 'Yours', exact: true })).toHaveAttribute('aria-selected', 'true');
+		await sort.click();
+		await page.getByRole('menuitem', { name: chinese ? '所有者' : 'Owner', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemradio', { name: chinese ? '其他人' : 'Others', exact: true }).click();
+		await expect(cards).toHaveCount(0);
+		await sort.click();
+		await page.getByRole('menuitem', { name: chinese ? '重置筛选' : 'Reset filters', exact: true }).click();
+		await expect(cards).toHaveCount(7);
+		await expect(sort).not.toHaveClass(/filtered/u);
+		await sort.press('ArrowDown');
+		await page.getByRole('menuitem', { name: chinese ? '排序方式' : 'Sort by', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemradio', { name: chinese ? '名称' : 'Name', exact: true }).click();
+		await sort.click();
+		await page.getByRole('menuitem', { name: chinese ? '排序方式' : 'Sort by', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemradio', { name: chinese ? '升序' : 'Ascending', exact: true }).click();
+		const titles = await cards.locator('.ash-button-content').allTextContents();
+		expect(titles).toEqual([...titles].sort((a, b) => a.localeCompare(b)));
+		await sort.press('ArrowDown');
+		await page.getByRole('menuitem', { name: chinese ? '类型' : 'Type', exact: true }).press('ArrowRight');
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+		await expect(sort).toBeFocused();
+	});
+}
+
 test('Artifact details share the conversation and dock their views in the editor', { tag: '@artifact-examples' }, async ({ page }) => {
 	const home = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true });
 	const navigation = page.locator('[data-part="sidebar"]');
@@ -73,7 +145,7 @@ test('Artifact details share the conversation and dock their views in the editor
 
 	for (const kind of ['docs', 'slides', 'design', 'sheet', 'whiteboard', 'data', 'motion']) {
 		await home.click();
-		await page.locator(`[data-artifact-example="${kind}"]`).click();
+		await page.locator(`.ash-artifacts-work-grid .ash-artifacts-card.${kind}`).click();
 		await expect(conversation).toBeVisible();
 		await expect(editor).toBeVisible();
 		await expect(header.getByRole('heading')).toBeVisible();
@@ -97,7 +169,7 @@ test('Artifact details share the conversation and dock their views in the editor
 				const checks = docs.getByRole('checkbox');
 				await expect(checks).toHaveCount(3);
 				await expect(checks.first()).toBeChecked();
-				await expect(checks.first()).toBeDisabled();
+				await expect(checks.first()).toBeEnabled();
 				await header.getByRole('button', { name: 'Document tools', exact: true }).click();
 				await expect(dock.getByRole('navigation', { name: 'Document outline' })).toBeVisible();
 				await header.getByRole('button', { name: 'Document tools', exact: true }).click();
@@ -135,7 +207,7 @@ test('Artifact titlebar exports, maximizes and closes the editor beside the side
 	const close = header.getByRole('button', { name: '关闭作品区域' });
 	const exportButton = header.getByRole('button', { name: '导出', exact: true });
 	const home = navigation.getByRole('button', { name: 'Artifacts', exact: true });
-	const slides = page.locator('[data-artifact-example="slides"]');
+	const slides = page.locator('.ash-artifacts-work-grid .ash-artifacts-card.slides');
 	await home.click();
 	await slides.click();
 	await expect(header.getByRole('heading')).toBeVisible();
@@ -208,7 +280,7 @@ test('Saved artifact title actions keep the same document across link, pin, rena
 		await page.getByRole('menuitem', { name, exact: true }).click();
 	};
 	await home.click();
-	await page.locator('[data-artifact-example="slides"]').click();
+	await page.locator('.ash-artifacts-work-grid .ash-artifacts-card.slides').click();
 	await expect(title).toHaveText('Studio launch');
 	await chooseAction('Copy link');
 	const link = await page.evaluate(() => navigator.clipboard.readText());

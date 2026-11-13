@@ -6,7 +6,7 @@ import { getArtifactTitle } from '../../artifact/browser/artifactKindPresentatio
 import { openArtifactWorkspace } from '../../artifact/browser/artifactWorkspaceOpener.js';
 import { registerArtifactCatalogSource } from '../../artifact/browser/artifactWorkspaceRegistry.js';
 import { openArtifactCommands } from '../../artifact/common/artifactWorkspace.js';
-import { ArtifactTableWorkspace, type TableArtifactExample } from './artifactTableWorkspace.js';
+import { ArtifactTableWorkspace } from './artifactTableWorkspace.js';
 import { ArtifactTableDraft, IArtifactTableDrafts, type TableArtifactKind } from './artifactTableDrafts.js';
 
 const openTableCommand = openArtifactCommands.table;
@@ -18,7 +18,7 @@ export function registerTableArtifactCatalog(kind: TableArtifactKind): void {
 			cards: tables.drafts.map((drafts, reader) => [...drafts.values()].filter(draft => draft.kind === kind).map(draft => {
 				const key = `table:${draft.id}`;
 				return {
-					kind, title: draft.title.read(reader) ?? getTableTitle(kind), detail: getArtifactTitle(kind), workspaceKey: key,
+					kind, title: draft.title.read(reader) ?? getTableTitle(kind), detail: getArtifactTitle(kind), workspaceKey: key, owner: 'you' as const, resource: tables.resource(draft), createdAt: draft.createdAt,
 					command: { id: openTableCommand, args: [key] },
 				};
 			})),
@@ -27,11 +27,11 @@ export function registerTableArtifactCatalog(kind: TableArtifactKind): void {
 	});
 }
 
-export function openTableArtifact(accessor: ServicesAccessor, source: TableArtifactExample | ArtifactTableDraft): Promise<void> {
+export function openTableArtifact(accessor: ServicesAccessor, source: ArtifactTableDraft): Promise<void> {
 	const { kind } = source;
-	const title = source instanceof ArtifactTableDraft ? getTableTitle(kind) : source.title;
+	const title = getTableTitle(kind);
 	return openArtifactWorkspace(accessor, {
-		key: source instanceof ArtifactTableDraft ? `table:${source.id}` : `example:${kind}`, entryId: kind, title,
+		key: `table:${source.id}`, entryId: kind, title,
 		mount: (instantiation, container) => {
 			const workspace = instantiation.createInstance(ArtifactTableWorkspace, container.ownerDocument, title, source);
 			workspace.create(container);

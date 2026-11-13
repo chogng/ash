@@ -45,7 +45,7 @@ Design 的标题和窗口操作使用共用的 Artifact 标题栏，编辑工具
 
 ## 开发范例
 
-通过 `pnpm dev` 或 `pnpm dev:web` 启动时，Artifacts 的「全部」显示七套 [测试范例](../../test/browser/fixtures/artifactExamples.contribution.ts)。示例内容、翻译和打开命令只随开发服务器和测试夹具加载。
+通过 `pnpm dev` 或 `pnpm dev:web` 启动时，隔离的开发配置中初始化七份 [测试作品](../../test/browser/fixtures/artifactExamples.contribution.ts)。夹具写入普通文档、画布文件包和表格文件，由正式服务恢复并在同一作品网格显示。「全部」和「我的」共用这些作品的打开、编辑与保存流程。初始化标记防止重载覆盖修改或恢复已删除的作品；发布构建不加载夹具。
 
 ## 目录与命名
 

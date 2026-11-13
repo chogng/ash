@@ -14,7 +14,7 @@ export class DesignModel extends Disposable {
 	private document: DesignDocument;
 	constructor(mode: ArtifactWorkspaceId = ArtifactWorkspaceId.Design, public readonly measureText?: DesignTextMeasurer) {
 		super();
-		this.document = documentFromShapes([], { documentId: generateUuid(), artifactId: generateUuid(), mode });
+		this.document = documentFromShapes([], { documentId: generateUuid(), artifactId: generateUuid(), mode, createdAt: Date.now() });
 	}
 	private modelEpoch = generateUuid();
 	private editRevision = 0;
@@ -95,9 +95,10 @@ export class DesignModel extends Disposable {
 		const components = resolveDesignResources(resolveDesignComponents(layout, resolveDesignResources(getDesignLibraryShapes(resources), resources), this.measureText), resources);
 		// Removing a wire target is derived cleanup, not an explicit instance override.
 		const resolved = reconcilePrototypeLinks(resolveDesignLayout(components, components, this.measureText), this.document.shapes);
-		const { documentId, artifactId, mode, background, title } = this.document;
+		const { documentId, artifactId, mode, background, title, createdAt } = this.document;
 		const next = documentFromShapes(resolved, {
 			documentId, artifactId, mode,
+			...(createdAt === undefined ? {} : { createdAt }),
 			...(background === undefined ? {} : { background }),
 			...(title === undefined ? {} : { title }),
 			...(resources ? { resources } : {}),

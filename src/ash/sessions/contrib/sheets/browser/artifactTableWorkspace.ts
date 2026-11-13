@@ -5,24 +5,14 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { autorun } from '../../../../base/common/observable.js';
-import { getNLSLanguage, localize } from '../../../../nls.js';
+import { localize } from '../../../../nls.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ArtifactTableDraft, IArtifactTableDrafts } from './artifactTableDrafts.js';
-import type { TableArtifactKind } from './artifactTableDrafts.js';
 import type { IArtifactWorkspace } from '../../artifact/browser/artifactWorkspaceRegistry.js';
-
-export interface TableArtifactExample {
-	readonly kind: TableArtifactKind;
-	readonly title: string;
-	readonly detail: string;
-	readonly columns: readonly string[];
-	readonly rows: readonly (readonly (string | number)[])[];
-	readonly summary?: readonly { readonly label: string; readonly value: number; }[];
-}
 
 export class ArtifactTableWorkspace extends Disposable implements IArtifactWorkspace {
 	public readonly domNode: HTMLElement;
@@ -31,21 +21,21 @@ export class ArtifactTableWorkspace extends Disposable implements IArtifactWorks
 	private readonly titleChanged = this._register(new Emitter<void>());
 	public readonly onDidChangeTitle = this.titleChanged.event;
 	public get title(): string {
-		return this.source instanceof ArtifactTableDraft ? this.source.title.get() ?? this.defaultTitle : this.defaultTitle;
+		return this.source.title.get() ?? this.defaultTitle;
 	}
 	public get rename(): ((title: string) => Promise<void>) | undefined {
 		const { source } = this;
-		return source instanceof ArtifactTableDraft ? title => this.drafts.rename(source, title) : undefined;
+		return title => this.drafts.rename(source, title);
 	}
 	public get delete(): (() => Promise<void>) | undefined {
 		const { source } = this;
-		return source instanceof ArtifactTableDraft ? () => this.drafts.delete(source) : undefined;
+		return () => this.drafts.delete(source);
 	}
 
 	constructor(
 		ownerDocument: Document,
 		private readonly defaultTitle: string,
-		private readonly source: TableArtifactExample | ArtifactTableDraft,
+		private readonly source: ArtifactTableDraft,
 		@IFileDialogService private readonly dialogs: IFileDialogService,
 		@IFileService private readonly files: IFileService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -60,63 +50,18 @@ export class ArtifactTableWorkspace extends Disposable implements IArtifactWorks
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.exportActions = [this._register(new Action('sessions.artifacts.table.exportCsv',
 			localize({ bundle: 'ash.artifacts', key: 'exportCsv' }, 'Export CSV'), '', true, () => this.exportCsv()))];
-		if (source instanceof ArtifactTableDraft) {
-			this.domNode.classList.add('editable');
-			this.renderDraft(source);
-			this._register(autorun(reader => {
-				source.title.read(reader);
-				this.domNode.setAttribute('aria-label', this.title);
-				this.domNode.querySelector('table')?.setAttribute('aria-label', this.title);
-				this.titleChanged.fire();
-			}));
-		} else {
-			this.renderExample(source);
-		}
+		this.domNode.classList.add('editable');
+		this.renderDraft(source);
+		this._register(autorun(reader => {
+			source.title.read(reader);
+			this.domNode.setAttribute('aria-label', this.title);
+			this.domNode.querySelector('table')?.setAttribute('aria-label', this.title);
+			this.titleChanged.fire();
+		}));
 	}
 
 	public getAccessibilityHelp(): string {
 		return localize({ bundle: 'ash.artifacts', key: 'tableHelp' }, 'In an editable table, use Tab to move between cells and reach Add row and Add column. Choose Export CSV from Export in the window title bar. Changes save automatically and you can reopen the table from Artifacts.') + '\n\n';
-	}
-
-	private renderExample(example: TableArtifactExample): void {
-		const ownerDocument = this.domNode.ownerDocument;
-		const sheet = example.kind === 'sheet';
-		const numberFormat = new Intl.NumberFormat(getNLSLanguage());
-		if (example.summary) {
-			const summary = h(ownerDocument, 'dl', { className: 'ash-artifact-example-summary' });
-			for (const { label, value } of example.summary) {
-				summary.append(h(ownerDocument, 'div', {}, h(ownerDocument, 'dt', {}, label), h(ownerDocument, 'dd', {}, numberFormat.format(value))));
-			}
-			this.domNode.append(summary);
-		}
-
-		const table = h(ownerDocument, 'table', {}, h(ownerDocument, 'caption', {}, example.detail));
-		const head = table.createTHead();
-		if (sheet) {
-			const coordinates = head.insertRow();
-			coordinates.append(h(ownerDocument, 'td'));
-			example.columns.forEach((_, index) => coordinates.append(h(ownerDocument, 'td', {}, String.fromCharCode(65 + index))));
-			coordinates.setAttribute('aria-hidden', 'true');
-		}
-		const headers = head.insertRow();
-		if (sheet) { headers.append(h(ownerDocument, 'td', { attributes: { 'aria-hidden': 'true' } }, '1')); }
-		for (const [index, label] of example.columns.entries()) {
-			headers.append(h(ownerDocument, 'th', {
-				className: typeof example.rows[0]?.[index] === 'number' ? 'numeric' : '',
-				attributes: { scope: 'col' },
-			}, label));
-		}
-		const body = table.createTBody();
-		for (const [index, values] of example.rows.entries()) {
-			const row = body.insertRow();
-			if (sheet) { row.append(h(ownerDocument, 'td', { attributes: { 'aria-hidden': 'true' } }, String(index + 2))); }
-			for (const value of values) {
-				row.append(h(ownerDocument, 'td', {
-					className: typeof value === 'number' ? 'numeric' : '',
-				}, typeof value === 'number' ? numberFormat.format(value) : value));
-			}
-		}
-		this.domNode.append(table);
 	}
 
 	private renderDraft(draft: ArtifactTableDraft, focus?: { row: number; column: number; }): void {
@@ -181,7 +126,7 @@ export class ArtifactTableWorkspace extends Disposable implements IArtifactWorks
 	}
 
 	private toCsv(): string {
-		const rows = this.source instanceof ArtifactTableDraft ? this.source.rows : [this.source.columns, ...this.source.rows];
+		const rows = this.source.rows;
 		return rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n');
 	}
 
@@ -190,14 +135,7 @@ export class ArtifactTableWorkspace extends Disposable implements IArtifactWorks
 	public layout(_dimension: IDimension): void { }
 	public focus(): void { this.domNode.focus(); }
 	public getAccessibleContent(): string {
-		const source = this.source;
-		if (source instanceof ArtifactTableDraft) return source.rows.map(row => row.join('\t')).join('\n');
-		return [
-			source.detail,
-			...(source.summary?.map(({ label, value }) => `${label}: ${value}`) ?? []),
-			source.columns.join('\t'),
-			...source.rows.map(row => row.join('\t')),
-		].join('\n');
+		return this.source.rows.map(row => row.join('\t')).join('\n');
 	}
 }
 

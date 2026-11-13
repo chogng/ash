@@ -11,10 +11,10 @@ export function registerArtifactCanvasDocument(kind: ArtifactCanvasKind, detail:
 	registerArtifactCatalogSource(accessor => {
 		const mode = artifactCanvasModes[kind];
 		const document = accessor.get(IDesignEditorService).getDocument(mode);
-		const changed = Event.any(document.onDidChangeContent, document.onDidChangeLabel);
+		const changed = Event.any(document.onDidChangeContent, document.onDidChangeLabel, document.onDidChange);
 		return {
 			cards: observableFromEvent(document, changed, () => document.model.value.shapes.length === 0 ? [] : [{
-				title: document.name, kind, detail: detail(document),
+				title: document.name, kind, detail: detail(document), owner: 'you' as const, resource: document.savedResource, createdAt: document.model.value.createdAt,
 				command: { id: 'sessions.creator.openMode', args: [mode] },
 			}]),
 			isRestoring: observableFromEvent(document, document.onDidChange, () => document.isRestoring),
@@ -29,7 +29,7 @@ registerArtifactCatalogSource(accessor => {
 		cards: designs.artifactDocuments.map(artifacts => [...artifacts].flatMap(([id, document]) => {
 			const kind = document.artifactKind;
 			return kind === undefined ? [] : [{
-				title: document.name, kind, detail: getArtifactTitle(kind),
+				title: document.name, kind, detail: getArtifactTitle(kind), owner: 'you' as const, resource: document.savedResource, createdAt: document.model.value.createdAt,
 				workspaceKey: `canvas:${id}`,
 				command: { id: openArtifactCommands.canvas, args: [id] },
 			}];

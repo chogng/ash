@@ -24,6 +24,6 @@ export function openManagedCanvasArtifact(accessor: ServicesAccessor, document: 
 	return openArtifactWorkspace(accessor, {
 		key: `canvas:${document.model.value.documentId}`, entryId: document.artifactKind ?? document.mode, title: document.name,
 		help: getArtifactWorkspace(document.mode)?.help,
-		mount: (instantiation, container) => mountArtifactWorkspace(instantiation, container, document.mode, undefined, document),
+		mount: (instantiation, container) => mountArtifactWorkspace(instantiation, container, document.mode, document),
 	});
 }

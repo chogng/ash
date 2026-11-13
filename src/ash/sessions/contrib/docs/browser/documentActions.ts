@@ -23,8 +23,6 @@ import { ISessionsEntryService } from '../../../services/layout/common/sessionsE
 import { artifactDetailEntry } from '../../artifact/common/artifactWorkspace.js';
 import { DOCS_ARTIFACT_EDITOR_ID, DOCS_MARKDOWN_EDITOR_ID, DOCS_TOOLS_CONTAINER_ID, GENERAL_DOCUMENT_CONTENT_TYPE } from '../common/docs.js';
 
-export const ARTIFACT_EXAMPLE_SCHEME = 'ash-artifact-example';
-
 export async function createGeneralDocument(accessor: ServicesAccessor): Promise<void> {
 	await createDocsOpener(accessor)(newDocsResource(localize('document.untitled', 'Untitled')));
 }
@@ -68,14 +66,13 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 	const layout = accessor.get(ISessionsEntryService);
 	const remember = (resource: URI) => storage.store(activeDocsKey, resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	return async (resource: URI, options: { source?: 'restore'; label?: string; initialText?: string; document?: DocumentNode; } = {}) => {
-		const example = resource.scheme === ARTIFACT_EXAMPLE_SCHEME;
 		const rich = resource.path.toLowerCase().endsWith('.ash-doc');
-		const input = rich ? createDocsInput({ resource, label: options.label, readOnly: example, initialText: options.initialText })
+		const input = rich ? createDocsInput({ resource, label: options.label, initialText: options.initialText })
 			: createMarkdownDocsInput({ resource, label: options.label });
 		const entry = {
-			...artifactDetailEntry, id: example ? 'creator.example.docs' : 'creator.docs',
+			...artifactDetailEntry, id: 'creator.docs',
 			detailsContainerId: rich ? DOCS_TOOLS_CONTAINER_ID : undefined,
-			restoreCommand: example ? 'sessions.show.creator' : 'sessions.restore.creatorDocs',
+			restoreCommand: 'sessions.restore.creatorDocs',
 			editorInput: input,
 			onEditorInputReplaced: (previous: IResourceEditorInput, replacement: IResourceEditorInput) => {
 				if (storage.get(activeDocsKey, StorageScope.WORKSPACE) === previous.resource.toString()) remember(replacement.resource);
@@ -89,7 +86,7 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 				}
 				pane.restoreDraft(options.document);
 			}
-			if (!example) remember(resource);
+			remember(resource);
 			return entry;
 		}, { source: options.source });
 	};

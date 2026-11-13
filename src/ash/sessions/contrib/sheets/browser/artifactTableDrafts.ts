@@ -29,6 +29,7 @@ export class ArtifactTableDraft {
 		public revision: string | undefined,
 		private readonly onChange: (draft: ArtifactTableDraft) => void,
 		title?: string,
+		public readonly createdAt?: number,
 	) {
 		this.titleValue = observableValue(this, title);
 		this.title = this.titleValue;
@@ -65,6 +66,7 @@ export interface IArtifactTableDrafts {
 	readonly drafts: IObservable<ReadonlyMap<string, ArtifactTableDraft>>;
 	readonly isRestoring: IObservable<boolean>;
 	readonly ready: Promise<void>;
+	resource(draft: ArtifactTableDraft): URI;
 	rename(draft: ArtifactTableDraft, title: string): Promise<void>;
 	delete(draft: ArtifactTableDraft): Promise<void>;
 }
@@ -131,16 +133,19 @@ export class ArtifactTableDrafts extends Disposable implements IArtifactTableDra
 				const { content, revision } = await this.files.readFile(entry.resource);
 				const value: unknown = JSON.parse(content);
 				if (!isRecord(value) || (value.kind !== 'sheet' && value.kind !== 'data') || !isTableRows(value.rows)
-					|| value.title !== undefined && !isArtifactName(value.title)) {
+					|| value.title !== undefined && !isArtifactName(value.title)
+					|| value.createdAt !== undefined && (typeof value.createdAt !== 'number' || !Number.isFinite(value.createdAt) || value.createdAt < 0)) {
 					throw new TypeError('Invalid artifact table draft');
 				}
-				restored.set(id, new ArtifactTableDraft(id, value.kind, value.rows, revision, this.queueSave, value.title));
+				restored.set(id, new ArtifactTableDraft(id, value.kind, value.rows, revision, this.queueSave, value.title, value.createdAt as number | undefined));
 			} catch (error) {
 				this.log.warn('creator', 'Could not restore table draft', entry.resource.toString(), error);
 			}
 		}
 		if (!this.isDisposed) this.catalog.set(restored, undefined);
 	}
+
+	public resource(draft: ArtifactTableDraft): URI { return this.home.joinPathSegment(`${draft.id}.json`); }
 
 	public async rename(draft: ArtifactTableDraft, title: string): Promise<void> {
 		if (this.catalog.get().get(draft.id) !== draft || this.deleting.has(draft)) return;
@@ -182,7 +187,7 @@ export class ArtifactTableDrafts extends Disposable implements IArtifactTableDra
 			this.pending.clear();
 			const results = await Promise.allSettled(batch.map(async draft => {
 				const resource = this.home.joinPathSegment(`${draft.id}.json`);
-				const content = JSON.stringify({ kind: draft.kind, rows: draft.rows, title: draft.title.get() });
+				const content = JSON.stringify({ kind: draft.kind, rows: draft.rows, title: draft.title.get(), createdAt: draft.createdAt });
 				try {
 					const result = await this.files.writeFile({ resource, content, expectedRevision: draft.revision });
 					draft.revision = result.revision;

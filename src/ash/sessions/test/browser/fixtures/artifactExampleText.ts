@@ -1,17 +1,8 @@
 import { formatNlsMessage, getNLSLanguage } from '../../../../nls.js';
 
 const chinese: Readonly<Record<string, string>> = {
-	examples: "范例",
 	exampleTitle: "{0}范例",
-	examplesHelp: "在「全部」中，在幻灯片范例上按 Enter 会创建新作品。作品会自动保存，可从「我的」重新打开。使用「导出可编辑副本」创建文件包。其他画布范例的修改保留在当前窗口中。文档、电子表格和数据范例为只读。",
-	exampleDocs: "包含标题、清单和日程的发布简报",
 	exampleDocsContent: "# 工作室发布简报\n\n为工作室的创作成果建立一个共享空间。先邀请少量成员试用，再根据反馈准备公开发布。\n\n## 准备清单\n\n- [x] 审阅视觉方向\n- [ ] 邀请试用成员\n- [ ] 发布更新说明\n\n## 日程\n\n| 里程碑 | 目标日期 |\n| --- | --- |\n| 试用 | 周二 |\n| 讨论反馈 | 周四 |\n| 公开发布 | 下周一 |",
-	exampleSlides: "可进入演示模式的两页幻灯片",
-	exampleDesign: "带可编辑图层的落地页",
-	exampleSheet: "只读的发布预算表",
-	exampleWhiteboard: "带便签和连线的计划白板",
-	exampleData: "只读的试用活动概览",
-	exampleMotion: "带可编辑关键帧的循环动画",
 	exampleItem: "项目",
 	exampleOwner: "负责人",
 	exampleBudget: "预算",

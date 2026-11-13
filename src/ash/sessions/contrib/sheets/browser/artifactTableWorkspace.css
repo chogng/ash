@@ -54,30 +54,6 @@
 	color: var(--ash-description-foreground);
 }
 
-.ash-artifact-example-summary {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--ash-spacing-size160);
-	margin: 0 0 var(--ash-spacing-size240);
-}
-
-.ash-artifact-example-summary > div {
-	min-width: 120px;
-	padding: var(--ash-spacing-size160);
-	border: var(--ash-strokeThickness) solid var(--ash-border);
-	border-radius: var(--ash-cornerRadius-large);
-}
-
-.ash-artifact-example-summary dt {
-	color: var(--ash-description-foreground);
-}
-
-.ash-artifact-example-summary dd {
-	margin: var(--ash-spacing-size80) 0 0;
-	font-size: var(--ash-fontSize-heading2);
-	font-weight: var(--ash-fontWeight-semiBold);
-}
-
 .ash-artifact-table-workspace.editable tbody td {
 	padding: 0;
 	border: var(--ash-strokeThickness) solid var(--ash-border);

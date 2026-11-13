@@ -22,22 +22,16 @@ import type { ArtifactEditorWidget } from './widget/artifactEditorWidget.js';
 import type { DesignDocumentController } from './designDocumentController.js';
 import { DESIGN_PROPERTIES_CONTAINER_ID, IDesignEditorService } from './designEditorService.js';
 
-export interface ArtifactDesignExample {
-	readonly title: string;
-	readonly editorMode?: DesignMode;
-	createShapes(): readonly DesignShape[];
-}
-
-const artifactWorkspaces = new Map<ArtifactWorkspaceId, (instantiation: IInstantiationService, container: HTMLElement, example?: ArtifactDesignExample, document?: DesignDocumentController) => ArtifactWorkspace>();
+const artifactWorkspaces = new Map<ArtifactWorkspaceId, (instantiation: IInstantiationService, container: HTMLElement, document?: DesignDocumentController) => ArtifactWorkspace>();
 
 export function registerArtifactWorkspaceMode(
 	mode: Omit<ArtifactWorkspaceContribution, 'mount'>,
 	create: (instantiation: IInstantiationService, document: Document) => ArtifactWorkspace,
 ): void {
-	const mount = (instantiation: IInstantiationService, container: HTMLElement, example?: ArtifactDesignExample, document?: DesignDocumentController) => {
+	const mount = (instantiation: IInstantiationService, container: HTMLElement, document?: DesignDocumentController) => {
 		const workspace = create(instantiation, container.ownerDocument);
 		try {
-			workspace.create(container, example, document);
+			workspace.create(container, document);
 			return workspace;
 		} catch (error) {
 			workspace.dispose();
@@ -48,8 +42,8 @@ export function registerArtifactWorkspaceMode(
 	registerArtifactWorkspace({ ...mode, mount: (instantiation, container) => mount(instantiation, container) });
 }
 
-export function mountArtifactWorkspace(instantiation: IInstantiationService, container: HTMLElement, mode: ArtifactWorkspaceId, example?: ArtifactDesignExample, document?: DesignDocumentController): ArtifactWorkspace {
-	return artifactWorkspaces.get(mode)!(instantiation, container, example, document);
+export function mountArtifactWorkspace(instantiation: IInstantiationService, container: HTMLElement, mode: ArtifactWorkspaceId, document?: DesignDocumentController): ArtifactWorkspace {
+	return artifactWorkspaces.get(mode)!(instantiation, container, document);
 }
 
 const ActiveArtifactWorkspace = new RawContextKey<ArtifactWorkspaceId | undefined>('sessions.artifacts.activeCanvasWorkspace', undefined);
@@ -146,7 +140,7 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		});
 	}
 
-	public create(container: HTMLElement, example?: ArtifactDesignExample, document?: DesignDocumentController): void {
+	public create(container: HTMLElement, document?: DesignDocumentController): void {
 		this.domNode = h(this.ownerDocument, 'section', { className: 'ash-creator-workspace', attributes: { 'data-creator-mode': this.mode } });
 		this.contentDomNode = h(this.ownerDocument, 'div', { className: 'ash-creator-workspace-content' });
 		this.domNode.append(this.contentDomNode);
@@ -157,7 +151,7 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		const canEdit = ArtifactWorkspaceCanEdit.bindTo(scope);
 		const scopedInstantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, scope])));
 		this.editorHost = this._register(scopedInstantiation.createInstance(DesignEditorHost, this.mode));
-		this.editorHost.create(this.contentDomNode, example, document);
+		this.editorHost.create(this.contentDomNode, document);
 		const exportSvg = this._register(new Action('sessions.creator.canvas.exportSvg', localize2('sessions.design.export', 'Export SVG').value,
 			'', true, () => this.document.exportDocument()));
 		this.exportActions = this.mode === ArtifactWorkspaceId.Design || this.document.artifactKind !== undefined
@@ -168,8 +162,8 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		ArtifactWorkspaceHasManagedDocument.bindTo(scope).set(this.document.artifactKind !== undefined);
 		this.editor.setWorkspaceToolbarContext(this);
 		this.createModeContent();
-		if (example || document) { this.initialFrame = this.document.model.value.shapes[0]?.id; }
-		const editorMode = document?.artifactKind === 'motion' ? DesignMode.Motion : example?.editorMode;
+		if (document) { this.initialFrame = this.document.model.value.shapes[0]?.id; }
+		const editorMode = document?.artifactKind === 'motion' ? DesignMode.Motion : undefined;
 		if (editorMode) { this.editor.setMode(editorMode); }
 		const updateModeContext = this.bindToolbarContext?.(scope);
 		const updateContext = () => scope.bufferChangeEvents(() => {

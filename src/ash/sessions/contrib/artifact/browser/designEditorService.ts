@@ -28,7 +28,6 @@ export interface IDesignEditorService {
 	loadArtifactDocuments(): Promise<void>;
 	createArtifactDocument(kind: ArtifactCanvasKind, shapes: readonly DesignShape[]): DesignDocumentController;
 	deleteArtifactDocument(document: DesignDocumentController): Promise<void>;
-	adoptExampleDocument(document: DesignDocumentController, ownerWindow: Window): void;
 	setActiveEditor(editor: ArtifactEditorWidget | undefined): void;
 }
 
@@ -36,14 +35,13 @@ export const IDesignEditorService = createServiceIdentifier<IDesignEditorService
 
 export class DesignEditorService extends Disposable implements IDesignEditorService {
 	private readonly documents = new Map<ArtifactWorkspaceId, DesignDocumentController>();
-	private readonly adoptedExamples = new Set<DesignDocumentController>();
 	private readonly artifacts = observableValue<ReadonlyMap<string, DesignDocumentController>>(this, new Map());
 	private readonly artifactLifetimes = this._register(new DisposableMap<string, DisposableStore>());
 	public readonly artifactDocuments: IObservable<ReadonlyMap<string, DesignDocumentController>> = this.artifacts;
 	private readonly draftHome: URI;
 	private artifactLoading: Promise<void> | undefined;
 	private get managedDocuments(): readonly DesignDocumentController[] {
-		return [...this.documents.values(), ...this.adoptedExamples, ...this.artifacts.get().values()];
+		return [...this.documents.values(), ...this.artifacts.get().values()];
 	}
 	public get document(): DesignDocumentController { return this.getDocument(ArtifactWorkspaceId.Design); }
 	private readonly active = observableValue<ArtifactEditorWidget | undefined>(this, undefined);
@@ -146,17 +144,6 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 			this.documents.set(mode, document);
 		}
 		return document;
-	}
-	public adoptExampleDocument(document: DesignDocumentController, ownerWindow: Window): void {
-		this.adoptedExamples.add(this._register(document));
-		this._register(this.workingCopies.register(document));
-		// Browser navigation cannot wait for an asynchronous file write.
-		this._register(addDisposableListener(ownerWindow, 'beforeunload', (event: BeforeUnloadEvent) => {
-			if (!this.lifecycle.willShutdown && (document.isDirty || document.needsSaveRetry)) {
-				event.preventDefault();
-				event.returnValue = '';
-			}
-		}));
 	}
 	private async confirmDiscard(): Promise<boolean> {
 		for (const document of this.managedDocuments) {
