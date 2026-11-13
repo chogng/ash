@@ -279,5 +279,12 @@ fn tcp_read_discards_bytes_when_revocation_races_with_the_syscall() {
         streams.read("read").unwrap_err().kind(),
         std::io::ErrorKind::PermissionDenied
     );
-    assert_eq!(peer.read(&mut [0]).unwrap(), 0);
+    // Closing with unread kernel-buffered bytes can reset the peer on macOS.
+    // Both EOF and reset prove that the revoked socket no longer carries data.
+    let closed = peer.read(&mut [0]);
+    assert!(
+        matches!(closed, Ok(0))
+            || matches!(&closed, Err(error) if error.kind() == std::io::ErrorKind::ConnectionReset),
+        "revoked socket remained usable: {closed:?}"
+    );
 }
