@@ -731,8 +731,11 @@ fn disable_commits_then_waits_for_exact_invocation_drain() {
             },
         ))
         .unwrap();
-    let active = authority.snapshot().activation().packages()[0].clone();
-    let fence = authority.invocation_fence(&active).unwrap();
+    let snapshot = authority.snapshot();
+    let activation = snapshot.activation();
+    let fence = authority
+        .invocation_fence(activation, &activation.packages()[0])
+        .unwrap();
     let lease = fence.acquire().unwrap();
     let subscription = authority.subscribe();
     let expected_revision = authority.snapshot().revision();
@@ -817,8 +820,11 @@ fn enabling_a_new_version_switches_generation_without_mutating_the_old_object() 
             .apply(request(&authority, command_id, command))
             .unwrap();
     }
-    let first_active = authority.snapshot().activation().packages()[0].clone();
-    let first_fence = authority.invocation_fence(&first_active).unwrap();
+    let snapshot = authority.snapshot();
+    let activation = snapshot.activation();
+    let first_fence = authority
+        .invocation_fence(activation, &activation.packages()[0])
+        .unwrap();
 
     authority
         .apply(request(
@@ -893,8 +899,11 @@ fn unrelated_activation_change_does_not_revoke_an_exact_package_fence() {
             },
         ))
         .unwrap();
-    let active = authority.snapshot().activation().packages()[0].clone();
-    let fence = authority.invocation_fence(&active).unwrap();
+    let snapshot = authority.snapshot();
+    let activation = snapshot.activation();
+    let fence = authority
+        .invocation_fence(activation, &activation.packages()[0])
+        .unwrap();
 
     authority
         .apply(request(

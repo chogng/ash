@@ -599,9 +599,10 @@ impl PluginActivationAuthority {
         Ok(())
     }
 
-    /// Creates an exact dispatch fence for one package in the current active snapshot.
+    /// Creates an exact dispatch fence only while the supplied activation is still current.
     pub fn invocation_fence(
         &self,
+        activation: &PluginActivationSnapshot,
         package: &InstalledPluginPackage,
     ) -> Option<PluginInvocationFence> {
         let state = self
@@ -609,6 +610,9 @@ impl PluginActivationAuthority {
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if state.activation_generation != activation.generation() {
+            return None;
+        }
         let active = state.active.get(&package.manifest().id)?;
         if active.package.digest != *package.package_digest() {
             return None;

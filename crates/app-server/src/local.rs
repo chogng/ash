@@ -609,6 +609,7 @@ pub struct LocalConnectorRuntime {
     base_definitions: Vec<connectors::ConnectorDefinition>,
     base_mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
     plugin_authority: Option<PluginActivationAuthority>,
+    plugin_activation_generation: Option<u64>,
     plugins_manager: Option<Arc<ash_core_plugins::ExtensionPackageManager>>,
     oauth: Option<Arc<connectors::ConnectorOAuthService>>,
     device_oauth: Option<Arc<connectors::ConnectorDeviceOAuthService>>,
@@ -634,6 +635,7 @@ impl LocalConnectorRuntime {
             base_definitions,
             base_mcp: mcp,
             plugin_authority: None,
+            plugin_activation_generation: None,
             plugins_manager: None,
             oauth: None,
             device_oauth: None,
@@ -719,8 +721,11 @@ impl LocalConnectorRuntime {
         )
         .map_err(|error| OpenAppServerError(error.to_string()))?;
         let mcp: Arc<dyn ConnectorMcpRuntimeProvider> = Arc::new(
-            PluginConnectorMcpRuntimeProvider::from_authority(&plugin_authority)
-                .map_err(|error| OpenAppServerError(error.to_string()))?,
+            PluginConnectorMcpRuntimeProvider::from_authority(
+                &plugin_authority,
+                snapshot.activation(),
+            )
+            .map_err(|error| OpenAppServerError(error.to_string()))?,
         );
         let service = Arc::new(connectors::ConnectorCredentialService::new(
             authority,
@@ -738,6 +743,7 @@ impl LocalConnectorRuntime {
                 .collect(),
             base_mcp: mcp,
             plugin_authority: Some(plugin_authority),
+            plugin_activation_generation: Some(snapshot.activation().generation()),
             plugins_manager: None,
             oauth: None,
             device_oauth: None,
@@ -753,7 +759,9 @@ impl LocalConnectorRuntime {
     }
 
     fn reconcile_sources(&mut self) -> Result<(), OpenAppServerError> {
-        let (mut definitions, mut mcp) = if let Some(authority) = &self.plugin_authority {
+        let (mut definitions, mut mcp, plugin_activation_generation) = if let Some(authority) =
+            &self.plugin_authority
+        {
             let snapshot = authority.snapshot();
             let catalog = connectors::ConnectorCatalog::from_activation(snapshot.activation())
                 .map_err(open_error)?;
@@ -764,13 +772,19 @@ impl LocalConnectorRuntime {
                 .map(|entry| entry.definition().clone())
                 .collect();
             let provider =
-                PluginConnectorMcpRuntimeProvider::from_authority(authority).map_err(open_error)?;
+                PluginConnectorMcpRuntimeProvider::from_authority(authority, snapshot.activation())
+                    .map_err(open_error)?;
             (
                 definitions,
                 Arc::new(provider) as Arc<dyn ConnectorMcpRuntimeProvider>,
+                Some(snapshot.activation().generation()),
             )
         } else {
-            (self.base_definitions.clone(), Arc::clone(&self.base_mcp))
+            (
+                self.base_definitions.clone(),
+                Arc::clone(&self.base_mcp),
+                None,
+            )
         };
         if let Some(manager) = &self.plugins_manager {
             let catalog =
@@ -784,6 +798,7 @@ impl LocalConnectorRuntime {
             .reconcile_definitions(definitions)
             .map_err(open_error)?;
         self.mcp = mcp;
+        self.plugin_activation_generation = plugin_activation_generation;
         Ok(())
     }
 
@@ -2653,17 +2668,19 @@ impl ToolConfigWatcher {
         let connector_changes = connectors
             .as_ref()
             .map(|runtime| runtime.service.authority().subscribe());
-        let plugin_changes = connectors
+        let plugin_authority = connectors
             .as_ref()
             .and_then(|runtime| runtime.plugin_authority.as_ref())
+            .cloned();
+        let plugin_changes = plugin_authority
+            .as_ref()
             .map(PluginActivationAuthority::subscribe);
         let extension_packages_changes = connectors
             .as_ref()
             .and_then(|runtime| runtime.plugins_manager.as_ref())
             .and_then(|manager| manager.subscribe().ok());
-        let mut plugin_activation_generation = connectors
+        let mut plugin_activation_generation = plugin_authority
             .as_ref()
-            .and_then(|runtime| runtime.plugin_authority.as_ref())
             .map(|authority| authority.snapshot().activation().generation());
         drop(connectors);
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
@@ -2828,19 +2845,23 @@ impl ToolConfigWatcher {
                             continue;
                         }
                     };
+                    let mut composed_plugin_generation = None;
                     let composition = match &connector_runtime {
                         Some(connectors) => {
-                            let (authority, secrets, provider) = match connectors.lock() {
-                                Ok(connectors) => (
-                                    connectors.service.authority().clone(),
-                                    Arc::clone(&connectors.secrets),
-                                    Arc::clone(&connectors.mcp),
-                                ),
-                                Err(error) => {
-                                    env_tools.record_reconcile_failure(error.to_string());
-                                    continue;
-                                }
-                            };
+                            let (authority, secrets, provider, plugin_generation) =
+                                match connectors.lock() {
+                                    Ok(connectors) => (
+                                        connectors.service.authority().clone(),
+                                        Arc::clone(&connectors.secrets),
+                                        Arc::clone(&connectors.mcp),
+                                        connectors.plugin_activation_generation,
+                                    ),
+                                    Err(error) => {
+                                        env_tools.record_reconcile_failure(error.to_string());
+                                        continue;
+                                    }
+                                };
+                            composed_plugin_generation = plugin_generation;
                             let runtime_intents = mcp_runtime_intents.snapshot();
                             compose_mcp_tools_with_connectors_and_runtime_intents_and_updates(
                                 &snapshot.values,
@@ -2865,6 +2886,18 @@ impl ToolConfigWatcher {
                             )
                         }
                     };
+                    // Startup can block on MCP discovery. Discard a catalog overtaken by a
+                    // Plugin change; exact dispatch fences cover changes after this check.
+                    if plugin_authority
+                        .as_ref()
+                        .zip(composed_plugin_generation)
+                        .is_some_and(|(authority, generation)| {
+                            authority.snapshot().activation().generation() != generation
+                        })
+                    {
+                        plugin_dirty = true;
+                        continue;
+                    }
                     let (mcp, mcp_status) = match composition {
                         Ok(Some(mcp)) => {
                             let status = mcp.status.clone();
