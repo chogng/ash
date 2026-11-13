@@ -3751,7 +3751,7 @@ impl ThreadController {
                             .ok_or_else(|| {
                                 CoreError::Journal("checkpoint source was disposed".into())
                             })?
-                            .capture(thread_id, turn_id, item.item_id(), &event_id)?,
+                            .capture(thread_id, turn_id, item, &event_id)?,
                         None => Box::new(crate::message_checkpoint::NoFilesCapture(
                             ash_protocol::WorkspaceCheckpoint::NoFiles,
                         )),

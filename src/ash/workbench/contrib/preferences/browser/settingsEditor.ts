@@ -13,7 +13,6 @@ import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../..
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
-import { SearchSettingsModel } from '../../search/browser/searchSettingsModel.js';
 import { NetworkSettingsRenderer } from './networkSettingsRenderer.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { CLOSE_EDITOR_COMMAND_ID } from '../../../browser/parts/editor/editorCommands.js';
@@ -282,7 +281,6 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 				await this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(CLOSE_EDITOR_COMMAND_ID));
 			}, undefined)),
 			this._register(this.instantiationService.createInstance(NetworkSettingsRenderer, settingsContent)),
-			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(SearchSettingsModel)), AccessibleViewProviderId.ContentSearchSettings, AccessibilityVerbositySettingId.ContentSearchSettings)),
 			...getSettingsSections().map(section => this._register(this.instantiationService.createInstance(
 				SettingsSectionRenderer, settingsContent,
 				this._register(this.instantiationService.createInstance(section.model)),

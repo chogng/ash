@@ -37,7 +37,17 @@ export type SettingsMenuOption =
 export type SettingsSectionField = { readonly description?: string; } & (
 	| { readonly id: string; readonly kind: 'status'; readonly text: string; }
 	| { readonly id: string; readonly kind: 'boolean'; readonly label: string; readonly value: boolean; readonly enabled: boolean; readonly setValue: (value: boolean) => void; }
-	| { readonly id: string; readonly kind: 'text'; readonly label: string; readonly value: string; readonly placeholder: string; readonly enabled: boolean; readonly setValue: (value: string) => void; }
+	| {
+		readonly id: string;
+		readonly kind: 'text';
+		readonly label: string;
+		readonly value: string;
+		readonly placeholder: string;
+		readonly enabled: boolean;
+		/** Commit on Enter or when leaving a modified field. The default reports every edit. */
+		readonly commitOnChange?: boolean;
+		readonly setValue: (value: string) => void;
+	}
 	| { readonly id: string; readonly kind: 'select'; readonly label: string; readonly value: string | undefined; readonly options: readonly { readonly value: string; readonly label: string; readonly separatorBefore?: boolean; }[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
 	| { readonly id: string; readonly kind: 'menu'; readonly label: string; readonly value: string; readonly valueLabel: string; readonly valueDescription?: string; readonly options: readonly SettingsMenuOption[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
 	| { readonly id: string; readonly kind: 'action'; readonly label: string; readonly enabled: boolean; readonly run: () => Promise<void>; });

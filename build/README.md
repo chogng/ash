@@ -543,7 +543,7 @@ just test-python build
 
 ## Public grep runtime
 
-`lib/tgrep.py` and development `prepare.py` build the same pinned 1.2.3-ash.58629d2.1 source, Ash runtime patch and shared file-search ranking/admission sources from
+`lib/tgrep.py` and development `prepare.py` build the same pinned 1.2.7-ash.70c3b0a.1 source, Ash runtime patch and shared file-search ranking/admission sources from
 [`third_party/tgrep/runtime-lock.json`](../third_party/tgrep/runtime-lock.json).
 Source builds use the release profile with debug information disabled and symbols
 stripped on every target. The profile participates in the cache identity, so a

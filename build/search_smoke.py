@@ -268,19 +268,32 @@ def verify(package, node=None):
                     key: metadata["protocol"][key] for key in ("major",)
                 }
                 assert initialized["schemaHash"] == metadata["protocol"]["schemaHash"]
-                status = client.call("grep/index/status", {})
-                assert status["enabled"] and not status["active"], status
-                status = client.call("grep/index/rebuild", {})
+                deadline = time.monotonic() + client.timeout
+                while True:
+                    status = client.call("grep/index/status", {})
+                    assert status["enabled"], status
+                    if status["ready"]:
+                        break
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError(
+                            f"workspace grep index did not warm up: {status}"
+                        )
+                    time.sleep(0.025)
                 discovery = list(profile.rglob("serve.json"))
                 client.servers.extend(
                     json.loads(path.read_text()) for path in discovery
                 )
                 assert len(discovery) == 1, discovery
-                assert status["ready"] and status["indexedFileCount"] == 1, status
+                assert status["active"] and status["indexedFileCount"] == 1, status
                 rows, pages = search(client, "packaged_tgrep_marker", "indexed")
                 assert pages == [100, 50], pages
                 assert [row["lineNumber"] for row in rows] == list(range(1, 151)), rows
                 assert all(row["path"] == "marker.rs" for row in rows)
+                assert (
+                    json.loads(discovery[0].read_text())["pid"]
+                    == client.servers[0]["pid"]
+                )
+                assert client.call("grep/index/rebuild", {})["ready"]
                 with source.open("a", encoding="utf-8") as output:
                     output.write("latest_disk_marker\n")
                 current, _ = search(client, "latest_disk_marker", "current")
@@ -299,6 +312,7 @@ def verify(package, node=None):
                 "buildId": metadata["buildId"],
                 "tgrepVersion": component["version"],
                 "indexedPages": pages,
+                "indexReadyBeforeFirstSearch": True,
                 "indexedGlobs": True,
                 "indexStats": True,
                 "currentDiskLine": 151,

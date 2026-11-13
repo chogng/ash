@@ -5,6 +5,49 @@ use crate::GitTreeReplayResult;
 use crate::test_support::TestRepository;
 
 #[tokio::test]
+async fn checkpoint_preserves_worktree_contents_with_clean_staged_and_flagged_indexes() {
+    let fixture = TestRepository::init();
+    fixture.write(".gitignore", "ignored.txt\n");
+    fixture.write("tracked.txt", "base\n");
+    fixture.commit_all("baseline");
+    let git = GitClient::system();
+    let repository = git.open_repository(fixture.root()).await.unwrap();
+    fixture.write("tracked.txt", "worktree edit\n");
+    fixture.write("ignored.txt", "ignored\n");
+    fixture.write("untracked.txt", "untracked\n");
+    let index = repository.git_dir().join("index");
+    let original_index = std::fs::read(&index).unwrap();
+    let expected = git.capture_worktree_tree(&repository).await.unwrap();
+    assert_eq!(std::fs::read(&index).unwrap(), original_index);
+    assert_eq!(
+        fixture.git(&["show", &format!("{}:tracked.txt", expected.as_str())]),
+        "worktree edit"
+    );
+    assert_eq!(
+        fixture.git(&["ls-tree", "--name-only", expected.as_str()]),
+        ".gitignore\ntracked.txt\nuntracked.txt"
+    );
+
+    fixture.git(&["add", "-f", "ignored.txt"]);
+    assert_eq!(
+        git.capture_worktree_tree(&repository).await.unwrap(),
+        expected
+    );
+    fixture.git(&["reset", "--", "ignored.txt"]);
+    fixture.git(&["update-index", "--assume-unchanged", "tracked.txt"]);
+    assert_eq!(
+        git.capture_worktree_tree(&repository).await.unwrap(),
+        expected
+    );
+    fixture.git(&["update-index", "--no-assume-unchanged", "tracked.txt"]);
+    fixture.git(&["update-index", "--skip-worktree", "tracked.txt"]);
+    assert_eq!(
+        git.capture_worktree_tree(&repository).await.unwrap(),
+        expected
+    );
+}
+
+#[tokio::test]
 async fn selection_preserves_rename_delete_binary_and_mode_without_reading_later_edits() {
     let fixture = TestRepository::init();
     fixture.write("old.txt", "rename this file\n");

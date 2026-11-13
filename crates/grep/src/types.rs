@@ -20,7 +20,7 @@ pub struct FuzzyFileMatch {
 }
 
 /// Selects indexed search at application composition time. Ripgrep disables indexes;
-/// Current and explicit-file queries always use ripgrep regardless of this preference.
+/// Current and explicit-file queries always scan the filesystem regardless of this preference.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Backend {
     Ripgrep,
@@ -41,7 +41,7 @@ pub enum CaseSensitivity {
 }
 
 /// Indexed queries include observed writes but may lag external filesystem changes.
-/// Current queries use ripgrep to read eligible files without opening an index session.
+/// Current queries read eligible files without opening an index session.
 /// For tgrep directory queries, indexed includes filter the ordinary, non-hidden corpus;
 /// current includes may explicitly admit ignored files. This also holds before index readiness.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

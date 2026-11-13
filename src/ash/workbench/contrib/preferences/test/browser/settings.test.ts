@@ -414,9 +414,9 @@ test('developer command opens a grouped read-only tool snapshot outside ordinary
 	);
 });
 
-test('Chinese indexed search settings explain engine scope in the control and accessibility help', async () => {
+test('Chinese Codebase settings explain indexed Grep in the control and accessibility help', async () => {
 	using resources = new DisposableStore();
-	const { SearchSettingsModel } = await import('../../../search/browser/searchSettingsModel.js');
+	const { CodebaseSettingsModel } = await import('../../../codebase/browser/codebaseSettingsModel.js');
 	const { SettingsSectionRenderer } = await import('../../browser/settingsSectionRenderer.js');
 	const { ContextKeyService, IContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
@@ -431,9 +431,16 @@ test('Chinese indexed search settings explain engine scope in the control and ac
 	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } });
 	services.registerInstance(RemoteAgentServiceId, {
+		connectionState: 'connected',
 		onDidChangeConnectionState: Event.None,
 		onDidChangeConnection: Event.None,
 	} as IAppServerRemoteAgentService);
+	services.registerInstance(ICodebaseService, {
+		onDidChangeConfig: Event.None,
+		readConfig: async () => ({ revision: 1, generation: 1, codebase: { automaticContext: 'off' } }),
+		configure: async () => { throw new Error('Unexpected Codebase write'); },
+		status: async () => { throw new Error('Unexpected Codebase status read'); },
+	});
 	services.registerInstance(IContentSearchConfigurationService, {
 		read: async () => ({ revision: 1, engine: 'tgrep' }),
 		configure: async () => { },
@@ -450,39 +457,45 @@ test('Chinese indexed search settings explain engine scope in the control and ac
 		services.createInstance(
 			SettingsSectionRenderer,
 			root,
-			resources.add(services.createInstance(SearchSettingsModel)),
+			resources.add(services.createInstance(CodebaseSettingsModel)),
 			AccessibleViewProviderId.ContentSearchSettings,
 			AccessibilityVerbositySettingId.ContentSearchSettings,
 		),
 	);
-	const item = content.getNodes()[0].children![0].element;
+	const item = content.getNodes()[0].element;
 	assert.ok(item.kind === 'item' && 'rendererId' in item.value);
 	root.append(content.renderItem(item.value));
 	content.setVisible(true);
 	await nextTurn();
-	const engine = root.querySelector<HTMLElement>('[role="combobox"]')!;
-	assert.equal(engine.getAttribute('aria-label'), '索引搜索引擎');
-	assert.equal(engine.textContent, 'tgrep（默认）');
-	assert.match(root.textContent ?? '', /tgrep 加速 Agent 和 Codebase 的索引搜索/);
-	assert.match(root.textContent ?? '', /编辑器的 Current 搜索始终使用 ripgrep（rg）/);
+	const engine = root.querySelector<HTMLInputElement>('[role="switch"]')!;
+	assert.equal(engine.getAttribute('aria-label'), '为 Grep 启用仓库索引');
+	assert.equal(engine.checked, true);
+	const description = engine.getAttribute('aria-describedby')!;
+	assert.equal(root.ownerDocument.getElementById(description)?.textContent, '自动为仓库建立索引，加速 Grep 搜索。索引数据均存储在本地。');
 	engine.focus();
 	const help = AccessibleViewRegistry.getImplementations()
 		.find(provider => provider.name.startsWith('settingsSection-') && provider.type === AccessibleViewType.Help)
 		?.getProvider(services);
 	assert.ok(help);
 	resources.add(help);
-	assert.match(help.provideContent(), /选择 ripgrep 会关闭索引并扫描当前文件/);
-	assert.match(help.provideContent(), /编辑器的 Current 搜索始终使用 ripgrep/);
+	assert.match(help.provideContent(), /打开有搜索权限的仓库后，Ash 会在后台准备索引/);
+	assert.match(help.provideContent(), /按 Enter 或离开输入框即可保存/);
 });
 
-test('Search settings discard retired reads and save through the current backend revision', async () => {
+test('Codebase settings discard retired reads and save through the current backend revision', async () => {
 	using resources = new DisposableStore();
-	const { SearchSettingsModel } = await import('../../../search/browser/searchSettingsModel.js');
+	const { CodebaseSettingsModel } = await import('../../../codebase/browser/codebaseSettingsModel.js');
 	const connections = resources.add(new Emitter<void>());
 	const reads: DeferredPromise<{ revision: number; engine: 'tgrep' | 'ripgrep'; }>[] = [];
 	const writes: [string, number][] = [];
 	const model = resources.add(
-		new SearchSettingsModel(
+		new CodebaseSettingsModel(
+			{
+				onDidChangeConfig: Event.None,
+				readConfig: async () => ({ revision: 8, generation: 8, codebase: { automaticContext: 'off' } }),
+				configure: async () => { throw new Error('Unexpected Codebase write'); },
+				status: async () => { throw new Error('Unexpected Codebase status read'); },
+			},
 			{
 				read: () => {
 					const read = new DeferredPromise<{ revision: number; engine: 'tgrep' | 'ripgrep'; }>();
@@ -494,31 +507,32 @@ test('Search settings discard retired reads and save through the current backend
 				},
 			},
 			{
+				connectionState: 'connected',
 				onDidChangeConnection: connections.event,
 				onDidChangeConnectionState: Event.None,
 			} as unknown as IAppServerRemoteAgentService,
 		),
 	);
-	const engine = () => model.fields.find(field => field.kind === 'select')!;
+	const engine = () => model.fields.filter(field => field.kind === 'boolean').find(field => field.id === 'grep')!;
 	model.setVisible(true);
 	connections.fire();
 	await reads[1].complete({ revision: 8, engine: 'ripgrep' });
 	await nextTurn();
 	await reads[0].complete({ revision: 1, engine: 'tgrep' });
 	await nextTurn();
-	assert.equal(engine().value, 'ripgrep');
-	engine().setValue('tgrep');
+	assert.equal(engine().value, false);
+	engine().setValue(true);
 	await nextTurn();
 	assert.deepEqual(writes, [['tgrep', 8]]);
 	model.setVisible(false);
-	await reads[2].complete({ revision: 9, engine: 'tgrep' });
+	await reads[2].complete({ revision: 9, engine: 'ripgrep' });
 	await nextTurn();
-	assert.equal(engine().value, 'ripgrep');
+	assert.equal(engine().value, false);
 	model.setVisible(true);
 	model.dispose();
 	await reads[3].complete({ revision: 10, engine: 'tgrep' });
 	await nextTurn();
-	assert.equal(engine().value, 'ripgrep');
+	assert.equal(engine().value, false);
 });
 
 test('Settings maturity filters compose with text, identifiers and modified settings without changing values', () => {
@@ -3278,25 +3292,19 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			entries: [{ dir: 'dir-1', path: '/workspace', permissions: ['readFiles'] }],
 		}),
 	} as unknown as IWorkspaceTrustApi);
-	let searchSnapshot: import('../../../../../platform/search/common/search.js').ContentSearchConfiguration = {
-		revision: 4,
-		engine: 'tgrep',
-	};
+	let searchEngine: 'tgrep' | 'ripgrep' = 'tgrep';
 	let rejectSearchSave = false;
-	let nextSearchRead: Promise<typeof searchSnapshot> | undefined;
 	const searchWrites: { engine: string; expectedRevision: number; }[] = [];
 	services.registerInstance(IContentSearchConfigurationService, {
-		read: async () => {
-			const pending = nextSearchRead;
-			nextSearchRead = undefined;
-			return pending ?? searchSnapshot;
-		},
+		read: async () => ({ revision: codebaseConfig.revision, engine: searchEngine }),
 		configure: async (engine, expectedRevision) => {
 			searchWrites.push({ engine, expectedRevision });
+			assert.equal(expectedRevision, codebaseConfig.revision);
 			if (rejectSearchSave) {
 				throw new Error('Revision conflict');
 			}
-			searchSnapshot = { engine, revision: expectedRevision + 1 };
+			searchEngine = engine;
+			codebaseConfig = { ...codebaseConfig, revision: expectedRevision + 1, generation: codebaseConfig.generation + 1 };
 		},
 	});
 	services.registerInstance(INetworkDiagnosticsService, {
@@ -3545,41 +3553,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-category-id="terminal"]')?.textContent, 'Terminal');
 	assert.equal(root.querySelectorAll('[data-settings-item-id^="terminal.integrated."]').length, 11);
 	await preferences.openSettings({ section: 'search' });
-	const searchEngine = root.querySelector<HTMLElement>('[data-settings-item-id="grep.backend"] [role="combobox"]');
-	assert.equal(searchEngine?.textContent, 'tgrep (default)');
+	assert.equal(root.querySelector('[data-settings-item-id="grep.backend"]'), null);
 	assert.throws(() => configuration.inspect('grep.backend'), /Unknown configuration key/);
-	assert.ok(searchEngine);
-	const searchRow = root.querySelector<HTMLElement>('[data-settings-item-id="grep.backend"]')!;
-	searchEngine.click();
-	const searchList = ownerDocument.getElementById(searchEngine.getAttribute('aria-controls')!)!;
-	searchList.querySelectorAll<HTMLElement>('[role="option"]')[1].click();
-	await nextTurn();
-	assert.equal(searchEngine.textContent, 'ripgrep');
-	assert.equal(searchRow.querySelector('[role="status"]')?.textContent, 'Search engine saved.');
-	assert.deepEqual(searchWrites, [{ engine: 'ripgrep', expectedRevision: 4 }]);
-	rejectSearchSave = true;
-	searchEngine.click();
-	searchList.querySelectorAll<HTMLElement>('[role="option"]')[0].click();
-	await nextTurn();
-	assert.equal((searchEngine as HTMLButtonElement).disabled, true);
-	assert.equal(searchRow.querySelector('[role="status"]')?.textContent, 'Could not save search engine. Refresh the configuration before trying again.');
-	rejectSearchSave = false;
-	searchRow.querySelector<HTMLButtonElement>('button:not([role="combobox"])')!.click();
-	await nextTurn();
-	assert.equal(searchEngine.textContent, 'ripgrep');
-	assert.equal((searchEngine as HTMLButtonElement).disabled, false);
-	const pendingSearch = new DeferredPromise<typeof searchSnapshot>();
-	nextSearchRead = pendingSearch.p;
-	searchRow.querySelector<HTMLButtonElement>('button:not([role="combobox"])')!.click();
-	connectionChanged.fire('disconnected');
-	await pendingSearch.complete({ revision: 1, engine: 'tgrep' });
-	await nextTurn();
-	assert.equal((searchEngine as HTMLButtonElement).disabled, true);
-	assert.equal(searchRow.querySelector('[role="status"]')?.textContent, 'App Server is disconnected.');
-	connectionChanged.fire('connected');
-	await nextTurn();
-	assert.equal(searchEngine.textContent, 'ripgrep');
-	assert.equal((searchEngine as HTMLButtonElement).disabled, false);
 	await preferences.openSettings({ section: 'display-language' });
 	assert.equal(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`), null);
 	assert.equal(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`), null);
@@ -3769,31 +3744,33 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const embedding = codebase.querySelector<HTMLInputElement>('input[aria-label="Embedding model"]')!;
 	assert.equal(embedding.value, 'local/embed');
 	assert.throws(() => configuration.inspect('codebase'), /Unknown configuration key/);
-	codebaseConfig = { revision: 5, generation: 7, codebase: { ...codebaseConfig.codebase, automaticContext: 'firstInvocation' } };
-	codebaseChanged.fire();
+	const grep = codebase.querySelector<HTMLInputElement>('[role="switch"][aria-label="Index repositories for instant Grep"]')!;
+	assert.equal(grep.checked, true);
+	assert.equal(codebase.querySelector('button'), null);
+	grep.click();
 	await nextTurn();
-	assert.equal(codebase.querySelector<HTMLInputElement>('[aria-label="Automatic context"]')?.checked, true);
-	embedding.value = '';
-	embedding.dispatchEvent(new ownerDocument.defaultView!.Event('input', { bubbles: true }));
-	const codebaseActions = [...codebase.querySelectorAll<HTMLElement>('button, [role="button"]')];
-	const saveCodebase = codebaseActions.find(button => button.textContent === 'Save Codebase settings')!;
-	const refreshCodebase = codebaseActions.find(button => button.textContent === 'Refresh Codebase settings')!;
-	codebaseConfig = { revision: 6, generation: 8, codebase: { ...codebaseConfig.codebase, automaticContext: 'off' } };
-	codebaseChanged.fire();
+	assert.equal(grep.checked, false);
+	assert.deepEqual(searchWrites, [{ engine: 'ripgrep', expectedRevision: 4 }]);
+	rejectSearchSave = true;
+	grep.click();
 	await nextTurn();
-	saveCodebase.click();
-	await nextTurn();
+	assert.equal(grep.checked, false);
+	assert.equal(grep.disabled, false);
 	assert.match(codebase.querySelector('[role="status"]')?.textContent ?? '', /Could not save Codebase settings/u);
-	assert.equal(embedding.value, '', 'a conflicting backend revision leaves the local draft available');
-	assert.equal(codebaseConfig.codebase.models?.embeddingModel.model, 'embed');
-	refreshCodebase.click();
+	rejectSearchSave = false;
+	grep.click();
 	await nextTurn();
-	assert.equal(embedding.value, 'local/embed');
+	assert.equal(grep.checked, true);
+	codebaseConfig = { revision: 7, generation: 9, codebase: { ...codebaseConfig.codebase, automaticContext: 'firstInvocation' } };
+	codebaseChanged.fire();
+	await nextTurn();
+	assert.equal(codebase.querySelectorAll('[role="switch"]').length, 1);
 	embedding.value = '';
 	embedding.dispatchEvent(new ownerDocument.defaultView!.Event('input', { bubbles: true }));
-	saveCodebase.click();
+	assert.equal(codebaseConfig.codebase.models?.embeddingModel.model, 'embed');
+	embedding.dispatchEvent(new ownerDocument.defaultView!.Event('change', { bubbles: true }));
 	await nextTurn();
-	assert.deepEqual(codebaseConfig, { revision: 7, generation: 9, codebase: { models: undefined, automaticContext: 'off' } });
+	assert.deepEqual(codebaseConfig, { revision: 8, generation: 10, codebase: { models: undefined, automaticContext: 'firstInvocation' } });
 	await preferences.openSettings({ section: 'agents' });
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Agents');

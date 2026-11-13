@@ -13,7 +13,8 @@ import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
 import { TestHostService } from '../../../src/ash/workbench/services/host/test/browser/testHostService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { SearchSettingsModel } from '../../../src/ash/workbench/contrib/search/browser/searchSettingsModel.js';
+import { CodebaseSettingsModel } from '../../../src/ash/workbench/contrib/codebase/browser/codebaseSettingsModel.js';
+import { ICodebaseService } from '../../../src/ash/platform/codebase/common/codebaseService.js';
 import { SettingsSectionRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/settingsSectionRenderer.js';
 import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { IContentSearchConfigurationService } from '../../../src/ash/platform/search/common/search.js';
@@ -101,7 +102,7 @@ declare global {
 			setSettingsPolicy(managed: boolean): void;
 			readPolicySettings(): Promise<string>;
 			showCredentialSettings(): void;
-			showSearchSettings(): void;
+			showCodebaseSettings(): void;
 			readonly searchSaved: readonly string[];
 			setCredentialStorage(status: SecretStorageStatus): void;
 			setCredentialStorageMode(mode: SecretStorageMode): void;
@@ -428,9 +429,15 @@ window.ashTableIntegration = {
 	setSettingsPolicy: managed => setSettingsPolicy!(managed),
 	readPolicySettings: async () => (await policySettings!.read()).source,
 	get searchSaved() { return searchSaved; },
-	showSearchSettings: () => {
+	showCodebaseSettings: () => {
 		let engine: 'tgrep' | 'ripgrep' = 'tgrep';
 		let revision = 1;
+		services.registerInstance(ICodebaseService, {
+			onDidChangeConfig: Event.None,
+			readConfig: async () => ({ revision, generation: revision, codebase: { automaticContext: 'off' } }),
+			configure: async () => { throw new Error('Unexpected Codebase write'); },
+			status: async () => { throw new Error('Unexpected Codebase status read'); },
+		});
 		services.registerInstance(IContentSearchConfigurationService, {
 			read: async () => ({ revision, engine }),
 			configure: async (next, expected) => {
@@ -440,14 +447,14 @@ window.ashTableIntegration = {
 				searchSaved.push(next);
 			},
 		});
-		services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService);
+		services.registerInstance(IAppServerRemoteAgentService, { connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService);
 		const root = document.createElement('div');
-		root.id = 'search-settings';
+		root.id = 'codebase-settings';
 		document.body.append(root);
-		const model = resources.add(services.createInstance(SearchSettingsModel));
+		const model = resources.add(services.createInstance(CodebaseSettingsModel));
 		const renderer = resources.add(services.createInstance(SettingsSectionRenderer, root, model, AccessibleViewProviderId.ContentSearchSettings, AccessibilityVerbositySettingId.ContentSearchSettings));
-		const node = renderer.getNodes()[0].children![0].element;
-		if (node.kind !== 'item' || !('rendererId' in node.value)) throw new Error('Missing search settings');
+		const node = renderer.getNodes()[0].element;
+		if (node.kind !== 'item' || !('rendererId' in node.value)) throw new Error('Missing Codebase settings');
 		root.append(renderer.renderItem(node.value));
 		renderer.setVisible(true);
 	},

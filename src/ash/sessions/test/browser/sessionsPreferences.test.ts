@@ -15,6 +15,7 @@ import { DeferredPromise } from '../../../base/common/async.js';
 import '../../../workbench/contrib/advisor/browser/advisor.contribution.js';
 import '../../../workbench/contrib/codebase/browser/codebase.contribution.js';
 import { ICodebaseService, type CodebaseConfigurationSnapshot } from '../../../platform/codebase/common/codebaseService.js';
+import { IContentSearchConfigurationService, type ContentSearchEngine } from '../../../platform/search/common/search.js';
 import { ILanguageServerService, type LanguageServerEnablement } from '../../../platform/language/common/languageServerService.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
@@ -273,6 +274,16 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(ITraceSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }), configure: async () => { } });
 	using codebaseChanged = new Emitter<void>();
 	let codebaseConfig: CodebaseConfigurationSnapshot = { revision: 7, generation: 7, codebase: { automaticContext: 'off' } };
+	let grepEngine: ContentSearchEngine = 'tgrep';
+	services.registerInstance(IContentSearchConfigurationService, {
+		read: async () => ({ revision: codebaseConfig.revision, engine: grepEngine }),
+		configure: async (engine, expectedRevision) => {
+			assert.equal(expectedRevision, codebaseConfig.revision);
+			grepEngine = engine;
+			codebaseConfig = { ...codebaseConfig, revision: expectedRevision + 1, generation: codebaseConfig.generation + 1 };
+			codebaseChanged.fire();
+		},
+	});
 	services.registerInstance(ICodebaseService, {
 		onDidChangeConfig: codebaseChanged.event,
 		readConfig: async () => codebaseConfig,
@@ -658,30 +669,35 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(window.document.querySelector('[data-settings-item-id="codebase"]'), null);
 	assert.equal(window.document.querySelector('[data-settings-item-id="languageServers.enabled"]'), null);
 	await preferences.open({ section: 'code-intelligence' });
-	await Promise.resolve();
+	await new Promise(resolve => setImmediate(resolve));
 	const codebase = window.document.querySelector<HTMLElement>('[data-settings-item-id="codebase"]')!;
-	const context = codebase.querySelector<HTMLInputElement>('[role="switch"][aria-label="Automatic context"]')!;
+	const grep = codebase.querySelector<HTMLInputElement>('[role="switch"][aria-label="Index repositories for instant Grep"]')!;
 	const embedding = codebase.querySelector<HTMLInputElement>('input[aria-label="Embedding model"]')!;
 	const rerank = codebase.querySelector<HTMLInputElement>('input[aria-label="Rerank model"]')!;
-	const saveCodebase = [...codebase.querySelectorAll<HTMLElement>('button, [role="button"]')].find(button => button.textContent === 'Save Codebase settings')!;
 	const editorCount = editorOpens.length;
-	assert.equal(context.checked, false);
+	assert.equal(grep.checked, true);
+	assert.equal(codebase.querySelectorAll('[role="switch"]').length, 1);
 	assert.equal(rerank.disabled, true);
-	context.click();
+	assert.equal(codebase.querySelector('button'), null);
 	embedding.value = 'local';
 	embedding.dispatchEvent(new window.Event('input', { bubbles: true }));
-	saveCodebase.click();
+	assert.equal(codebaseConfig.revision, 7);
+	embedding.dispatchEvent(new window.Event('change', { bubbles: true }));
+	await new Promise(resolve => setImmediate(resolve));
 	assert.match(codebase.querySelector('[role="status"]')?.textContent ?? '', /provider\/model/u);
 	assert.equal(codebaseConfig.revision, 7);
+	grep.click();
 	embedding.value = 'local/vendor/embed';
-	embedding.dispatchEvent(new window.Event('input', { bubbles: true }));
+	embedding.dispatchEvent(new window.Event('change', { bubbles: true }));
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(grepEngine, 'ripgrep');
+	assert.equal(grep.checked, false);
 	rerank.value = 'local/rank';
-	rerank.dispatchEvent(new window.Event('input', { bubbles: true }));
-	saveCodebase.click();
+	rerank.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 	await new Promise(resolve => setImmediate(resolve));
 	assert.deepEqual(codebaseConfig, {
-		revision: 8, generation: 8, codebase: {
-			automaticContext: 'firstInvocation',
+		revision: 10, generation: 10, codebase: {
+			automaticContext: 'off',
 			models: { embeddingModel: { provider: 'local', model: 'vendor/embed' }, rerankModel: { provider: 'local', model: 'rank' } },
 		},
 	});

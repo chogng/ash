@@ -590,6 +590,10 @@ impl ToolExecutionOrchestrator {
                 name: call.name.clone(),
                 arguments: call.arguments.clone(),
                 outcome_unknown,
+                completed_without_review: matches!(
+                    &output,
+                    Ok(ToolExecutionOutput::Success(_) | ToolExecutionOutput::SuccessContent(_))
+                ),
             });
         for update in self
             .threads

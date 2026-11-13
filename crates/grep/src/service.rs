@@ -35,6 +35,7 @@ use std::time::Duration;
 /// Shared engine selection, repository storage, and independent directory registrations.
 pub struct Service {
     ripgrep: RipgrepExecutable,
+    parallel_scan: bool,
     storage: Option<Arc<StateRuntime>>,
     state: RwLock<State>,
     configuration: Mutex<()>,
@@ -75,6 +76,11 @@ enum IndexPhase {
     Vacant,
     Opening,
     Ready(Arc<Index>),
+}
+#[derive(Clone, Copy)]
+enum IndexAdmission {
+    Wait,
+    ScanWhilePreparing,
 }
 struct DirectoryUse {
     directory: Arc<DirectoryIndex>,
@@ -201,17 +207,20 @@ fn cancelled(cancellation: &CancellationToken) -> Result<(), Error> {
 impl Service {
     /// Resolves managed executables once when the host assembles the shared capability.
     pub fn installed(backend: Backend, storage: Option<Arc<StateRuntime>>) -> Result<Self, Error> {
-        let ripgrep =
+        let (ripgrep, parallel_scan) =
             match InstallContext::current().executable_candidates(ManagedExecutable::Ripgrep) {
-                ExecutableCandidates::ExplicitOverride(value) => {
-                    RipgrepExecutable::from_override(value.variable(), value.path())
-                }
+                ExecutableCandidates::ExplicitOverride(value) => (
+                    RipgrepExecutable::from_override(value.variable(), value.path()),
+                    false,
+                ),
                 ExecutableCandidates::SearchPaths(paths) => {
-                    RipgrepExecutable::discover_candidates(paths)
+                    (RipgrepExecutable::discover_candidates(paths), true)
                 }
-            }
-            .map_err(|error| Error::Failed(error.to_string()))?;
-        Self::new(backend, ripgrep, storage)
+            };
+        let ripgrep = ripgrep.map_err(|error| Error::Failed(error.to_string()))?;
+        let mut service = Self::new(backend, ripgrep, storage)?;
+        service.parallel_scan = parallel_scan;
+        Ok(service)
     }
 
     pub fn new(
@@ -225,6 +234,7 @@ impl Service {
         };
         Ok(Self {
             ripgrep,
+            parallel_scan: false,
             storage,
             state: RwLock::new(State {
                 backend,
@@ -272,6 +282,10 @@ impl Service {
         state.executable = executable;
         state.backend = backend;
         Ok(())
+    }
+
+    pub fn backend(&self) -> Backend {
+        self.state.read().unwrap_or_else(|e| e.into_inner()).backend
     }
 
     /// Records writes synchronously so all consumers see Ash edits even before watcher delivery.
@@ -405,6 +419,12 @@ impl Service {
             .index_for(root, cancellation)?
             .ok_or_else(|| Error::Failed("selected grep engine does not use an index".into()))?;
         Ok(status(index.index.search.rebuild(cancellation)?))
+    }
+
+    /// Attaches the directory so the indexed backend can prepare its content in the background.
+    /// Searches share this registration and wait for readiness when they need the content.
+    pub fn prepare_index(&self, root: &Dir, cancellation: &CancellationToken) -> Result<(), Error> {
+        self.index_for(root, cancellation).map(|_| ())
     }
 
     /// Clears repository-owned search storage after its worktree registrations are released.
@@ -554,11 +574,32 @@ impl Search for Service {
             .check()
             .map_err(|s| Error::Cancelled(s.reason().to_string()))?;
         let regex = validate(query)?;
-        self.search_disk(dir, query, &regex, cancellation)
+        self.search_disk(dir, query, &regex, IndexAdmission::Wait, cancellation)
     }
 }
 
 impl Service {
+    /// Serves interactive Agent searches while the directory index is preparing.
+    pub fn search_for_agent(
+        &self,
+        dir: &Dir,
+        query: &Query,
+        documents: &[DocumentContent],
+        cancellation: &CancellationToken,
+    ) -> Result<SearchResult, Error> {
+        if !documents.is_empty() {
+            return self.search_with_documents(dir, query, documents, cancellation);
+        }
+        let regex = validate(query)?;
+        self.search_disk(
+            dir,
+            query,
+            &regex,
+            IndexAdmission::ScanWhilePreparing,
+            cancellation,
+        )
+    }
+
     /// Searches one coherent task view without putting unsaved text into the shared index.
     pub fn search_with_documents(
         &self,
@@ -569,7 +610,7 @@ impl Service {
     ) -> Result<SearchResult, Error> {
         let regex = validate(query)?;
         if documents.is_empty() {
-            return self.search_disk(dir, query, &regex, cancellation);
+            return self.search_disk(dir, query, &regex, IndexAdmission::Wait, cancellation);
         }
         let includes = document_globs(&query.include_patterns)?;
         let excludes = document_globs(&query.exclude_patterns)?;
@@ -646,7 +687,8 @@ impl Service {
         // Engines search an explicitly named file even when a glob excludes it.
         // A scope supplied by the editor has no disk contribution, including no matches.
         if !replaced_scope {
-            let disk = self.search_disk(dir, &disk_query, &regex, cancellation)?;
+            let disk =
+                self.search_disk(dir, &disk_query, &regex, IndexAdmission::Wait, cancellation)?;
             limit_hit |= disk.limit_hit;
             matches.extend(disk.matches);
         }
@@ -668,6 +710,7 @@ impl Service {
         dir: &Dir,
         query: &Query,
         regex: &regex::Regex,
+        admission: IndexAdmission,
         cancellation: &CancellationToken,
     ) -> Result<SearchResult, Error> {
         let scope = if query.scope.as_os_str().is_empty() {
@@ -692,32 +735,51 @@ impl Service {
                 .acquire()?
         };
         // Current and explicit-file reads must not start watchers or wait for index preparation.
+        let scan = || {
+            if self.parallel_scan
+                && scope.is_dir()
+                && std::fs::symlink_metadata(dir.canonical_path().join(&query.scope))
+                    .is_ok_and(|m| m.is_dir())
+            {
+                crate::ordered_scan::search(&self.ripgrep, dir, query, regex.as_str(), cancellation)
+            } else {
+                crate::ripgrep::search(&self.ripgrep, dir, query, regex.as_str(), cancellation)
+            }
+        };
         if query.freshness == Freshness::Current || scope.is_file() {
-            return crate::ripgrep::search(&self.ripgrep, dir, query, regex.as_str(), cancellation);
+            return scan();
         }
         match self.index_for(dir, cancellation)? {
-            None => crate::ripgrep::search(&self.ripgrep, dir, query, regex.as_str(), cancellation),
+            None => scan(),
             Some(index) => {
-                let result = index.index.search.search(
-                    &tgrep::Query {
-                        pattern: regex.as_str(),
-                        scope: &query.scope,
-                        case_insensitive: false,
-                        include: &query
-                            .include_patterns
-                            .iter()
-                            .map(String::as_str)
-                            .collect::<Vec<_>>(),
-                        exclude: &query
-                            .exclude_patterns
-                            .iter()
-                            .map(String::as_str)
-                            .collect::<Vec<_>>(),
-                        max_results: query.max_results,
-                        current: false,
-                    },
-                    cancellation,
-                )?;
+                let request = tgrep::Query {
+                    pattern: regex.as_str(),
+                    scope: &query.scope,
+                    case_insensitive: false,
+                    include: &query
+                        .include_patterns
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<Vec<_>>(),
+                    exclude: &query
+                        .exclude_patterns
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<Vec<_>>(),
+                    max_results: query.max_results,
+                    current: false,
+                };
+                let result = match admission {
+                    IndexAdmission::Wait => index.index.search.search(&request, cancellation)?,
+                    IndexAdmission::ScanWhilePreparing => {
+                        let Some(result) =
+                            index.index.search.search_if_ready(&request, cancellation)?
+                        else {
+                            return scan();
+                        };
+                        result
+                    }
+                };
                 Ok(SearchResult {
                     matches: result
                         .matches

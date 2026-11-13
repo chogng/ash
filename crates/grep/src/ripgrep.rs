@@ -21,6 +21,10 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+pub(super) const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
+pub(super) const MAX_OUTPUT_BYTES: usize = 64 * 1024 * 1024;
+pub(super) const TIMEOUT: Duration = Duration::from_secs(30);
+
 struct Process(Child);
 impl Drop for Process {
     fn drop(&mut self) {
@@ -47,11 +51,8 @@ pub(super) fn search(
         "--sort=path",
         "--multiline",
     ]);
-    for glob in &query.include_patterns {
-        command.arg("--glob").arg(glob);
-    }
-    for glob in &query.exclude_patterns {
-        command.arg("--glob").arg(format!("!{glob}"));
+    for glob in globs(query) {
+        command.arg("--glob").arg(glob.as_ref());
     }
     command
         .arg("--")
@@ -84,7 +85,7 @@ pub(super) fn search(
         let _ = std::io::copy(&mut stderr, &mut std::io::sink());
         String::from_utf8_lossy(&bytes).into_owned()
     });
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let deadline = Instant::now() + TIMEOUT;
     let parsed = loop {
         if let Err(signal) = cancellation.check() {
             break Err(Error::Cancelled(signal.reason().to_string()));
@@ -127,6 +128,24 @@ pub(super) fn search(
     if !stopped && !matches!(status.code(), Some(0 | 1)) {
         return Err(Error::Failed(stderr.trim().to_owned()));
     }
+    validate_paths(dir, query, &result)?;
+    Ok(result)
+}
+
+pub(super) fn globs(query: &Query) -> impl Iterator<Item = std::borrow::Cow<'_, str>> {
+    query
+        .include_patterns
+        .iter()
+        .map(|g| g.as_str().into())
+        .chain(
+            query
+                .exclude_patterns
+                .iter()
+                .map(|g| format!("!{g}").into()),
+        )
+}
+
+pub(super) fn validate_paths(dir: &Dir, query: &Query, result: &SearchResult) -> Result<(), Error> {
     for m in &result.matches {
         if !m.path.starts_with(&query.scope)
             || !m
@@ -138,23 +157,27 @@ pub(super) fn search(
             return Err(Error::Failed("grep returned an out-of-scope path".into()));
         }
     }
-    Ok(result)
+    Ok(())
 }
-fn parse(stdout: impl Read, max_results: usize) -> Result<SearchResult, Error> {
-    let mut reader = BufReader::new(stdout);
+
+pub(super) fn parse(stdout: impl Read, max_results: usize) -> Result<SearchResult, Error> {
+    parse_buffered(BufReader::new(stdout), max_results)
+}
+
+fn parse_buffered(mut reader: impl BufRead, max_results: usize) -> Result<SearchResult, Error> {
     let mut matches = Vec::new();
     let mut consumed = 0usize;
     loop {
         let mut line = String::new();
         let bytes = reader
             .by_ref()
-            .take(64 * 1024 * 1024 + 1)
+            .take((MAX_OUTPUT_BYTES - consumed + 1) as u64)
             .read_line(&mut line)?;
         if bytes == 0 {
             break;
         }
         consumed = consumed.saturating_add(bytes);
-        if consumed > 64 * 1024 * 1024 {
+        if consumed > MAX_OUTPUT_BYTES {
             return Err(Error::Failed("grep output exceeded 64 MiB".into()));
         }
         let record: Value =

@@ -322,15 +322,25 @@ fn grep_rpc_shares_search_with_codebase_and_editor_then_releases_the_index() {
     );
     assert_eq!(enabled["result"]["revision"], 0);
 
-    let initial = call(
-        &server,
-        &mut connection,
-        3,
-        "grep/index/status",
-        serde_json::json!({}),
-    );
-    assert_eq!(initial["result"]["enabled"], true);
-    assert_eq!(initial["result"]["active"], false);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let mut status_request_id = 1000;
+    loop {
+        let status = call(
+            &server,
+            &mut connection,
+            status_request_id,
+            "grep/index/status",
+            serde_json::json!({}),
+        );
+        assert_eq!(status["result"]["enabled"], true, "{status}");
+        if status["result"]["ready"] == true {
+            assert_eq!(status["result"]["active"], true, "{status}");
+            break;
+        }
+        assert!(Instant::now() < deadline, "background grep index: {status}");
+        status_request_id += 1;
+        std::thread::sleep(Duration::from_millis(25));
+    }
 
     let rebuilt = call(
         &server,

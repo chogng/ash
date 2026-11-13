@@ -426,6 +426,15 @@ impl FileWatcher {
 
     /// Creates a live watcher using one explicit backend strategy.
     pub fn new_with_backend(backend: FileWatcherBackend) -> notify::Result<Self> {
+        Self::new_with_backend_ignoring_directory_metadata(backend, Vec::new())
+    }
+
+    /// Ignores Windows attribute and timestamp notifications for these existing directories.
+    /// Child events, replacements, and rescans still reach subscribers.
+    pub fn new_with_backend_ignoring_directory_metadata(
+        backend: FileWatcherBackend,
+        mut directories: Vec<PathBuf>,
+    ) -> notify::Result<Self> {
         Handle::try_current().map_err(|_| {
             notify::Error::generic("ash-file-watcher requires a current Tokio runtime")
         })?;
@@ -444,7 +453,16 @@ impl FileWatcher {
             // handles need a persistent parent watch to notice removal and recreation.
             watch_parents: matches!(backend, FileWatcherBackend::Recommended),
         };
-        file_watcher.spawn_event_loop(raw_rx);
+        if cfg!(windows) && backend == FileWatcherBackend::Recommended {
+            let canonical: Vec<_> = directories
+                .iter()
+                .filter_map(|path| path.canonicalize().ok())
+                .collect();
+            directories.extend(canonical);
+        } else {
+            directories.clear();
+        }
+        file_watcher.spawn_event_loop(raw_rx, directories);
         Ok(file_watcher)
     }
 
@@ -766,7 +784,11 @@ impl FileWatcher {
         }
     }
 
-    fn spawn_event_loop(&self, mut raw_rx: crate::ingress::EventReceiver) {
+    fn spawn_event_loop(
+        &self,
+        mut raw_rx: crate::ingress::EventReceiver,
+        ignored_directory_metadata: Vec<PathBuf>,
+    ) {
         let Ok(handle) = Handle::try_current() else {
             warn!("file watcher event loop skipped: no Tokio runtime available");
             return;
@@ -801,7 +823,18 @@ impl FileWatcher {
                         Self::reconcile_event(&state, inner.as_ref(), &roots, watch_parents);
                         Self::require_rescan(&state).await;
                     }
-                    Ok(event) if is_mutating_event(&event) && !event.paths.is_empty() => {
+                    Ok(mut event) if is_mutating_event(&event) && !event.paths.is_empty() => {
+                        // ReadDirectoryChangesW reports directory metadata as Modify(Any).
+                        // Filter before routing can turn an ancestor hint into child changes.
+                        if cfg!(windows) && event.kind == EventKind::Modify(ModifyKind::Any) {
+                            event.paths.retain(|path| {
+                                !ignored_directory_metadata.contains(path)
+                                    || !path.symlink_metadata().is_ok_and(|info| info.is_dir())
+                            });
+                        }
+                        if event.paths.is_empty() {
+                            continue;
+                        }
                         let inner = inner.as_ref().and_then(std::sync::Weak::upgrade);
                         Self::notify_subscribers(&state, inner.as_ref(), &event, watch_parents)
                             .await;
@@ -1035,7 +1068,7 @@ impl FileWatcher {
 
     #[cfg(test)]
     pub(crate) fn spawn_event_loop_for_test(&self, raw_rx: crate::ingress::EventReceiver) {
-        self.spawn_event_loop(raw_rx);
+        self.spawn_event_loop(raw_rx, Vec::new());
     }
 
     #[cfg(test)]

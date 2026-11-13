@@ -6,8 +6,27 @@ use crate::GitResult;
 use crate::path::path_from_git_bytes;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
+use std::fs::File;
+use std::fs::FileTimes;
 use std::path::Path;
 use std::path::PathBuf;
+
+const PRIVATE_REF_DIRECTORY: &str = "refs/ash";
+const CHECKPOINT_INDEX_PREFIX: &str = "ash-tree-index-";
+
+/// Whether a metadata hint is only from Ash's private reachability refs or a
+/// disposable checkpoint index, neither of which affects public Git status.
+pub fn is_private_checkpoint_path(common_dir: &Path, path: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix(common_dir) else {
+        return false;
+    };
+    relative.starts_with(PRIVATE_REF_DIRECTORY)
+        || (relative.components().count() == 1
+            && relative
+                .file_name()
+                .and_then(std::ffi::OsStr::to_str)
+                .is_some_and(|name| name.starts_with(CHECKPOINT_INDEX_PREFIX)))
+}
 
 /// Bounded UTF-8 patch text between two immutable trees.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -48,7 +67,9 @@ pub struct GitPrivateRef(String);
 
 impl GitPrivateRef {
     pub fn new(value: String) -> GitResult<Self> {
-        if !value.starts_with("refs/ash/")
+        if !value
+            .strip_prefix(PRIVATE_REF_DIRECTORY)
+            .is_some_and(|suffix| suffix.starts_with('/'))
             || value.contains("..")
             || value.chars().any(char::is_whitespace)
             || value.ends_with('/')
@@ -178,35 +199,83 @@ impl GitClient {
     /// Captures the current working-directory contents in Git's object database without touching
     /// the repository's real index. Ignored untracked files remain excluded by Git.
     pub async fn capture_worktree_tree(&self, repository: &GitRepository) -> GitResult<GitTreeId> {
+        let root = repository.worktree_root();
         let temporary = tempfile::Builder::new()
-            .prefix("ash-tree-index-")
+            .prefix(CHECKPOINT_INDEX_PREFIX)
             .tempfile_in(repository.common_dir())
             .map_err(|source| GitError::io("create temporary Git index", source))?;
         let index_path = temporary.into_temp_path();
-        std::fs::remove_file(&index_path)
-            .map_err(|source| GitError::io("prepare temporary Git index", source))?;
-        let snapshot = self.snapshot(repository).await?;
-        let read_tree_args = match snapshot.head() {
-            GitHead::Unborn { .. } => vec![OsString::from("read-tree"), OsString::from("--empty")],
-            GitHead::Branch { object_id, .. } | GitHead::Detached { object_id } => {
-                vec![OsString::from("read-tree"), OsString::from(object_id)]
-            }
-        };
-        self.run_mutation_with_index(repository.worktree_root(), read_tree_args, &index_path)
+        if !self.seed_checkpoint_index(repository, &index_path).await {
+            // The common path resolves HEAD as part of comparing the index. Only the
+            // rebuild needs to distinguish an unborn branch from a broken HEAD.
+            let head = self
+                .run_query_unchecked(root, ["rev-parse", "--verify", "--quiet", "HEAD"])
+                .await?;
+            let tree = match head.status.code() {
+                Some(0) => {
+                    let oid = std::str::from_utf8(&head.stdout)
+                        .map_err(|_| GitError::invalid_output(&head.command, "HEAD was not UTF-8"))?
+                        .trim();
+                    validate_object_id(oid, "checkpoint HEAD")?;
+                    oid
+                }
+                Some(1) if matches!(self.head(repository).await?, GitHead::Unborn { .. }) => {
+                    "--empty"
+                }
+                _ => {
+                    let output = head.require_success()?;
+                    return Err(GitError::invalid_output(
+                        &output.command,
+                        "HEAD was not resolved",
+                    ));
+                }
+            };
+            std::fs::remove_file(&index_path)
+                .map_err(|source| GitError::io("prepare temporary Git index", source))?;
+            self.run_mutation_with_index(root, ["read-tree", tree], &index_path)
+                .await?
+                .require_success()?;
+        }
+        self.run_mutation_with_index(root, ["add", "--all", "--", "."], &index_path)
             .await?
             .require_success()?;
-        self.run_mutation_with_index(
-            repository.worktree_root(),
-            ["add", "--all", "--", "."],
-            &index_path,
-        )
-        .await?
-        .require_success()?;
         let output = self
-            .run_mutation_with_index(repository.worktree_root(), ["write-tree"], &index_path)
+            .run_mutation_with_index(root, ["write-tree"], &index_path)
             .await?
             .require_success()?;
         parse_tree_id(output.stdout, &output.command)
+    }
+
+    /// Only a plain index with HEAD's staged entries can donate stat data to a checkpoint.
+    async fn seed_checkpoint_index(&self, repository: &GitRepository, index: &Path) -> bool {
+        if copy_index_with_mtime(&repository.git_dir().join("index"), index).is_err() {
+            return false;
+        }
+        let root = repository.worktree_root();
+        let Ok((staged, entries)) = tokio::try_join!(
+            self.run_mutation_with_index(
+                root,
+                [
+                    "diff-index",
+                    "--cached",
+                    "--quiet",
+                    "--ignore-submodules=none",
+                    "HEAD",
+                    "--"
+                ],
+                index,
+            ),
+            self.run_mutation_with_index(root, ["ls-files", "-v", "-z"], index),
+        ) else {
+            return false;
+        };
+        // Skip-worktree, assume-unchanged and unmerged entries must not change what is captured.
+        staged.status.success()
+            && entries.status.success()
+            && entries
+                .stdout
+                .split(|byte| *byte == 0)
+                .all(|entry| entry.is_empty() || entry.starts_with(b"H "))
     }
 
     /// Keeps one object reachable under Ash's private ref namespace.
@@ -242,6 +311,40 @@ impl GitClient {
         self.run_mutation(
             repository.worktree_root(),
             ["update-ref", reference.as_str(), object_id],
+        )
+        .await?
+        .require_success()?;
+        Ok(())
+    }
+
+    /// Keeps a message's tree and merge destination reachable in one ref transaction.
+    pub async fn pin_private_checkpoint(
+        &self,
+        repository: &GitRepository,
+        reference: &GitPrivateRef,
+        tree: &GitTreeId,
+        target_reference: &GitPrivateRef,
+        target_commit: &str,
+    ) -> GitResult<()> {
+        validate_object_id(target_commit, "checkpoint target commit")?;
+        let root = repository.worktree_root();
+        self.run_mutation(
+            root,
+            ["cat-file", "-e", &format!("{target_commit}^{{commit}}")],
+        )
+        .await?
+        .require_success()?;
+        // Create-only protects the pins of an existing checkpoint if a name collides.
+        let input = format!(
+            "create {} {}\ncreate {} {target_commit}\n",
+            reference.as_str(),
+            tree.as_str(),
+            target_reference.as_str(),
+        );
+        self.run_mutation_with_stdin(
+            root,
+            ["update-ref", "--no-deref", "--stdin"],
+            input.into_bytes(),
         )
         .await?
         .require_success()?;
@@ -637,6 +740,15 @@ fn parse_tree_id(output: Vec<u8>, command: &str) -> GitResult<GitTreeId> {
     let value = String::from_utf8(output)
         .map_err(|_| GitError::invalid_output(command, "tree object ID was not UTF-8"))?;
     GitTreeId::new(value.trim().to_string())
+}
+
+fn copy_index_with_mtime(source: &Path, destination: &Path) -> std::io::Result<()> {
+    let mut source = File::open(source)?;
+    let modified = source.metadata()?.modified()?;
+    let mut destination = File::create(destination)?;
+    std::io::copy(&mut source, &mut destination)?;
+    // Git uses the index timestamp to detect stat entries that may still be racy.
+    destination.set_times(FileTimes::new().set_modified(modified))
 }
 
 pub(crate) fn validate_object_id(value: &str, field: &'static str) -> GitResult<()> {

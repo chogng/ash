@@ -38,9 +38,10 @@ flowchart TD
 Config 只保存模型引用和行为意图。Secret Store 保存凭据。可重建索引由 Codebase Store 保存；
 Cloud grant、同步 generation、撤销和待删除状态由 Cloud Codebase state 保存。
 
-前端 `ICodebaseService` 只读写 Codebase 的模型选择和自动上下文策略。Provider 连接、地址、
-模型通用参数与凭据由原有配置和模型领域管理，不通过 Codebase 再维护一份。策略的持久化
-权威仍是 Rust Config Store；前端返回配置 revision，并在修改时使用该 revision 检查冲突。
+设置界面提供 Codebase 的模型选择。App Server 配置中的 `[codebase]` `automaticContext` 默认
+为 `"off"`，已显式设为 `"firstInvocation"` 的配置会在修改模型时保留。Agent 也可按需调用
+`search_code`。Provider 连接、地址、模型通用参数与凭据由配置和模型领域管理。Rust Config Store
+持有持久化配置，前端写入时使用配置 revision 检查冲突。
 
 ## 身份与持久化
 

@@ -51,27 +51,30 @@ grep 返回内容匹配位置；Codebase 保留源码与 chunk 身份的所有�
 - 请求的权限、取消、分页游标与结果预算分别管理；共享索引不扩大任何调用方的授权范围。
 - 调用入口核验权限，能力内部约束目录范围；未保存内容由持有源码视图的上层合并。
 - 查询契约表达文字/正则、大小写、范围、过滤、上限和新鲜度；引擎命令行参数留在适配实现内部。
-- `Indexed` 默认由 tgrep 执行，允许外部修改短暂滞后；`Current` 由 rg 搜索当前磁盘，不创建索引会话。索引就绪只表示覆盖完整。
+- `Indexed` 默认由 tgrep 执行，允许外部修改短暂滞后；`Current` 搜索当前磁盘，不创建索引会话。目录扫描复用 ripgrep 的遍历和匹配库，由有界工作线程并行匹配，再按路径遍历顺序收集。索引就绪只表示覆盖完整。
 
 ### rg 与 tgrep 的场景分工
 
-| 查询场景                                         | 默认执行方式                      | 选择理由                                                                                 |
-| ------------------------------------------------ | --------------------------------- | ---------------------------------------------------------------------------------------- |
-| 编辑器跨文件 Current 搜索                        | rg 当前磁盘扫描                   | 读取当前内容；无需准备索引、常驻进程或 watcher                                           |
-| Agent grep、Codebase 文字候选的 Indexed 目录搜索 | tgrep 共享索引                    | 对同一代码库反复查询，用 trigram 筛选减少候选文件读取，为 codebase instant grep 提供加速 |
-| 明确的单文件 scope，或合并未保存文档的内容搜索   | rg 扫描，公共 grep 合并未保存文本 | 返回当前内容和一致的匹配范围，实际新鲜度为 Current                                       |
-| Quick Open / 工作区文件选择器的普通模糊查询      | 复用 tgrep 的目录路径视图         | 复用注册和监听，在引擎内排名并仅返回前 N 项；显式 glob 仍由 file-search 扫描当前路径     |
+| 查询场景                                       | 默认执行方式                      | 选择理由                                                                             |
+| ---------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------ |
+| 编辑器跨文件 Current 搜索                      | 有界并行磁盘扫描                  | 读取当前内容；无需准备索引、常驻进程或 watcher                                       |
+| Agent grep                                     | tgrep 共享索引，准备期间扫描磁盘  | 首次搜索可直接读盘，索引就绪后用 trigram 缩小候选范围                                |
+| Codebase 文字候选的 Indexed 目录搜索           | tgrep 共享索引                    | 等待已验证的索引供 Codebase 检索使用                                                 |
+| 明确的单文件 scope，或合并未保存文档的内容搜索 | rg 扫描，公共 grep 合并未保存文本 | 返回当前内容和一致的匹配范围，实际新鲜度为 Current                                   |
+| Quick Open / 工作区文件选择器的普通模糊查询    | 复用 tgrep 的目录路径视图         | 复用注册和监听，在引擎内排名并仅返回前 N 项；显式 glob 仍由 file-search 扫描当前路径 |
 
 rg 更适合一次性、小范围及要求当前内容的常规搜索。tgrep 的收益来自已准备索引上的重复查询，
 尤其是能排除多数文件的查询；首次注册和内容准备仍有成本，不能承诺每次查询都即时完成。
+App Server 在工作区目录取得 `SearchFiles` 授权后，后台启动 tgrep 并准备索引。打开目录无需等待。
+首次索引内容查询复用同一目录注册，索引仍在构建时等待就绪。文件名查询可在内容索引准备期间返回。
 tgrep 还持有常驻进程、watcher、内存中的路径视图及磁盘索引和 worktree 差异缓存。
 共享基础索引能摊薄多个 worktree 的存储，但大量差异、CRLF 内容和宽泛正则会减弱收益。
 这类成本和外部修改的异步可见性，使它适合 Agent / Codebase 的 Indexed 查询，
-而编辑器 Current 搜索保持 rg 的直接读取方式。上游性能数据不能代替 Ash 包内共享模式的实测。
+而编辑器 Current 搜索继续直接读取磁盘。上游性能数据不能代替 Ash 包内共享模式的实测。
 
-`[grep].backend = "ripgrep"` 是显式关闭索引的选择：Indexed 请求改用 rg 并返回 Current，
-模糊文件查询改为当前磁盘查询；Current 内容搜索始终使用 rg。
-tgrep 的准备失败、协议错误或超时显式返回，不悄悄切换引擎。两个引擎共用公共 grep 的
+`[grep].backend = "ripgrep"` 是显式关闭索引的选择：Indexed 请求改为扫描磁盘并返回 Current，
+模糊文件查询改为当前磁盘查询。
+tgrep 的协议错误、超时及其他非就绪类错误显式返回。Agent 在索引尚未就绪或遇到可重试的准备冲突时扫描磁盘，结果标记为 Current。两个引擎共用公共 grep 的
 模式编译：smart case 只检查字面量和字符范围，忽略 `\S`、Unicode 属性名、捕获组名和注释中的大写。
 `\p{Lu}` 等没有字面量的正则保持大小写敏感；文字搜索按文字本身判断。
 
@@ -330,11 +333,11 @@ Renderer 通过现有 App Server 连接发送生成的类型协议；Electron Ma
 - glob 必须相对所选目录，绝对路径、`..`、前导 `!` 和 NUL 会被拒绝。
 - 单次任务最多返回 5,000 条结果，读取批次最多 200 条。
 - 任务绑定创建它的 App Server connection，其他连接不能读取或取消。
-- Current 内容搜索始终使用 rg；Indexed 默认使用 tgrep，公共 `[grep].backend = "ripgrep"` 显式关闭索引。命令通过参数数组启动，不经过 shell。
+- Current 内容搜索直接读取磁盘；Indexed 默认使用 tgrep，公共 `[grep].backend = "ripgrep"` 显式关闭索引。单文件、显式指定的 rg 或并行工作线程用完时通过参数数组启动 rg。
 - RPC 的 `freshness` 可选 `indexed` / `current`，省略时为 `current`；成功查询的读取结果返回实际模式。
 - tgrep 的 Indexed 目录 glob 只筛选遵守 ignore 规则的非隐藏文件；初始化扫描与即时写入保持同一过滤。Current glob 可主动包含被忽略文件；单文件 scope 直接读取。
 - `grep/search/read` 的可选 `indexStats` 包含 `queryPlan`、`rawCandidates`、`candidates`、`totalFiles`，分别表示诊断计划、trigram 候选数、范围与文件过滤后的候选数、索引总文件数。扫描或查询仍在执行时省略；查询结束后的各页保留同一份统计。计划文字不具有稳定语法。
-- 编辑器默认请求 `Current`，由 rg 直接搜索磁盘；Agent 和 Codebase 文字候选使用 `Indexed`，默认由 tgrep 执行。单文件 scope 使用 rg 并返回 Current。
+- 编辑器默认请求 `Current` 并直接搜索磁盘；Agent 和 Codebase 文字候选使用 `Indexed`，默认由 tgrep 执行。单文件 scope 使用 rg 并返回 Current。
 - Agent 存在未保存文档时合并当前磁盘与编辑器内容；文档列表为空时保留请求的 Indexed 模式。
 - 公共结果保留 UTF-8 byte ranges，App Server 协议适配器转换为 UTF-16；前端不重新解释。
 
@@ -349,7 +352,7 @@ Agent、Codebase 和编辑器共用 `grep::Search`，并注入同一 `grep::Serv
 
 原 `[agent].grepBackend` 自动迁移到 `[grep].backend`；公共协议使用 `grepBackend`。
 
-TS 前端可在“设置 → 通用 → 应用 → 内容搜索 → 索引搜索引擎”选择默认的 tgrep 或 ripgrep。
+TS 前端可在“设置 → 代码智能 → Codebase”切换“为 Grep 启用仓库索引”。开启使用 tgrep，关闭使用 ripgrep。
 控件通过 `config/read` 和带当前配置 revision 的 `config/update` 直接读写 `[grep].backend`，
 不在前端 `settings.json` 保存副本。保存后读回配置；断连或保存失败时禁用选择并提示刷新。
 

@@ -49,6 +49,19 @@ pub struct MessageCaptureTarget {
     pub target_unborn: bool,
 }
 
+/// The open Turn that can consume this message's fresh worktree trees.
+#[derive(Clone)]
+pub struct MessageCaptureTurn {
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+    pub turn_id: TurnId,
+}
+
+pub struct MessageCapture {
+    pub checkpoints: Vec<ash_protocol::RepositoryCheckpoint>,
+    pub refreshed: Result<Vec<TurnChangeSet>, TurnChangeLedgerError>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TurnChangeBeginRequest {
     pub session_id: SessionId,
@@ -120,11 +133,14 @@ impl TurnChangeLedger {
                         LedgerCommand::CaptureMessage {
                             event_id,
                             repositories,
+                            refresh,
                             response,
                         } => {
-                            let _ = response.send(
-                                runtime.block_on(worker.capture_message(&event_id, repositories)),
-                            );
+                            let _ = response.send(runtime.block_on(worker.capture_message(
+                                &event_id,
+                                repositories,
+                                refresh,
+                            )));
                         }
                         LedgerCommand::ReleaseMessage {
                             checkpoint,
@@ -149,6 +165,7 @@ impl TurnChangeLedger {
                                 &session_id,
                                 &thread_id,
                                 &turn_id,
+                                &BTreeMap::new(),
                             )));
                         }
                         LedgerCommand::RecordScope(scope, response) => {
@@ -206,13 +223,15 @@ impl TurnChangeLedger {
         &self,
         event_id: String,
         repositories: Vec<MessageCaptureTarget>,
-    ) -> Result<Vec<ash_protocol::RepositoryCheckpoint>, TurnChangeLedgerError> {
+        refresh: Option<MessageCaptureTurn>,
+    ) -> Result<MessageCapture, TurnChangeLedgerError> {
         let (response, receiver) = mpsc::sync_channel(1);
         self.inner
             .sender
             .send(LedgerCommand::CaptureMessage {
                 event_id,
                 repositories,
+                refresh,
                 response,
             })
             .map_err(|_| TurnChangeLedgerError::WorkerStopped)?;
@@ -320,9 +339,8 @@ enum LedgerCommand {
     CaptureMessage {
         event_id: String,
         repositories: Vec<MessageCaptureTarget>,
-        response: mpsc::SyncSender<
-            Result<Vec<ash_protocol::RepositoryCheckpoint>, TurnChangeLedgerError>,
-        >,
+        refresh: Option<MessageCaptureTurn>,
+        response: mpsc::SyncSender<Result<MessageCapture, TurnChangeLedgerError>>,
     },
     ReleaseMessage {
         checkpoint: ash_protocol::RepositoryCheckpoint,
@@ -394,12 +412,13 @@ impl LedgerWorker {
         &self,
         event_id: &str,
         repositories: Vec<MessageCaptureTarget>,
-    ) -> Result<Vec<ash_protocol::RepositoryCheckpoint>, TurnChangeLedgerError> {
+        refresh: Option<MessageCaptureTurn>,
+    ) -> Result<MessageCapture, TurnChangeLedgerError> {
         let mut captured = Vec::new();
+        let mut snapshots = BTreeMap::new();
         let result: Result<(), TurnChangeLedgerError> = async {
             for target in repositories {
-                let repository = self.git.open_repository(&target.worktree_root).await?;
-                let tree = self.git.capture_worktree_tree(&repository).await?;
+                let (repository, tree) = self.capture_snapshot(&target.worktree_root).await?;
                 let digest = ash_protocol::ContentDigest::sha256(
                     format!("{event_id}:{}", target.repository_id).as_bytes(),
                 );
@@ -409,6 +428,15 @@ impl LedgerWorker {
                 ))?;
                 let target_reference =
                     GitPrivateRef::new(format!("{}-target", reference.as_str()))?;
+                self.git
+                    .pin_private_checkpoint(
+                        &repository,
+                        &reference,
+                        &tree,
+                        &target_reference,
+                        &target.target_head,
+                    )
+                    .await?;
                 captured.push(ash_protocol::RepositoryCheckpoint {
                     repository_id: target.repository_id,
                     relative_path: target.relative_path.to_string_lossy().into_owned(),
@@ -416,27 +444,40 @@ impl LedgerWorker {
                     reference: reference.as_str().to_string(),
                     git_directory: repository.common_dir().to_string_lossy().into_owned(),
                     target_branch: target.target_branch,
-                    target_head: target.target_head.clone(),
+                    target_head: target.target_head,
                     target_unborn: target.target_unborn,
                     target_reference: target_reference.as_str().to_string(),
                 });
-                self.git
-                    .pin_private_ref(&repository, &reference, &tree)
-                    .await?;
-                self.git
-                    .pin_private_commit(&repository, &target_reference, &target.target_head)
-                    .await?;
+                if refresh.is_some() {
+                    snapshots.insert(target.worktree_root, (repository, tree));
+                }
             }
             Ok(())
         }
         .await;
         if let Err(error) = result {
+            // Only undo pins this call created. A rejected transaction may have collided
+            // with a checkpoint already referenced by a durable message.
             for checkpoint in &captured {
-                self.release_message(checkpoint).await?;
+                if let Err(cleanup) = self.release_message(checkpoint).await {
+                    log::warn!("could not release unpublished message checkpoint: {cleanup}");
+                }
             }
             return Err(error);
         }
-        Ok(captured)
+        // Both consumers observe the same fresh trees, before any queued watcher refresh.
+        // A live summary failure does not invalidate a successfully pinned message.
+        let refreshed = match refresh {
+            Some(turn) => {
+                self.refresh(&turn.session_id, &turn.thread_id, &turn.turn_id, &snapshots)
+                    .await
+            }
+            None => Ok(Vec::new()),
+        };
+        Ok(MessageCapture {
+            checkpoints: captured,
+            refreshed,
+        })
     }
 
     async fn begin(
@@ -559,24 +600,17 @@ impl LedgerWorker {
                 sealed.push(change_set);
                 continue;
             }
-            let after_tree = self.capture_snapshot(&change_set.worktree_root).await?;
-            let repository = self.git.open_repository(&change_set.worktree_root).await?;
-            let after_tree_id = GitTreeId::new(after_tree.clone())?;
+            let (repository, after_tree) = self.capture_snapshot(&change_set.worktree_root).await?;
             self.git
                 .pin_private_ref(
                     &repository,
                     &after_reference(&change_set.change_set_id)?,
-                    &after_tree_id,
+                    &after_tree,
                 )
                 .await?;
-            let before_tree = GitTreeId::new(change_set.before_tree.clone())?;
             let changes = self
-                .git
-                .diff_trees(&repository, &before_tree, &after_tree_id)
-                .await?
-                .into_iter()
-                .map(change_file)
-                .collect::<Vec<_>>();
+                .changes_between(&repository, &change_set.before_tree, &after_tree)
+                .await?;
             let dependencies = dependencies_for(&change_set, &changes, &all_records);
             let expected_revision = change_set.revision;
             let unexplained_paths = changes
@@ -602,14 +636,19 @@ impl LedgerWorker {
                     )
                 };
                 change_set.seal_incomplete(
-                    after_tree.clone(),
+                    after_tree.as_str().to_owned(),
                     request.terminal_state,
                     changes,
                     dependencies,
                     warning,
                 )?;
             } else {
-                change_set.seal(after_tree, request.terminal_state, changes, dependencies)?;
+                change_set.seal(
+                    after_tree.as_str().to_owned(),
+                    request.terminal_state,
+                    changes,
+                    dependencies,
+                )?;
             }
             self.store
                 .compare_and_swap(expected_revision, &change_set)?;
@@ -628,6 +667,7 @@ impl LedgerWorker {
         session_id: &SessionId,
         thread_id: &ThreadId,
         turn_id: &TurnId,
+        snapshots: &BTreeMap<PathBuf, (GitRepository, GitTreeId)>,
     ) -> Result<Vec<TurnChangeSet>, TurnChangeLedgerError> {
         let mut refreshed = Vec::new();
         for mut record in self.store.list_for_thread(thread_id)? {
@@ -641,18 +681,26 @@ impl LedgerWorker {
                 refreshed.push(record);
                 continue;
             }
-            let after_tree = self.capture_snapshot(&record.worktree_root).await?;
-            let files = self.changes_between(&record, &after_tree).await?;
-            let repository = self.git.open_repository(&record.worktree_root).await?;
+            let fresh;
+            let (repository, after_tree) = match snapshots.get(&record.worktree_root) {
+                Some(snapshot) => snapshot,
+                None => {
+                    fresh = self.capture_snapshot(&record.worktree_root).await?;
+                    &fresh
+                }
+            };
+            let files = self
+                .changes_between(repository, &record.before_tree, after_tree)
+                .await?;
             self.git
                 .pin_private_ref(
-                    &repository,
+                    repository,
                     &after_reference(&record.change_set_id)?,
-                    &GitTreeId::new(after_tree.clone())?,
+                    after_tree,
                 )
                 .await?;
             let expected_revision = record.revision;
-            record.refresh_open_files(after_tree, files)?;
+            record.refresh_open_files(after_tree.as_str().to_owned(), files)?;
             if record.revision != expected_revision {
                 self.store.compare_and_swap(expected_revision, &record)?;
             }
@@ -668,15 +716,17 @@ impl LedgerWorker {
 
     async fn changes_between(
         &self,
-        change_set: &TurnChangeSet,
-        after_tree: &str,
+        repository: &GitRepository,
+        before_tree: &str,
+        after_tree: &GitTreeId,
     ) -> Result<Vec<ChangeFile>, TurnChangeLedgerError> {
-        let repository = self.git.open_repository(&change_set.worktree_root).await?;
-        let before_tree = GitTreeId::new(change_set.before_tree.clone())?;
-        let after_tree = GitTreeId::new(after_tree.to_string())?;
+        if before_tree == after_tree.as_str() {
+            return Ok(Vec::new());
+        }
+        let before_tree = GitTreeId::new(before_tree.to_owned())?;
         Ok(self
             .git
-            .diff_trees(&repository, &before_tree, &after_tree)
+            .diff_trees(repository, &before_tree, after_tree)
             .await?
             .into_iter()
             .map(change_file)
@@ -686,14 +736,10 @@ impl LedgerWorker {
     async fn capture_snapshot(
         &self,
         worktree_root: &std::path::Path,
-    ) -> Result<String, TurnChangeLedgerError> {
+    ) -> Result<(GitRepository, GitTreeId), TurnChangeLedgerError> {
         let repository = self.git.open_repository(worktree_root).await?;
-        Ok(self
-            .git
-            .capture_worktree_tree(&repository)
-            .await?
-            .as_str()
-            .to_string())
+        let tree = self.git.capture_worktree_tree(&repository).await?;
+        Ok((repository, tree))
     }
 
     fn record_scope(

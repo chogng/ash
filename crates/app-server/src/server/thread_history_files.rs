@@ -1,13 +1,10 @@
 use super::git_turn_changes_runtime::GitTurnChangesRuntime;
 use ash_protocol::CommandId;
 use ash_protocol::ContentDigest;
-use ash_protocol::ItemId;
 use ash_protocol::ThreadId;
-use ash_protocol::TurnId;
 use ash_protocol::WorkspaceCheckpoint;
 use core_api::CheckpointCapture;
 use core_api::CoreError;
-use core_api::MessageCheckpointSource;
 use core_api::MoveThreadHistoryRequest;
 use core_api::WorkspaceRestoration;
 use serde::Deserialize;
@@ -109,11 +106,10 @@ impl GitTurnChangesRuntime {
                 "Thread file captures or commits are still running".into(),
             ));
         }
-        let capture = self.capture(
+        let capture = self.capture_workspace(
             &request.thread_id,
-            &TurnId::new("history").expect("constant ID"),
-            &ItemId::new("history").expect("constant ID"),
             &format!("history-{}", request.command_id),
+            None,
         )?;
         if !same_files(capture.workspace(), expected) {
             return Err(CoreError::WorkspaceCheckpointConflict);

@@ -49,6 +49,7 @@ pub use objects::GitTreeChange;
 pub use objects::GitTreeChangeKind;
 pub use objects::GitTreeId;
 pub use objects::GitTreeTextDiff;
+pub use objects::is_private_checkpoint_path;
 pub use operation_lock::RepositoryOperationGuard;
 pub use operation_lock::RepositoryOperationLock;
 pub use operation_lock::RepositoryOperationWaiter;

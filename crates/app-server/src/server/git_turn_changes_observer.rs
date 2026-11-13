@@ -148,6 +148,10 @@ impl TurnExecutionObserver for GitTurnChangesRuntime {
     }
 
     fn did_finish(&self, event: &TurnExecutionFinished) {
+        self.tool_result_refreshes
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|(thread, turn, _), _| thread != &event.thread_id || turn != &event.turn_id);
         if self
             .binding(&event.thread_id)
             .is_some_and(|binding| binding.kind() == ManagedDirKind::Directory)
@@ -256,8 +260,11 @@ impl TurnExecutionObserver for GitTurnChangesRuntime {
             .tool_write_capabilities
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&(event.turn_id.clone(), event.tool_call_id.clone()))
-            .unwrap_or(false);
+            .remove(&(event.turn_id.clone(), event.tool_call_id.clone()));
+        let can_share_result_capture = write_capable == Some(false)
+            && event.completed_without_review
+            && matches!(event.name.as_str(), "grep" | "glob" | "read_file");
+        let write_capable = write_capable.unwrap_or(false);
         let roots = match self.execution_roots(&event.thread_id) {
             Ok(roots) if !roots.is_empty() => roots,
             Ok(_) => {
@@ -297,6 +304,7 @@ impl TurnExecutionObserver for GitTurnChangesRuntime {
                 &event.turn_id,
             )
         } else {
+            let share_result_capture = can_share_result_capture && write_paths.is_empty();
             self.ledger
                 .record_tool_scope(ToolChangeScope {
                     session_id: event.session_id.clone(),
@@ -308,7 +316,23 @@ impl TurnExecutionObserver for GitTurnChangesRuntime {
                     opaque_dependencies: false,
                 })
                 .map_err(|error| error.to_string())
-                .and_then(|_| {
+                .and_then(|records| {
+                    if share_result_capture {
+                        // Scope is durable now; defer only the filesystem scan to the
+                        // matching result's checkpoint, which still observes external writes.
+                        self.tool_result_refreshes
+                            .write()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .insert(
+                                (
+                                    event.thread_id.clone(),
+                                    event.turn_id.clone(),
+                                    event.tool_call_id.clone(),
+                                ),
+                                event.session_id.clone(),
+                            );
+                        return Ok(records);
+                    }
                     self.ledger
                         .refresh_turn(
                             event.session_id.clone(),

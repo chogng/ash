@@ -55,7 +55,7 @@ impl MessageCheckpointSource for Source {
         &self,
         _: &ash_protocol::ThreadId,
         _: &ash_protocol::TurnId,
-        _: &ash_protocol::ItemId,
+        _: &ash_protocol::ThreadItem,
         event_id: &str,
     ) -> Result<Box<dyn CheckpointCapture>, CoreError> {
         Ok(Box::new(Capture {
