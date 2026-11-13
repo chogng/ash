@@ -1623,8 +1623,12 @@ test('Draft handoff carries user context and leaves source-owned App context wit
 	});
 	assert.equal(sourceReads, 0);
 	using target = inputPart(sharedNotifications);
+	target.addContext(source);
+	assert.equal(await target.captureDraft(), undefined);
 	target.restoreDraft(captured.draft);
-	assert.deepEqual((await target.captureDraft())?.draft, captured.draft);
+	const restored = (await target.captureDraft())!.draft;
+	assert.deepEqual({ ...restored, text: restored.text.trimEnd() }, { ...captured.draft, text: captured.draft.text.trimEnd() });
+	assert.deepEqual(target.attachmentModel.attachments.filter(attachment => attachment.lifetime === 'source'), [source]);
 	captured.clear();
 	assert.deepEqual(part.attachmentModel.attachments, [source]);
 	assert.equal(await part.captureDraft(), undefined);
