@@ -15,6 +15,7 @@ export namespace ChatContextKeys {
 	export const enabled = new RawContextKey<boolean>('chatIsEnabled', false);
 	export const hasActiveRequest = new RawContextKey<boolean>('chatSessionHasActiveRequest', false);
 	export const inChatSession = new RawContextKey<boolean>('inChat', false);
+	export const contextMenuCanAddSelectionToChat = new RawContextKey<boolean>('chatContextMenuCanAddSelectionToChat', false);
 	export const responseHasText = new RawContextKey<boolean>('chatResponseHasText', false);
 	export const requestHasText = new RawContextKey<boolean>('chatRequestHasText', false);
 	/** The popup presentation uses thumbnails for sent images and opens images in place. */

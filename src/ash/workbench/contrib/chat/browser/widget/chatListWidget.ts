@@ -1,6 +1,6 @@
 import type { MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
 import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichContent.js';
-import type { ChatTurnChangesOpener } from '../chat.js';
+import { ChatContextMenuActionContext, type ChatTurnChangesOpener } from '../chat.js';
 import { PromptTimelineModel } from '../promptTimeline/promptTimelineModel.js';
 import type { ChatResponseFileChangesPresentation } from '../chatResponseFileChangesService.js';
 import { PromptTimelineWidgetContrib } from '../promptTimeline/promptTimelineWidgetContrib.js';
@@ -18,25 +18,33 @@ import { IChatLayoutService } from '../../common/widget/chatLayoutService.js';
 import { findLast, findLastIdx } from '../../../../../base/common/arraysFind.js';
 import { PromptTimelineStickyHeader } from '../promptTimeline/promptTimelineStickyHeader.js';
 import './media/chatListWidget.css';
-import { addDisposableListener, h, isHTMLElement } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, isElement, isHTMLElement, stopEvent } from '../../../../../base/browser/dom.js';
 import { observeMutations, observeResize } from '../../../../../base/browser/observer.js';
 import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { isMacintosh, isNative } from '../../../../../base/common/platform.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatStreamingResponseUpdate, ChatTurnErrorAction, IChatListItem } from '../../common/model/chatViewModel.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { getFlatContextMenuActions } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import { IMenuService, MenuId } from '../../../../../platform/actions/common/actions.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../editor/common/config/fontInfo.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { PROMPT_TIMELINE_STICKY_SCROLL_SETTING } from '../../common/promptTimeline.js';
 import { ChatConfiguration, ChatEditorConfiguration, ChatInputConfiguration } from '../../common/constants.js';
 import { observableConfigValue } from '../../../../../platform/observable/common/platformObservableUtils.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppModel.js';
@@ -46,7 +54,8 @@ import { AccessibleViewRegistry } from '../../../../../platform/accessibility/br
 import { localize } from '../../../../../nls.js';
 import { ChatAccessibilityProvider } from '../accessibility/chatAccessibilityProvider.js';
 import { ChatResponseAccessibleView } from '../accessibility/chatResponseAccessibleView.js';
-import { getChatLinkPreviewAccessibilityHelp } from '../actions/chatAccessibilityHelp.js';
+import { getChatLinkPreviewAccessibilityHelp, getChatSelectionAccessibilityHelp } from '../actions/chatAccessibilityHelp.js';
+import { CopyItemActionId } from '../actions/chatCopyActions.js';
 import { computeRevealScrollTop } from './chatFind/chatFindWidget.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { ChatVirtualRows } from './chatVirtualRows.js';
@@ -56,6 +65,7 @@ interface ChatListWidgetOptions {
 	readonly messagePresentation?: import('../chat.js').ChatMessagePresentation;
 	readonly codeBlockPresentation?: 'card';
 	readonly onDidRequestEdit?: (requestId: string) => void | Promise<void>;
+	readonly prepareAddSelectionToChat?: (text: string) => (() => void) | undefined;
 	readonly canEditRequest?: () => boolean;
 	readonly submitRequestEdit?: (item: IChatListItem, text: string, commandId: string) => Promise<void>;
 	readonly getRequestVersions?: (item: IChatListItem) => Promise<readonly import('../chat.js').ChatRequestVersion[]>;
@@ -78,6 +88,7 @@ interface ChatListWidgetOptions {
 }
 
 const textInputSelector = 'textarea, [role="textbox"], [contenteditable="true"]';
+const clipboardInputSelector = `input, ${textInputSelector}, .stanza-editor`;
 const focusableSelector = 'button, a, summary, textarea, audio, [role="textbox"], [tabindex="0"], [contenteditable="true"]';
 const viewportMargin = 600;
 const virtualOverscan = 1000;
@@ -161,6 +172,7 @@ export class ChatListWidget extends DomWidget {
 	private readonly rowResizeObserver: ResizeObserver | undefined;
 	private selectionStart: string | undefined;
 	private readonly refreshSelection = this._register(new RunOnceScheduler(() => this.refreshVirtualWindow(), 0));
+	private readonly selectionMenu = this._register(new MutableDisposable<IDisposable>());
 
 	public get element(): HTMLElement { return this.domNode; }
 
@@ -297,8 +309,12 @@ export class ChatListWidget extends DomWidget {
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IChatLayoutService chatLayoutService: IChatLayoutService,
 		@ILoggerService loggerService: ILoggerService,
-		@IContextKeyService contextKeys: IContextKeyService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibilityService private readonly accessibilityService: IAccessibilityService,
+		@IMenuService private readonly menuService: IMenuService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@ICommandService private readonly commands: ICommandService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		this.layoutTrace = this.layoutTraceStore.add(new ChatLayoutTrace(() => performance.now(), loggerService.createLogger('chat.layout')));
@@ -388,25 +404,25 @@ export class ChatListWidget extends DomWidget {
 			}, () => this.renderPromptTimeline()));
 		}
 
-		this._register(addDisposableListener<ClipboardEvent>(this.transcript, 'copy', event => {
-			if (event.defaultPrevented || !this.visible || !event.clipboardData) { return; }
-			const target = event.target as Element | null;
-			// Input and code editors own their clipboard formats and selection semantics.
-			if (target?.closest('input, textarea, [contenteditable="true"], [role="textbox"]')) { return; }
-			const selection = this.transcript.ownerDocument.defaultView?.getSelection();
-			if (!selection || selection.isCollapsed || !selection.rangeCount) { return; }
-			const holder = this.transcript.ownerDocument.createElement('div');
-			let changed = false;
-			for (let index = 0; index < selection.rangeCount; index++) {
-				const range = selection.getRangeAt(index);
-				if (!this.transcript.contains(range.commonAncestorContainer)) { return; }
-				const fragment = cloneVisibleSelection(range, this.transcript);
-				changed = sanitizeChatClipboardFragment(fragment) || changed;
-				holder.append(fragment);
+		// Selected text takes precedence over context menus owned by the underlying link or row.
+		this._register(addDisposableListener(this.transcript, 'contextmenu', event => this.handleContextMenu(event), true));
+		this._register(addDisposableListener(this.transcript, 'keydown', event => {
+			if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') {
+				this.handleContextMenu(event);
+			} else if (isNative) {
+				this.handleCopyShortcut(event);
 			}
+		}, true));
+		this._register(addDisposableListener(this.transcript, 'copy', event => {
+			if (event.defaultPrevented || !this.visible || !event.clipboardData) { return; }
+			// Input and code editors own their clipboard formats and selection semantics.
+			if (isElement(event.target) && event.target.closest(clipboardInputSelector)) { return; }
+			const selection = this.getTranscriptSelection();
+			if (!selection) { return; }
+			const { html, changed } = this.getSelectionHtml(selection);
 			if (!changed) { return; }
 			event.clipboardData.setData('text/plain', selection.toString());
-			event.clipboardData.setData('text/html', holder.innerHTML);
+			event.clipboardData.setData('text/html', html);
 			event.preventDefault();
 		}));
 		this._register(addDisposableListener(this.transcript, 'focusin', event => {
@@ -464,6 +480,7 @@ export class ChatListWidget extends DomWidget {
 						localize('chat.modelFeedback.rowHelp', 'On a completed reply, open More Actions and choose Give model feedback to open an editable report about the model used for that reply.'),
 						localize('chat.response.voteHelp', 'In the Agents window, open More Actions on a completed Ash reply to mark it Good response or Bad response. The mark is saved in your Ash profile.'),
 						getChatLinkPreviewAccessibilityHelp(),
+						getChatSelectionAccessibilityHelp(),
 						localize('chat.requestVersions.help', 'In Code, open the original request’s checkpoint actions and choose Run another version to run it again in a separate worktree. When both versions have finished and their Git snapshots are available, open More Actions on either reply and choose Compare results.'),
 						...(this.options.openTurnChanges || this.options.getTurnChanges ? [localize('chat.turnChanges.help', 'When a completed reply has captured file changes, use Tab to reach its file count button. Press Enter or Space to open the before-and-after comparison for that turn.')] : []),
 						...(this.options.getTurnChanges ? [localize('chat.turnChanges.filesHelp', 'Use Enter or Space on Changed files to expand the list. Tab to a file and press Enter to open its comparison.')] : []),
@@ -529,6 +546,86 @@ export class ChatListWidget extends DomWidget {
 				if (this.virtualRows || this.items.length >= threshold) this.render(this.items, this.working);
 			}));
 		}
+	}
+
+	private getTranscriptSelection(): Selection | undefined {
+		const selection = this.transcript.ownerDocument.getSelection();
+		if (!selection || selection.isCollapsed || !selection.rangeCount) return undefined;
+		for (let index = 0; index < selection.rangeCount; index++) {
+			if (!this.transcript.contains(selection.getRangeAt(index).commonAncestorContainer)) return undefined;
+		}
+		return selection;
+	}
+
+	private getSelectionHtml(selection: Selection): { readonly html: string; readonly changed: boolean; } {
+		const holder = this.transcript.ownerDocument.createElement('div');
+		let changed = false;
+		for (let index = 0; index < selection.rangeCount; index++) {
+			const fragment = cloneVisibleSelection(selection.getRangeAt(index), this.transcript);
+			changed = sanitizeChatClipboardFragment(fragment) || changed;
+			holder.append(fragment);
+		}
+		return { html: holder.innerHTML, changed };
+	}
+
+	private handleCopyShortcut(event: KeyboardEvent): void {
+		const copyModifier = isMacintosh ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+		if (!copyModifier || event.altKey || event.shiftKey || event.isComposing || event.key.toLowerCase() !== 'c') return;
+		if (event.defaultPrevented || !this.visible || !isElement(event.target) || event.target.closest(clipboardInputSelector)) return;
+		const selection = this.getTranscriptSelection();
+		const text = selection?.toString();
+		if (!selection || !text) return;
+
+		// Electron can dispatch the default copy event outside the focused transcript.
+		stopEvent(event);
+		const { html } = this.getSelectionHtml(selection);
+		void this.commands.executeCommand(CopyItemActionId, new ChatContextMenuActionContext(text, html, undefined))
+			.catch(error => { if (!this.isDisposed && this.visible) this.notifications.error(error); });
+	}
+
+	private handleContextMenu(event: MouseEvent | KeyboardEvent): void {
+		const target = event.target;
+		if (event.defaultPrevented || !this.visible || !isElement(target) || target.closest(clipboardInputSelector)) return;
+		const selection = this.getTranscriptSelection();
+		const text = selection?.toString();
+		if (!selection || !text?.trim()) return;
+		const mouseEvent = 'clientX' in event ? event : undefined;
+		const ranges = Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index));
+		const overSelection = ranges.some(range => mouseEvent
+			? Array.from(range.getClientRects()).some(rect => mouseEvent.clientX >= rect.left && mouseEvent.clientX <= rect.right
+				&& mouseEvent.clientY >= rect.top && mouseEvent.clientY <= rect.bottom)
+			: range.intersectsNode(target));
+		if (!overSelection) return;
+
+		// The menu can take focus and the transcript can stream while it is open.
+		const { html } = this.getSelectionHtml(selection);
+		const actionContext = new ChatContextMenuActionContext(text, html, this.options.prepareAddSelectionToChat?.(text));
+		using menuContext = this.contextKeys.createScoped(this.transcript.ownerDocument.createElement('div'));
+		ChatContextKeys.contextMenuCanAddSelectionToChat.bindTo(menuContext).set(!!actionContext.addToChat);
+		const actions = getFlatContextMenuActions(
+			this.menuService.getMenuActions(MenuId.ChatContext, { shouldForwardArgs: true }, menuContext),
+		);
+		if (!actions.length) return;
+
+		stopEvent(event);
+		const source = new CancellationTokenSource();
+		let closed = false;
+		const menu = toDisposable(() => source.dispose(!closed));
+		this.selectionMenu.value = menu;
+		const anchor = mouseEvent ? { x: mouseEvent.clientX, y: mouseEvent.clientY, targetWindow: getWindow(target) } : target;
+		this.contextMenuService.showContextMenu({
+			getAnchor: () => anchor,
+			getActionsContext: () => actionContext,
+			getActions: () => actions,
+			iconPlacement: 'leading-with-trailing-check',
+			autoSelectFirstItem: !mouseEvent,
+			cancellationToken: source.token,
+			onHide: () => {
+				// Native menus report closure before dispatching the chosen action.
+				closed = true;
+				if (this.selectionMenu.value === menu) this.selectionMenu.clear();
+			},
+		});
 	}
 
 	private updateCodeBlockOptions(): void {
@@ -1014,6 +1111,7 @@ export class ChatListWidget extends DomWidget {
 		// A replacement can already be visible and still have a reading position to restore.
 		if (this.visible === visible && !(visible && this.pendingReadingPosition)) return;
 		if (!visible) {
+			this.selectionMenu.clear();
 			this.pendingDrag?.cancelDrag();
 			this.relayout.cancel();
 			this.refreshViewport.cancel();

@@ -7,6 +7,10 @@ import { createTestLanguageModelToolsService } from '../common/tools/testLanguag
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
 import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
@@ -796,6 +800,70 @@ test('a saved pull request context opens the original PR above the first message
 suite('Chat message copy ownership', () => {
 	suiteSetup(() => { getWindows(); });
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('transcript shortcuts and menu commands copy the same selection without taking over editor input', async () => {
+		using resources = new DisposableStore();
+		const services = resources.add(createChatListTestServices(resources));
+		let menu: IContextMenuDelegate | undefined;
+		const copies: { text: string; html: string; }[] = [];
+		const draft: string[] = [];
+		services.registerInstance(IContextMenuService, {
+			contextMenuStyle: 'custom',
+			onDidShowContextMenu: Event.None,
+			onDidHideContextMenu: Event.None,
+			hideContextMenu() { },
+			showContextMenu: delegate => { menu = delegate as IContextMenuDelegate; },
+		});
+		services.registerInstance(IClipboardService, resources.add(new class extends BrowserClipboardService {
+			constructor() { super(undefined); }
+			override async writeTextWithHtml(text: string, html: Promise<string>): Promise<void> {
+				copies.push({ text, html: await html });
+			}
+		}()));
+		services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
+		services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
+		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {
+			prepareAddSelectionToChat: (text: string) => () => { draft.push(text); },
+		});
+		document.body.append(widget.element);
+		resources.add(toDisposable(() => widget.element.remove()));
+		widget.render([{ id: 'reply', type: 'agentMessage', text: 'Before **selected words** after.', transient: false }]);
+		const row = widget.getRowElement('reply')!;
+		const selection = document.getSelection()!;
+		resources.add(toDisposable(() => selection.removeAllRanges()));
+		const copy = (target: HTMLElement) => target.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', {
+			key: 'c', metaKey: isMacintosh, ctrlKey: !isMacintosh, bubbles: true, cancelable: true,
+		}));
+		const openMenu = () => row.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', {
+			key: 'F10', shiftKey: true, bubbles: true, cancelable: true,
+		}));
+		assert.equal(openMenu(), true);
+		assert.equal(copy(row), true);
+		assert.equal(menu, undefined);
+		selection.selectAllChildren(row.querySelector('strong')!);
+		const input = document.createElement('textarea');
+		row.append(input);
+		assert.equal(copy(input), true);
+		input.remove();
+		assert.equal(copy(row), false);
+		assert.equal(openMenu(), false);
+		const openedMenu = menu as IContextMenuDelegate | undefined;
+		assert.ok(openedMenu);
+		const actions = openedMenu.getActions();
+		assert.deepEqual(actions.map(action => action.label), ['Copy', 'Add to Chat']);
+		assert.deepEqual(actions.map(action => action.icon?.id), ['copy', 'add']);
+		assert.equal(openedMenu.iconPlacement, 'leading-with-trailing-check');
+		selection.removeAllRanges();
+		await actions[0].run(openedMenu.getActionsContext?.());
+		await actions[1].run(openedMenu.getActionsContext?.());
+		assert.equal(copies.length, 2);
+		assert.equal(copies[0]?.text, 'selected words');
+		assert.match(copies[0]?.html ?? '', /<strong>selected words<\/strong>/);
+		assert.deepEqual(copies[1], copies[0]);
+		assert.deepEqual(draft, ['selected words']);
+		widget.setVisible(false);
+		assert.equal(openedMenu.cancellationToken?.isCancellationRequested, true);
+	});
+
 	test('the actual row command copies current raw text and releases feedback after removal', async () => {
 		using resources = new DisposableStore();
 		const parent = resources.add(new InstantiationService());

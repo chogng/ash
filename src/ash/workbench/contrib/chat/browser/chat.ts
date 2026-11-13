@@ -25,6 +25,15 @@ import type { ChatEditorInput } from './widgetHosts/editor/chatEditorInput.js';
 
 export const CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT = 100;
 
+/** Captures the transcript selection for copy and draft actions. */
+export class ChatContextMenuActionContext {
+	constructor(
+		readonly text: string,
+		readonly html: string,
+		readonly addToChat: (() => void) | undefined,
+	) { }
+}
+
 /** Binds a toolbar action to its rendered message and row lifetime. */
 export class ChatMessageActionContext extends Disposable {
 	constructor(

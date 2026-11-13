@@ -53,6 +53,10 @@ export function getChatLinkPreviewAccessibilityHelp(): string {
 	return localize('chat.link.previewHelp', 'Use Tab to reach Sources in the reply’s action row. Press Enter or Space on a sources button to show its links. Use Tab to reach a link and Enter to open it. Escape returns to the sources button. On an external link, use {0} to show its preview.', '<keybinding:workbench.action.showHover>');
 }
 
+export function getChatSelectionAccessibilityHelp(): string {
+	return localize('chat.selection.help', 'With text selected in a chat message, press Ctrl or Command+C to copy it. Focus the message input and press Ctrl or Command+V to paste. Right-click the selection or press Shift+F10 to open its menu. Choose Copy to copy the selected text, or Add to Chat when available to append it to the unsent draft. Press Escape to close the menu.');
+}
+
 export function getChatCodeBlockCardAccessibilityHelp(): string {
 	return localize('chat.code.cardHelp', 'Use Tab to reach the code block actions. Press Left or Right to move between More Actions and Copy. Open More Actions to insert the code at the cursor, open it in a new file, or apply it to the editor when available. Press Escape to close the menu and return to More Actions.') + '\n' + getChatMermaidAccessibilityHelp();
 }
@@ -135,6 +139,7 @@ export function getChatInputAccessibilityHelp(screenshotHelp: string, secondaryT
 		isNative && localize('chat.developer.nativeProfileHelp', 'From a local desktop window, Developer: Debug Local App Server opens a native debugger. Run Developer: Start Local App Server CPU Recording and then Developer: Stop Local App Server CPU Recording to save a report. Recording requires Samply on the desktop PATH.'),
 		localize('chat.markdown.imagePreviewHelp', 'In a reply, use Tab to focus a Markdown image preview and Enter or Space to open it. In a gallery preview, activate a dot to jump to its image, or press Left or Right Arrow in the image viewport or gallery controls to change images. Press Escape to return to the current image.'),
 		getChatLinkPreviewAccessibilityHelp(),
+		getChatSelectionAccessibilityHelp(),
 		localize('chat.markdown.diffHelp', 'In a reply, use Tab or Next Code Block to reach a read-only diff. Press F7 or Shift+F7 to review the next or previous change in the accessible diff viewer.'),
 		localize('chat.fileAnchor.help', 'Focus a file link in a reply. Press Enter to open it, Ctrl+Enter to open it in a side editor, or {0} to copy the file reference.', isMacintosh ? 'Command+C' : 'Ctrl+C'),
 		localize('chat.plugins.updateHelp', 'Run Chat: Update Plugins from the Command Palette to install newer stable versions of plugins from signed registries and review the result.'),

@@ -292,6 +292,15 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
 			classPrefix: viewOptions?.classPrefix,
 			onDidRequestEdit: (requestId: string) => this.startEditing(requestId),
+			prepareAddSelectionToChat: (text: string) => {
+				if (!this.canAddSelectionToChat()) return undefined;
+				const generation = model.composerGeneration;
+				return () => {
+					if (generation !== model.composerGeneration || !this.canAddSelectionToChat()) return;
+					this.appendToDraft(text);
+					this.focusInput();
+				};
+			},
 			canEditRequest: () => !this.isTranscriptProgressActive,
 			submitRequestEdit: model.submitRequestEdit?.bind(model),
 			getRequestVersions: model.getRequestVersions?.bind(model),
@@ -581,6 +590,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 
 	appendToDraft(text: string): void {
 		this.input.appendToDraft(text);
+	}
+
+	private canAddSelectionToChat(): boolean {
+		const { aiDisabled, draft } = this.model.inputState;
+		return !this.isDisposed && this.visible && !this.readOnlyBanner.visible && !aiDisabled && !draft?.readOnly;
 	}
 
 	public acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {

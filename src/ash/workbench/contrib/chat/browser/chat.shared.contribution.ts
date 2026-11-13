@@ -28,6 +28,7 @@ import { ChatOutputPartStateCache, IChatOutputPartStateCache } from './widget/ch
 import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
 import { ChatLayoutService } from './widget/chatLayoutService.js';
 import { registerChatCopyActions } from './actions/chatCopyActions.js';
+import { registerAddSelectionToChatAction } from './actions/chatContextActions.js';
 import { registerChatApprovalEnvironmentActions } from './actions/chatApprovalEnvironmentActions.js';
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
 import { registerChatToolActions } from './actions/chatToolActions.js';
@@ -194,6 +195,7 @@ registerChatToolActions();
 registerChatTitleActions();
 registerChatExportActions();
 registerChatCopyActions();
+registerAddSelectionToChatAction();
 registerChatApprovalEnvironmentActions();
 registerChatCodeBlockActions();
 registerChatElicitationActions();
