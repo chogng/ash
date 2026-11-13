@@ -35,8 +35,8 @@ while :; do
   case "$message" in
     *'"method":"initialize"'*)
       root_uri=$(printf '%s' "$message" | sed -n 's/.*"rootUri":"\([^"]*\)".*/\1/p')
-      if [ "$LSP_OPTION" = projection ]; then
-        result='{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":{"openClose":true,"change":1},"definitionProvider":true,"renameProvider":true,"workspaceSymbolProvider":true,"completionProvider":{},"documentFormattingProvider":true,"documentRangeFormattingProvider":true}}'
+      if [ "$LSP_OPTION" = projection ] || [ "${LSP_OPTION#rename-}" != "$LSP_OPTION" ]; then
+        result='{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":{"openClose":true,"change":1},"definitionProvider":true,"renameProvider":true,"codeActionProvider":{"resolveProvider":true},"workspaceSymbolProvider":true,"completionProvider":{},"documentFormattingProvider":true,"documentRangeFormattingProvider":true}}'
       elif [ "$LSP_OPTION" = diagnostics ]; then
         result='{"capabilities":{"textDocumentSync":{"openClose":true,"change":1},"hoverProvider":true,"diagnosticProvider":{"interFileDependencies":true,"workspaceDiagnostics":true}}}'
       else
@@ -44,8 +44,22 @@ while :; do
       fi;;
     *'"method":"textDocument/definition"'*)
       result="[{\"uri\":\"$root_uri/target.demo\",\"range\":{\"start\":{\"line\":0,\"character\":12},\"end\":{\"line\":0,\"character\":18}}}]";;
-    *'"method":"textDocument/rename"'*)
-      result="{\"changes\":{\"$root_uri/target.demo\":[{\"range\":{\"start\":{\"line\":0,\"character\":12},\"end\":{\"line\":0,\"character\":18}},\"newText\":\"renamed\"}]}}";;
+    *'"method":"textDocument/rename"'*|*'"method":"textDocument/codeAction"'*|*'"method":"codeAction/resolve"'*)
+      case "$LSP_OPTION" in rename-*)
+        : > "$LSP_LOG/blocked"
+        while [ ! -f "$LSP_LOG/release" ]; do sleep 0.01; done;;
+      esac
+      result="{\"changes\":{\"$root_uri/target.demo\":[{\"range\":{\"start\":{\"line\":0,\"character\":12},\"end\":{\"line\":0,\"character\":18}},\"newText\":\"renamed\"}]}}"
+      if [ "$LSP_OPTION" = rename-versioned ]; then
+        result="{\"documentChanges\":[{\"textDocument\":{\"uri\":\"$root_uri/target.demo\",\"version\":1},\"edits\":[{\"range\":{\"start\":{\"line\":0,\"character\":12},\"end\":{\"line\":0,\"character\":18}},\"newText\":\"renamed\"}]}]}"
+      fi
+      if [ "$LSP_OPTION" = rename-sequential ]; then
+        result="{\"documentChanges\":[{\"textDocument\":{\"uri\":\"$root_uri/target.demo\",\"version\":1},\"edits\":[{\"range\":{\"start\":{\"line\":0,\"character\":12},\"end\":{\"line\":0,\"character\":18}},\"newText\":\"renamed\"}]},{\"textDocument\":{\"uri\":\"$root_uri/target.demo\",\"version\":null},\"edits\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":0}},\"newText\":\"step \"}]}]}"
+      fi
+      case "$message" in
+        *'"method":"textDocument/codeAction"'*) result="[{\"title\":\"Rename target\",\"edit\":$result}]";;
+        *'"method":"codeAction/resolve"'*) result="{\"title\":\"Rename target\",\"edit\":$result}";;
+      esac;;
     *'"method":"workspace/symbol"'*)
       result="[{\"name\":\"target\",\"kind\":12,\"location\":{\"uri\":\"$root_uri/target.demo\",\"range\":{\"start\":{\"line\":0,\"character\":12},\"end\":{\"line\":0,\"character\":18}}}}]";;
     *'"method":"workspace/diagnostic"'*)
@@ -821,4 +835,143 @@ fn workspace_diagnostics_reuse_ready_servers_without_resuming_idle_or_stopped_se
         "restart replays the latest stopped document before semantic work"
     );
     assert_eq!(pull(&mut connection)["result"]["supported"], true);
+}
+
+#[test]
+fn delayed_cross_file_rename_keeps_the_request_targets_dirty_unicode_baseline() {
+    assert_delayed_rename_baseline("rename-unversioned", RenameTargetUpdate::Synchronize);
+}
+
+#[test]
+fn versioned_delayed_cross_file_rename_keeps_the_request_baseline() {
+    assert_delayed_rename_baseline("rename-versioned", RenameTargetUpdate::Synchronize);
+}
+
+#[test]
+fn closing_a_target_during_rename_retains_its_dirty_request_baseline() {
+    assert_delayed_rename_baseline("rename-unversioned", RenameTargetUpdate::Close);
+}
+
+#[test]
+fn cancelling_a_delayed_cross_file_rename_returns_no_edit() {
+    assert_delayed_rename_baseline("rename-unversioned", RenameTargetUpdate::Cancel);
+}
+
+#[test]
+fn delayed_code_action_edits_keep_the_request_target_baseline() {
+    assert_delayed_rename_baseline("rename-code-actions", RenameTargetUpdate::Synchronize);
+}
+
+#[test]
+fn delayed_resolved_code_action_edits_keep_the_request_target_baseline() {
+    assert_delayed_rename_baseline("rename-resolve", RenameTargetUpdate::Synchronize);
+}
+
+#[test]
+fn delayed_rename_preserves_sequential_edit_baselines() {
+    assert_delayed_rename_baseline("rename-sequential", RenameTargetUpdate::Synchronize);
+}
+
+enum RenameTargetUpdate {
+    Synchronize,
+    Close,
+    Cancel,
+}
+
+fn assert_delayed_rename_baseline(option: &str, update: RenameTargetUpdate) {
+    let fixture = Arc::new(Fixture::new());
+    let _release = ReleaseOnDrop(fixture.root.path().join("logs/release"));
+    let mut connection = fixture.connection();
+    fixture.configure(&mut connection, "fixture", "demo", true, option);
+    let original = "/*🦀*/ fn target() {}";
+    let changed = "xxx /*🦀*/ fn target() {}";
+    std::fs::write(fixture.root.path().join("target.demo"), "disk").unwrap();
+    let opened = fixture.call(
+        &mut connection,
+        "language/synchronize",
+        json!({
+            "document":{"path":"target.demo", "languageId":"demo", "revision":1, "text":original}
+        }),
+    );
+    assert!(opened.get("result").is_some(), "{opened}");
+    let pending = Arc::clone(&fixture);
+    let option = option.to_owned();
+    let operation = option.clone();
+    let mut worker = connection.clone();
+    let rename = std::thread::spawn(move || {
+        let document =
+            json!({"path":"same.demo", "languageId":"demo", "revision":1, "text":"target()"});
+        let (method, request) = match operation.as_str() {
+            "rename-code-actions" => (
+                "language/codeActions",
+                json!({"document":document,
+                "range":{"start":{"lineIndex":0,"columnIndex":0},"end":{"lineIndex":0,"columnIndex":6}},
+                "diagnostics":[], "only":[]}),
+            ),
+            "rename-resolve" => (
+                "language/resolveCodeAction",
+                json!({"document":document,
+                "providerData":{"title":"Rename target","data":{"fixture":true}}}),
+            ),
+            _ => (
+                "language/rename",
+                json!({"document":document,
+                "position":{"lineIndex":0,"columnIndex":0},"newName":"renamed"}),
+            ),
+        };
+        let result = pending.call(
+            &mut connection,
+            method,
+            json!({"operationId":"rename-race", "request":request}),
+        );
+        (connection, result)
+    });
+    fixture.wait_until_blocked();
+    let synchronized = match update {
+        RenameTargetUpdate::Synchronize => fixture.call(
+            &mut worker,
+            "language/synchronize",
+            json!({
+                "document":{"path":"target.demo", "languageId":"demo", "revision":2, "text":changed}
+            }),
+        ),
+        RenameTargetUpdate::Close => {
+            fixture.call(&mut worker, "language/close", json!({"path":"target.demo"}))
+        }
+        RenameTargetUpdate::Cancel => fixture.call(
+            &mut worker,
+            "language/cancel",
+            json!({"operationId":"rename-race"}),
+        ),
+    };
+    fixture.release();
+    let (connection, response) = rename.join().unwrap();
+    assert!(synchronized.get("result").is_some(), "{synchronized}");
+    if matches!(update, RenameTargetUpdate::Cancel) {
+        assert!(response.get("error").is_some(), "{response}");
+        fixture.server.close_connection(connection);
+        return;
+    }
+    let edits = match option.as_str() {
+        "rename-code-actions" => &response["result"]["actions"][0]["edit"]["entries"],
+        "rename-resolve" => &response["result"]["edit"]["entries"],
+        _ => &response["result"]["entries"],
+    };
+    let edit = &edits[0]["document"];
+    assert_eq!(edit["expectedText"], original, "{option}: {response}");
+    if option == "rename-sequential" {
+        assert_eq!(
+            edits[1]["document"]["expectedText"],
+            original.replace("target", "renamed"),
+            "{response}"
+        );
+    }
+    assert_eq!(
+        edit["edits"][0]["range"],
+        json!({
+            "start":{"lineIndex":0,"columnIndex":10},"end":{"lineIndex":0,"columnIndex":16}
+        }),
+        "{response}"
+    );
+    fixture.server.close_connection(connection);
 }

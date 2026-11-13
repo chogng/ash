@@ -24,7 +24,7 @@ export class AshChatModel extends ChatWidgetModel {
 	get memoryNamespace() { return this.presentation === 'session' ? this.session?.kind : 'chat'; }
 	protected override get useCodeModelDefaults(): boolean { return false; }
 	protected override get initializeInConstructor(): boolean { return false; }
-	protected override get commandInterpretation(): 'literal' { return 'literal'; }
+	override get commandInterpretation(): 'literal' { return 'literal'; }
 	protected override get isCodeConversation(): boolean { return false; }
 	protected override get useSkillSelectors(): boolean { return this.presentation === 'session'; }
 	protected override get snapshotHistory() { return this.presentation === 'session' ? undefined : super.snapshotHistory; }

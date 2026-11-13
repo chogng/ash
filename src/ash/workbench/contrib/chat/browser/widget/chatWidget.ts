@@ -84,6 +84,8 @@ export interface IChatWidgetModel extends IDisposable {
 	readonly goal: ThreadGoal | undefined;
 	readonly items: readonly IChatListItem[];
 	readonly inputState: ChatInputState;
+	/** Input semantics belong to the source surface, even when it presents another conversation kind. */
+	readonly commandInterpretation?: 'literal';
 	readonly draft?: ChatInputDelegate['draft'];
 	readonly voice?: {
 		readonly isAvailable: boolean;

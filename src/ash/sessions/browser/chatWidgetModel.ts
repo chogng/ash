@@ -143,7 +143,7 @@ export class ChatWidgetModel extends Disposable {
 
 	protected get useCodeModelDefaults(): boolean { return true; }
 	protected get initializeInConstructor(): boolean { return true; }
-	protected get commandInterpretation(): 'literal' | undefined { return undefined; }
+	get commandInterpretation(): 'literal' | undefined { return undefined; }
 	protected get useSkillSelectors(): boolean { return this.commandInterpretation !== 'literal'; }
 	protected get snapshotHistory(): ThreadSnapshotHistory | undefined {
 		return { type: 'latest', turnLimit: historyPageTurns, previewToolResults: true };

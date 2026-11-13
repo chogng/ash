@@ -1,3 +1,4 @@
+import { BulkEditTestServices } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import assert from 'node:assert/strict';
@@ -1133,4 +1134,43 @@ test('a negotiated color provider preserves real language request errors', async
 	const signal = new AbortController().signal;
 	api.documentColorsError = new Error('LanguageRequestFailed');
 	await assert.rejects(async () => languages.colorProvider.ordered(model)[0]!.provideDocumentColors({ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), resource: model.uri }, signal), api.documentColorsError);
+});
+
+
+test('cross-file rename preserves its request baseline so bulk edit rejects a newer dirty target', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
+	const api = new FakeLanguageApi();
+	const events = new FakeServerEvents();
+	using providers = createProviders(languages, api, workspace, { events });
+	notifyFeatures(events, ['rename']);
+	await tick();
+	const source = URI.file('/workspace/main.ts');
+	const target = URI.file('/workspace/target.ts');
+	const original = '/*🦀*/ fn target() {}';
+	const changed = `xxx ${original}`;
+	using fixture = new BulkEditTestServices([[source, 'target()'], [target, original]]);
+	using reference = await fixture.models.acquire({ resource: target }, new AbortController().signal);
+	reference.model.setValue(changed);
+	using model = new TextModel('target()', { languageId: 'typescript', resource: source });
+	api.rename = async () => ({
+		entries: [{
+			kind: 'textDocument', document: {
+				path: 'target.ts', expectedText: original,
+				edits: [{ range: { start: { lineIndex: 0, columnIndex: 10 }, end: { lineIndex: 0, columnIndex: 16 } }, newText: 'renamed' }]
+			}
+		}]
+	});
+	const signal = new AbortController().signal;
+	const provider = languages.renameProvider.ordered(model)[0]!;
+	const edit = await provider.provideRenameEdits({
+		...createLanguageFeatureRequest(model, 'typescript', signal), resource: source, position: new Position(1, 1), newName: 'renamed'
+	}, signal);
+	assert.equal(edit.entries[0]!.kind, 'textDocument');
+	if (edit.entries[0]!.kind !== 'textDocument') assert.fail('expected a target text edit');
+	assert.equal(edit.entries[0]!.expectedText, original);
+	await assert.rejects(fixture.service.apply(edit), /stale/u);
+	assert.equal(reference.model.getText(), changed);
+	assert.equal(model.getText(), 'target()');
+	assert.deepEqual(fixture.store.saved, []);
 });

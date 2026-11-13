@@ -18,22 +18,23 @@ import { IChatSideChatService, ChatSideChatService, type IChatSideChatOrigin, ty
 import { IChatSlashCommandService, ChatSlashCommandService } from '../../common/participants/chatSlashCommands.js';
 import { LocalChatSessionUri } from '../../common/model/chatUri.js';
 
-function fixture(openToSide = false) {
+function fixture(openToSide = false, commandInterpretation?: 'literal') {
 	const lifetime = new DisposableStore();
 	const services = lifetime.add(new InstantiationService());
 	const changed = lifetime.add(new Emitter<void>());
 	const domNode = browserEnvironment.window.document.createElement('div');
-	domNode.innerHTML = '<div class="ash-chat-list-widget"><p>Source selection</p></div><div class="outside">Unrelated editor</div>';
+	domNode.innerHTML = '<div class="ash-chat-transcript-viewport"><div class="ash-chat-list-widget"><p>Source selection</p></div></div><div class="outside">Unrelated editor</div>';
 	browserEnvironment.window.document.body.append(domNode);
 	const state = { mode: 'ask', isAutomaticModel: false, selectedModel: { provider: 'test', model: 'model' }, selectedReasoningEffort: 'high', approvalMode: 'manual' };
-	const model = { composerGeneration: 1, onDidChange: changed.event, sessionId: 'session', threadId: 'source', thread: { origin: { type: 'root' }, turns: [{ turnId: 'turn-source', status: 'running' }] }, inputState: state, items: [] };
+	const model = { commandInterpretation, composerGeneration: 1, onDidChange: changed.event, sessionId: 'session', threadId: 'source', thread: { origin: { type: 'root' }, turns: [{ turnId: 'turn-source', status: 'running' }] }, inputState: state, items: [] };
 	const widget = { sessionId: 'session', threadId: 'source', visible: true, domNode, model, isTranscriptProgressActive: false } as unknown as IChatWidget;
 	const widgets = [widget];
 	const calls: { create: unknown[]; start: unknown[]; navigate: unknown[]; } = { create: [], start: [], navigate: [] };
 	const threads = { canCreateSideChat: () => true, createSideChat: async (options: unknown) => { calls.create.push(options); return { sessionId: 'session', threadId: 'side' }; } };
 	services.registerInstance(IAgentThreadService, threads as unknown as IAgentThreadService);
 	services.registerInstance(IChatWidgetService, { getAllWidgets: () => widgets, onDidChangeWidgets: changed.event } as unknown as IChatWidgetService);
-	services.registerInstance(IChatService, { readThread: async () => ({ thread: { sequence: 4 } }), startTurn: async (options: unknown) => { calls.start.push(options); } } as unknown as IChatService);
+	const chat = { readThread: async () => ({ thread: { sequence: 4 } }), startTurn: async (options: unknown) => { calls.start.push(options); } };
+	services.registerInstance(IChatService, chat as unknown as IChatService);
 	services.registerInstance(IChatSessionNavigationService, {
 		getConversations: () => [{ sessionId: 'session', threadId: 'source', title: 'Source title' }],
 		openConversation: async (...args: unknown[]) => { calls.navigate.push(args); },
@@ -45,7 +46,7 @@ function fixture(openToSide = false) {
 	services.registerInstance(IChatSlashCommandService, commands);
 	const provider = lifetime.add(services.createInstance(ChatSideChatProvider));
 	lifetime.add(services.createInstance(BtwSlashCommandContribution));
-	return { commands, sideChats, provider, widget, widgets, model, state, changed, threads, calls, resource: LocalChatSessionUri.forSession('session', 'source'), [Symbol.dispose]: () => { lifetime.dispose(); domNode.remove(); } };
+	return { commands, sideChats, provider, chat, widget, widgets, model, state, changed, threads, calls, resource: LocalChatSessionUri.forSession('session', 'source'), [Symbol.dispose]: () => { lifetime.dispose(); domNode.remove(); } };
 }
 
 test('/btw is a registered client command and submits to the captured source with its model and attachments', async () => {
@@ -61,6 +62,77 @@ test('/btw is a registered client command and submits to the captured source wit
 	assert.deepEqual(f.calls.start[0], { sessionId: 'session', threadId: 'side', commandId: (f.calls.start[0] as { commandId: string; }).commandId, expectedSequence: 4, text: 'Question\nsecond line', mode: 'ask', model: f.state.selectedModel, reasoningEffort: 'high', approvalMode: 'manual', contexts: [{ name: 'frozen', content: 'captured bytes' }], signal: undefined });
 	assert.deepEqual(f.calls.navigate, [['session', 'side']]);
 	assert.equal(f.model.thread.turns[0].status, 'running');
+});
+
+for (const commandInterpretation of [undefined, 'literal'] as const) {
+	for (const mode of ['ask', 'plan', 'agent']) {
+		for (const query of ['/init', '/develop synthetic task']) {
+			test(`Side Chat preserves ${commandInterpretation ?? 'product'} input semantics for ${mode} ${query}`, async () => {
+				using f = fixture(false, commandInterpretation);
+				f.state.mode = mode;
+				// A native Chat pane can present the same Code Thread as a retained hidden Code widget.
+				f.widgets.unshift({ ...f.widget, visible: false, model: { ...f.model, commandInterpretation: commandInterpretation ? undefined : 'literal' } } as unknown as IChatWidget);
+				await f.commands.executeCommand('btw', query, f.resource, { attachedContext: [{ id: 'attachment', kind: 'context', name: 'frozen', resolve: async () => ({ name: 'frozen', content: 'attachment bytes' }) }] });
+				const submission = f.calls.start[0] as Record<string, unknown>;
+				assert.equal(submission.commandInterpretation, commandInterpretation);
+				assert.equal(submission.text, query);
+				assert.equal(submission.mode, mode);
+				assert.deepEqual(submission.contexts, [{ name: 'frozen', content: 'attachment bytes' }]);
+				assert.deepEqual(f.calls.navigate, [['session', 'side']]);
+			});
+		}
+	}
+}
+
+test('Side Chat retains literal semantics after a failed submission is retried', async () => {
+	using f = fixture(false, 'literal');
+	let attempts = 0;
+	const start = f.chat.startTurn;
+	f.chat.startTurn = async options => {
+		await start(options);
+		if (++attempts === 1) throw new Error('Synthetic admission failure');
+	};
+	await assert.rejects(f.commands.executeCommand('btw', '/develop synthetic task', f.resource), /Synthetic admission failure/);
+	assert.deepEqual(f.calls.navigate, []);
+	await f.commands.executeCommand('btw', '/develop synthetic task', f.resource);
+	assert.deepEqual(f.calls.start.map(value => {
+		const submission = value as Record<string, unknown>;
+		return { text: submission.text, commandInterpretation: submission.commandInterpretation };
+	}), Array.from({ length: 2 }, () => ({ text: '/develop synthetic task', commandInterpretation: 'literal' })));
+	assert.deepEqual(f.calls.navigate, [['session', 'side']]);
+});
+
+for (const retirement of ['abort', 'composer', 'hide'] as const) test(`Side Chat rejects ${retirement} while resolving literal input attachments`, async () => {
+	using f = fixture(false, 'literal');
+	const resolved = new DeferredPromise<{ name: string; content: string; }>();
+	const abort = new AbortController();
+	const operation = f.commands.executeCommand('btw', '/init', f.resource, { signal: abort.signal, attachedContext: [{ id: 'pending', kind: 'context', name: 'pending', resolve: () => resolved.p }] });
+	if (retirement === 'abort') abort.abort();
+	if (retirement === 'composer') f.model.composerGeneration++;
+	if (retirement === 'hide') Object.assign(f.widget, { visible: false });
+	resolved.complete({ name: 'pending', content: 'frozen bytes' });
+	await assert.rejects(operation, /Cancel/i);
+	assert.deepEqual(f.calls.create, []);
+	assert.deepEqual(f.calls.start, []);
+	assert.deepEqual(f.calls.navigate, []);
+});
+
+test('Side Chat ignores another registered conversation and keeps its source policy', async () => {
+	using f = fixture(false, 'literal');
+	f.widgets.unshift({ ...f.widget, sessionId: 'other-host-session', model: { ...f.model, commandInterpretation: undefined } } as unknown as IChatWidget);
+	await f.commands.executeCommand('btw', '/init', f.resource);
+	assert.equal((f.calls.create[0] as { sessionId: string; }).sessionId, 'session');
+	assert.equal((f.calls.start[0] as { commandInterpretation: string; }).commandInterpretation, 'literal');
+});
+
+test('Side Chat respects the source host capability without creating or submitting a branch', async () => {
+	using f = fixture(false, 'literal');
+	f.threads.canCreateSideChat = () => false;
+	assert.equal(f.sideChats.canAskInSideChat(f.resource), false);
+	await assert.rejects(f.commands.executeCommand('btw', '/init', f.resource), /Send a message/);
+	assert.deepEqual(f.calls.create, []);
+	assert.deepEqual(f.calls.start, []);
+	assert.deepEqual(f.calls.navigate, []);
 });
 
 test('Side Chat uses the host’s side slot when available', async () => {

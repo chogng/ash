@@ -197,7 +197,7 @@ export type ChatTurnChangesOpener = (source: NonNullable<IChatListItem['feedback
 export interface IChatWidget {
 	getFileTreeInfosForResponse(response: IChatListItem): readonly IChatFileTreeInfo[];
 	getLastFocusedFileTreeForResponse(response: IChatListItem): IChatFileTreeInfo | undefined;
-	readonly model?: Pick<import('./widget/chatWidget.js').IChatWidgetModel, 'onDidChange' | 'inputState' | 'thread' | 'composerGeneration' | 'items' | 'olderHistory' | 'loadOlderHistory'>;
+	readonly model?: Pick<import('./widget/chatWidget.js').IChatWidgetModel, 'onDidChange' | 'inputState' | 'commandInterpretation' | 'thread' | 'composerGeneration' | 'items' | 'olderHistory' | 'loadOlderHistory'>;
 	readonly input: IChatInputPart;
 	readonly sessionId: string | undefined;
 	readonly threadId: string | undefined;

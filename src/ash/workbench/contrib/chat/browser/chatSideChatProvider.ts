@@ -74,6 +74,7 @@ export class ChatSideChatProvider extends Disposable implements IChatSideChatPro
 			model: state.isAutomaticModel ? undefined : state.selectedModel, reasoningEffort: state.selectedReasoningEffort,
 			...(state.isAutomaticModel && { modelRouting: 'auto' as const }),
 			approvalMode: state.approvalMode, contexts, signal: options?.signal,
+			...(model.commandInterpretation && { commandInterpretation: model.commandInterpretation }),
 		});
 		current();
 		if (this.navigation.openSideConversation) {
