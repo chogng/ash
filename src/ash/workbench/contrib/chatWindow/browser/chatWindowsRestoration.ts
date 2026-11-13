@@ -1,6 +1,6 @@
 import { URI } from '../../../../base/common/uri.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { parseAuxiliaryWindowState } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { parseAuxiliaryWindowState, type AuxiliaryWindowOpenOptions } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { readChatWindowState, type IStoredChatWindow } from '../common/chatWindowState.js';
 import type { IChatWindow, IChatWindowOpenOptions } from './chatWindow.js';
 
@@ -24,9 +24,10 @@ export class ChatWindowsRestoration {
 		prepare: (chat: URI) => Promise<void>,
 		open: (chat: URI, options: IChatWindowOpenOptions) => Promise<TWindow | undefined>,
 		restoreLayout: (window: TWindow, state: IStoredChatWindow) => Promise<void>,
+		openEditorWindow: (state: IStoredChatWindow, bounds: AuxiliaryWindowOpenOptions | undefined) => Promise<void>,
 		onError: (error: unknown) => void,
 	): Promise<void> {
-		this.restoring ??= this.restorePending(prepare, open, restoreLayout, onError);
+		this.restoring ??= this.restorePending(prepare, open, restoreLayout, openEditorWindow, onError);
 		await this.restoring;
 	}
 
@@ -34,23 +35,27 @@ export class ChatWindowsRestoration {
 		prepare: (chat: URI) => Promise<void>,
 		open: (chat: URI, options: IChatWindowOpenOptions) => Promise<TWindow | undefined>,
 		restoreLayout: (window: TWindow, state: IStoredChatWindow) => Promise<void>,
+		openEditorWindow: (state: IStoredChatWindow, bounds: AuxiliaryWindowOpenOptions | undefined) => Promise<void>,
 		onError: (error: unknown) => void,
 	): Promise<void> {
 		const saved = this.pending;
 		const remaining = new Set(saved);
 		for (const entry of saved) {
 			try {
-				let window: TWindow | undefined;
-				for (const value of entry.chats) {
-					const chat = URI.parse(value, true);
-					await prepare(chat);
-					window = await open(chat, {
-						window, preserveFocus: true, bounds: parseAuxiliaryWindowState(JSON.stringify(entry.bounds)),
-					}) ?? window;
-				}
-				if (window) {
-					await restoreLayout(window, entry);
-					await open(URI.parse(entry.active, true), { window, preserveFocus: true });
+				const bounds = parseAuxiliaryWindowState(JSON.stringify(entry.bounds));
+				if (entry.active === undefined) {
+					await openEditorWindow(entry, bounds);
+				} else {
+					let window: TWindow | undefined;
+					for (const value of entry.chats) {
+						const chat = URI.parse(value, true);
+						await prepare(chat);
+						window = await open(chat, { window, preserveFocus: true, bounds }) ?? window;
+					}
+					if (window) {
+						await restoreLayout(window, entry);
+						await open(URI.parse(entry.active, true), { window, preserveFocus: true });
+					}
 				}
 				remaining.delete(entry);
 			} catch (error) {

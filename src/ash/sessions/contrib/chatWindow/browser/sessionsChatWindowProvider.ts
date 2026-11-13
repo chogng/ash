@@ -12,7 +12,7 @@ export class SessionsChatWindowProvider<TView> implements IChatWindowProvider {
 		private readonly getSelection: (view: TView) => SessionsViewSelection,
 		private readonly createContent: (view: TView) => IChatWindowContent,
 		readonly prepareChat?: (chat: URI) => Promise<void>,
-		readonly createChat?: (chat: URI) => URI | undefined,
+		readonly createChat?: IChatWindowProvider['createChat'],
 		readonly getChats?: IChatWindowProvider['getChats'],
 	) { }
 

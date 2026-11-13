@@ -31,7 +31,7 @@ import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
 import { TerminalEditorInput } from '../../terminal/browser/terminalEditorInput.js';
-import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { IAuxiliaryWindowService, type AuxiliaryWindowOpenOptions, type IAuxiliaryWindow } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { ILifecycleService } from '../../../services/lifecycle/common/lifecycle.js';
 import { ITitleService } from '../../../services/title/browser/titleService.js';
 import type { IChatWindow, IChatWindowContent, IChatWindowOpenOptions, IChatWindowProvider, IChatWindowService } from './chatWindow.js';
@@ -45,6 +45,10 @@ import { ChatWindowPartFactory } from './chatWindowPartFactory.js';
 import { ChatWindowsRestoration } from './chatWindowsRestoration.js';
 import { type ChatWindowEdge, type ChatWindowLayoutMode, ChatWindowTerminalPosition } from '../common/chatWindowLayout.js';
 import type { IStoredChatWindow } from '../common/chatWindowState.js';
+
+function defaultChatWindowTitle(): string {
+	return localize({ bundle: 'ash.workbench', key: 'chatWindow.title' }, 'Chat Window');
+}
 
 export class ChatWindowService extends Disposable implements IChatWindowService {
 	declare readonly _serviceBrand: undefined;
@@ -67,7 +71,11 @@ export class ChatWindowService extends Disposable implements IChatWindowService 
 		this._register(storage.onWillSaveState(({ reason }) => {
 			// Terminal shutdown can flush again after disposing live terminal tabs.
 			if (reason !== WillSaveStateReason.SHUTDOWN && lifecycle.willShutdown) return;
-			this.restoration.save([...this.windows].flatMap(([, window]) => window.chats.get().length ? [window.createState()] : []));
+			const states = [...this.windows].flatMap(([, window]) => {
+				const state = window.createState();
+				return state ? [state] : [];
+			});
+			this.restoration.save(states);
 		}));
 	}
 
@@ -96,7 +104,9 @@ export class ChatWindowService extends Disposable implements IChatWindowService 
 				await target.addChat(chat, content, options?.preserveFocus);
 				return target.isDisposed ? undefined : target;
 			}
-			return this.openWindow(provider, chat, content, options);
+			return this.openWindow(content.title, options?.bounds,
+				window => window.addChat(chat, content, options?.preserveFocus),
+				() => this.provider === provider && content.isAvailable());
 		});
 	}
 
@@ -148,6 +158,9 @@ export class ChatWindowService extends Disposable implements IChatWindowService 
 			chat => provider.prepareChat!(chat),
 			(chat, options) => this.provider === provider ? this.open(chat, options) : Promise.resolve(undefined),
 			async (window, state) => { await this.windows.get(window.windowId)?.restoreLayout(state); },
+			async (state, bounds) => {
+				await this.openWindow(defaultChatWindowTitle(), bounds, window => window.restoreLayout(state));
+			},
 			error => this.notifications.error(String(error)),
 		);
 	}
@@ -163,21 +176,25 @@ export class ChatWindowService extends Disposable implements IChatWindowService 
 		if (await managed.prepareReturn() && !managed.isDisposed) this.auxiliaryWindows.getWindow(window.windowId)?.window.close();
 	}
 
-	private async openWindow(provider: IChatWindowProvider, chat: URI, content: IChatWindowContent, options?: IChatWindowOpenOptions): Promise<IChatWindow | undefined> {
-		const { title } = content;
-		const window = await this.auxiliaryWindows.open({ width: 900, height: 760, ...options?.bounds, title });
+	private async openWindow(
+		title: string,
+		bounds: AuxiliaryWindowOpenOptions | undefined,
+		initialize: (window: ChatWindow) => Promise<void>,
+		canOpen = () => true,
+	): Promise<IChatWindow | undefined> {
+		const window = await this.auxiliaryWindows.open({ width: 900, height: 760, ...bounds, title });
 		try {
-			if (this.isDisposed || this.provider !== provider || !content.isAvailable() || window.isDisposed) {
+			if (this.isDisposed || window.isDisposed || !canOpen()) {
 				window.dispose();
 				return undefined;
 			}
-			const chatWindow = this.instantiationService.createInstance(ChatWindow, window, chat, title,
+			const chatWindow = this.instantiationService.createInstance(ChatWindow, window, title,
 				() => this.windows.deleteAndDispose(window.id), (window: IChatWindow) => this.moveToMainWindow(window));
 			this.windows.set(window.id, chatWindow);
-			await chatWindow.addChat(chat, content, options?.preserveFocus);
-			if (chatWindow.isDisposed) return undefined;
 			window.layout();
-			return chatWindow;
+			await initialize(chatWindow);
+			if (chatWindow.isDisposed) return undefined;
+			return chatWindow.finishOpening() ? chatWindow : undefined;
 		} catch (error) {
 			this.windows.deleteAndDispose(window.id);
 			window.dispose();
@@ -195,7 +212,7 @@ class ChatWindow extends Disposable implements IChatWindow {
 	readonly chatPart;
 	readonly mainPart;
 	readonly terminalsPart;
-	readonly chat;
+	readonly chat = observableValue<URI | undefined>(this, undefined);
 	readonly chats = observableValue<readonly URI[]>(this, []);
 	private readonly tabs = new DisposableMap<HTMLElement, DisposableStore>();
 	private readonly titlebar;
@@ -205,11 +222,10 @@ class ChatWindow extends Disposable implements IChatWindow {
 	private tabQueue = Promise.resolve();
 	private closing = false;
 	private returned = false;
-	private initialTab = true;
+	private opening = true;
 
 	constructor(
 		private readonly window: IAuxiliaryWindow,
-		firstChat: URI,
 		title: string,
 		private readonly disposeWindow: () => void,
 		moveToMainWindow: (window: IChatWindow) => Promise<void>,
@@ -221,7 +237,6 @@ class ChatWindow extends Disposable implements IChatWindow {
 		@INotificationService notifications: INotificationService,
 	) {
 		super();
-		this.chat = observableValue(this, firstChat);
 		this._register(toDisposable(() => window.dispose()));
 		try {
 			const context = this._register(contextKeys.createScoped(window.container));
@@ -324,10 +339,19 @@ class ChatWindow extends Disposable implements IChatWindow {
 		return [this.mainPart, this.terminalsPart, ...this.partFactory.parts];
 	}
 
-	createState(): IStoredChatWindow {
+	finishOpening(): boolean {
+		this.opening = false;
+		if (this.tabs.size || this.hasEditors()) return true;
+		this.close();
+		return false;
+	}
+
+	createState(): IStoredChatWindow | undefined {
+		const chats = this.chats.get();
+		if (this.opening || (!chats.length && !this.hasEditors())) return undefined;
 		return {
-			chats: this.chats.get().map(chat => chat.toString()),
-			active: this.chat.get().toString(),
+			chats: chats.map(chat => chat.toString()),
+			active: this.chat.get()?.toString(),
 			bounds: this.window.createState(),
 			layout: this.grid.mode,
 			terminalPosition: this.grid.terminalPosition,
@@ -412,7 +436,7 @@ class ChatWindow extends Disposable implements IChatWindow {
 	}
 
 	private closeWhenEmpty(): void {
-		if (this.initialTab || this.closing || this.tabs.size) return;
+		if (this.opening || this.closing || this.tabs.size) return;
 		queueMicrotask(() => {
 			if (!this.isDisposed && !this.closing && !this.tabs.size && !this.hasEditors()) this.close();
 		});
@@ -425,6 +449,9 @@ class ChatWindow extends Disposable implements IChatWindow {
 		if (active instanceof ChatWindowEditorInput) {
 			this.chat.set(active.resource, undefined);
 			this.titlebar.setTitle(active.getName());
+		} else {
+			this.chat.set(undefined, undefined);
+			this.titlebar.setTitle(defaultChatWindowTitle());
 		}
 	}
 
@@ -461,7 +488,6 @@ class ChatWindow extends Disposable implements IChatWindow {
 			element.classList.add('ash-chat-auxiliary-content');
 			resources.add(toDisposable(() => element.classList.remove('ash-chat-auxiliary-content')));
 			await this.chatPart.openEditor(input, { pinned: true, preserveFocus });
-			this.initialTab = false;
 			if (!preserveFocus) await this.focus();
 		} catch (error) {
 			await this.chatPart.activeGroup.closeEditor(input, { skipConfirmation: true, reason: 'move' });

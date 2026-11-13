@@ -128,7 +128,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				if (prepared && prepared.threadId !== chat.threadId) await prepared.model.selectThread({ session, threadId: chat.threadId });
 			},
 			resource => {
-				const source = [...this.panes.values()].find(pane => getSessionChatResource(pane.model.selectedSession).toString() === resource.toString());
+				const source = resource && [...this.panes.values()].find(pane => getSessionChatResource(pane.model.selectedSession).toString() === resource.toString());
 				const selection = source?.model.selectedSession;
 				const draft = this.sessionService.createUntitledSession(undefined, selection?.kind === 'untitled' ? selection.session.workspace : undefined, undefined, false);
 				this.syncSessions(untitledSessionPaneId(draft));

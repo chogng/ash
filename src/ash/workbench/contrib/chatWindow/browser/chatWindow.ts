@@ -39,7 +39,8 @@ export interface IChatWindowProvider {
 	resolveContent(chat: URI): IChatWindowContent | undefined;
 	/** Waits for the host's catalog before preparing a saved tab. */
 	prepareChat?(chat: URI): Promise<void>;
-	createChat?(chat: URI): URI | undefined;
+	/** Uses the active chat as context when the window has one. */
+	createChat?(chat: URI | undefined): URI | undefined;
 	getChats?(): readonly { readonly resource: URI; readonly title: string; readonly description?: string; }[];
 }
 
@@ -48,7 +49,7 @@ export interface IChatWindow {
 	readonly chatPart: IEditorPart;
 	readonly mainPart: IEditorPart;
 	readonly chats: IObservable<readonly URI[]>;
-	readonly chat: IObservable<URI>;
+	readonly chat: IObservable<URI | undefined>;
 	readonly terminalsPart: IEditorPart;
 	focus(): Promise<void>;
 	showEditor(): void;

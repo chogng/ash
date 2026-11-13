@@ -174,7 +174,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				}
 			},
 			resource => {
-				const source = [...this.entries.values()].find(view => getSessionChatResource(view.currentSelection).toString() === resource.toString());
+				const source = resource && [...this.entries.values()].find(view => getSessionChatResource(view.currentSelection).toString() === resource.toString());
 				const parent = source?.currentSelection;
 				const workspace = parent?.kind === 'untitled' ? parent.session.workspace : undefined;
 				const draft = this.sessionService.createUntitledSession(undefined, workspace, undefined, false);

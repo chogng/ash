@@ -1,8 +1,9 @@
 import { expect, test } from '../../../automation/test.js';
 import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
-import type { Locator, Page } from '@playwright/test';
+import type { ElectronApplication, Locator, Page } from '@playwright/test';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+import type { Workbench } from '../../../automation/workbench.js';
 
 test.use({ electronWindowMode: 'active', electronUserSettings: { 'workbench.locale': 'en' } });
 
@@ -40,6 +41,30 @@ async function setTerminalPosition(page: Page, label: string) {
 	const option = page.getByRole('menuitemradio', { name: label, exact: true }).or(page.getByRole('menuitemcheckbox', { name: label, exact: true }));
 	await expect(option).toBeVisible();
 	await option.press('Enter');
+}
+
+async function selectChineseLocale(application: ElectronApplication, workbench: Workbench) {
+	const window = await application.browserWindow(workbench.page);
+	try { await window.evaluate(window => window.focus()); }
+	finally { await window.dispose(); }
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+	await language.fill('简体中文');
+	await language.press('Enter');
+}
+
+async function waitForRestoredChatWindow(application: ElectronApplication): Promise<Page> {
+	let restored: Page | undefined;
+	await expect.poll(async () => {
+		for (const candidate of application.windows()) {
+			if (await candidate.locator('.ash-chat-auxiliary-window').isVisible().catch(() => false)) {
+				restored = candidate;
+				return true;
+			}
+		}
+		return false;
+	}, { message: 'The detached Chat window reopens after restart' }).toBe(true);
+	return restored!;
 }
 
 test('restores chat window edge editors, input-only layout, and terminal position after restarting Ash', { tag: ['@electron-app-server'] }, async ({ application, workbench, target, testWorkspace, restartWorkbench }, testInfo) => {
@@ -164,23 +189,11 @@ test('restores chat window edge editors, input-only layout, and terminal positio
 	await expect(chat.locator('.ash-chat-list-widget')).toBeHidden();
 	await testInfo.attach('chat-window-before-restart', { body: await popup.screenshot(), contentType: 'image/png' });
 
-	const workbenchWindow = await application.browserWindow(workbench.page);
-	try { await workbenchWindow.evaluate(window => window.focus()); }
-	finally { await workbenchWindow.dispose(); }
-	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
-	await language.fill('简体中文');
-	await language.press('Enter');
+	await selectChineseLocale(application, workbench);
 	({ application, workbench } = await restartWorkbench());
 	if (!('windows' in application)) throw new Error('Expected Electron after restart');
 	const main = await workbench.openAgentsWindow('electron');
-	await expect.poll(async () => {
-		for (const candidate of application.windows()) {
-			if (await candidate.locator('.ash-chat-auxiliary-window').isVisible().catch(() => false)) return true;
-		}
-		return false;
-	}).toBe(true);
-	const restored = application.windows().find(candidate => candidate.url() === 'about:blank')!;
+	const restored = await waitForRestoredChatWindow(application);
 	await expect(restored.locator('.ash-chat-window-body').getByRole('tab')).toHaveCount(3);
 	const documentTab = restored.getByRole('tab', { name: /chat-window\.txt/ });
 	await expect(documentTab).toHaveCount(2);
@@ -208,4 +221,77 @@ test('restores chat window edge editors, input-only layout, and terminal positio
 	await closed;
 	await expect(main.getByRole('tab', { name: /chat-window\.txt/ }).first()).toBeVisible();
 	await expect(main.locator(terminalRows)).toContainText(prompt);
+});
+
+test('restores the detached window after its last chat tab closes', { tag: ['@electron-app-server'] }, async ({ application, workbench, target, testWorkspace, restartWorkbench }) => {
+	if (target.kind !== 'electron' || !('windows' in application)) return;
+	test.setTimeout(100_000);
+	const agents = await workbench.openAgentsWindow('electron');
+	await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await agents.locator('[data-action-id="sessions.newSession"] button').click();
+	await agents.locator('.ash-sessions-chat-slot.active:visible').getByRole('textbox', { name: 'Chat message', exact: true }).focus();
+	await agents.keyboard.insertText('Draft to close');
+	await agents.locator('.ash-sessions-list:visible [data-item^="untitled:"] .ash-sessions-list-item').click({ button: 'right' });
+	const [popup] = await Promise.all([
+		application.waitForEvent('window'),
+		agents.getByRole('menuitem', { name: 'Open in new window', exact: true }).click(),
+	]);
+
+	const file = join(testWorkspace.directory, 'detached-editor.txt');
+	await writeFile(file, 'File left in the detached window');
+	const original = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
+	try {
+		await application.evaluate(({ dialog }, filePath) => {
+			dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] });
+		}, file);
+		await popup.getByRole('button', { name: 'Open File Beside Chat', exact: true }).click();
+		await expect(popup.getByRole('tab', { name: /detached-editor\.txt/ })).toBeVisible();
+		await popup.getByRole('button', { name: 'Split Right', exact: true }).click();
+		await expect(popup.getByRole('tab', { name: /detached-editor\.txt/ })).toHaveCount(2);
+	} finally {
+		await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, original);
+		await original.dispose();
+	}
+
+	await dragTabToEdge(popup, popup.getByRole('tab', { name: /detached-editor\.txt/ }).last(), 'right');
+	await popup.getByRole('button', { name: 'New Terminal in Chat Window', exact: true }).click();
+	const terminalRows = '.ash-terminal-editor:visible .xterm-rows';
+	const prompt = /[$#%>❯]\s*$/u;
+	await expect(popup.locator(terminalRows)).toContainText(prompt, { timeout: 20_000 });
+	const chatTab = popup.locator('.ash-editor-tabs-control .ash-tab').filter({ has: popup.getByRole('tab', { name: /New Chat/ }) });
+	await chatTab.hover();
+	await chatTab.locator('.ash-tab-close-action button').click();
+	await expect(chatTab).toHaveCount(0);
+	const edge = popup.locator(edgeSelector('right'));
+	const terminal = popup.locator('.ash-terminal-editor:visible');
+	await expect(edge.getByRole('tab', { name: /detached-editor\.txt/ })).toBeVisible();
+	const defaultEdgeWidth = (await bounds(edge)).width;
+	const defaultTerminalHeight = (await bounds(terminal)).height;
+	const edgeSeparator = popup.locator('.ash-chat-window-edge-split > .ash-split-view > [role="separator"]');
+	const terminalSeparator = popup.locator('.ash-chat-window-terminal-split > .ash-split-view > [role="separator"]');
+	for (let index = 0; index < 5; index++) {
+		await edgeSeparator.press('ArrowLeft');
+		await terminalSeparator.press('ArrowUp');
+	}
+	const previousEdgeWidth = (await bounds(edge)).width;
+	const previousTerminalHeight = (await bounds(terminal)).height;
+	expect(previousEdgeWidth).toBeGreaterThan(defaultEdgeWidth + 30);
+	expect(previousTerminalHeight).toBeGreaterThan(defaultTerminalHeight + 30);
+
+	await selectChineseLocale(application, workbench);
+	({ application, workbench } = await restartWorkbench());
+	if (!('windows' in application)) throw new Error('Expected Electron after restart');
+	await workbench.openAgentsWindow('electron');
+	const restored = await waitForRestoredChatWindow(application);
+	const restoredEdge = restored.locator(edgeSelector('right'));
+	await expect(restoredEdge.getByRole('tab', { name: /detached-editor\.txt/ })).toBeVisible();
+	await expect(restored.locator('.ash-chat-window-body').getByRole('tab', { name: /detached-editor\.txt/ })).toBeVisible();
+	await expect(restored.locator('.ash-chat-window-editor')).toHaveCount(0);
+	await expect(restored.locator(terminalRows)).toContainText(prompt, { timeout: 20_000 });
+	expect((await bounds(restoredEdge)).width).toBeCloseTo(previousEdgeWidth, -1);
+	expect((await bounds(restored.locator('.ash-terminal-editor:visible'))).height).toBeCloseTo(previousTerminalHeight, -1);
+	await expect(restored).toHaveTitle('聊天窗口');
+	await expect(restored.locator('.ash-chat-auxiliary-window')).toHaveAttribute('aria-label', '聊天窗口');
+	await restored.getByRole('button', { name: '新建聊天标签页', exact: true }).click();
+	await expect(restored.locator('.ash-chat-window-editor:visible').getByRole('textbox')).toBeVisible();
 });

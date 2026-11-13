@@ -11,7 +11,7 @@ interface IStoredChatWindowPart {
 
 export interface IStoredChatWindow {
 	readonly chats: readonly string[];
-	readonly active: string;
+	readonly active?: string;
 	readonly bounds: unknown;
 	readonly layout: ChatWindowLayoutMode;
 	readonly inputOnly: boolean;
@@ -29,21 +29,26 @@ export function readChatWindowState(raw: string | undefined): readonly IStoredCh
 	if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.windows)) return [];
 	const windows: IStoredChatWindow[] = [];
 	for (const entry of value.windows) {
-		if (!isRecord(entry) || !Array.isArray(entry.chats) || !entry.chats.length || typeof entry.active !== 'string'
-			|| !entry.chats.includes(entry.active) || !entry.chats.every(isChatUri)
+		if (!isRecord(entry) || !Array.isArray(entry.chats) || !entry.chats.every(isChatUri)
 			|| (entry.layout !== ChatWindowLayoutMode.Stacked && entry.layout !== ChatWindowLayoutMode.SideBySide)) continue;
+		const active = entry.active;
+		if (active !== undefined && typeof active !== 'string') continue;
+		if (entry.chats.length ? active === undefined || !entry.chats.includes(active) : active !== undefined) continue;
 		try {
 			const sizes = isRecord(entry.sizes) && isSize(entry.sizes.main) && isSize(entry.sizes.terminals)
 				? { main: entry.sizes.main, terminals: entry.sizes.terminals }
 				: undefined;
+			const editors = parseEditorWorkingSet(entry.editors as EditorWorkingSet, 0);
+			const terminals = parseEditorWorkingSet(entry.terminals as EditorWorkingSet, 0);
+			const createdParts = readCreatedParts(entry.createdParts);
+			if (!entry.chats.length && ![editors, terminals, ...createdParts.map(part => part.editors)]
+				.some(part => part.groups.some(group => group.editors.length))) continue;
 			windows.push({
-				chats: entry.chats, active: entry.active, bounds: entry.bounds, layout: entry.layout, sizes,
+				chats: entry.chats, active, bounds: entry.bounds, layout: entry.layout, sizes,
 				inputOnly: entry.inputOnly === true,
 				terminalPosition: entry.terminalPosition === ChatWindowTerminalPosition.UnderChat || entry.terminalPosition === ChatWindowTerminalPosition.UnderEditor
 					? entry.terminalPosition : ChatWindowTerminalPosition.FullWidth,
-				editors: parseEditorWorkingSet(entry.editors as EditorWorkingSet, 0),
-				terminals: parseEditorWorkingSet(entry.terminals as EditorWorkingSet, 0),
-				createdParts: readCreatedParts(entry.createdParts),
+				editors, terminals, createdParts,
 			});
 		} catch { /* A malformed entry must not prevent the other windows from restoring. */ }
 	}
