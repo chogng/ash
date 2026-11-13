@@ -86,6 +86,10 @@ export async function writeApplicationChecksums(applicationRoot: string): Promis
 
 export async function prepareHostOutput(): Promise<void> {
 	await prepareHostLogs();
+	await prepareHostLayout();
+}
+
+async function prepareHostLayout(): Promise<void> {
 	await mkdir(outputRoot, { recursive: true });
 	const metadata = '{\n  "private": true,\n  "type": "module"\n}\n';
 	const packageFile = join(outputRoot, 'package.json');
@@ -126,7 +130,8 @@ export async function buildHost(): Promise<void> {
 
 /** Successful readiness includes the output content digest used to decide whether Electron needs restarting. */
 export async function watchHost(onReady: (ready: boolean, output?: string) => void): Promise<{ close: () => Promise<void>; done: Promise<void>; }> {
-	await prepareHostBuild();
+	// Build helpers inside the watched build, once their changes and cancellation are owned.
+	await prepareHostBuild({ deferNativeBuild: true });
 	const nativeBuild = new AbortController();
 	const completion = Promise.withResolvers<void>();
 	let compilerRun: ProcessRun | undefined;
@@ -290,8 +295,9 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 	}
 
 	async function build(): Promise<void> {
-		await prepareHostLogs(nativeBuild.signal);
 		pending = false;
+		const current = revision;
+		await prepareHostLogs(nativeBuild.signal);
 		// Check settled timestamps after debouncing: a Windows write can report a
 		// transient truncation. Compare with the last compiled snapshot, not that
 		// notification, before bypassing TS7's mtime-based incremental gate.
@@ -306,7 +312,6 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 			const previous = builtInputs.get(path);
 			return previous?.mtime === input.mtime && previous.content !== input.content;
 		});
-		const current = revision;
 		const compileStarted = Date.now();
 		console.log('[host] Starting incremental compilation...');
 		const run = new ProcessRun(sourceRoot, undefined, 5_000);
@@ -391,10 +396,14 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 	return { close, done: completion.promise };
 }
 
-async function prepareHostBuild(): Promise<void> {
+async function prepareHostBuild(options: { readonly deferNativeBuild?: boolean; } = {}): Promise<void> {
 	// A changed compiler root set can clear the main output, including native helpers.
 	await Promise.all(projects.map(project => prepareIncrementalOutput(join(sourceRoot, project))));
-	await prepareHostOutput();
+	if (options.deferNativeBuild) {
+		await prepareHostLayout();
+	} else {
+		await prepareHostOutput();
+	}
 }
 
 async function prepareHostLogs(signal?: AbortSignal): Promise<void> {

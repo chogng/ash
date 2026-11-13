@@ -96,7 +96,7 @@ pub(crate) struct BackendExecutable {
     pub(crate) path: PathBuf,
     pub(crate) identity: ExecutableIdentity,
     _package_lease: Option<PackageLease>,
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     verified_launch: Option<verified_launch::VerifiedExecutable>,
 }
 
@@ -150,9 +150,9 @@ impl ProcessRecord {
         }
         let executable =
             dunce::canonicalize(std::env::current_exe().map_err(io_error)?).map_err(io_error)?;
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", windows))]
         let verified_digest = verified_launch::receive(&executable)?;
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", windows)))]
         let verified_digest: Option<String> = None;
         let mut executable_identity = match verified_digest {
             Some(sha256) => identity_from_digest(&executable, sha256)?,
@@ -287,16 +287,19 @@ pub(crate) fn resolve_backend_executable(
     }
     let path = dunce::canonicalize(backend_executable).map_err(io_error)?;
     let package_lease = acquire_package_lease_for_executable(&path).map_err(io_error)?;
+    #[cfg(windows)]
+    let mut file = verified_launch::open(&path, package_lease.as_ref())?;
+    #[cfg(not(windows))]
     let mut file = File::open(&path).map_err(io_error)?;
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     let stamp = verified_launch::capture(&path, &file, package_lease.as_ref())?;
     let identity = executable_identity(&path, &mut file)?;
     if let PackageDigest::Expected(expected) = package_digest {
         identity.verify_package_digest(expected)?;
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     let verified_launch = stamp.filter(|_| identity.package_build_id.is_some());
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     if let Some(verified) = &verified_launch {
         verified.check(&path)?;
     }
@@ -304,7 +307,7 @@ pub(crate) fn resolve_backend_executable(
         path,
         identity,
         _package_lease: package_lease,
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", windows))]
         verified_launch,
     })
 }
@@ -409,6 +412,8 @@ pub(crate) struct SpawnedBackend {
     // macOS can identify the proof's peer while the carrier still owns its socket.
     #[cfg(target_os = "macos")]
     launch_proof: Option<std::os::unix::net::UnixStream>,
+    #[cfg(windows)]
+    launch_proof: Option<std::io::PipeWriter>,
 }
 
 impl SpawnedBackend {
@@ -541,7 +546,7 @@ pub(crate) fn spawn_backend(
             crate::runtime::clear_binding(&mut command);
         }
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     let launch_proof = verified_launch::prepare(&mut command, backend)?;
     detach_command(&mut command)?;
     let spawn = crate::startup_trace::StartupTrace::span("daemon-spawn-command");
@@ -551,11 +556,11 @@ pub(crate) fn spawn_backend(
         child: Some(child),
         endpoint: endpoint.clone(),
         start_identity: None,
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", windows))]
         launch_proof,
     };
     spawned.start_identity = process_start_identity(spawned.child.as_ref().unwrap().id())?;
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     if let Some(proof) = &mut spawned.launch_proof {
         verified_launch::send(proof, backend)?;
     }
@@ -803,6 +808,11 @@ mod tests;
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 #[path = "process/verified_launch_macos.rs"]
+mod verified_launch;
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+#[path = "process/verified_launch_windows.rs"]
 mod verified_launch;
 
 #[cfg(windows)]

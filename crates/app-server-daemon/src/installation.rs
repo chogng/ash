@@ -6,6 +6,12 @@ use std::io::Read;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
+#[cfg(windows)]
+use std::sync::atomic::AtomicBool;
+#[cfg(windows)]
+use std::sync::atomic::AtomicUsize;
+#[cfg(windows)]
+use std::sync::atomic::Ordering;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -213,41 +219,7 @@ fn install_from_client_with_electron(
     fs::create_dir(&staging).map_err(|error| error.to_string())?;
     let result = (|| {
         fs::write(staging.join(METADATA_FILE), metadata).map_err(|error| error.to_string())?;
-        for name in files.files.keys() {
-            let relative = Path::new(name);
-            if relative.components().count() == 0
-                || !relative
-                    .components()
-                    .all(|part| matches!(part, Component::Normal(_)))
-            {
-                return Err(format!(
-                    "App Server package contains an invalid path: {name}"
-                ));
-            }
-            let from = source.join(relative);
-            let mut parent = source.to_path_buf();
-            for part in relative.components() {
-                parent.push(part);
-                let kind = fs::symlink_metadata(&parent).map_err(|error| error.to_string())?;
-                if kind.file_type().is_symlink() {
-                    return Err(format!(
-                        "App Server package contains a symbolic path: {name}"
-                    ));
-                }
-            }
-            let target = staging.join(relative);
-            fs::create_dir_all(
-                target
-                    .parent()
-                    .ok_or("App Server package path has no parent")?,
-            )
-            .map_err(|error| error.to_string())?;
-            fs::copy(&from, &target).map_err(|error| error.to_string())?;
-            let permissions = fs::metadata(from)
-                .map_err(|error| error.to_string())?
-                .permissions();
-            fs::set_permissions(target, permissions).map_err(|error| error.to_string())?;
-        }
+        copy_package_files(source, &staging, &files.files)?;
         let selected = match &runtime_binding {
             Some(binding) => store.publish_with_installation(
                 &staging,
@@ -266,6 +238,108 @@ fn install_from_client_with_electron(
         let _ = fs::remove_dir_all(staging);
     }
     result
+}
+
+fn copy_package_files(
+    source: &Path,
+    staging: &Path,
+    files: &BTreeMap<String, String>,
+) -> Result<(), String> {
+    #[cfg(windows)]
+    if files.len() > 1 {
+        // Windows package installation spends much of its time in per-file I/O.
+        // Bound concurrency while retaining independent copies and every path check.
+        let names = files.keys().collect::<Vec<_>>();
+        let next = AtomicUsize::new(0);
+        let failed = AtomicBool::new(false);
+        let workers = std::thread::available_parallelism()
+            .map(usize::from)
+            .unwrap_or(1)
+            .min(8)
+            .min(names.len());
+        return std::thread::scope(|scope| {
+            let mut handles = Vec::with_capacity(workers);
+            let mut failure = None;
+            for index in 0..workers {
+                let names = &names;
+                let next = &next;
+                let failed = &failed;
+                let worker = std::thread::Builder::new()
+                    .name(format!("ash-package-copy-{index}"))
+                    .spawn_scoped(scope, move || {
+                        while !failed.load(Ordering::Relaxed) {
+                            let Some(name) = names.get(next.fetch_add(1, Ordering::Relaxed)) else {
+                                return Ok(());
+                            };
+                            if let Err(error) = copy_package_file(source, staging, name) {
+                                failed.store(true, Ordering::Relaxed);
+                                return Err(error);
+                            }
+                        }
+                        Ok(())
+                    });
+                match worker {
+                    Ok(handle) => handles.push(handle),
+                    Err(error) => {
+                        failed.store(true, Ordering::Relaxed);
+                        failure = Some(error.to_string());
+                        break;
+                    }
+                }
+            }
+            // Join every writer before publication or removal of a failed staging directory.
+            for handle in handles {
+                if let Err(error) = handle
+                    .join()
+                    .unwrap_or_else(|_| Err("App Server package copy worker panicked".into()))
+                {
+                    failure.get_or_insert(error);
+                }
+            }
+            failure.map_or(Ok(()), Err)
+        });
+    }
+    for name in files.keys() {
+        copy_package_file(source, staging, name)?;
+    }
+    Ok(())
+}
+
+fn copy_package_file(source: &Path, staging: &Path, name: &str) -> Result<(), String> {
+    let relative = Path::new(name);
+    if relative.components().count() == 0
+        || !relative
+            .components()
+            .all(|part| matches!(part, Component::Normal(_)))
+    {
+        return Err(format!(
+            "App Server package contains an invalid path: {name}"
+        ));
+    }
+    let from = source.join(relative);
+    let mut parent = source.to_path_buf();
+    for part in relative.components() {
+        parent.push(part);
+        let kind = fs::symlink_metadata(&parent).map_err(|error| error.to_string())?;
+        if kind.file_type().is_symlink() {
+            return Err(format!(
+                "App Server package contains a symbolic path: {name}"
+            ));
+        }
+    }
+    let target = staging.join(relative);
+    fs::create_dir_all(
+        target
+            .parent()
+            .ok_or("App Server package path has no parent")?,
+    )
+    .map_err(|error| error.to_string())?;
+    fs::copy(&from, &target).map_err(|error| error.to_string())?;
+    let permissions = fs::metadata(from)
+        .map_err(|error| error.to_string())?
+        .permissions();
+    fs::set_permissions(target, permissions).map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 pub(crate) fn selected_is_pinned(profile_root: &Path) -> Result<bool, String> {

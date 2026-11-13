@@ -220,7 +220,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 		this.layoutActiveComposite();
 	}
 
-	private layoutActiveComposite(): void {
+	protected layoutActiveComposite(): void {
 		if (!this.activeComposite?.isVisible() || this.domNode.hidden) { return; }
 		// Flex owns the space left by borders, title slots and activity bars. Publish it
 		// during the host layout, before focus or paint can use the previous pane size.

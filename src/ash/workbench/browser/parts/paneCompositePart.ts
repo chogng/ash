@@ -223,9 +223,14 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		this.updateTitleVisibility();
 	}
 
-	override layout(dimension: IDimension): void {
+	override layout(_dimension: IDimension): void {
+		this.layoutComposite();
+	}
+
+	/** Reflow title changes using the content geometry owned by the hosted view. */
+	protected layoutComposite(): void {
 		this.compositeBar.layout();
-		super.layout(dimension);
+		this.layoutActiveComposite();
 	}
 
 	private updateTitleVisibility(): void {

@@ -3,7 +3,7 @@ import { IActivityService } from '../../../services/activity/common/activity.js'
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IActivityHoverOptions } from '../compositeBarActions.js';
 import './media/sidebarpart.css';
-import { Dimension, h } from '../../../../base/browser/dom.js';
+import { h } from '../../../../base/browser/dom.js';
 import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IBoundarySashes } from '../../../../base/browser/ui/sash/sash.js';
 import { IWorkbenchLayoutService, Position } from '../../../services/layout/browser/layoutService.js';
@@ -159,7 +159,7 @@ export class SidebarPart extends PaneCompositePart {
 		this.bottomCompositeBarDomNode!.hidden = !isBottom || hide;
 		this.setCompositeBarVisible(!hide);
 		// Flex has changed the available content height; publish it to the retained view immediately.
-		this.layout(new Dimension(this.domNode.clientWidth, this.domNode.clientHeight));
+		this.layoutComposite();
 		if (restoreFocus) {
 			const active = this.activeCompositeId ? this.getComposite(this.activeCompositeId) : undefined;
 			if (active?.panes.length) {

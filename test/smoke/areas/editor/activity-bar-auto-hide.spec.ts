@@ -21,7 +21,7 @@ test('Activity Bar auto hide follows view moves and persists through reload', as
 	await settings.locator('.ash-modal-editor-close').click();
 
 	// Keep Explorer active while moving every other selector through the product menu.
-	const explorer = switcher().getByRole('tab', { name: 'Explorer', exact: true });
+	const explorer = () => switcher().getByRole('tab', { name: 'Explorer', exact: true });
 	const otherIds = await switcher().getByRole('tab').evaluateAll(tabs => tabs
 		.filter(tab => tab.getAttribute('aria-selected') !== 'true')
 		.map(tab => (tab as HTMLElement).dataset.actionId!));
@@ -46,7 +46,7 @@ test('Activity Bar auto hide follows view moves and persists through reload', as
 	await moved.click();
 	await workbench.menus.select(application, () => moved.click({ button: 'right' }), ['Move To', 'Primary Side Bar']);
 	await expect(switcher()).toBeVisible();
-	await expect(explorer).toBeVisible();
+	await expect(explorer()).toBeVisible();
 	await workbench.quickaccess.runCommand('workbench.action.activityBarLocation.bottom');
 	await expect(sidebar().locator('.ash-sidebar-composite-bar-bottom .ash-composite-bar')).toBeVisible();
 	({ workbench, application } = await reloadWorkbench());

@@ -44,7 +44,7 @@ sha2 = { workspace = true, features = ["asm"] }
 [target.'cfg(windows)'.dependencies]
 ash-utils-pty = { workspace = true }
 sha2 = { workspace = true }
-windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading"] }
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Kernel", "Win32_System_LibraryLoader", "Win32_System_Pipes", "Win32_System_Threading"] }
 
 [dev-dependencies]
 zip = { workspace = true }

@@ -96,10 +96,13 @@ for (const mode of ['build', 'watch'] as const) {
 		await copyFile(join(import.meta.dirname, '../processes.ts'), join(root, 'build/processes.ts'));
 		// Isolate compiler/watch behavior from Rust compilation; the native builder
 		// has its own generation-publication tests and real build validation.
-		await writeFile(join(root, 'build/python.ts'), 'export async function runPython() {}');
-		for (const name of ['host-logs', 'host-integrity']) {
+		await writeFile(join(root, 'build/python.ts'), 'export let preparations = 0; export async function runPython() { preparations++; }');
+		const nativeBuilder = await import(pathToFileURL(join(root, 'build/python.ts')).href) as { readonly preparations: number; };
+		for (const name of ['host-logs', 'host-integrity', 'image-opener']) {
 			await mkdir(join(root, 'crates', name), { recursive: true });
 		}
+		const nativeSource = join(root, 'crates/host-logs/lib.rs');
+		await writeFile(nativeSource, 'pub const VERSION: u8 = 1;');
 		await mkdir(join(root, 'build/lib'), { recursive: true });
 		await copyFile(join(import.meta.dirname, '../lib/incrementalOutput.ts'), join(root, 'build/lib/incrementalOutput.ts'));
 		await symlink(resolve(import.meta.dirname, '../../node_modules'), join(desktop, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
@@ -152,6 +155,7 @@ for (const mode of ['build', 'watch'] as const) {
 			watcher = await host.watchHost(value => { ready = value; readyStates.push(value); });
 			await until(() => ready);
 		}
+		assert.equal(nativeBuilder.preparations, 1, 'Startup prepares native helpers once before compiling the Host');
 		assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = 1/u);
 		assert.match(await readFile(preloadOutput, 'utf8'), /require\("electron"\)/u);
 		if (mode === 'build') {
@@ -165,6 +169,11 @@ for (const mode of ['build', 'watch'] as const) {
 		}
 
 		if (mode === 'watch') {
+			ready = false;
+			const previousPreparations = nativeBuilder.preparations;
+			await writeFile(nativeSource, 'pub const VERSION: u8 = 2;');
+			await until(() => ready);
+			assert.ok(nativeBuilder.preparations > previousPreparations, 'Native source edits still prepare helpers before publishing readiness');
 			readyStates.length = 0;
 			const cache = join(output, 'dev/cache');
 			await mkdir(cache, { recursive: true });

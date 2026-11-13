@@ -11,7 +11,7 @@ import { IMenuService, MenuId } from '../../../../platform/actions/common/action
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
-import { addDisposableListener, Dimension, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Separator } from '../../../../base/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ActivityBarPosition, WorkbenchConfiguration } from '../../../common/configuration.js';
@@ -156,7 +156,7 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		this.selectorHost.hidden = !separateRow || !visible;
 		super.setTitleProjection({ content: this.titleHost, actions: projection?.actions });
 		this.setCompositeBarVisible(visible);
-		this.layout(new Dimension(this.domNode.clientWidth, this.domNode.clientHeight));
+		this.layoutComposite();
 		if (focused) {
 			if (visible) {
 				focused.focus();
