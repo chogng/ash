@@ -13,6 +13,7 @@ use ash_app_server_protocol::protocol::extension_host::ExtensionHostChanged;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostInvokeCompleted;
 use ash_app_server_protocol::protocol::extension_packages::ExtensionsChanged;
 use ash_app_server_protocol::protocol::fs::FsChanged;
+use ash_app_server_protocol::protocol::generated_files::GeneratedFileChanged;
 use ash_app_server_protocol::protocol::git::GitIgnoreChanged;
 use ash_app_server_protocol::protocol::git::GitStatusChanged;
 use ash_app_server_protocol::protocol::git::GitStatusResult;
@@ -125,6 +126,7 @@ struct Subscriber {
     scope_id: u64,
     agent_interactions: Option<AgentInteractionCapability>,
     product_host: bool,
+    generated_files: Option<bool>,
     chat_project_memories: bool,
     collaboration_rooms: BTreeSet<String>,
     catalog: bool,
@@ -351,6 +353,7 @@ impl UpdateBroker {
                     scope_id: self.scope_id,
                     agent_interactions: None,
                     product_host,
+                    generated_files: None,
                     chat_project_memories: false,
                     collaboration_rooms: BTreeSet::new(),
                     catalog: false,
@@ -358,6 +361,18 @@ impl UpdateBroker {
                     threads: BTreeMap::new(),
                 },
             );
+        }
+    }
+
+    pub(super) fn enable_generated_file_notifications(
+        &self,
+        connection_id: u64,
+        native_only: bool,
+    ) {
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
+        {
+            subscriber.generated_files = Some(native_only);
         }
     }
 
@@ -1459,6 +1474,27 @@ impl UpdateBroker {
             ServerNotificationMethod::AutomationChanged,
             &serde_json::json!({}),
         );
+    }
+
+    pub(super) fn publish_generated_file_changed(&self, changed: GeneratedFileChanged) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            // Browser connections only observe native documents, never imports or their namespaces.
+            if subscriber.generated_files.is_some_and(|native_only| {
+                !native_only || changed.client_id == ash_state::NATIVE_GENERATED_FILE_CLIENT
+            }) {
+                queue.push(notification(
+                    ServerNotificationMethod::GeneratedFileChanged,
+                    &changed,
+                ));
+            }
+            true
+        });
     }
 
     pub(super) fn publish_project_changed(&self, changed: ProjectChanged) {

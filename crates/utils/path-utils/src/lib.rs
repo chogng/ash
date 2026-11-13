@@ -8,6 +8,7 @@ pub use canonical_root::CanonicalContainmentError;
 pub use canonical_root::CanonicalPathRoot;
 pub use canonical_root::NoSymlinkPathError;
 pub use canonical_root::NoSymlinkPathStatus;
+pub use persistence::ensure_file_atomically;
 pub use persistence::write_atomically;
 pub use relative::join_descendant;
 

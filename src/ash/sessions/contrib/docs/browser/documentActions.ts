@@ -1,3 +1,4 @@
+import { Schemas } from '../../../../base/common/network.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { renderWorkbenchMarkdown } from '../../../../base/browser/markdownRenderer.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -35,7 +36,7 @@ export function restoredDocsResource(storage: IStorageService): URI | undefined 
 	const saved = storage.get(activeDocsKey, StorageScope.WORKSPACE);
 	if (!saved) return undefined;
 	const resource = URI.parse(saved);
-	return ['file', 'untitled'].includes(resource.scheme) && /\.(?:ash-doc|md)$/iu.test(resource.path) ? resource : undefined;
+	return [Schemas.file, Schemas.untitled, Schemas.vscodeUserData].includes(resource.scheme) && /\.(?:ash-doc|md)$/iu.test(resource.path) ? resource : undefined;
 }
 
 export function newDocsResource(name: string, extension = '.ash-doc'): URI {
@@ -71,7 +72,7 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 		const example = resource.scheme === ARTIFACT_EXAMPLE_SCHEME;
 		const rich = resource.path.toLowerCase().endsWith('.ash-doc');
 		const input = rich ? createDocsInput({ resource, label: options.label, readOnly: example, initialText: options.initialText })
-			: createMarkdownDocsInput({ resource });
+			: createMarkdownDocsInput({ resource, label: options.label });
 		const entry = {
 			...artifactDetailEntry, id: example ? 'creator.example.docs' : 'creator.docs',
 			workspaceMode: 'chat', conversationKind: 'chat',

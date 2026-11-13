@@ -15,6 +15,7 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { getChatCodeBlockCardAccessibilityHelp, getChatRequestAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
+import { getSessionArtifactsAccessibilityHelp } from '../browser/sessionArtifacts.js';
 import { getSessionsListGroupingHelp } from '../../sessions/browser/views/sessionsListActions.js';
 import type { IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { IChatViewFactory, type ChatDraftModelSource, type ICompactChatModel, type IChatViewSource } from '../browser/chatViewFactory.js';
@@ -38,6 +39,7 @@ import { SessionsView } from '../../sessions/browser/views/sessionsView.js';
 import type { SessionsCatalogAccessibility } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { INativeChatModelPreferencesService } from '../common/nativeChatModelPreferencesService.js';
 import '../browser/chat.contribution.js';
@@ -72,13 +74,14 @@ class NativeChatWorkspaceModel extends AshChatModel implements ICompactChatModel
 		@ICommandService private readonly commands: ICommandService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IStorageService storage: IStorageService,
+		@IGeneratedFilesService generatedFiles: IGeneratedFilesService,
 		@IContextKeyService contexts: IContextKeyService,
 		@IInstantiationService instantiation: IInstantiationService,
 		@INativeChatModelPreferencesService modelPreferences: INativeChatModelPreferencesService,
 	) {
 		const initial = view.getChatSelection();
 		if (!initial) throw new Error('The compact Chat view needs a restored Sessions selection');
-		super(initial, 'compact', management, primary.chat, primary.prompts, primary.models, primary.execution, configuration, storage, contexts, modelPreferences);
+		super(initial, 'compact', management, primary.chat, primary.prompts, primary.models, primary.execution, configuration, storage, generatedFiles, contexts, modelPreferences);
 		this.draftModels = instantiation.createInstance(modelSource);
 		let previous: ReturnType<typeof view.chatSelection.get>;
 		this._register(autorun(reader => {
@@ -260,6 +263,7 @@ function registerAshChatAccessibility(): void {
 						+ '\n\n' + getChatRequestAccessibilityHelp(true)
 						+ '\n\n' + localize('sessions.chat.ashResponseActionsHelp', 'Use Tab to reach the response toolbar, then use the arrow keys to move between actions. Share asks for confirmation before sharing the conversation through this response. Fork starts a new Ash conversation through this response.')
 						+ '\n\n' + getChatCodeBlockCardAccessibilityHelp()
+						+ '\n\n' + getSessionArtifactsAccessibilityHelp()
 						+ '\n\n' + localize('sessions.chat.versionsHelp', 'For a conversation with edits, open More actions on its sidebar row and choose Conversation versions. Use Right Arrow to open the submenu and Enter to open a version.')
 						+ '\n\n' + localize('sessions.list.forkSidebarHelp', 'In the sidebar, Tab to the Fork icon and press Enter to open its source conversation. Focus Conversation branches and press Enter to expand or collapse the tree. On the conversation row, Right Arrow expands the tree or moves to its first branch, and Left Arrow collapses it.')
 						+ '\n\n' + localize('sessions.titlebar.ashChatHelp', 'For a saved chat, focus its title and press Enter to rename it. Use More Sessions Actions beside the title to pin, archive, or delete it. Share at the right of the title bar asks for confirmation before creating and copying a link to the conversation text.')

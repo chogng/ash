@@ -1,4 +1,8 @@
-import './docsArtifactCatalog.js';
+import { Schemas } from '../../../../base/common/network.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
+import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
+import { isRetainedDocsInput } from './docsArtifactCatalog.js';
 import { registerArtifactExample } from '../../artifact/browser/artifactExamples.js';
 import { URI } from '../../../../base/common/uri.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -30,6 +34,23 @@ import { DocsArtifactPane, DocsToolsView } from './docsArtifactPane.js';
 import { MarkdownDocsArtifactPane } from './markdownDocsArtifactPane.js';
 
 DocumentTypes.enableFileEditors();
+
+registerWorkbenchContribution('sessions.generatedFileOpener', WorkbenchPhase.BlockRestore, accessor => {
+	const generated = accessor.get(IGeneratedFilesService);
+	const open = createDocsOpener(accessor);
+	return accessor.get(IOpenerService).registerOpener({
+		open: async (target, options) => {
+			if (options?.openExternal) return false;
+			const resource = typeof target === 'string' ? URI.parse(target) : target;
+			if (!generated.isProfileGeneratedPath(resource) && !generated.isGeneratedResource(resource)) return false;
+			await generated.refresh();
+			const file = generated.files.find(file => file.resource.toString() === resource.toString());
+			if (!file) throw new Error(localize({ bundle: 'ash.artifacts', key: 'generatedFileUnavailable' }, 'This generated file is unavailable.'));
+			await open(file.resource, { label: file.title });
+			return true;
+		}
+	});
+});
 
 const resolveDocumentProfile = async () => (await import('../../../../../../extensions/academy/browser/generalProfile.js')).generalProfile;
 registerEditorPane({
@@ -146,15 +167,27 @@ registerAction2(class ChooseDocsEditor extends Action2 {
 
 CommandsRegistry.register('sessions.creator.openDocument', (accessor, value) => {
 	// Card targets must still belong to a retained document editor.
+	const generated = accessor.get(IGeneratedFilesService);
 	const input = accessor.get(IEditorPart).groups.flatMap(group => group.editors.map(editor => editor.input)).find(input =>
-		input.resource.toString() === value && (input.contentType === GENERAL_DOCUMENT_CONTENT_TYPE || input.resource.path.endsWith('.md')));
+		input.resource.toString() === value && isRetainedDocsInput(input, generated));
 	if (!input) { throw new TypeError(localize('sessions.artifacts.unavailableDocument', 'This document is no longer open.')); }
 	return createDocsOpener(accessor)(input.resource);
 });
-CommandsRegistry.register('sessions.restore.creatorDocs', (accessor, source) => {
+CommandsRegistry.register('sessions.restore.creatorDocs', async (accessor, source) => {
 	const resource = restoredDocsResource(accessor.get(IStorageService));
-	if (!resource) { return accessor.get(ICommandService).executeCommand('sessions.show.creator', source); }
-	return createDocsOpener(accessor)(resource, { source: source === 'restore' ? source : undefined });
+	const commands = accessor.get(ICommandService);
+	if (!resource) return commands.executeCommand('sessions.show.creator', source);
+	const open = createDocsOpener(accessor);
+	if (resource.scheme === Schemas.vscodeUserData) {
+		const generated = accessor.get(IGeneratedFilesService);
+		if (generated.isProfileGeneratedPath(resource)) {
+			await generated.refresh().catch(() => undefined);
+			const file = generated.files.find(file => file.resource.toString() === resource.toString());
+			if (!file) return commands.executeCommand('sessions.show.creator', source);
+			return open(resource, { label: file.title, source: source === 'restore' ? source : undefined });
+		}
+	}
+	return open(resource, { source: source === 'restore' ? source : undefined });
 });
 
 registerAction2(class NewDocumentAction extends Action2 {

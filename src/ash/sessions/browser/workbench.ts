@@ -230,6 +230,8 @@ import { ISessionsWorkspaceContextService } from '../services/workspace/browser/
 import { IMarkerService } from '../../platform/markers/common/markers.js';
 import { MarkerService } from '../../platform/markers/common/markerService.js';
 import { GitHubService as SessionsGitHubService, IGitHubService as ISessionsGitHubService } from '../contrib/github/browser/githubService.js';
+import { ArtifactIntegrationRegistry, IArtifactIntegrationRegistry } from '../../platform/artifactIntegrations/common/artifactIntegrationRegistry.js';
+import { ArtifactIntegrationService, IArtifactIntegrationService } from '../../platform/artifactIntegrations/common/artifactIntegrationService.js';
 import { SessionFileService } from '../contrib/providers/agentHost/browser/sessionFileService.js';
 import { AgentHostFileSystemService, IAgentHostFileSystemService } from '../../workbench/services/agentHost/common/agentHostFileSystemService.js';
 import { IFileService } from '../../platform/files/common/files.js';
@@ -578,6 +580,8 @@ export abstract class Workbench extends Disposable {
 			services, options, configurationService, primary, systemPolicies, extensionReady,
 		);
 		const serviceContributionReady = [configurationReady];
+		services.registerInstance(IArtifactIntegrationRegistry, this._register(new ArtifactIntegrationRegistry()));
+		services.registerInstance(IArtifactIntegrationService, this._register(services.createInstance(ArtifactIntegrationService)));
 		const sessionGitHub = this._register(services.createInstance(SessionsGitHubService));
 		services.registerInstance(ISessionsGitHubService, sessionGitHub);
 		sessionGitHub.initialize();

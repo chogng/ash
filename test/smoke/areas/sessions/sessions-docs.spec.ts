@@ -97,6 +97,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await chooseEditor();
 		await expect(quick.items.first().locator('.ash-quick-pick-row-content')).toHaveClass(/picked/);
 		await quick.input.press('Escape');
+		await expect(page.locator('[data-generated-file-resource]')).toHaveCount(0);
 		await page.locator('.ash-artifacts-card.docs:not([data-artifact-example])').click();
 		await markdown.waitForEditorContents(text => text === '# Retained Docs draft');
 		if (locale === 'en' && target.appServerMode === 'required' && 'windows' in application) {
@@ -117,11 +118,12 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(rich).toHaveText('Built-in Docs draft');
 		if (locale === 'zh-CN') {
 			await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
-			const cards = page.locator('.ash-creator-modes');
-			await expect(cards.locator('.ash-artifacts-create')).toHaveText(['文档', '幻灯片', '设计', '电子表格', '白板', '数据', '动效']);
+			const cards = page.locator('.ash-chat-creation');
+			await expect(cards.locator('.ash-chat-creation-button')).toHaveText(['文档', '幻灯片', '设计', '电子表格', '白板', '数据', '动效']);
 			const motion = cards.getByRole('button', { name: '动效', exact: true });
 			await motion.press('Alt+F1');
 			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/打开新的聊天草稿/u);
+			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/返回创建它的对话/u);
 			await page.keyboard.press('Escape');
 			await expect(motion).toBeFocused();
 			await motion.press('Enter');

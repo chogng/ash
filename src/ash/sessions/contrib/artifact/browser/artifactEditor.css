@@ -45,27 +45,6 @@
 	line-height: 1.5;
 	color: var(--ash-description-foreground);
 }
-.ash-creator-modes {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 104px), 1fr));
-	gap: var(--ash-spacing-size120);
-	max-width: 800px;
-}
-.ash-creator .ash-creator-modes > .ash-artifacts-create {
-	display: flex;
-	flex-direction: column;
-	align-items: stretch;
-	justify-content: flex-start;
-	gap: var(--ash-spacing-size80);
-	min-width: 0;
-	padding: 0 0 var(--ash-spacing-size40);
-	text-align: left;
-	background: transparent;
-}
-.ash-artifacts-create > .ash-button-content {
-	justify-content: flex-start;
-	padding: 0 var(--ash-spacing-size20);
-}
 .ash-artifacts-illustration {
 	display: flex;
 	align-items: center;
@@ -79,26 +58,8 @@
 	width: 56px;
 	height: 56px;
 }
-.ash-artifacts-create > .ash-artifacts-illustration {
-	height: 88px;
-	border-radius: var(--ash-cornerRadius-xLarge);
-}
-.ash-artifacts-create > .ash-artifacts-illustration > svg {
-	width: 40px;
-	height: 40px;
-}
-.ash-artifacts-create > .ash-artifacts-illustration > .ash-icon {
-	--ash-lxiconFontSize: 32px;
-}
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
-	.ash-artifacts-create:not(.ash-reduce-motion *)
-		> .ash-artifacts-illustration {
-		transition: transform var(--ash-animation-durationFast) ease-out;
-	}
-	.ash-artifacts-create:hover:not(.ash-reduce-motion *)
-		> .ash-artifacts-illustration {
-		transform: scale(1.04);
-	}
+.ash-artifacts-work-grid .ash-artifacts-illustration > .ash-icon {
+	--ash-lxiconFontSize: 56px;
 }
 .ash-artifacts-results {
 	display: flex;
@@ -184,6 +145,9 @@
 .list-view .ash-artifacts-illustration > svg {
 	width: 28px;
 	height: 28px;
+}
+.list-view .ash-artifacts-work-grid .ash-artifacts-illustration > .ash-icon {
+	--ash-lxiconFontSize: 28px;
 }
 .list-view .ash-artifacts-card > .ash-button-content {
 	flex: 1;

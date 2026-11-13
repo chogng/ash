@@ -617,6 +617,7 @@ impl<'a> VoiceRequestProcessor<'a> {
                     .dir_grants
                     .clone(),
                 updates: source.updates.clone(),
+                generated_files: Default::default(),
             });
             let host = VoiceHost {
                 session: session.clone(),

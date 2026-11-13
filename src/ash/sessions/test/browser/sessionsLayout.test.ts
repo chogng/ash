@@ -177,7 +177,7 @@ suite('sessions browser component', () => {
 		const searchInput = actions.getByRole('searchbox', { name: '搜索作品' });
 		const closeSearch = actions.getByRole('button', { name: '关闭作品搜索' });
 		const panel = creator.getByRole('tabpanel');
-		const createTiles = creator.locator('.ash-creator-modes');
+		const createTiles = creator.locator('.ash-chat-creation');
 		await expect(layout).toHaveAttribute('aria-controls', (await panel.getAttribute('id'))!);
 		await expect(layout.locator('[data-ash-icon-id="layout-grid"]')).toBeVisible();
 		await layout.hover();
@@ -189,11 +189,7 @@ suite('sessions browser component', () => {
 		expect((await panel.boundingBox())!.height).toBeGreaterThan((await empty.boundingBox())!.height);
 
 		for (let count = 0; count < 2; count++) {
-			const quick = new QuickAccess(page);
-			await quick.runCommand('sessions.creator.chooseDocsEditor');
-			await quick.select('新建空白文档');
-			await expect(creator).toBeHidden();
-			await home.click();
+			await page.evaluate(count => window.ashSessionsIntegration.publishGeneratedFile(`layout-${count}`, '未命名文档'), count);
 		}
 		const cards = panel.getByRole('button', { name: '未命名文档' });
 		await expect(cards).toHaveCount(2);

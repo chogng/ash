@@ -83,7 +83,7 @@ test('Sheet and Slides reach the local provider with their selected directions',
 		const editor = new Editor(chat);
 		const select = async (kind: 'sheet' | 'slides') => {
 			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-			await page.locator(`.ash-artifacts-create.${kind}`).press('Enter');
+			await page.locator(`.ash-chat-creation-button[data-creation-kind="${kind}"]`).press('Enter');
 			await expect(pill).toHaveAttribute('data-artifact-kind', kind);
 		};
 		const replacePrompt = async (prompt: string) => {

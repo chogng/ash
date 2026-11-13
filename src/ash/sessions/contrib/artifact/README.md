@@ -1,8 +1,8 @@
 # Artifacts 工作空间
 
-Artifacts 是 Sessions 的创作主页，七项新建入口打开 Chat 草稿，并在输入框下方显示对应的作品类型。示例在 Sessions 的 `EditorPart` 打开对应工作区，工具栏在内容上方，左侧保留 `SessionsPart`。注册了详情视图的工作区按需打开右侧停靠的 `AuxiliaryBarPart`。Motion 的时间线和关键帧编辑由 Design 的 Motion 模式提供。已有作品卡片打开对应编辑器。Sheet 和 Data 的草稿自动保存在当前工作区，重开后可从 Artifacts 继续编辑。导出 CSV 会生成独立文件。主页保留窗口原有的对话侧栏，不注册单独的分类导航，也不显示编辑器标签栏。`ArtifactEditorView` 保留画布工作空间。主页从已有文档编辑器、画布文档和表格草稿派生作品列表，不持久化第二份作品目录。
+Artifacts 是 Sessions 的创作主页，七项新建入口打开 Chat 草稿，并在输入框下方显示对应的作品类型。示例在 Sessions 的 `EditorPart` 打开对应工作区，工具栏在内容上方，左侧保留 `SessionsPart`。注册了详情视图的工作区按需打开右侧停靠的 `AuxiliaryBarPart`。Motion 的时间线和关键帧编辑由 Design 的 Motion 模式提供。Chat 生成的 Markdown 卡片返回来源对话，文件可从该对话用 Ash Docs 打开。其他已有作品卡片打开对应编辑器。Sheet 和 Data 的草稿自动保存在当前工作区，重开后可从 Artifacts 继续编辑。导出 CSV 会生成独立文件。主页保留窗口原有的对话侧栏，不注册单独的分类导航，也不显示编辑器标签栏。`ArtifactEditorView` 保留画布工作空间。主页从已有文档编辑器、画布文档和表格草稿派生作品列表，不持久化第二份作品目录。
 
-在命令面板中运行 Choose Docs editor 可以新建空白文档，或选择富文档和 Markdown。Agent Window 随产品提供按需加载的 `.ash-doc` 富文档编辑器，偏好由 UI profile 的 `sessions.docs.editor` 设置持有。Docs 示例、新建富文档或 Markdown 和 Edit in Docs 都使用 Sessions `EditorPart` 的产品页面组。Docs 操作位于窗口标题栏，正文紧接标题栏；排版、查找和大纲按需挂载到停靠在 `EditorPart` 内的 `AuxiliaryBarPart`。Docs 在 `contrib/docs` 注册文档创建、恢复、转换和文件导入导出，复用 Workbench 的工作副本、保存和备份。ChatGPT Web 的写作块打开为独立的未保存文档，来源对话由 Sessions 保留。
+在命令面板中运行 Choose Docs editor 可以新建空白文档，或选择富文档和 Markdown。Agent Window 随产品提供按需加载的 `.ash-doc` 富文档编辑器，偏好由 UI profile 的 `sessions.docs.editor` 设置持有。Docs 示例、新建富文档或 Markdown 和 Edit in Docs 都使用 Sessions `EditorPart` 的产品页面组。Docs 操作位于窗口标题栏，正文紧接标题栏；排版、查找和大纲按需挂载到停靠在 `EditorPart` 内的 `AuxiliaryBarPart`。Docs 在 `contrib/docs` 注册文档创建、恢复、转换和文件导入导出，复用 Workbench 的工作副本、保存和备份。ChatGPT Web 已登记的写作块打开原有 Markdown；编辑副本会打开独立草稿。
 
 Docs、Slides、Design、Sheets、Whiteboard、Data 和 Motion 在 Sessions 的同级 `contrib` 下注册各自的范例、作品来源和工作区。Brand、Sites、Make、Prototype 也可以通过命令面板打开。画布工作空间各自拥有文档、保存基准和撤销历史，选区、视口及编辑工具由各自的编辑器实例持有。画布模式仍借用现有的图层和属性面板；主页及 Make 保留对话侧栏。配置、主题、快捷键、文件访问、对话框和窗口生命周期复用已有服务。
 

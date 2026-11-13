@@ -834,7 +834,9 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 
 	private knownDirectory(resource: URI): IFileSystemDirectory | undefined {
 		return [...this.directories(), ...this.resolvedDirectories.values()]
-			.filter(directory => extUri.isEqualOrParent(resource.with({ query: null, fragment: null }), directory.uri))
+			.filter(directory => directory.exactFile
+				? extUri.isEqual(resource.with({ query: null, fragment: null }), directory.exactFile)
+				: extUri.isEqualOrParent(resource.with({ query: null, fragment: null }), directory.uri))
 			.sort((a, b) => b.uri.path.length - a.uri.path.length)[0];
 	}
 
@@ -858,7 +860,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			if (!extUri.isEqualOrParent(resource.with({ query: null, fragment: null }), directory.uri)) {
 				throw new Error(localize('files.invalidResourceDirectory', 'Filesystem directory does not contain the requested resource'));
 			}
-			this.resolvedDirectories.set(directory.uri.toString(), directory);
+			this.resolvedDirectories.set((directory.exactFile ?? directory.uri).toString(), directory);
 			return directory;
 		}).finally(() => {
 			if (this.directoryRequests.get(key) === pending) { this.directoryRequests.delete(key); }

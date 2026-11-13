@@ -107,6 +107,28 @@ fn atomic_write_replaces_existing_contents() {
     assert_eq!(std::fs::read_to_string(path).unwrap(), "second");
 }
 
+#[test]
+fn ensure_file_atomically_preserves_the_first_write() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("nested/state.json");
+    ensure_file_atomically(&path, b"first").unwrap();
+    ensure_file_atomically(&path, b"retry").unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), b"first");
+    assert!(ensure_file_atomically(path.parent().unwrap(), b"file").is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn ensure_file_atomically_rejects_a_symlink_to_an_existing_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let target = directory.path().join("target");
+    let link = directory.path().join("link");
+    std::fs::write(&target, "private").unwrap();
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    assert!(ensure_file_atomically(&link, b"new").is_err());
+    assert_eq!(std::fs::read(&target).unwrap(), b"private");
+}
+
 #[cfg(windows)]
 #[test]
 fn atomic_write_creates_and_replaces_a_file_beyond_max_path() {

@@ -74,7 +74,7 @@ test('Sessions Artifacts retains Design and Slides canvases independently', asyn
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const creator = page.locator('.ash-creator');
 	await expect(page.locator('[data-part="titlebar"]').getByRole('heading', { name: 'Artifacts', exact: true })).toBeVisible();
-	await expect(creator.locator('.ash-artifacts-create')).toHaveCount(7);
+	await expect(creator.locator('.ash-chat-creation-button')).toHaveCount(7);
 	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="editor"] .ash-creator')).toBeVisible();
 	await expect(page.locator('[data-part="creator"], [data-part="projects"]')).toHaveCount(0);
@@ -114,7 +114,7 @@ test('Sessions Artifacts retains Design and Slides canvases independently', asyn
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.setViewportSize({ width: 620, height: 860 });
 	await expect(creator).toHaveClass(/narrow/);
-	const tiles = creator.locator('.ash-artifacts-create');
+	const tiles = creator.locator('.ash-chat-creation-button');
 	await expect.poll(async () => (await tiles.last().boundingBox())!.y).toBeGreaterThan((await tiles.first().boundingBox())!.y);
 	await expect(design).toHaveCSS('min-width', '0px');
 });

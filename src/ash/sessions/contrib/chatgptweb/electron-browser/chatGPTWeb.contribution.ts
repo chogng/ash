@@ -29,8 +29,9 @@ import { signInChatGPT } from '../browser/chatGPTLogin.js';
 import { ChatGPTList, ChatGPTNativeList } from './chatGPTList.js';
 import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../common/chatGPTNative.js';
 import { canUseAshModels } from './chatGPTWidgetModel.js';
-import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
+import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID } from '../../chat/common/constants.js';
 import { openAshChatWithModel } from '../../chat/electron-browser/actions/newChatModelAction.js';
+import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 
 export const chatGPTWorkspaceSource = {
 	catalog: new SyncDescriptor(ChatGPTList),
@@ -102,6 +103,33 @@ registerWorkbenchContribution(ChatGPTExperimentalContribution.ID, WorkbenchPhase
 registerWorkbenchContribution(ChatGPTWebContribution.ID, WorkbenchPhase.BlockRestore,
 	services => services.get(IInstantiationService).createInstance(ChatGPTWebContribution));
 
+CommandsRegistry.register(OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID, async (accessor, provider: unknown, accountScope: unknown, id: unknown) => {
+	if (provider !== 'chatgpt-web') return false;
+	if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,240}$/u.test(id)
+		|| typeof accountScope !== 'string' || !/^[a-f0-9]{64}$/u.test(accountScope)) {
+		throw new TypeError('Invalid ChatGPT conversation reference');
+	}
+	const commands = accessor.get(ICommandService);
+	const conversation = accessor.get(ISessionsConversationService);
+	const backends = [
+		{ transport: accessor.get(IChatGPTTransport), chat: accessor.get(IChatGPTService), command: SHOW_CHATGPT_COMMAND },
+		{ transport: accessor.get(IChatGPTNativeTransport), chat: accessor.get(IChatGPTNativeService), command: SHOW_EXPERIMENTAL_CHATGPT },
+	];
+	const scopes = await Promise.all(backends.map(({ transport }) => transport.getCacheScope().catch(() => undefined)));
+	const backend = backends[scopes.indexOf(accountScope)];
+	if (!backend) return false;
+	await backend.chat.select(id, accountScope);
+	const selected = () => {
+		const state = backend.chat.state.get();
+		return state.catalogScope === accountScope && state.conversationId === id;
+	};
+	if (!selected()) return false;
+	const opened = await commands.executeCommand(backend.command);
+	if (opened === false || !selected()) return false;
+	conversation.focus();
+	return true;
+});
+
 CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, model: unknown) => {
 	if (!isRecord(model) || !isNonEmptyString(model.provider) || !isNonEmptyString(model.model)) {
 		throw new TypeError('Expected an Ash model reference');
@@ -121,7 +149,7 @@ CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, mod
 		const state = chat.state.get();
 		if (!canOpen() || state.localConversationId !== source || chat.newDraftRevision !== revision || !canUseAshModels(state)
 			|| state.sending || state.managing || state.voice !== 'idle') return undefined;
-		return { text: state.draft, artifactKind: state.draftArtifactKind };
+		return { text: state.draft, creationKind: state.draftCreationKind };
 	});
 });
 

@@ -11,6 +11,7 @@ import { IPromptsService } from '../../../../workbench/contrib/chat/common/promp
 import { modelRefIdentity } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import { ChatWidgetModel, type ChatWidgetSelection } from '../../../browser/chatWidgetModel.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
 import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
 import { INativeChatModelPreferencesService } from '../common/nativeChatModelPreferencesService.js';
 
@@ -42,10 +43,11 @@ export class AshChatModel extends ChatWidgetModel {
 		@IAgentExecutionSettingsService execution: IAgentExecutionSettingsService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IStorageService storage: IStorageService,
+		@IGeneratedFilesService generatedFiles: IGeneratedFilesService,
 		@IContextKeyService contexts: IContextKeyService | undefined,
 		@INativeChatModelPreferencesService private readonly preferences: INativeChatModelPreferencesService | undefined,
 	) {
-		super(chat, selection, management, prompts, models, execution, configuration, storage, presentation === 'compact' ? contexts : undefined);
+		super(chat, selection, management, prompts, models, execution, configuration, storage, generatedFiles, presentation === 'compact' ? contexts : undefined);
 		if (preferences) this._register(preferences.onDidChangeModels(() => {
 			this.applyDefaultNewChatModel();
 			this.notifyModelChoicesChanged();

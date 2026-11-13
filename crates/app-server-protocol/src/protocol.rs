@@ -27,6 +27,7 @@ pub mod extension_items;
 pub mod extension_packages;
 pub mod extensions;
 pub mod fs;
+pub mod generated_files;
 pub mod git;
 pub mod github;
 pub mod goal;

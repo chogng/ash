@@ -1,5 +1,5 @@
-import { isRequestArtifactKind, type RequestArtifactKind } from '../../../common/artifactKind.js';
 import { isRecord } from '../../../../base/common/types.js';
+import { isChatCreationKind, type ChatCreationKind } from '../../../common/chatCreation.js';
 import { type IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 
 export interface PendingChatGPTCreation {
@@ -7,7 +7,7 @@ export interface PendingChatGPTCreation {
 	readonly messageId: string;
 	readonly parentId: string;
 	readonly text: string;
-	readonly artifactKind?: RequestArtifactKind;
+	readonly creationKind?: ChatCreationKind;
 	readonly model?: string;
 	readonly thinkingEffort?: string;
 	readonly projectId?: string;
@@ -24,7 +24,7 @@ function isId(value: unknown): value is string {
 function isCreation(value: unknown): value is PendingChatGPTCreation {
 	return isRecord(value) && isId(value.localId) && isId(value.messageId) && isId(value.parentId)
 		&& typeof value.text === 'string' && value.text.length > 0
-		&& (value.artifactKind === undefined || isRequestArtifactKind(value.artifactKind))
+		&& (value.creationKind === undefined || isChatCreationKind(value.creationKind))
 		&& (value.model === undefined || typeof value.model === 'string')
 		&& (value.thinkingEffort === undefined || typeof value.thinkingEffort === 'string')
 		&& (value.projectId === undefined || isId(value.projectId))
@@ -49,7 +49,10 @@ export class ChatGPTOutbox {
 		catch { return; }
 		if (!isRecord(value)) { return; }
 		if (Array.isArray(value.creates)) {
-			for (const entry of value.creates) {
+			for (const stored of value.creates) {
+				if (!isRecord(stored)) continue;
+				const { artifactKind, ...entry } = stored;
+				if (entry.creationKind === undefined && artifactKind !== undefined) entry.creationKind = artifactKind;
 				if (isCreation(entry)) { this.creates.set(entry.localId, entry); }
 			}
 		}

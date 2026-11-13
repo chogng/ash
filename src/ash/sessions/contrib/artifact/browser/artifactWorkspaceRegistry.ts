@@ -50,12 +50,14 @@ export interface ArtifactCard {
 	readonly kind: ArtifactKind;
 	readonly detail: string;
 	readonly workspaceKey?: string;
+	readonly generatedFileResource?: string;
 	readonly command: { readonly id: string; readonly args: readonly unknown[]; };
 }
 
 export interface ArtifactCatalogSource {
 	readonly cards: IObservable<readonly ArtifactCard[]>;
 	readonly isRestoring?: IObservable<boolean>;
+	readonly error?: IObservable<string | undefined>;
 }
 
 const artifactCatalogSources: Array<(accessor: ServicesAccessor) => ArtifactCatalogSource> = [];

@@ -200,7 +200,7 @@ test('Artifacts creation cards select a Chat draft type without creating an arti
 	const pill = sessions.locator('.ash-chat-input-artifact-pill:visible');
 	for (const kind of ['docs', 'slides', 'design', 'sheet', 'whiteboard', 'data', 'motion']) {
 		await artifacts.click();
-		const card = home.locator(`.ash-artifacts-create.${kind}`);
+		const card = home.locator(`.ash-chat-creation-button[data-creation-kind="${kind}"]`);
 		if (kind === 'docs') await card.click();
 		else await card.press('Enter');
 		await expect(home).toBeHidden();
@@ -390,13 +390,13 @@ test('Artifacts home keeps the conversation sidebar and offers seven creation ty
 	await expect(page.locator('[data-part="titlebar"] .ash-sessions-titlebar-editor-page h1')).toHaveText('Artifacts');
 	await expect(sidebar.locator('[data-view-container-id="sessions.creator.navigation"]')).toHaveCount(0);
 	expect(await sidebar.locator('[data-view-container-id]:visible').evaluate((element, retained) => element === retained, originalList)).toBe(true);
-	const tiles = home.locator('.ash-artifacts-create');
+	const tiles = home.locator('.ash-chat-creation-button');
 	await expect(tiles).toHaveText(['Docs', 'Slides', 'Design', 'Sheet', 'Whiteboard', 'Data', 'Motion']);
 	await expect(home.locator('[data-artifact-example]')).toHaveCount(7);
 	await expect.poll(() => tiles.evaluateAll(elements => new Set(elements.map(element => element.getBoundingClientRect().top)).size)).toBe(1);
-	await expect(home.locator('.ash-artifacts-create > .ash-artifacts-illustration').first()).toHaveCSS('height', '88px');
+	await expect(home.locator('.ash-chat-creation-button > .ash-chat-creation-illustration').first()).toHaveCSS('height', '88px');
 	const docs = home.getByRole('button', { name: 'Docs', exact: true });
-	const preview = docs.locator('.ash-artifacts-illustration');
+	const preview = docs.locator('.ash-chat-creation-illustration');
 	await expect(home.getByRole('button', { name: 'Choose Docs editor', exact: true })).toHaveCount(0);
 	await page.emulateMedia({ reducedMotion: 'no-preference' });
 	const restingWidth = (await preview.boundingBox())!.width;
@@ -449,8 +449,8 @@ test('Artifacts home keeps the conversation sidebar and offers seven creation ty
 	await document.waitForEditorFocus();
 	await document.waitForTypeInEditor('Retained artifact document');
 	await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await expect(home.locator('.ash-artifacts-card')).toHaveCount(2);
-	await home.locator('.ash-artifacts-card.docs').click();
+	await expect(home.locator('.ash-artifacts-card:not([data-artifact-example])')).toHaveCount(2);
+	await home.locator('.ash-artifacts-card.docs:not([data-artifact-example])').click();
 	await document.waitForEditorContents(text => text === 'Retained artifact document');
 	await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.setViewportSize({ width: 620, height: 860 });
@@ -470,8 +470,8 @@ test('Artifacts keeps creation and ownership controls legible across themes', { 
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', id);
 		const home = page.locator('.ash-creator-home');
 		await expect(home.getByRole('tab', { name: 'All', exact: true })).toHaveAttribute('aria-selected', 'true');
-		await expect(home.locator('.ash-artifacts-create')).toHaveCount(7);
-		for (const illustration of await home.locator('.ash-artifacts-create > .ash-artifacts-illustration').all()) {
+		await expect(home.locator('.ash-chat-creation-button')).toHaveCount(7);
+		for (const illustration of await home.locator('.ash-chat-creation-button > .ash-chat-creation-illustration').all()) {
 			await expect(illustration).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
 			if (id.includes('contrast')) { await expect(illustration).toHaveCSS('border-top-width', '1px'); }
 		}

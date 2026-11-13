@@ -3,6 +3,10 @@ import { flattenDesignShapes, type DesignShape } from '../../contrib/artifact/co
 import { InMemoryFileSystemProvider } from '../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { createTestFileService } from '../../../workbench/test/common/testEditorServices.js';
 import { IAssetService } from '../../../platform/assets/common/assetService.js';
+import { IGeneratedFilesService, type GeneratedFile } from '../../services/generatedFiles/common/generatedFilesService.js';
+import { DeferredPromise } from '../../../base/common/async.js';
+import { parseOpenSessionLinkUri } from '../../../platform/agentHost/common/openSessionLink.js';
+import { createTestGeneratedFilesService } from '../common/testGeneratedFilesService.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { generateUuid } from '../../../base/common/uuid.js';
@@ -75,6 +79,7 @@ const { ArtifactWorkspaceId } = await import('../../contrib/artifact/common/arti
 const { ArtifactEditorView } = await import('../../contrib/artifact/browser/artifactEditor.js');
 const { IEditorPart } = await import('../../../workbench/browser/parts/editor/editorPart.js');
 await import('../../contrib/artifact/browser/artifact.contribution.js');
+await import('../../contrib/docs/browser/docsArtifactCatalog.js');
 await import('../../contrib/design/browser/design.contribution.js');
 await import('../../contrib/whiteboard/browser/whiteboard.contribution.js');
 await import('../../contrib/slides/browser/slides.contribution.js');
@@ -1249,6 +1254,8 @@ class CreatorFixture extends Disposable {
 		const child = this._register(parent.createChild());
 		this.editors = this._register(child.createInstance(DesignEditorService));
 		child.registerInstance(IDesignEditorService, this.editors);
+		if (!child.has(IGeneratedFilesService)) child.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+		child.registerInstance(INotificationService, notifications);
 		child.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for help.', show: () => { throw new Error('Unexpected accessible view'); }, disableHint: unexpected, showAccessibleViewHelp: () => { throw new Error('Unexpected accessible view'); }, dispose() { }, [Symbol.dispose]() { } });
 		const storage = this._register(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 }));
 		child.registerInstance(IStorageService, storage);
@@ -1281,9 +1288,9 @@ class CreatorFixture extends Disposable {
 	}
 }
 
-test('Creator routes all seven contributions and retains separate documents, selection and camera', () => {
+test('Creator offers Chat creation choices and retains each canvas document, selection and camera', () => {
 	using fixture = new CreatorFixture();
-	assert.equal(fixture.page.domNode.querySelectorAll('.ash-artifacts-create').length, 7);
+	assert.equal(fixture.page.domNode.querySelectorAll('.ash-chat-creation-button').length, 7);
 	assert.equal(fixture.page.detailsContainerId, undefined);
 	fixture.page.openMode(ArtifactWorkspaceId.Design);
 	const design = fixture.editors.activeEditor.get()!;
@@ -1293,7 +1300,7 @@ test('Creator routes all seven contributions and retains separate documents, sel
 	const transform = projectedTransform(design);
 	fixture.page.showHome();
 	assert.equal(fixture.editors.activeEditor.get(), undefined);
-	assert.equal(fixture.page.domNode.ownerDocument.activeElement?.getAttribute('data-creator-mode'), 'design');
+	assert.equal(fixture.page.domNode.ownerDocument.activeElement?.getAttribute('data-creation-kind'), 'design');
 	fixture.page.openMode(ArtifactWorkspaceId.Whiteboard);
 	const whiteboardToolbar = fixture.editors.activeEditor.get()!.domNode.querySelector('.ash-canvas-editor-toolbar')!;
 	assert.ok(whiteboardToolbar.querySelector('[data-action-id="sessions.creator.whiteboard.note"]'));
@@ -1304,7 +1311,7 @@ test('Creator routes all seven contributions and retains separate documents, sel
 	whiteboard.model.undo();
 	assert.equal(whiteboard.model.value.shapes.length, 0);
 	fixture.page.showHome();
-	assert.equal(fixture.page.domNode.ownerDocument.activeElement?.getAttribute('data-creator-mode'), 'whiteboard');
+	assert.equal(fixture.page.domNode.ownerDocument.activeElement?.getAttribute('data-creation-kind'), 'whiteboard');
 	assert.equal(design.documentController.model.value.shapes.length, 1);
 	for (const [mode, action] of [
 		[ArtifactWorkspaceId.Slides, 'add'],
@@ -1330,6 +1337,66 @@ test('Creator routes all seven contributions and retains separate documents, sel
 	assert.equal(fixture.editors.activeEditor.get(), undefined);
 	fixture.page.setVisible(true);
 	assert.equal(fixture.editors.activeEditor.get(), design);
+});
+
+test('Creator opens the originating conversation from a published artifact card', async () => {
+	using scoped = services.createChild();
+	using changed = new Emitter<void>();
+	const file: GeneratedFile = {
+		id: 'a'.repeat(64), title: 'Launch notes', resource: URI.file('/generated/launch-notes.md'), contentType: 'text/markdown', createdAt: 1,
+		source: { providerId: 'local-agent-host', accountId: null, sessionId: 'session', threadId: 'thread', itemId: 'reply', partId: 'markdown' },
+	};
+	let catalog: readonly GeneratedFile[] = [];
+	let refreshes = 0;
+	scoped.registerInstance(IGeneratedFilesService, {
+		...createTestGeneratedFilesService(), onDidChange: changed.event, get files() { return catalog; },
+		refresh: async () => { refreshes++; },
+	});
+	const opened = new DeferredPromise<URI | string>();
+	scoped.registerInstance(IOpenerService, {
+		...services.get(IOpenerService),
+		open: async target => { await opened.complete(target); return true; },
+	});
+	using commands = new CommandService(scoped);
+	scoped.registerInstance(ICommandService, commands);
+	using fixture = new CreatorFixture(scoped);
+	assert.equal(fixture.page.domNode.querySelector('[data-generated-file-resource]'), null);
+	catalog = [file];
+	changed.fire();
+	const card = fixture.page.domNode.querySelector<HTMLButtonElement>('[data-generated-file-resource]');
+	assert.ok(card);
+	assert.equal(card.dataset.generatedFileResource, file.resource.toString());
+	assert.equal(card.title, file.title);
+	assert.match(card.textContent ?? '', /Markdown/u);
+	assert.equal(fixture.page.domNode.querySelectorAll('[data-generated-file-resource]').length, 1);
+	card.click();
+	const target = await opened.p;
+	assert.equal(refreshes, 1);
+	assert.ok(URI.isUri(target));
+	assert.deepEqual(parseOpenSessionLinkUri(target), { connectionAuthority: 'local', sessionId: 'session', threadId: 'thread' });
+	assert.equal(fixture.page.domNode.querySelector<HTMLElement>('.ash-creator-home')?.hidden, false);
+});
+
+test('Creator reports generated file open failures and retains the published card', async () => {
+	using scoped = services.createChild();
+	const file: GeneratedFile = {
+		id: 'b'.repeat(64), title: 'Saved document', resource: URI.file('/generated/saved-document.md'), contentType: 'text/markdown', createdAt: 1,
+		source: { providerId: 'local-agent-host', accountId: null, sessionId: 'session', threadId: 'thread', itemId: 'reply', partId: 'markdown' },
+	};
+	scoped.registerInstance(IGeneratedFilesService, { ...createTestGeneratedFilesService(), files: [file], refresh: async () => { throw new Error('Catalog unavailable'); } });
+	using commands = new CommandService(scoped);
+	scoped.registerInstance(ICommandService, commands);
+	const notified = new DeferredPromise<string>();
+	using listener = notifications.model.onDidAdd(notification => { void notified.complete(notification.message); });
+	using fixture = new CreatorFixture(scoped);
+	const card = fixture.page.domNode.querySelector<HTMLButtonElement>('[data-generated-file-resource]');
+	assert.ok(card);
+	card.click();
+	assert.equal(await notified.p, 'Catalog unavailable');
+	const retained = fixture.page.domNode.querySelectorAll<HTMLButtonElement>('[data-generated-file-resource]');
+	assert.equal(retained.length, 1);
+	assert.equal(retained[0].dataset.generatedFileResource, file.resource.toString());
+	assert.equal(fixture.page.domNode.querySelector<HTMLElement>('.ash-creator-home')?.hidden, false);
 });
 
 test('Creator Slides order and Brand variants use their own complete undo history', () => {

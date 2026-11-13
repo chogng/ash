@@ -1,3 +1,8 @@
+import { buildOpenSessionLinkUri } from '../../../../platform/agentHost/common/openSessionLink.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { OPEN_ARTIFACT_CONVERSATION_COMMAND_ID, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID } from '../../chat/common/constants.js';
 import { getActiveElement } from '../../../../base/browser/dom.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../../nls.js';
@@ -20,6 +25,22 @@ import { getArtifactWorkspace } from './artifactWorkspaceRegistry.js';
 import { isArtifactKind } from '../../../common/artifactKind.js';
 import { getArtifactExample, OPEN_ARTIFACT_EXAMPLE } from './artifactExamples.js';
 import { openArtifacts } from './artifactWorkspaceOpener.js';
+
+CommandsRegistry.register(OPEN_ARTIFACT_CONVERSATION_COMMAND_ID, async (accessor, id) => {
+	if (typeof id !== 'string' || !/^[a-f0-9]{64}$/u.test(id)) throw new TypeError('Invalid generated file identity');
+	const opener = accessor.get(IOpenerService);
+	const commands = accessor.get(ICommandService);
+	const files = accessor.get(IGeneratedFilesService);
+	await files.refresh();
+	const source = files.files.find(file => file.id === id)?.source;
+	if (!source) throw new Error(localize({ bundle: 'ash.artifacts', key: 'generatedFileUnavailable' }, 'This generated file is unavailable.'));
+	if (source.providerId === LOCAL_AGENT_HOST_PROVIDER_ID && source.accountId === null) {
+		if (await opener.open(buildOpenSessionLinkUri(source.sessionId, source.threadId, 'local'), { fromUserGesture: true })) return;
+	} else if (source.accountId && CommandsRegistry.getCommand(OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID)) {
+		if (await commands.executeCommand<boolean>(OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID, source.providerId, source.accountId, source.sessionId)) return;
+	}
+	throw new Error(localize('sessions.artifacts.sourceConversationUnavailable', 'The conversation that created this artifact is unavailable.'));
+});
 
 registerEditorPane({ id: 'sessions.editor.creator', name: 'Artifacts', canOpen: input => input.resource.scheme === 'ash-creator' && input.resource.path === '/page' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(ArtifactEditorPane) });
 
@@ -75,7 +96,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
 			const page = ArtifactEditorView.getFocused(focused);
 			if (!page) { return undefined; }
-			return new AccessibleContentProvider(AccessibleViewProviderId.Creator, { type }, () => type === AccessibleViewType.Help ? `${localize('sessions.creator.help', 'Artifacts\nUse Tab and Shift+Tab to reach filters, search, view options, creation cards and your existing work. Press Enter on a creation card to open a new chat with that artifact type shown below the input. Use the window title bar to return to Artifacts. Show Secondary Side Bar opens canvas properties when available. Press Enter on existing work to open it. Use Left and Right to move between All, Yours and Shared with you. Press Enter or Space to apply the focused filter. Search filters titles; sort changes title order. Layout grid switches your work between grid and list views. The Artifacts navigation item returns home and retains each workspace. In the Command Palette, Choose Docs editor sets the editor preference and can open a blank document. Docs uses rich document or Markdown format according to the Docs editor preference. Design saves automatically. Use Save document for files opened in the Slides workspace. Preview supports Left and Right to change slides and Escape to return.')}\n${localize('sessions.artifacts.examplesHelp', 'In All, press Enter on the Slides example to create a deck. The deck saves automatically and can be reopened from Yours. Use Export editable copy to create a file package. Other canvas examples keep edits for this window. Docs, Sheet and Data examples are read-only.')}\n\n${page.getWorkspaceAccessibilityHelp() ?? ''}${page.getAccessibleContent()}` : page.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.Creator);
+			return new AccessibleContentProvider(AccessibleViewProviderId.Creator, { type }, () => type === AccessibleViewType.Help ? `${localize('sessions.creator.help', 'Artifacts\nUse Tab and Shift+Tab to reach filters, search, view options, creation cards and your existing work. Press Enter on a creation card to open a new chat with that artifact type shown below the input. Use the window title bar to return to Artifacts. Show Secondary Side Bar opens canvas properties when available. Press Enter on a generated artifact to return to the conversation that created it. Open its file from that conversation. Other saved work opens in its editor. Use Left and Right to move between All, Yours and Shared with you. Press Enter or Space to apply the focused filter. Search filters titles; sort changes title order. Layout grid switches your work between grid and list views. The Artifacts navigation item returns home and retains each workspace. In the Command Palette, Choose Docs editor sets the editor preference and can open a blank document. Docs uses rich document or Markdown format according to the Docs editor preference. Design saves automatically. Use Save document for files opened in the Slides workspace. Preview supports Left and Right to change slides and Escape to return.')}\n${localize('sessions.artifacts.examplesHelp', 'In All, press Enter on the Slides example to create a deck. The deck saves automatically and can be reopened from Yours. Use Export editable copy to create a file package. Other canvas examples keep edits for this window. Docs, Sheet and Data examples are read-only.')}\n\n${page.getWorkspaceAccessibilityHelp() ?? ''}${page.getAccessibleContent()}` : page.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.Creator);
 		},
 	});
 }

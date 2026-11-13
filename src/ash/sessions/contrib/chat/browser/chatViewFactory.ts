@@ -24,10 +24,11 @@ import { IChatEntityDetails, type ChatEntityDetailsSource } from './chatEntityDe
 import type { IChatWidgetViewOptions } from '../../../../workbench/contrib/chat/browser/chat.js';
 import type { IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ReplyChatInputFactory, type ReplyChatDraftPicker } from './replyChatInput.js';
-import { ChatInputArtifactPill, getArtifactDraftHelp, type ArtifactDraftModel } from './chatInputArtifactPill.js';
+import { ChatInputArtifactPill, getChatCreationHelp, type ChatCreationModel } from './chatInputArtifactPill.js';
 import { ChatView, NewChatView } from './chatView.js';
+import type { SessionArtifactSource } from './sessionArtifacts.js';
 
-export interface ICompactChatModel extends IChatWidgetModel, ArtifactDraftModel {
+export interface ICompactChatModel extends IChatWidgetModel, ChatCreationModel, SessionArtifactSource {
 	getEntityDetailsSource?(item: IChatListItem): ChatEntityDetailsSource | undefined;
 	newChat(): void;
 	readWelcomeDraft(reader: IReader): { readonly id: string; readonly revision: number; } | undefined;
@@ -149,8 +150,8 @@ class CompactChatWidgetFactory {
 							useWorkbenchModelManagement: options.useWorkbenchModelManagement,
 							persistentDraftScope: options.persistentDraftScope,
 							createDraftPicker: createDraftPicker && (footer => createDraftPicker(instantiation, footer, shown, model)),
-							accessibilityHelp: () => `${getChatPromptStartersHelp()}\n${getArtifactDraftHelp()}`,
-						});
+							accessibilityHelp: () => `${getChatPromptStartersHelp()}\n${getChatCreationHelp()}`,
+						}, owner);
 						owner.add(new ChatInputArtifactPill(input, model));
 						input.element.classList.add('chat-composer');
 						const starters = owner.add(new ChatPromptStarters(input.element, input));

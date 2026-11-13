@@ -610,7 +610,7 @@ fn file_type(file_type: FileType) -> FsFileType {
     }
 }
 
-fn file_system_error(error: FileSystemError) -> RpcError {
+pub(super) fn file_system_error(error: FileSystemError) -> RpcError {
     match error {
         FileSystemError::NotFound(_) => {
             RpcError::new(-32043, AppServerErrorName::FileSystemNotFound)

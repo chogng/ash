@@ -133,6 +133,7 @@ import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IChatService, type RestoreChatCheckpointOptions } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IGitHubService } from '../../../src/ash/sessions/contrib/github/browser/githubService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import type { ChatContentPart, ThreadTranscriptEntry } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
@@ -1411,6 +1412,9 @@ window.ashChatTranscriptIntegration = {
 			chatServices.registerSingleton(ITerminalConfigurationService, () => chatServices.createInstance(TerminalConfigurationService));
 			chatServices.registerSingleton(IChatTipService, () => chatServices.createInstance(ChatTipService));
 			chatServices.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
+			chatServices.registerInstance(IGitHubService, {
+				onDidChange: Event.None, watchSessionPullRequests: () => Disposable.None, getSessionPullRequests: () => [],
+			} satisfies Pick<IGitHubService, 'onDidChange' | 'watchSessionPullRequests' | 'getSessionPullRequests'> as unknown as IGitHubService);
 		}
 		const model: IChatWidgetModel = {
 			onDidChange: chatChanges.event, onDidChangeComposer: composerChanges.event, get composerGeneration() { return appChatGeneration; }, sessionId: 'app-session', get threadId() { return appChatThread; }, untitledSessionId: undefined, goal: undefined, get items() { return appItems; },

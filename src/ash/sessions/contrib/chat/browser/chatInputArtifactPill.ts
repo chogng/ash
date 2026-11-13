@@ -7,26 +7,26 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatInputPart, IChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import type { ArtifactKind } from '../../../common/artifactKind.js';
+import type { ChatCreationKind } from '../../../common/chatCreation.js';
 import { appendArtifactIcon, getArtifactTitle } from '../../artifact/browser/artifactKindPresentation.js';
 import './media/chatInputArtifactPill.css';
 
-export interface ArtifactDraftModel {
-	readonly artifactDraftKind: ArtifactKind | undefined;
-	setArtifactDraftKind(kind: ArtifactKind | undefined): boolean;
+export interface ChatCreationModel {
+	readonly creationKind: ChatCreationKind | undefined;
+	setCreationKind(kind: ChatCreationKind | undefined): boolean;
 }
 
-export function getArtifactDraftHelp(): string {
+export function getChatCreationHelp(): string {
 	return localize('sessions.artifacts.draftHelp', 'If a draft has an artifact type, Tab to its Remove button and press Enter or Space to clear the type and return to the message input. Your draft text and attachments stay in place.');
 }
 
-/** Renders the artifact type owned by the current draft. */
+/** Renders the creation direction owned by the current Chat draft. */
 export class ChatInputArtifactPill extends Disposable {
-	private static readonly pills = new WeakMap<IChatInputPart, ChatInputArtifactPill>();
+	private static readonly inputs = new WeakMap<IChatInputPart, ChatInputArtifactPill>();
 
-	static select(input: IChatInputPart, kind: ArtifactKind): void {
-		if (this.pills.get(input)?.model.setArtifactDraftKind?.(kind)) {
-			status(localize('sessions.artifacts.draftSelected', '{0} selected for this draft.', artifactDraftTitle(kind)));
+	static select(input: IChatInputPart, kind: ChatCreationKind): void {
+		if (this.inputs.get(input)?.model.setCreationKind?.(kind)) {
+			status(localize('sessions.artifacts.draftSelected', '{0} selected for this draft.', chatCreationTitle(kind)));
 		}
 	}
 
@@ -35,7 +35,7 @@ export class ChatInputArtifactPill extends Disposable {
 	private readonly remove: Button;
 	private kindIcon: Element | undefined;
 
-	constructor(private readonly input: ChatInputPart, private readonly model: Pick<IChatWidgetModel, 'onDidChange'> & Partial<ArtifactDraftModel>) {
+	constructor(private readonly input: ChatInputPart, private readonly model: Pick<IChatWidgetModel, 'onDidChange'> & Partial<ChatCreationModel>) {
 		super();
 		const document = input.element.ownerDocument;
 		this.element = h(document, 'span', {
@@ -53,9 +53,9 @@ export class ChatInputArtifactPill extends Disposable {
 		const footer = input.composerFooter;
 		if (footer) footer.insertBefore(this.element, footer.querySelector('.ash-chat-input-toolbars'));
 		else input.composerForm.after(this.element);
-		ChatInputArtifactPill.pills.set(input, this);
+		ChatInputArtifactPill.inputs.set(input, this);
 		this._register(toDisposable(() => {
-			ChatInputArtifactPill.pills.delete(input);
+			ChatInputArtifactPill.inputs.delete(input);
 			this.element.remove();
 		}));
 		this._register(model.onDidChange(() => this.render()));
@@ -63,14 +63,14 @@ export class ChatInputArtifactPill extends Disposable {
 	}
 
 	private removeKind(): void {
-		const kind = this.model.artifactDraftKind;
-		if (!kind || !this.model.setArtifactDraftKind?.(undefined)) return;
+		const kind = this.model.creationKind;
+		if (!kind || !this.model.setCreationKind?.(undefined)) return;
 		this.input.focus();
-		status(localize('sessions.artifacts.draftRemoved', 'Removed {0} from this draft.', artifactDraftTitle(kind)));
+		status(localize('sessions.artifacts.draftRemoved', 'Removed {0} from this draft.', chatCreationTitle(kind)));
 	}
 
 	private render(): void {
-		const kind = this.model.artifactDraftKind;
+		const kind = this.model.creationKind;
 		if (this.element.dataset.artifactKind === kind) return;
 		this.element.hidden = kind === undefined;
 		this.kindIcon?.remove();
@@ -82,22 +82,22 @@ export class ChatInputArtifactPill extends Disposable {
 			this.input.setDraftPlaceholder(undefined);
 			return;
 		}
-		const title = artifactDraftTitle(kind);
+		const title = chatCreationTitle(kind);
 		const removeLabel = localize('sessions.artifacts.removeDraftType', 'Remove {0}', title);
 		this.element.dataset.artifactKind = kind;
 		this.kindIcon = appendArtifactIcon(kind, this.remove.domNode);
 		this.text.textContent = title;
 		this.remove.domNode.setAttribute('aria-label', removeLabel);
 		this.remove.setTitle(removeLabel);
-		this.input.setDraftPlaceholder(getArtifactDraftPlaceholder(kind));
+		this.input.setDraftPlaceholder(getChatCreationPlaceholder(kind));
 	}
 }
 
-function artifactDraftTitle(kind: ArtifactKind): string {
+function chatCreationTitle(kind: ChatCreationKind): string {
 	return localize('sessions.artifacts.draftTitle', 'Ash {0}', getArtifactTitle(kind));
 }
 
-function getArtifactDraftPlaceholder(kind: ArtifactKind): string {
+function getChatCreationPlaceholder(kind: ChatCreationKind): string {
 	switch (kind) {
 		case 'docs': return localize('sessions.artifacts.promptDocs', 'What should this document be about?');
 		case 'slides': return localize('sessions.artifacts.promptSlides', 'What should this deck be about?');

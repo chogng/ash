@@ -27,7 +27,8 @@ import { ToolbarSearchActionViewItem } from '../../../browser/ui/toolbarSearchAc
 import { appendArtifactIcon, getArtifactTitle } from './artifactKindPresentation.js';
 import { artifactKinds, isArtifactKind, type ArtifactKind } from '../../../common/artifactKind.js';
 import { getArtifactExamples, OPEN_ARTIFACT_EXAMPLE } from './artifactExamples.js';
-import { OPEN_ARTIFACT_DRAFT_COMMAND_ID } from '../../chat/common/constants.js';
+import { ChatCreationWidget } from '../../chat/browser/chatCreationWidget.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ISessionsEditorPage } from '../../../browser/parts/editorPart.js';
 import { Menus } from '../../../browser/menus.js';
 
@@ -78,13 +79,12 @@ export class ArtifactEditorView extends Disposable {
 	private readonly titlebar: ArtifactTitleBarWidget;
 	private readonly titleListener = this._register(new MutableDisposable());
 	private readonly catalogSources: readonly ArtifactCatalogSource[];
-	private readonly docsButton: Button;
+	private readonly creation: ChatCreationWidget;
 	private readonly artifactsDomNode: HTMLElement;
 	private readonly artifactCards = this._register(new DisposableStore());
 	private readonly search: HTMLInputElement;
 	private readonly sortAction: Action;
 	private filter: ArtifactFilter = 'all';
-	private readonly creationButtons = new Map<ArtifactKind, Button>();
 	private readonly workspaces = this._register(new DisposableMap<string, IArtifactWorkspace>());
 	private activeWorkspace: ArtifactWorkspaceRequest | undefined;
 	private readonly examples = getArtifactExamples();
@@ -104,6 +104,7 @@ export class ArtifactEditorView extends Disposable {
 		@IStorageService private readonly storage: IStorageService,
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
 		@ICommandService private readonly commands: ICommandService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		this.catalogSources = createArtifactCatalogSources(instantiation);
@@ -194,18 +195,9 @@ export class ArtifactEditorView extends Disposable {
 		actionBar.domNode.classList.add('ash-artifacts-actions');
 		actionBar.domNode.querySelector(`[data-action-id="${layoutAction.id}"] button`)!.setAttribute('aria-controls', panelId);
 		const introduction = h(ownerDocument, 'h2', { className: 'ash-creator-introduction' }, localize('sessions.creator.introduction', 'Make something new'));
-		const modes = h(ownerDocument, 'div', { className: 'ash-creator-modes' });
-		this.docsButton = this.createTile(modes, 'docs');
-		for (const kind of artifactKinds) {
-			if (kind === 'docs') continue;
-			const button = this.createTile(modes, kind);
-			if (kind === ArtifactWorkspaceId.Slides || kind === ArtifactWorkspaceId.Design || kind === ArtifactWorkspaceId.Whiteboard) {
-				button.domNode.dataset.creatorMode = kind;
-			}
-			this.creationButtons.set(kind, button);
-		}
+		this.creation = this._register(instantiation.createInstance(ChatCreationWidget, ownerDocument));
 		this.artifactsDomNode = h(ownerDocument, 'section', { className: 'ash-artifacts-results', attributes: { id: panelId, role: 'tabpanel', 'aria-labelledby': `${panelId}-${this.filter}`, 'aria-live': 'polite' } });
-		this.homeDomNode.append(toolbar, introduction, modes, this.artifactsDomNode);
+		this.homeDomNode.append(toolbar, introduction, this.creation.domNode, this.artifactsDomNode);
 		this.workspacesDomNode = h(ownerDocument, 'div', { className: 'ash-creator-workspaces' });
 		this.workspacesDomNode.hidden = true;
 		this.domNode.append(this.homeDomNode, this.workspacesDomNode);
@@ -213,19 +205,10 @@ export class ArtifactEditorView extends Disposable {
 			for (const source of this.catalogSources) {
 				source.cards.read(reader);
 				source.isRestoring?.read(reader);
+				source.error?.read(reader);
 			}
 			this.renderArtifacts();
 		}));
-	}
-
-	private createTile(container: HTMLElement, kind: ArtifactKind): Button {
-		const button = this._register(new Button(container, {
-			...defaultButtonStyles, label: getArtifactTitle(kind),
-			onClick: () => { void this.commands.executeCommand(OPEN_ARTIFACT_DRAFT_COMMAND_ID, kind); },
-		}));
-		button.domNode.classList.add('ash-artifacts-create', kind);
-		button.domNode.prepend(this.createIllustration(kind));
-		return button;
 	}
 
 	private createIllustration(kind: ArtifactKind): HTMLElement {
@@ -250,6 +233,10 @@ export class ArtifactEditorView extends Disposable {
 		const examples = this.filter === 'all' ? this.examples.filter(card => card.title.toLocaleLowerCase().includes(query)) : [];
 		const restoring = this.filter !== 'shared' && this.catalogSources.some(source => source.isRestoring?.get());
 		this.artifactsDomNode.setAttribute('aria-busy', String(restoring));
+		for (const source of this.filter === 'shared' ? [] : this.catalogSources) {
+			const error = source.error?.get();
+			if (error) this.artifactsDomNode.append(h(this.domNode.ownerDocument, 'p', { className: 'ash-artifacts-empty', attributes: { role: 'status' } }, error));
+		}
 		const byTitle = (a: ArtifactCard, b: ArtifactCard) => a.title.localeCompare(b.title) * (this.sortAction.checked ? -1 : 1);
 		cards.sort(byTitle);
 		if (cards.length) {
@@ -278,9 +265,10 @@ export class ArtifactEditorView extends Disposable {
 	}
 
 	private renderCard(card: ArtifactCard, container: HTMLElement): HTMLElement {
-		const button = this.artifactCards.add(new Button(container, { ...defaultButtonStyles, label: card.title, title: card.title, onClick: () => { void this.commands.executeCommand(card.command.id, ...card.command.args); } }));
+		const button = this.artifactCards.add(new Button(container, { ...defaultButtonStyles, label: card.title, title: card.title, onClick: () => { void this.commands.executeCommand(card.command.id, ...card.command.args).catch(error => this.notifications.error(error)); } }));
 		button.domNode.classList.add('ash-artifacts-card', card.kind);
 		if (card.workspaceKey) { button.domNode.dataset.artifactWorkspace = card.workspaceKey; }
+		if (card.generatedFileResource) button.domNode.dataset.generatedFileResource = card.generatedFileResource;
 		button.domNode.prepend(this.createIllustration(card.kind));
 		button.domNode.append(h(this.domNode.ownerDocument, 'span', { className: 'ash-artifacts-card-detail' }, card.detail));
 		return button.domNode;
@@ -341,8 +329,9 @@ export class ArtifactEditorView extends Disposable {
 				: undefined;
 			const artifact = Array.from(this.artifactsDomNode.querySelectorAll<HTMLElement>('[data-artifact-workspace]'))
 				.find(card => card.dataset.artifactWorkspace === previous.key);
-			const button = isArtifactKind(previous.restoreMode) ? this.creationButtons.get(previous.restoreMode) : undefined;
-			(example ?? artifact ?? button ?? this.docsButton).focus();
+			const previousCard = example ?? artifact;
+			if (previousCard) previousCard.focus();
+			else this.creation.focus(isArtifactKind(previous.restoreMode) ? previous.restoreMode : undefined);
 		}
 	}
 	private updateVisibility(): void {
@@ -364,7 +353,7 @@ export class ArtifactEditorView extends Disposable {
 	}
 	public focus(): void {
 		if (this.activeWorkspace) { this.workspaces.get(this.activeWorkspace.key)!.focus(); }
-		else { this.docsButton.focus(); }
+		else { this.creation.focus(); }
 	}
 	public getWorkspaceAccessibilityHelp(): string | undefined {
 		return this.currentWorkspace?.getAccessibilityHelp?.();

@@ -18,8 +18,7 @@ import type { ChatAgent } from '../../../../workbench/services/chat/common/chatS
 import { localize } from '../../../../nls.js';
 import { selectionFromResource } from '../../../common/agentHostSessionWorkspace.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import { isRequestArtifactKind } from '../../../common/artifactKind.js';
-import { writePendingArtifactKind } from './sessionGridState.js';
+import { writePendingCreationKind } from './sessionGridState.js';
 import { ISessionsProvidersService } from './sessionsProvidersService.js';
 import { backendSession, parseSessionIdentity, projectSession, sessionIdentity, threadIdentity } from '../common/sessionIdentity.js';
 
@@ -388,10 +387,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	setUntitledSessionArtifactKind(untitledSessionId: string, kind: IUntitledChatSession['artifactKind']): void {
+	setUntitledSessionCreationKind(untitledSessionId: string, kind: IUntitledChatSession['creationKind']): void {
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
-		if (!current || current.artifactKind === kind) return;
-		this._untitledSessions = this._untitledSessions.map(session => session === current ? { ...session, artifactKind: kind } : session);
+		if (!current || current.creationKind === kind) return;
+		this._untitledSessions = this._untitledSessions.map(session => session === current ? { ...session, creationKind: kind } : session);
 		this._onDidChange.fire();
 	}
 
@@ -540,7 +539,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		const wasActive = this._activeUntitledSessionId === untitledSessionId;
 		const draft = this._untitledSessions.find(draft => draft.untitledSessionId === untitledSessionId);
 		const nested = !!draft?.forkSource;
-		if (this.storage && isRequestArtifactKind(draft?.artifactKind)) writePendingArtifactKind(this.storage, active, draft.artifactKind);
+		if (this.storage && draft?.creationKind) writePendingCreationKind(this.storage, active, draft.creationKind);
 		this._untitledSessions = this._untitledSessions.filter(session => session.untitledSessionId !== untitledSessionId);
 		if (wasActive) this._activeUntitledSessionId = undefined;
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
@@ -558,7 +557,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		if (this.isDisposed) return;
 		this.materializations.delete(untitledSessionId);
 		this._untitledSessions = this._untitledSessions.map(draft => draft.untitledSessionId === untitledSessionId
-			? { ...draft, creationId: createUuid(), artifactKind: undefined } : draft);
+			? { ...draft, creationId: createUuid(), creationKind: undefined } : draft);
 		// Catalog refresh may already contain a newer projection of the accepted request.
 		if (!this._sessions.some(session => session.sessionId === active.session.sessionId)) {
 			this._sessions = [active.session, ...this._sessions];

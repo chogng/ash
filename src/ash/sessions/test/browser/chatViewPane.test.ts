@@ -5,11 +5,13 @@ import { createDisconnectedLocalGitService } from '../../../platform/git/browser
 import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
 import { IBrowserViewWorkbenchService } from '../../../workbench/contrib/browserView/common/browserView.js';
 import { codeConversationDefaultsSetting, codeConversationWorkspaceKey, type CodeConversationDefaults } from '../../common/codeConversationDefaults.js';
-import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
+import { BrowserLayoutService, ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
 import { IChatEntitlementService } from '../../../workbench/services/chat/common/chatEntitlementService.js';
 import { IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
+import { IGeneratedFilesService } from '../../services/generatedFiles/common/generatedFilesService.js';
+import { createTestGeneratedFilesService } from '../common/testGeneratedFilesService.js';
 import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import type { IChatWidgetViewOptions } from '../../../workbench/contrib/chat/browser/chat.js';
 import { IWorkspacesService } from '../../../platform/workspaces/common/workspaces.js';
@@ -190,11 +192,15 @@ function createInputServices(
 	menus?: IMenuService,
 	contextMenus?: IContextMenuService,
 	commandScope?: InstantiationService,
+	layout?: ILayoutService,
 ): InstantiationService {
 	const editorServices = createCodeEditorServices(inputResources);
 	if (!editorServices.has(IExtensionService)) registerTestExtensionService(inputResources, editorServices);
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), editorServices));
 	services.registerInstance(IChatService, chat);
+	services.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
+	services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+	services.registerInstance(ILayoutService, layout ?? inputResources.add(new BrowserLayoutService({ root: contextView.container })));
 	services.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 	services.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
 	services.registerInstance(ISessionFolderTrustRetryService, new SessionFolderTrustRetryService());
@@ -250,6 +256,7 @@ type SessionChatViewPaneTestArguments = ConstructorParameters<typeof SessionChat
 
 function createSessionChatViewPane(...args: SessionChatViewPaneTestArguments): InstanceType<typeof SessionChatViewPane> {
 	const services = inputResources.add(args[12].createChild());
+	if (!services.has(IGeneratedFilesService)) services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
 	services.registerInstance(IChatService, args[2]);
 	services.registerInstance(ISessionsManagementService, args[3]);
 	services.registerInstance(IMenuService, args[4]);
@@ -278,6 +285,7 @@ function createSessionChatViewPane(...args: SessionChatViewPaneTestArguments): I
 
 function createChatListWidget(container: HTMLElement, options: ConstructorParameters<typeof ChatListWidget>[1] = {}): InstanceType<typeof ChatListWidget> {
 	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
+	services.registerInstance(ILayoutService, inputResources.add(new BrowserLayoutService({ root: container.ownerDocument.body })));
 	services.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
 	services.registerInstance(IChatResponseResourceFileSystemProvider, inputResources.add(services.createInstance(ChatResponseResourceFileSystemProvider)));
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { throw new Error('Unexpected media preview'); }, focusActiveEditor() { } });
@@ -350,6 +358,7 @@ const { ReplyChatInputFactory } = await import('../../contrib/chat/browser/reply
 
 function createSessionAshChatModel(services: InstantiationService, chat: IChatService, selection: ConstructorParameters<typeof AshChatModel>[0], sessions: ISessionsManagementService): AshChatModel {
 	if (!services.has(IChatService)) services.registerInstance(IChatService, chat);
+	if (!services.has(IGeneratedFilesService)) services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
 	if (!services.has(ISessionsManagementService)) services.registerInstance(ISessionsManagementService, sessions);
 	if (!services.has(IContextKeyService)) services.registerInstance(IContextKeyService, undefined);
 	return services.createInstance(AshChatModel, selection, 'session');
@@ -503,7 +512,6 @@ test('Quick Chat retains its independent composer through hide, materialization 
 	const fake = fakeApi({ sessions: [session('existing', 'existing-thread')], createSession: session('session-1', 'thread-1') });
 	using sessions = new SessionsManagementService(fake.api);
 	using chat = createChatService(fake.api);
-	const services = createInputServices(contextView, chat);
 	const layout = {
 		...testLayoutService(),
 		mainContainer: dom.window.document.body,
@@ -513,6 +521,8 @@ test('Quick Chat retains its independent composer through hide, materialization 
 		onDidLayoutActiveContainer: Event.None,
 		onDidChangeActiveContainer: Event.None,
 	} as IWorkbenchLayoutService;
+	// The Workbench refinement and platform layout share one window-owned registration.
+	const services = createInputServices(contextView, chat, undefined, undefined, undefined, layout);
 	using pane = createSessionChatViewPane(
 		dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 		services.get(IMenuService), services.get(IContextMenuService), contextView, services.get(ICommandService),
@@ -528,7 +538,6 @@ test('Quick Chat retains its independent composer through hide, materialization 
 	const revision = sessions.navigationRevision;
 	using quickInput = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: services.get(IContextKeyService), layoutService: layout, instantiationService: services });
 	services.registerInstance(IQuickInputService, quickInput);
-	services.registerInstance(IWorkbenchLayoutService, layout);
 	let focusedMain = 0;
 	services.registerInstance(IViewsService, {
 		getViewWithId: () => pane,
@@ -1293,7 +1302,7 @@ async function sessionsWidgetFixture(send: (text: string, signal?: AbortSignal) 
 		fixture.services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 		fixture.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 		fixture.services.registerInstance(ISessionContext, fixture.model);
-		fixture.services.registerInstance(ILayoutService, { activeContainer: document.body } as ILayoutService);
+		fixture.services.registerInstance(ILayoutService, inputResources.add(new BrowserLayoutService({ root: document.body })));
 		fixture.model.send = async (text, _mode, _skills, _contexts, options) => send(text, options?.signal);
 		fixture.model.interrupt = interrupt;
 		const contribution = fixture.services.createInstance(SharedChatInputComposerContribution);
@@ -1646,6 +1655,7 @@ for (const background of [false, true]) test(background
 		const editorRoot = createCodeEditorServices(editorResources);
 		registerTestExtensionService(editorResources, editorRoot);
 		const editorServices = editorResources.add(createTestEditorServices(undefined, editorRoot, dom.window.document, composerStorage));
+		editorServices.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
 		editorServices.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 		editorServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 		editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
@@ -1654,7 +1664,7 @@ for (const background of [false, true]) test(background
 		editorServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
 		editorServices.registerInstance(ISessionFolderTrustRetryService, new SessionFolderTrustRetryService());
 		editorServices.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
-		editorServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
+		editorServices.registerInstance(ILayoutService, editorResources.add(new BrowserLayoutService({ root: dom.window.document.body })));
 		editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 		editorServices.registerInstance(IProjectService, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService);
 		editorServices.registerInstance(ISearchService, {
@@ -1666,6 +1676,7 @@ for (const background of [false, true]) test(background
 		editorServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
 		editorServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
 		editorServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
+		editorServices.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
 		editorServices.registerInstance(ISessionsGitHubService, {
 			onDidChange: Event.None,
 			getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
@@ -1749,7 +1760,16 @@ for (const background of [false, true]) test(background
 		const tipAnchor = input?.querySelector(':scope > .ash-sessions-chat-tip-anchor');
 		assert.ok(tipAnchor);
 		assert.equal(tipSlot?.parentElement, tipAnchor);
-		assert.equal(tipAnchor.nextElementSibling, input?.querySelector('.ash-chat-input-container'));
+		const references = input?.querySelector<HTMLElement>(':scope > .ash-session-chat-input-prs');
+		const backgroundActivities = input?.querySelector<HTMLDetailsElement>(':scope > .ash-sessions-background-activities');
+		assert.ok(references);
+		assert.ok(backgroundActivities);
+		assert.equal(references.hidden, true);
+		assert.equal(backgroundActivities.hidden, true);
+		// Shared notice and status hosts remain mounted between the leading tip and Session controls.
+		assert.equal(input?.firstElementChild, tipAnchor);
+		assert.equal(references.nextElementSibling, backgroundActivities);
+		assert.equal(backgroundActivities.nextElementSibling, input?.querySelector('.ash-chat-input-container'));
 		assert.equal(input?.lastElementChild, input?.querySelector('.ash-sessions-chat-input-footer'));
 		assert.deepEqual([input?.getAttribute('aria-busy'), input?.querySelector('.ash-chat-status, .ash-chat-status-summary')?.textContent], ['true', '']);
 		await widgetModel.initialize();
@@ -2997,6 +3017,7 @@ function modelsFor(chat: IChatService): ILanguageModelsService {
 }
 function createWidgetModel(chat: IChatService, selection: import('../../browser/chatWidgetModel.js').ChatWidgetSelection, sessions: ISessionsManagementService, execution?: IAgentExecutionSettingsService, configuration?: WorkbenchConfigurationService): ChatWidgetModel {
 	const services = inputResources.add(new InstantiationService());
+	services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
 	services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
@@ -3360,6 +3381,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: { session: session('session-1'), threadId: 'thread-1' } };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
+		services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
 		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : createSessionAshChatModel(services, chat, selection, sessions);
 		await widget.initialize();
 		assert.deepEqual(scopes, ['session-1']);
@@ -3855,6 +3877,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: sessions.active! };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
+		services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
 		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : createSessionAshChatModel(services, chat, selection, sessions);
 		await widget.initialize();
 		assert.deepEqual({ catalog: sessions.active?.session.model, picker: widget.inputState.selectedModel }, { catalog: rootModel, picker: rootModel });
@@ -3891,6 +3914,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: sessions.active! };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
+		services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
 		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : createSessionAshChatModel(services, chat, selection, sessions);
 		await widget.initialize();
 		await widget.selectModel(manualModel);
@@ -7399,6 +7423,7 @@ for (const kind of ['Chat', 'Cowork']) {
 		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'untitled' as const, session: sessions.createUntitledSession() };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
+		services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
 		using model = kind === 'Chat' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : createSessionAshChatModel(services, chat, selection, sessions);
 		await model.initialize();
 		await configuration.updateValue(ChatAIDisabledSettingId, true);

@@ -3,7 +3,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { DockedEditorInput } from '../../../common/dockedEditorInput.js';
 import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
-import { isUntitledSession } from '../../../services/sessions/browser/sessionGridState.js';
+import { readUntitledSession } from '../../../services/sessions/browser/sessionGridState.js';
 import { EditorInputSerializers, requireRecord, requireString } from '../../../../workbench/services/editor/common/editorInputSerializer.js';
 import type { IEditorCloseHandler } from '../../../../workbench/common/editor/editorInput.js';
 
@@ -38,8 +38,9 @@ EditorInputSerializers.registerStatic({
 		const id = requireString(record.id, 'Side Chat identity');
 		const label = requireString(record.label, 'Side Chat title');
 		const reference = record.reference;
-		if (isRecord(reference) && isUntitledSession(reference.draft) && reference.draft.untitledSessionId === id) {
-			return new SessionSideChatEditorInput(id, label, { draft: reference.draft });
+		const draft = isRecord(reference) ? readUntitledSession(reference.draft) : undefined;
+		if (draft?.untitledSessionId === id) {
+			return new SessionSideChatEditorInput(id, label, { draft });
 		}
 		const thread = requireRecord(reference, 'Side Chat thread');
 		return new SessionSideChatEditorInput(id, label, {

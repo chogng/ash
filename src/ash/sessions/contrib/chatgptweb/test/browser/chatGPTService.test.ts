@@ -1,3 +1,6 @@
+import { URI } from '../../../../../base/common/uri.js';
+import { IGeneratedFilesService } from '../../../../services/generatedFiles/common/generatedFilesService.js';
+import { createTestGeneratedFilesService } from '../../../../test/common/testGeneratedFilesService.js';
 import { ILifecycleService } from '../../../../../workbench/services/lifecycle/common/lifecycle.js';
 import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { Thread } from '../../../../../workbench/services/chat/common/chatService.js';
@@ -24,6 +27,7 @@ import type { IChannel } from '../../../../../base/parts/ipc/common/ipc.js';
 import { ChatGPTAuthenticationError, IChatGPTTransport, type ChatGPTRequest } from '../../common/chatGPTTransport.js';
 import { ChatGPTService, IChatGPTService, selectedChatConversationId } from '../../browser/chatGPTService.js';
 import { ElectronChatGPTTransport } from '../../electron-browser/electronChatGPTTransport.js';
+import { chatCreationKinds, getChatCreationContext } from '../../../../common/chatCreation.js';
 
 const lifecycle = { onWillShutdown: Event.None } as ILifecycleService;
 
@@ -38,7 +42,7 @@ function notificationService(model?: NotificationsModel): INotificationService {
 	} as INotificationService;
 }
 
-function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, options?: { values?: Map<string, string>; instantiation?: IInstantiationService; cacheScope?: () => string | undefined; onDidChangeAuthentication?: Event<void>; notifications?: NotificationsModel; native?: true; }) {
+function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, options?: { values?: Map<string, string>; instantiation?: IInstantiationService; cacheScope?: () => string | undefined; onDidChangeAuthentication?: Event<void>; notifications?: NotificationsModel; native?: true; generated?: IGeneratedFilesService; }) {
 	const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
 	const transport: IChatGPTTransport = {
 		native: options?.native,
@@ -55,7 +59,7 @@ function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRe
 		async cancel(id) { const request = requests.get(id); requests.delete(id); request?.controller.abort(); await request?.reader?.cancel().catch(() => { }); },
 	};
 	const values = options?.values ?? new Map<string, string>();
-	return new ChatGPTService(transport, { get: (key: string) => values.get(key), keys: () => [...values.keys()], store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); }, flush: async () => { } } as unknown as IStorageService, lifecycle, notificationService(options?.notifications), options?.instantiation);
+	return new ChatGPTService(transport, { get: (key: string) => values.get(key), keys: () => [...values.keys()], store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); }, flush: async () => { } } as unknown as IStorageService, lifecycle, notificationService(options?.notifications), options?.generated ?? createTestGeneratedFilesService(), options?.instantiation);
 }
 function response(path: string): Response {
 	assert.ok(!path.endsWith('/me'), 'The chat must not request an account identity');
@@ -93,6 +97,49 @@ suite('ChatGPT shared service', () => {
 	const mainWindowDisposables = getWindowById(1)?.disposables;
 	suiteTeardown(() => mainWindowDisposables?.dispose());
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('opens an unlisted source conversation only for its owning account', async () => {
+		const reads: string[] = [];
+		using chat = fixture(async path => {
+			reads.push(path);
+			return response(path);
+		});
+		await assert.rejects(chat.select('older-chat', 'b'.repeat(64)));
+		assert.equal(reads.length, 0);
+		assert.equal(chat.state.get().conversationId, undefined);
+		await chat.select('older-chat', 'a'.repeat(64));
+		assert.equal(chat.state.get().conversationId, 'older-chat');
+		assert.equal(chat.state.get().catalogScope, 'a'.repeat(64));
+		assert.ok(reads.some(path => path.endsWith('/older-chat')));
+	});
+
+	test('confirmed history publishes complete writing without an active Chat widget', async () => {
+		const document = new DeferredPromise<{ markdown: string; account: string | null; }>();
+		const writing = ':::writing{title="Published"}\n# Published\n\n<text>Body</text>\n:::';
+		const generated: IGeneratedFilesService = {
+			...createTestGeneratedFilesService(),
+			async publishMarkdown(source, markdown) {
+				await document.complete({ markdown, account: source.accountId });
+				return { id: 'published', source, title: 'Published', resource: URI.file('/published.md'), contentType: 'text/markdown', createdAt: 1 };
+			},
+		};
+		using chat = fixture(async path => {
+			if (!path.endsWith('/one')) return response(path);
+			return Response.json({
+				title: 'One', current_node: 'reply', mapping: {
+					reply: { parent: 'incomplete', message: { id: 'reply', status: 'finished_successfully', author: { role: 'assistant' }, content: { parts: [writing] } } },
+					incomplete: { parent: null, message: { id: 'incomplete', status: 'in_progress', author: { role: 'assistant' }, content: { parts: [writing] } } },
+				}
+			});
+		}, { generated });
+		await chat.reload();
+		await chat.select('one');
+		const publication = await document.p;
+		assert.equal(publication.account, 'a'.repeat(64));
+		assert.match(publication.markdown, /^# Published\n/u);
+		assert.match(publication.markdown, /Body/u);
+		assert.doesNotMatch(publication.markdown, /<:ash-rich/u);
+	});
+
 	for (const native of [undefined, true] as const) {
 		test(`${native ? 'Native' : 'Web'} recent history and sidebar groups have independent freshness after reopening`, async () => {
 			mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
@@ -430,19 +477,34 @@ suite('ChatGPT shared service', () => {
 			assert.equal(fresh.state.get().draft, '');
 			assert.equal(selectedChatConversationId(fresh.state.get()), undefined);
 			fresh.setDraft('New draft to restore');
-			assert.equal(fresh.setDraftArtifactKind('design'), true);
+			assert.equal(fresh.setDraftCreationKind('design'), true);
 		}
 		using restoredNew = fixture(respond, { values });
 		await restoredNew.reload();
 		assert.equal(selectedChatConversationId(restoredNew.state.get()), undefined);
 		assert.equal(restoredNew.state.get().draft, 'New draft to restore');
-		assert.equal(restoredNew.state.get().draftArtifactKind, 'design');
+		assert.equal(restoredNew.state.get().draftCreationKind, 'design');
 		await restoredNew.select('one');
 		assert.equal(restoredNew.state.get().draft, 'Unsent follow-up');
-		assert.equal(restoredNew.state.get().draftArtifactKind, undefined);
+		assert.equal(restoredNew.state.get().draftCreationKind, undefined);
 		restoredNew.newChat();
-		assert.equal(restoredNew.state.get().draftArtifactKind, undefined);
+		assert.equal(restoredNew.state.get().draftCreationKind, undefined);
 	});
+	test('restores legacy creation choices and only persists the creationKind field', () => {
+		const id = 'a8d414f2-4f2a-47ef-91db-9054b51bdfc1';
+		for (const reference of [{ id, artifactKind: 'docs' }, { id, artifactKind: 'slides', creationKind: 'docs' }]) {
+			const values = new Map([
+				['sessions.chatgpt.newDraftId', JSON.stringify(reference)],
+				[`sessions.chatgpt.draft:${id}`, 'Original draft'],
+			]);
+			using chat = fixture(async () => assert.fail('Restoring a local draft must not make requests'), { values });
+			assert.equal(chat.state.get().draftCreationKind, 'docs');
+			assert.equal(chat.state.get().draft, 'Original draft');
+			chat.setDraft('Edited draft');
+			assert.deepEqual(JSON.parse(values.get('sessions.chatgpt.newDraftId')!), { id, creationKind: 'docs' });
+		}
+	});
+
 	test('stages a draft attachment while the background upload retries each failed step', async () => {
 		const putStarted = new DeferredPromise<void>();
 		const putCanFail = new DeferredPromise<void>();
@@ -567,6 +629,7 @@ suite('ChatGPT shared service', () => {
 			[INotificationService, notificationService()],
 			[IChatGPTTransport, new SyncDescriptor(ElectronChatGPTTransport, [], true)],
 			[IChatGPTService, new SyncDescriptor(ChatGPTService, [], true)],
+			[IGeneratedFilesService, createTestGeneratedFilesService()],
 			[IStorageService, { get: () => undefined, keys: () => [], store() { }, remove() { } } as unknown as IStorageService],
 			[IMainProcessService, { _serviceBrand: undefined, getChannel: () => channel, registerChannel() { } }],
 		));
@@ -1383,7 +1446,7 @@ suite('ChatGPT shared service', () => {
 		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['one']);
 	});
 
-	for (const kind of ['sheet', 'slides'] as const) {
+	for (const kind of chatCreationKinds) {
 		test(`${kind} creation reaches the real online request and survives offline replay without changing displayed text`, async () => {
 			const text = 'Create the requested work';
 			const sent: string[] = [];
@@ -1395,14 +1458,14 @@ suite('ChatGPT shared service', () => {
 					const body = JSON.parse(String(request.body));
 					user = body.messages[0];
 					sent.push(user!.content.parts[0]!);
-					assert.equal(body.artifactKind, undefined);
+					assert.equal(body.creationKind, undefined);
 					return new Response('data: {"conversation_id":"created"}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
 				}
 				if (path.endsWith('/conversation/created')) {
 					return Response.json({
 						title: 'Created', current_node: 'reply', mapping: {
 							question: { parent: null, message: user },
-							reply: { parent: 'question', message: { id: 'reply', author: { role: 'assistant' }, status: 'finished_successfully', content: { parts: ['Fixture response'] } } },
+							reply: { parent: 'question', message: { id: 'reply', author: { role: 'assistant' }, status: 'finished_successfully', content: { parts: [':::writing{title="Document"}\n# Document\n:::'] } } },
 						}
 					});
 				}
@@ -1410,13 +1473,14 @@ suite('ChatGPT shared service', () => {
 			};
 			using online = fixture(respond);
 			await online.reload();
-			assert.equal(online.setDraftArtifactKind(kind), true);
+			assert.equal(online.setDraftCreationKind(kind), true);
 			online.setDraft(text);
 			await online.send();
 			assert.equal(sent.length, 1);
 			assert.ok(sent[0]!.startsWith(text + '\n\n'));
 			assert.ok(sent[0]!.includes(`name="ash.creation.${kind}"`));
-			assert.match(sent[0]!, kind === 'sheet' ? /Structure the rows and columns/u : /slide-by-slide content/u);
+			assert.ok(sent[0]!.includes(getChatCreationContext(kind).content));
+			if (kind === 'docs') assert.match(sent[0]!, /:::writing\{title="Document title"\}/u);
 			assert.equal(online.state.get().messages.find(message => message.role === 'user')?.text, text);
 			assert.equal(online.state.get().messages.find(message => message.role === 'user')?.editableText, text);
 
@@ -1424,7 +1488,7 @@ suite('ChatGPT shared service', () => {
 			using queued = fixture(respond, { values });
 			await queued.reload();
 			queued.setNetworkAvailable(false);
-			assert.equal(queued.setDraftArtifactKind(kind), true);
+			assert.equal(queued.setDraftCreationKind(kind), true);
 			queued.setDraft(text);
 			await queued.send();
 			assert.equal(queued.state.get().messages[0]?.text, text);
@@ -1439,6 +1503,8 @@ suite('ChatGPT shared service', () => {
 			assert.equal(sent.length, 2);
 			assert.equal(sent[1], sent[0]);
 			assert.equal(reopened.state.get().messages.find(message => message.role === 'user')?.text, text);
+			assert.equal(reopened.state.get().messages.find(message => message.role === 'user')?.creationKind, kind);
+			assert.equal(reopened.state.get().messages.find(message => message.role === 'assistant')?.completion, 'complete');
 		});
 	}
 
@@ -1466,7 +1532,7 @@ suite('ChatGPT shared service', () => {
 		await chat.reload();
 		const draft = 'Create the plan';
 		chat.setDraft(draft);
-		assert.equal(chat.setDraftArtifactKind('sheet'), true);
+		assert.equal(chat.setDraftCreationKind('sheet'), true);
 		const sending = chat.send();
 		await preparing.p;
 		try {
@@ -1481,13 +1547,13 @@ suite('ChatGPT shared service', () => {
 		assert.deepEqual(posts, []);
 		assert.deepEqual(chat.state.get().messages, []);
 		assert.equal(chat.state.get().draft, draft);
-		assert.equal(chat.state.get().draftArtifactKind, 'sheet');
+		assert.equal(chat.state.get().draftCreationKind, 'sheet');
 
 		await chat.send();
 		assert.equal(chat.state.get().uncertain, false);
 		assert.equal(chat.state.get().draft, draft);
-		assert.equal(chat.state.get().draftArtifactKind, 'sheet');
-		assert.equal(chat.setDraftArtifactKind('slides'), true);
+		assert.equal(chat.state.get().draftCreationKind, 'sheet');
+		assert.equal(chat.setDraftCreationKind('slides'), true);
 		await chat.send();
 		assert.equal(posts.length, 2);
 		assert.match(posts[0]!, /name="ash\.creation\.sheet"/u);

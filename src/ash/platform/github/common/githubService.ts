@@ -2,6 +2,7 @@ import type { AccountStatus } from '../../accounts/common/accountService.js';
 import type { JsonValue } from '../../../base/common/jsonValue.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { Event } from '../../../base/common/event.js';
+import type { ArtifactOrigin } from '../../artifactIntegrations/common/artifactIntegration.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export enum GitHubIssueState { Open = 'open', Closed = 'closed' }
@@ -45,7 +46,7 @@ export interface GitHubPullRequestReference {
 	/** True when the session produced the PR. Older associations are references. */
 	readonly isArtifact?: boolean;
 	readonly artifactId?: string;
-	readonly artifactOrigin?: { readonly chat: string; readonly turnId: string; };
+	readonly artifactOrigin?: ArtifactOrigin & { readonly turnId: string; };
 	readonly repository: { readonly host: string; readonly owner: string; readonly name: string; };
 	readonly number: number;
 }

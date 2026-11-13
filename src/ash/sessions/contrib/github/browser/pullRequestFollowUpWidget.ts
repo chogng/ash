@@ -56,7 +56,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 
 	constructor(
 		container: HTMLElement,
-		private readonly artifact: { readonly sessionId: string; readonly id: string; readonly cardState: ArtifactDetailsCardState; } | undefined,
+		private readonly artifact: { readonly sessionId: string; readonly id: string; readonly cardState: ArtifactDetailsCardState; readonly threadId?: string; } | undefined,
 		@ISessionsService private readonly sessions: ISessionsService,
 		@IGitHubService private readonly associations: IGitHubService,
 		@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService,
@@ -69,7 +69,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 		container.append(this.element);
 		this._register(toDisposable(() => { this.epoch++; this.element.remove(); }));
 		const invalidate = (): void => {
-			const selected = this.sessions.activeSelection;
+			const selected = this.selection;
 			const key = selected?.kind === 'session'
 				? JSON.stringify([selected.active.session.sessionId, selected.active.threadId, selected.active.session.workspace]) : undefined;
 			if (key !== this.selectionKey) {
@@ -82,10 +82,21 @@ export class PullRequestFollowUpWidget extends Disposable {
 			}
 		};
 		this._register(sessions.onDidChange(invalidate));
+		if (artifact?.threadId) this._register(sessions.chatSelection?.onDidChange(invalidate));
 		this._register(associations.onDidChange(() => { void this.refresh(); }));
 		this._register(scopes.onDidChangeScopes(() => { this.selectionKey = undefined; invalidate(); }));
 		this._register(autorun(reader => this.render(this.rows.read(reader))));
 		invalidate();
+	}
+
+	private get selection() {
+		const active = this.sessions.activeSelection;
+		if (!this.artifact?.threadId) return active;
+		if (active?.kind === 'session' && active.active.session.sessionId === this.artifact.sessionId
+			&& active.active.threadId === this.artifact.threadId) return active;
+		const chat = this.sessions.getChatSelection();
+		return chat?.kind === 'session' && chat.active.session.sessionId === this.artifact.sessionId
+			&& chat.active.threadId === this.artifact.threadId ? chat : undefined;
 	}
 
 	private refresh(): Promise<void> {
@@ -99,7 +110,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 		do {
 			this.loadAgain = false;
 			const epoch = this.epoch;
-			const selected = this.sessions.activeSelection;
+			const selected = this.selection;
 			if (selected?.kind !== 'session' || this.artifact && selected.active.session.sessionId !== this.artifact.sessionId) { this.rows.set([], undefined); continue; }
 			const { session } = selected.active;
 			const directory = session.workspace ? sessionWorkspaceUri(session.workspace).path : undefined;

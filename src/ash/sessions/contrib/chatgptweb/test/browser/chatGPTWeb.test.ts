@@ -28,7 +28,7 @@ import * as chatInputStatePersistence from '../../../../../workbench/contrib/cha
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 import { ISessionsEntryService, type ISessionsEntry } from '../../../../services/layout/common/sessionsEntryService.js';
-import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
 import { ISessionsService, SessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { loadChatSelection } from '../../../../services/sessions/browser/sessionGridState.js';
 import type { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
@@ -36,6 +36,7 @@ import type { ISession, IUntitledChatSession, ModelRef } from '../../../../servi
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 import { ChatGPTWebContribution, chatGPTViewSource, experimentalChatGPTViewSource, chatGPTScrollOptimization, SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../electron-browser/chatGPTWeb.js';
+import { IChatGPTNativeTransport, IChatGPTTransport } from '../../common/chatGPTTransport.js';
 import { IChatGPTNativeService, IChatGPTService, linkedTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
 import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../../common/chatGPTNative.js';
 import '../../common/chatGPTAccountLabel.js';
@@ -50,7 +51,9 @@ import { IChatViewFactory } from '../../../chat/browser/chatViewFactory.js';
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
 import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
-import type { ArtifactKind } from '../../../../common/artifactKind.js';
+import type { ChatCreationKind } from '../../../../common/chatCreation.js';
+import { IGeneratedFilesService } from '../../../../services/generatedFiles/common/generatedFilesService.js';
+import { createTestGeneratedFilesService } from '../../../../test/common/testGeneratedFilesService.js';
 
 const newChatState = { conversations: [], messages: [], linkedTasks: [] } satisfies Partial<ChatGPTState>;
 
@@ -72,7 +75,7 @@ function chatSelectionFixture(storage: IStorageService, sessions: readonly ISess
 		},
 		discardUntitledSession(id: string) { drafts = drafts.filter(draft => draft.untitledSessionId !== id); },
 		setUntitledSessionModel(id: string, model: ModelRef) { drafts = drafts.map(draft => draft.untitledSessionId === id ? { ...draft, model } : draft); },
-		setUntitledSessionArtifactKind(id: string, artifactKind: ArtifactKind | undefined) { drafts = drafts.map(draft => draft.untitledSessionId === id ? { ...draft, artifactKind } : draft); },
+		setUntitledSessionCreationKind(id: string, creationKind: ChatCreationKind | undefined) { drafts = drafts.map(draft => draft.untitledSessionId === id ? { ...draft, creationKind } : draft); },
 	} as unknown as ISessionsManagementService;
 	const customViews = { activeCustomViewOpen: constObservable(undefined) } as unknown as ICustomViewService;
 	const view = new SessionsService(management, storage, customViews, {} as ICommandService);
@@ -89,6 +92,31 @@ const chatViews: IChatViewFactory = {
 
 suite('ChatGPT entry', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('opens an artifact conversation in the ChatGPT backend that owns its account', async () => {
+		const webScope = 'a'.repeat(64);
+		const nativeScope = 'b'.repeat(64);
+		const calls: unknown[] = [];
+		const state = observableValue<Partial<ChatGPTState>>('nativeChat', { catalogScope: nativeScope });
+		using services = new InstantiationService(new ServiceCollection(
+			[IChatGPTTransport, { getCacheScope: async () => webScope }],
+			[IChatGPTNativeTransport, { getCacheScope: async () => nativeScope }],
+			[IChatGPTService, { select: () => assert.fail('Unexpected ChatGPT Web navigation') }],
+			[IChatGPTNativeService, {
+				state, select: async (id: string, scope: string) => {
+					calls.push([id, scope]);
+					state.set({ catalogScope: scope, conversationId: id });
+				}
+			}],
+			[ICommandService, { executeCommand: async (id: string) => { calls.push(id); } }],
+			[ISessionsConversationService, { focus: () => { calls.push('focus'); } }],
+		));
+		const open = CommandsRegistry.getCommand(OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID)!;
+		assert.equal(await services.invokeFunction(open, 'chatgpt-web', 'c'.repeat(64), 'source-chat'), false);
+		assert.equal(calls.length, 0);
+		assert.equal(await services.invokeFunction(open, 'chatgpt-web', nativeScope, 'source-chat'), true);
+		assert.deepEqual(calls, [['source-chat', nativeScope], SHOW_EXPERIMENTAL_CHATGPT, 'focus']);
+	});
 
 	test('only ChatGPT views open first-party Library file links directly on activation', async () => {
 		using opener = new OpenerService({} as ICodeEditorService, {} as ICommandService);
@@ -348,6 +376,7 @@ suite('ChatGPT entry', () => {
 		using services = new InstantiationService(new ServiceCollection(
 			[IChatViewFactory, chatViews],
 			[IChatGPTService, { native: true, state, newDraftRevision: 1 } as unknown as IChatGPTService],
+			[IGeneratedFilesService, createTestGeneratedFilesService()],
 			[IClipboardService, {} as IClipboardService],
 			[IDialogService, {} as IDialogService],
 			[IOpenerService, {} as IOpenerService],
@@ -396,7 +425,7 @@ suite('ChatGPT entry', () => {
 		let mode = 'code';
 		let experimental = false;
 		const state = observableValue<ChatGPTState>('draft', {
-			localConversationId: 'chatgpt-draft', draft: 'Unsent prompt', draftArtifactKind: 'slides', voice: 'idle',
+			localConversationId: 'chatgpt-draft', draft: 'Unsent prompt', draftCreationKind: 'slides', voice: 'idle',
 			conversations: [], messages: [], linkedTasks: [], attachments: [],
 		} as unknown as ChatGPTState);
 		const experimentalState = observableValue<ChatGPTState>('experimentalDraft', { ...state.get(), localConversationId: 'experimental-draft', draft: 'Experimental prompt' });
@@ -446,7 +475,7 @@ suite('ChatGPT entry', () => {
 		const selected = selection.chatSelection.get();
 		assert.ok(selected?.kind === 'draft');
 		assert.deepEqual(selected.model, model);
-		assert.equal(management.untitledSessions.find(draft => draft.untitledSessionId === selected.id)?.artifactKind, 'slides');
+		assert.equal(management.untitledSessions.find(draft => draft.untitledSessionId === selected.id)?.creationKind, 'slides');
 		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${selected.id}`, chatInputStatePersistence), { text: 'Unsent prompt', mode: 'agent', contexts: [] });
 		assert.deepEqual(loadChatSelection(storage), selected);
 
