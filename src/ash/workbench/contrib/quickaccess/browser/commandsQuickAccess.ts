@@ -19,6 +19,9 @@ import { localize, localize2 } from '../../../../nls.js';
 import { ShowAllCommandsCommandId } from '../../../browser/quickaccess.js';
 import { commandActionLabel } from '../../../../platform/action/common/action.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { getActiveElement } from '../../../../base/browser/dom.js';
 
 interface ICommandQuickPickItem extends IPickerQuickAccessItem {
 	readonly commandId: string;
@@ -36,12 +39,17 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 		@IStorageService private readonly storageService: IStorageService,
 		@IPreferencesService private readonly preferencesService: IPreferencesService,
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@ILayoutService layout: ILayoutService,
 	) {
 		super('>');
 		this.history = this._register(this.instantiationService.createInstance(CommandsHistory));
 		// Capture the editor before the picker takes focus.
 		this.editor = this.codeEditorService.getFocusedCodeEditor() ?? this.codeEditorService.getActiveCodeEditor();
-		this.menu = this._register(this.menuService.createMenu(MenuId.CommandPalette));
+		const container = layout.activeContainer;
+		const focused = getActiveElement(container.ownerDocument);
+		const target = focused && container.contains(focused) ? focused : container;
+		this.menu = this._register(this.menuService.createMenu(MenuId.CommandPalette, contextKeys.getContextKeyService(target)));
 		this._register(this.menu.onDidChange(() => this.refresh()));
 		this._register(this.keybindingService.onDidUpdateKeybindings(() => this.refresh()));
 		this._register(this.configurationService.onDidChangeConfiguration(event => {

@@ -1,0 +1,122 @@
+.ash-chat-window-grid {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+}
+
+.ash-chat-window-grid
+	> :is(
+		.ash-chat-window-body,
+		.ash-chat-window-terminal-split,
+		.ash-chat-window-edge-split
+	),
+:is(
+		.ash-chat-window-body,
+		.ash-chat-window-terminal-split,
+		.ash-chat-window-edge-split
+	)
+	> .ash-split-view {
+	width: 100%;
+	height: 100%;
+}
+
+.ash-chat-window-grid .ash-chat-window-edge-drop {
+	position: absolute;
+	z-index: 19;
+	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	background: color-mix(in srgb, var(--ash-focusBorder) 18%, transparent);
+	pointer-events: none;
+}
+
+.ash-chat-window-edge-drop[data-edge="left"] {
+	inset: 0 67% 0 0;
+}
+.ash-chat-window-edge-drop[data-edge="right"] {
+	inset: 0 0 0 67%;
+}
+.ash-chat-window-edge-drop[data-edge="top"] {
+	inset: 0 0 67%;
+}
+.ash-chat-window-edge-drop[data-edge="bottom"] {
+	inset: 67% 0 0;
+}
+
+.ash-chat-window-grid.input-only
+	.ash-chat-window-editor
+	.ash-chat
+	> :not(.ash-chat-input-part) {
+	display: none;
+}
+
+.ash-chat-auxiliary-actions > button[hidden] {
+	display: none;
+}
+
+.ash-chat-window-grid .ash-workbench-editor {
+	width: 100%;
+	height: 100%;
+}
+
+.ash-chat-window-editor {
+	display: flex;
+	height: 100%;
+	min-height: 0;
+}
+
+.ash-chat-window-editor > .ash-chat-auxiliary-content {
+	flex: 1 1 auto;
+	height: 0;
+	border: 0;
+	--ash-chat-transcript-overlap: var(--ash-spacing-size80);
+}
+
+.ash-chat-auxiliary-titlebar {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+	min-width: 0;
+	height: 44px;
+	gap: var(--ash-spacing-size120);
+	padding: 0 var(--ash-spacing-size120);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+	background: var(--ash-editor-background);
+	-webkit-app-region: drag;
+}
+
+.ash-chat-auxiliary-window[data-runtime="electron"][data-os="mac"]
+	.ash-chat-auxiliary-titlebar {
+	padding-inline-start: calc(2 * var(--ash-spacing-size400));
+}
+
+.ash-chat-auxiliary-window[data-runtime="electron"]:not([data-os="mac"])
+	.ash-chat-auxiliary-titlebar {
+	padding-inline-end: calc(
+		3 * var(--ash-spacing-size400) + var(--ash-spacing-size200)
+	);
+}
+
+.ash-chat-auxiliary-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-chat-auxiliary-actions {
+	display: flex;
+	gap: var(--ash-spacing-size40);
+	-webkit-app-region: no-drag;
+}
+
+.ash-chat-detached-chat {
+	display: grid;
+	place-content: center;
+	height: 100%;
+	padding: var(--ash-spacing-size200);
+}
+
+.ash-chat-detached-chat[hidden] {
+	display: none;
+}

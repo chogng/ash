@@ -7,7 +7,9 @@ import { IChatEntitlementService } from '../../../src/ash/workbench/services/cha
 import * as chatInputStatePersistence from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISessionGroupsService, SessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
-import { ChatAuxiliaryWindow } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
+import { IChatWindowService } from '../../../src/ash/workbench/contrib/chatWindow/browser/chatWindow.js';
+import { ChatWindowService } from '../../../src/ash/workbench/contrib/chatWindow/browser/chatWindowService.js';
+import { registerTestChatWindowParts } from '../../../src/ash/workbench/contrib/chatWindow/test/browser/chatWindowTestServices.js';
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 import { ChatMarkdownContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.js';
@@ -94,7 +96,7 @@ import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/base/browser/markdownRenderer.css';
 import '../../../src/ash/sessions/contrib/chat/browser/media/chatInput.css';
 import '../../../src/ash/editor/browser/coreCommands.js';
-import { Disposable, DisposableStore, MutableDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Lexer } from '../../../src/ash/base/common/marked/marked.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -1550,10 +1552,12 @@ window.ashChatTranscriptIntegration = {
 	openChatAuxiliaryWindow: async () => {
 		const scope = resources.add(services.createChild());
 		scope.registerInstance(IAccessibleViewService, accessibleView);
+		scope.registerInstance(ILifecycleService, { willShutdown: false } as ILifecycleService);
 		const windows = resources.add(scope.createInstance(BrowserAuxiliaryWindowService, window, document.body));
-		const auxiliary = await windows.open({ title: 'Borrowed conversation', width: 640, height: 480 });
-		await auxiliary.whenStylesHaveLoaded;
-		const shell = resources.add(scope.createInstance(ChatAuxiliaryWindow, auxiliary, 'Borrowed conversation', undefined));
+		registerTestChatWindowParts(resources, scope, document.body, windows);
+		scope.registerSingleton(IChatWindowService, () => scope.createInstance(ChatWindowService));
+		const chatWindows = scope.get(IChatWindowService);
+		const chat = URI.parse('test-chat:/borrowed');
 		const content = document.createElement('section');
 		content.className = 'ash-chat';
 		content.dataset.testChatWindow = 'true';
@@ -1561,14 +1565,23 @@ window.ashChatTranscriptIntegration = {
 		input.setAttribute('aria-label', 'Borrowed draft');
 		input.value = 'Preserved draft';
 		content.append(input);
-		shell.mount(content);
-		resources.add(auxiliary.onDidClose(() => {
-			document.body.append(content);
-			shell.dispose();
-			auxiliary.dispose();
-			input.focus();
+		resources.add(chatWindows.registerProvider({
+			resolveContent: resource => resource.toString() === chat.toString() ? {
+				element: content,
+				title: 'Borrowed conversation',
+				isAvailable: () => true,
+				getResource: () => chat,
+				setVisible: visible => { content.hidden = !visible; },
+				focus: () => input.focus(),
+				mount: ({ resources }) => {
+					resources.add(toDisposable(() => {
+						document.body.append(content);
+						input.focus();
+					}));
+				},
+			} : undefined,
 		}));
-		auxiliary.layout();
+		await chatWindows.open(chat);
 	},
 	prepareSessionLifecycle: async wording => {
 		await import('../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js');

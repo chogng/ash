@@ -1263,11 +1263,21 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(root).not.toHaveClass(/ash-sessions-window/);
 		await expect(popup.locator('.ash-chat-auxiliary-titlebar')).toHaveCSS('height', '44px');
 		await expect(popup.locator('.ash-chat-auxiliary-content')).toHaveCSS('flex-grow', '1');
-		await expect(popup.getByRole('textbox', { name: 'Borrowed draft' })).toHaveValue('Preserved draft');
+		const draft = popup.getByRole('textbox', { name: 'Borrowed draft' });
+		await expect(draft).toHaveValue('Preserved draft');
+		await expect(draft).toBeFocused();
+		await page.evaluate(() => document.body.classList.add('hc-black', 'ash-high-contrast'));
+		await expect(root).toHaveClass(/hc-black/);
+		const returnButton = popup.getByRole('button', { name: locale === 'en' ? 'Return to main window' : '返回主窗口', exact: true });
+		await returnButton.focus();
+		await expect(returnButton).toBeFocused();
 		const closed = popup.waitForEvent('close');
-		await popup.getByRole('button').first().click();
+		await popup.keyboard.press('Enter').catch(error => {
+			if (!popup.isClosed()) throw error;
+		});
 		await closed;
 		await expect(page.getByRole('textbox', { name: 'Borrowed draft' })).toHaveValue('Preserved draft');
+		await expect(page.getByRole('textbox', { name: 'Borrowed draft' })).toBeFocused();
 		await expect(page.locator('[data-test-chat-window]')).not.toHaveClass(/ash-chat-auxiliary-content/);
 	});
 }

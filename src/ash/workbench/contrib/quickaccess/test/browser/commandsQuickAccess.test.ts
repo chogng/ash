@@ -18,7 +18,8 @@ import { filterQuickPickItems } from '../../../../../platform/quickinput/browser
 import { MenuId, MenusRegistry, IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { CommandRegistry, CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { BrowserLayoutService, ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IDialogService, DialogResult, DialogSeverity } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
@@ -58,6 +59,7 @@ test('empty-editor navigation commands open the file picker and focus file searc
 function registerHistoryServices(services: InstantiationService, resources: DisposableStore): void {
 	const dom = new JSDOM('', { url: 'https://ash.test' });
 	resources.add(toDisposable(() => dom.window.close()));
+	services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: dom.window.document.body })));
 	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 	services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'commands', flushInterval: 0 })));
 	services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: dom.window.document.body, instantiationService: services })));
@@ -89,6 +91,7 @@ test('Command Palette finds localized commands by their English title and report
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 		const commands = resources.add(new CommandService(services, registry));
 		const contexts = resources.add(new ContextKeyService());
+		services.registerInstance(IContextKeyService, contexts);
 		const dialogs = resources.add(new DialogService());
 		services.registerInstance(ICommandService, commands);
 		services.registerInstance(IMenuService, new MenuService(commands, contexts));
@@ -150,6 +153,7 @@ test('Command Palette does not show a dialog for cancelled commands', async () =
 	services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 	const commands = resources.add(new CommandService(services, registry));
 	const contexts = resources.add(new ContextKeyService());
+	services.registerInstance(IContextKeyService, contexts);
 	const dialogs = resources.add(new DialogService());
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, new MenuService(commands, contexts));
@@ -194,6 +198,7 @@ test('Command Palette retains the focused embedded editor actions while its pick
 	resources.add(registry.register('test.outputCommand', () => { executed.push(focused); }));
 	const commands = resources.add(new CommandService(services, registry));
 	const contexts = resources.add(new ContextKeyService());
+	services.registerInstance(IContextKeyService, contexts);
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, new MenuService(commands, contexts));
 	services.registerInstance(IDialogService, resources.add(new DialogService()));

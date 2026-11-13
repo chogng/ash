@@ -33,10 +33,26 @@ import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/cha
 import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { ForkConversationAction } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import '../services/generatedFiles/browser/generatedFiles.contribution.js';
+import '../../workbench/contrib/chatWindow/browser/chatWindow.contribution.js';
 import '../contrib/sessions/browser/sessionsActions.js';
 import '../contrib/sessions/browser/views/sessionsViewActions.js';
 import { IChatService, type ChatAgent } from '../../workbench/services/chat/common/chatService.js';
 import type { ToolResultPresentation } from '../../platform/agentHost/common/agent.js';
+import { onUnexpectedError } from '../../base/common/errors.js';
+import { IChatWindowService } from '../../workbench/contrib/chatWindow/browser/chatWindow.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../workbench/common/contributions.js';
+import { isNative } from '../../base/common/platform.js';
+
+if (isNative) {
+	registerWorkbenchContribution('workbench.contrib.restoreChatWindows', WorkbenchPhase.AfterRestored, accessor => {
+		const views = accessor.get(IViewsService);
+		const windows = accessor.get(IChatWindowService);
+		if (windows.hasWindowsToRestore) {
+			void views.openView<SessionChatViewPane>(CHAT_VIEW_ID).then(view => view?.restoreChatWindows()).catch(onUnexpectedError);
+		}
+		return Disposable.None;
+	});
+}
 
 class ChatSessionNavigationService extends Disposable implements IChatSessionNavigationServiceContract {
 	private readonly links: SessionConversationLinks;

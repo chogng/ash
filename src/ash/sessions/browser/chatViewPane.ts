@@ -11,8 +11,8 @@ import { Emitter } from '../../base/common/event.js';
 import { constObservable } from '../../base/common/observable.js';
 import type { IQuickChatSession, IChatWidgetViewOptions } from '../../workbench/contrib/chat/browser/chat.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
-import { IAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
-import { ChatAuxiliaryWindow } from '../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
+import { IChatWindowService, type IChatWindowContent, type IChatWindowMount } from '../../workbench/contrib/chatWindow/browser/chatWindow.js';
+import { getSessionChatResource, getSessionChatWindowChoices, readSessionChatResource, SessionsChatWindowProvider } from '../contrib/chatWindow/browser/sessionsChatWindowProvider.js';
 import { Button } from '../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
 import { isRecord } from '../../base/common/types.js';
@@ -70,8 +70,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 	private viewDisposed = false;
 	private restoringViewState = true;
 	private failedSelectionRevision: number | undefined;
-	private readonly popouts = new Map<ChatWidget<ChatWidgetModel>, { shell: ChatAuxiliaryWindow; resources: DisposableStore; placeholder: HTMLElement; }>();
-	private readonly openingPopouts = new Map<ChatWidget<ChatWidgetModel>, Promise<void>>();
+	private readonly detachedPanes = new Map<ChatWidget<ChatWidgetModel>, { readonly mount: IChatWindowMount; readonly placeholder: HTMLElement; readonly titleId: string; readonly visible: boolean; }>();
 	private readonly embeddedChats = new Map<ChatWidget<ChatWidgetModel>, { readonly session: IQuickChatSession; readonly placeholder: HTMLElement; readonly titleId: string; visible: boolean; }>();
 	private readonly embeddedOptions = new Map<string, IChatWidgetViewOptions>();
 	private readonly sessionsReady: Promise<void>;
@@ -93,7 +92,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		@IConfigurationService configuration: IConfigurationService,
 		@IStorageService private readonly storage: IStorageService,
 		@ILifecycleService lifecycleService: ILifecycleService,
-		@IAuxiliaryWindowService private readonly auxiliaryWindows: IAuxiliaryWindowService,
+		@IChatWindowService private readonly chatWindows: IChatWindowService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IEditorGroupsService editorGroups: IEditorGroupsService,
 		@IOpenerService private readonly openerService: IOpenerService | undefined,
@@ -105,6 +104,38 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		this.chatService = chatService;
 		this.sessionService = sessionService;
 		this.contextMenuService = contextMenuService;
+		this._register(this.chatWindows.registerProvider(new SessionsChatWindowProvider(
+			this.panes, pane => pane.model.selectedSession, pane => this.getChatWindowContent(pane),
+			async resource => {
+				await this.sessionsReady;
+				if (this.viewDisposed) return;
+				const target = readSessionChatResource(resource);
+				if (!target) return;
+				if ('draftId' in target) {
+					this.syncSessions(`untitled:${target.draftId}`);
+					return;
+				}
+				const session = this.sessionService.sessions.find(candidate => candidate.sessionId === target.sessionId && candidate.status === 'active');
+				const chat = session?.chats.find(candidate => candidate.threadId === target.threadId);
+				if (!session || !chat || !canOpenThreadInCode(session, chat)) return;
+				const id = sessionPaneIdFromId(target.sessionId);
+				const pane = this.panes.get(id);
+				// The IDE retains one conversation pane per session. A detached pane keeps its chosen thread.
+				if (pane && this.detachedPanes.has(pane) && pane.threadId !== chat.threadId) return;
+				this.restoredThreadIds.set(id, chat.threadId);
+				this.syncSessions(id);
+				const prepared = this.panes.get(id);
+				if (prepared && prepared.threadId !== chat.threadId) await prepared.model.selectThread({ session, threadId: chat.threadId });
+			},
+			resource => {
+				const source = [...this.panes.values()].find(pane => getSessionChatResource(pane.model.selectedSession).toString() === resource.toString());
+				const selection = source?.model.selectedSession;
+				const draft = this.sessionService.createUntitledSession(undefined, selection?.kind === 'untitled' ? selection.session.workspace : undefined, undefined, false);
+				this.syncSessions(untitledSessionPaneId(draft));
+				return getSessionChatResource({ kind: 'untitled', session: draft });
+			},
+			() => getSessionChatWindowChoices(this.sessionService, false),
+		)));
 		this.initializeSessionsControl(() => { this.sessionService.createUntitledSession(); }, item => {
 			const target = item.target;
 			const selection = 'untitledSessionId' in target
@@ -139,8 +170,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		this._register(toDisposable(() => {
 			this.viewDisposed = true;
 			for (const mount of this.embeddedChats.values()) { mount.session.dispose(); }
-			for (const popup of this.popouts.values()) popup.resources.dispose();
-			this.popouts.clear();
+			for (const { mount } of this.detachedPanes.values()) mount.close();
 			for (const pane of this.panes.values()) pane.dispose();
 			this.paneScopes.clearAndDisposeAll();
 			this.panes.clear();
@@ -171,6 +201,11 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		});
 		void this.getProgressIndicator().showWhile(restoring, 150);
 		this.sessionsReady = restoring;
+	}
+
+	public async restoreChatWindows(): Promise<void> {
+		await this.sessionsReady;
+		if (!this.viewDisposed) await this.chatWindows.restoreWindows();
 	}
 
 	protected override async restoreEditorPane(id: string, signal: AbortSignal): Promise<void> {
@@ -243,9 +278,13 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		this.storage.store('chat.viewState', JSON.stringify({ version: 2, drafts: this.sessionService.untitledSessions, opened: this.openedPaneIds, threads, active, sessionsSidebarWidth: this.sessionsSidebarWidth }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 
-	override focus(): void {
-		if (this.activePane) this.popouts.get(this.activePane)?.shell.window.window.focus();
-		super.focus();
+	override focusInput(): void {
+		const popup = this.activePane && this.detachedPanes.get(this.activePane);
+		if (popup) {
+			void popup.mount.focus().catch(error => this.notifications.error(String(error)));
+		} else {
+			super.focusInput();
+		}
 	}
 
 	async openInNewWindow(selection?: SessionsViewSelection): Promise<void> {
@@ -267,53 +306,50 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		if (!pane) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
 		const releasingEditor = this.releaseSessionEditor(pane);
 		if (releasingEditor && !await releasingEditor || this.viewDisposed || pane.isDisposed) return;
-		const existing = this.popouts.get(pane);
-		if (existing) { existing.shell.window.window.focus(); pane.focus(); return; }
-		let pending = this.openingPopouts.get(pane);
-		if (!pending) {
-			pending = this.detachPane(pane, selection.kind === 'session' ? selection.active.session.title : selection.session.title);
-			this.openingPopouts.set(pane, pending);
-		}
-		try { await pending; }
-		finally { if (this.openingPopouts.get(pane) === pending) this.openingPopouts.delete(pane); }
+		await this.chatWindows.open(getSessionChatResource(pane.model.selectedSession));
 	}
 
-	private async detachPane(pane: ChatWidget<ChatWidgetModel>, title: string): Promise<void> {
-		const window = await this.auxiliaryWindows.open({ title, width: 900, height: 760 });
-		if (this.viewDisposed || ![...this.panes.values()].includes(pane)) { window.dispose(); return; }
-		const resources = new DisposableStore();
-		try {
-			const shell = resources.add(this.instantiationService.createInstance(ChatAuxiliaryWindow, window, title, undefined));
-			const placeholder = h(this.paneHost.ownerDocument, 'div', { className: 'ash-chat-detached-chat' });
-			placeholder.id = `${pane.element.id}-detached`;
-			resources.add(new Button(placeholder, {
-				...defaultButtonStyles, presentation: 'quiet', label: localize('sessions.window.focus', 'Chat is open in another window'),
-				onClick: () => { window.window.focus(); pane.focus(); },
-			}));
-			this.popouts.set(pane, { shell, resources, placeholder });
-			resources.add(toDisposable(() => {
-				this.popouts.delete(pane);
-				// Reattach the same editor before the popup document is destroyed.
-				this.paneHost.append(pane.element);
-				placeholder.remove();
-				if (!this.viewDisposed && [...this.panes.values()].includes(pane)) {
-					if (pane.sessionId && pane.threadId) this.sessionService.selectThread(pane.sessionId, pane.threadId);
-					else if (pane.model.untitledSessionId) this.sessionService.selectUntitledSession(pane.model.untitledSessionId);
-					this.syncSessions();
-					if (!this.editorMount) this.layoutService.showPart('auxiliarybar');
-					this.paneHost.ownerDocument.defaultView?.focus();
-					pane.focus();
-				}
-				window.dispose();
-			}));
-			resources.add(window.onDidClose(() => resources.dispose()));
+	private getChatWindowContent(pane: ChatWidget<ChatWidgetModel>): IChatWindowContent {
+		const selection = pane.model.selectedSession;
+		return {
+			element: pane.element,
+			title: selection.kind === 'session' ? selection.active.session.title : selection.session.title,
+			isAvailable: () => !this.viewDisposed && !pane.isDisposed && [...this.panes.values()].includes(pane),
+			getResource: () => getSessionChatResource(pane.model.selectedSession),
+			setVisible: visible => pane.setVisible(visible),
+			focus: () => pane.focus(),
+			mount: mount => this.mountDetachedPane(pane, mount),
+		};
+	}
+
+	private mountDetachedPane(
+		pane: ChatWidget<ChatWidgetModel>,
+		mount: IChatWindowMount,
+	): void {
+		const { titleId, resources } = mount;
+		const placeholder = h(this.paneHost.ownerDocument, 'div', { className: 'ash-chat-detached-chat' });
+		placeholder.id = `${pane.element.id}-detached`;
+		resources.add(new Button(placeholder, {
+			...defaultButtonStyles,
+			presentation: 'quiet',
+			label: localize('sessions.window.focus', 'Chat is open in another window'),
+			onClick: () => { void mount.focus().catch(error => this.notifications.error(String(error))); },
+		}));
+		this.detachedPanes.set(pane, { mount, titleId, placeholder, get visible() { return !pane.element.hidden; } });
+		resources.add(toDisposable(() => {
+			this.detachedPanes.delete(pane);
+			placeholder.remove();
+			if (this.viewDisposed || ![...this.panes.values()].includes(pane)) return;
+			// Reattach the retained editor before the popup document is destroyed.
+			this.paneHost.append(pane.element);
+			if (pane.sessionId && pane.threadId) this.sessionService.selectThread(pane.sessionId, pane.threadId);
+			else if (pane.model.untitledSessionId) this.sessionService.selectUntitledSession(pane.model.untitledSessionId);
 			this.syncSessions();
-			shell.mount(pane.element);
-			pane.setVisible(true);
-			window.layout();
-			window.window.focus();
+			if (!this.editorMount) this.layoutService.showPart('auxiliarybar');
+			this.paneHost.ownerDocument.defaultView?.focus();
 			pane.focus();
-		} catch (error) { resources.dispose(); window.dispose(); throw error; }
+		}));
+		this.syncSessions();
 	}
 
 	protected override get selectionRevision(): number {
@@ -495,7 +531,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			if (retainedPaneIds.has(paneId)) continue;
 			this.panes.delete(paneId);
 			this.embeddedChats.get(pane)?.session.dispose();
-			this.popouts.get(pane)?.resources.dispose();
+			this.detachedPanes.get(pane)?.mount.close();
 			pane.dispose();
 			this.paneScopes.deleteAndDispose(pane);
 		}
@@ -507,12 +543,12 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				if (embedded) {
 					return { ...entry, detached: { placeholder: embedded.placeholder, titleId: embedded.titleId, visible: embedded.visible } };
 				}
-				const popup = this.popouts.get(entry.pane);
+				const popup = this.detachedPanes.get(entry.pane);
 				if (!popup) {
 					return entry;
 				}
-				popup.shell.setTitle(entry.label);
-				return { ...entry, detached: { placeholder: popup.placeholder, titleId: popup.shell.title.id } };
+				popup.mount.setTitle(entry.label);
+				return { ...entry, detached: popup };
 			}),
 		};
 	}
@@ -542,15 +578,19 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 	}
 
 	private selectionForSession(session: ISession): IActiveSessionThread | undefined {
+		const pane = this.panes.get(sessionPaneId(session));
+		const retainedThreadId = pane?.threadId ?? this.restoredThreadIds.get(sessionPaneId(session));
 		const active = this.sessionService.activeUntitledSession ? undefined : this.sessionService.active;
 		const canOpen = (chat: IChat) => canOpenThreadInCode(session, chat);
+		if (pane && this.detachedPanes.has(pane) && retainedThreadId && session.chats.some(chat => chat.threadId === retainedThreadId && canOpen(chat))) {
+			return { session, threadId: retainedThreadId };
+		}
 		if (
 			active?.session.sessionId === session.sessionId &&
 			session.chats.some(chat => chat.threadId === active.threadId && canOpen(chat))
 		) {
 			return { session, threadId: active.threadId };
 		}
-		const retainedThreadId = this.panes.get(sessionPaneId(session))?.threadId ?? this.restoredThreadIds.get(sessionPaneId(session));
 		if (retainedThreadId && session.chats.some(chat => chat.threadId === retainedThreadId && canOpen(chat))) {
 			return { session, threadId: retainedThreadId };
 		}
@@ -598,12 +638,12 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				// before its create response. A deliberately selected durable draft wins.
 				if (origin && paneId === `untitled:${origin}` && pane === this.activePane && active?.session.sessionId === sessionId && active.threadId === pane.threadId) {
 					this.panes.delete(materializedPaneId);
-					this.popouts.get(existing)?.resources.dispose();
+					this.detachedPanes.get(existing)?.mount.close();
 					existing.dispose();
 				} else {
 					this.panes.delete(paneId);
 					this.embeddedChats.get(pane)?.session.dispose();
-					this.popouts.get(pane)?.resources.dispose();
+					this.detachedPanes.get(pane)?.mount.close();
 					pane.dispose();
 					this.paneScopes.deleteAndDispose(pane);
 					continue;

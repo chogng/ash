@@ -6,7 +6,7 @@ import { ChatHistoryModel } from '../../browser/chatHistoryModel.js';
 import { IFileService } from '../../../platform/files/common/files.js';
 import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { emptyEditorGroupsService } from '../../../workbench/test/common/testWorkbenchContextKeys.js';
-import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { IChatWindowService } from '../../../workbench/contrib/chatWindow/browser/chatWindow.js';
 import { registerCodeEditorServices } from '../../../editor/test/browser/testCodeEditor.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widget/chatWidgetService.js';
@@ -147,6 +147,18 @@ test('opens a local Chat conversation before the backend session request settles
 	viewServices.registerInstance(ISessionGroupsService, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService);
 	viewServices.registerSingleton(ISessionsListModelService, () => viewServices.createInstance(SessionsListModelService));
 	viewServices.registerSingleton(IAgentSessionsService, () => viewServices.createInstance(ChatHistoryModel));
+	viewServices.registerInstance(IChatWindowService, {
+		_serviceBrand: undefined,
+		registerProvider: () => toDisposable(() => { }),
+		open: async () => { throw new Error('Unexpected chat window'); },
+		getWindow: () => undefined,
+		activeWindow: undefined,
+		hasWindowsToRestore: false,
+		openNewChat: async () => { throw new Error('Unexpected chat window'); },
+		pickChat: () => { throw new Error('Unexpected chat window'); },
+		restoreWindows: async () => { },
+		moveToMainWindow: async () => { throw new Error('Unexpected chat window'); },
+	});
 	using view = viewServices.createInstance(SessionChatViewPane, document.body, { id: 'workbench.chat', title: 'Chat' });
 
 	assert.deepEqual(escaped, []);

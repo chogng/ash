@@ -18,6 +18,11 @@ import { IWorkspacesService } from '../../../platform/workspaces/common/workspac
 import { IProjectService } from '../../../platform/projects/common/projectService.js';
 import { IVoiceModeOnboardingService } from '../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { IChatWindowService } from '../../../workbench/contrib/chatWindow/browser/chatWindow.js';
+import { ChatWindowService } from '../../../workbench/contrib/chatWindow/browser/chatWindowService.js';
+import { registerTestChatWindowParts } from '../../../workbench/contrib/chatWindow/test/browser/chatWindowTestServices.js';
+import { registerTestWorkbenchHostServices } from '../../../workbench/test/common/workbenchHostTestServices.js';
+import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
 import { ImageEditorService } from '../../../workbench/services/imageEditor/browser/imageEditorService.js';
 import { ISessionGroupsService, SessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
@@ -195,6 +200,7 @@ function createInputServices(
 	layout?: ILayoutService,
 ): InstantiationService {
 	const editorServices = createCodeEditorServices(inputResources);
+	registerTestWorkbenchHostServices(editorServices, createDisconnectedRendererApi());
 	if (!editorServices.has(IExtensionService)) registerTestExtensionService(inputResources, editorServices);
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), editorServices));
 	services.registerInstance(IChatService, chat);
@@ -250,9 +256,17 @@ function createInputServices(
 	if (commandScope) commandScope.registerInstance(IChatWidgetService, services.get(IChatWidgetService));
 	return services;
 }
-type SessionChatViewPaneTestArguments = ConstructorParameters<typeof SessionChatViewPane> extends [...infer Head, IOpenerService | undefined, IEditorService | undefined, ISessionProviderScopeService, ISessionsListModelService]
-	? [...Head, opener?: IOpenerService, editor?: IEditorService]
+type SessionChatViewPaneTestArguments = ConstructorParameters<typeof SessionChatViewPane> extends [
+	...infer Head, IChatWindowService, IContextKeyService, IEditorGroupsService, IOpenerService | undefined, IEditorService | undefined, ISessionProviderScopeService, ISessionsListModelService,
+]
+	? [...Head, IAuxiliaryWindowService, IContextKeyService, IEditorGroupsService, opener?: IOpenerService, editor?: IEditorService]
 	: never;
+
+function registerTestChatWindowService(services: InstantiationService, root: HTMLElement, windows: IAuxiliaryWindowService): void {
+	services.registerInstance(IAuxiliaryWindowService, windows);
+	registerTestChatWindowParts(inputResources, services, root, windows);
+	services.registerSingleton(IChatWindowService, () => services.createInstance(ChatWindowService));
+}
 
 function createSessionChatViewPane(...args: SessionChatViewPaneTestArguments): InstanceType<typeof SessionChatViewPane> {
 	const services = inputResources.add(args[12].createChild());
@@ -270,7 +284,7 @@ function createSessionChatViewPane(...args: SessionChatViewPaneTestArguments): I
 	services.registerInstance(IConfigurationService, args[13]);
 	services.registerInstance(IStorageService, args[14]);
 	services.registerInstance(ILifecycleService, args[15]);
-	services.registerInstance(IAuxiliaryWindowService, args[16]);
+	registerTestChatWindowService(services, args[0], args[16]);
 	services.registerInstance(IContextKeyService, args[17]);
 	services.registerInstance(IEditorGroupsService, args[18]);
 	if (args[19]) services.registerInstance(IOpenerService, args[19]);
@@ -5811,7 +5825,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	viewServices.registerInstance(IStorageService, storage);
 	viewServices.registerInstance(ILifecycleService, testLifecycle);
 	viewServices.registerInstance(ISessionGroupsService, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService);
-	viewServices.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
+	registerTestChatWindowService(viewServices, dom.window.document.body, auxiliaryWindows);
 	viewServices.registerInstance(IContextKeyService, contextKeys);
 	if (editorGroups) viewServices.registerInstance(IEditorGroupsService, editorGroups);
 	const descriptor = ViewsRegistry.getViews(CHAT_VIEW_CONTAINER_ID).find(view => view.id === CHAT_VIEW_ID)!.ctorDescriptor;
@@ -5828,7 +5842,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	const input = chatPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input')!;
 	assert.ok(input);
 	resources.add(toDisposable(() => dom.window.close()));
-	return { resources, dom, fake, pane, sessions, chatPane, input, configuration, commands, inputServices, storage, layout, commandServices, contextMenus, auxiliaryWindows };
+	return { resources, dom, fake, pane, sessions, chatPane, input, configuration, commands, inputServices, storage, layout, commandServices, contextMenus, auxiliaryWindows, chatWindows: viewServices.get(IChatWindowService) };
 }
 
 test('moving Chat after attachment preparation cannot follow A-B-A navigation', async () => {
@@ -7588,6 +7602,7 @@ test('IDE background item retains its composer in one light Agent auxiliary wind
 	assert.equal(f.auxiliaryWindows.openCount, 1);
 	const popup = f.auxiliaryWindows.windows[0]!;
 	assert.ok(popup.container.classList.contains('ash-chat-auxiliary-window'));
+	assert.equal(f.chatWindows.getWindow(popup.id)?.windowId, popup.id);
 	assert.equal(popup.container.querySelector('.ash-chat'), draftPane);
 	assert.equal(popup.container.querySelector('textarea'), draftInput);
 	assert.equal(draftInput.value, originalDraft.text);
@@ -7603,6 +7618,7 @@ test('IDE background item retains its composer in one light Agent auxiliary wind
 	assert.equal(draftPane.hidden, false);
 	typeChatText(popup.dom.window, draftInput, originalDraft.text + ' Edited in popup');
 	popup.container.querySelector<HTMLButtonElement>('[aria-label="Return to main window"]')!.click();
+	assert.equal(f.chatWindows.getWindow(popup.id), undefined);
 	assert.equal(f.sessions.activeUntitledSession?.untitledSessionId, draft.untitledSessionId);
 	assert.equal(f.pane.element.querySelector('.ash-chat-pane-host > .ash-chat:not([hidden])'), draftPane);
 	assert.equal(draftInput.value, originalDraft.text + ' Edited in popup');
@@ -7720,6 +7736,7 @@ for (const close of ['discard', 'dispose'] as const) test(`IDE auxiliary window 
 	assert.equal(popup.isDisposed, false);
 	if (close === 'discard') f.sessions.discardUntitledSession(draft.untitledSessionId);
 	else f.pane.dispose();
+	await waitFor(() => popup.isDisposed);
 	assert.equal(popup.isDisposed, true);
 	assert.equal(f.fake.createSessionRequests.length, 0);
 	assert.equal(f.fake.turnStartRequests.length, 0);

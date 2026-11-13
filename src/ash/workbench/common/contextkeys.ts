@@ -125,6 +125,7 @@ export const MultipleEditorGroupsContext = new RawContextKey<boolean>('multipleE
 export const ActiveEditorGroupLockedContext = new RawContextKey<boolean>('activeEditorGroupLocked', false);
 /** Part-local group count; auxiliary windows have their own editor layout. */
 export const EditorPartMultipleEditorGroupsContext = new RawContextKey<boolean>('editorPartMultipleEditorGroups', false);
+export const EditorPartSupportsGroupSplittingContext = new RawContextKey<boolean>('editorPartSupportsGroupSplitting', false);
 /** Whether the containing EditorPart temporarily displays one maximized group. */
 export const EditorPartMaximizedEditorGroupContext = new RawContextKey<boolean>('editorPartMaximizedEditorGroup', false);
 

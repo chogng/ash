@@ -9,6 +9,7 @@ export interface IContextKeyService extends IContextKeyValueService {
 	contextMatchesRules(expression: ContextKeyExpression | undefined, target?: Node | null): boolean;
 	createScoped(target: HTMLElement): IScopedContextKeyService;
 	getContext(target?: Node | null): Context;
+	getContextKeyService(target: Node): IContextKeyService;
 }
 
 /** A disposable context layer inherited by descendants of one DOM element. */
@@ -98,6 +99,10 @@ abstract class AbstractContextKeyService
 		return findScopedContext(this.state, target) ??
 			this.state.root ??
 			this;
+	}
+
+	getContextKeyService(target: Node): IContextKeyService {
+		return findScopedContext(this.state, target) ?? this;
 	}
 
 	bufferChangeEvents(callback: () => void): void {

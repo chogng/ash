@@ -270,6 +270,7 @@ import { DesktopEditorArea } from './parts/desktopEditorArea.js';
 import { EditorParts } from './parts/editorParts.js';
 import { type IEditorPartOptions } from '../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorPartsService } from '../../workbench/browser/parts/editor/editorParts.js';
+import { IChatWindowService } from '../../workbench/contrib/chatWindow/browser/chatWindow.js';
 import { SessionsEntryService } from '../contrib/layout/browser/sessionsEntryService.js';
 import { URI } from '../../base/common/uri.js';
 import { SessionsEditorService } from './sessionsEditorService.js';
@@ -1644,7 +1645,10 @@ export abstract class Workbench extends Disposable {
 				void workspaceProjectionReady.complete();
 			});
 			if (this.isDisposed) return;
-			return this.restoreEditorWorkingSet(services, editor, entryLayout, terminalContribution, workspaceProjectionReady.p, hasBrowser);
+			await this.restoreEditorWorkingSet(services, editor, entryLayout, terminalContribution, workspaceProjectionReady.p, hasBrowser);
+			if (!this.isDisposed && options.nativeHostApi) {
+				await services.get(IChatWindowService).restoreWindows();
+			}
 		});
 		void whenRestored.catch(error => workspaceProjectionReady.error(error));
 		return whenRestored;

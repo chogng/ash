@@ -75,6 +75,7 @@ import { ISessionsManagementService } from '../../services/sessions/common/sessi
 import type { ISession, IUntitledChatSession } from '../../services/sessions/common/session.js';
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IChatWindowService } from '../../../workbench/contrib/chatWindow/browser/chatWindow.js';
+import { registerTestChatWindowParts } from '../../../workbench/contrib/chatWindow/test/browser/chatWindowTestServices.js';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { ServiceCollection } from '../../../platform/instantiation/common/serviceCollection.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
@@ -332,6 +333,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		},
 	};
 	const editorRoot = createCodeEditorServices(resources);
+	registerTestWorkbenchHostServices(editorRoot, createDisconnectedRendererApi());
 	editorRoot.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	registerTestExtensionService(resources, editorRoot);
 	const services = resources.add(editorRoot.createChild());
@@ -450,6 +452,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	dom.window.document.title = 'Ash Sessions';
 	registerTitleService(dom.window.document.body, 'Ash', paneServices);
 	const titleService = paneServices.get(ITitleService);
+	registerTestChatWindowParts(resources, paneServices, dom.window.document.body, paneServices.get(IAuxiliaryWindowService));
 	const titlebar = dom.window.document.querySelector('.ash-sessions-titlebar');
 	assert.ok(titlebar);
 	assert.equal(dom.window.document.querySelectorAll('.ash-sessions-titlebar').length, 1);

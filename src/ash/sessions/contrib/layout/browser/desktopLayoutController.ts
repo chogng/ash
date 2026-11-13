@@ -1,4 +1,4 @@
-import { type IObservable } from '../../../../base/common/observable.js';
+import { type IObservable, type IReader } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { localize } from '../../../../nls.js';
 import { BaseLayoutController } from './baseSessionLayoutController.js';
@@ -26,7 +26,7 @@ import { ISessionEditorWorkingSetService } from '../common/sessionEditorWorkingS
 /** The entry owner supplies policy; the controller never owns another product selection. */
 export interface IDesktopLayoutContext {
 	readonly isSessionContent: boolean;
-	readonly canRestoreSessionEditors: boolean;
+	readonly sessionEditorRestorationEnabled: IObservable<boolean>;
 	readonly isDocumentContent: boolean;
 	readonly documentContent: IObservable<boolean>;
 	readonly isChangingContent: boolean;
@@ -102,7 +102,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 
 	private get documentGroups(): readonly IEditorGroupView[] {
 		const otherGroups = new Set([...this.liveGroups].filter(([key]) => key !== this.currentWorkingSet).flatMap(([, ids]) => ids));
-		return this.editor.groups.filter(group => group.id !== this.pageGroupId && !otherGroups.has(group.id));
+		return (this.editor as EditorParts).mainWindowGroups.filter(group => group.id !== this.pageGroupId && !otherGroups.has(group.id));
 	}
 	private get documentsVisible(): boolean { return this.context.isDocumentContent && this.layout.isPartVisible('editor'); }
 	public get hasDocumentEditors(): boolean { return this.documentGroups.some(group => group.inputs.some(input => !this.tabs.isManaged(input))); }
@@ -117,9 +117,10 @@ export class DesktopLayoutController extends BaseLayoutController {
 		}
 		this.codeGroupsVisible = visible;
 		if (visible && this.codeLayout) {
-			(this.editor as EditorParts).restoreWorkingSetLayout(this.codeLayout, new Map(this.editor.groups.map(group => [group.id, group.id])));
+			const editor = this.editor as EditorParts;
+			editor.restoreWorkingSetLayout(this.codeLayout, new Map(editor.mainWindowGroups.map(group => [group.id, group.id])));
 		}
-		for (const group of this.editor.groups) {
+		for (const group of (this.editor as EditorParts).mainWindowGroups) {
 			if (group.id !== this.pageGroupId && (!visible || !this.documentGroups.includes(group))) this.editor.setGroupVisible(group.id, false);
 			else if (visible && !this.codeLayout && group.id !== this.pageGroupId) this.editor.setGroupVisible(group.id, true);
 		}
@@ -164,11 +165,14 @@ export class DesktopLayoutController extends BaseLayoutController {
 		else { this.layout.hidePart('editor'); }
 	}
 
-	protected override canRestoreSessionEditors(): boolean { return this.context.canRestoreSessionEditors; }
+	protected override canRestoreSessionEditors(reader?: IReader): boolean {
+		return this.context.sessionEditorRestorationEnabled.read(reader);
+	}
 	protected override shouldShowEditor(): boolean {
 		return !this.context.isSessionContent || (this.context.isDocumentContent && (
 			(this.layout.isPartRequested('editor') && (this.editor as EditorParts).filesDetailsOpen)
-			|| (this.editors.visibleEditors.length > 0 && (this.layout.isPartRequested('editor') || !this.editors.activeEditor || !this.tabs.isManaged(this.editors.activeEditor)))
+			|| (this.documentGroups.some(group => this.editor.isGroupVisible(group.id) && !!group.activeInput)
+				&& (this.layout.isPartRequested('editor') || !this.editors.activeEditor || !this.tabs.isManaged(this.editors.activeEditor)))
 		));
 	}
 	protected override isEditorAutoVisibilitySuppressed(): boolean { return super.isEditorAutoVisibilitySuppressed() || this.context.isChangingContent; }
@@ -178,22 +182,23 @@ export class DesktopLayoutController extends BaseLayoutController {
 		this.currentWorkingSet = key;
 		const groups = this.documentGroups;
 		this.liveGroups.set(key, groups.map(group => group.id));
-		const saved = this.editor.saveWorkingSet(key, this.editor.groups.filter(group => !groups.includes(group)).map(group => group.id));
+		const saved = this.editor.saveWorkingSet(key, (this.editor as EditorParts).mainWindowGroups.filter(group => !groups.includes(group)).map(group => group.id));
 		if (this.codeGroupsVisible || !this.codeLayout) return saved;
 		// Entry switches hide the same live groups. Persist their Code visibility and
 		// active group rather than the temporary hidden projection used by Chat/pages.
 		return (this.editor as EditorParts).withWorkingSetLayout(saved, this.codeLayout, this.codeActiveGroup);
 	}
 	protected override async applyWorkingSet(saved: EditorWorkingSet | 'empty', key = saved === 'empty' ? 'empty' : saved.id): Promise<void> {
-		if (saved !== 'empty') saved = (this.editor as EditorParts).migrateWorkingSet(saved);
-		const previous = this.editor.groups.map(group => group.id);
+		const editor = this.editor as EditorParts;
+		if (saved !== 'empty') saved = editor.migrateWorkingSet(saved);
+		const previous = editor.mainWindowGroups.map(group => group.id);
 		let incoming = this.liveGroups.get(key)?.filter(id => previous.includes(id));
 		const reused = !!incoming?.length;
 		if (!incoming?.length) {
 			await this.editor.applyWorkingSet(saved, { preserveFocus: true, preserveGroups: previous });
-			incoming = this.editor.groups.filter(group => !previous.includes(group.id)).map(group => group.id);
+			incoming = editor.mainWindowGroups.filter(group => !previous.includes(group.id)).map(group => group.id);
 			const owned = new Set([...this.liveGroups.values()].flat());
-			for (const group of [...this.editor.groups]) {
+			for (const group of editor.mainWindowGroups) {
 				if (group.id !== this.pageGroupId && previous.includes(group.id) && !owned.has(group.id) && group.inputs.length === 0) await this.editor.removeGroup(group);
 			}
 		}
@@ -204,7 +209,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 			const mapping = new Map(saved.groups.flatMap((group, index) => incoming[index] === undefined || group.id === undefined ? [] : [[group.id, incoming[index]!] as const]));
 			(this.editor as EditorParts).restoreWorkingSetLayout(saved, mapping);
 		}
-		for (const group of this.editor.groups) {
+		for (const group of editor.mainWindowGroups) {
 			if (!incoming.includes(group.id)) this.editor.setGroupVisible(group.id, false);
 		}
 		if (!this.codeGroupsVisible) {

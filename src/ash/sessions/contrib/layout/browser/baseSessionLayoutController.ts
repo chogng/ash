@@ -3,6 +3,7 @@ import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, constObservable, derived, observableSignalFromEvent } from '../../../../base/common/observable.js';
+import type { IReader } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -171,7 +172,7 @@ export abstract class BaseLayoutController extends Disposable {
 			workspaceChanged.read(reader);
 			partVisibilityChanged.read(reader);
 
-			if (!selection || selected.visibleSelections.length !== 1 || !this.canRestoreSessionEditors()) {
+			if (!this.canRestoreSessionEditors(reader) || !selection || selected.visibleSelections.length !== 1) {
 				this.editorWorkingSets.setRestoreState({ ...this.editorWorkingSets.restoreState.get(), restoring: false, applying: false });
 				return;
 			}
@@ -256,7 +257,7 @@ export abstract class BaseLayoutController extends Disposable {
 	protected getWorkingSet(key: string): EditorWorkingSet { return this.editor.saveWorkingSet(key); }
 	protected isEditorAutoVisibilitySuppressed(): boolean { return this.restoring || this.layout.isEditorPartAutoVisibilitySuppressed(); }
 	protected shouldShowEditor(): boolean { return this.editors.visibleEditors.length > 0 || !this.layout.isPartVisible('sessions'); }
-	protected canRestoreSessionEditors(): boolean { return this.layout.isPartVisible('sessions'); }
+	protected canRestoreSessionEditors(_reader?: IReader): boolean { return this.layout.isPartVisible('sessions'); }
 	protected applyWorkingSet(saved: EditorWorkingSet | 'empty', _key?: string): Promise<void> { return this.editor.applyWorkingSet(saved, { preserveFocus: true }); }
 	protected async onSessionRestored(_selection: SessionsViewSelection, _hasSavedEditors: boolean): Promise<void> { }
 	protected onSessionIdentityChanged(_from: string, _to: string): void { }

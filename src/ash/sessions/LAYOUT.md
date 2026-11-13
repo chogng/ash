@@ -273,7 +273,7 @@ Explicit session and chat open actions dismiss the active custom view. Reactive 
 
 ## Part lifecycle
 
-Web and Electron register `IChatWindowService` and `ITitleService` in the Agents Window scope. The Workbench chat window service tracks pending and open popups by retained view and releases each popup and its titlebar registration on close. `SessionsPart` owns the conversation and its grid placeholder, and reattaches the same view to the main window before the popup is disposed.
+The Workbench chat-window service registers each popup's chat, editor and terminal parts with the editor-group coordinator. The Sessions provider resolves tab resources against retained views. `SessionsPart` owns those views and their grid placeholders. The Sessions working-set controller changes groups in the main window independently of popup groups. Returning a popup selects its active chat, waits for the destination working set, then moves its editors and live terminal tabs. Desktop startup restores chat resources and editor working sets from workspace storage after the session catalog is ready.
 
 The workbench:
 

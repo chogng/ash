@@ -58,7 +58,10 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 	private navigationQueue = Promise.resolve();
 	public isChangingContent = false;
 	public get isSessionContent(): boolean { return !this.customViews.activeCustomView.get() && this.activeEntry.get()?.content !== 'editor'; }
-	public get canRestoreSessionEditors(): boolean { return this.isSessionContent && !this.activeEntry.get()?.chatSource; }
+	public readonly sessionEditorRestorationEnabled = derived(reader => {
+		const entry = this.activeEntry.read(reader);
+		return !this.customViews.activeCustomView.read(reader) && entry?.content !== 'editor' && !entry?.chatSource;
+	});
 	public get isDocumentContent(): boolean { return this.documentContent.get(); }
 	public get newSessionCommand(): string | undefined { return this.customViews.activeCustomView.get() ? undefined : this.activeEntry.get()?.newSessionCommand; }
 
@@ -108,6 +111,11 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		}
 		this.controller = this._register(instantiation.createInstance(DesktopLayoutController, this.pageGroupId, this));
 		this.controller.start();
+		this._register((editor as EditorParts).bindWindowEditorReturn(async () => {
+			// Code restores its session's editor groups on entry. Pick the destination after that restore.
+			if (!this.isDocumentContent) await this.openEntry(documentEntry);
+			await this.controller.whenSettled();
+		}));
 		this._register(instantiation.createInstance(EditorTitleMenuBridgeContribution, this.controller, this));
 		this._register(storage.onWillSaveState(() => this.saveVisibility()));
 		this._register(lifecycle.onWillShutdown(event => event.join(this.navigationQueue.then(() => this.saveVisibility()), 'Sessions entry layout')));
@@ -115,6 +123,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		const revealActiveEditor = (explicit = false): void => {
 			if (this.customViews.activeCustomView.get()) { return; }
 			if (editor.isModalEditorVisible || this.isChangingContent || this.controller.isRestoringEditors || !editors.activeEditor) { return; }
+			if (!(editor as EditorParts).mainWindowGroups.some(group => group.id === editor.activeGroup.id)) return;
 			if (editor.activeGroup.id === this.pageGroupId && !editor.isGroupVisible(this.pageGroupId)) { return; }
 			const entry = this.editorEntries.get(extUri.getComparisonKey(editors.activeEditor.resource)) ?? documentEntry;
 			if (entry.id !== this.activeEntry.get()?.id) {

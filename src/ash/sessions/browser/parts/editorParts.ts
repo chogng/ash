@@ -140,6 +140,7 @@ export class EditorParts extends WorkbenchEditorParts {
 	public readonly onDidRevealActiveEditor = this.revealed.event;
 	private inWorkingSet: (id: number) => boolean = () => true;
 	private applying = false;
+	private waitForWorkingSet = () => Promise.resolve();
 	private readonly hosts: ReadonlyMap<DesktopEditorTool, EditorPart>;
 	public readonly filesPart: DesktopMainEditorPart;
 
@@ -217,9 +218,9 @@ export class EditorParts extends WorkbenchEditorParts {
 			this._register(this.onDidChangeEditors(event => {
 				if (this.applying) { return; }
 				if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed') {
-					const host = this.owner(event.groupId);
-					const group = host.groups.find(candidate => candidate.id === event.groupId);
-					if (host !== filesPart && group && group.inputs.length === 0) { host.setGroupVisible(group.id, false); }
+					const host = [...this.hosts.values()].find(part => part.groups.some(group => group.id === event.groupId));
+					const group = host?.groups.find(candidate => candidate.id === event.groupId);
+					if (host && host !== filesPart && group && group.inputs.length === 0) { host.setGroupVisible(group.id, false); }
 				}
 				this.syncArea();
 			}));
@@ -231,6 +232,7 @@ export class EditorParts extends WorkbenchEditorParts {
 	}
 
 	public get pageGroupId(): number { return this.filesPart.pageGroupId; }
+	public get mainWindowGroups(): readonly IEditorGroupView[] { return [...this.hosts.values()].flatMap(part => part.groups); }
 	public get filesDetailsOpen(): boolean { return this.filesPart.detailsOpen; }
 	public get filesDetailsVisible(): boolean { return this.filesPart.detailsVisible; }
 	public get fileEditorsVisible(): boolean {
@@ -263,7 +265,7 @@ export class EditorParts extends WorkbenchEditorParts {
 		const productPage = this.filesPart.isGroupVisible(this.pageGroupId);
 		this.area.syncVisible([...this.hosts]
 			.filter(([tool, part]) => (!productPage || tool === 'files') && part.groups.some(group => part.isGroupVisible(group.id)))
-			.map(([tool]) => tool), this.toolForGroup(this.activeGroup.id), productPage);
+			.map(([tool]) => tool), this.isWindowEditorPart(this.activePart) ? undefined : this.toolForGroup(this.activeGroup.id), productPage);
 	}
 
 	private toolForGroup(groupId: number): DesktopEditorTool {
@@ -282,7 +284,31 @@ export class EditorParts extends WorkbenchEditorParts {
 		return { ...super.getEditorState(), groups: this.groups.map(group => group.getEditorState()) };
 	}
 
+	public override getWindowEditorReturnGroup(input: IResourceEditorInput): IEditorGroupView {
+		const part = this.hosts.get(editorTool(input))!;
+		return part instanceof DesktopToolEditorPart ? part.resolveDefaultGroup(input) : this.filesPart.resolveDefaultGroup(input);
+	}
+
+	public override revealReturnedEditors(group: IEditorGroupView): void {
+		this.activateGroup(group.id);
+		this.syncArea();
+		this.area.revealTool(this.toolForGroup(group.id));
+		this.revealed.fire();
+	}
+
+	public bindWindowEditorReturn(whenReady: () => Promise<void>): IDisposable {
+		this.waitForWorkingSet = whenReady;
+		return toDisposable(() => { this.waitForWorkingSet = () => Promise.resolve(); });
+	}
+
+	public override whenReadyForWindowEditorReturn(): Promise<void> { return this.waitForWorkingSet(); }
+
 	public override async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
+		const targetGroupId = typeof target === 'object' ? target.groupId : undefined;
+		const targetPart = targetGroupId !== undefined
+			? this.parts.find(part => part.groups.some(group => group.id === targetGroupId))
+			: this.activePart;
+		if (targetPart && this.isWindowEditorPart(targetPart)) return super.openEditor(input, options, target);
 		const tool = editorTool(input);
 		const host = this.hosts.get(tool)!;
 		const groupId = typeof target === 'object' ? target.groupId : undefined;
@@ -348,7 +374,7 @@ export class EditorParts extends WorkbenchEditorParts {
 	}
 
 	public getToolGroups(accepts: (input: IResourceEditorInput) => boolean, options: { readonly emptyGroupId?: number; } = {}): readonly IEditorGroupView[] {
-		return this.groups.filter(group => group.id !== this.pageGroupId && this.inWorkingSet(group.id)
+		return this.mainWindowGroups.filter(group => group.id !== this.pageGroupId && this.inWorkingSet(group.id)
 			&& (group.inputs.some(accepts) || group.id === options.emptyGroupId));
 	}
 

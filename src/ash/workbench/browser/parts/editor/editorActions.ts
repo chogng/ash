@@ -11,7 +11,7 @@ import type { ExtensionFileTemplateDefinition } from '../../../services/extensio
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { IUntitledTextEditorService } from '../../../services/untitled/common/untitledTextEditorService.js';
 import { UntitledTextEditorInput } from '../../../services/untitled/common/untitledTextEditorInput.js';
-import { ActiveEditorFirstInGroupContext, EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext, EditorsVisibleContext, IsSessionsWindowContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from '../../../common/contextkeys.js';
+import { ActiveEditorFirstInGroupContext, EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext, EditorPartSupportsGroupSplittingContext, EditorsVisibleContext, IsSessionsWindowContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from '../../../common/contextkeys.js';
 import { IEditorPartsService } from './editorParts.js';
 import { ActiveGroupEditorsByMostRecentlyUsedQuickAccess, AllEditorsByMostRecentlyUsedQuickAccess } from './editorQuickAccess.js';
 import { EditorEnablePreviewConfiguration } from './editorConfiguration.js';
@@ -24,7 +24,10 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { EditorOpenSideBySideDirectionConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 
 export const SPLIT_EDITOR = 'workbench.action.splitEditor';
-const editorGroupSplitting = ContextKeyExpr.not(IsSessionsWindowContext.key);
+const editorGroupSplitting = ContextKeyExpr.or(
+	EditorPartSupportsGroupSplittingContext.isEqualTo(true),
+	ContextKeyExpr.not(IsSessionsWindowContext.key),
+);
 
 registerAction2(class SplitEditorAction extends Action2 {
 	constructor() {

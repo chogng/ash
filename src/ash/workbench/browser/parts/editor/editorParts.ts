@@ -21,7 +21,7 @@ import { EditorCloseEmptyGroupsConfiguration } from '../../../services/editor/co
 import { parseAuxiliaryWindowState, type AuxiliaryWindowOpenOptions, type AuxiliaryWindowState, type IAuxiliaryWindow, type IAuxiliaryWindowService } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 
 import { editorInputKey } from './editorTabsControl.js';
-import type { EditorCloseAllOptions, IEditorPart } from './editorPart.js';
+import { EditorPart, type EditorCloseAllOptions, type IEditorPart, type IEditorPartOptions } from './editorPart.js';
 import type { IEditorGroupView } from './editor.js';
 import type { IEditorGroup, IFindGroupScope } from '../../../services/editor/common/editorGroupsService.js';
 import {
@@ -43,6 +43,11 @@ export interface IEditorPartsService extends IEditorPart {
 	readonly parts: readonly IEditorPart[];
 	readonly activePart: IEditorPart;
 	readonly onDidCreateAuxiliaryEditorPart: Event<IEditorPart>;
+	createEditorPart(container: HTMLElement, options: IEditorPartOptions): IEditorPart;
+	registerWindowEditorPart(part: IEditorPart, getDefaultPart: () => IEditorPart): IDisposable;
+	getWindowEditorReturnGroup(input: IResourceEditorInput): IEditorGroupView;
+	revealReturnedEditors(group: IEditorGroupView): void;
+	whenReadyForWindowEditorReturn(): Promise<void>;
 	createAuxiliaryEditorPart(options?: AuxiliaryWindowOpenOptions): Promise<IEditorPart>;
 	/** Opens one window for the selected instances; copies share content but receive new instance identities. */
 	openEditorsInNewWindow(editors: readonly EditorIdentifier[], mode: 'move' | 'copy'): Promise<IEditorPart | undefined>;
@@ -64,6 +69,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	private readonly auxiliaryCreatedEmitter = this._register(new Emitter<IEditorPart>());
 	private readonly partWindows = new Map<IEditorPart, IAuxiliaryWindow>();
 	private readonly embedded = new Map<IEditorPart, { readonly accepts: (input: IResourceEditorInput) => boolean; readonly reveal: () => void; }>();
+	private readonly windowParts = new Map<IEditorPart, () => IEditorPart>();
 	private readonly auxiliary = this._register(new DisposableMap<IEditorPart, AuxiliaryEditorPart>());
 	private readonly partListeners = this._register(new DisposableMap<IEditorPart, DisposableStore>());
 	private _activePart: IEditorPart;
@@ -93,7 +99,34 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		}));
 	}
 
-	get parts(): readonly IEditorPart[] { return [this.mainPart, ...this.embedded.keys(), ...this.auxiliary.keys()]; }
+	get parts(): readonly IEditorPart[] { return [this.mainPart, ...this.embedded.keys(), ...this.auxiliary.keys(), ...this.windowParts.keys()]; }
+
+	createEditorPart(container: HTMLElement, options: IEditorPartOptions): IEditorPart {
+		if (!(this.mainPart instanceof EditorPart)) throw new Error('The main editor part cannot create a window editor part');
+		return this.mainPart.createEditorPart(container, options);
+	}
+
+	/** The window owner handles close and persistence. Register its groups for ordinary editor commands. */
+	registerWindowEditorPart(part: IEditorPart, getDefaultPart: () => IEditorPart): IDisposable {
+		this.windowParts.set(part, getDefaultPart);
+		this.registerPart(part, undefined, true);
+		for (const group of part.groups) this.editorChangeEmitter.fire({ kind: 'groupAdded', group: group.getEditorState() });
+		return toDisposable(() => {
+			this.windowParts.delete(part);
+			this.partListeners.deleteAndDispose(part);
+			if (this._activePart === part) this.setActivePart(this.mainPart);
+			for (const group of part.groups) this.editorChangeEmitter.fire({ kind: 'groupRemoved', groupId: group.id });
+		});
+	}
+
+	protected isWindowEditorPart(part: IEditorPart): boolean { return this.windowParts.has(part); }
+
+	getWindowEditorReturnGroup(_input: IResourceEditorInput): IEditorGroupView { return this.getReturnGroup(); }
+	revealReturnedEditors(group: IEditorGroupView): void {
+		this.activateGroup(group.id);
+		group.focus();
+	}
+	whenReadyForWindowEditorReturn(): Promise<void> { return Promise.resolve(); }
 
 	/** A host retains ownership and persistence of an embedded part; commands share this coordinator. */
 	public registerEditorPart(part: IEditorPart, accepts: (input: IResourceEditorInput) => boolean, reveal: () => void): IDisposable {
@@ -319,6 +352,10 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	}
 
 	async openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<IEditorPane> {
+		const windowPart = typeof target === 'object'
+			? [...this.windowParts.keys()].find(part => part.groups.some(group => group.id === target.groupId))
+			: this.windowParts.get(this._activePart)?.();
+		if (windowPart) return windowPart.openEditor(input, options, target);
 		if ((input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton) {
 			const owner = this.findPartForInput(input);
 			if (owner) {
@@ -466,7 +503,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 					const target = event === 'focus' ? part.domNode.ownerDocument.activeElement : e.target;
 					if (part === this.mainPart && this.embedded.size > 0) {
 						const focused = [this.mainPart, ...this.embedded.keys()].find(candidate => candidate.domNode.contains(target as Node));
-						if (focused) { this.setActivePart(focused); }
+						if (focused || this.isWindowEditorPart(this._activePart)) this.setActivePart(focused ?? this.mainPart);
 						return;
 					}
 					if ([...this.embedded.keys()].some(candidate => candidate.domNode.contains(target as Node))) { return; }

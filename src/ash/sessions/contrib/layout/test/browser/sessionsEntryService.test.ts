@@ -54,12 +54,12 @@ suite('SessionsEntryService lifecycle and focus', () => {
 		await fixture.service.openEntry({ ...chatEntry, chatSource });
 		assert.deepEqual(fixture.chatSource, [chatSource]);
 		assert.deepEqual(fixture.conversationKinds, []);
-		assert.equal(fixture.service.canRestoreSessionEditors, false);
+		assert.equal(fixture.service.sessionEditorRestorationEnabled.get(), false);
 		assert.equal(fixture.focused, 'conversation');
 		await fixture.service.openEntry(documentEntry);
 		assert.deepEqual(fixture.chatSource, [chatSource, undefined]);
 		assert.deepEqual(fixture.conversationKinds, ['code']);
-		assert.equal(fixture.service.canRestoreSessionEditors, true);
+		assert.equal(fixture.service.sessionEditorRestorationEnabled.get(), true);
 	});
 
 	test('Artifacts borrows the ordinary Chat entry from Code and on restore', async () => {
@@ -664,6 +664,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(IContextKeyService, this.contextKeys);
 		this.services.registerInstance(IWorkspaceContextService, this.workspace);
 		this.services.registerInstance(IEditorPart, {
+			bindWindowEditorReturn: () => Disposable.None,
 			setGroupScope: () => Disposable.None,
 			saveWorkingSet: () => ({}),
 			restoreLayout() { },
@@ -674,7 +675,7 @@ class EntryFixture extends Disposable {
 			openFiles: async () => { fixture.filesDetailsOpen = true; fixture.focused = 'files'; },
 			isGroupVisible: (id: string) => this.groupVisibility.get(id) ?? true,
 			filesPart: { isEditorVisible: false, onDidChangeDetailsVisibility: Event.None, setEditorVisible() { }, hideDetails() { fixture.filesDetailsOpen = false; }, showDetails() { fixture.filesDetailsOpen = true; }, auxiliaryBar: { focus() { fixture.focused = 'files'; } }, fileGroups: [documentGroup] },
-			pageGroupId: pageGroup.id, groups: [documentGroup, pageGroup], activeGroup: documentGroup,
+			pageGroupId: pageGroup.id, groups: [documentGroup, pageGroup], mainWindowGroups: [documentGroup, pageGroup], activeGroup: documentGroup,
 			onDidChangeEditors: this.editorChanged.event,
 			onDidRevealActiveEditor: this.revealActiveEditor.event,
 			get isModalEditorVisible() { return fixture.modalVisible; },

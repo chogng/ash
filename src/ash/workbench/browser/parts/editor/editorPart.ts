@@ -66,7 +66,7 @@ import { ModalEditorPart, type ModalEditorPartOptions } from './modalEditorPart.
 import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from '../../../services/editor/common/editorState.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import { EditorCloseEmptyGroupsConfiguration, EditorOpenSideBySideDirectionConfiguration } from '../../../services/editor/common/editorConfiguration.js';
-import { EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext } from '../../../common/contextkeys.js';
+import { EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext, EditorPartSupportsGroupSplittingContext } from '../../../common/contextkeys.js';
 
 export { EditorOpenSupersededError } from './editorGroupView.js';
 
@@ -217,7 +217,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	constructor(
 		container: HTMLElement,
-		options: IEditorPartOptions,
+		private readonly options: IEditorPartOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
@@ -328,6 +328,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this._register(this.modalEditor.onDidRequestClose(input => {
 			void this.closeEditor(input).catch(reportEditorCloseError);
 		}));
+	}
+
+	/** Builds another editor region with this host's document and editor capabilities. */
+	createEditorPart(container: HTMLElement, options: IEditorPartOptions): EditorPart {
+		return this.instantiationService.createInstance(EditorPart, container, { ...this.options, ...options });
 	}
 
 	get groups(): readonly IEditorGroupView[] {
@@ -914,6 +919,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	private layoutEditorContent(): void {
 		this.groupOptions.contextKeyService?.bufferChangeEvents(() => {
+			this.groupOptions.contextKeyService!.setContext(EditorPartSupportsGroupSplittingContext.key, this.supportsGroupSplitting);
 			this.groupOptions.contextKeyService!.setContext(EditorPartMultipleEditorGroupsContext.key, this.supportsGroupSplitting && this._groups.length > 1);
 			this.groupOptions.contextKeyService!.setContext(EditorPartMaximizedEditorGroupContext.key, this.hasMaximizedGroup());
 		});

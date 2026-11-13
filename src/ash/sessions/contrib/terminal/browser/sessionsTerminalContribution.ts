@@ -31,7 +31,7 @@ export function registerSessionsTerminalContribution(
 	const disposables = new DisposableStore();
 	const terminalVisible = terminalVisibleContext.bindTo(contextKeys);
 	const updateVisibility = (): void => {
-		terminalVisible.set(layout.isPartVisible('editor') && editor.groups.some(group =>
+		terminalVisible.set(layout.isPartVisible('editor') && editor.mainWindowGroups.some(group =>
 			editor.isGroupVisible(group.id) && group.activeInput instanceof TerminalEditorInput));
 	};
 	updateVisibility();
@@ -43,6 +43,7 @@ export function registerSessionsTerminalContribution(
 	const isTerminal = (input: unknown): input is TerminalEditorInput => input instanceof TerminalEditorInput;
 	const hasShell = (input: TerminalEditorInput, terminalEditors: ITerminalEditorService): boolean =>
 		input.panes.get().some(pane => terminalEditors.getInstanceFromResource(pane.resource));
+	const terminalGroups = () => editor.groups.filter(group => group.inputs.some(isTerminal));
 	const restoring = new WeakMap<TerminalEditorInput, Promise<boolean>>();
 	const restoreTab = (
 		input: TerminalEditorInput, group: IEditorGroupView, terminals: ITerminalService, terminalEditors: ITerminalEditorService,
@@ -56,7 +57,7 @@ export function registerSessionsTerminalContribution(
 		if (pending) return pending;
 		const scope = workspace.getWorkspace();
 		const isCurrent = () => !disposables.isDisposed && !options.willShutdown?.() && workspace.getWorkspace() === scope
-			&& group.inputs.includes(input) && editor.getToolGroups(isTerminal).includes(group);
+			&& group.inputs.includes(input) && terminalGroups().includes(group);
 		const operation = Promise.resolve().then(async () => {
 			if (!isCurrent()) return false;
 			if (hasShell(input, terminalEditors)) return true;
@@ -107,13 +108,19 @@ export function registerSessionsTerminalContribution(
 		const log = accessor.get(ILogService);
 		const attempted = new WeakSet<TerminalEditorInput>();
 		const restoreVisibleTabs = async (): Promise<void> => {
-			if (disposables.isDisposed || lifecycle.willShutdown || !contextKeys.contextMatchesRules(codeVisible) || !layout.isPartVisible('editor')) return;
-			for (const group of editor.getToolGroups(isTerminal)) {
+			if (disposables.isDisposed || lifecycle.willShutdown) return;
+			const mainVisible = contextKeys.contextMatchesRules(codeVisible) && layout.isPartVisible('editor');
+			const localGroups = new Set(mainVisible ? editor.getToolGroups(isTerminal) : []);
+			const mainGroups = new Set(editor.mainWindowGroups);
+			for (const group of terminalGroups()) {
+				if (mainGroups.has(group) && (!localGroups.has(group) || !editor.isGroupVisible(group.id))) continue;
 				const input = group.activeInput;
-				if (!isTerminal(input) || !editor.isGroupVisible(group.id) || attempted.has(input) || hasShell(input, terminalEditors)) continue;
+				if (!isTerminal(input) || attempted.has(input) || hasShell(input, terminalEditors)) continue;
 				attempted.add(input);
 				try {
-					if (!await restoreTab(input, group, terminals, terminalEditors, workspace, { willShutdown: () => lifecycle.willShutdown })) attempted.delete(input);
+					if (!await restoreTab(input, group, terminals, terminalEditors, workspace, { willShutdown: () => lifecycle.willShutdown })) {
+						attempted.delete(input);
+					}
 				} catch (error) {
 					if (!isCancellationError(error)) log.error('terminal', error);
 				}
@@ -122,6 +129,7 @@ export function registerSessionsTerminalContribution(
 		const scheduler = disposables.add(new RunOnceScheduler(() => { void restoreVisibleTabs(); }, 0));
 		disposables.add(editor.onDidChangeEditors(() => scheduler.schedule()));
 		disposables.add(layout.onDidChangePartVisibility(() => scheduler.schedule()));
+		disposables.add(workspace.onDidChangeWorkspace(() => scheduler.schedule()));
 		return restoreVisibleTabs();
 	};
 
