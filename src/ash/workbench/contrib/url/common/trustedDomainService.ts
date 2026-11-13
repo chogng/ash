@@ -12,4 +12,7 @@ export interface ITrustedDomainService {
 	/** The editable JSONC document is the sole persisted representation. */
 	readonly content: string;
 	setTrustedDomains(content: string, expectedContent?: string): Promise<void>;
+	addTrustedDomain(pattern: string): Promise<void>;
+	updateTrustedDomain(original: string, pattern: string): Promise<string>;
+	removeTrustedDomain(pattern: string): Promise<void>;
 }

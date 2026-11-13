@@ -2,7 +2,8 @@ import '../../../services/language/common/languageServerLifecycleService.js';
 import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
 import { BrowserOpenLocalhostLinksSettingId } from '../../../../platform/browserView/common/browserView.js';
 import { BrowserNewTabPlacementSettingId } from '../../browserView/common/browserView.js';
-import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
+import type { IConfiguredSetting, ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
+import { TRUSTED_DOMAINS_SETTING_ID } from '../../url/browser/trustedDomains.js';
 import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
 import { MEMORY_SETTINGS_CATEGORY, memorySettingsTitle } from '../../memories/browser/memorySettings.js';
@@ -123,6 +124,7 @@ export const SettingsNavigation = [
 							'window.menuStyle',
 							'window.zoomLevel',
 							'window.zoomPerWindow',
+							'window.confirmBeforeClose',
 							'workbench.tree.*',
 							'workbench.list.smoothScrolling',
 						],
@@ -220,6 +222,12 @@ export const SettingsNavigation = [
 						label: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.label' }, 'ChatGPT'),
 						description: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.description' }, 'Configure ChatGPT in this window.'),
 						settings: ['sessions.chatgpt.defaultBackend', 'sessions.chatgpt.optimizeScrolling'],
+					},
+					{
+						id: 'trusted-domains',
+						label: localize({ bundle: 'ash.settings', key: 'trustedDomains.title' }, 'Trusted domains'),
+						description: '',
+						settings: [TRUSTED_DOMAINS_SETTING_ID],
 					},
 				],
 			},
@@ -840,7 +848,7 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 			.map(group => {
 				// Each group applies the same rules to every remaining setting.
 				const patterns = group.settings.map(settingIdPattern);
-				const matches = [...remaining.values()].filter(setting => setting.configuration.source?.id === group.source && patterns.some(pattern => pattern.test(setting.id)));
+				const matches = [...remaining.values()].filter(setting => setting.configuration?.source?.id === group.source && patterns.some(pattern => pattern.test(setting.id)));
 				for (const setting of matches) remaining.delete(setting.id);
 				return {
 					id: group.id,
@@ -852,13 +860,14 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 			.filter(group => group.settings.length > 0),
 	}));
 
-	const unplaced = [...remaining.values()].filter(setting => !setting.configuration.source);
+	const unplaced = [...remaining.values()].filter(setting => !setting.configuration?.source);
 	if (unplaced.length > 0) {
 		const ids = unplaced.map(setting => setting.id).sort().join(', ');
 		throw new Error(`Registered settings are missing from settingsLayout.ts: ${ids}`);
 	}
-	const extensions = new Map<string, ISetting[]>();
+	const extensions = new Map<string, IConfiguredSetting[]>();
 	for (const setting of remaining.values()) {
+		if (!setting.configuration) continue;
 		const source = setting.configuration.source;
 		if (!source) continue;
 		const entries = extensions.get(source.id) ?? [];
@@ -868,7 +877,7 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 	for (const [id, entries] of extensions) {
 		const source = entries[0].configuration.source!;
 		const label = source.displayName ?? id;
-		const sections = new Map<ISetting['configuration']['section'], ISetting[]>();
+		const sections = new Map<IConfiguredSetting['configuration']['section'], IConfiguredSetting[]>();
 		for (const setting of entries) {
 			const section = setting.configuration.section;
 			const matches = sections.get(section) ?? [];

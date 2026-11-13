@@ -39,6 +39,7 @@ import { ITextFileService } from '../../../../services/textfile/common/textfiles
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { ITrustedDomainService } from '../../common/trustedDomainService.js';
+import { TrustedDomainService } from '../../browser/trustedDomainService.js';
 import { TRUSTED_DOMAINS_URI } from '../../browser/trustedDomains.js';
 import '../../browser/url.contribution.js';
 
@@ -86,6 +87,60 @@ class URLFixture extends Disposable {
 suite('Workbench external link trust', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('initial HTTPS rules are editable and a saved empty list survives reopening', async () => {
+		using fixture = new URLFixture();
+		const domains = fixture.trustedDomains;
+		assert.equal(domains.isValid(URI.parse('https://learn.microsoft.com/en-us/')), true);
+		assert.equal(domains.isValid(URI.parse('https://openai.com/')), true);
+		assert.equal(domains.isValid(URI.parse('https://github.com/microsoft/vscode')), true);
+		assert.equal(domains.isValid(URI.parse('http://github.com/')), false);
+		assert.equal(domains.isValid(URI.parse('https://example.github.com/')), false);
+		const document = await fixture.files.readFile(TRUSTED_DOMAINS_URI);
+		assert.match(document.content, /\/\/ .*https:\/\/example\.com\/docs/u);
+		assert.match(document.content, /"https:\/\/github\.com"/u);
+		await domains.removeTrustedDomain('https://github.com/');
+		assert.equal(domains.isValid(URI.parse('https://github.com/')), false);
+		await domains.setTrustedDomains('[]');
+		using reopened = fixture.services.createInstance(TrustedDomainService);
+		assert.equal(reopened.content, '[]');
+		assert.deepEqual(reopened.trustedDomains, []);
+	});
+
+	test('editing rules preserves JSONC comments and revokes every equivalent entry', async () => {
+		using fixture = new URLFixture();
+		const domains = fixture.trustedDomains;
+		await domains.setTrustedDomains('// Keep this list\n["https://EXAMPLE.test", "https://example.test/", "keep.test",]\n');
+		await domains.addTrustedDomain(' https://example.test/ ');
+		assert.equal(domains.trustedDomains.length, 2);
+		await domains.addTrustedDomain('https://added.test/docs?source=settings#top');
+		await domains.removeTrustedDomain('https://example.test/');
+		assert.deepEqual(domains.trustedDomains, ['keep.test/', 'https://added.test/docs']);
+		assert.match(domains.content, /\/\/ Keep this list/);
+		assert.equal(domains.isValid(URI.parse('https://example.test')), false);
+		assert.equal(domains.isValid(URI.parse('https://added.test/docs/page')), true);
+		assert.equal(domains.isValid(URI.parse('https://added.test')), false);
+		const content = domains.content;
+		await assert.rejects(domains.addTrustedDomain('https://user@bad.test?query'), /Invalid trusted domain/);
+		assert.equal(domains.content, content);
+	});
+
+	test('replacing a rule keeps its position and comments and rejects invalid or stale edits', async () => {
+		using fixture = new URLFixture();
+		const domains = fixture.trustedDomains;
+		const original = 'https://example.test/';
+		const content = '[\n  "https://EXAMPLE.test", // primary\n  "keep.test",\n  "https://example.test/", // equivalent\n]\n';
+		await domains.setTrustedDomains(content);
+		await assert.rejects(domains.updateTrustedDomain(original, 'keep.test'), /already exists/);
+		await assert.rejects(domains.updateTrustedDomain(original, 'https://user@bad.test?query'), /Invalid trusted domain/);
+		assert.equal(domains.content, content);
+		await domains.updateTrustedDomain(original, 'https://replacement.test#top');
+		assert.equal(domains.content, content.replaceAll(/https:\/\/example\.test\/?/gi, 'https://replacement.test/'));
+		assert.deepEqual(domains.trustedDomains, ['https://replacement.test/', 'keep.test/']);
+		assert.equal(domains.isValid(URI.parse(original)), false);
+		assert.equal(domains.isValid(URI.parse('https://replacement.test')), true);
+		await assert.rejects(domains.updateTrustedDomain(original, '*'), /changed or been removed/);
+	});
+
 	test('the production contribution blocks default and contributed openers until an explicit decision', async () => {
 		using fixture = new URLFixture();
 		using contributed = fixture.opener.registerExternalOpener({ openExternal: async () => { assert.fail('Cancelled link reached a contributed opener'); } });
@@ -123,6 +178,7 @@ suite('Workbench external link trust', () => {
 		await assert.rejects(fixture.trustedDomains.setTrustedDomains('[]', 'stale source'), /changed/);
 		await assert.rejects(fixture.trustedDomains.setTrustedDomains('["*"] trailing garbage'), /JSONC/);
 		await assert.rejects(fixture.trustedDomains.setTrustedDomains('[true]'), /pattern/);
+		await assert.rejects(fixture.trustedDomains.setTrustedDomains('["https://example.test/?query"]'), /pattern/);
 		assert.equal(fixture.trustedDomains.content, source);
 		fixture.storage.store('http.linkProtectionTrustedDomains', 'invalid', StorageScope.APPLICATION, StorageTarget.USER);
 		assert.equal(fixture.trustedDomains.isValid(URI.parse('https://persisted.test')), false);
@@ -152,10 +208,13 @@ suite('Workbench external link trust', () => {
 		const content = '// retained user comment\n["https://managed.test/docs",]\n';
 		await fixture.files.writeFile({ resource: TRUSTED_DOMAINS_URI, content, expectedRevision: original.revision });
 		assert.equal(fixture.trustedDomains.content, content);
+		assert.deepEqual(fixture.trustedDomains.trustedDomains, ['https://managed.test/docs']);
 		assert.equal(await fixture.opener.open('https://managed.test/docs/page'), true);
-		await assert.rejects(fixture.files.writeFile({ resource: TRUSTED_DOMAINS_URI, content: '[]', expectedRevision: original.revision }), FileRevisionConflictError);
+		const draft = await fixture.files.readFile(TRUSTED_DOMAINS_URI);
+		await fixture.trustedDomains.updateTrustedDomain('https://managed.test/docs', 'https://edited.test/docs');
+		await assert.rejects(fixture.files.writeFile({ resource: TRUSTED_DOMAINS_URI, content: '[]', expectedRevision: draft.revision }), FileRevisionConflictError);
 		await assert.rejects(fixture.files.writeFile({ resource: TRUSTED_DOMAINS_URI, content: '[false]' }), /pattern/);
-		assert.equal((await fixture.files.readFile(TRUSTED_DOMAINS_URI)).content, content);
+		assert.equal((await fixture.files.readFile(TRUSTED_DOMAINS_URI)).content, content.replace('managed.test', 'edited.test'));
 		fixture.host.dispose();
 		assert.throws(() => fixture.files.readFile(TRUSTED_DOMAINS_URI));
 	});

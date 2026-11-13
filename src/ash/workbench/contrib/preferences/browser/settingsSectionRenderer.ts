@@ -78,7 +78,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 			this.fieldsDomNode = this.domNode;
 		}
 		this.actionsDomNode = h(document, 'div'); this.actionsDomNode.className = 'ash-settings-section-actions';
-		this._register(model.onDidChange(() => {
+		const changes = model.onDidChange?.(() => {
 			const focused = document.activeElement;
 			if (isHTMLElement(focused) && this.domNode.contains(focused)) { this.pendingFocus = focused; }
 			this.render();
@@ -91,7 +91,8 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 			if (document.activeElement !== document.body && (document.activeElement !== this.pendingFocus || !this.pendingFocus?.matches(':disabled'))) {
 				this.pendingFocus = undefined;
 			}
-		}));
+		});
+		if (changes) this._register(changes);
 		const key = `settingsSection-${generateUuid()}`;
 		const scope = this._register(contextKeys.createScoped(this.domNode)); scope.createKey(key, true);
 		const updateHint = (): void => {
@@ -112,7 +113,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 			}));
 		}
 		updateHint();
-		this._register(toDisposable(() => { this.model.setVisible(false); this.domNode.remove(); }));
+		this._register(toDisposable(() => { this.model.setVisible?.(false); this.domNode.remove(); }));
 	}
 
 	public renderSection(): HTMLElement {
@@ -128,7 +129,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 
 	public setVisible(visible: boolean): void {
 		this.isVisible = visible;
-		this.model.setVisible(visible);
+		this.model.setVisible?.(visible);
 		if (!visible) {
 			this.pendingFocus = undefined;
 			for (const control of this.controls.values()) {

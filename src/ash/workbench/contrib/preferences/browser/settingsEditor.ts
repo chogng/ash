@@ -8,6 +8,8 @@ import { ExtensionSettingBinding } from './extensionSettingBinding.js';
 import { GitHubSettingsModel } from '../../github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from './settingsSectionRenderer.js';
+import { trustedDomainsSetting } from '../../url/browser/trustedDomains.js';
+import { ITrustedDomainService } from '../../url/common/trustedDomainService.js';
 import { SnapshotSettingsRenderer } from './snapshotSettingsRenderer.js';
 import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -52,7 +54,6 @@ import { isSettingsEditorInput } from '../../../services/preferences/common/sett
 import { configurationSettingBinding, DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
 import type { SettingWidgetOptions } from './settingsWidgets.js';
 import { SettingsRenderer, SettingsPageRenderer } from './settingsRenderers.js';
-import { Event } from '../../../../base/common/event.js';
 import { AICustomizationManagementEditorInput } from '../../chat/browser/aiCustomization/aiCustomizationManagementEditorInput.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { LanguageServerSettingsRenderer } from './languageServerSettingsRenderer.js';
@@ -141,6 +142,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		@IStorageService storageService: IStorageService,
 		@ILanguageService private readonly languageService: ILanguageService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@ITrustedDomainService private readonly trustedDomains: ITrustedDomainService,
 	) {
 		super(SettingsEditorId, themeService, storageService);
 		this.configurationService = configurationService;
@@ -294,7 +296,6 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 				title: localize({ bundle: 'ash.settings', key: 'hooks.aria' }, 'Agent Hooks'),
 				description: localize({ bundle: 'ash.settings', key: 'hooks.managementLink' }, 'Manage Hooks in Agent Customizations.'),
 				help: localize({ bundle: 'ash.settings', key: 'hooks.managementLinkHelp' }, 'Open Manage Hooks to search events, inspect declarations, edit TOML, or ask Ash to configure a Hook.'),
-				onDidChange: Event.None,
 				fields: [{
 					id: 'manage', kind: 'action', label: localize({ bundle: 'ash.settings', key: 'hooks.manage' }, 'Manage Hooks'), enabled: true, run: () => this.instantiationService.invokeFunction(async accessor => {
 						const commands = accessor.get(ICommandService);
@@ -303,7 +304,6 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 						await editors.openEditor(new AICustomizationManagementEditorInput(), { pinned: true });
 					})
 				}],
-				setVisible: () => { },
 			}, AccessibleViewProviderId.HooksSettings, AccessibilityVerbositySettingId.HooksSettings)),
 		);
 		this.languageServerSettings = this._register(this.instantiationService.createInstance(LanguageServerSettingsRenderer, settingsContent));
@@ -598,7 +598,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	}
 
 	private registeredSettings(): readonly ISetting[] {
-		return new DefaultSettings().all.map(setting => {
+		const settings = new DefaultSettings().all.map(setting => {
 			if (setting.id === DESKTOP_UPDATE_POLICY_SETTING) return localUpdatePolicySetting(setting, this.configurationService);
 			if (setting.id === LocalizationConfiguration.locale) return displayLanguageSetting(setting, this.localeService, this.languagePackService, this.localizationService, this.configurationService);
 			if (setting.configuration.extensionBinding && setting.valueType !== 'complex') {
@@ -611,6 +611,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			}
 			return setting;
 		});
+		return [...settings, trustedDomainsSetting(this.trustedDomains)];
 	}
 
 	private navigation(): readonly SettingsNavigationDescriptor[] {
@@ -627,7 +628,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const scoped = this.target !== ConfigurationTarget.USER_LOCAL || !!query.languageFilter;
 		const settings = this.settingsModel.settings.filter(setting => {
 			if (!scoped) return true;
-			if (setting.binding || setting.configuration.extensionBinding || setting.configuration.agentsWindow?.readOnly) return false;
+			if (setting.binding || !setting.configuration || setting.configuration.extensionBinding || setting.configuration.agentsWindow?.readOnly) return false;
 			const scope = setting.configuration.scope ?? ConfigurationScope.WINDOW;
 			if (query.languageFilter && (!this.languageService.isRegisteredLanguageId(query.languageFilter) || scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE)) return false;
 			if (this.target === ConfigurationTarget.USER_LOCAL) return true;

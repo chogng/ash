@@ -33,8 +33,6 @@ export class ProjectMaterialFilesSettings extends Disposable implements Settings
 		}));
 	}
 
-	setVisible(): void { }
-
 	get fields(): readonly SettingsSectionField[] {
 		const folder = this.folder();
 		return [

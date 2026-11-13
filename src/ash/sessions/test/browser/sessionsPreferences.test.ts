@@ -322,6 +322,9 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IChatSessionNavigationService, { createNewConversation: () => { throw new Error('Unexpected draft creation'); }, revision: 0, getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, startVoiceConversation: async () => { throw new Error('Unexpected voice start'); }, appendToActiveDraft: () => { } });
 	using storage = new BrowserStorageService({ ownerWindow: window as unknown as Window, workspaceId: 'sessions-preferences', flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
+	const { ITrustedDomainService } = await import('../../../workbench/contrib/url/common/trustedDomainService.js');
+	const { TrustedDomainService } = await import('../../../workbench/contrib/url/browser/trustedDomainService.js');
+	services.registerSingleton(ITrustedDomainService, () => services.createInstance(TrustedDomainService));
 	services.registerInstance(IAgentSessionService, { listAgents: async () => ({ agents: [], diagnostics: [] }), readRoleCatalog: async () => ({ agents: [], diagnostics: [] }) } as unknown as IAgentSessionService);
 	services.registerInstance(ITeamsManagementService, { teams: constObservable([]), refresh: async () => { } } as unknown as ITeamsManagementService);
 	services.registerInstance(ISessionsService, { onDidChange: Event.None, openThread: async () => { throw new Error('Unexpected team conversation navigation'); } } as unknown as ISessionsService);
@@ -885,7 +888,6 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await openCategoryAction('customize', 'Preferences: Open User Settings (JSON)');
 	assert.deepEqual(preferenceOpens, [{ user: { jsonEditor: true } }]);
 	await openCategoryAction('customize', 'Open Workbench Settings');
-	await openCategoryAction('browser', 'Open Browser settings');
 	await openCategoryAction('tab', 'Open Tab settings');
 	const terminalSettings = preferences.open({ section: 'environment', query: '@id:sessions.terminal.*' });
 	assert.ok(window.document.querySelector('dialog[open] [data-settings-item-id="sessions.terminal.fontSize"]'));
@@ -909,7 +911,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
 	await environmentSettings;
 	assert.deepEqual(editorOpens.map(open => ({ section: new URL(open.resource).searchParams.get('target'), target: open.target })), [
-		{ section: null, target: 'modalGroup' }, { section: 'browser', target: 'modalGroup' },
+		{ section: null, target: 'modalGroup' },
 		{ section: 'editor-opening', target: 'modalGroup' },
 	]);
 	assert.equal(editorReveals, 1);

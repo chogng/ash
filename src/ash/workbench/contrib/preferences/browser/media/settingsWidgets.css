@@ -476,3 +476,115 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 }
+
+.ash-configuration-setting.ash-string-array-setting {
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-bound-string-array-setting {
+	display: grid;
+	min-width: 0;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+
+.ash-bound-string-array-setting > p {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+.ash-settings-array-table {
+	min-width: 0;
+	display: grid;
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-settings-array-table table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.ash-settings-array-table :is(th, td) {
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
+	text-align: start;
+	overflow-wrap: anywhere;
+}
+
+.ash-settings-array-table :is(th, td):last-child {
+	text-align: end;
+}
+
+.ash-settings-array-table th {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	font-weight: var(--ash-fontWeight-regular);
+}
+
+.ash-settings-array-table tbody {
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-settings-itemSeparator));
+}
+
+.ash-settings-array-table td:last-child {
+	width: 1%;
+	vertical-align: top;
+}
+
+.ash-settings-array-table-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-settings-array-table-actions[hidden] {
+	display: none;
+}
+
+.ash-settings-array-table-icon-actions tbody tr:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+@media (hover: hover) {
+	.ash-settings-array-table-icon-actions
+		tr:not(:hover, :focus-within)
+		.ash-settings-array-table-actions:has(.icon-only) {
+		opacity: 0;
+	}
+}
+
+.ash-settings-array-table-editor {
+	display: grid;
+	min-width: 0;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-settings-array-table-form {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-settings-array-table-form > .ash-input-box {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.ash-settings-array-table p {
+	margin: 0;
+	font-size: var(--ash-fontSize-body2);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+.ash-settings-array-table-error {
+	color: var(--ash-error-foreground);
+}
+
+.ash-settings-array-table-error:empty {
+	display: none;
+}

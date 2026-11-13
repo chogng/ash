@@ -49,7 +49,6 @@ export class SnapshotSettingsRenderer extends SettingsPageRenderer {
 						run: async () => { await preferences.openGlobalKeybindingSettings(false, { query: `@command:${command}` }); },
 					}];
 				},
-				setVisible: () => { },
 			};
 			const renderer = this._register(instantiation.createInstance(SettingsSectionRenderer, container, model, AccessibleViewProviderId.ChatScreenshot, AccessibilityVerbositySettingId.ChatScreenshot));
 			this._register(renderer.onDidChange(() => this.changed.fire()));

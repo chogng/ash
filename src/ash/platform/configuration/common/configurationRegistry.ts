@@ -58,6 +58,10 @@ export interface ITextConfigurationSettingSchema extends IConfigurationSettingSc
 	readonly placeholder: string;
 }
 
+interface IStringArrayConfigurationSettingSchema extends IConfigurationSettingSchemaBase {
+	readonly valueType: 'array';
+}
+
 export interface IStringMapConfigurationSettingSchema extends IConfigurationSettingSchemaBase {
 	readonly valueType: 'stringMap';
 	readonly structuredValues?: boolean;
@@ -69,13 +73,14 @@ export interface IStringMapConfigurationSettingSchema extends IConfigurationSett
 	readonly duplicateMessage: string;
 }
 
-export type IConfigurationSettingSchema = IBooleanConfigurationSettingSchema | INumberConfigurationSettingSchema | ISelectConfigurationSettingSchema<string | boolean> | ITextConfigurationSettingSchema | IStringMapConfigurationSettingSchema;
+export type IConfigurationSettingSchema = IBooleanConfigurationSettingSchema | INumberConfigurationSettingSchema | ISelectConfigurationSettingSchema<string | boolean> | ITextConfigurationSettingSchema | IStringArrayConfigurationSettingSchema | IStringMapConfigurationSettingSchema;
 
 export type ConfigurationSettingSchemaFor<T> =
 	[T] extends [boolean] ? IBooleanConfigurationSettingSchema
 	: [T] extends [number] ? INumberConfigurationSettingSchema
 	: [T] extends [string] ? ISelectConfigurationSettingSchema<T & string> | ITextConfigurationSettingSchema
 	: [T] extends [string | boolean] ? ISelectConfigurationSettingSchema<T & (string | boolean)>
+	: [T] extends [readonly string[]] ? IStringArrayConfigurationSettingSchema
 	: [T] extends [Record<string, unknown>] ? IStringMapConfigurationSettingSchema
 	: never;
 

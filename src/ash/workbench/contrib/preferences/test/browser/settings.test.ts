@@ -744,7 +744,7 @@ test('Extension settings use catalog identities and standard schemas without a p
 			['sample.count', 'number'],
 			['sample.mode', 'select'],
 			['sample.text', 'text'],
-			['sample.rules', 'complex'],
+			['sample.rules', 'array'],
 			['sample.nested', 'boolean'],
 		],
 	);
@@ -770,6 +770,58 @@ test('Extension settings use catalog identities and standard schemas without a p
 		createSettingsLayout(new DefaultSettings(registry).all).some(category => category.id === extension.id),
 		false,
 	);
+});
+
+test('String array settings edit individual entries and persist ordered values through configuration', async () => {
+	using resources = new DisposableStore();
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	resources.add(toDisposable(resetNlsResolver));
+	const { BrowserClipboardService } = await import('../../../../../platform/clipboard/browser/clipboardService.js');
+	const registry = new ConfigurationRegistry();
+	registry.updateConfigurations({
+		add: [{
+			extensionInfo: { id: 'sample.extension' }, properties: {
+				'sample.values': { type: 'array', default: [], items: { type: 'string' } },
+			}
+		}], remove: []
+	});
+	const configuration = resources.add(new WorkspaceService({ registry, source: '{ "sample.values": ["same", "same", "last"] }' }));
+	const root = h(browserEnvironment.window.document, 'div');
+	root.ownerDocument.body.append(root);
+	resources.add(toDisposable(() => root.remove()));
+	const widget = resources.add(createSettingWidget(resources, root, new DefaultSettings(registry).get('sample.values'), {
+		configurationService: configuration,
+		clipboardService: resources.add(new BrowserClipboardService(undefined)),
+		contextViewProvider: resources.add(new BrowserContextViewService(root)),
+		contextMenuProvider: { showContextMenu() { } },
+		onStatus() { },
+	}));
+	root.append(widget.domNode);
+	const rows = () => [...root.querySelectorAll('tbody tr')];
+	assert.deepEqual(rows().map(row => row.firstElementChild!.textContent), ['same', 'same', 'last']);
+	assert.equal(root.querySelector('th')?.textContent, '项目');
+	const save = async (action: () => void): Promise<void> => {
+		let resolveSaved!: () => void;
+		const saved = new Promise<void>(resolve => { resolveSaved = resolve; });
+		using listener = configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('sample.values')) resolveSaved();
+		});
+		action();
+		await saved;
+		await nextTurn();
+	};
+	rows()[1].querySelector<HTMLButtonElement>('button[aria-label="编辑 same"]')!.click();
+	const input = rows()[1].querySelector<HTMLInputElement>('input')!;
+	assert.equal(root.ownerDocument.activeElement, input);
+	input.value = ' revised ';
+	await save(() => input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+	await save(() => rows()[0].querySelector<HTMLButtonElement>('button[aria-label="移除 same"]')!.click());
+	await save(() => root.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+	assert.deepEqual(configuration.getValue('sample.values'), [' revised ', 'last', '']);
+	assert.deepEqual(rows().map(row => row.firstElementChild!.textContent), [' revised ', 'last', '']);
+	using reopened = new WorkspaceService({ registry, source: (await configuration.read()).source });
+	assert.deepEqual(reopened.getValue('sample.values'), [' revised ', 'last', '']);
 });
 
 test('Image preview preferences belong to Features with validated defaults and Chinese labels', async () => {
@@ -2025,7 +2077,7 @@ test('font preferences show translated labels and the actual platform defaults',
 		assert.deepEqual(appearance.groups.map(group => group.title), ['消息正文', '消息输入', '代码块', '对话']);
 		assert.deepEqual(appearance.groups[0]!.settings.map(setting => setting.id), ['chat.upvoteAnimation', 'chat.fontFamily', 'chat.fontSize']);
 		assert.deepEqual(
-			appearance.groups[1]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
+			appearance.groups[1]!.settings.map(setting => [setting.id, setting.title, setting.configuration?.defaultValue]),
 			[
 				['chat.input.fontFamily', '字体', ''],
 				['chat.input.fontSize', '字号', 13],
@@ -2033,16 +2085,16 @@ test('font preferences show translated labels and the actual platform defaults',
 			],
 		);
 		assert.deepEqual(
-			appearance.groups[0]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
+			appearance.groups[0]!.settings.map(setting => [setting.id, setting.title, setting.configuration?.defaultValue]),
 			[['chat.upvoteAnimation', '有用回复动画', 'floatingThumbs'], ['chat.fontFamily', '字体', 'default'], ['chat.fontSize', '字号', 13]],
 		);
 		const follow = appearance.groups[3]!.settings.find(setting => setting.id === 'chat.autoFollowReplies')!;
 		assert.equal(follow.title, '自动跟随新回复');
-		assert.equal(follow.configuration.defaultValue, true);
+		assert.equal(follow.configuration?.defaultValue, true);
 		const inputFamily = defaults.get('chat.input.fontFamily');
 		assert.equal(inputFamily.valueType === 'text' && inputFamily.placeholder, '系统默认');
 		assert.deepEqual(
-			appearance.groups[2]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
+			appearance.groups[2]!.settings.map(setting => [setting.id, setting.title, setting.configuration?.defaultValue]),
 			[
 				['chat.editor.fontFamily', '字体', ''],
 				['chat.editor.fontSize', '字号', 0],
@@ -3350,6 +3402,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const memoryNavigation = new MemorySettingsNavigation();
 	services.registerInstance(IMemorySettingsNavigation, memoryNavigation);
 	const editorServices = disposables.add(createTestEditorServices(undefined, services));
+	const { ITrustedDomainService } = await import('../../../url/common/trustedDomainService.js');
+	const { TrustedDomainService } = await import('../../../url/browser/trustedDomainService.js');
+	editorServices.registerSingleton(ITrustedDomainService, () => editorServices.createInstance(TrustedDomainService));
 	const editor = disposables.add(editorServices.createInstance(EditorPart, root, { registry: editorPanes }));
 	editorServices.registerInstance(IEditorPart, editor);
 	editorServices.registerInstance(ICommandService, disposables.add(new CommandService(editorServices)));
@@ -3454,6 +3509,19 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	for (const categoryId of ['display-language', 'updates', 'network', 'interaction']) {
 		assert.equal(root.querySelector(`[data-settings-category-id="${categoryId}"]`)?.closest('.ash-tree-row')?.getAttribute('aria-level'), '2');
 	}
+	await preferences.openSettings({ section: 'browser' });
+	const domains = editorServices.get(ITrustedDomainService);
+	const trustedDomains = root.querySelector<HTMLElement>('[data-settings-item-id="workbench.trustedDomains"]')!;
+	assert.ok(trustedDomains.closest('.ash-settings-card'));
+	assert.ok(trustedDomains.querySelector('button[aria-label="Edit https://github.com/"].icon-only'));
+	const form = trustedDomains.querySelector('form')!;
+	form.querySelector('input')!.value = 'https://example.test/ide';
+	const domainSaved = new Promise<void>(resolve => { disposables.add(AshEvent.once(domains.onDidChangeTrustedDomains)(resolve)); });
+	form.dispatchEvent(new browserEnvironment.window.Event('submit', { cancelable: true }));
+	await domainSaved;
+	assert.match(domains.content, /"https:\/\/example\.test\/ide"/u);
+	await domains.setTrustedDomains('// Saved in the JSONC editor\n["https://example.test/jsonc"]');
+	assert.equal(trustedDomains.querySelector('tbody td')?.textContent, 'https://example.test/jsonc');
 	await preferences.openSettings({ section: 'updates' });
 	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Updates');
 	assert.ok(root.querySelector('[data-settings-item-id="update.policy"]'));

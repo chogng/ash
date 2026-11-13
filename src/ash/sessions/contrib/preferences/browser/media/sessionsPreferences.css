@@ -217,6 +217,11 @@
 	background: transparent;
 }
 
+.ash-sessions-settings-page .ash-bound-string-array-setting {
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size80)
+		var(--ash-spacing-size80) 0;
+}
+
 .ash-sessions-settings-page .ash-settings-card > * + *::before {
 	inset-inline: 0;
 }
