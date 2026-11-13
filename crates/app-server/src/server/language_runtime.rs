@@ -460,6 +460,16 @@ struct LanguageRuntimeSources {
     retained_roots: Option<LanguageDirectoryRoots>,
 }
 
+/// One immutable source view for the request's configuration. Waiting for a connection
+/// must not pair that configuration with versions published by a later update.
+struct LanguageRuntimeSourceSnapshot {
+    providers: LspServerProviders,
+    acquisitions: BTreeMap<String, CatalogLanguageServer>,
+    versions: BTreeMap<String, u64>,
+    retained_roots: Option<LanguageDirectoryRoots>,
+    worktrees_enabled: bool,
+}
+
 #[derive(Clone, Default)]
 pub(super) struct LanguageDirectoryRoots {
     pub(super) granted: BTreeSet<PathBuf>,
@@ -642,9 +652,12 @@ impl LanguageRuntimeGuard {
             );
         }
         let connection = runtime.connections[&connection_id].clone();
+        // The adapter reads configuration under the profile registry lock. Capture its
+        // matching sources before releasing that lock, then wait only on this connection.
+        let snapshot = runtime.source_snapshot();
         drop(runtime);
         let mut runtime = pollster::block_on(Arc::clone(&connection.runtime).lock_owned());
-        runtime.refresh_sources();
+        runtime.refresh_source_snapshot(&snapshot);
         Self {
             runtime,
             connection,
@@ -813,20 +826,26 @@ impl AppServerLanguageRuntime {
             .map_or(self, |runtime| runtime.selected_runtime())
     }
 
+    fn source_snapshot(&self) -> LanguageRuntimeSourceSnapshot {
+        let sources = self
+            .sources
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        LanguageRuntimeSourceSnapshot {
+            providers: sources.providers.clone(),
+            acquisitions: sources.acquisitions.clone(),
+            versions: sources.versions.clone(),
+            retained_roots: sources.retained_roots.clone(),
+            worktrees_enabled: sources.worktrees_enabled(),
+        }
+    }
+
     fn refresh_sources(&mut self) {
-        let (providers, acquisitions, versions, retained_roots, worktrees_enabled) = {
-            let sources = self
-                .sources
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            (
-                sources.providers.clone(),
-                sources.acquisitions.clone(),
-                sources.versions.clone(),
-                sources.retained_roots.clone(),
-                sources.worktrees_enabled(),
-            )
-        };
+        self.refresh_source_snapshot(&self.source_snapshot());
+    }
+
+    fn refresh_source_snapshot(&mut self, snapshot: &LanguageRuntimeSourceSnapshot) {
+        let versions = &snapshot.versions;
         let changed_names = self
             .source_versions
             .keys()
@@ -851,11 +870,12 @@ impl AppServerLanguageRuntime {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .retain(|id, _| self.source_versions.get(id) == versions.get(id));
-        self.providers = providers;
-        self.acquisitions = acquisitions;
-        self.source_versions = versions;
+        self.providers = snapshot.providers.clone();
+        self.acquisitions = snapshot.acquisitions.clone();
+        self.source_versions = versions.clone();
         self.definitions_dirty |= changed;
-        if let Some(roots) = retained_roots {
+        if let Some(roots) = &snapshot.retained_roots {
+            let worktrees_enabled = snapshot.worktrees_enabled;
             self.env_runtimes
                 .retain(|root, _| roots.retains(root, worktrees_enabled));
             if self
@@ -868,7 +888,7 @@ impl AppServerLanguageRuntime {
             }
         }
         for runtime in self.env_runtimes.values_mut() {
-            runtime.refresh_sources();
+            runtime.refresh_source_snapshot(snapshot);
         }
     }
 
