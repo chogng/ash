@@ -39,6 +39,26 @@ Server，执行 canonical initialize/schema 协商，捕获 `InitializeResult`�
 本机宿主持有 OpenSSH config、agent socket 和凭据。任何配置档案字段或远端命令都不包含密码或
 私钥。
 
+### 通过 HTTP/3 网关连接
+
+在本机 `~/.ssh/config` 中为需要网关的 Host 配置 `ProxyCommand`，并在 Ash Remote 中选择该 Host 别名。
+使用本机安装包中 `bin/ash-remote` 的绝对路径。
+
+```sshconfig
+Host ash-gateway-dev
+    HostName dev.internal.example
+    Port 22
+    User dev
+    StrictHostKeyChecking yes
+    ProxyCommand "/opt/ash/bin/ash-remote" proxy-command https://gateway.example "%h:%p" "/home/dev/.ssh/ash-gateway-ca.pem" "/home/dev/.ssh/ash-gateway.token"
+```
+
+网关须接受标准 HTTP/3 CONNECT 和 bearer 认证，并能访问目标 `host:port`。IPv6 目标使用
+`[地址]:端口`，可在该 Host 的命令中直接写明。CA 文件为验证网关证书的 PEM 信任根。
+Token 文件只包含单行网关凭据，应仅授权本机账号读取。每次 SSH 连接重新读取该文件。
+SSH 主机密钥仍由 OpenSSH 使用 `known_hosts` 验证。
+Remote 的平台探测、安装、App Server 连接和端口转发均使用该 Host 配置。
+
 ## 运行时安装契约
 
 `SshRemoteRuntimeInstaller::probe_platform` 先执行 POSIX `uname`/libc 探测；无法识别 shell 时再执行
@@ -216,6 +236,11 @@ crate。其他产品可以拥有自己的生命周期和 UI。
 ```bash
 just test ash-remote-connections
 ```
+
+`tests/proxy_command.rs` 的本地网关验收使用真实 OpenSSH 和当前平台的完整 Remote 包。
+将 `ASH_TEST_PROXY_SSH_CONFIG` 指向隔离的 release SSH fixture 配置，设置
+`ASH_TEST_PROXY_SSH_PORT` 和 `ASH_TEST_PROXY_ARCHIVE`，再运行
+`just test ash-remote-connections --test proxy_command -- --ignored`。
 
 更新器的确定性 fake-HTTP、缓存复用/篡改、原子失败和 linked-cache 测试位于
 `src/runtime_updater_tests.rs`；canonical archive 验证继续由 `install/artifact_validation.rs` 承担，

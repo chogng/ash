@@ -15,17 +15,22 @@ name = "ash_remote_connections"
 path = "src/lib.rs"
 
 [dependencies]
+ash-async-utils = { workspace = true }
 base64 = { workspace = true }
 ash-utils-home-dir = { workspace = true }
 build-info = { workspace = true }
 ash-package-store = { workspace = true }
 process-hardening = { workspace = true }
 flate2 = { workspace = true }
+http = { workspace = true }
+rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 tar = { workspace = true }
+tcp-tunnel = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["io-std", "io-util", "macros", "sync"] }
 url = { workspace = true }
 ash-app-server-client = { workspace = true }
 ash-app-server-protocol = { workspace = true }
@@ -34,7 +39,15 @@ ash-remote = { workspace = true }
 ash-remote-profile-store = { workspace = true }
 ash-utils-path = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+tokio = { workspace = true, features = ["signal"] }
+
 [dev-dependencies]
+bytes = { workspace = true }
+h3 = { workspace = true }
+h3-quinn = { workspace = true }
+quinn = { workspace = true, features = ["runtime-tokio", "rustls-aws-lc-rs"] }
+rcgen = { workspace = true, features = ["pem", "ring"] }
 
 [lints]
 workspace = true
