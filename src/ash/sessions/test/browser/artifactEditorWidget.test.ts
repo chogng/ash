@@ -28,7 +28,6 @@ import { URI } from '../../../base/common/uri.js';
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
 import { ContextView } from '../../../base/browser/ui/contextview/contextview.js';
-import type { DesignEditorContributionContext } from '../../contrib/artifact/browser/designEditorBrowser.js';
 import { ConfirmResult, IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { FileKind, FileRevisionConflictError, FileNotFoundError, IFileService, type IFileWriteRequest, type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -88,9 +87,10 @@ await import('../../contrib/brand/browser/brand.contribution.js');
 await import('../../contrib/sites/browser/sites.contribution.js');
 await import('../../contrib/make/browser/make.contribution.js');
 await import('../../contrib/prototype/browser/prototype.contribution.js');
+await import('./fixtures/artifactExamples.contribution.js');
 const DESIGN_EDITOR_RESOURCE = URI.parse('ash-creator:/design');
 await import('../../contrib/artifact/browser/designEditor.contribution.js');
-const { createDesignEditorContributions } = await import('../../contrib/artifact/browser/designEditorContributions.js');
+const { createDesignEditorContributionFactory } = await import('../../contrib/artifact/browser/designEditorContributions.js');
 const services = new InstantiationService();
 services.registerInstance(ILogService, new NullLoggerService());
 const notifications = new TestNotificationService();
@@ -772,8 +772,8 @@ test('Chinese Design actions and new property labels are localized', async () =>
 
 test('Design editors share document edits and history while keeping selection, camera and lifetime separate', () => {
 	using document = services.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
-	using first = services.createInstance(ArtifactEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, services));
-	using second = services.createInstance(ArtifactEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, services));
+	using first = services.createInstance(ArtifactEditorWidget, browser.window.document, document, createDesignEditorContributionFactory(services));
+	using second = services.createInstance(ArtifactEditorWidget, browser.window.document, document, createDesignEditorContributionFactory(services));
 	for (const editor of [first, second]) {
 		editor.initialize();
 		editor.layout({ width: 400, height: 300 });
@@ -2644,7 +2644,7 @@ test('Design drains edits made during saving without interrupting editing or ask
 test('Design retains failed edits, refuses to close on failure and retries without a save dialog', async () => {
 	using fixture = new AutoSaveFixture();
 	const document = fixture.createDocument();
-	using editor = fixture.child.createInstance(ArtifactEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, fixture.child));
+	using editor = fixture.child.createInstance(ArtifactEditorWidget, browser.window.document, document, createDesignEditorContributionFactory(fixture.child));
 	new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
 	fixture.beforeWrite = async () => { throw new Error('Disk full'); };
 	assert.equal(await document.flushAutoSave(), false);
@@ -2721,9 +2721,9 @@ test('Design failed restoration keeps the original pointer and blocks replacemen
 
 test('Design autosave status and Slides artifact export use Chinese localization', async () => {
 	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
-	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
+	const { setNlsMessages, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	setNlsMessages('zh-CN', chinese.bundles);
 	try {
 		using fixture = new AutoSaveFixture();
 		const document = fixture.createDocument();
@@ -2789,7 +2789,7 @@ test('Design save a copy rejects the active package as its destination', async (
 test('Page and fill color widgets preserve alpha, validate edits and restore their shared document history', async () => {
 	using fixture = new AutoSaveFixture();
 	const document = fixture.createDocument();
-	using editor = fixture.child.createInstance(ArtifactEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, fixture.child));
+	using editor = fixture.child.createInstance(ArtifactEditorWidget, browser.window.document, document, createDesignEditorContributionFactory(fixture.child));
 	editor.initialize();
 	const properties = editor.propertiesDomNode;
 	const field = (label: string): HTMLInputElement => properties.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;

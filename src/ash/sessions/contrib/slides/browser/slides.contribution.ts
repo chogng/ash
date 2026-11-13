@@ -1,9 +1,4 @@
-import { registerArtifactDesignDocument } from '../../artifact/browser/artifactDesignCatalog.js';
-import { registerArtifactExample } from '../../artifact/browser/artifactExamples.js';
-import { frame, geometry, text } from '../../artifact/browser/artifactExampleShapes.js';
-import { openManagedArtifactDesign } from '../../artifact/browser/artifactDesignWorkspaces.js';
-import { IDesignEditorService } from '../../artifact/browser/designEditorService.js';
-import type { DesignShape } from '../../artifact/common/model/designDocument.js';
+import { registerArtifactCanvasDocument } from '../../artifact/browser/artifactCanvasCatalog.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { RawContextKey, type IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
@@ -66,29 +61,4 @@ registerArtifactWorkspaceMode({
 	help: localize('sessions.creator.slides.help', 'Add slide creates a 16:9 slide. Pages selects a slide for editing. Move slide earlier and Move slide later change presentation order and support Undo. Present plays the deck; use Left and Right on the preview to change pages and Escape to return to editing.'),
 }, (instantiation, ownerDocument) => instantiation.createInstance(SlidesWorkspace, ownerDocument, ArtifactWorkspaceId.Slides));
 
-registerArtifactDesignDocument('slides', () => getArtifactWorkspaceTitle(ArtifactWorkspaceId.Slides));
-
-registerArtifactExample('slides', () => ({
-	detail: localize('sessions.artifacts.exampleSlides', 'A two-slide deck with presentation mode'),
-	open: accessor => openManagedArtifactDesign(accessor, accessor.get(IDesignEditorService).createArtifactDocument('slides', createSlides())),
-}));
-
-function createSlides(): readonly DesignShape[] {
-	const launch = localize('sessions.artifacts.exampleLaunch', 'Studio launch');
-	return [
-		frame(0, 1280, 720, '#191e33', launch, [
-			text(84, 94, 1050, localize('sessions.artifacts.examplePilot', 'Pilot'), 32, '#b8ec79', 600),
-			text(84, 242, 1110, launch, 112, '#ffffff', 700),
-			text(84, 435, 990, localize('sessions.artifacts.exampleSlidesTagline', 'A shared home for the studio’s work'), 42, '#cad0e6'),
-			{ ...geometry(84, 602, 300, 10, '#b8ec79'), kind: 'rectangle' },
-		]),
-		frame(1320, 1280, 720, '#eff1f8', localize('sessions.artifacts.exampleSchedule', 'Launch schedule'), [
-			text(84, 86, 1100, localize('sessions.artifacts.exampleSchedule', 'Launch schedule'), 70, '#191e33', 700),
-			...[
-				localize('sessions.artifacts.examplePilot', 'Pilot'),
-				localize('sessions.artifacts.exampleFeedback', 'Review feedback'),
-				localize('sessions.artifacts.exampleRelease', 'Publish launch notes'),
-			].map((step, index) => text(90, 244 + index * 112, 1010, `${index + 1}. ${step}`, 50, '#424f75', 600)),
-		]),
-	];
-}
+registerArtifactCanvasDocument('slides', () => getArtifactWorkspaceTitle(ArtifactWorkspaceId.Slides));

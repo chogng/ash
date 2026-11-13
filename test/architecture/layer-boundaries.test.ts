@@ -295,7 +295,7 @@ test('Design editor stays within its Sessions contribution and keeps document co
 	const sharedBrowserFiles = [
 		...productionTypeScriptFiles(join(designRoot, 'browser/widget')),
 		...productionTypeScriptFiles(join(designRoot, 'browser/controller')),
-		join(designRoot, 'browser/designCanvasView.ts'),
+		join(sourceRoot, 'sessions/contrib/design/browser/designCanvasView.ts'),
 		join(designRoot, 'browser/designEditorBrowser.ts'),
 	];
 	for (const file of sharedBrowserFiles) {

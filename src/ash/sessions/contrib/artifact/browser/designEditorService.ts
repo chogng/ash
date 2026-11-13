@@ -13,7 +13,7 @@ import { IWorkingCopyService } from '../../../../workbench/services/workingCopy/
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { DesignDocumentController, getDesignDraftHome } from './designDocumentController.js';
 import type { ArtifactEditorWidget } from './widget/artifactEditorWidget.js';
-import { ArtifactWorkspaceId, artifactDesignModes, type ArtifactDesignKind } from '../common/artifactWorkspace.js';
+import { ArtifactWorkspaceId, artifactCanvasModes, type ArtifactCanvasKind } from '../common/artifactWorkspace.js';
 import type { DesignShape } from '../common/model/designDocument.js';
 
 export const DESIGN_LAYERS_CONTAINER_ID = 'workbench.sessions.sidebar.designLayers';
@@ -26,7 +26,7 @@ export interface IDesignEditorService {
 	readonly artifactDocuments: IObservable<ReadonlyMap<string, DesignDocumentController>>;
 	getDocument(mode: ArtifactWorkspaceId): DesignDocumentController;
 	loadArtifactDocuments(): Promise<void>;
-	createArtifactDocument(kind: ArtifactDesignKind, shapes: readonly DesignShape[]): DesignDocumentController;
+	createArtifactDocument(kind: ArtifactCanvasKind, shapes: readonly DesignShape[]): DesignDocumentController;
 	adoptExampleDocument(document: DesignDocumentController, ownerWindow: Window): void;
 	setActiveEditor(editor: ArtifactEditorWidget | undefined): void;
 }
@@ -79,12 +79,12 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 	}
 
 	private async restoreArtifactDocuments(): Promise<void> {
-		for (const kind of Object.keys(artifactDesignModes) as ArtifactDesignKind[]) {
+		for (const kind of Object.keys(artifactCanvasModes) as ArtifactCanvasKind[]) {
 			await this.restoreArtifactKind(kind);
 		}
 	}
 
-	private async restoreArtifactKind(kind: ArtifactDesignKind): Promise<void> {
+	private async restoreArtifactKind(kind: ArtifactCanvasKind): Promise<void> {
 		const entries = await this.files.readDirectory(this.draftHome.joinPathSegment(kind)).catch(error => {
 			if (error instanceof FileNotFoundError) { return []; }
 			throw error;
@@ -104,7 +104,7 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 		}
 	}
 
-	public createArtifactDocument(kind: ArtifactDesignKind, shapes: readonly DesignShape[]): DesignDocumentController {
+	public createArtifactDocument(kind: ArtifactCanvasKind, shapes: readonly DesignShape[]): DesignDocumentController {
 		const id = generateUuid();
 		const resource = this.draftHome.joinPathSegment(kind).joinPathSegment(`${id}.ash-design`);
 		const document = this.instantiation.createInstance(DesignDocumentController, { kind, id, resource, shapes });

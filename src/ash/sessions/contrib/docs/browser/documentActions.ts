@@ -1,6 +1,5 @@
 import { Schemas } from '../../../../base/common/network.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { renderWorkbenchMarkdown } from '../../../../base/browser/markdownRenderer.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import type { DocumentTextFormat } from '../../../../workbench/services/documentEditor/common/documentCodec.js';
@@ -95,17 +94,6 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 			return entry;
 		}, { source: options.source, preserveChatSource: true });
 	};
-}
-
-export async function openDocsExample(accessor: ServicesAccessor, example: { title: string; text: string; }): Promise<void> {
-	const open = createDocsOpener(accessor);
-	const ownerDocument = accessor.get(IEditorPart).domNode.ownerDocument;
-	const { generalProfile, importGeneralDocumentHtml } = await import('../../../../../../extensions/academy/browser/generalProfile.js');
-	const document = importGeneralDocumentHtml(renderWorkbenchMarkdown(example.text), ownerDocument);
-	if (!document) throw new Error(localize('document.creation.failed', 'The document editor could not open the new draft.'));
-	await open(URI.from({ scheme: ARTIFACT_EXAMPLE_SCHEME, path: '/studio-launch.ash-doc' }), {
-		label: example.title, initialText: generalProfile.create().codec.serialize(document),
-	});
 }
 
 export async function openWritingDraft(accessor: ServicesAccessor, html: string, title?: string): Promise<void> {

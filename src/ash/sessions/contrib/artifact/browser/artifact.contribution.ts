@@ -22,8 +22,6 @@ import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { getArtifactWorkspace } from './artifactWorkspaceRegistry.js';
-import { isArtifactKind } from '../../../common/artifactKind.js';
-import { getArtifactExample, OPEN_ARTIFACT_EXAMPLE } from './artifactExamples.js';
 import { openArtifacts } from './artifactWorkspaceOpener.js';
 
 CommandsRegistry.register(OPEN_ARTIFACT_CONVERSATION_COMMAND_ID, async (accessor, id) => {
@@ -50,13 +48,6 @@ CommandsRegistry.register('sessions.creator.openMode', (accessor, value) => {
 	if (typeof value !== 'string' || !getArtifactWorkspace(value)) { throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.')); }
 	return openArtifacts(accessor, page => page.openMode(value as ArtifactWorkspaceId), { restoreCommand: 'sessions.restore.creator' });
 });
-CommandsRegistry.register(OPEN_ARTIFACT_EXAMPLE, (accessor, kind) => {
-	if (!isArtifactKind(kind)) {
-		throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.'));
-	}
-	return getArtifactExample(kind)?.open(accessor);
-});
-
 registerAction2(class OpenCreator extends Action2 {
 	constructor() {
 		super({ id: 'sessions.open.creator', title: localize2('sessions.creator.title', 'Artifacts'), icon: Lxicon.artifacts, toggled: ContextKeyExpr.has('sessions.activity.creatorSelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 50, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') } });
@@ -96,7 +87,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
 			const page = ArtifactEditorView.getFocused(focused);
 			if (!page) { return undefined; }
-			return new AccessibleContentProvider(AccessibleViewProviderId.Creator, { type }, () => type === AccessibleViewType.Help ? `${localize('sessions.creator.help', 'Artifacts\nUse Tab and Shift+Tab to reach filters, search, view options, creation cards and your existing work. Press Enter on a creation card to open a new chat with that artifact type shown below the input. Use the window title bar to return to Artifacts. Show Secondary Side Bar opens canvas properties when available. Press Enter on a generated artifact to return to the conversation that created it. Open its file from that conversation. Other saved work opens in its editor. Use Left and Right to move between All, Yours and Shared with you. Press Enter or Space to apply the focused filter. Search filters titles; sort changes title order. Layout grid switches your work between grid and list views. The Artifacts navigation item returns home and retains each workspace. In the Command Palette, Choose Docs editor sets the editor preference and can open a blank document. Docs uses rich document or Markdown format according to the Docs editor preference. Design saves automatically. Use Save document for files opened in the Slides workspace. Preview supports Left and Right to change slides and Escape to return.')}\n${localize('sessions.artifacts.examplesHelp', 'In All, press Enter on the Slides example to create a deck. The deck saves automatically and can be reopened from Yours. Use Export editable copy to create a file package. Other canvas examples keep edits for this window. Docs, Sheet and Data examples are read-only.')}\n\n${page.getWorkspaceAccessibilityHelp() ?? ''}${page.getAccessibleContent()}` : page.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.Creator);
+			return new AccessibleContentProvider(AccessibleViewProviderId.Creator, { type }, () => type === AccessibleViewType.Help ? `${localize('sessions.creator.help', 'Artifacts\nUse Tab and Shift+Tab to reach filters, search, view options, creation cards and your existing work. Press Enter on a creation card to open a new chat with that artifact type shown below the input. Use the window title bar to return to Artifacts. Show Secondary Side Bar opens canvas properties when available. Press Enter on a generated artifact to return to the conversation that created it. Open its file from that conversation. Other saved work opens in its editor. Use Left and Right to move between All, Yours and Shared with you. Press Enter or Space to apply the focused filter. Search filters titles; sort changes title order. Layout grid switches your work between grid and list views. The Artifacts navigation item returns home and retains each workspace. In the Command Palette, Choose Docs editor sets the editor preference and can open a blank document. Docs uses rich document or Markdown format according to the Docs editor preference. Design saves automatically. Use Save document for files opened in the Slides workspace. Preview supports Left and Right to change slides and Escape to return.')}\n\n${page.getWorkspaceAccessibilityHelp() ?? ''}${page.getAccessibleContent()}` : page.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.Creator);
 		},
 	});
 }

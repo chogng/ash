@@ -218,7 +218,7 @@ test('Artifacts creation cards select a Chat draft type without creating an arti
 	await expect(home.locator('.ash-artifacts-card')).toHaveCount(0);
 });
 
-test('Artifacts examples use the retained editor and conversation', { tag: ['@browser-ui', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Artifact editors keep the same conversation when opening Docs and canvas workspaces', { tag: ['@browser-ui', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.setViewportSize({ width: 1440, height: 860 });
 	const navigation = page.locator('.ash-sessions-activity-content');
@@ -233,17 +233,15 @@ test('Artifacts examples use the retained editor and conversation', { tag: ['@br
 	await conversation.waitForTypeInEditor('Keep this conversation alongside Artifacts');
 	const retained = await sessions.elementHandle();
 	const cases = [
-		['docs', '.ash-docs-workspace-body'],
-		['slides', '.ash-sessions-design-stage'],
-		['design', '.ash-sessions-design-stage'],
-		['sheet', '.ash-artifact-table-workspace'],
-		['whiteboard', '.ash-sessions-design-stage'],
-		['data', '.ash-artifact-table-workspace'],
-		['motion', '.ash-sessions-design-stage'],
+		['workbench.action.document.new', '.ash-docs-workspace-body', 'Document tools'],
+		['sessions.creator.open.slides', '.ash-sessions-design-stage', 'Show Secondary Side Bar'],
+		['sessions.creator.open.design', '.ash-sessions-design-stage', 'Show Secondary Side Bar'],
+		['sessions.creator.open.whiteboard', '.ash-sessions-design-stage', 'Show Secondary Side Bar'],
 	] as const;
-	for (const [kind, bodySelector] of cases) {
+	const quick = new QuickAccess(page);
+	for (const [command, bodySelector, toolsLabel] of cases) {
 		await artifacts.click();
-		await editor.locator(`[data-artifact-example="${kind}"]`).press('Enter');
+		await quick.runCommand(command);
 		const body = editor.locator(`${bodySelector}:visible`);
 		await expect(header.getByRole('heading')).toBeVisible();
 		await expect(body).toBeVisible();
@@ -258,18 +256,13 @@ test('Artifacts examples use the retained editor and conversation', { tag: ['@br
 		expect(headerBounds.x).toBeCloseTo((await editor.boundingBox())!.x, 0);
 		expect(headerBounds.y + headerBounds.height).toBeLessThanOrEqual((await body.boundingBox())!.y);
 		await expect(editor.getByRole('button', { name: /^(Artifacts home|Back to Artifacts|Document tools|Show Secondary Side Bar)$/u })).toHaveCount(0);
-		const toggle = header.getByRole('button', { name: kind === 'docs' ? 'Document tools' : 'Show Secondary Side Bar', exact: true });
-		if (kind === 'sheet' || kind === 'data') {
-			await expect(body.getByRole('table')).toBeVisible();
-			await expect(toggle).toHaveCount(0);
-		} else {
-			await toggle.click();
-			await expect(details).toBeVisible();
-			expect(await details.evaluate(element => element.closest('[data-part="editor"]') !== null)).toBe(true);
-			if (kind === 'slides') continue;
-			await header.getByRole('button', { name: kind === 'docs' ? 'Document tools' : 'Hide Secondary Side Bar', exact: true }).click();
-			await expect(details).toBeHidden();
-		}
+		const toggle = header.getByRole('button', { name: toolsLabel, exact: true });
+		await toggle.click();
+		await expect(details).toBeVisible();
+		expect(await details.evaluate(element => element.closest('[data-part="editor"]') !== null)).toBe(true);
+		const hideLabel = toolsLabel === 'Document tools' ? toolsLabel : 'Hide Secondary Side Bar';
+		await header.getByRole('button', { name: hideLabel, exact: true }).click();
+		await expect(details).toBeHidden();
 	}
 
 	expect(await sessions.evaluate((element, original) => element === original, retained)).toBe(true);
@@ -392,7 +385,15 @@ test('Artifacts home keeps the conversation sidebar and offers seven creation ty
 	expect(await sidebar.locator('[data-view-container-id]:visible').evaluate((element, retained) => element === retained, originalList)).toBe(true);
 	const tiles = home.locator('.ash-chat-creation-button');
 	await expect(tiles).toHaveText(['Docs', 'Slides', 'Design', 'Sheet', 'Whiteboard', 'Data', 'Motion']);
-	await expect(home.locator('[data-artifact-example]')).toHaveCount(7);
+	if (process.env.ASH_PLAYWRIGHT_SERVER === 'development') {
+		await expect(home.locator('[data-artifact-example]')).toHaveCount(7);
+	} else {
+		await expect(home.locator('[data-artifact-example]')).toHaveCount(0);
+		await expect(home.getByText('Your work will appear here.')).toBeVisible();
+		await tiles.first().press('Alt+F1');
+		await expect(page.locator('.ash-accessible-view-content')).not.toHaveValue(/Slides example/);
+		await page.keyboard.press('Escape');
+	}
 	await expect.poll(() => tiles.evaluateAll(elements => new Set(elements.map(element => element.getBoundingClientRect().top)).size)).toBe(1);
 	await expect(home.locator('.ash-chat-creation-button > .ash-chat-creation-illustration').first()).toHaveCSS('height', '88px');
 	const docs = home.getByRole('button', { name: 'Docs', exact: true });

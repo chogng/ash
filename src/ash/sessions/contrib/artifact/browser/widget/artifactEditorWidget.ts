@@ -25,12 +25,11 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { DesignMediaPreview } from '../designMedia.js';
-import { DesignCanvasView } from '../designCanvasView.js';
 import { CanvasViewport } from '../../../canvas/common/canvasViewport.js';
 import { DesignInputController } from '../controller/designInputController.js';
 import { ArtifactEditorToolbar } from './artifactEditorToolbar.js';
 import { ArtifactEditorActions } from '../artifactEditorActions.js';
-import type { DesignEditorContributionFactory, IDesignDrawingContribution, IDesignMotionContribution, IDesignPropertiesContribution, IDesignCodeContribution, IDesignPrototypeContribution } from '../designEditorBrowser.js';
+import type { DesignEditorContributionFactory, IDesignCanvasView, IDesignDrawingContribution, IDesignMotionContribution, IDesignPropertiesContribution, IDesignCodeContribution, IDesignPrototypeContribution } from '../designEditorBrowser.js';
 
 const KEYBOARD_ZOOM_FACTOR = 1.2;
 const KEYBOARD_PAN_DISTANCE = 60;
@@ -44,7 +43,7 @@ export class ArtifactEditorWidget extends Disposable {
 	public readonly onDidChangeView = this.viewChange.event;
 	private readonly mediaPreview = this._register(new DesignMediaPreview());
 	private readonly camera = new CanvasViewport();
-	private readonly canvas: DesignCanvasView;
+	private readonly canvas: IDesignCanvasView;
 	private readonly properties: IDesignPropertiesContribution;
 	private readonly contentDomNode: HTMLElement;
 	private readonly messageDomNode: HTMLElement;
@@ -65,7 +64,7 @@ export class ArtifactEditorWidget extends Disposable {
 	constructor(
 		ownerDocument: Document,
 		public readonly documentController: DesignDocumentController,
-		createContributions: DesignEditorContributionFactory,
+		contributionsFactory: DesignEditorContributionFactory,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
@@ -81,7 +80,7 @@ export class ArtifactEditorWidget extends Disposable {
 			focusedViews.delete(this.domNode);
 			if (this.contextMenuVisible) { this.contextMenus.hideContextMenu(); }
 		}));
-		this.canvas = this._register(instantiationService.createInstance(DesignCanvasView, ownerDocument));
+		this.canvas = this._register(contributionsFactory.createCanvasView(ownerDocument));
 		this.canvas.setTool(this.tool);
 		const stage = h(ownerDocument, 'div', { className: 'ash-sessions-design-stage' });
 		this.toolbar = this._register(instantiationService.createInstance(ArtifactEditorToolbar, ownerDocument));
@@ -90,7 +89,7 @@ export class ArtifactEditorWidget extends Disposable {
 			mode => commandService.executeCommand(`sessions.design.mode.${mode}`, this),
 			action => commandService.executeCommand(`sessions.design.${action}`, this),
 		);
-		const contributions = this._register(createContributions({
+		const contributions = this._register(contributionsFactory.createFeatures({
 			ownerDocument,
 			canvasDomNode: this.canvas.domNode,
 			overlayDomNode: this.canvas.overlayDomNode,

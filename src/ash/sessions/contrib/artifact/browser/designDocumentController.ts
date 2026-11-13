@@ -2,7 +2,7 @@ import { loadDesignVectorGeometry, isDesignVectorGeometryReady } from './designV
 import { mainWindow } from '../../../../base/browser/window.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { measureDesignText, clearDesignTextMeasurements } from './designTextMeasurement.js';
-import { ArtifactWorkspaceId, artifactDesignModes, getArtifactWorkspaceTitle, type ArtifactDesignKind } from '../common/artifactWorkspace.js';
+import { ArtifactWorkspaceId, artifactCanvasModes, getArtifactWorkspaceTitle, type ArtifactCanvasKind } from '../common/artifactWorkspace.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { decodeBase64 } from '../../../../base/common/buffer.js';
 import { isRecord } from '../../../../base/common/types.js';
@@ -35,7 +35,7 @@ interface DesignDocumentExample {
 }
 
 interface ArtifactDesignInput {
-	readonly kind: ArtifactDesignKind;
+	readonly kind: ArtifactCanvasKind;
 	readonly id: string;
 	readonly resource: URI;
 	readonly shapes?: readonly DesignShape[];
@@ -50,7 +50,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	public readonly mode: ArtifactWorkspaceId;
 	private readonly example: { readonly title: string; adopted: boolean; } | undefined;
 	private readonly artifact: ArtifactDesignInput | undefined;
-	public get artifactKind(): ArtifactDesignKind | undefined { return this.artifact?.kind; }
+	public get artifactKind(): ArtifactCanvasKind | undefined { return this.artifact?.kind; }
 	public readonly resource: URI;
 	public readonly backupKind = 'structuredDocument' as const;
 	public readonly backupContentType = 'application/vnd.ash.design+json';
@@ -121,7 +121,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	) {
 		super();
 		this.artifact = typeof input !== 'string' && 'id' in input ? input : undefined;
-		this.mode = typeof input === 'string' ? input : 'mode' in input ? input.mode : artifactDesignModes[input.kind];
+		this.mode = typeof input === 'string' ? input : 'mode' in input ? input.mode : artifactCanvasModes[input.kind];
 		this.model = this._register(new DesignModel(this.mode, measureDesignText));
 		if (typeof input !== 'string' && 'title' in input) {
 			this.example = { title: input.title, adopted: false };

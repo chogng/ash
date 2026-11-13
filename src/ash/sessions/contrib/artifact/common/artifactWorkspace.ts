@@ -21,14 +21,14 @@ export enum ArtifactWorkspaceId {
 	Prototype = 'prototype',
 }
 
-export const artifactDesignModes = {
+export const artifactCanvasModes = {
 	slides: ArtifactWorkspaceId.Slides,
 	design: ArtifactWorkspaceId.Design,
 	whiteboard: ArtifactWorkspaceId.Whiteboard,
 	motion: ArtifactWorkspaceId.Design,
 } as const;
 
-export type ArtifactDesignKind = keyof typeof artifactDesignModes;
+export type ArtifactCanvasKind = keyof typeof artifactCanvasModes;
 
 export function getArtifactWorkspaceTitle(mode: ArtifactWorkspaceId): string {
 	switch (mode) {

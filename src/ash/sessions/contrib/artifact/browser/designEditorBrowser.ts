@@ -7,6 +7,8 @@ import type { DesignMode, DesignTool } from '../common/config/designEditorConfig
 import type { DesignPoint } from '../common/core/geometry.js';
 import type { DesignDocument, DesignShape } from '../common/model/designDocument.js';
 import type { DesignSelection } from '../common/designSelection.js';
+import type { CanvasViewport } from '../../canvas/common/canvasViewport.js';
+import type { DesignImageSource } from './designMedia.js';
 import type { DesignDocumentController } from './designDocumentController.js';
 
 /** A sampled scene carries presentation geometry without changing the editable document. */
@@ -104,4 +106,33 @@ export interface DesignEditorContributionContext {
 	runFileOperation(operation: () => Promise<void>): Promise<void>;
 }
 
-export type DesignEditorContributionFactory = (context: DesignEditorContributionContext) => IDesignEditorContributions;
+export interface DesignRenderState {
+	readonly shapes: readonly DesignShape[];
+	readonly images: ReadonlyMap<string, DesignImageSource>;
+	readonly selectedShapes: readonly DesignShape[];
+	readonly draft: DesignShape | undefined;
+	readonly showPathHandles: boolean;
+	readonly showWidthHandles?: boolean;
+	readonly gradient?: { paintId?: string; stopId?: string; };
+	readonly blur?: { effectId?: string; handle: 'start' | 'end'; };
+	readonly selectedWidthPoints?: ReadonlySet<string>;
+	readonly selectionRect?: { x: number; y: number; width: number; height: number; };
+	readonly activeContour?: number;
+	readonly selectedNodes?: ReadonlySet<number>;
+	readonly scale: number;
+	readonly opacity: ReadonlyMap<string, number> | undefined;
+}
+
+export interface IDesignCanvasView extends IDisposable {
+	readonly domNode: HTMLElement;
+	readonly overlayDomNode: SVGGElement;
+	setFocused(isFocused: boolean): void;
+	setTool(tool: DesignTool): void;
+	applyTransform(viewport: CanvasViewport): void;
+	render(state: DesignRenderState): void;
+}
+
+export interface DesignEditorContributionFactory {
+	createCanvasView(ownerDocument: Document): IDesignCanvasView;
+	createFeatures(context: DesignEditorContributionContext): IDesignEditorContributions;
+}

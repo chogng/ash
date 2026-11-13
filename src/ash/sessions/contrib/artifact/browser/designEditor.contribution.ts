@@ -1,4 +1,4 @@
-import './artifactDesignCatalog.js';
+import './artifactCanvasCatalog.js';
 import { AuxiliaryBarVisibleContext } from '../../../../workbench/common/contextkeys.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';

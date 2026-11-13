@@ -38,6 +38,9 @@ if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
 await import('../../../src/ash/sessions/sessions.web.main.js');
+if (new URL(location.href).searchParams.has('artifactExamples')) {
+	await import('../../../src/ash/sessions/test/browser/fixtures/artifactExamples.contribution.js');
+}
 let showEmptyEditorArea: (() => void) | undefined;
 if (new URL(location.href).searchParams.has('emptyEditorArea')) {
 	registerWorkbenchServiceContribution({

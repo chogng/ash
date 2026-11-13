@@ -5,11 +5,12 @@ import { paintColor, paintPixel, clickCanvasMenu, inspectCanvasMenu, drawBezierP
 
 // Exercise the production Creator renderer with the existing disconnected Sessions host.
 const test = base.extend({
-	page: async ({ page }, use) => {
+	page: async ({ page }, use, testInfo) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-		await page.goto('/sessions.html?creator');
+		const examples = testInfo.tags.includes('@artifact-examples') ? '&artifactExamples' : '';
+		await page.goto('/sessions.html?creator' + examples);
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await use(page);
 		expect(errors).toEqual([]);
@@ -18,7 +19,7 @@ const test = base.extend({
 });
 test.use({ viewport: { width: 1600, height: 900 } });
 
-test('Artifact details share the conversation and dock their views in the editor', async ({ page }) => {
+test('Artifact details share the conversation and dock their views in the editor', { tag: '@artifact-examples' }, async ({ page }) => {
 	const home = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true });
 	const navigation = page.locator('[data-part="sidebar"]');
 	const conversation = page.locator('[data-part="sessions"]');
@@ -87,6 +88,19 @@ test('Artifact details share the conversation and dock their views in the editor
 			await expect(dock).toBeVisible();
 		} else {
 			await expect(properties).toBeHidden();
+			if (kind === 'docs') {
+				const docs = editor.locator('.ash-docs-workspace:visible');
+				await expect(docs.locator('.stanza-document-heading').first()).toBeVisible();
+				await expect(docs.locator('.stanza-document-paragraph').first()).toContainText('guide the public release.');
+				await expect(docs.locator('table')).toBeVisible();
+				const checks = docs.getByRole('checkbox');
+				await expect(checks).toHaveCount(3);
+				await expect(checks.first()).toBeChecked();
+				await expect(checks.first()).toBeDisabled();
+				await header.getByRole('button', { name: 'Document tools', exact: true }).click();
+				await expect(dock.getByRole('navigation', { name: 'Document outline' })).toBeVisible();
+				await header.getByRole('button', { name: 'Document tools', exact: true }).click();
+			}
 		}
 	}
 	for (const mode of ['brand', 'sites', 'make', 'prototype']) {
@@ -803,7 +817,7 @@ test('Sessions Design typography wraps, preserves rich ranges and exports respon
 });
 
 const design = test.extend({
-	page: async ({ page }, use) => {
+	page: async ({ page }, use, testInfo) => {
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 		await new QuickAccess(page).runCommand('sessions.creator.open.design');
 		await use(page);

@@ -22,6 +22,9 @@ try {
 	await invoke<void>(NLS_ACTIVATE_CHANNEL, catalog);
 	canShowSplash = false;
 	await import('../sessions.desktop.main.js');
+	if (import.meta.env.ASH_DEV_ARTIFACT_EXAMPLES) {
+		await import('../test/browser/fixtures/artifactExamples.contribution.js');
+	}
 	const { main } = await import('./sessions.main.js');
 	await main(createSessionsProfile(import.meta.env.ASH_SESSIONS_PROFILE as SessionsProfile));
 } catch (error) {

@@ -1,39 +1,23 @@
-import { designPaints } from '../common/model/designPaint.js';
-import { designEffects } from '../common/model/designEffects.js';
-import { designWidthLocation } from '../common/model/designVariableWidth.js';
-import { designPathEditingContours } from '../common/model/designVector.js';
+import { designPaints } from '../../artifact/common/model/designPaint.js';
+import { designEffects } from '../../artifact/common/model/designEffects.js';
+import { designWidthLocation } from '../../artifact/common/model/designVariableWidth.js';
+import { designPathEditingContours } from '../../artifact/common/model/designVector.js';
 import './designCanvasView.css';
+import type { DesignRenderState, IDesignCanvasView } from '../../artifact/browser/designEditorBrowser.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { Canvas, CanvasCursor } from '../../canvas/browser/canvas.js';
 import type { CanvasViewport } from '../../canvas/common/canvasViewport.js';
-import { DesignConfiguration, DesignTool } from '../common/config/designEditorConfiguration.js';
-import type { DesignShape } from '../common/model/designDocument.js';
-import type { DesignImageSource } from './designMedia.js';
-import { renderDesignShape } from './designSvgRenderer.js';
+import { DesignConfiguration, DesignTool } from '../../artifact/common/config/designEditorConfiguration.js';
+import type { DesignShape } from '../../artifact/common/model/designDocument.js';
+import type { DesignImageSource } from '../../artifact/browser/designMedia.js';
+import { renderDesignShape } from '../../artifact/browser/designSvgRenderer.js';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
-interface DesignRenderState {
-	readonly shapes: readonly DesignShape[];
-	readonly images: ReadonlyMap<string, DesignImageSource>;
-	readonly selectedShapes: readonly DesignShape[];
-	readonly draft: DesignShape | undefined;
-	readonly showPathHandles: boolean;
-	readonly showWidthHandles?: boolean;
-	readonly gradient?: { paintId?: string; stopId?: string; };
-	readonly blur?: { effectId?: string; handle: 'start' | 'end'; };
-	readonly selectedWidthPoints?: ReadonlySet<string>;
-	readonly selectionRect?: { x: number; y: number; width: number; height: number; };
-	readonly activeContour?: number;
-	readonly selectedNodes?: ReadonlySet<number>;
-	readonly scale: number;
-	readonly opacity: ReadonlyMap<string, number> | undefined;
-}
-
 /** Presents design objects and path handles on the shared spatial canvas. */
-export class DesignCanvasView extends Disposable {
+export class DesignCanvasView extends Disposable implements IDesignCanvasView {
 	public readonly domNode: HTMLElement;
 	private readonly canvas: Canvas;
 	private readonly shapesDomNode: SVGSVGElement;

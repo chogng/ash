@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { clickCanvasMenu, paintColor, paintPixel } from '../../../automation/design.js';
-import { readFile, readdir, realpath } from 'node:fs/promises';
+import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { Menus } from '../../../automation/menus.js';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
@@ -7,7 +8,11 @@ import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
-import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifact/common/model/designDocument.js';
+import { URI } from '../../../../src/ash/base/common/uri.js';
+import { getSingleFolderWorkspaceIdentifier } from '../../../../src/ash/platform/workspaces/node/workspaces.js';
+import { ArtifactWorkspaceId } from '../../../../src/ash/sessions/contrib/artifact/common/artifactWorkspace.js';
+import { documentFromShapes, parseDesignDocument, serializeDesignDocument } from '../../../../src/ash/sessions/contrib/artifact/common/model/designDocument.js';
+import { createSlides } from '../../../../src/ash/sessions/test/browser/fixtures/artifactExampleShapes.js';
 
 test('Sessions mode and page-tab activation reuse Parts while retaining the conversation and dirty document', async ({ target, workbench, testWorkspace }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
@@ -203,10 +208,13 @@ test('Sessions Creator uses Chinese mode names, actions and keyboard help', asyn
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Artifacts 导航返回首页/);
 	await page.keyboard.press('Escape');
-	await creator.getByRole('button', { name: /^幻灯片范例/ }).press('Enter');
+	await new QuickAccess(page).runCommand('sessions.creator.open.slides');
 	const pages = creator.getByRole('combobox', { name: '页面', exact: true });
+	const addSlide = creator.getByRole('button', { name: '添加幻灯片', exact: true });
+	await addSlide.click();
+	await addSlide.click();
 	await expect(pages.locator('option')).toHaveText(['第 1 页', '第 2 页']);
-	await creator.getByRole('button', { name: '添加幻灯片', exact: true }).click();
+	await addSlide.click();
 	await expect(pages.locator('option:checked')).toHaveText('第 3 页');
 	const titlebar = page.locator('[data-part="titlebar"]');
 	await titlebar.getByRole('button', { name: 'Artifacts 首页', exact: true }).click();
@@ -222,8 +230,8 @@ test('Sessions Creator uses Chinese mode names, actions and keyboard help', asyn
 	await page.keyboard.press('Escape');
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await expect(creator.getByRole('button', { name: '设计', exact: true })).toBeVisible();
-	await creator.locator('[data-artifact-example="sheet"]').press('Enter');
-	await expect(titlebar.getByRole('heading', { name: '电子表格范例', exact: true })).toBeVisible();
+	await new QuickAccess(page).runCommand('sessions.creator.open.slides');
+	await expect(titlebar.getByRole('heading', { name: '未命名幻灯片', exact: true })).toBeVisible();
 	const back = titlebar.getByRole('button', { name: 'Artifacts 首页', exact: true });
 	await back.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/使用窗口标题栏返回 Artifacts/u);
@@ -922,9 +930,17 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 }
 
 
-test('Sessions Slides example autosaves to Artifacts and exports an independent copy', { tag: ['@electron-app-server'] }, async ({ target, workbench, application, testWorkspace }) => {
+test('Sessions Slides autosaves a saved artifact and exports an independent copy', { tag: ['@electron-app-server'] }, async ({ target, workbench, application, testWorkspace }) => {
 	if (!('windows' in application)) throw new Error('Expected Electron application');
-	const path = join(await realpath(testWorkspace.directory), 'slides.ash-design');
+	const workspaceRoot = await realpath(testWorkspace.directory);
+	const path = join(workspaceRoot, 'slides.ash-design');
+	const workspaceId = getSingleFolderWorkspaceIdentifier(URI.file(workspaceRoot)).id;
+	const profile = await application.evaluate(() => process.env.ASH_HOME!);
+	const id = randomUUID();
+	const deckDirectory = join(profile, 'creator', workspaceId, 'slides', `${id}.ash-design`);
+	await mkdir(deckDirectory, { recursive: true });
+	const deck = documentFromShapes(createSlides(), { documentId: id, artifactId: randomUUID(), mode: ArtifactWorkspaceId.Slides });
+	await writeFile(join(deckDirectory, 'manifest.json'), serializeDesignDocument(deck));
 	const original = await application.evaluateHandle(({ dialog }) => dialog.showSaveDialog);
 	try {
 		await application.evaluate(({ dialog }, path) => {
@@ -933,7 +949,7 @@ test('Sessions Slides example autosaves to Artifacts and exports an independent 
 		let page = await workbench.openAgentsWindow(target.kind);
 		const openArtifacts = (page: Page) => page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 		await openArtifacts(page);
-		await page.locator('[data-artifact-example="slides"]').press('Enter');
+		await page.locator(`[data-artifact-workspace="canvas:${id}"]`).press('Enter');
 		const workspace = page.locator('[data-creator-mode="slides"]:visible');
 		const pages = workspace.getByRole('combobox', { name: 'Pages', exact: true }).getByRole('option');
 		await expect(pages).toHaveCount(2);

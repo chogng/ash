@@ -7,8 +7,7 @@ import { ILifecycleService } from '../../../../workbench/services/lifecycle/comm
 import { DesignDocumentController } from './designDocumentController.js';
 import { IDesignEditorService } from './designEditorService.js';
 import { ArtifactEditorWidget } from './widget/artifactEditorWidget.js';
-import { createDesignEditorContributions } from './designEditorContributions.js';
-import type { DesignEditorContributionContext } from './designEditorBrowser.js';
+import { createDesignEditorContributionFactory } from './designEditorContributions.js';
 import { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import type { ArtifactDesignExample } from './artifactWorkspace.js';
 
@@ -43,7 +42,7 @@ export class DesignEditorHost extends Disposable {
 		} else {
 			this.document = this.designEditors.getDocument(this.mode);
 		}
-		this.editor = this._register(this.instantiationService.createInstance(ArtifactEditorWidget, parent.ownerDocument, this.workingCopy, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, this.instantiationService)));
+		this.editor = this._register(this.instantiationService.createInstance(ArtifactEditorWidget, parent.ownerDocument, this.workingCopy, createDesignEditorContributionFactory(this.instantiationService)));
 		this.domNode = this.editor.domNode;
 		parent.append(this.domNode);
 		this.editor.initialize();

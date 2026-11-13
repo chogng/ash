@@ -26,7 +26,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ToolbarSearchActionViewItem } from '../../../browser/ui/toolbarSearchActionViewItem.js';
 import { appendArtifactIcon, getArtifactTitle } from './artifactKindPresentation.js';
 import { artifactKinds, isArtifactKind, type ArtifactKind } from '../../../common/artifactKind.js';
-import { getArtifactExamples, OPEN_ARTIFACT_EXAMPLE } from './artifactExamples.js';
+import { getArtifactExamples } from './artifactExamples.js';
 import { ChatCreationWidget } from '../../chat/browser/chatCreationWidget.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ISessionsEditorPage } from '../../../browser/parts/editorPart.js';
@@ -230,7 +230,8 @@ export class ArtifactEditorView extends Disposable {
 		this.artifactsDomNode.replaceChildren();
 		const query = this.search.value.trim().toLocaleLowerCase();
 		const cards = this.filter === 'shared' ? [] : this.getArtifacts().filter(card => card.title.toLocaleLowerCase().includes(query));
-		const examples = this.filter === 'all' ? this.examples.filter(card => card.title.toLocaleLowerCase().includes(query)) : [];
+		const exampleSection = this.filter === 'all' ? this.examples : undefined;
+		const examples = exampleSection?.cards.filter(card => card.title.toLocaleLowerCase().includes(query)) ?? [];
 		const restoring = this.filter !== 'shared' && this.catalogSources.some(source => source.isRestoring?.get());
 		this.artifactsDomNode.setAttribute('aria-busy', String(restoring));
 		for (const source of this.filter === 'shared' ? [] : this.catalogSources) {
@@ -246,14 +247,11 @@ export class ArtifactEditorView extends Disposable {
 				this.renderCard(card, grid);
 			}
 		}
-		if (examples.length) {
-			this.artifactsDomNode.append(h(this.domNode.ownerDocument, 'h2', { className: 'ash-artifacts-examples-heading' }, localize('sessions.artifacts.examples', 'Examples')));
+		if (exampleSection && examples.length) {
+			this.artifactsDomNode.append(h(this.domNode.ownerDocument, 'h2', { className: 'ash-artifacts-examples-heading' }, exampleSection.heading));
 			const grid = h(this.domNode.ownerDocument, 'div', { className: 'ash-artifacts-examples-grid' });
 			this.artifactsDomNode.append(grid);
-			for (const example of examples) {
-				const card = {
-					...example, command: { id: OPEN_ARTIFACT_EXAMPLE, args: [example.kind] },
-				};
+			for (const card of examples) {
 				this.renderCard(card, grid).dataset.artifactExample = card.kind;
 			}
 		}
@@ -356,7 +354,7 @@ export class ArtifactEditorView extends Disposable {
 		else { this.creation.focus(); }
 	}
 	public getWorkspaceAccessibilityHelp(): string | undefined {
-		return this.currentWorkspace?.getAccessibilityHelp?.();
+		return this.currentWorkspace?.getAccessibilityHelp?.() ?? (!this.activeWorkspace && this.filter === 'all' ? this.examples?.accessibilityHelp : undefined);
 	}
 
 	public getAccessibleContent(): string {
@@ -364,7 +362,7 @@ export class ArtifactEditorView extends Disposable {
 			const { title, help } = this.activeWorkspace;
 			return [title, help, this.currentWorkspace?.getAccessibleContent()].filter(Boolean).join('\n');
 		}
-		const cards = this.filter === 'all' ? [...this.getArtifacts(), ...this.examples] : this.filter === 'yours' ? this.getArtifacts() : [];
+		const cards = this.filter === 'all' ? [...this.getArtifacts(), ...(this.examples?.cards ?? [])] : this.filter === 'yours' ? this.getArtifacts() : [];
 		return [localize('sessions.creator.title', 'Artifacts'), ...artifactKinds.map(getArtifactTitle), ...cards.map(card => `${card.title}: ${card.detail}`)].join('\n');
 	}
 	protected override disposeCore(): void { pages.delete(this.domNode); super.disposeCore(); this.domNode.remove(); }

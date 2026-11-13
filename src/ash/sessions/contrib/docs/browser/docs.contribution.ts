@@ -3,7 +3,6 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
 import { isRetainedDocsInput } from './docsArtifactCatalog.js';
-import { registerArtifactExample } from '../../artifact/browser/artifactExamples.js';
 import { URI } from '../../../../base/common/uri.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../nls.js';
@@ -29,7 +28,7 @@ import { EDIT_CHAT_WRITING_COMMAND_ID } from '../../../../workbench/contrib/chat
 import { DocumentTypes } from '../../../../workbench/services/documentEditor/common/documentTypes.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { DOCS_ARTIFACT_EDITOR_ID, DOCS_EDITOR_SETTING, DOCS_MARKDOWN_EDITOR_ID, DOCS_TOOLS_CONTAINER_ID, GENERAL_DOCUMENT_CONTENT_TYPE, GENERAL_DOCUMENT_EDITOR_ID, type DocsEditorPreference } from '../common/docs.js';
-import { convertActiveTextToDocument, createDocsInput, createDocsOpener, createGeneralDocument, createMarkdownDocsInput, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact, newDocsResource, openDocsExample, openWritingDraft, restoredDocsResource } from './documentActions.js';
+import { convertActiveTextToDocument, createDocsInput, createDocsOpener, createGeneralDocument, createMarkdownDocsInput, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact, newDocsResource, openWritingDraft, restoredDocsResource } from './documentActions.js';
 import { DocsArtifactPane, DocsToolsView } from './docsArtifactPane.js';
 import { MarkdownDocsArtifactPane } from './markdownDocsArtifactPane.js';
 
@@ -224,11 +223,3 @@ for (const operation of ['import', 'export'] as const) registerAction2(class Doc
 	constructor() { super({ id: `workbench.action.document.${operation}.file`, title: operation === 'import' ? localize2('document.output.import', 'Import Document File…') : localize2('document.output.export', 'Export Document File…'), f1: true, menu: { id: MenuId.MenubarFileMenu, group: '2_files', order: operation === 'import' ? 10 : 11 } }); }
 	override run(accessor: ServicesAccessor): Promise<void> { return operation === 'import' ? importDocumentArtifact(accessor) : exportDocumentArtifact(accessor); }
 });
-
-registerArtifactExample('docs', title => ({
-	detail: localize('sessions.artifacts.exampleDocs', 'A launch brief with headings, a checklist and a schedule'),
-	open: accessor => openDocsExample(accessor, {
-		title,
-		text: localize('sessions.artifacts.exampleDocsContent', '# Studio launch brief\n\nLaunch a shared home for the studio’s work. Start with a small pilot and use feedback to guide the public release.\n\n## Readiness checklist\n\n- [x] Review the visual direction\n- [ ] Invite the pilot group\n- [ ] Publish the launch notes\n\n## Schedule\n\n| Milestone | Target |\n| --- | --- |\n| Pilot | Tuesday |\n| Feedback review | Thursday |\n| Public launch | Next Monday |'),
-	}),
-}));

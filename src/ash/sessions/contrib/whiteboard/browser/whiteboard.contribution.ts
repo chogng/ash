@@ -1,7 +1,3 @@
-import { registerArtifactExample } from '../../artifact/browser/artifactExamples.js';
-import { frame, geometry, text } from '../../artifact/browser/artifactExampleShapes.js';
-import { openArtifactDesignExample } from '../../artifact/browser/artifactDesignWorkspaces.js';
-import type { DesignShape } from '../../artifact/common/model/designDocument.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize, localize2 } from '../../../../nls.js';
@@ -57,28 +53,3 @@ registerArtifactWorkspaceMode({
 	icon: Lxicon.pen,
 	help: localize('sessions.creator.whiteboard.help', 'Add note creates a movable note. Select its text in Layers to edit the idea in Shape properties. Select two objects and choose Connect selection to draw a line. Draw provides freehand sketching. Lines keep their drawn geometry when objects move.'),
 }, (instantiation, ownerDocument) => instantiation.createInstance(WhiteboardWorkspace, ownerDocument, ArtifactWorkspaceId.Whiteboard));
-
-registerArtifactExample('whiteboard', title => ({
-	detail: localize('sessions.artifacts.exampleWhiteboard', 'A planning board with notes and connectors'),
-	open: accessor => openArtifactDesignExample(accessor, 'whiteboard', ArtifactWorkspaceId.Whiteboard, { title, createShapes: createWhiteboard }),
-}));
-
-function createWhiteboard(): readonly DesignShape[] {
-	const stages = [
-		[localize('sessions.artifacts.examplePilot', 'Pilot'), localize('sessions.artifacts.exampleInvite', 'Invite five teammates'), '#fff0a6'],
-		[localize('sessions.artifacts.exampleFeedback', 'Review feedback'), localize('sessions.artifacts.exampleDiscuss', 'Discuss the pilot notes'), '#d8edc2'],
-		[localize('sessions.artifacts.exampleRelease', 'Publish launch notes'), localize('sessions.artifacts.exampleShare', 'Share the release checklist'), '#d6e8fa'],
-	];
-	const notes = stages.map(([name, body, fill], index) => frame(35 + index * 280, 220, 172, fill, name, [
-		text(16, 22, 189, name, 22, '#33342b', 700),
-		text(16, 90, 189, body, 18, '#33342b'),
-	]));
-	const connectors = [0, 1].map((index): DesignShape => {
-		const a = { x: 0, y: 0 }, b = { x: 1, y: 0 };
-		return {
-			...geometry(255 + index * 280, 86, 60, 1, '#687461'), kind: 'path', closed: false, strokeWidth: 2,
-			nodes: [{ ...a, incoming: a, outgoing: a }, { ...b, incoming: b, outgoing: b, endpoint: 'triangle-arrow' }],
-		};
-	});
-	return [frame(0, 860, 204, '#f8f8f3', localize('sessions.artifacts.exampleSchedule', 'Launch schedule'), [...connectors, ...notes])];
-}
