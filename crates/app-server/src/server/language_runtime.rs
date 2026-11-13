@@ -371,21 +371,21 @@ struct AppServerLanguageDocumentSnapshot {
     relative_path: PathBuf,
     language_id: String,
     revision: ash_lsp_manager::LanguageDocumentRevision,
-    text: String,
+    text: Arc<str>,
 }
 
-/// Reads the open editor snapshots owned by one connection and directory session.
+/// Captures the open editor baselines owned by one connection and directory session.
+/// Responses must project ranges and expected text against this request-time view even
+/// when another request synchronizes or closes a target while the language server waits.
 pub(super) struct LanguageDocumentSnapshots {
-    documents: Arc<Mutex<BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>>>,
+    documents: BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>,
 }
 
 impl LanguageDocumentSnapshots {
     pub(super) fn text(&self, path: &Path) -> Option<String> {
         self.documents
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(path)
-            .map(|snapshot| snapshot.text.clone())
+            .map(|snapshot| snapshot.text.to_string())
     }
 }
 
@@ -666,7 +666,13 @@ impl LanguageRuntimeGuard {
 
     pub(super) fn document_snapshots(&self) -> LanguageDocumentSnapshots {
         LanguageDocumentSnapshots {
-            documents: Arc::clone(&self.selected_runtime().dir_state.documents),
+            documents: self
+                .selected_runtime()
+                .dir_state
+                .documents
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
         }
     }
 
@@ -1416,7 +1422,7 @@ impl AppServerLanguageRuntime {
                     relative_path: relative_path.to_path_buf(),
                     language_id: document.language_id().to_owned(),
                     revision: document.revision(),
-                    text: document.text().to_owned(),
+                    text: Arc::from(document.text()),
                 },
             );
         self.manager
