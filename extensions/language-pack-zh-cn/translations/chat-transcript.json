@@ -67,7 +67,7 @@
     "chat.markdown.imagePreviewHelp": "在回复中按 Tab 聚焦 Markdown 图片预览，按 Enter 或空格键打开。在图集预览中，激活圆点可跳到对应图片。聚焦图片视区或切换按钮时，也可以按左、右方向键换图。按 Esc 返回当前图片。",
     "chat.markdown.previewImage": "预览 {0}",
     "chat.markdown.tableScroll": "可滚动表格",
-    "chat.markdown.tableScrollHelp": "按 Tab 可访问回复图片的下载操作和表格的导出操作。表格获得焦点时，可用左右方向键滚动。对于超出显示区域的表格，激活“展开表格”可打开更宽的预览，按 Esc 返回展开按钮。在聊天中查找会将表格滚动到匹配的单元格。",
+    "chat.markdown.tableScrollHelp": "按 Tab 可访问回复图片的下载操作或表格上方的操作。聚焦“复制表格”后按 Enter 或空格可复制整张表格，也可以选择“将表格导出为 CSV”来保存表格。表格获得焦点时，可用左右方向键滚动。对于超出显示区域的表格，激活“展开表格”可打开更宽的预览，按 Esc 返回展开按钮。在聊天中查找会将表格滚动到匹配的单元格。",
     "chat.response.fileLinksHelp": "按 Tab 聚焦回复中的文件链接，按 Enter 打开文件并跳到引用的行。",
     "chat.image.annotationHelp": "选择“标注图片”后可在预览中绘制。选择“撤销笔迹”或“取消标注”修改或放弃标注，选择“完成标注”将图片加入当前草稿。",
     "chat.image.annotationTooLarge": "图片过大，无法标注。",
@@ -144,10 +144,13 @@
     "chat.response.feedbackHelp": "已完成的 IDE 聊天回复提供“有用”按钮。按 Enter 或空格将该回复保存为个人有用标记，重开聊天后仍然保留。评价只保存在 Ash 当前配置文件中，不会发送给模型厂商或更改回复。可在设置中的“有用回复动画”选择效果或关闭动画；减少动态效果设置也会关闭动画。"
   },
   "ash.workbench": {
+    "chat.markdown.copyTable": "复制表格",
     "chat.markdown.expandTable": "展开表格",
     "chat.markdown.exportTable": "将表格导出为 CSV",
     "chat.markdown.saveFailed": "无法保存此内容：{0}",
     "chat.markdown.tableActions": "表格操作",
+    "chat.markdown.tableCopied": "表格已复制。",
+    "chat.markdown.tableCopyFailed": "无法复制表格：{0}",
     "chat.markdown.tablePreview": "表格预览"
   }
 }

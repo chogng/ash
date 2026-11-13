@@ -13,7 +13,9 @@ import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { Marked } from '../../../../../../base/common/marked/marked.js';
 import { equals } from '../../../../../../base/common/objects.js';
 import { escapeRegExpCharacters, htmlAttributeEncodeValue } from '../../../../../../base/common/strings.js';
-import { WorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
+import { WorkbenchToolBar, type IWorkbenchToolBarOptions } from '../../../../../../platform/actions/browser/toolbar.js';
+import { IAccessibilityService } from '../../../../../../platform/accessibility/common/accessibility.js';
+import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
 import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../../../platform/layout/browser/layoutService.js';
@@ -22,9 +24,10 @@ import { INotificationService } from '../../../../../../platform/notification/co
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { resourceFileName, saveResourceAs } from '../../../../../services/files/browser/resourceSave.js';
-import { serializeChatMarkdownTable } from './chatMarkdownTableCsv.js';
+import { serializeChatMarkdownTableCsv, serializeChatMarkdownTableTsv } from './chatMarkdownTableSerialization.js';
 import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExtension.js';
 import { ChatContentMarkdownRenderer, getChatMarkdownRenderOptions } from '../chatContentMarkdownRenderer.js';
+import { CopyActionViewItem } from '../copyActionViewItem.js';
 import { CHAT_RESPONSE_IMAGE_SCHEME, chatMarkdownRichContentExtension } from '../chatMarkdownRichContent.js';
 import { IncrementalDOMMorpher, markdownFrameThreshold } from './chatIncrementalRendering/chatIncrementalRendering.js';
 import type { FileSearchDirectory } from '../../../../../../platform/search/common/fileSearch.js';
@@ -160,6 +163,8 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@INotificationService private readonly notifications: INotificationService,
 		@ILayoutService private readonly layout: ILayoutService,
+		@IClipboardService private readonly clipboard: IClipboardService,
+		@IAccessibilityService private readonly accessibility: IAccessibilityService,
 	) {
 		super();
 		if (options.readResponseImage) {
@@ -646,13 +651,30 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	}
 
 	private mountTableActions(table: HTMLTableElement, scrollable: ScrollableElement, lifetime: DisposableStore): void {
+		const readRows = (): string[][] => Array.from(table.rows, row => Array.from(row.cells, cell => cell.innerText));
+		const copy: IAction = {
+			id: 'chat.markdown.copyTable',
+			label: localize({ bundle: 'ash.workbench', key: 'chat.markdown.copyTable' }, 'Copy table'),
+			tooltip: localize('chat.message.copyTooltip', 'Copy'),
+			icon: Lxicon.copy,
+			enabled: true,
+			run: () => this.clipboard.writeText(serializeChatMarkdownTableTsv(readRows())),
+		};
 		const { toolbar, download } = this.mountContentActions(scrollable.element.parentElement!, lifetime, {
 			id: 'chat.markdown.exportTable',
 			label: localize({ bundle: 'ash.workbench', key: 'chat.markdown.exportTable' }, 'Export table as CSV'),
 			toolbarLabel: localize({ bundle: 'ash.workbench', key: 'chat.markdown.tableActions' }, 'Table actions'),
+			leadingActions: [copy],
+			actionViewItemProvider: (action, options) => {
+				if (action !== copy) return undefined;
+				return new CopyActionViewItem(action, options, () => ({
+					run: copy.run,
+					onSuccess: () => this.accessibility.status(localize({ bundle: 'ash.workbench', key: 'chat.markdown.tableCopied' }, 'Table copied.')),
+					onError: error => this.notifications.error(localize({ bundle: 'ash.workbench', key: 'chat.markdown.tableCopyFailed' }, 'Could not copy table: {0}', String(error))),
+				}));
+			},
 			run: signal => {
-				const rows = Array.from(table.rows, row => Array.from(row.cells, cell => cell.innerText));
-				const csv = new Blob([serializeChatMarkdownTable(rows)], { type: 'text/csv;charset=utf-8' });
+				const csv = new Blob([serializeChatMarkdownTableCsv(readRows())], { type: 'text/csv;charset=utf-8' });
 				return this.instantiation.invokeFunction(saveResourceAs, csv, 'table.csv', table.ownerDocument, { signal });
 			},
 		});
@@ -672,6 +694,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			},
 		};
 		let expandedActionVisible = false;
+		const expandButton = (): HTMLButtonElement | null => toolbar.element.querySelector('[data-action-id="chat.markdown.expandTable"] button');
 		const viewport = scrollable.scrollableElement;
 		const updateActions = (): void => {
 			// Keep the return-focus target while the dialog is open.
@@ -679,8 +702,11 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			const overflows = viewport.scrollWidth > viewport.clientWidth;
 			if (overflows === expandedActionVisible) return;
 			expandedActionVisible = overflows;
-			toolbar.setActions(overflows ? [download, expand] : [download]);
-			if (overflows) toolbar.element.querySelector('[data-action-id="chat.markdown.expandTable"] button')?.setAttribute('aria-haspopup', 'dialog');
+			// When Expand disappears, keep keyboard focus at its previous neighbor.
+			const restoreDownloadFocus = !overflows && expandButton() === table.ownerDocument.activeElement;
+			toolbar.setActions(overflows ? [copy, download, expand] : [copy, download]);
+			if (overflows) expandButton()?.setAttribute('aria-haspopup', 'dialog');
+			if (restoreDownloadFocus) toolbar.focus(1);
 		};
 		lifetime.add(observeResize([viewport, scrollable.contentElement], updateActions));
 	}
@@ -735,6 +761,8 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		readonly id: string;
 		readonly label: string;
 		readonly toolbarLabel?: string;
+		readonly leadingActions?: readonly IAction[];
+		readonly actionViewItemProvider?: IWorkbenchToolBarOptions['actionViewItemProvider'];
 		readonly run: (signal: AbortSignal) => Promise<void>;
 	}): { toolbar: WorkbenchToolBar; download: IAction; } {
 		const host = h(container.ownerDocument, 'div', { className: 'ash-chat-content-actions' });
@@ -746,7 +774,11 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		}));
 		const controller = new AbortController();
 		lifetime.add(toDisposable(() => controller.abort()));
-		const toolbar = lifetime.add(new WorkbenchToolBar(host, this.contextMenus, { ariaLabel: options.toolbarLabel ?? options.label, tabNavigation: 'each-action' }));
+		const toolbar = lifetime.add(new WorkbenchToolBar(host, this.contextMenus, {
+			ariaLabel: options.toolbarLabel ?? options.label,
+			tabNavigation: 'each-action',
+			actionViewItemProvider: options.actionViewItemProvider,
+		}));
 		let running = false;
 		const action: IAction = {
 			id: options.id, label: options.label, tooltip: options.label, icon: Lxicon.download, enabled: true,
@@ -767,7 +799,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			if (completedAction === action) this.notifications.error(localize({ bundle: 'ash.workbench', key: 'chat.markdown.saveFailed' }, 'Could not save this content: {0}', String(error)));
 			else this.notifications.error(String(error));
 		}));
-		toolbar.setActions([action]);
+		toolbar.setActions([...(options.leadingActions ?? []), action]);
 		return { toolbar, download: action };
 	}
 

@@ -61,6 +61,10 @@ export function getChatCodeBlockCardAccessibilityHelp(): string {
 	return localize('chat.code.cardHelp', 'Use Tab to reach the code block actions. Press Left or Right to move between More Actions and Copy. Open More Actions to insert the code at the cursor, open it in a new file, or apply it to the editor when available. Press Escape to close the menu and return to More Actions.') + '\n' + getChatMermaidAccessibilityHelp();
 }
 
+export function getChatTableAccessibilityHelp(): string {
+	return localize('chat.markdown.tableScrollHelp', 'Use Tab to reach the download action for a reply image or the actions above a table. Press Enter or Space on Copy table to copy the entire table, or choose Export table as CSV to save it. Use Left or Right Arrow to scroll a focused table. On a wide table, activate Expand table to open a larger preview. Press Escape to return to the Expand table button. Find in Chat scrolls the table to the matching cell.');
+}
+
 function getChatMermaidAccessibilityHelp(): string {
 	return localize('chat.mermaid.help', 'When a Mermaid diagram is rendered, use Tab to reach its preview button or Mermaid source. Press Enter or Space to open the image preview or expand the code. Escape closes the preview and returns focus to the diagram.');
 }

@@ -1083,6 +1083,48 @@ suite('chatRenderer browser component', () => {
 		assert.deepEqual(await page.getByRole('cell').allInnerTexts(), cells);
 	});
 
+	test('Markdown table copy uses the selected table and gives feedback after the clipboard write', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?locale=zh-CN');
+		const text = '| A |\n| --- |\n| B |\n\n| Name | Value |\n| --- | --- |\n| **中文** | |\n| Formula | `=1+1` |';
+		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), text);
+		const buttons = page.getByRole('button', { name: '复制表格', exact: true });
+		await expect(buttons).toHaveCount(2);
+		const compactTable = page.getByRole('region', { name: '可滚动表格' }).filter({ has: page.getByRole('columnheader', { name: 'A', exact: true }) });
+		assert.ok((await buttons.first().boundingBox())!.x >= (await compactTable.boundingBox())!.x - 0.5);
+		const copy = buttons.nth(1);
+		const icon = copy.locator('[data-ash-icon-id="copy"]');
+		const check = copy.locator('[data-ash-icon-id="check"]');
+		await expect(copy).toHaveAttribute('tabindex', '0');
+		await copy.focus();
+		const bounds = await copy.boundingBox();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.holdClipboard(true));
+		await copy.press('Space');
+		await expect(copy).toHaveAttribute('aria-busy', 'true');
+		await expect(icon).toBeVisible();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.releaseClipboard());
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().notifications))
+			.toContain('无法复制表格：Error: clipboard rejected');
+		await expect(check).toHaveCount(0);
+		await page.evaluate(() => {
+			window.ashChatTranscriptIntegration.holdClipboard();
+			window.ashChatTranscriptIntegration.releaseClipboard();
+		});
+		await copy.press('Enter');
+		await expect(check).toBeVisible();
+		await expect(copy).toBeFocused();
+		assert.deepEqual(await copy.boundingBox(), bounds);
+		assert.equal(await page.evaluate(() => window.ashChatTranscriptIntegration.state().copied), "Name\tValue\n中文\t\nFormula\t'=1+1");
+		await expect(page.locator('.ash-aria-status').filter({ hasText: '表格已复制。' })).toHaveCount(1);
+		await expect(icon).toBeVisible();
+
+		assert.equal(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(true)), true);
+		const view = page.locator('.ash-accessible-view-content');
+		await expect(view).toHaveValue(/聚焦“复制表格”后按 Enter 或空格可复制整张表格/);
+		await view.press('Escape');
+		await expect(copy).toBeFocused();
+	});
+
 	test('wide Markdown tables scroll with the keyboard and retain their viewport during streaming', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html?locale=zh-CN');
@@ -1127,9 +1169,18 @@ suite('chatRenderer browser component', () => {
 		await region.press('ArrowRight');
 		await expect.poll(() => viewport.evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
 		const scrollLeft = await viewport.evaluate(node => node.scrollLeft);
-		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), text + row(columns.map(() => 'Appended cell')));
+		const appended = columns.map(() => 'Appended cell');
+		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), text + row(appended));
 		await expect(viewport.getByRole('row')).toHaveCount(22);
 		await expect(region).toBeFocused();
+		assert.ok(await viewport.evaluate(node => node.scrollLeft) >= scrollLeft);
+		const copy = page.getByRole('button', { name: '复制表格', exact: true });
+		await page.getByRole('button', { name: '将表格导出为 CSV', exact: true }).focus();
+		await page.keyboard.press('Shift+Tab');
+		await expect(copy).toBeFocused();
+		await page.keyboard.press('Enter');
+		const expected = [columns, ...rows.map(() => columns), appended].map(cells => cells.join('\t')).join('\n');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(expected);
 		assert.ok(await viewport.evaluate(node => node.scrollLeft) >= scrollLeft);
 
 		await viewport.evaluate(node => { node.scrollLeft = 0; });
@@ -1140,7 +1191,7 @@ suite('chatRenderer browser component', () => {
 			const bounds = node.closest('.ash-chat-markdown-table-viewport')!.getBoundingClientRect();
 			return cell.left < bounds.right && cell.right > bounds.left;
 		})).toBe(true);
-		await page.evaluate(() => window.ashChatTranscriptIntegration.stream('| Fits |\n| --- |\n| Cell |', true));
+		await page.evaluate(() => window.ashChatTranscriptIntegration.stream('| Fits |\n| --- |\n| A compact row |', true));
 		await expect(region.getByRole('columnheader', { name: 'Fits' })).toBeVisible();
 		await expect(region.getByRole('scrollbar')).toHaveCount(0);
 		await expect(expand).toHaveCount(0);

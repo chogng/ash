@@ -7,7 +7,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import type { ServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
-import { getChatCodeBlockCardAccessibilityHelp, getChatLinkPreviewAccessibilityHelp, getChatRequestAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
+import { getChatCodeBlockCardAccessibilityHelp, getChatLinkPreviewAccessibilityHelp, getChatRequestAccessibilityHelp, getChatTableAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
 import { experimentalChatGPTSelected } from '../common/chatGPTNative.js';
 import { CHAT_NAVIGATION_FOCUS_CONTEXT } from '../../chat/common/constants.js';
 import { getSessionArtifactsAccessibilityHelp } from '../../chat/browser/sessionArtifacts.js';
@@ -49,6 +49,7 @@ export function registerChatGPTAccessibility(focusContext: string, contentServic
 					+ '\n\n' + getChatLinkPreviewAccessibilityHelp()
 					+ '\n\n' + getChatRequestAccessibilityHelp(true)
 					+ '\n\n' + getChatCodeBlockCardAccessibilityHelp()
+					+ '\n\n' + getChatTableAccessibilityHelp()
 					+ '\n\n' + getSessionArtifactsAccessibilityHelp()
 					+ '\n\n' + localize('sessions.chatgpt.messageVersionsHelp', 'For a message with alternate versions, use Message versions in its toolbar. Use Up or Down Arrow to select a version and Enter to open it. Escape closes the picker.')
 					+ '\n\n' + localize('sessions.chatgpt.codeModelsHelp', 'In a new Chat without attachments, the model list also includes available Ash models. Selecting one opens an Ash Chat draft with your unsent text.')

@@ -18,6 +18,8 @@ import { createDisconnectedExtensionHostApi } from '../../../../../../platform/e
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { ConfigurationRegistry } from '../../../../../../platform/configuration/common/configurationRegistry.js';
 import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
+import { IAccessibilityService } from '../../../../../../platform/accessibility/common/accessibility.js';
+import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
 import { BrowserLayoutService, ILayoutService } from '../../../../../../platform/layout/browser/layoutService.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
@@ -52,6 +54,8 @@ function services(
 ): InstantiationService {
 	const instance = new InstantiationService(new ServiceCollection([IOpenerService, opener]));
 	instance.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None });
+	instance.registerInstance(IAccessibilityService, { status: (message: string) => assert.fail(message) } as unknown as IAccessibilityService);
+	instance.registerInstance(IClipboardService, { writeText: () => assert.fail('Unexpected clipboard write') } as unknown as IClipboardService);
 	instance.registerInstance(INotificationService, { error: (error: unknown) => assert.fail(String(error)) } as unknown as INotificationService);
 	instance.registerSingleton(ILayoutService, () => new BrowserLayoutService({ root: document.body }));
 	const registry = new ConfigurationRegistry();
