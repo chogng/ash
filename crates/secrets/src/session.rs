@@ -20,6 +20,12 @@ enum ActiveStorage {
     },
 }
 
+enum Access<'a> {
+    ReadOrCheck,
+    ConfirmedRead(&'a SecretKey),
+    Write(&'a SecretKey),
+}
+
 /// One profile's active credential facility, with a process-local fallback for a locked keyring.
 ///
 /// Background access never requests authorization. Once unavailable, durable storage is left
@@ -43,7 +49,7 @@ impl SessionSecretStore {
 
     fn access<T>(
         &self,
-        changed_key: Option<&SecretKey>,
+        access: Access<'_>,
         operation: impl Fn(&dyn SecretStore) -> Result<T, SecretStoreError>,
     ) -> Result<T, SecretStoreError> {
         let mut active = self.active.lock().map_err(lock_error)?;
@@ -71,13 +77,21 @@ impl SessionSecretStore {
                 },
             }
         }
-        let value = operation(&self.memory)?;
-        if let ActiveStorage::InMemory { changed, .. } = &mut *active
-            && let Some(key) = changed_key
-        {
-            changed.insert(key.clone());
+        let ActiveStorage::InMemory { reason, changed } = &mut *active else {
+            unreachable!("persistent access returned or switched to memory");
+        };
+        match access {
+            Access::ConfirmedRead(key) if !changed.contains(key) => Err(SecretStoreError::new(
+                *reason,
+                "persisted secret state is unavailable",
+            )),
+            Access::ReadOrCheck | Access::ConfirmedRead(_) => operation(&self.memory),
+            Access::Write(key) => {
+                let value = operation(&self.memory)?;
+                changed.insert(key.clone());
+                Ok(value)
+            }
         }
-        Ok(value)
     }
 
     // Hold the profile's selection lock throughout recovery: no provider can write to
@@ -128,19 +142,25 @@ impl SecretStore for SessionSecretStore {
     }
 
     fn check_availability(&self) -> Result<(), SecretStoreError> {
-        self.access(None, |store| store.check_availability())
+        self.access(Access::ReadOrCheck, |store| store.check_availability())
     }
 
     fn load(&self, key: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError> {
-        self.access(None, |store| store.load(key))
+        self.access(Access::ReadOrCheck, |store| store.load(key))
+    }
+
+    fn load_confirmed(&self, key: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError> {
+        self.access(Access::ConfirmedRead(key), |store| {
+            store.load_confirmed(key)
+        })
     }
 
     fn store(&self, key: &SecretKey, value: &SecretValue) -> Result<(), SecretStoreError> {
-        self.access(Some(key), |store| store.store(key, value))
+        self.access(Access::Write(key), |store| store.store(key, value))
     }
 
     fn delete(&self, key: &SecretKey) -> Result<DeleteSecretOutcome, SecretStoreError> {
-        self.access(Some(key), |store| store.delete(key))
+        self.access(Access::Write(key), |store| store.delete(key))
     }
 }
 

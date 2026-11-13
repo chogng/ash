@@ -125,6 +125,31 @@ fn recovery_commits_ephemeral_deletions_before_returning_to_disk() {
 }
 
 #[test]
+fn confirmed_reads_require_a_session_change_while_the_keyring_is_unavailable() {
+    let persisted = Arc::new(KeyringBackedStore::default());
+    let key = SecretKey::new("account").unwrap();
+    let old = SecretValue::new(b"saved".to_vec());
+    persisted.store(&key, &old).unwrap();
+    *persisted.failure.lock().unwrap() = Some(SecretStoreErrorKind::AccessDenied);
+    let store = SessionSecretStore::new(persisted.clone());
+
+    store.check_availability().unwrap();
+    assert_eq!(
+        store.load_confirmed(&key).unwrap_err().kind(),
+        SecretStoreErrorKind::AccessDenied
+    );
+    store
+        .store(&key, &SecretValue::new(b"temporary".to_vec()))
+        .unwrap();
+    assert_eq!(
+        store.load_confirmed(&key).unwrap().unwrap().expose(),
+        b"temporary"
+    );
+    store.delete(&key).unwrap();
+    assert!(store.load_confirmed(&key).unwrap().is_none());
+}
+
+#[test]
 fn an_explicit_file_choice_preserves_permission_failures_without_fallback() {
     let persisted = Arc::new(KeyringBackedStore::default());
     *persisted.mode.lock().unwrap() = Some(SecretStorageMode::File);

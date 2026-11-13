@@ -40,7 +40,7 @@ Ash 提供两条独立的 ChatGPT 订阅连接。同一模型厂商仍为 `opena
 
 只读加载不反序列化 refresh token。遵循 Codex 的 `auth_mode`、旧记录模式判定、登录方式和 workspace 限制；已有 API key 不当成订阅凭据。损坏记录不当成缺失。
 
-本机入口不创建、刷新、替换或删除 Codex 凭据。缺失、过期或失效时，登录控制面返回 `AccountExternalLoginRequired`，需在 Codex 完成登录。重新连接已有有效凭据立即完成，不打开新的 OAuth 流。断开只保存 Ash profile 中该连接的停用标志，不影响 Codex，也不改变 `chatgpt-plan`。
+本机入口不创建、刷新、替换或删除 Codex 凭据。缺失、过期或失效时，登录控制面返回 `AccountExternalLoginRequired`，需在 Codex 完成登录。重新连接已有有效凭据立即完成，不打开新的 OAuth 流。断开只保存 Ash profile 中该连接的停用标志，不影响 Codex，也不改变 `chatgpt-plan`。如果密钥环不可用，导致 Ash 无法确认该连接的断开状态，Ash 不会自动复用 Codex 凭据。
 
 每次模型请求读取当前外部凭据。明确 HTTP 401 且未交付模型事件时，最多重读一次；只有同一用户和 workspace 的外部 token 已更新才允许重试。Ash 不刷新共享 token，已开始的流不重放。账户额度查询同样使用只读身份，并拒绝返回换账号后的迟到结果。
 

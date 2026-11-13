@@ -339,9 +339,10 @@ impl ChatGptOAuth {
         if self.owner != CredentialOwner::Codex {
             return Ok(false);
         }
+        // Reuse Codex credentials only once both disconnect markers are known to be absent.
         if self
             .secrets
-            .load(&self.disconnected_key())
+            .load_confirmed(&self.disconnected_key())
             .map_err(|_| ChatGptError::new("Ash connection state could not be read"))?
             .is_some()
         {
@@ -349,7 +350,7 @@ impl ChatGptOAuth {
         }
         let legacy = self
             .secrets
-            .load(&Self::legacy_disconnected_key())
+            .load_confirmed(&Self::legacy_disconnected_key())
             .map_err(|_| ChatGptError::new("Ash connection state could not be read"))?;
         let Some(legacy) = legacy else {
             return Ok(false);
