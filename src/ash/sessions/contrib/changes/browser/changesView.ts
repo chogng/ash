@@ -15,7 +15,7 @@ import { MultiDiffEditorFileList, type IMultiDiffEditorFileListItem } from '../.
 import { ChangesStatsWidget } from '../../../../workbench/browser/changesStatsWidget.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { IChatService, createThreadChangeFileResource, type ThreadChangesSummary, type TurnChangeSetSummary } from '../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, canPreviewTurnChange, createThreadChangeFileResource, type ThreadChangesSummary, type TurnChangeSetSummary } from '../../../../workbench/services/chat/common/chatService.js';
 import { createDiffEditorInput } from '../../../../workbench/common/editor/diffEditorInput.js';
 import { createMultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
@@ -52,6 +52,7 @@ export class ChangesViewPane extends ViewPane {
 	private readonly review: Button;
 	private readonly preview: Button;
 	private readonly retry: Button;
+	private readonly retryCheckout: Button;
 	private readonly statsCache: SessionChangesStatsCache;
 	private readonly statistics = observableValue<TurnChangeSetSummary['statistics'] | undefined>(this, undefined);
 	private rows: readonly IChangesFileItem[] = [];
@@ -126,6 +127,16 @@ export class ChangesViewPane extends ViewPane {
 			onClick: () => { void this.refresh(); },
 		}));
 		this.retry.hidden = true;
+		this.retryCheckout = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			size: 'small',
+			label: localize('sessions.changes.retryCheckout', 'Retry checkout'),
+			onClick: () => {
+				const epoch = this.ownerEpoch;
+				void this.retryCommitCheckout().catch(error => this.reportOperationError(error, epoch));
+			},
+		}));
+		this.retryCheckout.hidden = true;
 		this.summary = h(container.ownerDocument, 'p', { className: 'ash-sessions-changes-summary' });
 		this.contentElement.append(this.summary);
 		this._register(autorun(reader => { this.summary.hidden = !this.statistics.read(reader); }));
@@ -324,7 +335,7 @@ export class ChangesViewPane extends ViewPane {
 	private updatePreviewSelection(): void {
 		const selected = this.tree.selection.filter(row => row.type === 'file');
 		const onlyFiles = selected.length > 0 && selected.length === this.tree.selection.length;
-		this.preview.enabled = !this.loading && onlyFiles && selected.every(row => 'summary' in row && row.summary.captureState === 'sealed' && !row.summary.committedPaths.includes(row.file.path) && row.summary.commitState !== 'queued' && row.summary.commitState !== 'committing' && 'summary' in selected[0]! && row.summary.repositoryId === selected[0].summary.repositoryId);
+		this.preview.enabled = !this.loading && onlyFiles && selected.every(row => 'summary' in row && canPreviewTurnChange(row.summary, row.file.path) && 'summary' in selected[0]! && row.summary.repositoryId === selected[0].summary.repositoryId);
 		this.markReviewed.enabled = !this.loading && onlyFiles;
 		this.markUnread.enabled = !this.loading && onlyFiles;
 	}
@@ -359,6 +370,27 @@ export class ChangesViewPane extends ViewPane {
 		});
 	}
 
+	private get blockedCheckout(): TurnChangeSetSummary | undefined {
+		const blocked = this.rows.find(row => 'summary' in row && row.summary.commitState === 'recovering');
+		return blocked && 'summary' in blocked ? blocked.summary : undefined;
+	}
+
+	private async retryCommitCheckout(): Promise<void> {
+		const blocked = this.blockedCheckout;
+		if (!this.isVisible() || this.loading || !this.retryCheckout.enabled || !blocked?.commitId) {
+			return;
+		}
+		const epoch = this.ownerEpoch;
+		this.retryCheckout.enabled = false;
+		try {
+			await this.chat.commitTurnChange(blocked.sessionId, blocked.threadId, blocked.commitId);
+		} finally {
+			if (!this.isDisposed && this.isVisible() && epoch === this.ownerEpoch) {
+				this.retryCheckout.enabled = !this.loading && !!this.blockedCheckout?.commitId;
+			}
+		}
+	}
+
 	private renderRows(): void {
 		const rows = this.visibleRows();
 		this.files.setFiles(rows.map(row => ({
@@ -388,7 +420,19 @@ export class ChangesViewPane extends ViewPane {
 		} : undefined);
 		if (!this.loading) {
 			const message = rows.length ? localize('sessions.changes.count', '{0} changed files', rows.length) : localize('sessions.changes.empty', 'No changes in this conversation.');
-			this.statusDomNode.textContent = [message, ...(!this.changesetId ? this.threadSummary?.warnings ?? [] : [])].join('\n');
+			const blocked = this.blockedCheckout;
+			const unavailable = this.rows.some(row => 'summary' in row && row.summary.commitState === 'recoveryUnavailable');
+			if (!blocked && this.retryCheckout.domNode === this.contentElement.ownerDocument.activeElement) {
+				this.focus();
+			}
+			this.retryCheckout.hidden = !blocked?.commitId;
+			this.retryCheckout.enabled = !!blocked?.commitId;
+			this.statusDomNode.textContent = [
+				message,
+				blocked && checkoutBlockedMessage(blocked),
+				unavailable && localize('sessions.changes.checkoutUnavailable', 'The commit was published, but Ash cannot finish updating the working tree because its recovery log is missing. Check the repository in Git.'),
+				...(!this.changesetId ? this.threadSummary?.warnings ?? [] : []),
+			].filter(Boolean).join('\n');
 		}
 	}
 
@@ -405,6 +449,7 @@ export class ChangesViewPane extends ViewPane {
 		this.review.enabled = false;
 		this.preview.enabled = false;
 		this.retry.hidden = true;
+		this.retryCheckout.enabled = false;
 		this.tree.domNode.setAttribute('aria-busy', 'true');
 		const selection = this.sessions.activeSelection;
 		const resource = selection ? new SessionChangesEditorInput(selection).resource : undefined;
@@ -421,6 +466,7 @@ export class ChangesViewPane extends ViewPane {
 			this.rows = [];
 			this.threadRows = [];
 			this.threadSummary = undefined;
+			this.retryCheckout.hidden = true;
 			this.files.setFiles([], this.viewMode);
 			this.review.enabled = false;
 			this.preview.enabled = false;
@@ -493,6 +539,7 @@ export class ChangesViewPane extends ViewPane {
 			this.files.setFiles([], this.viewMode);
 			this.statistics.set(owner && !this.changesetId ? this.statsCache.get(owner) : undefined, undefined);
 			this.retry.hidden = false;
+			this.retryCheckout.hidden = true;
 			this.statusDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', error instanceof Error ? error.message : String(error));
 		} finally {
 			if (!this.isDisposed && request === this.request) {
@@ -590,8 +637,22 @@ function fileState(row: IChangesFileItem): string {
 	switch (summary.commitState) {
 		case 'queued': return localize('sessions.changes.fileQueued', 'Queued');
 		case 'committing': return localize('sessions.changes.fileCommitting', 'Committing');
+		case 'recovering': return localize('sessions.changes.fileCheckoutBlocked', 'Checkout needs attention');
+		case 'recoveryUnavailable': return summary.conflictPaths.includes(row.file.path)
+			? localize('sessions.changes.fileCheckoutUnavailable', 'Published, checkout incomplete')
+			: localize('sessions.changes.fileRemaining', 'Not committed');
 		case 'conflict': return localize('sessions.changes.fileConflict', 'Conflict — preview again after resolving');
 		case 'failed': return localize('sessions.changes.fileFailed', 'Commit failed: {0}', summary.failureMessage ?? '');
 		case 'idle': case 'partiallyCommitted': case 'committed': return localize('sessions.changes.fileRemaining', 'Not committed');
 	}
+}
+
+function checkoutBlockedMessage(summary: TurnChangeSetSummary): string {
+	if (summary.conflictPaths.length) {
+		return localize('sessions.changes.checkoutBlockedFiles', 'The commit was published, but local changes block checkout for {0}. Resolve them before retrying.', summary.conflictPaths.join(', '));
+	}
+	if (summary.failureMessage) {
+		return localize('sessions.changes.checkoutBlockedError', 'The commit was published, but checkout failed: {0}', summary.failureMessage);
+	}
+	return localize('sessions.changes.checkoutBlockedRef', 'The commit was published, but its branch or checkout changed. Check the branch in Git before retrying checkout.');
 }

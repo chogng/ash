@@ -396,7 +396,9 @@ impl GitTurnChangesRuntime {
                 record.capture_state != CaptureState::Open
                     && !matches!(
                         record.commit_state,
-                        CommitState::Queued | CommitState::Committing
+                        CommitState::Queued
+                            | CommitState::Committing
+                            | CommitState::Recovering { .. }
                     )
             }))
     }
@@ -657,6 +659,28 @@ pub(super) fn summary(record: &TurnChangeSet) -> TurnChangeSetSummary {
         CommitState::Idle => (TurnChangeCommitStateDto::Idle, Vec::new(), None, None),
         CommitState::Queued => (TurnChangeCommitStateDto::Queued, Vec::new(), None, None),
         CommitState::Committing => (TurnChangeCommitStateDto::Committing, Vec::new(), None, None),
+        CommitState::Recovering {
+            commit_id,
+            paths,
+            error,
+        } => (
+            TurnChangeCommitStateDto::Recovering,
+            paths
+                .iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect(),
+            error.clone(),
+            Some(commit_id.clone()),
+        ),
+        CommitState::RecoveryUnavailable { paths } => (
+            TurnChangeCommitStateDto::RecoveryUnavailable,
+            paths
+                .iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect(),
+            None,
+            None,
+        ),
         CommitState::Committed { object_id } => (
             TurnChangeCommitStateDto::Committed,
             Vec::new(),

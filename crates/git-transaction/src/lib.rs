@@ -298,10 +298,13 @@ impl<'a> GitTransactions<'a> {
         publication: RecoveryPublication,
     ) -> GitResult<GitTreeCommitRecovery> {
         let path = journal_path(repository, transaction_id)?;
-        if !path.exists() {
-            return Ok(GitTreeCommitRecovery::None);
-        }
-        let journal = read_journal(&path)?;
+        let journal = match read_journal(&path) {
+            Ok(journal) => journal,
+            Err(GitError::Io { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(GitTreeCommitRecovery::None);
+            }
+            Err(error) => return Err(error),
+        };
         if journal.checkout_installed {
             return Ok(GitTreeCommitRecovery::Committed {
                 object_id: journal.new_head,
@@ -329,6 +332,18 @@ impl<'a> GitTransactions<'a> {
             });
         };
         let checkout_repository = self.git.open_repository(&checkout.root).await?;
+        // A retry can happen after the user switches branches or replaces this checkout.
+        // Matching file trees alone do not authorize installing into that checkout.
+        if checkout_repository.common_dir() != repository.common_dir()
+            || !matches!(
+                self.git.head(&checkout_repository).await?,
+                GitHead::Branch { name, object_id, .. }
+                    if journal.target_ref.strip_prefix("refs/heads/") == Some(name.as_str())
+                        && object_id == journal.new_head
+            )
+        {
+            return Ok(GitTreeCommitRecovery::Conflict { paths: Vec::new() });
+        }
         let current_index = self.git.capture_index_tree(&checkout_repository).await?;
         let current_worktree = self.git.capture_worktree_tree(&checkout_repository).await?;
         let desired_index = GitTreeId::new(checkout.desired_index.clone())?;

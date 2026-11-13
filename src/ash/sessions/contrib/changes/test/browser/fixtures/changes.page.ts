@@ -169,6 +169,19 @@ function multipleTurns(): readonly TurnChangeDetails[] {
 	return [details, { ...details, summary: { ...details.summary, changeSetId: 'second', turnId: 'second-turn' }, files: [{ ...details.files[0]!, path: 'tests/main.test.ts' }] }];
 }
 if (new URL(location.href).searchParams.has('multiple')) { ledger = multipleTurns(); }
+const checkoutState = new URL(location.href).searchParams.get('checkout');
+const checkoutAttempts: string[][] = [];
+if (checkoutState === 'blocked' || checkoutState === 'unavailable') {
+	ledger = [{
+		...details,
+		summary: {
+			...details.summary,
+			commitState: checkoutState === 'blocked' ? 'recovering' : 'recoveryUnavailable',
+			commitId: checkoutState === 'blocked' ? 'published-checkout' : undefined,
+			conflictPaths: [details.files[0]!.path],
+		},
+	}];
+}
 const threadUpdates = resources.add(new Emitter<ThreadUpdateEnvelope>());
 let checkpoint: ThreadChangesSummary | undefined;
 const summaryReads: unknown[] = [];
@@ -214,6 +227,17 @@ services.registerInstance(IChatService, {
 	},
 	queueTurn: async (request: unknown) => { agentRequests.push({ action: 'queue', request }); },
 	onDidUpdateThread: threadUpdates.event, onDidBecomeReady: Event.None, onDidUpdateTurnChanges: Event.None,
+	commitTurnChange: async (sessionId: string, threadId: string, commitId: string) => {
+		checkoutAttempts.push([sessionId, threadId, commitId]);
+		ledger = [{
+			...details,
+			summary: {
+				...details.summary, commitState: 'committed', committedPaths: [details.files[0]!.path], revision: 2,
+			},
+		}];
+		changed.fire();
+		return ledger.map(entry => entry.summary);
+	},
 	listTurnChanges: async (sessionId: string, threadId: string) => {
 		const held = holdNextLedger;
 		holdNextLedger = undefined;
@@ -392,6 +416,7 @@ declare global {
 			setLocale(): void;
 			opened(): number;
 			previewCommit(): void;
+			checkoutAttempts(): readonly string[][];
 			reviews(): readonly { resource: string; changesetId?: string; }[];
 			content(): string;
 			gitCalls(): readonly string[];
@@ -514,6 +539,7 @@ window.ashChangesIntegration = {
 	fail: value => { fail = value; changed.fire(); },
 	setLocale: () => { setNlsMessages('zh-CN', chineseCatalog.bundles); changed.fire(); },
 	opened: () => opened,
+	checkoutAttempts: () => checkoutAttempts,
 	previewCommit: () => {
 		const selected = services.get(ISessionsService).activeSelection;
 		if (selected?.kind === 'session') void services.get(ISessionChangesService).previewCommit(new SessionChangesEditorInput(selected).sessionResource, CancellationToken.None);

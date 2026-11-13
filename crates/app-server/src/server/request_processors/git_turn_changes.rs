@@ -497,13 +497,31 @@ impl<'a> GitTurnChangesRequestProcessor<'a> {
                 "commit selection is outside the current Thread history".into(),
             ));
         }
-        for record in &mut records {
-            record.commit_state = CommitState::Queued;
-            record.revision += 1;
-        }
-        let response = result(&TurnChangesMutationResult {
-            change_sets: records.iter().map(summary).collect(),
-        })?;
+        let response = if matches!(
+            commit.state,
+            git_turn_changes::TurnCommitState::Recovering { .. }
+        ) {
+            result(&TurnChangesMutationResult {
+                change_sets: visible
+                    .iter()
+                    .filter(|record| {
+                        commit
+                            .sources
+                            .iter()
+                            .any(|source| source.change_set_id == record.change_set_id)
+                    })
+                    .map(summary)
+                    .collect(),
+            })?
+        } else {
+            for record in &mut records {
+                record.commit_state = CommitState::Queued;
+                record.revision += 1;
+            }
+            result(&TurnChangesMutationResult {
+                change_sets: records.iter().map(summary).collect(),
+            })?
+        };
         let updated = runtime
             .store
             .queue_publication(

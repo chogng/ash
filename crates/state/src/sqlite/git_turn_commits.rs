@@ -65,7 +65,10 @@ pub(super) fn create_schema(transaction: &Transaction<'_>) -> Result<(), String>
                     before_tree: record.before_tree.clone(),
                     after_tree: after.clone(),
                 },
-                CommitState::Idle | CommitState::PartiallyCommitted { .. } => {
+                CommitState::Idle
+                | CommitState::PartiallyCommitted { .. }
+                | CommitState::Recovering { .. }
+                | CommitState::RecoveryUnavailable { .. } => {
                     return Err("unexpected legacy commit state".into());
                 }
             };
@@ -78,7 +81,10 @@ pub(super) fn create_schema(transaction: &Transaction<'_>) -> Result<(), String>
                     message: "migrated publication conflict".into(),
                 },
                 CommitState::Failed { message } => TurnCommitState::Failed { message },
-                CommitState::Idle | CommitState::PartiallyCommitted { .. } => {
+                CommitState::Idle
+                | CommitState::PartiallyCommitted { .. }
+                | CommitState::Recovering { .. }
+                | CommitState::RecoveryUnavailable { .. } => {
                     return Err("unexpected legacy commit state".into());
                 }
             };
@@ -292,6 +298,13 @@ impl TurnCommitStore for SqliteTurnChangeStore {
             return Ok(Vec::new());
         }
         let record = load_commit(&transaction, commit_id)?;
+        if matches!(record.state, TurnCommitState::Recovering { .. }) {
+            // The existing record already reserves the selection. Only record the retry command;
+            // the worker will recheck the current state under the repository operation lock.
+            receipt(&transaction, command_id, fingerprint, response)?;
+            transaction.commit().map_err(storage)?;
+            return Ok(Vec::new());
+        }
         let captures = record
             .sources
             .iter()

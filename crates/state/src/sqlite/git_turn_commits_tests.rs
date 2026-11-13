@@ -603,14 +603,10 @@ esac"#,
             .unwrap();
         assert!(wrapper.path().join("injected").exists());
         assert_eq!(git(&scenario.source, &["rev-parse", "HEAD"]), object_id);
-        assert_eq!(
-            scenario
-                .store
-                .load(&record.change_set_id)
-                .unwrap()
-                .commit_state,
-            CommitState::Committing
-        );
+        assert!(matches!(
+            scenario.store.load(&record.change_set_id).unwrap().commit_state,
+            CommitState::Recovering { commit_id, .. } if commit_id == "recover-install"
+        ));
         assert!(
             git_turn_changes::require_settled_publications(
                 &scenario.store.list_commits(&record.thread_id).unwrap()
@@ -677,7 +673,7 @@ esac"#,
 #[cfg(unix)]
 #[tokio::test]
 async fn pending_and_legacy_checkout_conflicts_preserve_edits_and_never_republish() {
-    for legacy in [false, true] {
+    for (legacy, journal_missing) in [(false, false), (true, false), (false, true)] {
         let scenario = Scenario::new();
         let original = std::fs::read_to_string(scenario.source.join("a.txt")).unwrap();
         let base_head = git(&scenario.source, &["rev-parse", "HEAD"]);
@@ -792,16 +788,53 @@ esac"#,
             )
             .is_err()
         );
-        // Even a missing journal or an external ref reset cannot authorize re-publication.
-        let saved_journal = std::fs::read(&journal).unwrap();
-        std::fs::remove_file(&journal).unwrap();
-        assert!(
-            git_turn_changes::publish_selection(&reopened, &recovery, &target, "pending-save")
-                .await
-                .unwrap_err()
-                .contains("refusing to publish again")
-        );
-        std::fs::write(&journal, saved_journal).unwrap();
+        if journal_missing {
+            std::fs::remove_file(&journal).unwrap();
+            let updated =
+                git_turn_changes::publish_selection(&reopened, &recovery, &target, "pending-save")
+                    .await
+                    .unwrap();
+            assert_eq!(
+                updated[0].commit_state,
+                CommitState::RecoveryUnavailable {
+                    paths: vec!["a.txt".into()],
+                }
+            );
+            assert_eq!(
+                reopened.load_commit("pending-save").unwrap().state,
+                TurnCommitState::RecoveryUnavailable
+            );
+            assert!(
+                git_turn_changes::require_settled_publications(
+                    &reopened.list_commits(&capture.thread_id).unwrap(),
+                )
+                .is_ok()
+            );
+            assert!(
+                reopened
+                    .queue_publication("duplicate", "queue-after-loss", "duplicate", "{}")
+                    .is_err()
+            );
+            assert!(
+                reopened
+                    .queue_publication("pending-save", "retry-after-loss", "retry", "{}")
+                    .is_err()
+            );
+            assert!(
+                git_turn_changes::publish_selection(&reopened, &recovery, &target, "pending-save",)
+                    .await
+                    .unwrap()
+                    .is_empty()
+            );
+            assert!(!guard.path().join("injected").exists());
+            assert_eq!(git(&scenario.source, &["rev-parse", "HEAD"]), published);
+            assert_eq!(
+                std::fs::read_to_string(scenario.source.join("a.txt")).unwrap(),
+                "external editor save\n"
+            );
+            continue;
+        }
+        // An external ref reset cannot authorize re-publication.
         git(
             &scenario.source,
             &["update-ref", "refs/heads/main", &base_head, &published],
@@ -819,8 +852,39 @@ esac"#,
             &scenario.source,
             &["update-ref", "refs/heads/main", &published, &base_head],
         );
+        reopened
+            .queue_publication("pending-save", "retry-checkout", "retry", "{}")
+            .unwrap();
+        reopened
+            .queue_publication("pending-save", "retry-checkout", "retry", "{}")
+            .unwrap();
         // The editor's owner resolves the blocking save; recovery may now finish the same object.
-        std::fs::write(scenario.source.join("a.txt"), original).unwrap();
+        std::fs::write(scenario.source.join("a.txt"), &original).unwrap();
+        // The original trees can match while HEAD points to a different branch at the same ID.
+        git(&scenario.source, &["branch", "other", &published]);
+        git(
+            &scenario.source,
+            &["symbolic-ref", "HEAD", "refs/heads/other"],
+        );
+        git_turn_changes::publish_selection(&reopened, &recovery, &target, "pending-save")
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(scenario.source.join("a.txt")).unwrap(),
+            original
+        );
+        assert!(journal.exists());
+        assert_eq!(
+            reopened.load_commit("pending-save").unwrap().state,
+            TurnCommitState::Recovering {
+                paths: Vec::new(),
+                error: None
+            }
+        );
+        git(
+            &scenario.source,
+            &["symbolic-ref", "HEAD", "refs/heads/main"],
+        );
         git_turn_changes::publish_selection(&reopened, &recovery, &target, "pending-save")
             .await
             .unwrap();

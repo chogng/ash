@@ -75,6 +75,9 @@ pub enum TurnCommitState {
         #[serde(default)]
         error: Option<String>,
     },
+    /// The publication is recorded, but its checkout journal is missing. Keep the selection
+    /// reserved while this record exists, and let the owner leave or delete the Session.
+    RecoveryUnavailable,
     Committed {
         object_id: String,
     },
@@ -372,23 +375,33 @@ pub async fn publish_selection(
             .await
     } else {
         transaction.recover_tree_commit(repository, commit_id).await
-    }
-    .map_err(|error| error.to_string())?;
+    };
     let outcome = match recovery {
-        GitTreeCommitRecovery::Committed { object_id } => {
+        Err(error) if matches!(record.state, TurnCommitState::Recovering { .. }) => {
+            GitTreeCommitResult::CheckoutPending {
+                paths: Vec::new(),
+                error: Some(error.to_string()),
+            }
+        }
+        Err(error) => return Err(error.to_string()),
+        Ok(GitTreeCommitRecovery::Committed { object_id }) => {
             GitTreeCommitResult::Committed { object_id }
         }
-        GitTreeCommitRecovery::Conflict { paths } => {
+        Ok(GitTreeCommitRecovery::Conflict { paths }) => {
             GitTreeCommitResult::CheckoutPending { paths, error: None }
         }
-        GitTreeCommitRecovery::None | GitTreeCommitRecovery::RolledBack => {
-            if recovery_only {
-                return if matches!(record.state, TurnCommitState::Conflict { .. }) {
-                    Ok(Vec::new())
-                } else {
-                    Err("Published Turn commit is missing its recovery journal; refusing to publish again.".into())
-                };
+        Ok(GitTreeCommitRecovery::None | GitTreeCommitRecovery::RolledBack) if recovery_only => {
+            if matches!(record.state, TurnCommitState::Conflict { .. }) {
+                return Ok(Vec::new());
             }
+            let expected = record.revision;
+            record.revision += 1;
+            record.state = TurnCommitState::RecoveryUnavailable;
+            return store
+                .update_publication(expected, &record)
+                .map_err(|error| error.to_string());
+        }
+        Ok(GitTreeCommitRecovery::None | GitTreeCommitRecovery::RolledBack) => {
             match &record.publication {
                 TurnPublication::Prepared { commit } => transaction
                     .publish_prepared_tree_commit(repository, commit)
@@ -506,6 +519,8 @@ pub fn derive_commit_progress(record: &mut TurnChangeSet, commits: &[TurnCommitR
         }
     }
     let mut pending = None;
+    let mut recovering = None;
+    let mut unavailable_paths = BTreeSet::new();
     let mut terminal = None;
     for commit in commits {
         let Some(source) = commit
@@ -528,8 +543,17 @@ pub fn derive_commit_progress(record: &mut TurnChangeSet, commits: &[TurnCommitR
                     pending = Some(CommitState::Queued);
                 }
             }
-            TurnCommitState::Publishing | TurnCommitState::Recovering { .. } => {
-                pending = Some(CommitState::Committing);
+            TurnCommitState::Publishing => pending = Some(CommitState::Committing),
+            TurnCommitState::Recovering { paths, error } => {
+                // Expose the oldest blocked publication first so every reservation can be retried.
+                recovering.get_or_insert_with(|| CommitState::Recovering {
+                    commit_id: commit.commit_id.clone(),
+                    paths: paths.clone(),
+                    error: error.clone(),
+                });
+            }
+            TurnCommitState::RecoveryUnavailable => {
+                unavailable_paths.extend(source.paths.iter().cloned());
             }
             TurnCommitState::Conflict { paths, message } => {
                 terminal = Some(CommitState::Conflict {
@@ -545,7 +569,11 @@ pub fn derive_commit_progress(record: &mut TurnChangeSet, commits: &[TurnCommitR
             TurnCommitState::Preview | TurnCommitState::Committed { .. } => {}
         }
     }
-    record.commit_state = if let Some(active) = pending.or(terminal) {
+    let unavailable = (!unavailable_paths.is_empty()).then(|| CommitState::RecoveryUnavailable {
+        paths: unavailable_paths.into_iter().collect(),
+    });
+    record.commit_state = if let Some(active) = recovering.or(pending).or(unavailable).or(terminal)
+    {
         active
     } else if record.committed_paths.is_empty() {
         CommitState::Idle
@@ -629,6 +657,7 @@ pub fn queued_publication(
                     TurnCommitState::Queued
                         | TurnCommitState::Publishing
                         | TurnCommitState::Recovering { .. }
+                        | TurnCommitState::RecoveryUnavailable
                         | TurnCommitState::Committed { .. }
                 )
             })
@@ -686,7 +715,9 @@ pub fn validate_publication_update(
                 )
                 | (
                     TurnCommitState::Recovering { .. },
-                    TurnCommitState::Recovering { .. } | TurnCommitState::Committed { .. }
+                    TurnCommitState::Recovering { .. }
+                        | TurnCommitState::RecoveryUnavailable
+                        | TurnCommitState::Committed { .. }
                 )
                 | (
                     TurnCommitState::Conflict { .. },

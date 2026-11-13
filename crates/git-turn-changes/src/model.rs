@@ -63,6 +63,14 @@ pub enum CommitState {
     Idle,
     Queued,
     Committing,
+    Recovering {
+        commit_id: String,
+        paths: Vec<PathBuf>,
+        error: Option<String>,
+    },
+    RecoveryUnavailable {
+        paths: Vec<PathBuf>,
+    },
     Committed {
         object_id: String,
     },
@@ -412,7 +420,7 @@ impl TurnChangeSet {
     pub fn discard(&mut self) -> Result<(), TurnChangeError> {
         if matches!(
             self.commit_state,
-            CommitState::Queued | CommitState::Committing
+            CommitState::Queued | CommitState::Committing | CommitState::Recovering { .. }
         ) {
             return Err(TurnChangeError::InvalidTransition);
         }

@@ -3,7 +3,7 @@ import { localize } from '../../nls.js';
 import { throwIfCancelled } from '../../base/common/cancellation.js';
 import { raceCancellationError } from '../../base/common/async.js';
 import { equals } from '../../base/common/objects.js';
-import type { IChatService, TurnChangeFile, TurnChangeFileContents, TurnChangeSetSummary, TurnCommitPreview } from '../../workbench/services/chat/common/chatService.js';
+import { canPreviewTurnChange, type IChatService, type TurnChangeFile, type TurnChangeFileContents, type TurnChangeSetSummary, type TurnCommitPreview } from '../../workbench/services/chat/common/chatService.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import type { IActiveSessionThread, ISessionFileChange } from '../services/sessions/common/session.js';
 import { createSessionFileChange } from '../services/sessions/common/session.js';
@@ -225,8 +225,7 @@ function turnFileInput(file: ComposedTurnFile): MultiDiffEditorInputItem {
 function turnReviewContextKeys(summary: TurnChangeSetSummary, path: string, canReview: boolean): Readonly<Record<string, boolean>> {
 	return {
 		'sessions.changesCanReview': canReview,
-		'sessions.changesCanPreview': summary.captureState === 'sealed' && !summary.committedPaths.includes(path)
-			&& summary.commitState !== 'queued' && summary.commitState !== 'committing',
+		'sessions.changesCanPreview': canPreviewTurnChange(summary, path),
 	};
 }
 

@@ -16,6 +16,28 @@ suite('changes browser component', () => {
 		await page.keyboard.press('Escape');
 	});
 
+	test('blocked checkout explains the conflict in Chinese and retries the original commit by keyboard', async () => {
+		const { page } = browserTests;
+		await page.goto('/changes.html?checkout=blocked&locale=zh-CN');
+		const retry = page.getByRole('button', { name: '重试检出', exact: true });
+		await expect(retry).toBeEnabled();
+		await expect(page.getByRole('status').filter({ hasText: '本地更改阻止了检出' })).toContainText('src/a-long-directory-name/main.ts');
+		await retry.focus();
+		await page.keyboard.press('Enter');
+		await expect(retry).toBeHidden();
+		expect(await page.evaluate(() => window.ashChangesIntegration.checkoutAttempts())).toEqual([['session', 'thread', 'published-checkout']]);
+	});
+
+	test('a missing checkout journal is actionable without offering to republish the files', async () => {
+		const { page } = browserTests;
+		await page.goto('/changes.html?checkout=unavailable');
+		await expect(page.getByRole('status').filter({ hasText: 'recovery log is missing' })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Retry checkout' })).toBeHidden();
+		await page.getByRole('combobox', { name: 'Changes from Turn' }).selectOption('change');
+		await page.getByRole('treeitem').filter({ hasText: 'main.ts' }).click();
+		await expect(page.getByRole('button', { name: 'Preview selected changes' })).toBeDisabled();
+	});
+
 	for (const direction of ['topToBottom', 'bottomToTop'] as const) test(`Animated counts resize and interrupt in ${direction}`, async function () {
 		const { page } = browserTests;
 
