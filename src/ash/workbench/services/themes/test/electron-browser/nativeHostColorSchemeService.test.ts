@@ -36,7 +36,7 @@ test('a system event wins over an older startup read and disposed windows ignore
 		openExternal: unexpected, showMessageBox: unexpected,
 		listWindows: unexpected, focusWindowById: unexpected, focusWindow: unexpected, closeWindow: unexpected, closeOtherWindows: unexpected,
 		getZoomLevel: unexpected, onDidChangeZoomLevel: unexpected, setZoomLevel: unexpected,
-		getAuxiliaryWindowState: async () => { throw new Error('Unused window state'); },
+		getAuxiliaryWindowInitialization: async () => { throw new Error('Unused window state'); },
 		onDidChangeAuxiliaryWindowState: () => ({ dispose() { } }),
 		onDidChangeWindowAlwaysOnTop: () => ({ dispose() { } }),
 		isAlwaysOnTop: unexpected, setAlwaysOnTop: unexpected, performNativeTabAction: unexpected, openNewWindowTab: unexpected,

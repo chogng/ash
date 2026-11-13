@@ -9,6 +9,7 @@ import { execFile } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { createServer } from 'node:http';
 
 const run = promisify(execFile);
 test.use({ gitRepository: true });
@@ -47,20 +48,63 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 			else if (event !== WEB_APP_SERVER_DISCONNECT_EVENT) throw new Error(`Unexpected transport event ${event}`);
 		},
 	});
+	const patches = new Map<string, string>();
+	const applied = new Set<string>();
+	// Only model output is controlled; the real editing Tool, capture and Git publication run in Ash.
+	const modelServer = createServer(async (request, response) => {
+		try {
+			if (request.method === 'GET') {
+				response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: 'turn-selection-model' }] }));
+				return;
+			}
+			const chunks: Buffer[] = [];
+			for await (const chunk of request) chunks.push(Buffer.from(chunk));
+			const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { messages?: { role: string; content: unknown; }[]; };
+			const edit = [...patches].find(([prompt]) => body.messages?.some(message => message.role === 'user' && JSON.stringify(message.content).includes(prompt)));
+			const patch = edit && !applied.has(edit[0]);
+			const delta = patch ? { tool_calls: [{ index: 0, id: `turn-selection-${applied.size}`, type: 'function', function: { name: 'apply_patch', arguments: JSON.stringify({ patch: edit[1] }) } }] } : { content: 'Turn selection fixture complete.' };
+			if (patch) applied.add(edit[0]);
+			const packet = (value: unknown) => `data: ${JSON.stringify(value)}\n\n`;
+			response.writeHead(200, { 'content-type': 'text/event-stream' });
+			response.end(packet({ id: 'turn-selection', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason: null }] })
+				+ packet({ id: 'turn-selection', object: 'chat.completion.chunk', choices: [{ index: 0, delta: {}, finish_reason: patch ? 'tool_calls' : 'stop' }] }) + 'data: [DONE]\n\n');
+		} catch (error) {
+			response.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { message: String(error) } }));
+		}
+	});
+	await new Promise<void>(resolve => modelServer.listen(0, '127.0.0.1', resolve));
 	try {
 		await client.connect();
+		const address = modelServer.address();
+		if (!address || typeof address === 'string') throw new Error('The turn selection model fixture has no port');
+		const provider = 'custom-turn-selection-fixture';
+		const model = { provider, model: 'turn-selection-model' };
 		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
-		await client.request(APP_SERVER_METHODS['execPolicy/rule/upsert'], { commandId: 'allow-turn-selection-shell', expectedRevision: config.revision, rule: { id: 'turn-selection-shell', selector: { type: 'source', source: 'built_in_tool', sourceId: 'shell-command' }, effect: { type: 'allowUnsandboxed' }, justification: 'The scenario writes only to its isolated temporary repositories.' } });
-		const create = async (name: string, command: string): Promise<{ sessionId: string; threadId: string; }> => {
+		await client.request(APP_SERVER_METHODS['provider/configure'], {
+			commandId: 'turn-selection-provider', expectedRevision: config.revision, config: {
+				connection: provider, provider, baseUrl: `http://127.0.0.1:${address.port}/v1`, custom: { name: 'Turn selection fixture', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 }, modelContext: { [model.model]: { contextWindow: 272_000 } },
+			}
+		});
+		await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-turn-selection-key' });
+		const create = async (name: string, patch: string, paths: readonly string[]): Promise<{ sessionId: string; threadId: string; }> => {
+			patches.set(name, patch);
 			const { session } = await client.request(APP_SERVER_METHODS['session/create'], { commandId: `create-${name}`, kind: 'code', title: name, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const identity = { sessionId: session.sessionId, threadId: session.threads[0]!.threadId };
 			const { thread } = await client.request(APP_SERVER_METHODS['session/thread/read'], identity);
-			await client.request(APP_SERVER_METHODS['session/request'], { ...identity, commandId: `write-${name}`, request: { type: 'startShellTurn', threadId: identity.threadId, expectedSequence: thread.sequence, approvalMode: 'bypassPermissions', command, workingDirectory: '.' } });
+			await client.request(APP_SERVER_METHODS['session/request'], { ...identity, commandId: `write-${name}`, request: { type: 'startTurn', threadId: identity.threadId, expectedSequence: thread.sequence, mode: 'agent', approvalMode: 'bypassPermissions', model, input: [{ type: 'text', text: name }] } });
+			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], identity)).thread.turns.at(-1)?.status).toBe('completed');
+			const completed = (await client.request(APP_SERVER_METHODS['session/thread/read'], identity)).thread.turns.at(-1)!;
+			const results = completed.items.filter(item => item.type === 'toolResult');
+			expect(results, JSON.stringify(completed)).toHaveLength(1);
+			expect(results[0]).toMatchObject({ isError: false });
 			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], identity)).changeSets[0]?.captureState).toBe('sealed');
+			const capture = (await client.request(APP_SERVER_METHODS['turnChanges/list'], identity)).changeSets[0]!;
+			const details = await client.request(APP_SERVER_METHODS['turnChanges/read'], { ...identity, changeSetId: capture.changeSetId });
+			expect(details.files.map(file => file.path).sort()).toEqual([...paths].sort());
 			return identity;
 		};
-		const a = await create('Selected files A', process.platform === 'win32' ? 'echo const value = 42;>main.ts & echo remaining A>remaining.txt' : "printf 'const value = 42;\\n' > main.ts; printf 'remaining A\\n' > remaining.txt");
-		const b = await create('Selected files B', process.platform === 'win32' ? 'echo separate B>other-session.txt' : "printf 'separate B\\n' > other-session.txt");
+		const a = await create('Selected files A', '*** Begin Patch\n*** Update File: main.ts\n@@\n-const value = 1;\n+const value = 42;\n*** Add File: remaining.txt\n+remaining A\n*** End Patch', ['main.ts', 'remaining.txt']);
+		const b = await create('Selected files B', '*** Begin Patch\n*** Add File: other-session.txt\n+separate B\n*** End Patch', ['other-session.txt']);
 		const git = async (...args: string[]): Promise<string> => (await run('git', args, { cwd: testWorkspace.directory })).stdout.trim();
 		const initialHead = await git('rev-parse', 'HEAD');
 		const changeB = (await client.request(APP_SERVER_METHODS['turnChanges/list'], b)).changeSets[0]!;
@@ -175,5 +219,8 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		expect(await git('show', ':external.txt')).toBe('staged local');
 		expect(await readFile(join(testWorkspace.directory, 'external.txt'), 'utf8')).toBe('unstaged local\n');
 		expect(await readFile(join(testWorkspace.directory, 'untracked.txt'), 'utf8')).toBe('untracked local\n');
-	} finally { client.dispose(); incoming.dispose(); closed.dispose(); await frames.close(); launcher.dispose(); }
+	} finally {
+		client.dispose(); incoming.dispose(); closed.dispose(); await frames.close(); launcher.dispose();
+		await new Promise<void>((resolve, reject) => { modelServer.close(error => error ? reject(error) : resolve()); modelServer.closeAllConnections(); });
+	}
 });

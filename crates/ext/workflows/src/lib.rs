@@ -80,6 +80,7 @@ impl Runtime<'_> {
             command,
             request,
             None,
+            None,
             |thread, request, routing| {
                 self.threads
                     .start_turn_with_model_routing(thread, request, None, routing)
@@ -94,13 +95,15 @@ impl Runtime<'_> {
         command: Command,
         request: StartTurnRequest,
         model_routing: Option<protocol::TurnModelRouting>,
+        precondition: Option<ash_core::ThreadEventPrecondition>,
         submit: impl FnOnce(
             &ThreadId,
             StartTurnRequest,
             Option<protocol::TurnModelRouting>,
         ) -> Result<ash_core::StartTurnResult, CoreError>,
     ) -> Result<Receipt, CoreError> {
-        let plan = self.prepare_with_model_routing(root, command, request, model_routing)?;
+        let plan =
+            self.prepare_with_model_routing(root, command, request, model_routing, precondition)?;
         self.finish(root, plan, submit)
     }
 
@@ -111,7 +114,7 @@ impl Runtime<'_> {
         command: Command,
         request: StartTurnRequest,
     ) -> Result<Plan, CoreError> {
-        self.prepare_with_model_routing(root, command, request, None)
+        self.prepare_with_model_routing(root, command, request, None, None)
     }
 
     fn prepare_with_model_routing(
@@ -120,6 +123,7 @@ impl Runtime<'_> {
         command: Command,
         request: StartTurnRequest,
         model_routing: Option<protocol::TurnModelRouting>,
+        precondition: Option<ash_core::ThreadEventPrecondition>,
     ) -> Result<Plan, CoreError> {
         let parent = self.threads.read_thread(root)?;
         if parent.agent_context_seed.is_some() {
@@ -133,13 +137,26 @@ impl Runtime<'_> {
             model_routing.is_some(),
         )?;
         let command_id = request.command_id.clone();
-        self.store.commit(
+        let plan = self.store.commit(
             &parent.session_id,
             root,
             &command_id,
             &request_key,
-            |previous| self.plan(&parent, &command, request, model_routing, previous),
-        )
+            |previous| {
+                self.plan(
+                    &parent,
+                    &command,
+                    request,
+                    model_routing,
+                    precondition.clone(),
+                    previous,
+                )
+            },
+        )?;
+        if plan.submission.precondition != precondition {
+            return Err(CoreError::CommandConflict);
+        }
+        Ok(plan)
     }
 
     fn plan(
@@ -148,6 +165,7 @@ impl Runtime<'_> {
         command: &Command,
         request: StartTurnRequest,
         model_routing: Option<protocol::TurnModelRouting>,
+        precondition: Option<ash_core::ThreadEventPrecondition>,
         mut previous: Option<Work>,
     ) -> Result<Plan, CoreError> {
         if command.mode == Mode::ParallelDevelop {
@@ -251,19 +269,37 @@ impl Runtime<'_> {
             response_sequence: None,
             transition,
             agent,
-            submission: model::Submission::new(request, parent.sequence, model_routing),
+            submission: model::Submission::new(
+                request,
+                parent.sequence,
+                model_routing,
+                precondition,
+            ),
         })
     }
 
-    /// Replays committed workflow actions after host services and Thread journals are restored.
-    pub fn recover(&self) -> Result<usize, CoreError> {
+    /// Replays committed workflow actions through the host's admission authority.
+    pub fn recover(
+        &self,
+        mut submit: impl FnMut(
+            &ThreadId,
+            StartTurnRequest,
+            Option<protocol::TurnModelRouting>,
+            Option<&ash_core::ThreadEventPrecondition>,
+        ) -> Result<ash_core::StartTurnResult, CoreError>,
+    ) -> Result<usize, CoreError> {
         let pending = self.store.pending()?;
         let count = pending.len();
         for (root, plan) in pending {
-            self.finish(&root, plan, |thread, request, routing| {
-                self.threads
-                    .start_turn_with_model_routing(thread, request, None, routing)
-            })?;
+            let precondition = plan.submission.precondition.clone();
+            match self.finish(&root, plan, |thread, request, routing| {
+                submit(thread, request, routing, precondition.as_ref())
+            }) {
+                Ok(_)
+                | Err(CoreError::ThreadStore(ash_core::ThreadStoreError::AuthorizationRevoked)) => {
+                }
+                Err(error) => return Err(error),
+            }
         }
         Ok(count)
     }
@@ -293,6 +329,9 @@ impl Runtime<'_> {
                             | CoreError::Policy(_)
                             | CoreError::CommandConflict
                             | CoreError::NotFound(_)
+                            | CoreError::ThreadStore(
+                                ash_core::ThreadStoreError::AuthorizationRevoked
+                            )
                     ) {
                         self.store.abort(root, &plan.submission.command_id)?;
                     }

@@ -22,7 +22,7 @@ import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from '../../workbench/common/views.js';
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from '../../workbench/contrib/chat/common/chat.js';
-import { IChatSessionNavigationService, type IChatSessionNavigationService as IChatSessionNavigationServiceContract } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { IChatSessionNavigationService, type IChatSessionNavigationService as IChatSessionNavigationServiceContract, type IPreparedChatConversation } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { SessionChatViewPane } from './chatViewPane.js';
@@ -32,6 +32,7 @@ import { registerChatSessionsActions } from '../../workbench/contrib/chat/browse
 import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { ForkConversationAction } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
+import '../services/generatedFiles/browser/generatedFiles.contribution.js';
 import '../contrib/sessions/browser/sessionsActions.js';
 import '../contrib/sessions/browser/views/sessionsViewActions.js';
 import { IChatService, type ChatAgent } from '../../workbench/services/chat/common/chatService.js';
@@ -56,6 +57,9 @@ class ChatSessionNavigationService extends Disposable implements IChatSessionNav
 
 	prepareConversationLink(sessionId: string, threadId: string): Promise<OpenSessionLink> {
 		return this.links.prepare(sessionId, threadId);
+	}
+	prepareConversation(sessionId: string, threadId: string): Promise<IPreparedChatConversation> {
+		return this.links.prepareConversation(sessionId, threadId);
 	}
 
 	async openConversationLink(address: OpenSessionLink): Promise<void> {

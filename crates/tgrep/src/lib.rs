@@ -24,7 +24,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-pub const VERSION: &str = "1.2.3-ash.58629d2.1";
+pub const VERSION: &str = "1.2.7-ash.70c3b0a.1";
 const TIMEOUT: Duration = Duration::from_secs(30);
 const INDEX_TIMEOUT: Duration = Duration::from_secs(600);
 
@@ -278,6 +278,12 @@ enum Registration {
         lease: String,
         generation: Value,
     },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SearchAdmission {
+    Wait,
+    ReadyOnly,
 }
 
 struct PendingAttachment {
@@ -636,6 +642,30 @@ impl Session {
         query: &Query<'_>,
         cancellation: &CancellationToken,
     ) -> Result<SearchResult, Error> {
+        self.search_with_admission(query, cancellation, SearchAdmission::Wait)
+    }
+
+    /// Queries the current published index without waiting for it to become ready.
+    /// The caller can scan when there is no verified view to query.
+    pub fn search_if_ready(
+        &self,
+        query: &Query<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<SearchResult>, Error> {
+        match self.search_with_admission(query, cancellation, SearchAdmission::ReadyOnly) {
+            Ok(result) => Ok(Some(result)),
+            Err(Error::NotReady(_)) => Ok(None),
+            Err(Error::Management(error)) if error.is_preparation_contention() => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
+    fn search_with_admission(
+        &self,
+        query: &Query<'_>,
+        cancellation: &CancellationToken,
+        admission: SearchAdmission,
+    ) -> Result<SearchResult, Error> {
         let deadline = Instant::now() + TIMEOUT;
         let limit = query.max_results;
         if limit == 0 || limit > 5000 {
@@ -660,17 +690,24 @@ impl Session {
         }
         // Filename attachment does not wait for content. Indexed content callers retain the
         // existing initialization budget before starting their bounded query deadline.
-        let deadline = if self.initial_content_ready.load(Ordering::Relaxed) {
-            self.wait_ready(cancellation, deadline)?;
-            deadline
-        } else {
-            self.wait_ready(cancellation, Instant::now() + INDEX_TIMEOUT)?;
-            Instant::now() + TIMEOUT
+        let deadline = match admission {
+            SearchAdmission::ReadyOnly => deadline,
+            SearchAdmission::Wait if self.initial_content_ready.load(Ordering::Relaxed) => {
+                self.wait_ready(cancellation, deadline)?;
+                deadline
+            }
+            SearchAdmission::Wait => {
+                self.wait_ready(cancellation, Instant::now() + INDEX_TIMEOUT)?;
+                Instant::now() + TIMEOUT
+            }
         };
         let (revision, changes) = {
             let changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
             (changed.revision, changed.since(changed.content_ack))
         };
+        if admission == SearchAdmission::ReadyOnly && !self.status(cancellation)?.ready {
+            return Err(Error::NotReady("search index is catching up".into()));
+        }
         match changes {
             Changes::None => {}
             Changes::Paths(paths) => self.refresh(&paths, cancellation, deadline)?,
@@ -691,12 +728,12 @@ impl Session {
         });
         let result = loop {
             check(cancellation, deadline)?;
-            if !self.status(cancellation)?.ready {
+            if admission == SearchAdmission::Wait && !self.status(cancellation)?.ready {
                 self.refresh(&[], cancellation, deadline)?;
             }
             match self.rpc("search", params.clone(), cancellation, deadline) {
                 Ok(value) => break value,
-                Err(Error::NotReady(_)) => {
+                Err(Error::NotReady(_)) if admission == SearchAdmission::Wait => {
                     self.refresh(&[], cancellation, deadline)?;
                 }
                 Err(error) => return Err(error),

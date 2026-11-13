@@ -70,16 +70,21 @@ suite('Chat execution commands', () => {
 		const ids = [OpenModelPickerAction.ID, OpenModePickerAction.ID, OpenPermissionPickerAction.ID, OpenWorkspacePickerAction.ID];
 		for (const id of ids) await services.invokeFunction(CommandsRegistry.getCommand(id)!);
 		assert.deepEqual(calls, ['model', 'mode', 'permission', 'workspace']);
+		Object.assign(widget.input, { replyOnly: true });
+		for (const id of ids) await services.invokeFunction(CommandsRegistry.getCommand(id)!);
+		assert.deepEqual(calls, ['model', 'mode', 'permission', 'workspace', 'model']);
 		Object.assign(widget, { visible: false });
 		for (const id of ids) await services.invokeFunction(CommandsRegistry.getCommand(id)!);
-		assert.equal(calls.length, 4);
+		assert.equal(calls.length, 5);
 	});
 
 	test('picker shortcuts apply only inside the Chat input', () => {
 		using context = new ContextKeyService();
 		ChatContextKeys.enabled.bindTo(context).set(true);
+		const replyOnly = ChatContextKeys.replyOnlyInput.bindTo(context);
 		const inInput = ChatContextKeys.inChatInput.bindTo(context);
 		for (const id of [OpenModelPickerAction.ID, OpenModePickerAction.ID]) {
+			replyOnly.set(false);
 			const rule = KeybindingsRegistry.getKeybindings().find(rule => rule.kind === KeybindingRuleKind.Command && rule.command === id)!;
 			inInput.set(true); assert.equal(rule.when!.evaluate(context.getContext()), true);
 			const result = new KeybindingResolver().resolve(context.getContext(), [{ key: '.', code: 'Period', ctrlKey: !isMacintosh, metaKey: isMacintosh, altKey: id === OpenModelPickerAction.ID, shiftKey: false }]);
@@ -88,6 +93,8 @@ suite('Chat execution commands', () => {
 				const optionPeriod = new KeybindingResolver().resolve(context.getContext(), [{ key: '≥', code: 'Period', ctrlKey: !isMacintosh, metaKey: isMacintosh, altKey: true, shiftKey: false }]);
 				assert.equal('command' in optionPeriod ? optionPeriod.command : undefined, id);
 			}
+			replyOnly.set(true);
+			assert.equal(rule.when!.evaluate(context.getContext()), id === OpenModelPickerAction.ID);
 			inInput.set(false); assert.equal(rule.when!.evaluate(context.getContext()), false);
 		}
 	});

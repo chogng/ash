@@ -2,7 +2,7 @@
 
 本 crate 保存 Agent 每轮修改的来源，并让同一 Session / Thread 从一轮或多轮选择部分文件提交。
 它依赖 [`ash-git`](../git/README.md) 的对象能力和
-[`ash-git-transaction`](../git-transaction/README.md) 的发布事务；目录物化、绑定与清理由
+[条件提交事务](../git/README.md#条件提交与恢复)；目录物化、绑定与清理由
 [`worktree`](../worktree/README.md) 拥有。产品流程见
 [Turn 变更账本](../../docs/chat-session-inspector.md) 和 [能力方案](../../docs/git-capabilities.md)。
 
@@ -26,7 +26,14 @@
 
 准备时固定目标 HEAD 和最终 commit 对象，保留于 Git 内部引用。确认只发布该对象；目标移动要求
 重新预览，不会将当前磁盘或新的消息塞进旧请求。发布先保存请求，Git 成功后原子记账，最后确认
-事务日志；数据库写入失败留下 Publishing，重启恢复同一事务。进行中的发布阻止 Session 删除。
+事务日志；数据库写入失败留下 Publishing，重启恢复同一事务。ref 已发布后的 checkout/index
+失败持久保存为 `Recovering { paths, error }`，继续占用选中的文件并阻止 Session 删除。
+Changes 显示阻塞原因，并用同一 commit ID 重试。重试和启动恢复只读取原事务日志。
+确认日志缺失后进入 `RecoveryUnavailable`，保留已发布选择的占用，允许离开或删除 Session。
+
+旧版本误存为 Conflict 的记录在启动时也检查日志。有日志时恢复并转为 Recovering 或 Committed，
+无日志时维持原冲突。旧 JSON 继续可读，`Recovering.error` 可缺省。旧版程序无法读取包含
+新增状态的提交记录。
 
 封存快照保留 common directory 位置，读取不依赖 Thread checkout 存在。目录搬迁更新对象库位置，
 不改变封存证据。非 Git Thread 不创建 ChangeSet。本次不提供行/块级 Turn 选择或跨仓库原子提交。

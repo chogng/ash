@@ -106,6 +106,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			// Menus keep their content-sized geometry.
 			getHeight: presentation === 'quickPick' ? getRowHeight : undefined,
 			accessibilityProvider: {
+				getAriaLabel: item => item.ariaLabel,
 				getAriaSetSize: () => this._visibleItems.length,
 				getAriaPosInSet: item => this._visibleItems.indexOf(item) + 1,
 				isChecked: item => this.multiple ? this.checked.has(item) : undefined,

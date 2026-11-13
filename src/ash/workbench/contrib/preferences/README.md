@@ -38,6 +38,8 @@ Preferences 拥有设置页的呈现模型，不接管领域业务状态。配�
 
 当前 [SettingsSectionModel](../../services/preferences/common/preferences.ts) 与 [SettingsSectionRenderer](browser/settingsSectionRenderer.ts) 提供了非配置内容的数据和渲染分离路径。功能贡献通过 [设置区域注册](../../services/preferences/browser/settingsSections.ts) 声明模型及其无障碍标识；Workbench 与 Sessions 为每次设置页面打开创建并释放模型，功能贡献不依赖 Preferences 内部 renderer。它们是当前接入入口，不表示全部旧页面已经迁移，也不要求为每个功能重新发明一套字段协议。数据契约的扩展应由具体需求驱动，并保持在 Preferences 的呈现边界内。
 
+字符串数组通过通用设置控件编辑。可信域名绑定同一控件的行操作，通过可信域名服务编辑现有 JSONC。JSONC 编辑器与表格共用服务的校验和保存逻辑。
+
 ## 禁止把页面实现穿过接入边界
 
 功能模块向 Preferences 提供的配置或数据契约不得包含：

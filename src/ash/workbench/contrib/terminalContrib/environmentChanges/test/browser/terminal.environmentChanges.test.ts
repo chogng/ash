@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
@@ -29,6 +30,7 @@ import { TerminalEnvironmentChangesContribution } from '../../browser/terminal.e
 
 function fixture(owner: DisposableStore) {
 	const services = owner.add(new InstantiationService());
+	services.registerInstance(IContextKeyService, owner.add(new ContextKeyService()));
 	const commands = owner.add(new CommandService(services));
 	services.registerInstance(ICommandService, commands);
 	const workspace = owner.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') }));

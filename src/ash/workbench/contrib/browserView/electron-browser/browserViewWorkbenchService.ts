@@ -1,16 +1,22 @@
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { extUri } from '../../../../base/common/resources.js';
+import { getWindowId } from '../../../../base/browser/window.js';
+import { Direction } from '../../../../base/browser/ui/grid/grid.js';
+import { IAgentHostConnectionsService } from '../../../../platform/agentHost/common/agentHostConnectionsService.js';
+import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import {
 	IBrowserViewService, getBrowserViewSessionNetwork, getBrowserViewSessionAffinity,
 	type BrowserViewEvent, type IBrowserViewCreateOptions, type IBrowserViewInfo,
 	type IBrowserViewOwner, type IBrowserViewNetwork, type IBrowserViewSessionOptions,
 } from '../../../../platform/browserView/common/browserView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
-import { IEditorService, type EditorOpenOptions } from '../../../services/editor/common/editorService.js';
+import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
+import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
+import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../../../services/editor/common/editorService.js';
 import { BrowserEditorInput, type IBrowserEditorInputData } from '../common/browserEditorInput.js';
-import { BrowserViewModel, type IBrowserViewNetworkResolver, type IBrowserViewContextualFilter, type IBrowserViewFilterContext, type IBrowserViewOpenHandler, type IBrowserViewWorkbenchService, type IBrowserViewWorkbenchCreateOptions } from '../common/browserView.js';
+import { BrowserNewTabPlacementSettingId, BrowserViewModel, type BrowserNewTabPlacement, type IBrowserViewNetworkResolver, type IBrowserViewNetworkStatus, type IBrowserViewOpenOptions, type IBrowserViewContextualFilter, type IBrowserViewFilterContext, type IBrowserViewOpenHandler, type IBrowserViewWorkbenchService, type IBrowserViewWorkbenchCreateOptions } from '../common/browserView.js';
+import { IsSessionsWindowContext } from '../../../common/contextkeys.js';
 import { IDialogsModel, type IDialogHandle } from '../../../common/dialogs.js';
 import { DialogResult, DialogSeverity } from '../../../../platform/dialogs/common/dialogs.js';
 import { localize } from '../../../../nls.js';
@@ -21,6 +27,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceContextService, getWorkspaceRemoteAuthority, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
+import { ASH_REMOTE_SCHEME, getProviderRemoteWorkspace } from '../../../../platform/remote/common/remote.js';
 import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { BrowserViewStorageScope } from '../../../../platform/browserView/common/browserView.js';
 import { logBrowserOpen, type IntegratedBrowserOpenSource } from '../../../../platform/browserView/common/browserViewTelemetry.js';
@@ -41,6 +48,8 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	private initialization: Promise<void> | undefined;
 	private readonly permissionDialogs = new Map<string, IDialogHandle>();
 	private readonly authenticationDialogs = new Map<string, IDialogHandle>();
+	private readonly sideGroupIds = new WeakMap<IEditorPart, number>();
+	private browserWindow: Promise<IEditorPart> | undefined;
 
 	constructor(
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -50,11 +59,14 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		@IBrowserViewService private readonly service: IBrowserViewService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IEditorService private readonly editors: IEditorService,
-		@IEditorPart private readonly editorPart: IEditorPart,
+		@IEditorPartsService private readonly editorPart: IEditorPartsService,
+		@IContextKeyService private readonly contexts: IContextKeyService,
+		@IAgentHostConnectionsService private readonly hosts: IAgentHostConnectionsService,
 		@IDialogsModel private readonly dialogs: IDialogsModel,
 		@ITelemetryService private readonly telemetry: ITelemetryService,
 	) {
 		super();
+		this._register(hosts.onDidChangeConnections(() => this.changes.fire()));
 		this._register(service.onDidEvent(event => {
 			if (event.type === 'fileRequested') { this.acceptEvent(event); }
 			else if (!this.initialized) { this.initialEvents.push(event); }
@@ -143,6 +155,63 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		return authority ? { authority } : undefined;
 	}
 
+	public getNetworkStatus(network: IBrowserViewNetwork): IBrowserViewNetworkStatus {
+		if (this.networkResolver) return this.networkResolver.getNetworkStatus(network);
+		const ambient = this.hosts.connections.find(host => host.isAmbient);
+		try {
+			// Provider runtimes use an opaque namespace; their proxy is carried by the backing host.
+			const runtime = getProviderRemoteWorkspace(URI.from({ scheme: ASH_REMOTE_SCHEME, authority: network.authority, path: '/' }));
+			const authority = runtime?.hostAuthority ?? (runtime ? 'local' : network.authority);
+			const ambientRoute = authority === 'local' || authority === getWorkspaceRemoteAuthority(this.workspace.getWorkspace());
+			const connection = this.hosts.resolveConnection(URI.from({ scheme: ASH_REMOTE_SCHEME, authority, path: runtime ? '/' : network.root ?? '/' }));
+			const transport = connection ?? (ambientRoute || authority.startsWith('ssh+') ? ambient : undefined);
+			return { label: connection?.name ?? (ambientRoute ? ambient?.name : undefined) ?? network.authority, connected: transport?.state === 'ready', proxySupported: undefined };
+		} catch {
+			return { label: network.authority, connected: false, proxySupported: undefined };
+		}
+	}
+
+	private async getPreferredGroup(options: IBrowserViewOpenOptions | undefined): Promise<EditorOpenTarget | undefined> {
+		if (options?.target !== undefined) return options.target;
+		if (this.contexts.getValue(IsSessionsWindowContext.key)) return options?.openToSide ? 'sideGroup' : undefined;
+		const source = options?.sourceWindowId === undefined ? undefined : this.editorPart.parts.find(part => {
+			const window = part.domNode.ownerDocument.defaultView;
+			return window && getWindowId(window) === options.sourceWindowId;
+		});
+		const placement = options?.openToSide ? 'sideGroup' : this.configuration.getValue<BrowserNewTabPlacement>(BrowserNewTabPlacementSettingId);
+		const direction = this.configuration.getValue('workbench.editor.openSideBySideDirection') === 'down' ? Direction.Down : Direction.Right;
+		if (placement === 'sideGroup') {
+			const part = source ?? this.editorPart.activePart;
+			// Each window retains its own dedicated group when links alternate between windows.
+			const existing = part.groups.find(group => group.id === this.sideGroupIds.get(part) && group.isLocked);
+			const group = existing ?? part.addGroup(part.activeGroup.id, direction);
+			group.setLocked(true);
+			this.sideGroupIds.set(part, group.id);
+			return { groupId: group.id };
+		}
+		if (placement === 'window') {
+			const pending = this.browserWindow;
+			const previous = await pending;
+			if (previous && this.editorPart.parts.includes(previous)) return { groupId: previous.activeGroup.id };
+			if (this.browserWindow === pending) {
+				this.browserWindow = this.editorPart.createAuxiliaryEditorPart().then(part => {
+					part.activeGroup.setLocked(true);
+					return part;
+				}).catch(error => {
+					this.browserWindow = undefined;
+					throw error;
+				});
+			}
+			return { groupId: (await this.browserWindow!).activeGroup.id };
+		}
+		if (source) {
+			const group = !source.activeGroup.isLocked ? source.activeGroup
+				: source.groups.find(group => !group.isLocked) ?? source.addGroup(source.activeGroup.id, direction);
+			return { groupId: group.id };
+		}
+		return undefined;
+	}
+
 	public getOrCreateLazy(data: IBrowserEditorInputData): BrowserEditorInput {
 		this.assertNotDisposed();
 		let input = this.inputs.get(data.id);
@@ -155,13 +224,14 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		return input;
 	}
 
-	public async createBrowserView(request: IBrowserViewWorkbenchCreateOptions, source?: IntegratedBrowserOpenSource): Promise<BrowserEditorInput> {
+	public async createBrowserView(request: IBrowserViewWorkbenchCreateOptions, source?: IntegratedBrowserOpenSource, openOptions?: IBrowserViewOpenOptions): Promise<BrowserEditorInput> {
 		// Capture policy before initialization/trust IPC: selection can change while those are pending.
 		const network = request.session ? getBrowserViewSessionNetwork(request.session) : this.resolveNetwork(request.owner);
 		const affinity = request.session ? getBrowserViewSessionAffinity(request.session) : this.networkResolver?.resolveStorageAffinity?.(request.owner);
 		const id = 'browser_target_' + crypto.randomUUID();
 		const created = [...this.openHandlers].map(handler => handler.onWillCreateBrowserView?.(request.owner, id));
 		let input: BrowserEditorInput | undefined;
+		let targetCreated = false;
 		try {
 			const storage = request.session ?? await this.defaultStorage(request.owner, network, affinity);
 			const session: IBrowserViewSessionOptions = storage.scope === BrowserViewStorageScope.Global ? storage : {
@@ -175,10 +245,11 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			// Reserve before Main emits creation, so its event cannot open the page a second time.
 			input = this.getOrCreateLazy({ id, url: options.initialUrl, title: '', session: options.session });
 			const info = await this.service.getOrCreateBrowserView(id, options);
+			targetCreated = true;
 			this.assertNotDisposed();
 			if (this.inputs.get(id) !== input) { throw new Error('BrowserTargetUnavailable'); }
 			if (!input.model) { input.model = this.instantiationService.createInstance(BrowserViewModel, info); }
-			await this.openEditor(input);
+			await this.openEditor(input, undefined, await this.getPreferredGroup(openOptions));
 			this.assertNotDisposed();
 			if (this.inputs.get(id) !== input) { throw new Error('BrowserTargetUnavailable'); }
 			for (const callback of created) { callback?.(input); }
@@ -191,6 +262,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 				this.inputs.deleteAndDispose(id);
 				this.changes.fire();
 			}
+			if (targetCreated) await this.service.destroyBrowserView(id).catch(() => { });
 			throw error;
 		}
 	}
@@ -246,13 +318,17 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		return input;
 	}
 
-	private async openEditor(input: BrowserEditorInput, options: EditorOpenOptions = {}): Promise<void> {
+	private async openEditor(input: BrowserEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<void> {
 		const id = BrowserViewUri.getId(input.resource)!;
 		await this.closingInputs.get(id);
 		if (this.isDisposed || this.inputs.get(id) !== input) { return; }
 		const owner = input.model?.info.owner ?? { type: 'user' as const };
 		if (![...this.openHandlers].every(handler => handler.shouldOpenEditor(input, owner, options))) { return; }
-		await this.editors.openEditor(input, { pinned: true, ...options });
+		await this.editors.openEditor(input, { pinned: true, ...options }, target);
+		if (typeof target === 'object' && !options.preserveFocus && !options.inactive) {
+			const window = this.editorPart.groups.find(group => group.id === target.groupId)?.domNode.ownerDocument.defaultView;
+			window?.focus();
+		}
 	}
 
 	private acceptEvent(event: BrowserViewEvent): void {
@@ -374,7 +450,10 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			void this.service.getBrowserViews().then(views => {
 				const parent = views.find(view => view.id === event.targetId);
 				if (!parent) { throw new Error('BrowserTargetUnavailable'); }
-				return this.createBrowserView({ initialUrl: event.url, owner: parent.owner, session: parent.session }, 'browserLinkForeground');
+				const input = this.inputs.get(event.targetId);
+				const group = input && (this.editorPart.groups.find(group => group.activeInput === input)
+					?? this.editorPart.groups.find(group => group.inputs.includes(input)));
+				return this.createBrowserView({ initialUrl: event.url, owner: parent.owner, session: parent.session }, 'browserLinkForeground', group ? { target: { groupId: group.id } } : undefined);
 			}).catch(error => console.error('Failed to open browser popup', error));
 		}
 	}

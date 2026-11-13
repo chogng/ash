@@ -12,6 +12,7 @@ import { ContextKeyExpr, RawContextKey, type IContextKeyService } from '../../pl
 import type { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
 import {
 	SideBarVisibleContext,
+	SessionsCodeEditorContext,
 	PanelVisibleContext,
 } from '../../workbench/common/contextkeys.js';
 import type { ISessionsService } from '../services/sessions/browser/sessionsService.js';
@@ -47,7 +48,7 @@ export function registerLayoutActions(
 			sidebarVisible.set(layout.isPartVisible('sidebar'));
 			backEnabled.set(sessions.canNavigateBack);
 			forwardEnabled.set(sessions.canNavigateForward);
-			codeAvailable.set(contextKeys.getValue('sessions.desktopCode') === true);
+			codeAvailable.set(contextKeys.getValue(SessionsCodeEditorContext.key) === true);
 			panelVisible.set(false);
 			covered.set(codeAvailable.get() === true && layout.isPartAvailable('sessions') && !layout.isPartVisible('sessions') && layout.isPartVisible('editor'));
 			const selection = sessions.activeSelection;
@@ -101,7 +102,7 @@ export function registerLayoutActions(
 			});
 		}
 
-		override run(): void { layout.showPart('sessions'); }
+		override run(): void { if (covered.get()) layout.showPart('sessions'); }
 	}));
 	disposables.add(registerAction2(class OpenSideChatAction extends Action2 {
 		constructor() {

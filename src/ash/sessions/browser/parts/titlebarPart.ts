@@ -62,7 +62,8 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	private readonly leftControls: HTMLElement;
 	private readonly pageContent: HTMLElement;
 	private readonly sessionContent: HTMLElement;
-	private readonly toolHeaders: HTMLElement;
+	private readonly editorHeaders: HTMLElement;
+	private readonly layoutActions: MenuWorkbenchToolBar;
 	private activityActionViewItemProvider: ActionViewItemProvider | undefined;
 	private sidebarMinimumWidth = 0;
 
@@ -181,14 +182,14 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 		updatePageVisibility();
 		const right = h(container.ownerDocument, 'div');
 		right.className = 'ash-sessions-titlebar-right';
-		this.toolHeaders = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-tool-headers' });
-		this.toolHeaders.hidden = true;
-		this.contentDomNode.append(right, this.toolHeaders);
+		this.editorHeaders = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-editor-headers' });
+		this.editorHeaders.hidden = true;
+		this.contentDomNode.append(right, this.editorHeaders);
 		const horizontalPadding = (element: HTMLElement): number => {
 			const style = ownerWindow.getComputedStyle(element);
 			return pixels(style.paddingLeft) + pixels(style.paddingRight);
 		};
-		const layoutActions = this._register(
+		const layoutActions = this.layoutActions = this._register(
 			new MenuWorkbenchToolBar(right, menuService, contextMenus, Menus.TitleBarRightLayout, {
 				ariaLabel: localize({ bundle: 'ash', key: 'windowMode.layout' }, 'Code layout'),
 				presentation: 'inherit-foreground',
@@ -205,12 +206,12 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 						const accounts = this.activityActions?.element;
 						const accountsWidth = accounts?.getBoundingClientRect().width ?? 0;
 						const accountsGap = accounts && accountsWidth ? pixels(ownerWindow.getComputedStyle(accounts).marginLeft) : 0;
-						const toolWidth = this.toolHeaders.getBoundingClientRect().width;
-						const titleMinimum = toolWidth ? pixels(ownerWindow.getComputedStyle(center).minWidth) : 0;
+						const editorHeaderWidth = this.editorHeaders.getBoundingClientRect().width;
+						const titleMinimum = editorHeaderWidth ? pixels(ownerWindow.getComputedStyle(center).minWidth) : 0;
 						// Use the remaining titlebar space so growing the window can restore overflowed actions.
 						const reservedWidth = horizontalPadding(this.contentDomNode) + left.getBoundingClientRect().width
 							+ Math.max(horizontalPadding(center), titleMinimum) + horizontalPadding(right)
-							+ accountsWidth + accountsGap + toolWidth;
+							+ accountsWidth + accountsGap + editorHeaderWidth;
 						return Math.max(0, this.contentDomNode.clientWidth - reservedWidth);
 					},
 				},
@@ -226,27 +227,37 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 			actionViewItemProvider: (action, options) => this.activityActionViewItemProvider?.(action, options),
 		}));
 		const relayoutActions = this._register(new AnimationFrameScheduler(ownerWindow, () => layoutActions.relayout()));
-		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.toolHeaders], () => relayoutActions.schedule(), { box: 'border-box' }));
+		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.editorHeaders], () => relayoutActions.schedule(), { box: 'border-box' }));
 	}
 
-	public layoutToolHeaders(left: number | undefined, setHost: (host: HTMLElement | undefined) => void): void {
+	public layoutEditorHeaders(left: number | undefined, page: HTMLElement | undefined, setToolHost: (host: HTMLElement | undefined) => void): void {
 		let width = 0;
 		if (left !== undefined) {
-			// A very narrow conversation split still needs its title menu and tool overflow trigger.
-			const minimumActionsWidth = this.minimumHeight * 2 + this.activityActions.element.offsetWidth;
-			if (left - this.leftControls.getBoundingClientRect().right >= minimumActionsWidth) {
+			const controlsEnd = this.leftControls.getBoundingClientRect().right;
+			const accountsWidth = this.activityActions.element.offsetWidth;
+			if (page) {
+				// In a single-pane layout, the page starts behind the window navigation controls.
+				const actionWidth = this.layoutActions.element.hidden ? 0 : this.minimumHeight;
+				left = Math.max(left, controlsEnd + accountsWidth + actionWidth);
+			}
+			// A narrow Code split still needs its conversation title menu and tool overflow trigger.
+			if (page || left - controlsEnd >= this.minimumHeight * 2 + accountsWidth) {
 				const row = this.contentDomNode;
 				const rightInset = parseFloat(row.ownerDocument.defaultView!.getComputedStyle(row).paddingRight);
 				width = Math.max(0, row.getBoundingClientRect().right - rightInset - left);
 			}
 		}
-		const visible = width > 0;
+		const dockTools = width > 0 && !page;
 		// Return the focused row to its group before hiding the titlebar slot.
-		if (!visible) setHost(undefined);
-		this.toolHeaders.hidden = !visible;
-		this.domNode.classList.toggle('has-tool-headers', visible);
-		this.toolHeaders.style.flexBasis = `${width}px`;
-		if (visible) setHost(this.toolHeaders);
+		if (!dockTools) setToolHost(undefined);
+		const oldPage = this.editorHeaders.firstElementChild;
+		if (page && oldPage !== page) this.editorHeaders.replaceChildren(page);
+		else if (!page && this.domNode.classList.contains('has-editor-page-header')) oldPage?.remove();
+		this.editorHeaders.hidden = width === 0;
+		this.domNode.classList.toggle('has-tool-headers', dockTools);
+		this.domNode.classList.toggle('has-editor-page-header', !!page);
+		this.editorHeaders.style.flexBasis = `${width}px`;
+		if (dockTools) setToolHost(this.editorHeaders);
 	}
 
 	public override updateStyles(): void {

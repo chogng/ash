@@ -28,7 +28,7 @@ test('Canvas creation validates the complete presentation and requires isolated 
 	assert.throws(() => validateBrowserViewCreateRequest({ targetId, options: { ...options, canvas } }), /Canvas/);
 });
 
-test('browser view validators admit secure and loopback navigation', () => {
+test('browser view validators admit secure and local navigation', () => {
 	assert.equal(
 		normalizeBrowserViewUrl('https://example.com/path'),
 		'https://example.com/path',
@@ -37,6 +37,9 @@ test('browser view validators admit secure and loopback navigation', () => {
 		normalizeBrowserViewUrl('http://localhost:3000/path'),
 		'http://localhost:3000/path',
 	);
+	assert.equal(normalizeBrowserViewUrl('http://dev.localhost:3000/path'), 'http://dev.localhost:3000/path');
+	assert.equal(normalizeBrowserViewUrl('http://0.0.0.0:3000/path'), 'http://0.0.0.0:3000/path');
+	assert.equal(normalizeBrowserViewUrl('http://[0:0:0:0:0:0:0:0]:3000/path'), 'http://[::]:3000/path');
 	assert.equal(normalizeBrowserViewUrl('about:blank'), 'about:blank');
 	assert.equal(normalizeBrowserViewUrl('file:///workspace/index.html'), 'file:///workspace/index.html');
 	assert.deepEqual(validateBrowserViewCreateRequest({ targetId, options }), { targetId, options });
@@ -56,6 +59,7 @@ test('browser view validators reject privileged URLs and malformed geometry', ()
 	for (
 		const url of [
 			'http://example.com',
+			'http://localhost.example.com',
 			'file://remote/secret.txt',
 			'javascript:alert(1)',
 			'https://user:password@example.com',

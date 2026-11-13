@@ -5,12 +5,13 @@ import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize2 } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ContextKeyExpr, RawContextKey, type IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { RawContextKey, type IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import type { IEditorGroupView } from '../../../../workbench/browser/parts/editor/editor.js';
+import { SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
 import { ITerminalEditorService, ITerminalService, type ITerminalInstance } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalEditorInput } from '../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -19,7 +20,7 @@ import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 
 const terminalVisibleContext = new RawContextKey<boolean>('sessions.terminalVisible', false);
-const codeVisible = ContextKeyExpr.equals('sessions.desktopCode', true);
+const codeVisible = SessionsCodeEditorContext.isEqualTo(true);
 
 /** Connects the Agents Window terminal action to its retained editor groups. */
 export function registerSessionsTerminalContribution(
@@ -156,7 +157,7 @@ export function registerSessionsTerminalContribution(
 				});
 			}
 			override async run(accessor: ServicesAccessor): Promise<void> {
-				if (!layout.isPartAvailable('editor')) {
+				if (!contextKeys.contextMatchesRules(codeVisible) || !layout.isPartAvailable('editor')) {
 					return;
 				}
 				terminalToggle ??= (async () => {
@@ -164,7 +165,7 @@ export function registerSessionsTerminalContribution(
 					const workspace = accessor.get(IWorkspaceContextService);
 					const scope = workspace.getWorkspace();
 					await terminals.whenConnected;
-					if (disposables.isDisposed || workspace.getWorkspace() !== scope) {
+					if (disposables.isDisposed || !contextKeys.contextMatchesRules(codeVisible) || workspace.getWorkspace() !== scope) {
 						return;
 					}
 					const terminalEditors = accessor.get(ITerminalEditorService);

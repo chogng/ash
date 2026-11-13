@@ -1,3 +1,4 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { registerSingleton, InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
 import { ITerminalCompletionService, TerminalCompletionService, type ITerminalCompletion } from './terminalCompletionService.js';
 import { raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
@@ -11,7 +12,7 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../../base/c
 import { posix } from '../../../../../base/common/path.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { FileKind, IFileService } from '../../../../../platform/files/common/files.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -38,7 +39,7 @@ interface CompletionPick extends IQuickPickItem {
 }
 
 /** Applies accepted provider ranges through the existing shell input owner. */
-registerAction2(class TerminalTriggerSuggestAction extends Action2 {
+registerEditorToolAction(class TerminalTriggerSuggestAction extends Action2 {
 	constructor() {
 		super({
 			id: TerminalSuggestCommandId.TriggerSuggest,

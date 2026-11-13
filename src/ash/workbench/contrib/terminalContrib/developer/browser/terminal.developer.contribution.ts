@@ -1,8 +1,9 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -13,7 +14,7 @@ import { IStatusbarService, StatusbarAlignment } from '../../../../services/stat
 import { ITerminalEditorService, ITerminalGroupService, ITerminalService } from '../../../terminal/browser/terminal.js';
 import { TerminalDeveloperCommandId } from '../common/terminal.developer.js';
 
-registerAction2(class WriteDataToTerminalAction extends Action2 {
+registerEditorToolAction(class WriteDataToTerminalAction extends Action2 {
 	constructor() {
 		super({ id: TerminalDeveloperCommandId.WriteDataToTerminal, title: localize2('terminal.developer.writeData', 'Developer: Write Data to Terminal'), f1: true });
 	}
@@ -49,7 +50,7 @@ registerAction2(class WriteDataToTerminalAction extends Action2 {
 	}
 });
 
-registerAction2(class RecordTerminalSessionAction extends Action2 {
+registerEditorToolAction(class RecordTerminalSessionAction extends Action2 {
 	constructor() {
 		super({ id: TerminalDeveloperCommandId.RecordSession, title: localize2('terminal.developer.recordSession', 'Developer: Record Terminal Session'), f1: true });
 	}

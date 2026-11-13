@@ -14,7 +14,7 @@ import { modelRefIdentity } from '../../../../workbench/services/chat/common/mod
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
-import { getChatCodeBlockCardAccessibilityHelp, getChatRequestAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
+import { getChatCodeBlockCardAccessibilityHelp, getChatRequestAccessibilityHelp, getChatTableAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
 import { getSessionsListGroupingHelp } from '../../sessions/browser/views/sessionsListActions.js';
 import type { IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { IChatViewFactory, type ChatDraftModelSource, type ICompactChatModel, type IChatViewSource } from '../browser/chatViewFactory.js';
@@ -31,13 +31,14 @@ import { ISessionPrimaryProviderServices, type SessionProviderServices } from '.
 import { AshChatModel } from '../browser/ashChatModel.js';
 import { registerChatEntityDetails } from '../browser/chatEntityDetails.js';
 import { SessionWorkspaceStatus } from '../browser/sessionWorkspaceStatus.js';
-import { ASH_CHAT_SELECTED_CONTEXT, CHAT_NAVIGATION_FOCUS_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_NAVIGATION_FOCUS_CONTEXT, CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../common/constants.js';
 import { ChatListCatalog, ChatWorkspaceListModel, IChatListCatalog, NativeChatCatalogSource, type ChatListSource } from '../browser/chatListModel.js';
 import { registerNativeConversationSharing } from '../browser/nativeConversationShare.js';
 import { SessionsView } from '../../sessions/browser/views/sessionsView.js';
 import type { SessionsCatalogAccessibility } from '../../sessions/browser/views/sessionsCatalogList.js';
-import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
+import { ISessionsEntryService, type ISessionsEntry } from '../../../services/layout/common/sessionsEntryService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { INativeChatModelPreferencesService } from '../common/nativeChatModelPreferencesService.js';
 import '../browser/chat.contribution.js';
@@ -51,7 +52,6 @@ const ashChatViewSource = {
 	advanceWelcomePhrase: false,
 	useWorkbenchModelManagement: true,
 	explicitModelSelection: true,
-	literalServerCommands: true,
 	createDraftPicker: (instantiation, footer, _visible, model) => instantiation.createInstance(SessionWorkspaceStatus, footer, model),
 	accessibility: {
 		focusContext: 'ashNativeChatFocused',
@@ -72,13 +72,14 @@ class NativeChatWorkspaceModel extends AshChatModel implements ICompactChatModel
 		@ICommandService private readonly commands: ICommandService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IStorageService storage: IStorageService,
+		@IGeneratedFilesService generatedFiles: IGeneratedFilesService,
 		@IContextKeyService contexts: IContextKeyService,
 		@IInstantiationService instantiation: IInstantiationService,
 		@INativeChatModelPreferencesService modelPreferences: INativeChatModelPreferencesService,
 	) {
 		const initial = view.getChatSelection();
 		if (!initial) throw new Error('The compact Chat view needs a restored Sessions selection');
-		super(initial, 'compact', management, primary.chat, primary.prompts, primary.models, primary.execution, configuration, storage, contexts, modelPreferences);
+		super(initial, 'compact', management, primary.chat, primary.prompts, primary.models, primary.execution, configuration, storage, generatedFiles, contexts, modelPreferences);
 		this.draftModels = instantiation.createInstance(modelSource);
 		let previous: ReturnType<typeof view.chatSelection.get>;
 		this._register(autorun(reader => {
@@ -143,7 +144,7 @@ export function registerChatWorkspace(source: {
 	readonly additionalCatalog?: SyncDescriptor<ChatListSource>;
 	readonly draftModels: SyncDescriptor<ChatDraftModelSource>;
 	readonly accessibility: Omit<SessionsCatalogAccessibility, 'focusContext'>;
-	readonly openCommand: string;
+	readonly resumeCommand: (lastBackend: string | undefined) => string;
 	readonly createDraft: (commands: ICommandService, origin: unknown) => Promise<void>;
 }): void {
 	registerAshChatAccessibility();
@@ -159,7 +160,7 @@ export function registerChatWorkspace(source: {
 	CommandsRegistry.register('sessions.open.new', (accessor, origin) => source.createDraft(accessor.get(ICommandService), origin));
 
 	registerWorkbenchContribution(ChatWorkspaceContribution.ID, WorkbenchPhase.BlockRestore,
-		accessor => accessor.get(IInstantiationService).createInstance(ChatWorkspaceContribution, source.openCommand, source.draftModels));
+		accessor => accessor.get(IInstantiationService).createInstance(ChatWorkspaceContribution, source.resumeCommand, source.draftModels));
 }
 
 export function registerChatWorkspaceNavigation(accessibility: Omit<SessionsCatalogAccessibility, 'focusContext'>): IDisposable {
@@ -184,7 +185,7 @@ export class ChatWorkspaceContribution extends Disposable {
 	static readonly ID = 'sessions.chatWorkspace';
 
 	constructor(
-		openContributedChatCommand: string,
+		resumeContributedChat: (lastBackend: string | undefined) => string,
 		draftModels: SyncDescriptor<ChatDraftModelSource>,
 		@ISessionsEntryService layout: ISessionsEntryService,
 		@IStorageService storage: IStorageService,
@@ -197,21 +198,24 @@ export class ChatWorkspaceContribution extends Disposable {
 		const chatSource = 'ashChat';
 		this._register(chatViews.registerSource(chatSource, { ...ashChatViewSource, model: new SyncDescriptor(NativeChatWorkspaceModel, [draftModels]) }));
 		const newDraft = view.chatSelection.map(current => current?.kind === 'draft');
+		const entry: ISessionsEntry = {
+			id: chatSource, workspaceMode: 'chat', activityContext: ASH_CHAT_SELECTED_CONTEXT,
+			content: 'conversation', sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
+			restoreCommand: SHOW_ASH_CHAT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
+		};
 		const openAshChat = async (source?: unknown): Promise<void> => {
 			if (this.isDisposed) throw canceled();
-			await layout.openEntry({
-				id: chatSource, workspaceMode: 'chat', activityContext: ASH_CHAT_SELECTED_CONTEXT,
-				content: 'conversation', sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
-				restoreCommand: SHOW_ASH_CHAT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
-			}, undefined, source === 'restore' ? { source } : undefined);
+			await layout.openEntry(entry, undefined, source === 'restore' ? { source } : undefined);
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'ash', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		};
 		this._register(CommandsRegistry.register(SHOW_ASH_CHAT_COMMAND, async (_accessor, source) => {
 			await view.restoreChatSelection();
+			if (source === CHAT_WORKSPACE_ENTRY_REQUEST) return entry;
 			await openAshChat(source);
 		}));
 		this._register(CommandsRegistry.register(SHOW_CHAT_WORKSPACE_COMMAND, (accessor, source) => {
-			const command = storage.get(CHAT_WORKSPACE_LAST_BACKEND_KEY, StorageScope.WORKSPACE) === 'ash' ? SHOW_ASH_CHAT_COMMAND : openContributedChatCommand;
+			const lastBackend = storage.get(CHAT_WORKSPACE_LAST_BACKEND_KEY, StorageScope.WORKSPACE);
+			const command = lastBackend === 'ash' ? SHOW_ASH_CHAT_COMMAND : resumeContributedChat(lastBackend);
 			return accessor.get(ICommandService).executeCommand(command, source);
 		}));
 		// The desktop contribution registers after the shared opener, which handles Code and other hosts.
@@ -260,9 +264,10 @@ function registerAshChatAccessibility(): void {
 						+ '\n\n' + getChatRequestAccessibilityHelp(true)
 						+ '\n\n' + localize('sessions.chat.ashResponseActionsHelp', 'Use Tab to reach the response toolbar, then use the arrow keys to move between actions. Share asks for confirmation before sharing the conversation through this response. Fork starts a new Ash conversation through this response.')
 						+ '\n\n' + getChatCodeBlockCardAccessibilityHelp()
+						+ '\n\n' + getChatTableAccessibilityHelp()
 						+ '\n\n' + localize('sessions.chat.versionsHelp', 'For a conversation with edits, open More actions on its sidebar row and choose Conversation versions. Use Right Arrow to open the submenu and Enter to open a version.')
 						+ '\n\n' + localize('sessions.list.forkSidebarHelp', 'In the sidebar, Tab to the Fork icon and press Enter to open its source conversation. Focus Conversation branches and press Enter to expand or collapse the tree. On the conversation row, Right Arrow expands the tree or moves to its first branch, and Left Arrow collapses it.')
-						+ '\n\n' + localize('sessions.titlebar.ashChatHelp', 'For a saved chat, focus its title and press Enter to rename it. Use More Sessions Actions beside the title to pin, archive, or delete it. Share at the right of the title bar asks for confirmation before creating and copying a link to the conversation text.')
+						+ '\n\n' + localize('sessions.titlebar.ashChatHelp', 'For a saved chat, focus its title and press Enter or Down Arrow to open the actions menu. Choose Rename or double-click the title to edit it in place. Press Enter to save or Escape to cancel. The menu also offers pin, archive, and delete actions when available. Share at the right of the title bar asks for confirmation before creating and copying a link to the conversation text.')
 						: model.items.filter(item => !item.transient).map(item => item.text).filter(Boolean).join('\n\n'),
 					() => focused.isConnected ? focused.focus() : widget.focusInput(), AccessibilityVerbositySettingId.Chat);
 			},

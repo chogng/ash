@@ -1,11 +1,7 @@
 import { h } from '../../../../base/browser/dom.js';
-import type { IButtonOptions } from '../../../../base/browser/ui/button/button.js';
-import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
-import type { IAction } from '../../../../base/common/actions.js';
-import { RunOnceScheduler } from '../../../../base/common/async.js';
+import type { ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
@@ -14,59 +10,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { CopyCodeBlockActionId } from '../../../../workbench/contrib/chat/browser/actions/chatCodeblockActions.js';
 import { CopyItemActionId } from '../../../../workbench/contrib/chat/browser/actions/chatCopyActions.js';
 import { ChatMessageActionContext } from '../../../../workbench/contrib/chat/browser/chat.js';
-
-interface CopyActionOperation {
-	readonly run: () => unknown;
-	readonly isCurrent?: () => boolean;
-	readonly onSuccess: () => void;
-	readonly onError: (error: unknown) => void;
-}
-
-/** Shows copy feedback on the existing button after the clipboard write succeeds. */
-class CopyActionViewItem extends ButtonActionViewItem {
-	private copying = false;
-	private readonly clearFeedback = this._register(new RunOnceScheduler(() => this.setCopied(false), 1200));
-
-	constructor(action: IAction, options: ActionViewItemOptions, private readonly resolveOperation?: () => CopyActionOperation | undefined, private readonly size?: IButtonOptions['size']) {
-		super(action, options);
-	}
-
-	protected override createButton(container: HTMLElement, options: IButtonOptions) {
-		return super.createButton(container, { ...options, size: this.size ?? options.size });
-	}
-
-	protected getCopyOperation(): CopyActionOperation | undefined {
-		return this.resolveOperation?.();
-	}
-
-	protected override async runAction(): Promise<void> {
-		if (this.copying) return;
-		const operation = this.getCopyOperation();
-		if (!operation || operation.isCurrent?.() === false) return;
-
-		this.copying = true;
-		this.button.domNode.setAttribute('aria-busy', 'true');
-		this.clearFeedback.cancel();
-		this.setCopied(false);
-		try {
-			await operation.run();
-			if (this.isDisposed || operation.isCurrent?.() === false) return;
-			this.setCopied(true);
-			this.clearFeedback.schedule();
-			operation.onSuccess();
-		} catch (error) {
-			if (!this.isDisposed && operation.isCurrent?.() !== false) operation.onError(error);
-		} finally {
-			this.copying = false;
-			if (!this.isDisposed) this.button.domNode.removeAttribute('aria-busy');
-		}
-	}
-
-	private setCopied(copied: boolean): void {
-		this.button.icon = copied ? Lxicon.check : this.action.icon;
-		this.button.toggleClassName('ash-copy-action-succeeded', copied);
-	}
-}
+import { CopyActionViewItem, type CopyActionOperation } from '../../../../workbench/contrib/chat/browser/widget/copyActionViewItem.js';
 
 class ChatCopyActionViewItem extends CopyActionViewItem {
 	private status: HTMLElement | undefined;

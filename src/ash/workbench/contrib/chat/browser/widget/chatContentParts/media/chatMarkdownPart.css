@@ -275,6 +275,16 @@
 		var(--ash-toolbar-actionSize) + 2 * var(--ash-strokeThickness)
 	);
 }
+.ash-chat-markdown-table-scroll.ash-chat-content-actions-anchor {
+	/* Leave room for Copy and Export even when the cells are narrower. */
+	min-inline-size: min(
+		100%,
+		calc(
+			2 * var(--ash-toolbar-actionSize) + var(--ash-actionBar-gap) + 2 *
+				var(--ash-strokeThickness)
+		)
+	);
+}
 .ash-chat-content-actions-anchor > .ash-chat-content-actions {
 	/* The same slot stays outside the image or scroll viewport. */
 	position: absolute;
@@ -284,6 +294,9 @@
 	border: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, transparent);
 	border-radius: var(--ash-cornerRadius-small);
+}
+.ash-chat-content-actions .ash-copy-action-succeeded .ash-icon-check {
+	color: var(--ash-success-foreground);
 }
 .ash-chat-rich-row.align-center {
 	align-items: center;

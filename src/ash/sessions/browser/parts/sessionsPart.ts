@@ -17,13 +17,12 @@ import { Part } from '../../../workbench/browser/part.js';
 import type { SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
 import type { SessionRecencyEntry } from '../../services/sessions/browser/sessionsRecencyHistory.js';
 import { sessionViewSelectionKey } from '../../services/sessions/browser/visibleSessions.js';
-import { ChatAuxiliaryWindow } from '../../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
-import { ITitleService } from '../../../workbench/services/title/browser/titleService.js';
+import { IChatWindowService } from '../../../workbench/contrib/chatWindow/browser/chatWindow.js';
 import { SessionView, type ISessionsConversationPane } from './sessionView.js';
 import { SessionGridLayout } from './sessionGridLayout.js';
 import { Direction, type IView } from '../../../base/browser/ui/grid/grid.js';
 import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
-import { Disposable, DisposableMap, DisposableStore, type IDisposable, setDisposableOwner, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, type DisposableStore, type IDisposable, setDisposableOwner, toDisposable } from '../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../base/common/observable.js';
 import { localize } from '../../../nls.js';
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
@@ -33,10 +32,7 @@ import { IInstantiationService } from '../../../platform/instantiation/common/in
 import { IChatViewFactory } from '../../contrib/chat/browser/chatViewFactory.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
-import {
-	IAuxiliaryWindowService,
-	type IAuxiliaryWindow,
-} from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import type { IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import type {
@@ -83,11 +79,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	private visible = true;
 	private get agentViewsVisible(): boolean { return this.visible && !this.desktopChatView; }
 	private switching = Promise.resolve();
-	private readonly popouts = new Map<
-		AgentSessionView,
-		{ window: IAuxiliaryWindow; resources: DisposableStore; placeholder: IView; shell: ChatAuxiliaryWindow; }
-	>();
-	private readonly openingPopouts = new Map<AgentSessionView, Promise<void>>();
+	private readonly detachedPlaceholders = new WeakMap<AgentSessionView, IView>();
 
 	override get minimumWidth(): number {
 		return 400;
@@ -96,11 +88,10 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	constructor(
 		container: HTMLElement,
 		private readonly options: SessionsPartOptions,
-		@IInstantiationService private readonly services: IInstantiationService,
+		@IInstantiationService services: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
-		@IAuxiliaryWindowService private readonly auxiliaryWindows: IAuxiliaryWindowService,
-		@ITitleService private readonly titleService: ITitleService,
+		@IChatWindowService private readonly chatWindows: IChatWindowService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@ISessionsManagementService private readonly sessionService: ISessionsManagementService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -152,7 +143,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			},
 		];
 		for (const { id, title, run } of splitCommands) {
-			this._register(CommandsRegistry.register(id, run));
+			this._register(CommandsRegistry.register(id, () => { if (this.splitActive.get()) run(); }));
 			this._register(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
 				command: { id, title },
 				when: ContextKeyExpr.has('sessions.splitActive'),
@@ -187,9 +178,10 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		);
 		this._register(
 			toDisposable(() => {
-				for (const popup of this.popouts.values()) popup.resources.dispose();
-				this.popouts.clear();
-				for (const view of this.entries.values()) view.dispose();
+				for (const view of this.entries.values()) {
+					this.chatWindows.getWindowForChat(view.element)?.close();
+					view.dispose();
+				}
 				this.entries.clear();
 			}),
 		);
@@ -220,13 +212,10 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		const switchKind = async () => {
 			if (this.isDisposed) return;
 			this.kind = kind;
-			await Promise.all(
-				[...this.entries.values()]
-					.filter(view => !this.popouts.has(view))
-					.map(view => view.setConversationKind(kind)),
-			);
+			for (const view of this.entries.values()) {
+				if (!this.detachedPlaceholders.has(view)) view.setConversationKind(kind);
+			}
 		};
-		// Entry commands may overlap while a composer flushes its pending edits.
 		this.switching = this.switching.then(switchKind, switchKind);
 		return this.switching;
 	}
@@ -240,125 +229,97 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 
 	focus(): void {
 		const active = this.desktopChatView ?? this.activeAgentView;
-		if (active === this.activeAgentView && active) this.popouts.get(active)?.window.window.focus();
-		if (active === this.activeAgentView || this.visible) active?.focus();
+		const popup = active === this.activeAgentView && active ? this.chatWindows.getWindowForChat(active.element) : undefined;
+		if (popup) {
+			void popup.focus().catch(error => this.notifications.error(String(error)));
+		} else if (active === this.activeAgentView || this.visible) {
+			active?.focus();
+		}
 	}
 
 	async openInNewWindow(selection: SessionsViewSelection): Promise<void> {
 		await this.switching;
+		if (this.isDisposed) return;
 		const view = this.entries.get(sessionViewSelectionKey(selection));
 		if (!view) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
-		const existing = this.popouts.get(view);
-		if (existing) {
-			existing.window.window.focus();
-			view.focus();
-			return;
-		}
-		let pending = this.openingPopouts.get(view);
-		if (!pending) {
-			pending = this.detachView(view, selection);
-			this.openingPopouts.set(view, pending);
-		}
-		try {
-			await pending;
-		} finally {
-			if (this.openingPopouts.get(view) === pending) this.openingPopouts.delete(view);
-		}
+		const title = selection.kind === 'session' ? selection.active.session.title : selection.session.title;
+		await this.chatWindows.open({
+			element: view.element,
+			title,
+			isAvailable: () => !this.isDisposed && !view.isDisposed,
+			focus: window => {
+				view.focus();
+				this.markDetachedViewViewed(view, window.window.document);
+			},
+			mount: (window, header, mountView, resources) => this.mountDetachedView(view, window, header, mountView, resources),
+		});
 	}
 
-	private async detachView(view: AgentSessionView, selection: SessionsViewSelection): Promise<void> {
-		const title = selection.kind === 'session' ? selection.active.session.title : selection.session.title;
-		const window = await this.auxiliaryWindows.open({ title, width: 900, height: 760 });
-		if (this.isDisposed || ![...this.entries.values()].includes(view)) {
-			window.dispose();
-			return;
-		}
-		const resources = new DisposableStore();
-		try {
-			const shell = this.titleService.createAuxiliaryTitlebarPart(window.container, unregister =>
-				this.services.createInstance(ChatAuxiliaryWindow, window, title, unregister));
-			resources.add(toDisposable(() => shell.dispose()));
-			const { header } = shell;
-			const placeholder = h(this.content.ownerDocument, 'div', { className: 'ash-chat-detached-chat' });
-			resources.add(
-				new Button(placeholder, {
-					...defaultButtonStyles,
-					presentation: 'quiet',
-					label: localize('sessions.window.focus', 'Chat is open in another window'),
-					onClick: () => {
-						window.window.focus();
-						view.focus();
-					},
-				}),
-			);
-			const placeholderView: IView = {
-				element: placeholder,
-				minimumWidth: 300,
-				maximumWidth: Infinity,
-				minimumHeight: 240,
-				maximumHeight: Infinity,
-				layout() { },
-			};
-			this.popouts.set(view, { window, resources, placeholder: placeholderView, shell });
-			resources.add(
-				toDisposable(() => {
-					this.popouts.delete(view);
-					// Reattach before the popup document is destroyed. The existing pane is
-					// the only owner of its input, transcript and provider subscriptions.
-					if (!this.isDisposed && [...this.entries.values()].includes(view)) {
-						this.options.activateSelection(view.currentSelection);
-						this.reconcileGrid();
-						view.setVisible(this.agentViewsVisible);
-						void view
-							.setConversationKind(this.kind)
-							.catch(error => this.notifications.error(String(error)));
-						if (this.agentViewsVisible && this.activeAgentView === view) view.focus();
-					}
-					window.dispose();
-				}),
-			);
-			resources.add(window.onDidClose(() => resources.dispose()));
-			resources.add(
-				window.onWillLayout(dimension =>
-					view.layout({
-						top: 0,
-						left: 0,
-						width: dimension.width,
-						height: Math.max(0, dimension.height - header.offsetHeight),
-					}),
-				),
-			);
-			view.setCloseVisible(false);
+	private mountDetachedView(
+		view: AgentSessionView,
+		window: IAuxiliaryWindow,
+		header: HTMLElement,
+		mountView: () => void,
+		resources: DisposableStore,
+	): void {
+		const placeholder = h(this.content.ownerDocument, 'div', { className: 'ash-chat-detached-chat' });
+		resources.add(new Button(placeholder, {
+			...defaultButtonStyles,
+			presentation: 'quiet',
+			label: localize('sessions.window.focus', 'Chat is open in another window'),
+			onClick: () => {
+				void this.chatWindows.getWindowForChat(view.element)?.focus().catch(error => this.notifications.error(String(error)));
+			},
+		}));
+		this.detachedPlaceholders.set(view, {
+			element: placeholder,
+			minimumWidth: 300,
+			maximumWidth: Infinity,
+			minimumHeight: 240,
+			maximumHeight: Infinity,
+			layout() { },
+		});
+		resources.add(toDisposable(() => {
+			this.detachedPlaceholders.delete(view);
+			// Return the same pane before the popup document and its listeners go away.
+			if (this.isDisposed || ![...this.entries.values()].includes(view)) return;
+			this.options.activateSelection(view.currentSelection);
 			this.reconcileGrid();
-			window.container.classList.add('ash-sessions-window');
-			shell.mount(view.element);
-			view.setVisible(true);
-			const document = window.window.document;
-			const markViewed = () => {
-				if (this.popouts.get(view)?.window !== window || document.hidden || !document.hasFocus()) return;
-				const selection = view.currentSelection;
-				if (selection.kind === 'session') {
-					const { session, threadId } = selection.active;
-					this.options.markVisibleThreadViewed({ sessionId: session.sessionId, threadId });
-				}
-			};
-			resources.add(addDisposableListener(window.window, 'focus', markViewed));
-			resources.add(addDisposableListener(document, 'visibilitychange', markViewed));
-			resources.add(this.sessionService.onDidChange(markViewed));
-			window.layout();
-			window.window.focus();
-			view.focus();
-			markViewed();
-		} catch (error) {
-			resources.dispose();
-			window.dispose();
-			throw error;
+			view.setVisible(this.agentViewsVisible);
+			try { view.setConversationKind(this.kind); }
+			catch (error) { this.notifications.error(String(error)); }
+			if (this.agentViewsVisible && this.activeAgentView === view) view.focus();
+		}));
+		resources.add(window.onWillLayout(dimension => view.layout({
+			top: 0,
+			left: 0,
+			width: dimension.width,
+			height: Math.max(0, dimension.height - header.offsetHeight),
+		})));
+		view.setCloseVisible(false);
+		this.reconcileGrid();
+		window.container.classList.add('ash-sessions-window');
+		mountView();
+		view.setVisible(true);
+		const document = window.window.document;
+		const markViewed = () => this.markDetachedViewViewed(view, document);
+		resources.add(addDisposableListener(window.window, 'focus', markViewed));
+		resources.add(addDisposableListener(document, 'visibilitychange', markViewed));
+		resources.add(this.sessionService.onDidChange(markViewed));
+	}
+
+	private markDetachedViewViewed(view: AgentSessionView, document: Document): void {
+		if (!this.detachedPlaceholders.has(view) || document.hidden || !document.hasFocus()) return;
+		const selection = view.currentSelection;
+		if (selection.kind === 'session') {
+			const { session, threadId } = selection.active;
+			this.options.markVisibleThreadViewed({ sessionId: session.sessionId, threadId });
 		}
 	}
 
 	private get activeGridId(): string | undefined {
 		const active = this.activeAgentView;
-		return !this.desktopChatView && active && !this.popouts.has(active) ? this.mainKeys.find(id => this.entries.get(id) === active) : undefined;
+		return !this.desktopChatView && active && !this.detachedPlaceholders.has(active) ? this.mainKeys.find(id => this.entries.get(id) === active) : undefined;
 	}
 
 	private focusNeighbor(direction: Direction): void {
@@ -366,7 +327,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		const id = this.activeGridId;
 		const neighbor = id && this.grid.neighbor(id, direction);
 		const view = neighbor ? this.entries.get(neighbor) : undefined;
-		if (!view || this.popouts.has(view)) return;
+		if (!view || this.detachedPlaceholders.has(view)) return;
 		this.options.activateSelection(view.currentSelection);
 		view.focus();
 	}
@@ -375,7 +336,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		const source = this.chatSource.get();
 		const entries = desktopChat && source !== undefined ? [{ id: source, view: desktopChat }] : this.mainKeys.flatMap(id => {
 			const view = this.entries.get(id);
-			return view ? [{ id, view: this.popouts.get(view)?.placeholder ?? view }] : [];
+			return view ? [{ id, view: this.detachedPlaceholders.get(view) ?? view }] : [];
 		});
 		const docked = entries.flatMap(({ view }) => view instanceof SessionView ? [view] : []);
 		for (const view of docked) view.setCloseVisible(docked.length > 1);
@@ -387,22 +348,23 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 
 	focusDraftPicker(picker: 'workspace' | 'environment'): void {
 		const view = this.activeAgentView;
-		if (!this.agentViewsVisible || !view || this.popouts.has(view) || view.currentSelection.kind !== 'untitled') return;
+		if (!this.agentViewsVisible || !view || this.detachedPlaceholders.has(view) || view.currentSelection.kind !== 'untitled') return;
 		const pane = view.activeChat;
 		if (pane instanceof NewChatView) pane.focusDraftPicker(picker);
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
-		if (!this.activeAgentView)
+		const view = this.desktopChatView ?? this.activeAgentView;
+		if (!view)
 			throw new Error(
 				localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'),
 			);
-		this.activeAgentView.activeChat.addContext(attachment);
+		view.activeChat.addContext(attachment);
 	}
 
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>): Promise<readonly ChatContextAttachment[]> {
 		const view = this.activeAgentView;
-		if (!view || this.popouts.has(view)) return Promise.resolve([]);
+		if (!view || this.detachedPlaceholders.has(view)) return Promise.resolve([]);
 		return view.activeChat.acquireContext(prepare);
 	}
 
@@ -460,7 +422,8 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		const removed: AgentSessionView[] = [];
 		for (const [key, view] of this.entries) {
 			if (desired.has(key)) continue;
-			if (this.popouts.has(view)) {
+			const popup = this.chatWindows.getWindowForChat(view.element);
+			if (popup) {
 				const current = view.currentSelection;
 				const id =
 					view.activeChat.sessionId ??
@@ -484,8 +447,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 					);
 					if (thread) {
 						view.openSession({ kind: 'session', active: { session, threadId: thread.threadId } });
-						const popup = this.popouts.get(view)!;
-						popup.shell.setTitle(session.title);
+						popup.setTitle(session.title);
 						continue;
 					}
 				}
@@ -512,7 +474,6 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 					createPane: (kind, container, panelId, selected) =>
 						this.createPane(kind, container, panelId, selected),
 					bindPane: bindAgentSession,
-					bindingKey: selection => selection.kind === 'session' ? selection.active.threadId : selection.session.untitledSessionId,
 					shouldRecreatePane: (previous, next) => previous.kind === 'untitled' && next.kind === 'untitled'
 						&& previous.session.providerId !== next.session.providerId,
 					activateSelection: this.options.activateSelection,
@@ -522,11 +483,11 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				this.entries.set(id, view);
 			}
 			view.openSession(selection);
-			const popup = this.popouts.get(view);
+			const popup = this.chatWindows.getWindowForChat(view.element);
 			view.setVisible(this.agentViewsVisible || popup !== undefined);
 			if (popup) {
 				const title = selection.kind === 'session' ? selection.active.session.title : selection.session.title;
-				popup.shell.setTitle(title);
+				popup.setTitle(title);
 			}
 			view.element.classList.toggle('last-slot', selection === selections.at(-1));
 		}
@@ -534,7 +495,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		this.updateInfoContext();
 		this.reconcileGrid();
 		for (const view of removed) {
-			this.popouts.get(view)?.resources.dispose();
+			this.chatWindows.getWindowForChat(view.element)?.close();
 			view.dispose();
 		}
 	}
@@ -549,7 +510,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		this.desktopChatView?.setVisible(this.visible);
 		this.grid.setVisible(this.visible);
 		this.splitActive.set(this.agentViewsVisible && this.mainKeys.length > 1 && this.activeGridId !== undefined);
-		for (const view of this.entries.values()) view.setVisible(this.agentViewsVisible || this.popouts.has(view));
+		for (const view of this.entries.values()) view.setVisible(this.agentViewsVisible || this.detachedPlaceholders.has(view));
 	}
 
 	override layout(dimension: Dimension): void {

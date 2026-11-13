@@ -3,9 +3,12 @@ import { cloneDocumentStyles } from '../../../../base/browser/domStylesheets.js'
 import { observeMutations } from '../../../../base/browser/observer.js';
 import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { getWindowId, registerWindow } from '../../../../base/browser/window.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
+import { cancelOnDispose } from '../../../../base/common/cancellation.js';
+import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { DisposableMap, Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, Disposable, DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
@@ -16,7 +19,6 @@ import { getContainerDimension } from '../../../../platform/layout/browser/layou
 
 const WORKBENCH_ROOT_CLASSES = ['ash-reduce-motion', 'ash-enable-motion', 'ash-reduce-transparency', 'ash-underline-links', 'hc-black', 'hc-light', 'ash-high-contrast'] as const;
 const WORKBENCH_ROOT_ATTRIBUTES = ['data-os', 'data-runtime', 'data-workbench-state', 'data-color-theme', 'data-color-scheme'] as const;
-const AUXILIARY_WINDOW_STATE_KEY = 'auxiliaryEditorWindowState';
 
 export interface AuxiliaryWindowBounds {
 	readonly width: number;
@@ -35,6 +37,10 @@ export interface AuxiliaryWindowState extends AuxiliaryWindowBounds {
 
 export interface AuxiliaryWindowOpenOptions extends Partial<IAuxiliaryWindowState> {
 	readonly title?: string;
+	/** Remember the last window geometry for this feature. */
+	readonly stateKey?: string;
+	readonly featureWidthOffset?: number;
+	readonly featureHeightOffset?: number;
 	readonly width?: number;
 	readonly height?: number;
 	readonly left?: number;
@@ -43,6 +49,8 @@ export interface AuxiliaryWindowOpenOptions extends Partial<IAuxiliaryWindowStat
 
 export interface AuxiliaryWindowBeforeUnloadEvent {
 	veto(reason: string): void;
+	/** Pause unloading while the owner prepares to close. */
+	join(close: () => Promise<boolean>): void;
 }
 
 /** One same-origin popup whose document is owned by Workbench UI. */
@@ -62,6 +70,7 @@ export interface IAuxiliaryWindow extends Disposable {
 		readonly onDidChange: Event<boolean>;
 		set(value: boolean): Promise<void>;
 	};
+	focus(): Promise<void>;
 	layout(): void;
 	createState(): AuxiliaryWindowState;
 }
@@ -92,9 +101,10 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 
 	async open(options: AuxiliaryWindowOpenOptions = {}): Promise<IAuxiliaryWindow> {
 		this.assertNotDisposed();
-		const restored = parseAuxiliaryWindowState(this.storageService.get(AUXILIARY_WINDOW_STATE_KEY, StorageScope.APPLICATION));
-		const width = finiteDimension(options.width ?? (restored ? restored.width + restored.featureWidthOffset : undefined), 960);
-		const height = finiteDimension(options.height ?? (restored ? restored.height + restored.featureHeightOffset : undefined), 720);
+		const { stateKey } = options;
+		const restored = stateKey === undefined ? undefined : parseAuxiliaryWindowState(this.storageService.get(stateKey, StorageScope.APPLICATION));
+		const width = finiteDimension((options.width ?? restored?.width ?? 960) + (options.width === undefined ? restored?.featureWidthOffset ?? 0 : options.featureWidthOffset ?? 0), 960);
+		const height = finiteDimension((options.height ?? restored?.height ?? 720) + (options.height === undefined ? restored?.featureHeightOffset ?? 0 : options.featureHeightOffset ?? 0), 720);
 		const left = options.left ?? restored?.left;
 		const top = options.top ?? restored?.top;
 		const positionKeys = this.workbenchRoot.getAttribute('data-runtime') === 'electron' && left !== undefined && top !== undefined
@@ -103,7 +113,7 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 		const features = [
 			'popup=yes',
 			options.zoomLevel === undefined ? undefined : `window-zoom-level=${options.zoomLevel}`,
-			options.alwaysOnTop ? 'window-always-on-top=yes' : undefined,
+			options.alwaysOnTop === undefined ? undefined : `window-always-on-top=${options.alwaysOnTop ? 'yes' : 'no'}`,
 			options.mode === 'maximized' ? 'window-maximized=yes' : undefined,
 			options.mode === 'fullscreen' ? 'window-fullscreen=yes' : undefined,
 			`width=${width}`,
@@ -118,21 +128,40 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 		} catch {
 			// Some browser WindowProxy implementations expose a read-only opener.
 		}
-		const auxiliary = this.createAuxiliaryWindow(target, options.title ?? localize({ bundle: 'ash', key: 'auxiliaryWindow.editor' }, 'Editor'));
-		this.windows.set(auxiliary.id, auxiliary);
-		this.windowListeners.set(auxiliary.id, auxiliary.onDidClose(() => {
-			this.storageService.store(AUXILIARY_WINDOW_STATE_KEY, JSON.stringify(auxiliary.createState()), StorageScope.APPLICATION, StorageTarget.MACHINE);
-			this.windowListeners.deleteAndDispose(auxiliary.id);
-			const closedWindow = this.windows.deleteAndLeak(auxiliary.id);
-			// Release the window after every close listener has received the event.
-			queueMicrotask(() => closedWindow?.dispose());
+		const opening = this._register(new DisposableStore());
+		const closeTarget = opening.add(toDisposable(() => {
+			if (!target.closed) target.close();
 		}));
-		await auxiliary.whenStylesHaveLoaded;
-		if (this.windows.get(auxiliary.id) !== auxiliary) throw new Error('The auxiliary editor window closed before its styles loaded');
-		auxiliary.recordFrameOffsets();
-		this.openEmitter.fire(auxiliary);
-		auxiliary.layout();
-		return auxiliary;
+		const cancellation = cancelOnDispose(opening);
+		try {
+			const auxiliary = opening.add(this.createAuxiliaryWindow(target, options.title ?? localize({ bundle: 'ash', key: 'auxiliaryWindow.editor' }, 'Editor')));
+			opening.add(auxiliary.onDidClose(() => opening.dispose()));
+			const windowId = await raceCancellationError(auxiliary.initialize(), cancellation);
+			if (target.closed) throw new CancellationError();
+			auxiliary.recordFrameOffsets();
+			auxiliary.register(windowId);
+			if (target.closed || cancellation.isCancellationRequested) throw new CancellationError();
+
+			opening.delete(closeTarget);
+			opening.delete(auxiliary);
+			this.windows.set(auxiliary.id, auxiliary);
+			this.windowListeners.set(auxiliary.id, auxiliary.onDidClose(() => {
+				this.windowListeners.deleteAndDispose(auxiliary.id);
+				const closedWindow = this.windows.deleteAndLeak(auxiliary.id);
+				// Release the window after every close listener has received the event.
+				queueMicrotask(() => closedWindow?.dispose());
+				if (stateKey !== undefined) {
+					this.storageService.store(stateKey, JSON.stringify(auxiliary.createState()), StorageScope.APPLICATION, StorageTarget.MACHINE);
+				}
+			}));
+			this.openEmitter.fire(auxiliary);
+			if (target.closed || auxiliary.isDisposed) throw new CancellationError();
+			auxiliary.startLayout();
+			return auxiliary;
+		} finally {
+			this._store.delete(opening);
+			opening.dispose();
+		}
 	}
 
 	protected createAuxiliaryWindow(target: Window, title: string): AuxiliaryWindow {
@@ -157,10 +186,17 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	readonly onDidLayout = this.layoutEmitter.event;
 	readonly onBeforeUnload = this.beforeUnloadEmitter.event;
 	readonly onDidClose = this.closeEmitter.event;
-	readonly id: number;
+	private windowId: number | undefined;
+	get id(): number {
+		if (this.windowId === undefined) throw new Error('Auxiliary window is not registered');
+		return this.windowId;
+	}
 	readonly container: HTMLElement;
 	readonly whenStylesHaveLoaded: Promise<void>;
 	private closed = false;
+	private pendingClose = false;
+	private closeApproved = false;
+	private layoutEnabled = false;
 	private closingState: AuxiliaryWindowState | undefined;
 	private featureWidthOffset = 0;
 	private featureHeightOffset = 0;
@@ -173,47 +209,74 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 		title: string,
 	) {
 		super();
-		this._register(registerWindow(window));
-		const id = getWindowId(window);
-		if (id === undefined) throw new Error('Auxiliary window registration did not produce an identity');
-		this.id = id;
-		this.whenStylesHaveLoaded = this._register(cloneDocumentStyles(sourceWindow.document, window.document)).whenStylesHaveLoaded;
-		window.document.documentElement.lang = sourceWindow.document.documentElement.lang;
-		window.document.documentElement.dir = sourceWindow.document.documentElement.dir;
-		window.document.body.replaceChildren();
-		window.document.documentElement.classList.add('ash-auxiliary-window');
-		window.document.body.classList.add('ash-auxiliary-window-body');
-		this.container = h(sourceWindow.document, 'main');
-		this.container.className = 'ash-auxiliary-window-container ash-workbench';
-		this.container.setAttribute('aria-label', title);
-		window.document.body.append(this.container);
-		this._register(observeMutations(workbenchRoot, () => this.syncWorkbenchRoot(workbenchRoot), {
-			attributes: true,
-			attributeFilter: ['class', ...WORKBENCH_ROOT_ATTRIBUTES],
-		}));
-		this.syncWorkbenchRoot(workbenchRoot);
 		const targetDocument = window.document;
-		const updateIcons = (): void => setIconResolver(
-			targetDocument,
-			icon => getIconDefinition(icon, themeService.getProductIconTheme().icons),
-		);
-		updateIcons();
-		this._register(themeService.onDidProductIconThemeChange(updateIcons));
-		this._register(toDisposable(() => setIconResolver(targetDocument, icon => getIconDefinition(icon))));
-		this._register(addDisposableListener(window, 'resize', () => this.layout()));
-		this._register(addDisposableListener(window, 'beforeunload', event => this.handleBeforeUnload(event as BeforeUnloadEvent)));
-		this._register(addDisposableListener(window, 'unload', () => this.publishClosed()));
+		const { documentElement, body } = targetDocument;
+		this.container = h(sourceWindow.document, 'main');
 		this._register(toDisposable(() => {
-			this.closingState ??= this.readCurrentState();
+			if (this.layoutEnabled && !window.closed) this.closingState ??= this.readCurrentState();
 			this.container.remove();
-			window.document.documentElement.classList.remove('ash-auxiliary-window');
-			window.document.body.classList.remove('ash-auxiliary-window-body');
+			documentElement.classList.remove('ash-auxiliary-window');
+			body.classList.remove('ash-auxiliary-window-body');
 			if (!this.closed && !window.closed) window.close();
 			this.publishClosed();
 		}));
+		try {
+			this.whenStylesHaveLoaded = this._register(cloneDocumentStyles(sourceWindow.document, targetDocument)).whenStylesHaveLoaded;
+			documentElement.lang = sourceWindow.document.documentElement.lang;
+			documentElement.dir = sourceWindow.document.documentElement.dir;
+			body.replaceChildren();
+			documentElement.classList.add('ash-auxiliary-window');
+			body.classList.add('ash-auxiliary-window-body');
+			this.container.className = 'ash-auxiliary-window-container ash-workbench';
+			this.container.setAttribute('aria-label', title);
+			body.append(this.container);
+			this._register(observeMutations(workbenchRoot, () => this.syncWorkbenchRoot(workbenchRoot), {
+				attributes: true,
+				attributeFilter: ['class', ...WORKBENCH_ROOT_ATTRIBUTES],
+			}));
+			this.syncWorkbenchRoot(workbenchRoot);
+			const updateIcons = (): void => setIconResolver(
+				targetDocument,
+				icon => getIconDefinition(icon, themeService.getProductIconTheme().icons),
+			);
+			updateIcons();
+			this._register(themeService.onDidProductIconThemeChange(updateIcons));
+			this._register(toDisposable(() => setIconResolver(targetDocument, icon => getIconDefinition(icon))));
+			this._register(addDisposableListener(window, 'resize', () => this.layout()));
+			this._register(addDisposableListener(window, 'beforeunload', event => this.handleBeforeUnload(event as BeforeUnloadEvent)));
+			this._register(addDisposableListener(window, 'unload', () => this.publishClosed()));
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
+	}
+
+	register(windowId: number | undefined): void {
+		const registration = registerWindow(this.window, windowId);
+		if (this.isDisposed) {
+			registration.dispose();
+			throw new CancellationError();
+		}
+		this._register(registration);
+		this.windowId = getWindowId(this.window)!;
+	}
+
+	async initialize(): Promise<number | undefined> {
+		await this.whenStylesHaveLoaded;
+		return undefined;
+	}
+
+	startLayout(): void {
+		this.layoutEnabled = true;
+		this.layout();
+	}
+
+	async focus(): Promise<void> {
+		this.window.focus();
 	}
 
 	layout(): void {
+		if (!this.layoutEnabled || this.isDisposed || this.closed) return;
 		const measured = getContainerDimension(this.container);
 		const dimension = new Dimension(
 			Math.max(0, measured.width || this.window.innerWidth || 0),
@@ -265,14 +328,73 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	}
 
 	private handleBeforeUnload(event: BeforeUnloadEvent): void {
-		let reason: string | undefined;
-		this.beforeUnloadEmitter.fire({ veto: candidate => { reason ??= candidate; } });
-		if (!reason) {
-			this.closingState = this.readCurrentState();
+		if (this.closeApproved) {
+			this.closeApproved = false;
+			if (this.layoutEnabled) this.closingState = this.readCurrentState();
 			return;
 		}
+		if (this.pendingClose) {
+			this.preventUnload(event);
+			return;
+		}
+		let reason: string | undefined;
+		let close: (() => Promise<boolean>) | undefined;
+		this.beforeUnloadEmitter.fire({
+			veto: candidate => { reason ??= candidate; },
+			join: participant => { close ??= participant; },
+		});
+		const confirm = !reason && this.layoutEnabled && this.shouldConfirmClose();
+		if (!reason && !close && !confirm) {
+			if (this.layoutEnabled) this.closingState = this.readCurrentState();
+			return;
+		}
+		this.preventUnload(event, reason);
+		this.pendingClose = true;
+		void this.prepareClose(reason, close, confirm).catch(onUnexpectedError).finally(() => {
+			this.pendingClose = false;
+		});
+	}
+
+	private async prepareClose(reason: string | undefined, close: (() => Promise<boolean>) | undefined, confirm: boolean): Promise<void> {
+		// Let the current beforeunload dispatch finish before showing a dialog or closing again.
+		await Promise.resolve();
+		if (this.isDisposed || this.window.closed) return;
+		if (reason) {
+			await this.showCloseVeto(reason);
+			return;
+		}
+		if (confirm && !await this.confirmClose()) return;
+		if (this.isDisposed || this.window.closed) return;
+		if (close && !await close()) return;
+		if (this.isDisposed || this.window.closed) return;
+		this.closeApproved = true;
+		try {
+			await this.closeWindow();
+		} catch (error) {
+			this.closeApproved = false;
+			throw error;
+		}
+	}
+
+	protected preventUnload(event: BeforeUnloadEvent, reason?: string): void {
 		event.preventDefault();
-		event.returnValue = reason;
+		if (reason) event.returnValue = reason;
+	}
+
+	protected shouldConfirmClose(): boolean {
+		return false;
+	}
+
+	protected confirmClose(): Promise<boolean> {
+		return Promise.resolve(true);
+	}
+
+	protected showCloseVeto(_reason: string): Promise<void> {
+		return Promise.resolve();
+	}
+
+	protected async closeWindow(): Promise<void> {
+		this.window.close();
 	}
 
 	private publishClosed(): void {

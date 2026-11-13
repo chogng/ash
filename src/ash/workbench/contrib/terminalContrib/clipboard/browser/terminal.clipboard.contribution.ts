@@ -1,10 +1,11 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { isLinux, isWindows } from '../../../../../base/common/platform.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -209,7 +210,7 @@ function clipboardInstance(accessor: ServicesAccessor, context: unknown): ITermi
 	return instance;
 }
 
-registerAction2(class TerminalCopySelectionAction extends Action2 {
+registerEditorToolAction(class TerminalCopySelectionAction extends Action2 {
 	constructor() {
 		super({
 			id: TerminalCommandId.CopySelection,
@@ -225,7 +226,7 @@ registerAction2(class TerminalCopySelectionAction extends Action2 {
 	}
 });
 
-registerAction2(class TerminalCopyAndClearSelectionAction extends Action2 {
+registerEditorToolAction(class TerminalCopyAndClearSelectionAction extends Action2 {
 	constructor() {
 		super({
 			id: TerminalCommandId.CopyAndClearSelection,
@@ -252,7 +253,7 @@ registerAction2(class TerminalCopyAndClearSelectionAction extends Action2 {
 	}
 });
 
-registerAction2(class TerminalPasteAction extends Action2 {
+registerEditorToolAction(class TerminalPasteAction extends Action2 {
 	constructor() {
 		super({
 			id: TerminalCommandId.Paste,
@@ -276,7 +277,7 @@ registerAction2(class TerminalPasteAction extends Action2 {
 });
 
 if (isLinux) {
-	registerAction2(class TerminalPasteSelectionAction extends Action2 {
+	registerEditorToolAction(class TerminalPasteSelectionAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalCommandId.PasteSelection,

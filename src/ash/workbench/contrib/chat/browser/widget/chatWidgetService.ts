@@ -2,6 +2,8 @@ import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { IChatWidget, IChatWidgetService } from '../chat.js';
 import { Emitter } from '../../../../../base/common/event.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 
 /** Window-scoped input targeting. Models and media remain owned by each registered widget. */
 export class ChatWidgetService extends Disposable implements IChatWidgetService {
@@ -9,6 +11,14 @@ export class ChatWidgetService extends Disposable implements IChatWidgetService 
 	readonly onDidChangeWidgets = this.changed.event;
 	private readonly widgets = new Map<IChatWidget, DisposableStore>();
 	private focused: IChatWidget | undefined;
+	private readonly replyOnlyInput;
+
+	constructor(@IContextKeyService contextKeys: IContextKeyService) {
+		super();
+		this.replyOnlyInput = ChatContextKeys.replyOnlyInput.bindTo(contextKeys);
+		this._register(this.onDidChangeWidgets(() => this.updateFocusedInputContext()));
+		this._register(toDisposable(() => this.replyOnlyInput.reset()));
+	}
 
 	get lastFocusedWidget(): IChatWidget | undefined {
 		return this.focused?.visible ? this.focused : undefined;
@@ -25,7 +35,10 @@ export class ChatWidgetService extends Disposable implements IChatWidgetService 
 		lifetime.add(widget.onDidChangeVisibility(() => this.changed.fire()));
 		lifetime.add(widget.onDidChangeViewModel(() => this.changed.fire()));
 		lifetime.add(addDisposableListener(widget.domNode, 'focusin', () => {
-			if (widget.visible) this.focused = widget;
+			if (widget.visible && this.focused !== widget) {
+				this.focused = widget;
+				this.updateFocusedInputContext();
+			}
 		}));
 		if (widget.visible && widget.domNode.contains(widget.domNode.ownerDocument.activeElement)) this.focused = widget;
 		this.changed.fire();
@@ -36,6 +49,10 @@ export class ChatWidgetService extends Disposable implements IChatWidgetService 
 			this._store.delete(lifetime);
 			lifetime.dispose();
 		});
+	}
+
+	private updateFocusedInputContext(): void {
+		this.replyOnlyInput.set(this.lastFocusedWidget?.input.replyOnly === true);
 	}
 
 	protected override disposeCore(): void {

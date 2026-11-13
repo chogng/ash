@@ -51,7 +51,7 @@ export interface MarkdownSanitizerConfig {
 	readonly allowedTags?: { readonly override: readonly string[]; };
 	readonly allowedAttributes?: { readonly override: ReadonlyArray<string | SanitizeAttributeRule>; };
 	readonly resolveFileLink?: (href: string) => string | undefined;
-	readonly allowedLinkSchemes?: { readonly augment: readonly string[]; };
+	readonly allowedLinkSchemes?: { readonly augment: readonly string[]; readonly accepts?: (resource: URI) => boolean; };
 	readonly allowedMediaSchemes?: { readonly augment: readonly string[]; };
 	readonly remoteImageIsAllowed?: (uri: URI) => boolean;
 }
@@ -671,6 +671,7 @@ export function resolveMarkdownLinkTarget(href: string, markdown?: IMarkdownStri
 			return /^[a-z][a-z0-9+.-]*:/i.test(href) ? href : url.toString();
 		}
 		if (url.protocol !== 'javascript:' && config?.allowedLinkSchemes?.augment.includes(url.protocol.slice(0, -1))) {
+			if (config.allowedLinkSchemes.accepts && !config.allowedLinkSchemes.accepts(URI.parse(url.href))) return undefined;
 			return /^[a-z][a-z0-9+.-]*:/i.test(href) ? href : url.toString();
 		}
 	} catch {

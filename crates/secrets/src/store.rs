@@ -61,6 +61,12 @@ pub trait SecretStore: Send + Sync {
 
     fn load(&self, key: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError>;
 
+    /// Reads a secret when its presence or absence can be determined. A fallback store must
+    /// return an error if the backing value is unreadable and no session change supersedes it.
+    fn load_confirmed(&self, key: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError> {
+        self.load(key)
+    }
+
     fn store(&self, key: &SecretKey, value: &SecretValue) -> Result<(), SecretStoreError>;
 
     fn delete(&self, key: &SecretKey) -> Result<DeleteSecretOutcome, SecretStoreError>;

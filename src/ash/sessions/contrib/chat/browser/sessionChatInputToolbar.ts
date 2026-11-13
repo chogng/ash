@@ -20,7 +20,8 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import type { ArtifactAction, IArtifactIntegrationBinding } from '../../../../platform/artifactIntegrations/common/artifactIntegration.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IGitHubService } from '../../github/browser/githubService.js';
 import { getIssueLabel, getPullRequestLabel, type IResolvedSessionIssue, type IResolvedSessionPullRequest } from '../../github/common/types.js';
@@ -146,7 +147,7 @@ export class SessionChatInputToolbar extends Disposable {
 						status(localize('sessions.github.detached', 'Pull request attachment removed.'));
 					}
 				};
-				const invoke = async (request: IResolvedSessionPullRequest, select: (binding: IArtifactIntegrationBinding) => Promise<ArtifactAction | undefined>) => {
+				const invoke = async (request: IResolvedSessionPullRequest, select: (binding: IArtifactIntegrationBinding, token: CancellationToken) => Promise<ArtifactAction | undefined>) => {
 					if (sessionId) { await this.github.invokePullRequestArtifact(sessionId, request, select); }
 				};
 				entry = this.entries.set(key, this.instantiation.createInstance(PullRequestEntry, this.element, request, detach, sessionId, invoke));
@@ -259,7 +260,7 @@ class PullRequestEntry extends Disposable {
 		request: IResolvedSessionPullRequest,
 		detach: (reference: NonNullable<IResolvedSessionPullRequest['recordedReference']>) => Promise<void>,
 		private readonly sessionId: string | undefined,
-		invoke: (request: IResolvedSessionPullRequest, select: (binding: IArtifactIntegrationBinding) => Promise<ArtifactAction | undefined>) => Promise<void>,
+		invoke: (request: IResolvedSessionPullRequest, select: (binding: IArtifactIntegrationBinding, token: CancellationToken) => Promise<ArtifactAction | undefined>) => Promise<void>,
 		@IOpenerService opener: IOpenerService,
 		@INotificationService notifications: INotificationService,
 		@IEditorService editors: IEditorService,
@@ -297,7 +298,9 @@ class PullRequestEntry extends Disposable {
 		this._register(addDisposableListener(this.actionsDomNode, 'click', () => {
 			if (this.actionsDomNode.disabled) { return; }
 			this.actionsDomNode.disabled = true;
-			void invoke(this.request, binding => this.selectAction(binding)).catch(error => notifications.error(error)).finally(() => {
+			void invoke(this.request, (binding, token) => this.selectAction(binding, token)).catch(error => {
+				if (!isCancellationError(error)) notifications.error(error);
+			}).finally(() => {
 				this.actionsDomNode.disabled = false;
 				if (!this.isDisposed && this.actionsDomNode.ownerDocument.activeElement === this.actionsDomNode.ownerDocument.body) {
 					(this.actionsDomNode.hidden ? this.domNode : this.actionsDomNode).focus();
@@ -319,11 +322,11 @@ class PullRequestEntry extends Disposable {
 		this._register(toDisposable(() => this.containerDomNode.remove()));
 	}
 
-	private async selectAction(binding: IArtifactIntegrationBinding): Promise<ArtifactAction | undefined> {
+	private async selectAction(binding: IArtifactIntegrationBinding, token: CancellationToken): Promise<ArtifactAction | undefined> {
 		const sessionId = this.sessionId;
 		if (!sessionId || this.isDisposed || this.actionsDomNode.hidden || this.request.artifact?.id !== binding.artifact.id) return undefined;
 		return this.artifactDetails.choose(binding, (container, cardState) =>
-			this.instantiation.createInstance(PullRequestFollowUpWidget, container, { sessionId, id: binding.artifact.id, cardState }));
+			this.instantiation.createInstance(PullRequestFollowUpWidget, container, { sessionId, id: binding.artifact.id, cardState }), token);
 	}
 
 	public update(request: IResolvedSessionPullRequest): void {

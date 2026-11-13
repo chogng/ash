@@ -1,6 +1,5 @@
 import './remoteAgentHost/remoteAgentHost.contribution.js';
 import { AgentHostOpenSessionLinkOpenerContribution } from './agentSessions/agentHost/openSessionLinkOpener.contribution.js';
-import { ChatInputSessionLinkProvider } from './widget/input/editor/chatInputSessionLinkProvider.js';
 import { registerMoveActions } from './actions/chatMoveActions.js';
 import { registerAgentSessionsLayoutActions } from './agentSessions/agentSessionsActions.js';
 import { registerChatOpenAgentDebugPanelAction } from './actions/chatOpenAgentDebugPanelAction.js';
@@ -23,6 +22,5 @@ registerMoveActions();
 registerAgentSessionsLayoutActions();
 registerChatOpenAgentDebugPanelAction();
 registerWorkbenchContribution(AgentHostOpenSessionLinkOpenerContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(AgentHostOpenSessionLinkOpenerContribution));
-registerWorkbenchContribution('workbench.contrib.chatInputSessionLinks', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatInputSessionLinkProvider));
 registerWorkbenchContribution('workbench.contrib.chatContextActions', WorkbenchPhase.BlockStartup, accessor => registerChatContextActions(accessor.get(IImageEditorService), accessor.get(ICommandService)));
 registerHookActions();

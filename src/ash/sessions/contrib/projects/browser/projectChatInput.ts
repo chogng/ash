@@ -79,11 +79,10 @@ export class ProjectChatInput extends Disposable {
 				}, model, {
 					inputLabel,
 					explicitModelSelection: true,
-					literalServerCommands: true,
 					useWorkbenchModelManagement: local ? true : undefined,
 					persistentDraftScope: local ? 'ash-chat' : undefined,
 				}),
-				{ showWelcome: false },
+				{ showWelcome: false, messageActionSurface: 'chat' },
 			));
 		} catch (error) {
 			model.dispose();

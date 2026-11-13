@@ -71,7 +71,7 @@ class ToolsContextPickerPick implements IChatContextPickerItem {
 	) { }
 
 	public isEnabled(widget?: IChatWidget): boolean {
-		return (widget?.input.languageModelTools ?? this.toolsService).isAvailable;
+		return !widget?.input.replyOnly && (widget?.input.languageModelTools ?? this.toolsService).isAvailable;
 	}
 
 	public asPicker(widget?: IChatWidget): IChatContextPicker {

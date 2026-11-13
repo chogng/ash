@@ -94,7 +94,7 @@ import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/base/browser/markdownRenderer.css';
 import '../../../src/ash/sessions/contrib/chat/browser/media/chatInput.css';
 import '../../../src/ash/editor/browser/coreCommands.js';
-import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Lexer } from '../../../src/ash/base/common/marked/marked.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -133,9 +133,11 @@ import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IChatService, type RestoreChatCheckpointOptions } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IGitHubService } from '../../../src/ash/sessions/contrib/github/browser/githubService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import type { ChatContentPart, ThreadTranscriptEntry } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
+import { ChatFindWidget, type IChatFindHost } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatFind/chatFindWidget.js';
 import { ChatContentMarkdownRenderer } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
@@ -426,6 +428,21 @@ const listOptions = {
 let rendererItems: readonly IChatListItem[] = [];
 let list = resources.add(appServices.createInstance(ChatListWidget, root, listOptions));
 list.setVisible(true);
+const transcriptFind = resources.add(new MutableDisposable<ChatFindWidget>());
+function getTranscriptFind(): ChatFindWidget {
+	const transcript = list;
+	return transcriptFind.value ??= appServices.createInstance(ChatFindWidget, {
+		element: transcript.element,
+		onDidChange: transcript.onDidChangeFindableContent,
+		getItems: () => transcript.getItems(),
+		getRowElement: id => transcript.getRowElement(id),
+		getViewportAnchorItemId: () => transcript.getViewportAnchorItemId(),
+		reveal: (id, target) => transcript.revealItem(id, target),
+		focus: () => transcript.focusReadingPosition(),
+		isVisible: () => !root.hidden && root.style.display !== 'none',
+		setFindVisible: visible => transcript.setFindVisible(visible),
+	} satisfies IChatFindHost);
+}
 const toolNotifications = resources.add(new Emitter<ServerNotification>());
 const connectionChanges = resources.add(new Emitter<void>());
 const appHtml = `<h1>Report</h1><output id="context"></output><output id="input"></output><output id="result"></output><output id="called"></output><output id="resource"></output><output id="binary"></output><output id="catalog"></output><output id="link-result"></output><output id="mode-result"></output><input id="link-url" aria-label="App link URL" value="https://example.com/report?view=8#result"><button id="open-link">Open external link</button><button id="fullscreen">Fullscreen</button><button id="inline">Inline</button><button id="pip">Picture in picture</button><button id="list-tools">List tools</button><output id="error"></output><output id="capabilities"></output><output id="context-ack"></output><output id="message-ack"></output><input aria-label="App context text" id="context-text" value="First context"><button id="update-context">Update context</button><button id="image-context">Image context</button><button id="clear-context">Clear context</button><button id="bad-image-context">Invalid image context</button><button id="bad-image-data">Undecodable image context</button><button id="audio-context">Unsupported audio context</button><output id="image-ack"></output><button id="resource-context">Resource context</button><button id="binary-context">Binary resource context</button><button id="cancel-context">Cancel resource context</button><output id="resource-context-ack"></output><button id="send-message">Send Chat message</button><button id="mixed-message">Send image message</button><button id="image-only-message">Send image only</button><button id="cancel-message">Cancel image message</button><button id="invalid-message">Invalid role</button><button id="increment">Increment</button><button id="call">Call tool</button><button id="cancel">Cancel call</button><button id="unsupported">Unsupported</button><button id="read">Read resource</button><button id="binary-read">Read binary</button><button id="logs">Send logs</button><button id="invalid-log">Invalid log</button><button id="large-log">Large log</button><button id="flood-log">Flood logs</button><output id="download-result"></output><button id="download-inline">Download inline</button><button id="download-linked">Download linked</button><button id="download-invalid">Invalid download</button><button id="download-cancel">Cancel download</button><output id="count">0</output>
@@ -955,11 +972,11 @@ window.ashChatTranscriptIntegration = {
 		theme.setColorTheme(palette);
 	},
 	imageReadCount: () => imageReads,
-	showFind: query => list.getFindController().show(query),
+	showFind: query => getTranscriptFind().show(query),
 	runNavigationCommand: async command => {
 		const widget = {
 			visible: true, domNode: list.element,
-			getFindController: (): ReturnType<IChatWidget['getFindController']> => list.getFindController(),
+			getFindController: getTranscriptFind,
 			focusResponseItem: (last?: boolean) => list.focusResponseItem(last),
 			focusCodeBlock: (reverse?: boolean) => list.focusCodeBlock(reverse),
 			getFocus: () => list.getFocus(),
@@ -1066,10 +1083,12 @@ window.ashChatTranscriptIntegration = {
 		if (!value) list.setVisible(false);
 		root.style.display = value ? 'flex' : 'none';
 		if (value) list.setVisible(true);
+		else if (transcriptFind.value?.visible) transcriptFind.value.hide();
 	},
 	recreateTranscript: () => {
 		const previous = list;
 		const state = previous.getViewState();
+		transcriptFind.clear();
 		list = resources.add(services.createInstance(ChatListWidget, root, listOptions));
 		previous.element.replaceWith(list.element);
 		list.restoreViewState(state, rendererItems);
@@ -1361,7 +1380,13 @@ window.ashChatTranscriptIntegration = {
 		if (requestEditMode) {
 			chatServices.registerSingleton(ICommandService, () => chatServices.createInstance(StandaloneCommandService));
 		}
-		chatServices.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected link opening'); } } as unknown as IOpenerService);
+		chatServices.registerInstance(IOpenerService, {
+			open: async (uri: URI | string, options: unknown) => {
+				if (!new URLSearchParams(location.search).has('recordChatLinks')) throw new Error('Unexpected link opening');
+				openedAppLinks.push({ uri: uri.toString(), options });
+				return true;
+			},
+		} as unknown as IOpenerService);
 		if (!builtinBackend) chatServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 		chatServices.registerInstance(IAgentVoiceService, voice ? voiceFixture : undefined);
 		registerTestVoiceInputServices(chatServices);
@@ -1387,6 +1412,9 @@ window.ashChatTranscriptIntegration = {
 			chatServices.registerSingleton(ITerminalConfigurationService, () => chatServices.createInstance(TerminalConfigurationService));
 			chatServices.registerSingleton(IChatTipService, () => chatServices.createInstance(ChatTipService));
 			chatServices.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
+			chatServices.registerInstance(IGitHubService, {
+				onDidChange: Event.None, watchSessionPullRequests: () => Disposable.None, getSessionPullRequests: () => [],
+			} satisfies Pick<IGitHubService, 'onDidChange' | 'watchSessionPullRequests' | 'getSessionPullRequests'> as unknown as IGitHubService);
 		}
 		const model: IChatWidgetModel = {
 			onDidChange: chatChanges.event, onDidChangeComposer: composerChanges.event, get composerGeneration() { return appChatGeneration; }, sessionId: 'app-session', get threadId() { return appChatThread; }, untitledSessionId: undefined, goal: undefined, get items() { return appItems; },
@@ -1411,13 +1439,17 @@ window.ashChatTranscriptIntegration = {
 				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: responseWorking, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, ...(hasConversationChanges ? conversationChanges : {}) };
 			},
 			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
-			executeServerCommand: async () => { }, interrupt: async () => { }, refreshChanges: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
+			executeServerCommand: async () => { }, interrupt: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
 			listAgents: async () => [], selectAgent() { }, selectMode() { }, selectApprovalMode() { }, resolveInteraction: async () => { }, retryFailedTurn: async () => { }, dispose() { }, [Symbol.dispose]() { },
 		};
 		const container = document.createElement('main');
 		container.style.cssText = 'height:700px;width:800px;background:var(--ash-editor-background);color:var(--ash-foreground);font-family:system-ui';
 		document.body.append(container);
-		appChat = cowork ? resources.add(chatServices.createInstance(NativeChatWidget, container, 'app-chat', model, () => { }, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(ReplyChatInputFactory).createSessionInput(host, delegate, model, resources))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined, virtualizeHistory ? { virtualizeHistoryFrom: constObservable(48) } : undefined));
+		appChat = cowork ? resources.add(chatServices.createInstance(NativeChatWidget, container, 'app-chat', model, () => { }, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(ReplyChatInputFactory).createSessionInput(host, delegate, model, resources))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), chatServices.get(IOpenerService), undefined, undefined, undefined, {
+			messageActionSurface: new URLSearchParams(location.search).has('sessions') ? 'code' : undefined,
+			virtualizeHistoryFrom: virtualizeHistory ? constObservable(48) : undefined,
+			changes: { refreshConversation: async () => { } },
+		}));
 		appChat.setVisible(true);
 	},
 	showLongCodeHistory: (turns, virtualizeHistory, withTools = false) => {

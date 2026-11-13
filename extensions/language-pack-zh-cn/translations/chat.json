@@ -75,6 +75,7 @@
     "chat.fontSize.invalid": "消息字号必须是 6 到 100 之间的数字。",
     "chat.typography.help": "在设置中打开“聊天 → 外观”可更改消息字体和字号，包括 Markdown 和链接文字。消息输入框和代码块有独立的字体设置。修改设置会保留草稿和阅读位置。",
     "chat.sessionLink.open": "打开会话",
+    "chat.artifactLink.open": "打开作品",
     "chat.category": "聊天",
     "chat.transfer.invalid": "此文件不是受支持的 Ash 聊天记录。",
     "chat.transfer.tooLarge": "聊天记录超出了文档限制：10 MB、10,000 条消息及 1,024 个字符的标题。",

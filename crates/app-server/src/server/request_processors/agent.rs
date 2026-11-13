@@ -177,6 +177,7 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
+        precondition: Option<&thread_store::ThreadEventPrecondition>,
     ) -> Result<core_api::TurnReceipt, core_api::CoreError>;
     fn resolve_turn_approval_mode(
         &self,
@@ -234,6 +235,7 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
+        precondition: Option<&thread_store::ThreadEventPrecondition>,
     ) -> Result<workflows::Receipt, core_api::CoreError>;
     fn workflow_store(&self) -> &workflows::Store;
     fn terminal_service(
@@ -251,6 +253,7 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
 
 pub(super) struct AgentRequestProcessor<'ctx, C: AgentRequestProcessorContext + ?Sized> {
     context: &'ctx C,
+    turn_precondition: Option<thread_store::ThreadEventPrecondition>,
     config: &'ctx Option<super::Arc<super::ConfigStore>>,
     env_config: &'ctx super::Arc<super::RwLock<super::environment_runtime::EnvRuntimeConfig>>,
     env_runtime: &'ctx super::Arc<super::RwLock<super::EnvRuntime>>,
@@ -282,6 +285,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
     ) -> Self {
         Self {
             context,
+            turn_precondition: None,
             config,
             env_config,
             env_runtime,
@@ -297,6 +301,15 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
 }
 
 impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx, C> {
+    /// Carries the scheduler's artifact generation to the durable acceptance boundary.
+    pub(super) fn with_turn_precondition(
+        mut self,
+        precondition: Option<thread_store::ThreadEventPrecondition>,
+    ) -> Self {
+        self.turn_precondition = precondition;
+        self
+    }
+
     pub(super) fn default_approval_mode(&self) -> Result<ash_protocol::ApprovalMode, RpcError> {
         self.config
             .as_ref()
@@ -2400,6 +2413,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     mutation.connection_id,
                     document_mode,
                     mutation.ide_window_id.as_deref(),
+                    self.turn_precondition.as_ref(),
                 )
                 .map_err(core_error)?;
             workflow_child = result.child;
@@ -2415,6 +2429,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     mutation.connection_id,
                     document_mode,
                     mutation.ide_window_id.as_deref(),
+                    self.turn_precondition.as_ref(),
                 )
                 .map_err(core_error)?
         };

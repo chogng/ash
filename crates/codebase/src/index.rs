@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::fs;
 use std::io::Read;
 use std::path::Component;
 use std::path::Path;
@@ -40,6 +39,7 @@ use crate::error::io_error;
 use crate::memory_store::InMemoryCodebaseIndexStore;
 use crate::overlay::CodebaseOverlay;
 use crate::scanner::is_hard_excluded_path;
+use crate::scanner::open_source_file;
 use crate::scanner::read_relative_file;
 use crate::scanner::scan_dir;
 use crate::store::CodebaseIndexStore;
@@ -338,8 +338,11 @@ impl Codebase {
         if let Some(materialized) = self.overlay.materialize_chunk(reference) {
             return materialized;
         }
-        let absolute_path = self.root.resolve_existing(&reference.relative_path)?;
-        let source = read_source_for_verification(&absolute_path, self.limits.max_file_bytes)?;
+        let source = read_source_for_verification(
+            &self.root,
+            Path::new(&reference.relative_path),
+            self.limits.max_file_bytes,
+        )?;
         materialize_chunk_from_source(reference, &source)
     }
 
@@ -353,8 +356,11 @@ impl Codebase {
         if let Some(materialized) = self.overlay.materialize_excerpt(reference) {
             return materialized;
         }
-        let absolute_path = self.root.resolve_existing(&reference.relative_path)?;
-        let source = read_source_for_verification(&absolute_path, self.limits.max_file_bytes)?;
+        let source = read_source_for_verification(
+            &self.root,
+            Path::new(&reference.relative_path),
+            self.limits.max_file_bytes,
+        )?;
         validate_source_revision(&source, &reference.source_revision)?;
         let content = verified_span_content(&source, &reference.span)?;
         let content_hash = ChunkContentHash::new(sha256(content.as_bytes()));
@@ -406,9 +412,11 @@ impl Codebase {
                 if let Some(materialized) = self.overlay.materialize_source(reference) {
                     return materialized;
                 }
-                let absolute_path = self.root.resolve_existing(&reference.relative_path)?;
-                let content =
-                    read_source_for_verification(&absolute_path, self.limits.max_file_bytes)?;
+                let content = read_source_for_verification(
+                    &self.root,
+                    &reference.relative_path,
+                    self.limits.max_file_bytes,
+                )?;
                 validate_source_revision(&content, &reference.source_revision)?;
                 Ok(MaterializedSource {
                     reference: reference.clone(),
@@ -433,8 +441,11 @@ impl Codebase {
         }
         let mut materialized = Vec::with_capacity(references.len());
         for (relative_path, path_references) in by_path {
-            let absolute_path = self.root.resolve_existing(&relative_path)?;
-            let source = read_source_for_verification(&absolute_path, self.limits.max_file_bytes)?;
+            let source = read_source_for_verification(
+                &self.root,
+                &relative_path,
+                self.limits.max_file_bytes,
+            )?;
             for reference in path_references {
                 let mut chunk = materialize_chunk_from_source(&reference.reference, &source)?;
                 chunk.language = reference.language.clone();
@@ -590,23 +601,38 @@ fn validate_source_revision(
 }
 
 fn read_source_for_verification(
-    path: &Path,
+    root: &Dir,
+    relative_path: &Path,
     max_file_bytes: usize,
 ) -> Result<String, CodebaseError> {
-    let file = fs::File::open(path).map_err(|source| io_error(path, source))?;
+    let path = root.canonical_path().join(relative_path);
+    let file = open_source_file(root, relative_path)?;
+    if !file
+        .metadata()
+        .map_err(|source| io_error(&path, source))?
+        .is_file()
+    {
+        return Err(io_error(
+            &path,
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "source is not a regular file",
+            ),
+        ));
+    }
     let read_limit = u64::try_from(max_file_bytes)
         .unwrap_or(u64::MAX)
         .saturating_add(1);
     let mut bytes = Vec::with_capacity(max_file_bytes.min(64 * 1024));
     file.take(read_limit)
         .read_to_end(&mut bytes)
-        .map_err(|source| io_error(path, source))?;
+        .map_err(|source| io_error(&path, source))?;
     if bytes.len() > max_file_bytes {
         return Err(CodebaseError::SourceVerificationLimitExceeded);
     }
     String::from_utf8(bytes).map_err(|source| {
         io_error(
-            path,
+            &path,
             std::io::Error::new(std::io::ErrorKind::InvalidData, source),
         )
     })

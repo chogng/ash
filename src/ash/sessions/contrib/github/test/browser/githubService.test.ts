@@ -14,6 +14,8 @@ import type { CancellationToken } from '../../../../../base/common/cancellation.
 import type { IAccountService, AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { GitHubDiffSide, GitHubIssueState, type IGitHubService, type GitHubPullRequest } from '../../../../../platform/github/common/githubService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { ArtifactIntegrationRegistry } from '../../../../../platform/artifactIntegrations/common/artifactIntegrationRegistry.js';
+import { ArtifactIntegrationService } from '../../../../../platform/artifactIntegrations/common/artifactIntegrationService.js';
 // Fixtures expose the public repository-context command consumed by GitHub, independently of Git's runtime.
 interface GitRepository { id: string; label: string; path: string; root: URI; }
 interface GitStatus { repositoryId: string; streamInstanceId: string; historyRevision: number; revision: number; workspacePath: string; head: { type: 'branch'; name: string; objectId: string; upstream: undefined; }; changes: readonly unknown[]; }
@@ -96,10 +98,12 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 		getScopes: () => [...hostScopes.values()],
 		getScope: (sessionId: string) => { const scope = hostScopes.get(parseSessionIdentity(sessionId, 'primary').providerId); if (!scope) throw new CancellationError(); return scope; },
 	} as unknown as ISessionProviderScopeService;
+	const integrations = resources.add(new ArtifactIntegrationRegistry());
+	const artifactIntegrations = resources.add(new ArtifactIntegrationService(integrations));
 	const service = resources.add(new GitHubService(
 		{ get activeSelection() { return selection; }, onDidChange: selectionChanged.event } as ISessionsService,
 		{ get sessions() { return catalog; } } as unknown as ISessionsManagementService,
-		scm, scopes, new NullLoggerService(),
+		scm, scopes, new NullLoggerService(), integrations, artifactIntegrations,
 	));
 	const nextChange = (): Promise<void> => new Promise(resolve => {
 		const listener = resources.add(service.onDidChange(() => { listener.dispose(); resolve(); }));
@@ -416,6 +420,27 @@ suite('Session GitHub associations', () => {
 		assert.deepEqual(merged, []);
 		await context.service.invokePullRequestArtifact('session', request, async binding => binding.actions[0]);
 		assert.deepEqual(merged, ['b'.repeat(40)]);
+	});
+
+	test('PR artifact action is retired when the conversation changes and returns to the same PR', async () => {
+		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7, isArtifact: true };
+		let merges = 0;
+		using context = fixture({
+			listSessionPullRequests: async () => [reference],
+			readPullRequest: async () => ({ ...pullRequest, mergeable: true }),
+			readRepository: async () => ({ defaultBranch: 'main', fullName: 'team/repo', allowMergeCommit: true, allowSquashMerge: false, allowRebaseMerge: false, allowAutoMerge: false }),
+			mergePullRequest: async () => { merges++; return { merged: true, commit: pullRequest.headCommit, message: '' }; },
+		});
+		const [request] = await context.load();
+		await assert.rejects(context.service.invokePullRequestArtifact('session', request, async (binding, token) => {
+			context.select({ kind: 'session', active: { session, threadId: 'another-thread' } });
+			context.select({ kind: 'session', active: { session, threadId: 'thread' } });
+			assert.equal(token.isCancellationRequested, true);
+			return binding.actions[0];
+		}), CancellationError);
+		assert.equal(merges, 0);
+		await context.service.invokePullRequestArtifact('session', request, async binding => binding.actions[0]);
+		assert.equal(merges, 1);
 	});
 
 	test('a required check that has not reported blocks immediate merge but leaves auto-merge available', async () => {

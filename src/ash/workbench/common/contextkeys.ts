@@ -1,4 +1,4 @@
-import { RawContextKey } from '../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr, RawContextKey } from '../../platform/contextkey/common/contextkey.js';
 import type { WorkbenchStateValue } from '../../platform/workspace/common/workspace.js';
 
 export const BannerFocused = new RawContextKey<boolean>('bannerFocused', false);
@@ -8,6 +8,11 @@ export const StatusBarFocused = new RawContextKey<boolean>('statusBarFocused', f
 export const AppServerAvailableContext = new RawContextKey<boolean>('appServerAvailable', false);
 
 export const IsSessionsWindowContext = new RawContextKey<boolean>('isSessionsWindow', false);
+
+/** Whether the Sessions window is showing Code's document tools. */
+export const SessionsCodeEditorContext = new RawContextKey<boolean>('sessions.desktopCode', false);
+
+export const WorkbenchEditorToolsAvailable = ContextKeyExpr.or(ContextKeyExpr.not(IsSessionsWindowContext.key), SessionsCodeEditorContext.isEqualTo(true))!;
 
 /** Whether this title bar belongs to an auxiliary editor window. */
 export const IsAuxiliaryWindowContext = new RawContextKey<boolean>('isAuxiliaryWindow', false);

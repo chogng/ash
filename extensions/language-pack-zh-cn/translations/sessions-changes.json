@@ -282,7 +282,7 @@
     "sessions.changes.prHelp": "创建拉取请求\n使用 Tab 和 Shift+Tab 在标题、目标分支、描述、草稿复选框、合并方式和操作之间移动。选择“创建拉取请求”提交表单内容。Escape 或“取消”关闭表单并恢复焦点。切换会话或 GitHub 账户会关闭表单。创建前会重新检查仓库和分支，上下文变化后需要重新打开表单。",
     "sessions.changes.prChecked": "已选中",
     "sessions.changes.prUnchecked": "未选中",
-    "sessions.changes.operationsHelp": "使用 Tab 移动到摘要和操作。“重新加载更改”会重试加载失败的列表。在更改范围选择器中选择“查看工作区更改”，可在单独的编辑器中打开当前未提交的更改。仓库操作和拉取请求检查位于“会话信息”的“环境”中。",
+    "sessions.changes.operationsHelp": "使用 Tab 移动到摘要和操作。“重新加载更改”会重试加载失败的列表。检出需要处理时，请查看摘要中的原因，处理后选择“重试检出”。在更改范围选择器中选择“查看工作区更改”，可在单独的编辑器中打开当前未提交的更改。仓库操作和拉取请求检查位于“会话信息”的“环境”中。",
     "sessions.changes.prGitHubError": "GitHub 无法准备或创建拉取请求，请检查账户和仓库后重新打开表单。",
     "sessions.changes.checkGitHubError": "GitHub 检查暂不可用，请检查账户和仓库访问权限，视图将自动重试。",
     "sessions.changes.prHeadChanged": "已发布分支与本地提交不同，请在合并前检查拉取请求。",
@@ -341,6 +341,13 @@
     "sessions.changes.followUpHelp": "“跟进 PR 检查”在后台观察显示的 PR，并关联到此聊天。所有检查结束后，每个提交版本最多请求一次修复。“停止 PR 跟进”暂停观察并停止当前修复。“跟进历史”打开例行任务，可查看运行及关联聊天。关闭窗口后跟进继续运行；账号变化后需要重新启用。"
   },
   "ash.sessions": {
+    "sessions.changes.retryCheckout": "重试检出",
+    "sessions.changes.fileCheckoutBlocked": "检出需要处理",
+    "sessions.changes.fileCheckoutUnavailable": "已发布，检出未完成",
+    "sessions.changes.checkoutBlockedFiles": "提交已发布，但以下文件的本地更改阻止了检出：{0}。请处理这些更改后重试。",
+    "sessions.changes.checkoutBlockedError": "提交已发布，但检出失败：{0}",
+    "sessions.changes.checkoutBlockedRef": "提交已发布，但目标分支或检出目录发生了变化。请在 Git 中检查分支后重试检出。",
+    "sessions.changes.checkoutUnavailable": "提交已发布，但恢复日志缺失，Ash 无法完成工作树更新。请在 Git 中检查仓库。",
     "sessions.changes.fileSizeLimit": "此文件的一个版本超出了预览大小上限。",
     "sessions.changes.comparisonSizeLimit": "当前显示部分对比结果。由于对比总量超出上限，此文件的预览已省略。",
     "sessions.github.pullRequestDraftReady": "拉取请求的工作树已就绪。快照已附加到你的首条消息。",

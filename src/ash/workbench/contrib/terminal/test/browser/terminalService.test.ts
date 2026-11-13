@@ -355,8 +355,8 @@ test('TerminalService accepts an empty reload checkpoint after the workspace cha
 	} finally { setUnexpectedErrorHandler(previous); }
 });
 
-for (const rejectFirst of [false, true]) {
-	test(`TerminalService reattaches saved PTYs without resolving a missing shell${rejectFirst ? ' and isolates an attachment failure' : ''}`, async () => {
+for (const rejection of ['none', 'beforeAttach', 'afterAttach'] as const) {
+	test(`TerminalService reattaches saved PTYs without resolving a missing shell${rejection === 'none' ? '' : ` and preserves leases after ${rejection} failure`}`, async () => {
 		const processes = new TestTerminalProcessService([], 'reconnectable');
 		using workspace = folderWorkspaceContext();
 		using services = revivalServices(processes, workspace);
@@ -366,11 +366,16 @@ for (const rejectFirst of [false, true]) {
 		let resolutions = 0;
 		processes.resolveProfile = async () => { resolutions++; throw new Error('Custom shell no longer exists'); };
 		const attached: string[] = [];
+		const rotated = new Map<string, { terminalId: string; reconnectToken: string; reconnectGracePeriodMillis: number; }>();
+		const rejectFirst = rejection !== 'none';
 		const attachmentFailure = new Error('First PTY is temporarily unavailable');
 		Object.assign(processes, {
+			getReconnectLease: async (id: string) => rotated.get(id),
 			attach: async (lease: { terminalId: string; }) => {
 				attached.push(lease.terminalId);
-				if (rejectFirst && lease.terminalId === first.process.terminalId) throw attachmentFailure;
+				if (rejection === 'beforeAttach' && lease.terminalId === first.process.terminalId) throw attachmentFailure;
+				rotated.set(lease.terminalId, { terminalId: lease.terminalId, reconnectToken: 'b'.repeat(64), reconnectGracePeriodMillis: 0 });
+				if (rejection === 'afterAttach' && lease.terminalId === first.process.terminalId) throw attachmentFailure;
 				return snapshots.find(snapshot => snapshot.process.terminalId === lease.terminalId)!.process;
 			}
 		});
@@ -395,7 +400,7 @@ for (const rejectFirst of [false, true]) {
 			assert.equal(errors.length, rejectFirst ? 1 : 0);
 			if (rejectFirst) assert.deepEqual(((errors[0] as Error).cause as AggregateError).errors, [attachmentFailure]);
 			assert.equal(services.get(IStorageService).get(stateKey, StorageScope.WORKSPACE), text);
-			assert.equal(await services.get(ISecretStorageService).get(TerminalStorageKeys.Reload), credentials);
+			assert.deepEqual(JSON.parse((await services.get(ISecretStorageService).get(TerminalStorageKeys.Reload))!), { ...JSON.parse(credentials), leases: snapshots.map(snapshot => ({ terminalId: snapshot.process.terminalId, reconnectToken: (rejection === 'beforeAttach' && snapshot === first ? 'a' : 'b').repeat(64), reconnectGracePeriodMillis: 0 })) });
 		} finally { setUnexpectedErrorHandler(previous); }
 	});
 }

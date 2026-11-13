@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../../../platform/workspace/common/workspaceTrust.js';
@@ -52,6 +53,8 @@ suite('Terminal editing focus', () => {
 			document.body.append(container);
 			using quickInput = new TestQuickInputService({ container });
 			using services = new InstantiationService();
+			using contexts = new ContextKeyService();
+			services.registerInstance(IContextKeyService, contexts);
 			using workspace = new TestWorkspaceService({ id: 'terminal-editing' });
 			services.registerInstance(IWorkspaceContextService, workspace);
 			using trust = new TestWorkspaceTrustManagementService();

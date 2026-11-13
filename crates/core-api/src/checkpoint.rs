@@ -1,6 +1,6 @@
 use crate::CoreError;
-use ash_protocol::ItemId;
 use ash_protocol::ThreadId;
+use ash_protocol::ThreadItem;
 use ash_protocol::TurnId;
 use ash_protocol::WorkspaceCheckpoint;
 
@@ -22,7 +22,7 @@ pub trait MessageCheckpointSource: Send + Sync {
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
-        item_id: &ItemId,
+        item: &ThreadItem,
         event_id: &str,
     ) -> Result<Box<dyn CheckpointCapture>, CoreError>;
     fn release(&self, checkpoint: &ash_protocol::RepositoryCheckpoint) -> Result<(), CoreError>;

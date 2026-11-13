@@ -70,6 +70,7 @@ pub(crate) fn scan_dir_with_cancellation(
     cancellation: &ash_async_utils::CancellationToken,
 ) -> Result<DirScan, CodebaseError> {
     cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
+    root.directory().ensure_current()?;
     let mut builder = WalkBuilder::new(root.canonical_path());
     builder
         .hidden(true)
@@ -151,6 +152,7 @@ pub(crate) fn scan_dir_with_cancellation(
         }
     }
     cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
+    root.directory().ensure_current()?;
     Ok(DirScan {
         files,
         skipped_file_count,
@@ -182,27 +184,25 @@ pub(crate) fn read_relative_file(
     {
         return Ok(None);
     }
-    let absolute_path = root.resolve_existing(&relative_path)?;
-    read_file(&absolute_path, relative_path, metadata.len(), limits)
-}
-
-fn read_file(
-    absolute_path: &Path,
-    relative_path: PathBuf,
-    observed_bytes: u64,
-    limits: &CodebaseLimits,
-) -> Result<Option<SourceFile>, CodebaseError> {
-    let file = fs::File::open(absolute_path).map_err(|source| io_error(absolute_path, source))?;
+    let file = open_source_file(root, &relative_path)?;
+    let metadata = file
+        .metadata()
+        .map_err(|source| io_error(&observed_path, source))?;
+    if !metadata.is_file()
+        || usize::try_from(metadata.len()).unwrap_or(usize::MAX) > limits.max_file_bytes
+    {
+        return Ok(None);
+    }
     let read_limit = u64::try_from(limits.max_file_bytes)
         .unwrap_or(u64::MAX)
         .saturating_add(1);
     // Most repository files are small. Metadata is only an allocation hint: the
     // bounded read still handles growth or replacement after the earlier stat.
-    let capacity = usize::try_from(observed_bytes).unwrap_or(usize::MAX);
+    let capacity = usize::try_from(metadata.len()).unwrap_or(usize::MAX);
     let mut bytes = Vec::with_capacity(capacity.min(limits.max_file_bytes).min(64 * 1024));
     file.take(read_limit)
         .read_to_end(&mut bytes)
-        .map_err(|source| io_error(absolute_path, source))?;
+        .map_err(|source| io_error(&observed_path, source))?;
     if bytes.len() > limits.max_file_bytes || looks_binary(&bytes) {
         return Ok(None);
     }
@@ -214,6 +214,31 @@ fn read_file(
         revision: source_revision(&source),
         content: source,
     }))
+}
+
+/// Keep the resolved name relative to the opened root through the actual open.
+/// Canonicalization preserves existing in-root aliases, but its returned path is
+/// only an observation: cap-std must enforce containment if any component changes.
+/// Check the root binding again before exposing the file to a content reader.
+pub(crate) fn open_source_file(
+    root: &Dir,
+    relative_path: &Path,
+) -> Result<fs::File, CodebaseError> {
+    let absolute_path = root.resolve_existing(relative_path)?;
+    #[cfg(all(test, unix))]
+    crate::source_read_tests::after_resolution();
+    let resolved_relative = absolute_path
+        .strip_prefix(root.canonical_path())
+        .map_err(|_| ash_file_access::DirPathError::OutsideDir(absolute_path.clone()))?;
+    let file = root
+        .directory()
+        .handle()
+        .open(resolved_relative)
+        .map_err(|source| io_error(&absolute_path, source))?;
+    #[cfg(all(test, unix))]
+    crate::source_read_tests::after_open();
+    root.directory().ensure_current()?;
+    Ok(file.into_std())
 }
 
 fn looks_binary(bytes: &[u8]) -> bool {

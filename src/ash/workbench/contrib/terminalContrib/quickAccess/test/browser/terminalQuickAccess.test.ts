@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { browserEnvironment } from '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -19,6 +20,8 @@ import '../../browser/terminal.quickAccess.contribution.js';
 suite('Terminal Quick Access', () => {
 	test('command opens the registered terminal provider', async () => {
 		using services = new InstantiationService();
+		using contexts = new ContextKeyService();
+		services.registerInstance(IContextKeyService, contexts);
 		const shown: string[] = [];
 		services.registerInstance(IQuickInputService, { quickAccess: { show: (value: string) => shown.push(value) } } as unknown as IQuickInputService);
 		using commands = new CommandService(services, CommandsRegistry);
@@ -29,6 +32,8 @@ suite('Terminal Quick Access', () => {
 
 	test('terminal navigation commands apply only to the terminal picker', async () => {
 		using services = new InstantiationService();
+		using contexts = new ContextKeyService();
+		services.registerInstance(IContextKeyService, contexts);
 		const directions: boolean[] = [];
 		const picker = { type: QuickInputType.QuickPick, value: '>other picker' };
 		services.registerInstance(IQuickInputService, {
@@ -45,6 +50,8 @@ suite('Terminal Quick Access', () => {
 
 	test('filters live instances and routes acceptance, rename and confirmed close to their owners', async () => {
 		using services = new InstantiationService();
+		using contexts = new ContextKeyService();
+		services.registerInstance(IContextKeyService, contexts);
 		using changed = new Emitter<void>();
 		const panel = { title: 'Build shell', target: TerminalLocation.Panel } as ITerminalInstance;
 		const editor = { title: 'Remote editor', target: TerminalLocation.Editor } as ITerminalInstance;
@@ -96,11 +103,15 @@ suite('Terminal Quick Access', () => {
 
 	test('production construction requires the existing terminal owners', () => {
 		using services = new InstantiationService();
+		using contexts = new ContextKeyService();
+		services.registerInstance(IContextKeyService, contexts);
 		assert.throws(() => services.createInstance(TerminalQuickAccessProvider), /terminalService/);
 	});
 
 	test('the production picker keeps the browsed terminal when an earlier row disappears and its title changes', async () => {
 		using services = new InstantiationService();
+		using contexts = new ContextKeyService();
+		services.registerInstance(IContextKeyService, contexts);
 		using changed = new Emitter<void>();
 		const first = { title: 'First shell', target: TerminalLocation.Panel };
 		const browsed = { title: 'Browsed shell', target: TerminalLocation.Panel };

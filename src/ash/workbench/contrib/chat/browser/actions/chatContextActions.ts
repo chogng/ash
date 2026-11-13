@@ -12,6 +12,7 @@ import { withSelection } from '../../../../../platform/opener/common/opener.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import type { IView } from '../../../../common/views.js';
 import { CHAT_VIEW_ID } from '../../common/chat.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ChatInstructionsPickerPick } from '../promptSyntax/attachInstructionsAction.js';
 import { pickFiles } from '../../../../../base/browser/fileAccess.js';
@@ -47,13 +48,35 @@ import {
 	GitHubContextValuePick,
 	TerminalContext,
 } from './chatContext.js';
-import { IChatWidgetService, type IChatWidget } from '../chat.js';
+import { ChatContextMenuActionContext, IChatWidgetService, type IChatWidget } from '../chat.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { raceCancellationError } from '../../../../../base/common/async.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import type { ChatContextAttachment, ChatImageCapture, IChatContextTarget } from '../../../../services/chat/common/chatContextService.js';
+
+export function registerAddSelectionToChatAction(): void {
+	registerAction2(class AddSelectionToChatAction extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.chat.addSelectionToChat',
+				get title() { return localize2('chat.selection.addToChat', 'Add to Chat'); },
+				icon: Lxicon.add,
+				menu: {
+					id: MenuId.ChatContext,
+					group: 'navigation',
+					order: 2,
+					when: ChatContextKeys.contextMenuCanAddSelectionToChat.isEqualTo(true),
+				},
+			});
+		}
+
+		override run(_accessor: ServicesAccessor, context: unknown): void {
+			if (context instanceof ChatContextMenuActionContext) context.addToChat?.();
+		}
+	});
+}
 
 /** Registers editor context commands for the lifetime of their Workbench host. */
 export function registerChatContextActions(imageEditors: IImageEditorService, commands: ICommandService): DisposableStore {
@@ -190,7 +213,7 @@ export class AttachContextAction extends Disposable {
 			const widget = this.widgets.getAllWidgets().find(widget => widget.input === this.host.target);
 			const sources: ContextSourceItem[] = [{ label: localize('chat.attach.files', 'Attach files'), iconClass: ThemeIcon.asClassName(Lxicon.paperclip), source: 'upload' }];
 			if (this.workspace.getWorkspace().folders.length) sources.unshift({ label: localize('chat.context.filesAndFolders', 'Files & Folders…'), iconClass: ThemeIcon.asClassName(Lxicon.folders), source: 'workspace' });
-			const contexts: readonly [IChatContextValueItem, number][] = [
+			const contexts: readonly [IChatContextValueItem, number][] = widget?.input.replyOnly ? [] : [
 				[instantiation.createInstance(GitHubContextValuePick, 'issue'), -450],
 				[instantiation.createInstance(GitHubContextValuePick, 'pullRequest'), -450],
 				[instantiation.createInstance(TerminalContext), -475],

@@ -38,6 +38,7 @@ export function createAppServerFileApi(connection: AppServerProtocolClient): IFi
 			const result = await appServerRequest(connection, 'fs/resolvePath', { path: resource.scheme === 'file' ? resource.fsPath : resource.path });
 			return {
 				uri: resource.with({ path: URI.file(result.root).path, query: null, fragment: null }),
+				...(result.exactFile && { exactFile: resource.with({ query: null, fragment: null }) }),
 				target: result.target.type === 'environment' ? result.target : { type: 'session', ...result.target.sessionDirectory },
 			};
 		},

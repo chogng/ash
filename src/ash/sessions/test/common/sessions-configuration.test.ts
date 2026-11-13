@@ -25,6 +25,10 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 		assert.ok(activityBarSetting?.valueType === 'select');
 		assert.equal(activityBarSetting.description, '将活动栏放在侧边、顶部或底部。');
 		assert.deepEqual(activityBarSetting.options.map(option => option.value), ['default', 'top', 'bottom']);
+		const inputLayout = registry.getConfiguration(SessionsConfiguration.chatInputLayout)?.setting;
+		assert.ok(inputLayout?.valueType === 'select');
+		assert.equal(inputLayout.title, 'Chat 输入框布局');
+		assert.deepEqual(inputLayout?.options, [{ value: 'compact', label: '单行' }, { value: 'stacked', label: '分层' }]);
 		assert.equal(chinese.bundles.ash?.['sessions.settings.title'], '设置');
 		assert.equal(registry.getConfiguration(SESSIONS_DIFF_VIEW_MODE)?.setting?.title, '差异视图');
 		for (const [key, label] of Object.entries({
@@ -139,4 +143,21 @@ test('Agent Window terminal settings are independent in the shared profile docum
 		'sessions.terminal.defaultProfile.osx': 'Agent profile',
 		'sessions.terminal.fontSize': 17,
 	});
+});
+
+
+test('Chat input layout defaults to one line, persists in the profile and rejects invalid values', async () => {
+	using files = new TestConfigurationFiles();
+	using configuration = new WorkbenchConfigurationService({ files });
+	const key = SessionsConfiguration.chatInputLayout;
+	assert.equal(configuration.getValue(key), 'compact');
+	await configuration.updateValue(key, 'stacked');
+	using reopened = new WorkbenchConfigurationService({ files });
+	await reopened.reloadConfiguration();
+	assert.equal(reopened.getValue(key), 'stacked');
+	await assert.rejects(configuration.updateValue(key, 'wide'), /Choose Single line or Stacked/);
+	assert.equal(configuration.getValue(key), 'stacked');
+	await configuration.updateValue(key, 'compact');
+	await reopened.reloadConfiguration();
+	assert.equal(reopened.getValue(key), 'compact');
 });

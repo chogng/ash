@@ -1,5 +1,4 @@
 use super::AppServer;
-use super::AppServerThreadUpdates;
 use super::CodebaseModels;
 use super::EnvStateMode;
 use super::RpcError;
@@ -82,12 +81,14 @@ use goal::GoalToolService;
 use grep::Jobs as ContentSearchService;
 use model_provider_info::ModelProviderConfig;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
+use std::thread::JoinHandle;
 
 pub(super) struct EnvRuntime {
     pub(super) selected_grant: Option<Grant>,
@@ -181,11 +182,24 @@ pub(super) struct WorkspaceRuntime {
     pub(super) content_search: Option<Arc<ContentSearchService>>,
     pub(super) session_dir_search: BTreeMap<(SessionId, PathBuf), Arc<ContentSearchService>>,
     pub(super) grep: Option<Arc<grep::Service>>,
+    grep_warmup: Option<ash_async_utils::CancelOnDrop>,
+    grep_warmup_workers: Vec<JoinHandle<()>>,
     pub(super) codebase: Option<Arc<CodebaseRuntime>>,
     pub(super) symbol_index: Option<Arc<SymbolIndexRuntime>>,
     pub(super) codebase_semantic: Option<Arc<CodebaseSemanticService>>,
     pub(super) codebase_semantic_job: Option<Arc<SemanticIndexJobController>>,
     pub(super) cloud_codebase: Option<Arc<CloudCodebaseController>>,
+}
+
+impl Drop for WorkspaceRuntime {
+    fn drop(&mut self) {
+        self.grep_warmup = None;
+        // Warmup owns directory grants independently of EnvRuntime. The last host must wait
+        // for cancellation to release those handles before its directory can be removed.
+        for worker in self.grep_warmup_workers.drain(..) {
+            let _ = worker.join();
+        }
+    }
 }
 
 /// Interactive execution resources bound to the selected directory authorization.
@@ -225,6 +239,103 @@ impl EnvRuntime {
             turn_executor,
             workspace: WorkspaceRuntime::default(),
             execution: ExecutionRuntime::default(),
+        }
+    }
+
+    fn schedule_grep_warmup(&mut self) {
+        self.workspace.grep_warmup = None;
+        self.workspace
+            .grep_warmup_workers
+            .retain(|worker| !worker.is_finished());
+        let Some(grep) = self
+            .workspace
+            .grep
+            .clone()
+            .filter(|grep| grep.backend() == grep::Backend::Tgrep)
+        else {
+            return;
+        };
+        let directories = self
+            .selected_grant
+            .iter()
+            .chain(self.dirs.values().map(|directory| &directory.grant))
+            .filter(|grant| grant.permissions().allows(Permission::SearchFiles))
+            .cloned()
+            .collect::<Vec<_>>();
+        if directories.is_empty() {
+            return;
+        }
+        let cancellation = ash_async_utils::CancellationSource::new();
+        let token = cancellation.token();
+        match std::thread::Builder::new()
+            .name("grep-warmup".into())
+            .spawn(move || {
+                let mut roots = BTreeSet::new();
+                for grant in directories {
+                    if token.is_cancelled() {
+                        break;
+                    }
+                    let Ok(authorization) = grant.authorize(Permission::SearchFiles) else {
+                        continue;
+                    };
+                    if !roots.insert(authorization.dir().id()) {
+                        continue;
+                    }
+                    let result = authorization.execute(
+                        authorization.subject(),
+                        authorization.dir(),
+                        Permission::SearchFiles,
+                        || grep.prepare_index(authorization.dir(), &token),
+                    );
+                    if let Ok(Err(error)) = result
+                        && !token.is_cancelled()
+                    {
+                        log::debug!("grep index warmup failed: {error}");
+                    }
+                }
+            }) {
+            Ok(worker) => {
+                self.workspace.grep_warmup_workers.push(worker);
+                self.workspace.grep_warmup = Some(cancellation.cancel_on_drop());
+            }
+            Err(error) => log::debug!("failed to start grep index warmup: {error}"),
+        }
+    }
+
+    fn unused_grep_roots<'a>(
+        &self,
+        retired: impl IntoIterator<Item = &'a Grant>,
+    ) -> BTreeSet<PathBuf> {
+        let retired = retired
+            .into_iter()
+            .filter(|grant| grant.permissions().allows(Permission::SearchFiles))
+            .map(|grant| grant.dir().canonical_path().to_path_buf())
+            .collect::<BTreeSet<_>>();
+        if retired.is_empty() {
+            return retired;
+        }
+        let mut authorized = self.dir_grants.dirs_for(Permission::SearchFiles);
+        authorized.extend(
+            self.selected_grant
+                .iter()
+                .chain(self.dirs.values().map(|directory| &directory.grant))
+                .filter(|grant| grant.permissions().allows(Permission::SearchFiles))
+                .map(|grant| grant.dir().canonical_path().to_path_buf()),
+        );
+        retired
+            .into_iter()
+            .filter(|root| !authorized.contains(root))
+            .collect()
+    }
+}
+
+fn release_grep_indexes(grep: Option<Arc<grep::Service>>, roots: BTreeSet<PathBuf>) {
+    if let Some(grep) = grep {
+        let token = ash_async_utils::CancellationSource::new().token();
+        for root in roots {
+            if let Err(error) = grep.release_directory(&root, &token) {
+                log::warn!("failed to release grep index for a retired directory: {error}");
+            }
         }
     }
 }
@@ -318,22 +429,47 @@ impl EnvRuntimeControl {
             .authority_gate
             .lock()
             .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
-        if let Some(grep) = &self
+        let grep = self
             .runtime
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .workspace
             .grep
-        {
-            grep.configure(backend)
-                .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-        }
+            .clone();
+        self.apply_grep_backend(grep.as_deref(), backend)?;
         // This operation owns grep only. Rebuilding from profile configuration here would
         // discard the directory execution policy already installed in the environment.
         self.env_config
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .grep_backend = backend;
+        Ok(())
+    }
+
+    fn apply_grep_backend(
+        &self,
+        grep: Option<&grep::Service>,
+        backend: grep::Backend,
+    ) -> Result<(), EnvRuntimeError> {
+        let Some(grep) = grep else {
+            return Ok(());
+        };
+        let changed = grep.backend() != backend;
+        if changed {
+            self.runtime
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .workspace
+                .grep_warmup = None;
+        }
+        grep.configure(backend)
+            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        if changed && backend == grep::Backend::Tgrep {
+            self.runtime
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .schedule_grep_warmup();
+        }
         Ok(())
     }
 
@@ -377,10 +513,7 @@ impl EnvRuntimeControl {
                 runtime.workspace.grep.clone(),
             )
         };
-        if let Some(grep) = &grep {
-            grep.configure(env_config.grep_backend)
-                .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-        }
+        self.apply_grep_backend(grep.as_deref(), env_config.grep_backend)?;
         let Some(authorization) = authorization else {
             *self
                 .env_config
@@ -718,11 +851,20 @@ impl EnvRuntimeControl {
                     .map(|route| route.replace_file_access(grant))
             })
             .collect::<Vec<_>>();
+        if !retired.is_empty() {
+            runtime.workspace.grep_warmup = None;
+        }
         for dir in &retired {
             dir.grant.revoke();
         }
+        let grep = runtime.workspace.grep.clone();
+        let retired_grep_roots = runtime.unused_grep_roots(retired.iter().map(|dir| &dir.grant));
+        if !retired.is_empty() {
+            runtime.schedule_grep_warmup();
+        }
         let language_roots = language_roots_for(&runtime);
         drop(runtime);
+        release_grep_indexes(grep, retired_grep_roots);
         if !retired.is_empty() {
             self.language
                 .lock()
@@ -805,6 +947,8 @@ impl EnvRuntimeControl {
         if let Some(extension_hosts) = &self.extension_hosts {
             extension_hosts.unbind_dir();
         }
+        let authorization = authorization.clone();
+        runtime.workspace.grep_warmup = None;
         authorization.revoke();
         self.hooks.unbind_dir();
         let directories = replacements
@@ -836,8 +980,12 @@ impl EnvRuntimeControl {
         runtime.selected_grant = Some(replacement);
         runtime.workspace.git = replacement_git;
         runtime.workspace._git_watcher = replacement_git_watcher;
+        let grep = runtime.workspace.grep.clone();
+        let retired_grep_roots = runtime.unused_grep_roots([&authorization]);
+        runtime.schedule_grep_warmup();
         let language_roots = language_roots_for(&runtime);
         drop(runtime);
+        release_grep_indexes(grep, retired_grep_roots);
         self.language
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -1623,17 +1771,7 @@ impl AppServer {
             .turn_executor_snapshot()
             .with_tool_service(tools.reloadable.tools(), policy)
             .with_hooks(hooks.clone())
-            .with_thread_updates(Arc::new(AppServerThreadUpdates {
-                client_host: Arc::clone(&self.client_host),
-                threads: Arc::clone(&self.threads),
-                grants: self
-                    .env_runtime
-                    .read()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .dir_grants
-                    .clone(),
-                updates: Arc::clone(&self.updates),
-            }));
+            .with_thread_updates(self.thread_update_sink());
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime
@@ -1712,7 +1850,7 @@ impl AppServer {
         let dir =
             Dir::open_local(root).map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let authorization = host.grants.grant(dir)?;
-        self.activate_dir_runtime(authorization, host)
+        self.activate_and_warm_dir_runtime(authorization, host)
     }
 
     /// Installs the first Directory before recovered execution is resumed. Durable active
@@ -1788,7 +1926,7 @@ impl AppServer {
             authorization
         };
         drop(grant_span);
-        self.activate_dir_runtime(authorization, host)
+        self.activate_and_warm_dir_runtime(authorization, host)
     }
 
     pub(crate) fn switch_local_dir_root_with_permissions(
@@ -1808,7 +1946,7 @@ impl AppServer {
         self.ensure_directory_transition_is_idle()?;
         let dir =
             Dir::open_local(root).map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-        self.activate_dir_runtime(Grant::for_environment(dir, source, permissions), host)
+        self.activate_and_warm_dir_runtime(Grant::for_environment(dir, source, permissions), host)
     }
 
     pub(crate) fn approve_web_directory(&self, dir: Dir) -> Result<Grant, EnvRuntimeError> {
@@ -2219,6 +2357,7 @@ impl AppServer {
             runtime.primary_dir_id = Some(primary_id);
             runtime.workspace.git = git;
             runtime.workspace._git_watcher = watcher;
+            runtime.schedule_grep_warmup();
             (previous_watcher, previous_directories)
         };
         drop(previous_watcher);
@@ -2593,13 +2732,29 @@ impl AppServer {
         self.terminate_revoked_terminal_sessions();
     }
 
-    fn activate_dir_runtime(
+    fn activate_and_warm_dir_runtime(
         &self,
         authorization: Grant,
         host: &LocalEnvHost,
     ) -> Result<PathBuf, EnvRuntimeError> {
+        let current_root = authorization.dir().canonical_path().to_path_buf();
+        if let Some(root) = self.activate_dir_runtime(authorization, host)? {
+            self.env_runtime
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .schedule_grep_warmup();
+            return Ok(root);
+        }
+        Ok(current_root)
+    }
+
+    fn activate_dir_runtime(
+        &self,
+        authorization: Grant,
+        host: &LocalEnvHost,
+    ) -> Result<Option<PathBuf>, EnvRuntimeError> {
         if self.selected_grant_is_current(&authorization) {
-            return Ok(authorization.dir().canonical_path().to_path_buf());
+            return Ok(None);
         }
         let result = if !authorization
             .permissions()
@@ -2641,7 +2796,7 @@ impl AppServer {
         if result.is_ok() {
             self.reset_language_env_runtimes();
         }
-        result
+        result.map(Some)
     }
 
     fn reset_language_env_runtimes(&self) {
@@ -2784,6 +2939,8 @@ impl AppServer {
                 content_search,
                 session_dir_search: BTreeMap::new(),
                 grep,
+                grep_warmup: None,
+                grep_warmup_workers: Vec::new(),
                 codebase,
                 symbol_index,
                 codebase_semantic: None,
@@ -3069,6 +3226,8 @@ impl AppServer {
                 content_search: content_search.clone(),
                 session_dir_search: BTreeMap::new(),
                 grep: Some(grep),
+                grep_warmup: None,
+                grep_warmup_workers: Vec::new(),
                 codebase,
                 symbol_index,
                 codebase_semantic,
@@ -3394,6 +3553,14 @@ impl AppServer {
     ) -> Result<FsResolvePathResult, RpcError> {
         use std::path::Component;
         let path = dunce::simplified(path);
+        if self
+            .local_env_host
+            .as_ref()
+            .is_some_and(|host| host.grants.is_web_session())
+            && let Some(route) = self.generated_files_processor.web_file_route(path)
+        {
+            return Ok(route);
+        }
         if let Some(route) = self.web_configuration_route(path) {
             return Ok(route);
         }
@@ -3420,6 +3587,7 @@ impl AppServer {
                 candidates.push(FsResolvePathResult {
                     root: root.to_path_buf(),
                     target,
+                    exact_file: None,
                 });
             }
         };
@@ -3531,6 +3699,14 @@ impl AppServer {
                 .ok_or_else(|| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?
                 .reconcile_user_directory_grants(&snapshot.values)
                 .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
+        }
+        if self
+            .local_env_host
+            .as_ref()
+            .is_some_and(|host| host.grants.is_web_session())
+            && let Some(files) = self.generated_files_processor.web_file_system(dir_id)?
+        {
+            return Ok(files);
         }
         if let Some(files) = self.web_configuration_file_system(dir_id)? {
             return Ok(files);
@@ -4308,6 +4484,8 @@ fn retire_env_runtime(
     retained_terminals: Option<&Arc<exec_server::terminal::TerminalService>>,
     retained_debug_adapters: Option<&Arc<crate::debug_service::DebugAdapterService>>,
 ) {
+    runtime.workspace.grep_warmup = None;
+    let warmup_workers = std::mem::take(&mut runtime.workspace.grep_warmup_workers);
     if let Some(grant) = runtime.execution.projectless_terminal_grant.take() {
         grant.revoke();
     }
@@ -4331,6 +4509,20 @@ fn retire_env_runtime(
         && !retained_search.is_some_and(|retained| Arc::ptr_eq(retained, &search))
     {
         search.cancel_all();
+    }
+    let grep = runtime.workspace.grep.take();
+    drop(runtime);
+    // Directory switches retire workers and the last service reference off the directory-open
+    // path. Final host disposal still joins its own warmup workers in WorkspaceRuntime::drop.
+    if grep.is_some() || !warmup_workers.is_empty() {
+        let _ = std::thread::Builder::new()
+            .name("grep-retire".into())
+            .spawn(move || {
+                for worker in warmup_workers {
+                    let _ = worker.join();
+                }
+                drop(grep);
+            });
     }
 }
 

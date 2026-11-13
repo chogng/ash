@@ -816,3 +816,202 @@ fn rust_workspace_settings_merge_profile_options_before_initialization_and_stay_
         "a retained directory keeps its existing owner"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn replaced_configuration_snapshot_cannot_adopt_the_new_source_version() {
+    assert_pending_configuration_change(PendingConfigurationChange::Replace);
+}
+
+#[cfg(unix)]
+#[test]
+fn disabled_configuration_snapshot_cannot_adopt_the_new_source_version() {
+    assert_pending_configuration_change(PendingConfigurationChange::Disable);
+}
+
+#[cfg(unix)]
+#[test]
+fn repeated_configuration_updates_do_not_reauthorize_a_waiting_request() {
+    assert_pending_configuration_change(PendingConfigurationChange::ReplaceTwice);
+}
+
+#[cfg(unix)]
+#[test]
+fn connection_cancellation_fences_a_waiting_configuration_snapshot() {
+    assert_pending_configuration_change(PendingConfigurationChange::CloseConnection);
+}
+
+#[cfg(unix)]
+#[test]
+fn global_disablement_fences_a_waiting_configuration_snapshot() {
+    assert_pending_configuration_change(PendingConfigurationChange::DisableProfile);
+}
+
+#[cfg(unix)]
+#[test]
+fn directory_revocation_fences_a_waiting_configuration_snapshot() {
+    assert_pending_configuration_change(PendingConfigurationChange::RevokeDirectory);
+}
+
+#[cfg(unix)]
+#[test]
+fn an_unrelated_source_update_preserves_a_waiting_configuration_snapshot() {
+    assert_pending_configuration_change(PendingConfigurationChange::Unrelated);
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum PendingConfigurationChange {
+    Replace,
+    Disable,
+    ReplaceTwice,
+    CloseConnection,
+    DisableProfile,
+    RevokeDirectory,
+    Unrelated,
+}
+
+#[cfg(unix)]
+fn assert_pending_configuration_change(change: PendingConfigurationChange) {
+    let root = tempfile::tempdir().unwrap();
+    let script = root.path().join("server.sh");
+    fs::write(&script, super::regression_tests::SERVER).unwrap();
+    let logs = root.path().join("logs");
+    fs::create_dir(&logs).unwrap();
+    let path = root.path().join("same.demo");
+    let configuration = LanguageServersConfig {
+        servers: BTreeMap::from([(
+            LanguageServerId::new("fixture").unwrap(),
+            LanguageServerConfig {
+                executable: Some("/bin/sh".into()),
+                language_ids: vec!["demo".into()],
+                args: vec![script.to_string_lossy().into_owned()],
+                environment: BTreeMap::from([
+                    ("LSP_LOG".into(), logs.to_string_lossy().into_owned()),
+                    ("LSP_OPTION".into(), "retired".into()),
+                ]),
+                ..Default::default()
+            },
+        )]),
+        ..Default::default()
+    };
+    let shared = Arc::new(std::sync::Mutex::new(AppServerLanguageRuntime::new(
+        Arc::new(UpdateBroker::default()),
+    )));
+    shared
+        .lock()
+        .unwrap()
+        .reconcile_configuration(&configuration);
+    // Hold only this connection while a request captures A under the profile lock. The
+    // channel and subsequent profile-lock acquisition prove the request has released the
+    // registry before B is published; releasing the connection then resumes that request.
+    let occupied = super::LanguageRuntimeGuard::new(shared.lock().unwrap(), 1);
+    let pending = Arc::clone(&shared);
+    let (captured, waiting) = std::sync::mpsc::channel();
+    let request_configuration = configuration.clone();
+    let request = std::thread::spawn(move || {
+        let runtime = pending.lock().unwrap();
+        captured.send(()).unwrap();
+        (
+            super::LanguageRuntimeGuard::new(runtime, 1),
+            request_configuration,
+        )
+    });
+    waiting
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    let mut updated = configuration.clone();
+    match change {
+        PendingConfigurationChange::Replace | PendingConfigurationChange::ReplaceTwice => {
+            updated
+                .servers
+                .values_mut()
+                .next()
+                .unwrap()
+                .environment
+                .insert("LSP_OPTION".into(), "current".into());
+        }
+        PendingConfigurationChange::Disable => {
+            updated.servers.values_mut().next().unwrap().mode = LanguageServerModeConfig::Disabled;
+        }
+        PendingConfigurationChange::CloseConnection => {
+            shared.lock().unwrap().close_connection(1);
+        }
+        PendingConfigurationChange::DisableProfile => updated.enabled = false,
+        PendingConfigurationChange::RevokeDirectory => {
+            shared
+                .lock()
+                .unwrap()
+                .retain_dir_roots(super::LanguageDirectoryRoots::default());
+        }
+        PendingConfigurationChange::Unrelated => {
+            updated.servers.insert(
+                LanguageServerId::new("other").unwrap(),
+                LanguageServerConfig::default(),
+            );
+        }
+    }
+    shared.lock().unwrap().reconcile_configuration(&updated);
+    if change == PendingConfigurationChange::ReplaceTwice {
+        updated
+            .servers
+            .values_mut()
+            .next()
+            .unwrap()
+            .environment
+            .insert("LSP_OPTION".into(), "latest".into());
+        shared.lock().unwrap().reconcile_configuration(&updated);
+    }
+    drop(occupied);
+    let (mut guard, configuration) = request.join().unwrap();
+    let revision = ash_lsp_manager::LanguageDocumentRevision::new(1);
+    let synchronized = guard.synchronize_document(
+        root.path(),
+        None,
+        1,
+        &configuration,
+        Path::new("same.demo"),
+        ash_lsp_manager::LspDocumentSnapshot::new(&path, "demo", revision, "private-fixture")
+            .unwrap(),
+        super::LanguageDocumentPurpose::SemanticRequest,
+    );
+    let observed = if synchronized.is_ok() {
+        let request = guard
+            .manager()
+            .unwrap()
+            .request_hover(
+                &path,
+                revision,
+                ash_lsp_manager::LanguageDocumentPosition::new(0, 0),
+            )
+            .unwrap();
+        format!(
+            "{:?}",
+            guard.wait_for_request(request, &ash_async_utils::CancellationSource::new().token(),)
+        )
+    } else {
+        drop(guard);
+        String::new()
+    };
+    shared.lock().unwrap().close_connection(1);
+    let messages = fs::read_dir(&logs)
+        .unwrap()
+        .map(|entry| fs::read_to_string(entry.unwrap().path()).unwrap())
+        .collect::<String>();
+    if change == PendingConfigurationChange::Unrelated {
+        assert!(
+            synchronized.is_ok(),
+            "an unrelated source update rejected this request: {synchronized:?}"
+        );
+        assert!(observed.contains("private-fixture"), "{observed}");
+    } else {
+        assert!(
+            synchronized.is_err(),
+            "stale configuration launched: {observed}; {messages}"
+        );
+        assert!(
+            !messages.contains("private-fixture"),
+            "retired fixture received a document: {messages}"
+        );
+    }
+}

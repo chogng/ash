@@ -1,5 +1,6 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { registerTerminalContribution } from '../../../terminal/browser/terminalExtensions.js';
@@ -8,7 +9,7 @@ import { TerminalStickyScrollContribution } from './terminalStickyScrollContribu
 
 registerTerminalContribution(TerminalStickyScrollContribution.ID, TerminalStickyScrollContribution);
 
-registerAction2(class TerminalToggleStickyScrollAction extends Action2 {
+registerEditorToolAction(class TerminalToggleStickyScrollAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.terminal.toggleStickyScroll',

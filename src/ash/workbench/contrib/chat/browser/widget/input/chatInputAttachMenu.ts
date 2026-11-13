@@ -8,7 +8,6 @@ import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../nls.js';
 import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { IProjectService } from '../../../../../../platform/projects/common/projectService.js';
 import { IConnectorService } from '../../../../../../platform/connectors/common/connectorService.js';
@@ -17,12 +16,8 @@ import { defaultButtonStyles, defaultMenuStyles } from '../../../../../../platfo
 import type { SkillSelectorDefinition } from '../../../../../services/chat/common/chatService.js';
 import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import type { Icon } from '../../../../../../base/common/icon.js';
-import { status as announceStatus } from '../../../../../../base/browser/ui/aria/aria.js';
 
 const uploadKeybinding = resolveKeybinding(Keybinding.single(logicalKey('u', { primaryKey: true })));
-
-const STORAGE_KEY_WEB_SEARCH = 'ash.chat.attachMenu.webSearch.enabled';
-const STORAGE_KEY_MEMORY = 'ash.chat.attachMenu.memory.enabled';
 
 export interface ChatInputAttachMenuOptions {
 	readonly anchor: HTMLElement;
@@ -46,8 +41,6 @@ interface MenuItemDef {
 	readonly id: string;
 	readonly label: string;
 	readonly icon?: Icon;
-	readonly checked?: boolean;
-	readonly onToggle?: (checked: boolean) => void;
 	readonly run?: () => void;
 	readonly getSubmenuItems?: () => Promise<readonly SubmenuItemDef[]> | readonly SubmenuItemDef[];
 }
@@ -70,23 +63,16 @@ export class ChatInputAttachMenu extends Disposable {
 
 	private readonly openMenu = this._register(new MutableDisposable<DisposableStore>());
 
-	private webSearchEnabled = true;
-	private memoryEnabled = true;
-
 	constructor(
 		private readonly options: ChatInputAttachMenuOptions,
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@ICommandService private readonly commandService: ICommandService,
-		@IStorageService private readonly storageService: IStorageService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
 		this.projectService = instantiationService.getOptional(IProjectService);
 		this.connectorService = instantiationService.getOptional(IConnectorService);
 		this.pluginService = instantiationService.getOptional(IPluginManagementService);
-
-		this.webSearchEnabled = this.storageService.getBoolean(STORAGE_KEY_WEB_SEARCH, StorageScope.PROFILE, true);
-		this.memoryEnabled = this.storageService.getBoolean(STORAGE_KEY_MEMORY, StorageScope.PROFILE, true);
 	}
 
 	show(): void {
@@ -164,17 +150,10 @@ export class ChatInputAttachMenu extends Disposable {
 		}
 
 		const action = lifetime.add(new Action(item.id, item.label, '', true, () => {
-			if (item.onToggle) {
-				const checked = !action.checked;
-				action.checked = checked;
-				item.onToggle(checked);
-			} else {
-				this.close();
-				item.run?.();
-			}
+			this.close();
+			item.run?.();
 		}));
 		action.icon = item.icon;
-		action.checked = item.checked;
 		return action;
 	}
 
@@ -250,6 +229,8 @@ export class ChatInputAttachMenu extends Disposable {
 			}
 			return attachments;
 		}
+		// Memory policy and search tools have no composer-level on/off contract. Do not
+		// present local checkmarks as controls over their reads, writes or network calls.
 		return [
 			...attachments,
 			// 2. Add to project
@@ -283,44 +264,6 @@ export class ChatInputAttachMenu extends Disposable {
 				label: localize('chat.attach.plugins', 'Plugins'),
 				icon: Lxicon.plug,
 				getSubmenuItems: () => this.getPluginSubmenuItems(),
-			},
-			// Divider
-			{ id: 'divider', label: '' },
-			// 7. Web search
-			{
-				id: 'websearch',
-				label: localize('chat.attach.webSearch', 'Web search'),
-				icon: Lxicon.website,
-				checked: this.webSearchEnabled,
-				onToggle: checked => {
-					this.webSearchEnabled = checked;
-					this.storageService.store(STORAGE_KEY_WEB_SEARCH, checked, StorageScope.PROFILE, StorageTarget.USER);
-					try {
-						announceStatus(checked
-							? localize('chat.attach.webSearchEnabled', 'Web search enabled')
-							: localize('chat.attach.webSearchDisabled', 'Web search disabled'));
-					} catch {
-						// Ignore in environments where ARIA container is not mounted
-					}
-				},
-			},
-			// 8. Memory
-			{
-				id: 'memory',
-				label: localize('chat.attach.memory', 'Memory'),
-				icon: Lxicon.brain,
-				checked: this.memoryEnabled,
-				onToggle: checked => {
-					this.memoryEnabled = checked;
-					this.storageService.store(STORAGE_KEY_MEMORY, checked, StorageScope.PROFILE, StorageTarget.USER);
-					try {
-						announceStatus(checked
-							? localize('chat.attach.memoryEnabled', 'Memory enabled')
-							: localize('chat.attach.memoryDisabled', 'Memory disabled'));
-					} catch {
-						// Ignore in environments where ARIA container is not mounted
-					}
-				},
 			},
 		];
 	}

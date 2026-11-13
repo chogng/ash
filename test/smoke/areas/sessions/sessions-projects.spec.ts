@@ -199,6 +199,10 @@ test('switching modes separates conversations, projects and Activity Bar entries
 			await expect(page.getByRole('menuitem', { name: 'Compare Agents…', exact: true })).toHaveCount(mode === 'code' ? 1 : 0);
 			await expect(page.getByRole('menuitem', { name: 'Show Conversation Recap', exact: true })).toHaveCount(mode === 'code' ? 1 : 0);
 			await expect(page.getByRole('menuitem', { name: 'Open in new window', exact: true })).toHaveCount(mode === 'code' ? 1 : 0);
+			if (mode === 'code') {
+				await expect(page.getByRole('menuitem', { name: 'Continue in Code', exact: true })).toHaveCount(0);
+				await expect(page.getByRole('menuitem', { name: 'Share', exact: true })).toHaveCount(0);
+			}
 		};
 		await expect(activity.locator('[data-action-id="sessions.open.projects"]')).toBeVisible();
 		await expect(activity.locator('[data-action-id="sessions.open.creator"]')).toBeVisible();
@@ -296,7 +300,12 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		await expect(code).toBeVisible();
 		await conversation.click({ button: 'right' });
 		await expectConversationMenu('code');
-		await page.keyboard.press('Escape');
+		const chatMode = mode.getByRole('button', { name: 'Chat / Agents', exact: true });
+		// Switch without an outside pointer event, so dismissal must come from the sidebar.
+		await chatMode.evaluate(button => (button as HTMLButtonElement).click());
+		await expect(chat).toBeVisible();
+		await expect(page.getByRole('menu')).toHaveCount(0);
+		await codeMode.click();
 		await conversation.press('Shift+F10');
 		await expectConversationMenu('code');
 		await page.getByRole('menuitem', { name: 'Remove from project', exact: true }).click();
@@ -369,7 +378,7 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 			await card.click();
 			await expect(projectTitle).toBeVisible();
 		};
-		const projectChats = () => page.getByRole('list', { name: 'Project conversations', exact: true }).getByRole('button');
+		const projectChats = () => page.getByRole('list', { name: 'Project conversations', exact: true }).locator('button.ash-projects-conversation');
 		const sidebar = () => page.locator('.ash-chat-navigation-list');
 		const projectName = () => sidebar().getByRole('button', { name: project.name, exact: true });
 		const sidebarChats = () => sidebar().locator('[data-parent-project] > .ash-chat-navigation-item:visible');
@@ -381,7 +390,6 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 		};
 		const prompts = ['Compare magnetic models.', 'Organize experiment data.'];
 		const threadIds: string[] = [];
-		const rowIds: string[] = [];
 		await openProject();
 		await expect(page.getByText('No chats in this project', { exact: true })).toBeVisible();
 		for (const prompt of prompts) {
@@ -407,12 +415,11 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 			const session = sessions.find(session => session.threads.some(thread => thread.threadId === threadId));
 			expect(session).toBeDefined();
 			expect(session?.kind).toBe('chat');
-			rowIds.push(`ash:${session!.sessionId}`);
 			await openProject();
 			await expect(projectChats()).toHaveCount(threadIds.length);
 		}
 		expect(new Set(threadIds).size).toBe(2);
-		await expect(projectChats().first()).toHaveAttribute('data-project-control', rowIds[1]);
+		await expect(projectChats().first()).toHaveAccessibleName(prompts[1]);
 		await projectChats().first().focus();
 		await page.keyboard.press('ArrowDown');
 		await expect(projectChats().last()).toBeFocused();
@@ -420,7 +427,7 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 		await expect(activeChat()).toHaveAttribute('data-thread-id', threadIds[0]);
 		const titleBar = page.locator('.ash-sessions-titlebar');
 		await expect(titleBar.locator('.ash-sessions-titlebar-page-content')).toBeHidden();
-		await expect(titleBar.locator('.ash-sessions-titlebar-widget').getByRole('button', { name: `Rename session (${prompts[0]})`, exact: true })).toBeVisible();
+		await expect(titleBar.locator('.ash-sessions-titlebar-widget').getByRole('button', { name: `Chat actions (${prompts[0]})`, exact: true })).toBeVisible();
 		await expect(projectName()).toHaveAttribute('aria-expanded', 'false');
 		await expect(sidebarChats()).toHaveCount(0);
 		await expect(sidebar().locator('[data-parent-section="recent"] .ash-chat-navigation-item')).toHaveCount(0);
@@ -448,10 +455,10 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 		await expect(sidebarChats()).toHaveText([...prompts].reverse());
 		await openProject();
 		await expect(projectChats()).toHaveCount(2);
-		await expect(projectChats().first()).toHaveAttribute('data-project-control', rowIds[1]);
-		await expect(projectChats().last()).toHaveAttribute('data-project-control', rowIds[0]);
+		await expect(projectChats().first()).toHaveAccessibleName(prompts[1]);
+		await expect(projectChats().last()).toHaveAccessibleName(prompts[0]);
 		await page.screenshot({ path: testInfo.outputPath('project-chats-restored.png') });
-		await projectChats().and(page.locator(`[data-project-control="${rowIds[0]}"]`)).click();
+		await projectChats().and(page.getByRole('button', { name: prompts[0], exact: true })).click();
 		await expect(activeChat()).toHaveAttribute('data-thread-id', threadIds[0]);
 		await expect(activeChat()).toContainText(prompts[0]);
 		await send(new Editor(activeChat()), 'Continue the first project conversation.');

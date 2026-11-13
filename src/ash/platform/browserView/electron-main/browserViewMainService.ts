@@ -42,6 +42,7 @@ interface BrowserViewRemoteNetwork {
 
 export interface BrowserViewMainServiceOptions {
 	readonly window: BrowserWindow;
+	readonly findAuxiliaryWindow?: (name: string) => BrowserWindow | undefined;
 	readonly getWorkspaceId: () => string;
 	readonly createSession: (partition: string) => Session;
 	readonly createView: (session: Session) => WebContentsView;
@@ -150,7 +151,8 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		add('resetZoom', text('browser.context.resetZoom', localize({ bundle: 'ash.workbench', key: 'browser.context.resetZoom' }, 'Reset zoom')), () => view.setBrowserZoomIndex(browserZoomDefaultIndex), true, zoomItems);
 		items.push({ type: 'submenu', label: text('browser.zoom', localize({ bundle: 'ash.workbench', key: 'browser.zoom' }, 'Page zoom')), enabled: true, items: zoomItems });
 		const bounds = view.view.getBounds();
-		const windowZoom = this.options.window.webContents.getZoomFactor();
+		const window = view.attachedWindow;
+		const windowZoom = window.webContents.getZoomFactor();
 		let cancelled = false;
 		const cancel = (): void => { cancelled = true; this.options.contextMenu.close(); };
 		this.contextMenuOwner = view;
@@ -158,7 +160,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		using cancellation = addAbortListener(view.signal, cancel);
 		try {
 			// Chromium reports view-local DIP; the shared menu API accepts Workbench CSS coordinates.
-			const { selectedId } = await this.options.contextMenu.popup({ items, x: (bounds.x + params.x) / windowZoom, y: (bounds.y + params.y) / windowZoom });
+			const { selectedId } = await this.options.contextMenu.popup({ items, x: (bounds.x + params.x) / windowZoom, y: (bounds.y + params.y) / windowZoom }, window);
 			if (!cancelled && !view.signal.aborted && !contents.isDestroyed() && params.frame && !params.frame.detached) {
 				view.focus();
 				if (selectedId) { await actions.get(selectedId)?.(); }
@@ -382,7 +384,11 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	public async respondToPermission(id: string, requestId: string, allowed: boolean): Promise<void> { this.target(id).session.permissions.respond(id, requestId, allowed); }
 	public async clearPermissions(id: string): Promise<void> { this.target(id).session.permissions.clear(); }
 	public async cancelDownloads(id: string): Promise<void> { this.target(id).session.permissions.cancelDownloads(id); }
-	async layout(id: string, bounds: IBrowserViewBounds) { this.target(id).layout(bounds); }
+	async layout(id: string, bounds: IBrowserViewBounds, windowName?: string) {
+		const window = windowName === undefined ? this.options.window : this.options.findAuxiliaryWindow?.(windowName);
+		if (!window || window.isDestroyed()) throw new Error('BrowserWindowAccessDenied');
+		this.target(id).layout(bounds, window);
+	}
 	async setVisible(id: string, visible: boolean) { this.target(id).setVisible(visible); }
 	loadURL(id: string, url: string, signal?: AbortSignal) { return this.target(id).loadURL(url, signal); }
 	goBack(id: string) { return this.target(id).goBack(); }

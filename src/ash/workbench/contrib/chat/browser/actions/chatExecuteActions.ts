@@ -57,6 +57,8 @@ export class ChatSubmitAction extends Action2 {
 
 export const CancelChatActionId = 'workbench.action.chat.cancel';
 
+const taskInputEnabled = ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ContextKeyExpr.not(ChatContextKeys.replyOnlyInput.key));
+
 export class OpenModelPickerAction extends Action2 {
 	public static readonly ID = 'workbench.action.chat.openModelPicker';
 	constructor() {
@@ -76,25 +78,25 @@ export class OpenModePickerAction extends Action2 {
 	public static readonly ID = 'workbench.action.chat.openModePicker';
 	constructor() {
 		super({
-			id: OpenModePickerAction.ID, title: localize2('chat.execute.modePicker', 'Chat: Open Mode or Agent Picker'), f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true), keybinding: {
+			id: OpenModePickerAction.ID, title: localize2('chat.execute.modePicker', 'Chat: Open Mode or Agent Picker'), f1: true, precondition: taskInputEnabled, keybinding: {
 				primary: Keybinding.single(physicalKey('Period', { primaryKey: true })), weight: KeybindingWeight.WorkbenchContrib, when: ChatContextKeys.inChatInput.isEqualTo(true),
 			}
 		});
 	}
 	public override run(accessor: ServicesAccessor): void {
 		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
-		if (widget?.visible) widget.input.openModePicker();
+		if (widget?.visible && !widget.input.replyOnly) widget.input.openModePicker();
 	}
 }
 
 export class OpenPermissionPickerAction extends Action2 {
 	public static readonly ID = 'workbench.action.chat.openPermissionPicker';
 	constructor() {
-		super({ id: OpenPermissionPickerAction.ID, title: localize2('chat.execute.permissionPicker', 'Chat: Open Permission Picker'), f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true) });
+		super({ id: OpenPermissionPickerAction.ID, title: localize2('chat.execute.permissionPicker', 'Chat: Open Permission Picker'), f1: true, precondition: taskInputEnabled });
 	}
 	public override run(accessor: ServicesAccessor): void {
 		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
-		if (widget?.visible) widget.input.openPermissionPicker();
+		if (widget?.visible && !widget.input.replyOnly) widget.input.openPermissionPicker();
 	}
 }
 
@@ -106,13 +108,13 @@ export class OpenWorkspacePickerAction extends Action2 {
 			id: OpenWorkspacePickerAction.ID,
 			title: localize2('chat.execute.workspacePicker', 'Chat: Open Workspace Picker'),
 			f1: true,
-			precondition: ChatContextKeys.enabled.isEqualTo(true),
+			precondition: taskInputEnabled,
 		});
 	}
 
 	public override run(accessor: ServicesAccessor): void {
 		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
-		if (widget?.visible) {
+		if (widget?.visible && !widget.input.replyOnly) {
 			widget.input.openWorkspacePicker();
 		}
 	}

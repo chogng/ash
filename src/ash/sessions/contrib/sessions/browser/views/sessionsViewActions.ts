@@ -30,15 +30,20 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 import { projectFolders } from '../../../chat/browser/sessionWorkspaceProjects.js';
 
+const canCloseSession = ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), SessionsWorkspaceModeContext.isEqualTo('code'));
+const routinesAvailable = ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('code'), ContextKeyExpr.has('sessions.automationsAvailable'));
+const scheduledAvailable = ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('chat'), ContextKeyExpr.has('sessions.scheduledAvailable'));
+
 registerAction2(class CloseSessionAction extends Action2 {
 	constructor() {
 		super({
 			id: 'sessionsViewPane.closeSession', title: localize2('sessions.closeSession', 'Close Session'),
-			f1: true, precondition: IsSessionsWindowContext.isEqualTo(true),
+			f1: true, precondition: canCloseSession,
 		});
 	}
 
 	override run(accessor: ServicesAccessor): void {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(canCloseSession)) return;
 		const sessions = accessor.get(ISessionsService);
 		const selection = sessions.activeSelection;
 		if (!selection) return;
@@ -54,32 +59,31 @@ registerAction2(class ManageAutomationsAction extends Action2 {
 		super({
 			id: 'sessionsView.manageAutomations', title: localize2('automations.title', 'Routines'),
 			icon: Lxicon.clockface,
-			precondition: ContextKeyExpr.has('sessions.automationsAvailable'),
+			precondition: routinesAvailable,
 			toggled: ContextKeyExpr.has('sessions.activity.automationsSelected'),
-			menu: { id: Menus.ActivityBar, group: 'more', order: 20, when: ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('code'), ContextKeyExpr.has('sessions.automationsAvailable')) },
+			menu: { id: Menus.ActivityBar, group: 'more', order: 20, when: routinesAvailable },
 		});
 	}
 
 	override run(accessor: ServicesAccessor): void {
-		accessor.get(ICustomViewService).showCustomView(AUTOMATIONS_CUSTOM_VIEW_ID);
+		if (accessor.get(IContextKeyService).contextMatchesRules(routinesAvailable)) accessor.get(ICustomViewService).showCustomView(AUTOMATIONS_CUSTOM_VIEW_ID);
 	}
 });
 
 registerAction2(class ManageScheduledTasksAction extends Action2 {
 	constructor() {
-		const available = ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('chat'), ContextKeyExpr.has('sessions.scheduledAvailable'));
 		super({
 			id: 'sessionsView.manageScheduledTasks',
 			title: localize2('scheduled.title', 'Scheduled'),
 			icon: Lxicon.clockface,
-			precondition: available,
+			precondition: scheduledAvailable,
 			toggled: ContextKeyExpr.has('sessions.activity.scheduledSelected'),
-			menu: { id: Menus.ActivityBar, group: 'navigation', order: 35, when: available },
+			menu: { id: Menus.ActivityBar, group: 'navigation', order: 35, when: scheduledAvailable },
 		});
 	}
 
 	override run(accessor: ServicesAccessor): void {
-		accessor.get(ICustomViewService).showCustomView(SCHEDULED_CUSTOM_VIEW_ID);
+		if (accessor.get(IContextKeyService).contextMatchesRules(scheduledAvailable)) accessor.get(ICustomViewService).showCustomView(SCHEDULED_CUSTOM_VIEW_ID);
 	}
 });
 
@@ -142,11 +146,12 @@ registerAction2(class NewSessionForWorkspaceAction extends Action2 {
 registerAction2(class AddSessionToProjectAction extends Action2 {
 	constructor() { super({ id: 'agentSession.addToProject', title: localize2('sessions.list.addToProject', 'Add to project') }); }
 
-	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+	override async run(accessor: ServicesAccessor, argument?: unknown, projectScope?: unknown): Promise<void> {
 		const target = sessionActionTarget(accessor, argument);
 		const projects = accessor.get(IProjectService);
 		const input = accessor.get(IQuickInputService);
-		const scope = accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) === 'code' ? 'code' : 'chat';
+		const scope = projectScope === 'code' || projectScope === 'chat' ? projectScope
+			: accessor.get(IContextKeyService).getValue<'chat' | 'code'>(SessionsWorkspaceModeContext.key) ?? 'chat';
 		const available = (await projects.list(scope)).filter(project => !project.archived);
 		if (!available.length) throw new Error(localize('sessions.list.noProjects', 'Create a project before adding this chat.'));
 		const selected = await pickSessionDestination(input, localize('sessions.list.addToProject', 'Add to project'), available.map(project => ({ label: project.name, id: project.id })));

@@ -3,10 +3,12 @@ import { isRecord } from '../../../../base/common/types.js';
 import { IWorkspaceContextService, workspaceRelativePath } from '../../../../platform/workspace/common/workspace.js';
 import { FileKind, IFileService } from '../../../../platform/files/common/files.js';
 import { localize } from '../../../../nls.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { WorkbenchEditorToolsAvailable } from '../../../common/contextkeys.js';
 import { EditorPanes, registerEditorPane } from '../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { CODE_EDITOR_ID, type TextResourceEditor } from '../../../browser/parts/editor/textResourceEditor.js';
@@ -29,8 +31,9 @@ registerEditorPane({
 });
 
 registerAction2(class extends Action2 {
-	constructor() { super({ id: OpenNewEditorCommandId, title: localize('searchEditor.new', 'Search: New Search Editor'), f1: true }); }
+	constructor() { super({ id: OpenNewEditorCommandId, title: localize('searchEditor.new', 'Search: New Search Editor'), f1: true, precondition: WorkbenchEditorToolsAvailable }); }
 	async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(WorkbenchEditorToolsAvailable)) return;
 		const editors = accessor.get(IEditorService);
 		const groupId = isRecord(argument) && typeof argument.groupId === 'number' && Number.isSafeInteger(argument.groupId)
 			? argument.groupId : undefined;

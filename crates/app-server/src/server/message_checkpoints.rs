@@ -1,13 +1,14 @@
 use super::git_turn_changes_runtime::GitTurnChangesRuntime;
-use ash_protocol::ItemId;
 use ash_protocol::RepositoryCheckpoint;
 use ash_protocol::ThreadId;
+use ash_protocol::ThreadItem;
 use ash_protocol::TurnId;
 use ash_protocol::WorkspaceCheckpoint;
 use core_api::CheckpointCapture;
 use core_api::CoreError;
 use core_api::MessageCheckpointSource;
 use git_turn_changes::MessageCaptureTarget;
+use git_turn_changes::MessageCaptureTurn;
 use git_turn_changes::TurnChangeLedger;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -60,9 +61,44 @@ impl MessageCheckpointSource for GitTurnChangesRuntime {
     fn capture(
         &self,
         thread_id: &ThreadId,
-        _: &TurnId,
-        _: &ItemId,
+        turn_id: &TurnId,
+        item: &ThreadItem,
         event_id: &str,
+    ) -> Result<Box<dyn CheckpointCapture>, CoreError> {
+        let refresh = match item {
+            ThreadItem::ToolResult { tool_call_id, .. } => self
+                .tool_result_refreshes
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(&(thread_id.clone(), turn_id.clone(), tool_call_id.clone()))
+                .map(|session_id| MessageCaptureTurn {
+                    session_id,
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                }),
+            _ => None,
+        };
+        self.capture_workspace(thread_id, event_id, refresh)
+    }
+
+    fn release(&self, checkpoint: &RepositoryCheckpoint) -> Result<(), CoreError> {
+        if !checkpoint.reference.starts_with("refs/ash/messages/") {
+            return Err(CoreError::Journal(
+                "checkpoint ref is outside the message namespace".into(),
+            ));
+        }
+        self.ledger
+            .release_message(checkpoint.clone())
+            .map_err(|error| CoreError::Journal(error.to_string()))
+    }
+}
+
+impl GitTurnChangesRuntime {
+    pub(super) fn capture_workspace(
+        &self,
+        thread_id: &ThreadId,
+        event_id: &str,
+        mut refresh: Option<MessageCaptureTurn>,
     ) -> Result<Box<dyn CheckpointCapture>, CoreError> {
         if self
             .history_restoration_pending(thread_id)
@@ -109,32 +145,41 @@ impl MessageCheckpointSource for GitTurnChangesRuntime {
                     target_unborn: repository.target_unborn(),
                 })
                 .collect();
-            match self.ledger.capture_message(event_id.to_string(), targets) {
-                Ok(repositories) => WorkspaceCheckpoint::Git {
-                    source_dir_id: self.dirs.id.to_string(),
-                    repositories,
-                },
+            match self
+                .ledger
+                .capture_message(event_id.to_string(), targets, refresh.clone())
+            {
+                Ok(capture) => {
+                    refresh = None;
+                    match capture.refreshed {
+                        Ok(records) => self.publish(&records),
+                        Err(error) => log::warn!("Tool Result ChangeSet refresh failed: {error}"),
+                    }
+                    WorkspaceCheckpoint::Git {
+                        source_dir_id: self.dirs.id.to_string(),
+                        repositories: capture.checkpoints,
+                    }
+                }
                 Err(error) => WorkspaceCheckpoint::Unavailable {
                     reason: format!("File snapshot capture failed: {error}"),
                 },
             }
         };
+        // A failed or fenced message capture must not swallow the observer's live refresh.
+        if let Some(turn) = refresh {
+            match self
+                .ledger
+                .refresh_turn(turn.session_id, turn.thread_id, turn.turn_id)
+            {
+                Ok(records) => self.publish(&records),
+                Err(error) => log::warn!("Tool Result ChangeSet refresh failed: {error}"),
+            }
+        }
         Ok(Box::new(CapturedWorkspace {
             ledger: self.ledger.clone(),
             workspace,
             committed: AtomicBool::new(false),
             lease: std::sync::Mutex::new(lease),
         }))
-    }
-
-    fn release(&self, checkpoint: &RepositoryCheckpoint) -> Result<(), CoreError> {
-        if !checkpoint.reference.starts_with("refs/ash/messages/") {
-            return Err(CoreError::Journal(
-                "checkpoint ref is outside the message namespace".into(),
-            ));
-        }
-        self.ledger
-            .release_message(checkpoint.clone())
-            .map_err(|error| CoreError::Journal(error.to_string()))
     }
 }

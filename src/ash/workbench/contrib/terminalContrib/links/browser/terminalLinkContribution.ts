@@ -1,3 +1,4 @@
+import { getWindowId } from '../../../../../base/browser/window.js';
 import { TerminalLinkResolver } from './terminalLinkResolver.js';
 import { isWindowsRemotePath } from '../../../../../platform/remote/common/remote.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
@@ -405,7 +406,9 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 	}
 
 	private async openUrl(url: string): Promise<void> {
-		if (!this.isDisposed) await this.opener.open(url, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });
+		const window = this.screen?.element.ownerDocument.defaultView;
+		const sourceWindowId = window ? getWindowId(window) : undefined;
+		if (!this.isDisposed) await this.opener.open(url, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true, ...(sourceWindowId === undefined ? {} : { sourceWindowId }) });
 	}
 
 	private isCurrent(generation: number, processId: number): boolean {

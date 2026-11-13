@@ -1,15 +1,17 @@
 import { QuickAccess } from '../../automation/quickaccess.js';
-import { parseDesignDocument } from '../../../src/ash/sessions/contrib/artifacts/common/model/designDocument.js';
+import { parseDesignDocument } from '../../../src/ash/sessions/contrib/artifact/common/model/designDocument.js';
 import { expect, test as base, type Page, type Locator } from '@playwright/test';
 import { paintColor, paintPixel, clickCanvasMenu, inspectCanvasMenu, drawBezierPath, rightClickCanvasShape } from '../../automation/design.js';
 
 // Exercise the production Creator renderer with the existing disconnected Sessions host.
 const test = base.extend({
-	page: async ({ page }, use) => {
+	page: async ({ page }, use, testInfo) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-		await page.goto('/sessions.html?creator');
+		const examples = testInfo.tags.includes('@artifact-examples') ? '&artifactExamples' : '';
+		const locale = testInfo.tags.includes('@zh-CN') ? '&locale=zh-CN' : '';
+		await page.goto('/sessions.html?creator' + examples + locale);
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await use(page);
 		expect(errors).toEqual([]);
@@ -18,17 +20,179 @@ const test = base.extend({
 });
 test.use({ viewport: { width: 1600, height: 900 } });
 
-test('Artifact details share the conversation and dock their views in the editor', async ({ page }) => {
+test('Fixture artifacts share one catalog and opening or reloading preserves their identities', { tag: '@artifact-examples' }, async ({ page }) => {
+	const home = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true });
+	await home.click();
+	const cards = page.locator('.ash-artifacts-work-grid .ash-artifacts-card');
+	await expect(cards).toHaveCount(7);
+	await expect(page.locator('.ash-artifacts-work-grid')).toHaveCount(1);
+	await expect(page.locator('.ash-artifacts-examples-grid')).toHaveCount(0);
+	const identities = await cards.evaluateAll(elements => elements.map(element => element.getAttribute('data-artifact-id')).filter(Boolean).sort());
+	expect(identities).toHaveLength(7);
+	await page.getByRole('tab', { name: 'Yours', exact: true }).click();
+	await expect(cards).toHaveCount(7);
+	const slidesDate = page.locator('.ash-artifacts-work-grid .ash-artifacts-card.slides time');
+	await expect(slidesDate).toHaveAttribute('datetime', /.+/u);
+	const savedDate = await slidesDate.getAttribute('datetime');
+	await page.locator('.ash-artifacts-work-grid .ash-artifacts-card.slides').click();
+	await expect(page.locator('[data-creator-mode="slides"]:visible')).toBeVisible();
+	await home.click();
+	await expect(cards).toHaveCount(7);
+	await page.reload();
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await home.click();
+	await expect(cards).toHaveCount(7);
+	expect(await cards.evaluateAll(elements => elements.map(element => element.getAttribute('data-artifact-id')).filter(Boolean).sort())).toEqual(identities);
+	await expect(slidesDate).toHaveAttribute('datetime', savedDate!);
+});
+
+for (const kind of ['sheet', 'data'] as const) {
+	for (const chinese of [false, true]) {
+		test(`${kind} files open in the table editor and retain cell edits in ${chinese ? 'Chinese' : 'English'}`, { tag: chinese ? ['@artifact-examples', '@zh-CN'] : '@artifact-examples' }, async ({ page }) => {
+			const home = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true });
+			await home.click();
+			const card = page.locator(`.ash-artifacts-card.${kind}`);
+			await expect(card).toHaveCount(1);
+			const resource = await card.getAttribute('data-artifact-id');
+			expect(resource).toMatch(/\.json$/u);
+			await expect(card).not.toHaveAttribute('data-artifact-workspace');
+			await card.click();
+			const editor = page.locator('.ash-table-editor-pane:visible');
+			const cell = editor.getByRole('textbox', { name: chinese ? '单元格 A1' : 'Cell A1', exact: true });
+			await cell.focus();
+			await page.keyboard.press('Alt+F1');
+			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /修改会自动保存/u : /Changes save automatically/u);
+			await page.keyboard.press('Escape');
+			await expect(cell).toBeFocused();
+			await cell.fill('Edited table file');
+			await editor.getByRole('button', { name: chinese ? '添加行' : 'Add row', exact: true }).click();
+			await expect(editor.getByRole('textbox').nth((await editor.getByRole('textbox').count()) - (await editor.getByRole('columnheader').count() - 1))).toBeFocused();
+			await home.click();
+			await expect(card).toHaveAttribute('data-artifact-id', resource!);
+			await page.locator(`.ash-artifacts-card.${kind === 'sheet' ? 'data' : 'sheet'}`).click();
+			await expect(editor.locator(`[data-creator-mode="${kind === 'sheet' ? 'data' : 'sheet'}"]`)).toBeVisible();
+			await home.click();
+			await card.click();
+			await expect(cell).toHaveValue('Edited table file');
+			const box = await editor.boundingBox();
+			expect(box!.width).toBeGreaterThan(300);
+			expect(box!.height).toBeGreaterThan(200);
+		});
+	}
+}
+
+for (const kind of ['sheet', 'data'] as const) {
+	test(`${kind} shares Table resizing, navigation, rectangular paste and row and column edits`, { tag: '@artifact-examples' }, async ({ page }, testInfo) => {
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
+		await page.locator(`.ash-artifacts-card.${kind}`).click();
+		const editor = page.locator('.ash-table-editor-pane:visible');
+		const grid = editor.getByRole('grid');
+		await expect(grid).toHaveCount(1);
+		const cell = (address: string) => editor.getByRole('textbox', { name: `Cell ${address}`, exact: true });
+		await cell('A1').focus();
+		await cell('A1').press('Shift+Tab');
+		await expect(editor.getByRole('button', { name: 'Delete column', exact: true })).toBeFocused();
+		await cell('A1').focus();
+		await cell('A1').press('Tab'); await expect(cell('B1')).toBeFocused();
+		await cell('B1').press('Enter'); await expect(cell('B2')).toBeFocused();
+		await cell('B2').press('ArrowUp'); await expect(cell('B1')).toBeFocused();
+		await cell('B1').press('Shift+Tab'); await expect(cell('A1')).toBeFocused();
+		const rowCount = Number(await grid.getAttribute('aria-rowcount')) - 1;
+		const columnCount = Number(await grid.getAttribute('aria-colcount')) - 1;
+		const last = editor.getByRole('textbox').last();
+		await last.evaluate(input => {
+			input.dispatchEvent(new ClipboardEvent('paste', {
+				bubbles: true, cancelable: true,
+				clipboardData: (() => { const data = new DataTransfer(); data.setData('text/plain', 'alpha\tbeta\ngamma\tdelta\n'); return data; })()
+			}));
+		});
+		await expect(grid).toHaveAttribute('aria-rowcount', String(rowCount + 2));
+		await expect(grid).toHaveAttribute('aria-colcount', String(columnCount + 2));
+		await expect(editor.getByRole('textbox').last()).toHaveValue('delta');
+		await editor.getByRole('textbox').last().focus();
+		await editor.getByRole('button', { name: 'Delete row', exact: true }).click();
+		await expect(grid).toHaveAttribute('aria-rowcount', String(rowCount + 1));
+		await editor.getByRole('button', { name: 'Delete column', exact: true }).click();
+		await expect(editor.getByRole('grid')).toHaveAttribute('aria-colcount', String(columnCount + 1));
+		const header = editor.getByRole('columnheader').nth(1);
+		const bodyCell = editor.locator('.ash-table-row').first().getByRole('gridcell').nth(1);
+		expect((await header.boundingBox())!.width).toBeCloseTo((await bodyCell.boundingBox())!.width, 0);
+		const before = (await header.boundingBox())!.width;
+		const sash = editor.locator('.ash-table-header .ash-sash-vertical').nth(1);
+		const sashBox = (await sash.boundingBox())!;
+		await page.mouse.move(sashBox.x + sashBox.width / 2, sashBox.y + sashBox.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(sashBox.x + sashBox.width / 2 + 30, sashBox.y + sashBox.height / 2);
+		await page.mouse.up();
+		await expect.poll(async () => (await header.boundingBox())!.width).toBeGreaterThan(before + 20);
+		expect((await header.boundingBox())!.width).toBeCloseTo((await bodyCell.boundingBox())!.width, 0);
+		await page.screenshot({ path: testInfo.outputPath('artifact-table-desktop.png') });
+		await page.setViewportSize({ width: 600, height: 700 });
+		await expect(editor.getByRole('button', { name: 'Add row', exact: true })).toBeInViewport();
+		await page.screenshot({ path: testInfo.outputPath('artifact-table-narrow.png') });
+	});
+}
+
+for (const chinese of [false, true]) {
+	test(`Artifact catalog dates and nested sort filters work in ${chinese ? 'Chinese' : 'English'}`, { tag: chinese ? ['@artifact-examples', '@zh-CN'] : '@artifact-examples' }, async ({ page }) => {
+		const home = page.locator('.ash-sessions-activity-content').getByRole('button', { name: chinese ? '作品' : 'Artifacts', exact: true });
+		// Navigation uses the product's existing Artifacts translation.
+		await (await home.count() ? home : page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true })).click();
+		const cards = page.locator('.ash-artifacts-work-grid .ash-artifacts-card');
+		await expect(cards).toHaveCount(7);
+		await expect.poll(() => cards.locator('time[datetime]').count()).toBe(7);
+		const timestamps = await cards.locator('time').evaluateAll(elements => elements.map(element => ({ date: element.getAttribute('datetime'), title: element.getAttribute('title') })));
+		expect(timestamps.every(timestamp => timestamp.date && timestamp.title && Number.isFinite(Date.parse(timestamp.date)))).toBe(true);
+		const sort = page.locator('.ash-artifacts-sort');
+		await sort.press('ArrowDown');
+		await page.getByRole('menuitem', { name: chinese ? '类型' : 'Type', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemradio', { name: chinese ? '幻灯片' : 'Slides', exact: true }).click();
+		await expect(cards).toHaveCount(1);
+		await expect(sort).toHaveClass(/filtered/u);
+		await expect(page.getByRole('tab', { name: chinese ? '全部' : 'All', exact: true })).toHaveAttribute('aria-selected', 'true');
+		await sort.click();
+		await page.getByRole('menuitem', { name: chinese ? '所有者' : 'Owner', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemradio', { name: chinese ? '自己' : 'You', exact: true }).click();
+		await expect(cards).toHaveCount(1);
+		await expect(page.getByRole('tab', { name: chinese ? '我的' : 'Yours', exact: true })).toHaveAttribute('aria-selected', 'true');
+		await sort.click();
+		await page.getByRole('menuitem', { name: chinese ? '所有者' : 'Owner', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemradio', { name: chinese ? '其他人' : 'Others', exact: true }).click();
+		await expect(cards).toHaveCount(0);
+		await sort.click();
+		await page.getByRole('menuitem', { name: chinese ? '重置筛选' : 'Reset filters', exact: true }).click();
+		await expect(cards).toHaveCount(7);
+		await expect(sort).not.toHaveClass(/filtered/u);
+		await sort.press('ArrowDown');
+		await page.getByRole('menuitem', { name: chinese ? '排序方式' : 'Sort by', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemradio', { name: chinese ? '名称' : 'Name', exact: true }).click();
+		await sort.click();
+		await page.getByRole('menuitem', { name: chinese ? '排序方式' : 'Sort by', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemradio', { name: chinese ? '升序' : 'Ascending', exact: true }).click();
+		const titles = await cards.locator('.ash-button-content').allTextContents();
+		expect(titles).toEqual([...titles].sort((a, b) => a.localeCompare(b)));
+		await sort.press('ArrowDown');
+		await page.getByRole('menuitem', { name: chinese ? '类型' : 'Type', exact: true }).press('ArrowRight');
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+		await expect(sort).toBeFocused();
+	});
+}
+
+test('Artifact details share the conversation and dock their views in the editor', { tag: '@artifact-examples' }, async ({ page }) => {
 	const home = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true });
 	const navigation = page.locator('[data-part="sidebar"]');
 	const conversation = page.locator('[data-part="sessions"]');
 	const editor = page.locator('[data-part="editor"]');
+	const titlebar = page.locator('[data-part="titlebar"]');
+	const header = titlebar.locator('.ash-sessions-titlebar-editor-page');
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const dock = editor.locator('[data-part="tool-editor"] > [data-part="auxiliarybar"]');
 	const commands = new QuickAccess(page);
 	await home.click();
 	await expect(conversation).toBeHidden();
 	await commands.runCommand('sessions.creator.open.design');
+	await header.getByRole('button', { name: 'Show Secondary Side Bar' }).click();
 	await expect(dock).toBeVisible();
 	await expect(conversation).toBeVisible();
 	const [navBox, chatBox, editorBox, detailsBox] = await Promise.all([navigation, conversation, editor, dock].map(part => part.boundingBox()));
@@ -55,11 +219,12 @@ test('Artifact details share the conversation and dock their views in the editor
 	await expect(dock).toBeVisible();
 	await expect(conversation).toBeVisible();
 	await page.setViewportSize({ width: 900, height: 900 });
-	await expect(properties).toBeHidden();
 	await expect(editor).toBeVisible();
+	await expect(header.getByRole('button', { name: 'Close artifact' })).toBeInViewport();
 	await page.setViewportSize({ width: 600, height: 700 });
 	await expect(dock).toBeVisible();
 	await expect(navigation).toBeHidden();
+	await expect(header.getByRole('button', { name: 'Close artifact' })).toBeInViewport();
 	await page.setViewportSize({ width: 1600, height: 900 });
 	await expect(dock).toBeVisible();
 	await expect(navigation).toBeVisible();
@@ -67,17 +232,196 @@ test('Artifact details share the conversation and dock their views in the editor
 
 	for (const kind of ['docs', 'slides', 'design', 'sheet', 'whiteboard', 'data', 'motion']) {
 		await home.click();
-		await page.locator(`[data-artifact-example="${kind}"]`).click();
+		await page.locator(`.ash-artifacts-work-grid .ash-artifacts-card.${kind}`).click();
 		await expect(conversation).toBeVisible();
 		await expect(editor).toBeVisible();
-		if (kind === 'docs' || kind === 'sheet' || kind === 'data') await expect(properties).toBeHidden();
-		else await expect(dock).toBeVisible();
+		await expect(header.getByRole('heading')).toBeVisible();
+		await expect.poll(async () => Math.abs((await header.boundingBox())!.x - (await editor.boundingBox())!.x)).toBeLessThan(1);
+		const windowRow = (await titlebar.boundingBox())!;
+		const artifactRow = (await header.boundingBox())!;
+		expect(artifactRow.y).toBe(windowRow.y);
+		expect(artifactRow.height).toBe(windowRow.height);
+		await expect(header.getByRole('button', { name: 'Close artifact' })).toBeVisible();
+		if (kind !== 'docs' && kind !== 'sheet' && kind !== 'data') {
+			const toggle = header.getByRole('button', { name: /^(Show|Hide) Secondary Side Bar$/u });
+			if (await toggle.getAttribute('aria-pressed') !== 'true') await toggle.click();
+			await expect(dock).toBeVisible();
+		} else {
+			await expect(properties).toBeHidden();
+			if (kind === 'docs') {
+				const docs = editor.locator('.ash-docs-workspace:visible');
+				await expect(docs.locator('.stanza-document-heading').first()).toBeVisible();
+				await expect(docs.locator('.stanza-document-paragraph').first()).toContainText('guide the public release.');
+				await expect(docs.locator('table')).toBeVisible();
+				const checks = docs.getByRole('checkbox');
+				await expect(checks).toHaveCount(3);
+				await expect(checks.first()).toBeChecked();
+				await expect(checks.first()).toBeEnabled();
+				await header.getByRole('button', { name: 'Document tools', exact: true }).click();
+				await expect(dock.getByRole('navigation', { name: 'Document outline' })).toBeVisible();
+				await header.getByRole('button', { name: 'Document tools', exact: true }).click();
+			}
+		}
 	}
+	for (const mode of ['brand', 'sites', 'make', 'prototype']) {
+		await commands.runCommand(`sessions.creator.open.${mode}`);
+		await expect(editor.locator(`[data-creator-mode="${mode}"]:visible`)).toBeVisible();
+		await expect(header.getByRole('heading')).toBeVisible();
+		await expect(header.getByRole('button', { name: 'Close artifact' })).toBeVisible();
+	}
+	await commands.runCommand('sessions.creator.chooseDocsEditor');
+	await commands.select('Markdown');
 	await commands.runCommand('sessions.creator.chooseDocsEditor');
 	await commands.select('New blank document');
 	await expect(editor.locator('.stanza-editor:visible')).toBeVisible();
 	await expect(conversation).toBeVisible();
 	await expect(properties).toBeHidden();
+	const close = header.getByRole('button', { name: 'Close artifact' });
+	await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
+	await expect(header).toHaveCSS('border-bottom-style', 'solid');
+	await close.press('Enter');
+	await expect(conversation).toBeVisible();
+	await expect(header).toHaveCount(0);
+});
+
+test('Artifact titlebar exports, maximizes and closes the editor beside the sidebar', { tag: ['@artifact-examples', '@zh-CN'] }, async ({ page }, testInfo) => {
+	const navigation = page.locator('[data-part="sidebar"]');
+	const conversation = page.locator('[data-part="sessions"]');
+	const editor = page.locator('[data-part="editor"]');
+	const header = page.locator('.ash-sessions-titlebar-editor-page');
+	const maximize = header.getByRole('button', { name: '放大作品区域' });
+	const restore = header.getByRole('button', { name: '还原作品区域大小' });
+	const close = header.getByRole('button', { name: '关闭作品区域' });
+	const exportButton = header.getByRole('button', { name: '导出', exact: true });
+	const home = navigation.getByRole('button', { name: 'Artifacts', exact: true });
+	const slides = page.locator('.ash-artifacts-work-grid .ash-artifacts-card.slides');
+	await home.click();
+	await slides.click();
+	await expect(header.getByRole('heading')).toBeVisible();
+	const title = header.getByRole('button', { name: '工作室发布' });
+	await expect(title).toHaveCSS('gap', '4px');
+	await expect(title).toHaveCSS('font-weight', '400');
+	await title.press('Shift+F10');
+	const actions = page.getByRole('menu').getByRole('menuitem');
+	await expect(actions).toHaveCount(5);
+	for (const [index, name] of ['复制链接', '在新窗口中打开', '固定到侧栏', '重命名', '删除…'].entries()) {
+		await expect(actions.nth(index)).toHaveAccessibleName(name);
+		const icon = actions.nth(index).locator('.ash-menu-leading-slot .ash-menu-action-icon');
+		await expect(icon).toBeVisible();
+		const iconBounds = await icon.boundingBox();
+		const labelBounds = await actions.nth(index).locator('.ash-button-label').boundingBox();
+		expect(iconBounds!.x + iconBounds!.width).toBeLessThanOrEqual(labelBounds!.x);
+	}
+	await expect(title).toHaveAttribute('aria-expanded', 'true');
+	await page.screenshot({ path: testInfo.outputPath('artifact-title-menu-zh-CN.png') });
+	await page.keyboard.press('Escape');
+	await expect(title).toBeFocused();
+	await expect(title).toHaveAttribute('aria-expanded', 'false');
+	await expect(conversation).toBeVisible();
+	const sidebar = (await navigation.boundingBox())!;
+	const split = (await conversation.boundingBox())!;
+	const artifact = (await editor.boundingBox())!;
+	await expect.poll(async () => Math.abs((await header.boundingBox())!.x - artifact.x)).toBeLessThan(1);
+	expect((await header.getByRole('heading').boundingBox())!.x).toBeLessThan((await exportButton.boundingBox())!.x);
+	expect((await exportButton.boundingBox())!.x).toBeLessThan((await maximize.boundingBox())!.x);
+	expect((await maximize.boundingBox())!.x).toBeLessThan((await close.boundingBox())!.x);
+
+	await exportButton.press('ArrowDown');
+	await expect(page.getByRole('menuitem', { name: '导出 SVG' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(exportButton).toBeFocused();
+	await page.keyboard.press('ArrowRight');
+	await expect(maximize).toBeFocused();
+	await page.keyboard.press('Enter');
+	await expect(conversation).toBeHidden();
+	await expect(restore).toBeFocused();
+	expect(await navigation.boundingBox()).toEqual(sidebar);
+	const expanded = (await editor.boundingBox())!;
+	expect(expanded.x).toBeCloseTo(sidebar.x + sidebar.width, 0);
+	expect(expanded.width).toBeCloseTo(artifact.width + split.width, 0);
+	await expect.poll(async () => Math.abs((await header.boundingBox())!.x - expanded.x)).toBeLessThan(1);
+	await page.screenshot({ path: testInfo.outputPath('artifact-maximized-zh-CN.png') });
+	await restore.press('Enter');
+	await expect(conversation).toBeVisible();
+	await expect(maximize).toBeFocused();
+	expect(await conversation.boundingBox()).toEqual(split);
+	await maximize.press('Enter');
+	await close.press('Enter');
+	await expect(conversation).toBeVisible();
+	await expect(header).toHaveCount(0);
+	await expect.poll(() => conversation.evaluate(part => part.contains(part.ownerDocument.activeElement))).toBe(true);
+	await home.click();
+	await slides.click();
+	await expect(maximize).toBeVisible();
+	await expect(conversation).toBeVisible();
+});
+
+test('Saved artifact title actions keep the same document across link, pin, rename, pop out and delete', { tag: '@artifact-examples' }, async ({ page, context }) => {
+	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+	const header = page.locator('.ash-sessions-titlebar-editor-page');
+	const title = header.locator('h1').getByRole('button');
+	const sidebar = page.locator('.ash-sessions-activity-content');
+	const home = sidebar.getByRole('button', { name: 'Artifacts', exact: true });
+	const chooseAction = async (name: string) => {
+		await title.click();
+		await page.getByRole('menuitem', { name, exact: true }).click();
+	};
+	await home.click();
+	await page.locator('.ash-artifacts-work-grid .ash-artifacts-card.slides').click();
+	await expect(title).toHaveText('Studio launch');
+	await chooseAction('Copy link');
+	const link = await page.evaluate(() => navigator.clipboard.readText());
+	expect(link).toMatch(/^ash:\/\/artifact\/open\/canvas\//u);
+	await chooseAction('Pin to sidebar');
+	await expect(sidebar.getByRole('button', { name: 'Studio launch', exact: true })).toBeVisible();
+	await chooseAction('Rename');
+	const rename = header.getByRole('textbox', { name: 'Rename artifact' });
+	await expect(rename).toBeFocused();
+	await rename.press('Escape');
+	await expect(title).toBeFocused();
+	await title.getByText('Studio launch', { exact: true }).dblclick();
+	await expect(rename).toBeFocused();
+	await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toBeHidden();
+	await rename.fill('Release deck');
+	await rename.press('Enter');
+	await expect(title).toHaveText('Release deck');
+	const pin = sidebar.getByRole('button', { name: 'Release deck', exact: true });
+	await expect(pin).toBeVisible();
+	await header.getByRole('button', { name: 'Close artifact' }).click();
+	const composer = page.locator('[data-part="sessions"] .stanza-editor-input:visible');
+	await composer.focus();
+	await page.keyboard.insertText(link);
+	const linkText = page.locator('[data-part="sessions"] .stanza-editor').getByText('ash://artifact/open/', { exact: false });
+	await linkText.click({ modifiers: ['ControlOrMeta'], position: { x: 12, y: 8 } });
+	await expect(title).toHaveText('Release deck');
+	const workspace = page.locator('[data-creator-mode="slides"]:visible');
+	const pages = workspace.getByRole('combobox', { name: 'Pages' }).getByRole('option');
+	await expect(pages).toHaveCount(2);
+	await expect(workspace.getByText('Studio launch', { exact: true }).first()).toBeVisible();
+	const popupOpening = page.waitForEvent('popup');
+	await chooseAction('Open in new window');
+	const popup = await popupOpening;
+	await expect(page.getByRole('button', { name: 'Artifact is open in another window' })).toBeVisible();
+	const popupWorkspace = popup.locator('[data-creator-mode="slides"]:visible');
+	const popupPages = popupWorkspace.getByRole('combobox', { name: 'Pages' }).getByRole('option');
+	const popupCanvas = popupWorkspace.getByRole('region', { name: 'Design canvas', exact: true });
+	await popupWorkspace.getByRole('button', { name: 'Add slide', exact: true }).click();
+	await expect(popupPages).toHaveCount(3);
+	await popupCanvas.press('ControlOrMeta+z');
+	await expect(popupPages).toHaveCount(2);
+	await popupCanvas.press('ControlOrMeta+Shift+z');
+	await expect(popupPages).toHaveCount(3);
+	await popup.getByRole('button', { name: 'Return to main window' }).click();
+	await expect(pages).toHaveCount(3);
+	await chooseAction('Delete…');
+	const confirmation = page.getByRole('dialog').filter({ hasText: 'Delete artifact “Release deck”?' });
+	await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(title).toHaveText('Release deck');
+	await chooseAction('Delete…');
+	await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
+	await expect(header.getByRole('heading', { name: 'Artifacts', exact: true })).toBeVisible();
+	await expect(pin).toHaveCount(0);
+	await expect(page.locator('.ash-artifacts-card').filter({ hasText: 'Release deck' })).toHaveCount(0);
 });
 
 async function openDesignLayers(page: Page): Promise<Locator> {
@@ -85,10 +429,15 @@ async function openDesignLayers(page: Page): Promise<Locator> {
 	return page.getByRole('tree', { name: 'Layers', exact: true });
 }
 
+async function openArtifactDetails(page: Page): Promise<Locator> {
+	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	return page.locator('[data-part="auxiliarybar"]');
+}
+
 test('Sessions Prototype expressions, ordered conditional actions and custom springs run without changing variables', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.prototype');
-	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = await openArtifactDetails(page);
 	const prototype = properties.locator('.ash-prototype-properties'), resources = properties.locator('.ash-design-resources');
 	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]'), layers = await openDesignLayers(page);
 	for (const name of ['Home', 'Cart', 'Empty', 'Confirmation']) {
@@ -138,7 +487,7 @@ test('Sessions Prototype connects screens by dragging and plays transitions, bra
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.prototype');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
-	const properties = page.locator('[data-part="auxiliarybar"]');
+	const properties = await openArtifactDetails(page);
 	const prototype = properties.locator('.ash-prototype-properties');
 	const layers = await openDesignLayers(page);
 	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]');
@@ -185,7 +534,7 @@ test('Sessions Prototype Change to previews interactive component variants witho
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
-	const properties = page.locator('[data-part="auxiliarybar"]'); const prototype = properties.locator('.ash-prototype-properties');
+	const properties = await openArtifactDetails(page); const prototype = properties.locator('.ash-prototype-properties');
 	const layers = await openDesignLayers(page);
 	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('textbox', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
 	await canvas.press('t'); await canvas.locator('.ash-canvas-viewport').click({ position: { x: 200, y: 100 } }); await page.keyboard.press('Escape'); await field('Text content', 'Off'); await canvas.press('ControlOrMeta+Alt+k'); await field('Layer name', 'Toggle');
@@ -236,7 +585,7 @@ test('Sessions Design resources bind variable modes and reuse styles with keyboa
 	await page.keyboard.press('Escape'); await expect(resources.getByRole('combobox', { name: 'Apply style', exact: true })).toBeFocused();
 	await resources.locator('[data-resource-section="bindings"] > summary').scrollIntoViewIfNeeded();
 	await page.screenshot({ path: testInfo.outputPath('design-resources.png') });
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 	const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
 	expect(code).toContain('"resources"'); expect(code).toContain('"styleBindings"'); expect(code).toContain('Surface'); expect(code).toContain('Brand');
 });
@@ -272,7 +621,7 @@ test('Sessions Design components inherit overrides and switch variants with keyb
 	await expect(canvas.locator('.ash-sessions-design-shapes [data-design-text]')).toContainText(['Default label', 'Default label', 'My instance']);
 	await canvas.press('ControlOrMeta+z');
 	await expect(layers.getByRole('treeitem', { name: 'Instance: Button', exact: true })).toBeVisible();
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 	const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
 	expect(code).toContain('"componentId"'); expect(code).toContain('"overrides"'); expect(code).toContain('My instance');
 });
@@ -310,7 +659,7 @@ test('Sessions Creator Slides presents reordered pages and Brand undoes an entir
 test('Sessions Prototype scrolls with wheel, drag and keyboard, pins layers and animates Scroll to', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.prototype');
-	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]'), layers = await openDesignLayers(page);
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = await openArtifactDetails(page), layers = await openDesignLayers(page);
 	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]'), prototype = properties.locator('.ash-prototype-properties');
 	const text = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('textbox', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
 	const number = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
@@ -537,7 +886,7 @@ test('Sessions Design layout edits reflow the canvas and preserve layer identity
 	await expect(rectangle).toHaveAttribute('width', '276');
 	await expect(rectangle).toHaveAttribute('data-shape-id', id!);
 	await page.screenshot({ path: testInfo.outputPath('design-layout.png') });
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 	const source = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
 	{
 		const preview = await page.context().newPage();
@@ -549,7 +898,7 @@ test('Sessions Design layout edits reflow the canvas and preserve layer identity
 			await expect(exported).toHaveCSS('width', '376px');
 		} finally { await preview.close(); }
 	}
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
 	await canvas.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Shift\+A[\s\S]*Constraints/);
 	await page.keyboard.press('Escape');
@@ -587,9 +936,9 @@ test('Sessions Design grid and wrap respect size limits in the canvas and respon
 	await select('Wrap', 'wrap'); await number('Width', '300'); await number('Line gap', '16');
 	await expect(properties.getByRole('spinbutton', { name: 'Height', exact: true })).toHaveValue('200');
 	const source = async (): Promise<string> => {
-		await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+		await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 		const value = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
-		await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
+		await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
 		return value;
 	};
 	const wrapped = await source();
@@ -750,7 +1099,7 @@ test('Sessions Design typography wraps, preserves rich ranges and exports respon
 	await typography.getByRole('checkbox', { name: 'Truncate text', exact: true }).uncheck();
 	await features.focus(); await page.keyboard.press('Alt+F1'); await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Auto width grows.*Max lines/u); await page.keyboard.press('Escape');
 	await page.screenshot({ path: testInfo.outputPath('design-typography.png') });
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 	const source = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
 	{
 		const preview = await page.context().newPage();
@@ -766,7 +1115,7 @@ test('Sessions Design typography wraps, preserves rich ranges and exports respon
 });
 
 const design = test.extend({
-	page: async ({ page }, use) => {
+	page: async ({ page }, use, testInfo) => {
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 		await new QuickAccess(page).runCommand('sessions.creator.open.design');
 		await use(page);
@@ -986,7 +1335,7 @@ design('Sessions Design color picker preserves formats, previews gestures and ex
 	await expect(fill).toBeFocused();
 	await canvas.press('ControlOrMeta+z');
 	await expect(shape).toHaveAttribute('fill', changedFill!);
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 	const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
 	expect(code).toContain(`background: ${changedFill}`);
 	const saved = code.match(/<script type="application\/json" id="ash-design-document">([\s\S]*?)<\/script>/u)![1];
@@ -999,7 +1348,7 @@ design('Sessions Design color picker preserves formats, previews gestures and ex
 		} finally { await preview.close(); }
 		await page.setViewportSize({ width: 620, height: 700 });
 	}
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
 	await fill.click();
 	const popup = (await picker.boundingBox())!;
 	const viewport = page.viewportSize();
@@ -1083,7 +1432,7 @@ design('Sessions Design property pane groups fields, collapses with the keyboard
 
 design('Sessions Design frames keep child geometry, nested selection and whole-gesture undo', async ({ page }) => {
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Add frame (F)', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Add frame (F)', exact: true }).click();
 	const frame = canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]');
 	await expect(frame).toHaveAttribute('width', '640');
 	await canvas.focus(); await page.keyboard.press('r');
@@ -1191,6 +1540,45 @@ design('Sessions Design edits text and Bézier handles and transforms groups wit
 	await expect.poll(async () => (await canvas.locator('.ash-canvas-viewport').boundingBox())!.height).toBeGreaterThan(100);
 });
 
+design('Sessions artifact toolbar stays centered at the bottom and clears the motion timeline', async ({ page }, testInfo) => {
+	const canvas = page.getByRole('region', { name: 'Design canvas' });
+	const stage = canvas.locator('.ash-sessions-design-stage');
+	const viewport = canvas.locator('.ash-canvas-viewport');
+	const toolbar = canvas.locator('.ash-artifact-toolbar');
+	for (const [theme, background] of [
+		['ash-light', 'rgb(24, 24, 24)'],
+		['ash-dark', 'rgb(24, 24, 24)'],
+		['ash-high-contrast-dark', 'rgb(0, 0, 0)'],
+		['ash-high-contrast-light', 'rgb(255, 255, 255)'],
+	]) {
+		await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+		await expect(toolbar).toHaveCSS('background-color', background);
+		await expect(toolbar).toHaveCSS('border-radius', '12px');
+		await expect(toolbar.getByRole('button', { name: 'Design', exact: true })).toHaveCSS('width', '32px');
+		if (theme.includes('high-contrast')) await expect(toolbar).toHaveCSS('box-shadow', 'none');
+	}
+	for (const width of [1600, 600]) {
+		await page.setViewportSize({ width, height: 900 });
+		const area = (await stage.boundingBox())!;
+		const tools = (await toolbar.boundingBox())!;
+		expect(tools.x + tools.width / 2).toBeCloseTo(area.x + area.width / 2, 0);
+		expect(area.y + area.height - tools.y - tools.height).toBeCloseTo(16, 0);
+		expect(tools.width).toBeLessThanOrEqual(area.width - 32);
+		expect(await viewport.boundingBox()).toEqual(area);
+	}
+	await toolbar.getByRole('button', { name: 'Motion', exact: true }).click();
+	const timeline = canvas.locator('.ash-design-motion-widget');
+	await expect(timeline).toBeVisible();
+	const motion = (await timeline.boundingBox())!;
+	const tools = (await toolbar.boundingBox())!;
+	expect(motion.y + motion.height + 16).toBeLessThanOrEqual(tools.y + 1);
+	await testInfo.attach('artifact-toolbar-motion-narrow', { body: await canvas.screenshot(), contentType: 'image/png' });
+	await toolbar.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(canvas.locator('.ash-design-code-widget')).toBeVisible();
+	await toolbar.getByRole('button', { name: 'Design', exact: true }).click();
+	await expect(timeline).toBeHidden();
+});
+
 design('Sessions Design canvas keeps grid and cursor readable across themes', async ({ page }, testInfo) => {
 	for (const [theme, scheme] of [
 		['ash-light', 'light'],
@@ -1202,7 +1590,7 @@ design('Sessions Design canvas keeps grid and cursor readable across themes', as
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
 		const canvas = page.getByRole('region', { name: 'Design canvas' });
 		const viewport = canvas.locator('.ash-canvas-viewport');
-		const tools = canvas.locator('.ash-canvas-editor-toolbar');
+		const tools = canvas.locator('.ash-artifact-toolbar');
 		const chromeBackground = scheme === 'hcLight' ? 'rgb(255, 255, 255)' : scheme === 'hcDark' ? 'rgb(0, 0, 0)' : 'rgb(24, 24, 24)';
 		await expect(tools).toHaveCSS('background-color', chromeBackground);
 		await expect(tools).toHaveCSS('border-radius', '12px');
@@ -1288,7 +1676,7 @@ design('Sessions Design canvas keeps grid and cursor readable across themes', as
 
 design('Sessions Design floating tools draw, edit motion and expose reusable code', async ({ page }) => {
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
-	const tools = canvas.locator('.ash-canvas-editor-toolbar');
+	const tools = canvas.locator('.ash-artifact-toolbar');
 	const codeTabs = page.locator('[data-part="editor"] .ash-editor-group:not(.ash-editor-group-locked) .ash-editor-title-control').getByRole('tab', { includeHidden: true });
 	const codeTabsBefore = await codeTabs.allTextContents();
 	const viewport = canvas.locator('.ash-canvas-viewport');

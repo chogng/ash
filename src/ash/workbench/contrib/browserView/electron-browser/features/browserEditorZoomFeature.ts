@@ -1,3 +1,4 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { IBrowserViewService, BrowserViewStorageScope, browserZoomFactors } from '../../../../../platform/browserView/common/browserView.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -14,7 +15,7 @@ import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
 import { BrowserEditorInput } from '../../common/browserEditorInput.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { BrowserViewEditorId } from '../../common/browserView.js';
 import { Keybinding, logicalKey } from '../../../../../base/common/keybindings.js';
@@ -39,7 +40,7 @@ for (const command of [
 	{ id: 'workbench.action.browser.zoomOut', title: localize2({ bundle: 'ash.workbench', key: 'browser.zoomOut' }, 'Browser: Zoom Out'), key: '-', step: -1 },
 	{ id: 'workbench.action.browser.resetZoom', title: localize2({ bundle: 'ash.workbench', key: 'browser.resetZoom' }, 'Browser: Reset Zoom'), key: '0', step: 0 },
 ]) {
-	registerAction2(class BrowserZoomAction extends Action2 {
+	registerEditorToolAction(class BrowserZoomAction extends Action2 {
 		constructor() {
 			super({
 				id: command.id, title: command.title, f1: true,

@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
-import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
-import { documentFromShapes, parseDesignDocument, serializeDesignDocument } from '../../contrib/artifacts/common/model/designDocument.js';
-import { designPathContours, type DesignPath } from '../../contrib/artifacts/common/model/designVector.js';
-import { connectDesignNetwork, designNetworkRegions, moveDesignNetworkVertices, paintDesignNetworkFromPath, splitDesignNetworkEdge, toDesignVectorNetwork, withDesignVectorNetwork } from '../../contrib/artifacts/common/model/designVectorNetwork.js';
-import { cubicBezierPoint } from '../../contrib/artifacts/common/core/geometry.js';
-import { hitTestDesignShapes } from '../../contrib/artifacts/common/model/hitTest.js';
-import { intersectDesignNetwork, mergeDesignNetworkVertices, simplifyDesignNetwork } from '../../contrib/artifacts/common/model/designVectorTopology.js';
-import type { DesignVectorNetwork } from '../../contrib/artifacts/common/model/designVectorNetwork.js';
+import { DocumentCommands } from '../../contrib/artifact/common/commands/documentCommands.js';
+import { DesignModel } from '../../contrib/artifact/common/model/designModel.js';
+import { documentFromShapes, parseDesignDocument, serializeDesignDocument } from '../../contrib/artifact/common/model/designDocument.js';
+import { designPathContours, type DesignPath } from '../../contrib/artifact/common/model/designVector.js';
+import { connectDesignNetwork, designNetworkRegions, moveDesignNetworkVertices, paintDesignNetworkFromPath, splitDesignNetworkEdge, toDesignVectorNetwork, withDesignVectorNetwork } from '../../contrib/artifact/common/model/designVectorNetwork.js';
+import { cubicBezierPoint } from '../../contrib/artifact/common/core/geometry.js';
+import { hitTestDesignShapes } from '../../contrib/artifact/common/model/hitTest.js';
+import { intersectDesignNetwork, mergeDesignNetworkVertices, simplifyDesignNetwork } from '../../contrib/artifact/common/model/designVectorTopology.js';
+import type { DesignVectorNetwork } from '../../contrib/artifact/common/model/designVectorNetwork.js';
 
 const square = (): DesignPath => ({ id: generateUuid(), kind: 'path', x: 0, y: 0, width: 200, height: 100, rotation: 0, fill: '#ff0000', strokeWidth: 2, closed: true, nodes: [[0, 0], [1, 0], [1, 1], [0, 1]].map(([x, y]) => ({ x, y, incoming: { x, y }, outgoing: { x, y } })) });
 const lines = (points: readonly (readonly [number, number])[], edges: readonly (readonly [number, number])[]): DesignVectorNetwork => ({ vertices: points.map(([x, y]) => ({ x, y })), edges: edges.map(([start, end]) => ({ id: generateUuid(), start, end, outgoing: { x: points[start][0], y: points[start][1] }, incoming: { x: points[end][0], y: points[end][1] } })) });
@@ -196,7 +196,7 @@ test('Network conversion preserves compound holes and region paint through subdi
 });
 
 test('Network mirroring survives conversion and all handles remain serializable', async () => {
-	const { moveDesignNetworkHandle } = await import('../../contrib/artifacts/common/model/designVectorNetwork.js');
+	const { moveDesignNetworkHandle } = await import('../../contrib/artifact/common/model/designVectorNetwork.js');
 	using model = new DesignModel(); const commands = new DocumentCommands(model), source = square();
 	let path = withDesignVectorNetwork(source, toDesignVectorNetwork(source)); model.replace(documentFromShapes([path]));
 	commands.vector.setMirroring(path, 0, new Set([0]), 'angle-length'); path = model.value.shapes[0] as DesignPath;

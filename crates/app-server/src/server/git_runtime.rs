@@ -54,7 +54,6 @@ use ash_file_watcher::DebouncedWatchReceiver;
 use ash_file_watcher::FileWatcher;
 use ash_file_watcher::FileWatcherBackend;
 use ash_file_watcher::FileWatcherEvent;
-use ash_file_watcher::ThrottledWatchReceiver;
 use ash_file_watcher::WatchPath;
 use ash_git::GitChangeFileComparison;
 use ash_git::GitChangeStatus;
@@ -2985,6 +2984,38 @@ impl GitRepositoryRuntime {
             })
     }
 
+    /// Private refs, temporary indexes, and object writes alone cannot change
+    /// the working copy status. HEAD, the real index, and public ref hints still
+    /// trigger refreshes, as do explicit queries and watcher rescans.
+    fn relevant_status_hints(&self, mut event: FileWatcherEvent) -> Option<FileWatcherEvent> {
+        if let FileWatcherEvent::PathsChanged { paths } = &mut event {
+            let sources = self
+                .ignore_watch_paths
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            paths.retain(|path| {
+                let canonical;
+                let path =
+                    if let Ok(relative) = path.strip_prefix(self.service.dir().requested_path()) {
+                        canonical = self.service.dir().canonical_path().join(relative);
+                        &canonical
+                    } else {
+                        path
+                    };
+                let common_dir = self.identity.common_dir();
+                let private = ash_git::is_private_checkpoint_path(common_dir, path)
+                    || path.strip_prefix(common_dir).is_ok_and(|relative| {
+                        relative.starts_with("objects") && !relative.starts_with("objects/info")
+                    });
+                !private || sources.iter().any(|source| source.starts_with(path))
+            });
+            if paths.is_empty() {
+                return None;
+            }
+        }
+        Some(event)
+    }
+
     fn status_refresh_for_event(&self, event: &FileWatcherEvent) -> StatusRefresh {
         let FileWatcherEvent::PathsChanged { paths } = event else {
             return StatusRefresh::Repository;
@@ -3513,7 +3544,13 @@ fn watch_git(
                 interval: ALIASED_PATH_POLL_INTERVAL,
             }
         };
-        let Ok(file_watcher) = FileWatcher::new_with_backend(backend) else {
+        let Ok(file_watcher) = FileWatcher::new_with_backend_ignoring_directory_metadata(
+            backend,
+            vec![
+                git_runtime.identity.git_dir().to_path_buf(),
+                git_runtime.identity.common_dir().to_path_buf(),
+            ],
+        ) else {
             return;
         };
         let file_watcher = Arc::new(file_watcher);
@@ -3531,9 +3568,9 @@ fn watch_git(
                 .collect(),
         });
         drop(git_runtime);
-        // An isolated edit should refresh immediately. During a burst the receiver
-        // retains and coalesces subsequent hints, with the same maximum refresh rate.
-        let mut receiver = ThrottledWatchReceiver::new(receiver, GIT_WATCH_INTERVAL);
+        // Git replaces HEAD and the index separately during a checkout. Collect
+        // the burst into one refresh, with a fixed deadline for isolated edits.
+        let mut receiver = DebouncedWatchReceiver::new(receiver, GIT_WATCH_INTERVAL);
         // This lease is admitted only after the first scan with registered watches.
         // Cancellation, a failed refresh, or any worker exit retires cached reads.
         let mut coverage = None;
@@ -3557,6 +3594,9 @@ fn watch_git(
             };
             let Some(git_runtime) = runtime.upgrade() else {
                 break;
+            };
+            let Some(event) = git_runtime.relevant_status_hints(event) else {
+                continue;
             };
             let refresh_runtime = Arc::clone(&git_runtime);
             let request_cancellation = cancellation.clone();

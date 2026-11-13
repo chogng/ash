@@ -13,6 +13,10 @@ path = "src/lib.rs"
 [dependencies]
 dunce = { workspace = true }
 globset = { workspace = true }
+grep-printer = { workspace = true }
+grep-regex = { workspace = true }
+grep-searcher = { workspace = true }
+ignore = { workspace = true }
 serde_json = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-shell-command = { workspace = true }
@@ -23,6 +27,10 @@ regex = { workspace = true }
 regex-syntax = { workspace = true }
 tempfile = { workspace = true }
 ash-file-access = { workspace = true }
+cap-std = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
 
 [lints]
 workspace = true

@@ -88,6 +88,8 @@ mod browser_file_access;
 #[path = "server/request_processors/browser.rs"]
 mod browser_processor;
 mod browser_workspace;
+#[path = "server/request_processors/generated_files.rs"]
+mod generated_files_processor;
 mod host_credentials;
 pub(crate) use browser_workspace::WebWorkspaceRollback;
 
@@ -314,6 +316,7 @@ pub struct AppServer {
         Option<Arc<crate::session_runtime_provider::SessionRuntimeProvider>>,
     pub(crate) task_delivery: Option<Arc<task_delivery::Runtime>>,
     backup_processor: backup_processor::BackupRequestProcessor,
+    generated_files_processor: generated_files_processor::GeneratedFileRequestProcessor,
     diff_processor: diff_operations::DiffRequestProcessor,
     queue: Option<Arc<queue::QueueStore>>,
     queue_directory: Option<String>,
@@ -1246,6 +1249,22 @@ impl AppServer {
         self
     }
 
+    pub(crate) fn with_generated_file_store(
+        mut self,
+        store: Arc<ash_state::SqliteGeneratedFileStore>,
+        directory: std::path::PathBuf,
+    ) -> Self {
+        self.generated_files_processor =
+            generated_files_processor::GeneratedFileRequestProcessor::new(store, Some(directory));
+        self.generated_files_processor.publish_native(&self.updates);
+        let executor = self
+            .turn_executor_snapshot()
+            .with_thread_updates(self.thread_update_sink());
+        self.turn_backend.install_executor(executor.clone());
+        self.env_runtime_mut().turn_executor = executor;
+        self
+    }
+
     pub(crate) fn with_backup_store(mut self, backups: Arc<ash_state::SqliteBackupStore>) -> Self {
         self.backup_processor = backup_processor::BackupRequestProcessor::new(backups);
         self
@@ -1341,6 +1360,7 @@ impl AppServer {
             threads: Arc::clone(&threads),
             grants: Arc::clone(&directory_grants),
             updates: updates.clone(),
+            generated_files: Default::default(),
         }))
         .with_extensions(Arc::clone(&agent_extensions));
         let multi_agent = Arc::new(MultiAgentCoordinator::new(
@@ -1431,6 +1451,8 @@ impl AppServer {
             resources,
             asset_processor: asset_operations::AssetsRequestProcessor::default(),
             backup_processor: backup_processor::BackupRequestProcessor::default(),
+            generated_files_processor:
+                generated_files_processor::GeneratedFileRequestProcessor::default(),
             diff_processor: diff_operations::DiffRequestProcessor::new(diff_handler),
             memories: None,
             approval_environment: None,
@@ -2827,14 +2849,6 @@ impl AppServer {
         Ok(self)
     }
 
-    /// Enables connection-owned directory search using a shared grep capability.
-    pub fn with_grep(mut self, dir: ash_file_access::Dir, grep: Arc<grep::Service>) -> Self {
-        let search = Arc::new(grep::Jobs::new(dir, grep.clone()));
-        self.env_runtime_mut().workspace.grep = Some(grep);
-        self.env_runtime_mut().workspace.content_search = Some(search);
-        self
-    }
-
     /// Enables connection-owned and leased interactive terminals under one execution authorization.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_terminal_root(
@@ -2876,17 +2890,7 @@ impl AppServer {
         let mut executor = self
             .turn_executor_snapshot()
             .with_tool_service(tools, policy)
-            .with_thread_updates(Arc::new(AppServerThreadUpdates {
-                client_host: Arc::clone(&self.client_host),
-                threads: Arc::clone(&self.threads),
-                grants: self
-                    .env_runtime
-                    .read()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .dir_grants
-                    .clone(),
-                updates: self.updates.clone(),
-            }));
+            .with_thread_updates(self.thread_update_sink());
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;
@@ -2955,18 +2959,23 @@ impl AppServer {
             self.turn_executor_snapshot(),
             self.turn_backend.as_ref(),
             self.thread_worktree_binder.as_ref(),
-            Arc::new(AppServerThreadUpdates {
-                client_host: Arc::clone(&self.client_host),
-                threads: Arc::clone(&self.threads),
-                grants: self
-                    .env_runtime
-                    .read()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .dir_grants
-                    .clone(),
-                updates: Arc::clone(&self.updates),
-            }),
+            self.thread_update_sink(),
         )
+    }
+
+    fn thread_update_sink(&self) -> Arc<AppServerThreadUpdates> {
+        Arc::new(AppServerThreadUpdates {
+            client_host: Arc::clone(&self.client_host),
+            threads: Arc::clone(&self.threads),
+            grants: self
+                .env_runtime
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .dir_grants
+                .clone(),
+            updates: Arc::clone(&self.updates),
+            generated_files: self.generated_files_processor.clone(),
+        })
     }
 
     pub(super) fn bind_session_runtime(
@@ -3064,7 +3073,7 @@ impl AppServer {
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
     ) -> Result<ash_core::StartTurnResult, CoreError> {
-        self.admit_bound_turn_with_ide(thread, request, connection, document_mode, None, None)
+        self.admit_bound_turn_with_ide(thread, request, connection, document_mode, None, None, None)
     }
 
     pub(super) fn admit_bound_turn_with_ide(
@@ -3075,6 +3084,7 @@ impl AppServer {
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
         model_routing: Option<ash_protocol::TurnModelRouting>,
+        precondition: Option<&thread_store::ThreadEventPrecondition>,
     ) -> Result<ash_core::StartTurnResult, CoreError> {
         let record = self.threads.thread_catalog_record(thread)?;
         let route = session_execution_router::SessionExecutionRouter::new(&self.threads)
@@ -3105,11 +3115,12 @@ impl AppServer {
             document_mode,
             expected_ide,
             || {
-                let result = self.threads.start_turn_with_model_routing(
+                let result = self.threads.start_turn_with_admission(
                     thread,
                     request,
                     directory,
                     model_routing,
+                    precondition,
                 )?;
                 let receipt = core_api::TurnReceipt {
                     turn_id: result.turn_id.clone(),
@@ -3141,6 +3152,7 @@ impl AppServer {
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
+        precondition: Option<&thread_store::ThreadEventPrecondition>,
     ) -> Result<workflows::Receipt, CoreError> {
         let model_routing = request.model_routing;
         self.workflow_runtime().execute_with_turn_submission(
@@ -3164,6 +3176,7 @@ impl AppServer {
                 input: request.input,
             },
             model_routing,
+            precondition.cloned(),
             |thread, request, model_routing| {
                 self.admit_bound_turn_with_ide(
                     thread,
@@ -3172,6 +3185,7 @@ impl AppServer {
                     document_mode,
                     expected_ide,
                     model_routing,
+                    precondition,
                 )
             },
         )
@@ -3186,7 +3200,21 @@ impl AppServer {
 
     /// Reconciles durable Agent spawn/delivery sagas and starts newly materialized child Turns.
     pub fn resume_recovered_agent_coordinations(&self) -> Result<usize, CoreError> {
-        let workflows = self.workflow_runtime().recover()?;
+        let workflows =
+            self.workflow_runtime()
+                .recover(|thread, request, routing, precondition| {
+                    let command = request.command_id.clone();
+                    self.with_workflow_recovery_admission(
+                        thread,
+                        &command,
+                        precondition,
+                        |admission| {
+                            self.threads.start_turn_with_admission(
+                                thread, request, None, routing, admission,
+                            )
+                        },
+                    )
+                })?;
         Ok(workflows + self.agent_runtime().recover_agents()?)
     }
 
@@ -4702,6 +4730,16 @@ impl AppServer {
             Some(ClientMethod::FsReadFile) => self
                 .fs_processor()
                 .fs_read_file(connection.connection_id, &request.params),
+            Some(ClientMethod::GeneratedFileRegister) => self.generated_files_processor.register(
+                connection.authority,
+                &request.params,
+                &self.updates,
+            ),
+            Some(ClientMethod::GeneratedFileList) => self.generated_files_processor.list(
+                connection.authority,
+                &request.params,
+                &self.updates,
+            ),
             Some(ClientMethod::BackupWorkspaces) => self
                 .backup_processor
                 .workspaces(connection.authority, &request.params),
@@ -5171,11 +5209,15 @@ struct AppServerThreadUpdates {
     client_host: Arc<crate::client_host::ClientHost>,
     threads: Arc<ThreadController>,
     updates: Arc<UpdateBroker>,
+    generated_files: generated_files_processor::GeneratedFileRequestProcessor,
 }
 
 impl ThreadUpdateSink for AppServerThreadUpdates {
     fn publish(&self, update: ThreadUpdateEnvelope) {
         if let ash_protocol::ThreadUpdate::Committed { event } = &update.update {
+            if matches!(event, ash_protocol::ThreadEvent::TurnCompleted { .. }) {
+                self.generated_files.publish_native(&self.updates);
+            }
             match event {
                 ash_protocol::ThreadEvent::TurnCompleted { turn_id, .. }
                 | ash_protocol::ThreadEvent::TurnFailed { turn_id, .. }

@@ -1,3 +1,4 @@
+import { isIOS } from '../../../../base/browser/browser.js';
 import { type ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { type IMouseEvent } from '../../../../base/browser/mouseEvent.js';
@@ -55,6 +56,7 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 			menuId: this.editor.contextMenuId,
 			contextKeyService: this.contextKeyService,
 			menuActionOptions: { arg: this.editor.getModel()?.uri },
+			domForShadowRoot: this.getMenuOwner(),
 			getAnchor: () => resolvedAnchor,
 			onHide: () => this.onMenuHide(menu),
 		});
@@ -151,6 +153,7 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 		];
 		const menu = this.activeMenu = {};
 		this.contextMenuService.showContextMenu({
+			domForShadowRoot: this.getMenuOwner(),
 			getAnchor: () => this.mouseAnchor(event),
 			getActions: () => actions,
 			getCheckedActionsRepresentation: item =>
@@ -159,6 +162,11 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 					: 'radio',
 			onHide: () => this.onMenuHide(menu),
 		});
+	}
+
+	private getMenuOwner(): HTMLElement | undefined {
+		if (isIOS || !this.editor.getOption(EditorOption.useShadowDOM)) return undefined;
+		return this.editor.getDomNode() ?? undefined;
 	}
 
 	private onMenuHide(menu: object): void {

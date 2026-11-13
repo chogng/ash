@@ -322,6 +322,172 @@ fn ledger_seals_rename_mode_and_line_statistics_from_immutable_trees() {
 }
 
 #[test]
+fn message_checkpoint_pins_survive_ledger_restart_and_a_conflicting_capture() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    run_git(root, &["init", "--quiet", "--initial-branch=main"]);
+    std::fs::write(root.join("tracked.txt"), "initial\n").unwrap();
+    run_git(root, &["add", "."]);
+    run_git(root, &["commit", "--quiet", "-m", "initial"]);
+    let head = run_git(root, &["rev-parse", "HEAD"]);
+    let target = crate::MessageCaptureTarget {
+        repository_id: "repository".into(),
+        worktree_root: root.to_path_buf(),
+        relative_path: PathBuf::from("."),
+        target_branch: Some("main".into()),
+        target_head: head.clone(),
+        target_unborn: false,
+    };
+    let store = std::sync::Arc::new(MemoryStore::default());
+    let ledger = crate::TurnChangeLedger::start(store.clone()).unwrap();
+    let [first]: [_; 1] = ledger
+        .capture_message("first".into(), vec![target.clone()], None)
+        .unwrap()
+        .checkpoints
+        .try_into()
+        .unwrap();
+    drop(ledger);
+
+    std::fs::write(root.join("tracked.txt"), "external edit\n").unwrap();
+    std::fs::write(root.join("new.txt"), "untracked file\n").unwrap();
+    let ledger = crate::TurnChangeLedger::start(store).unwrap();
+    assert_eq!(
+        run_git(root, &["show", &format!("{}:tracked.txt", first.reference)]),
+        "initial"
+    );
+    // Leave only the destination ref, so Git has to reject the whole pair when
+    // the second create collides. The rejected capture must also leave that ref alone.
+    run_git(root, &["update-ref", "-d", &first.reference]);
+    assert!(
+        ledger
+            .capture_message("first".into(), vec![target.clone()], None)
+            .is_err()
+    );
+    assert_eq!(
+        run_git(
+            root,
+            &["for-each-ref", "--format=%(refname)", "refs/ash/messages/"]
+        ),
+        first.target_reference
+    );
+    assert_eq!(run_git(root, &["rev-parse", &first.target_reference]), head);
+
+    let [second]: [_; 1] = ledger
+        .capture_message("second".into(), vec![target], None)
+        .unwrap()
+        .checkpoints
+        .try_into()
+        .unwrap();
+    ledger.release_message(first).unwrap();
+    drop(ledger);
+    assert_eq!(
+        run_git(
+            root,
+            &["show", &format!("{}:tracked.txt", second.reference)]
+        ),
+        "external edit"
+    );
+    assert_eq!(
+        run_git(root, &["show", &format!("{}:new.txt", second.reference)]),
+        "untracked file"
+    );
+    assert_eq!(
+        run_git(root, &["rev-parse", &second.target_reference]),
+        head
+    );
+}
+
+#[test]
+fn result_checkpoint_refreshes_open_changes_without_claiming_external_edits() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    run_git(root, &["init", "--quiet", "--initial-branch=main"]);
+    std::fs::write(root.join("tracked.txt"), "original\n").unwrap();
+    run_git(root, &["add", "."]);
+    run_git(root, &["commit", "--quiet", "-m", "initial"]);
+    let head = run_git(root, &["rev-parse", "HEAD"]);
+    let turn = crate::MessageCaptureTurn {
+        session_id: SessionId::new("session").unwrap(),
+        thread_id: ThreadId::new("thread").unwrap(),
+        turn_id: TurnId::new("turn").unwrap(),
+    };
+    let target = crate::MessageCaptureTarget {
+        repository_id: "repository".into(),
+        worktree_root: root.to_path_buf(),
+        relative_path: PathBuf::from("."),
+        target_branch: Some("main".into()),
+        target_head: head.clone(),
+        target_unborn: false,
+    };
+    let ledger =
+        crate::TurnChangeLedger::start(std::sync::Arc::new(MemoryStore::default())).unwrap();
+    ledger
+        .begin_turn(crate::TurnChangeBeginRequest {
+            session_id: turn.session_id.clone(),
+            thread_id: turn.thread_id.clone(),
+            turn_id: turn.turn_id.clone(),
+            repositories: vec![crate::RepositoryCaptureTarget {
+                repository_id: target.repository_id.clone(),
+                worktree_root: target.worktree_root.clone(),
+                target_branch: target.target_branch.clone(),
+                base_object_id: Some(head),
+                baseline_tree: run_git(root, &["rev-parse", "HEAD^{tree}"]),
+            }],
+            commit_message_configured: false,
+            opaque_dependencies: false,
+        })
+        .unwrap();
+    let call = ledger
+        .capture_message("call".into(), vec![target.clone()], None)
+        .unwrap();
+
+    std::fs::write(root.join("tracked.txt"), "external edit\n").unwrap();
+    std::fs::write(root.join("new.txt"), "untracked\n").unwrap();
+    let result = ledger
+        .capture_message("result".into(), vec![target], Some(turn.clone()))
+        .unwrap();
+    let [live]: [_; 1] = result.refreshed.unwrap().try_into().unwrap();
+    assert_eq!(live.capture_state, CaptureState::Open);
+    assert_eq!(
+        live.after_tree.as_deref(),
+        Some(result.checkpoints[0].tree_id.as_str())
+    );
+    assert_eq!(live.files.len(), 2);
+    assert!(live.write_paths.is_empty());
+    assert_eq!(
+        run_git(
+            root,
+            &[
+                "show",
+                &format!("{}:tracked.txt", call.checkpoints[0].reference)
+            ]
+        ),
+        "original"
+    );
+    assert_eq!(
+        run_git(
+            root,
+            &[
+                "show",
+                &format!("{}:new.txt", result.checkpoints[0].reference)
+            ]
+        ),
+        "untracked"
+    );
+    std::fs::write(root.join("after.txt"), "another external edit\n").unwrap();
+    let sealed = ledger
+        .seal_turn(crate::TurnChangeSealRequest {
+            session_id: turn.session_id,
+            thread_id: turn.thread_id,
+            turn_id: turn.turn_id,
+            terminal_state: TerminalTurnState::Completed,
+        })
+        .unwrap();
+    assert_eq!(sealed[0].capture_state, CaptureState::Incomplete);
+    assert_eq!(sealed[0].files.len(), 3);
+}
+
+#[test]
 fn ledger_reuses_existing_baseline_after_git_metadata_becomes_unavailable() {
     let directory = tempfile::tempdir().unwrap();
     run_git(directory.path(), &["init", "--quiet"]);

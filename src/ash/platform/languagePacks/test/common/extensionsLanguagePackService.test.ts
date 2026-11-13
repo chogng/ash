@@ -17,6 +17,7 @@ import { IExtensionManagementService } from '../../../../platform/extensionManag
 import { WebLanguagePacksService } from '../../browser/languagePacks.js';
 import { parseLanguagePackCatalog, parseLanguagePackIndexEntry, resolveLanguagePackCatalog } from '../../common/languagePackCatalog.js';
 import type { LanguagePackCatalog, PreinstalledLanguagePack } from '../../common/languagePackContract.js';
+import { validateLanguagePackCatalog } from '../../common/languagePackContract.js';
 import { builtinLanguagePackSources, preinstalledLanguagePacks, productLanguagePackSources } from '../../../../../../.build/desktop/localization/localizationCatalogLoader.js';
 import { productLanguagePackCatalogs } from '../../../../workbench/services/localization/common/localizationCatalogs.js';
 
@@ -53,6 +54,48 @@ test('language pack catalogs are validated before projection', () => {
 	assert.equal(parseLanguagePackCatalog(valid)?.locale, 'fr-CA');
 	assert.equal(parseLanguagePackCatalog({ ...valid, catalogVersion: 'other-product-1' }), undefined);
 	assert.equal(parseLanguagePackCatalog({ ...valid, bundles: {} }), undefined);
+});
+
+test('shipped catalogs pass persistence and native activation validation', async () => {
+	for (const source of productLanguagePackSources) {
+		const catalog = await source.load();
+		const parsed = parseLanguagePackCatalog(structuredClone(catalog));
+
+		assert.ok(parsed, source.locale);
+		assert.deepEqual(structuredClone(parsed), catalog, source.locale);
+	}
+});
+
+test('product bundles can exceed 10,000 messages but remain bounded', () => {
+	const messages = Object.fromEntries(
+		Array.from({ length: 100_000 }, (_, index) => [`message.${index}`, `Message ${index}`])
+	);
+	const catalog = {
+		...productLanguagePackCatalogs[0],
+		bundles: { ash: messages },
+	};
+
+	assert.deepEqual(parseLanguagePackCatalog(catalog), catalog);
+
+	messages['message.overflow'] = 'Too many messages';
+	assert.equal(parseLanguagePackCatalog(catalog), undefined);
+	assert.throws(() => validateLanguagePackCatalog(catalog), {
+		name: 'TypeError',
+		message: 'bundles["ash"]: expected 1–100000 messages (received 100001)',
+	});
+});
+
+test('catalog validation identifies invalid fields while optional parsing remains tolerant', () => {
+	const catalog = { ...productLanguagePackCatalogs[0], bundles: { ash: { greeting: 'Hello' } } };
+	for (const [value, message] of [
+		[{ ...catalog, schemaVersion: 2 }, 'schemaVersion: expected 1'],
+		[{ ...catalog, locale: 'invalid/locale' }, 'locale: expected a valid locale'],
+		[{ ...catalog, bundles: { ash: { greeting: 'x'.repeat(65537) } } }, 'bundles["ash"]["greeting"]: expected a string of at most 65536 characters'],
+		[{ ...catalog, extensionTranslations: { 'example.pack': { package: {}, bundle: { greeting: false } } } }, 'extensionTranslations["example.pack"].bundle["greeting"]: expected a string of at most 65536 characters'],
+	] as const) {
+		assert.equal(parseLanguagePackCatalog(value), undefined);
+		assert.throws(() => validateLanguagePackCatalog(value), { name: 'TypeError', message });
+	}
 });
 
 test('Extensions localization capability resources become installed language packs', async () => {

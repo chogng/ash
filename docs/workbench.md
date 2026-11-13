@@ -15,7 +15,7 @@ Ash Desktop 当前只有 Code 工作台。Academy 是独立安装的文档编辑
 | `extensions/academy`                        | Academy 文档内容类型、扩展名、schema、引用、节点视图及工具栏配置 |
 | `DocumentEditorTextModelService`            | 按规范化资源地址共享一个模型及工作副本，最后一个视图关闭时释放   |
 
-`DocumentEditorPane` 是 Workbench 的通用承载适配器，负责资源引用、保存、备份、取消和扩展停用；实际富文档编辑表面是 `extensions/academy/browser/widget/richTextEditor/richTextEditorWidget.ts`。宿主不解释段落、引用、分页或图片节点，也不直接导入 Academy 的实现。频道笔记使用同一窗格；富文档文件的创建、转换与导入导出由 [Artifacts Docs](../src/ash/sessions/contrib/artifacts/README.md) 注册。
+`DocumentEditorPane` 是 Workbench 的通用承载适配器，负责资源引用、保存、备份、取消和扩展停用；实际富文档编辑表面是 `extensions/academy/browser/widget/richTextEditor/richTextEditorWidget.ts`。宿主不解释段落、引用、分页或图片节点，也不直接导入 Academy 的实现。频道笔记使用同一窗格；富文档文件的创建、转换与导入导出由 [Artifacts Docs](../src/ash/sessions/contrib/artifact/README.md) 注册。
 
 Browser 与 Electron 各保留一个 Workbench 启动入口，只加载 Code。标题由产品入口提供，构建与启动没有模式注册表。两端产品入口在本地化完成后加载各自 Workbench 入口并直接调用启动函数；共同贡献由 `workbench.common.main.ts` 装配，不再经单项模式 loader。工作台不提供运行时模式切换服务、宿主切换回调或切换 IPC。通用代码编辑器排除已注册的结构化文档，文档编辑器按相同配置完成匹配与实例化。支持富文档文件编辑的宿主通过扩展匹配 `.ash-doc`、`.ash-academy`、`.ash-paper` 或其内容类型。
 

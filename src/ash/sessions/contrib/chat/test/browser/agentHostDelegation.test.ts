@@ -6,6 +6,7 @@ import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
@@ -29,6 +30,9 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 	using aria = setARIAContainer(dom.window.document.body);
 	using services = new InstantiationService();
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'comparison-test' });
+	using contexts = new ContextKeyService();
+	contexts.setContext('sessions.workspaceMode', 'code');
+	services.registerInstance(IContextKeyService, contexts);
 	services.registerInstance(IStorageService, storage);
 	const comparisons = services.createInstance(SessionComparisonService);
 	services.registerInstance(ISessionComparisonService, comparisons);

@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import '../../electron-browser/terminal.contribution.js';
 import type { ITerminalSerializedState } from '../../../../services/terminal/common/terminal.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -49,6 +50,8 @@ function fixture(owner: DisposableStore, release: (id: string) => Promise<void>,
 	const browser = new JSDOM('', { url: 'https://terminal.test' });
 	owner.add(toDisposable(() => browser.window.close()));
 	const services = owner.add(new InstantiationService());
+	const contexts = owner.add(new ContextKeyService());
+	services.registerInstance(IContextKeyService, contexts);
 	const storage = owner.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'terminal', flushInterval: 0 }));
 	const log = new NullLoggerService();
 	const errors: unknown[] = [];
@@ -519,6 +522,8 @@ suite('Desktop terminal move command transaction', () => {
 
 function transferCommandFixture(owner: DisposableStore, failure?: 'detach' | 'open' | 'receiver' | 'rollback') {
 	const services = owner.add(new InstantiationService());
+	const contexts = owner.add(new ContextKeyService());
+	services.registerInstance(IContextKeyService, contexts);
 	const workspace = owner.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') }));
 	services.registerInstance(IWorkspaceContextService, workspace);
 	const log = new NullLoggerService();

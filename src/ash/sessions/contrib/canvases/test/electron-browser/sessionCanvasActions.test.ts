@@ -8,11 +8,13 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+import { MenusRegistry, isMenuItem } from '../../../../../platform/actions/common/actions.js';
+import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import type { ICanvas } from '../../../../../workbench/common/canvasReference.js';
 import { ICanvasContextService, ICanvasService, getCanvasDefinitionInstanceId, type ICanvasDefinition } from '../../../../../workbench/contrib/canvases/common/canvas.js';
-import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
 import { OPEN_SESSION_CANVAS_COMMAND_ID, REOPEN_SESSION_CANVAS_COMMAND_ID, registerSessionCanvasActions } from '../../electron-browser/sessionCanvasActions.js';
+import { Menus } from '../../../../browser/menus.js';
 
 suite('Sessions Canvas actions', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -34,11 +36,8 @@ suite('Sessions Canvas actions', () => {
 		};
 		services.registerInstance(ILogService, { error: (error: unknown) => assert.fail(String(error)) } as unknown as ILogService);
 		services.registerInstance(IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService);
-		services.registerInstance(IChatSessionNavigationService, {
-			getActiveConversation: () => undefined,
-		} as IChatSessionNavigationService);
-
 		const owner = { providerId: 'local-agent-host', session: URI.parse('ash-session:/session'), chat: URI.parse('ash-thread:/chat') };
+		const activeOwner = observableValue('active canvas owner', owner);
 		const definition: ICanvasDefinition = {
 			extensionId: 'test.canvases', canvasId: 'board', extensionSource: 'user', displayName: 'Board definition', description: '', requiresInput: false,
 		};
@@ -58,6 +57,7 @@ suite('Sessions Canvas actions', () => {
 				},
 			}]),
 			onDidChangeVisibility: Event.None, onDidRemoveOwner: Event.None, isOwnerVisible: () => true,
+			getActiveContext: reader => ({ ...contexts.contexts.get()[0]!, owner: activeOwner.read(reader) }),
 			getContext: () => undefined, getFrontendSessionResource: () => undefined, getEditorGroup: () => undefined,
 		};
 		const revealed: URI[] = [];
@@ -67,14 +67,25 @@ suite('Sessions Canvas actions', () => {
 			revealCanvas: async reference => { revealed.push(reference.canvas); },
 		} satisfies Pick<ICanvasService, 'enabled' | 'reopenableCanvases' | 'isOwnerPresentable' | 'revealCanvas'>;
 		const service = canvases as unknown as ICanvasService;
+		const opened: URI[] = [];
 		services.registerInstance(ICanvasContextService, contexts);
 		services.registerInstance(ICanvasService, service);
 		resources.add(registerSessionCanvasActions(service, {
 			availableCanvases: constObservable([definition]),
-			getActiveOwner: () => owner,
-			openCanvas: async () => assert.fail('Unexpected definition open'),
+			openCanvas: async owner => { opened.push(owner.chat); },
 		}, contexts));
 		const commands = resources.add(new CommandService(services));
+		const definitionCommand = () => MenusRegistry.getMenuItems(Menus.SessionsEditorTabsBarAddTabCanvas).find(isMenuItem)!.command.id;
+		const originalCommand = definitionCommand();
+		const originalHandler = CommandsRegistry.getCommand(originalCommand)!;
+		const peer = { ...owner, chat: URI.parse('ash-thread:/peer') };
+		activeOwner.set(peer, undefined);
+		assert.notEqual(definitionCommand(), originalCommand);
+		assert.equal(CommandsRegistry.getCommand(originalCommand), undefined);
+		await services.invokeFunction(originalHandler);
+		await commands.executeCommand(definitionCommand());
+		assert.deepEqual(opened, [peer.chat]);
+		activeOwner.set(owner, undefined);
 
 		const opening = commands.executeCommand(OPEN_SESSION_CANVAS_COMMAND_ID);
 		await new Promise<void>(resolve => setImmediate(resolve));

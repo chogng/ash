@@ -336,7 +336,7 @@ export class SessionEnvironmentPicker extends Disposable {
 				detail: localize('sessions.environment.profileHelp', 'Use the saved environment settings.'),
 				disabled: !provider || provider.connectionStatus?.get() === 'disconnected',
 				checked: draft.environment?.id === saved.environment.id && draft.providerId === saved.providerId,
-				item: () => this.applyEnvironment(draft, saved.providerId, saved.environment),
+				item: async () => { await this.applyEnvironment(draft, saved.providerId, saved.environment, { projectId: saved.projectId }); },
 			});
 		}
 		if (this.remoteHosts.isAvailable) {
@@ -379,9 +379,9 @@ export class SessionEnvironmentPicker extends Disposable {
 		draft: IUntitledChatSession,
 		providerId: string,
 		environment: SessionEnvironmentSelection,
-		projectFolder = environment.folders[0],
-		signal?: AbortSignal,
-	): Promise<void> {
+		options: { readonly projectFolder?: SessionExecutionTarget; readonly projectId?: string; readonly signal?: AbortSignal; } = {},
+	): Promise<{ readonly projectId?: string; } | undefined> {
+		const { signal, projectFolder = environment.folders[0] } = options;
 		const isCurrent = () => !signal?.aborted && this.isCurrent(draft);
 		if (!isCurrent()) return;
 		const provider = this.providers.getProvider(providerId) as IAgentHostSessionsProvider | undefined;
@@ -391,14 +391,17 @@ export class SessionEnvironmentPicker extends Disposable {
 		if (providerId === LOCAL_AGENT_HOST_PROVIDER_ID && projectFolder?.type === 'local'
 			&& this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code') {
 			const resource = URI.file(projectFolder.root);
-			projectResource = resource;
-			if (draft.projectId && draft.workspace.type === 'local' && extUriBiasedIgnorePathCase.isEqual(URI.file(draft.workspace.root), resource)) {
-				projectId = draft.projectId;
-			} else {
-				const projects = await readCodeProjects(this.projects);
-				if (!isCurrent()) return;
-				projectId = (await projectForFolder(this.projects, projects, resource)).id;
+			const projects = await readCodeProjects(this.projects);
+			if (!isCurrent()) return;
+			projectId = options.projectId ?? (draft.workspace.type === 'local'
+				&& extUriBiasedIgnorePathCase.isEqual(URI.file(draft.workspace.root), resource) ? draft.projectId : undefined);
+			const project = projectId ? projects.find(project => project.id === projectId && !project.archived)
+				: await projectForFolder(this.projects, projects, resource);
+			if (!project) {
+				throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.project.unavailable' }, 'This project is unavailable. Choose another project.'));
 			}
+			projectId = project.id;
+			projectResource = resource;
 		}
 		await this.persistDraft();
 		if (!isCurrent() || this.providers.getProvider(providerId) !== provider) return;
@@ -408,6 +411,7 @@ export class SessionEnvironmentPicker extends Disposable {
 				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
 			});
 		}
+		return { projectId };
 	}
 
 	private async authorizeFolders(provider: IAgentHostSessionsProvider, folders: readonly SessionExecutionTarget[], parentSignal?: AbortSignal): Promise<boolean> {
@@ -479,8 +483,11 @@ export class SessionEnvironmentPicker extends Disposable {
 					}
 					await session.saveEnvironmentProfile(key, parsed.variables);
 				}
-				this.storage.store(key, JSON.stringify({ providerId, environment }), StorageScope.PROFILE, StorageTarget.MACHINE);
-				await this.applyEnvironment(draft, providerId, environment, folders[0]?.target, controller.signal);
+				const applied = await this.applyEnvironment(draft, providerId, environment, { projectFolder: folders[0]?.target, signal: controller.signal });
+				if (applied) {
+					// Project membership is independent of the Worktree execution folders.
+					this.storage.store(key, JSON.stringify({ providerId, environment, projectId: applied.projectId }), StorageScope.PROFILE, StorageTarget.MACHINE);
+				}
 			},
 		}, this.menus);
 		this.newEnvironment.value = dialog;
@@ -584,11 +591,12 @@ export class SessionEnvironmentPicker extends Disposable {
 }
 
 
-function readEnvironment(raw: string | undefined): { providerId: string; environment: SessionEnvironmentSelection; } | undefined {
+function readEnvironment(raw: string | undefined): { providerId: string; environment: SessionEnvironmentSelection; projectId?: string; } | undefined {
 	if (!raw) return;
 	try {
 		const entry = JSON.parse(raw);
 		if (typeof entry?.providerId !== 'string' || !isSessionEnvironmentSelection(entry.environment)) return;
-		return { providerId: entry.providerId, environment: entry.environment };
+		if (entry.projectId !== undefined && (typeof entry.projectId !== 'string' || !entry.projectId)) return;
+		return { providerId: entry.providerId, environment: entry.environment, projectId: entry.projectId };
 	} catch { return; }
 }

@@ -11,6 +11,30 @@ import type { IQuickInputService, IQuickPick } from '../../../../../../platform/
 import type { BrowserEditorInput } from '../../../common/browserEditorInput.js';
 import type { IBrowserUrlSuggestion, IBrowserUrlSuggestionProvider } from '../../../electron-browser/browserEditor.js';
 import { BrowserUrlBarWidget, type IUrlPickerItem } from '../../../electron-browser/widgets/browserUrlBarWidget.js';
+import { BrowserRemoteIndicatorContribution } from '../../../electron-browser/features/browserRemoteFeatures.js';
+import type { IBrowserViewModel, IBrowserViewWorkbenchService } from '../../../common/browserView.js';
+import { BrowserViewStorageScope } from '../../../../../../platform/browserView/common/browserView.js';
+
+test('the remote status follows the page network, reconnects and identifies local files', () => {
+	const { window } = new JSDOM('<body></body>');
+	try {
+		let connected = true;
+		const browsers = { getNetworkStatus: () => ({ label: 'Development host', connected, proxySupported: true }) } as unknown as IBrowserViewWorkbenchService;
+		using indicator = new BrowserRemoteIndicatorContribution(window.document.body, browsers);
+		const status = window.document.body.querySelector('[role="status"]') as HTMLElement;
+		const info = { remoteAuthority: 'ssh+development', session: { scope: BrowserViewStorageScope.Workspace, network: { authority: 'ssh+development' } } };
+		const update = (url: string) => indicator.update({ info, state: { url } } as IBrowserViewModel);
+		update('https://example.test/');
+		assert.equal(status.textContent, 'Connected via Development host');
+		connected = false;
+		update('https://example.test/');
+		assert.equal(status.textContent, 'Development host is disconnected. Reload after it reconnects.');
+		update('file:///tmp/index.html');
+		assert.equal(status.textContent, 'Local file');
+		indicator.update(undefined);
+		assert.equal(status.hidden, true);
+	} finally { window.close(); }
+});
 
 suite('Browser URL suggestions', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

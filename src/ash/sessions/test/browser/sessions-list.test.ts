@@ -407,16 +407,18 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 	const buttons = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')];
 	list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!.click();
 	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
-	assert.equal(actions.length, 7);
-	assert.ok(actions.every(action => action.enabled), 'Every new chat item exposes all actions before sending');
-	for (const action of actions.slice(0, 5)) await action.run();
+	assert.deepEqual(actions.map(action => action.id), [
+		'sessions.list.togglePin', 'agentSession.rename', 'agentSession.addToProject', 'agentSession.moveToGroup',
+		'agentSession.archive', 'agentSession.delete',
+	]);
+	assert.ok(actions.every(action => action.enabled));
+	for (const action of actions.slice(0, 4)) await action.run();
 	const target = { untitledSessionId: 'first' };
 	assert.deepEqual(executed, [
 		['sessions.list.togglePin', target],
 		['agentSession.rename', target],
-		['agentSession.addToProject', target],
+		['agentSession.addToProject', target, 'chat'],
 		['agentSession.moveToGroup', target],
-		['sessions.openInNewWindow', { kind: 'untitled', session: untitledSessions[0] }],
 	]);
 	menu!.onHide?.(false);
 
@@ -612,8 +614,12 @@ test('SessionsList updates passive status without changing row identity or selec
 		'sessions.list.togglePin', 'agentSession.rename', 'agentSession.addToProject',
 		'agentSession.moveToGroup', 'agentSession.archive', 'agentSession.delete',
 	]);
+	await actions[2]!.run();
 	actions[1]!.run();
-	assert.deepEqual(executed, [['agentSession.rename', { sessionId: 'background', threadId: 'root' }]]);
+	assert.deepEqual(executed, [
+		['agentSession.addToProject', { sessionId: 'background', threadId: 'root' }, 'chat'],
+		['agentSession.rename', { sessionId: 'background', threadId: 'root' }],
+	]);
 	menu!.onHide?.(true);
 	assert.equal(more.getAttribute('aria-expanded'), 'false');
 	button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));

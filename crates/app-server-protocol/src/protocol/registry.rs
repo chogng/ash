@@ -198,6 +198,21 @@ use crate::protocol::extension_packages::ExtensionsUpdatePolicyDto;
 use crate::protocol::extension_packages::ExtensionsUpdatesResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::{ExtensionRegistryKindDto, ExtensionsSourceDto};
+use crate::protocol::generated_files::GeneratedFileChanged;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::generated_files::GeneratedFileDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::generated_files::GeneratedFileListParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::generated_files::GeneratedFileListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::generated_files::GeneratedFileRegisterParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::generated_files::GeneratedFileRegisterResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::generated_files::GeneratedFileRegistrationDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::generated_files::GeneratedFileSourceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitAIContributionParams;
 #[cfg(any(test, feature = "export"))]
@@ -5199,6 +5214,9 @@ client_methods! {
     BackupWrite => "backup/write" { params: BackupWriteParams, response: BackupRecordDto, serialization: None, },
     BackupMove => "backup/move" { params: BackupMoveParams, response: BackupMoveResult, serialization: None, },
     BackupDiscard => "backup/discard" { params: BackupDiscardParams, response: (), serialization: None, },
+    // The owning SQLite transaction serializes registration across connections and processes.
+    GeneratedFileRegister => "generatedFile/register" { params: GeneratedFileRegisterParams, response: GeneratedFileRegisterResult, serialization: None, },
+    GeneratedFileList => "generatedFile/list" { params: GeneratedFileListParams, response: GeneratedFileListResult, serialization: None, },
     FsReadBinaryFile => "fs/readBinaryFile" {
         params: FsReadBinaryFileParams,
         response: FsReadBinaryFileResult,
@@ -6425,6 +6443,9 @@ server_notifications! {
     TurnChangesChanged => "turnChanges/changed" {
         params: TurnChangesChanged,
     },
+    GeneratedFileChanged => "generatedFile/changed" {
+        params: GeneratedFileChanged,
+    },
     ProjectChanged => "project/changed" {
         params: ProjectChanged,
     },
@@ -6641,6 +6662,14 @@ typescript_bindings! {
     BackupMoveParams,
     BackupMoveResult,
     BackupRevisionDto,
+    GeneratedFileSourceDto,
+    GeneratedFileRegistrationDto,
+    GeneratedFileDto,
+    GeneratedFileRegisterParams,
+    GeneratedFileRegisterResult,
+    GeneratedFileListParams,
+    GeneratedFileListResult,
+    GeneratedFileChanged,
     AccountLoginCancelParams,
     AccountLoginCancelResult,
     AccountLoginCancelStatusDto,

@@ -45,7 +45,7 @@ import {
 let windowServices: InstantiationService;
 setup(() => {
 	windowServices = new InstantiationService();
-	windowServices.registerSingleton(IAuxiliaryWindowsMainService, () => new AuxiliaryWindowsMainService(() => null));
+	windowServices.registerSingleton(IAuxiliaryWindowsMainService, () => new AuxiliaryWindowsMainService(() => null, () => undefined));
 });
 teardown(() => windowServices.dispose());
 

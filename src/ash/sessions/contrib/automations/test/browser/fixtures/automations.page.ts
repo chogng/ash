@@ -84,7 +84,6 @@ const resources = new DisposableStore();
 
 const services = resources.add(new InstantiationService());
 services.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected opener request'); } } as unknown as IOpenerService);
-services.registerInstance(IChatWidgetService, resources.add(new ChatWidgetService()));
 services.registerInstance(ISessionProviderScopeService, { onDidChangeScopes: Event.None, getScopes: () => [] } as unknown as ISessionProviderScopeService);
 
 const commands = resources.add(new CommandService(services));
@@ -110,7 +109,9 @@ services.registerInstance(ILogService, new NullLoggerService());
 services.registerInstance(ILayoutService, parameters.has('hosts') ? resources.add(new BrowserLayoutService({ root })) : { activeContainer: root } as ILayoutService);
 
 const contexts = resources.add(new ContextKeyService());
+contexts.setContext('sessions.workspaceMode', 'code');
 services.registerInstance(IContextKeyService, contexts);
+services.registerInstance(IChatWidgetService, resources.add(services.createInstance(ChatWidgetService)));
 
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 

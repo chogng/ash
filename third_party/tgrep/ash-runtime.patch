@@ -1,7 +1,9 @@
 diff --git a/.cargo/config.toml b/.cargo/config.toml
+index f7988f3..df71783 100644
 --- a/.cargo/config.toml
 +++ b/.cargo/config.toml
-@@ -14,4 +14,8 @@ index = "sparse+https://pkgs.dev.azure.com/devdiv/_packaging/DeepPrompt/Cargo/index/"
+@@ -12,5 +12,9 @@ index = "sparse+https://pkgs.dev.azure.com/devdiv/_packaging/DeepPrompt/Cargo/in
+
  # BinSkim compliance flags (OneBranch BA2007)
  # Required for Windows builds in the ADO sign pipeline.
 -[target.'cfg(target_os = "windows")']
@@ -12,7 +14,7 @@ diff --git a/.cargo/config.toml b/.cargo/config.toml
 +[target.'cfg(all(target_os = "windows", target_arch = "aarch64"))']
 +rustflags = ["-Ccontrol-flow-guard", "-Ctarget-feature=+crt-static", "-Clink-args=/DYNAMICBASE"]
 diff --git a/Cargo.lock b/Cargo.lock
-index b6737fac1bd94666f0707d7e8dbcd9a98267e0a1..279971c547fa3f232df67f267720539844ff8857 100644
+index 01d5102..4be4dff 100644
 --- a/Cargo.lock
 +++ b/Cargo.lock
 @@ -922,6 +922,15 @@ dependencies = [
@@ -35,8 +37,8 @@ index b6737fac1bd94666f0707d7e8dbcd9a98267e0a1..279971c547fa3f232df67f2677205398
 
  [[package]]
  name = "tgrep-cli"
--version = "1.2.3"
-+version = "1.2.3-ash.58629d2.1"
+-version = "1.2.7"
++version = "1.2.7-ash.70c3b0a.1"
  dependencies = [
   "anyhow",
   "assert_cmd",
@@ -52,8 +54,8 @@ index b6737fac1bd94666f0707d7e8dbcd9a98267e0a1..279971c547fa3f232df67f2677205398
 
  [[package]]
  name = "tgrep-core"
--version = "1.2.3"
-+version = "1.2.3-ash.58629d2.1"
+-version = "1.2.7"
++version = "1.2.7-ash.70c3b0a.1"
  dependencies = [
   "anyhow",
   "blake3",
@@ -71,20 +73,20 @@ index b6737fac1bd94666f0707d7e8dbcd9a98267e0a1..279971c547fa3f232df67f2677205398
  name = "unicode-xid"
  version = "0.2.6"
 diff --git a/Cargo.toml b/Cargo.toml
-index eda9bac3fcdffe7cfc1c482fff424769e1f0847c..97e005536b33259952a2859a96795ff4cadb4ab1 100644
+index 2202054..3cadb4a 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -4,7 +4,7 @@ exclude = ["vendor/ignore"]
  resolver = "2"
 
  [workspace.package]
--version = "1.2.3"
-+version = "1.2.3-ash.58629d2.1"
+-version = "1.2.7"
++version = "1.2.7-ash.70c3b0a.1"
  edition = "2024"
  rust-version = "1.88"
  license = "MIT"
 diff --git a/tgrep-cli/Cargo.toml b/tgrep-cli/Cargo.toml
-index 8a81e09dd8f04122c7192ad36b84a74e2e53ae89..c317c0b64748566e8523dd47f780533ba5fc93fa 100644
+index 8a81e09..c317c0b 100644
 --- a/tgrep-cli/Cargo.toml
 +++ b/tgrep-cli/Cargo.toml
 @@ -36,6 +36,8 @@ globset = "0.4.18"
@@ -98,7 +100,7 @@ index 8a81e09dd8f04122c7192ad36b84a74e2e53ae89..c317c0b64748566e8523dd47f780533b
 
 diff --git a/tgrep-cli/src/ash.rs b/tgrep-cli/src/ash.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..f33e84781b0e7dd30e7862c7cde815154b5778b2
+index 0000000..f33e847
 --- /dev/null
 +++ b/tgrep-cli/src/ash.rs
 @@ -0,0 +1,91 @@
@@ -195,7 +197,7 @@ index 0000000000000000000000000000000000000000..f33e84781b0e7dd30e7862c7cde81515
 +}
 diff --git a/tgrep-cli/src/ash_files.rs b/tgrep-cli/src/ash_files.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..0e1902231d841d8c7de84dbfefb1438c8373bc6a
+index 0000000..0e19022
 --- /dev/null
 +++ b/tgrep-cli/src/ash_files.rs
 @@ -0,0 +1,502 @@
@@ -703,7 +705,7 @@ index 0000000000000000000000000000000000000000..0e1902231d841d8c7de84dbfefb1438c
 +}
 diff --git a/tgrep-cli/src/ash_request.rs b/tgrep-cli/src/ash_request.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..c18df6a6ddaeb299bef6459f7514cb8bf94bd52c
+index 0000000..c18df6a
 --- /dev/null
 +++ b/tgrep-cli/src/ash_request.rs
 @@ -0,0 +1,77 @@
@@ -785,7 +787,7 @@ index 0000000000000000000000000000000000000000..c18df6a6ddaeb299bef6459f7514cb8b
 +    action(&cancellation)
 +}
 diff --git a/tgrep-cli/src/main.rs b/tgrep-cli/src/main.rs
-index a6253dbf4ef09f975fbe136b9cd14a1c3f2c9bab..5858957869fcb8e8aade58bd4d14b7d903364695 100644
+index c18593b..1f10e16 100644
 --- a/tgrep-cli/src/main.rs
 +++ b/tgrep-cli/src/main.rs
 @@ -1,5 +1,10 @@
@@ -825,7 +827,7 @@ index a6253dbf4ef09f975fbe136b9cd14a1c3f2c9bab..5858957869fcb8e8aade58bd4d14b7d9
          /// Maximum shared views; native watches and hint slots are divided by this.
          #[arg(long, requires = "shared", default_value_t = 32, value_parser = clap::value_parser!(u32).range(1..=1024))]
          shared_max_views: u32,
-@@ -1410,6 +1427,8 @@ fn run_cli() {
+@@ -1411,6 +1428,8 @@ fn run_cli() {
      }
 
      let result = match cli.command {
@@ -834,7 +836,7 @@ index a6253dbf4ef09f975fbe136b9cd14a1c3f2c9bab..5858957869fcb8e8aade58bd4d14b7d9
          Some(Command::Index {
              path,
              exclude,
-@@ -1435,6 +1454,7 @@ fn run_cli() {
+@@ -1436,6 +1455,7 @@ fn run_cli() {
              path,
              shared_storage,
              shared_policy,
@@ -842,7 +844,7 @@ index a6253dbf4ef09f975fbe136b9cd14a1c3f2c9bab..5858957869fcb8e8aade58bd4d14b7d9
              shared_max_views,
              shared_max_leases,
              no_watch,
-@@ -1447,6 +1467,9 @@ fn run_cli() {
+@@ -1448,6 +1468,9 @@ fn run_cli() {
              auto_save_mutations,
              watcher_queue_cap,
          }) => {
@@ -853,10 +855,10 @@ index a6253dbf4ef09f975fbe136b9cd14a1c3f2c9bab..5858957869fcb8e8aade58bd4d14b7d9
                  .map(|mb| mb.saturating_mul(1024 * 1024))
                  .unwrap_or_else(mem::default_memory_cap_bytes);
 diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
-index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fbb7322d60 100644
+index c397498..4aa2fda 100644
 --- a/tgrep-cli/src/serve.rs
 +++ b/tgrep-cli/src/serve.rs
-@@ -489,6 +489,7 @@ impl RecentReindexCache {
+@@ -549,6 +549,7 @@ impl RecentReindexCache {
  }
 
  struct ServerState {
@@ -864,7 +866,7 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
      index: RwLock<HybridIndex>,
      /// Read under the index lock so visibility and content change together at
      /// publication. Native events update it using metadata they already read.
-@@ -937,6 +938,16 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
+@@ -1001,6 +1002,16 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
      );
 
      let state = Arc::new(ServerState {
@@ -881,9 +883,9 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
          index: RwLock::new(hybrid),
          visibility: RwLock::new(discovery.visibility),
          hidden_complete: std::sync::atomic::AtomicBool::new(discovery.hidden_complete),
-@@ -1078,6 +1089,19 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
-         std::process::exit(0);
-     });
+@@ -1141,6 +1152,19 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
+         start_file_watcher(watcher_state, &watcher_root, watcher_queue_cap);
+     }
 
 +    if crate::ash::parent_watched() {
 +        let parent_index_dir = index_dir.clone();
@@ -901,10 +903,14 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
      // Start auto-save thread
      let save_state = Arc::clone(&state);
      thread::spawn(move || auto_save_loop(save_state));
-@@ -1571,7 +1595,15 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>) -> Result<()>
-     let mut writer = stream;
-
-     while let Some(line) = read_bounded_line(&mut reader)? {
+@@ -1697,11 +1721,18 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>, instance: &str
+         let line = match read_bounded_line(&mut reader) {
+             Ok(Some(line)) => line,
+             Ok(None) => break,
+-            // An idle client is closed quietly; it was told nothing it missed.
+             Err(error) if is_timeout(&error) => break,
+             Err(error) => return Err(error),
+         };
 -        let response = process_request(&line, state);
 +        let envelope: serde_json::Value =
 +            serde_json::from_str(&line).unwrap_or(serde_json::Value::Null);
@@ -915,11 +921,11 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
 +        let response = crate::ash_request::run(&writer, enabled, |cancellation| {
 +            Ok(process_request(&line, state, cancellation))
 +        })?;
-         writeln!(writer, "{response}")?;
+         writeln!(writer, "{}", with_instance(&response, instance))?;
          writer.flush()?;
      }
-@@ -1579,7 +1611,11 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>) -> Result<()>
-     Ok(())
+@@ -1735,7 +1766,11 @@ fn with_instance<'a>(response: &'a str, instance: &str) -> std::borrow::Cow<'a,
+     }
  }
 
 -fn process_request(request: &str, state: &Arc<ServerState>) -> String {
@@ -931,7 +937,7 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
      let req: serde_json::Value = match serde_json::from_str(request) {
          Ok(v) => v,
          Err(e) => {
-@@ -1597,12 +1633,65 @@ fn process_request(request: &str, state: &Arc<ServerState>) -> String {
+@@ -1753,12 +1788,65 @@ fn process_request(request: &str, state: &Arc<ServerState>) -> String {
      match method {
          "search" => handle_search(id, &params, state),
          "files" => handle_files(id, &params, state),
@@ -997,10 +1003,10 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
  fn handle_files(
      id: Option<serde_json::Value>,
      params: &serde_json::Value,
-@@ -1960,6 +2049,21 @@ fn parse_search_params(params: &serde_json::Value) -> std::result::Result<Search
-     })
- }
-
+@@ -2153,6 +2241,20 @@ fn parse_search_params(params: &serde_json::Value) -> std::result::Result<Search
+ /// single broad query holds at once, while keeping enough files per batch to
+ /// occupy every search thread.
+ const SEARCH_CHUNK_FILES: usize = 2048;
 +// Ash's limit is global and distinct from ripgrep's per-file max_count.
 +// A bounded request uses ordered matching so later files never consume its row budget.
 +pub(super) fn global_result_limit(params: &serde_json::Value) -> Result<Option<usize>, String> {
@@ -1015,11 +1021,10 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
 +        })
 +        .transpose()
 +}
-+
+
  fn handle_search(
      id: Option<serde_json::Value>,
-     params: &serde_json::Value,
-@@ -1975,13 +2079,17 @@ fn handle_search(
+@@ -2169,13 +2271,17 @@ fn handle_search(
          Err(e) => return json_rpc_error(id, -32602, &e),
      };
 
@@ -1038,86 +1043,60 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
      let pattern = req.pattern;
      let case_insensitive = req.case_insensitive;
      let scope = req.scope;
-@@ -2121,7 +2229,9 @@ fn handle_search(
-             }
-         }
-     };
--    let candidate_contents: Vec<(String, Arc<DecodedFile>)> = if encoding.may_differ_from_index() {
-+    let mut candidate_contents: Vec<(String, Arc<DecodedFile>)> = if encoding
-+        .may_differ_from_index()
-+    {
-         // The cache holds text decoded with the default (BOM-sniffing) rules and
-         // is shared by every client. A request that asked for a different
-         // `--encoding` must neither read those entries nor write its own, or one
-@@ -2195,25 +2305,52 @@ fn handle_search(
-     };
-     let resolve_ms = t_resolve.elapsed().as_secs_f64() * 1000.0;
+@@ -2190,7 +2296,7 @@ fn handle_search(
 
--    // Parallel regex matching across candidate files
-     let t_search = Instant::now();
--    let per_file: std::result::Result<Vec<FileSearchResult>, String> = candidate_contents
--        .par_iter()
--        .map(|(rel_path, content)| {
--            search_file_matches(rel_path, content, &matcher, &opts).map_err(|e| format!("{e}"))
--        })
--        .collect();
--    let per_file = match per_file {
--        Ok(per_file) => per_file,
--        Err(e) => return json_rpc_error(id, -32603, &e),
--    };
+     // Collect candidates and their paths/full_paths while holding the index lock briefly
+     let t_index = Instant::now();
+-    let (candidate_info, raw_candidate_count, filtered_candidate_count, total_files) = {
++    let (mut candidate_info, raw_candidate_count, filtered_candidate_count, total_files) = {
+         let index = state.index.read().unwrap();
+         // Check the same generation whose candidates and visibility we read.
+         if state.indexing.load(Ordering::SeqCst) || !state.hidden_complete.load(Ordering::SeqCst) {
+@@ -2401,11 +2507,43 @@ fn handle_search(
      let mut matches = Vec::new();
      let mut file_stats = Vec::new();
      let mut search_stats = Vec::new();
--    for file in per_file {
--        matches.extend(file.rows);
--        file_stats.extend(file.stats);
--        search_stats.extend(file.search_stats);
-+    if let Some(limit) = limit {
-+        candidate_contents.sort_by(|a, b| a.0.cmp(&b.0));
-+        let per_file_limit = opts.max_count;
-+        let mut budget = JsonBudget {
-+            remaining: 64 * 1024 * 1024 - 1024,
-+        };
-+        for (path, content) in &candidate_contents {
-+            let remaining = limit - matches.len();
-+            opts.max_count = Some(per_file_limit.unwrap_or(remaining).min(remaining));
-+            let file = match search_file_matches_bounded(
-+                path,
-+                content,
-+                &matcher,
-+                &opts,
-+                Some(&mut budget),
-+            ) {
-+                Ok(file) => file,
-+                Err(error) => return json_rpc_error(id, -32603, &error.to_string()),
-+            };
-+            matches.extend(file.rows.into_iter().take(remaining));
-+            file_stats.extend(file.stats);
-+            search_stats.extend(file.search_stats);
++    let mut ordered_budget = JsonBudget {
++        remaining: tgrep_core::managed::MAX_RESPONSE_BYTES,
++    };
++    let per_file_limit = opts.max_count;
++    if limit.is_some() {
++        candidate_info.sort_unstable_by(|left, right| left.0.cmp(&right.0));
++    }
+     for chunk in candidate_info.chunks(SEARCH_CHUNK_FILES) {
+         let t_resolve = Instant::now();
+         let candidate_contents = resolve_chunk(chunk);
+         resolve_time += t_resolve.elapsed();
+
++        if let Some(limit) = limit {
++            let t_search = Instant::now();
++            for (path, content) in &candidate_contents {
++                let remaining = limit - matches.len();
++                opts.max_count = Some(per_file_limit.unwrap_or(remaining).min(remaining));
++                let file = match search_file_matches_bounded(
++                    path, content, &matcher, &opts, Some(&mut ordered_budget),
++                ) {
++                    Ok(file) => file,
++                    Err(error) => return json_rpc_error(id, -32603, &error.to_string()),
++                };
++                matches.extend(file.rows.into_iter().take(remaining));
++                file_stats.extend(file.stats);
++                search_stats.extend(file.search_stats);
++                if matches.len() == limit {
++                    break;
++                }
++            }
++            search_time += t_search.elapsed();
 +            if matches.len() == limit {
 +                break;
 +            }
++            continue;
 +        }
-+    } else {
-+        let per_file: std::result::Result<Vec<FileSearchResult>, String> = candidate_contents
-+            .par_iter()
-+            .map(|(path, content)| {
-+                search_file_matches(path, content, &matcher, &opts).map_err(|e| format!("{e}"))
-+            })
-+            .collect();
-+        let per_file = match per_file {
-+            Ok(files) => files,
-+            Err(error) => return json_rpc_error(id, -32603, &error),
-+        };
-+        for file in per_file {
-+            matches.extend(file.rows);
-+            file_stats.extend(file.stats);
-+            search_stats.extend(file.search_stats);
-+        }
-     }
-
-     let search_ms = t_search.elapsed().as_secs_f64() * 1000.0;
-@@ -2597,12 +2734,15 @@ fn collect_match_rows_bounded(
++
+         // Parallel regex matching across candidate files
+         let t_search = Instant::now();
+         let per_file: anyhow::Result<Vec<FileSearchResult>> = candidate_contents
+@@ -2879,12 +3017,15 @@ fn collect_match_rows_bounded(
  }
 
  fn handle_status(id: Option<serde_json::Value>, state: &ServerState) -> String {
@@ -1133,7 +1112,7 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
          "num_files": index.num_files(),
          "num_trigrams": index.num_trigrams(),
          "cache_size": cache.len(),
-@@ -3145,6 +3285,17 @@ fn start_file_watcher_using(
+@@ -3452,6 +3593,17 @@ fn start_file_watcher_using(
                          .paths
                          .retain(|path| !path.starts_with(&callback_state.index_dir));
                      if !event.paths.is_empty() || event.need_rescan() {
@@ -1151,7 +1130,7 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
                          enqueue_watcher_event(
                              &tx,
                              &callback_overflow,
-@@ -3160,6 +3311,7 @@ fn start_file_watcher_using(
+@@ -3467,6 +3619,7 @@ fn start_file_watcher_using(
                  // watcher stopped working" from the outside, and silence makes it
                  // impossible to tell apart from a bug in our own filtering.
                  Err(e) => {
@@ -1159,7 +1138,7 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
                      eprintln!("[trace] warning: file watcher error: {e}");
                      if native_capacity_error(&e) {
                          request_polling(&callback_state, watch_failure_reason(&e));
-@@ -9408,6 +9560,13 @@ mod tests {
+@@ -9952,6 +10105,13 @@ mod tests {
      fn test_server_state_from_index(root: &Path, index_dir: &Path) -> Arc<ServerState> {
          let hybrid = HybridIndex::open(index_dir, root).expect("open index");
          Arc::new(ServerState {
@@ -1173,7 +1152,7 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
              index: RwLock::new(hybrid),
              visibility: RwLock::new(Default::default()),
              hidden_complete: std::sync::atomic::AtomicBool::new(true),
-@@ -9726,7 +9885,11 @@ mod tests {
+@@ -10270,7 +10430,11 @@ mod tests {
              .insert("asset.bin".to_string());
          state.filename_index_ready.store(true, Ordering::SeqCst);
 
@@ -1187,7 +1166,7 @@ index 8aedf02f19e937de7d662cd59d817f997265aaf0..086e94c489f174a4f8b55996a44a11fb
          assert_eq!(
              value.pointer("/result/files").unwrap(),
 diff --git a/tgrep-cli/src/serve/poll_tests.rs b/tgrep-cli/src/serve/poll_tests.rs
-index 367f38ae00ceabd7cfeb816e26e34221684419f4..30b730fc91c1edab086437fac37ec3effb781aa2 100644
+index 367f38a..30b730f 100644
 --- a/tgrep-cli/src/serve/poll_tests.rs
 +++ b/tgrep-cli/src/serve/poll_tests.rs
 @@ -69,7 +69,11 @@ impl Fixture {
@@ -1204,20 +1183,20 @@ index 367f38ae00ceabd7cfeb816e26e34221684419f4..30b730fc91c1edab086437fac37ec3ef
          let actual: BTreeSet<_> = value["result"]["files"]
              .as_array()
 diff --git a/tgrep-cli/src/serve/shared/managed.rs b/tgrep-cli/src/serve/shared/managed.rs
-index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6f3feafa8 100644
+index 8e7ad65..c3d4c58 100644
 --- a/tgrep-cli/src/serve/shared/managed.rs
 +++ b/tgrep-cli/src/serve/shared/managed.rs
 @@ -111,7 +111,8 @@ fn hello(namespace: &Namespace) -> Result<Value> {
              "bounded-storage-inventory","namespace-discovery","maintenance-diagnostics",
              "private-rpc-authentication","bounded-reconciliation","reconciliation-phase-metrics",
              "event-driven-native-reconciliation","serving-native-periodic-verification",
--            "content-eligibility-profile"
-+            "content-eligibility-profile",
-+            "host-owner-lifetime", "file-pages", "file-fuzzy", "request-cancellation"
+-            "content-eligibility-profile","paged-results","filtered-files"
++            "content-eligibility-profile","paged-results","filtered-files",
++            "host-owner-lifetime","file-pages","file-fuzzy","request-cancellation"
          ],
          "profile":IndexingProfile::default(),
          "policy":namespace.policy()?,"allocation":namespace.allocation()?,
-@@ -310,6 +311,7 @@ pub(super) fn storage_request(
+@@ -329,6 +330,7 @@ fn content_verification_due(
  }
 
  struct Monitor {
@@ -1225,8 +1204,8 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
      watcher: Option<notify::RecommendedWatcher>,
      watched: HashSet<PathBuf>,
      fallback: Option<String>,
-@@ -430,6 +432,8 @@ struct State {
-     jobs: mpsc::SyncSender<Id>,
+@@ -819,6 +821,8 @@ struct State {
+     jobs: JobQueue,
      queued: Mutex<HashMap<Id, managed::OperationReadGuard>>,
      admission: Mutex<bool>,
 +    // Host association is a transport lifetime contract, not another owner catalog.
@@ -1234,7 +1213,7 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
      requests: AtomicU64,
      queries: AtomicU64,
      background_batches: AtomicU64,
-@@ -764,6 +768,7 @@ fn sync_monitor(
+@@ -1318,6 +1322,7 @@ fn sync_monitor(
          let storage = storage.to_path_buf();
          #[cfg(feature = "managed-test-hooks")]
          let suppress = Arc::clone(&monitor.suppress_events);
@@ -1242,7 +1221,7 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
          let watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
              #[cfg(feature = "managed-test-hooks")]
              if suppress.load(Ordering::Acquire) {
-@@ -772,6 +777,19 @@ fn sync_monitor(
+@@ -1326,13 +1331,21 @@ fn sync_monitor(
              let Some(slot) = weak.upgrade() else {
                  return;
              };
@@ -1259,10 +1238,18 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
 +                }
 +                _ => filenames.invalidate(),
 +            }
-             let result = watch_event(&slot, &metadata, &storage, &watch_failure, event);
+             let result = watch_event(
+-                &slot,
+-                &metadata,
+-                &storage,
+-                &watch_failure,
+-                &watch_counters,
+-                event,
++                &slot, &metadata, &storage, &watch_failure, &watch_counters, event,
+             );
              if let Err(error) = result {
                  eprintln!("managed watcher invalidation {}: {error}", slot.id());
-@@ -877,6 +895,52 @@ impl State {
+@@ -1451,6 +1464,52 @@ impl State {
          Ok(status)
      }
 
@@ -1315,7 +1302,7 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
      fn legacy_registration(&self) -> super::protocol::Registration {
          super::protocol::Registration {
              protocol: 1,
-@@ -1059,7 +1123,7 @@ impl State {
+@@ -1634,7 +1693,7 @@ impl State {
                      namespace: request.namespace.clone(), instance: request.instance.clone(),
                      repository: request.repository.clone(), id: request.id.clone(), method: request.method.clone(),
                      params: json!({"root":input.root,"view":input.view,"expected_version":record.version,"query":input.query}),
@@ -1324,7 +1311,7 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
              }
              _ => Err(Error::invalid("unknown legacy management method").into()),
          }
-@@ -1339,7 +1403,7 @@ impl State {
+@@ -1943,7 +2002,7 @@ impl State {
                      .and_then(|pin| pin.incarnation.as_ref());
                  Ok(
                      json!({"root":input.root,"view":view.id,"generation":intent.key,"version":view.version,
@@ -1333,7 +1320,7 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
                  )
              }
              "stop-if-idle" => {
-@@ -1400,16 +1464,49 @@ impl State {
+@@ -2004,16 +2063,49 @@ impl State {
                      )
                      .into());
                  }
@@ -1389,7 +1376,7 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
                      self.views
                          .drain_released()
                          .map_err(|error| error.committed(managed::CommitState::Committed))?;
-@@ -1434,7 +1531,11 @@ impl State {
+@@ -2039,7 +2131,11 @@ impl State {
          }
      }
 
@@ -1402,7 +1389,7 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
          #[derive(Deserialize)]
          #[serde(deny_unknown_fields)]
          struct Query {
-@@ -1453,14 +1554,88 @@ impl State {
+@@ -2058,14 +2154,88 @@ impl State {
              )
              .into());
          }
@@ -1491,9 +1478,9 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
 +                "num_files":num_files,"files_ready":files_ready,"file_count":file_count,
 +                "reconcile_running":status.work.is_some(),
                  "root":slot.root(),"view":slot.id(),"generation":pin.key,"version":status.authoritative.version,
-                 "ready":status.ready,"epoch":status.input_epoch,"backend":"shared-v2","status":status,
+                 "ready":status.ready,"serving":status.serving,"epoch":status.input_epoch,"backend":"shared-v2","status":status,
                  "watch_mode":watch["watch_mode"],
-@@ -1887,6 +2062,13 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
+@@ -2637,6 +2807,13 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
          };
          let sentinel_identity = managed::publish_private_control_file(&sentinel, &sentinel_value)?;
          let monitor = Arc::new(Mutex::new(Monitor {
@@ -1507,15 +1494,15 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
              watcher: None,
              watched: HashSet::new(),
              fallback: None,
-@@ -1953,6 +2135,7 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
-         jobs,
+@@ -2712,6 +2889,7 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
+         jobs: JobQueue::new(policy.work.queue_items as usize),
          queued: Mutex::new(HashMap::new()),
          admission: Mutex::new(true),
 +        parent_owners: Mutex::new(HashMap::new()),
          requests: AtomicU64::new(0),
          queries: AtomicU64::new(0),
          background_batches: AtomicU64::new(0),
-@@ -2061,7 +2244,11 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
+@@ -2819,7 +2997,11 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
                              let result = if request.protocol == 1 {
                                  query_state.legacy(&request)
                              } else {
@@ -1528,7 +1515,7 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
                              };
                              respond(stream, Some(&request), &query_state, result);
                          }
-@@ -2154,7 +2341,15 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
+@@ -2912,7 +3094,15 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
                          }
                      };
                      if request.protocol == 1
@@ -1545,36 +1532,33 @@ index 5431de48d8836837a03b61c20c4a0f07aaa9896c..72926630fcc41072e9a213194f68edf6
                      {
                          let sender = if request.protocol == 1
                              && matches!(request.method.as_str(), "attach" | "detach" | "refresh")
-@@ -2222,6 +2417,9 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
-                         collection_requested = true;
-                         collection_schedule.request();
-                     }
-+                    // EOF requests retirement; only positive owner-death proof and the
-+                    // upstream idle fence authorize exit after active Git/read work drains.
+@@ -2998,6 +3188,7 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
+                     // Each phase fails independently: unproductive or failing
+                     // maintenance must never stop view reconciliation.
+                     let mut failures = PhaseFailures::default();
 +                    if crate::ash::parent_ended() { recovery_schedule.request(); }
                      if recovery_schedule.due(now, retry) {
                          match scheduler.namespace.recover_pass(recovery.clone()) {
                              Ok(progress) => {
-@@ -2316,6 +2514,12 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
-                     });
-                     Ok(())
-                 })();
+@@ -3172,6 +3363,11 @@ pub(super) fn run(root: &Path, options: Options<'_>, policy: Policy) -> Result<(
+                 if let Ok(signature) = signature {
+                     pacer.completed(tick_started, signature, quiet && tick.is_ok());
+                 }
 +                if crate::ash::parent_ended() {
 +                    if let Err(error) = scheduler.stop_after_parent() {
 +                        eprintln!("managed parent retirement deferred: {error}");
 +                    }
 +                }
-+
                  let mut diagnostics = scheduler.scheduler_diagnostics.lock().expect("scheduler diagnostics");
                  if diagnostics.observe(started.elapsed(), tick.err().map(|error| format!("{error:#}"))) {
                      eprintln!("managed scheduler: {}", diagnostics.last_error_detail.as_deref().expect("observed error"));
 diff --git a/tgrep-cli/src/serve/shared/mod.rs b/tgrep-cli/src/serve/shared/mod.rs
-index c100b5d0d027e534c125ff78ae47ab393f487fd8..6f5c5e89f26af1751c0001b866b2d3bc85a1ae5c 100644
+index 8bccc7a..a1da9a7 100644
 --- a/tgrep-cli/src/serve/shared/mod.rs
 +++ b/tgrep-cli/src/serve/shared/mod.rs
-@@ -73,3 +73,17 @@ pub fn status(root: &Path, index_path: Option<&Path>) -> Result<()> {
-     println!("{}", serde_json::to_string_pretty(&result)?);
-     Ok(())
+@@ -132,3 +132,17 @@ mod accept_tests {
+         assert_eq!(error.kind(), std::io::ErrorKind::ConnectionAborted);
+     }
  }
 +
 +/// Export credentials only through the packaged helper, using the upstream private-file checks.
@@ -1583,7 +1567,7 @@ index c100b5d0d027e534c125ff78ae47ab393f487fd8..6f5c5e89f26af1751c0001b866b2d3bc
 +    let repository = tgrep_core::generations::Repository::discover(root)?;
 +    let file = std::fs::File::open(repository.common_dir().join(protocol_v2::MARKER))?;
 +    let registration: protocol_v2::Registration = serde_json::from_reader(file.take(4096))?;
-+    let auth = protocol_v2::Authentication::read(&repository, &registration)?;
++    let auth = protocol_v2::Authentication::read(repository.common_dir(), &registration)?;
 +    println!(
 +        "{}",
 +        serde_json::json!({"registration":registration,"authorization":auth.token})
@@ -1591,10 +1575,10 @@ index c100b5d0d027e534c125ff78ae47ab393f487fd8..6f5c5e89f26af1751c0001b866b2d3bc
 +    Ok(())
 +}
 diff --git a/tgrep-cli/src/serve/shared/protocol.rs b/tgrep-cli/src/serve/shared/protocol.rs
-index 57c178a11c9eb9f4de6726ea0a15b0af29e72705..a2871993eac414988881606c05d987399e0937c5 100644
+index 3931c4c..c56e0a7 100644
 --- a/tgrep-cli/src/serve/shared/protocol.rs
 +++ b/tgrep-cli/src/serve/shared/protocol.rs
-@@ -37,6 +37,8 @@ pub(super) struct Request {
+@@ -38,6 +38,8 @@ pub(super) struct Request {
      pub method: String,
      pub params: Value,
      pub id: Value,
@@ -1604,21 +1588,18 @@ index 57c178a11c9eb9f4de6726ea0a15b0af29e72705..a2871993eac414988881606c05d98739
 
  #[derive(Clone, Debug, Deserialize)]
 diff --git a/tgrep-cli/src/serve/shared/server.rs b/tgrep-cli/src/serve/shared/server.rs
-index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01fc2596749 100644
+index 4869683..4443127 100644
 --- a/tgrep-cli/src/serve/shared/server.rs
 +++ b/tgrep-cli/src/serve/shared/server.rs
-@@ -3,8 +3,10 @@ use std::fs::{self, File, OpenOptions};
+@@ -3,6 +3,8 @@ use std::fs::{self, File, OpenOptions};
  use std::io::{Read, Write};
  use std::net::{Ipv4Addr, TcpListener, TcpStream};
  use std::path::{Component, Path, PathBuf};
 +use std::sync::RwLock;
 +use std::sync::RwLockReadGuard;
  use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
--use std::sync::{Arc, Mutex, mpsc};
-+use std::sync::{Arc, Mutex, OnceLock, mpsc};
+ use std::sync::{Arc, Mutex, OnceLock, mpsc};
  use std::thread;
- use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-
 @@ -13,7 +15,7 @@ use notify::{Event, EventKind};
  use serde::Deserialize;
  use serde_json::{Value, json};
@@ -1861,7 +1842,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                                  work.try_send(Work::Rpc((stream, request)))
                                      .err()
                                      .map(|error| {
-@@ -386,8 +485,17 @@ pub fn run(root: &Path, options: Options<'_>) -> Result<()> {
+@@ -401,8 +500,17 @@ pub fn run(root: &Path, options: Options<'_>) -> Result<()> {
  }
 
  fn send_error(stream: &mut TcpStream, id: Value, error: &anyhow::Error) {
@@ -1880,7 +1861,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
      if let Err(error) = writeln!(stream, "{response}") {
          eprintln!("shared RPC error response failed: {error}");
      }
-@@ -403,9 +511,10 @@ fn respond(
+@@ -418,9 +526,10 @@ fn respond(
      mut stream: TcpStream,
      request: &Request,
      state: &State,
@@ -1893,7 +1874,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
          result["protocol"] = json!(PROTOCOL);
          result["instance"] = json!(state.registration.instance);
          result["repository"] = json!(state.registration.repository);
-@@ -422,6 +531,10 @@ fn respond(
+@@ -437,6 +546,10 @@ fn respond(
                  eprintln!("shared RPC response failed: {error}");
              }
          }
@@ -1904,7 +1885,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
          Err(error) => send_error(&mut stream, request.id.clone(), &error),
      }
  }
-@@ -462,6 +575,16 @@ struct AttachParams {
+@@ -477,6 +590,16 @@ struct AttachParams {
      revision: String,
      profile: IndexingProfile,
      lease: String,
@@ -1921,7 +1902,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
  }
 
  #[derive(Deserialize)]
-@@ -524,17 +647,28 @@ impl State {
+@@ -539,17 +662,28 @@ impl State {
      }
 
      fn entry(&self, root: &Path, id: Option<&str>) -> Result<Arc<Entry>> {
@@ -1960,7 +1941,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
              "stale shared view identity"
          );
          Ok(entry)
-@@ -564,16 +698,17 @@ impl State {
+@@ -579,16 +713,17 @@ impl State {
      fn invalidate(&self, value: &Value) -> Result<()> {
          let params: LeaseParams = serde_json::from_value(value.clone())?;
          let entry = self.lease(&params)?;
@@ -1981,7 +1962,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
              }
          }
          Ok(())
-@@ -582,7 +717,7 @@ impl State {
+@@ -597,7 +732,7 @@ impl State {
      fn lifecycle(&self, request: &Request) -> Result<Value> {
          match request.method.as_str() {
              "attach" => self.attach(serde_json::from_value(request.params.clone())?),
@@ -1990,7 +1971,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                  let params: LeaseParams = serde_json::from_value(request.params.clone())?;
                  let entry = self.lease(&params)?;
                  let epoch = self.reconcile(&entry)?;
-@@ -591,18 +726,62 @@ impl State {
+@@ -606,18 +741,62 @@ impl State {
                  Ok(value)
              }
              "detach" => {
@@ -2020,7 +2001,8 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
 +                            .is_ok_and(|root| root == entry.root()),
 +                    "lease belongs to a different root"
 +                );
-+                let leases = entry.leases.lock().expect("leases");
+                 let leases = entry.leases.lock().expect("leases");
+-                ensure!(leases.contains_key(&params.lease), "lease already released");
 +                if !leases.contains_key(&params.lease) {
 +                    return Ok(
 +                        json!({"remaining_leases":leases.len(),"view":entry.id,"detached":true}),
@@ -2039,8 +2021,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
 +                drop(attachment);
 +                let _queries = entry.access.write().expect("worktree query access");
 +                let _attachment = self.attachment.lock().expect("attachment");
-                 let leases = entry.leases.lock().expect("leases");
--                ensure!(leases.contains_key(&params.lease), "lease already released");
++                let leases = entry.leases.lock().expect("leases");
 +                if !leases.contains_key(&params.lease) {
 +                    return Ok(
 +                        json!({"remaining_leases":leases.len(),"view":entry.id,"detached":true}),
@@ -2055,7 +2036,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                      if let Err(error) = self.remove_view_marker(&entry) {
                          let warning = format!("shared view registration cleanup failed: {error:#}");
                          eprintln!("{warning}");
-@@ -610,7 +789,7 @@ impl State {
+@@ -625,7 +804,7 @@ impl State {
                      }
                      entry.active.store(false, Ordering::SeqCst);
                      entry.monitor.lock().expect("monitor").registry = None;
@@ -2064,7 +2045,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                  }
                  entry.leases.lock().expect("leases").remove(&params.lease);
                  Ok(
-@@ -624,7 +803,6 @@ impl State {
+@@ -639,7 +818,6 @@ impl State {
 
      fn remove_view_marker(&self, entry: &Entry) -> Result<()> {
          let marker = entry
@@ -2072,7 +2053,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
              .repository()
              .git_dir()
              .join(super::protocol::VIEW_MARKER);
-@@ -650,6 +828,7 @@ impl State {
+@@ -665,6 +843,7 @@ impl State {
      }
 
      fn attach(&self, params: AttachParams) -> Result<Value> {
@@ -2080,7 +2061,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
          ensure!(
              !params.lease.is_empty()
                  && params.lease.len() <= 128
-@@ -675,10 +854,10 @@ impl State {
+@@ -690,10 +869,10 @@ impl State {
                  .cloned();
              if let Some(lease) = lease {
                  ensure!(
@@ -2093,7 +2074,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                  self.publish_view(entry)?;
                  return self.attach_result(entry, &params.lease, &lease);
              }
-@@ -691,62 +870,43 @@ impl State {
+@@ -706,63 +885,43 @@ impl State {
              total_leases < self.policy.max_leases,
              "shared lease limit reached"
          );
@@ -2150,6 +2131,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
 -                    exclude_paths: vec![self.registration.storage.clone()],
 -                    ..Default::default()
 -                },
+-                stale_reads: false,
 -            };
 -            let restored = directory.join("overlay.json").try_exists()?;
 -            let view = if restored {
@@ -2181,7 +2163,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                  leases: Mutex::new(HashMap::new()),
                  queued: AtomicBool::new(false),
                  running: AtomicBool::new(false),
-@@ -763,20 +923,20 @@ impl State {
+@@ -779,20 +938,20 @@ impl State {
                      last: None,
                      total_reads: 0,
                      total_extractions: 0,
@@ -2206,7 +2188,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
          };
          let lease = Lease {
              revision: params.revision,
-@@ -785,9 +945,10 @@ impl State {
+@@ -801,9 +960,10 @@ impl State {
          };
          if let Err(error) = self.publish_view(&entry) {
              if entry.leases.lock().expect("leases").is_empty() {
@@ -2218,7 +2200,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
              }
              return Err(error);
          }
-@@ -796,19 +957,23 @@ impl State {
+@@ -812,19 +972,23 @@ impl State {
              .lock()
              .expect("leases")
              .insert(params.lease.clone(), lease.clone());
@@ -2245,7 +2227,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                  .repository()
                  .git_dir()
                  .join(super::protocol::VIEW_MARKER),
-@@ -824,14 +989,85 @@ impl State {
+@@ -840,14 +1004,86 @@ impl State {
          Ok(value)
      }
 
@@ -2285,6 +2267,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
 +        let options = WorktreeOptions {
 +            checkpoint_directory: Some(directory.clone()),
 +            hint_capacity: self.policy.hints_per_view,
++            stale_reads: false,
 +            walk: tgrep_core::walker::MetaWalkOptions {
 +                exclude_paths: vec![self.registration.storage.clone()],
 +                ..Default::default()
@@ -2333,7 +2316,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
              Ok((stats, epoch))
          })();
          let result = (|| {
-@@ -849,7 +1085,9 @@ impl State {
+@@ -865,7 +1101,9 @@ impl State {
                      Ok(epoch)
                  }
                  Err(error) => {
@@ -2344,7 +2327,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                      metrics.error = Some(format!("{error:#}"));
                      metrics.failures = metrics.failures.saturating_add(1);
                      Err(error)
-@@ -861,26 +1099,32 @@ impl State {
+@@ -877,26 +1115,32 @@ impl State {
      }
 
      fn describe(&self, entry: &Entry) -> Result<Value> {
@@ -2388,7 +2371,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
              "queued":entry.queued.load(Ordering::SeqCst), "last_error":metrics.error,
              "reconcile_running":running,
              "reconcile_attempts":metrics.attempts, "consecutive_failures":metrics.failures,
-@@ -892,31 +1136,103 @@ impl State {
+@@ -908,32 +1152,104 @@ impl State {
              "queries":entry.queries.load(Ordering::SeqCst),
              "total_reads":metrics.total_reads, "total_extractions":metrics.total_extractions,
              "last_reconcile":metrics.last.as_ref().map(reconcile_stats), "generation_build":build_stats(&metrics.build),
@@ -2410,7 +2393,8 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                  Ok(json!({
 -                    "capabilities":["leases","recoverable-attach","worktree-overlays","refresh","search","files"],
 +                    "capabilities":["leases","recoverable-attach","worktree-overlays","refresh","search","files","file-pages","file-fuzzy","request-cancellation"],
-                     "profile":IndexingProfile::default(), "retention":"retain-all",
+                     "profile":IndexingProfile::default(), "retention":"retain-all", "paged_results":true,
+                     "filtered_files":true,
                      "limits":{"views":self.policy.max_views, "leases":self.policy.max_leases,
                          "watches_per_view":self.policy.watches_per_view, "hints_per_view":self.policy.hints_per_view,
 -                        "reconcile_workers":1, "query_workers":QUERY_WORKERS, "query_queue":QUERY_QUEUE,
@@ -2497,7 +2481,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                  if request.method == "status" {
                      ensure!(params.query == json!({}), "status query must be empty");
                      return self.describe(&entry);
-@@ -944,8 +1260,12 @@ impl State {
+@@ -961,8 +1277,12 @@ impl State {
          if monitor.fallback.is_some() {
              return Ok(());
          }
@@ -2511,7 +2495,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
              &self.registration.storage,
              self.policy.watches_per_view,
          );
-@@ -954,7 +1274,7 @@ impl State {
+@@ -971,7 +1291,7 @@ impl State {
              Err(error) => {
                  monitor.registry = None;
                  monitor.fallback = Some(error.to_string());
@@ -2520,7 +2504,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                  eprintln!("shared native watch fallback: {error}");
                  return Ok(());
              }
-@@ -975,7 +1295,7 @@ impl State {
+@@ -992,7 +1312,7 @@ impl State {
                          Ok(_) => {}
                          Err(error) => {
                              failed.store(true, Ordering::SeqCst);
@@ -2529,7 +2513,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                                  eprintln!("shared watcher invalidation: {invalidation}");
                              }
                              eprintln!("shared watcher: {error}");
-@@ -987,7 +1307,7 @@ impl State {
+@@ -1004,7 +1324,7 @@ impl State {
                  Ok(watcher) => {
                      monitor.registry = Some(WatchRegistry {
                          watcher,
@@ -2538,7 +2522,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                          watched: HashSet::new(),
                          budget: self.policy.watches_per_view,
                          failure: None,
-@@ -998,7 +1318,7 @@ impl State {
+@@ -1015,7 +1335,7 @@ impl State {
                  }
                  Err(error) => {
                      monitor.fallback = Some(format!("native registration failed: {error}"));
@@ -2547,7 +2531,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
                      return Ok(());
                  }
              }
-@@ -1012,7 +1332,7 @@ impl State {
+@@ -1029,7 +1349,7 @@ impl State {
          if let Some(error) = registry.failure.take() {
              monitor.registry = None;
              monitor.fallback = Some(error.clone());
@@ -2556,7 +2540,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
              eprintln!("shared native watch fallback: {error}");
          }
          Ok(())
-@@ -1051,12 +1371,12 @@ fn watch_directories(root: &Path, storage: &Path, budget: usize) -> Result<HashS
+@@ -1068,12 +1388,12 @@ fn watch_directories(root: &Path, storage: &Path, budget: usize) -> Result<HashS
 
  fn invalidate_event(entry: &Entry, event: &Event) -> Result<()> {
      if event_requires_full(event) {
@@ -2572,7 +2556,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
              continue;
          };
          // Our own metadata publication must not create an endless repair loop.
-@@ -1069,9 +1389,9 @@ fn invalidate_event(entry: &Entry, event: &Event) -> Result<()> {
+@@ -1086,9 +1406,9 @@ fn invalidate_event(entry: &Entry, event: &Event) -> Result<()> {
              continue;
          }
          if relative.as_os_str().is_empty() {
@@ -2584,7 +2568,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
          }
      }
      Ok(())
-@@ -1086,6 +1406,7 @@ fn event_requires_full(event: &Event) -> bool {
+@@ -1103,6 +1423,7 @@ fn event_requires_full(event: &Event) -> bool {
  fn reconcile_stats(stats: &ReconcileStats) -> Value {
      json!({
          "epoch":stats.epoch, "full":stats.full, "files_discovered":stats.files_discovered,
@@ -2592,16 +2576,25 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
          "files_read":stats.files_read, "bytes_read":stats.bytes_read, "files_decoded":stats.files_decoded,
          "files_extracted":stats.files_extracted, "base_reused":stats.base_reused,
          "base_files_copied":stats.base_files_copied, "postings_copied":stats.postings_copied,
-@@ -1119,7 +1440,7 @@ fn validate_query(query: &Value, files: bool) -> Result<()> {
+@@ -1132,7 +1453,6 @@ fn validate_query(query: &Value, files: bool) -> Result<()> {
+             "glob" | "iglob" | "types" | "types_not" | "type_add" | "type_clear" => value
                  .as_array()
                  .is_some_and(|array| array.iter().all(Value::is_string)),
-             "type_ops" => crate::search::type_ops_from_json(value).is_ok(),
+-            "type_ops" => crate::search::type_ops_from_json(value).is_ok(),
+             "glob_case_insensitive" => value.is_boolean(),
+             _ if files => false,
+             "pattern" | "encoding" | "engine" => value.is_string(),
+@@ -1140,7 +1460,8 @@ fn validate_query(query: &Value, files: bool) -> Result<()> {
+             "extra_patterns" => value
+                 .as_array()
+                 .is_some_and(|array| array.iter().all(Value::is_string)),
 -            "max_count" | "after_context" | "before_context" | "max_filesize"
++            "type_ops" => crate::search::type_ops_from_json(value).is_ok(),
 +            "max_results" | "max_count" | "after_context" | "before_context" | "max_filesize"
              | "regex_size_limit" | "dfa_size_limit" => value.is_null() || value.is_u64(),
              "case_insensitive"
              | "fixed_string"
-@@ -1192,12 +1513,11 @@ impl State {
+@@ -1212,12 +1533,11 @@ impl State {
          entry: &Entry,
          read: impl FnOnce(WorktreeSnapshot<'_>) -> T,
      ) -> Result<T> {
@@ -2618,7 +2611,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
              .with_snapshot(|snapshot| (snapshot.epoch(), read(snapshot)))
              .inspect_err(|error| {
                  if !matches!(error, WorktreeError::NotReady) {
-@@ -1212,16 +1532,15 @@ impl State {
+@@ -1232,16 +1552,15 @@ impl State {
              .last
              .as_ref()
              .map(|stats| stats.epoch);
@@ -2639,7 +2632,7 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
              "ready":true, "hidden_complete":true, "ordered_filters":true,
              "multiline_replace":true, "report_replacements":true, "backend":"shared-v1",
              "protocol":PROTOCOL, "instance":self.registration.instance,
-@@ -1257,16 +1576,16 @@ struct LegacyQuery<'a> {
+@@ -1287,16 +1606,16 @@ struct LegacyQuery<'a> {
 
  impl QuerySource for LegacyQuery<'_> {
      fn root(&self) -> &Path {
@@ -2659,93 +2652,48 @@ index 23c452c268399e252cf336fe5148711a41206256..99d8c6dc60457c4adec948f92fd7c01f
          self.entry.metrics.lock().expect("metrics").error = Some(format!("{error:#}"));
          Ok(())
      }
-@@ -1318,15 +1637,28 @@ pub(super) fn search_snapshot(
-         })??;
-         (json!({"files":paths, "epoch":epoch}), epoch)
-     } else {
--        let request = crate::serve::parse_search_params(query).map_err(anyhow::Error::msg)?;
--        let (paths, total, epoch) = source.snapshot(|snapshot| {
-+        let mut request = crate::serve::parse_search_params(query).map_err(anyhow::Error::msg)?;
-+        let limit = crate::serve::global_result_limit(query).map_err(anyhow::Error::msg)?;
-+        let per_file_limit = request.opts.max_count;
-+        let (paths, raw_count, total, epoch) = source.snapshot(|snapshot| {
-+            let candidates = snapshot.candidates(&request.plan, "", true);
-+            let raw_count = candidates.len();
-+            let paths: Vec<_> = candidates
-+                .into_iter()
-+                .filter(|path| {
-+                    scope.relative(path).is_some()
-+                        && snapshot
-+                            .visibility()
-+                            .is_visible(path, &scope.prefix, scope.hidden)
-+                })
-+                .collect();
-             (
--                snapshot.candidates(&request.plan, &scope.prefix, scope.hidden),
-+                paths,
-+                raw_count,
-                 request.opts.stats.then(|| snapshot.files("", true).len()),
-                 snapshot.epoch(),
-             )
-         })?;
--        let raw_count = paths.len();
-         let paths: Vec<_> = paths
-             .into_iter()
-             .filter(|path| {
-@@ -1347,6 +1679,9 @@ pub(super) fn search_snapshot(
-         let mut stats = Vec::new();
-         let mut search_stats = Vec::new();
-         for siblings in tgrep_core::rooted::sibling_batches(&paths) {
-+            if limit.is_some_and(|limit| rows.len() == limit) {
-+                break;
-+            }
-             let batch = (siblings.len() > 1)
-                 .then(|| {
-                     candidate_snapshot(source, &siblings[0], |snapshot| {
-@@ -1355,6 +1690,14 @@ pub(super) fn search_snapshot(
-                 })
-                 .transpose()?;
-             for relative in siblings {
-+                if let Some(limit) = limit {
-+                    if rows.len() == limit {
-+                        break;
-+                    }
-+                    let remaining = limit - rows.len();
-+                    request.opts.max_count =
-+                        Some(per_file_limit.unwrap_or(remaining).min(remaining));
-+                }
-                 let bytes = read_candidate(source, batch.as_ref(), relative)?;
-                 if bytes.len() > 64 * 1024 * 1024 {
-                     continue;
-@@ -1367,7 +1710,8 @@ pub(super) fn search_snapshot(
-                     &request.opts,
-                     Some(&mut budget),
-                 )?;
--                rows.extend(found.rows);
-+                let remaining = limit.map_or(usize::MAX, |limit| limit - rows.len());
-+                rows.extend(found.rows.into_iter().take(remaining));
-                 stats.extend(found.stats);
-                 search_stats.extend(found.search_stats);
-             }
-@@ -1387,10 +1731,9 @@ pub(super) fn search_snapshot(
-         }
+@@ -1616,6 +1935,7 @@ fn search_snapshot_with<S: QuerySource>(
          (result, epoch)
-     };
+     } else {
+         let request = crate::serve::parse_search_params(query).map_err(anyhow::Error::msg)?;
++        let limit = crate::serve::global_result_limit(query).map_err(anyhow::Error::msg)?;
+         let (paths, total, epoch) = source.snapshot(|snapshot| {
+             (
+                 snapshot.candidates(&request.plan, &scope.prefix, scope.hidden),
+@@ -1690,7 +2010,13 @@ fn search_snapshot_with<S: QuerySource>(
+                     };
+                     budget.remaining -= bytes;
+                     searched += 1;
+-                    rows.extend(found.rows);
++                    let remaining = limit.map_or(usize::MAX, |limit| limit - rows.len());
++                    rows.extend(found.rows.into_iter().take(remaining));
++                    if limit == Some(rows.len()) {
++                        stats.extend(found.stats);
++                        search_stats.extend(found.search_stats);
++                        break 'page;
++                    }
+                     stats.extend(found.stats);
+                     search_stats.extend(found.search_stats);
+                 }
+@@ -1713,10 +2039,9 @@ fn search_snapshot_with<S: QuerySource>(
+     // publication either way; eventual sources read live bytes and requeue
+     // misses, so only strict sources reject a newer publication.
+     let current = source.snapshot(|snapshot| snapshot.epoch())?;
 -    ensure!(
--        source.snapshot(|snapshot| snapshot.epoch() == epoch)?,
+-        source.eventual() || current == epoch,
 -        "view changed during query; retry or scan"
 -    );
-+    if !source.snapshot(|snapshot| snapshot.epoch() == epoch)? {
++    if !source.eventual() && current != epoch {
 +        return Err(WorktreeError::ChangedDuringReconcile.into());
 +    }
      for (key, value) in metadata.as_object().expect("metadata object") {
          result[key] = value.clone();
      }
 diff --git a/tgrep-core/src/generations/mod.rs b/tgrep-core/src/generations/mod.rs
-index 86f14ce4fe629fe244b70e015738ed9ebe3c6a4f..c25017b677af14da97ec076e40e6508677a462b3 100644
+index c3e917a..1f8d6ad 100644
 --- a/tgrep-core/src/generations/mod.rs
 +++ b/tgrep-core/src/generations/mod.rs
-@@ -754,6 +754,25 @@ impl GenerationManager {
+@@ -763,6 +763,25 @@ impl GenerationManager {
          })
      }
 
@@ -2772,10 +2720,10 @@ index 86f14ce4fe629fe244b70e015738ed9ebe3c6a4f..c25017b677af14da97ec076e40e65086
      /// error; they are never repaired/replaced while another reader could map them.
      pub fn open(&self, key: &GenerationKey) -> Result<Arc<Generation>> {
 diff --git a/tgrep-core/src/managed/views.rs b/tgrep-core/src/managed/views.rs
-index 3dbf6df27f986d30d63db6e5ea5e42e676153469..4547d6e5e4ac67013726fcfa8cec6f1ddc0d3d18 100644
+index c40f8a5..8730aad 100644
 --- a/tgrep-core/src/managed/views.rs
 +++ b/tgrep-core/src/managed/views.rs
-@@ -919,7 +919,7 @@ impl ViewManager {
+@@ -937,7 +937,7 @@ impl ViewManager {
                      return Err(Error::stale_version(record.version));
                  }
              }
@@ -2784,7 +2732,7 @@ index 3dbf6df27f986d30d63db6e5ea5e42e676153469..4547d6e5e4ac67013726fcfa8cec6f1d
                  return Err(Error::incompatible(
                      "joining profile differs from current pin",
                  ));
-@@ -2065,6 +2065,44 @@ impl ViewSlot {
+@@ -2143,6 +2143,44 @@ impl ViewSlot {
      pub fn root(&self) -> &Path {
          &self.root
      }
@@ -2829,7 +2777,7 @@ index 3dbf6df27f986d30d63db6e5ea5e42e676153469..4547d6e5e4ac67013726fcfa8cec6f1d
      pub fn input_epoch(&self) -> u64 {
          self.epoch.load(Ordering::Acquire)
      }
-@@ -2292,6 +2330,35 @@ impl Drop for ViewWork<'_> {
+@@ -2414,6 +2452,35 @@ impl Drop for ViewWork<'_> {
      }
  }
 
@@ -2866,7 +2814,7 @@ index 3dbf6df27f986d30d63db6e5ea5e42e676153469..4547d6e5e4ac67013726fcfa8cec6f1d
      slot: Arc<ViewSlot>,
      published: Arc<PublishedView>,
 diff --git a/tgrep-core/src/visibility.rs b/tgrep-core/src/visibility.rs
-index 2f140f875721c7f43d54747acf33fcfeadd67fa7..fa62628b03d9b33da03ff2629f0258fd23043190 100644
+index 52a8d4f..3d8bd33 100644
 --- a/tgrep-core/src/visibility.rs
 +++ b/tgrep-core/src/visibility.rs
 @@ -34,6 +34,17 @@ impl PathVisibility {
@@ -2888,19 +2836,22 @@ index 2f140f875721c7f43d54747acf33fcfeadd67fa7..fa62628b03d9b33da03ff2629f0258fd
          self.hidden.is_empty()
      }
 diff --git a/tgrep-core/src/walker.rs b/tgrep-core/src/walker.rs
-index f5b7caa4e3f574858630645a8bcdd012dd2dcbfd..227d4ba7d965a46b5d9f1b275eab620c1de71d30 100644
+index 40fc927..8823ae0 100644
 --- a/tgrep-core/src/walker.rs
 +++ b/tgrep-core/src/walker.rs
-@@ -655,7 +655,41 @@ pub fn walk_file_metadata_with_ignorecase(
+@@ -733,7 +733,7 @@ pub(crate) fn walk_file_metadata_with_rules(
      opts: &MetaWalkOptions,
      ignorecase: Option<std::sync::Arc<crate::gitignore::CaseInsensitiveIgnore>>,
- ) -> MetaWalkResult {
--    walk_metadata_inner(root, opts, ignorecase, None, None)
-+    walk_metadata_inner(root, opts, ignorecase, None, None, None, &|| false)
-+        .expect("an uncontrolled metadata walk has no work-budget failure")
-+        .0
-+}
-+
+ ) -> (MetaWalkResult, WalkRules) {
+-    let (walk, _, matcher) = walk_metadata_inner(root, opts, ignorecase, None, None)
++    let (walk, _, matcher) = walk_metadata_inner(root, opts, ignorecase, None, None, None, &|| false)
+         .expect("an uncontrolled metadata walk has no work-budget failure");
+     (
+         walk,
+@@ -744,6 +744,40 @@ pub(crate) fn walk_file_metadata_with_rules(
+     )
+ }
+
 +/// Repair one subtree while retaining the registered root's ignore-rule precedence.
 +pub fn walk_file_metadata_scoped(
 +    root: &Path,
@@ -2931,37 +2882,32 @@ index f5b7caa4e3f574858630645a8bcdd012dd2dcbfd..227d4ba7d965a46b5d9f1b275eab620c
 +    should_stop: &(dyn Fn() -> bool + Sync),
 +) -> MetaWalkResult {
 +    walk_metadata_inner(root, opts, ignorecase, None, None, scope, should_stop)
-         .expect("an uncontrolled metadata walk has no work-budget failure")
-         .0
- }
-@@ -677,8 +711,15 @@ pub(crate) fn walk_file_metadata_controlled(
-             )?
++        .expect("an uncontrolled metadata walk has no work-budget failure")
++        .0
++}
++
+ pub(crate) fn walk_file_metadata_controlled(
+     root: &Path,
+     opts: &MetaWalkOptions,
+@@ -766,7 +800,7 @@ pub(crate) fn walk_file_metadata_controlled(
              .map(std::sync::Arc::new)
          };
--        let (walk, charge) =
+         let (walk, charge, matcher) =
 -            walk_metadata_inner(root, opts, ignorecase, Some(permit), Some(control))?;
-+        let (walk, charge) = walk_metadata_inner(
-+            root,
-+            opts,
-+            ignorecase,
-+            Some(permit),
-+            Some(control),
-+            None,
-+            &|| false,
-+        )?;
++            walk_metadata_inner(root, opts, ignorecase, Some(permit), Some(control), None, &|| false)?;
          Ok((
              walk,
              charge.expect("controlled walk owns its memory charge"),
-@@ -693,6 +734,8 @@ fn walk_metadata_inner(
+@@ -791,6 +825,8 @@ fn walk_metadata_inner(
      ignorecase: Option<std::sync::Arc<crate::gitignore::CaseInsensitiveIgnore>>,
      permit: Option<&std::sync::Arc<crate::managed::WorkPermit>>,
      read_control: Option<std::sync::Arc<dyn ignore::gitignore::FileReadControl>>,
 +    scope: Option<&Path>,
 +    should_stop: &(dyn Fn() -> bool + Sync),
- ) -> crate::managed::Result<(MetaWalkResult, Option<crate::managed::work::MemoryCharge>)> {
-     let memory = std::sync::Arc::new(std::sync::Mutex::new(
-         permit.map(|permit| permit.memory(0)).transpose()?,
-@@ -720,6 +763,7 @@ fn walk_metadata_inner(
+ ) -> crate::managed::Result<(
+     MetaWalkResult,
+     Option<crate::managed::work::MemoryCharge>,
+@@ -824,6 +860,7 @@ fn walk_metadata_inner(
      let match_root = root.to_path_buf();
      let root = root.to_path_buf();
      let exclude_paths = opts.exclude_paths.clone();
@@ -2969,7 +2915,7 @@ index f5b7caa4e3f574858630645a8bcdd012dd2dcbfd..227d4ba7d965a46b5d9f1b275eab620c
 
      let parallelism = permit
          .map(|permit| permit.parallelism(walker_thread_count()))
-@@ -744,6 +788,11 @@ fn walk_metadata_inner(
+@@ -848,6 +885,11 @@ fn walk_metadata_inner(
                  permit.cancel();
                  return false;
              }
@@ -2981,7 +2927,7 @@ index f5b7caa4e3f574858630645a8bcdd012dd2dcbfd..227d4ba7d965a46b5d9f1b275eab620c
              if exclude_paths
                  .iter()
                  .any(|path| entry.path().starts_with(path))
-@@ -805,6 +854,10 @@ fn walk_metadata_inner(
+@@ -911,6 +953,10 @@ fn walk_metadata_inner(
                      .get_or_insert(error);
                  return ignore::WalkState::Quit;
              }
@@ -2992,7 +2938,7 @@ index f5b7caa4e3f574858630645a8bcdd012dd2dcbfd..227d4ba7d965a46b5d9f1b275eab620c
              let entry = match entry {
                  Ok(e) => e,
                  Err(_) => {
-@@ -818,7 +871,7 @@ fn walk_metadata_inner(
+@@ -924,7 +970,7 @@ fn walk_metadata_inner(
              }
 
              let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
@@ -3002,7 +2948,7 @@ index f5b7caa4e3f574858630645a8bcdd012dd2dcbfd..227d4ba7d965a46b5d9f1b275eab620c
              }
              if !is_dir && !entry.file_type().is_some_and(|ft| ft.is_file()) {
 diff --git a/tgrep-core/src/worktrees.rs b/tgrep-core/src/worktrees.rs
-index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff9514196b5e7 100644
+index 331dd39..f95bdd5 100644
 --- a/tgrep-core/src/worktrees.rs
 +++ b/tgrep-core/src/worktrees.rs
 @@ -19,6 +19,7 @@ use std::time::Instant;
@@ -3013,16 +2959,16 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
  use crate::hybrid::HybridIndex;
  use crate::live::LiveIndex;
  use crate::meta::{ContentId, FileVersion, file_version};
-@@ -127,6 +128,8 @@ pub struct ReconcileStats {
-     pub epoch: u64,
-     pub full: bool,
-     pub files_discovered: usize,
+@@ -147,6 +148,8 @@ pub struct ReconcileStats {
+     /// Searchable files provisionally served from the pinned generation before
+     /// checkout content has been verified.
+     pub provisional_files: u64,
 +    /// Checkout files opened to verify their current version, excluding retained evidence.
 +    pub metadata_files_checked: u64,
      pub files_read: u64,
      pub bytes_read: u64,
      pub files_decoded: u64,
-@@ -186,6 +189,7 @@ pub struct ReconcileTimings {
+@@ -210,6 +213,7 @@ pub struct ReconcileTimings {
 
  impl ReconcileStats {
      fn add_verification(&mut self, other: &Self) {
@@ -3030,7 +2976,7 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
          self.files_read += other.files_read;
          self.bytes_read += other.bytes_read;
          self.files_decoded += other.files_decoded;
-@@ -251,6 +255,25 @@ struct State {
+@@ -320,6 +324,25 @@ struct State {
      restored_content: BTreeMap<String, ContentId>,
      memory: Option<crate::managed::memory::RetainedMemory>,
      cost: OverlayCost,
@@ -3056,7 +3002,7 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
  }
 
  /// One canonical worktree identity and an exact, lifetime-pinned generation.
-@@ -411,6 +434,7 @@ impl WorktreeView {
+@@ -531,6 +554,7 @@ impl WorktreeView {
                  restored_content: BTreeMap::new(),
                  memory: None,
                  cost: OverlayCost::default(),
@@ -3064,58 +3010,67 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
              }),
              reconcile: Mutex::new(()),
              stale: AtomicBool::new(false),
-@@ -486,7 +510,7 @@ impl WorktreeView {
+@@ -683,13 +707,33 @@ impl WorktreeView {
              .map_err(|_| WorktreeError::Synchronization)?;
          let epoch = control.invalidate()?;
-         let relative = match relative_path(path) {
+         let mut relative = match relative_path(path) {
 -            Ok(relative) => relative.to_ascii_lowercase(),
 +            Ok(relative) => relative,
              Err(error) => {
                  control.full = true;
                  control.hints.clear();
-@@ -494,9 +518,12 @@ impl WorktreeView {
+                 return Err(error);
              }
          };
-         if !relative.is_ascii()
--            || relative
--                .split('/')
--                .any(|part| matches!(part, ".git" | ".gitignore" | ".ignore" | ".gitattributes"))
-+            || relative.split('/').any(|part| {
-+                matches!(
-+                    part.to_ascii_lowercase().as_str(),
-+                    ".git" | ".gitignore" | ".ignore" | ".gitattributes" | "p4ignore.ini"
-+                )
-+            })
-             || control.hints.len() >= self.options.hint_capacity
-                 && !control.hints.contains(&relative)
++        if self.root_protection.is_none() {
++            // Scoped legacy discovery needs the spelling of newly created paths.
++            if !relative.is_ascii()
++                || relative.split('/').any(|part| {
++                    matches!(
++                        part.to_ascii_lowercase().as_str(),
++                        ".git" | ".gitignore" | ".ignore" | ".gitattributes" | "p4ignore.ini"
++                    )
++                })
++                || control.hints.len() >= self.options.hint_capacity
++                    && !control.hints.contains(&relative)
++            {
++                control.full = true;
++                control.hints.clear();
++            } else if !control.full {
++                control.hints.insert(relative);
++            }
++            return Ok(epoch);
++        }
++        relative.make_ascii_lowercase();
+         if !relative.is_ascii() {
+             relative = relative
+                 .split('/')
+@@ -699,7 +743,7 @@ impl WorktreeView {
+         }
+         if relative
+             .split('/')
+-            .any(|part| matches!(part, ".git" | ".gitignore" | ".ignore" | ".gitattributes"))
++            .any(|part| matches!(part, ".git" | ".gitignore" | ".ignore" | ".gitattributes" | "p4ignore.ini"))
          {
-@@ -527,7 +554,8 @@ impl WorktreeView {
-         self.refresh()
-     }
-
--    /// Rewalk membership/visibility and process pending hints. With no hints,
-+    /// Repair hinted paths/subtrees using published admission and evidence.
-+    /// Rule changes and ambiguous hints rewalk membership/visibility. With no hints,
-     /// performs a full content reconciliation, not a success-shaped no-op.
-     ///
-     /// At most one pass is attempted. A concurrent invalidation returns
-@@ -803,6 +831,7 @@ impl WorktreeView {
-         let Prepared {
-             evidence,
+             control.tree = true;
+         }
+@@ -1320,6 +1364,7 @@ impl WorktreeView {
              visibility,
+             whitelisted_hidden,
+             excluded,
 +            admission,
              upserts,
              mut stats,
              mut memory,
-@@ -885,6 +914,7 @@ impl WorktreeView {
+@@ -1411,6 +1456,7 @@ impl WorktreeView {
              permit.observe_reconciliation(&mut stats);
          }
          stats.timings.assembly_us += crate::managed::work::micros(assembly.elapsed());
 +        state.admission = admission;
          stats.epoch = epoch;
          control.published_epoch = Some(epoch);
-         control.full = false;
-@@ -908,7 +938,7 @@ impl WorktreeView {
+         if current {
+@@ -1683,7 +1729,7 @@ impl WorktreeView {
          permit: Option<&Arc<crate::managed::WorkPermit>>,
          verify: bool,
      ) -> Result<Prepared> {
@@ -3124,7 +3079,7 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
          self.files.verify_root()?;
          let process = permit.map(crate::managed::process::Control::work);
          let repository = match &process {
-@@ -928,59 +958,129 @@ impl WorktreeView {
+@@ -1703,68 +1749,141 @@ impl WorktreeView {
                  "worktree identity changed".into(),
              ));
          }
@@ -3137,64 +3092,37 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
          // Metadata alone must not permanently exclude a file whose actual
          // bytes have become small enough. Bound actual reads instead.
          options.max_file_size = None;
--        let (walk, memory) = match permit {
+-        let (walk, memory, rules) = match permit {
 -            Some(permit) => {
--                let (walk, memory) = walker::walk_file_metadata_controlled(
+-                let (walk, memory, rules) = walker::walk_file_metadata_controlled(
 -                    &self.root,
 -                    &options,
 -                    &repository,
 -                    permit,
 -                )
 -                .map_err(crate::Error::from)?;
--                (walk, Some(memory))
--            }
--            None => (
--                walker::walk_file_metadata_with_ignorecase(&self.root, &options, ignorecase),
--                None,
--            ),
--        };
--        if walk.skipped_error != 0 {
--            return Err(WorktreeError::IncompleteWalk(walk.skipped_error));
--        }
--        after_discovery();
--        let mut prepared = Prepared {
--            memory,
--            parents: Vec::new(),
--            evidence: BTreeMap::new(),
--            visibility: walk.visibility,
--            upserts: BTreeMap::new(),
--            stats: ReconcileStats {
--                full,
--                files_discovered: walk.listed_files.len(),
--                timings: ReconcileTimings {
--                    discovery_us: crate::managed::work::micros(discovery.elapsed()),
--                    ..ReconcileTimings::default()
--                },
--                ..ReconcileStats::default()
--            },
--        };
--        let planning = Instant::now();
-         let state = self
-             .state
-             .read()
-             .map_err(|_| WorktreeError::Synchronization)?;
+-                (walk, Some(memory), rules)
++        let state = self
++            .state
++            .read()
++            .map_err(|_| WorktreeError::Synchronization)?;
 +        let discovery = if full || permit.is_some() {
 +            Discovery::Full
 +        } else {
 +            self.discover_hints(&state, hints, &options)?
 +        };
-+        let (paths, files, mut prepared) = match discovery {
++        let (paths, files, listed_versions, listed_sizes, mut prepared) = match discovery {
 +            Discovery::Full => {
-+                let (walk, memory, admission) = match permit {
++                let (walk, mut memory, rules, admission) = match permit {
 +                    Some(permit) => {
-+                        let (walk, memory) = walker::walk_file_metadata_controlled(
++                        let (walk, memory, rules) = walker::walk_file_metadata_controlled(
 +                            &self.root,
 +                            &options,
 +                            &repository,
 +                            permit,
 +                        )
 +                        .map_err(crate::Error::from)?;
-+                        (walk, Some(memory), None)
++                        (walk, Some(memory), rules, None)
 +                    }
 +                    None => {
 +                        let ignorecase = if options.no_ignore {
@@ -3202,7 +3130,7 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
 +                        } else {
 +                            CaseInsensitiveIgnore::try_frozen_snapshot(&self.root)?.map(Arc::new)
 +                        };
-+                        let walk = walker::walk_file_metadata_with_ignorecase(
++                        let (walk, rules) = walker::walk_file_metadata_with_rules(
 +                            &self.root,
 +                            &options,
 +                            ignorecase.clone(),
@@ -3241,13 +3169,17 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
 +                            ignorecase,
 +                            sources,
 +                        });
-+                        (walk, None, Some(admission))
++                        (walk, None, rules, Some(admission))
 +                    }
 +                };
 +                if walk.skipped_error != 0 {
 +                    return Err(WorktreeError::IncompleteWalk(walk.skipped_error));
 +                }
++                let excluded_started = Instant::now();
++                let excluded = self.excluded_records(&walk, rules, permit, memory.as_mut())?;
++                let excluded_records_us = crate::managed::work::micros(excluded_started.elapsed());
 +                let prepared = Prepared {
++                    whitelisted_hidden: walk.whitelisted_hidden.into_iter().collect(),
 +                    parents: Vec::new(),
 +                    evidence: BTreeMap::new(),
 +                    visibility: walk.visibility,
@@ -3257,11 +3189,21 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
 +                    stats: ReconcileStats {
 +                        full: full || permit.is_none(),
 +                        files_discovered: walk.listed_files.len(),
++                        excluded_tracked: excluded.len() as u64,
++                        timings: ReconcileTimings {
++                            excluded_records_us,
++                            ..Default::default()
++                        },
 +                        ..ReconcileStats::default()
 +                    },
++                    excluded,
 +                };
-+                (walk.listed_files, walk.files, prepared)
-+            }
++                (walk.listed_files, walk.files, walk.listed_versions, walk.listed_sizes, prepared)
+             }
+-            None => {
+-                let (walk, rules) =
+-                    walker::walk_file_metadata_with_rules(&self.root, &options, ignorecase);
+-                (walk, None, rules)
 +            Discovery::Paths {
 +                files,
 +                evidence,
@@ -3280,16 +3222,49 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
 +                    evidence,
 +                    visibility,
 +                    memory: None,
++                    whitelisted_hidden: state.whitelisted_hidden.clone(),
++                    excluded: state.excluded.clone(),
 +                    admission: Some(admission),
 +                    upserts: BTreeMap::new(),
 +                };
-+                (files.into_iter().collect(), Vec::new(), prepared)
-+            }
-+        };
-+        after_discovery();
++                (files.into_iter().collect(), Vec::new(), Default::default(), Default::default(), prepared)
+             }
+         };
+-        if walk.skipped_error != 0 {
+-            return Err(WorktreeError::IncompleteWalk(walk.skipped_error));
+-        }
+-        let mut memory = memory;
+-        let records = Instant::now();
+-        let excluded = self.excluded_records(&walk, rules, permit, memory.as_mut())?;
+-        let excluded_records_us = crate::managed::work::micros(records.elapsed());
+         after_discovery();
+-        let mut prepared = Prepared {
+-            memory,
+-            parents: Vec::new(),
+-            evidence: BTreeMap::new(),
+-            visibility: walk.visibility,
+-            whitelisted_hidden: walk.whitelisted_hidden.into_iter().collect(),
+-            stats: ReconcileStats {
+-                full,
+-                files_discovered: walk.listed_files.len(),
+-                excluded_tracked: excluded.len() as u64,
+-                timings: ReconcileTimings {
+-                    discovery_us: crate::managed::work::micros(discovery.elapsed()),
+-                    excluded_records_us,
+-                    ..ReconcileTimings::default()
+-                },
+-                ..ReconcileStats::default()
+-            },
+-            excluded,
+-            upserts: BTreeMap::new(),
+-        };
 +        prepared.stats.timings.discovery_us =
 +            crate::managed::work::micros(discovery_started.elapsed());
-+        let planning = Instant::now();
+         let planning = Instant::now();
+-        let state = self
+-            .state
+-            .read()
+-            .map_err(|_| WorktreeError::Synchronization)?;
          let base_contents = BaseContents::default();
          let mut copies: HashMap<u32, Vec<String>> = HashMap::new();
 -        let mut paths = walk.listed_files;
@@ -3297,7 +3272,26 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
          if verify
              && (prepared.visibility != state.visibility
                  || paths.len() != state.evidence.len()
-@@ -998,8 +1098,7 @@ impl WorktreeView {
+@@ -1778,8 +1897,7 @@ impl WorktreeView {
+                 .map_err(crate::Error::from)?;
+         }
+         if !full {
+-            let versions: HashMap<_, _> = walk
+-                .files
++            let versions: HashMap<_, _> = files
+                 .iter()
+                 .filter_map(|file| {
+                     file.version
+@@ -1787,7 +1905,7 @@ impl WorktreeView {
+                         .map(|version| (file.relative_path.as_str(), version))
+                 })
+                 .chain(
+-                    walk.listed_versions
++                    listed_versions
+                         .iter()
+                         .map(|(path, version)| (path.as_str(), version)),
+                 )
+@@ -1822,12 +1940,11 @@ impl WorktreeView {
                  .cmp(parent_path(right))
                  .then_with(|| left.cmp(right))
          });
@@ -3306,8 +3300,13 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
 +        let sizes: HashMap<_, _> = files
              .iter()
              .map(|file| (file.relative_path.as_str(), file.size))
-             .collect();
-@@ -1044,6 +1143,17 @@ impl WorktreeView {
+             .chain(
+-                walk.listed_sizes
++                listed_sizes
+                     .iter()
+                     .map(|(path, size)| (path.as_str(), *size)),
+             )
+@@ -1873,6 +1990,17 @@ impl WorktreeView {
          }
          prepared.stats.timings.planning_us = crate::managed::work::micros(planning.elapsed());
          let verification = Instant::now();
@@ -3325,7 +3324,7 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
          for range in ranges {
              let files = &paths[range];
              let mut wanted = rayon::current_num_threads().min(files.len());
-@@ -1059,7 +1169,7 @@ impl WorktreeView {
+@@ -1888,7 +2016,7 @@ impl WorktreeView {
                      let start = Instant::now();
                      let mut timings = ReconcileTimings::default();
                      let verified =
@@ -3334,7 +3333,7 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
                      timings.worker_content_us = crate::managed::work::micros(start.elapsed());
                      let chunk = match verified {
                          Ok(result) => Some(result),
-@@ -1212,11 +1322,14 @@ impl WorktreeView {
+@@ -2041,11 +2169,14 @@ impl WorktreeView {
                  let file = timed(&mut timings.worker_open_us, || {
                      reader.open_observed(relative)
                  })?;
@@ -3350,8 +3349,8 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
 +                    && !full
                      && !hinted
                      && version.is_trusted()
-                     && previous.is_some_and(|entry| entry.version == version)
-@@ -1341,6 +1454,239 @@ impl WorktreeView {
+                     && previous.is_some_and(|entry| entry.version.as_ref() == Some(&version))
+@@ -2170,6 +2301,239 @@ impl WorktreeView {
          Ok(chunk)
      }
 
@@ -3591,40 +3590,40 @@ index 8d2a607be4b6add07197f0acfa641222460039ea..9aa18fdd8863ad76ed9e987e5f7ff951
      /// Hold the readiness, overlay, visibility and membership guards together.
      /// Owned paths and read-only file handles may escape; live IDs never do.
      /// Do not reenter this view (including invalidation) from the closure.
-@@ -1901,6 +2247,7 @@ struct Prepared {
-     parents: Vec<ParentObservation>,
-     evidence: BTreeMap<String, Evidence>,
+@@ -2879,6 +3243,7 @@ struct Prepared {
      visibility: PathVisibility,
+     whitelisted_hidden: BTreeSet<String>,
+     excluded: BTreeMap<String, ExcludedFile>,
 +    admission: Option<Arc<Admission>>,
      upserts: BTreeMap<String, PreparedUpsert>,
      stats: ReconcileStats,
  }
-@@ -2216,19 +2563,23 @@ fn validate_checkpoint_directory(
+@@ -3233,6 +3598,28 @@ fn validate_checkpoint_directory(
      Ok(())
  }
 
--fn is_hinted(path: &str, hints: &BTreeSet<String>, lookups: &mut u64) -> bool {
 +fn hinted_prefix<'a>(
 +    original: &'a str,
 +    hints: &BTreeSet<String>,
 +    lookups: &mut u64,
 +) -> Option<&'a str> {
-     if hints.is_empty() {
--        return false;
++    if hints.is_empty() {
 +        return None;
-     }
--    let path = path.to_ascii_lowercase();
++    }
 +    let path = original.to_ascii_lowercase();
-     let mut prefix = path.as_str();
-     loop {
-         *lookups += 1;
-         if hints.contains(prefix) {
--            return true;
++    let mut prefix = path.as_str();
++    loop {
++        *lookups += 1;
++        if hints.contains(prefix) {
 +            return Some(&original[..prefix.len()]);
-         }
-         let Some((parent, _)) = prefix.rsplit_once('/') else {
--            return false;
++        }
++        let Some((parent, _)) = prefix.rsplit_once('/') else {
 +            return None;
-         };
-         prefix = parent;
-     }
++        };
++        prefix = parent;
++    }
++}
++
+ fn is_hinted(path: &str, hints: &BTreeSet<String>, lookups: &mut u64) -> bool {
+     if hints.is_empty() {
+         return false;

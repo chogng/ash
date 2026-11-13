@@ -3,12 +3,13 @@ import { CommandsRegistry } from '../../../../platform/commands/common/commands.
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
-import { ISessionsEntryService, type ISessionsEntryOpenOptions } from '../../../services/layout/common/sessionsEntryService.js';
+import { ISessionsEntryService, type ISessionsEntry, type ISessionsEntryOpenOptions } from '../../../services/layout/common/sessionsEntryService.js';
 import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../sessions/browser/views/sessionsView.js';
 import { IPreferencesService } from '../../../../workbench/services/preferences/common/preferences.js';
 import { COLLAB_CONTAINER_ID } from '../../../../workbench/contrib/collab/common/collab.js';
 import { SessionsEntryService, documentEntry } from './sessionsEntryService.js';
 import { ISessionEditorWorkingSetService, SessionEditorWorkingSetService } from '../common/sessionEditorWorkingSet.js';
+import { CHAT_WORKSPACE_ENTRY_REQUEST } from '../../chat/common/constants.js';
 
 class SessionsLayoutContribution extends Disposable {
 	constructor(@ISessionsEntryService layout: ISessionsEntryService) {
@@ -26,12 +27,14 @@ class SessionsLayoutContribution extends Disposable {
 			['chat', SESSIONS_NAVIGATION_CONTAINER_ID, 'conversation'],
 			['collaboration', COLLAB_CONTAINER_ID, 'sidebar'],
 		] as const) {
-			this._register(CommandsRegistry.register('sessions.open.' + id, (_accessor, source) => layout.openEntry({
+			const entry: ISessionsEntry = {
 				id, workspaceMode: id === 'chat' ? 'chat' : 'current', sidebarContainerId: sidebar, content: 'conversation', focus,
 				conversationKind: 'chat',
 				newDraft: id === 'chat' ? 'conversation' : undefined,
 				activityContext: 'sessions.activity.' + id + 'Selected', restoreCommand: 'sessions.open.' + id,
-			}, undefined, source === 'restore' ? { source } : undefined)));
+			};
+			this._register(CommandsRegistry.register('sessions.open.' + id, (_accessor, source) => id === 'chat' && source === CHAT_WORKSPACE_ENTRY_REQUEST
+				? entry : layout.openEntry(entry, undefined, source === 'restore' ? { source } : undefined)));
 		}
 	}
 }

@@ -7,15 +7,15 @@ import type { IView } from '../../../base/browser/ui/grid/grid.js';
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
+import type { IChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
-import type { ChatMode } from '../../../workbench/services/chat/common/chatService.js';
 import type { SessionId, IActiveSessionThread, IUntitledChatSession } from '../../services/sessions/common/session.js';
 import type { SessionsConversationKind } from '../../services/sessions/common/sessionsConversation.js';
 
 export interface ISessionChatView extends IDisposable {
 	readonly element: HTMLElement;
 	readonly sessionId: SessionId | undefined;
-	readonly model: { readonly inputState: { readonly mode: ChatMode; }; };
+	readonly input: Pick<IChatInputPart, 'moveDraftTo' | 'replaceDraft'>;
 	focus(): void;
 	startVoiceConversation(): Promise<void>;
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>): Promise<readonly ChatContextAttachment[]>;
@@ -27,7 +27,7 @@ export interface ISessionChatView extends IDisposable {
 }
 
 export interface ISessionsConversationPane extends ISessionChatView {
-	readonly model: ISessionChatView['model'] & {
+	readonly model: {
 		selectThread(active: IActiveSessionThread): Promise<void>;
 		selectUntitledSession(session: IUntitledChatSession): void;
 	};
@@ -38,7 +38,6 @@ interface ISessionViewOptions<TSelection, TChat extends ISessionChatView> {
 	readonly kind: SessionsConversationKind;
 	readonly createPane: (kind: SessionsConversationKind, container: HTMLElement, panelId: string, selection: TSelection) => TChat;
 	readonly bindPane?: (pane: TChat, selection: TSelection) => void;
-	readonly bindingKey?: (selection: TSelection) => string;
 	readonly shouldRecreatePane?: (previous: TSelection, next: TSelection) => boolean;
 	readonly activateSelection?: (selection: TSelection) => void;
 	readonly closeSelection?: (selection: TSelection) => void;
@@ -58,7 +57,6 @@ export class SessionView<TSelection, TChat extends ISessionChatView> extends Dis
 	private selection: TSelection;
 	private kind: SessionsConversationKind;
 	private visible = true;
-	private selectionRevision = 0;
 
 	constructor(container: HTMLElement, private readonly options: ISessionViewOptions<TSelection, TChat>) {
 		super();
@@ -98,12 +96,10 @@ export class SessionView<TSelection, TChat extends ISessionChatView> extends Dis
 	get activeChat(): TChat { return this.panes.get(this.kind)!; }
 
 	openSession(selection: TSelection): void {
-		const { bindingKey, shouldRecreatePane } = this.options;
+		const { shouldRecreatePane } = this.options;
 		const previous = this.selection;
 		this.selection = selection;
-		if (bindingKey && bindingKey(previous) !== bindingKey(selection)) this.selectionRevision++;
 		if (shouldRecreatePane?.(previous, selection)) {
-			this.selectionRevision++;
 			const focused = this.element.contains(this.element.ownerDocument.activeElement);
 			// The host owns the pane's services. Rebind them while retaining the draft identity.
 			this.panes.clearAndDisposeAll();
@@ -115,22 +111,12 @@ export class SessionView<TSelection, TChat extends ISessionChatView> extends Dis
 		for (const [, pane] of this.panes) this.options.bindPane?.(pane, this.selection);
 	}
 
-	async setConversationKind(kind: SessionsConversationKind): Promise<void> {
+	setConversationKind(kind: SessionsConversationKind): void {
 		if (kind === this.kind || this.isDisposed) return;
-		const revision = this.selectionRevision;
 		const previous = this.activeChat;
-		const draft = await previous.captureDraft();
-		if (this.isDisposed) return;
 		const next = this.getOrCreatePane(kind);
-		const oldDraft = await next.captureDraft();
-		if (this.isDisposed) return;
-		if (revision !== this.selectionRevision) return this.setConversationKind(kind);
 		const focused = this.element.contains(this.element.ownerDocument.activeElement);
-		// Only the displayed chat owns the unsent draft. Retained renderers keep their
-		// DOM and transcript view state, without reviving an older composer on return.
-		oldDraft?.clear();
-		draft?.clear();
-		next.restoreDraft(draft?.draft ?? { mode: previous.model.inputState.mode, text: '', contexts: [] });
+		previous.input.moveDraftTo(next.input);
 		previous.setVisible(false);
 		previous.element.remove();
 		this.kind = kind;

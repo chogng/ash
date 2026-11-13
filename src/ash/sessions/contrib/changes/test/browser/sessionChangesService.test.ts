@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import { Event } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { autorun } from '../../../../../base/common/observable.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -11,7 +12,9 @@ import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '.
 import { EditorInputSerializers } from '../../../../../workbench/services/editor/common/editorInputSerializer.js';
 import type { IResourceEditorInput } from '../../../../../workbench/common/editor.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import { SessionsChatResponseFileChangesService } from '../../../chat/browser/sessionTurnChanges.js';
+import { SessionsChatResponseFileChangesProvider } from '../../../chat/browser/sessionTurnChanges.js';
+import type { IChatResponseFileChangesProvider } from '../../../../../workbench/contrib/chat/browser/chatResponseFileChangesService.js';
+import { LocalChatSessionUri } from '../../../../../workbench/contrib/chat/common/model/chatUri.js';
 import type { ChatWidgetModel } from '../../../../browser/chatWidgetModel.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { SessionChangesService } from '../../browser/sessionChangesService.js';
@@ -105,13 +108,26 @@ suite('Session Changes opening and capture contract', () => {
 		const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(request.input)))) as SessionChangesEditorInput;
 		assert.equal(restored.resource.toString(), editor.toString());
 		assert.deepEqual(restored.changesetSelection, { kind: 'id', id: 'capture' });
-		const model = { sessionId: 'session', threadId: 'thread', composerGeneration: 0, changeSets: [details.summary], turnChangeDetails: () => currentDetails };
+		using modelChanged = new Emitter<void>();
+		const model = { sessionId: 'session', threadId: 'thread', composerGeneration: 0, changeSets: [details.summary], turnChangeDetails: () => currentDetails, onDidChange: modelChanged.event };
 		services.registerInstance(ISessionChangesService, service);
 		services.registerInstance(INotificationService, {
 			error: (error: unknown) => assert.fail(String(error)),
 		} as unknown as INotificationService);
-		const responseChanges = services.createInstance(SessionsChatResponseFileChangesService, model as unknown as ChatWidgetModel);
-		const turn = responseChanges.getChangesForRequest({
+		const responseChanges = services.createInstance(SessionsChatResponseFileChangesProvider, model as unknown as ChatWidgetModel);
+		const responseProvider: IChatResponseFileChangesProvider = responseChanges;
+		assert.equal(responseProvider.getChangesForRequest(URI.parse('file:/session'), 'turn'), undefined);
+		assert.equal(responseProvider.getChangesForRequest(LocalChatSessionUri.forSession('session', 'other'), 'turn'), undefined);
+		assert.equal(responseProvider.getChangesForRequest(LocalChatSessionUri.forSession('session', 'thread'), 'missing'), undefined);
+		const diffs = responseProvider.getChangesForRequest(LocalChatSessionUri.forSession('session', 'thread'), 'turn')!;
+		let observedFiles = 0;
+		using observeDiffs = autorun(reader => { observedFiles = diffs.read(reader).length; });
+		assert.equal(observedFiles, 1);
+		assert.deepEqual(diffs.get().map(diff => ({
+			original: diff.originalURI.toString(), modified: diff.modifiedURI.toString(), snapshot: diff.modifiedSnapshotURI?.toString(),
+			added: diff.added, removed: diff.removed, deleted: diff.isDeleted, final: diff.isFinal,
+		})), [{ original: change.originalUri.toString(), modified: change.uri.toString(), snapshot: change.modifiedUri.toString(), added: 0, removed: 2, deleted: true, final: true }]);
+		const turn = responseChanges.getChangesForPrompt({
 			id: 'prompt', type: 'userMessage', text: 'Delete file', transient: false,
 			requestSource: { sessionId: 'session', threadId: 'thread', turnId: 'turn', itemId: 'prompt' },
 		});
@@ -131,12 +147,23 @@ suite('Session Changes opening and capture contract', () => {
 		const signal = new AbortController().signal;
 		assert.deepEqual(await replyFile?.preview?.read(signal), { beforeContent: 'deleted', afterContent: '' });
 		currentDetails = { ...details, summary: { ...details.summary, revision: 4 } };
+		modelChanged.fire();
+		assert.equal(observedFiles, 0);
 		assert.deepEqual(responseChanges.getChangesForResponse(replySource)?.fileDiffs, []);
 		await assert.rejects(replyFile!.preview!.read(signal));
 		await replyFile?.review();
 		assert.equal(opened.length, 3);
 		currentDetails = details;
+		modelChanged.fire();
+		assert.equal(observedFiles, 1);
+		model.changeSets = [{ ...details.summary, statistics: { files: 0, additions: 0, deletions: 0 } }];
+		modelChanged.fire();
+		assert.equal(observedFiles, 0);
+		model.changeSets = [details.summary];
+		modelChanged.fire();
 		model.composerGeneration++;
+		modelChanged.fire();
+		assert.equal(observedFiles, 0);
 		await file?.review();
 		await turn?.review();
 		assert.equal(opened.length, 3);

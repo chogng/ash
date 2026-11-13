@@ -11,6 +11,7 @@ import { MenusRegistry, type MenuId } from '../../platform/actions/common/action
 import { Menus } from './menus.js';
 import { SessionsMenuActiveConversationContext, SessionsMenuConversationPinnedContext } from '../common/contextkeys.js';
 import { ContextKeyExpr } from '../../platform/contextkey/common/contextkey.js';
+import type { ProjectScope } from '../../platform/projects/common/projectService.js';
 
 const rename = () => ({ id: 'agentSession.rename', title: localize('sessions.list.rename', 'Rename'), icon: Lxicon.edit });
 const moveToGroup = () => ({ id: 'agentSession.moveToGroup', title: localize('sessions.list.moveToGroup', 'Move to group'), icon: Lxicon.folders });
@@ -61,16 +62,21 @@ export function createSessionWorkspaceActions(sessionId: string, threadId: strin
 	}];
 }
 
-/** Session menus share presentation and captured-target commands; opening a window is host-owned. */
-export function createSessionItemActions(selection: SessionsViewSelection, commands: ICommandService, listModel: ISessionsListModelService, notifications: INotificationService, openInNewWindow: () => Promise<unknown>, didPin?: (sessionId: string) => void): readonly IAction[] {
+/** Session menus share captured-target commands; the host supplies the project scope and window opener. */
+export function createSessionItemActions(selection: SessionsViewSelection, commands: ICommandService, listModel: ISessionsListModelService, notifications: INotificationService, options: {
+	readonly projectScope: ProjectScope;
+	readonly openInNewWindow?: () => Promise<unknown>;
+	readonly didPin?: (sessionId: string) => void;
+}): readonly IAction[] {
+	const { projectScope, openInNewWindow, didPin } = options;
 	const id = selection.kind === 'session' ? selection.active.session.sessionId : undefined;
 	const target = selection.kind === 'untitled' ? { untitledSessionId: selection.session.untitledSessionId } : id;
 	const pinned = selection.kind === 'session' && listModel.isSessionPinned(selection.active.session);
-	const action = (commandId: string, label: string, icon: NonNullable<IAction['icon']>): IAction => ({
+	const action = (commandId: string, label: string, icon: NonNullable<IAction['icon']>, ...args: unknown[]): IAction => ({
 		id: commandId, label, icon, enabled: true, tooltip: '',
-		run: () => commands.executeCommand(commandId, target).catch(error => notifications.error(String(error))),
+		run: () => commands.executeCommand(commandId, target, ...args).catch(error => notifications.error(String(error))),
 	});
-	const conversationAction = ({ id: commandId, title, icon }: ReturnType<typeof rename>): IAction => action(commandId, title, icon);
+	const conversationAction = ({ id: commandId, title, icon }: ReturnType<typeof rename>, ...args: unknown[]): IAction => action(commandId, title, icon, ...args);
 	const { title: pinLabel, icon: pinIcon } = pinned ? unpin() : pin();
 	return [
 		{
@@ -82,13 +88,12 @@ export function createSessionItemActions(selection: SessionsViewSelection, comma
 		},
 		conversationAction(rename()),
 		new Separator(),
-		conversationAction(addToProject()),
+		conversationAction(addToProject(), projectScope),
 		conversationAction(moveToGroup()),
-		new Separator(),
-		{
+		...(openInNewWindow ? [new Separator(), {
 			...action('sessions.openInNewWindow', localize('sessions.list.openWindow', 'Open in new window'), Lxicon.linkExternal),
 			run: () => openInNewWindow().catch(error => notifications.error(String(error)))
-		},
+		}] : []),
 		new Separator(),
 		conversationAction(archive()),
 		{

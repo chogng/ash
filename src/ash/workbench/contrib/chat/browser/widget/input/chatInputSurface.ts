@@ -3,6 +3,7 @@ import type { ActionViewItemProvider } from '../../../../../../base/browser/ui/a
 import { ButtonActionViewItem } from '../../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { setAriaAttribute } from '../../../../../../base/browser/ui/aria/aria.js';
 import type { IAction } from '../../../../../../base/common/actions.js';
+import type { IObservable } from '../../../../../../base/common/observable.js';
 import type { Icon } from '../../../../../../base/common/icon.js';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
@@ -18,6 +19,7 @@ interface ChatInputSurfaceOptions<T extends IChatInputEditor> {
 	readonly submit: () => void;
 	readonly modelPickerPosition: 'leading' | 'trailing';
 	readonly layout?: 'compact';
+	readonly alwaysExpanded?: IObservable<boolean>;
 	readonly actionViewItemProvider: ActionViewItemProvider;
 }
 
@@ -55,7 +57,7 @@ export class ChatInputSurface<T extends IChatInputEditor> extends Disposable {
 			this.inlineActionsToolbar = this._register(new WorkbenchToolBar(this.form, contextMenus, { ariaLabel, actionViewItemProvider }));
 			this.inlineActionsToolbar.element.classList.add('ash-chat-input-toolbars');
 			this.footer.append(this.toolbar.element);
-			this._register(installChatInputLayout(this.form, this.editor, this.inlineActionsToolbar.element, this.attachmentToolbar.element));
+			this._register(installChatInputLayout(this.form, this.editor, this.inlineActionsToolbar.element, this.attachmentToolbar.element, options.alwaysExpanded));
 		}
 		this._register(addDisposableListener(this.form, 'submit', event => {
 			event.preventDefault();

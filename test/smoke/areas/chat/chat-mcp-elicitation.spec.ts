@@ -5,7 +5,7 @@ import { expect, test } from '../../../automation/test.js';
 import { APP_SERVER_METHODS as methods, APPROVAL_MODE_DEFINITIONS } from '../../../../.build/protocol/typescript/index.js';
 import { connectProfile } from '../sessions/sessionProfileFixture.js';
 
-for (const surface of ['Code', 'Cowork'] as const) test(`${surface} MCP forms preserve optional absence and explicit false through the real harness`, { tag: ['@electron-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
+test('Code MCP forms preserve optional absence and explicit false through the real harness', { tag: ['@electron-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 	test.setTimeout(180_000);
 	const provider = 'custom-elicitation-fixture';
 	const model = { provider, model: 'elicitation-model' };
@@ -89,8 +89,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 		await page.locator('.ash-sessions-chat-slot.active:visible').getByRole('button', { name: /^Permissions:/ }).click();
 		await page.getByRole('menuitemradio', { name: bypass.label.english, exact: true }).click();
 		await page.getByRole('dialog', { name: 'Confirm', exact: true }).getByRole('button', { name: bypass.label.english, exact: true }).click();
-		if (surface === 'Cowork') await page.locator('[data-action-id="sessions.open.collaboration"] button').click();
-		const chat = page.locator(`.ash-sessions-chat-slot.active:visible ${surface === 'Code' ? '.ash-chat' : '.ash-native-chat'}`);
+		const chat = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 		const answers = async (): Promise<unknown[]> => {
 			try { return (await readFile(record, 'utf8')).trim().split('\n').map(line => JSON.parse(line)); }
 			catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
@@ -100,7 +99,6 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 			await input.focus();
 			await page.keyboard.insertText(`Use ask_fields once, then finish. ${explicit ? 'With optional values' : 'Required fields only'}`);
 			await input.press('Enter');
-			if (surface === 'Cowork') await chat.getByRole('button', { name: 'Approve once', exact: true }).click();
 			const form = chat.locator('.ash-chat-interaction-form');
 			const project = form.locator('input[name="project"]');
 			try { await expect(project).toBeVisible(); }

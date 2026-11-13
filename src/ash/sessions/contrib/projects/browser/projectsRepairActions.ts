@@ -3,11 +3,13 @@ import { basename } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { localize, localize2 } from '../../../../nls.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProjectService, type Project } from '../../../../platform/projects/common/projectService.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { projectForFolder, projectFolders, readCodeProjects, unassignedCodeFolder, workspaceFolderKey } from '../../chat/browser/sessionWorkspaceProjects.js';
@@ -59,10 +61,13 @@ registerAction2(class RepairCodeFolderProjects extends Action2 {
 			title: localize2('projects.repairCodeFolders', 'Link Unassigned Code Conversations to Folder Projects…'),
 			category: localize2('projects.title', 'Projects'),
 			f1: true,
+			precondition: SessionsWorkspaceModeContext.isEqualTo('code'),
 		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
+		const contextKeys = accessor.get(IContextKeyService);
+		if (contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code') return;
 		const projects = accessor.get(IProjectService);
 		const sessions = accessor.get(ISessionsManagementService);
 		const groups = accessor.get(ISessionGroupsService);
@@ -97,6 +102,7 @@ registerAction2(class RepairCodeFolderProjects extends Action2 {
 			});
 		};
 		const selected = await reviewRepairs(input, notifications, load, localize('projects.repairFolderPick', 'Select Code conversations to link'));
+		if (contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code') return;
 		const updated = new Map<string, Project>();
 		for (const { key, resource, target, sessionId } of selected) {
 			const project = updated.get(target?.id ?? key) ?? target ?? await createRepairFolderProject(projects, resource);

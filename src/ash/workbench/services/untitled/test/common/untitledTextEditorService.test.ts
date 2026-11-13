@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { QuickInputType, QuickInputHideReason, type IQuickInput, type IQuickInputHideEvent, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
@@ -173,6 +174,8 @@ test('closing the last working copy releases its untitled identity and shared te
 test('New Untitled Text Editor opens a compatible text editor input', async () => {
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();
+	using contexts = new ContextKeyService();
+	services.registerInstance(IContextKeyService, contexts);
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using models = createModels();
 	services.registerInstance(ITextModelResourceService, models);

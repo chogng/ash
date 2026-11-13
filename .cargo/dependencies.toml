@@ -380,8 +380,8 @@ reason = "3.0 through product-update -> tough; 4.0 through rtc-shared -> rcgen."
 
 [[multiple_versions]]
 name = "quinn-udp"
-versions = ["0.5.15", "0.6.2"]
-reason = "0.5 through quinn used by the existing product; 0.6 through webrtc-rs 0.21."
+versions = ["0.5.16", "0.6.3"]
+reason = "0.5 through quinn used by ash-tcp-tunnel; 0.6 through webrtc-rs 0.21 used by ash-livekit-client."
 
 [[multiple_versions]]
 name = "x509-parser"

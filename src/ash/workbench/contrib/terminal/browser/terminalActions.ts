@@ -7,19 +7,21 @@ import { IEditorGroupsService } from '../../../services/editor/common/editorGrou
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { TerminalChatCommandId } from '../terminalContribChatExports.js';
 import { TerminalTabsChatEntry } from './terminalTabsChatEntry.js';
+import { registerEditorToolAction } from '../../../browser/actions/editorToolActions.js';
 import { TerminalIconPicker } from './terminalIconPicker.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { terminalStrings } from '../common/terminalStrings.js';
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { KeyChord, KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
-import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId } from '../../../../platform/actions/common/actions.js';
 import { CONTEXT_ACCESSIBILITY_MODE_ENABLED } from '../../../../platform/accessibility/common/accessibility.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { AppServerAvailableContext } from '../../../common/contextkeys.js';
+import { AppServerAvailableContext, WorkbenchEditorToolsAvailable } from '../../../common/contextkeys.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TerminalCommandId, TERMINAL_VIEW_ID } from '../common/terminal.js';
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../common/terminalContextKey.js';
@@ -41,7 +43,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
 export function registerTerminalActions(): void {
-	registerAction2(class FocusTerminalHoverAction extends Action2 {
+	registerEditorToolAction(class FocusTerminalHoverAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalCommandId.FocusHover,
@@ -99,7 +101,7 @@ export function registerTerminalActions(): void {
 			keybinding: { primary: KeyMod.CtrlCmd | KeyCode.End, linux: { primary: KeyMod.Shift | KeyCode.End } },
 		},
 	]) {
-		registerAction2(class ScrollTerminalAction extends Action2 {
+		registerEditorToolAction(class ScrollTerminalAction extends Action2 {
 			constructor() {
 				super({
 					id: action.id,
@@ -115,7 +117,7 @@ export function registerTerminalActions(): void {
 			}
 		});
 	}
-	registerAction2(class SelectAllTerminalAction extends Action2 {
+	registerEditorToolAction(class SelectAllTerminalAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalCommandId.SelectAll, title: localize2('terminal.selectAll', 'Terminal: Select All'), f1: true,
@@ -128,7 +130,7 @@ export function registerTerminalActions(): void {
 			if (screen && !screen.isDisposed) screen.raw.selectAll();
 		}
 	});
-	registerAction2(class ClearTerminalSelectionAction extends Action2 {
+	registerEditorToolAction(class ClearTerminalSelectionAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalCommandId.ClearSelection, title: localize2('terminal.clearSelection', 'Terminal: Clear Selection'), f1: true,
@@ -144,7 +146,7 @@ export function registerTerminalActions(): void {
 			if (screen && !screen.isDisposed && screen.raw.hasSelection()) screen.raw.clearSelection();
 		}
 	});
-	registerAction2(class RunActiveFileTerminalAction extends Action2 {
+	registerEditorToolAction(class RunActiveFileTerminalAction extends Action2 {
 		constructor() {
 			super({ id: TerminalCommandId.RunActiveFile, title: localize2('terminal.runActiveFile', 'Terminal: Run Active File in Active Terminal'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) });
 		}
@@ -162,7 +164,7 @@ export function registerTerminalActions(): void {
 			else await accessor.get(ITerminalGroupService).showPanel(false);
 		}
 	});
-	registerAction2(class RunSelectedTextTerminalAction extends Action2 {
+	registerEditorToolAction(class RunSelectedTextTerminalAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalCommandId.RunSelectedText,
@@ -199,7 +201,7 @@ export function registerTerminalActions(): void {
 			}
 		}
 	});
-	registerAction2(class AttachTerminalToChatAction extends Action2 {
+	registerEditorToolAction(class AttachTerminalToChatAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalChatCommandId.AttachToChat,
@@ -216,7 +218,7 @@ export function registerTerminalActions(): void {
 		}
 	});
 
-	registerAction2(class RenameTerminalAction extends Action2 {
+	registerEditorToolAction(class RenameTerminalAction extends Action2 {
 		constructor() { super({ id: TerminalCommandId.Rename, title: localize2('terminal.rename.command', 'Terminal: Rename'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
 		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 			const instance = resolveInstance(accessor, context);
@@ -224,7 +226,7 @@ export function registerTerminalActions(): void {
 			if (instance && editing.getEditingTerminal() !== instance) await editing.rename(instance);
 		}
 	});
-	registerAction2(class ChangeTerminalIconAction extends Action2 {
+	registerEditorToolAction(class ChangeTerminalIconAction extends Action2 {
 		constructor() { super({ id: TerminalCommandId.ChangeIcon, title: localize2('terminal.icon.command', 'Terminal: Change Icon'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
 		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 			const instance = resolveInstance(accessor, context);
@@ -237,14 +239,14 @@ export function registerTerminalActions(): void {
 			if (icon !== undefined && terminals.instances.includes(instance)) await instance.changeIcon(icon ?? undefined);
 		}
 	});
-	registerAction2(class MoveTerminalToEditorAction extends Action2 {
+	registerEditorToolAction(class MoveTerminalToEditorAction extends Action2 {
 		constructor() { super({ id: TerminalCommandId.MoveToEditor, title: terminalStrings.moveToEditor, f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
 		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 			const instance = resolveInstance(accessor, context);
 			if (instance) await accessor.get(ITerminalEditorService).openEditor(instance);
 		}
 	});
-	registerAction2(class MoveTerminalToPanelAction extends Action2 {
+	registerEditorToolAction(class MoveTerminalToPanelAction extends Action2 {
 		constructor() { super({ id: TerminalCommandId.MoveToTerminalPanel, title: terminalStrings.moveToTerminalPanel, f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
 		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 			const instance = resolveInstance(accessor, context);
@@ -256,7 +258,7 @@ export function registerTerminalActions(): void {
 			await accessor.get(ITerminalGroupService).showPanel(true);
 		}
 	});
-	registerAction2(class FocusTerminalAction extends Action2 {
+	registerEditorToolAction(class FocusTerminalAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalCommandId.Focus,
@@ -276,7 +278,7 @@ export function registerTerminalActions(): void {
 		}
 	});
 
-	registerAction2(class NewTerminalAction extends Action2 {
+	registerEditorToolAction(class NewTerminalAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalCommandId.New, title: localize2('terminal.title.new', 'New Terminal'), f1: true,
@@ -289,6 +291,7 @@ export function registerTerminalActions(): void {
 			});
 		}
 		override async run(accessor: ServicesAccessor): Promise<void> {
+			const contextKeys = accessor.get(IContextKeyService);
 			const instantiation = accessor.get(IInstantiationService);
 			const workspaceContext = accessor.get(IWorkspaceContextService);
 			const workspace = workspaceContext.getWorkspace();
@@ -305,6 +308,7 @@ export function registerTerminalActions(): void {
 				if (accepted !== true) return;
 			}
 			if (workspaceContext.getWorkspace() !== workspace) return;
+			if (!contextKeys.contextMatchesRules(WorkbenchEditorToolsAvailable)) return;
 			// Construct process owners only after authorization and its connection recovery finish.
 			const { terminals, groups, quickInput } = instantiation.invokeFunction(accessor => ({
 				terminals: accessor.get(ITerminalService), groups: accessor.get(ITerminalGroupService), quickInput: accessor.get(IQuickInputService),
@@ -322,7 +326,7 @@ export function registerTerminalActions(): void {
 			if (focus && !quickInput.currentQuickInput && terminals.activeInstance === instance) instance.xterm?.focus();
 		}
 	});
-	registerAction2(class CreateTerminalEditorSameGroupAction extends Action2 {
+	registerEditorToolAction(class CreateTerminalEditorSameGroupAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalCommandId.CreateTerminalEditorSameGroup,
@@ -338,7 +342,7 @@ export function registerTerminalActions(): void {
 			}
 		}
 	});
-	registerAction2(class NewTerminalWindowAction extends Action2 {
+	registerEditorToolAction(class NewTerminalWindowAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalCommandId.NewInNewWindow, title: localize2('terminal.newInNewWindow', 'New Terminal Window'), f1: true,
@@ -370,7 +374,7 @@ export function registerTerminalActions(): void {
 			}
 		}
 	});
-	registerAction2(class ConfigureTerminalSettingsAction extends Action2 {
+	registerEditorToolAction(class ConfigureTerminalSettingsAction extends Action2 {
 		constructor() {
 			super({ id: TerminalCommandId.ConfigureTerminalSettings, title: localize2('terminal.configureSettings', 'Configure Terminal Settings'), f1: true });
 		}
@@ -378,7 +382,7 @@ export function registerTerminalActions(): void {
 			return accessor.get(IPreferencesService).openSettings({ jsonEditor: false, query: '@id:terminal.integrated.*' });
 		}
 	});
-	registerAction2(class SplitTerminalAction extends Action2 {
+	registerEditorToolAction(class SplitTerminalAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalCommandId.Split, title: localize2('terminal.group.split', 'Terminal: Split Terminal'), f1: true,
@@ -407,7 +411,7 @@ export function registerTerminalActions(): void {
 		[TerminalCommandId.FocusNextPane, localize2('terminal.group.next', 'Terminal: Focus Next Pane'), 'next', KeyCode.RightArrow],
 		[TerminalCommandId.FocusPreviousPane, localize2('terminal.group.previous', 'Terminal: Focus Previous Pane'), 'previous', KeyCode.LeftArrow],
 	] as const) {
-		registerAction2(class FocusTerminalPaneAction extends Action2 {
+		registerEditorToolAction(class FocusTerminalPaneAction extends Action2 {
 			constructor() {
 				super({
 					id, title, f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
@@ -426,7 +430,7 @@ export function registerTerminalActions(): void {
 			}
 		});
 	}
-	registerAction2(class UnsplitTerminalAction extends Action2 {
+	registerEditorToolAction(class UnsplitTerminalAction extends Action2 {
 		constructor() {
 			super({ id: TerminalCommandId.Unsplit, title: localize2('terminal.group.unsplit', 'Terminal: Unsplit Terminal'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) });
 		}
@@ -437,7 +441,7 @@ export function registerTerminalActions(): void {
 			instance.xterm?.focus();
 		}
 	});
-	registerAction2(class JoinTerminalAction extends Action2 {
+	registerEditorToolAction(class JoinTerminalAction extends Action2 {
 		constructor() {
 			super({ id: TerminalCommandId.Join, title: localize2('terminal.group.join', 'Terminal: Join or Reorder Terminals...'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) });
 		}
@@ -476,7 +480,7 @@ export function registerTerminalActions(): void {
 			source.xterm?.focus();
 		}
 	});
-	registerAction2(class NewWithProfileAction extends Action2 {
+	registerEditorToolAction(class NewWithProfileAction extends Action2 {
 		constructor() {
 			super({ id: TerminalCommandId.NewWithProfile, title: localize2('terminal.profile.newCommand', 'Terminal: Create New Terminal With Profile'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) });
 		}
@@ -496,7 +500,7 @@ export function registerTerminalActions(): void {
 			else await groups.showPanel(true);
 		}
 	});
-	registerAction2(class SelectDefaultProfileAction extends Action2 {
+	registerEditorToolAction(class SelectDefaultProfileAction extends Action2 {
 		constructor() {
 			super({ id: TerminalCommandId.SelectDefaultProfile, title: localize2('terminal.profile.defaultCommand', 'Terminal: Select Default Profile'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) });
 		}
@@ -505,7 +509,7 @@ export function registerTerminalActions(): void {
 			await picker.showAndGetResult('setDefault');
 		}
 	});
-	registerAction2(class ScrollToPreviousCommandAction extends Action2 {
+	registerEditorToolAction(class ScrollToPreviousCommandAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalCommandId.ScrollToPreviousCommand,
@@ -522,7 +526,7 @@ export function registerTerminalActions(): void {
 			scrollToCommand(accessor, 'previous');
 		}
 	});
-	registerAction2(class ScrollToNextCommandAction extends Action2 {
+	registerEditorToolAction(class ScrollToNextCommandAction extends Action2 {
 		constructor() {
 			super({
 				id: TerminalCommandId.ScrollToNextCommand,
@@ -540,18 +544,21 @@ export function registerTerminalActions(): void {
 		}
 	});
 	CommandsRegistry.register(TerminalCommandId.Relaunch, async (accessor, context) => {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(WorkbenchEditorToolsAvailable)) return;
 		if (context === undefined && accessor.get(ITerminalService).activeInstance?.target !== TerminalLocation.Editor) return terminalView(accessor).relaunchActive();
 		const instance = resolveInstance(accessor, context);
 		if (!instance || instance.state === 'reconnecting') return;
 		await accessor.get(ITerminalService).relaunchTerminal(instance, instance.xterm?.dimensions() ?? { cols: 80, rows: 24 });
 	});
 	CommandsRegistry.register(TerminalCommandId.Kill, (accessor, context) => {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(WorkbenchEditorToolsAvailable)) return;
 		const instance = resolveInstance(accessor, context);
 		if (!instance) return;
 		if (context === undefined && instance.target !== TerminalLocation.Editor) return terminalView(accessor).killActive();
 		return accessor.get(ITerminalService).safeDisposeTerminal(instance);
 	});
 	CommandsRegistry.register(TerminalCommandId.Clear, (accessor, context) => {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(WorkbenchEditorToolsAvailable)) return;
 		if (context === undefined && accessor.get(ITerminalService).activeInstance?.target !== TerminalLocation.Editor) return terminalView(accessor).clearActive();
 		resolveInstance(accessor, context)?.clearBuffer();
 	});

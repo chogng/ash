@@ -4,6 +4,7 @@ import buttonCSS from '../button/button.css?inline';
 import actionbarCSS from '../actionbar/actionbar.css?inline';
 import iconlabelCSS from '../iconlabel/iconlabel.css?inline';
 import iconCSS from '../lxicons/lxicon.css?inline';
+import keybindingLabelCSS from '../keybindinglabel/keybindinglabel.css?inline';
 import contextviewCSS from '../contextview/contextview.css?inline';
 import type { Button, IButtonStyles } from '../button/button.js';
 import type { IKeybindingLabelStyles } from '../keybindinglabel/keybindinglabel.js';
@@ -33,7 +34,7 @@ export interface MenuActionViewItemOptions extends ActionViewItemOptions {
 	readonly tooltip?: string;
 	readonly onDidSelect?: () => void;
 	readonly submenuLayer?: number;
-	readonly contextViewContainer?: HTMLElement;
+	readonly contextViewContainer?: HTMLElement | ShadowRoot;
 	readonly keybinding?: ResolvedKeybinding;
 	readonly getKeyBinding?: (
 		action: IAction,
@@ -241,7 +242,7 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 	private readonly submenuAction: SubmenuAction;
 	private readonly onDidSelect: (() => void) | undefined;
 	private readonly submenuLayer: number;
-	private readonly contextViewContainer: HTMLElement | undefined;
+	private readonly contextViewContainer: HTMLElement | ShadowRoot | undefined;
 	private readonly getKeyBinding:
 		| ((action: IAction) => ResolvedKeybinding | undefined)
 		| undefined;
@@ -560,7 +561,7 @@ export interface IMenuOptions {
 	readonly useEventAsContext?: boolean;
 	/** Applies only to submenu actions in this menu, not nested menus they create. */
 	readonly openSubmenusImmediatelyOnHover?: boolean;
-	readonly contextViewContainer?: HTMLElement;
+	readonly contextViewContainer?: HTMLElement | ShadowRoot;
 	readonly onDidSelect?: () => void;
 	readonly getKeyBinding?: (
 		action: IAction,
@@ -938,7 +939,7 @@ function adoptMenuStyles(root: ShadowRoot): ReturnType<typeof toDisposable> {
 	if (!shared) {
 		const element = h(root.ownerDocument, 'style');
 		// Use the component's own styles; theme values already live on each menu root.
-		element.textContent = [buttonCSS, actionbarCSS, iconlabelCSS, iconCSS, contextviewCSS, menuCSS].join('\n');
+		element.textContent = [buttonCSS, actionbarCSS, iconlabelCSS, iconCSS, keybindingLabelCSS, contextviewCSS, menuCSS].join('\n');
 		root.append(element);
 		shared = { count: 0, element };
 		shadowMenuStyles.set(root, shared);

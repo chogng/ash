@@ -42,8 +42,14 @@
 		if (window !== window.top || !root.isConnected || !samePasswordOrigin(passwordAction(root))
 			|| root instanceof HTMLFormElement && root.autocomplete === 'off') { return; }
 		const controls = root instanceof HTMLFormElement ? [...root.elements] : [...root.querySelectorAll('input')];
-		// A submit button can override its form's destination, including after a controlled-input update.
-		if (controls.some(element => element.hasAttribute('formaction') && !samePasswordOrigin(element.getAttribute('formaction')!))) { return; }
+		// form.elements omits image submitters. Check form ownership across the document
+		// to include external controls, and let formAction resolve the document base and empty URL.
+		const submitters = root instanceof HTMLFormElement
+			? [...document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input[formaction],button[formaction]')].filter(element => element.form === root)
+			: controls;
+		if (submitters.some(element => (element instanceof HTMLButtonElement && element.type === 'submit'
+			|| element instanceof HTMLInputElement && ['submit', 'image'].includes(element.type))
+			&& element.hasAttribute('formaction') && !samePasswordOrigin(element.formAction))) { return; }
 		const inputs = controls.filter((element): element is HTMLInputElement => element instanceof HTMLInputElement && !element.disabled && !element.readOnly && visiblePasswordInput(element));
 		const passwords = inputs.filter(input => input.type === 'password');
 		if (passwords.length > 1 || passwords.some(input => verificationInput(input) || ['new-password', 'off'].includes(autocomplete(input) ?? ''))) { return; }
@@ -316,7 +322,8 @@
 		}
 		host = document.createElement('div');
 		host.className = 'ash-browser-selection';
-		host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:none;';
+		// The shadow tree isolates its contents, but page rules can still match the host.
+		host.style.cssText = 'all:initial;position:fixed;inset:0;z-index:2147483647;pointer-events:none;';
 		shadow = host.attachShadow({ mode: 'closed' });
 		const style = document.createElement('style');
 		style.textContent = `

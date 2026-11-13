@@ -160,6 +160,58 @@ suite('External URI opener production routing', () => {
 		assert.deepEqual([fixture.hostOpened, fixture.contributedOpened], [[destination.toString(), destination.toString()], [`viewer:${destination.toString()}`]]);
 	});
 
+	test('the workbench browser skips external confirmation while the host and extensions still require it', async () => {
+		using fixture = new Fixture();
+		fixture.register({ ...fixture.handler('browser', ExternalUriOpenerPriority.Option), opensInWorkbench: true }, fixture.handler('extension'));
+		const confirmations: string[] = [];
+		let approve = false;
+		using confirmation = fixture.opener.registerValidator({
+			externalOnly: true,
+			shouldOpen: async target => { confirmations.push(target.toString()); return approve; },
+		});
+
+		await fixture.configuration.updateValue(externalUriOpenersSettingId, { '*': 'browser' });
+		assert.equal(await fixture.opener.open(destination, { allowContributedOpeners: true }), true);
+		assert.deepEqual(fixture.contributedOpened, [`browser:${destination.toString()}`]);
+		assert.deepEqual(confirmations, []);
+
+		{
+			using deny = fixture.opener.registerValidator({ shouldOpen: async () => false });
+			assert.equal(await fixture.opener.open(destination, { allowContributedOpeners: true }), false);
+		}
+		assert.deepEqual(fixture.contributedOpened, [`browser:${destination.toString()}`]);
+
+		assert.equal(await fixture.opener.open(destination, { allowContributedOpeners: defaultExternalUriOpenerId }), false);
+		assert.deepEqual(fixture.hostOpened, []);
+		assert.equal(await fixture.opener.open(destination, { allowContributedOpeners: 'extension' }), false);
+		assert.deepEqual(fixture.contributedOpened, [`browser:${destination.toString()}`]);
+
+		await fixture.configuration.updateValue(externalUriOpenersSettingId, {});
+		assert.equal(await fixture.opener.open(destination, { allowContributedOpeners: true }), false);
+		assert.deepEqual(fixture.probed, [`browser:${destination.toString()}`]);
+		assert.deepEqual(confirmations, Array(3).fill(destination.toString()));
+
+		approve = true;
+		await fixture.configuration.updateValue(externalUriOpenersSettingId, { '*': 'default' });
+		assert.equal(await fixture.opener.open(destination, { allowContributedOpeners: true }), true);
+		assert.deepEqual(fixture.hostOpened, [destination.toString()]);
+		assert.deepEqual(confirmations, Array(4).fill(destination.toString()));
+	});
+
+	test('a preferred workbench browser wins before an earlier extension can receive a local URL', async () => {
+		using fixture = new Fixture();
+		const local = URI.parse('http://0.0.0.0:3000/');
+		fixture.register(fixture.handler('extension'), { ...fixture.handler('browser', ExternalUriOpenerPriority.Preferred), opensInWorkbench: true });
+		using confirmation = fixture.opener.registerValidator({
+			externalOnly: true,
+			shouldOpen: async () => { assert.fail('The workbench browser should not ask for external confirmation'); },
+		});
+
+		assert.equal(await fixture.opener.open(local, { allowContributedOpeners: true }), true);
+		assert.deepEqual(fixture.probed, [`browser:${local.toString()}`]);
+		assert.deepEqual(fixture.contributedOpened, [`browser:${local.toString()}`]);
+	});
+
 	test('explicit IDs override configuration and bypass capability probes', async () => {
 		using fixture = new Fixture();
 		fixture.register(fixture.handler('requested', ExternalUriOpenerPriority.None), fixture.handler('configured'));

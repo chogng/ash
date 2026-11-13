@@ -31,7 +31,7 @@ import {
 	WINDOW_ZOOM_CHANGED_CHANNEL,
 	WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, validateWindowClientSize, validateWindowClientSizeEvent,
 	WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL,
-	AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, validateAuxiliaryWindowState, validateAuxiliaryWindowStateEvent,
+	AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, validateAuxiliaryWindowInitialization, validateAuxiliaryWindowStateEvent,
 	validateWindowAlwaysOnTopChangedEvent,
 	WINDOW_OPEN_EXTERNAL_URI_CHANNEL,
 	validateWorkbenchWindowInfo,
@@ -99,7 +99,9 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		getZoomLevel: windowName => invoke<number>(WINDOW_OPERATION_CHANNEL, { kind: 'getZoom', ...(windowName === undefined ? {} : { windowName }) }),
 		onDidChangeZoomLevel: listener => subscribe<number>(WINDOW_ZOOM_CHANGED_CHANNEL, listener),
 		setZoomLevel: (level, windowName, allWindows) => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'setZoom', level, ...(windowName === undefined ? {} : { windowName }), ...(allWindows ? { allWindows: true } : {}) }),
-		getAuxiliaryWindowState: async windowName => validateAuxiliaryWindowState(await invoke<unknown>(WINDOW_OPERATION_CHANNEL, { kind: 'getAuxiliaryState', windowName })),
+		getAuxiliaryWindowInitialization: async windowName => validateAuxiliaryWindowInitialization(
+			await invoke<unknown>(WINDOW_OPERATION_CHANNEL, { kind: 'getAuxiliaryInitialization', windowName }),
+		),
 		onDidChangeAuxiliaryWindowState: listener => subscribe<unknown>(AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, value => listener(validateAuxiliaryWindowStateEvent(value))),
 		isAlwaysOnTop: windowName => invoke<boolean>(WINDOW_OPERATION_CHANNEL, { kind: 'getAlwaysOnTop', ...(windowName === undefined ? {} : { windowName }) }),
 		setAlwaysOnTop: (enabled, windowName) => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'setAlwaysOnTop', enabled, ...(windowName === undefined ? {} : { windowName }) }),
@@ -130,8 +132,12 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		syncSystemWideKeybindings: async keybindings => validateSystemWideKeybindingsResult(await invoke<unknown>(NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, keybindings)),
 		openExternal: target => invoke<boolean>('ash:host:openExternal', target),
 		onDidRequestOpenExternalUri: listener => subscribe<unknown>(WINDOW_OPEN_EXTERNAL_URI_CHANNEL, value => {
-			if (typeof value !== 'string') { throw new TypeError('Invalid external URL request'); }
-			listener(normalizeExternalUrl(value));
+			if (typeof value === 'string') { listener(normalizeExternalUrl(value)); return; }
+			if (typeof value !== 'object' || !value || !('url' in value) || typeof value.url !== 'string'
+				|| !('sourceWindowName' in value) || typeof value.sourceWindowName !== 'string') {
+				throw new TypeError('Invalid external URL request');
+			}
+			listener(normalizeExternalUrl(value.url), value.sourceWindowName);
 		}),
 		revealFile: path => invoke<void>(NATIVE_HOST_REVEAL_FILE_CHANNEL, path),
 		setWindowTheme: (theme) => invoke<void>(NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, theme),

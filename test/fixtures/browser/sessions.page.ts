@@ -24,6 +24,8 @@ import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
+import type { GeneratedFile } from '../../../src/ash/platform/generatedFiles/common/generatedFiles.js';
+import { IGeneratedFilesService } from '../../../src/ash/sessions/services/generatedFiles/common/generatedFilesService.js';
 import type { } from '../../../src/ash/workbench/browser/web.api.js';
 import { codeSessionsProfile } from '../../../src/ash/code/common/codeSessionsProfile.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
@@ -36,6 +38,9 @@ if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
 await import('../../../src/ash/sessions/sessions.web.main.js');
+if (new URL(location.href).searchParams.has('artifactExamples')) {
+	await import('../../../src/ash/sessions/test/browser/fixtures/artifactExamples.contribution.js');
+}
 let showEmptyEditorArea: (() => void) | undefined;
 if (new URL(location.href).searchParams.has('emptyEditorArea')) {
 	registerWorkbenchServiceContribution({
@@ -96,9 +101,36 @@ const { SessionsBrowserMain } = await import('../../../src/ash/sessions/browser/
 // Mount the renderer's real Parts, settings and canvas without a product process or backend.
 // A disconnected host that advertises automation still owns its saved management entry.
 const disconnectedApi = createDisconnectedRendererApi();
+const generatedEntries = new Map<string, GeneratedFile>();
+const generatedChanges = new Emitter<void>();
+window.addEventListener('pagehide', () => generatedChanges.dispose(), { once: true });
+let publishGeneratedFile: (itemId: string, title: string) => Promise<void>;
+registerWorkbenchServiceContribution({
+	service: createServiceIdentifier<object>('test.generatedFiles'),
+	dependencies: [IGeneratedFilesService],
+	install: context => {
+		const files = context.container.get(IGeneratedFilesService);
+		publishGeneratedFile = async (itemId, title) => {
+			await files.publishMarkdown({ providerId: 'fixture', accountId: null, sessionId: 'layout', threadId: 'thread', itemId, partId: 'markdown' }, `# ${title}`, title);
+		};
+		return {};
+	},
+});
 globalThis.ashWebWorkbenchHost = {
 	api: {
 		...disconnectedApi,
+		generatedFiles: {
+			onDidChange: generatedChanges.event,
+			list: async () => [...generatedEntries.values()],
+			register: async (_clientId, registration) => {
+				const existing = generatedEntries.get(registration.id);
+				if (existing) return existing;
+				const file = { ...registration, createdAt: Date.now() };
+				generatedEntries.set(file.id, file);
+				generatedChanges.fire();
+				return file;
+			},
+		},
 		// Policy startup reads account order even when no account is signed in.
 		github: { ...disconnectedApi.github, listAccounts: async () => [] },
 	}
@@ -413,6 +445,7 @@ window.addEventListener('pagehide', stopObservingErrors, { once: true });
 declare global {
 	interface Window {
 		ashSessionsIntegration: {
+			publishGeneratedFile(itemId: string, title: string): Promise<void>;
 			refreshProject(): void;
 			completeCustomizeDetails(): void;
 			setCustomizeDetailsRead(mode: 'hold' | 'fail'): void;
@@ -434,6 +467,7 @@ declare global {
 }
 
 window.ashSessionsIntegration = {
+	publishGeneratedFile: (itemId, title) => publishGeneratedFile(itemId, title),
 	refreshProject: () => projectChanges.fire(),
 	completeCustomizeDetails: () => completeCustomizeDetails(),
 	setCustomizeDetailsRead: mode => { customizeDetailsRead = mode; },

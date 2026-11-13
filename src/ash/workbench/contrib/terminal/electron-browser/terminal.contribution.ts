@@ -6,6 +6,9 @@ import { generateUuid } from '../../../../base/common/uuid.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { validateTerminalWindowTransferMove } from '../../../../platform/native/common/nativeHost.js';
 import type { ITerminalReconnectLease } from '../../../../platform/terminal/common/terminal.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { WorkbenchEditorToolsAvailable } from '../../../common/contextkeys.js';
 import { INativeHostService } from '../../../common/services.js';
 import { ITerminalService, type ITerminalInstance } from '../browser/terminal.js';
 import { TerminalCommandId } from '../common/terminal.js';
@@ -48,11 +51,12 @@ registerAction2(class MoveTerminalIntoNewWindowAction extends Action2 {
 			id: TerminalCommandId.MoveIntoNewWindow,
 			title: localize2('terminal.moveIntoNewWindow', 'Terminal: Move Terminal into New Window'),
 			f1: true,
-			precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+			precondition: ContextKeyExpr.and(WorkbenchEditorToolsAvailable, TerminalHasActiveInstanceContext.isEqualTo(true)),
 		});
 	}
 
 	override async run(accessor: ServicesAccessor, targetWindowId?: unknown): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(WorkbenchEditorToolsAvailable)) return;
 		if (targetWindowId !== undefined && (!Number.isSafeInteger(targetWindowId) || (targetWindowId as number) <= 0)) throw new TypeError('Invalid terminal transfer target');
 		const terminals = accessor.get(ITerminalService);
 		const instance = terminals.activeInstance;

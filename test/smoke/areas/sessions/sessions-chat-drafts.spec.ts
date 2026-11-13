@@ -5,10 +5,35 @@ import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+import { seedStorageOnNextLoad } from '../../../automation/storage.js';
+import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
 test.use({ video: 'on' });
+
+test('Agents switches a Sessions conversation from Chat to Code with the same automatically saved input', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
+	const page = await workbench.openAgentsWindow('electron');
+	// Exercise the shared Sessions conversation, whose Chat and Code panes have the same draft identity.
+	await seedStorageOnNextLoad(application, page, { scope: StorageScope.WORKSPACE, id: 'sessions' }, {
+		'sessions.layout.activeEntry': { value: 'sessions.open.chat', target: StorageTarget.MACHINE },
+	});
+	await workbench.reloadWindow(page);
+	const slot = page.locator('.ash-sessions-chat-slot.active:visible');
+	const editor = new Editor(slot);
+	const composer = slot.locator('[data-untitled-session-id]');
+	await expect(slot).toHaveAttribute('data-conversation-kind', 'chat');
+	await expect(composer).toHaveAttribute('data-untitled-session-id', /.+/);
+	const identity = (await composer.getAttribute('data-untitled-session-id'))!;
+	await editor.waitForEditorFocus();
+	await editor.waitForTypeInEditor('Keep this input when switching to Code');
+	const code = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+	await code.click();
+	await expect(code).toHaveAttribute('aria-pressed', 'true');
+	await expect(slot).toHaveAttribute('data-conversation-kind', 'code');
+	await expect(composer).toHaveAttribute('data-untitled-session-id', identity);
+	await editor.waitForEditorContents(text => text === 'Keep this input when switching to Code');
+});
 
 test('Sessions sidebar hides blank drafts and restores parked content drafts', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 	let page = await workbench.openAgentsWindow(target.kind);
@@ -18,6 +43,7 @@ test('Sessions sidebar hides blank drafts and restores parked content drafts', {
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const active = () => page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-native-chat):visible');
 	const drafts = () => page.locator('.ash-sessions-list:visible [data-item^="untitled:"]');
+	const draftRow = () => drafts().getByRole('button', { name: 'New Chat (draft)', exact: true });
 	await page.locator('[data-action-id="sessions.newSession"] button').click();
 	await expect(drafts()).toHaveCount(0);
 	const identity = await active().getAttribute('data-untitled-session-id');
@@ -26,16 +52,15 @@ test('Sessions sidebar hides blank drafts and restores parked content drafts', {
 	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('Keep this unsent sidebar draft');
 	await expect(drafts()).toHaveCount(1);
-	await expect(drafts().locator('.ash-sessions-list-item')).toHaveText('New Session (draft)');
+	await expect(draftRow()).toHaveText('New Chat (draft)');
 	await expect(editor.input).toBeFocused();
 
 	await page.locator('[data-action-id="sessions.newSession"] button').click();
 	await expect(active()).not.toHaveAttribute('data-untitled-session-id', identity!);
 	await expect(drafts()).toHaveCount(1);
 	await expect(drafts()).toHaveAttribute('data-item', `untitled:${identity}`);
-	const row = drafts().locator('.ash-sessions-list-item');
-	await row.focus();
-	await row.press('Enter');
+	await draftRow().focus();
+	await draftRow().press('Enter');
 	await expect(active()).toHaveAttribute('data-untitled-session-id', identity!);
 	await new Editor(active()).waitForEditorContents(text => text === 'Keep this unsent sidebar draft');
 
@@ -45,6 +70,7 @@ test('Sessions sidebar hides blank drafts and restores parked content drafts', {
 	}
 	await expect(drafts()).toHaveCount(1);
 	await expect(drafts()).toHaveAttribute('data-item', `untitled:${identity}`);
+	await expect(draftRow()).toHaveText('New Chat (draft)');
 	await expect(active()).toHaveAttribute('data-untitled-session-id', identity!);
 	await new Editor(active()).waitForEditorContents(text => text === 'Keep this unsent sidebar draft');
 	const modes = page.locator('.ash-window-mode-control');

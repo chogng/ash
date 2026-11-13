@@ -424,7 +424,7 @@ export class ProjectsList extends Disposable {
 			loading = false;
 			const context = request.add(this.contexts.createScoped(row));
 			const target = entry.sessionId ? { sessionId: entry.sessionId } : { catalogId: entry.id };
-			const menuActions = conversationMenuActions('chat', this.menus, context, target, !!entry.pinned, actions).map(action => {
+			const menuActions = conversationMenuActions('chat', this.menus, this.commands, context, target, !!entry.pinned, actions).map(action => {
 				if (action.id === 'agentSession.rename' && entry.rename) {
 					const run = entry.rename;
 					return { ...action, run: () => rename(run) };

@@ -12,13 +12,13 @@ import { TestConfigurationService } from '../../../workbench/services/configurat
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { CommandsRegistry } from '../../../platform/commands/common/commands.js';
 import { EditorPanes } from '../../../workbench/browser/editor.js';
-import { DOCS_ARTIFACT_EDITOR_ID, DOCS_EDITOR_SETTING, GENERAL_DOCUMENT_CONTENT_TYPE } from '../../contrib/artifacts/contrib/docs/common/docs.js';
+import { DOCS_ARTIFACT_EDITOR_ID, DOCS_EDITOR_SETTING, GENERAL_DOCUMENT_CONTENT_TYPE } from '../../contrib/docs/common/docs.js';
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://docs.test' });
 for (const [key, value] of Object.entries({ window: browser.window, document: browser.window.document, HTMLElement: browser.window.HTMLElement, Node: browser.window.Node })) {
 	Object.defineProperty(globalThis, key, { configurable: true, value });
 }
-await import('../../contrib/artifacts/contrib/docs/browser/docs.contribution.js');
+await import('../../contrib/docs/browser/docs.contribution.js');
 
 for (const [preference, extension] of [
 	[undefined, '.ash-doc'], ['automatic', '.ash-doc'], ['rich', '.ash-doc'], ['markdown', '.md'],

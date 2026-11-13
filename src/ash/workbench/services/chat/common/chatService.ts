@@ -187,7 +187,7 @@ export interface ResolveInteractionOptions extends InterruptTurnOptions { readon
 
 export type TurnChangeCaptureState = 'open' | 'sealed' | 'incomplete' | 'discarded';
 export type TurnChangeMessageState = 'unconfigured' | 'queued' | 'generating' | 'ready' | 'failed';
-export type TurnChangeCommitState = 'idle' | 'queued' | 'committing' | 'committed' | 'partiallyCommitted' | 'conflict' | 'failed';
+export type TurnChangeCommitState = 'idle' | 'queued' | 'committing' | 'recovering' | 'recoveryUnavailable' | 'committed' | 'partiallyCommitted' | 'conflict' | 'failed';
 
 export interface TurnChangeSetSummary {
 	readonly changeSetId: string;
@@ -209,6 +209,15 @@ export interface TurnChangeSetSummary {
 	readonly failureMessage?: string;
 	readonly commitId?: string;
 	readonly revision: number;
+}
+
+export function canPreviewTurnChange(summary: TurnChangeSetSummary, path: string): boolean {
+	return summary.captureState === 'sealed'
+		&& summary.commitState !== 'queued'
+		&& summary.commitState !== 'committing'
+		&& summary.commitState !== 'recovering'
+		&& !summary.committedPaths.includes(path)
+		&& (summary.commitState !== 'recoveryUnavailable' || !summary.conflictPaths.includes(path));
 }
 
 export interface TurnChangeFile {

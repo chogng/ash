@@ -127,6 +127,7 @@ test('Project history survives an interrupted catalog, repair and Desktop restar
 			await apply();
 			await expect.poll(() => statuses(archivedSelected, archivedUnselected)).toEqual(['archived', 'active']);
 
+			await showCode();
 			await pick('projects.repairCodeFolders', 'Select Code conversations to link', 'Folder repair selected', 'Folder repair unselected');
 			const archivedTarget = (await request().request(APP_SERVER_METHODS['project/archive'], {
 				commandId: randomUUID(), projectId: folder.projectId, expectedRevision: folder.revision,

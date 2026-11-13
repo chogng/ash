@@ -205,7 +205,6 @@ members = [
     "crates/thread-store",
     "crates/thread-transcript",
     "crates/git-turn-changes",
-    "crates/git-transaction",
     "crates/tools",
     "crates/uds",
     "crates/tui",
@@ -386,6 +385,9 @@ image = { version = "0.25.10", default-features = false }
 ignore = "0.4"
 insta = "1.46.3"
 globset = "0.4"
+grep-printer = "0.3.1"
+grep-regex = "0.1.14"
+grep-searcher = "0.1.17"
 libc = "0.2"
 keyring = { version = "3.6", default-features = false }
 log = "0.4"
@@ -558,7 +560,6 @@ ash-package-store = { path = "crates/package-store" }
 ash-file-watcher = { path = "crates/file-watcher" }
 github = { package = "ash-github", path = "crates/github" }
 ash-git = { path = "crates/git" }
-git-transaction = { package = "ash-git-transaction", path = "crates/git-transaction" }
 ash-history = { path = "crates/history" }
 ash-home = { path = "crates/ash-home" }
 message-history = { package = "ash-message-history", path = "crates/message-history" }

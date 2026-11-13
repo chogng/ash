@@ -6,7 +6,7 @@ import { localize } from '../../../../nls.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationSettingSchema, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ConfigurationTarget, getConfigValueInTarget, merge, type IConfigurationOverrides, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import type { IBooleanSetting, INumberSetting, INumberWithOptionsSetting, ISelectSetting, ISetting, ISettingsEditorModel, ITextSetting, SettingReference, SettingsStatus, SettingValueBinding } from './preferences.js';
+import type { IBooleanSetting, IConfiguredSetting, INumberSetting, INumberWithOptionsSetting, ISelectSetting, ISetting, ISettingsEditorModel, ITextSetting, SettingReference, SettingsStatus, SettingValueBinding } from './preferences.js';
 
 export interface SettingState<T> {
 	readonly id: string;
@@ -139,7 +139,7 @@ export function configurationSettingBinding<T>(
 
 /** Projects registered configuration schemas into Settings-domain entries. */
 export class DefaultSettings {
-	private readonly settings = new Map<string, ISetting>();
+	private readonly settings = new Map<string, IConfiguredSetting>();
 
 	constructor(registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)) {
 		for (const configuration of registry.getRegisteredConfigurations()) {
@@ -157,11 +157,11 @@ export class DefaultSettings {
 		}
 	}
 
-	public get all(): readonly ISetting[] {
+	public get all(): readonly IConfiguredSetting[] {
 		return [...this.settings.values()].filter(setting => setting.configuration.setting?.included !== false);
 	}
 
-	public get(key: string): ISetting {
+	public get(key: string): IConfiguredSetting {
 		const setting = this.settings.get(key);
 		if (!setting) throw new RangeError(`Configuration '${key}' does not declare Settings metadata`);
 		return setting;
@@ -218,6 +218,10 @@ function contributedSettingSchema(configuration: IRegisteredConfiguration): ICon
 		case 'integer':
 		case 'number': return { ...base, valueType: 'number', minimum: schema.minimum ?? -Number.MAX_VALUE, maximum: schema.maximum ?? Number.MAX_VALUE };
 		case 'string': return { ...base, valueType: 'text', placeholder: '' };
+		case 'array': {
+			const items = schema.items;
+			return items && 'type' in items && items.type === 'string' ? { ...base, valueType: 'array' } : undefined;
+		}
 		default: return undefined;
 	}
 }
@@ -232,7 +236,7 @@ function contributedSettingCopy(configuration: IRegisteredConfiguration): { id: 
 	};
 }
 
-function registeredSetting(configuration: IRegisteredConfiguration, schema: IConfigurationSettingSchema): ISetting {
+function registeredSetting(configuration: IRegisteredConfiguration, schema: IConfigurationSettingSchema): IConfiguredSetting {
 	const base = {
 		id: configuration.key,
 		tags: configuration.tags,
@@ -254,6 +258,8 @@ function registeredSetting(configuration: IRegisteredConfiguration, schema: ICon
 			};
 		case 'text':
 			return { ...base, valueType: 'text', configuration: configuration as IRegisteredConfiguration<string>, placeholder: schema.placeholder };
+		case 'array':
+			return { ...base, valueType: 'array', configuration: configuration as IRegisteredConfiguration<readonly string[]> };
 		case 'stringMap':
 			return { ...base, valueType: 'stringMap', structuredValues: schema.structuredValues, configuration: configuration as IRegisteredConfiguration<Record<string, unknown>>, keyLabel: schema.keyLabel, valueLabel: schema.valueLabel, addLabel: schema.addLabel, removeLabel: schema.removeLabel, incompleteMessage: schema.incompleteMessage, duplicateMessage: schema.duplicateMessage };
 	}

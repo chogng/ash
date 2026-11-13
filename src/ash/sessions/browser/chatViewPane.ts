@@ -4,6 +4,7 @@ import { ISessionsListModelService } from '../services/sessions/browser/sessions
 import { ISessionProviderScopeService } from './agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
 import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
+import type { ChatChangesStatistics } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatViewPane, type IChatViewPaneEntry } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
 import { DisposableMap, DisposableStore } from '../../base/common/lifecycle.js';
 import { Emitter } from '../../base/common/event.js';
@@ -15,7 +16,7 @@ import { ChatAuxiliaryWindow } from '../../workbench/contrib/chat/browser/widget
 import { Button } from '../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
 import { isRecord } from '../../base/common/types.js';
-import { isUntitledSession } from '../services/sessions/browser/sessionGridState.js';
+import { readUntitledSession } from '../services/sessions/browser/sessionGridState.js';
 import { setDisposableOwner, toDisposable } from '../../base/common/lifecycle.js';
 import { IMenuService } from '../../platform/actions/common/actions.js';
 import { IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
@@ -116,7 +117,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			const workspaceActions = captured.kind === 'session'
 				? createSessionWorkspaceActions(captured.active.session.sessionId, captured.active.threadId, sessionService, commandService)
 				: [];
-			return [...workspaceActions, ...createSessionItemActions(captured, commandService, this.listModel, notifications, () => this.openInNewWindow(captured))];
+			return [...workspaceActions, ...createSessionItemActions(captured, commandService, this.listModel, notifications, {
+				projectScope: 'chat', openInNewWindow: () => this.openInNewWindow(captured),
+			})];
 		}, preserveFocus => {
 			const focusChat = !this.sessionsSideBySide || !preserveFocus;
 			this.hideSessionsAfterSelection();
@@ -186,13 +189,20 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				this.sessionsSidebarWidth = value.sessionsSidebarWidth;
 			}
 			if (!restoreSelection) return undefined;
-			if (!isRecord(value) || (value.version !== 1 && value.version !== 2) || !Array.isArray(value.drafts) || !value.drafts.every(isUntitledSession)
-				|| new Set(value.drafts.map(draft => draft.untitledSessionId)).size !== value.drafts.length) {
+			if (!isRecord(value) || (value.version !== 1 && value.version !== 2) || !Array.isArray(value.drafts)) {
+				throw new TypeError(localize('chat.selection.invalid', 'Invalid stored Chat selection.'));
+			}
+			const drafts = value.drafts.map(value => {
+				const draft = readUntitledSession(value);
+				if (!draft) throw new TypeError(localize('chat.selection.invalid', 'Invalid stored Chat selection.'));
+				return draft;
+			});
+			if (new Set(drafts.map(draft => draft.untitledSessionId)).size !== drafts.length) {
 				throw new TypeError(localize('chat.selection.invalid', 'Invalid stored Chat selection.'));
 			}
 			const active = value.active;
 			if (active !== undefined && (!isRecord(active) || (active.kind === 'untitled'
-				? typeof active.id !== 'string' || !value.drafts.some(draft => draft.untitledSessionId === active.id)
+				? typeof active.id !== 'string' || !drafts.some(draft => draft.untitledSessionId === active.id)
 				: active.kind !== 'session' || typeof active.sessionId !== 'string' || !active.sessionId || typeof active.threadId !== 'string' || !active.threadId))) {
 				throw new TypeError(localize('chat.selection.invalid', 'Invalid stored Chat selection.'));
 			}
@@ -209,7 +219,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 					for (const [id, thread] of Object.entries(value.threads)) this.restoredThreadIds.set(id, thread as ThreadId);
 				}
 			}
-			for (const draft of value.drafts) this.sessionService.restoreUntitledSession(draft);
+			for (const draft of drafts) this.sessionService.restoreUntitledSession(draft);
 			if (isRecord(value.active) && value.active.kind === 'untitled') this.sessionService.selectUntitledSession(value.active.id as string);
 			if (isRecord(value.active) && value.active.kind === 'session') return { sessionId: value.active.sessionId as string, threadId: value.active.threadId as string };
 		} catch (error) {
@@ -377,6 +387,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		let model: ChatWidgetModel | undefined;
 		try {
 			model = services.createInstance(ChatWidgetModel, this.chatService, selection, this.sessionService);
+			const conversation = model;
 			const log = services.getOptional(ILogService);
 			if (log) resources.add(logSessionHistoryBinding(log, model.onDidFinishHistoryBinding));
 			const editor = this.editorService;
@@ -397,7 +408,13 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				this.openerService,
 				this.editorService,
 				(resource: URI) => readMarkdownImageResource(this.fileService, resource),
-				undefined, { ...options, virtualizeHistoryFrom: options?.virtualizeHistoryFrom ?? codeHistoryVirtualizeFrom, configureModelInMenu: true, openTurnChanges },
+				undefined, {
+				...options, virtualizeHistoryFrom: options?.virtualizeHistoryFrom ?? codeHistoryVirtualizeFrom, configureModelInMenu: true, openTurnChanges,
+				changes: {
+					refreshConversation: () => conversation.refreshChanges(),
+					readWorkspace: () => readWorkspaceChanges(this.commandService),
+				},
+			},
 			);
 			this.paneScopes.set(pane, resources);
 			return pane;
@@ -501,7 +518,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 	}
 
 	private getSessionTabActions(selection: SessionsViewSelection): readonly IAction[] {
-		const actions = createSessionItemActions(selection, this.commandService, this.listModel, this.notifications, () => this.openInNewWindow(selection))
+		const actions = createSessionItemActions(selection, this.commandService, this.listModel, this.notifications, {
+			projectScope: 'chat', openInNewWindow: () => this.openInNewWindow(selection),
+		})
 			.filter(action => ['agentSession.rename', 'sessions.list.togglePin', 'sessions.openInNewWindow'].includes(action.id));
 		const rename = actions.find(action => action.id === 'agentSession.rename')!;
 		return [
@@ -607,6 +626,24 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 
 
 
+}
+
+/** Validates the optional Git extension's command result at its process boundary. */
+async function readWorkspaceChanges(commands: ICommandService): Promise<ChatChangesStatistics | undefined> {
+	let result: unknown;
+	try {
+		result = await commands.executeCommand('git.getChangesSummary');
+	} catch (error) {
+		if (error instanceof Error && error.message === 'Unknown command: git.getChangesSummary') return undefined;
+		throw error;
+	}
+	if (!result || typeof result !== 'object') throw new TypeError('Invalid workspace changes summary');
+	const value = result as Record<string, unknown>;
+	for (const key of ['files', 'additions', 'deletions']) {
+		if (typeof value[key] !== 'number' || !Number.isSafeInteger(value[key]) || value[key] < 0) throw new TypeError('Invalid workspace change statistics');
+	}
+	if (value.partial !== undefined && typeof value.partial !== 'boolean') throw new TypeError('Invalid workspace change coverage');
+	return { files: value.files as number, additions: value.additions as number, deletions: value.deletions as number, partial: value.partial === true };
 }
 
 function isActiveThread(session: ISession, threadId: ThreadId): boolean {

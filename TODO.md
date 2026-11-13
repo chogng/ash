@@ -4,6 +4,18 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
+## Chat 输入框 · 布局切换验收
+
+- [ ] **验收** · 已将两个 Chat 入口默认统一为单行自适应，在设置 → 外观增加「Chat 输入框布局」单行／分层选项，切换保留草稿。配置、设置页面与 Chat 测试共 259 项通过，渲染器、自动化和测试类型检查及中文翻译检查通过。真实窗口测试入口因进程枚举触发 `spawn EPERM`，尚未完成视觉验收。在允许启动测试进程的环境运行 `pnpm test:smoke:ui test/smoke/areas/sessions/sessions-window.spec.ts --grep 'Chat input layout switches live|Sessions empty chat centers'`，检查默认单行、即时切换、长文本展开、重开保留和设置控件与背景色选项的视觉一致性；通过后删除本条。
+
+## Artifact 工具栏 · Desktop 验收
+
+- [ ] **验收** · `ArtifactToolbar` 已统一浮动外壳、动作分组和菜单生命周期，画布默认底部居中；103 项定向单测运行、2 项浏览器集成测试、渲染器与分层类型检查通过。Desktop 启动被语言包校验阻断：内置 `ash` bundle 有 10,003 条消息，`parseLanguagePackCatalog` 上限为 10,000，报 `Invalid display language resource`。修复该边界后运行 `node test/scenario/out/runScenario.js .build/ash-playwright-mcp/artifact-toolbar.cjs`，复核居中、Motion 时间线避让和模式切换，通过后删除本条。最终完整单测编译另被 `src/ash/sessions/test/common/sessions-configuration.test.ts:30` 的 `IConfigurationSettingSchema.options` 类型错误阻断；本轮定向运行使用已核对包含最新工具栏实现的编译产物。
+
+## Docs · 空段落首次输入修复集成
+
+- [ ] **集成** · Mac Studio 已修复空白富文本段落首次输入的模型同步、选区恢复与输入法组合提交；新增工作副本备份／恢复回归及真实 Electron 输入、保存重开场景。定向编辑器测试 51 项通过，新增备份跟踪器回归 3 项通过，Electron UI 与连接 App Server 场景各 1 项通过。当前 checkout 的 `main` 基线为 `f06080352e`，远端 `origin/main` 为 `b98e8522fe`，另有 105 个既有修改／未跟踪文件；原内容已核对保留。按提交规范不能自动 stash 或切换工作区以 rebase，故本次只准备本地任务提交。由现有修改的 owner 收尾后，fetch 最新 main，仅 rebase 本任务未发布提交，复验受影响场景并通过 `just commit-check origin/main`，再串行非强制推送并核验远端；完成后删除本条。备份覆盖使用生产工作副本跟踪器与内存存储，Sessions 窗口当前未接入自动备份跟踪器，未验证其整窗崩溃恢复。
+
 ## 终端恢复 · macOS 验收
 
 - [ ] **验收 · 断线期间退出的 PTY** · Linux 已验证重连后能读到末尾输出和退出码 `7`。Windows 上针对 macOS 的交叉检查在构建 `libsqlite3-sys` 时因缺少目标 C 编译器中止。在装有 Xcode Command Line Tools 的 macOS 上运行 `just verify ash-exec-server --lib --filter attach_replays_final_output_and_status_after_disconnected_child_exits`，通过后移除此条。
@@ -149,6 +161,12 @@
 ## Desktop 跨机器验收 · TODO
 
 - [ ] **验收** · 完成指定 Windows 主机真实 Desktop → SSH／Tailscale 全部十步、远端清理和证据 QA；同机 SSH fixture 不能替代跨机器验收。2026-10-19 已通过严格主机校验、公钥登录及原检出的 major10 Windows runtime 构建，真实冷部署一步通过；FILES 在扩展激活超时后的重连中失败，其余步骤未执行。SSH 握手／通道持续不稳定，按用户要求停止重试；待连接稳定后重跑全套并复核远端清理。失败证据保留在 `.build/ash-playwright-mcp/evidence/desktop-cross-machine-windows-major10-2026-10-19T13-46-20-671Z/report.html`，本轮未据此消项。
+
+## Ash Code · 线程展示缓存淘汰时保留输入
+
+- [ ] **修复候选 · 非活动线程的未发送输入**：`crates/tui/src/thread/presentation_store.rs` 为每个线程保存 input 与 queue，超过 32 个展示状态后，`evict_inactive` 直接移除最旧的非活动项；再次切回时创建默认展示状态，未发送草稿不会由服务端队列恢复；`recovery_drafts` 也只能读取仍在缓存中的草稿。参考 [Codex 按线程保留草稿与队列](https://github.com/openai/codex/pull/61216)（2026-11-13 已合并 main），补齐容量淘汰时的输入保留。本项为静态调用链确认，尚未运行 Ash 复现；不宣称持久会话记录丢失，与 `/fork` 提交前校验消耗草稿的候选分开处理。
+  - 范围与风险：沿现有 presentation、composer 和 queue owner 区分可丢弃展示缓存与未提交输入，保留文本、光标、附件绑定及本地队列顺序。先明确有界存储与恢复契约，不把 32 项限制简单改为无限缓存，不新增自动发送或对结果未知请求的自动重试；已由服务端接收的输入仍以其权威状态为准，不另建竞争队列。
+  - 验收：扩展 `crates/tui/src/thread/presentation_store_tests.rs`，让含文本、附件与队列的线程经历 32→33 个不同线程切换后返回，核对完整输入、目标线程和顺序；覆盖连续超限、空状态淘汰、重复返回、恢复草稿再次超限及结果未知的投递。在 `crates/tui/src/thread/queue_tests.rs` 与 `crates/tui/src/app/state_tests.rs` 区分本地未提交项、队列编辑草稿和服务端已接收项的刷新，核对 command_id／revision 与目标线程一致且不重复提交。保留现有两线程切换和空缓存 LRU 测试，再走 Inline／Fullscreen 的真实输入与返回流程。当前容量测试未填入草稿或队列，不能作为本项通过证据。
 
 ## Ash Code · `/fork` 拒绝时保留草稿
 
@@ -363,6 +381,12 @@ Git 首次发现已由 watcher 或首个 Git 查询接手。使用同一 Electro
 - [ ] **修复候选 · Overview Ruler 分数缩放边缘绘制**：`src/ash/editor/browser/viewParts/overviewRuler/decorationsOverviewRuler.ts` 对装饰画布设置 `contain: strict`，位图宽高按逻辑尺寸乘像素比向下取整，CSS 仍保留原逻辑尺寸；该层背景承担遮住滚动轨道下方文字的职责。参考 [VS Code 分数缩放边缘绘制修复](https://github.com/microsoft/vscode/pull/346835)（2026-11-08 已合并 main，已包含于 [VS Code 1.146.0](https://github.com/microsoft/vscode/releases/tag/1.146.0) 稳定版），核实 paint containment 在分数缩放下裁掉末列设备像素的相同风险，并在现有 owner 内调整 containment；这是匹配到相同绘制前提的静态候选，尚未在 Ash 复现可见漏绘，不把上游截图当作 Ash 结果。
   - 范围与风险：先限定装饰 Overview Ruler，不全局移除编辑器 containment、不顺带修改 Minimap 或另一种 `OverviewRuler`。保留尺寸隔离、画布背景／主题透明度、装饰 lane、光标、滚动条位置和点击行为；若 Ash 真实场景不复现且没有可观察收益，不仅为源码一致性改变绘制策略。
   - 验收：扩展 `src/ash/editor/test/browser/codeEditorPresentation.test.ts` 的轨道对齐场景，在整数与分数 DPR／Electron 缩放组合中记录逻辑宽度、位图宽度、有效像素比及右缘像素；用长行横向滚动与静止／纵向滚动对照，确认默认实色主题下末列不透出正文且 lane／光标／边框未裁掉。覆盖亮暗与高对比主题、Minimap 关闭／左右布局及缩放后重绘，复用已有几何与主题测试；补真实 Desktop 观察并明确平台，不能用几何相等或改 CSS 属性代替像素验收。
+
+### Minimap · 视图空白与导航坐标
+
+- [ ] **修复候选 · 滑块覆盖行与点击位置一致性**：`src/ash/editor/browser/viewParts/minimap/minimap.ts` 按 `projection.visualLineCount` 绘制行图，却用包含视图空白的 `scrollTop / (scrollHeight - viewportHeight)` 定位滑块，`moveTo` 再把比例直接乘实际最大滚动位置；`src/ash/editor/common/viewLayout/viewLayout.ts` 已提供 whitespace／view-zone 布局。参考 [VS Code 修正 Minimap 视图空白映射](https://github.com/microsoft/vscode/pull/346852)（2026-11-12 已合并 main），先复现 fit／fill 下较大或密集 view zone 的错位，再闭合行图与实际滚动位置的双向映射。本项为静态坐标空间核对，尚未运行 Ash 可见错位复现，不宣称所有模式都受影响。
+  - 范围与风险：沿现有 Minimap 与 ViewLayout owner 处理，不复制上游布局类或另建行模型；保留折叠、换行、padding、横向滚动条、DPR、点击和拖动语义。起拖后没有垂直位移时不跳过当前 zone，拖到末尾仍能到达文档末尾；不扩大为 Minimap 重构，标题重叠与注释结束符候选保持独立。
+  - 验收：使用实际 View 与 whitespace 布局，在 `src/ash/editor/test/browser/editorDecorationViewport.test.ts` 的 Canvas／几何测试中覆盖长 zone、密集 zone、自定义行高、zone 内起拖、仅横向移动、末尾及无 zone 对照；核对 fit／fill／proportional、折叠和换行后滑块覆盖行、点击及拖动落点，并补真实 Desktop 场景。上游结果不计入 Ash 验收。
 
 ### Minimap 相邻区段标题可读性
 

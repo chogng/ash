@@ -79,7 +79,7 @@ export function createSessionFolderTrustRequestService(
 			detail.append(host);
 		}
 		const paths = request.paths.map(path => h(document, 'div', {
-			className: 'ash-sessions-directory-permission-path',
+			className: 'ash-dialog-resource',
 			attributes: multiple ? { role: 'listitem' } : undefined,
 		}, path));
 		if (multiple) {

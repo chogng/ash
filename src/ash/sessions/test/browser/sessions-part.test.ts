@@ -20,7 +20,7 @@ import { ISessionChangesService } from '../../contrib/changes/common/sessionChan
 import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
-import { IAgentHostInputCompletionService, IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentHostInputCompletionService, IAgentThreadService, IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { createTestLanguageModelToolsService } from '../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { ISessionGitActionsService, SessionGitActionsService } from '../../services/sessions/browser/sessionGitActionsService.js';
@@ -58,6 +58,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictati
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { autorun, observableValue } from '../../../base/common/observable.js';
+import { isCancellationError } from '../../../base/common/errors.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -73,8 +74,16 @@ import { IChatService, type ThreadUpdateEnvelope } from '../../../workbench/serv
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import type { ISession, IUntitledChatSession } from '../../services/sessions/common/session.js';
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { IChatWindowService } from '../../../workbench/contrib/chatWindow/browser/chatWindow.js';
+import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
+import { ServiceCollection } from '../../../platform/instantiation/common/serviceCollection.js';
+import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import { ISessionsConversationService } from '../../services/sessions/common/sessionsConversation.js';
+import { DeferredPromise } from '../../../base/common/async.js';
 import { ISessionsService, SessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
+import { IGeneratedFilesService } from '../../services/generatedFiles/common/generatedFilesService.js';
+import { createTestGeneratedFilesService } from '../common/testGeneratedFilesService.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -112,8 +121,10 @@ for (const [name, value] of Object.entries({
 Object.defineProperty(browserEnvironment.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
 const { registerTitleService } = await import('../../services/title/browser/titleService.js');
-await import('../../contrib/artifacts/browser/designEditor.contribution.js');
+await import('../../contrib/artifact/browser/designEditor.contribution.js');
 await import('../../../workbench/contrib/chat/browser/chat.shared.contribution.js');
+await import('../../../workbench/contrib/chatWindow/browser/chatWindow.contribution.js');
+await import('../../contrib/sessions/browser/views/sessionsViewActions.js');
 const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
 const { NativeChatPaneFactory } = await import('../../contrib/chat/browser/nativeChatPaneFactory.js');
 const { NativeChatModelPreferences } = await import('../../contrib/chat/common/nativeChatModelPreferences.js');
@@ -182,7 +193,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 			if (activeUntitledSessionId === untitledSessionId) activeUntitledSessionId = untitledSessions[0]?.untitledSessionId;
 			onDidChange.fire();
 		},
-		setUntitledSessionArtifactKind() { throw new Error('Unexpected artifact draft edit'); },
+		setUntitledSessionCreationKind() { throw new Error('Unexpected artifact draft edit'); },
 		setUntitledSessionModel() { },
 		setUntitledSessionDefaultModel() { },
 		setUntitledSessionReasoningEffort() { },
@@ -308,10 +319,17 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		layout() { },
 	};
 	const commandEvents = resources.add(new Emitter<ICommandEvent>());
+	let workspaceChangesReads = 0;
 	const commandService: ICommandService = {
 		onWillExecuteCommand: commandEvents.event,
 		onDidExecuteCommand: commandEvents.event,
-		async executeCommand() { throw new Error('No commands registered'); },
+		async executeCommand<T>(id: string) {
+			if (id === 'git.getChangesSummary') {
+				workspaceChangesReads++;
+				return { files: 66, additions: 1803, deletions: 313 } as T;
+			}
+			throw new Error('No commands registered');
+		},
 	};
 	const editorRoot = createCodeEditorServices(resources);
 	editorRoot.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
@@ -321,6 +339,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(IHostService, new TestHostService());
 	registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 	services.registerInstance(IAgentVoiceService, createDisconnectedRendererApi().agentVoice);
+	services.registerInstance(IAgentThreadService, createDisconnectedRendererApi().thread);
 	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -366,6 +385,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(INotificationService, notifications);
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
+	services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
 	services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: dom.window.document.body })));
 	registerTestVoiceInputServices(services);
 	services.registerInstance(ISessionsManagementService, sessionService);
@@ -387,27 +407,41 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerSingleton(INativeChatModelPreferencesService, () => services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
-	const popup = new JSDOM('', { pretendToBeVisual: true });
-	resources.add(toDisposable(() => popup.window.close()));
-	const popupClosed = resources.add(new Emitter<void>());
-	let popupFocused = false;
-	popup.window.document.hasFocus = () => popupFocused;
-	popup.window.focus = () => { };
-	const auxiliaryWindow = resources.add(new class extends Disposable {
-		readonly id = 100;
-		readonly window = popup.window as unknown as Window;
-		readonly container = popup.window.document.body;
-		readonly onWillLayout = Event.None;
-		readonly onDidLayout = Event.None;
-		readonly onBeforeUnload = Event.None;
-		readonly onDidClose = popupClosed.event;
-		readonly whenStylesHaveLoaded = Promise.resolve();
-		layout() { }
-		createState(): never { throw new Error('Unexpected popup state capture'); }
-	}());
+	const openedPopups: { document: Document; window: JSDOM['window']; close(): void; focused: boolean; focusCount: number; }[] = [];
+	let pendingPopup: DeferredPromise<void> | undefined;
+	const popupLayoutError = new Error('Popup layout failed after mounting');
+	let failPopupLayout = false;
 	services.registerInstance(IAuxiliaryWindowService, resources.add(new class extends Disposable {
 		readonly onDidOpenWindow = Event.None;
-		async open() { return auxiliaryWindow; }
+		async open() {
+			const popup = new JSDOM('', { pretendToBeVisual: true });
+			resources.add(toDisposable(() => popup.window.close()));
+			const closed = resources.add(new Emitter<void>());
+			const state = { document: popup.window.document, window: popup.window, close: () => closed.fire(), focused: false, focusCount: 0 };
+			openedPopups.push(state);
+			popup.window.document.hasFocus = () => state.focused;
+			popup.window.focus = () => { state.focusCount++; };
+			const layoutError = failPopupLayout ? popupLayoutError : undefined;
+			const id = 100 + openedPopups.length;
+			await pendingPopup?.p;
+			return resources.add(new class extends Disposable {
+				readonly id = id;
+				readonly window = popup.window as unknown as Window;
+				readonly container = state.document.body;
+				readonly onWillLayout = Event.None;
+				readonly onDidLayout = Event.None;
+				readonly onBeforeUnload = Event.None;
+				readonly onDidClose = closed.event;
+				readonly whenStylesHaveLoaded = Promise.resolve();
+				async focus(): Promise<void> { this.window.focus(); }
+				layout(): void { if (layoutError) throw layoutError; }
+				createState(): never { throw new Error('Unexpected popup state capture'); }
+				protected override disposeCore(): void {
+					this.container.replaceChildren();
+					super.disposeCore();
+				}
+			}());
+		}
 		getWindow() { return undefined; }
 	}()));
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
@@ -453,6 +487,9 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	paneServices.registerInstance(ISessionsChatViewStateService, new SessionsChatViewStateService());
 	using composerContribution = paneServices.createInstance(SharedChatInputComposerContribution);
 	paneServices.registerSingleton(IChatViewFactory, () => paneServices.createInstance(ChatViewFactory));
+	const chatWindowRegistration = getSingletonServiceDescriptors().find(([id]) => id === IChatWindowService);
+	assert.ok(chatWindowRegistration);
+	paneServices.registerCollection(new ServiceCollection(chatWindowRegistration));
 	using part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
 		newDraftVisible: observableValue('draft visibility', false),
 		createChatPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
@@ -461,6 +498,8 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		closeSelection: selection => viewService.closeVisibleSelection(selection),
 		createNewSession: () => { viewService.openNewSession(); },
 	} satisfies SessionsPartOptions);
+	paneServices.registerInstance(ISessionsConversationService, part);
+	using commands = new CommandService(paneServices);
 	using partListener = autorun(reader => {
 		const { visibleSelections, activeSelection } = viewService.getSelection(reader);
 		part.updateVisibleSessions(visibleSelections, activeSelection);
@@ -532,6 +571,9 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	await part.setConversationKind('chat');
 	const coworkView = part.domNode.querySelector('[data-conversation-kind="chat"]')!;
 	assert.ok(coworkView.querySelector('.ash-chat-input-part'));
+	await new Promise<void>(resolve => setTimeout(resolve, 0));
+	assert.equal(workspaceChangesReads, 0, 'The Chat composer must not ask Git for the window workspace');
+	assert.equal(coworkView.querySelector('.ash-chat-changes-pill:not([hidden])'), null);
 	assert.equal(coworkView.querySelector('[data-action-id="ash.chat.input.mode"]'), null);
 	assert.ok(coworkView.querySelector('.ash-chat-input-container [data-action-id="ash.chat.input.model"]'));
 	assert.equal(coworkView.querySelector('.ash-chat'), null);
@@ -543,9 +585,18 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	const retainedCoworkInput = coworkView.querySelector('.ash-chat-input-part');
 	part.appendToDraft('Continue the presentation in Cowork');
 	const coworkDraft = (await part.captureActiveDraft())!.draft;
-	await part.setConversationKind('code');
+	const preparing = new DeferredPromise<[]>();
+	const acquiring = assert.rejects(part.acquireContext(() => preparing.p), isCancellationError);
+	const switching = part.setConversationKind('code');
+	// An unfinished attachment cannot hold up switching or discard the latest input.
+	part.appendToDraft('Keep the latest text while switching');
+	await switching;
+	await acquiring;
+	await preparing.complete([]);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
-	assert.deepEqual((await part.captureActiveDraft())?.draft, coworkDraft);
+	const latestDraft = { ...coworkDraft, text: `${coworkDraft.text}\n\nKeep the latest text while switching` };
+	assert.deepEqual((await part.captureActiveDraft())?.draft, latestDraft);
+	assert.deepEqual(readNewChatDraftState(storage, `untitled:${selected.session.untitledSessionId}`, chatInputStatePersistence), latestDraft);
 	const transferred = await part.captureActiveDraft();
 	transferred!.clear();
 	await part.setConversationKind('chat');
@@ -560,6 +611,37 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	assert.equal(await part.didActiveCodeHistoryFail(), false);
+
+	failPopupLayout = true;
+	await assert.rejects(commands.executeCommand('sessions.openInNewWindow', selected), popupLayoutError);
+	assert.equal(openedPopups.length, 1);
+	const failedPopup = openedPopups[0]!;
+	assert.equal(failedPopup.document.body.childElementCount, 0);
+	assert.throws(() => titleService.getPart(failedPopup.document.body), /no titlebar registered/);
+	assert.equal(part.domNode.querySelector('.ash-chat-detached-chat'), null);
+	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
+
+	failPopupLayout = false;
+	pendingPopup = new DeferredPromise<void>();
+	const opening = commands.executeCommand('sessions.openInNewWindow', selected);
+	const duplicate = commands.executeCommand('sessions.openInNewWindow', selected);
+	await Promise.resolve();
+	assert.equal(openedPopups.length, 2);
+	await pendingPopup.complete();
+	pendingPopup = undefined;
+	await Promise.all([opening, duplicate]);
+	const draftPopup = openedPopups[1]!;
+	assert.equal(draftPopup.document.querySelector('.ash-chat-input-part'), retainedCodeInput);
+	assert.equal(draftPopup.focusCount, 1);
+	await commands.executeCommand('sessions.openInNewWindow', selected);
+	assert.equal(openedPopups.length, 2);
+	assert.equal(draftPopup.focusCount, 2);
+	draftPopup.close();
+	assert.equal(draftPopup.document.querySelector('.ash-chat-input-part'), null);
+	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
+	assert.ok(retainedCodeInput?.contains(dom.window.document.activeElement));
+	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
+
 	const unavailable = {
 		kind: 'session',
 		active: {
@@ -583,6 +665,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		onDidChange.fire();
 	};
 	await part.openInNewWindow(unavailable);
+	const popup = openedPopups[2]!;
 	assert.ok(popup.window.document.querySelector('.ash-chat-auxiliary-content'));
 	const auxiliaryTitlebar = titleService.getPart(popup.window.document.body);
 	assert.notEqual(auxiliaryTitlebar, titleService.getPart(dom.window.document.body));
@@ -591,20 +674,20 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	publishActivity(100);
 	assert.equal(viewService.getLastViewedAt(entry), undefined);
 
-	popupFocused = true;
+	popup.focused = true;
 	popup.window.dispatchEvent(new popup.window.Event('focus'));
 	assert.equal(viewService.getLastViewedAt(entry), 100);
 	publishActivity(200);
 	assert.equal(viewService.getLastViewedAt(entry), 200);
 
-	popupFocused = false;
+	popup.focused = false;
 	publishActivity(300);
 	assert.equal(viewService.getLastViewedAt(entry), 200);
-	popupClosed.fire();
+	popup.close();
 	assert.equal(popup.window.document.querySelector('.ash-chat-auxiliary-titlebar'), null);
 	assert.throws(() => titleService.getPart(popup.window.document.body), /no titlebar registered/);
 	const lastViewedAfterClose = viewService.getLastViewedAt(entry);
-	popupFocused = true;
+	popup.focused = true;
 	publishActivity(Date.now() + 60_000);
 	assert.equal(viewService.getLastViewedAt(entry), lastViewedAfterClose);
 });

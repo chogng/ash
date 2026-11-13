@@ -1,11 +1,9 @@
 import { localize } from '../../../../nls.js';
 import { getSessionsListAttentionHelp, getSessionsListGroupingHelp } from '../../sessions/browser/views/sessionsListActions.js';
-import { getArtifactDraftHelp } from './chatInputArtifactPill.js';
 
 /** Product-specific help appended by the shared input's accessibility provider. */
 export function getSessionsChatAccessibilityHelp(): string {
 	return [
-		getArtifactDraftHelp(),
 		localize('sessions.chat.tipCarouselHelp', 'In a new Code session, use Previous tip and Next tip to browse the tips above the input. Dismiss tip closes the card.'),
 		getSessionsListGroupingHelp(),
 		getSessionsListAttentionHelp(),
@@ -27,7 +25,7 @@ export function getSessionsChatAccessibilityHelp(): string {
 		localize({ bundle: 'ash.sessions', key: 'sessions.code.workspaceRequiredHelp' }, 'In Code, choose a project before sending in a new conversation. You can edit the draft while choosing. The first message saves the conversation to that project. You can continue saved Ash conversations in Code or the IDE, including conversations without a folder.'),
 		localize({ bundle: 'ash.sessions', key: 'sessions.code.modelAvailabilityHelp' }, 'If the current model is unavailable, the input status explains why sending is paused. Keep editing the draft or use Tab to reach the model picker, then choose another model to continue.'),
 		localize('sessions.hover.help', 'Focus a session row or conversation link and use <keybinding:workbench.action.showHover> to open its summary. Use <keybinding:editor.action.accessibleView> to read the summary as text.'),
-		localize('sessions.titlebar.help', 'In the Sessions window, focus the session title in the title bar and press Enter to edit it in place. Press Enter to save, or press Escape or leave the field to cancel. Use <keybinding:workbench.action.showHover> on the title to read the full title if it is truncated, or the workspace path if it fits. Tab to More session actions beside the title and press Enter to open the menu. Open Show Session History from the Command Palette.'),
+		localize('sessions.titlebar.help', 'In the Sessions window, focus the Chat title and press Enter or Down Arrow to open its actions menu. Choose Rename or double-click the title to edit it in place. In Code, press Enter on the session title to edit it in place, or tab to More Sessions Actions beside it to open the menu. Press Enter to save, or press Escape or leave the field to cancel. Use <keybinding:workbench.action.showHover> on the title to read the full title if it is truncated, or the workspace path if it fits. Open Show Session History from the Command Palette.'),
 		localize('sessions.blocked.help', 'When the title bar reports sessions requiring attention, press Enter to open the list. Use the arrow keys to select a session and press Enter to open it. Press Escape to close the list. After ignoring one or more alerts, use Undo in the notification to restore them.'),
 		localize({ bundle: 'ash.sessions', key: 'sessions.notification.help' }, 'In the desktop Sessions window, adjust Session input notifications and Session response notifications in Settings. Activate a system notification to return to its conversation.'),
 		localize('sessions.compare.help', 'In Code, run Compare Agents from the Command Palette in an active conversation, or open the conversation row menu with Shift+F10 and choose Compare Agents. Use Space to select at least two agents, then press Enter. Choose Compare answers or Compare code changes and enter one task for all agents. Results open in separate panes and appear together in a group in the Sessions sidebar. Focus the comparison group heading and press Enter to reopen all attempts side by side. Use Left and Right Arrow to collapse and expand the group. Compare code changes gives each agent an independent Git worktree. Choose a Judge when you start a comparison. Use participant defaults or configure the model, thinking effort, and permissions for each participant. The Judge runs after the attempts finish. In the comparison controls, you can check progress, retry the Judge, open the winner, or start synthesis. Escape cancels the prompts.'),

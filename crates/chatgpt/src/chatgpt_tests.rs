@@ -12,6 +12,10 @@ use ash_login::InteractiveLoginDriver;
 use ash_login::LoginMethod;
 use ash_login::LoginService;
 use ash_secrets::MemorySecretStore;
+use ash_secrets::ProfileSecretStore;
+use ash_secrets::SecretStore;
+use ash_secrets::SessionSecretStore;
+use ash_secrets::UnavailableSecretStore;
 use base64::Engine;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -221,6 +225,51 @@ fn disconnect_and_reconnect_leave_codex_unchanged_and_external_logout_is_observe
     std::fs::remove_file(auth).unwrap();
     assert!(runtime.read_account().unwrap().is_none());
     assert!(runtime.api_target().is_err());
+}
+
+#[test]
+fn keyring_unavailable_after_disconnect_blocks_codex_credential_reuse() {
+    let home = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    let client = Arc::new(ScriptedClient::new([]));
+    let keyring = Arc::new(MemorySecretStore::default());
+    let open_runtime = |keyring: Arc<dyn SecretStore>| {
+        let persisted = ProfileSecretStore::open(profile.path(), keyring).unwrap();
+        ChatGptOAuth::with_client(
+            home.path().into(),
+            Arc::new(SessionSecretStore::new(Arc::new(persisted))),
+            client.clone(),
+            ChatGptAuthManagement::Codex,
+        )
+    };
+    CodexAuthStore::new(home.path().into())
+        .create(&test_tokens(4_000_000_000))
+        .unwrap();
+    let auth = home.path().join("auth.json");
+    let original = std::fs::read(&auth).unwrap();
+
+    let runtime = open_runtime(keyring.clone());
+    assert!(runtime.api_target().is_ok());
+    let account = runtime.read_account().unwrap().unwrap().account;
+    runtime.logout(&account).unwrap();
+    drop(runtime);
+
+    let restarted = open_runtime(Arc::new(UnavailableSecretStore));
+    assert_eq!(
+        restarted
+            .api_target()
+            .err()
+            .map(|error| error.to_string())
+            .as_deref(),
+        Some("Ash connection state could not be read")
+    );
+    assert!(restarted.read_account().is_err());
+
+    let recovered = open_runtime(keyring);
+    assert!(recovered.read_account().unwrap().is_none());
+    assert!(recovered.api_target().is_err());
+    assert_eq!(std::fs::read(auth).unwrap(), original);
+    assert!(client.requests.lock().unwrap().is_empty());
 }
 
 fn test_tokens(expiry: u64) -> TokenResponse {

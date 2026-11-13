@@ -3,6 +3,44 @@ use ash_async_utils::CancellationSource;
 use ash_install_context::InstallContext;
 
 #[test]
+fn failed_server_diagnostics_are_bounded_and_drained() {
+    const CHILD: &str = "ASH_TGREP_TEST_STDERR_CHILD";
+    if std::env::var_os(CHILD).is_some() {
+        let mut stderr = std::io::stderr().lock();
+        stderr.write_all(b"fixture startup failure: ").unwrap();
+        stderr.write_all(&vec![b'x'; 128 * 1024]).unwrap();
+        drop(stderr);
+        std::process::exit(2);
+    }
+    let mut command = Command::new(std::env::current_exe().unwrap());
+    command
+        .args([
+            "--exact",
+            "process::tests::failed_server_diagnostics_are_bounded_and_drained",
+            "--nocapture",
+        ])
+        .env(CHILD, "1")
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    let mut child = OwnedChild::spawn(command).unwrap();
+    child.capture_diagnostics();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "diagnostic pipe stopped draining"
+        );
+        thread::sleep(POLL);
+    };
+    assert_eq!(status.code(), Some(2));
+    assert_eq!(child.stderr.len(), 4096);
+    assert!(child.stderr.starts_with("fixture startup failure: "));
+}
+
+#[test]
 fn exited_server_returns_an_error_instead_of_using_its_stale_index() {
     let root = tempfile::tempdir().unwrap();
     let index = tempfile::tempdir().unwrap();

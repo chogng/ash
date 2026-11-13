@@ -18,6 +18,7 @@ import { EditorsVisibleContext, MultipleEditorsSelectedInGroupContext, ResourceS
 import { IUntitledTextEditorService } from '../../../services/untitled/common/untitledTextEditorService.js';
 import { UntitledTextEditorInput } from '../../../services/untitled/common/untitledTextEditorInput.js';
 import { ASH_REMOTE_SCHEME, isRemoteResource } from '../../../../platform/remote/common/remote.js';
+import { registerEditorToolAction } from '../../../browser/actions/editorToolActions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IsWebContext } from '../../../../platform/contextkey/common/contextkeys.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
@@ -103,7 +104,7 @@ registerAction2(class OpenFileAction extends Action2 {
 	}
 });
 
-registerAction2(class NewUntitledTextEditorAction extends Action2 {
+registerEditorToolAction(class NewUntitledTextEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: NEW_UNTITLED_FILE_COMMAND_ID,
@@ -226,7 +227,7 @@ for (const action of [
 	});
 }
 
-registerAction2(class RefreshExplorerAction extends Action2 {
+registerEditorToolAction(class RefreshExplorerAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.files.action.refreshFilesExplorer',
@@ -243,7 +244,7 @@ registerAction2(class RefreshExplorerAction extends Action2 {
 	}
 });
 
-registerAction2(class CollapseExplorerFoldersAction extends Action2 {
+registerEditorToolAction(class CollapseExplorerFoldersAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.files.action.collapseExplorerFolders',

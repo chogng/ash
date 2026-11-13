@@ -33,7 +33,6 @@ mod tcp;
 #[cfg(feature = "server")]
 pub use tcp::TCP_CHUNK_BYTES;
 #[cfg(feature = "server")]
+pub use tcp::TcpAuthorization;
+#[cfg(feature = "server")]
 pub use tcp::TcpStreams;
-#[cfg(all(test, feature = "server"))]
-#[path = "tcp_tests.rs"]
-mod tcp_tests;

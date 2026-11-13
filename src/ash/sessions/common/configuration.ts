@@ -71,6 +71,28 @@ export type SessionsActivityBarLocation = Exclude<ActivityBarPosition, ActivityB
 
 /** Appearance preferences owned by the dedicated Sessions window. */
 export const SessionsConfiguration = Object.freeze({
+	chatInputLayout: configurationRegistry.registerConfiguration<'compact' | 'stacked'>({
+		key: 'sessions.chat.inputLayout',
+		defaultValue: 'compact',
+		scope: ConfigurationScope.APPLICATION,
+		schema: { type: 'string', enum: ['compact', 'stacked'] },
+		parse(value: unknown) {
+			if (value === 'compact' || value === 'stacked') return value;
+			throw new TypeError(localize('sessions.chat.inputLayout.invalid', 'Choose Single line or Stacked.'));
+		},
+		setting: {
+			included: false,
+			valueType: 'select',
+			get title() { return localize('sessions.chat.inputLayout.title', 'Chat input layout'); },
+			get description() { return localize('sessions.chat.inputLayout.description', 'Single line expands as text grows. Stacked keeps the controls below the text.'); },
+			get options() {
+				return [
+					{ value: 'compact', label: localize('sessions.chat.inputLayout.compact', 'Single line') },
+					{ value: 'stacked', label: localize('sessions.chat.inputLayout.stacked', 'Stacked') },
+				] as const;
+			},
+		},
+	}),
 	interfaceFontFamily: configurationRegistry.registerConfiguration<'ash-sans' | 'system'>({
 		key: 'sessions.interfaceFontFamily',
 		defaultValue: 'ash-sans',

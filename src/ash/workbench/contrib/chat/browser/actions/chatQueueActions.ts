@@ -20,6 +20,7 @@ import { status } from '../../../../../base/browser/ui/aria/aria.js';
 const editingQueue = ChatContextKeys.editingRequestType.isEqualTo(ChatContextKeys.EditingRequestType.Queue);
 const editingSteer = ChatContextKeys.editingRequestType.isEqualTo(ChatContextKeys.EditingRequestType.Steer);
 const editingPending = ContextKeyExpr.or(editingQueue, editingSteer)!;
+const taskInput = ContextKeyExpr.not(ChatContextKeys.replyOnlyInput.key);
 const steerDefault = ContextKeyExpr.equals(`config.${ChatConfiguration.RequestQueueingDefaultAction}`, 'steer');
 const notEditingPending = ContextKeyExpr.and(
 	ContextKeyExpr.notEquals(ChatContextKeys.editingRequestType.key, ChatContextKeys.EditingRequestType.Queue),
@@ -32,6 +33,7 @@ const queueAvailable = ContextKeyExpr.and(
 	ChatContextKeys.transcriptProgressActive.isEqualTo(false),
 );
 const queueVisible = ContextKeyExpr.and(
+	taskInput,
 	ContextKeyExpr.or(ChatContextKeys.requestInProgress.isEqualTo(true), editingPending),
 	ContextKeyExpr.notEquals(ChatContextKeys.editingRequestType.key, ChatContextKeys.EditingRequestType.Sent),
 	ChatContextKeys.inputHasText.isEqualTo(true), ChatContextKeys.transcriptProgressActive.isEqualTo(false),
@@ -60,7 +62,7 @@ export class ChatSteerWithMessageAction extends Action2 {
 	constructor() {
 		super({
 			id: ChatSteerWithMessageAction.ID, title: localize2('chat.steerWithMessage', 'Chat: Steer with Message'),
-			f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true),
+			f1: true, precondition: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), taskInput),
 			keybinding: [
 				{ primary: Keybinding.single(logicalKey('Enter')), when: ContextKeyExpr.and(queueAvailable, ChatContextKeys.inChatInput.isEqualTo(true), queueVisible, effectiveSteer), weight: KeybindingWeight.EditorContrib + 1 },
 				{ primary: Keybinding.single(logicalKey('Enter', { altKey: true })), when: ContextKeyExpr.and(queueAvailable, ChatContextKeys.inChatInput.isEqualTo(true), queueVisible, effectiveQueue), weight: KeybindingWeight.EditorContrib + 1 },
@@ -101,14 +103,14 @@ function readTarget(value: unknown): QueueMessageTarget | undefined {
 }
 
 /** The picker captures one conversation; focus changes never retarget its selection. */
-async function selectMessage(accessor: ServicesAccessor, value?: unknown): Promise<{ message: QueuedMessage; widget: IChatWidget; } | undefined> {
+async function selectMessage(accessor: ServicesAccessor, value?: unknown, immediate = false): Promise<{ message: QueuedMessage; widget: IChatWidget; } | undefined> {
 	const target = readTarget(value);
 	const registry = accessor.get(IChatWidgetService);
 	const chat = accessor.get(IChatService);
 	const quickInput = accessor.get(IQuickInputService);
 	const notifications = accessor.get(INotificationService);
 	const widget = registry.lastFocusedWidget;
-	if (!widget?.visible || !widget.sessionId || !widget.threadId) return;
+	if (!widget?.visible || !widget.sessionId || !widget.threadId || immediate && widget.input.replyOnly) return;
 	const { sessionId, threadId } = widget;
 	const generation = widget.model?.composerGeneration;
 	if (target && (target.sessionId !== sessionId || target.threadId !== threadId)) throw new TypeError(localize('chat.queue.invalidTarget', 'Choose a queued message with a valid identity and revision.'));
@@ -168,10 +170,10 @@ export class ChatRemovePendingRequestAction extends Action2 {
 
 export class ChatSendPendingImmediatelyAction extends Action2 {
 	public static readonly ID = 'workbench.action.chat.sendPendingImmediately';
-	constructor() { super({ id: ChatSendPendingImmediatelyAction.ID, title: localize2('chat.queue.sendNow', 'Chat: Send Queued Message Immediately'), f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true) }); }
+	constructor() { super({ id: ChatSendPendingImmediatelyAction.ID, title: localize2('chat.queue.sendNow', 'Chat: Send Queued Message Immediately'), f1: true, precondition: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), taskInput) }); }
 	public override async run(accessor: ServicesAccessor, value?: unknown): Promise<void> {
 		const chat = accessor.get(IChatService);
-		const selected = await selectMessage(accessor, value);
+		const selected = await selectMessage(accessor, value, true);
 		if (selected) await chat.sendPendingRequestImmediately(messageTarget(selected.message));
 	}
 }

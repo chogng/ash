@@ -6,7 +6,7 @@ import { connectProfile } from '../sessions/sessionProfileFixture.js';
 
 test.use({ gitRepository: true });
 
-for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
+for (const surface of ['IDE', 'Agents Code'] as const) {
 	test(`${surface} navigates messages and focuses a pending confirmation without sending or answering`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 		test.setTimeout(180_000);
 		let calls = 0;
@@ -65,13 +65,12 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			if (agents) {
 				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 				await page.locator('.ash-sessions-list-item').filter({ hasText: 'Navigation conversation' }).click();
-				if (surface === 'Agents Cowork') await page.locator('[data-action-id="sessions.open.collaboration"] button').click();
 			} else {
 				await window.quickaccess.runCommand('workbench.action.chat.open');
 				await page.locator('[data-action-id="workbench.action.chat.showHistory"] button').click();
 				await page.getByRole('option').filter({ hasText: 'Navigation conversation' }).click();
 			}
-			const chat = page.locator(agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-native-chat'}` : '.ash-chat-view-pane .ash-chat:visible');
+			const chat = page.locator(agents ? '.ash-sessions-chat-slot.active:visible .ash-chat' : '.ash-chat-view-pane .ash-chat:visible');
 			await expect(chat).toHaveAttribute('data-thread-id', threadId);
 			const composer = chat.locator('.ash-chat-input-part');
 			const draft = composer.locator('.stanza-editor-input');

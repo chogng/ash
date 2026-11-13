@@ -27,6 +27,7 @@ import { MenuId } from '../../../../../../platform/actions/common/actions.js';
 import { WorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
+import { IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
@@ -35,6 +36,7 @@ import { createTreeSitterSyntaxSession } from '../../../../../services/treeSitte
 import { CodeEditorConfiguration } from '../../../../codeEditor/common/editorConfiguration.js';
 import { CopyCodeBlockActionId } from '../../actions/chatCodeblockActions.js';
 import { ChatEditorConfiguration } from '../../../common/constants.js';
+import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
 
 export interface ICodeBlockActionContext {
 	readonly code: string;
@@ -90,6 +92,7 @@ export class CodeBlockPart extends Disposable {
 		@IActionViewItemService private readonly actionViewItems: IActionViewItemService,
 		@ITreeSitterLibraryService private readonly syntax: ITreeSitterLibraryService,
 		@IThemeService private readonly themes: IThemeService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
 		this.element = h(document, 'div');
@@ -106,7 +109,7 @@ export class CodeBlockPart extends Disposable {
 			announcement: copied,
 		};
 		const apply: CodeBlockAction = { id: 'workbench.action.chat.applyInEditor', label: localize('chat.code.apply', 'Apply to editor') };
-		const edits: CodeBlockAction[] = [
+		const edits: CodeBlockAction[] = contextKeys.getValue(ChatContextKeys.messageActionSurface.key) === 'chat' ? [] : [
 			apply,
 			{ id: 'workbench.action.chat.insertCodeBlock', label: localize('chat.code.insert', 'Insert at cursor') },
 			{ id: 'workbench.action.chat.insertIntoNewFile', label: localize('chat.code.newFile', 'Open in new file') },

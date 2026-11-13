@@ -16,6 +16,7 @@ import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/edit
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { ISymphonyService, SymphonyService, SymphonyNavigationId, SymphonyMonitorResource } from './symphonyService.js';
@@ -48,10 +49,14 @@ registerAction2(class OpenSymphony extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.open.symphony', title: localize2('symphony.title', 'Symphony'), f1: true, icon: Lxicon.bot,
+			precondition: SessionsWorkspaceModeContext.isEqualTo('code'),
 			toggled: ContextKeyExpr.has('sessions.activity.symphonySelected'), menu: { id: Menus.ActivityBar, group: 'more', order: 40, when: SessionsWorkspaceModeContext.isEqualTo('code') }
 		});
 	}
-	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> { await openSymphony(accessor, source === 'restore' ? source : undefined); }
+	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> {
+		if (source !== 'restore' && accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) !== 'code') return;
+		await openSymphony(accessor, source === 'restore' ? source : undefined);
+	}
 });
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {

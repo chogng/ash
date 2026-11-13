@@ -327,16 +327,22 @@
 	padding: var(--ash-spacing-size20) var(--ash-spacing-size80);
 }
 
+.ash-sessions-window .ash-simple-find-query > .ash-input-box {
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
 .ash-sessions-window
 	:is(
 		.ash-chat-message-actions,
-		.ash-chat-code-block-card > .ash-chat-code-block-toolbar
+		.ash-chat-code-block-card > .ash-chat-code-block-toolbar,
+		.ash-simple-find-row
 	) {
 	--ash-toolbar-actionSize: var(--ash-spacing-size240);
 	--ash-button-border-radius: var(--ash-cornerRadius-medium);
 }
 
-.ash-sessions-window .ash-chat-message-actions > .ash-button.icon-only {
+.ash-sessions-window .ash-chat-message-actions > .ash-button.icon-only,
+.ash-sessions-window .ash-simple-find-row .ash-button.icon-only {
 	box-sizing: border-box;
 	inline-size: var(--ash-toolbar-actionSize);
 	min-inline-size: var(--ash-toolbar-actionSize);
@@ -349,7 +355,8 @@
 	.ash-sessions-window
 		:is(
 			.ash-chat-message-actions,
-			.ash-chat-code-block-card > .ash-chat-code-block-toolbar
+			.ash-chat-code-block-card > .ash-chat-code-block-toolbar,
+			.ash-simple-find-row
 		) {
 		--ash-toolbar-actionSize: 44px;
 		--ash-button-border-radius: var(--ash-cornerRadius-large);

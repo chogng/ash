@@ -1,7 +1,7 @@
 import { SettingsPageRenderer, SettingsRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
 import { h } from '../../../../base/browser/dom.js';
 import { TabList, type TabListItem } from '../../../../base/browser/ui/tablist/tabList.js';
-import { Emitter, Event } from '../../../../base/common/event.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -95,7 +95,6 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 				hideInnerTitle: true,
 				description: localize('sessions.customize.settingsDescription', 'Edit shared Workbench preferences using the settings editor or the current profile’s settings.json file.'),
 				help: localize('sessions.customize.settingsHelp', 'Open Workbench Settings to search, change or reset settings. Open User Settings (JSON) to edit the profile’s settings.json file. Both use the same configuration owner as the Workbench.'),
-				onDidChange: Event.None,
 				fields: [{
 					id: 'editor', kind: 'action', enabled: true,
 					label: localize('sessions.customize.openSettings', 'Open Workbench Settings'), run: this.openSettingsEditor,
@@ -103,7 +102,6 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 					id: 'json', kind: 'action', enabled: true,
 					label: localize({ bundle: 'ash.settings', key: 'json.openCommand' }, 'Preferences: Open User Settings (JSON)'), run: this.openUserSettings,
 				}],
-				setVisible: () => { },
 			}, AccessibleViewProviderId.SessionsSettings, AccessibilityVerbositySettingId.SessionsSettings));
 			this._register(this.renderer.registerPage(this.settings));
 			contentCreated = true;
@@ -115,7 +113,6 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 				hideInnerTitle: true,
 				description: localize({ bundle: 'ash.settings', key: 'hooks.managementLink' }, 'Manage Hooks in Agent Customizations.'),
 				help: localize({ bundle: 'ash.settings', key: 'hooks.managementLinkHelp' }, 'Open Manage Hooks to search events, inspect declarations, edit TOML, or ask Ash to configure a Hook.'),
-				onDidChange: Event.None,
 				fields: [{
 					id: 'manage', kind: 'action', label: localize({ bundle: 'ash.settings', key: 'hooks.manage' }, 'Manage Hooks'), enabled: true, run: async () => {
 						// Closing the modal releases its child service scope. Resolve the window owner first.
@@ -125,7 +122,6 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 						this.showEditor();
 					}
 				}],
-				setVisible: () => { },
 			}, AccessibleViewProviderId.HooksSettings, AccessibilityVerbositySettingId.HooksSettings));
 			this._register(this.renderer.registerPage(this.hooks));
 			contentCreated = true;

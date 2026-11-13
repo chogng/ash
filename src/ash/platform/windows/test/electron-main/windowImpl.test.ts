@@ -39,7 +39,7 @@ setup(() => {
 			flush: async () => { }, close: async () => { },
 		});
 	});
-	windowServices.registerSingleton(IAuxiliaryWindowsMainService, () => new AuxiliaryWindowsMainService(() => null));
+	windowServices.registerSingleton(IAuxiliaryWindowsMainService, () => new AuxiliaryWindowsMainService(() => null, () => undefined));
 	showMessageBox = async () => ({ response: 1, checkboxChecked: false });
 	const dialogs = new DialogMainService({
 		showMessageBox: options => showMessageBox(options),

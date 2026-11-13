@@ -23,9 +23,13 @@ test('Files command opens group navigation without registering a competing Part 
 	using descriptors = new TestViewDescriptorService({ registry: SessionsViewRegistry }, contexts);
 	assert.equal(descriptors.getViewContainerById(SESSIONS_FILES_CONTAINER_ID), null);
 	using services = new InstantiationService();
+	services.registerInstance(IContextKeyService, contexts);
 	const opened: string[] = [];
 	services.registerInstance(ICommandService, { executeCommand: async (id: string) => { opened.push(id); } } as unknown as ICommandService);
 	using commands = new CommandService(services);
+	await commands.executeCommand(SESSIONS_FILES_CONTAINER_ID);
+	assert.deepEqual(opened, []);
+	contexts.setContext('sessions.desktopCode', true);
 	await commands.executeCommand(SESSIONS_FILES_CONTAINER_ID);
 	assert.deepEqual(opened, [NEW_FILE_TAB_COMMAND_ID]);
 });

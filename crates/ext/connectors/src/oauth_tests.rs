@@ -165,7 +165,7 @@ fn oauth_pkce_callback_publishes_only_provider_validated_account_and_secret_refe
     assert_eq!(
         oauth
             .credentials
-            .load_connected_credential(&connector_id)
+            .load_connected_credential(&connector_id, account.connection_generation())
             .unwrap()
             .expose(),
         b"access-and-refresh-token-bundle"
@@ -206,7 +206,7 @@ fn refresh_replaces_the_opaque_secret_without_changing_connection_authority() {
     assert_eq!(
         oauth
             .credentials
-            .load_connected_credential(&connector_id)
+            .load_connected_credential(&connector_id, account.connection_generation())
             .unwrap()
             .expose(),
         b"refreshed-token-bundle"

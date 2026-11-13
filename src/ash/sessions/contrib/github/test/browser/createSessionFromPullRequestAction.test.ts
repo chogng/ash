@@ -5,6 +5,7 @@ import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { GitHubPullRequest } from '../../../../../platform/github/common/githubService.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -50,7 +51,11 @@ test('New Session from Pull Request prepares the selected commit and opens the s
 		let selected: IQuickPickItem | undefined;
 		let opened = false;
 		let created = false;
+		const contextKeys = resources.add(new ContextKeyService());
+		contextKeys.setContext('isSessionsWindow', true);
+		contextKeys.setContext('sessions.workspaceMode', 'code');
 		const services = new Map<unknown, unknown>([
+			[IContextKeyService, contextKeys],
 			[IExtensionService, { activateByEvent: async () => { } }],
 			[ICommandService, {
 				executeCommand: async () => [{

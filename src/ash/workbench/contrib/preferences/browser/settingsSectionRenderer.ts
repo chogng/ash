@@ -7,7 +7,7 @@ import {
 } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/settingsSection.css';
 import './media/settingsCard.css';
-import { h, isHTMLElement } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { AnchorAlignment } from '../../../../base/browser/ui/contextview/contextview.js';
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
@@ -78,7 +78,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 			this.fieldsDomNode = this.domNode;
 		}
 		this.actionsDomNode = h(document, 'div'); this.actionsDomNode.className = 'ash-settings-section-actions';
-		this._register(model.onDidChange(() => {
+		const changes = model.onDidChange?.(() => {
 			const focused = document.activeElement;
 			if (isHTMLElement(focused) && this.domNode.contains(focused)) { this.pendingFocus = focused; }
 			this.render();
@@ -91,7 +91,8 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 			if (document.activeElement !== document.body && (document.activeElement !== this.pendingFocus || !this.pendingFocus?.matches(':disabled'))) {
 				this.pendingFocus = undefined;
 			}
-		}));
+		});
+		if (changes) this._register(changes);
 		const key = `settingsSection-${generateUuid()}`;
 		const scope = this._register(contextKeys.createScoped(this.domNode)); scope.createKey(key, true);
 		const updateHint = (): void => {
@@ -112,7 +113,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 			}));
 		}
 		updateHint();
-		this._register(toDisposable(() => { this.model.setVisible(false); this.domNode.remove(); }));
+		this._register(toDisposable(() => { this.model.setVisible?.(false); this.domNode.remove(); }));
 	}
 
 	public renderSection(): HTMLElement {
@@ -128,7 +129,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 
 	public setVisible(visible: boolean): void {
 		this.isVisible = visible;
-		this.model.setVisible(visible);
+		this.model.setVisible?.(visible);
 		if (!visible) {
 			this.pendingFocus = undefined;
 			for (const control of this.controls.values()) {
@@ -157,6 +158,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 		if (this.titleDomNode) { this.titleDomNode.textContent = this.model.title; }
 		if (this.descriptionDomNode) { this.descriptionDomNode.textContent = this.model.description; }
 		for (const field of this.model.fields) {
+			const previous = this.fields.get(field.id);
 			this.fields.set(field.id, field);
 			let control = this.controls.get(field.id);
 			if (!control) {
@@ -204,9 +206,24 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 					}));
 					input.inputElement.id = `settingsField-${generateUuid()}`;
 					label.htmlFor = input.inputElement.id;
-					// InputBox also emits when the renderer restores a saved value. Only a
-					// value different from the model is a user edit, otherwise a read dirties the draft.
-					this._register(input.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'text' && current.value !== value) { current.setValue(value); } })); control = input;
+					const acceptValue = (value: string): void => {
+						const current = this.fields.get(field.id);
+						if (current?.kind === 'text' && current.enabled && current.value !== value) {
+							current.setValue(value);
+						}
+					};
+					if (field.commitOnChange) {
+						this._register(addDisposableListener(input.inputElement, 'change', () => acceptValue(input.value)));
+						this._register(input.onKeyDown(event => {
+							if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
+								event.preventDefault();
+								acceptValue(input.value);
+							}
+						}));
+					} else {
+						this._register(input.onDidChange(acceptValue));
+					}
+					control = input;
 				} else if (field.kind === 'boolean') {
 					const toggle = this._register(new Switch(container, {
 						...defaultToggleStyles,
@@ -219,6 +236,10 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 						toggle.input.id = `settingsField-${generateUuid()}`;
 						label.htmlFor = toggle.input.id;
 						copy.prepend(label);
+					}
+					const descriptionId = container.getAttribute('aria-describedby');
+					if (descriptionId) {
+						toggle.input.setAttribute('aria-describedby', descriptionId);
 					}
 					this._register(toggle.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'boolean') { current.setValue(value); } }));
 					control = toggle;
@@ -257,7 +278,13 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 				this.controls.set(field.id, control);
 			}
 			if (field.kind === 'status' && isHTMLElement(control)) { if (control.textContent !== field.text) { control.textContent = field.text; } }
-			else if (field.kind === 'text' && control instanceof InputBox) { control.value = field.value; control.enabled = field.enabled; }
+			else if (field.kind === 'text' && control instanceof InputBox) {
+				// Status and unrelated setting updates should leave uncommitted text alone.
+				if (!field.commitOnChange || !field.enabled || previous?.kind !== 'text' || previous.value !== field.value) {
+					control.value = field.value;
+				}
+				control.enabled = field.enabled;
+			}
 			else if (field.kind === 'boolean' && control instanceof Switch) { control.checked = field.value; control.enabled = field.enabled; }
 			else if (field.kind === 'select' && control instanceof SelectBox) { if (JSON.stringify(control.options) !== JSON.stringify(field.options)) { control.setOptions(field.options); } control.value = field.value; control.enabled = field.enabled; }
 			else if (field.kind === 'menu' && control instanceof DropdownMenuActionViewItem && control.action instanceof Action) {

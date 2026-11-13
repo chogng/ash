@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
 import { clickCanvasMenu, paintColor, paintPixel } from '../../../automation/design.js';
-import { readFile, readdir, realpath } from 'node:fs/promises';
+import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { Menus } from '../../../automation/menus.js';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
@@ -7,7 +9,242 @@ import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
-import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifacts/common/model/designDocument.js';
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
+import { URI } from '../../../../src/ash/base/common/uri.js';
+import { getSingleFolderWorkspaceIdentifier } from '../../../../src/ash/platform/workspaces/node/workspaces.js';
+import { ArtifactWorkspaceId } from '../../../../src/ash/sessions/contrib/artifact/common/artifactWorkspace.js';
+import { documentFromShapes, parseDesignDocument, serializeDesignDocument } from '../../../../src/ash/sessions/contrib/artifact/common/model/designDocument.js';
+import { createSlides } from '../../../../src/ash/sessions/test/browser/fixtures/artifactExampleShapes.js';
+import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
+import { connectProfile } from './sessionProfileFixture.js';
+
+test.describe('Artifacts conversation ownership', () => {
+	test.use({ gitRepository: true, electronUserSettings: { 'workbench.locale': 'zh-CN' } });
+
+	test('Artifacts reuses the ordinary Chat composer without bringing the Code workspace', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
+		const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+		let sessionId: string;
+		try {
+			const { session } = await connection.client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: 'artifact-chat-composer-fixture', title: 'Retained Ash Chat', kind: 'chat',
+				executionTarget: null, agent: { type: 'default' },
+			});
+			sessionId = session.sessionId;
+		} finally { await connection.close(); }
+		let page = await workbench.openAgentsWindow(target.kind);
+		const chat = () => page.locator(`[data-part="sessions"] .ash-native-chat-widget [data-session-id="${sessionId}"]:visible`);
+		const chatRow = () => page.locator(`[data-item="ash:${sessionId}"] .ash-sessions-list-item`);
+		const mode = (name: string) => page.locator('.ash-window-mode-control').getByRole('button', { name, exact: true });
+		const slides = () => page.locator('[data-creator-mode="slides"]:visible');
+		const draft = 'Unsent Chat text';
+		await writeFile(join(testWorkspace.directory, 'code-only.txt'), 'Code workspace change');
+		await chatRow().press('Enter');
+		await expect(chat()).toBeVisible();
+		const editor = new Editor(chat());
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor(draft);
+		const original = (await editor.input.elementHandle())!;
+		try {
+			await mode('代码').click();
+			await expect(chat()).toBeHidden();
+			await new QuickAccess(page).runCommand('sessions.creator.open.slides');
+			await expect(slides()).toBeVisible();
+			await expect(mode('聊天 / Agents')).toHaveAttribute('aria-pressed', 'true');
+			await expect(chatRow()).toHaveAttribute('aria-current', 'page');
+			await editor.waitForEditorContents(text => text === draft);
+			expect(await editor.input.evaluate((element, before) => element === before, original)).toBe(true);
+			await expect(page.locator('[data-part="sessions"] .native-chat-composer:visible, [data-part="sessions"] .ash-sessions-workspace-picker:visible, [data-part="sessions"] .ash-chat-changes-pill:visible')).toHaveCount(0);
+			await mode('聊天 / Agents').click();
+			await expect(slides()).toBeHidden();
+			expect(await editor.input.evaluate((element, before) => element === before, original)).toBe(true);
+			await expect(editor.input).toBeFocused();
+		} finally { await original.dispose(); }
+
+		await new QuickAccess(page).runCommand('sessions.creator.open.slides');
+		page = await workbench.reopenAgentsWindow(application, page);
+		await expect(slides()).toBeVisible();
+		await expect(chat()).toBeVisible();
+		await expect(chatRow()).toHaveAttribute('aria-current', 'page');
+		await new Editor(chat()).waitForEditorContents(text => text === draft);
+	});
+
+	test('Docs, Sheets and Design retain Chat models, attachments and drafts apart from Code', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
+		test.setTimeout(120_000);
+		if (!('windows' in application)) throw new Error('Expected a Desktop profile');
+		const provider = 'custom-artifact-draft-fixture';
+		const codeModel = 'fixture-code';
+		const modes = [
+			{ name: 'Docs', command: 'workbench.action.document.new', body: '.ash-docs-workspace:visible', model: 'fixture-docs' },
+			{ name: 'Markdown', command: 'sessions.creator.chooseDocsEditor', body: '[data-docs-format="markdown"]:visible', model: 'fixture-markdown' },
+			{ name: 'Sheets', command: undefined, body: '.ash-artifact-table-workspace.editable.sheet:visible', model: 'fixture-sheet' },
+			{ name: 'Design', command: 'sessions.creator.open.design', body: '[data-creator-mode="design"]:visible', model: 'fixture-design' },
+		] as const;
+		const modelIds = [codeModel, ...modes.map(mode => mode.model)];
+		let submitted = 0;
+		await using server = createServer((request, response) => {
+			if (request.method === 'GET') {
+				response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: modelIds.map(id => ({ id })) }));
+			} else {
+				submitted++;
+				response.writeHead(400).end();
+			}
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		const address = server.address();
+		if (!address || typeof address === 'string') throw new Error('Missing model fixture port');
+		const root = await realpath(testWorkspace.directory);
+		const profile = await application.evaluate(() => process.env.ASH_HOME!);
+		const workspaceId = getSingleFolderWorkspaceIdentifier(URI.file(root)).id;
+		const tables = join(profile, 'creator', workspaceId, 'tables');
+		const sheetId = randomUUID();
+		await mkdir(tables, { recursive: true });
+		await writeFile(join(tables, `${sheetId}.json`), JSON.stringify({ kind: 'sheet', rows: [['Fixture sheet', '', '']] }));
+		await writeFile(join(root, 'code-only.txt'), 'Code workspace change');
+
+		const connection = await connectProfile(application, undefined, root, workbench.page);
+		let sessionId: string;
+		try {
+			const { client } = connection;
+			const config = await client.request(APP_SERVER_METHODS['config/read'], {});
+			await client.request(APP_SERVER_METHODS['provider/configure'], {
+				commandId: 'artifact-draft-provider', expectedRevision: config.revision,
+				config: {
+					connection: provider, provider, baseUrl: `http://127.0.0.1:${address.port}/v1`,
+					custom: { name: 'Artifact draft fixtures', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 },
+					modelContext: Object.fromEntries(modelIds.map(id => [id, { contextWindow: 272_000 }])),
+				},
+			});
+			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-fixture-key' });
+			const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: 'artifact-draft-chat', title: 'Artifact draft Chat', kind: 'chat',
+				executionTarget: null, agent: { type: 'default' },
+			});
+			sessionId = session.sessionId;
+		} finally { await connection.close(); }
+		const settings = await readUserSettings(workbench.page);
+		await writeUserSettings(workbench.page, JSON.stringify({
+			...JSON.parse(settings.content), 'models.hidden': modelIds.map(model => ({ provider, model, visible: true })),
+		}), settings.revision);
+
+		const page = await workbench.openAgentsWindow(target.kind);
+		const commands = new QuickAccess(page);
+		const modeButton = (name: string) => page.locator('.ash-window-mode-control').getByRole('button', { name, exact: true });
+		const chat = page.locator(`[data-part="sessions"] .ash-native-chat-widget [data-session-id="${sessionId}"]:visible`);
+		const code = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		const chatEditor = new Editor(chat);
+		const codeEditor = new Editor(code);
+		const codeProject = code.locator('.ash-sessions-workspace-picker');
+		const modelButton = (surface: typeof chat) => surface.locator('.ash-chat-input-model-action');
+		const chooseModel = async (surface: typeof chat, model: string) => {
+			await modelButton(surface).press('ArrowDown');
+			const picker = page.getByRole('dialog', { name: '选择聊天模型', exact: true });
+			await expect(picker).toBeVisible();
+			const expand = picker.locator('.ash-chat-slider-model-button');
+			if (await expand.count()) {
+				if (await expand.getAttribute('aria-expanded') !== 'true') await expand.press('Enter');
+			} else {
+				const auto = picker.getByRole('switch', { name: '自动', exact: true });
+				if (await auto.isChecked()) await auto.press('Space');
+				await picker.getByRole('combobox').fill(model);
+			}
+			await picker.getByRole('menuitemradio', { name: model, exact: true }).click();
+			await expect(modelButton(surface)).toHaveText(model);
+			if (await picker.isVisible()) await page.keyboard.press('Escape');
+		};
+		const addFile = async (surface: typeof chat, name: string) => {
+			await surface.getByRole('button', { name: '添加上下文', exact: true }).click();
+			const picker = page.waitForEvent('filechooser');
+			await page.getByRole('menu', { name: '添加内容或上下文' }).getByRole('menuitem', { name: '上传或添加文件' }).click();
+			await (await picker).setFiles({ name, mimeType: 'text/plain', buffer: Buffer.from(`Fixture contents of ${name}`) });
+			await expect(surface.locator('.ash-chat-code-reference').getByText(name, { exact: true })).toBeVisible();
+		};
+		const expectDraft = async (editor: Editor, tokens: readonly string[]) => {
+			await editor.waitForEditorContents(text => text.replaceAll('\uFFFC', ' ').replace(/\s+/gu, ' ').trim() === tokens.join(' '));
+		};
+		const expectFiles = async (surface: typeof chat, names: readonly string[]) => {
+			await expect.poll(async () => (await surface.locator('.ash-chat-code-reference').allTextContents()).sort()).toEqual([...names].sort());
+		};
+
+		await page.locator(`[data-item="ash:${sessionId}"] .ash-sessions-list-item`).press('Enter');
+		await expect(chat).toBeVisible();
+		const original = (await chatEditor.input.elementHandle())!;
+		try {
+			await modeButton('代码').click();
+			const project = basename(root);
+			await page.locator('.ash-sessions-chat-slot.active:visible')
+				.getByRole('group', { name: '最近打开的项目', exact: true })
+				.getByRole('button', { name: project, exact: true }).click();
+			await expect(codeProject).toHaveText(project);
+			await chooseModel(code, codeModel);
+			await codeEditor.waitForEditorFocus();
+			await codeEditor.waitForTypeInEditor('Code-only draft');
+			await addFile(code, 'code-draft.txt');
+			const chatTokens: string[] = [];
+			const chatFiles: string[] = [];
+			for (const artifact of modes) {
+				await test.step(`Keep Chat state from ${artifact.name}`, async () => {
+					if (artifact.command) {
+						await commands.runCommand(artifact.command);
+						if (artifact.name === 'Markdown') {
+							await commands.select('Markdown');
+							await commands.runCommand(artifact.command);
+							await commands.select('新建空白文档');
+						}
+					} else {
+						await modeButton('聊天 / Agents').click();
+						await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
+						await page.locator(`.ash-artifacts-card.sheet[data-artifact-workspace="table:${sheetId}"]`).press('Enter');
+					}
+					const body = page.locator(artifact.body);
+					await expect(body).toBeVisible();
+					await expect(chat.locator('.ash-sessions-workspace-picker, .ash-chat-changes-pill').filter({ visible: true })).toHaveCount(0);
+					expect(await chatEditor.input.evaluate((element, before) => element === before, original)).toBe(true);
+					await chooseModel(chat, artifact.model);
+					const text = `${artifact.name}-draft`;
+					const file = `${artifact.name.toLowerCase()}-draft.txt`;
+					await chatEditor.waitForEditorFocus();
+					await page.keyboard.press('ControlOrMeta+End');
+					await chatEditor.waitForTypeInEditor(` ${text} `);
+					await addFile(chat, file);
+					chatTokens.push(text);
+					chatFiles.push(file);
+					await page.locator('[data-part="titlebar"]').getByRole('button', { name: '关闭作品区域', exact: true }).press('Enter');
+					await expect(body).toBeHidden();
+					expect(await chatEditor.input.evaluate((element, before) => element === before, original)).toBe(true);
+					await expect(modelButton(chat)).toHaveText(artifact.model);
+					await expectDraft(chatEditor, chatTokens);
+					await expectFiles(chat, chatFiles);
+					await modeButton('代码').click();
+					await expect(chat).toBeHidden();
+					await expect(codeProject).toHaveText(project);
+					await expect(modelButton(code)).toHaveText(codeModel);
+					await expectDraft(codeEditor, ['Code-only draft']);
+					await expectFiles(code, ['code-draft.txt']);
+				});
+			}
+			await modeButton('聊天 / Agents').click();
+			await expect(modelButton(chat)).toHaveText(modes.at(-1)!.model);
+			await expectDraft(chatEditor, chatTokens);
+			await expectFiles(chat, chatFiles);
+			expect(submitted).toBe(0);
+		} finally { await original.dispose(); }
+	});
+
+	test('Make hands the preview to an unsent Code draft', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
+		const page = await workbench.openAgentsWindow(target.kind);
+		await new QuickAccess(page).runCommand('sessions.creator.open.make');
+		const make = page.locator('[data-creator-mode="make"]:visible');
+		await make.getByRole('textbox', { name: '描述你想开发的内容' }).fill('Add a welcome panel');
+		await expect(page.locator('[data-part="sessions"] .ash-chatgpt-widget')).toBeVisible();
+		await make.getByRole('button', { name: '交给 Agent 开发' }).click();
+		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '代码' })).toHaveAttribute('aria-pressed', 'true');
+		await expect(make).toBeHidden();
+		const draft = page.locator('.ash-sessions-chat-slot.active:visible');
+		await expect(draft.locator('.ash-sessions-workspace-picker')).toBeVisible();
+		await expect(draft.locator('.ash-chat-input-editor')).toContainText('Add a welcome panel');
+		await expect(draft.locator('.ash-chat-input-editor')).toContainText('creator.html');
+	});
+});
 
 test('Sessions mode and page-tab activation reuse Parts while retaining the conversation and dirty document', async ({ target, workbench, testWorkspace }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
@@ -73,8 +310,8 @@ test('Sessions Artifacts retains Design and Slides canvases independently', asyn
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const creator = page.locator('.ash-creator');
-	await expect(creator.getByRole('heading', { name: 'Artifacts', exact: true })).toBeVisible();
-	await expect(creator.locator('.ash-artifacts-create')).toHaveCount(7);
+	await expect(page.locator('[data-part="titlebar"]').getByRole('heading', { name: 'Artifacts', exact: true })).toBeVisible();
+	await expect(creator.locator('.ash-chat-creation-button')).toHaveCount(7);
 	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="editor"] .ash-creator')).toBeVisible();
 	await expect(page.locator('[data-part="creator"], [data-part="projects"]')).toHaveCount(0);
@@ -114,7 +351,7 @@ test('Sessions Artifacts retains Design and Slides canvases independently', asyn
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.setViewportSize({ width: 620, height: 860 });
 	await expect(creator).toHaveClass(/narrow/);
-	const tiles = creator.locator('.ash-artifacts-create');
+	const tiles = creator.locator('.ash-chat-creation-button');
 	await expect.poll(async () => (await tiles.last().boundingBox())!.y).toBeGreaterThan((await tiles.first().boundingBox())!.y);
 	await expect(design).toHaveCSS('min-width', '0px');
 });
@@ -203,14 +440,18 @@ test('Sessions Creator uses Chinese mode names, actions and keyboard help', asyn
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Artifacts 导航返回首页/);
 	await page.keyboard.press('Escape');
-	await creator.getByRole('button', { name: /^幻灯片范例/ }).press('Enter');
+	await new QuickAccess(page).runCommand('sessions.creator.open.slides');
 	const pages = creator.getByRole('combobox', { name: '页面', exact: true });
+	const addSlide = creator.getByRole('button', { name: '添加幻灯片', exact: true });
+	await addSlide.click();
+	await addSlide.click();
 	await expect(pages.locator('option')).toHaveText(['第 1 页', '第 2 页']);
-	await creator.getByRole('button', { name: '添加幻灯片', exact: true }).click();
+	await addSlide.click();
 	await expect(pages.locator('option:checked')).toHaveText('第 3 页');
-	await creator.getByRole('button', { name: 'Artifacts 首页', exact: true }).click();
+	const titlebar = page.locator('[data-part="titlebar"]');
+	await titlebar.getByRole('button', { name: 'Artifacts 首页', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
-	await expect(creator.locator('.ash-creator-header')).toBeHidden();
+	await expect(titlebar.locator('.ash-sessions-titlebar-editor-page h1')).toBeVisible();
 	await expect(creator.locator('[data-creator-mode="design"] .ash-creator-workspace-navigation')).toHaveCount(0);
 	const canvas = page.getByRole('region', { name: '设计画布', exact: true });
 	await canvas.press('r');
@@ -221,9 +462,13 @@ test('Sessions Creator uses Chinese mode names, actions and keyboard help', asyn
 	await page.keyboard.press('Escape');
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await expect(creator.getByRole('button', { name: '设计', exact: true })).toBeVisible();
-	await creator.getByRole('button', { name: '电子表格', exact: true }).press('Enter');
-	await expect(creator.getByRole('button', { name: '导出 CSV', exact: true })).toBeVisible();
-	await expect(creator.getByRole('button', { name: '添加行', exact: true })).toBeVisible();
+	await new QuickAccess(page).runCommand('sessions.creator.open.slides');
+	await expect(titlebar.getByRole('heading', { name: '未命名幻灯片', exact: true })).toBeVisible();
+	const back = titlebar.getByRole('button', { name: 'Artifacts 首页', exact: true });
+	await back.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/使用窗口标题栏返回 Artifacts/u);
+	await page.keyboard.press('Escape');
+	await expect(back).toBeFocused();
 });
 
 test('Sessions Design vector booleans keep editable operands, holes, history and exported paths', async ({ target, workbench }, testInfo) => {
@@ -628,6 +873,7 @@ test('Sessions Design converts shaped variable-font text to editable outlines an
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
+	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
 	await canvas.press('t'); await canvas.locator('.ash-canvas-viewport').click({ position: { x: 160, y: 160 } }); await page.keyboard.press('Escape');
 	const content = properties.getByRole('textbox', { name: 'Text content', exact: true }); await content.fill('office AV\nB8'); await content.press('Tab');
@@ -916,9 +1162,17 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 }
 
 
-test('Sessions Slides example autosaves to Artifacts and exports an independent copy', { tag: ['@electron-app-server'] }, async ({ target, workbench, application, testWorkspace }) => {
+test('Sessions Slides autosaves a saved artifact and exports an independent copy', { tag: ['@electron-app-server'] }, async ({ target, workbench, application, testWorkspace }) => {
 	if (!('windows' in application)) throw new Error('Expected Electron application');
-	const path = join(await realpath(testWorkspace.directory), 'slides.ash-design');
+	const workspaceRoot = await realpath(testWorkspace.directory);
+	const path = join(workspaceRoot, 'slides.ash-design');
+	const workspaceId = getSingleFolderWorkspaceIdentifier(URI.file(workspaceRoot)).id;
+	const profile = await application.evaluate(() => process.env.ASH_HOME!);
+	const id = randomUUID();
+	const deckDirectory = join(profile, 'creator', workspaceId, 'slides', `${id}.ash-design`);
+	await mkdir(deckDirectory, { recursive: true });
+	const deck = documentFromShapes(createSlides(), { documentId: id, artifactId: randomUUID(), mode: ArtifactWorkspaceId.Slides });
+	await writeFile(join(deckDirectory, 'manifest.json'), serializeDesignDocument(deck));
 	const original = await application.evaluateHandle(({ dialog }) => dialog.showSaveDialog);
 	try {
 		await application.evaluate(({ dialog }, path) => {
@@ -927,11 +1181,42 @@ test('Sessions Slides example autosaves to Artifacts and exports an independent 
 		let page = await workbench.openAgentsWindow(target.kind);
 		const openArtifacts = (page: Page) => page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 		await openArtifacts(page);
-		await page.locator('[data-artifact-example="slides"]').press('Enter');
+		await page.locator(`[data-artifact-workspace="canvas:${id}"]`).press('Enter');
 		const workspace = page.locator('[data-creator-mode="slides"]:visible');
+		const heading = page.locator('.ash-sessions-titlebar-editor-page h1');
+		const artifactTitle = heading.getByRole('button', { name: 'Studio launch' });
+		await artifactTitle.getByText('Studio launch', { exact: true }).dblclick();
+		const rename = heading.getByRole('textbox', { name: 'Rename artifact', exact: true });
+		await expect(rename).toBeFocused();
+		await rename.press('Escape');
+		await expect(artifactTitle).toBeFocused();
+		await artifactTitle.press('Enter');
+		const actions = page.getByRole('menuitem');
+		await expect(actions).toHaveText(['Copy link', 'Handoff to Ash Code', 'Open in new window', 'Pin to sidebar', 'Rename', 'Delete…']);
+		await actions.getByText('Copy link', { exact: true }).click();
+		const link = await application.evaluate(({ clipboard }) => clipboard.readText());
+		expect(link).toMatch(/^ash:\/\/artifact\/open\/canvas\//u);
+		const parsedLink = new URL(link);
+		expect(parsedLink.searchParams.get('workspace')).toBe(workspaceId);
+		expect(parsedLink.searchParams.get('folder')).toBe(URI.file(workspaceRoot).toString());
+		await artifactTitle.press('Enter');
+		await actions.getByText('Handoff to Ash Code', { exact: true }).click();
+		const conversation = page.locator('[data-part="sessions"]');
+		await expect(conversation.getByText('Studio launch.ash-design.json', { exact: true })).toBeVisible();
+		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+		await openArtifacts(page);
+		await page.locator(`[data-artifact-workspace="canvas:${id}"]`).press('Enter');
 		const pages = workspace.getByRole('combobox', { name: 'Pages', exact: true }).getByRole('option');
 		await expect(pages).toHaveCount(2);
-		await workspace.getByRole('button', { name: 'More Actions', exact: true }).click();
+		const opening = application.waitForEvent('window');
+		await artifactTitle.click();
+		await page.getByRole('menuitem', { name: 'Open in new window', exact: true }).click();
+		const popup = await opening;
+		await expect(popup.getByRole('heading', { name: 'Studio launch' })).toBeVisible();
+		await popup.getByRole('button', { name: 'Return to main window' }).click();
+		await expect(pages).toHaveCount(2);
+		await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Export', exact: true }).click();
 		await expect(page.getByRole('menuitem', { name: 'Save document', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('menuitem', { name: 'Open document', exact: true })).toHaveCount(0);
 		await page.getByRole('menuitem', { name: 'Export editable copy', exact: true }).click();
@@ -942,12 +1227,44 @@ test('Sessions Slides example autosaves to Artifacts and exports an independent 
 
 		await workspace.getByRole('button', { name: 'Add slide', exact: true }).click();
 		await expect(pages).toHaveCount(3);
-		page = await workbench.reopenAgentsWindow(application, page);
+		const prior = await application.browserWindow(page);
+		const closed = page.waitForEvent('close');
+		await prior.evaluate(window => window.close());
+		await closed;
+		const otherFolder = join(workspaceRoot, 'another workspace');
+		await mkdir(otherFolder);
+		const openingOther = application.waitForEvent('window');
+		await application.evaluate(({ app }, folder) => {
+			app.emit('second-instance', {}, [], process.cwd(), { launchArguments: ['--agents-window', '--folder', folder] });
+		}, otherFolder);
+		const otherWindow = await openingOther;
+		await otherWindow.getByRole('button', { name: 'Trust and Open', exact: true }).click();
+		await otherWindow.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true }).click();
+		await otherWindow.locator('[data-part="sessions"] .stanza-editor-input:visible').focus();
+		await otherWindow.keyboard.insertText(link);
+		const switching = application.waitForEvent('window');
+		await otherWindow.locator('[data-part="sessions"] .stanza-editor').getByText('ash://artifact/open/', { exact: false })
+			.click({ modifiers: ['ControlOrMeta'], position: { x: 12, y: 8 } });
+		page = await switching;
+		const reopenedPages = page.locator('[data-creator-mode="slides"]:visible').getByRole('combobox', { name: 'Pages', exact: true }).getByRole('option');
+		await expect(reopenedPages).toHaveCount(3);
+		await expect(page.getByText('The Agents Window already has an unsent draft in this chat.', { exact: false })).toHaveCount(0);
+		await page.getByRole('button', { name: 'Close artifact', exact: true }).click();
+		const chatInput = page.locator('[data-part="sessions"] .stanza-editor-input:visible');
+		await chatInput.focus();
+		await page.keyboard.insertText('Keep this unsent draft while opening the artifact.');
+		const legacyQuery = new URLSearchParams({ workspace: JSON.stringify({ id: workspaceId, uri: URI.file(workspaceRoot).toString() }) });
+		const legacyLink = `ash://artifact${parsedLink.pathname}?${legacyQuery.toString().replaceAll('%', '%25')}`;
+		await application.evaluate(({ app }, url) => { app.emit('open-url', { preventDefault() { } }, url); }, legacyLink);
+		await expect(reopenedPages).toHaveCount(3);
+		await page.getByRole('button', { name: 'Close artifact', exact: true }).click();
+		await expect(page.locator('[data-part="sessions"] .stanza-editor:visible'))
+			.toContainText('Keep this unsent draft while opening the artifact.');
 		await openArtifacts(page);
 		await page.getByRole('tab', { name: 'Yours', exact: true }).click();
-		const card = page.locator('[data-slides-artifact]').filter({ hasText: 'Studio launch' });
+		const card = page.locator('.ash-artifacts-card.slides[data-artifact-workspace]').filter({ hasText: 'Studio launch' });
 		await expect(card).toHaveCount(1);
-		expect(await card.getAttribute('data-slides-artifact')).not.toBe(snapshot.documentId);
+		expect(await card.getAttribute('data-artifact-workspace')).not.toBe(`canvas:${snapshot.documentId}`);
 		await card.press('Enter');
 		await expect(page.locator('[data-creator-mode="slides"]:visible').getByRole('combobox', { name: 'Pages', exact: true }).getByRole('option')).toHaveCount(3);
 		expect(await exported()).toEqual(snapshot);
@@ -962,7 +1279,7 @@ test('Sessions Design automatically retains an untitled draft across window reop
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	let canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
-	await expect(page.locator('.ash-creator-header')).toBeHidden();
+	await expect(page.locator('[data-part="titlebar"] .ash-sessions-titlebar-editor-page h1')).toHaveText('Untitled design');
 	await expect(page.locator('[data-creator-mode="design"] .ash-creator-workspace-navigation')).toHaveCount(0);
 	// Removed tabs, controls and the footer reserve no space around the canvas.
 	await expect.poll(async () => {

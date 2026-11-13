@@ -4,7 +4,7 @@ import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { resolveCommandsContext } from '../../../../workbench/browser/parts/editor/editorCommandsContext.js';
-import { ActiveEditorContext, AppServerAvailableContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, IsSessionsWindowContext, ResourceSchemeContext } from '../../../../workbench/common/contextkeys.js';
+import { ActiveEditorContext, AppServerAvailableContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, IsSessionsWindowContext, ResourceSchemeContext, SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
 import { CODE_EDITOR_ID } from '../../../../workbench/browser/parts/editor/textResourceEditor.js';
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
@@ -40,7 +40,6 @@ const editorVisibleContext = new RawContextKey<boolean>('sessions.editorContentV
 const detailsVisibleContext = new RawContextKey<boolean>('sessions.detailsVisible', false);
 const filesVisibleContext = new RawContextKey<boolean>('sessions.filesVisible', false);
 const changesVisibleContext = new RawContextKey<boolean>('sessions.changesVisible', false);
-const codeContext = new RawContextKey<boolean>('sessions.desktopCode', false);
 const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDetails', false);
 const filesTool = ContextKeyExpr.equals('sessions.editorTool', 'files');
 const terminalTool = ContextKeyExpr.equals('sessions.editorTool', 'terminal');
@@ -56,7 +55,7 @@ registerAction2(class ToggleSessionsEditorWordWrapAction extends Action2 {
 			menu: {
 				id: Menus.SessionsEditorTitle,
 				group: '1_view',
-				when: ContextKeyExpr.and(codeContext.isEqualTo(true), filesTool, ActiveEditorContext.isEqualTo(CODE_EDITOR_ID)),
+				when: ContextKeyExpr.and(SessionsCodeEditorContext.isEqualTo(true), filesTool, ActiveEditorContext.isEqualTo(CODE_EDITOR_ID)),
 			},
 		});
 	}
@@ -99,7 +98,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		const detailsVisible = detailsVisibleContext.bindTo(contextKeys);
 		const fileEditorsVisible = filesVisibleContext.bindTo(contextKeys);
 		const changesVisible = changesVisibleContext.bindTo(contextKeys);
-		const code = codeContext.bindTo(contextKeys);
+		const code = SessionsCodeEditorContext.bindTo(contextKeys);
 		const supportedDetails = supportedDetailsContext.bindTo(contextKeys);
 		const updateContext = (): void =>
 			contextKeys.bufferChangeEvents(() => {
@@ -136,7 +135,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			});
 		const toolGroup = (arg: unknown): number => isRecord(arg) && typeof arg.groupId === 'number'
 			&& editor.groups.some(group => group.id === arg.groupId) ? arg.groupId : editor.activeGroup.id;
-		const changesTool = ContextKeyExpr.and(codeContext.isEqualTo(true), ContextKeyExpr.equals('sessions.editorTool', 'changes'));
+		const changesTool = ContextKeyExpr.and(SessionsCodeEditorContext.isEqualTo(true), ContextKeyExpr.equals('sessions.editorTool', 'changes'));
 		const previewCommitId = 'ash.sessions.changes.previewCommit';
 		this._register(CommandsRegistry.register(previewCommitId, (_accessor, arg) => {
 			const pane = editor.groups.find(group => group.id === toolGroup(arg))?.activePane;
@@ -172,7 +171,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				command: { id, title, toggled: ChangesScopeContext.isEqualTo(scope) }, group: 'navigation', order,
 			}));
 		}
-		const terminalInCode = ContextKeyExpr.and(codeContext.isEqualTo(true), terminalTool);
+		const terminalInCode = ContextKeyExpr.and(SessionsCodeEditorContext.isEqualTo(true), terminalTool);
 		const liveShell = TerminalEditorCanSplitContext.isEqualTo(true);
 		const appServerAvailable = AppServerAvailableContext.isEqualTo(true);
 		const canSplit = ContextKeyExpr.and(liveShell, appServerAvailable);
@@ -261,10 +260,10 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			registerAddTabActions(
 				() => run(() => controller.openFiles()),
 				() => run(() => controller.openChanges()),
-				codeContext.isEqualTo(true),
+				SessionsCodeEditorContext.isEqualTo(true),
 			),
 		);
-		const codeWhen = codeContext.isEqualTo(true);
+		const codeWhen = SessionsCodeEditorContext.isEqualTo(true);
 		const modalVisible = EditorPartModalVisibleContext.isEqualTo(true);
 		const modalToEditor = ContextKeyExpr.and(codeWhen, modalVisible);
 		this._register(registerAction2(class OpenModalEditorInEditorAction extends Action2 {
@@ -277,7 +276,9 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					menu: { id: MenuId.ModalEditorTitle, group: 'navigation', order: 98, when: modalToEditor },
 				});
 			}
-			override run(): Promise<void> { return (editor as EditorParts).moveModalEditorToMain(); }
+			override async run(): Promise<void> {
+				if (context.isDocumentContent) await (editor as EditorParts).moveModalEditorToMain();
+			}
 		}));
 		const openInModal = ContextKeyExpr.and(codeWhen, EditorPartModalVisibleContext.isEqualTo(false),
 			ContextKeyExpr.or(...[Schemas.file, Schemas.ashRemote, Schemas.untitled, 'ash-session-changes'].map(scheme => ResourceSchemeContext.isEqualTo(scheme))));
@@ -290,7 +291,9 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					precondition: openInModal,
 				});
 			}
-			override run(): Promise<void> { return (editor as EditorParts).openActiveEditorInModal(); }
+			override async run(): Promise<void> {
+				if (context.isDocumentContent) await (editor as EditorParts).openActiveEditorInModal();
+			}
 		}));
 		const editorShown = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(true));
 		const editorHidden = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(false));

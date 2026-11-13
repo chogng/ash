@@ -4,13 +4,14 @@ import { localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
+import { KeybindingContextKeys } from '../../../../../platform/keybinding/common/keybinding.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { IChatWidgetService, type IChatWidget, type IChatFindController } from '../chat.js';
 import { ChatFindCommandId } from '../widget/chatFind/chatFindCommandIds.js';
 
 export function resolveFocusedChatWidget(widgets: readonly IChatWidget[], lastFocusedWidget: IChatWidget | undefined, isFocusAncestor: (element: HTMLElement) => boolean): IChatWidget | undefined {
-	return widgets.find(widget => widget.visible && widget.getFindController() && isFocusAncestor(widget.domNode)) ?? (lastFocusedWidget?.visible ? lastFocusedWidget : undefined);
+	return widgets.find(widget => widget.visible && isFocusAncestor(widget.domNode) && widget.getFindController()) ?? (lastFocusedWidget?.visible ? lastFocusedWidget : undefined);
 }
 
 export function getFocusedFindController(accessor: ServicesAccessor): IChatFindController | undefined {
@@ -21,6 +22,7 @@ export function getFocusedFindController(accessor: ServicesAccessor): IChatFindC
 export function registerChatFindActions(): void {
 	const supported = ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ChatContextKeys.findSupported.isEqualTo(true));
 	const visible = ContextKeyExpr.and(supported, ChatContextKeys.findWidgetVisible.isEqualTo(true));
+	const canNavigate = ContextKeyExpr.and(supported, ContextKeyExpr.not(KeybindingContextKeys.isComposing.key));
 	registerAction2(class extends Action2 {
 		constructor() {
 			super({
@@ -57,10 +59,10 @@ export function registerChatFindActions(): void {
 		registerAction2(class extends Action2 {
 			constructor() {
 				super({
-					id, title, precondition: visible,
+					id, title, precondition: canNavigate,
 					keybinding: [
 						{ primary, mac: { primary: KeyMod.CtrlCmd | (id === ChatFindCommandId.FindPrevious ? KeyMod.Shift : 0) | KeyCode.KeyG, secondary: [primary] }, weight: KeybindingWeight.WorkbenchContrib + 1, when: ChatContextKeys.inChatSession.isEqualTo(true) },
-						{ primary: secondary, weight: KeybindingWeight.WorkbenchContrib + 1, when: ChatContextKeys.findInputFocused.isEqualTo(true) },
+						{ primary: secondary, weight: KeybindingWeight.WorkbenchContrib + 1, when: ContextKeyExpr.and(ChatContextKeys.findWidgetVisible.isEqualTo(true), ChatContextKeys.findInputFocused.isEqualTo(true)) },
 					],
 				});
 			}

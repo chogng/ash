@@ -19,7 +19,6 @@ import { AccessibleViewService } from './accessibleView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { EditorAccessibilityHelpContribution } from './editorAccessibilityHelp.js';
-import { AccessibilityStatus } from './accessibilityStatus.js';
 import { UnfocusedViewDimmingContribution } from './unfocusedViewDimmingContribution.js';
 
 registerSingleton(IAccessibleViewService, AccessibleViewService, InstantiationType.Delayed);
@@ -81,8 +80,6 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 
 registerWorkbenchContribution(EditorAccessibilityHelpContribution.ID, WorkbenchPhase.AfterRestored, accessor =>
 	accessor.get(IInstantiationService).createInstance(EditorAccessibilityHelpContribution));
-registerWorkbenchContribution(AccessibilityStatus.ID, WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(AccessibilityStatus));
 registerWorkbenchContribution('workbench.contrib.unfocusedViewDimming', WorkbenchPhase.AfterRestored, accessor =>
 	accessor.get(IInstantiationService).createInstance(UnfocusedViewDimmingContribution));
 

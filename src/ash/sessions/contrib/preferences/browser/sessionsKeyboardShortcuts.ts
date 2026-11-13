@@ -12,7 +12,7 @@ import { BrowserViewEditorId } from '../../../../workbench/contrib/browserView/c
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { CONTEXT_DEBUG_STATE } from '../../../../workbench/contrib/debug/common/debug.js';
 import { NewSessionPickersAvailableContext } from '../../chat/browser/newChatPickerKeybinding.js';
-import { designCanvasShortcutKeys, designVectorShortcutKeys } from '../../artifacts/browser/designShortcutKeys.js';
+import { designCanvasShortcutKeys, designVectorShortcutKeys } from '../../artifact/browser/designShortcutKeys.js';
 
 interface Shortcut {
 	readonly title: string;

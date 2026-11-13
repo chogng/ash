@@ -6,7 +6,7 @@ import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
-import { Action2, MenuId, MenuItemAction, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, MenuItemAction, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
@@ -18,7 +18,7 @@ import { IChatService, type ThreadRead } from '../../../../services/chat/common/
 import { IChatSessionNavigationService, withChatConversation } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { getCompletedChatResponseSource, type IChatListItem } from '../../common/model/chatViewModel.js';
-import { ChatMessageActionContext, IChatWidgetService, unwrapChatResponseActionContext } from '../chat.js';
+import { ChatContextMenuActionContext, ChatMessageActionContext, IChatWidgetService, unwrapChatResponseActionContext } from '../chat.js';
 import { renderChatClipboardHtml, toPortableMarkdown } from '../widget/chatClipboard.js';
 import { expandChatRichContentForCopy } from '../widget/chatMarkdownRichContent.js';
 
@@ -229,6 +229,17 @@ export function registerChatCopyActions(): void {
 			});
 		}
 		public override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
+			if (context instanceof ChatContextMenuActionContext) {
+				const clipboard = accessor.get(IClipboardService);
+				const accessibility = accessor.get(IAccessibilityService);
+				if (clipboard.writeTextWithHtml) {
+					await clipboard.writeTextWithHtml(context.text, Promise.resolve(context.html));
+				} else {
+					await clipboard.writeText(context.text);
+				}
+				accessibility.status(localize('chat.selection.copied', 'Selection copied.'));
+				return;
+			}
 			context = unwrapChatResponseActionContext(context);
 			if (!context || typeof context !== 'object' || !('text' in context) || typeof context.text !== 'string' || !('type' in context) || context.type !== 'agentMessage' && context.type !== 'userMessage') return;
 			const clipboard = accessor.get(IClipboardService);
@@ -245,6 +256,15 @@ export function registerChatCopyActions(): void {
 				await clipboard.writeText(text);
 			}
 		}
+	});
+	MenusRegistry.appendMenuItem(MenuId.ChatContext, {
+		command: {
+			id: CopyItemActionId,
+			get title() { return localize2('chat.message.copyTooltip', 'Copy'); },
+			icon: Lxicon.copy,
+		},
+		group: 'navigation',
+		order: 1,
 	});
 	registerAction2(CopyChatSessionLinkAction);
 }

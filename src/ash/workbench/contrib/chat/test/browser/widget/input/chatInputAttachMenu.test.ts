@@ -15,8 +15,9 @@ import { IConnectorService } from '../../../../../../../platform/connectors/comm
 import { IPluginManagementService } from '../../../../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { setARIAContainer } from '../../../../../../../base/browser/ui/aria/aria.js';
 import { ChatInputAttachMenu, type ChatInputAttachMenuOptions } from '../../../../browser/widget/input/chatInputAttachMenu.js';
+import { initializeTestLocalization } from '../../../../../../services/localization/test/common/localizationTestUtils.js';
 
-function createFixture(listConnectors?: IConnectorService['list'], host?: ChatInputAttachMenuOptions['host']) {
+function createFixture(listConnectors?: IConnectorService['list'], host?: ChatInputAttachMenuOptions['host'], legacyEnabled?: boolean) {
 	const resources = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body><div id="container" class="ash-sessions-window"><button id="attach-btn" aria-haspopup="menu"></button><input></div></body>', {
 		url: 'http://localhost/',
@@ -40,12 +41,19 @@ function createFixture(listConnectors?: IConnectorService['list'], host?: ChatIn
 	};
 	services.registerInstance(ICommandService, commandService as ICommandService);
 
-	const storageValues = new Map<string, any>();
+	const storageValues = new Map<string, boolean>();
+	if (legacyEnabled !== undefined) {
+		storageValues.set('ash.chat.attachMenu.webSearch.enabled', legacyEnabled);
+		storageValues.set('ash.chat.attachMenu.memory.enabled', legacyEnabled);
+	}
+	const storageOperations: string[] = [];
 	const storageService: Partial<IStorageService> = {
 		getBoolean(key: string, _scope: StorageScope, fallbackValue?: boolean): any {
+			storageOperations.push(`read:${key}`);
 			return storageValues.has(key) ? Boolean(storageValues.get(key)) : (fallbackValue ?? false);
 		},
 		store(key: string, value: any, _scope?: StorageScope, _target?: StorageTarget) {
+			storageOperations.push(`write:${key}`);
 			storageValues.set(key, value);
 		},
 	};
@@ -117,6 +125,7 @@ function createFixture(listConnectors?: IConnectorService['list'], host?: ChatIn
 		menu,
 		executedCommands,
 		storageValues,
+		storageOperations,
 		attachedSkills,
 		selectedProjects,
 		get uploaded() { return uploaded; },
@@ -132,7 +141,7 @@ function menuItem(menu: HTMLElement, label: string): HTMLButtonElement {
 }
 
 suite('ChatInputAttachMenu', () => {
-	test('shows action icons on the left and checks and submenu arrows on the right', () => {
+	test('shows attachment action icons and submenu arrows without unsupported feature toggles', () => {
 		using f = createFixture();
 		f.menu.show();
 
@@ -140,9 +149,9 @@ suite('ChatInputAttachMenu', () => {
 		const menu = f.popup()!;
 		assert.equal(menu.getAttribute('role'), 'menu');
 		assert.ok(menu.classList.contains('ash-menu-indicators-trailing'));
-		assert.equal(menu.querySelectorAll('button').length, 8);
-		assert.equal(menu.querySelectorAll('[role="separator"]').length, 2);
-		assert.equal(menu.querySelectorAll('.ash-menu-leading-slot [data-ash-icon-id]').length, 8);
+		assert.equal(menu.querySelectorAll('button').length, 6);
+		assert.equal(menu.querySelectorAll('[role="separator"]').length, 1);
+		assert.equal(menu.querySelectorAll('.ash-menu-leading-slot [data-ash-icon-id]').length, 6);
 
 		const upload = menuItem(menu, 'Upload or add files');
 		assert.equal(upload.getAttribute('role'), 'menuitem');
@@ -156,13 +165,8 @@ suite('ChatInputAttachMenu', () => {
 			assert.ok(trigger.querySelector('.ash-menu-leading-slot [data-ash-icon-id]'));
 			assert.ok(trigger.querySelector('.ash-menu-trailing-slot.ash-submenu-indicator [data-ash-icon-id="menu-submenu"]'));
 		}
-		for (const label of ['Web search', 'Memory']) {
-			const toggle = menuItem(menu, label);
-			assert.equal(toggle.getAttribute('role'), 'menuitemcheckbox');
-			assert.equal(toggle.getAttribute('aria-checked'), 'true');
-			assert.ok(toggle.querySelector('.ash-menu-leading-slot [data-ash-icon-id]'));
-			assert.ok(toggle.querySelector('.ash-menu-trailing-slot > [data-ash-icon-id="check"]'));
-		}
+		assert.equal(menu.querySelector('[role="menuitemcheckbox"]'), null);
+		assert.equal(menu.querySelector('[aria-label="Web search"], [aria-label="Memory"]'), null);
 	});
 
 	test('clicking Upload or add files invokes onUploadFiles and closes the menu', () => {
@@ -175,21 +179,66 @@ suite('ChatInputAttachMenu', () => {
 		assert.equal(f.anchor.getAttribute('aria-expanded'), 'false');
 	});
 
-	test('toggling Web search and Memory keeps the menu open and persists the check states', () => {
-		using f = createFixture();
-		f.menu.show();
-		const menu = f.popup()!;
-
-		for (const [label, key] of [['Web search', 'webSearch'], ['Memory', 'memory']]) {
-			const toggle = menuItem(menu, label);
-			for (const checked of [false, true]) {
-				toggle.click();
-				assert.equal(toggle.getAttribute('aria-checked'), String(checked));
-				assert.equal(toggle.classList.contains('checked'), checked);
-				assert.ok(toggle.querySelector('.ash-menu-leading-slot [data-ash-icon-id]'));
-				assert.equal(f.storageValues.get(`ash.chat.attachMenu.${key}.enabled`), checked);
-				assert.equal(f.popup(), menu);
+	for (const enabled of [false, true]) {
+		test(`ignores legacy feature values (${enabled}) across cancellation and repeated opening without announcing a policy change`, () => {
+			using f = createFixture(undefined, undefined, enabled);
+			const before = [...f.storageValues];
+			for (let attempt = 0; attempt < 2; attempt++) {
+				f.menu.show();
+				assert.deepEqual([...f.popup()!.querySelectorAll('button')].map(row => row.getAttribute('aria-label')), [
+					'Upload or add files', 'Add to project', 'Skills', 'Add connector', 'Design system', 'Plugins',
+				]);
+				f.key('End');
+				assert.equal(f.document.activeElement, menuItem(f.popup()!, 'Plugins'));
+				f.key('ArrowDown');
+				assert.equal(f.document.activeElement, menuItem(f.popup()!, 'Upload or add files'));
+				f.key('Escape');
+				assert.equal(f.popup(), null);
+				assert.equal(f.document.activeElement, f.input);
 			}
+			f.menu.show();
+			f.menu.show();
+			assert.equal(f.popup(), null);
+			assert.equal(f.anchor.getAttribute('aria-expanded'), 'false');
+			assert.deepEqual(f.storageOperations, []);
+			assert.deepEqual([...f.storageValues], before);
+			assert.equal(f.document.querySelector('.ash-aria-live')!.textContent, '');
+		});
+	}
+
+	test('simplified hosts keep their supported actions without implying control over Memory or Web search', async () => {
+		let selected = false;
+		using f = createFixture(undefined, {
+			getProjectActions: () => [{ id: 'alpha', label: 'Alpha Project', enabled: true, checked: true, tooltip: '', run: async () => { selected = true; } }],
+			additionalActions: [{ id: 'extra', label: 'Host attachment', enabled: true, tooltip: '', run: async () => { } }],
+		}, false);
+		f.menu.show();
+		assert.deepEqual([...f.popup()!.querySelectorAll('button')].map(row => row.getAttribute('aria-label')), [
+			'Upload or add files', 'Host attachment', 'Add to project', 'Skills',
+		]);
+		assert.deepEqual(f.storageOperations, []);
+		menuItem(f.popup()!, 'Add to project').click();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		const project = menuItem(f.popup('Add to project')!, 'Alpha Project');
+		assert.equal(project.getAttribute('role'), 'menuitemradio');
+		assert.equal(project.getAttribute('aria-checked'), 'true');
+		project.click();
+		assert.equal(selected, true);
+		assert.equal(f.popup(), null);
+	});
+
+	test('Simplified Chinese retains localized attachment actions without unsupported feature or status text', () => {
+		initializeTestLocalization('zh-CN');
+		try {
+			using f = createFixture();
+			f.menu.show();
+			assert.deepEqual([...f.popup('添加内容或上下文')!.querySelectorAll('button')].map(row => row.getAttribute('aria-label')), [
+				'上传或添加文件', '添加到项目', '技能', '添加连接器', '设计系统', '插件',
+			]);
+			f.key('Escape');
+			assert.equal(f.document.querySelector('.ash-aria-live')!.textContent, '');
+		} finally {
+			initializeTestLocalization('en');
 		}
 	});
 

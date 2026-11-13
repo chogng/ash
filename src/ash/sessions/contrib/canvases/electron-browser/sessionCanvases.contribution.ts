@@ -1,6 +1,8 @@
+import '../../../../workbench/contrib/canvases/electron-browser/canvases.contribution.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { ICanvasContextService, ICanvasService } from '../../../../workbench/contrib/canvases/common/canvas.js';
+import { registerCanvasContextPicker } from '../../../../workbench/contrib/canvases/browser/canvasContextPicker.js';
 import { SessionCanvasContextService, SessionCanvasRegistryService } from './sessionCanvasService.js';
 import { ISessionCanvasRegistryService } from '../common/sessionCanvas.js';
 import { registerSessionCanvasActions } from './sessionCanvasActions.js';
@@ -24,9 +26,9 @@ registerWorkbenchContribution('sessions.contrib.canvases', WorkbenchPhase.BlockR
 	resources.add(accessor.get(IInstantiationService).createInstance(PinnedCanvasPageContribution));
 	resources.add(registerPinnedCanvasSidebar(accessor.get(IPinnedCanvasService), accessor.get(INotificationService)));
 	resources.add(EditorInputSerializers.register(accessor.get(IInstantiationService).createInstance(SessionCanvasSerializer)));
+	resources.add(registerCanvasContextPicker(accessor));
 	resources.add(registerSessionCanvasActions(accessor.get(ICanvasService), accessor.get(ISessionCanvasRegistryService), accessor.get(ICanvasContextService)));
 	return resources;
 });
-import '../../../../workbench/contrib/canvases/electron-browser/canvases.contribution.js';
 
 registerWorkbenchContribution('sessions.contrib.remoteCanvases', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(RemoteCanvasHostContribution));

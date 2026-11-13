@@ -1,3 +1,4 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { Event } from '../../../../../base/common/event.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../../base/common/htmlContent.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
@@ -12,7 +13,7 @@ import type { ITextModel } from '../../../../../editor/common/model.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { EnvironmentVariableMutatorType, type EnvironmentVariableScope, type IMergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariable.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
@@ -137,7 +138,7 @@ class EnvironmentCollectionProvider extends Disposable {
 	}
 }
 
-registerAction2(class ShowEnvironmentContributionsAction extends Action2 {
+registerEditorToolAction(class ShowEnvironmentContributionsAction extends Action2 {
 	constructor() { super({ id: TerminalCommandId.ShowEnvironmentContributions, title: localize2('terminal.environmentChanges.show', 'Terminal: Show Environment Contributions'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
 	override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 		if (context !== undefined && !URI.isUri(context)) throw new TypeError(localize('terminal.context.invalid', 'Invalid terminal instance context'));

@@ -17,7 +17,7 @@ import {
 	drawImageAnnotation,
 	rightClickCanvasShape,
 } from '../../../automation/design.js';
-import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifacts/common/model/designDocument.js';
+import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifact/common/model/designDocument.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
 import type { IKeyboardLayoutDefinition } from '../../../../src/ash/platform/keyboardLayout/common/keyboardLayout.js';
@@ -266,16 +266,20 @@ test(
 );
 
 test(
-	'Sessions desktop follows system screen-reader detection and live changes in its editor',
+	'Sessions desktop follows system screen-reader detection without the IDE configuration prompt',
 	{ tag: ['@electron-ui', '@electron-app-server'] },
 	async ({ application, target, workbench }) => {
 		if (!('windows' in application)) {
 			throw new Error('Expected Electron windows');
 		}
 		const initialSupport = await application.evaluate(({ app }) => app.isAccessibilitySupportEnabled());
+		const screenReaderPrompt = (page: Page) => page.locator('.ash-notification-message').filter({ hasText: 'Choose how Ash enables screen reader optimization.' });
 		try {
+			await application.evaluate(({ app }) => app.setAccessibilitySupportEnabled(false));
 			await application.evaluate(({ app }) => app.setAccessibilitySupportEnabled(true));
+			await expect(screenReaderPrompt(workbench.page).filter({ visible: true })).toBeVisible();
 			const page = await workbench.openAgentsWindow(target.kind);
+			await expect(screenReaderPrompt(page)).toHaveCount(0);
 			const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-native-chat):visible').first();
 			const editor = new Editor(chat);
 			await replaceChatInput(editor, 'System screen-reader detection');
@@ -288,6 +292,13 @@ test(
 			await application.evaluate(({ app }) => app.setAccessibilitySupportEnabled(true));
 			await expect(mirror).toHaveAttribute('aria-hidden', 'false');
 			await expect(mirror).toHaveText('System screen-reader detection');
+			const commands = new QuickAccess(page);
+			await commands.open('>showEditorScreenReaderNotification');
+			await expect(commands.items).toHaveCount(0);
+			await commands.close();
+			await commands.runCommand('notifications.showList');
+			await expect(page.getByRole('region', { name: 'Notification Center', exact: true })).toBeVisible();
+			await expect(screenReaderPrompt(page)).toHaveCount(0);
 		} finally {
 			await application.evaluate(
 				({ app }, enabled) => app.setAccessibilitySupportEnabled(enabled),
@@ -351,15 +362,15 @@ async function readComposerShadow(
 	});
 }
 
-async function openSessionsComposer(page: Page, presentation: 'Cowork' | 'Code'): Promise<Locator> {
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	if (presentation === 'Cowork') {
-		// Desktop's Chat mode opens ChatGPT; Collab hosts the shared Cowork composer.
+async function openSessionsComposer(page: Page, presentation: 'Collab' | 'Code'): Promise<Locator> {
+	const mode = presentation === 'Collab' ? 'Chat / Agents' : 'Code';
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: mode, exact: true }).click();
+	if (presentation === 'Collab') {
 		await page.locator('[data-action-id="sessions.activity.more"] button').click();
 		await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 	}
 	const chat = page
-		.locator(`.ash-sessions-chat-slot .${presentation === 'Cowork' ? 'ash-native-chat' : 'ash-chat'}:visible`)
+		.locator(`.ash-sessions-chat-slot .${presentation === 'Collab' ? 'ash-native-chat' : 'ash-chat'}:visible`)
 		.first();
 	await expect(chat).toBeVisible();
 	return chat;
@@ -369,7 +380,7 @@ async function expectFloatingComposerHover(
 	card: Locator,
 	input: Locator,
 	blurTarget: Locator,
-	presentation: 'Cowork' | 'Code',
+	presentation: 'Collab' | 'Code',
 ): Promise<void> {
 	await blurTarget.hover();
 	await blurTarget.focus();
@@ -394,7 +405,7 @@ async function expectFloatingComposerHover(
 	await expect.poll(() => card.evaluate(element => element.getAnimations().length)).toBe(0);
 	const resting = await readComposerShadow(card);
 	const restingShadow = resting.shadow;
-	// Cowork retains its two-layer elevation; Code only raises during interaction.
+	// Collab retains its two-layer elevation; Code only raises during interaction.
 	expect(resting.themeOpacity).toBeGreaterThan(0.05);
 	expect(resting.layerOpacities).toHaveLength(presentation === 'Code' ? 0 : 2);
 	for (const [index, opacity] of resting.layerOpacities.entries()) {
@@ -575,7 +586,7 @@ test(
 			.click();
 		await new QuickAccess(page).runCommand('sessions.creator.open.design');
 		const canvas = page.getByRole('region', { name: 'Design canvas' });
-		const tools = canvas.locator('.ash-canvas-editor-toolbar');
+		const tools = canvas.locator('.ash-artifact-toolbar');
 		await tools.getByRole('button', { name: 'Select (V)', exact: true }).focus();
 		await page.keyboard.press('ArrowRight');
 		const selectionTools = tools.getByRole('button', { name: 'Selection tools', exact: true });
@@ -692,7 +703,7 @@ test(
 		await canvas.focus();
 		await page.keyboard.press('f');
 		await canvas
-			.locator('.ash-canvas-editor-toolbar')
+			.locator('.ash-artifact-toolbar')
 			.getByRole('button', { name: 'Import image', exact: true })
 			.click();
 		if (target.kind === 'browser') {
@@ -757,11 +768,11 @@ test(
 				bytes: Array.from(originalBytes),
 			});
 		}
-		await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+		await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(canvas.getByRole('textbox', { name: 'Generated code', exact: true })).toHaveValue(
 			/href="data:image\/png;base64,/u,
 		);
-		await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
+		await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
 		await rename(join(directory, 'design.ash-design'), join(directory, 'moved.ash-design'));
 		if (target.kind === 'electron') {
 			if (!('windows' in application)) {
@@ -1076,7 +1087,7 @@ test(
 		}, svg);
 		expect(parsed).toMatchObject({ text: '中文 <script>', selection: false, script: false, error: false });
 		expect(parsed.path).toContain(' C ');
-		await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+		await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 		const source = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
 		if (target.kind === 'electron' && 'windows' in application) {
 			await application.evaluate(({ dialog }, folder) => {
@@ -1092,7 +1103,7 @@ test(
 		await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Exported design.html');
 		expect(await read('design.html')).toBe(source);
 		await expect(canvas).toHaveClass(/\bdirty\b/u);
-		await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
+		await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
 		await canvas.focus();
 		await page.keyboard.press('ControlOrMeta+z');
 		await clickCanvasMenu(canvas, 'Open design', application);
@@ -1687,7 +1698,7 @@ focusTest(
 		}
 		await settings.locator('.ash-modal-editor-close').click();
 		const page = await workbench.openAgentsWindow(target.kind);
-		for (const presentation of ['Cowork', 'Code'] as const) {
+		for (const presentation of ['Collab', 'Code'] as const) {
 			const chat = await openSessionsComposer(page, presentation);
 			const card = chat.locator('.ash-chat-input-container');
 			await expect
@@ -1723,6 +1734,68 @@ focusTest(
 	},
 );
 
+test('Chat input layout switches live in Settings and survives reopening', { tag: ['@electron-ui', '@browser-ui'] }, async ({ application, target, workbench }, testInfo) => {
+	let page = await workbench.openAgentsWindow(target.kind);
+	await openSessionsComposer(page, 'Collab');
+	const cardSelector = '.ash-native-chat:visible .ash-chat-input-container';
+	let card = page.locator(cardSelector);
+	await expect(card).toHaveClass(/ash-chat-input-adaptive/u);
+	await expect(card).not.toHaveClass(/\bexpanded\b/u);
+	let editor = new Editor(card);
+	await editor.waitForEditorFocus();
+	await editor.waitForTypeInEditor('Keep this draft');
+	const compactHeight = (await card.boundingBox())!.height;
+
+	const openLayoutSettings = async (): Promise<Locator> => {
+		const navigation = page.locator('.ash-sessions-activity-bottom');
+		await new Workbench(page).menus.select(application,
+			() => navigation.getByRole('button', { name: 'Accounts', exact: true }).click(), ['Settings']);
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+		await settings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Appearance', exact: true }).click();
+		return settings;
+	};
+	let settings = await openLayoutSettings();
+	const layoutSelector = '[data-configuration-key="sessions.chat.inputLayout"]';
+	let picker = settings.locator(layoutSelector).getByRole('combobox');
+	await expect(picker).toHaveText('Single line');
+	// Both preferences use the same Settings control and type scale.
+	const reference = settings.locator('[data-configuration-key="sessions.backgroundColor"]').getByRole('combobox');
+	expect(await picker.evaluate(element => getComputedStyle(element).fontSize)).toBe(await reference.evaluate(element => getComputedStyle(element).fontSize));
+	await picker.focus();
+	await picker.press('Enter');
+	await page.getByRole('option', { name: 'Stacked', exact: true }).click();
+	await expect(card).toHaveClass(/\bexpanded\b/u);
+	await testInfo.attach('chat-input-layout-settings', { body: await settings.screenshot(), contentType: 'image/png' });
+	await page.keyboard.press('Escape');
+	await editor.waitForEditorContents(text => text === 'Keep this draft');
+	expect((await card.boundingBox())!.height).toBeGreaterThan(compactHeight);
+	await testInfo.attach('chat-input-stacked', { body: await card.screenshot(), contentType: 'image/png' });
+
+	page = await workbench.reopenAgentsWindow(application, page);
+	await openSessionsComposer(page, 'Collab');
+	card = page.locator(cardSelector);
+	await expect(card).toHaveClass(/\bexpanded\b/u);
+	settings = await openLayoutSettings();
+	picker = settings.locator(layoutSelector).getByRole('combobox');
+	await expect(picker).toHaveText('Stacked');
+	await picker.click();
+	await page.getByRole('option', { name: 'Single line', exact: true }).click();
+	await page.keyboard.press('Escape');
+	await expect(card).not.toHaveClass(/\bexpanded\b/u);
+	editor = new Editor(card);
+	await editor.waitForEditorFocus();
+	await editor.input.press('ControlOrMeta+a');
+	await page.keyboard.insertText('Short draft');
+	await expect(card).not.toHaveClass(/\bexpanded\b/u);
+	await testInfo.attach('chat-input-single-line', { body: await card.screenshot(), contentType: 'image/png' });
+	await page.keyboard.insertText(' with more detail'.repeat(80));
+	await expect(card).toHaveClass(/\bexpanded\b/u);
+	await editor.input.press('ControlOrMeta+a');
+	await page.keyboard.insertText('Short again');
+	await expect(card).not.toHaveClass(/\bexpanded\b/u);
+	await expect(editor.input).toBeFocused();
+});
+
 test('Sessions empty chat centers a growing input card and keeps the draft across themes and navigation', async ({
 	application,
 	target,
@@ -1730,7 +1803,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const setColorScheme = (colorScheme: 'light' | 'dark') => workbench.setAppearance(application, colorScheme, page);
-	await openSessionsComposer(page, 'Cowork');
+	await openSessionsComposer(page, 'Collab');
 	const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-native-chat):visible').first();
 	const card = chat.locator(':is(.ash-chat-input-container,.ash-native-chat-input-container):visible');
 	const editor = new Editor(chat);
@@ -1741,10 +1814,8 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	// Windows display scaling can serialize a one-pixel border as a fractional CSS width.
 	expect(await card.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderTopWidth)))).toBe(1);
 	await expect(chat.locator(':is(.ash-chat-textarea-input,.ash-native-chat-textarea-input)')).toHaveCount(0);
-	await expect(chat.locator(':is(.ash-chat-input-editor,.ash-native-chat-input-editor):visible')).toHaveCSS(
-		'height',
-		'32px',
-	);
+	await expect(card).not.toHaveClass(/\bexpanded\b/u);
+	await expect(editor.lines).toHaveCount(1);
 	const bounds = await chat.boundingBox();
 	const cardBounds = await card.boundingBox();
 	expect(Math.abs(cardBounds!.x + cardBounds!.width / 2 - bounds!.x - bounds!.width / 2)).toBeLessThanOrEqual(1);
@@ -1778,7 +1849,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 			card,
 			input,
 			page.getByRole('button', { name: 'Hide sidebar', exact: true }),
-			'Cowork',
+			'Collab',
 		);
 		await editor.waitForEditorContents(contents => contents === 'Keep this draft');
 		await expect(card).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
@@ -1821,7 +1892,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	await page.keyboard.press('Shift+Enter');
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft\n');
 	await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
-	await openSessionsComposer(page, 'Cowork');
+	await openSessionsComposer(page, 'Collab');
 	await expect(chat.locator(':is(.chat-composer,.native-chat-composer)')).toBeVisible();
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft\n');
 });
@@ -1848,7 +1919,7 @@ focusTest(
 			).toBe(1);
 			await expect(sidebar).toHaveCSS('border-right-style', 'solid');
 			await expect(sidebar).not.toHaveCSS('border-right-color', 'rgba(0, 0, 0, 0)');
-			for (const presentation of ['Cowork', 'Code'] as const) {
+			for (const presentation of ['Collab', 'Code'] as const) {
 				const chat = await openSessionsComposer(page, presentation);
 				const card = chat.locator('.ash-chat-input-container');
 				expect(

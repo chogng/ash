@@ -1,11 +1,11 @@
-import { ChatReplyError, type ChatReplyUpdate, type IChatReplyBackend } from '../../../common/chatReplyBackend.js';
+import { ChatReplyError, type IChatReplyBackend } from '../../../common/chatReplyBackend.js';
 import { ChatGPTAuthenticationError } from '../common/chatGPTTransport.js';
-import { ChatGPTRequestError, type ChatGPTClient, type ChatGPTReplyRequest } from './chatGPTClient.js';
+import { ChatGPTRequestError, type ChatGPTClient, type ChatGPTReplyRequest, type ChatGPTStreamUpdate } from './chatGPTClient.js';
 
 export class ChatGPTReplyBackend implements IChatReplyBackend {
 	constructor(private readonly client: ChatGPTClient) { }
 
-	async *streamReply(request: ChatGPTReplyRequest, signal: AbortSignal, beforeSubmit?: () => Promise<void>): AsyncGenerator<ChatReplyUpdate> {
+	async *streamReply(request: ChatGPTReplyRequest, signal: AbortSignal, beforeSubmit?: () => Promise<void>): AsyncGenerator<ChatGPTStreamUpdate> {
 		let acknowledged = false;
 		try {
 			for await (const update of this.client.send(request, signal, beforeSubmit)) {

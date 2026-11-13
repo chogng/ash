@@ -120,7 +120,7 @@ import { ChatInputNoticeHost } from './chatInputNoticeHost.js';
 import { IChatInputNoticeHubService } from './chatInputNoticeHub.js';
 import { registerChatInputOnboardingHosts } from './chatInputOnboardingHosts.js';
 import { OpenSettingsCommandId } from '../../../../preferences/common/preferences.js';
-import { getChatInputAccessibilityHelp } from '../../actions/chatAccessibilityHelp.js';
+import { getChatInputAccessibilityHelp, getReplyInputAccessibilityHelp } from '../../actions/chatAccessibilityHelp.js';
 import { ChatInputNotificationWidget } from './chatInputNotificationWidget.js';
 import { ChatInputNotificationActionKind, ChatInputNotificationSeverity, IChatInputNotificationService } from './chatInputNotificationService.js';
 import { IVoiceModeOnboardingService } from '../../../../agentsVoice/browser/voiceModeOnboarding.js';
@@ -186,17 +186,20 @@ const approvalModeIcons: Record<ChatInputState['approvalMode'], Icon> = {
 /** Picker composition is selected by the host; input state and operations keep one owner. */
 export interface ChatInputPartOptions {
 	readonly modePicker: 'visible' | 'hidden';
+	/** A reply composer sends messages without local execution controls or client commands. */
+	readonly replyOnly?: true;
 	readonly modelPickerPosition: 'leading' | 'trailing';
 	readonly configureModelInMenu?: boolean;
 	/** The host supplies its own catalog and model settings when false. */
 	readonly useWorkbenchModelManagement?: boolean;
 	readonly chatModelSlider?: boolean;
-	readonly showContextUsage?: boolean;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	/** Mounts host-owned controls before the compact footer's model toolbar. */
 	readonly renderLeadingFooter?: (footer: HTMLElement) => IDisposable;
 	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
 	readonly layout?: 'compact';
+	/** Keep the adaptive composer's controls below the editor, including short drafts. */
+	readonly alwaysExpanded?: IObservable<boolean>;
 	/** Places captured images in the attachment row, outside the editable message text. */
 	readonly stageImages?: boolean;
 	readonly inputLabel?: string;
@@ -234,6 +237,7 @@ export interface IChatInputPart extends IDisposable {
 	readonly changesSummaryVisible?: IObservable<boolean>;
 	readonly composerForm?: HTMLElement;
 	readonly attachmentModel: ChatAttachmentModel;
+	readonly replyOnly?: boolean;
 	/** The tool catalog of the provider that owns this input. */
 	readonly languageModelTools: ILanguageModelToolsService;
 	readonly element: HTMLElement;
@@ -245,6 +249,9 @@ export interface IChatInputPart extends IDisposable {
 	attachFiles(files: readonly File[], signal?: AbortSignal): Promise<void>;
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]>;
 	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;
+	/** Moves the live draft between retained composers for the same conversation. */
+	moveDraftTo(target: Pick<IChatInputPart, 'replaceDraft'>): void;
+	replaceDraft(draft: IChatComposerDraft): void;
 	appendToDraft(text: string): void;
 	/** Inserts a source-qualified Skill selector and retains its exact revision for submission. */
 	attachSkill(skill: SkillReference): void;
@@ -266,6 +273,12 @@ export interface IChatInputPart extends IDisposable {
 	focusConfirmation(): boolean;
 	setVisible(visible: boolean): void;
 	render(state: ChatInputState): void;
+}
+
+interface IChatComposerDraft {
+	readonly mode: ChatInputMode;
+	readonly text: string;
+	readonly contexts: readonly ChatContextAttachment[];
 }
 
 interface InputHistoryDraft {
@@ -293,6 +306,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private historyInputRevision = 0;
 	private draftSkills: { readonly text: string; readonly references: readonly SkillReference[]; } | undefined;
 	private persistentDrafts = false;
+	private ownsDraftStorage = true;
+	private retireDraftWrite?: () => void;
 	private draftIdentity: ChatInputState['draftIdentity'];
 	private readonly conversationDrafts = new Map<string, InputHistoryDraft & { readonly mode: ChatInputMode; }>();
 	private readonly inputChanges = this._register(new PauseableEmitter<void>({ merge: () => undefined }));
@@ -413,8 +428,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.attachAction.label = delegate.draft ? localize('chat.input.attachFiles', 'Attach files') : localize('chat.context.add', 'Add context');
 		this.attachAction.tooltip = this.attachAction.label;
 		this.attachAction.icon = Lxicon.add;
-		this.slashCommands.setClientCommands(clientCommands.getCommands());
-		this._register(clientCommands.onDidChangeCommands(() => this.slashCommands.setClientCommands(clientCommands.getCommands())));
+		if (!this.replyOnly) {
+			this.slashCommands.setClientCommands(clientCommands.getCommands());
+			this._register(clientCommands.onDidChangeCommands(() => this.slashCommands.setClientCommands(clientCommands.getCommands())));
+		}
 		this.history = this._register(instantiationService.createInstance(ChatHistoryNavigator<InputHistoryDraft>));
 		this.element = h(ownerDocument, 'div');
 		this.element.className = `ash-chat-input-part ${chatInputStackClass}`;
@@ -431,6 +448,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.voiceOnboardingContainer = h(ownerDocument, 'div', { className: `ash-chat-input-notice-slot ${chatInputStackSlotClass}` });
 		this.element.append(this.voiceOnboardingContainer);
 		const context = this._register(contextKeys.createScoped(this.element));
+		ChatContextKeys.replyOnlyInput.bindTo(context).set(this.replyOnly);
 		this.executeContext = context;
 		this.queueContextKeys = {
 			hasText: ChatContextKeys.inputHasText.bindTo(context), running: ChatContextKeys.requestInProgress.bindTo(context),
@@ -493,6 +511,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			},
 			modelPickerPosition: options.modelPickerPosition,
 			layout: options.layout,
+			alwaysExpanded: options.alwaysExpanded,
 			actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
 		}));
 		this.inputContainer = surface.form;
@@ -578,6 +597,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				currentLifecycle: () => this.inputLifecycle.signal,
 				getContext: () => this.state.conversation ?? {},
 				acceptSkill: skill => this.captureSkill(skill),
+				commands: this.delegate.executeServerCommand !== undefined,
+				skills: !this.replyOnly,
 				isEnabled: () => this.visible && !this.state.aiDisabled,
 				acceptResource: async (resource, isDirectory, replacement, signal) => {
 					await this.acceptContextCompletion(replacement, async draftSignal => [await this.attachmentResolver.resolveResourceAttachContext(resource, isDirectory, draftSignal)], signal);
@@ -979,6 +1000,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	get isSubmitting(): boolean { return this.submitting; }
 
 	get changesActionsHost(): HTMLElement { return this.changesPill.domNode; }
+	get replyOnly(): boolean { return this.options.replyOnly === true; }
 	get changesSummaryVisible(): IObservable<boolean> { return this.changesPill.summaryVisible; }
 	get composerForm(): HTMLElement { return this.inputContainer; }
 	get usesInlineVoiceControls(): boolean { return this.inlineActionsToolbar !== undefined; }
@@ -1226,28 +1248,53 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
-		if (this.input.value || this.contexts.length > 0) throw new Error(localize('chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'));
-		this.delegate.selectMode(draft.mode);
-		const attachments = draft.contexts.map(restoreChatVariableEntry);
-		const { text, contexts } = this.options.stageImages ? projectChatDraftReferences(draft.text, attachments, true)
-			: { text: draft.text, contexts: attachments };
-		this.setInputValue(text !== draft.text && !text.trim() && !contexts.some(context => context.reference) ? '' : text);
-		const references: ChatContextAttachment[] = [];
-		const legacyReferences: ChatContextAttachment[] = [];
-		for (const attachment of contexts) {
-			if (attachment.reference || this.inlineContext.shouldStageImage(attachment)) references.push(attachment);
-			else legacyReferences.push(attachment);
+		// Live context can already be projected in a composer without any user draft.
+		const current = this.snapshotDraftReferences();
+		if (current.text.trim() || current.contexts.length > 0 || this.attachmentModel.hasPendingContext) {
+			throw new Error(localize('chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'));
 		}
-		this.setReferenceState(references);
-		// Older drafts have snapshots without text positions; retain each as a reference at the message end.
-		for (const attachment of legacyReferences) this.inlineContext.addReference(attachment, false);
-		this.draftRevision++;
-		this.renderToolbar();
-		this.inputChanges.fire();
+		this.applyDraft({ ...draft, contexts: draft.contexts.map(restoreChatVariableEntry) });
+	}
+
+	moveDraftTo(target: Pick<IChatInputPart, 'replaceDraft'>): void {
+		target.replaceDraft({ mode: this.mode, ...this.snapshotDraftReferences() });
+		this.ownsDraftStorage = false;
+		this.retireDraftWrite?.();
+		// Clearing the retained composer must never erase the active composer's saved draft.
+		this.applyDraft({ mode: this.mode, text: '', contexts: [] });
+	}
+
+	replaceDraft(draft: IChatComposerDraft): void {
+		this.ownsDraftStorage = true;
+		this.applyDraft(draft);
+	}
+
+	private applyDraft(draft: IChatComposerDraft): void {
+		this.inputChanges.pause();
+		try {
+			this.delegate.selectMode(draft.mode);
+			const { text, contexts } = this.options.stageImages ? projectChatDraftReferences(draft.text, draft.contexts, true) : draft;
+			this.setInputValue(text !== draft.text && !text.trim() && !contexts.some(context => context.reference) ? '' : text);
+			const references: ChatContextAttachment[] = [];
+			const legacyReferences: ChatContextAttachment[] = [];
+			for (const attachment of contexts) {
+				if (attachment.reference || this.inlineContext.shouldStageImage(attachment)) references.push(attachment);
+				else legacyReferences.push(attachment);
+			}
+			this.setReferenceState(references);
+			// Older drafts have snapshots without text positions; retain each as a reference at the message end.
+			for (const attachment of legacyReferences) this.inlineContext.addReference(attachment, false);
+			this.draftRevision++;
+			this.renderToolbar();
+			this.inputChanges.fire();
+		} finally {
+			this.inputChanges.resume();
+		}
 	}
 
 	async acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
 		if (this.isDisposed || !this.visible) { return; }
+		if (this.replyOnly && isTaskSubmission(options)) return;
 		const queue = options?.queue;
 		const intent = this.parseInput(value ?? this.commandText());
 		const sendInBackground = options?.background ? this.delegate.sendInBackground : undefined;
@@ -1380,7 +1427,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	openPermissionPicker(): void {
-		if (this.isDisposed || !this.visible || this.state.aiDisabled) return;
+		if (this.isDisposed || !this.visible || this.state.aiDisabled || this.replyOnly) return;
 		if (this.permissionWidget) {
 			this.permissionWidget.focus();
 			this.permissionWidget.show();
@@ -1448,7 +1495,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	protected getAccessibilityHelpContent(): string {
 		const request = this.state.interaction?.request;
 		return [
-			getChatInputAccessibilityHelp(this.imageEditors.accessibilityHelp, !!this.secondaryToolbarContainer, !!this.delegate.executeServerCommand || this.clientCommands.getCommands().length > 0, !!this.delegate.readWorkspaceChanges),
+			this.replyOnly
+				? getReplyInputAccessibilityHelp(!!this.delegate.draft)
+				: getChatInputAccessibilityHelp(this.imageEditors.accessibilityHelp, !!this.secondaryToolbarContainer, !!this.delegate.executeServerCommand || this.clientCommands.getCommands().length > 0,
+					this.delegate.readWorkspaceChanges ? 'workspace' : this.delegate.openChanges ? 'conversation' : undefined,
+					this.executeContext.getValue(ChatContextKeys.messageActionSurface.key) !== 'chat'),
 			this.delegate.draft?.readImage ? localize('chat.input.stagedImageHelp', 'Pasted images appear above the message text inside the input. Use Tab to reach Preview or Remove, and Enter or Space to activate. Escape closes the preview and returns focus to the image.') : '',
 			this.state.interaction?.request.type === 'toolResultReview' ? localize('chat.resultReview.help', 'This tool has already executed. Tab to Results awaiting review to read its captured output. Share results sends it to the model; Skip results withholds it without undoing changes. Restoring supported file changes is a separate checkpoint operation.') : '',
 			this.toolConfirmation instanceof ChatToolAuthenticationSubPart ? localize('chat.tool.authHelp', 'Use Tab to reach Sign in. The sign-in result appears in the approval. Review the tool and choose whether to approve it afterwards.') : '',
@@ -1614,6 +1665,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		let restoring = false;
 		let restoreFailed = false;
 		const revisions = new Map<string, number>();
+		this.retireDraftWrite = () => {
+			const revision = revisions.get(identity);
+			if (revision !== undefined) revisions.set(identity, revision + 1);
+		};
 		const pending = new Set<Promise<void>>();
 		const restore = (): void => {
 			restoreFailed = false;
@@ -1637,7 +1692,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (draft && revision === revisions.get(draftId)) storage.write(draftId, draft);
 		};
 		const save = (reportError = true): Promise<void> | undefined => {
-			if (restoreFailed || restoring) return;
+			if (!this.ownsDraftStorage || restoreFailed || restoring) return;
 			const operation = write();
 			pending.add(operation);
 			void operation.then(() => pending.delete(operation), error => {
@@ -1658,8 +1713,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			event.join((async () => {
 				// File selection can still be preparing its snapshot when the window closes.
 				while (this.attachmentModel.hasPendingContext) await this.attachmentModel.resolvePendingContext();
-				// A mode switch clears the retained renderer after transferring its draft.
-				// Its shutdown must not overwrite the active renderer's persisted input.
 				const draft = this.snapshotDraftReferences();
 				if (this.visible || draft.text.length > 0 || draft.contexts.length > 0) save();
 				await Promise.all([...pending]);
@@ -1677,11 +1730,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				return;
 			}
 			const promoted = wasUntitled && model.threadId !== undefined && generation === nextGeneration;
-			if (promoted) {
+			if (promoted && this.ownsDraftStorage) {
 				// Promotion consumes the untitled identity without creating another composer.
 				revisions.set(identity, (revisions.get(identity) ?? 0) + 1);
 				storage.write(identity, undefined);
-			} else {
+			} else if (!promoted) {
 				save();
 				restoring = true;
 				this.setInputValue('');
@@ -1690,7 +1743,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			generation = nextGeneration;
 			wasUntitled = model.threadId === undefined;
 			identity = nextIdentity;
-			if (!promoted) restore();
+			if (!promoted && this.ownsDraftStorage) restore();
 			restoring = false;
 			save();
 		}));
@@ -1831,12 +1884,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.input.setPlaceholder(inlineVoice && this.toolbarState.voiceConnecting ? localize('chat.voice.connectingPlaceholder', 'Connecting…')
 			: inlineVoice && this.toolbarState.voiceConnected ? this.toolbarState.voiceConnectedPlaceholder ?? localize('chat.voice.listeningPlaceholder', 'Listening…')
 				: this.placeholderPreview ?? this.draftPlaceholder);
-	}
-
-	/** Reapply host-owned controls when the presentation changes without a model update. */
-	public refreshPresentation(): void {
-		this.renderToolbarActions();
-		this.renderFooter();
 	}
 
 	private renderToolbarActions(): void {
@@ -2186,7 +2233,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.renderWorkspacePicker();
 		if (!this.footerContextToolbar || !this.footerContextAction) return;
 		const showWhenEmpty = this.options.layout === 'compact';
-		const showMeter = this.options.showContextUsage !== false && (showWhenEmpty || this.state.contextUsage !== undefined);
+		const showMeter = showWhenEmpty || this.state.contextUsage !== undefined;
 		this.footerContextToolbar.setActions(showMeter ? [this.footerContextAction] : []);
 		if (showMeter) {
 			this.contextUsageWidget?.update(this.state.contextUsage, showWhenEmpty);
@@ -2287,7 +2334,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private followUpCommand(): string {
-		if (!this.state.canInterrupt || this.toolbarState.inputKind !== 'message') return ChatSubmitAction.ID;
+		if (this.replyOnly || !this.state.canInterrupt || this.toolbarState.inputKind !== 'message') return ChatSubmitAction.ID;
 		const editing = this.executeContext.getValue(ChatContextKeys.editingRequestType.key);
 		const queue = editing === ChatContextKeys.EditingRequestType.Queue || editing !== ChatContextKeys.EditingRequestType.Steer && this.configuration.getValue<string>(ChatConfiguration.RequestQueueingDefaultAction) === 'queue';
 		return queue ? ChatQueueMessageAction.ID : ChatSteerWithMessageAction.ID;
@@ -2417,7 +2464,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				return localize('chat.input.unavailable', 'Chat is unavailable.');
 			case 'ready':
 				if (state.queuedMessages > 0) return localize('chat.input.queuedMessages', '{0} messages queued', state.queuedMessages);
-				if (state.activeMode && state.activeMode !== state.mode) return localize('chat.input.modeChangeQueued', 'Working in {0}. The next message will be queued in {1} mode.', state.activeMode, state.mode);
+				if (!this.replyOnly && state.activeMode && state.activeMode !== state.mode) return localize('chat.input.modeChangeQueued', 'Working in {0}. The next message will be queued in {1} mode.', state.activeMode, state.mode);
 				return state.canInterrupt && !this.delegate.responseProgressInTranscript ? localize('chat.input.working', 'Working…') : '';
 		}
 	}
@@ -2596,6 +2643,10 @@ class DictationCancelActionViewItem extends ChatInputButtonViewItem {
 	}
 }
 
+function isTaskSubmission(options: IChatAcceptInputOptions | undefined): boolean {
+	return options?.queue === ChatRequestQueueKind.Steering || options?.sideChat === true || options?.cancelCurrentRequest === true;
+}
+
 /** One paused queue revision owns its editor; the regular composer and frozen attachments stay intact. */
 export class ChatQueueEditor extends Disposable {
 	private submitEdit: ((value?: string, options?: IChatAcceptInputOptions) => Promise<void>) | undefined;
@@ -2613,6 +2664,7 @@ export class ChatQueueEditor extends Disposable {
 	) { super(); }
 
 	acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
+		if (this.widget.input.replyOnly && isTaskSubmission(options)) return Promise.resolve();
 		if (options?.sideChat) return Promise.reject(new Error(localize('chat.queue.sideChatUnavailable', 'Save or cancel the queued message edit before starting a side chat.')));
 		return this.submitEdit?.(value, options) ?? Promise.resolve();
 	}
@@ -2632,6 +2684,8 @@ export class ChatQueueEditor extends Disposable {
 		const content = h(this.widget.domNode.ownerDocument, 'div');
 		const context = lifetime.add(this.contextKeys.createScoped(content));
 		const scope = lifetime.add(this.instantiation.createChild(new ServiceCollection([IContextKeyService, context])));
+		const replyOnly = this.widget.input.replyOnly === true;
+		ChatContextKeys.replyOnlyInput.bindTo(context).set(replyOnly);
 		const type = paused.steerTurnId ? ChatContextKeys.EditingRequestType.Steer : ChatContextKeys.EditingRequestType.Queue;
 		ChatContextKeys.editingRequestType.bindTo(context).set(type);
 		const hasText = ChatContextKeys.inputHasText.bindTo(context);
@@ -2645,7 +2699,9 @@ export class ChatQueueEditor extends Disposable {
 		input.value = paused.text;
 		ChatContextKeys.inChatInput.bindTo(lifetime.add(context.createScoped(input.inputElement))).set(true);
 		const hint = h(content.ownerDocument, 'p');
-		hint.textContent = localize('chat.queue.editHint', 'The message is paused while editing. Enter keeps its queue or steering action; Alt+Enter uses the other action. Ctrl or Command+Enter saves. Escape cancels. Attached inputs and the unsent draft are kept. Previously paused or failed messages stay paused when cancelled.');
+		hint.textContent = replyOnly
+			? localize({ bundle: 'ash.workbench', key: 'chat.queue.replyEditHint' }, 'The message is paused while editing. Press Ctrl or Command+Enter to save, or Escape to cancel. Attached inputs and the unsent draft are kept. Previously paused or failed messages stay paused when cancelled.')
+			: localize('chat.queue.editHint', 'The message is paused while editing. Enter keeps its queue or steering action; Alt+Enter uses the other action. Ctrl or Command+Enter saves. Escape cancels. Attached inputs and the unsent draft are kept. Previously paused or failed messages stay paused when cancelled.');
 		hint.id = createUuid();
 		input.inputElement.setAttribute('aria-describedby', hint.id);
 		const feedback = h(content.ownerDocument, 'p');
@@ -2678,7 +2734,7 @@ export class ChatQueueEditor extends Disposable {
 			feedback.textContent = '';
 			pending = (options?.cancelCurrentRequest
 				? this.chat.sendPendingRequestImmediately(target(paused), input.value)
-				: this.chat.editPendingRequest(target(paused), input.value, options?.queue ?? (paused.steerTurnId ? ChatRequestQueueKind.Steering : ChatRequestQueueKind.Queued)))
+				: this.chat.editPendingRequest(target(paused), input.value, replyOnly ? undefined : options?.queue ?? (paused.steerTurnId ? ChatRequestQueueKind.Steering : ChatRequestQueueKind.Queued)))
 				.then(() => { saved = true; announceStatus(localize('chat.queue.saved', 'Queued message saved.')); dialog.dispose(); }, error => {
 					if (!hidden) feedback.textContent = localize('chat.queue.saveFailed', 'Could not save queued message: {0}', String(error instanceof Error ? error.message : error));
 				}).finally(() => { pending = undefined; input.inputElement.readOnly = false; update(); });

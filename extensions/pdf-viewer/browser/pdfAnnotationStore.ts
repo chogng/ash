@@ -6,6 +6,7 @@ import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument, serializePdfAnn
 /** Annotation sidecar data plus its conditional-write revision. */
 export interface PdfAnnotationSnapshot {
 	readonly document: PdfAnnotationDocument;
+	/** Undefined means the sidecar was absent, so the first save must only create it. */
 	readonly revision: string | undefined;
 }
 
@@ -35,7 +36,7 @@ export class WorkspacePdfAnnotationStore implements IPdfAnnotationStore {
 	async save(resource: URI, document: PdfAnnotationDocument, expectedRevision: string | undefined, signal: AbortSignal): Promise<PdfAnnotationSnapshot> {
 		throwIfCancelled(signal, 'PDF annotation saving was cancelled');
 		const content = serializePdfAnnotationDocument(document);
-		const saved = await this.files.writeFile({ resource: pdfAnnotationSidecarResource(resource), content, ...(expectedRevision === undefined ? {} : { expectedRevision }) }, { create: true, overwrite: true }, signal);
+		const saved = await this.files.writeFile({ resource: pdfAnnotationSidecarResource(resource), content, ...(expectedRevision === undefined ? {} : { expectedRevision }) }, { create: true, overwrite: expectedRevision !== undefined }, signal);
 		throwIfCancelled(signal, 'PDF annotation saving was cancelled');
 		return Object.freeze({ document: parsePdfAnnotationDocument(content), revision: saved.revision });
 	}

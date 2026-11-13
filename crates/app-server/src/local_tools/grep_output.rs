@@ -46,12 +46,12 @@ pub(super) fn execute(
         max_results: 100,
         freshness: grep::Freshness::Indexed,
     };
-    let searched = match documents {
-        Some(documents) => {
-            search.search_with_documents(&path.root, &query, documents, cancellation)
-        }
-        None => grep::Search::search(search, &path.root, &query, cancellation),
-    };
+    let searched = search.search_for_agent(
+        &path.root,
+        &query,
+        documents.unwrap_or_default(),
+        cancellation,
+    );
     let mut result = match searched {
         Ok(result) => result,
         Err(grep::Error::Cancelled(reason)) => return Err(CoreError::Cancelled(reason)),

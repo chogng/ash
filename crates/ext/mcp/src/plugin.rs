@@ -52,9 +52,9 @@ impl PluginConnectorMcpRuntimeProvider {
     /// Builds a provider whose contributions remain bound to exact live Plugin authority.
     pub fn from_authority(
         authority: &PluginActivationAuthority,
+        activation: &PluginActivationSnapshot,
     ) -> Result<Self, ConnectorMcpRuntimeError> {
-        let snapshot = authority.snapshot();
-        Self::from_activation_with_authority(snapshot.activation(), Some(authority))
+        Self::from_activation_with_authority(activation, Some(authority))
     }
 
     fn from_activation_with_authority(
@@ -65,8 +65,18 @@ impl PluginConnectorMcpRuntimeProvider {
         let mut standalone = Vec::new();
         for package in activation.packages() {
             let manifest = package.manifest();
+            if manifest.contributions.mcp_servers.is_empty() {
+                continue;
+            }
             let invocation_fence = authority
-                .and_then(|authority| authority.invocation_fence(package))
+                .map(|authority| {
+                    authority
+                        .invocation_fence(activation, package)
+                        .ok_or_else(|| {
+                            runtime_error("Plugin activation changed during MCP composition")
+                        })
+                })
+                .transpose()?
                 .map(|fence| {
                     Arc::new(PluginRuntimeInvocationFence(fence)) as Arc<dyn RuntimeInvocationFence>
                 });

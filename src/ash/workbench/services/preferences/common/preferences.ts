@@ -22,10 +22,11 @@ export interface SettingsSectionModel {
 	readonly title: string;
 	readonly description: string;
 	readonly help: string;
-	readonly onDidChange: Event<void>;
+	readonly onDidChange?: Event<void>;
 	/** Field IDs and kinds remain stable for this section’s lifetime; values and actions may change. */
 	readonly fields: readonly SettingsSectionField[];
-	setVisible(visible: boolean): void;
+	/** For sections that load or observe service state while visible. */
+	setVisible?(visible: boolean): void;
 }
 
 export type SettingsMenuOption =
@@ -37,12 +38,22 @@ export type SettingsMenuOption =
 export type SettingsSectionField = { readonly description?: string; } & (
 	| { readonly id: string; readonly kind: 'status'; readonly text: string; }
 	| { readonly id: string; readonly kind: 'boolean'; readonly label: string; readonly value: boolean; readonly enabled: boolean; readonly setValue: (value: boolean) => void; }
-	| { readonly id: string; readonly kind: 'text'; readonly label: string; readonly value: string; readonly placeholder: string; readonly enabled: boolean; readonly setValue: (value: string) => void; }
+	| {
+		readonly id: string;
+		readonly kind: 'text';
+		readonly label: string;
+		readonly value: string;
+		readonly placeholder: string;
+		readonly enabled: boolean;
+		/** Commit on Enter or when leaving a modified field. The default reports every edit. */
+		readonly commitOnChange?: boolean;
+		readonly setValue: (value: string) => void;
+	}
 	| { readonly id: string; readonly kind: 'select'; readonly label: string; readonly value: string | undefined; readonly options: readonly { readonly value: string; readonly label: string; readonly separatorBefore?: boolean; }[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
 	| { readonly id: string; readonly kind: 'menu'; readonly label: string; readonly value: string; readonly valueLabel: string; readonly valueDescription?: string; readonly options: readonly SettingsMenuOption[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
 	| { readonly id: string; readonly kind: 'action'; readonly label: string; readonly enabled: boolean; readonly run: () => Promise<void>; });
 
-export type SettingValueType = 'boolean' | 'number' | 'numberWithOptions' | 'select' | 'text' | 'stringMap' | 'complex';
+export type SettingValueType = 'boolean' | 'number' | 'numberWithOptions' | 'select' | 'text' | 'array' | 'stringMap' | 'complex';
 export type SettingsPresentation = 'editor' | 'general';
 
 export interface SettingValueBinding<T> {
@@ -112,6 +123,38 @@ export interface ITextSetting extends ISettingBase {
 	readonly placeholder: string;
 }
 
+export type StringArraySettingEdit =
+	| { readonly kind: 'add'; readonly value: string; }
+	| { readonly kind: 'edit'; readonly index: number; readonly original: string; readonly value: string; }
+	| { readonly kind: 'remove'; readonly index: number; readonly original: string; };
+
+interface IStringArraySettingBase extends ISettingBase {
+	readonly valueType: 'array';
+	readonly columnLabel?: string;
+	readonly inputLabel?: string;
+	readonly placeholder?: string;
+	readonly addLabel?: string;
+}
+
+export interface IConfiguredStringArraySetting extends IStringArraySettingBase {
+	readonly configuration: IRegisteredConfiguration<readonly string[]>;
+	readonly binding?: SettingValueBinding<readonly string[]>;
+}
+
+/** A list backed by a separate document can apply the row operation directly. */
+export interface IBoundStringArraySetting extends IStringArraySettingBase {
+	readonly configuration?: undefined;
+	readonly binding: {
+		readonly onDidChange: Event<void>;
+		getValue(): readonly string[];
+		apply(edit: StringArraySettingEdit): Promise<unknown>;
+	};
+	readonly accessibility: {
+		readonly verbositySetting: string;
+		readonly help: string;
+	};
+}
+
 export interface IStringMapSetting extends ISettingBase {
 	readonly valueType: 'stringMap';
 	readonly structuredValues?: boolean;
@@ -131,7 +174,8 @@ export interface IComplexSetting extends ISettingBase {
 	readonly configuration: IRegisteredConfiguration;
 }
 
-export type ISetting = IBooleanSetting | INumberSetting | INumberWithOptionsSetting | ISelectSetting | ITextSetting | IStringMapSetting | IComplexSetting;
+export type IConfiguredSetting = IBooleanSetting | INumberSetting | INumberWithOptionsSetting | ISelectSetting | ITextSetting | IConfiguredStringArraySetting | IStringMapSetting | IComplexSetting;
+export type ISetting = IConfiguredSetting | IBoundStringArraySetting;
 
 export interface ISelectSettingOption {
 	readonly value: string | boolean;

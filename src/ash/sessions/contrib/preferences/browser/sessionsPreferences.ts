@@ -4,6 +4,8 @@ import { LspSettingsModel } from './lspSettingsModel.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../../../workbench/contrib/trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
+import { trustedDomainsSetting } from '../../../../workbench/contrib/url/browser/trustedDomains.js';
+import { ITrustedDomainService } from '../../../../workbench/contrib/url/common/trustedDomainService.js';
 import { MEMORY_SETTINGS_CATEGORY, memorySettingsTitle } from '../../../../workbench/contrib/memories/browser/memorySettings.js';
 import { MemorySettingsRenderer } from '../../../../workbench/contrib/preferences/browser/memorySettingsRenderer.js';
 import { CodeConversationDefaultsEntry } from './codeConversationDefaultsEntry.js';
@@ -21,7 +23,6 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import type { Icon } from '../../../../base/common/icon.js';
-import { Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { isNative } from '../../../../base/common/platform.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -53,10 +54,11 @@ import { getSettingsSections } from '../../../../workbench/services/preferences/
 import { ModelSettingsRenderer } from '../../../../workbench/contrib/preferences/browser/modelSettingsRenderer.js';
 import { DictationSettingsRenderer } from '../../../../workbench/contrib/preferences/browser/dictationSettingsRenderer.js';
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
+import { SettingsLayout } from '../../../../workbench/contrib/preferences/browser/settingsLayout.js';
 import { SettingsTreeModel, type SettingsSectionReference, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
-import { IPreferencesService, validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
+import { IPreferencesService, validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting, type ISettingsGroup } from '../../../../workbench/services/preferences/common/preferences.js';
 import { SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP, SESSIONS_GENERAL_SETTINGS_TAG, SESSIONS_TERMINAL_CONFIG_SECTION, SessionsConfiguration } from '../../../common/configuration.js';
 import { SESSIONS_LAYOUT_SCOPE_SETTING } from '../../../common/chatLayout.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
@@ -68,7 +70,7 @@ import { SessionsStorageContent, storageSettingsTitle } from './sessionsStorageC
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import type { TeamRun } from '../../../services/teams/common/team.js';
 import { OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID } from '../../../common/sessionCommands.js';
-import { DesignConfiguration } from '../../artifacts/common/config/designEditorConfiguration.js';
+import { DesignConfiguration } from '../../artifact/common/config/designEditorConfiguration.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.SessionsSettings,
@@ -102,6 +104,7 @@ interface SettingsCategory {
 	readonly title: string;
 	readonly icon: Icon;
 	readonly settings: readonly ISetting[];
+	readonly settingGroups?: readonly ISettingsGroup[];
 	readonly content?: SettingsPageRenderer<ISetting | SettingsSectionReference>;
 }
 
@@ -131,6 +134,7 @@ export class SessionsPreferences extends Disposable {
 		@ILocaleService private readonly localeService: ILocaleService,
 		@ILanguagePackService private readonly languagePackService: ILanguagePackService,
 		@ILocalizationService private readonly localizationService: ILocalizationService,
+		@ITrustedDomainService private readonly trustedDomains: ITrustedDomainService,
 	) {
 		super();
 		this._register(AccessibleViewRegistry.register({
@@ -143,7 +147,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.settings.help', 'Settings has categories on the left and settings on the right. In Appearance, use Interface font, Message body font, and Code block font to choose typography for each part of the window. Use the arrow keys to browse font choices and Enter to select one. In Appearance, Automatically follow new replies controls whether chat follows replies at the bottom. General has Interface language, which takes effect after restarting Ash or refreshing the page. Voice contains settings for dictation and two-way voice conversations. On desktop, Open on startup chooses whether the next launch opens the IDE, Agent window, or the windows from last time. Models contains chat models and API connections. In Your Ash, use Manage under Code conversation defaults to edit and save your personal or workspace defaults. Run Developer: Show Agent Tool Catalog to inspect a grouped read-only tool snapshot. Git & PRs contains GitHub account selection, repository access checks, and official Codex PR cloud review management links. Agents contains the Advisor model, conversation title and recap settings, Agent definitions, and Teams. Teams manages fixed members, roles, tasks and discussion. Select a model to enable Advisor or Disable to turn it off. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings and Hooks tabs. Use Customize to manage plugins, skills, connections and the optional Academy paper editor. IDE extensions open in the standalone IDE. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use Up and Down, Home or End to navigate categories. Keyboard Shortcuts opens the Agent Window shortcut list. Customize Settings opens all Workbench settings or settings.json. Browser and Tab open their Workbench settings. In Code Intelligence, edit Codebase settings and control language servers with Enable LSPs and Enable LSPs for Worktrees. Environment contains execution, permissions, and Agent Window terminal settings. Use search to filter settings and Down to focus the first result. Right-click a configuration setting, or focus its control and press Shift+F10 to open the setting menu. Choose Copy Setting as JSON to copy the key and current value without saving settings. Local dictation settings list available and installed models. Use the Dictation models selector to switch between installed models. Use Tab to reach Install, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation and Voice Mode use API connections in Models. ChatGPT dictation uses the Codex login in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.maturityHelp' }, 'Settings can be marked Experimental or Preview; these labels describe maturity and do not change enablement. Use @tag:experimental or @tag:preview to filter them, or @stable to exclude both. Combine these filters with text, @id: and @modified.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.languageHelp' }, 'Language queries such as @lang:plaintext open language-specific settings in the shared Workbench editor. Workspace and folder settings use that editor too.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.') + ' ' + localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.') + ' ' + localize('sessions.settings.chatGPTBackendHelp', 'In the desktop General category, Default ChatGPT entry selects which entry opens when you start a new chat.') + (isNative ? ' ' + localize('sessions.settings.projectFilesHelp', 'In General, Project files shows the local save folder. Activate Change to choose a different folder.') : '') + ' ' + localize('sessions.settings.layoutScopeHelp', 'Appearance has Layout scope. Session keeps documents per session. Chat with shared visibility keeps documents per chat and shares Editor and Details visibility. Chat keeps documents and visibility per chat.') + (isNative ? ' ' + localize({ bundle: 'ash.sessions', key: 'sessions.storage.help' }, 'Storage shows estimated usage for the local profile and worktrees. Use Tab to refresh, manage worktrees, restore an archived session, or review sessions for permanent deletion. Expand Manage worktrees and use Space to select worktrees to clean up.') : '') + '\n\n'
+					() => localize('sessions.settings.help', 'Settings has categories on the left and settings on the right. In Appearance, use Interface font, Message body font, and Code block font to choose typography for each part of the window. Use the arrow keys to browse font choices and Enter to select one. In Appearance, Automatically follow new replies controls whether chat follows replies at the bottom. General has Interface language, which takes effect after restarting Ash or refreshing the page. Voice contains settings for dictation and two-way voice conversations. On desktop, Open on startup chooses whether the next launch opens the IDE, Agent window, or the windows from last time. Models contains chat models and API connections. In Your Ash, use Manage under Code conversation defaults to edit and save your personal or workspace defaults. Run Developer: Show Agent Tool Catalog to inspect a grouped read-only tool snapshot. Git & PRs contains GitHub account selection, repository access checks, and official Codex PR cloud review management links. Agents contains the Advisor model, conversation title and recap settings, Agent definitions, and Teams. Teams manages fixed members, roles, tasks and discussion. Select a model to enable Advisor or Disable to turn it off. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings and Hooks tabs. Use Customize to manage plugins, skills, connections and the optional Academy paper editor. IDE extensions open in the standalone IDE. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use Up and Down, Home or End to navigate categories. Keyboard Shortcuts opens the Agent Window shortcut list. Customize Settings opens all Workbench settings or settings.json. Browser lets you manage trusted domains. Tab opens its Workbench settings. In Code Intelligence, edit Codebase settings and control language servers with Enable LSPs and Enable LSPs for Worktrees. Environment contains execution, permissions, and Agent Window terminal settings. Use search to filter settings and Down to focus the first result. Right-click a configuration setting, or focus its control and press Shift+F10 to open the setting menu. Choose Copy Setting as JSON to copy the key and current value without saving settings. Local dictation settings list available and installed models. Use the Dictation models selector to switch between installed models. Use Tab to reach Install, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation and Voice Mode use API connections in Models. ChatGPT dictation uses the Codex login in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.maturityHelp' }, 'Settings can be marked Experimental or Preview; these labels describe maturity and do not change enablement. Use @tag:experimental or @tag:preview to filter them, or @stable to exclude both. Combine these filters with text, @id: and @modified.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.languageHelp' }, 'Language queries such as @lang:plaintext open language-specific settings in the shared Workbench editor. Workspace and folder settings use that editor too.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.') + ' ' + localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.') + ' ' + localize('sessions.settings.chatGPTBackendHelp', 'In the desktop General category, Default ChatGPT entry selects which entry opens when you start a new chat.') + (isNative ? ' ' + localize('sessions.settings.projectFilesHelp', 'In General, Project files shows the local save folder. Activate Change to choose a different folder.') : '') + ' ' + localize('sessions.settings.layoutScopeHelp', 'Appearance has Layout scope. Session keeps documents per session. Chat with shared visibility keeps documents per chat and shares Editor and Details visibility. Chat keeps documents and visibility per chat.') + (isNative ? ' ' + localize({ bundle: 'ash.sessions', key: 'sessions.storage.help' }, 'Storage shows estimated usage for the local profile and worktrees. Use Tab to refresh, manage worktrees, restore an archived session, or review sessions for permanent deletion. Expand Manage worktrees and use Space to select worktrees to clean up.') : '') + '\n\n'
 						+ localize('sessions.backgroundColor.help', 'In Appearance, Background color switches the light conversation and editor area between Warm and Cool. Cool uses pure white.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
@@ -300,7 +304,6 @@ export class SessionsPreferences extends Disposable {
 		const managementContent = (id: string, title: string, description: string, fields: readonly SettingsSectionField[]): SettingsPageRenderer =>
 			resources.add(contentServices.createInstance(SettingsSectionRenderer, list, {
 				categoryId: id, title, description, help: description, fields, hideInnerTitle: true,
-				onDidChange: Event.None, setVisible: () => { },
 			}, AccessibleViewProviderId.SessionsSettings, AccessibilityVerbositySettingId.SessionsSettings));
 		const settingOptions: SettingWidgetOptions = {
 			actionsOnContextMenuOnly: true,
@@ -342,15 +345,14 @@ export class SessionsPreferences extends Disposable {
 					return handoff(async () => { await commands.executeCommand(OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID); }, false);
 				},
 			}]));
-		for (const [id, section, title] of [
-			['browser', 'browser', localize('sessions.settings.browser', 'Browser')],
-			['tab', 'editor-opening', localize('sessions.settings.tab', 'Tab')],
-		] as const) {
-			const label = localize('sessions.settings.openSection', 'Open {0} settings', title);
-			management.set(id, managementContent(id, title,
-				localize('sessions.settings.sharedDescription', 'These preferences are shared with the Workbench. Open the settings editor to view, change, search, or reset them.'),
-				[{ id: 'settings', kind: 'action', label, enabled: true, run: () => openSettingsEditor(section) }]));
-		}
+		const tabTitle = localize('sessions.settings.tab', 'Tab');
+		management.set('tab', managementContent('tab', tabTitle,
+			localize('sessions.settings.sharedDescription', 'These preferences are shared with the Workbench. Open the settings editor to view, change, search, or reset them.'),
+			[{
+				id: 'settings', kind: 'action', enabled: true,
+				label: localize('sessions.settings.openSection', 'Open {0} settings', tabTitle),
+				run: () => openSettingsEditor('editor-opening'),
+			}]));
 		management.set('code-intelligence', resources.add(contentServices.createInstance(SettingsSectionRenderer,
 			{ container: list, rowPresentation: 'general' }, resources.add(contentServices.createInstance(LspSettingsModel)),
 			AccessibleViewProviderId.LanguageServers, AccessibilityVerbositySettingId.LanguageServers)));
@@ -372,7 +374,6 @@ export class SessionsPreferences extends Disposable {
 		const terminalProfileContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, {
 			categoryId: 'terminal-profile', groupId: null, title: selectDefaultProfile,
 			description: '', help: selectDefaultProfile, hideInnerTitle: true,
-			setVisible: () => { },
 			onDidChange: (listener: () => void) => contextKeys.onDidChangeContext(event => {
 				if (event.affectsSome(profileAvailability)) listener();
 			}),
@@ -473,6 +474,7 @@ export class SessionsPreferences extends Disposable {
 				element: { kind: 'group', id: `sessions.category.${category.id}`, title: category.title, description: '' },
 				children: [
 					...category.settings.map(setting => ({ element: { kind: 'item' as const, id: setting.id, title: setting.title, description: setting.description, keywords: [setting.id, ...setting.keywords ?? []], tags: setting.tags, value: setting } })),
+					...category.settingGroups ? new SettingsLayout(`sessions.category.${category.id}`, category.settingGroups).nodes : [],
 					...categoryContents(category).flatMap(content => content.getNodes(query).flatMap(node => {
 						const group = node.element;
 						// The category heading already labels these rows, including in search results.
@@ -629,6 +631,7 @@ export class SessionsPreferences extends Disposable {
 				title: localize('sessions.settings.messageInputFontSize', 'User message font size'),
 				description: localize('sessions.settings.messageInputFontSize.description', 'Set the font size in pixels for the message input, sent user messages, and inline editing. The IDE shares this user setting for its message input.'),
 			},
+			defaults.get(SessionsConfiguration.chatInputLayout),
 			defaults.get(ChatConfiguration.AutoFollowReplies),
 			defaults.get(ChatConfiguration.ShowAgentReplyTimestamps),
 			...[SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP].map(id => defaults.get(id)),
@@ -644,6 +647,7 @@ export class SessionsPreferences extends Disposable {
 		const terminalSettings = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getRegisteredConfigurations()
 			.filter(configuration => configuration.setting && configuration.key.startsWith(`${SESSIONS_TERMINAL_CONFIG_SECTION}.`))
 			.map(configuration => defaults.get(configuration.key));
+		const trustedDomains = trustedDomainsSetting(this.trustedDomains);
 		return [{
 			title: localize('sessions.settings.section.basics', 'Basics'),
 			categories: [
@@ -663,7 +667,10 @@ export class SessionsPreferences extends Disposable {
 				{ id: 'design', title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
 				{ id: 'models', title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },
 				{ id: 'github', title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [], content: githubContent },
-				{ id: 'browser', title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.global, settings: [], content: management.get('browser') },
+				{
+					id: 'browser', title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.global, settings: [],
+					settingGroups: [{ id: 'trusted-domains', title: trustedDomains.title, description: '', settings: [trustedDomains] }],
+				},
 				{ id: 'tab', title: localize('sessions.settings.tab', 'Tab'), icon: Lxicon.keyboardTab, settings: [], content: management.get('tab') },
 				{ id: 'code-intelligence', title: localize('sessions.settings.codeIntelligence', 'Code Intelligence'), icon: Lxicon.code, settings: [], content: management.get('code-intelligence') },
 				{ id: 'environment', title: localize('sessions.settings.environment', 'Environment'), icon: Lxicon.terminal, settings: terminalSettings },

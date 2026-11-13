@@ -1,11 +1,13 @@
 //! Connection-scoped, bounded TCP transport. Browser protocol policy remains with its caller.
 
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::io;
 use std::io::Read;
 use std::io::Write;
 use std::net::Shutdown;
 use std::net::TcpStream;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -13,10 +15,31 @@ use std::time::Duration;
 const CAPACITY: usize = 64;
 pub const TCP_CHUNK_BYTES: usize = 65_536;
 
+/// A live, sticky authorization owned by the caller's policy. Revocation must not be undone
+/// by a later grant; a new connection needs a new authorization.
+pub trait TcpAuthorization: std::fmt::Debug + Send + Sync {
+    fn check(&self) -> io::Result<()>;
+    fn revoked(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+}
+
+#[derive(Debug)]
+struct Socket {
+    stream: TcpStream,
+    authorization: Arc<dyn TcpAuthorization>,
+}
+
+impl Socket {
+    fn check(&self) -> io::Result<()> {
+        self.authorization.check().inspect_err(|_| {
+            let _ = self.stream.shutdown(Shutdown::Both);
+        })
+    }
+}
+
 #[derive(Debug)]
 struct Stream {
     revision: u64,
-    socket: Option<Arc<Mutex<TcpStream>>>,
+    socket: Option<Arc<Mutex<Socket>>>,
 }
 
 #[derive(Debug, Default)]
@@ -30,11 +53,38 @@ struct State {
 #[derive(Debug, Default)]
 pub struct TcpStreams(Mutex<State>, ash_async_utils::CancellationSource);
 
+// Cancellation can drop the open future while DNS/connect is pending. Retire only that
+// reservation, never a replacement that has reused the same ID.
+struct Reservation<'a> {
+    streams: &'a TcpStreams,
+    id: &'a str,
+    revision: u64,
+}
+
+impl Drop for Reservation<'_> {
+    fn drop(&mut self) {
+        let mut state = self.streams.0.lock().unwrap();
+        if state
+            .streams
+            .get(self.id)
+            .is_some_and(|entry| entry.revision == self.revision && entry.socket.is_none())
+        {
+            state.streams.remove(self.id);
+        }
+    }
+}
+
 impl TcpStreams {
-    pub async fn open(&self, id: String, destination: &crate::NetworkRequest) -> io::Result<()> {
+    pub async fn open(
+        &self,
+        id: String,
+        destination: &crate::NetworkRequest,
+        authorization: Arc<dyn TcpAuthorization>,
+    ) -> io::Result<()> {
         if id.is_empty() || id.len() > 128 {
             return Err(io::ErrorKind::InvalidInput.into());
         }
+        authorization.check()?;
         let host = destination.host();
         let port = destination.port();
         let revision = {
@@ -58,14 +108,26 @@ impl TcpStreams {
             );
             revision
         };
+        let _reservation = Reservation {
+            streams: self,
+            id: &id,
+            revision,
+        };
         let result = async {
             let token = self.1.token();
             let stream = tokio::select! {
+                biased;
+                _ = authorization.revoked() => return Err(io::Error::from(io::ErrorKind::PermissionDenied)),
                 _ = token.cancelled() => return Err(io::Error::from(io::ErrorKind::Interrupted)),
                 result = tokio::time::timeout(Duration::from_secs(10), tokio::net::TcpStream::connect((host, port))) => result.map_err(|_| io::Error::from(io::ErrorKind::TimedOut))??,
             };
             stream.set_nodelay(true)?;
-            stream.into_std()
+            let stream = stream.into_std()?;
+            // Do not publish a connect that completed concurrently with revocation.
+            authorization.check().inspect_err(|_| {
+                let _ = stream.shutdown(Shutdown::Both);
+            })?;
+            Ok(stream)
         }.await;
         let mut state = self.0.lock().unwrap();
         match result {
@@ -77,10 +139,13 @@ impl TcpStreams {
                         .is_some_and(|entry| entry.revision == revision) =>
             {
                 state.streams.insert(
-                    id,
+                    id.clone(),
                     Stream {
                         revision,
-                        socket: Some(Arc::new(Mutex::new(stream))),
+                        socket: Some(Arc::new(Mutex::new(Socket {
+                            stream,
+                            authorization,
+                        }))),
                     },
                 );
                 Ok(())
@@ -102,7 +167,7 @@ impl TcpStreams {
         }
     }
 
-    fn stream(&self, id: &str) -> io::Result<Arc<Mutex<TcpStream>>> {
+    fn stream(&self, id: &str) -> io::Result<Arc<Mutex<Socket>>> {
         self.0
             .lock()
             .unwrap()
@@ -116,7 +181,12 @@ impl TcpStreams {
         let stream = self.stream(id)?;
         let mut stream = stream.lock().unwrap();
         let mut bytes = vec![0; TCP_CHUNK_BYTES];
-        match stream.read(&mut bytes) {
+        // The check belongs after the socket lock: a queued operation must not carry an
+        // authorization result obtained before another operation or a policy update.
+        stream.check()?;
+        let result = stream.stream.read(&mut bytes);
+        stream.check()?;
+        match result {
             Ok(count) => {
                 bytes.truncate(count);
                 Ok((bytes, count == 0))
@@ -130,14 +200,24 @@ impl TcpStreams {
         if bytes.len() > TCP_CHUNK_BYTES {
             return Err(io::ErrorKind::InvalidInput.into());
         }
-        match self.stream(id)?.lock().unwrap().write(bytes) {
+        let socket = self.stream(id)?;
+        let mut socket = socket.lock().unwrap();
+        socket.check()?;
+        let result = socket.stream.write(bytes);
+        socket.check()?;
+        match result {
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(0),
             result => result,
         }
     }
 
     pub fn end(&self, id: &str) -> io::Result<()> {
-        self.stream(id)?.lock().unwrap().shutdown(Shutdown::Write)
+        let socket = self.stream(id)?;
+        let socket = socket.lock().unwrap();
+        socket.check()?;
+        let result = socket.stream.shutdown(Shutdown::Write);
+        socket.check()?;
+        result
     }
 
     pub fn close(&self, id: &str) {
@@ -149,7 +229,7 @@ impl TcpStreams {
             .remove(id)
             .and_then(|entry| entry.socket)
         {
-            let _ = stream.lock().unwrap().shutdown(Shutdown::Both);
+            let _ = stream.lock().unwrap().stream.shutdown(Shutdown::Both);
         }
     }
 
@@ -161,7 +241,7 @@ impl TcpStreams {
             std::mem::take(&mut state.streams)
         };
         for stream in streams.into_values().filter_map(|entry| entry.socket) {
-            let _ = stream.lock().unwrap().shutdown(Shutdown::Both);
+            let _ = stream.lock().unwrap().stream.shutdown(Shutdown::Both);
         }
     }
 }
@@ -171,3 +251,7 @@ impl Drop for TcpStreams {
         self.close_all();
     }
 }
+
+#[cfg(test)]
+#[path = "tcp_tests.rs"]
+mod tests;

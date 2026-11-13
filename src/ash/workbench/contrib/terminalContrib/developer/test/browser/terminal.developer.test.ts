@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { StatusbarService } from '../../../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
@@ -18,6 +19,7 @@ import '../../browser/terminal.developer.contribution.js';
 
 function fixture(owner: DisposableStore) {
 	const services = owner.add(new InstantiationService());
+	services.registerInstance(IContextKeyService, owner.add(new ContextKeyService()));
 	const activeChanged = owner.add(new Emitter<ITerminalInstance | undefined>());
 	const disposed = owner.add(new Emitter<ITerminalInstance>());
 	const changed = owner.add(new Emitter<ITerminalInstance['state']>());

@@ -1,8 +1,9 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { h } from '../../../../../base/browser/dom.js';
 import { BrowserEditor, BrowserEditorContribution, BrowserWidgetLocation, CONTEXT_BROWSER_HAS_ERROR, CONTEXT_BROWSER_HAS_URL, type IBrowserEditorWidget } from '../browserEditor.js';
-import type { IBrowserViewModel } from '../../common/browserView.js';
+import { IBrowserViewWorkbenchService, type IBrowserViewModel } from '../../common/browserView.js';
 import { BrowserHistoryFeature } from './browserHistoryFeature.js';
 import { BrowserPermissionsFeature } from './browserPermissionsFeature.js';
 import { BrowserEditorZoomSupport } from './browserEditorZoomFeature.js';
@@ -72,6 +73,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IMenuService menuService: IMenuService,
 		@IContextKeyService contexts: IContextKeyService,
+		@IBrowserViewWorkbenchService browsers: IBrowserViewWorkbenchService,
 	) {
 		super(editor);
 		const container = this.container = h(editor.browserContainer.ownerDocument, 'div');
@@ -102,7 +104,8 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		this.favorites = this._register(instantiation.createInstance(BrowserFavoritesFeature, () => this.setPageActions(), this.report));
 		this.permissions = this._register(instantiation.createInstance(BrowserPermissionsFeature, (message: string) => editor.setStatus(message), this.report));
 		this.address.mountContributions([this.history, this.favorites]);
-		this.remoteIndicator = this._register(new BrowserRemoteIndicatorContribution(container));
+		this.remoteIndicator = this._register(instantiation.createInstance(BrowserRemoteIndicatorContribution, container));
+		this._register(browsers.onDidChangeBrowserViews(() => this.remoteIndicator.update(editor.model)));
 		const sharing = h(container.ownerDocument, 'div');
 		sharing.className = 'ash-browser-page-actions';
 		container.append(sharing);
@@ -147,6 +150,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		this.update(model.state);
 		this.setPageActions();
 		store.add(model.onDidChangeState(state => {
+			this.remoteIndicator.update(model);
 			this.update(state);
 			if (this.actionsUrl !== state.url) { this.setPageActions(); }
 		}));
@@ -269,7 +273,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 
 }
 
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { BrowserViewCommandId } from '../../../../../platform/browserView/common/browserView.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
@@ -284,7 +288,7 @@ for (const command of [
 	{ id: BrowserViewCommandId.Reload, title: localize2({ bundle: 'ash.workbench', key: 'browser.reloadCommand' }, 'Browser: Reload'), run: (model: import('../../common/browserView.js').IBrowserViewModel) => model.reload() },
 	{ id: BrowserViewCommandId.HardReload, title: localize2({ bundle: 'ash.workbench', key: 'browser.hardReloadCommand' }, 'Browser: Reload Without Cache'), run: (model: import('../../common/browserView.js').IBrowserViewModel) => model.reload(true) },
 ]) {
-	registerAction2(class BrowserNavigationAction extends Action2 {
+	registerEditorToolAction(class BrowserNavigationAction extends Action2 {
 		constructor() {
 			super({
 				id: command.id, title: command.title, f1: true, precondition: ContextKeyExpr.and(ActiveEditorContext.isEqualTo(BrowserViewEditorId),
@@ -304,7 +308,7 @@ for (const command of [
 		}
 	});
 }
-registerAction2(class FocusBrowserAddressAction extends Action2 {
+registerEditorToolAction(class FocusBrowserAddressAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.FocusUrlInput, title: localize2({ bundle: 'ash.workbench', key: 'browser.focusAddressCommand' }, 'Browser: Focus Address Bar'), f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 	override run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): void {
 		const pane = accessor.get(IEditorPart).activePane;

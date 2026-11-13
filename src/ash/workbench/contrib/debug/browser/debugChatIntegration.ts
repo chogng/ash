@@ -17,7 +17,7 @@ export class DebugChatContextContribution extends Disposable {
 		this._register(
 			contexts.registerChatContextItem({
 				type: 'pickerPick', label, icon: Lxicon.bug,
-				isEnabled: () => debug.sessions.some((session) => session.state === 'stopped'),
+				isEnabled: widget => !widget?.input.replyOnly && debug.sessions.some(session => session.state === 'stopped'),
 				asPicker: () => ({ placeholder: localize('chat.context.select', 'Select {0}', label), picks: picksWithPromiseFn(query => this.picks(query)) }),
 			}),
 		);

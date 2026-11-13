@@ -3,6 +3,7 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { ISerializedBrowserHistoryEntriesSnapshot } from './browserHistory.js';
 import type { VSBuffer } from '../../../base/common/buffer.js';
+import { isAllInterfacesAuthority, isLocalhostAuthority } from '../../url/common/trustedDomains.js';
 
 /** Stable command IDs shared by browser controls, keybindings and external callers. */
 export enum BrowserViewCommandId {
@@ -133,6 +134,7 @@ export interface IBrowserViewTargetRequest {
 
 export interface IBrowserViewLayoutRequest extends IBrowserViewTargetRequest {
 	readonly bounds: IBrowserViewBounds;
+	readonly windowName?: string;
 }
 
 export interface IBrowserViewVisibilityRequest
@@ -320,7 +322,7 @@ export interface IBrowserViewService {
 	getBrowserViews(): Promise<readonly IBrowserViewInfo[]>;
 	getOrCreateBrowserView(id: string, options: IBrowserViewCreateOptions): Promise<IBrowserViewInfo>;
 	getState(id: string): Promise<IBrowserViewState>;
-	layout(id: string, bounds: IBrowserViewBounds): Promise<void>;
+	layout(id: string, bounds: IBrowserViewBounds, windowName?: string): Promise<void>;
 	setVisible(id: string, visible: boolean): Promise<void>;
 	loadURL(id: string, url: string): Promise<void>;
 	goBack(id: string): Promise<void>;
@@ -375,6 +377,7 @@ export interface IBrowserUploadFile { readonly name: string; readonly dataBase64
 
 export const BrowserChatToolsSettingId = 'workbench.browser.enableChatTools';
 export const BrowserCDPSettingId = 'workbench.browser.enableCDP';
+export const BrowserOpenLocalhostLinksSettingId = 'workbench.browser.openLocalhostLinks';
 
 const MAX_URL_LENGTH = 8192;
 const MAX_BOUND_MAGNITUDE = 100_000;
@@ -479,14 +482,20 @@ export function validateBrowserViewLayoutRequest(
 		value,
 		['bounds', 'targetId'],
 		'browser view layout request',
+		['windowName'],
 	);
 	const bounds = exactRecord(
 		request.bounds,
 		['height', 'width', 'x', 'y'],
 		'browser view bounds',
 	);
+	const windowName = request.windowName;
+	if (windowName !== undefined && (typeof windowName !== 'string' || !/^ash-auxiliary-[a-z\d-]{36}$/iu.test(windowName))) {
+		throw new Error('Invalid browser presentation window');
+	}
 	return {
 		targetId: validateTargetId(request.targetId),
+		...(windowName === undefined ? {} : { windowName }),
 		bounds: {
 			x: boundedInteger(bounds.x, 'bounds.x', true),
 			y: boundedInteger(bounds.y, 'bounds.y', true),
@@ -544,19 +553,15 @@ export function normalizeBrowserViewUrl(value: unknown): string {
 	if (url.username || url.password) {
 		throw new Error('browser view URL credentials are not allowed');
 	}
-	const localHttpHost =
-		url.hostname === 'localhost' ||
-		url.hostname === '127.0.0.1' ||
-		url.hostname === '[::1]';
 	const localFile = url.protocol === 'file:' && (url.hostname === '' || url.hostname === 'localhost');
 	if (
 		url.protocol !== 'https:' &&
-		!(url.protocol === 'http:' && localHttpHost) &&
+		!(url.protocol === 'http:' && (isLocalhostAuthority(url.host) || isAllInterfacesAuthority(url.host))) &&
 		!localFile &&
 		url.href !== 'about:blank'
 	) {
 		throw new Error(
-			'browser view URL must use HTTPS, loopback HTTP, a local file, or about:blank',
+			'browser view URL must use HTTPS, HTTP on a loopback or all-interfaces address, a local file, or about:blank',
 		);
 	}
 	return url.href;

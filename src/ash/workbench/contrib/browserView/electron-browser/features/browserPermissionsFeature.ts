@@ -1,3 +1,4 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { BrowserNavigationFeatures } from './browserNavigationFeatures.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import type { IAction } from '../../../../../base/common/actions.js';
@@ -74,14 +75,14 @@ export class BrowserPermissionsFeature extends Disposable {
 
 import { PermissionCategory, type PermissionDecision, toOriginKey } from '../../../../../platform/browserView/common/browserPermissions.js';
 
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { BrowserViewCommandId } from '../../../../../platform/browserView/common/browserView.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { BrowserViewEditorId } from '../../common/browserView.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { localize2 } from '../../../../../nls.js';
 import type { BrowserEditor } from '../browserEditor.js';
-registerAction2(class ManageBrowserPermissionsAction extends Action2 {
+registerEditorToolAction(class ManageBrowserPermissionsAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.ManagePermissions, title: localize2({ bundle: 'ash.workbench', key: 'browser.managePermissionsCommand' }, 'Browser: Manage Website Permissions'), f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 	override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 		const pane = accessor.get(IEditorPart).activePane;

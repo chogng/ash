@@ -49,6 +49,8 @@ pub struct TurnToolExecutionFinished {
     pub name: ToolName,
     pub arguments: serde_json::Value,
     pub outcome_unknown: bool,
+    /// The service returned a successful result without an intervening review or retry.
+    pub completed_without_review: bool,
 }
 
 /// Tool identity checked after the durable Tool Call exists but before any service side effect.

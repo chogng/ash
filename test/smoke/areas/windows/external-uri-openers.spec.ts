@@ -1,4 +1,5 @@
 import { expect, test } from '../../../automation/test.js';
+import { Workbench } from '../../../automation/workbench.js';
 import { createServer } from 'node:http';
 import type { ElectronApplication } from '@playwright/test';
 
@@ -61,6 +62,10 @@ test('Graphical URL opening rules support suggestions, validation, persistence a
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectGroup('workbench');
 	await workbench.settingsEditor.selectCategory('browser');
+	const localLinks = workbench.settingsEditor.element.getByRole('group', { name: '在浏览器中打开 localhost 链接', exact: true });
+	await expect(localLinks.getByRole('switch', { name: '在浏览器中打开 localhost 链接', exact: true })).toBeVisible();
+	await expect(localLinks).toContainText('关闭后，这些链接默认由系统浏览器打开。');
+	await expect(workbench.settingsEditor.element.getByRole('combobox', { name: '新浏览器标签页的位置', exact: true })).toBeVisible();
 	rules = workbench.page.locator('[data-configuration-key="workbench.externalUriOpeners"]');
 	await expect(rules).toContainText('网址打开规则');
 	await expect(rules).toContainText('用方向键选择打开方式，再按 Enter 确认');
@@ -77,6 +82,97 @@ test('Graphical URL opening rules support suggestions, validation, persistence a
 	await opener.press('ArrowUp');
 	await expect(workbench.page.getByRole('option', { name: 'default 在默认浏览器中打开', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await opener.press('Escape');
+});
+
+test.describe('browser tab placement', () => {
+	test.use({ electronUserSettings: { 'workbench.browser.openLocalhostLinks': true, 'workbench.browser.newTabPlacement': 'window' } });
+
+	test('a dedicated window hosts and reuses native browser tabs', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }) => {
+		const server = createServer((_request, response) => {
+			response.setHeader('Content-Type', 'text/html');
+			response.end('<title>Browser placement fixture</title>');
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		const address = server.address();
+		if (!address || typeof address === 'string') throw new Error('Missing fixture endpoint');
+		const root = `http://127.0.0.1:${address.port}`;
+		const electron = application as ElectronApplication;
+		try {
+			const main = await electron.browserWindow(workbench.page);
+			const open = (url: string) => workbench.page.evaluate(url => { window.open(url, '_blank', 'noopener,noreferrer'); }, url);
+			const auxiliaryOpened = workbench.page.context().waitForEvent('page');
+			await open(`${root}/first`);
+			const auxiliary = await auxiliaryOpened;
+			const nativeWindow = await electron.browserWindow(auxiliary);
+			const browser = auxiliary.locator('.ash-browser-editor:visible');
+			await expect(browser.getByRole('status')).toHaveText('Browser placement fixture');
+			const nativeUrls = () => nativeWindow.evaluate((window: Electron.BrowserWindow) => window.contentView.children.filter(child => 'webContents' in child).map(child => (child as Electron.WebContentsView).webContents.getURL()));
+			await expect.poll(nativeUrls).toEqual([`${root}/first`]);
+			await open(`${root}/second`);
+			await expect.poll(nativeUrls).toEqual([`${root}/first`, `${root}/second`]);
+			await expect(workbench.page.locator('.ash-browser-editor')).toHaveCount(0);
+			expect(await main.evaluate((window: Electron.BrowserWindow) => window.contentView.children.filter(child => 'webContents' in child).length)).toBe(0);
+
+			const copyOpened = auxiliary.context().waitForEvent('page');
+			await new Workbench(auxiliary).quickaccess.runCommand('workbench.action.copyEditorToNewWindow');
+			const copy = await copyOpened;
+			const copyWindow = await electron.browserWindow(copy);
+			await expect.poll(() => copyWindow.evaluate((window: Electron.BrowserWindow) => window.contentView.children
+				.filter(child => 'webContents' in child).map(child => (child as Electron.WebContentsView).webContents.getURL()))).toEqual([`${root}/second`]);
+			const copyClosed = copy.waitForEvent('close');
+			await copyWindow.evaluate(window => window.close());
+			await copyClosed;
+			await expect.poll(nativeUrls).toEqual([`${root}/first`, `${root}/second`]);
+
+			const closed = auxiliary.waitForEvent('close');
+			await nativeWindow.evaluate(window => window.close());
+			await closed;
+			await expect.poll(() => electron.evaluate(({ webContents }, origin) => webContents.getAllWebContents().filter(contents => contents.getURL().startsWith(origin)).length, root)).toBe(0);
+		} finally {
+			server.closeAllConnections();
+			await new Promise<void>(resolve => server.close(() => resolve()));
+		}
+	});
+});
+
+test.describe('browser side placement', () => {
+	test.use({ electronUserSettings: { 'workbench.browser.openLocalhostLinks': true, 'workbench.browser.newTabPlacement': 'sideGroup' } });
+
+	test('a link from an auxiliary editor opens in a locked side group in that window', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }) => {
+		const server = createServer((_request, response) => {
+			response.setHeader('Content-Type', 'text/html');
+			response.end('<title>Browser side fixture</title>');
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		const address = server.address();
+		if (!address || typeof address === 'string') throw new Error('Missing fixture endpoint');
+		const url = `http://127.0.0.1:${address.port}/preview`;
+		try {
+			const main = workbench.page;
+			await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+			const opened = main.context().waitForEvent('page');
+			await workbench.quickaccess.runCommand('workbench.action.moveEditorToNewWindow');
+			const auxiliary = await opened;
+			await expect(auxiliary.getByRole('tab', { name: 'Untitled-1' })).toBeVisible();
+			await main.evaluate(url => { window.open(url, '_blank', 'noopener,noreferrer'); }, `${url}?main`);
+			await expect(main.locator('.ash-browser-editor:visible').getByRole('status')).toHaveText('Browser side fixture');
+			await auxiliary.evaluate(url => { window.open(url, '_blank', 'noopener,noreferrer'); }, url);
+			await expect(auxiliary.locator('.ash-browser-editor:visible').getByRole('status')).toHaveText('Browser side fixture');
+			await expect(auxiliary.getByRole('tab', { name: 'Untitled-1' })).toBeVisible();
+			const nativeWindow = await (application as ElectronApplication).browserWindow(auxiliary);
+			await expect.poll(() => nativeWindow.evaluate((window: Electron.BrowserWindow) => window.contentView.children
+				.filter(child => 'webContents' in child).map(child => (child as Electron.WebContentsView).webContents.getURL()))).toEqual([url]);
+			await expect(main.locator('.ash-browser-editor')).toHaveCount(1);
+			await main.evaluate(url => { window.open(url, '_blank', 'noopener,noreferrer'); }, `${url}?main-again`);
+			await expect(workbench.editors.groups).toHaveCount(2);
+			const mainWindow = await (application as ElectronApplication).browserWindow(main);
+			await expect.poll(() => mainWindow.evaluate((window: Electron.BrowserWindow) => window.contentView.children
+				.filter(child => 'webContents' in child).map(child => (child as Electron.WebContentsView).webContents.getURL()))).toEqual([`${url}?main`, `${url}?main-again`]);
+		} finally {
+			server.closeAllConnections();
+			await new Promise<void>(resolve => server.close(() => resolve()));
+		}
+	});
 });
 
 test('External URL opener rules accept unregistered IDs and persist after reopening', async ({ workbench, reloadWorkbench }) => {
@@ -119,6 +215,73 @@ test('URL opener settings suggest built-in IDs and their names', { tag: ['@brows
 	await choices.filter({ hasText: 'default' }).click();
 	await group.editor.waitForEditorContents(source => JSON.parse(source)['workbench.externalUriOpeners']['*'] === 'default');
 	await workbench.quickaccess.runCommand('workbench.action.files.save');
+});
+
+test('Local links follow the window default and the user can choose the system browser in Agents', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
+	const server = createServer((_request, response) => {
+		response.setHeader('Content-Type', 'text/html');
+		response.end('<title>Local Browser Fixture</title>');
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	const address = server.address();
+	if (!address || typeof address === 'string') { throw new Error('Missing fixture endpoint'); }
+	const root = `http://dev.localhost:${address.port}`;
+	const electron = application as ElectronApplication;
+	await electron.evaluate(({ shell }) => {
+		const original = shell.openExternal;
+		Object.assign(globalThis, { urlRuleSmoke: { urls: [] as string[], restore: () => { shell.openExternal = original; } } });
+		shell.openExternal = async url => { (globalThis as URLRuleSmokeGlobal).urlRuleSmoke.urls.push(url); };
+	});
+	const openedExternally = () => electron.evaluate(() => (globalThis as URLRuleSmokeGlobal).urlRuleSmoke.urls);
+	try {
+		await workbench.page.evaluate(url => { window.open(url, '_blank', 'noopener,noreferrer'); }, `${root}/ide`);
+		await expect.poll(openedExternally).toEqual([`${root}/ide`]);
+		await expect(workbench.page.locator('.ash-browser-editor')).toHaveCount(0);
+
+		const agents = await workbench.openAgentsWindow(target.kind);
+		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const { quickaccess, settingsEditor } = new Workbench(agents);
+		const openLocalLinkSettings = async () => {
+			await quickaccess.runCommand('workbench.action.openSettings2');
+			const preferences = agents.getByRole('dialog', { name: 'Settings', exact: true });
+			await preferences.getByRole('button', { name: 'Browser', exact: true }).click();
+			await preferences.getByRole('button', { name: 'Open Browser settings', exact: true }).click();
+		};
+		const openAgentLink = async (url: string) => {
+			await quickaccess.runCommand('workbench.action.url.openUrl');
+			const input = agents.getByRole('textbox', { name: 'URL to Open', exact: true });
+			await input.fill(url);
+			await input.press('Enter');
+		};
+		const setting = settingsEditor.element.getByRole('group', { name: 'Open localhost links in Browser', exact: true });
+		const toggle = setting.getByRole('switch');
+		await openLocalLinkSettings();
+		await expect(toggle).toBeChecked();
+		await settingsEditor.element.locator('.ash-modal-editor-close').click();
+
+		await openAgentLink(`${root}/agents`);
+		const browser = agents.locator('.ash-browser-editor:visible');
+		await expect.poll(() => electron.evaluate(({ BrowserWindow }) => ({
+			external: (globalThis as URLRuleSmokeGlobal).urlRuleSmoke.urls,
+			browser: BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(child => 'webContents' in child).map(child => (child as Electron.WebContentsView).webContents.getURL()),
+		}))).toEqual({ external: [`${root}/ide`], browser: [`${root}/agents`] });
+		await expect(browser.getByRole('status')).toHaveText('Local Browser Fixture');
+		await quickaccess.runCommand('workbench.action.browser.closeAll');
+		await expect(browser).toHaveCount(0);
+
+		await openLocalLinkSettings();
+		await toggle.press('Space');
+		await expect(toggle).not.toBeChecked();
+		await expect(setting.locator('.ash-settings-indicators')).toBeHidden();
+
+		await openAgentLink(`${root}/disabled`);
+		await expect.poll(openedExternally).toEqual([`${root}/ide`, `${root}/disabled`]);
+		await expect(browser).toHaveCount(0);
+	} finally {
+		await electron.evaluate(() => (globalThis as URLRuleSmokeGlobal).urlRuleSmoke.restore());
+		server.closeAllConnections();
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
 });
 
 test('URL rules open editor links in the Ash browser and default links in the system browser', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
@@ -182,12 +345,13 @@ test('URL rules open editor links in the Ash browser and default links in the sy
 
 		// The dedicated Agents window loads the same desktop provider and browser editor.
 		const agents = await workbench.openAgentsWindow(target.kind);
+		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await agents.evaluate(url => { window.open(url, '_blank', 'noopener,noreferrer'); }, `${root}/internal?source=agents`);
 		const agentBrowser = agents.locator('.ash-browser-editor:visible');
 		await expect(agentBrowser).toBeVisible();
 		await expect(agentBrowser.getByRole('status')).toHaveText('Configured URL page');
 		await expect.poll(views).toEqual([{ url: `${root}/internal?source=agents`, visible: true }]);
-		await agents.getByRole('button', { name: 'Close Configured URL page', exact: true }).click();
+		await new Workbench(agents).quickaccess.runCommand('workbench.action.browser.closeAll');
 		await expect.poll(views).toEqual([]);
 	} finally {
 		await electron.evaluate(() => (globalThis as URLRuleSmokeGlobal).urlRuleSmoke.restore());

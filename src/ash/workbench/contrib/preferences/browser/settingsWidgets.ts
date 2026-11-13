@@ -7,7 +7,7 @@ import {
 import './media/settingsWidgets.css';
 import { localize, localize2 } from '../../../../nls.js';
 import type { ContextMenuAnchor, IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
-import { addDisposableListener, getActiveElement, getWindow, h, isElement, stopEvent } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, getWindow, h, isElement, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
 import { isAncestorOfActiveElement } from '../../../../base/browser/focus.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -18,18 +18,24 @@ import { SelectBox, type SelectOption } from '../../../../base/browser/ui/select
 import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { Disposable, DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { toErrorMessage } from '../../../../base/common/errorMessage.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IConfigurationService, type IConfigurationOverrides, ConfigurationTarget, getConfigValueInTarget } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { HoverConfiguration } from '../../../../platform/hover/common/hoverService.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
-import type { IBooleanSetting, IComplexSetting, INumberSetting, INumberWithOptionsSetting, ISelectSetting, ISetting, IStringMapSetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
+import type { IBooleanSetting, IBoundStringArraySetting, IComplexSetting, IConfiguredSetting, IConfiguredStringArraySetting, INumberSetting, INumberWithOptionsSetting, ISelectSetting, ISetting, IStringMapSetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation, StringArraySettingEdit } from '../../../services/preferences/common/preferences.js';
 import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsSearchMenu } from './settingsSearchMenu.js';
 import { SettingsTreeIndicatorsLabel } from './settingsEditorSettingIndicators.js';
@@ -283,7 +289,7 @@ class SettingActions extends Disposable {
 	}
 }
 
-abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends Disposable implements SettingWidget {
+abstract class AbstractSettingWidget<TSetting extends IConfiguredSetting, TValue> extends Disposable implements SettingWidget {
 	public readonly domNode: HTMLDivElement;
 	protected readonly copyDomNode: HTMLSpanElement;
 	protected readonly model: SettingModel<TValue>;
@@ -1321,6 +1327,408 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 	}
 }
 
+class StringArraySettingWidget extends AbstractSettingWidget<IConfiguredStringArraySetting, readonly string[]> {
+	private readonly list: StringArrayTable;
+
+	constructor(container: HTMLElement, descriptor: IConfiguredStringArraySetting, options: SettingWidgetOptions,
+		@IConfigurationService configuration: IConfigurationService,
+		@IContextViewService contextView: IContextViewService,
+		@IInstantiationService instantiation: IInstantiationService,
+	) {
+		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configuration, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configuration, contextView, instantiation);
+		this.domNode.classList.add('ash-string-array-setting');
+		this.domNode.dataset.configurationKey = descriptor.configuration.key;
+		this.domNode.append(this.copyDomNode);
+		this.list = this._register(new StringArrayTable(this.domNode, descriptor, !options.actionsOnContextMenuOnly, async edit => {
+			const values = [...this.model.state.value];
+			if (edit.kind === 'add') values.push(edit.value);
+			else if (edit.kind === 'edit') values[edit.index] = edit.value;
+			else values.splice(edit.index, 1);
+			await this.model.update(this.descriptor.configuration.parse(values));
+		}));
+		this.bindState(state => {
+			this.list.setReadOnly(this.hasPolicyValue);
+			if (!state.isPending) this.list.updateRows(state.value);
+		});
+	}
+
+	protected updateControl(descriptor: IConfiguredStringArraySetting): void {
+		this.list.updateLabels(descriptor);
+	}
+}
+
+class BoundStringArraySettingWidget extends Disposable implements SettingWidget {
+	readonly domNode: HTMLElement;
+	private readonly list: StringArrayTable;
+	private readonly description: HTMLElement;
+	private descriptor: IBoundStringArraySetting;
+
+	constructor(container: HTMLElement, descriptor: IBoundStringArraySetting, options: SettingWidgetOptions,
+		@IConfigurationService configuration: IConfigurationService,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@IAccessibleViewService accessibleView: IAccessibleViewService,
+	) {
+		super();
+		this.descriptor = descriptor;
+		const document = container.ownerDocument;
+		this.domNode = h(document, 'div', { className: 'ash-bound-string-array-setting' });
+		this.domNode.tabIndex = -1;
+		this.domNode.setAttribute('role', 'group');
+		this.description = h(document, 'p');
+		this.description.id = `settingsArrayDescription-${generateUuid()}`;
+		this.domNode.setAttribute('aria-describedby', this.description.id);
+		this.domNode.append(this.description);
+		const binding = descriptor.binding;
+		this.list = this._register(new StringArrayTable(this.domNode, descriptor, !options.actionsOnContextMenuOnly, edit => binding.apply(edit)));
+		this.update(descriptor);
+		this.list.updateRows(binding.getValue());
+		this._register(binding.onDidChange(() => this.list.updateRows(binding.getValue())));
+		this._register(toDisposable(() => this.domNode.remove()));
+
+		const verbosity = descriptor.accessibility.verbositySetting;
+		const key = `settingsArray-${generateUuid()}`;
+		this._register(contextKeys.createScoped(this.domNode)).createKey(key, true);
+		const updateHint = (): void => {
+			const hint = accessibleView.getOpenAriaHint(verbosity);
+			if (hint) this.domNode.setAttribute('aria-description', hint);
+			else this.domNode.removeAttribute('aria-description');
+		};
+		updateHint();
+		this._register(configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(verbosity)) updateHint(); }));
+		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+			this._register(AccessibleViewRegistry.register({
+				type, priority: 110, name: `${key}-${type}`, when: ContextKeyExpr.has(key),
+				getProvider: (_accessor, target) => {
+					const focused = target ?? getActiveElement(document);
+					if (!this.domNode.isConnected || !isHTMLElement(focused) || !this.domNode.contains(focused)) return undefined;
+					return new AccessibleContentProvider(AccessibleViewProviderId.SettingsArray, { type },
+						() => type === AccessibleViewType.Help ? this.descriptor.accessibility.help : [this.descriptor.title, this.descriptor.description, ...binding.getValue()].join('\n'),
+						() => { if (focused.isConnected) focused.focus(); else if (this.domNode.isConnected) this.focus(); }, verbosity);
+				},
+			}));
+		}
+	}
+
+	update(setting: ISetting): void {
+		if (setting.id !== this.descriptor.id || setting.valueType !== 'array' || setting.configuration) throw new TypeError('Cannot change the setting rendered by this widget');
+		this.descriptor = setting;
+		this.domNode.setAttribute('aria-label', setting.title);
+		this.description.textContent = setting.description;
+		this.list.updateLabels(setting);
+	}
+
+	focus(): void {
+		this.domNode.focus();
+	}
+}
+
+interface StringArrayRow {
+	readonly element: HTMLTableRowElement;
+	readonly item: string;
+	readonly value: HTMLElement;
+	readonly actions: HTMLElement;
+	readonly edit: Button;
+	readonly remove: Button;
+	readonly resources: DisposableStore;
+}
+
+class StringArrayTable extends Disposable {
+	private readonly table: HTMLTableElement;
+	private readonly body: HTMLTableSectionElement;
+	private readonly input: InputBox;
+	private readonly message: HTMLElement;
+	private readonly announcement: HTMLElement;
+	private readonly columnHeader: HTMLTableCellElement;
+	private readonly add: Button;
+	private readonly allowEmpty: boolean;
+	private rows: StringArrayRow[] = [];
+	private readonly editor = this._register(new MutableDisposable<DisposableStore>());
+	private editingRow: StringArrayRow | undefined;
+	private pending = false;
+	private readOnly = false;
+
+	constructor(container: HTMLElement, descriptor: IConfiguredStringArraySetting | IBoundStringArraySetting, private readonly iconActions: boolean, private readonly apply: (edit: StringArraySettingEdit) => Promise<unknown>) {
+		super();
+		this.allowEmpty = !!descriptor.configuration;
+		const document = container.ownerDocument;
+		const root = h(document, 'div', { className: 'ash-settings-array-table' });
+		root.classList.toggle('ash-settings-array-table-icon-actions', iconActions);
+		container.append(root);
+		this._register(toDisposable(() => root.remove()));
+		const table = h(document, 'table');
+		this.table = table;
+		table.hidden = true;
+		const head = table.createTHead().insertRow();
+		this.columnHeader = h(document, 'th', { attributes: { scope: 'col' } });
+		head.append(this.columnHeader, h(document, 'th', { attributes: { scope: 'col' } }, localize({ bundle: 'ash.settings', key: 'section.tableActions' }, 'Actions')));
+		this.body = table.createTBody();
+		const form = h(document, 'form', { className: 'ash-settings-array-table-form' });
+		this.input = this._register(new InputBox(form, {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+		}));
+		this.add = this._register(new Button(form, {
+			...defaultButtonStyles,
+			label: '',
+			presentation: 'secondary',
+			type: 'submit',
+			enabled: this.allowEmpty,
+		}));
+		this.message = h(document, 'p', { className: 'ash-settings-array-table-error' });
+		this.message.id = `settingsArrayTableError-${generateUuid()}`;
+		this.message.setAttribute('role', 'alert');
+		this.announcement = h(document, 'span', { className: 'ash-aria-live' });
+		this.announcement.setAttribute('role', 'status');
+		this.input.inputElement.setAttribute('aria-describedby', this.message.id);
+		root.append(table, form, this.message, this.announcement);
+		this.updateLabels(descriptor);
+		this._register(this.input.onDidChange(value => {
+			this.add.enabled = !this.readOnly && this.canSave(value);
+			this.clearMessage();
+		}));
+		this._register(addDisposableListener(form, 'submit', event => {
+			event.preventDefault();
+			const value = this.input.value;
+			if (this.canSave(value)) void this.change({ kind: 'add', value });
+		}));
+		this._register(toDisposable(() => {
+			for (const row of this.rows) row.resources.dispose();
+		}));
+	}
+
+	updateLabels(descriptor: IConfiguredStringArraySetting | IBoundStringArraySetting): void {
+		this.table.setAttribute('aria-label', descriptor.title);
+		this.columnHeader.textContent = descriptor.columnLabel ?? localize({ bundle: 'ash.settings', key: 'array.item' }, 'Item');
+		this.input.inputElement.setAttribute('aria-label', descriptor.inputLabel ?? localize({ bundle: 'ash.settings', key: 'array.newItem' }, 'New item for {0}', descriptor.title));
+		this.input.placeholder = descriptor.placeholder ?? '';
+		this.add.label = descriptor.addLabel ?? localize({ bundle: 'ash.settings', key: 'array.addItem' }, 'Add Item');
+	}
+
+	setReadOnly(readOnly: boolean): void {
+		if (this.readOnly === readOnly) return;
+		this.readOnly = readOnly;
+		if (readOnly) this.cancelEdit();
+		this.input.enabled = !readOnly;
+		this.add.enabled = !readOnly && this.canSave(this.input.value);
+		for (const row of this.rows) {
+			row.edit.enabled = row.remove.enabled = !readOnly;
+		}
+	}
+
+	updateRows(values: readonly string[]): void {
+		const document = this.body.ownerDocument;
+		const focused = document.activeElement;
+		const focusedIndex = this.rows.findIndex(row => row.element.contains(focused));
+		const focusedRow = this.rows[focusedIndex];
+		const focusEdit = focusedRow !== undefined && (focusedRow === this.editingRow || focusedRow.edit.domNode === focused);
+		const available = new Map<string, StringArrayRow[]>();
+		// Reuse each occurrence independently. Configuration arrays can contain duplicates.
+		for (const row of this.rows) {
+			const matches = available.get(row.item) ?? [];
+			matches.push(row);
+			available.set(row.item, matches);
+		}
+		this.rows = values.map(value => available.get(value)?.shift() ?? this.createRow(value));
+		for (const matches of available.values()) {
+			for (const row of matches) {
+				if (row === this.editingRow) this.cancelEdit();
+				row.resources.dispose();
+				row.element.remove();
+			}
+		}
+		let nextRow = this.body.firstElementChild;
+		for (const row of this.rows) {
+			if (nextRow !== row.element) this.body.insertBefore(row.element, nextRow);
+			nextRow = row.element.nextElementSibling;
+		}
+		this.table.hidden = this.rows.length === 0;
+		if (focusedIndex >= 0 && document.activeElement === document.body) {
+			const row = this.rows[Math.min(focusedIndex, this.rows.length - 1)];
+			const nextControl = isHTMLElement(focused) && this.body.contains(focused)
+				? focused
+				: (focusEdit ? row?.edit : row?.remove)?.domNode ?? this.input.inputElement;
+			nextControl.focus();
+		}
+	}
+
+	private createRow(item: string): StringArrayRow {
+		const document = this.body.ownerDocument;
+		const resources = new DisposableStore();
+		const element = h(document, 'tr');
+		const cell = element.insertCell();
+		const value = h(document, 'span', item);
+		cell.append(value);
+		const actions = h(document, 'div', { className: 'ash-settings-array-table-actions' });
+		element.insertCell().append(actions);
+		const editLabel = localize({ bundle: 'ash.settings', key: 'patterns.edit' }, 'Edit');
+		const removeLabel = localize({ bundle: 'ash.settings', key: 'array.remove' }, 'Remove');
+		const itemLabel = item || localize({ bundle: 'ash.settings', key: 'array.emptyItem' }, 'empty string');
+		const edit = resources.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: editLabel,
+			title: this.iconActions ? editLabel : undefined,
+			ariaLabel: localize({ bundle: 'ash.settings', key: 'array.editItem' }, 'Edit {0}', itemLabel),
+			icon: this.iconActions ? Lxicon.edit : undefined,
+			iconOnly: this.iconActions,
+			presentation: this.iconActions ? 'quiet' : 'secondary',
+			size: 'small',
+		}));
+		const remove = resources.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: removeLabel,
+			title: this.iconActions ? removeLabel : undefined,
+			ariaLabel: localize({ bundle: 'ash.settings', key: 'array.removeItem' }, 'Remove {0}', itemLabel),
+			icon: this.iconActions ? Lxicon.close : undefined,
+			iconOnly: this.iconActions,
+			presentation: this.iconActions ? 'quiet' : 'secondary',
+			size: 'small',
+		}));
+		edit.enabled = remove.enabled = !this.readOnly;
+		const row = { element, item, value, actions, edit, remove, resources };
+		resources.add(edit.onDidClick(() => this.editRow(row)));
+		resources.add(addDisposableListener(cell, 'dblclick', event => {
+			if (event.target === value || event.target === cell) this.editRow(row);
+		}));
+		resources.add(remove.onDidClick(() => {
+			void this.change({ kind: 'remove', index: this.rows.indexOf(row), original: item });
+		}));
+		return row;
+	}
+
+	private cancelEdit(): void {
+		this.editingRow = undefined;
+		this.editor.clear();
+	}
+
+	private editRow(row: StringArrayRow): void {
+		if (this.readOnly || this.pending || this.editingRow === row) return;
+		this.cancelEdit();
+		this.clearMessage();
+		const resources = new DisposableStore();
+		this.editor.value = resources;
+		this.editingRow = row;
+		const document = row.element.ownerDocument;
+		const editor = h(document, 'div', { className: 'ash-settings-array-table-editor' });
+		const input = resources.add(new InputBox(editor, {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+			ariaLabel: row.edit.domNode.getAttribute('aria-label') ?? undefined,
+		}));
+		input.value = row.item;
+		const error = h(document, 'p', { className: 'ash-settings-array-table-error' });
+		error.id = `settingsArrayEditError-${generateUuid()}`;
+		error.setAttribute('role', 'alert');
+		input.inputElement.setAttribute('aria-describedby', error.id);
+		editor.append(error);
+		const actions = h(document, 'div', { className: 'ash-settings-array-table-actions' });
+		const save = resources.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash.settings', key: 'patterns.save' }, 'Save'),
+			presentation: this.iconActions ? 'primary' : 'secondary',
+			size: 'small',
+		}));
+		const cancel = resources.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash.settings', key: 'patterns.cancel' }, 'Cancel'),
+			presentation: 'secondary',
+			size: 'small',
+		}));
+		row.value.hidden = row.actions.hidden = true;
+		row.value.after(editor);
+		row.actions.after(actions);
+		resources.add(toDisposable(() => {
+			editor.remove();
+			actions.remove();
+			row.value.hidden = row.actions.hidden = false;
+		}));
+		const finish = (): void => {
+			const restoreFocus = row.element.contains(document.activeElement);
+			this.cancelEdit();
+			if (restoreFocus) row.edit.focus();
+		};
+		const commit = async (): Promise<void> => {
+			if (this.pending || this.readOnly || !this.canSave(input.value)) return;
+			this.pending = true;
+			input.readOnly = true;
+			this.announcement.textContent = '';
+			try {
+				await this.apply({ kind: 'edit', index: this.rows.indexOf(row), original: row.item, value: input.value });
+				if (this.isDisposed) return;
+				if (!resources.isDisposed) finish();
+				this.announceSaved();
+			} catch (failure) {
+				if (this.isDisposed) return;
+				if (resources.isDisposed) {
+					this.message.textContent = toErrorMessage(failure);
+					return;
+				}
+				input.inputElement.setAttribute('aria-invalid', 'true');
+				error.textContent = toErrorMessage(failure);
+				if (row.element.contains(document.activeElement)) input.focus();
+			} finally {
+				this.pending = false;
+				if (!resources.isDisposed) input.readOnly = false;
+			}
+		};
+		resources.add(input.onDidChange(value => {
+			save.enabled = this.canSave(value);
+			error.textContent = '';
+			input.inputElement.removeAttribute('aria-invalid');
+		}));
+		resources.add(save.onDidClick(() => void commit()));
+		resources.add(cancel.onDidClick(() => { if (!this.pending) finish(); }));
+		resources.add(addDisposableListener(row.element, 'keydown', event => {
+			if (event.isComposing || event.keyCode === 229) return;
+			if (event.key === 'Escape') {
+				stopEvent(event);
+				if (!this.pending) finish();
+			} else if (event.key === 'Enter' && event.target === input.inputElement) {
+				stopEvent(event);
+				void commit();
+			}
+		}));
+		input.focus();
+		input.select();
+	}
+
+	private announceSaved(): void {
+		this.announcement.textContent = localize({ bundle: 'ash.settings', key: 'array.saved' }, 'List saved.');
+	}
+
+	private canSave(value: string): boolean {
+		return this.allowEmpty || value.trim().length > 0;
+	}
+
+	private clearMessage(): void {
+		this.message.textContent = '';
+		this.input.inputElement.removeAttribute('aria-invalid');
+	}
+
+	private async change(edit: Exclude<StringArraySettingEdit, { kind: 'edit'; }>): Promise<void> {
+		if (this.pending || this.readOnly) return;
+		this.pending = true;
+		this.clearMessage();
+		this.announcement.textContent = '';
+		const document = this.body.ownerDocument;
+		const focused = document.activeElement;
+		try {
+			await this.apply(edit);
+			if (this.isDisposed) return;
+			if (edit.kind === 'add' && this.input.value === edit.value) {
+				if (document.activeElement === focused && focused?.tagName === 'BUTTON') this.input.focus();
+				this.input.value = '';
+			}
+			this.announceSaved();
+		} catch (error) {
+			if (this.isDisposed) return;
+			if (edit.kind === 'add' && this.input.value === edit.value) this.input.inputElement.setAttribute('aria-invalid', 'true');
+			this.message.textContent = toErrorMessage(error);
+		} finally {
+			this.pending = false;
+		}
+	}
+}
+
 /** Complex extension values keep schema validation and editing in the shared JSON editor. */
 class ComplexSettingWidget extends AbstractSettingWidget<IComplexSetting, unknown> {
 	constructor(container: HTMLElement, descriptor: IComplexSetting, options: SettingWidgetOptions,
@@ -1356,6 +1764,10 @@ export function createSettingWidget(container: HTMLElement, setting: ISetting, o
 			return instantiationService.createInstance(SelectSettingWidget, container, setting, options);
 		case 'text':
 			return instantiationService.createInstance(TextSettingWidget, container, setting, options);
+		case 'array':
+			return setting.configuration
+				? instantiationService.createInstance(StringArraySettingWidget, container, setting, options)
+				: instantiationService.createInstance(BoundStringArraySettingWidget, container, setting, options);
 		case 'stringMap':
 			if (['files.exclude', 'search.exclude', 'explorer.autoRevealExclude', 'files.readonlyInclude', 'files.readonlyExclude', 'workbench.localHistory.exclude'].includes(setting.id)) {
 				return instantiationService.createInstance(ExcludeSettingWidget, container, setting, options);

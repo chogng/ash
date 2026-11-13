@@ -1,5 +1,7 @@
 use std::process::ExitCode;
 
+mod proxy_command;
+
 fn main() -> ExitCode {
     if let Err(error) = process_hardening::initialize() {
         eprintln!("process hardening failed: {error}");
@@ -14,7 +16,11 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let result = ash_remote_connections::run_command(std::env::args().skip(1).collect());
+    let arguments: Vec<_> = std::env::args().skip(1).collect();
+    let result = match arguments.split_first() {
+        Some((command, options)) if command == "proxy-command" => proxy_command::run(options),
+        _ => ash_remote_connections::run_command(arguments),
+    };
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {

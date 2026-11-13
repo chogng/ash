@@ -77,6 +77,28 @@ suite('Agent Host filesystem authority routes', () => {
 		assert.equal((await provider.readTextFile(settings, 'utf8')).content, 'primary');
 	});
 
+	test('caches exact-file grants independently for siblings in one directory', async () => {
+		const directory = URI.file('/profile/generated-files');
+		const first = URI.joinPath(directory, 'first.md');
+		const second = URI.joinPath(directory, 'second.md');
+		const resolved: URI[] = [];
+		using provider = new AgentHostFileSystemProvider(connection(URI.file('/workspace'), 'primary', {
+			async resolvePath(exactFile) {
+				resolved.push(exactFile);
+				const dirId = exactFile.path.split('/').at(-1)!;
+				return { uri: directory, exactFile, target: { type: 'environment', dirId } };
+			},
+			async readFile({ path, dirId }) {
+				assert.equal(path, dirId);
+				return { content: path, revision: path };
+			},
+		}));
+		assert.equal((await provider.readTextFile(first, 'utf8')).content, 'first.md');
+		assert.equal((await provider.readTextFile(second, 'utf8')).content, 'second.md');
+		assert.equal((await provider.readTextFile(first, 'utf8')).content, 'first.md');
+		assert.deepEqual(resolved, [first, second]);
+	});
+
 	test('selects the longest registered root on one authority while preserving sibling roots', async () => {
 		using provider = new AgentHostFileSystemProvider(connection(URI.file('/workspace'), 'primary'));
 		using files = new FileService();

@@ -14,7 +14,7 @@ import { SHOW_SESSIONS_PICKER_COMMAND_ID } from '../../contrib/sessions/browser/
 import '../../browser/actions/sessionsChatActions.js';
 import '../../contrib/sessions/browser/sessionDetailsAction.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
-import { NEW_SESSION_ACTION_ID } from '../../contrib/chat/common/constants.js';
+import { NEW_SESSION_ACTION_ID, OPEN_CHAT_CREATION_COMMAND_ID, SHOW_ASH_CHAT_COMMAND } from '../../contrib/chat/common/constants.js';
 import '../../contrib/chat/browser/chat.contribution.js';
 import { registerNewChatActions } from '../../../workbench/contrib/chat/browser/actions/chatNewActions.js';
 import { registerChatActions } from '../../../workbench/contrib/chat/browser/actions/chatActions.js';
@@ -30,8 +30,9 @@ import { formatNlsMessage, localize, setNlsResolver, resetNlsResolver } from '..
 import { approvalModeDefinitions, type ApprovalMode } from '../../../platform/agentHost/common/approvalModes.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 import { ISessionsProvidersService, SessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
-import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { ISessionsEntryService } from '../../services/layout/common/sessionsEntryService.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
@@ -133,6 +134,25 @@ test('navigation New uses the active entry owner before the default ChatGPT entr
 	assert.deepEqual(calls, ['native', 'chatgpt']);
 });
 
+test('artifact creation from Code opens Chat before choosing a draft type', async () => {
+	using services = new InstantiationService();
+	const calls: string[] = [];
+	let mode = 'code';
+	services.registerInstance(IContextKeyService, { getValue: () => mode } as unknown as IContextKeyService);
+	services.registerInstance(ISessionsEntryService, { newSessionCommand: 'test.entry.newChat' } as ISessionsEntryService);
+	services.registerInstance(IChatWidgetService, { get lastFocusedWidget() { assert.equal(mode, 'chat'); return undefined; } } as IChatWidgetService);
+	using openChat = CommandsRegistry.register('sessions.open.chat', () => { calls.push('chat'); mode = 'chat'; });
+	using newChat = CommandsRegistry.register('test.entry.newChat', () => { calls.push('new'); });
+	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
+	await commands.executeCommand(OPEN_CHAT_CREATION_COMMAND_ID, 'docs');
+	assert.deepEqual(calls, ['chat', 'new']);
+	mode = 'code';
+	using desktopChat = CommandsRegistry.register('sessions.open.new', () => { calls.push('desktop Chat'); mode = 'chat'; });
+	await commands.executeCommand(OPEN_CHAT_CREATION_COMMAND_ID, 'slides');
+	assert.deepEqual(calls, ['chat', 'new', 'desktop Chat']);
+});
+
 test('Code navigation New creates a Session and opens its workspace without the shared Chat view', async () => {
 	using services = new InstantiationService();
 	const calls: string[] = [];
@@ -198,7 +218,9 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 		],
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IConfigurationService, { getValue: () => false } as unknown as IConfigurationService);
-	services.registerInstance(IContextKeyService, { getValue: () => 'code', onDidChangeContext: Event.None } as unknown as IContextKeyService);
+	using contexts = new ContextKeyService();
+	contexts.setContext('sessions.workspaceMode', 'code');
+	services.registerInstance(IContextKeyService, contexts);
 	services.registerInstance(ISessionsEntryService, { newSessionCommand: undefined } as unknown as ISessionsEntryService);
 	services.registerInstance(ILayoutService, { focus: () => focus.push('composer') } as unknown as ILayoutService);
 	using code = CommandsRegistry.register('sessions.open.code', () => { focus.push('code'); });
@@ -259,12 +281,46 @@ test('Sessions History ranks recent active chats ahead of unvisited chats', asyn
 	services.registerInstance(IQuickInputService, quickInput);
 	using commands = new CommandService(services);
 
+	using contexts = new ContextKeyService();
+	contexts.setContext('sessions.workspaceMode', 'code');
+	services.registerInstance(IContextKeyService, contexts);
 	await commands.executeCommand('sessions.chat.history');
 
 	assert.equal(quickInput.picker?.placeholder, 'Select a session');
 	assert.deepEqual(quickInput.picker?.items.map(item => item.label), ['Recent Session', 'First Session']);
 	quickInput.picker?.acceptFirst();
 	assert.deepEqual(opened, [{ sessionId: 'recent', threadId: 'root' }]);
+});
+
+test('Chat history lists Ash Chat threads and opens them without revealing Code', async () => {
+	using services = new InstantiationService();
+	using contexts = new ContextKeyService();
+	using commands = new CommandService(services);
+	const input = new TestQuickInputService();
+	const calls: string[] = [];
+	const chat: ISession = {
+		sessionId: 'chat', kind: 'chat', title: 'Ash conversation', status: 'active', nextApprovalMode: 'manual',
+		chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }],
+	};
+	contexts.setContext('sessions.workspaceMode', 'chat');
+	services.registerInstance(IContextKeyService, contexts);
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(IQuickInputService, input);
+	services.registerInstance(ISessionsManagementService, {
+		sessions: [chat, { ...chat, kind: 'code', sessionId: 'code', title: 'Code session' },
+			{ ...chat, sessionId: 'mirror', backendSessionId: 'remote', title: 'Contributed chat' }],
+	} as unknown as ISessionsManagementService);
+	services.registerInstance(ISessionsService, {
+		getChatSelection: () => undefined, recentSessions: [],
+		openSession: () => assert.fail('Opening an Ash Chat should use the Chat selection'),
+		selectChatThread: (sessionId: string, threadId: string) => calls.push(`${sessionId}/${threadId}`),
+	} as unknown as ISessionsService);
+	using openChat = CommandsRegistry.register(SHOW_ASH_CHAT_COMMAND, () => { calls.push('Ash Chat'); });
+	await commands.executeCommand(SHOW_SESSIONS_PICKER_COMMAND_ID);
+	assert.deepEqual(input.picker?.items.map(item => item.label), ['Ash conversation']);
+	input.picker?.acceptFirst();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(calls, ['Ash Chat', 'chat/root']);
 });
 
 test('Session History shows each branch management state in Chinese before opening details', async () => {
@@ -285,6 +341,9 @@ test('Session History shows each branch management state in Chinese before openi
 	services.registerInstance(ISessionsService, { recentSessions: [], openSession: async (_sessionId: string, threadId: string) => { opened.push(threadId); } } as unknown as ISessionsService);
 	services.registerInstance(IQuickInputService, quickInput);
 	using commands = new CommandService(services);
+	using contexts = new ContextKeyService();
+	contexts.setContext('sessions.workspaceMode', 'code');
+	services.registerInstance(IContextKeyService, contexts);
 	try {
 		await commands.executeCommand(SHOW_SESSIONS_PICKER_COMMAND_ID);
 		assert.deepEqual(quickInput.picker?.items.map(item => ({ label: item.label, description: item.description, detail: item.detail })), [
@@ -313,6 +372,9 @@ test('Session History has an unread group for new background activity since the 
 		getLastViewedAt: (entry: { sessionId: string; }) => entry.sessionId === 'read' ? 300 : 100,
 	} as unknown as ISessionsService);
 	services.registerInstance(IQuickInputService, quickInput);
+	using contexts = new ContextKeyService();
+	contexts.setContext('sessions.workspaceMode', 'code');
+	services.registerInstance(IContextKeyService, contexts);
 	await commands.executeCommand(SHOW_SESSIONS_PICKER_COMMAND_ID);
 	assert.deepEqual(quickInput.picker?.items.map(item => item.label), ['Unread', 'unread', 'Other sessions', 'read', 'working']);
 	quickInput.picker?.hide();
@@ -339,6 +401,11 @@ test('Session Details opens a localized read-only snapshot of active user sessio
 		services.registerInstance(IEditorService, {
 			openEditor: async (...args: Parameters<IEditorService['openEditor']>) => { opened.push(args); },
 		} as unknown as IEditorService);
+		using contexts = new ContextKeyService();
+		contexts.setContext('isSessionsWindow', true);
+		contexts.setContext('chatIsEnabled', true);
+		contexts.setContext('sessions.workspaceMode', 'code');
+		services.registerInstance(IContextKeyService, contexts);
 		await commands.executeCommand('sessions.showSessionDetails');
 		const [[input, options]] = opened;
 		assert.equal(input.label, '会话详情');
@@ -367,6 +434,14 @@ test('Show Conversation Recap opens the latest saved text for the selected branc
 	services.registerInstance(IEditorService, {
 		openEditor: async (...args: Parameters<IEditorService['openEditor']>) => { opened.push(args); },
 	} as unknown as IEditorService);
+	using contexts = new ContextKeyService();
+	contexts.setContext('isSessionsWindow', true);
+	contexts.setContext('chatIsEnabled', true);
+	contexts.setContext('sessions.workspaceMode', 'chat');
+	services.registerInstance(IContextKeyService, contexts);
+	await commands.executeCommand('sessions.showConversationRecap');
+	assert.equal(opened.length, 0);
+	contexts.setContext('sessions.workspaceMode', 'code');
 	await commands.executeCommand('sessions.showConversationRecap');
 	assert.equal(opened[0]?.[0].initialText, 'Branch recap');
 	assert.equal(opened[0]?.[0].readOnly, true);

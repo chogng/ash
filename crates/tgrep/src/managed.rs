@@ -71,6 +71,18 @@ impl std::fmt::Display for ManagementError {
     }
 }
 impl ManagementError {
+    pub(super) fn is_preparation_contention(&self) -> bool {
+        self.category == Category::Busy
+            && self.retryable
+            && self.committed_state == Commitment::NotCommitted
+            && matches!(
+                self.reason_code.as_str(),
+                "operation-result-still-in-use"
+                    | "operation-still-protects-preparation"
+                    | "view-preparation-invalidated"
+            )
+    }
+
     pub(super) fn into_error(self) -> Error {
         if self.category == Category::Busy
             && self.retryable
@@ -416,7 +428,11 @@ impl Session {
                             if error.category == Category::Busy
                                 && error.retryable
                                 && error.committed_state == Commitment::NotCommitted
-                                && error.reason_code == "operation-result-still-in-use" =>
+                                && matches!(
+                                    error.reason_code.as_str(),
+                                    "operation-result-still-in-use"
+                                        | "operation-still-protects-preparation"
+                                ) =>
                         {
                             std::thread::sleep(Duration::from_millis(25));
                         }

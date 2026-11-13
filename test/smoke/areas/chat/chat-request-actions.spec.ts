@@ -70,7 +70,7 @@ const requestActionScenarios = {
 	versions: 'reruns a request from its Git checkpoint and compares both results',
 };
 
-for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as const) for (const scenario of ['history', 'clipboard', 'checkpoint', 'reply', 'restore', 'redo', 'queue', 'turnChanges', 'versions'] as const) {
+for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const scenario of ['history', 'clipboard', 'checkpoint', 'reply', 'restore', 'redo', 'queue', 'turnChanges', 'versions'] as const) {
 	if ((scenario === 'restore' || scenario === 'redo' || scenario === 'queue') && surface !== 'IDE') continue;
 	if (scenario === 'turnChanges' && surface !== 'IDE' && surface !== 'Agents Code') continue;
 	if (scenario === 'versions' && surface !== 'Agents Code') continue;
@@ -111,10 +111,6 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 			const agents = surface !== 'IDE';
 			const page = agents ? await workbench.openAgentsWindow(target.kind) : workbench.page;
 			const window = new Workbench(page);
-			const openCowork = async () => {
-				await page.locator('[data-action-id="sessions.activity.more"] button').click();
-				await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
-			};
 			connection = await connectProfile(application, webAppServer, testWorkspace.directory, page);
 			const { client } = connection;
 			const address = server.address();
@@ -138,7 +134,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 			const read = async (threadId: string, owner = sessionId) => (await client.request(methods['session/thread/read'], { sessionId: owner, threadId })).thread;
 			const before = await read(root);
 			await client.request(methods['session/request'], {
-				sessionId, commandId: 'request-actions-turn', request: {
+				sessionId, commandId: scenario === 'reply' ? 'ash-code-review-request-actions' : 'request-actions-turn', request: {
 					type: 'startTurn', threadId: root, expectedSequence: before.sequence, mode, approvalMode, model,
 					input: [{ type: 'context', name: 'Accepted file', content: 'Original immutable context' }, { type: 'text', text: 'Original request' }],
 				}
@@ -167,14 +163,13 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 			} else if (agents) {
 				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 				await page.locator('.ash-sessions-list-item').filter({ hasText: 'Request actions source' }).click();
-				if (surface === 'Agents Cowork') await openCowork();
 			} else {
 				await window.quickaccess.runCommand('workbench.action.chat.open');
 				if (!await page.locator('.ash-chat-sessions-sidebar').isVisible()) await window.quickaccess.runCommand('agentSessions.toggleAgentSessionsSidebar');
 				await page.locator('.ash-chat-sessions-sidebar .ash-agent-session-row').filter({ hasText: 'Request actions source' }).click();
 			}
 			const chat = page.locator(ashChat ? '.ash-native-chat-widget .ash-chat'
-				: agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-native-chat'}` : '.ash-chat-view-pane .ash-chat:visible');
+				: agents ? '.ash-sessions-chat-slot.active:visible .ash-chat' : '.ash-chat-view-pane .ash-chat:visible');
 			const transcript = chat.locator('.ash-chat-list-widget, .ash-native-chat-list-widget');
 			const composer = chat.locator('.ash-chat-input-part');
 			const draft = composer.locator('.stanza-editor-input');
@@ -195,8 +190,9 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 				expect((await window.menus.inspect(application, () => openReplyMenu(1))).map(item => item.label)).not.toContain('Compare results');
 				const source = await read(root);
 				const rootDirectory = (await client.request(methods['session/thread/read'], { sessionId, threadId: root })).directory;
-				const checkpointMenu = request.getByRole('toolbar', { name: 'Request checkpoint actions', exact: true });
-				await window.menus.select(application, () => checkpointMenu.getByRole('button', { name: 'More Actions', exact: true }).press('Enter'), ['Run another version']);
+				const checkpointMenu = await window.menus.inspect(application, () => request.locator('pre').filter({ hasText: 'Original request' }).click({ button: 'right' }));
+				expect(checkpointMenu.map(item => item.label)).toEqual(['Run another version']);
+				await window.menus.select(application, () => request.press('Shift+F10'), ['Run another version']);
 				await expect(chat).not.toHaveAttribute('data-thread-id', root);
 				await chat.getByRole('button', { name: 'Approve once', exact: true }).click();
 				await expect(transcript).toContainText('Request action answer 3');
@@ -228,6 +224,8 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 				const toolbar = reply.getByRole('toolbar', { name: 'Response actions', exact: true });
 				await expect(toolbar.getByRole('button', { name: 'Copy message', exact: true })).toBeVisible();
 				await expect(toolbar.getByRole('button', { name: /ChatGPT/u })).toHaveCount(0);
+				await expect(toolbar.getByRole('button', { name: 'Share Ash response', exact: true })).toHaveCount(ashChat ? 1 : 0);
+				await expect(toolbar.getByRole('button', { name: 'Review comments', exact: true })).toHaveCount(ashChat ? 0 : 1);
 				if ('windows' in application) await expect(toolbar.getByRole('button', { name: 'Read aloud', exact: true })).toBeVisible();
 				else await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 				const readClipboard = () => 'windows' in application
@@ -246,7 +244,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 				}
 				const openMore = () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
 				expect((await window.menus.inspect(application, openMore)).map(item => item.label)).toEqual([
-					'Fork', 'Good response', 'Bad response', 'Give model feedback',
+					...(ashChat ? [] : ['Fork']), 'Good response', 'Bad response', 'Give model feedback',
 				]);
 				await window.menus.select(application, openMore, ['Good response']);
 				expect((await window.menus.inspect(application, openMore)).find(item => item.label === 'Good response')).toMatchObject({ checked: true });
@@ -254,7 +252,8 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 				const voted = await window.menus.inspect(application, openMore);
 				expect(voted.find(item => item.label === 'Good response')).toMatchObject({ checked: false });
 				expect(voted.find(item => item.label === 'Bad response')).toMatchObject({ checked: true });
-				await window.menus.select(application, openMore, ['Fork']);
+				if (ashChat) await toolbar.getByRole('button', { name: 'Fork', exact: true }).press('Enter');
+				else await window.menus.select(application, openMore, ['Fork']);
 				await expect(chat).not.toHaveAttribute('data-thread-id', root);
 				await expect(chat).toHaveAttribute('data-thread-id', /.+/u);
 				await expect(chat).toHaveAttribute('data-session-id', sessionId);
@@ -448,8 +447,6 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 			expect((await read(root)).turns.flatMap(turn => turn.items).filter(item => item.type === 'userMessage').map(item => item.text)).toEqual(['Original request']);
 			const beforeNewChat = (await client.request(methods['session/read'], { sessionId })).session.threads.map(thread => thread.threadId);
 			await page.locator(agents ? '[data-action-id="sessions.newSession"] button' : '.ash-chat-title-actions .ash-split-action-primary button').click();
-			// New opens Code in this workspace; Collab presents the same draft in Cowork.
-			if (surface === 'Agents Cowork') await openCowork();
 			await expect(chat).toHaveAttribute('data-untitled-session-id', /.+/u);
 			await expect(composer.locator('.view-lines')).not.toContainText('Unsent original draft');
 			expect((await client.request(methods['session/read'], { sessionId })).session.threads.map(thread => thread.threadId)).toEqual(beforeNewChat);

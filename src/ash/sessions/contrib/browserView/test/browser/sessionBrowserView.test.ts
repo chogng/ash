@@ -11,6 +11,8 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryServiceShape } from '../../../../../platform/telemetry/common/telemetryUtils.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
+import { IEditorPartsService } from '../../../../../workbench/browser/parts/editor/editorParts.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { IResourceEditorInput } from '../../../../../workbench/common/editor.js';
 import { DialogsModel, IDialogsModel } from '../../../../../workbench/common/dialogs.js';
 import type { BrowserEditorInput } from '../../../../../workbench/contrib/browserView/common/browserEditorInput.js';
@@ -400,7 +402,7 @@ function fixture() {
 			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'browser-test', folders: [], remoteAuthority: f.windowRemote }), getWorkbenchState: () => f.workbenchState, getWorkspaceFolder: () => null
 		}],
 		[IWorkspaceTrustManagementService, resources.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) } satisfies Partial<IWorkspaceTrustManagementService>))],
-		[IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, pages], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs],
+		[IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, pages], [IEditorService, editors], [IEditorPart, editorPart], [IEditorPartsService, editorPart as IEditorPartsService], [IContextKeyService, { getValue: () => undefined } as unknown as IContextKeyService], [IDialogsModel, dialogs],
 		[ITelemetryService, new NullTelemetryServiceShape()], [ILogService, new NullLoggerService()],
 		[ISessionsProvidersService, { getProvider: () => f.providerWorkspace ? { currentWorkspace: () => f.providerWorkspace } : undefined } as unknown as ISessionsProvidersService],
 		[IAgentHostConnectionsService, { _serviceBrand: undefined, onDidChangeConnections: Event.None, connections: [], resolveConnection: () => undefined } as unknown as IAgentHostConnectionsService], [ISessionsManagementService, management], [ISessionsService, sessions],

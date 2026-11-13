@@ -903,7 +903,7 @@ test('Artifacts canvas responds to wheel, drag and keyboard input', async ({ pag
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await expect(canvas).toBeVisible();
-	const tools = page.locator('.ash-canvas-editor-toolbar');
+	const tools = page.locator('.ash-artifact-toolbar');
 	const split = tools.locator('.ash-dropdown-with-primary-dropdown > .ash-button').first();
 	await expect(split).toHaveCSS('width', '20px');
 	await expect(split).toHaveCSS('height', '32px');
@@ -1634,10 +1634,49 @@ test.describe('Sessions settings components', () => {
 		await expect(chat).toHaveAttribute('aria-current', 'page');
 	});
 
-	test('Customize settings and feature links open the actual Workbench settings owner', async ({
+	test('Browser settings show trusted domains directly in the Agent Window', async ({ page }) => {
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+		await settings.locator('[data-settings-category-id="browser"]').click();
+		await expect(settings.getByRole('button', { name: 'Open Browser settings', exact: true })).toHaveCount(0);
+		const table = settings.getByRole('table', { name: 'Trusted domains', exact: true });
+		const input = settings.getByRole('textbox', { name: 'Domain to trust', exact: true });
+		const card = settings.locator('.ash-settings-card').filter({ has: page.getByRole('textbox', { name: 'Domain to trust', exact: true }) }).last();
+		await expect(input).toBeVisible();
+		await expect(card).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(table).toBeHidden();
+		await input.fill('https://example.test/docs?source=settings#top');
+		await input.press('Enter');
+		await expect(table.getByRole('cell', { name: 'https://example.test/docs', exact: true })).toBeVisible();
+		await expect(table.getByRole('cell', { name: 'https://github.com/', exact: true })).toHaveCount(0);
+		await table.getByRole('button', { name: 'Edit https://example.test/docs', exact: true }).click();
+		const edit = table.getByRole('textbox', { name: 'Edit https://example.test/docs', exact: true });
+		await expect(edit).toBeFocused();
+		await edit.fill('https://example.test/reference');
+		await edit.press('Enter');
+		await expect(table.getByRole('cell', { name: 'https://example.test/reference', exact: true })).toBeVisible();
+		await table.getByRole('button', { name: 'Remove https://example.test/reference', exact: true }).click();
+		await expect(table).toBeHidden();
+		await expect(input).toBeFocused();
+	});
+
+	test('Code Intelligence and Environment show their settings in the Agent Window', async ({ page }) => {
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+		await settings.locator('[data-settings-category-id="code-intelligence"]').click();
+		const codeIntelligence = settings.getByRole('region', { name: 'Code Intelligence', exact: true });
+		await expect(codeIntelligence.getByRole('switch', { name: 'Enable LSPs', exact: true })).toBeVisible();
+		await expect(codeIntelligence.getByRole('switch', { name: 'Enable LSPs for Worktrees', exact: true })).toBeVisible();
+
+		await settings.locator('[data-settings-category-id="environment"]').click();
+		const environment = settings.getByRole('region', { name: 'Environment', exact: true });
+		await expect(environment.getByRole('button', { name: 'Select Default Profile', exact: true })).toBeVisible();
+		await expect(environment.locator('[data-settings-item-id="sessions.terminal.fontSize"]')).toBeVisible();
+		await expect(page.locator('.ash-settings-editor')).toHaveCount(0);
+	});
+
+	test('Customize and Tab open their Workbench settings', async ({
 		page,
 	}, testInfo) => {
-		let settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		await settings.locator('[data-settings-category-id="customize"]').click();
 		await settings.getByRole('button', { name: 'Open Workbench Settings', exact: true }).click();
 		await expect(settings).toHaveCount(0);
@@ -1658,25 +1697,17 @@ test.describe('Sessions settings components', () => {
 		const closeSharedSettings = page.getByRole('toolbar', { name: 'Close Ash Settings', exact: true }).getByRole('button', { name: 'Close', exact: true });
 		await closeSharedSettings.click();
 		await expect(chat).toHaveAttribute('aria-current', 'page');
-		for (const [category, label, target] of [
-			['browser', 'Open Browser settings', 'browser'],
-			['tab', 'Open Tab settings', 'editor-opening'],
-			['code-intelligence', 'Language servers', 'editor-language'],
-			['environment', 'Open Environment settings', 'terminal'],
-		] as const) {
-			await page.getByRole('button', { name: 'Accounts', exact: true }).click();
-			await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
-			settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-			await settings.locator(`[data-settings-category-id="${category}"]`).click();
-			await settings.getByRole('button', { name: label, exact: true }).click();
-			await expect(settings).toHaveCount(0);
-			await expect(sharedSettings).toBeVisible();
-			await expect(sharedSettings.locator('[data-active-settings-category]')).toHaveAttribute(
-				'data-active-settings-category',
-				target,
-			);
-			await closeSharedSettings.click();
-		}
+		await page.getByRole('button', { name: 'Accounts', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+		await settings.locator('[data-settings-category-id="tab"]').click();
+		await settings.getByRole('button', { name: 'Open Tab settings', exact: true }).click();
+		await expect(settings).toHaveCount(0);
+		await expect(sharedSettings).toBeVisible();
+		await expect(sharedSettings.locator('[data-active-settings-category]')).toHaveAttribute(
+			'data-active-settings-category',
+			'editor-opening',
+		);
+		await closeSharedSettings.click();
 	});
 
 	test('preferences JSON actions reveal ordinary Code editors with their shared configuration resources', async ({

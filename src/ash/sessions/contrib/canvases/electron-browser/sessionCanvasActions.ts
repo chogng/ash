@@ -5,7 +5,7 @@ import { MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { getCanvasReferenceKey } from '../../../../workbench/common/canvasReference.js';
+import { canvasOwnerKey, getCanvasReferenceKey, isCanvasOwner } from '../../../../workbench/common/canvasReference.js';
 import {
 	getCanvasDefinitionInstanceId, getCanvasDefinitionLabels, getCanvasInstanceLabels, getPresentableCanvasTargets, type ICanvasService, type ICanvasContextService,
 } from '../../../../workbench/contrib/canvases/common/canvas.js';
@@ -24,7 +24,7 @@ export function registerSessionCanvasActions(canvases: ICanvasService, registry:
 	const commands = lifetime.add(new DisposableMap<string, IDisposable>());
 	let menuIdentity = '';
 	// The Sessions selection remains active beneath a pinned page, even when Chat navigation has no active conversation.
-	const pickCanvas = (accessor: ServicesAccessor) => showCanvasContextPicker(accessor, () => registry.getActiveOwner());
+	const pickCanvas = (accessor: ServicesAccessor) => showCanvasContextPicker(accessor);
 	lifetime.add(CommandsRegistry.register(OPEN_SESSION_CANVAS_COMMAND_ID, accessor => {
 		const live = contexts.contexts.get().filter(context => contexts.isOwnerVisible(context.owner))
 			.flatMap(context => getPresentableCanvasTargets(canvases, context.owner, context.canvases.get() ?? []));
@@ -33,21 +33,31 @@ export function registerSessionCanvasActions(canvases: ICanvasService, registry:
 	lifetime.add(CommandsRegistry.register(REOPEN_SESSION_CANVAS_COMMAND_ID, pickCanvas));
 	lifetime.add(autorun(reader => {
 		const enabled = canvases.enabled.read(reader);
-		const definitions = enabled ? registry.availableCanvases.read(reader) : [];
+		const owner = enabled ? contexts.getActiveContext(reader)?.owner : undefined;
+		const ownerKey = owner && canvasOwnerKey(owner);
+		const definitions = owner ? registry.availableCanvases.read(reader) : [];
 		const live = enabled ? canvases.reopenableCanvases.read(reader) : [];
-		const identity = JSON.stringify([definitions, live.map(target => [getCanvasReferenceKey(target.reference), target.canvas.title, target.canvas.instanceId])]);
+		const identity = JSON.stringify([ownerKey, definitions, live.map(target => [getCanvasReferenceKey(target.reference), target.canvas.title, target.canvas.instanceId])]);
 		if (identity === menuIdentity) { return; }
 		menuIdentity = identity;
 		menu.clear();
 		const active = new Set<string>();
-		const labels = getCanvasDefinitionLabels(definitions);
-		for (const [index, definition] of definitions.entries()) {
-			const id = OPEN_SESSION_CANVAS_COMMAND_ID + '.' + getCanvasDefinitionInstanceId(definition);
-			active.add(id);
-			if (!commands.has(id)) {
-				commands.set(id, CommandsRegistry.register(id, () => registry.openCanvas(definition)));
+		if (owner && ownerKey) {
+			const digest = new StringSHA1();
+			digest.update(ownerKey);
+			const prefix = OPEN_SESSION_CANVAS_COMMAND_ID + '.' + digest.digest();
+			const labels = getCanvasDefinitionLabels(definitions);
+			for (const [index, definition] of definitions.entries()) {
+				const id = prefix + '.' + getCanvasDefinitionInstanceId(definition);
+				active.add(id);
+				if (!commands.has(id)) {
+					commands.set(id, CommandsRegistry.register(id, () => {
+						const current = contexts.getActiveContext()?.owner;
+						if (current && isCanvasOwner(current, owner)) return registry.openCanvas(owner, definition);
+					}));
+				}
+				menu.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTabsBarAddTabCanvas, { command: { id, title: labels[index]! }, group: 'new', order: index }));
 			}
-			menu.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTabsBarAddTabCanvas, { command: { id, title: labels[index]! }, group: 'new', order: index }));
 		}
 		const liveLabels = getCanvasInstanceLabels(live.map(target => target.canvas));
 		for (const [index, target] of live.entries()) {

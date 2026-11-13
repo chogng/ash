@@ -8,7 +8,7 @@ import { extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
-import type { ArtifactKind } from '../../../common/artifactKind.js';
+import type { ChatCreationKind } from '../../../common/chatCreation.js';
 
 export const enum SessionChangesetOperationScope {
 	Changeset = 'changeset',
@@ -225,7 +225,7 @@ export interface SessionEnvironmentSelection {
 export interface IUntitledChatSession {
 	readonly providerId?: string;
 	readonly untitledSessionId: string;
-	readonly artifactKind?: ArtifactKind;
+	readonly creationKind?: ChatCreationKind;
 	readonly kind?: SessionKind;
 	/** A reusable composer rotates this backend creation identity after a background send. */
 	readonly creationId?: string;

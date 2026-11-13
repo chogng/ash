@@ -90,6 +90,7 @@ function queueFixture() {
 	let focus = 0;
 	let editor: ChatQueueEditor | undefined;
 	const widget = {
+		input: {},
 		sessionId: 'session', threadId: 'thread', visible: true, domNode: container, onDidHide: hidden.event, onDidChangeViewModel: changed.event, focusInput: () => { focus++; },
 		startEditing: async (request: QueuedMessage) => {
 			editor = lifetime.add(services.createInstance(ChatQueueEditor, widget, request));

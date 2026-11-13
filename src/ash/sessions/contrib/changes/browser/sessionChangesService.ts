@@ -7,7 +7,7 @@ import { localize } from '../../../../nls.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { IChatService, type TurnCommitSelection } from '../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, canPreviewTurnChange, type TurnCommitSelection } from '../../../../workbench/services/chat/common/chatService.js';
 import { IDecorationsService } from '../../../../workbench/services/decorations/common/decorations.js';
 import { IEditorService, type EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService, type IEditorGroup } from '../../../../workbench/services/editor/common/editorGroupsService.js';
@@ -77,10 +77,11 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 		const { sessionId, threadId } = this.getConversation(sessionResource);
 		const details = await this.chat.readTurnChange(sessionId, threadId, id);
 		const changes = details.files.map(file => createSessionFileChange(details.summary, file));
-		const remaining = changes.filter(change => !details.summary.committedPaths.includes(change.file.path));
-		const busy = details.summary.commitState === 'queued' || details.summary.commitState === 'committing';
-		const status = details.summary.captureState !== 'sealed' || !remaining.length ? SessionChangesetOperationStatus.Disabled
-			: busy ? SessionChangesetOperationStatus.Running : details.summary.commitState === 'failed' ? SessionChangesetOperationStatus.Error : SessionChangesetOperationStatus.Idle;
+		const remaining = changes.filter(change => canPreviewTurnChange(details.summary, change.file.path));
+		const busy = details.summary.captureState === 'sealed' && changes.some(change => !details.summary.committedPaths.includes(change.file.path))
+			&& (details.summary.commitState === 'queued' || details.summary.commitState === 'committing');
+		const status = busy ? SessionChangesetOperationStatus.Running
+			: !remaining.length ? SessionChangesetOperationStatus.Disabled : details.summary.commitState === 'failed' ? SessionChangesetOperationStatus.Error : SessionChangesetOperationStatus.Idle;
 		return {
 			id: details.summary.changeSetId, resource: this.getChangesEditorResource(sessionResource).with({ fragment: id }),
 			label: localize('sessions.changes.turn', 'Turn {0}', details.summary.turnId),
@@ -119,7 +120,7 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 			if ((selectedId && capture.changeSetId !== selectedId) || (selection?.kind === 'turn' && capture.turnId !== selection.turnId)) return [];
 			const { files, summary } = await this.chat.readTurnChange(sessionId, threadId, capture.changeSetId);
 			if (summary.revision !== capture.revision) return [];
-			return files.filter(file => !summary.committedPaths.includes(file.path)).map(file => ({
+			return files.filter(file => canPreviewTurnChange(summary, file.path)).map(file => ({
 				label: file.path, description: localize('sessions.changes.turn', 'Turn {0}', turnNumbers.get(capture.turnId)!), summary,
 			}));
 		}))).flat();

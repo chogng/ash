@@ -1,3 +1,4 @@
+import type { GeneratedFileSource } from '../../../../platform/generatedFiles/common/generatedFiles.js';
 import { Lexer, Marked, type Token, type TokenizerThis, type Tokens } from '../../../../base/common/marked/marked.js';
 import { basicMarkupHtmlTags, sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { getDocument } from '../../../../base/browser/dom.js';
@@ -722,4 +723,10 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 
 	const decoded = decode(normalized, richContentLexer().lexer(normalized), false);
 	return { text: decoded, richContent: richContent.content, resources, ...(citations.size && { citations: [...citations.values()] }) };
+}
+
+
+/** Stable publication identity for a provider-owned writing block. */
+export function chatGPTWritingSource(accountId: string, conversationId: string, messageId: string, index: number): GeneratedFileSource {
+	return { providerId: 'chatgpt-web', accountId, sessionId: conversationId, threadId: conversationId, itemId: messageId, partId: `writing:${index}` };
 }

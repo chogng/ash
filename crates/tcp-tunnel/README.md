@@ -1,6 +1,7 @@
 # HTTP/3 TCP tunnel
 
-`ash-tcp-tunnel` 提供通过 HTTP/3 CONNECT 代理建立 TCP 字节流的 Rust 接口。它是独立底层库，尚未接入 Ash 产品，不提供 CLI 命令，也不读取 stdin、profile、策略文件或账户存储。
+`ash-tcp-tunnel` 提供通过 HTTP/3 CONNECT 代理建立 TCP 字节流的 Rust 接口。Ash Remote 的
+[`ProxyCommand` helper](../remote-connections/README.md#通过-http3-网关连接) 使用该库转发 SSH 字节流。
 
 `ProxyClient` 持有一条经过 TLS 校验的 QUIC/HTTP/3 连接，多个目标字节流共用这条连接。调用方提供获准的 HTTPS origin、TLS 根证书、敏感凭据以及 `async-utils` 取消令牌。每次 CONNECT 的非 2xx 响应以 `Error::Rejected(status)` 返回；只有收到成功响应后，`open_stream` 才返回实现 Tokio `AsyncRead` / `AsyncWrite` 的 `TunnelStream`。
 

@@ -13,6 +13,8 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 
 export const REVEAL_CANVAS_COMMAND_ID = 'workbench.action.agentSessions.revealCanvas';
+export const OPEN_CANVAS_COMMAND_ID = 'workbench.action.chat.openCanvas';
+export const REOPEN_CANVAS_COMMAND_ID = 'workbench.action.chat.reopenCanvas';
 
 export type CanvasExtensionSource = 'user' | 'project' | 'session' | 'plugin' | 'unknown';
 
@@ -76,6 +78,8 @@ export interface ICanvasContextService {
 	readonly workingSets?: ICanvasWorkingSets;
 	readonly onDidChangeVisibility: Event<void>;
 	isOwnerVisible(owner: ICanvasOwner, reader?: IReader): boolean;
+	/** The conversation this window's Canvas actions currently target. */
+	getActiveContext(reader?: IReader): ICanvasContext | undefined;
 	getContext(owner: ICanvasOwner, reader?: IReader): ICanvasContext | undefined;
 	getTrackedCanvas?(reference: ICanvasReference, reader?: IReader): ICanvas | undefined;
 	isPresentedElsewhere?(reference: ICanvasReference, reader?: IReader): boolean;

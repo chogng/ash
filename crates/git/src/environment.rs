@@ -25,50 +25,43 @@ impl GitClient {
     pub async fn environment_summary(&self, start: &Path) -> GitResult<GitEnvironmentSummary> {
         let repository = self.open_repository(start).await?;
         let cwd = repository.worktree_root();
-        let branch = self
-            .environment_text(cwd, &["branch", "--show-current"])
-            .await
-            .filter(|value| !value.is_empty());
-        let main_branch = self
-            .environment_text(
+        // These independent queries describe this invocation; do not serve a prior
+        // invocation's status after an editor, Tool, or external Git process ran.
+        let (branch, main_branch, content_queries) = tokio::join!(
+            self.environment_text(cwd, &["branch", "--show-current"]),
+            self.environment_text(
                 cwd,
-                &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
-            )
-            .await
+                &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]
+            ),
+            self.environment_content_queries(cwd),
+        );
+        let branch = branch.filter(|value| !value.is_empty());
+        let main_branch = main_branch
             .map(|value| value.trim_start_matches("origin/").trim().to_owned())
             .filter(|value| !value.is_empty())
             .or_else(|| branch.clone());
-        let content_queries = self.environment_content_queries(cwd).await;
-        let status = match content_queries {
-            ContentQueries::StatusAndHistory => {
-                self.environment_text(cwd, &["status", "--porcelain", "--ignore-submodules=all"])
-                    .await
-            }
-            ContentQueries::MetadataOnly | ContentQueries::HistoryOnly => None,
-        };
         // Signature display can start a repository-configured verifier. Environment
         // context only needs commit subjects, irrespective of the user's log settings.
-        let recent_commits = match content_queries {
-            ContentQueries::MetadataOnly => None,
-            ContentQueries::HistoryOnly | ContentQueries::StatusAndHistory => self
-                .environment_text(
-                    cwd,
-                    &[
-                        "log",
-                        "--no-show-signature",
-                        "--no-patch",
-                        "--oneline",
-                        "-5",
-                    ],
-                )
-                .await
-                .filter(|value| !value.is_empty()),
+        let log = [
+            "log",
+            "--no-show-signature",
+            "--no-patch",
+            "--oneline",
+            "-5",
+        ];
+        let (status, recent_commits) = match content_queries {
+            ContentQueries::MetadataOnly => (None, None),
+            ContentQueries::HistoryOnly => (None, self.environment_text(cwd, &log).await),
+            ContentQueries::StatusAndHistory => tokio::join!(
+                self.environment_text(cwd, &["status", "--porcelain", "--ignore-submodules=all"]),
+                self.environment_text(cwd, &log),
+            ),
         };
         Ok(GitEnvironmentSummary {
             branch,
             main_branch,
             status,
-            recent_commits,
+            recent_commits: recent_commits.filter(|value| !value.is_empty()),
         })
     }
 

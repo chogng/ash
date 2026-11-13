@@ -5,6 +5,7 @@ import { Action2, registerAction2 } from '../../../../../platform/actions/common
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IChatWidgetService } from '../chat.js';
 import { showToolsPicker } from './chatToolPicker.js';
 import { createToolSelectionAttachment, readChatSelectedTools } from '../widget/input/chatSelectedTools.js';
@@ -48,12 +49,12 @@ export class ConfigureToolsAction extends Action2 {
 	constructor() {
 		super({
 			id: ConfigureToolsAction.ID, title: localize2('chat.tools.configureCommand', 'Chat: Configure Tools'),
-			f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true)
+			f1: true, precondition: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ContextKeyExpr.not(ChatContextKeys.replyOnlyInput.key)),
 		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
-		if (!widget?.visible) { return; }
+		if (!widget?.visible || widget.input.replyOnly) { return; }
 		const tools = widget.input.languageModelTools;
 		const quickInput = accessor.get(IQuickInputService);
 		if (!tools.isAvailable) { return; }

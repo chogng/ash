@@ -37,8 +37,7 @@ export function normalizeURLPattern(pattern: string): string {
 
 export function isURLDomainTrusted(resource: URI, trustedDomains: readonly string[]): boolean {
 	if (!isURLSafeForTrust(resource)) return false;
-	const hostname = new URL(resource.toString()).hostname;
-	if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1' || hostname === '[::1]') {
+	if (isLocalhostAuthority(new URL(resource.toString()).host)) {
 		return true;
 	}
 	return trustedDomains.some(pattern => {
@@ -48,4 +47,14 @@ export function isURLDomainTrusted(resource: URI, trustedDomains: readonly strin
 			return false;
 		}
 	});
+}
+
+export function isLocalhostAuthority(authority: string): boolean {
+	const host = authority.replace(/:\d+$/u, '').toLowerCase();
+	return host === 'localhost' || host.endsWith('.localhost') || host === '127.0.0.1' || host === '[::1]' || host === '[0:0:0:0:0:0:0:1]';
+}
+
+export function isAllInterfacesAuthority(authority: string): boolean {
+	const host = authority.replace(/:\d+$/u, '');
+	return host === '0.0.0.0' || host === '[::]' || host === '[0:0:0:0:0:0:0:0]';
 }

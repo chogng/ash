@@ -1,5 +1,6 @@
-import type { ChatReplyRequest, ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyMessage, ChatReplyUpdate as ChatGPTStreamUpdate } from '../../../common/chatReplyBackend.js';
-export type { ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyUpdate as ChatGPTStreamUpdate } from '../../../common/chatReplyBackend.js';
+import { getArtifactRequestContext, isRequestArtifactKind } from '../../../common/artifactKind.js';
+import type { ChatReplyRequest, ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyMessage } from '../../../common/chatReplyBackend.js';
+export type { ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference } from '../../../common/chatReplyBackend.js';
 import { localize } from '../../../../nls.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
@@ -7,6 +8,35 @@ import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { SSEParser } from '../../../../base/common/sseParser.js';
 import { chatGPTEntityDetailPath, chatGPTHistoryCooldownMs, chatGPTPrepareTokenHeader, readChatGPTGalleryImageUrl, readChatGPTRetryAfter } from '../common/chatGPTTransport.js';
 import type { CatalogProjectMemoryMode } from '../../sessions/browser/views/sessionsCatalogList.js';
+import { chatCreationKinds, getChatCreationContext, type ChatCreationKind } from '../../../common/chatCreation.js';
+
+function chatGPTCreationSuffix(kind: ChatCreationKind): string {
+	const context = getChatCreationContext(kind);
+	const writing = kind === 'docs'
+		? '\nWrap that complete Markdown document in one explicit writing block: :::writing{title="Document title"} followed by a newline, the full document, and a closing ::: on its own line. Do not put the writing block inside a code fence.'
+		: '';
+	return `\n\n<ash_context name="${context.name}">\n${context.content}${writing}\n</ash_context>`;
+}
+
+/** Keep provider instructions at the request boundary; drafts and queued previews retain the user's text. */
+export function chatGPTRequestText(text: string, kind: ChatCreationKind | undefined): string {
+	return kind ? text + chatGPTCreationSuffix(kind) : text;
+}
+
+function readChatGPTCreation(text: string): { text: string; kind: ChatCreationKind; } | undefined {
+	if (!text.includes('<ash_context name="ash.creation.')) return undefined;
+	for (const kind of chatCreationKinds) {
+		const suffix = chatGPTCreationSuffix(kind);
+		// Only strip the exact instructions Ash appended, never arbitrary user-authored context tags.
+		if (text.endsWith(suffix)) return { text: text.slice(0, -suffix.length), kind };
+		if (isRequestArtifactKind(kind)) {
+			const legacy = getArtifactRequestContext(kind);
+			const legacySuffix = `\n\n<ash_context name="${legacy.name}">\n${legacy.content}\n</ash_context>`;
+			if (text.endsWith(legacySuffix)) return { text: text.slice(0, -legacySuffix.length), kind };
+		}
+	}
+	return undefined;
+}
 
 const projectFileId = /^file[-_][A-Za-z0-9_-]{1,240}$/u;
 const uploadRetryDelays = [500, 1_500] as const;
@@ -108,15 +138,22 @@ export type ChatGPTImageGroup = {
 } & ({ readonly marker: string; } | { readonly query: string; });
 export type ChatGPTMessage = ChatReplyMessage & {
 	readonly editableText?: string;
+	readonly creationKind?: ChatCreationKind;
 	readonly hasVersions?: boolean;
 	readonly imageGroups?: readonly ChatGPTImageGroup[];
 	readonly asyncImagesDecoded?: true;
+	/** Only an explicit successful provider status permits importing a generated document. */
+	readonly completion?: 'complete' | 'incomplete' | 'failed';
 };
 
 export function hasChatGPTAsyncImages(text: string): boolean {
 	return /<AsyncImage(?=[\s/>])/iu.test(text);
 }
 
+export interface ChatGPTStreamUpdate {
+	readonly conversationId?: string;
+	readonly message?: ChatGPTMessage;
+}
 export interface ChatGPTMessageVersion {
 	readonly head: string;
 	readonly text: string;
@@ -566,10 +603,10 @@ export class ChatGPTClient {
 		return { value, mapping: value.mapping, head: value.current_node };
 	}
 
-	async prepareMessageEdit(id: string, messageId: string, expectedHead: string, signal: AbortSignal): Promise<{ parentId: string; files: readonly ChatGPTFile[]; }> {
+	async prepareMessageEdit(id: string, messageId: string, expectedHead: string, signal: AbortSignal): Promise<{ parentId: string; files: readonly ChatGPTFile[]; creationKind?: ChatCreationKind; }> {
 		const { node, parentId } = await this.messageVersionGraph(id, messageId, expectedHead, signal);
 		const edit = readEditableMessage(node);
-		if (edit) return { parentId, files: edit.files };
+		if (edit) return { parentId, files: edit.files, ...(edit.creationKind && { creationKind: edit.creationKind }) };
 		throw new Error(localize('sessions.chatgpt.editUnavailable', 'This ChatGPT message is unavailable for editing.'));
 	}
 
@@ -955,7 +992,7 @@ function* activeNodes(mapping: Record<string, unknown>, head: string): Iterable<
 	}
 }
 
-function readEditableMessage(message: Record<string, unknown>): { text: string; files: readonly ChatGPTFile[]; } | undefined {
+function readEditableMessage(message: Record<string, unknown>): { text: string; files: readonly ChatGPTFile[]; creationKind?: ChatCreationKind; } | undefined {
 	if (!isRecord(message.author) || message.author.role !== 'user' || !isRecord(message.content)
 		|| message.status !== undefined && message.status !== 'finished_successfully'
 		|| ![undefined, 'text', 'multimodal_text'].includes(message.content.content_type as string | undefined)
@@ -988,8 +1025,10 @@ function readEditableMessage(message: Record<string, unknown>): { text: string; 
 			|| typeof height !== 'number' || !Number.isSafeInteger(height) || height <= 0) return undefined;
 		files.set(file.id, { ...file, width, height });
 	}
-	const text = parts.join('\n');
-	return text.trim() ? { text, files: [...files.values()] } : undefined;
+	const source = parts.join('\n');
+	const creation = readChatGPTCreation(source);
+	const text = creation?.text ?? source;
+	return text.trim() ? { text, files: [...files.values()], ...(creation && { creationKind: creation.kind }) } : undefined;
 }
 
 export function chatGPTResourceKey(uri: string): string {
@@ -1168,6 +1207,8 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 		text = value.content.content_type === 'code' ? `${fence}\n${body}\n${fence}` : body;
 		if (value.content.content_type && !['text', 'code'].includes(value.content.content_type as string)) { text += `\n\n${fallback}`; }
 	} else { text = value.content.content_type === 'text' || !value.content.content_type ? '' : fallback; }
+	const creation = user ? readChatGPTCreation(text) : undefined;
+	if (creation) text = creation.text;
 	if (isRecord(value.metadata) && Array.isArray(value.metadata.attachments)) {
 		for (const attachment of value.metadata.attachments) {
 			if (!isRecord(attachment)) { continue; }
@@ -1223,9 +1264,16 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 	}
 	const timestamp = conversationTimestamp(value.create_time);
 	const edit = readEditableMessage(value);
+	const metadata = isRecord(value.metadata) ? value.metadata : undefined;
+	const finish = isRecord(metadata?.finish_details) ? metadata.finish_details.type : undefined;
+	const failed = value.status === 'failed' || value.status === 'error' || metadata?.is_error === true;
+	const completion = failed ? 'failed' : value.status === 'finished_successfully' && (finish === undefined || finish === 'stop') ? 'complete'
+		: value.status !== undefined ? 'incomplete' : undefined;
 	return {
 		id: value.id, role: value.author.role as 'user' | 'assistant', text,
+		...(value.author.role === 'assistant' && completion && { completion }),
 		...(edit && { editableText: edit.text }),
+		...(creation && { creationKind: creation.kind }),
 		...(isRecord(value.metadata) && value.metadata.has_versions === true && { hasVersions: true }),
 		...(timestamp !== undefined && Number.isFinite(new Date(timestamp).getTime()) ? { timestamp } : {}),
 		...(resources.length ? { resources: mergeChatGPTResources(resources) } : {}),

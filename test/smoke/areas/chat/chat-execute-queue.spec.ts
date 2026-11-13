@@ -145,7 +145,7 @@ test('Agents Code sends Auto through the App Server and records the default fall
 	}
 });
 
-for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
+for (const surface of ['IDE', 'Agents Code'] as const) {
 	test(`${surface} sends, queues, steers and stops through the owning execution model`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 		test.setTimeout(180_000);
 		const controlledReply = 'Controlled execution is running.\n\n```ts\nconst codeBlockFixture = 1;\n```\n\n```ts\nconst codeBlockFixture = 2;\n```';
@@ -201,7 +201,6 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			if (agents) {
 				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 				await page.locator('.ash-sessions-list-item').filter({ hasText: 'Execution queue conversation' }).click();
-				if (surface === 'Agents Cowork') await page.locator('[data-action-id="sessions.open.collaboration"] button').click();
 			} else {
 				const closeWelcome = page.getByRole('button', { name: 'Close Agent Sessions Welcome', exact: true });
 				if (await closeWelcome.isVisible()) await closeWelcome.click();
@@ -209,7 +208,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				await page.locator('[data-action-id="workbench.action.chat.showHistory"] button').click();
 				await page.getByRole('option').filter({ hasText: 'Execution queue conversation' }).click();
 			}
-			const chat = page.locator(agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-native-chat'}` : '.ash-chat-view-pane .ash-chat:visible');
+			const chat = page.locator(agents ? '.ash-sessions-chat-slot.active:visible .ash-chat' : '.ash-chat-view-pane .ash-chat:visible');
 			const composer = chat.locator('.ash-chat-input-part');
 			const draft = composer.locator('.stanza-editor-input');
 			await expect(chat).toHaveAttribute('data-thread-id', threadId);
@@ -233,21 +232,16 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			await draft.focus();
 			await page.keyboard.press('ControlOrMeta+.');
 			const modes = page.locator('.ash-chat-input-mode-menu');
-			if (surface === 'Agents Cowork') {
-				await expect(modes).toBeHidden();
-			} else {
-				await expect(modes).toBeVisible();
-				await modes.getByRole('menuitemradio', { name: 'Ask', exact: true }).click();
-				await expect(modes).toBeHidden();
-				await draft.focus();
-				await window.quickaccess.runCommand('workbench.action.chat.openModePicker');
-				await expect(modes.getByRole('menuitemradio', { name: 'Ask', exact: true })).toHaveAttribute('aria-checked', 'true');
-				await page.keyboard.press('Escape');
-			}
+			await expect(modes).toBeVisible();
+			await modes.getByRole('menuitemradio', { name: 'Ask', exact: true }).press('Enter');
+			await expect(modes).toBeHidden();
+			await draft.focus();
+			await window.quickaccess.runCommand('workbench.action.chat.openModePicker');
+			await expect(modes.getByRole('menuitemradio', { name: 'Ask', exact: true })).toHaveAttribute('aria-checked', 'true');
+			await page.keyboard.press('Escape');
 			await draft.focus();
 			await window.quickaccess.runCommand('workbench.action.chat.openPermissionPicker');
-			if (surface === 'Agents Cowork') await page.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label').getByText('Auto', { exact: true }) }).click();
-			else await page.getByRole('menuitemradio', { name: 'Auto', exact: true }).click();
+			await page.getByRole('menuitemradio', { name: 'Auto', exact: true }).click();
 			await expect(composer.locator('.view-lines')).toContainText('Preserve picker draft');
 			expect((await read()).turns).toHaveLength(0);
 			expect(calls).toBe(0);
@@ -265,9 +259,9 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			await expect.poll(async () => (await read()).turns.at(-1)?.status).toBe('running');
 			await expect.poll(() => calls).toBe(1);
 			const initialTurn = (await read()).turns.at(-1)!;
-			expect(initialTurn.mode).toBe(surface === 'Agents Cowork' ? 'agent' : 'ask');
+			expect(initialTurn.mode).toBe('ask');
 			expect(initialTurn.approvalMode).toBe('auto');
-			await expect(chat.locator('.ash-chat-list-widget, .ash-native-chat-list-widget')).toContainText('Controlled execution is running.');
+			await expect(chat.locator('.ash-chat-list-widget')).toContainText('Controlled execution is running.');
 			await window.quickaccess.runCommand('workbench.action.chat.nextCodeBlock');
 			const codeInputs = chat.locator('.ash-chat-code-block .stanza-editor-input');
 			await expect(codeInputs.nth(0)).toBeFocused();
@@ -281,7 +275,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			// Both public entries create an independent persisted branch while the source stream stays active.
 			for (const entry of ['menu', 'slash'] as const) {
 				await expect(chat).toHaveClass(/has-conversation/);
-				await expect(chat.locator('.ash-chat-list-widget, .ash-native-chat-list-widget')).toContainText('Controlled execution is running.');
+				await expect(chat.locator('.ash-chat-list-widget')).toContainText('Controlled execution is running.');
 				await draft.focus();
 				await page.keyboard.insertText(`${entry === 'slash' ? '/btw ' : ''}side-question-fixture ${entry}`);
 				if (entry === 'menu') {
@@ -310,7 +304,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				await page.screenshot({ path: testInfo.outputPath(`side-chat-${entry}.png`) });
 				await chat.locator('.ash-chat-side-chat-origin').getByRole('button').click();
 				await expect(chat).toHaveAttribute('data-thread-id', threadId);
-				await expect(chat.locator('.ash-chat-list-widget, .ash-native-chat-list-widget')).toContainText('Controlled execution is running.');
+				await expect(chat.locator('.ash-chat-list-widget')).toContainText('Controlled execution is running.');
 				await expect(composer.locator('.view-lines')).not.toContainText('side-question-fixture');
 			}
 
@@ -446,7 +440,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 					const saved = JSON.parse(await readFile(path, 'utf8'));
 					expect(saved.messages.some((message: { text: string; }) => message.text === controlledReply)).toBe(true);
 					await window.quickaccess.runCommand('workbench.action.chat.import');
-					await expect(window.editors.element.getByRole('tab', { name: `Saved Chat: ${saved.title}` })).toBeVisible();
+					await expect(page.getByRole('tab', { name: `Saved Chat: ${saved.title}`, exact: true })).toBeVisible();
 					const content = page.getByRole('tabpanel', { name: `Saved Chat: ${saved.title}`, exact: true });
 					await expect(content.locator('.stanza-editor-input:visible')).toHaveAttribute('aria-readonly', 'true');
 					await expect(content.locator('.view-lines')).toContainText('Controlled execution is running.');

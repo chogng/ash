@@ -1,3 +1,4 @@
+import { createTestGeneratedFilesService } from '../../../src/ash/sessions/test/common/testGeneratedFilesService.js';
 import './chatFixtureLocalization.js';
 import { projectMaterialFilesScheme } from '../../../src/ash/platform/projects/common/projectMaterialFiles.js';
 import { IWorkbenchEnvironmentService } from '../../../src/ash/workbench/services/environment/common/environmentService.js';
@@ -46,6 +47,8 @@ import { OpenerService } from '../../../src/ash/editor/browser/services/openerSe
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { ChatGPTService, IChatGPTService, chatGPTProjectConversationId } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
+import { generatedFileSourceKey, type GeneratedFile } from '../../../src/ash/platform/generatedFiles/common/generatedFiles.js';
+import { IGeneratedFilesService } from '../../../src/ash/sessions/services/generatedFiles/common/generatedFilesService.js';
 import { ChatGPTList } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTList.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND } from '../../../src/ash/sessions/contrib/chat/common/constants.js';
 import { registerChatWorkspaceNavigation } from '../../../src/ash/sessions/contrib/chat/electron-browser/chatWorkspace.contribution.js';
@@ -282,6 +285,28 @@ services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async
 services.registerSingleton(IProjectDialogService, () => services.createInstance(ProjectDialogService, { readEnabled: async () => true }));
 registerTestVoiceInputServices(services);
 registerTestComponentServices(services);
+const generatedFiles: GeneratedFile[] = [];
+let nextGeneratedFile = 0;
+const generatedFilesChanged = resources.add(new Emitter<void>());
+const generated: IGeneratedFilesService = {
+	...createTestGeneratedFilesService(),
+	onDidChange: generatedFilesChanged.event, files: generatedFiles, loading: false, error: undefined,
+	async refresh() { generatedFilesChanged.fire(); },
+	findBySource: source => generatedFiles.find(file => generatedFileSourceKey(file.source) === generatedFileSourceKey(source)),
+	isGeneratedResource: resource => generatedFiles.some(file => file.resource.toString() === resource.toString()),
+	async publishMarkdown(source, markdown, title) {
+		const existing = generated.findBySource(source);
+		if (existing) return existing;
+		const id = `fixture-markdown-${nextGeneratedFile++}`;
+		const resource = URI.file(`/generated/${id}.md`);
+		await services.get(IFileService).writeFileBytes(resource, new TextEncoder().encode(markdown));
+		const file: GeneratedFile = { id, resource, title: title ?? 'Document', contentType: 'text/markdown', source, createdAt: Date.now() };
+		generatedFiles.push(file);
+		generatedFilesChanged.fire();
+		return file;
+	},
+};
+services.registerInstance(IGeneratedFilesService, generated);
 if (parameters.has('projectMaterials')) {
 	Object.assign(services.get(IWorkbenchEnvironmentService), { userRoamingDataHome: URI.file('/fixture-profile') });
 	const provider = new class extends MemoryFileService {

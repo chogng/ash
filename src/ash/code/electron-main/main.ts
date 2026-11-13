@@ -32,6 +32,12 @@ import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.
 
 /** Starts the Electron product and its fixed Workbench/Sessions entries. */
 export async function startElectronApplication(): Promise<void> {
+	const startupUrls: string[] = [];
+	const captureStartupUrl = (event: Electron.Event, url: string): void => {
+		event.preventDefault();
+		startupUrls.push(url);
+	};
+	app.on('open-url', captureStartupUrl);
 	const developmentLauncher = !app.isPackaged && process.env.ASH_DEV_LAUNCHER === '1';
 	// This flag describes this process's IPC parent, never a terminal or helper
 	// subsequently spawned by the application.
@@ -199,9 +205,12 @@ export async function startElectronApplication(): Promise<void> {
 			{ rendererRoot, appServerStartupMode, developmentLauncher },
 			mainServices,
 		);
+		app.removeListener('open-url', captureStartupUrl);
+		for (const url of startupUrls) application.handleLaunchArguments([`--open-url=${url}`], process.cwd());
 
 		void startup(application, developmentLauncher);
 	} finally {
+		app.removeListener('open-url', captureStartupUrl);
 		// Once created, the application owns this scope through shutdown/failure cleanup.
 		if (!application) {
 			if (releaseInstallation) {

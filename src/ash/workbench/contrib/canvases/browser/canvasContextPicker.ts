@@ -2,13 +2,12 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, observableSignalFromEvent, type IReader } from '../../../../base/common/observable.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { isCanvasOwner, type ICanvasOwner } from '../../../common/canvasReference.js';
+import { isCanvasOwner } from '../../../common/canvasReference.js';
 import {
 	ICanvasContextService, ICanvasService, getCanvasDefinitionInstanceId, getCanvasDefinitionLabels, getCanvasInstanceLabels,
 	getPresentableCanvasTargets, isOpenableExtensionCanvasDefinition,
 } from '../common/canvas.js';
 import { CanvasDefinitionStore } from '../common/canvasDefinitionStore.js';
-import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { localize } from '../../../../nls.js';
 import { IChatContextPickService, type ChatContextPick } from '../../chat/browser/attachments/chatContextPickService.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -18,13 +17,8 @@ import { Event } from '../../../../base/common/event.js';
 export function registerCanvasContextPicker(accessor: ServicesAccessor) {
 	const contexts = accessor.get(ICanvasContextService);
 	const canvases = accessor.get(ICanvasService);
-	const navigation = accessor.get(IChatSessionNavigationService);
 	const instantiation = accessor.get(IInstantiationService);
-	const current = () => {
-		const selected = navigation.getActiveConversation();
-		return selected && canvases.enabled.get() ? contexts.contexts.get().find(context => contexts.isOwnerVisible(context.owner)
-			&& context.owner.session.path.slice(1) === selected.sessionId && context.owner.chat.path.slice(1) === selected.threadId) : undefined;
-	};
+	const current = () => canvases.enabled.get() ? contexts.getActiveContext() : undefined;
 	return accessor.get(IChatContextPickService).registerChatContextItem({
 		type: 'pickerPick', label: localize('canvas.context', 'Canvas…'), icon: Lxicon.preview, ordinal: -401, presentation: 'inline',
 		isEnabled: async () => {
@@ -68,34 +62,27 @@ export function registerCanvasContextPicker(accessor: ServicesAccessor) {
 }
 
 /** Selecting a Canvas runs its action without changing the composer's attachment model. */
-export async function showCanvasContextPicker(accessor: ServicesAccessor, getActiveOwner?: () => ICanvasOwner | undefined): Promise<void> {
+export async function showCanvasContextPicker(accessor: ServicesAccessor): Promise<void> {
 	const contexts = accessor.get(ICanvasContextService);
 	const canvases = accessor.get(ICanvasService);
-	const navigation = getActiveOwner ? undefined : accessor.get(IChatSessionNavigationService);
-	const isSelected = (candidate: ICanvasOwner): boolean => {
-		if (getActiveOwner) {
-			const owner = getActiveOwner();
-			return !!owner && isCanvasOwner(candidate, owner);
-		}
-		const active = navigation?.getActiveConversation();
-		return active?.sessionId === candidate.session.path.slice(1) && active.threadId === candidate.chat.path.slice(1);
-	};
-	const context = contexts.contexts.get().find(context => contexts.isOwnerVisible(context.owner) && isSelected(context.owner));
+	const context = contexts.getActiveContext();
 	if (!context || !canvases.enabled.get()) { return; }
-	const isCurrent = () => contexts.isOwnerVisible(context.owner) && isSelected(context.owner);
+	const isCurrent = (reader?: IReader) => {
+		const active = contexts.getActiveContext(reader);
+		return active !== undefined && isCanvasOwner(context.owner, active.owner);
+	};
 	using resources = new DisposableStore();
 	const invalidated = observableSignalFromEvent(resources, Event.any(contexts.onDidChangeVisibility, context.definitionProvider?.onDidChangeDefinitions ?? Event.None));
 	const store = resources.add(accessor.get(IInstantiationService).createInstance(CanvasDefinitionStore, (reader: IReader) => {
 		invalidated.read(reader);
-		return isCurrent() && context.definitionProvider ? { owner: context.owner, listCanvases: () => context.definitionProvider!.listCanvases() } : undefined;
+		return isCurrent(reader) && context.definitionProvider ? { owner: context.owner, listCanvases: () => context.definitionProvider!.listCanvases() } : undefined;
 	}, 'Canvas picker'));
 	type Item = { label: string; description?: string; detail?: string; run(): Promise<void>; };
 	const picker = resources.add(accessor.get(IQuickInputService).createQuickPick<Item>());
 	picker.placeholder = picker.ariaLabel = localize('canvas.pick', 'Open a Canvas from a visible conversation');
 	resources.add(autorun(reader => {
 		invalidated.read(reader);
-		contexts.contexts.read(reader);
-		if (!canvases.enabled.read(reader) || !isCurrent()) { picker.hide(); return; }
+		if (!canvases.enabled.read(reader) || !isCurrent(reader)) { picker.hide(); return; }
 		const live = context.canvases.read(reader)?.filter(canvas => canvas.source !== undefined) ?? [];
 		const targets = getPresentableCanvasTargets(canvases, context.owner, live, reader);
 		// A live Canvas may already be shown in a fixed page. Its definition still represents that same instance.

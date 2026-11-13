@@ -55,6 +55,7 @@ pub(super) struct GitTurnChangesRuntime {
     pub(super) workflows: Arc<workflows::Store>,
     pub(super) capture_failures: RwLock<BTreeMap<TurnId, String>>,
     pub(super) tool_write_capabilities: RwLock<BTreeMap<(TurnId, ToolCallId), bool>>,
+    pub(super) tool_result_refreshes: RwLock<BTreeMap<(ThreadId, TurnId, ToolCallId), SessionId>>,
     pub(super) write_lifecycles: WriteLifecycleTracker,
     pub(super) watchers: RwLock<BTreeMap<ThreadId, GitTurnChangeWatcher>>,
     file_watchers: RwLock<BTreeMap<ThreadId, FileSystemWatcher>>,
@@ -116,6 +117,7 @@ impl GitTurnChangesRuntime {
             workflows,
             capture_failures: RwLock::new(BTreeMap::new()),
             tool_write_capabilities: RwLock::new(BTreeMap::new()),
+            tool_result_refreshes: RwLock::new(BTreeMap::new()),
             write_lifecycles: WriteLifecycleTracker::default(),
             watchers: RwLock::new(BTreeMap::new()),
             file_watchers: RwLock::new(BTreeMap::new()),
@@ -259,6 +261,9 @@ impl GitTurnChangesRuntime {
                     commit.state,
                     git_turn_changes::TurnCommitState::Queued
                         | git_turn_changes::TurnCommitState::Publishing
+                        | git_turn_changes::TurnCommitState::Recovering { .. }
+                        // Older checkout failures may have a journal despite their terminal state.
+                        | git_turn_changes::TurnCommitState::Conflict { .. }
                         | git_turn_changes::TurnCommitState::Committed { .. }
                 ) {
                     let binding = self
@@ -393,7 +398,9 @@ impl GitTurnChangesRuntime {
                 record.capture_state != CaptureState::Open
                     && !matches!(
                         record.commit_state,
-                        CommitState::Queued | CommitState::Committing
+                        CommitState::Queued
+                            | CommitState::Committing
+                            | CommitState::Recovering { .. }
                     )
             }))
     }
@@ -654,6 +661,28 @@ pub(super) fn summary(record: &TurnChangeSet) -> TurnChangeSetSummary {
         CommitState::Idle => (TurnChangeCommitStateDto::Idle, Vec::new(), None, None),
         CommitState::Queued => (TurnChangeCommitStateDto::Queued, Vec::new(), None, None),
         CommitState::Committing => (TurnChangeCommitStateDto::Committing, Vec::new(), None, None),
+        CommitState::Recovering {
+            commit_id,
+            paths,
+            error,
+        } => (
+            TurnChangeCommitStateDto::Recovering,
+            paths
+                .iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect(),
+            error.clone(),
+            Some(commit_id.clone()),
+        ),
+        CommitState::RecoveryUnavailable { paths } => (
+            TurnChangeCommitStateDto::RecoveryUnavailable,
+            paths
+                .iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect(),
+            None,
+            None,
+        ),
         CommitState::Committed { object_id } => (
             TurnChangeCommitStateDto::Committed,
             Vec::new(),

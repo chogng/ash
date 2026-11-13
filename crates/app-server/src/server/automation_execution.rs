@@ -11,11 +11,13 @@ use ash_protocol::CommandId;
 use ash_protocol::ContentDigest;
 use ash_protocol::SessionId;
 use ash_protocol::SessionKind;
+use ash_protocol::ThreadId;
 use ash_protocol::TurnStatus;
 use ash_protocol::UnixMillis;
 use core_api::AgentRuntime;
 use core_api::CoreError;
 use core_api::StartThreadRequest;
+use thread_store::ThreadEventPrecondition;
 
 impl AppServer {
     /// Called after archiving has committed the Session's terminal events and before deleting
@@ -142,7 +144,7 @@ impl AppServer {
         }
         let mut observed = run.clone();
         observed.message = None;
-        let command = command_id("start", &run.id)?;
+        let command = command_id(AUTOMATION_START_ACTION, &run.id)?;
         let chat = run.definition.session == AutomationSession::NewChat;
         let snapshot = match &run.thread_id {
             Some(id) => self.agent_runtime().read_thread(id),
@@ -277,30 +279,33 @@ impl AppServer {
                         -32030, ash_app_server_protocol::protocol::error::AppServerErrorName::AccountAuthenticationRequired, message,
                     ))?;
                 }
-                self.agent_processor().start_turn_request(
-                    ThreadMutation {
-                        ide_window_id: None,
-                        connection_id: None,
-                        command_id: command.clone(),
-                        session_id: snapshot.session_id.clone(),
-                        expected_sequence: snapshot.sequence,
-                    },
-                    snapshot.thread_id.clone(),
-                    (!chat).then(ash_protocol::ApprovalMode::default),
-                    ash_protocol::CollaborationMode::Agent,
-                    TurnModelSelection::Current,
-                    None,
-                    None,
-                    ash_protocol::CommandInterpretation::Product,
-                    vec![InputItem::Text {
-                        text: match &observed.event {
-                            Some(event) => {
-                                format!("{}\n\n{}", run.definition.prompt, event.context)
-                            }
-                            None => run.definition.prompt.clone(),
+                let precondition = artifact_admission(&run.definition).map_err(core_error)?;
+                self.agent_processor()
+                    .with_turn_precondition(precondition)
+                    .start_turn_request(
+                        ThreadMutation {
+                            ide_window_id: None,
+                            connection_id: None,
+                            command_id: command.clone(),
+                            session_id: snapshot.session_id.clone(),
+                            expected_sequence: snapshot.sequence,
                         },
-                    }],
-                )
+                        snapshot.thread_id.clone(),
+                        (!chat).then(ash_protocol::ApprovalMode::default),
+                        ash_protocol::CollaborationMode::Agent,
+                        TurnModelSelection::Current,
+                        None,
+                        None,
+                        ash_protocol::CommandInterpretation::Product,
+                        vec![InputItem::Text {
+                            text: match &observed.event {
+                                Some(event) => {
+                                    format!("{}\n\n{}", run.definition.prompt, event.context)
+                                }
+                                None => run.definition.prompt.clone(),
+                            },
+                        }],
+                    )
             };
             let start = if let Some(store) = self.automation_processor.store() {
                 match store
@@ -328,6 +333,19 @@ impl AppServer {
                 .is_none()
             {
                 if let Err(error) = start {
+                    if matches!(
+                        error.cause.as_deref(),
+                        Some(CoreError::ThreadStore(
+                            thread_store::ThreadStoreError::AuthorizationRevoked
+                        ))
+                    ) {
+                        // Admission rejected before any receipt was written. Retire the plan
+                        // only after releasing AutomationStore's dispatch mutex.
+                        self.pause_follow_up(run, now)?;
+                        observed.status = AutomationRunStatus::Stopped;
+                        observed.finished_at = Some(now);
+                        return Ok(observed);
+                    }
                     observed.message = Some(format!("Agent start failed: {:?}", error.message));
                     if run.definition.condition.is_some()
                         && matches!(
@@ -404,6 +422,71 @@ impl AppServer {
         }
         Ok(observed)
     }
+
+    /// Keeps recovery admission under the automation store's dispatch guard while the server
+    /// assembly owns the concrete turn submission. Accepted commands remain replayable.
+    pub(super) fn with_workflow_recovery_admission<T, F>(
+        &self,
+        thread: &ThreadId,
+        command: &CommandId,
+        precondition: Option<&ThreadEventPrecondition>,
+        submit: F,
+    ) -> Result<T, CoreError>
+    where
+        F: FnOnce(Option<&ThreadEventPrecondition>) -> Result<T, CoreError>,
+    {
+        if !is_automation_start(command) {
+            return submit(precondition);
+        }
+
+        let revoked =
+            || CoreError::ThreadStore(thread_store::ThreadStoreError::AuthorizationRevoked);
+        let replay_if_accepted = |submit: F| {
+            if self
+                .agent_runtime()
+                .accepted_turn(thread, command)?
+                .is_some()
+            {
+                submit(precondition)
+            } else {
+                Err(revoked())
+            }
+        };
+        // Core replays an accepted receipt before evaluating any admission precondition.
+        if self
+            .agent_runtime()
+            .accepted_turn(thread, command)?
+            .is_some()
+        {
+            return submit(precondition);
+        }
+        let store = self.automation_processor.store().ok_or_else(revoked)?;
+        let run = store
+            .active_runs()
+            .map_err(|error| CoreError::Journal(error.to_string()))?
+            .into_iter()
+            .find(|run| command_id(AUTOMATION_START_ACTION, &run.id).as_ref() == Ok(command));
+        let Some(run) = run else {
+            return replay_if_accepted(submit);
+        };
+        // Older workflow records omitted the condition. Recover the original binding from the
+        // immutable run, since a fresh lookup of the PR could select a replacement artifact.
+        let original = artifact_admission(&run.definition)?;
+        if precondition.is_some() && precondition != original.as_ref() {
+            return Err(revoked());
+        }
+        let mut submit = Some(submit);
+        match store
+            .dispatch_if_current(&run.id, || {
+                submit.take().expect("one admission")(original.as_ref())
+            })
+            .map_err(|error| CoreError::Journal(error.to_string()))?
+        {
+            Some(result) => result,
+            None => replay_if_accepted(submit.expect("dispatch skipped")),
+        }
+    }
+
     /// The durable record owns the binding. Recreating a PR association cannot revive consent.
     pub(super) fn artifact_binding_is_current(
         &self,
@@ -609,6 +692,44 @@ impl AppServer {
             }
         }
     }
+}
+
+fn artifact_admission(
+    definition: &ash_protocol::AutomationDefinition,
+) -> Result<Option<ThreadEventPrecondition>, CoreError> {
+    let Some(ash_protocol::AutomationCondition::GitHubChecks {
+        artifact_id: Some(artifact_id),
+        ..
+    }) = &definition.condition
+    else {
+        return Ok(None);
+    };
+    let AutomationSession::Continue { session_id, .. } = &definition.session else {
+        return Err(CoreError::InvalidInput(
+            "PR artifact follow-up requires an existing session".into(),
+        ));
+    };
+    let source_thread_id = ThreadId::new(session_id.as_str())
+        .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+    Ok(Some(ThreadEventPrecondition::PullRequestArtifact {
+        source_thread_id,
+        artifact_id: artifact_id.clone(),
+    }))
+}
+
+const AUTOMATION_START_ACTION: &str = "start";
+const AUTOMATION_START_PREFIX: &str = "automation-start-sha256-";
+
+fn is_automation_start(command: &CommandId) -> bool {
+    command
+        .as_str()
+        .strip_prefix(AUTOMATION_START_PREFIX)
+        .is_some_and(|digest| {
+            digest.len() == 64
+                && digest
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        })
 }
 
 fn command_id(action: &str, run_id: &str) -> Result<CommandId, String> {

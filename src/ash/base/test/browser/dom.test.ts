@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { addDisposableListener, computeScreenAwareSize, Dimension, getActiveDocument, getActiveElement, getDocument, getDomNodePagePosition, getShadowRoot, getWindow, h, isEditableElement, isElement, isHTMLElement, isNode, stopEvent, svg } from '../../browser/dom.js';
-import { registerWindow } from '../../browser/window.js';
+import { getWindowById, getWindowId, registerWindow } from '../../browser/window.js';
 
 test('disposable DOM listeners detach deterministically', () => {
 	const target = new EventTarget();
@@ -19,6 +19,27 @@ test('disposable DOM listeners detach deterministically', () => {
 	target.dispatchEvent(new Event('change'));
 
 	assert.equal(calls, 1);
+});
+
+test('the browser window registry uses an assigned native ID until disposal', () => {
+	const native = new JSDOM();
+	const other = new JSDOM();
+	const window = native.window as unknown as Window;
+	const otherWindow = other.window as unknown as Window;
+	const id = 1234;
+	try {
+		using registration = registerWindow(window, id);
+		assert.equal(getWindowId(window), id);
+		assert.equal(getWindowById(id)?.window, window);
+		assert.throws(() => registerWindow(otherWindow, id), /already registered/);
+		assert.equal(getWindowId(otherWindow), undefined);
+		registration.dispose();
+		assert.equal(getWindowId(window), undefined);
+		assert.equal(getWindowById(id), undefined);
+	} finally {
+		other.window.close();
+		native.window.close();
+	}
 });
 
 test('disposable DOM listeners retain their registered capture mode', () => {

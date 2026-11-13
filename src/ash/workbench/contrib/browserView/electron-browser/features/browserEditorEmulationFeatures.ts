@@ -1,3 +1,4 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { BrowserNavigationFeatures } from './browserNavigationFeatures.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { IBrowserViewService, type IBrowserDeviceProfile } from '../../../../../platform/browserView/common/browserView.js';
@@ -36,14 +37,14 @@ export class BrowserEditorEmulationSupport extends Disposable {
 	}
 }
 
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { BrowserViewCommandId } from '../../../../../platform/browserView/common/browserView.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { BrowserViewEditorId } from '../../common/browserView.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { localize2 } from '../../../../../nls.js';
 import type { BrowserEditor } from '../browserEditor.js';
-registerAction2(class BrowserFeatureAction extends Action2 {
+registerEditorToolAction(class BrowserFeatureAction extends Action2 {
 	constructor() { super({ id: 'workbench.action.browser.toggleDeviceEmulation', title: localize2({ bundle: 'ash.workbench', key: 'browser.emulationCommand' }, 'Browser: Device Emulation'), f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 	override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 		const pane = accessor.get(IEditorPart).activePane;

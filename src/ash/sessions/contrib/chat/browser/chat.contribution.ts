@@ -15,14 +15,15 @@ import { ISessionsChatViewStateService, SessionsChatViewStateService } from './c
 import { AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING } from './sessionsChatHistory.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING, OPEN_ARTIFACT_DRAFT_COMMAND_ID } from '../common/constants.js';
+import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING, OPEN_CHAT_CREATION_COMMAND_ID } from '../common/constants.js';
 
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
-import { isArtifactKind } from '../../../common/artifactKind.js';
+import { isChatCreationKind } from '../../../common/chatCreation.js';
 import { parseSessionIdentity } from '../../../services/sessions/common/sessionIdentity.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
@@ -47,12 +48,19 @@ registerAction2(NewChatInSessionsWindowAction);
 registerAction2(NewSessionFromNavigationAction);
 registerAction2(NewSessionFolderQuickPickAction);
 
-CommandsRegistry.register(OPEN_ARTIFACT_DRAFT_COMMAND_ID, async (accessor, kind) => {
-	if (!isArtifactKind(kind)) {
+CommandsRegistry.register(OPEN_CHAT_CREATION_COMMAND_ID, async (accessor, kind) => {
+	if (!isChatCreationKind(kind)) {
 		throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.'));
 	}
 	const widgets = accessor.get(IChatWidgetService);
-	await accessor.get(ICommandService).executeCommand('sessions.newSession');
+	const commands = accessor.get(ICommandService);
+	const inCode = accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) === 'code';
+	if (inCode && CommandsRegistry.hasCommand('sessions.open.new')) {
+		await commands.executeCommand('sessions.open.new');
+	} else {
+		if (inCode) await commands.executeCommand('sessions.open.chat');
+		await commands.executeCommand('sessions.newSession');
+	}
 	const input = widgets.lastFocusedWidget?.input;
 	if (input) ChatInputArtifactPill.select(input, kind);
 });
@@ -93,6 +101,7 @@ registerAction2(class NewChatInSessionAction extends Action2 {
 	}
 
 	run(accessor: ServicesAccessor): void {
+		if (accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) !== 'code') return;
 		const views = accessor.get(ISessionsService);
 		const selection = views.activeSelection;
 		if (selection?.kind !== 'session' || selection.active.session.status !== 'active') return;

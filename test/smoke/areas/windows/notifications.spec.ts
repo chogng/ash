@@ -92,6 +92,41 @@ for (const presentation of ['center', 'toast'] as const) {
 	}
 }
 
+focusTest('copying selected notification text replaces the previous clipboard content in Agents', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
+	const page = await openAgentsWithInvalidKeybindings(application, workbench);
+	const clipboard = await notificationClipboard(application, page);
+	await focusNotificationWindow(application, page);
+	const row = page.locator('.ash-notification-host [data-notification-id]').filter({ hasText: 'Could not load keybindings.json' }).first();
+	const message = row.locator('.ash-notification-message');
+	await expect(message).toBeVisible();
+	await row.focus();
+	const selected = await message.evaluate(element => {
+		const text = element.firstChild!;
+		const range = document.createRange();
+		range.setStart(text, 0);
+		range.setEnd(text, 15);
+		const selection = window.getSelection()!;
+		selection.removeAllRanges();
+		selection.addRange(range);
+		return selection.toString();
+	});
+	expect(selected).toHaveLength(15);
+	await page.keyboard.press('ControlOrMeta+c');
+	await expect.poll(() => clipboard.read()).toBe(selected);
+	if (process.platform === 'darwin' && 'windows' in application) {
+		await notificationClipboard(application, page);
+		await new Menus(page).selectApplication(application, ['Edit', 'Copy']);
+		await expect.poll(() => clipboard.read()).toBe(selected);
+		await notificationClipboard(application, page);
+		await focusNotificationWindow(application, page);
+		await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe(selected);
+		const pid = application.process().pid;
+		assert.ok(Number.isSafeInteger(pid));
+		await new Promise<void>((resolve, reject) => execFile('osascript', ['-e', `tell application "System Events"\n tell first application process whose unix id is ${pid}\n  keystroke "c" using {command down}\n end tell\nend tell`], { timeout: 10_000 }, error => { if (error) reject(error); else resolve(); }));
+		await expect.poll(() => clipboard.read()).toBe(selected);
+	}
+});
+
 test('notification Copy Text reports the real browser clipboard permission rejection once', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ target, application, workbench }, testInfo) => {
 	const page = workbench.page;
 	await notificationClipboard(application, page);
@@ -395,7 +430,7 @@ test('notification copy menu cancellation preserves a genuine DialogService moda
 	await expect(dialog).toBeHidden();
 });
 
-test('Sessions startup notification copies through its window clipboard after real keybindings read failure', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
+async function openAgentsWithInvalidKeybindings(application: PlaywrightApplication, workbench: Workbench): Promise<Page> {
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	const paths = await application.evaluate(({ app }) => ({ profile: process.env.ASH_HOME, userData: app.getPath('userData') }));
 	assert.ok(paths.profile);
@@ -407,21 +442,25 @@ test('Sessions startup notification copies through its window clipboard after re
 	const original = await readFile(resource).catch(error => { if (error.code === 'ENOENT') return undefined; throw error; });
 	await writeFile(resource, '[ invalid notification fixture');
 	try {
-		const page = await workbench.openAgentsWindow(target.kind);
-		const clipboard = await notificationClipboard(application, page);
-		await new QuickAccess(page).runCommand('notifications.showList');
-		const center = page.getByRole('region', { name: 'Notification Center', exact: true });
-		await expect(center).toHaveCSS('border-radius', '12px');
-		const row = center.locator('[data-notification-id]').filter({ hasText: 'Could not load keybindings.json' }).first();
-		await expect(row).toBeVisible();
-		const message = await row.locator('.ash-notification-message').textContent();
-		await new Menus(page).select(application, async () => { await row.focus(); await row.press('Shift+F10'); }, ['Copy Text']);
-		await expect.poll(() => clipboard.read()).toBe(message);
-		await expect(row).toBeVisible();
+		return await workbench.openAgentsWindow('electron');
 	} finally {
 		if (original) await writeFile(resource, original);
 		else await rm(resource);
 	}
+}
+
+test('Sessions startup notification copies through its window clipboard after real keybindings read failure', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }) => {
+	const page = await openAgentsWithInvalidKeybindings(application, workbench);
+	const clipboard = await notificationClipboard(application, page);
+	await new QuickAccess(page).runCommand('notifications.showList');
+	const center = page.getByRole('region', { name: 'Notification Center', exact: true });
+	await expect(center).toHaveCSS('border-radius', '12px');
+	const row = center.locator('[data-notification-id]').filter({ hasText: 'Could not load keybindings.json' }).first();
+	await expect(row).toBeVisible();
+	const message = await row.locator('.ash-notification-message').textContent();
+	await new Menus(page).select(application, async () => { await row.focus(); await row.press('Shift+F10'); }, ['Copy Text']);
+	await expect.poll(() => clipboard.read()).toBe(message);
+	await expect(row).toBeVisible();
 });
 
 test('notification toast Escape, Copy Text, help, and removal use the Chinese labels and retained history', async ({ workbench, application, restartWorkbench }) => {

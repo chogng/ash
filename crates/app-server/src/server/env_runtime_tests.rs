@@ -201,7 +201,7 @@ fn empty_native_window_has_a_terminal_only_home_grant() {
             .unwrap();
         assert_eq!(
             grant.dir().canonical_path(),
-            dirs::home_dir().unwrap().canonicalize().unwrap()
+            dunce::canonicalize(dirs::home_dir().unwrap()).unwrap()
         );
         assert_eq!(
             grant.permissions(),
@@ -248,6 +248,7 @@ fn directory_cleanup_does_not_retain_the_disposed_environment_runtime() {
     let runtime = Arc::downgrade(&server.env_runtime);
     drop(server);
     assert!(runtime.upgrade().is_none());
+    directory.close().unwrap();
 }
 
 #[test]

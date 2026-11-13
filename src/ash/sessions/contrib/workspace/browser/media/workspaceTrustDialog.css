@@ -16,13 +16,3 @@
 	gap: var(--ash-spacing-size80);
 	font-size: var(--ash-fontSize-body1);
 }
-
-.ash-sessions-directory-permission-path {
-	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
-	border: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, transparent);
-	border-radius: var(--ash-cornerRadius-medium);
-	background: color-mix(in srgb, var(--ash-foreground) 7%, transparent);
-	color: var(--ash-foreground);
-	overflow-wrap: anywhere;
-}

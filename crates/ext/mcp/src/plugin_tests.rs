@@ -203,7 +203,9 @@ fn live_authority_fences_old_connector_runtime_after_disable() {
     let authority = enabled_authority(package(source.path(), "bin/review-server"));
     let snapshot = authority.snapshot();
     let connector = connector(snapshot.activation());
-    let provider = PluginConnectorMcpRuntimeProvider::from_authority(&authority).unwrap();
+    let provider =
+        PluginConnectorMcpRuntimeProvider::from_authority(&authority, snapshot.activation())
+            .unwrap();
     let fence = provider.invocation_fence(&connector).unwrap();
     assert!(fence.authorizes());
 
@@ -218,4 +220,47 @@ fn live_authority_fences_old_connector_runtime_after_disable() {
         .unwrap();
     assert!(!fence.authorizes());
     assert!(fence.acquire().is_none());
+}
+
+#[test]
+fn live_rebuild_rejects_stale_connector_and_standalone_plugin_snapshots() {
+    for package in [
+        |root: &std::path::Path| self::package(root, "bin/review-server"),
+        standalone_package,
+    ] {
+        let source = tempdir().unwrap();
+        let authority = enabled_authority(package(source.path()));
+        let stale = authority.snapshot();
+        let package = stale.enabled()[0].clone();
+        let disabled = authority
+            .apply(PluginAuthorityCommandRequest {
+                command_id: PluginAuthorityCommandId::new("disable-during-rebuild").unwrap(),
+                expected_revision: stale.revision(),
+                command: PluginAuthorityCommand::Disable {
+                    package: package.clone(),
+                },
+            })
+            .unwrap();
+        assert!(
+            PluginConnectorMcpRuntimeProvider::from_authority(&authority, stale.activation())
+                .is_err()
+        );
+
+        authority
+            .apply(PluginAuthorityCommandRequest {
+                command_id: PluginAuthorityCommandId::new("re-enable-during-rebuild").unwrap(),
+                expected_revision: disabled.revision,
+                command: PluginAuthorityCommand::Enable { package },
+            })
+            .unwrap();
+        assert!(
+            PluginConnectorMcpRuntimeProvider::from_authority(&authority, stale.activation())
+                .is_err()
+        );
+        let current = authority.snapshot();
+        assert!(
+            PluginConnectorMcpRuntimeProvider::from_authority(&authority, current.activation())
+                .is_ok()
+        );
+    }
 }

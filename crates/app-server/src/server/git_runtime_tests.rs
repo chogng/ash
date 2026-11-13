@@ -1359,6 +1359,114 @@ fn ignore_query_finishing_after_invalidation_cannot_repopulate_the_cache() {
 }
 
 #[test]
+fn checkpoint_watch_hints_preserve_external_edits_and_rescans() {
+    use ash_async_utils::CancellationSource;
+    use ash_file_watcher::FileWatcherEvent;
+
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "original\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+    let owner = runtime.repository(None).unwrap();
+    let git_dir = owner.identity.common_dir();
+    let private_paths = vec![
+        git_dir.join("ash-tree-index-test.lock"),
+        git_dir.join("refs/ash/messages/checkpoint.lock"),
+        git_dir.join("refs/ash/changes/change/after"),
+        git_dir.join("objects/pack/pack-test.pack"),
+    ];
+    let event = |paths| FileWatcherEvent::PathsChanged { paths };
+    assert!(
+        owner
+            .relevant_status_hints(event(private_paths.clone()))
+            .is_none()
+    );
+
+    repository.write("tracked.txt", "external edit\n");
+    repository.git(&["branch", "external"]);
+    let mut paths = private_paths;
+    paths.extend([
+        repository.root().join("tracked.txt"),
+        git_dir.join("refs/heads/external"),
+    ]);
+    let event = owner.relevant_status_hints(event(paths)).unwrap();
+    owner
+        .refresh_from_watcher_for_request(&event, &CancellationSource::new().token())
+        .unwrap();
+    let state = owner.state.lock().unwrap();
+    assert_eq!(
+        state.status.as_ref().unwrap().changes[0].path,
+        "tracked.txt"
+    );
+    assert!(
+        state
+            .references
+            .as_ref()
+            .unwrap()
+            .references
+            .iter()
+            .any(|reference| reference.name() == "external")
+    );
+    drop(state);
+    let overflow = FileWatcherEvent::RescanRequired {
+        watched_paths: vec![git_dir.to_path_buf()],
+    };
+    assert_eq!(
+        owner.relevant_status_hints(overflow.clone()),
+        Some(overflow)
+    );
+}
+
+#[test]
+fn live_git_watcher_reports_external_edits_and_branch_switch() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "original\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.git(&["branch", "external"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let descriptors = runtime.repositories().repositories;
+    let _watcher = runtime.start_watching(None, vec![watch_authorization(repository.root())]);
+    let wait_for_status = |predicate: &dyn Fn(&super::GitStatusResult) -> bool| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let statuses = runtime.published_statuses_for(&descriptors).unwrap();
+            if let Some(status) = statuses.first().filter(|status| predicate(status)) {
+                return status.clone();
+            }
+            assert!(
+                Instant::now() < deadline,
+                "watcher did not publish: {statuses:?}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+    let initial = wait_for_status(&|status| status.changes.is_empty());
+
+    repository.write("tracked.txt", "external edit\n");
+    repository.write("new.txt", "untracked\n");
+    let edited = wait_for_status(&|status| status.changes.len() == 2);
+    assert!(edited.revision > initial.revision);
+
+    repository.git(&["switch", "external"]);
+    let switched = wait_for_status(
+        &|status| matches!(&status.head, super::GitHeadDto::Branch { name, .. } if name == "external"),
+    );
+    assert_eq!(switched.changes, edited.changes);
+    assert!(switched.revision > edited.revision);
+}
+
+#[test]
 fn watcher_file_updates_reuse_refs_until_metadata_changes_or_head_moves() {
     let repository = TestRepository::init();
     repository.write("tracked.txt", "initial\n");

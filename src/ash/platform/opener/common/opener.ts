@@ -43,6 +43,7 @@ export function extractSelection(uri: URI): { selection: ITextEditorSelection | 
 export interface OpenOptions {
 	readonly openExternal?: boolean;
 	readonly openToSide?: boolean;
+	readonly sourceWindowId?: number;
 	readonly fromUserGesture?: boolean;
 	readonly editorOptions?: ITextEditorOptions;
 	readonly skipValidation?: boolean;
@@ -64,6 +65,8 @@ export interface IOpener {
 }
 
 export interface IValidator {
+	/** Applies only when a link is handed off outside the workbench. */
+	readonly externalOnly?: true;
 	shouldOpen(target: URI | string, options?: OpenOptions): Promise<boolean>;
 }
 
@@ -72,9 +75,17 @@ export interface IExternalUriResolver {
 }
 
 export interface IExternalOpener {
+	/** The dispatcher selects between workbench and external destinations and confirms external handoffs. */
+	readonly selectsWorkbenchDestination?: true;
 	openExternal(
 		href: string,
-		context: { readonly sourceUri: URI; readonly preferredOpenerId?: string; },
+		context: {
+			readonly sourceUri: URI;
+			readonly preferredOpenerId?: string;
+			readonly openToSide?: boolean;
+			readonly sourceWindowId?: number;
+			readonly confirmExternal?: () => Promise<boolean>;
+		},
 		token: CancellationToken,
 	): Promise<boolean>;
 }

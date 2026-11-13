@@ -24,6 +24,8 @@ import { CommandService } from '../../../workbench/services/commands/common/comm
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IGeneratedFilesService } from '../../services/generatedFiles/common/generatedFilesService.js';
+import { createTestGeneratedFilesService } from '../common/testGeneratedFilesService.js';
 import { IKeybindingService } from '../../../platform/keybinding/common/keybinding.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
@@ -103,7 +105,7 @@ test('opens a local Chat conversation before the backend session request settles
 	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
 	services.registerSingleton(IImageEditorService, () => new class extends ImageEditorService { async capture(): Promise<never> { throw new Error('Image capture is outside this fixture'); } }());
-	services.registerSingleton(IChatWidgetService, () => new ChatWidgetService());
+	services.registerSingleton(IChatWidgetService, () => services.createInstance(ChatWidgetService));
 	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, focusActiveEditor() { }, openEditor: async () => { } });
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -138,6 +140,7 @@ test('opens a local Chat conversation before the backend session request settles
 	viewServices.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	viewServices.registerInstance(IChatService, chat);
 	viewServices.registerInstance(ISessionsManagementService, sessionService);
+	viewServices.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
 	viewServices.registerInstance(IWorkbenchLayoutService, layoutService);
 	viewServices.registerInstance(IFileService, files);
 	viewServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
@@ -197,7 +200,7 @@ class PendingSessionService implements ISessionsManagementService {
 	selectUntitledSession(untitledSessionId: string): void { this._activeUntitledSessionId = untitledSessionId; }
 	restoreUntitledSession(session: IUntitledChatSession): void { this._untitledSessions = [session, ...this._untitledSessions]; }
 	discardUntitledSession(_untitledSessionId: string): void { }
-	setUntitledSessionArtifactKind(): never { throw new Error('Unexpected artifact draft edit'); }
+	setUntitledSessionCreationKind(): never { throw new Error('Unexpected artifact draft edit'); }
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void { }
 	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void { }
 	setUntitledSessionReasoningEffort() { }

@@ -37,6 +37,7 @@ import { formatChatMessageTime, type ChatTurnErrorAction, type IChatListItem } f
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { parseMemoryReference, type MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
+import { parseArtifactLink } from '../../../../../platform/artifactIntegrations/common/artifactLink.js';
 import { ChatMarkdownContentPart } from './chatContentParts/chatMarkdownContentPart.js';
 import { markdownFrameThreshold } from './chatContentParts/chatIncrementalRendering/chatIncrementalRendering.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -64,7 +65,7 @@ import { ChatTurnPillsContentPart } from './chatContentParts/chatTurnPillsPart.j
 import { ChatReferencesContentPart } from './chatContentParts/chatReferencesContentPart.js';
 import { ChatResponseCitationsContentPart } from './chatContentParts/chatResponseCitationsContentPart.js';
 import type { ChatPendingDragController } from './chatPendingDragAndDrop.js';
-import type { IChatResponseFileChangesService } from '../chatResponseFileChangesService.js';
+import type { ChatResponseFileChangesPresentation } from '../chatResponseFileChangesService.js';
 import { ChatRequestActionContext, ChatResponseActionContext, type ChatTurnChangesOpener } from '../chat.js';
 import { ChatConfiguration } from '../../common/constants.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
@@ -111,7 +112,7 @@ interface ChatListItemRendererOptions {
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void | Promise<void>;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
-	readonly getTurnChanges?: IChatResponseFileChangesService['getChangesForResponse'];
+	readonly getTurnChanges?: ChatResponseFileChangesPresentation['getChangesForResponse'];
 	readonly onDidRequestLink?: (target: string) => void;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
 	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
@@ -139,6 +140,8 @@ export class ChatListItemRenderer extends Disposable {
 	private readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement; }>());
 	private readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
 	private readonly mediaChanges = this._register(new MutableDisposable());
+	private readonly fileButtons = this._register(new MutableDisposable<DisposableStore>());
+	private renderedFiles: IChatListItem['files'];
 	private readonly resources = this._register(new MutableDisposable<ChatResourceGroupWidget>());
 	private readonly resourceChanges = this._register(new MutableDisposable());
 	public readonly element: HTMLElement;
@@ -328,6 +331,23 @@ export class ChatListItemRenderer extends Disposable {
 
 	private renderAttachments(): void {
 		if (!this.attachments) return;
+		if (!equals(this.renderedFiles, this.item.files)) {
+			this.fileButtons.clear();
+			this.renderedFiles = this.item.files;
+			if (this.item.files?.length) {
+				const lifetime = this.fileButtons.value = new DisposableStore();
+				const files = h(this.element.ownerDocument, 'div', { className: 'ash-chat-file-buttons' });
+				this.attachments.append(files);
+				lifetime.add(toDisposable(() => files.remove()));
+				for (const file of this.item.files) {
+					lifetime.add(new Button(files, {
+						...defaultButtonStyles, label: file.label, icon: Lxicon.file,
+						presentation: 'secondary',
+						onClick: () => { void this.opener.open(URI.parse(file.resource), { fromUserGesture: true }).catch(error => this.notifications.error(error)); },
+					}));
+				}
+			}
+		}
 		const content = this.item.content ?? [];
 		const changed = () => { this.options.onDidChangeHeight(); this.options.onDidChangeContent(); };
 		const useImagePopup = this.contextKeys.getValue(ChatContextKeys.imagePreviewPresentation.key) === 'popup';
@@ -427,7 +447,8 @@ export class ChatListItemRenderer extends Disposable {
 		ChatContextKeys.requestCanEdit.bindTo(context).set(editable);
 		ChatContextKeys.requestHasVersions.bindTo(context).set(!!(this.item.requestHasVersions && this.options.getRequestVersions));
 		const toolbar = this.createMessageToolbar(actions, MenuId.ChatMessageTitle, localize('chat.request.actions', 'Message actions'), context, lifetime);
-		toolbar.context = this.requestActionContext = lifetime.add(new ChatRequestActionContext(this.item, actions, this.options.isVisible, this.options.onDidRequestEdit, this.options.getRequestVersions));
+		toolbar.context = this.requestActionContext = lifetime.add(new ChatRequestActionContext(this.item, actions, this.options.isVisible,
+			this.options.onDidRequestEdit, this.options.getRequestVersions, this.contextKeys.getValue(ChatContextKeys.messageActionSurface.key)));
 		if (editable) {
 			this.installRequestEditor(requestText, lifetime, actions, () => {
 				toolbar.element.querySelector<HTMLButtonElement>(`[data-action-id="${EditChatRequestActionId}"] > button`)?.focus({ preventScroll: true });
@@ -481,6 +502,7 @@ export class ChatListItemRenderer extends Disposable {
 				if (toolbar && index >= 0 && toolbar.getItemAction(index)?.id !== focusedAction?.id) toolbar.focus(index);
 			},
 			this.options.getResponseActions && (() => getActions()?.fork),
+			this.contextKeys.getValue(ChatContextKeys.messageActionSurface.key),
 		));
 		let menuContext: readonly string[] | undefined;
 		let canProviderFork = false;
@@ -491,7 +513,7 @@ export class ChatListItemRenderer extends Disposable {
 			hasFeedbackSurvey.set(hasCompletedSource && this.item.canGiveModelFeedback === true);
 			hasConversationLink.set(hasCompletedSource);
 			requestClientId.set(hasCompletedSource ? this.item.requestClientId ?? '' : '');
-			hasLoadedSkills.set(!!this.item.loadedSkills?.length);
+			hasLoadedSkills.set(!this.contextKeys.getValue(ChatContextKeys.replyOnlyInput.key) && !!this.item.loadedSkills?.length);
 			canProviderFork = !!available?.fork;
 			canFork.set(canProviderFork || (hasCompletedSource && this.item.canForkAfterResponse === true));
 			canCompareResults.set(hasCompletedSource && this.item.canCompareResults === true);
@@ -591,12 +613,12 @@ export class ChatListItemRenderer extends Disposable {
 		};
 	}
 
-	private installRequestCheckpointMenu(requestText: HTMLElement, source: NonNullable<IChatListItem['requestSource']>, lifetime: DisposableStore): void {
+	private installRequestCheckpointMenu(requestText: HTMLElement, lifetime: DisposableStore): void {
 		const context = lifetime.add(this.contextKeys.createScoped(requestText));
 		ChatContextKeys.requestCanRunAnotherVersion.bindTo(context).set(true);
 		const menu = lifetime.add(this.menus.createMenu(MenuId.ChatMessageCheckpoint, context));
 		const showMenu = (event: MouseEvent | KeyboardEvent) => {
-			const actions = menu.getActions({ arg: source }).flatMap(([, group]) => group);
+			const actions = menu.getActions({ arg: this.requestActionContext }).flatMap(([, group]) => group);
 			if (!actions.length) return;
 			event.preventDefault();
 			event.stopPropagation();
@@ -848,8 +870,9 @@ export class ChatListItemRenderer extends Disposable {
 			if (!/^\d+$/u.test(index) || signal.aborted) return;
 			const content = this.item.markdown?.richContent;
 			const part = content?.parts[Number(index)];
-			if (content && part?.kind === 'writing') {
-				await this.commands.executeCommand(EDIT_CHAT_WRITING_COMMAND_ID, renderChatRichContentHtml(part.markdown, content), part.title);
+			if (content && part?.kind === 'writing' && !part.awaitingPublication) {
+				if (part.resource) await this.opener.open(URI.parse(part.resource), { fromUserGesture: true });
+				else await this.commands.executeCommand(EDIT_CHAT_WRITING_COMMAND_ID, renderChatRichContentHtml(part.markdown, content), part.title);
 			}
 			return;
 		}
@@ -1033,11 +1056,12 @@ export class ChatListItemRenderer extends Disposable {
 					} : undefined,
 					allowedLinkSchemes: {
 						augment: [
-							...(externalLinks ? [] : [OPEN_SESSION_LINK_SCHEME]),
+							...(externalLinks ? [] : [OPEN_SESSION_LINK_SCHEME, 'ash', 'ash-artifact']),
 							...(canDownload ? [CHAT_RESPONSE_DOWNLOAD_SCHEME] : []),
 							...(canInspect ? [CHAT_RESPONSE_ENTITY_SCHEME] : []),
 							...(canEditWriting ? [CHAT_RESPONSE_WRITING_SCHEME] : []),
-						]
+						],
+						accepts: (resource: URI) => resource.scheme !== 'ash' && resource.scheme !== 'ash-artifact' || !!parseArtifactLink(resource),
 					},
 					resolveFileLink: !externalLinks && item.type === 'agentMessage' && this.options.onDidRequestLink
 						? (href: string) => parseInlineFileReference(href) ? href : undefined
@@ -1139,9 +1163,10 @@ export class ChatListItemRenderer extends Disposable {
 		} else if (item.queueTarget) {
 			const actions = this.createMessageActions();
 			this.options.pendingDrag?.attachDragHandle(article, actions, () => this.item.queueTarget, disposables);
+			const canSendImmediately = !this.contextKeys.getValue(ChatContextKeys.replyOnlyInput.key);
 			this.renderMessageCommandActions(actions, disposables, [
 				{ id: ChatEditPendingRequestAction.ID, label: localize('chat.queue.rowEdit', 'Edit queued message'), icon: Lxicon.edit },
-				{ id: ChatSendPendingImmediatelyAction.ID, label: localize('chat.queue.rowSendNow', 'Send queued message immediately'), icon: Lxicon.enter },
+				...(canSendImmediately ? [{ id: ChatSendPendingImmediatelyAction.ID, label: localize('chat.queue.rowSendNow', 'Send queued message immediately'), icon: Lxicon.enter }] : []),
 				{ id: ChatRemovePendingRequestAction.ID, label: localize('chat.queue.rowRemove', 'Remove queued message'), icon: Lxicon.close },
 			], () => this.item.queueTarget);
 		} else if (requestText) {
@@ -1153,7 +1178,7 @@ export class ChatListItemRenderer extends Disposable {
 					disposables.add(this.instantiationService.createInstance(ChatForkActionViewItem, actions, { sessionId, threadId, beforeItemId: itemId }, this.options.isVisible));
 				}
 			}
-			if (item.canRunAnotherVersion && item.requestSource) this.installRequestCheckpointMenu(requestText, item.requestSource, disposables);
+			if (item.canRunAnotherVersion && item.requestSource) this.installRequestCheckpointMenu(requestText, disposables);
 		}
 	}
 
@@ -1218,7 +1243,7 @@ function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolea
 		&& (left.loadedSkills?.every((skill, index) => skill === right.loadedSkills?.[index]) ?? true)
 		&& left.hookPart?.run === right.hookPart?.run
 		&& sameFileReferenceDirectory(left, right)
-		&& left.resources === right.resources && equals(left.markdown, right.markdown)
+		&& left.resources === right.resources && equals(left.files, right.files) && equals(left.markdown, right.markdown)
 		&& left.contextEntries === right.contextEntries
 		&& left.conversationLink?.sessionId === right.conversationLink?.sessionId
 		&& left.conversationLink?.threadId === right.conversationLink?.threadId

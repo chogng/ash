@@ -29,15 +29,17 @@ import { signInChatGPT } from '../browser/chatGPTLogin.js';
 import { ChatGPTList, ChatGPTNativeList } from './chatGPTList.js';
 import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../common/chatGPTNative.js';
 import { canUseAshModels } from './chatGPTWidgetModel.js';
-import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
+import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID } from '../../chat/common/constants.js';
 import { openAshChatWithModel } from '../../chat/electron-browser/actions/newChatModelAction.js';
+import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 
 export const chatGPTWorkspaceSource = {
 	catalog: new SyncDescriptor(ChatGPTList),
 	additionalCatalog: new SyncDescriptor(ChatGPTNativeList),
 	draftModels: new SyncDescriptor(ChatGPTDraftModelSource),
 	accessibility: chatGPTViewSource.accessibility,
-	openCommand: SHOW_PREFERRED_CHATGPT_COMMAND,
+	resumeCommand: (lastBackend: string | undefined) => lastBackend === 'chatgpt' ? SHOW_CHATGPT_COMMAND
+		: lastBackend === 'chatgpt-native' ? SHOW_EXPERIMENTAL_CHATGPT : SHOW_PREFERRED_CHATGPT_COMMAND,
 	createDraft: (commands: ICommandService, origin: unknown) => commands.executeCommand<void>(SHOW_PREFERRED_CHATGPT_COMMAND, origin, true),
 };
 
@@ -102,6 +104,33 @@ registerWorkbenchContribution(ChatGPTExperimentalContribution.ID, WorkbenchPhase
 registerWorkbenchContribution(ChatGPTWebContribution.ID, WorkbenchPhase.BlockRestore,
 	services => services.get(IInstantiationService).createInstance(ChatGPTWebContribution));
 
+CommandsRegistry.register(OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID, async (accessor, provider: unknown, accountScope: unknown, id: unknown) => {
+	if (provider !== 'chatgpt-web') return false;
+	if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,240}$/u.test(id)
+		|| typeof accountScope !== 'string' || !/^[a-f0-9]{64}$/u.test(accountScope)) {
+		throw new TypeError('Invalid ChatGPT conversation reference');
+	}
+	const commands = accessor.get(ICommandService);
+	const conversation = accessor.get(ISessionsConversationService);
+	const backends = [
+		{ transport: accessor.get(IChatGPTTransport), chat: accessor.get(IChatGPTService), command: SHOW_CHATGPT_COMMAND },
+		{ transport: accessor.get(IChatGPTNativeTransport), chat: accessor.get(IChatGPTNativeService), command: SHOW_EXPERIMENTAL_CHATGPT },
+	];
+	const scopes = await Promise.all(backends.map(({ transport }) => transport.getCacheScope().catch(() => undefined)));
+	const backend = backends[scopes.indexOf(accountScope)];
+	if (!backend) return false;
+	await backend.chat.select(id, accountScope);
+	const selected = () => {
+		const state = backend.chat.state.get();
+		return state.catalogScope === accountScope && state.conversationId === id;
+	};
+	if (!selected()) return false;
+	const opened = await commands.executeCommand(backend.command);
+	if (opened === false || !selected()) return false;
+	conversation.focus();
+	return true;
+});
+
 CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, model: unknown) => {
 	if (!isRecord(model) || !isNonEmptyString(model.provider) || !isNonEmptyString(model.model)) {
 		throw new TypeError('Expected an Ash model reference');
@@ -121,25 +150,32 @@ CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, mod
 		const state = chat.state.get();
 		if (!canOpen() || state.localConversationId !== source || chat.newDraftRevision !== revision || !canUseAshModels(state)
 			|| state.sending || state.managing || state.voice !== 'idle') return undefined;
-		return { text: state.draft, artifactKind: state.draftArtifactKind };
+		return { text: state.draft, creationKind: state.draftCreationKind };
 	});
 });
 
+const chatWorkspace = SessionsWorkspaceModeContext.isEqualTo('chat');
+const experimentalChatAvailable = ContextKeyExpr.and(chatWorkspace, ContextKeyExpr.not('config.chat.disableAIFeatures'));
 const chatNewSessionMenu = ContextKeyExpr.and(
 	ActivityBarItemContext.isEqualTo('sessions.newSession'),
-	ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code'),
+	chatWorkspace,
 );
 
 registerAction2(class OpenChatGPT extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.open.chatgpt', title: localize2('sessions.chatgpt.webTitle', 'ChatGPT Web'), icon: Lxicon.openai,
+			precondition: chatWorkspace,
 			toggled: ContextKeyExpr.has(chatGPTSelectedContext),
 			menu: { id: Menus.ActivityBarContext, when: ContextKeyExpr.and(chatNewSessionMenu, ContextKeyExpr.has(experimentalChatGPTSelected)), group: 'navigation' },
 			f1: true,
 		});
 	}
-	public override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand(SHOW_CHATGPT_COMMAND); }
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (accessor.get(IContextKeyService).contextMatchesRules(chatWorkspace)) {
+			await accessor.get(ICommandService).executeCommand(SHOW_CHATGPT_COMMAND);
+		}
+	}
 });
 
 registerAction2(class OpenExperimentalChatGPT extends Action2 {
@@ -148,7 +184,7 @@ registerAction2(class OpenExperimentalChatGPT extends Action2 {
 			id: 'sessions.open.experimentalChatgpt',
 			title: localize2('sessions.chatgpt.experimentalTitle', 'ChatGPT (Experimental)'),
 			icon: Lxicon.openai,
-			precondition: ContextKeyExpr.not('config.chat.disableAIFeatures'),
+			precondition: experimentalChatAvailable,
 			menu: {
 				id: Menus.ActivityBarContext,
 				when: ContextKeyExpr.and(chatNewSessionMenu, ContextKeyExpr.not(experimentalChatGPTSelected)),
@@ -158,15 +194,21 @@ registerAction2(class OpenExperimentalChatGPT extends Action2 {
 		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(ICommandService).executeCommand(SHOW_EXPERIMENTAL_CHATGPT);
+		if (accessor.get(IContextKeyService).contextMatchesRules(experimentalChatAvailable)) {
+			await accessor.get(ICommandService).executeCommand(SHOW_EXPERIMENTAL_CHATGPT);
+		}
 	}
 });
 
+const chatGPTActive = ContextKeyExpr.and(chatWorkspace, ContextKeyExpr.or(ContextKeyExpr.has(chatGPTSelectedContext), ContextKeyExpr.has(experimentalChatGPTSelected)));
+const chatGPTWebActive = ContextKeyExpr.and(chatWorkspace, ContextKeyExpr.has(chatGPTSelectedContext));
+
 registerAction2(class ToggleChatGPTScrolling extends Action2 {
 	constructor() {
-		super({ id: 'sessions.chatgpt.toggleScrollOptimization', title: localize2('sessions.chatgpt.toggleOptimization', 'ChatGPT: Toggle Scrolling Optimization'), f1: true });
+		super({ id: 'sessions.chatgpt.toggleScrollOptimization', title: localize2('sessions.chatgpt.toggleOptimization', 'ChatGPT: Toggle Scrolling Optimization'), f1: true, precondition: chatGPTActive });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(chatGPTActive)) return;
 		const configuration = accessor.get(IConfigurationService);
 		await configuration.updateValue(chatGPTScrollOptimization, !configuration.getValue<boolean>(chatGPTScrollOptimization));
 	}
@@ -180,47 +222,53 @@ registerAction2(class ReloadChatGPT extends Action2 {
 			shortTitle: localize2('sessions.chatgpt.reloadShort', 'Reload'),
 			menu: {
 				id: Menus.ActivityBarContext,
-				when: ContextKeyExpr.and(chatNewSessionMenu, ContextKeyExpr.or(ContextKeyExpr.has(chatGPTSelectedContext), ContextKeyExpr.has(experimentalChatGPTSelected))),
+				when: ContextKeyExpr.and(chatNewSessionMenu, chatGPTActive),
 				group: 'navigation',
 			},
 			f1: true,
+			precondition: chatGPTActive,
 		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
-		const experimental = accessor.get(IContextKeyService).getValue(experimentalChatGPTSelected) === true;
+		const context = accessor.get(IContextKeyService);
+		if (!context.contextMatchesRules(chatGPTActive)) return;
+		const experimental = context.getValue(experimentalChatGPTSelected) === true;
 		await accessor.get(experimental ? IChatGPTNativeService : IChatGPTService).reload();
 	}
 });
 
 const authenticationMenu = {
 	id: Menus.ActivityBarContext,
-	when: ContextKeyExpr.and(chatNewSessionMenu, ContextKeyExpr.has(chatGPTSelectedContext)),
+	when: ContextKeyExpr.and(chatNewSessionMenu, chatGPTWebActive),
 	group: 'authentication',
 };
 
 registerAction2(class SignInChatGPT extends Action2 {
 	constructor() {
-		super({ id: 'sessions.chatgpt.signIn', title: localize2('sessions.chatgpt.signIn', 'ChatGPT: Sign In to Ash'), f1: true, menu: authenticationMenu });
+		super({ id: 'sessions.chatgpt.signIn', title: localize2('sessions.chatgpt.signIn', 'ChatGPT: Sign In to Ash'), f1: true, menu: authenticationMenu, precondition: chatGPTWebActive });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(chatGPTWebActive)) return;
 		await signInChatGPT(accessor.get(IAccountService), accessor.get(INotificationService), accessor.get(IProgressService));
 	}
 });
 
 registerAction2(class UseCodexChatGPTLogin extends Action2 {
 	constructor() {
-		super({ id: 'sessions.chatgpt.useCodexLogin', title: localize2('sessions.chatgpt.useCodexLogin', 'ChatGPT: Use Codex Login'), f1: true, menu: authenticationMenu });
+		super({ id: 'sessions.chatgpt.useCodexLogin', title: localize2('sessions.chatgpt.useCodexLogin', 'ChatGPT: Use Codex Login'), f1: true, menu: authenticationMenu, precondition: chatGPTWebActive });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(chatGPTWebActive)) return;
 		await accessor.get(IAccountService).startLogin({ type: 'chatGptWebCodex' });
 	}
 });
 
 registerAction2(class SignOutChatGPT extends Action2 {
 	constructor() {
-		super({ id: 'sessions.chatgpt.signOut', title: localize2('sessions.chatgpt.signOut', 'ChatGPT: Sign Out of Ash'), f1: true, menu: authenticationMenu });
+		super({ id: 'sessions.chatgpt.signOut', title: localize2('sessions.chatgpt.signOut', 'ChatGPT: Sign Out of Ash'), f1: true, menu: authenticationMenu, precondition: chatGPTWebActive });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(chatGPTWebActive)) return;
 		await accessor.get(IAccountService).logout('chatgpt-web');
 	}
 });

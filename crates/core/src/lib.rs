@@ -154,6 +154,7 @@ pub use ash_protocol::ToolReplaySafety;
 pub use ash_protocol::TurnStatus;
 pub use ash_thread_store::AppendBatchResult;
 pub use ash_thread_store::ThreadEventBatch;
+pub use ash_thread_store::ThreadEventPrecondition;
 pub use ash_thread_store::ThreadStore;
 pub use ash_thread_store::ThreadStoreError;
 pub use ash_thread_store::validate_append_batch;

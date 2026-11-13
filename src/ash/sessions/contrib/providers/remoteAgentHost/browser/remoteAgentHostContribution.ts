@@ -11,7 +11,8 @@ import { IRemoteAgentHostService } from '../../../../../platform/agentHost/commo
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
-import { RemoteAgentHostSessionsProvider, remoteAgentHostProviderId } from './remoteAgentHostSessionsProvider.js';
+import { RemoteAgentHostSessionsProvider } from './remoteAgentHostSessionsProvider.js';
+import { remoteAgentHostProviderId } from '../../../../common/agentHostSessionsProvider.js';
 import { createAgentHostSessionScope } from '../../agentHost/browser/agentHostSessionScope.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 

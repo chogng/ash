@@ -12,7 +12,7 @@ import {
 import { ITrustedDomainService } from '../common/trustedDomainService.js';
 import { TRUSTED_DOMAINS_URI } from './trustedDomains.js';
 
-/** Exposes the service's sole JSONC source through the ordinary editor save path. */
+/** Exposes the trusted domains JSONC document through the ordinary editor save path. */
 export class TrustedDomainsFileSystemProvider extends Disposable implements IFileSystemProvider {
 	readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.PathCaseSensitive;
 	readonly onDidChangeCapabilities = Event.None;
@@ -50,8 +50,8 @@ export class TrustedDomainsFileSystemProvider extends Disposable implements IFil
 		const current = this.domains.content;
 		if (options.expectedRevision !== undefined && options.expectedRevision !== current) throw new FileRevisionConflictError(resource);
 		const content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-		await this.domains.setTrustedDomains(content, current);
-		return { stat: this.fileStat(VSBuffer.fromString(content).byteLength), revision: content };
+		const saved = await this.domains.setTrustedDomains(content, current);
+		return { stat: this.fileStat(VSBuffer.fromString(saved).byteLength), revision: saved };
 	}
 
 	async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {

@@ -31,6 +31,7 @@ import { constObservable, autorun, autorunWithStore, derived, observableSignalFr
 import { getNLSLanguage, localize, localize2 } from '../../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { Severity, INotificationService, type INotificationHandle } from '../../../../../platform/notification/common/notification.js';
@@ -965,12 +966,12 @@ export class AutomationsCustomViewContribution extends Disposable {
 							id: 'sessionsView.newScheduledTask',
 							title: localize2('scheduled.new', 'New scheduled task'),
 							icon: Lxicon.add,
-							precondition: ContextKeyExpr.has('sessions.scheduledCanCreate'),
+							precondition: ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('chat'), ContextKeyExpr.has('sessions.scheduledCanCreate')),
 							menu: { id: Menus.CustomViewScheduled, group: 'navigation', order: 1 }
 						});
 					}
 					override async run(accessor: ServicesAccessor): Promise<void> {
-						await accessor.get(IAutomationDialogService).showAutomationDialog({ sessionKind: 'chat' });
+						if (contexts.getValue(SessionsWorkspaceModeContext.key) === 'chat') await accessor.get(IAutomationDialogService).showAutomationDialog({ sessionKind: 'chat' });
 					}
 				}));
 			} else if (!chatSupported) {
@@ -997,11 +998,13 @@ export class AutomationsCustomViewContribution extends Disposable {
 						id: 'sessionsView.newAutomation',
 						title: localize2('automations.new', 'New routine'),
 						icon: Lxicon.add,
-						precondition: ContextKeyExpr.has('sessions.automationsCanCreate'),
+						precondition: ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('code'), ContextKeyExpr.has('sessions.automationsCanCreate')),
 						menu: { id: Menus.CustomViewAutomations, group: 'navigation', order: 1 }
 					});
 				}
-				override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(IAutomationDialogService).showAutomationDialog({}); }
+				override async run(accessor: ServicesAccessor): Promise<void> {
+					if (contexts.getValue(SessionsWorkspaceModeContext.key) === 'code') await accessor.get(IAutomationDialogService).showAutomationDialog({});
+				}
 			}));
 		}));
 	}

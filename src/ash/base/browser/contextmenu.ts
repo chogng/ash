@@ -30,6 +30,8 @@ export interface IContextMenuEvent {
 export interface IContextMenuDelegate {
 	getAnchor(): ContextMenuAnchor;
 	getActions(): readonly IAction[];
+	/** Element that should own the browser menu's isolated DOM and styles. */
+	readonly domForShadowRoot?: HTMLElement;
 	getActionsContext?(event?: IContextMenuEvent): unknown;
 	getCheckedActionsRepresentation?(action: IAction): 'radio' | 'checkbox';
 	getActionViewItem?(

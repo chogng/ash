@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignAsset, type DesignAutoLayout, type DesignShape } from '../../contrib/artifacts/common/model/designDocument.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignAsset, type DesignAutoLayout, type DesignShape } from '../../contrib/artifact/common/model/designDocument.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
-import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
-import { getDesignShapeEntries, hitTestDesignShapes } from '../../contrib/artifacts/common/model/hitTest.js';
-import { sampleDesignMotion } from '../../contrib/artifacts/contrib/motion/common/motion.js';
+import { DesignModel } from '../../contrib/artifact/common/model/designModel.js';
+import { DocumentCommands } from '../../contrib/artifact/common/commands/documentCommands.js';
+import { getDesignShapeEntries, hitTestDesignShapes } from '../../contrib/artifact/common/model/hitTest.js';
+import { sampleDesignMotion } from '../../contrib/motion/common/motion.js';
 
 test('Design transparent fills survive serialization and the committed undo history', () => {
 	using model = new DesignModel();
@@ -598,5 +598,23 @@ test('Design persistence rejects malformed grid, wrapping and dimension bounds',
 		const file = JSON.parse(serializeDesignDocument(document));
 		Object.assign(file.artifacts[document.artifactId].objects[frame.id], properties);
 		assert.throws(() => parseDesignDocument(JSON.stringify(file)), TypeError);
+	}
+});
+
+
+test('Design creation date survives edits, serialization and undo while legacy documents keep an unknown date', () => {
+	using model = new DesignModel();
+	const createdAt = model.value.createdAt;
+	assert.equal(typeof createdAt, 'number');
+	new DocumentCommands(model).addShape('rectangle', { x: 0, y: 0 });
+	model.undo();
+	model.redo();
+	const serialized = serializeDesignDocument(model.value);
+	assert.equal(parseDesignDocument(serialized).createdAt, createdAt);
+	const legacy = JSON.parse(serialized);
+	delete legacy.createdAt;
+	assert.equal(parseDesignDocument(JSON.stringify(legacy)).createdAt, undefined);
+	for (const invalid of [-1, 'today', null]) {
+		assert.throws(() => parseDesignDocument(JSON.stringify({ ...legacy, createdAt: invalid })));
 	}
 });

@@ -43,7 +43,7 @@ test('Independent conversation workspace choices preserve drafts and defer workt
 	const cancel = trustDialog.getByRole('button', { name: 'Cancel', exact: true });
 	await expect(cancel).toHaveCSS('border-radius', '8px');
 	await expect(trustAndOpen).toHaveCSS('border-radius', '8px');
-	const trustPath = trustDialog.locator('.ash-sessions-directory-permission-path');
+	const trustPath = trustDialog.locator('.ash-dialog-resource');
 	await expect(trustPath).toHaveText(checkout);
 	await cancel.click();
 	await expect(workspace()).toBeFocused();
@@ -89,7 +89,7 @@ test('Clone Repository selects a real checkout for the initiating draft', { tag:
 		await input.press('Enter');
 		const checkout = join(destination, 'sessions-clone-source');
 		const trustDialog = page.getByRole('dialog', { name: 'Trust this workspace?', exact: true });
-		await expect(trustDialog.locator('.ash-sessions-directory-permission-path')).toHaveText(checkout);
+		await expect(trustDialog.locator('.ash-dialog-resource')).toHaveText(checkout);
 		await trustDialog.getByRole('button', { name: 'Trust and Open', exact: true }).click();
 		await expect(workspace).toHaveText('sessions-clone-source');
 		expect((await run('git', ['rev-parse', 'HEAD'], { cwd: checkout })).stdout).toBe((await run('git', ['rev-parse', 'HEAD'], { cwd })).stdout);

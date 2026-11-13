@@ -7,7 +7,13 @@ import type { IWindowClientSize } from '../common/window.js';
 export class NativeWindowClientArea extends Disposable {
 	readonly ready: Promise<void>;
 
-	constructor(container: HTMLElement, host: INativeHostApi, windowName?: string, relayout?: () => void) {
+	constructor(
+		container: HTMLElement,
+		host: INativeHostApi,
+		windowName?: string,
+		relayout?: () => void,
+		readInitialSize = () => host.getWindowClientSize(windowName),
+	) {
 		super();
 		const target = container.ownerDocument.defaultView!;
 		const originalWidth = container.style.maxWidth;
@@ -15,21 +21,24 @@ export class NativeWindowClientArea extends Disposable {
 		let size: IWindowClientSize | undefined;
 		let revision = 0;
 		let frame: number | undefined;
+		const applySize = (): void => {
+			const scale = target.devicePixelRatio;
+			// A native sample can lag the viewport. The percentage floor tracks
+			// the containing block immediately and limits rounding correction to
+			// one physical pixel while the next sample is in flight.
+			const floor = `calc(100% - ${1 / scale}px)`;
+			const maxWidth = size ? `max(${size.width / scale}px, ${floor})` : originalWidth;
+			const maxHeight = size ? `max(${size.height / scale}px, ${floor})` : originalHeight;
+			if (container.style.maxWidth === maxWidth && container.style.maxHeight === maxHeight) return;
+			container.style.maxWidth = maxWidth;
+			container.style.maxHeight = maxHeight;
+			relayout?.();
+		};
 		const update = (): void => {
 			if (frame !== undefined || this.isDisposed) return;
 			frame = target.requestAnimationFrame(() => {
 				frame = undefined;
-				const scale = target.devicePixelRatio;
-				// A native sample can lag the viewport. The percentage floor tracks
-				// the containing block immediately and limits rounding correction to
-				// one physical pixel while the next sample is in flight.
-				const floor = `calc(100% - ${1 / scale}px)`;
-				const maxWidth = size ? `max(${size.width / scale}px, ${floor})` : originalWidth;
-				const maxHeight = size ? `max(${size.height / scale}px, ${floor})` : originalHeight;
-				if (container.style.maxWidth === maxWidth && container.style.maxHeight === maxHeight) return;
-				container.style.maxWidth = maxWidth;
-				container.style.maxHeight = maxHeight;
-				relayout?.();
+				applySize();
 			});
 		};
 		const subscription = host.onDidChangeWindowClientSize(value => {
@@ -46,10 +55,10 @@ export class NativeWindowClientArea extends Disposable {
 		this._register(addDisposableListener(target, 'resize', update));
 		// Subscribe before reading so a late initial reply cannot replace a newer resize.
 		const currentRevision = revision;
-		this.ready = host.getWindowClientSize(windowName).then(initial => {
-			if (this.isDisposed || revision !== currentRevision) return;
-			size = initial;
-			update();
+		this.ready = readInitialSize().then(initial => {
+			if (this.isDisposed) return;
+			if (revision === currentRevision) size = initial;
+			applySize();
 		});
 	}
 }

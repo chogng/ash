@@ -1,3 +1,4 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { Event } from '../../../../../base/common/event.js';
 import { BrowserEditor, BrowserEditorContribution } from '../browserEditor.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
@@ -81,34 +82,34 @@ export class BrowserEditorFindFeature extends BrowserEditorContribution {
 	protected override disposeCore(): void { this.setModel(undefined); super.disposeCore(); }
 }
 
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { BrowserViewCommandId } from '../../../../../platform/browserView/common/browserView.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { BrowserViewEditorId } from '../../common/browserView.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { localize2 } from '../../../../../nls.js';
-registerAction2(class BrowserFeatureAction extends Action2 {
+registerEditorToolAction(class BrowserFeatureAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.ShowFind, title: localize2({ bundle: 'ash.workbench', key: 'browser.findCommand' }, 'Browser: Find in Page'), f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 	override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 		const pane = accessor.get(IEditorPart).activePane;
 		if (pane?.id === BrowserViewEditorId) { await (pane as BrowserEditor).getContribution(BrowserEditorFindFeature)?.show(); }
 	}
 });
-registerAction2(class BrowserFeatureAction extends Action2 {
+registerEditorToolAction(class BrowserFeatureAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.HideFind, title: localize2({ bundle: 'ash.workbench', key: 'browser.hideFindCommand' }, 'Browser: Stop Finding'), f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 	override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 		const pane = accessor.get(IEditorPart).activePane;
 		if (pane?.id === BrowserViewEditorId) { await (pane as BrowserEditor).getContribution(BrowserEditorFindFeature)?.hide(); }
 	}
 });
-registerAction2(class BrowserFeatureAction extends Action2 {
+registerEditorToolAction(class BrowserFeatureAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.FindNext, title: localize2({ bundle: 'ash.workbench', key: 'browser.nextFindCommand' }, 'Browser: Find Next'), f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 	override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 		const pane = accessor.get(IEditorPart).activePane;
 		if (pane?.id === BrowserViewEditorId) { await (pane as BrowserEditor).getContribution(BrowserEditorFindFeature)?.next(true); }
 	}
 });
-registerAction2(class BrowserFeatureAction extends Action2 {
+registerEditorToolAction(class BrowserFeatureAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.FindPrevious, title: localize2({ bundle: 'ash.workbench', key: 'browser.previousFindCommand' }, 'Browser: Find Previous'), f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 	override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 		const pane = accessor.get(IEditorPart).activePane;

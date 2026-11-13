@@ -38,6 +38,8 @@ pub enum TurnChangeCommitStateDto {
     Idle,
     Queued,
     Committing,
+    Recovering,
+    RecoveryUnavailable,
     Committed,
     Conflict,
     Failed,

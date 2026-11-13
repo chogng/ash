@@ -1,5 +1,6 @@
 import { ContextViewFocusRestore } from '../../../../base/browser/ui/contextview/contextview.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { ArtifactAction, IArtifactIntegrationBinding } from '../../../../platform/artifactIntegrations/common/artifactIntegration.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -18,8 +19,8 @@ export class ArtifactDetailsContextView extends Disposable {
 		super();
 	}
 
-	choose(binding: IArtifactIntegrationBinding, renderFollowUp?: (container: HTMLElement, state: ArtifactDetailsCardState) => Disposable): Promise<ArtifactAction | undefined> {
-		if (this.isDisposed || !this.anchor.isConnected) return Promise.resolve(undefined);
+	choose(binding: IArtifactIntegrationBinding, renderFollowUp?: (container: HTMLElement, state: ArtifactDetailsCardState) => Disposable, token = CancellationToken.None): Promise<ArtifactAction | undefined> {
+		if (this.isDisposed || !this.anchor.isConnected || token.isCancellationRequested) return Promise.resolve(undefined);
 		const lifetime = this.current.value = new DisposableStore();
 		const choice = new DeferredPromise<ArtifactAction | undefined>();
 		const panel = new ArtifactDetailsPanel(this.anchor.ownerDocument, binding, action => {
@@ -38,6 +39,7 @@ export class ArtifactDetailsContextView extends Disposable {
 			if (panel.element.isConnected) this.views.hide();
 		}));
 		lifetime.add(panel);
+		lifetime.add(token.onCancellationRequested(() => this.close()));
 		if (this.views.show({
 			anchor: this.anchor,
 			content: panel.element,

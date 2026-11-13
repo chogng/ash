@@ -16,6 +16,7 @@ import { IContextKeyService } from '../../../platform/contextkey/browser/context
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { MenuActivityBar } from '../../../workbench/browser/parts/activitybar/menuActivityBar.js';
+import { SessionsCodeEditorContext } from '../../../workbench/common/contextkeys.js';
 import { SessionsConfiguration } from '../../common/configuration.js';
 import { Menus, SessionActivityBarVisibleContext } from '../menus.js';
 
@@ -80,11 +81,13 @@ export class SessionActivityBar extends Disposable {
 					id: 'ash.sessions.toggleSessionActivityBar',
 					title: localize2('sessions.sessionActivityBar.toggle', 'Toggle Session Activity Bar'),
 					f1: true,
+					precondition: SessionsCodeEditorContext.isEqualTo(true),
 					menu: { id: Menus.SessionActivityBarContext },
 				});
 			}
 
 			override async run(accessor: ServicesAccessor): Promise<void> {
+				if (contextKeys.getValue(SessionsCodeEditorContext.key) !== true) return;
 				const configuration = accessor.get(IConfigurationService);
 				const show = !configuration.getValue<boolean>(setting);
 				const document = bar.element.ownerDocument;

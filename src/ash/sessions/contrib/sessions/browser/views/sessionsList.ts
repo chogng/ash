@@ -61,7 +61,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
 import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
-import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
+import { cancelOnDispose, CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
@@ -228,7 +228,7 @@ export class SessionsList extends DomWidget {
 	private readonly search: SessionsListSearch;
 	private readonly tree: SessionsListTree;
 	private readonly feedback = this._register(new SessionActionFeedback());
-	private readonly rowMenuContext = this._register(new MutableDisposable<IScopedContextKeyService>());
+	private readonly rowMenu = this._register(new MutableDisposable<DisposableStore>());
 	readonly domNode: HTMLElement;
 	readonly loading: IObservable<boolean>;
 	private readonly list: HTMLDivElement;
@@ -516,6 +516,7 @@ export class SessionsList extends DomWidget {
 
 	public closePopups(): void {
 		this.catalogMenu.clear();
+		this.rowMenu.clear();
 		for (const [, item] of this.items) { item.leadingIcon?.closePicker(); }
 	}
 
@@ -900,9 +901,11 @@ export class SessionsList extends DomWidget {
 		this.catalogMenu.clear();
 		const actions = this.orderActions(item.domNode, 'row');
 		if (selection.kind === 'untitled') {
-			this.showConversationMenu(item, anchor, [...actions, ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications,
-				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
-				sessionId => this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${sessionId}` }))], { untitledSessionId: selection.session.untitledSessionId });
+			this.showConversationMenu(item, anchor, [...actions, ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications, {
+				projectScope: this.mode,
+				openInNewWindow: this.mode === 'code' ? () => this.commands.executeCommand('sessions.openInNewWindow', selection) : undefined,
+				didPin: sessionId => this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${sessionId}` }),
+			})], { untitledSessionId: selection.session.untitledSessionId });
 			return;
 		}
 		const { session, threadId } = selection.active;
@@ -914,8 +917,8 @@ export class SessionsList extends DomWidget {
 
 	private showConversationMenu(item: SessionListItem, anchor: ContextMenuAnchor, actions: IAction[],
 		target?: ConversationMenuTarget, pinned = false): void {
-		this.rowMenuContext.clear();
-		const context = this.rowMenuContext.value = this.contextKeys?.createScoped(item.domNode);
+		const menu = this.rowMenu.value = new DisposableStore();
+		const context = this.contextKeys && menu.add(this.contextKeys.createScoped(item.domNode));
 		const workspace = this.mode === 'code' && target && 'sessionId' in target && target.threadId
 			? getSessionWorkspaceMenuState(target.sessionId, target.threadId, this.sessionService)
 			: undefined;
@@ -926,7 +929,8 @@ export class SessionsList extends DomWidget {
 			SessionsMenuCanMoveConversationContext.bindTo(context).set(!!this.sessionService.getChatMoveDestinations?.(sessionId, target.threadId).length);
 		}
 		this.showRowMenu(item, anchor, {
-			getActions: () => conversationMenuActions(this.mode, this.menus, context, target, pinned, actions).map(action => {
+			cancellationToken: cancelOnDispose(menu),
+			getActions: () => conversationMenuActions(this.mode, this.menus, this.commands, context, target, pinned, actions).map(action => {
 				const sessionActions = this.sessionActions;
 				if (action.id === 'agentSession.rename' && sessionActions && target && !('catalogId' in target)) {
 					return {
@@ -956,7 +960,7 @@ export class SessionsList extends DomWidget {
 				return action;
 			}),
 			onHide: () => {
-				if (this.rowMenuContext.value === context) this.rowMenuContext.clear();
+				if (this.rowMenu.value === menu) this.rowMenu.clear();
 			},
 		});
 	}

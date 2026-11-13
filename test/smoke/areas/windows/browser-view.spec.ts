@@ -991,8 +991,9 @@ for (const locale of ['en', 'zh-CN']) {
 
 }
 
+const browserInputTest = test.extend({ electronWindowMode: 'active' });
 for (const locale of ['en', 'zh-CN'] as const) {
-	test(`browser preload preserves page keys and connects frame selection, comments and area attachments in ${locale}`, { tag: ['@electron-ui'] }, async ({ application: initialApplication, workbench: initialWorkbench, restartWorkbench }, testInfo) => {
+	browserInputTest(`browser preload preserves page keys and connects frame selection, comments and area attachments in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application: initialApplication, workbench: initialWorkbench, restartWorkbench }, testInfo) => {
 		let application = initialApplication;
 		let workbench = initialWorkbench;
 		if (locale === 'zh-CN') {
@@ -1003,10 +1004,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			({ application, workbench } = await restartWorkbench());
 		}
 		await installMainChannelTestClient(workbench.page);
-		const labels = locale === 'en' ? { address: 'Browser address', more: 'More Actions', find: 'Find in Page', element: 'Select Element for Chat', comment: 'Comment on Elements', area: 'Select Area for Chat', captured: 'Selection captured.', areaCaptured: 'Area captured.', sidebar: 'Show Secondary Side Bar', add: 'Add context', search: 'Search attachments', other: 'Other context sources', image: 'Browser area 1', save: 'Add Comment' } : { address: '浏览器地址', more: '更多操作', find: '在页面中查找', element: '为聊天选取元素', comment: '批注网页元素', area: '为聊天选取区域', captured: '已捕获选取内容。', areaCaptured: '已捕获区域。', sidebar: '显示辅助侧栏', add: '添加上下文', search: '搜索附件', other: '其他上下文来源', image: '浏览器区域 1', save: '添加批注' };
+		const labels = locale === 'en' ? { address: 'Browser address', more: 'More Actions', find: 'Find in Page', element: 'Select Element for Chat', comment: 'Comment on Elements', area: 'Select Area for Chat', captured: 'Selection captured.', areaCaptured: 'Area captured.', sidebar: 'Show Secondary Side Bar', add: 'Add context', search: 'Search attachments', other: 'Other context sources', selections: 'Browser selections', image: 'Browser area 1', save: 'Add Comment' } : { address: '浏览器地址', more: '更多操作', find: '在页面中查找', element: '为聊天选取元素', comment: '批注网页元素', area: '为聊天选取区域', captured: '已捕获选取内容。', areaCaptured: '已捕获区域。', sidebar: '显示辅助侧栏', add: '添加上下文', search: '搜索附件', other: '其他上下文来源', selections: '浏览器选取内容', image: '浏览器区域 1', save: '添加批注' };
 		const server = createServer((_request, response) => {
 			response.setHeader('Content-Type', 'text/html');
-			response.end(`<title>Preload integration</title><style>body { background:white; color:black; } #pick { width:240px; height:64px; margin:32px; }</style><h1 id="selection">Real selected words</h1><button id="pick" onclick="window.pageClicks=(window.pageClicks||0)+1">Pick target</button><iframe srcdoc="<input id='input' aria-label='Frame input'>"></iframe>`);
+			response.end(`<title>Preload integration</title><style>body { background:white; color:black; } #pick { width:240px; height:64px; margin:32px; } div { transform: translateX(200vw); } form, textarea, .outline, .marker { display:none; }</style><h1 id="selection">Real selected words</h1><button id="pick" onclick="window.pageClicks=(window.pageClicks||0)+1">Pick target</button><iframe srcdoc="<input id='input' aria-label='Frame input'>"></iframe>`);
 		});
 		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 		const address = server.address();
@@ -1015,6 +1016,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		const electron = application as ElectronApplication;
 		const page = workbench.page;
 		try {
+			if (process.platform === 'darwin') await electron.evaluate(({ app }) => app.focus({ steal: true }));
+			await page.bringToFront();
 			await workbench.quickaccess.runCommand('workbench.action.browser.open');
 			const editor = page.locator('.ash-browser-editor');
 			await editor.getByRole('textbox', { name: labels.address, exact: true }).fill(url);
@@ -1033,6 +1036,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await view.webContents.executeJavaScript(`document.body.tabIndex=0; document.body.focus(); const range=document.createRange(); range.selectNodeContents(document.querySelector('#selection')); const selection=window.getSelection(); selection.removeAllRanges(); selection.addRange(range); window.getSelection=()=>({toString:()=> 'Forged page selection'}); void 0;`);
 					view.webContents.focus();
 				});
+				await expect.poll(() => view.evaluate(view => view.webContents.isFocused())).toBe(true);
 				await key('F', command);
 				const find = page.getByRole('dialog', { name: labels.find });
 				await expect(find.getByRole('textbox')).toHaveValue('Real selected words');
@@ -1065,6 +1069,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await select(labels.comment);
 				await pick();
 				await expect.poll(() => view.evaluate(view => view.webContents.executeJavaScript('document.activeElement.className'))).toBe('ash-browser-selection');
+				expect(await view.evaluate(view => view.webContents.executeJavaScript('document.elementFromPoint(24, 24)?.className'))).toBe('ash-browser-selection');
 				await view.evaluate(view => view.webContents.insertText('Review spacing'));
 				await key('Tab');
 				await expect.poll(() => view.evaluate(async view => {
@@ -1085,10 +1090,16 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await expect(editor.getByRole('status')).toContainText(labels.areaCaptured);
 				if (!await page.locator('.ash-chat-view-pane').isVisible()) { await page.getByRole('button', { name: labels.sidebar, exact: true }).click(); }
 				const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
-				await chat.getByRole('button', { name: labels.add, exact: true }).click();
-				await page.getByRole('dialog', { name: labels.search, exact: true }).getByRole('option', { name: labels.other, exact: true }).click();
+				await chat.getByRole('button', { name: labels.add, exact: true }).press('Enter');
+				await page.getByRole('menuitem', { name: labels.search, exact: true }).press('Enter');
 				const picks = page.getByRole('dialog');
-				await expect(picks.getByRole('option', { name: /Review spacing/ })).toBeVisible();
+				await picks.getByRole('combobox').fill(labels.other);
+				await picks.getByRole('combobox').press('Enter');
+				const browserSource = picks.getByRole('option', { name: labels.selections, exact: true });
+				const comment = picks.getByRole('option', { name: /Review spacing/ });
+				await expect(browserSource.or(comment)).toBeVisible();
+				if (await browserSource.isVisible()) await browserSource.click();
+				await expect(comment).toBeVisible();
 				await picks.getByRole('option', { name: new RegExp(labels.image) }).click();
 				const image = chat.getByRole('img', { name: labels.image, exact: true });
 				await expect(image).toHaveAttribute('src', /^data:image\/png;base64,/);

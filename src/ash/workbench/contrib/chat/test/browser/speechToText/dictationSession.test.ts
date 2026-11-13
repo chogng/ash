@@ -16,6 +16,7 @@ import { activeDictationEditor, cancelDictation, isDictating, notifyDictationSub
 import { registerChatSpeechToTextActions } from '../../../browser/actions/chatSpeechToTextActions.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
+import { ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { ILocalTranscriptionModelService } from '../../../../../../platform/localTranscription/common/localTranscription.js';
 import { ILogService } from '../../../../../../platform/log/common/log.js';
@@ -263,7 +264,7 @@ function commandFixture() {
 	const resources = new DisposableStore();
 	const f = resources.add(fixture());
 	const services = resources.add(new InstantiationService());
-	const widgets = resources.add(new ChatWidgetService());
+	const widgets = resources.add(new ChatWidgetService(resources.add(new ContextKeyService())));
 	const hidden = resources.add(new Emitter<void>());
 	const changed = resources.add(new Emitter<void>());
 	const released = new DeferredPromise<void>();
@@ -273,7 +274,7 @@ function commandFixture() {
 		isTranscriptProgressActive: false, onDidHide: hidden.event, onDidChangeViewModel: changed.event,
 		acquireContext: async () => { throw new Error('Unexpected context preparation'); },
 		getFindController: () => undefined,
-		get input(): never { throw new Error('Unexpected composer operation'); },
+		input: {} as IChatWidget['input'],
 		retryFailedTurn: async () => { throw new Error('Unexpected retry'); },
 		focusCodeBlock: () => { throw new Error('Unexpected code block navigation'); },
 		acceptInput: async () => { },

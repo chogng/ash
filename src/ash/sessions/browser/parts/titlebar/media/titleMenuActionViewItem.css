@@ -1,0 +1,28 @@
+.ash-title-menu[hidden] {
+	display: none;
+}
+
+.ash-title-menu-trigger.ash-button {
+	max-width: 100%;
+	height: var(--ash-toolbar-actionSize);
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size40);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
+	color: inherit;
+	-webkit-app-region: no-drag;
+}
+
+.ash-title-menu-trigger[aria-expanded="true"] {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-title-menu-trigger > .ash-dropdown-menu-indicator {
+	flex: none;
+}
+
+.ash-title-menu-trigger .ash-button-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

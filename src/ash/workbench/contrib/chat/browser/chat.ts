@@ -1,6 +1,7 @@
-import type { IChatResponseFileChangesService } from './chatResponseFileChangesService.js';
+import type { ChatResponseFileChangesPresentation } from './chatResponseFileChangesService.js';
 import type { ChatMode } from '../../../services/chat/common/chatService.js';
 import type { IChatInputPart } from './widget/input/chatInputPart.js';
+import type { ChatInputDelegate } from './widget/input/chatInput.js';
 import type { ChatRequestQueueKind, QueuedMessage } from '../../../services/chat/common/chatService.js';
 import type { IView } from '../../../common/views.js';
 import type { AgentSessionsViewerOrientation } from './agentSessions/agentSessions.js';
@@ -25,12 +26,22 @@ import type { ChatEditorInput } from './widgetHosts/editor/chatEditorInput.js';
 
 export const CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT = 100;
 
+/** Captures the transcript selection for copy and draft actions. */
+export class ChatContextMenuActionContext {
+	constructor(
+		readonly text: string,
+		readonly html: string,
+		readonly addToChat: (() => void) | undefined,
+	) { }
+}
+
 /** Binds a toolbar action to its rendered message and row lifetime. */
 export class ChatMessageActionContext extends Disposable {
 	constructor(
 		private currentItem: IChatListItem,
 		readonly actions: HTMLElement,
 		private readonly isVisible: () => boolean,
+		readonly surface?: IChatWidgetViewOptions['messageActionSurface'],
 	) { super(); }
 
 	get visible(): boolean { return !this.isDisposed && this.isVisible(); }
@@ -46,8 +57,9 @@ export class ChatRequestActionContext extends ChatMessageActionContext {
 		item: IChatListItem, actions: HTMLElement, isVisible: () => boolean,
 		readonly startEditing: (requestId: string) => void | Promise<void>,
 		readonly getVersions?: (item: IChatListItem) => Promise<readonly ChatRequestVersion[]>,
+		surface?: IChatWidgetViewOptions['messageActionSurface'],
 	) {
-		super(item, actions, isVisible);
+		super(item, actions, isVisible, surface);
 	}
 }
 
@@ -69,7 +81,8 @@ export class ChatResponseActionContext extends ChatMessageActionContext {
 		isVisible: () => boolean,
 		private readonly setReading: (reading: boolean) => void,
 		private readonly getFork?: () => (() => Promise<void>) | undefined,
-	) { super(item, actions, isVisible); }
+		surface?: IChatWidgetViewOptions['messageActionSurface'],
+	) { super(item, actions, isVisible, surface); }
 
 	get isReading(): boolean { return !!this.playback; }
 	get fork(): (() => Promise<void>) | undefined { return this.visible ? this.getFork?.() : undefined; }
@@ -169,11 +182,18 @@ export interface IChatWidgetViewOptions {
 	readonly showPromptTimeline?: boolean;
 	/** Minimum number of loaded rows for virtualization. Undefined keeps the full transcript mounted. */
 	readonly virtualizeHistoryFrom?: import('../../../../base/common/observable.js').IObservable<number | undefined>;
-	readonly promptTimelineChanges?: IChatResponseFileChangesService['getChangesForRequest'];
-	readonly getTurnChanges?: IChatResponseFileChangesService['getChangesForResponse'];
+	readonly promptTimelineChanges?: ChatResponseFileChangesPresentation['getChangesForPrompt'];
+	readonly getTurnChanges?: ChatResponseFileChangesPresentation['getChangesForResponse'];
 	readonly openTurnChanges?: ChatTurnChangesOpener;
+	readonly changes?: {
+		refreshConversation(): Promise<void>;
+		/** Only hosts that own a window workspace may supply its change summary. */
+		readonly readWorkspace?: ChatInputDelegate['readWorkspaceChanges'];
+	};
 	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	readonly messagePresentation?: ChatMessagePresentation;
+	/** Retained with the transcript even when its window switches workspaces. */
+	readonly messageActionSurface?: 'chat' | 'code';
 	readonly codeBlockPresentation?: 'card';
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
@@ -197,7 +217,7 @@ export type ChatTurnChangesOpener = (source: NonNullable<IChatListItem['feedback
 export interface IChatWidget {
 	getFileTreeInfosForResponse(response: IChatListItem): readonly IChatFileTreeInfo[];
 	getLastFocusedFileTreeForResponse(response: IChatListItem): IChatFileTreeInfo | undefined;
-	readonly model?: Pick<import('./widget/chatWidget.js').IChatWidgetModel, 'onDidChange' | 'inputState' | 'thread' | 'composerGeneration' | 'items' | 'olderHistory' | 'loadOlderHistory'>;
+	readonly model?: Pick<import('./widget/chatWidget.js').IChatWidgetModel, 'onDidChange' | 'inputState' | 'commandInterpretation' | 'thread' | 'composerGeneration' | 'items' | 'olderHistory' | 'loadOlderHistory'>;
 	readonly input: IChatInputPart;
 	readonly sessionId: string | undefined;
 	readonly threadId: string | undefined;

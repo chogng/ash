@@ -516,6 +516,22 @@ suite('dialog browser component', () => {
 		});
 	});
 
+	test('form action prompts preserve severity and action indices, focus Cancel, and fit narrow windows', async function () {
+		const { page } = browserTests;
+		await page.setViewportSize({ width: 210, height: 500 });
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showChoice(true));
+		const dialog = page.getByRole('dialog', { name: 'Choose action' });
+		const actions = dialog.locator('.ash-dialog-actions');
+		await expect(dialog).toHaveClass(/\bash-dialog-form\b/);
+		await expect(dialog).toHaveAttribute('data-dialog-severity', 'warning');
+		await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+		await expect(actions).toHaveCSS('flex-wrap', 'wrap');
+		expect(await actions.evaluate(element => element.scrollWidth)).toBe(await actions.evaluate(element => element.clientWidth));
+		await dialog.getByRole('button', { name: 'Third', exact: true }).press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome?.buttonIndex)).toBe(2);
+	});
+
 	test('aborting a dialog settles it as cancelled and removes its modal', async function () {
 		const { page } = browserTests;
 

@@ -1,12 +1,13 @@
 import { getWindow } from '../../../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../../../../base/common/lifecycle.js';
+import { autorun, type IObservable } from '../../../../../../base/common/observable.js';
 import { EditorOption } from '../../../../../../editor/common/config/editorOptions.js';
 import type { IChatInputEditor } from './chatInputEditorRegistry.js';
 import './chatInputLayout.css';
 
 /** Keeps short drafts and composer actions on the same line when they fit. */
-export function installChatInputLayout(container: HTMLElement, input: IChatInputEditor, actions: HTMLElement, attachments: HTMLElement): IDisposable {
+export function installChatInputLayout(container: HTMLElement, input: IChatInputEditor, actions: HTMLElement, attachments: HTMLElement, alwaysExpanded?: IObservable<boolean>): IDisposable {
 	const store = new DisposableStore();
 	container.classList.add('ash-chat-input-adaptive');
 	actions.classList.add('ash-chat-input-inline-toolbar');
@@ -22,13 +23,19 @@ export function installChatInputLayout(container: HTMLElement, input: IChatInput
 		const rightPadding = parseFloat(style.paddingRight);
 		const compactWidth = container.clientWidth - parseFloat(style.paddingLeft) - rightPadding
 			- actions.offsetWidth - gap - attachments.offsetWidth - gap;
-		const expanded = !fitsOnSingleLine(compactWidth);
+		const expanded = alwaysExpanded?.get() === true || !fitsOnSingleLine(compactWidth);
 		const changed = expanded !== container.classList.contains('expanded');
 		container.classList.toggle('expanded', expanded);
 		const editorChanged = input.setCompactLayout?.(!expanded, rightPadding);
 		if (changed || editorChanged) input.layout();
 	}, 0));
 	const schedule = (): void => layout.schedule();
+	if (alwaysExpanded) {
+		store.add(autorun(reader => {
+			alwaysExpanded.read(reader);
+			schedule();
+		}));
+	}
 	store.add(input.onDidChange(schedule));
 	if (input.codeEditor) {
 		store.add(input.codeEditor.onDidChangeConfiguration(event => {

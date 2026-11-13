@@ -8,7 +8,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import type { MultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IMultiDiffSourceResolverService, type IMultiDiffSourceResolver, type IResolvedMultiDiffSource } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
-import { IChatService as ChatServiceId, type IChatService, type TurnCommitSelection } from '../../../../workbench/services/chat/common/chatService.js';
+import { IChatService as ChatServiceId, canPreviewTurnChange, type IChatService, type TurnCommitSelection } from '../../../../workbench/services/chat/common/chatService.js';
 import { IEditorService, type IEditorService as IEditorServiceContract } from '../../../../workbench/services/editor/common/editorService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { createTurnCommitPreviewInput, createTurnMultiDiffEditorInput, type TurnMultiDiffScope } from '../../../browser/turnMultiDiffSource.js';
@@ -84,7 +84,7 @@ export class ChangesMultiDiffSourceResolver implements IMultiDiffSourceResolver 
 		let draft = '';
 		for (const record of selected) {
 			const details = await this.chat.readTurnChange(identity.sessionId, identity.threadId, record.changeSetId);
-			const paths = details.files.filter(file => !details.summary.committedPaths.includes(file.path)).map(file => file.path);
+			const paths = details.files.filter(file => canPreviewTurnChange(details.summary, file.path)).map(file => file.path);
 			if (paths.length) { selections.push({ changeSetId: record.changeSetId, expectedRevision: details.summary.revision, paths }); }
 			if (selected.length === 1) { draft = details.draftMessage ?? ''; }
 		}

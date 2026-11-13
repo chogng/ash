@@ -204,7 +204,15 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
 }
 
 impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor<'ctx, C> {
-    fn runtime(&self) -> Result<super::language_runtime::LanguageRuntimeGuard, RpcError> {
+    fn runtime(
+        &self,
+    ) -> Result<
+        (
+            super::language_runtime::LanguageRuntimeGuard,
+            ash_config::ResolvedConfigSnapshot,
+        ),
+        RpcError,
+    > {
         let snapshot = self
             .extensions
             .lock()
@@ -227,9 +235,9 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                 log::error!("language extension discovery failed: {error}");
                 language_error(AppServerErrorName::LanguageServiceUnavailable)
             })?;
-        Ok(super::language_runtime::LanguageRuntimeGuard::new(
-            runtime,
-            self.connection_id,
+        Ok((
+            super::language_runtime::LanguageRuntimeGuard::new(runtime, self.connection_id),
+            configuration,
         ))
     }
 
@@ -266,13 +274,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let dir = self
             .context
             .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
-        let snapshot = self
-            .config
-            .as_ref()
-            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
-            .read_snapshot()
-            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
-        let mut runtime = self.runtime()?;
+        let (mut runtime, snapshot) = self.runtime()?;
         if !runtime.directory_enabled(dir.canonical_path(), &snapshot.values.language_servers) {
             return result(&LanguageServersResult {
                 servers: Vec::new(),
@@ -323,13 +325,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let dir = self
             .context
             .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
-        let snapshot = self
-            .config
-            .as_ref()
-            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
-            .read_snapshot()
-            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
-        let mut runtime = self.runtime()?;
+        let (mut runtime, snapshot) = self.runtime()?;
         if !runtime.directory_enabled(dir.canonical_path(), &snapshot.values.language_servers) {
             return result(&());
         }
@@ -428,6 +424,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .resolve_existing(&params.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         self.runtime()?
+            .0
             .save_document(dir.canonical_path(), &path, params.text)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         result(&())
@@ -446,6 +443,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .resolve_for_write(&params.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         self.runtime()?
+            .0
             .close_document(dir.canonical_path(), &source_path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         result(&())
@@ -509,7 +507,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .context
             .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
         let language_id = ash_language::canonical_language_id(&params.language_id);
-        let mut runtime = self.runtime()?;
+        let (mut runtime, _) = self.runtime()?;
         let Some(request_id) = runtime
             .request_workspace_diagnostics(dir.canonical_path(), language_id)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?
@@ -637,12 +635,6 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         if cancellation.is_cancelled() {
             return Err(language_error(AppServerErrorName::RequestCancelled));
         }
-        let snapshot = self
-            .config
-            .as_ref()
-            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
-            .read_snapshot()
-            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let revision = LanguageDocumentRevision::new(document.revision);
         let service_document = LspDocumentSnapshot::new(
             source_path,
@@ -651,7 +643,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             &document.text,
         )
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let mut runtime = self.runtime()?;
+        let (mut runtime, snapshot) = self.runtime()?;
         runtime
             .synchronize_document(
                 dir.canonical_path(),
@@ -1177,12 +1169,6 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let position = utf8_position(&params.document.text, params.position)
             .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let snapshot = self
-            .config
-            .as_ref()
-            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
-            .read_snapshot()
-            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
         let document = LspDocumentSnapshot::new(
             &source_path,
@@ -1191,7 +1177,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             &params.document.text,
         )
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let mut runtime = self.runtime()?;
+        let (mut runtime, snapshot) = self.runtime()?;
         runtime
             .synchronize_document(
                 dir.canonical_path(),
@@ -1287,12 +1273,6 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                     .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))
             })
             .transpose()?;
-        let snapshot = self
-            .config
-            .as_ref()
-            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
-            .read_snapshot()
-            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
         let document = LspDocumentSnapshot::new(
             &source_path,
@@ -1305,7 +1285,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .item
             .map(|item| hierarchy_item_from_dto(&dir, item))
             .transpose()?;
-        let mut runtime = self.runtime()?;
+        let (mut runtime, snapshot) = self.runtime()?;
         runtime
             .synchronize_document(
                 dir.canonical_path(),
@@ -1382,14 +1362,8 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let dir = self
             .context
             .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
-        let snapshot = self
-            .config
-            .as_ref()
-            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
-            .read_snapshot()
-            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let language_id = ash_language::canonical_language_id(&params.language_id);
-        let mut runtime = self.runtime()?;
+        let (mut runtime, snapshot) = self.runtime()?;
         let service = runtime
             .ensure(
                 dir.canonical_path(),

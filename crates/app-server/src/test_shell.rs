@@ -1,4 +1,4 @@
-//! Real child commands for history/RPC tests through the local process backend.
+//! Controlled child commands for history/RPC tests through the shared process executor.
 //! Windows account isolation has its own explicitly provisioned acceptance test.
 
 use std::path::PathBuf;
@@ -29,6 +29,11 @@ use ash_protocol::ToolCall;
 use ash_protocol::ToolDefinition;
 use ash_sandboxing::FileSystemAccess;
 use ash_sandboxing::NetworkAccess;
+use ash_sandboxing::PreparedCommand;
+use ash_sandboxing::SandboxBackend;
+use ash_sandboxing::SandboxCommand;
+use ash_sandboxing::SandboxError;
+use ash_sandboxing::SandboxKind;
 use ash_sandboxing::SandboxPolicy;
 use core_api::ActionPolicyService;
 use core_api::CoreError;
@@ -138,14 +143,14 @@ impl ToolService for Shell {
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         let executor = ProcessExecutor::new(
             authorization.dir().clone(),
-            exec_server::LocalSandbox::new(ash_install_context::InstallContext::current()).build(),
+            FixtureProcessBackend,
             ExecutionLimits {
                 timeout: Duration::from_secs(30),
                 max_output_bytes: 64 * 1024,
             },
         );
-        // Keep the real command, process lifecycle and current Thread grant.
-        // Git metadata still requires isolation even for an unrestricted fixture command.
+        // These test-owned commands exercise history capture, grants and the real child lifecycle.
+        // Platform isolation is covered by provisioned sandbox tests, not this RPC fixture.
         let outcome = authorization
             .execute(
                 authorization.subject(),
@@ -174,6 +179,28 @@ impl ToolService for Shell {
             }).to_string())),
             CommandExecutionOutcome::SandboxDenied(denial) => Ok(ToolExecutionOutput::Failure(denial.reason().into())),
         }
+    }
+}
+
+struct FixtureProcessBackend;
+
+impl SandboxBackend for FixtureProcessBackend {
+    fn kind(&self) -> SandboxKind {
+        SandboxKind::Unrestricted
+    }
+
+    fn prepare(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        _: &ash_file_access::Dir,
+    ) -> Result<PreparedCommand, SandboxError> {
+        if policy.requires_platform_sandbox() {
+            return Err(SandboxError::UnsupportedPolicy(
+                "history fixtures require explicitly unrestricted command authority".into(),
+            ));
+        }
+        Ok(PreparedCommand::unrestricted(command))
     }
 }
 

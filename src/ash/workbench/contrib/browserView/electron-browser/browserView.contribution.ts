@@ -5,7 +5,8 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../base/comm
 import { extUri } from '../../../../base/common/resources.js';
 
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { BrowserViewStorageScope } from '../../../../platform/browserView/common/browserView.js';
+import { BrowserOpenLocalhostLinksSettingId, BrowserViewStorageScope } from '../../../../platform/browserView/common/browserView.js';
+import { isAllInterfacesAuthority, isLocalhostAuthority } from '../../../../platform/url/common/trustedDomains.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { EditorPanes } from '../../../browser/editor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -46,10 +47,16 @@ registerWorkbenchContribution('workbench.contrib.browserView', WorkbenchPhase.Bl
 			yield {
 				id: 'ash.browser.open',
 				label: localize('browser.urlOpener', 'Open in Ash browser'),
-				// Offer the browser for explicit URL rules without changing ordinary link opening.
-				canOpen: async uri => configuration.getValue<boolean>('workbench.browser.openLocalhostLinks') && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(uri.toString()).hostname) ? ExternalUriOpenerPriority.Preferred : ExternalUriOpenerPriority.Option,
-				openExternalUri: async uri => {
-					await views.createBrowserView({ initialUrl: uri.toString(), owner: { type: 'user' } });
+				opensInWorkbench: true,
+				canOpen: async uri => {
+					if (configuration.getValue<boolean>(BrowserOpenLocalhostLinksSettingId)) {
+						const { host } = new URL(uri.toString());
+						if (isLocalhostAuthority(host) || isAllInterfacesAuthority(host)) return ExternalUriOpenerPriority.Preferred;
+					}
+					return ExternalUriOpenerPriority.Option;
+				},
+				openExternalUri: async (uri, options) => {
+					await views.createBrowserView({ initialUrl: uri.toString(), owner: { type: 'user' } }, undefined, options);
 					return true;
 				},
 			};

@@ -6,7 +6,7 @@ import { URI } from '../../../base/common/uri.js';
 import { StorageTarget } from '../../../platform/storage/common/storage.js';
 import { suite, test, setup, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
-import { DOCS_EDITOR_SETTING } from '../../contrib/artifacts/contrib/docs/common/docs.js';
+import { DOCS_EDITOR_SETTING } from '../../contrib/docs/common/docs.js';
 
 suite('sessions browser component', () => {
 	const browserTests = useBrowserTests();
@@ -177,7 +177,7 @@ suite('sessions browser component', () => {
 		const searchInput = actions.getByRole('searchbox', { name: '搜索作品' });
 		const closeSearch = actions.getByRole('button', { name: '关闭作品搜索' });
 		const panel = creator.getByRole('tabpanel');
-		const createTiles = creator.locator('.ash-creator-modes');
+		const createTiles = creator.locator('.ash-chat-creation');
 		await expect(layout).toHaveAttribute('aria-controls', (await panel.getAttribute('id'))!);
 		await expect(layout.locator('[data-ash-icon-id="layout-grid"]')).toBeVisible();
 		await layout.hover();
@@ -189,11 +189,7 @@ suite('sessions browser component', () => {
 		expect((await panel.boundingBox())!.height).toBeGreaterThan((await empty.boundingBox())!.height);
 
 		for (let count = 0; count < 2; count++) {
-			const quick = new QuickAccess(page);
-			await quick.runCommand('sessions.creator.chooseDocsEditor');
-			await quick.select('新建空白文档');
-			await expect(creator).toBeHidden();
-			await home.click();
+			await page.evaluate(count => window.ashSessionsIntegration.publishGeneratedFile(`layout-${count}`, '未命名文档'), count);
 		}
 		const cards = panel.getByRole('button', { name: '未命名文档' });
 		await expect(cards).toHaveCount(2);
@@ -1164,7 +1160,29 @@ suite('sessions browser component', () => {
 		const titlebar = page.locator("[data-part='titlebar']");
 		await expect(titlebar).toBeVisible();
 		await expect(titlebar.getByRole('button', { name: 'Return to Workbench' })).toHaveCount(0);
-		await expect(titlebar.getByRole('button', { name: 'Rename session (New Chat)', exact: true })).toBeVisible();
+		const chatTitle = titlebar.getByRole('button', { name: 'Chat actions (New Chat)', exact: true });
+		const rename = page.getByRole('menuitem', { name: 'Rename', exact: true });
+		const input = titlebar.getByRole('textbox', { name: 'Session name', exact: true });
+		await expect(chatTitle).toHaveAttribute('aria-haspopup', 'menu');
+		await expect(chatTitle).toHaveCSS('gap', '4px');
+		await expect(chatTitle).toHaveCSS('font-weight', '400');
+		await expect(titlebar.getByRole('button', { name: 'More Sessions Actions', exact: true })).toHaveCount(0);
+		await chatTitle.getByText('New Chat', { exact: true }).click();
+		await expect(chatTitle).toHaveAttribute('aria-expanded', 'true');
+		await expect(rename).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: 'Open in new window', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('menuitem', { name: 'Set Workspace…', exact: true })).toHaveCount(0);
+		await expect(input).toBeHidden();
+		await page.keyboard.press('Escape');
+		await expect(chatTitle).toBeFocused();
+		await chatTitle.locator('.ash-dropdown-menu-indicator').click();
+		await rename.click();
+		await expect(input).toBeFocused();
+		await expect(chatTitle).toBeHidden();
+		await input.fill('Discarded title');
+		await input.press('Escape');
+		await expect(chatTitle).toBeFocused();
+		await expect(chatTitle).toHaveAttribute('aria-expanded', 'false');
 		const titlebarActions = titlebar.getByRole('toolbar', { name: 'Title bar left actions', exact: true });
 		await expect(titlebarActions).toBeVisible();
 		await expect(titlebarActions.getByRole('menuitem', { name: 'Application menu', exact: true })).toBeVisible();
@@ -1284,7 +1302,7 @@ suite('sessions browser component', () => {
 		const titlebar = page.locator('[data-part="titlebar"]');
 		const titleMenu = titlebar.locator('.ash-sessions-titlebar-menu');
 		const tools = titlebar.getByRole('toolbar', { name: 'Code layout', exact: true });
-		const toolHeaders = titlebar.locator('.ash-sessions-titlebar-tool-headers');
+		const toolHeaders = titlebar.locator('.ash-sessions-titlebar-editor-headers');
 		const filesHeader = toolHeaders.locator('[data-editor-tool="files"] > .ash-editor-group-header');
 		const editor = page.locator('[data-part="editor"]');
 		const conversation = page.locator('[data-part="sessions"]');

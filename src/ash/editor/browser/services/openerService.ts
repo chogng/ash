@@ -78,9 +78,13 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 
 	async open(target: URI | string, options?: OpenOptions): Promise<boolean> {
 		const resource = typeof target === 'string' ? URI.parse(target) : target;
+		const webLink = resource.scheme === 'http' || resource.scheme === 'https';
+		const useContributedOpeners = options?.allowContributedOpeners && options.allowContributedOpeners !== defaultExternalUriOpenerId;
+		const deferConfirmation = webLink && useContributedOpeners && [...this._externalOpeners].some(opener => opener.selectsWorkbenchDestination);
+		const validationTarget = this._resolvedUriTargets.get(resource.toString()) ?? target;
 		if (!options?.skipValidation) {
-			const validationTarget = this._resolvedUriTargets.get(resource.toString()) ?? target;
 			for (const validator of this._validators) {
+				if (deferConfirmation && validator.externalOnly) continue;
 				if (!await validator.shouldOpen(validationTarget, options)) return false;
 			}
 		}
@@ -99,8 +103,12 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 			await this.commandService.executeCommand(id, ...args);
 			return true;
 		}
-		if (options?.openExternal || resource.scheme === 'http' || resource.scheme === 'https' || resource.scheme === 'mailto') {
-			return this._doOpenExternal(target, options);
+		if (options?.openExternal || webLink || resource.scheme === 'mailto') {
+			let confirmation: Promise<boolean> | undefined;
+			const confirmExternal = deferConfirmation && !options?.skipValidation
+				? () => confirmation ??= this.confirmExternal(validationTarget, options)
+				: undefined;
+			return this._doOpenExternal(resource, options, confirmExternal);
 		}
 		for (const opener of this._openers) {
 			if (await opener.open(target, options)) return true;
@@ -118,8 +126,14 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 		throw new Error(`Could not resolve external URI: ${resource.toString()}`);
 	}
 
-	private async _doOpenExternal(target: URI | string, options?: OpenOptions): Promise<boolean> {
-		const sourceUri = typeof target === 'string' ? URI.parse(target) : target;
+	private async confirmExternal(target: URI | string, options?: OpenOptions): Promise<boolean> {
+		for (const validator of this._validators) {
+			if (validator.externalOnly && !await validator.shouldOpen(target, options)) return false;
+		}
+		return true;
+	}
+
+	private async _doOpenExternal(sourceUri: URI, options: OpenOptions | undefined, confirmExternal: (() => Promise<boolean>) | undefined): Promise<boolean> {
 		let resolved = sourceUri;
 		let resolution: IResolvedExternalUri | undefined;
 		for (const resolver of this._resolvers) {
@@ -135,9 +149,15 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 			if (options?.allowContributedOpeners && options.allowContributedOpeners !== defaultExternalUriOpenerId) {
 				const preferredOpenerId = typeof options.allowContributedOpeners === 'string' ? options.allowContributedOpeners : undefined;
 				for (const opener of this._externalOpeners) {
-					if (await opener.openExternal(href, { sourceUri, preferredOpenerId }, CancellationToken.None)) return true;
+					if (!opener.selectsWorkbenchDestination && confirmExternal && !await confirmExternal()) return false;
+					if (await opener.openExternal(href, {
+						sourceUri, preferredOpenerId, confirmExternal,
+						openToSide: options.openToSide,
+						sourceWindowId: options.sourceWindowId,
+					}, CancellationToken.None)) return true;
 				}
 			}
+			if (confirmExternal && !await confirmExternal()) return false;
 			if (!this._defaultExternalOpener) throw new Error('No default external opener is registered');
 			return await this._defaultExternalOpener.openExternal(href, { sourceUri }, CancellationToken.None);
 		} finally {

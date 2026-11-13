@@ -303,8 +303,8 @@ impl GitClient {
     }
 }
 
-struct IndexLock {
-    path: PathBuf,
+pub(super) struct IndexLock {
+    pub(super) path: PathBuf,
     state: IndexLockState,
 }
 
@@ -313,7 +313,7 @@ enum IndexLockState {
     Published,
 }
 impl IndexLock {
-    fn acquire(path: PathBuf) -> GitResult<Self> {
+    pub(super) fn acquire(path: PathBuf) -> GitResult<Self> {
         std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -326,7 +326,7 @@ impl IndexLock {
     }
 }
 impl IndexLock {
-    fn publish(&mut self, index: &Path) -> GitResult<()> {
+    pub(super) fn publish(&mut self, index: &Path) -> GitResult<()> {
         std::fs::rename(&self.path, index).map_err(|_| invalid("cannot replace index"))?;
         // After rename, the lock path may immediately belong to another Git process.
         self.state = IndexLockState::Published;

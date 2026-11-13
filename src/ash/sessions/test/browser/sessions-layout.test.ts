@@ -1041,6 +1041,7 @@ class TestLayoutAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	private readonly closed = this._register(new Emitter<void>());
 	readonly onDidClose = this.closed.event;
 	readonly whenStylesHaveLoaded = Promise.resolve();
+	async focus(): Promise<void> { this.window.focus(); }
 	private readonly closeDocument = this.dom.window.close.bind(this.dom.window);
 	constructor() {
 		super();

@@ -772,3 +772,262 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
         );
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn startup_resumes_published_turn_checkout_and_index_from_the_production_store() {
+    published_turn_checkout_resumes(true);
+}
+
+#[cfg(unix)]
+#[test]
+fn retry_resumes_the_original_published_turn_checkout() {
+    published_turn_checkout_resumes(false);
+}
+
+#[cfg(unix)]
+fn published_turn_checkout_resumes(restart: bool) {
+    use git_turn_changes::TurnChangeStore;
+    use git_turn_changes::TurnCommitStore;
+    use std::os::unix::fs::PermissionsExt;
+    let profile = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    let git = |arguments: &[&str]| {
+        let output = std::process::Command::new("git")
+            .current_dir(source.path())
+            .args([
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(arguments)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    };
+    git(&["init", "--quiet", "--initial-branch=main"]);
+    git(&["config", "user.name", "Recovery test"]);
+    git(&["config", "user.email", "recovery@example.invalid"]);
+    git(&["config", "core.autocrlf", "false"]);
+    std::fs::write(source.path().join("note"), "base\n").unwrap();
+    std::fs::write(source.path().join("local"), "base local\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "--quiet", "-m", "base"]);
+    let options = || {
+        AppServerOptions::new(profile.path())
+            .with_codex_home(profile.path().join("codex"))
+            .without_built_in_skills()
+            .with_dir_root(source.path())
+    };
+    let server = crate::test_shell::install(
+        open_app_server(options(), ash_app_server_diff::compute).unwrap(),
+    );
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let created = call(
+        &server,
+        &mut connection,
+        "session/create",
+        serde_json::json!({
+            "commandId":"recovery-session", "title":"Recovery", "kind":"code",
+            "executionTarget":{"type":"local","root":source.path()}
+        }),
+    );
+    let session =
+        ash_protocol::SessionId::new(created["session"]["sessionId"].as_str().unwrap()).unwrap();
+    let thread = ash_protocol::ThreadId::new(
+        created["session"]["threads"][0]["threadId"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    let read = call(
+        &server,
+        &mut connection,
+        "session/thread/read",
+        serde_json::json!({"sessionId":session,"threadId":thread}),
+    );
+    call(
+        &server,
+        &mut connection,
+        "execPolicy/rule/upsert",
+        serde_json::json!({"commandId":"recovery-shell-policy","expectedRevision":0,"rule":{"id":"recovery-shell-policy","selector":{"type":"source","source":"built_in_tool","sourceId":"shell-command"},"effect":{"type":"allowUnsandboxed"},"justification":"test owns this temporary directory"}}),
+    );
+    call(
+        &server,
+        &mut connection,
+        "session/request",
+        serde_json::json!({
+            "sessionId":session,"commandId":"recovery-turn","request":{
+                "type":"startShellTurn","threadId":thread,"expectedSequence":read["thread"]["sequence"],
+                "approvalMode":"bypassPermissions","command":"printf 'sealed turn\\n' > note","workingDirectory":"."
+            }
+        }),
+    );
+    let runtime = server.git_turn_changes.as_ref().unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let capture = loop {
+        let records = runtime.list(&session, &thread).unwrap();
+        if let Some(capture) = records
+            .into_iter()
+            .find(|capture| capture.capture_state == git_turn_changes::CaptureState::Sealed)
+        {
+            break capture;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "Turn capture was not sealed"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    let client = ash_git::GitClient::system();
+    let async_runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let (capture_id, object_id, journal) = async_runtime.block_on(async {
+        let target = client.open_repository(source.path()).await.unwrap();
+        let preview = git_turn_changes::prepare_selection(
+            &client,
+            &target,
+            "startup-commit".into(),
+            &session,
+            &thread,
+            &[capture.clone()],
+            &[git_turn_changes::TurnCommitSelection {
+                change_set_id: capture.change_set_id.clone(),
+                expected_revision: capture.revision,
+                paths: vec!["note".into()],
+            }],
+            "Recover the same Turn".into(),
+        )
+        .await
+        .unwrap();
+        let git_turn_changes::TurnPublication::Prepared { commit } = &preview.publication else {
+            panic!("prepared commit")
+        };
+        let object_id = commit.object_id().to_owned();
+        runtime
+            .store
+            .save_preview(&preview, "startup-preview", "preview", "{}")
+            .unwrap();
+        runtime
+            .store
+            .queue_publication("startup-commit", "startup-queue", "queue", "{}")
+            .unwrap();
+        std::fs::write(source.path().join("local"), "staged local\n").unwrap();
+        git(&["add", "local"]);
+        std::fs::write(source.path().join("local"), "unstaged local\n").unwrap();
+        let executable = profile.path().join("git-failure");
+        let quote = |path: &std::path::Path| {
+            format!("'{}'", path.display().to_string().replace('\'', "'\\''"))
+        };
+        std::fs::write(
+            &executable,
+            format!(
+                r#"#!/bin/sh
+set -eu
+real_git={}
+case " $* " in
+  *" read-tree -m -u "*) "$real_git" "$@"; exit 73 ;;
+esac
+exec "$real_git" "$@"
+"#,
+                quote(&client.executable().unwrap())
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let failing =
+            ash_git::GitClient::with_executable(executable, ash_git::GitExecutionLimits::default())
+                .unwrap();
+        git_turn_changes::publish_selection(
+            runtime.store.as_ref(),
+            &failing,
+            &target,
+            "startup-commit",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            runtime.store.load_commit("startup-commit").unwrap().state,
+            git_turn_changes::TurnCommitState::Recovering {
+                paths: vec!["note".into()],
+                error: None
+            }
+        );
+        assert_eq!(git(&["rev-parse", "HEAD"]), object_id);
+        assert_eq!(git(&["show", ":note"]), "base");
+        let journal = target
+            .common_dir()
+            .join("ash/commit-transactions/startup-commit.json");
+        assert!(journal.exists());
+        (capture.change_set_id, object_id, journal)
+    });
+    let server = if restart {
+        drop(connection);
+        drop(server);
+        // Product startup discovers and completes the journal.
+        open_app_server(options(), ash_app_server_diff::compute).unwrap()
+    } else {
+        let response = call(
+            &server,
+            &mut connection,
+            "turnChanges/commit",
+            serde_json::json!({
+                "sessionId":session,"threadId":thread,"commandId":"retry-checkout","commitId":"startup-commit"
+            }),
+        );
+        assert_eq!(response["changeSets"][0]["commitState"], "recovering");
+        assert_eq!(response["changeSets"][0]["commitId"], "startup-commit");
+        assert_eq!(
+            response["changeSets"][0]["conflictPaths"],
+            serde_json::json!(["note"])
+        );
+        server
+    };
+    let runtime = server.git_turn_changes.as_ref().unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        let state = runtime.store.load_commit("startup-commit").unwrap().state;
+        if state
+            == (git_turn_changes::TurnCommitState::Committed {
+                object_id: object_id.clone(),
+            })
+        {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "did not recover checkout: {state:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(git(&["rev-parse", "HEAD"]), object_id);
+    assert_eq!(git(&["rev-list", "--count", "HEAD"]), "2");
+    assert_eq!(git(&["show", ":note"]), "sealed turn");
+    assert_eq!(git(&["show", ":local"]), "staged local");
+    assert_eq!(
+        std::fs::read_to_string(source.path().join("local")).unwrap(),
+        "unstaged local\n"
+    );
+    assert!(matches!(
+        runtime.store.load(&capture_id).unwrap().commit_state,
+        git_turn_changes::CommitState::Committed { .. }
+    ));
+    // The receipt is stored immediately before acknowledgement; wait for the worker to finish it.
+    while journal.exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "recovery left its transaction journal"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(git(&["for-each-ref", "refs/ash/commit-transactions"]).is_empty());
+}

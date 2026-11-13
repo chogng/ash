@@ -46,8 +46,7 @@ import { getSessionsTitlebarBackground } from '../browser/parts/titlebarPart.js'
 import { registerTitleService } from '../services/title/electron-browser/titleService.js';
 import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
 import { AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL, AGENTS_WINDOW_READY_CHANNEL, AGENTS_WINDOW_STARTUP_INTENT_CHANNEL, AGENTS_WINDOW_WORKSPACE_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
-import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../../platform/window/common/window.js';
-import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
+import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, type AgentsWindowHandoff } from '../../platform/window/common/window.js';
 import { ElectronLifecycleService } from '../../workbench/services/lifecycle/electron-browser/lifecycleService.js';
 import { StartupKind } from '../../workbench/services/lifecycle/common/lifecycle.js';
 import { NativeHostColorSchemeService } from '../../workbench/services/themes/electron-browser/nativeHostColorSchemeService.js';
@@ -56,6 +55,7 @@ import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
 import { IBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
 import { IBrowserViewService, ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
+import { URLHandlerChannelClient } from '../../platform/url/common/urlIpc.js';
 import { ISecretStorageService } from '../../platform/secrets/common/secrets.js';
 import { SecretStorageService } from '../../workbench/services/secrets/electron-browser/secretStorageService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
@@ -95,7 +95,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		try {
 			while (drainRequested) {
 				drainRequested = false;
-				let handoff: { readonly id: string; readonly options: IOpenAgentsWindowOptions; } | undefined;
+				let handoff: { readonly id: string; readonly options: AgentsWindowHandoff; } | undefined;
 				while ((handoff = await invoke<typeof handoff>(AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL))) {
 					try {
 						if (handoff.options.draft && !handoff.options.conversation && api.appServer.isAvailable) {
@@ -152,6 +152,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		// Release automation dependencies before their Main IPC connection during window shutdown.
 		profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 		const mainProcessService = profileServices.get(IMainProcessService);
+		const urlHandler = new URLHandlerChannelClient(mainProcessService.getChannel('url'));
 		const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'), false, sandboxProcess.isBuilt);
 		profileServices.registerInstance(IWorkbenchEnvironmentService, environment);
 		const playwrightService = profileServices.get(IPlaywrightService);
@@ -313,11 +314,14 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					}
 					: undefined,
 				contributionIds: [
+					'sessions.generatedFileAutoSave',
+					'sessions.generatedFileOpener',
 					'sessions.projectMaterialFiles',
 					'sessions.chat.copyActionRendering',
 					'chat.queuePickerRendering',
 					'workbench.contrib.btwSlashCommand',
 					'workbench.contrib.chatSideChat',
+					'workbench.contrib.chatInputSessionLinks',
 					'workbench.contrib.policyTelemetry',
 					'workbench.contrib.limitIndicator',
 					'status.languageStatus',
@@ -416,6 +420,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				api,
 				workspaceSelection: () => workspaceSelection,
 				workspace: () => workspace,
+				openArtifactLinkInHost: resource => urlHandler.handleURL(resource),
 				bindLocalWorkspaceFolder: api.bindLocalWorkspaceFolder,
 				initialWorkspaceReady,
 				createFileDialogService: services => services.createInstance(FileDialogService),

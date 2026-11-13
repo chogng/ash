@@ -42,7 +42,7 @@ setup(() => {
 	windowServices.registerSingleton(ILifecycleMainService, () => new LifecycleMainService(() => { }, () => { }, {
 		getItem: () => undefined, setItem: () => { }, removeItem: () => { }, flush: async () => { }, close: async () => { },
 	}, 'test'));
-	windowServices.registerSingleton(IAuxiliaryWindowsMainService, () => new AuxiliaryWindowsMainService(contents => (contents as unknown as TestWindow['webContents']).getOwnerBrowserWindow()));
+	windowServices.registerSingleton(IAuxiliaryWindowsMainService, () => new AuxiliaryWindowsMainService(contents => (contents as unknown as TestWindow['webContents']).getOwnerBrowserWindow(), () => undefined));
 });
 teardown(() => windowServices.dispose());
 
@@ -411,11 +411,25 @@ test('auxiliary creation validates popup bounds independently of whether a posit
 	assert.ok(custom.titleBarOverlay);
 	const restored = service.createWindow(request('width=800,height=600,window-maximized=yes,window-always-on-top=yes,window-zoom-level=2'), 'custom');
 	assert.deepEqual({ show: restored.show, pinned: restored.alwaysOnTop, zoom: restored.webPreferences?.zoomFactor }, { show: false, pinned: true, zoom: 1.44 });
+	assert.equal(service.createWindow(request(''), 'system', 0, true).alwaysOnTop, true);
+	assert.equal(service.createWindow(request('window-always-on-top=no'), 'system', 0, true).alwaysOnTop, false);
+	assert.throws(() => service.createWindow(request('window-always-on-top=maybe'), 'system'), /Invalid auxiliary always-on-top/);
 	assert.throws(() => service.createWindow(request('window-zoom-level=Infinity'), 'custom'), /Invalid auxiliary zoom/);
 	for (const features of ['width=0', 'height=-1', 'x=NaN', 'width=', 'height=1.5']) {
 		assert.throws(() => service.createWindow(request(features), 'custom'), /Invalid auxiliary window/);
 	}
 	assert.throws(() => service.createWindow({ ...request(''), url: 'https://example.com' }, 'custom'), /same-origin document/);
+});
+
+test('auxiliary creation fits restored bounds into the current display work area', () => {
+	const bounds = { x: 0, y: 0, width: 1200, height: 800 };
+	const workArea = { ...bounds, height: 760 };
+	using service = new AuxiliaryWindowsMainService(() => null, () => ({ id: 1, bounds, workArea }));
+	const result = service.createWindow({
+		url: 'about:blank', features: 'width=800,height=600,x=5000,y=-500', frameName: '',
+		disposition: 'new-window', referrer: { url: '', policy: 'default' },
+	}, 'system');
+	assert.deepEqual({ x: result.x, y: result.y, width: result.width, height: result.height }, { x: 400, y: 0, width: 800, height: 600 });
 });
 
 test('focused detached editors retain their parent workspace and focus when that workspace is reused', async () => {
@@ -1026,8 +1040,11 @@ test('auxiliary state events report host bounds fullscreen and pin state only to
 	assert.equal(states.length, 2);
 	assert.deepEqual(states[1], { windowName: name, state: { width: 850, height: 600, left: 35, top: 45, mode: 'fullscreen', zoomLevel: 0, alwaysOnTop: true } });
 	assert.deepEqual(other.messages, []);
-	assert.deepEqual(service.perform(parent, { kind: 'getAuxiliaryState', windowName: name }), states[1]!.state);
-	assert.throws(() => service.perform(other, { kind: 'getAuxiliaryState', windowName: name }), /belongs to another/);
+	const initialize = { kind: 'getAuxiliaryInitialization', windowName: name } as const;
+	assert.deepEqual(service.perform(parent, initialize), { id: child.id, state: states[1]!.state, clientSize: undefined });
+	assert.throws(() => service.perform(other, initialize), /belongs to another/);
+	registration.dispose();
+	assert.throws(() => service.perform(parent, initialize), /closed/);
 	assert.throws(() => validateAuxiliaryWindowStateEvent({ windowName: name, state: { ...states[1]!.state, width: NaN } }), /Invalid auxiliary window state/);
 	assert.throws(() => validateAuxiliaryWindowStateEvent({ ...states[1], windowName: 'foreign' }), /Invalid auxiliary window state event/);
 });
@@ -1050,6 +1067,11 @@ test('auxiliary client pixels are readable and published only by their owner', a
 	const request = route.validate({ kind: 'getClientSize', windowName });
 	const size = { width: 1501, height: 999 };
 	assert.deepEqual(route.invoke(request), size);
+	assert.deepEqual(route.invoke(route.validate({ kind: 'getAuxiliaryInitialization', windowName })), {
+		id: child.id,
+		state: { width: child.bounds.width, height: child.bounds.height, left: child.bounds.x, top: child.bounds.y, zoomLevel: 0, alwaysOnTop: false, mode: 'normal' },
+		clientSize: size,
+	});
 	assert.throws(() => route.validate({ kind: 'getClientSize', windowId: child.id }), /Invalid window operation/);
 	assert.throws(() => windowOperationIpcRoute(service, other).invoke(request), /belongs to another/);
 	await new Promise<void>(resolve => setImmediate(resolve));

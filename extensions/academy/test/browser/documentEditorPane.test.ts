@@ -1,3 +1,6 @@
+import { WorkingCopyBackupTracker } from '../../../../src/ash/workbench/services/workingCopy/browser/workingCopyBackupTracker.js';
+import { InMemoryWorkingCopyBackupService } from '../../../../src/ash/workbench/services/workingCopy/common/workingCopyBackupService.js';
+import type { DocumentTextModel } from '../../common/model/documentTextModel.js';
 import type { RichTextEditorOptions } from '../../browser/widget/richTextEditor/richTextEditorWidget.js';
 import type { DocumentPlugin } from '../../common/model/documentPlugin.js';
 import { documentCodec, bindDocumentCodec } from '../../common/model/documentCodec.js';
@@ -62,6 +65,8 @@ const testDialogs: IDialogService = {
 };
 
 class EditorPane extends DocumentEditorPane {
+	readonly models: DocumentEditorTextModelService;
+	readonly copies: BrowserWorkingCopyService;
 	constructor(document: Document, files: ITextFileService, options: Partial<EditorPaneOptions> & RichTextEditorOptions & { schema?: DocumentSchema; plugins?: readonly DocumentPlugin<unknown>[]; } = {}) {
 		const copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 		const models = new DocumentEditorTextModelService(files, copies);
@@ -76,8 +81,8 @@ class EditorPane extends DocumentEditorPane {
 		this._register(services);
 		this._register(codeEditors);
 		this._register(opener);
-		this._register(copies);
-		this._register(models);
+		this.copies = this._register(copies);
+		this.models = this._register(models);
 	}
 }
 
@@ -1285,6 +1290,156 @@ test('Stanza inserts a pasted image at a rich-text selection', async () => {
 	assert.equal(backspace.defaultPrevented, true);
 	assert.equal(pane.getDocument().content[0]?.content.some(node => node.type === 'image'), false);
 	environment.window.close();
+});
+
+test('empty rich paragraph input synchronizes selection, backup and saved content', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(environment.window.Range.prototype, 'getClientRects', { value: () => [] });
+	try {
+		const schema = createDefaultDocumentSchema();
+		const empty = serializeDocument(schema.createDocument([schema.createNode('paragraph')]), schema);
+		const files = new MemoryTextFiles(empty);
+		const parent = h(environment.window.document, 'main');
+		environment.window.document.body.append(parent);
+		using pane = new EditorPane(environment.window.document, files, { flowingText: true });
+		using backups = new InMemoryWorkingCopyBackupService('empty-rich');
+		using tracker = new WorkingCopyBackupTracker(pane.copies, backups, environment.window as unknown as Window);
+		pane.create(parent);
+		const resource = URI.file('/empty-rich.ash-document');
+		const signal = new AbortController().signal;
+		const codec = bindDocumentCodec(createDefaultDocumentSchema());
+		await pane.setInput({ resource }, signal);
+		const acquire = () => pane.models.acquire({ resource, codec, contentType: 'application/vnd.ash.document+json' }, signal);
+		const reference = await acquire();
+		const model = reference.model as DocumentTextModel;
+		try {
+			const rich = parent.querySelector<HTMLDivElement>('.stanza-document-rich-text-input')!;
+			assert.ok(rich);
+			assert.equal(rich.childNodes.length, 0);
+			rich.focus();
+			const beforeInput = new environment.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: 'Hello' });
+			rich.dispatchEvent(beforeInput);
+			assert.equal(beforeInput.defaultPrevented, false, 'native input supplies the first text node');
+			rich.textContent = 'Hello';
+			const selection = environment.window.document.getSelection()!;
+			selection.setBaseAndExtent(rich.firstChild!, 2, rich.firstChild!, 2);
+			rich.dispatchEvent(new environment.window.Event('input', { bubbles: true }));
+			const text = pane.getDocument().content[0]!.content[0]!;
+			assert.equal(text.text, 'Hello');
+			assert.equal(reference.isDirty, true);
+			assert.deepEqual(model.selection, { kind: 'text', anchor: { nodeId: text.id, offset: 2 }, head: { nodeId: text.id, offset: 2 } });
+			assert.equal(selection.anchorNode?.textContent, 'Hello');
+			assert.equal(selection.anchorOffset, 2);
+			await tracker.flush();
+			const records = await backups.list();
+			assert.equal(records.length, 1);
+			assert.equal(records[0]!.kind, 'structuredDocument');
+			const backup = records[0]!.content;
+			assert.equal(backup, reference.backup());
+			assert.deepEqual(codec.parse(backup), pane.getDocument());
+			await pane.save();
+			assert.deepEqual(codec.parse(files.lastSavedText), pane.getDocument());
+			assert.equal(reference.isDirty, false);
+			reference.dispose();
+			pane.clearInput();
+			await pane.setInput({ resource }, signal);
+			assert.equal(pane.getDocument().content[0]!.content[0]!.text, 'Hello');
+			using reopened = await acquire();
+			files.setExternalText(empty);
+			await reopened.revert(signal);
+			assert.equal(pane.getDocument().content[0]!.content.length, 0);
+			reopened.restoreBackup(backup);
+			assert.equal(pane.getDocument().content[0]!.content[0]!.text, 'Hello');
+			assert.equal(parent.querySelector('.stanza-document-rich-text-input')?.textContent, 'Hello');
+			assert.equal(reopened.isDirty, true);
+		} finally { reference.dispose(); }
+	} finally { environment.window.close(); }
+});
+
+test('clearing a rich paragraph allows native input again with a valid caret', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(environment.window.Range.prototype, 'getClientRects', { value: () => [] });
+	try {
+		const parent = h(environment.window.document, 'main');
+		environment.window.document.body.append(parent);
+		using pane = new EditorPane(environment.window.document, new MemoryTextFiles('Before'), { flowingText: true });
+		pane.create(parent);
+		const resource = URI.file('/clear-rich.ash-document');
+		const signal = new AbortController().signal;
+		const codec = bindDocumentCodec(createDefaultDocumentSchema());
+		await pane.setInput({ resource }, signal);
+		using reference = await pane.models.acquire({ resource, codec, contentType: 'application/vnd.ash.document+json' }, signal);
+		const model = reference.model as DocumentTextModel;
+		let rich = parent.querySelector<HTMLDivElement>('.stanza-document-rich-text-input')!;
+		rich.focus();
+		rich.replaceChildren(environment.window.document.createElement('br'));
+		environment.window.document.getSelection()!.setBaseAndExtent(rich, 0, rich, 0);
+		rich.dispatchEvent(new environment.window.Event('input', { bubbles: true }));
+		assert.equal(pane.getDocument().content[0]!.content.length, 0);
+		assert.equal(model.selection, undefined);
+		rich = parent.querySelector<HTMLDivElement>('.stanza-document-rich-text-input')!;
+		rich.textContent = 'Again';
+		const selection = environment.window.document.getSelection()!;
+		selection.setBaseAndExtent(rich.firstChild!, 4, rich.firstChild!, 1);
+		rich.dispatchEvent(new environment.window.Event('input', { bubbles: true }));
+		const text = pane.getDocument().content[0]!.content[0]!;
+		assert.equal(text.text, 'Again');
+		assert.deepEqual(model.selection, { kind: 'text', anchor: { nodeId: text.id, offset: 4 }, head: { nodeId: text.id, offset: 1 } });
+		assert.equal(selection.anchorOffset, 4);
+		assert.equal(selection.focusOffset, 1);
+	} finally { environment.window.close(); }
+});
+
+test('empty rich paragraph composition commits once and supports cancellation and undo', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(environment.window.Range.prototype, 'getClientRects', { value: () => [] });
+	try {
+		const schema = createDefaultDocumentSchema();
+		const empty = serializeDocument(schema.createDocument([schema.createNode('paragraph')]), schema);
+		const parent = h(environment.window.document, 'main');
+		environment.window.document.body.append(parent);
+		using pane = new EditorPane(environment.window.document, new MemoryTextFiles(empty), { flowingText: true });
+		pane.create(parent);
+		const resource = URI.file('/compose-rich.ash-document');
+		const signal = new AbortController().signal;
+		const codec = bindDocumentCodec(createDefaultDocumentSchema());
+		await pane.setInput({ resource }, signal);
+		using reference = await pane.models.acquire({ resource, codec, contentType: 'application/vnd.ash.document+json' }, signal);
+		const model = reference.model as DocumentTextModel;
+		let rich = parent.querySelector<HTMLDivElement>('.stanza-document-rich-text-input')!;
+		rich.focus();
+		environment.window.document.getSelection()!.setBaseAndExtent(rich, 0, rich, 0);
+		rich.dispatchEvent(new environment.window.CompositionEvent('compositionstart', { bubbles: true }));
+		rich.textContent = 'zh';
+		rich.dispatchEvent(new environment.window.InputEvent('input', { bubbles: true, isComposing: true }));
+		assert.equal(reference.isDirty, false);
+		rich.dispatchEvent(new environment.window.Event('compositioncancel', { bubbles: true }));
+		assert.equal(parent.querySelector('.stanza-document-rich-text-input')?.textContent, '');
+		assert.equal(reference.isDirty, false);
+		rich = parent.querySelector<HTMLDivElement>('.stanza-document-rich-text-input')!;
+		rich.dispatchEvent(new environment.window.CompositionEvent('compositionstart', { bubbles: true }));
+		for (const text of ['zh', '中文']) {
+			rich.textContent = text;
+			environment.window.document.getSelection()!.setBaseAndExtent(rich.firstChild!, text.length, rich.firstChild!, text.length);
+			rich.dispatchEvent(new environment.window.InputEvent('input', { bubbles: true, isComposing: true }));
+			assert.equal(reference.isDirty, false, 'preedit must stay outside the model');
+			assert.equal(codec.parse(reference.backup()).content[0]!.content.length, 0);
+		}
+		rich.dispatchEvent(new environment.window.CompositionEvent('compositionend', { bubbles: true, data: '中文' }));
+		parent.querySelector('.stanza-document-rich-text-input')!.dispatchEvent(new environment.window.Event('input', { bubbles: true }));
+		const text = pane.getDocument().content[0]!.content[0]!;
+		assert.equal(text.text, '中文');
+		assert.deepEqual(model.selection, { kind: 'text', anchor: { nodeId: text.id, offset: 2 }, head: { nodeId: text.id, offset: 2 } });
+		assert.equal(reference.isDirty, true);
+		assert.equal(codec.parse(reference.backup()).content[0]!.content[0]!.text, '中文');
+		const change = model.undoBlocks();
+		assert.equal(change?.origin, 'undo');
+		assert.equal(pane.getDocument().content[0]!.content.length, 0);
+		assert.equal(model.canUndoBlocks, false);
+		model.redoBlocks();
+		assert.equal(pane.getDocument().content[0]!.content[0]!.text, '中文');
+		await pane.save();
+	} finally { environment.window.close(); }
 });
 
 test('Stanza renders and edits marked inline runs', async () => {

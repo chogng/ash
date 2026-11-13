@@ -37,6 +37,7 @@ impl SqliteThreadStore {
         let path = path.into();
         let mut connection = open(&path).map_err(ThreadStoreError::Storage)?;
         super::thread_history::create_schema(&mut connection)?;
+        crate::generated_files::migrate(&mut connection).map_err(ThreadStoreError::Storage)?;
         let catalog_connection = open(&path).map_err(ThreadStoreError::Storage)?;
         Ok(Self {
             path,
@@ -747,10 +748,31 @@ impl ThreadStore for SqliteThreadStore {
         &self,
         batch: &ThreadEventBatch,
     ) -> Result<AppendBatchResult, ThreadStoreError> {
+        self.append_batch_conditionally(batch, None)
+    }
+
+    fn append_batch_with_precondition(
+        &self,
+        batch: &ThreadEventBatch,
+        precondition: &ash_thread_store::ThreadEventPrecondition,
+    ) -> Result<AppendBatchResult, ThreadStoreError> {
+        self.append_batch_conditionally(batch, Some(precondition))
+    }
+}
+
+impl SqliteThreadStore {
+    fn append_batch_conditionally(
+        &self,
+        batch: &ThreadEventBatch,
+        precondition: Option<&ash_thread_store::ThreadEventPrecondition>,
+    ) -> Result<AppendBatchResult, ThreadStoreError> {
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage_error)?;
+        if let Some(precondition) = precondition {
+            super::thread_pull_requests::validate_admission(&transaction, batch, precondition)?;
+        }
         transaction
             .execute(
                 "INSERT OR IGNORE INTO thread_streams (thread_id, current_sequence)
@@ -933,6 +955,20 @@ impl ThreadStore for SqliteThreadStore {
         let session_changed = session_list_changed(&transaction, &batch.catalog)?;
         if let Some(index) = &batch.history_index {
             super::thread_history::write(&transaction, index, batch.expected_sequence)?;
+            for event in &batch.events {
+                if let ash_protocol::ThreadEvent::TurnCompleted { turn_id, .. } = &event.event
+                    && let Some(entry) = index
+                        .turns
+                        .iter()
+                        .find(|entry| &entry.turn.turn_id == turn_id)
+                {
+                    crate::generated_files::stage_native_turn(
+                        &transaction,
+                        &index.thread,
+                        &entry.turn,
+                    )?;
+                }
+            }
         }
         write_catalog(&transaction, &batch.catalog)?;
         if let Some((source, _)) = moved_from {

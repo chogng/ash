@@ -4,9 +4,9 @@ import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.
 import { isRecord } from '../../../../base/common/types.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import { isModelReasoningEffort, type ModelRef, type ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
-import type { IUntitledChatSession, SessionEnvironmentSelection, SessionWorkspaceSelection } from '../common/session.js';
+import type { IActiveSessionThread, IUntitledChatSession, SessionEnvironmentSelection, SessionWorkspaceSelection } from '../common/session.js';
 import { visibilityKey, type SessionsViewReference } from './visibleSessions.js';
-import { isArtifactKind } from '../../../common/artifactKind.js';
+import { isChatCreationKind, type ChatCreationKind } from '../../../common/chatCreation.js';
 
 const storageKey = 'sessions.viewState';
 const chatSelectionKey = 'sessions.chat.ashSelection';
@@ -41,6 +41,20 @@ export function loadChatSelection(storage: IStorageService): StoredChatSelection
 
 export function saveChatSelection(storage: IStorageService, selection: StoredChatSelection): void {
 	storage.store(chatSelectionKey, JSON.stringify(selection), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+}
+
+function pendingCreationKindKey(active: IActiveSessionThread): string {
+	return `sessions.chat.pendingArtifactKind.${JSON.stringify([active.session.sessionId, active.threadId])}`;
+}
+
+/** A promoted draft keeps its creation choice until the first Turn is accepted. */
+export function readPendingCreationKind(storage: IStorageService, active: IActiveSessionThread): ChatCreationKind | undefined {
+	const kind = storage.get(pendingCreationKindKey(active), StorageScope.WORKSPACE);
+	return isChatCreationKind(kind) ? kind : undefined;
+}
+
+export function writePendingCreationKind(storage: IStorageService, active: IActiveSessionThread, kind: ChatCreationKind | undefined): void {
+	storage.store(pendingCreationKindKey(active), kind, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 }
 
 export function loadSessionGridState(storage: IStorageService): ISessionGridState | undefined {
@@ -101,9 +115,11 @@ function parseStoredSessionsViewState(value: unknown, preferCode: boolean): ISes
 					throw new TypeError('Invalid stored Session identity');
 				}
 			} else if (reference.kind === 'untitled') {
-				if (!isUntitledSession(reference.session)) {
+				const session = readUntitledSession(reference.session);
+				if (!session) {
 					throw new TypeError('Invalid stored untitled Session');
 				}
+				reference.session = session;
 			} else {
 				throw new TypeError('Invalid stored Sessions reference kind');
 			}
@@ -117,15 +133,19 @@ function parseStoredSessionsViewState(value: unknown, preferCode: boolean): ISes
 	const selections = states as StoredSessionsSelection[];
 	const drafts = [...new Map(selections.flatMap(state => state.visible.flatMap(reference => reference.kind === 'untitled' ? [[reference.session.untitledSessionId, reference.session] as const] : []))).values()];
 	if (value.version === 2) {
-		if (!Array.isArray(value.drafts) || !value.drafts.every(isUntitledSession) || new Set(value.drafts.map(draft => draft.untitledSessionId)).size !== value.drafts.length) {
-			throw new TypeError('Invalid stored Sessions drafts');
-		}
+		if (!Array.isArray(value.drafts)) throw new TypeError('Invalid stored Sessions drafts');
+		const restored = value.drafts.map(value => {
+			const draft = readUntitledSession(value);
+			if (!draft) throw new TypeError('Invalid stored Sessions drafts');
+			return draft;
+		});
+		if (new Set(restored.map(draft => draft.untitledSessionId)).size !== restored.length) throw new TypeError('Invalid stored Sessions drafts');
 		for (const reference of selections[0]!.visible) {
-			if (reference.kind === 'untitled' && !value.drafts.some(draft => draft.untitledSessionId === reference.session.untitledSessionId)) {
+			if (reference.kind === 'untitled' && !restored.some(draft => draft.untitledSessionId === reference.session.untitledSessionId)) {
 				throw new TypeError('Stored visible draft is missing from the draft catalog');
 			}
 		}
-		drafts.splice(0, drafts.length, ...value.drafts);
+		drafts.splice(0, drafts.length, ...restored);
 	}
 	const visible: StoredSessionsViewReference[] = [];
 	const keys = new Set<string>();
@@ -144,10 +164,18 @@ function nonEmptyString(value: unknown): value is string {
 	return typeof value === 'string' && value.length > 0;
 }
 
+/** Normalize the retired draft field only when reading persisted session state. */
+export function readUntitledSession(value: unknown): IUntitledChatSession | undefined {
+	if (!isRecord(value)) return undefined;
+	const { artifactKind, ...session } = value;
+	const normalized = { ...session, ...(session.creationKind === undefined && artifactKind !== undefined ? { creationKind: artifactKind } : {}) };
+	return isUntitledSession(normalized) ? normalized : undefined;
+}
+
 export function isUntitledSession(value: unknown): value is IUntitledChatSession {
 	return isRecord(value) && nonEmptyString(value.untitledSessionId) && typeof value.title === 'string'
 		&& (value.kind === undefined || value.kind === 'chat' || value.kind === 'code')
-		&& (value.artifactKind === undefined || isArtifactKind(value.artifactKind))
+		&& (value.creationKind === undefined || isChatCreationKind(value.creationKind))
 		&& (value.creationId === undefined || nonEmptyString(value.creationId))
 		&& (value.model === undefined || isRecord(value.model) && nonEmptyString(value.model.provider) && nonEmptyString(value.model.model))
 		&& (value.forkSource === undefined || isRecord(value.forkSource) && nonEmptyString(value.forkSource.sessionId) && nonEmptyString(value.forkSource.threadId))

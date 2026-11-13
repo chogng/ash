@@ -300,6 +300,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	public override clearInput(): void {
 		this.inputController?.abort();
 		this.inputController = undefined;
+		this.saveOperation = undefined;
 		this.zoomController?.abort();
 		this.zoomController = undefined;
 		this.container?.removeAttribute('aria-busy');
@@ -330,28 +331,31 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		if (!this.canAnnotate() || !this.input || !this.annotationModel.isDirty) return;
 		if (this.saveOperation) return this.saveOperation;
 		const input = this.input;
+		const signal = AbortSignal.any([this.inputController!.signal, ...(this.providerSignal ? [this.providerSignal] : [])]);
 		this.statusMessage = localize('pdf.viewer.saving', 'Saving annotations…');
-		this.renderToolbar();
-		this.renderSidebar();
-		this.saveOperation = this.persistAnnotations(input).finally(() => {
+		const operation = this.persistAnnotations(input, signal).finally(() => {
+			// A cancelled input's completion must not clear a newer input's save.
+			if (this.saveOperation !== operation) return;
 			this.saveOperation = undefined;
 			this.renderToolbar();
 			this.renderSidebar();
 		});
-		return this.saveOperation;
+		this.saveOperation = operation;
+		this.renderToolbar();
+		this.renderSidebar();
+		return operation;
 	}
 
-	private async persistAnnotations(input: IResourceEditorInput): Promise<void> {
+	private async persistAnnotations(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		try {
-			const signal = AbortSignal.any([this.inputController!.signal, ...(this.providerSignal ? [this.providerSignal] : [])]);
 			throwIfCancelled(signal, 'PDF document loading was cancelled');
 			const snapshot = await this.annotationStore.save(input.resource, this.annotationModel.snapshot, this.annotationModel.revision, signal);
 			throwIfCancelled(signal, 'PDF document loading was cancelled');
 			if (this.input !== input) return;
 			this.annotationModel.markSaved(snapshot);
-			this.statusMessage = localize('pdf.viewer.saved', 'Annotations saved');
+			this.statusMessage = this.annotationModel.isDirty ? undefined : localize('pdf.viewer.saved', 'Annotations saved');
 		} catch (error) {
-			if (this.input !== input || this.providerSignal?.aborted) throw error;
+			if (this.input !== input || signal.aborted) throw error;
 			this.statusMessage = error instanceof Error ? localize('pdf.viewer.saveError', 'Could not save annotations: {0}', error.message) : localize('pdf.viewer.saveFailed', 'Could not save annotations');
 			throw error;
 		}

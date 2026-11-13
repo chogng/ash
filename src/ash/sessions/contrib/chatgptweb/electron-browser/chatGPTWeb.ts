@@ -20,8 +20,8 @@ import type { IWorkbenchContribution } from '../../../../workbench/common/contri
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
-import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
-import { CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
+import { ISessionsEntryService, type ISessionsEntry } from '../../../services/layout/common/sessionsEntryService.js';
+import { CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
 import { IChatViewFactory, type ChatDraftModelSource, type ICompactChatModel, type IChatViewSource } from '../../chat/browser/chatViewFactory.js';
 import { chatGPTModelEntries, ChatGPTWidgetModel } from './chatGPTWidgetModel.js';
 import { ChatGPTProjectFolderPicker } from './chatGPTProjectFolderPicker.js';
@@ -133,7 +133,7 @@ export class ChatGPTDraftModelSource implements ChatDraftModelSource {
 			// Each source owns its draft. Use Ash's text only when the destination has no draft content.
 			if (!destination.draft && !destination.attachments.length && !destination.draftTarget) {
 				if (capture) this.chat.setDraft(capture.draft.text);
-				if (source.artifactDraftKind) this.chat.setDraftArtifactKind(source.artifactDraftKind);
+				if (source.creationKind) this.chat.setDraftCreationKind(source.creationKind);
 			}
 			await this.commands.executeCommand(SHOW_CHATGPT_COMMAND);
 		} finally {
@@ -156,15 +156,21 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 		const chatSource = 'chatgpt';
 		this._register(chatViews.registerSource(chatSource, chatGPTViewSource));
 		const newDraft = chat.state.map(isChatGPTNewDraft);
+		const entry: ISessionsEntry = {
+			id: chatSource, activityContext: chatGPTSelectedContext, content: 'conversation',
+			sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
+			restoreCommand: SHOW_CHATGPT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
+		};
 		const showChat = async (source?: unknown, create?: unknown) => {
 			chat.setNetworkAvailable(mainWindow?.navigator.onLine ?? true);
-			if (create === true && source !== 'restore') { chat.newChat(source === 'startup' ? { clearDraft: true } : undefined); }
+			const resolveEntry = source === CHAT_WORKSPACE_ENTRY_REQUEST;
+			if (create === true && source !== 'restore' && !resolveEntry) { chat.newChat(source === 'startup' ? { clearDraft: true } : undefined); }
 			chat.initialize();
-			await layout.openEntry({
-				id: chatSource, activityContext: chatGPTSelectedContext, content: 'conversation',
-				sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
-				restoreCommand: SHOW_CHATGPT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
-			}, undefined, source === 'restore' || source === 'startup' ? { source } : undefined);
+			if (resolveEntry) {
+				storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'chatgpt', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+				return entry;
+			}
+			await layout.openEntry(entry, undefined, source === 'restore' || source === 'startup' ? { source } : undefined);
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'chatgpt', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		};
 		this._register(search.registerSource(derived<readonly SearchResult[]>(reader => {
@@ -219,13 +225,18 @@ export class ChatGPTExperimentalContribution extends Disposable implements IWork
 		this._register(chatViews.registerSource(chatSource, experimentalChatGPTViewSource));
 		const newDraft = chat.state.map(isChatGPTNewDraft);
 		const newChatCommand = 'sessions.experimentalChatgpt.newChat';
-		const connect = async (): Promise<boolean> => {
+		const entry: ISessionsEntry = {
+			id: chatSource, activityContext: experimentalChatGPTSelected, content: 'conversation',
+			sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
+			restoreCommand: SHOW_EXPERIMENTAL_CHATGPT, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
+		};
+		const connect = async (notifyLogin = true): Promise<boolean> => {
 			try {
 				const signedIn = !!await transport.getCacheScope();
 				if (this.isDisposed) return false;
 				if (signedIn) {
 					chat.initialize();
-				} else {
+				} else if (notifyLogin) {
 					notifications.info(localize('sessions.chatgpt.experimentalLoginRequired', 'Sign in to Codex, then open ChatGPT (Experimental) again.'));
 				}
 				return signedIn;
@@ -236,12 +247,13 @@ export class ChatGPTExperimentalContribution extends Disposable implements IWork
 		};
 		this._register(CommandsRegistry.register(SHOW_EXPERIMENTAL_CHATGPT, async (_accessor, source, create) => {
 			chat.setNetworkAvailable(mainWindow?.navigator.onLine ?? true);
+			if (source === CHAT_WORKSPACE_ENTRY_REQUEST) {
+				storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'chatgpt-native', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+				void connect(false);
+				return entry;
+			}
 			if (create === true && source !== 'restore') { chat.newChat(source === 'startup' ? { clearDraft: true } : undefined); }
-			await layout.openEntry({
-				id: chatSource, activityContext: experimentalChatGPTSelected, content: 'conversation',
-				sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
-				restoreCommand: SHOW_EXPERIMENTAL_CHATGPT, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
-			}, undefined, source === 'restore' || source === 'startup' ? { source } : undefined);
+			await layout.openEntry(entry, undefined, source === 'restore' || source === 'startup' ? { source } : undefined);
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'chatgpt-native', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 			if (source === 'startup' || source === 'restore') {
 				void connect();

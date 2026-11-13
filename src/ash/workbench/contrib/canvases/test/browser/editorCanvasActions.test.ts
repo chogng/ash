@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { constObservable, observableValue } from '../../../../../base/common/observable.js';
+import { constObservable, observableValue, type IReader } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { Separator } from '../../../../../base/common/actions.js';
@@ -16,9 +16,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { ChatContextKeys } from '../../../chat/common/actions/chatContextKeys.js';
-import { IChatWidgetService } from '../../../chat/browser/chat.js';
 import {
 	ChatContextPickService, IChatContextPickService, type IChatContextPickerItem, isChatContextPickerPickItem,
 } from '../../../chat/browser/attachments/chatContextPickService.js';
@@ -50,7 +48,7 @@ suite('Canvas menu actions', () => {
 		const reopened: string[] = [];
 		const errors: unknown[] = [];
 		const picks = new ChatContextPickService();
-		let active: { sessionId: string; threadId: string; } | undefined;
+		const active = observableValue<string | undefined>('active canvas owner', undefined);
 		let listing = async (): Promise<readonly ICanvasDefinition[] | undefined> => [board];
 		const context: ICanvasContext = {
 			owner: owner('one'), canvases: constObservable([]),
@@ -63,11 +61,14 @@ suite('Canvas menu actions', () => {
 		services.registerInstance(IContextKeyService, keys);
 		services.registerInstance(ILogService, { error: (value: unknown) => { errors.push(value); } } as unknown as ILogService);
 		services.registerInstance(INotificationService, { error: (value: unknown) => { errors.push(value); } } as unknown as INotificationService);
-		services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => active } as IChatSessionNavigationService);
-		services.registerInstance(IChatWidgetService, { onDidChangeWidgets: visibility.event } as IChatWidgetService);
 		services.registerInstance(IChatContextPickService, picks);
 		services.registerInstance(ICanvasContextService, {
 			contexts, onDidChangeVisibility: visibility.event,
+			getActiveContext: (reader?: IReader) => {
+				const id = active.read(reader);
+				return enabled.read(reader) && ai.get() === true && id
+					? contexts.read(reader).find(context => isCanvasOwner(context.owner, owner(id))) : undefined;
+			},
 			isOwnerVisible: (target: ICanvasOwner) => enabled.get() && ai.get() === true && contexts.get().some(context => isCanvasOwner(context.owner, target)),
 		} as unknown as ICanvasContextService);
 		services.registerInstance(ICanvasService, {
@@ -85,7 +86,7 @@ suite('Canvas menu actions', () => {
 		const menu = () => menus.getMenuActions(MenuId.ChatNewMenu).flatMap(([, actions]) => actions).filter((action): action is SubmenuItemAction => action instanceof SubmenuItemAction);
 		return {
 			context, contexts, enabled, reopenable, ai, opened, reopened, errors, services, menus, menu, source,
-			select(id?: string) { active = id ? { sessionId: id, threadId: id } : undefined; visibility.fire(); },
+			select(id?: string) { active.set(id, undefined); visibility.fire(); },
 			list(value: typeof listing) { listing = value; definitionsChanged.fire(); },
 			[Symbol.dispose]() { resources.dispose(); },
 		};

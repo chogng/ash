@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -35,6 +36,8 @@ import '../../browser/searchEditor.contribution.js';
 
 test('the Search Editor command scopes folder search to its workspace root and literal path', async () => {
 	using services = new InstantiationService();
+	using contexts = new ContextKeyService();
+	services.registerInstance(IContextKeyService, contexts);
 	using commands = new CommandService(services);
 	const root = URI.file('/workspace/one');
 	const folder = URI.joinPath(root, 'src,[fixture]');

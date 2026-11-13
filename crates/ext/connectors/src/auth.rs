@@ -23,7 +23,6 @@ use sha2::Sha256;
 use crate::ConnectorAuthority;
 use crate::ConnectorAuthorityCommand;
 use crate::ConnectorAuthorityError;
-use crate::ConnectorCommandDisposition;
 use crate::ConnectorCommandId;
 use crate::ConnectorCommandRequest;
 use crate::ConnectorCommandResult;
@@ -85,7 +84,16 @@ impl ConnectorCredentialService {
             connector_id,
             connection_generation,
             &definition.digest(),
-            || invoke(self.load_connected_credential(connector_id)?),
+            || {
+                let credential = {
+                    let _guard = self
+                        .authority
+                        .lock_credential_updates()
+                        .map_err(ConnectorCredentialServiceError::from)?;
+                    self.load_connected_credential(connector_id, connection_generation)?
+                };
+                invoke(credential)
+            },
         )
     }
 
@@ -96,34 +104,9 @@ impl ConnectorCredentialService {
     pub(crate) fn load_connected_credential(
         &self,
         connector_id: &ConnectorId,
+        connection_generation: ConnectorConnectionGeneration,
     ) -> Result<SecretValue, ConnectorCredentialServiceError> {
-        let snapshot = self.authority.snapshot();
-        let entry = snapshot.entry(connector_id).ok_or_else(|| {
-            ConnectorCredentialServiceError::new(
-                ConnectorCredentialServiceErrorKind::Authority,
-                "connector is unavailable",
-            )
-        })?;
-        let account = match entry.connection().state() {
-            ConnectorConnectionState::Connected(account) => account,
-            ConnectorConnectionState::Disconnected
-            | ConnectorConnectionState::Connecting
-            | ConnectorConnectionState::Unavailable { .. }
-            | ConnectorConnectionState::ReauthorizationRequired { .. } => {
-                return Err(ConnectorCredentialServiceError::new(
-                    ConnectorCredentialServiceErrorKind::Authority,
-                    "connector is not connected",
-                ));
-            }
-        };
-        let key = SecretKey::new(account.credential_reference().as_str().to_owned()).map_err(
-            |error| {
-                ConnectorCredentialServiceError::new(
-                    ConnectorCredentialServiceErrorKind::InvalidValue,
-                    error.to_string(),
-                )
-            },
-        )?;
+        let key = self.connected_credential_key(connector_id, connection_generation)?;
         let stored = self.secrets.load(&key)?.ok_or_else(|| {
             ConnectorCredentialServiceError::new(
                 ConnectorCredentialServiceErrorKind::SecretStore,
@@ -133,13 +116,45 @@ impl ConnectorCredentialService {
         oauth_credential_part(stored, OAuthCredentialPart::Lifecycle)
     }
 
+    fn connected_credential_key(
+        &self,
+        connector_id: &ConnectorId,
+        connection_generation: ConnectorConnectionGeneration,
+    ) -> Result<SecretKey, ConnectorCredentialServiceError> {
+        let snapshot = self.authority.snapshot();
+        let account = snapshot
+            .entry(connector_id)
+            .and_then(|entry| {
+                if entry.connection().generation() == connection_generation
+                    && let ConnectorConnectionState::Connected(account) = entry.connection().state()
+                {
+                    return Some(account);
+                }
+                None
+            })
+            .ok_or_else(|| {
+                ConnectorCredentialServiceError::new(
+                    ConnectorCredentialServiceErrorKind::Authority,
+                    "connector connection changed",
+                )
+            })?;
+        SecretKey::new(account.credential_reference().as_str().to_owned()).map_err(|error| {
+            ConnectorCredentialServiceError::new(
+                ConnectorCredentialServiceErrorKind::InvalidValue,
+                error.to_string(),
+            )
+        })
+    }
+
     pub(crate) fn replace_connected_oauth_credential(
         &self,
         connector_id: &ConnectorId,
+        connection_generation: ConnectorConnectionGeneration,
         runtime_secret: SecretValue,
         lifecycle_secret: SecretValue,
     ) -> Result<(), ConnectorCredentialServiceError> {
-        let key = credential_key(connector_id)?;
+        let _guard = self.authority.lock_credential_updates()?;
+        let key = self.connected_credential_key(connector_id, connection_generation)?;
         let value = encode_oauth_credential(runtime_secret, lifecycle_secret)?;
         self.secrets.store(&key, &value)?;
         Ok(())
@@ -219,28 +234,26 @@ impl ConnectorCredentialService {
             request.connector_id.clone(),
             request.connection_generation,
         )?;
-        let complete_command_id = phase_command_id(&request.command_id, "complete")?;
-        if begin.disposition == ConnectorCommandDisposition::Replayed {
-            let current = self.authority.snapshot();
-            let still_in_exact_attempt =
-                current.entry(&request.connector_id).is_some_and(|entry| {
-                    entry.connection().generation() == request.connection_generation
-                        && matches!(
-                            entry.connection().state(),
-                            ConnectorConnectionState::Connecting
-                        )
-                });
-            if !still_in_exact_attempt {
-                return self
-                    .authority
-                    .apply(ConnectorCommandRequest {
-                        command_id: complete_command_id,
-                        expected_generation: begin.generation,
-                        connector_id: request.connector_id,
-                        command: ConnectorAuthorityCommand::CompleteConnect { account },
-                    })
-                    .map_err(Into::into);
-            }
+        let complete = ConnectorCommandRequest {
+            command_id: phase_command_id(&request.command_id, "complete")?,
+            expected_generation: begin.generation,
+            connector_id: request.connector_id.clone(),
+            command: ConnectorAuthorityCommand::CompleteConnect { account },
+        };
+        // Begin can drain revoked calls. Acquire the secret lock only after that wait so
+        // in-flight OAuth can finish, and recheck the exact attempt before touching the key.
+        let _guard = self.authority.lock_credential_updates()?;
+        let current = self.authority.snapshot();
+        let still_in_exact_attempt = current.generation() == begin.generation
+            && current.entry(&request.connector_id).is_some_and(|entry| {
+                entry.connection().generation() == request.connection_generation
+                    && matches!(
+                        entry.connection().state(),
+                        ConnectorConnectionState::Connecting
+                    )
+            });
+        if !still_in_exact_attempt {
+            return self.authority.apply(complete).map_err(Into::into);
         }
         if let Err(error) = self.secrets.store(&secret_key, &request.token) {
             let _ = self.mark_connect_unavailable(
@@ -251,12 +264,7 @@ impl ConnectorCredentialService {
             );
             return Err(error.into());
         }
-        match self.authority.apply(ConnectorCommandRequest {
-            command_id: complete_command_id,
-            expected_generation: begin.generation,
-            connector_id: request.connector_id.clone(),
-            command: ConnectorAuthorityCommand::CompleteConnect { account },
-        }) {
+        match self.authority.apply(complete) {
             Ok(result) => Ok(result),
             Err(error) => {
                 let _ = self.secrets.delete(&secret_key);
@@ -331,9 +339,6 @@ impl ConnectorCredentialService {
         &self,
         connector_id: &ConnectorId,
     ) -> ConnectorCredentialCleanup {
-        if !self.authority.credential_cleanup_pending(connector_id) {
-            return ConnectorCredentialCleanup::AlreadyAbsent;
-        }
         let reference = credential_key(connector_id)
             .ok()
             .map(|key| key.as_str().to_owned());
@@ -345,6 +350,14 @@ impl ConnectorCredentialService {
         connector_id: &ConnectorId,
         reference: Option<String>,
     ) -> ConnectorCredentialCleanup {
+        let Ok(_guard) = self.authority.lock_credential_updates() else {
+            return ConnectorCredentialCleanup::RetryRequired;
+        };
+        // A reconnect can commit while disconnect is draining old invocations. Check who
+        // owns the shared key only after excluding concurrent credential writes.
+        if !self.authority.credential_cleanup_pending(connector_id) {
+            return ConnectorCredentialCleanup::AlreadyAbsent;
+        }
         let outcome = match reference.and_then(|reference| SecretKey::new(reference).ok()) {
             Some(key) => match self.secrets.delete(&key) {
                 Ok(DeleteSecretOutcome::Deleted) => ConnectorCredentialCleanup::Deleted,

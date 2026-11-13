@@ -6,8 +6,9 @@ import { connectProfile } from '../sessions/sessionProfileFixture.js';
 
 test.use({ gitRepository: true });
 
-for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
-	test(`${surface} finds earlier conversation content without changing the draft or sending a request`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
+for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) {
+	const ashChat = surface === 'Ash Chat';
+	test(`${surface} finds earlier conversation content without changing the draft or sending a request`, { tag: ashChat ? ['@electron-app-server'] : ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 		test.setTimeout(180_000);
 		let calls = 0;
 		const code = Array.from({ length: 80 }, (_, index) => index === 69 ? 'const old_code_needle = 42;' : `const line${index} = ${index};`).join('\n');
@@ -44,7 +45,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				}
 			});
 			await client.request(methods['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-find-fixture-key' });
-			const created = await client.request(methods['session/create'], { commandId: 'find-session', kind: 'code', title: 'Find earlier conversation', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+			const created = await client.request(methods['session/create'], { commandId: 'find-session', kind: ashChat ? 'chat' : 'code', title: 'Find earlier conversation', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const sessionId = created.session.sessionId;
 			const threadId = created.session.threads[0].threadId;
 			const read = async () => (await client.request(methods['session/thread/read'], { sessionId, threadId })).thread;
@@ -60,29 +61,42 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				await expect.poll(async () => (await read()).turns.at(-1)?.status, { intervals: [30, 60, 100] }).toBe('completed');
 			}
 			const before = await read();
-			if (agents) {
+			if (ashChat) {
+				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+				await page.locator(`.ash-chat-navigation [data-item="ash:${sessionId}"] .ash-sessions-list-item`).click();
+			} else if (agents) {
 				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 				await page.locator('.ash-sessions-list-item').filter({ hasText: 'Find earlier conversation' }).click();
-				if (surface === 'Agents Cowork') await page.locator('[data-action-id="sessions.open.collaboration"] button').click();
 			} else {
 				await window.quickaccess.runCommand('workbench.action.chat.open');
 				await page.locator('[data-action-id="workbench.action.chat.showHistory"] button').click();
 				await page.getByRole('option').filter({ hasText: 'Find earlier conversation' }).click();
 			}
-			const chat = page.locator(agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-native-chat'}` : '.ash-chat-view-pane .ash-chat:visible');
+			const chat = page.locator(ashChat ? '.ash-native-chat-widget .ash-chat:visible'
+				: agents ? '.ash-sessions-chat-slot.active:visible .ash-chat' : '.ash-chat-view-pane .ash-chat:visible');
 			await expect(chat).toHaveAttribute('data-thread-id', threadId);
 			const composer = chat.locator('.ash-chat-input-part');
 			const draft = composer.locator('.stanza-editor-input');
-			if (surface !== 'Agents Cowork') {
-				await expect(chat.getByRole('button', { name: 'Load earlier messages', exact: true })).toBeVisible();
-				await expect(chat).not.toContainText('Needle request');
-			}
+			await expect(chat.getByRole('button', { name: 'Load earlier messages', exact: true })).toBeVisible();
+			await expect(chat).not.toContainText('Needle request');
 			await draft.focus();
 			await page.keyboard.insertText('Unsent needle draft');
 			await page.keyboard.press('ControlOrMeta+f');
 			const find = chat.getByRole('search', { name: 'Find in Chat', exact: true });
 			const query = find.getByRole('textbox', { name: 'Find in conversation', exact: true });
 			await expect(query).toBeFocused();
+			if (agents) {
+				const actions = find.getByRole('button', { name: /^(Match case|Whole word|Regular expression|Previous match|Next match|Close Find)$/u });
+				await expect(actions).toHaveCount(6);
+				for (const action of await actions.all()) {
+					await expect(action).toHaveCSS('width', '24px');
+					await expect(action).toHaveCSS('height', '24px');
+					await expect(action).toHaveCSS('border-radius', '6px');
+					await expect(action.locator('.ash-icon')).toHaveCSS('font-size', '18px');
+				}
+				await expect(find).toHaveCSS('border-radius', '8px');
+				await expect(find.locator('.ash-input-box')).toHaveCSS('border-radius', '6px');
+			}
 			await query.fill('needle');
 			const status = find.getByRole('status');
 			await expect(status).toHaveText('1 of 3 matches');
@@ -98,6 +112,18 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			await expect(status).toHaveText('2 of 3 matches');
 			await page.keyboard.press('Shift+F3');
 			await expect(status).toHaveText('1 of 3 matches');
+			await query.press('Enter');
+			await expect(status).toHaveText('2 of 3 matches');
+			await query.press('Escape');
+			await expect(find).toBeHidden();
+			await expect(draft).toBeFocused();
+			await page.keyboard.press('F3');
+			await expect(status).toHaveText('3 of 3 matches');
+			await expect(draft).toBeFocused();
+			await query.press('Escape');
+			await page.keyboard.press('Shift+F3');
+			await expect(status).toHaveText('2 of 3 matches');
+			await expect(draft).toBeFocused();
 			await query.fill('old_code_needle');
 			await expect(status).toHaveText('1 of 1 matches');
 			await expect(chat.locator('.ash-chat-find-code-current')).toBeVisible();

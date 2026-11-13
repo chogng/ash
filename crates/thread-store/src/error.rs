@@ -6,6 +6,7 @@ use std::fmt;
 pub enum ThreadStoreError {
     InvalidBatch(String),
     SequenceConflict { expected: u64, actual: u64 },
+    AuthorizationRevoked,
     CatalogDamaged(ThreadId),
     SessionCatalogDamaged(SessionId),
     Storage(String),
@@ -22,6 +23,9 @@ impl fmt::Display for ThreadStoreError {
                     formatter,
                     "Thread sequence conflict: expected {expected}, actual {actual}"
                 )
+            }
+            Self::AuthorizationRevoked => {
+                write!(formatter, "Thread admission authorization was revoked")
             }
             Self::CatalogDamaged(thread_id) => {
                 write!(formatter, "Thread catalog record is damaged: {thread_id}")

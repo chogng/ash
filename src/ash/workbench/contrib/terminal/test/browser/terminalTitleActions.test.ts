@@ -95,6 +95,7 @@ test('the terminal editor title creates a terminal in the invoking group', async
 	using services = new InstantiationService();
 	using context = new ContextKeyService();
 	using commands = new CommandService(services);
+	services.registerInstance(IContextKeyService, context);
 	const menus = new MenuService(commands, context);
 	using menu = menus.createMenu(MenuId.EditorTabsTrailing);
 	const group = { id: 7, inputs: [] };
@@ -558,6 +559,8 @@ suite('Terminal context command lifecycle', () => {
 		const instances: ITerminalInstance[] = [first, second];
 		let active: ITerminalInstance | undefined = second;
 		using services = new InstantiationService();
+		using contexts = new ContextKeyService();
+		services.registerInstance(IContextKeyService, contexts);
 		services.registerInstance(ITerminalService, {
 			...Disposable.None, instances, get activeInstance() { return active; },
 			onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,

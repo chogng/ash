@@ -287,6 +287,7 @@ impl ConnectorDeviceOAuthService {
                     )?;
                     self.credentials.replace_connected_oauth_credential(
                         connector_id,
+                        connection_generation,
                         replacement.runtime_secret,
                         replacement.secret,
                     )?;

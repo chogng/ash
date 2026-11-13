@@ -17,5 +17,3 @@ ash_rust_crate(
         "//conditions:default": [],
     }),
 )
-
-exports_files(["src/test_support.rs"])

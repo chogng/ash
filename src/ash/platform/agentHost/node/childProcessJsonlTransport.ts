@@ -16,6 +16,8 @@ export interface ChildProcessJsonlTransportOptions {
 	maxStderrBytes?: number;
 	maxPendingWrites?: number;
 	closeTimeoutMs?: number;
+	/** Commands with orderly EOF cleanup can finish before the forced-close deadline. */
+	closeMode?: 'signal' | 'stdin';
 }
 
 type FrameListener = (frame: string) => void;
@@ -34,6 +36,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 	private readonly maxStderrBytes: number;
 	private readonly maxPendingWrites: number;
 	private readonly closeTimeoutMs: number;
+	private readonly closeMode: 'signal' | 'stdin';
 	private readonly frameListeners = new Set<FrameListener>();
 	private readonly dataListeners = new Set<DataListener>();
 	private readonly closeListeners = new Set<CloseListener>();
@@ -68,6 +71,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 			'maxPendingWrites',
 		);
 		this.closeTimeoutMs = positiveInteger(options.closeTimeoutMs, 2_000, 'closeTimeoutMs');
+		this.closeMode = options.closeMode ?? 'signal';
 
 		process.stdout.on('data', this.onStdoutData);
 		process.stderr.on('data', this.onStderrData);
@@ -180,7 +184,16 @@ export class ChildProcessJsonlTransport implements IDisposable {
 			timeout.unref();
 			this.process.once('exit', finish);
 			this.finish(new Error('Ash app-server connection closed'));
-			if (!this.process.kill('SIGTERM')) finish();
+			if (this.closeMode === 'stdin') {
+				// An interrupted daemon command can leave its directory operation lock
+				// until the stale-lock deadline. EOF lets it release that lock before
+				// disconnecting; the existing deadline still bounds an unresponsive peer.
+				const failed = (): void => { this.process.kill('SIGTERM'); };
+				this.process.stdin.once('error', failed);
+				this.process.stdin.once('close', () => this.process.stdin.off('error', failed));
+				try { this.process.stdin.end(); }
+				catch { failed(); }
+			} else if (!this.process.kill('SIGTERM')) finish();
 		});
 		return this.closePromise;
 	}

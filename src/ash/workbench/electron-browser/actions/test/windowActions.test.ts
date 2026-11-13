@@ -118,7 +118,7 @@ test('desktop window commands reach the window host', async () => {
 		getZoomLevel: async () => zoom,
 		onDidChangeZoomLevel: () => ({ dispose() { } }),
 		setZoomLevel: async level => { zoom = level; calls.push(`zoom:${level}`); },
-		getAuxiliaryWindowState: async () => { throw new Error('Unused window state'); },
+		getAuxiliaryWindowInitialization: async () => { throw new Error('Unused window state'); },
 		onDidChangeAuxiliaryWindowState: () => ({ dispose() { } }),
 		onDidChangeWindowAlwaysOnTop: () => ({ dispose() { } }),
 		isAlwaysOnTop: async () => alwaysOnTop,

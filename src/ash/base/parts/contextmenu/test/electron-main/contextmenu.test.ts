@@ -78,6 +78,19 @@ suite('Electron context menu owner', () => {
 		}
 	}
 
+	test('a browser popup uses its presentation window geometry and settles when that window closes', async () => {
+		using fixture = new HostMenuFixture();
+		const auxiliary = new EventEmitter();
+		Object.assign(auxiliary, { isDestroyed: () => false, webContents: { getZoomFactor: () => 2 } });
+		const popup = fixture.menus.popup(fixture.request, auxiliary as unknown as BrowserWindow);
+		assert.equal(fixture.options?.window, auxiliary);
+		assert.deepEqual([fixture.options?.x, fixture.options?.y], [20, 40]);
+		auxiliary.emit('closed');
+		assert.deepEqual(await popup, {});
+		assert.equal(fixture.window.listenerCount('closed'), 0);
+		assert.equal(auxiliary.listenerCount('closed'), 0);
+	});
+
 	test('requesting OS close keeps the popup result pending until its actual callback', async () => {
 		using fixture = new HostMenuFixture();
 		let settled = false;

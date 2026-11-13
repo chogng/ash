@@ -1,6 +1,6 @@
 import '../../../welcomeGettingStarted/browser/gettingStartedColors.js';
 import '../../../debug/browser/debugColors.js';
-import '../../../../../sessions/contrib/artifacts/browser/widget/canvasEditorToolbar.js';
+import '../../../../../sessions/contrib/artifact/browser/widget/artifactToolbar.js';
 import '../../../../../platform/theme/common/colors/baseColors.js';
 import '../../../../../platform/theme/common/sizes/baseSizes.js';
 import '../../../../../editor/common/core/editorColorRegistry.js';

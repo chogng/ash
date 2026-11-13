@@ -1,4 +1,5 @@
 import { languagePackCatalog as chineseCatalog } from '../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
+import { createTestGeneratedFilesService } from '../common/testGeneratedFilesService.js';
 import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSettings.js';
 import { ChatRequestQueueKind } from '../../../workbench/services/chat/common/chatService.js';
 import { observableValue } from '../../../base/common/observable.js';
@@ -20,7 +21,7 @@ import type { ISessionProviderScope, ISessionProviderScopeService } from '../../
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { createDisconnectedAgentSessionService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
-import type { AgentInteractionOffer, QueuedMessage, ThreadRead, ThreadSnapshotHistory, ThreadSubscription, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, SessionOperationInput } from '../../../platform/agentHost/common/agent.js';
+import type { AgentInteractionOffer, QueuedMessage, ThreadRead, ThreadSnapshotHistory, ThreadSubscription, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, SessionOperationInput, ThreadItem, Turn } from '../../../platform/agentHost/common/agent.js';
 import type { AdvisorConfig, IAgentModelsService } from '../../../platform/models/common/agentModels.js';
 import type { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { IAppServerApi, IServerEventApi, AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
@@ -29,9 +30,14 @@ import type { IAgentSkill, IPromptsService } from '../../../workbench/contrib/ch
 import type { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { INativeChatModelPreferencesService } from '../../contrib/chat/common/nativeChatModelPreferencesService.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import type { ISession } from '../../services/sessions/common/session.js';
+import type { ISession, IUntitledChatSession } from '../../services/sessions/common/session.js';
 import { resolveChatContextAttachment, type ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
 import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
+import { URI } from '../../../base/common/uri.js';
+import { generatedFileSourceKey } from '../../../platform/generatedFiles/common/generatedFiles.js';
+import type { GeneratedFile, GeneratedFileSource, IGeneratedFilesService } from '../../services/generatedFiles/common/generatedFilesService.js';
+import { readPendingCreationKind, writePendingCreationKind } from '../../services/sessions/browser/sessionGridState.js';
+import { chatCreationKinds, getChatCreationContext, isChatCreationKind, type ChatCreationKind } from '../../common/chatCreation.js';
 
 function snapshot(threadId: string, sequence = 1, waiting = false): ThreadRead {
 	const usage = { modelInvocations: 0, inputTokens: { reported: 0, complete: true }, outputTokens: { reported: 0, complete: true }, cachedInputTokens: { reported: 0, complete: true }, cacheWriteInputTokens: { reported: 0, complete: true }, reasoningTokens: { reported: 0, complete: true } };
@@ -104,16 +110,280 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	// Tests select a thread explicitly. An empty catalog keeps fork-version reads out of transcript tests.
 	const sessions = { onDidChange: Event.None, sessions: [], untitledSessions: [] } as unknown as ISessionsManagementService;
 	const selection = { kind: 'session' as const, active: { session, threadId: 'A' } };
-	const storage = { get: () => undefined, store: () => { } } as unknown as IStorageService;
+	const stored = new Map<string, string>();
+	const storage = {
+		get: (key: string) => stored.get(key),
+		store: (key: string, value: string | undefined) => value === undefined ? stored.delete(key) : stored.set(key, value),
+		remove: (key: string) => stored.delete(key),
+	} as unknown as IStorageService;
+	const generatedFileChanges = resources.add(new Emitter<void>());
+	const publishedFiles: GeneratedFile[] = [];
+	const publications: { source: GeneratedFileSource; markdown: string; }[] = [];
+	const generatedFiles: IGeneratedFilesService = {
+		...createTestGeneratedFilesService(),
+		onDidChange: generatedFileChanges.event, files: publishedFiles, loading: false, error: undefined,
+		refresh: async () => { },
+		findBySource: source => publishedFiles.find(file => generatedFileSourceKey(file.source) === generatedFileSourceKey(source)),
+		isGeneratedResource: resource => publishedFiles.some(file => file.resource.toString() === resource.toString()),
+		publishMarkdown: async (source, markdown, title) => {
+			publications.push({ source, markdown });
+			const file: GeneratedFile = { id: `file-${publishedFiles.length}`, resource: URI.file(`/generated/file-${publishedFiles.length}.md`), title: title ?? 'Generated document', contentType: 'text/markdown', source, createdAt: 1 };
+			publishedFiles.push(file);
+			generatedFileChanges.fire();
+			return file;
+		},
+	};
 	const contextKeys = resources.add(new ContextKeyService());
 	SessionsWorkspaceModeContext.bindTo(contextKeys).set(kind === 'Code' ? 'code' : 'chat');
-	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, configuration, storage, contextKeys) : new AshChatModel(selection, 'session', sessions, routedChat, prompts, models, execution, configuration, storage, undefined, preferences));
-	return { resources, model, configuration, storage, contextKeys, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, modelApi, execution, starts, queues, steers, consults, compacts, historyRequests, updates, transcripts, offers, session, sessions, reconnect: () => { generation++; connection.fire('ready'); } };
+	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, configuration, storage, generatedFiles, contextKeys) : new AshChatModel(selection, 'session', sessions, routedChat, prompts, models, execution, configuration, storage, generatedFiles, undefined, preferences));
+	return { resources, model, configuration, storage, generatedFiles, publications, publishedFiles, contextKeys, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, changeApi, modelApi, execution, starts, queues, steers, consults, compacts, historyRequests, updates, transcripts, offers, session, sessions, reconnect: () => { generation++; connection.fire('ready'); } };
 }
 
 async function turnTask(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
 async function waitFor(condition: () => boolean): Promise<void> { for (let i = 0; i < 200 && !condition(); i++) await turnTask(); assert.ok(condition(), 'expected deferred operation reached'); }
 function approval(requestId: string): AgentInteractionOffer { return { connectionGeneration: 1, sessionId: 'session', threadId: 'A', turnId: 'turn-A', interaction: { requestId, request: { type: 'approval', request: { reason: requestId, capabilities: [{ kind: 'fileWrite', scope: '/owned/file' }] } } } }; }
+
+function creationDraftFixture(kind: ChatCreationKind = 'docs') {
+	const f = fixture('Cowork');
+	f.model.dispose();
+	const draft: IUntitledChatSession = { untitledSessionId: 'creation-draft', kind: 'chat', title: 'New Chat', creationKind: kind, model: undefined, agent: undefined, workspace: { type: 'current' } };
+	let drafts = [draft];
+	let backgroundSends = 0;
+	const materialized = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string; }>>('creation materialization', new Map());
+	const sessions = {
+		onDidChange: Event.None, sessions: [], get untitledSessions() { return drafts; }, materializedSessions: materialized,
+		materializeUntitledSession: async () => ({ session: f.session, threadId: 'A' }),
+		setUntitledSessionCreationKind: (_id: string, creationKind: ChatCreationKind | undefined) => {
+			drafts = drafts.map(value => ({ ...value, creationKind }));
+		},
+		promoteUntitledSession: (_id: string, active: { session: ISession; threadId: string; }) => {
+			writePendingCreationKind(f.storage, active, drafts[0]?.creationKind);
+			drafts = [];
+			materialized.set(new Map([[draft.untitledSessionId, { sessionId: 'session', threadId: 'A' }]]));
+		},
+		completeBackgroundSend: () => { backgroundSends++; drafts = [{ ...draft, creationKind: undefined }]; },
+	} as unknown as ISessionsManagementService;
+	class RetainedChat extends AshChatModel {
+		retarget(selection: ConstructorParameters<typeof ChatWidgetModel>[1]): void { this.bindSelection(selection); }
+	}
+	const open = (selection: ConstructorParameters<typeof ChatWidgetModel>[1]) => f.resources.add(new RetainedChat(selection, 'session', sessions, f.chat, f.prompts, f.models, f.execution, f.configuration, f.storage, f.generatedFiles, undefined, undefined));
+	const model = open({ kind: 'untitled', session: draft });
+	return { ...f, model, open, sessions, draft, get backgroundSends() { return backgroundSends; } };
+}
+
+function creationHistory(status: Turn['status'] = 'completed', kind = 'docs', replies?: readonly Extract<ThreadItem, { type: 'agentMessage'; }>[]): ThreadRead {
+	const base = messageHistory('A', 3, 'Unused');
+	const items: ThreadItem[] = [
+		{ type: 'userContext', itemId: 'creation-context', turnId: 'shared-turn', name: `ash.creation.${kind}`, content: 'Accepted intent' },
+		...(replies ?? [{ type: 'agentMessage', itemId: 'document', turnId: 'shared-turn', text: '# Document\n\nComplete body', phase: 'final_answer' }]),
+	];
+	return {
+		...base,
+		thread: { ...base.thread, turns: [{ ...base.thread.turns[0]!, status, items }] },
+		transcript: { ...base.transcript, entries: items.map(item => ({ type: 'item', entryId: `item:${item.itemId}`, turnId: 'shared-turn', item, transient: status !== 'completed' })) },
+	};
+}
+
+test('Chat creation contexts use stable names and actionable directions for all choices', () => {
+	assert.deepEqual(chatCreationKinds, ['docs', 'slides', 'design', 'sheet', 'whiteboard', 'data', 'motion']);
+	for (const kind of chatCreationKinds) {
+		assert.equal(isChatCreationKind(kind), true);
+		const context = getChatCreationContext(kind);
+		assert.equal(context.name, `ash.creation.${kind}`);
+		assert.ok(context.content.length > 100);
+	}
+	assert.equal(isChatCreationKind('unknown'), false);
+	assert.equal(isChatCreationKind(undefined), false);
+	assert.match(getChatCreationContext('docs').content, /complete, standalone Markdown document/);
+	assert.match(getChatCreationContext('docs').content, /without an outer code fence/);
+	assert.match(getChatCreationContext('docs').content, /Ash saves the final reply body as a \.md file/);
+});
+
+test('Code sends a restored draft as written when it contains a legacy Chat creation type', async () => {
+	const f = creationDraftFixture(); using resources = f.resources;
+	f.model.dispose();
+	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: f.draft }, f.sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.generatedFiles, f.contextKeys);
+	await model.initialize();
+	assert.equal(model.creationKind, undefined);
+	assert.equal(model.setCreationKind('slides'), false);
+	await model.send('Write a guide');
+	assert.deepEqual(f.starts[0].input, [{ type: 'text', text: 'Write a guide' }]);
+	assert.equal(readPendingCreationKind(f.storage, { session: f.session, threadId: 'A' }), undefined);
+});
+
+for (const background of [false, true]) {
+	test(`Chat Docs ${background ? 'background' : 'foreground'} first send puts creation intent in the actual request`, async () => {
+		const f = creationDraftFixture(); using resources = f.resources;
+		await f.model.initialize();
+		const context = { name: 'Source', content: 'Captured source' };
+		if (background) await f.model.sendInBackground('Write a guide', 'agent', undefined, [context]);
+		else await f.model.send('Write a guide', 'agent', undefined, [context]);
+		assert.deepEqual(f.starts[0].input, [
+			{ type: 'context', ...context }, { type: 'context', ...getChatCreationContext('docs') }, { type: 'text', text: 'Write a guide' },
+		]);
+		assert.equal(f.backgroundSends, background ? 1 : 0);
+		assert.equal(f.model.untitledSessionId, background ? f.draft.untitledSessionId : undefined);
+	});
+
+	test(`Chat Docs ${background ? 'background' : 'foreground'} failed first send retains creation intent for retry`, async () => {
+		const f = creationDraftFixture(); using resources = f.resources;
+		await f.model.initialize();
+		let fail = true;
+		f.turnApi.start = async input => { f.starts.push(input); if (fail) throw new Error('First send failed'); return { turnId: 'accepted', sequence: 2 }; };
+		const send = () => background ? f.model.sendInBackground('Write a guide', 'agent', undefined, []) : f.model.send('Write a guide');
+		await assert.rejects(send(), /First send failed/);
+		if (!background) assert.equal(f.sessions.untitledSessions.length, 0, 'Promotion has already removed the draft');
+		fail = false;
+		await send();
+		assert.equal(f.starts.length, 2);
+		for (const request of f.starts) assert.deepEqual(request.input[0], { type: 'context', ...getChatCreationContext('docs') });
+	});
+}
+
+test('Chat Docs materialization failure keeps the draft selection for a subsequent first send', async () => {
+	const f = creationDraftFixture(); using resources = f.resources;
+	await f.model.initialize();
+	const materialize = f.sessions.materializeUntitledSession;
+	f.sessions.materializeUntitledSession = async () => { throw new Error('Cannot create session'); };
+	await assert.rejects(f.model.send('Write a guide'), /Cannot create session/);
+	assert.equal(f.model.creationKind, 'docs');
+	assert.equal(f.starts.length, 0);
+	f.sessions.materializeUntitledSession = materialize;
+	await f.model.send('Write a guide');
+	assert.deepEqual(f.starts[0].input[0], { type: 'context', ...getChatCreationContext('docs') });
+});
+
+test('Chat Docs materializing before first send preserves intent but subsequent Turns do not repeat it', async () => {
+	const f = creationDraftFixture(); using resources = f.resources;
+	await f.model.initialize();
+	await f.model.prepareConversation();
+	assert.equal(f.sessions.untitledSessions.length, 0);
+	await f.model.send('Write a guide');
+	assert.deepEqual(f.starts[0].input[0], { type: 'context', ...getChatCreationContext('docs') });
+	const accepted = messageHistory('A', 4, 'Accepted');
+	f.threadApi.read = async () => accepted;
+	f.threadApi.subscribe = async () => ({ ...accepted, updates: [] });
+	f.reconnect();
+	await waitFor(() => f.model.thread?.sequence === 4);
+	await f.model.send('Continue');
+	assert.deepEqual(f.starts[1].input, [{ type: 'text', text: 'Continue' }]);
+});
+
+test('Changing Sheet to Slides during a failed first send affects only the retry after reopening', async () => {
+	const f = creationDraftFixture('sheet');
+	using resources = f.resources;
+	await f.model.initialize();
+	const entered = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const materialize = f.sessions.materializeUntitledSession;
+	f.sessions.materializeUntitledSession = async id => {
+		void entered.complete();
+		await release.p;
+		return materialize(id);
+	};
+	const start = f.turnApi.start;
+	f.turnApi.start = async input => {
+		await start(input);
+		throw new Error('First send failed');
+	};
+	const rejected = assert.rejects(f.model.send('Create this'), /First send failed/);
+	await entered.p;
+	assert.equal(f.model.setCreationKind('slides'), true);
+	await release.complete();
+	await rejected;
+	assert.deepEqual(f.starts[0].input[0], { type: 'context', ...getChatCreationContext('sheet') });
+
+	f.model.dispose();
+	const reopened = f.open({ kind: 'session', active: { session: f.session, threadId: 'A' } });
+	await reopened.initialize();
+	assert.equal(reopened.creationKind, 'slides');
+	f.turnApi.start = start;
+	f.threadApi.read = async () => messageHistory('A', 3, 'Created');
+	await reopened.send('Retry this');
+	assert.deepEqual(f.starts[1].input[0], { type: 'context', ...getChatCreationContext('slides') });
+	assert.equal(reopened.creationKind, undefined);
+	assert.equal(readPendingCreationKind(f.storage, { session: f.session, threadId: 'A' }), undefined);
+	await reopened.send('Follow up');
+	assert.deepEqual(f.starts[2].input, [{ type: 'text', text: 'Follow up' }]);
+});
+
+test('Navigation during Sheet materialization retires the send without lending its intent to another Thread', async () => {
+	const f = creationDraftFixture('sheet');
+	using resources = f.resources;
+	await f.model.initialize();
+	const entered = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const materialize = f.sessions.materializeUntitledSession;
+	f.sessions.materializeUntitledSession = async id => {
+		void entered.complete();
+		await release.p;
+		return materialize(id);
+	};
+	const rejected = assert.rejects(f.model.send('Create a budget'), isCancellationError);
+	await entered.p;
+	f.model.retarget({ kind: 'session', active: { session: f.session, threadId: 'B' } });
+	await release.complete();
+	await rejected;
+	assert.equal(f.starts.length, 0);
+	assert.equal(f.model.creationKind, undefined);
+	await f.model.send('Unrelated message');
+	assert.deepEqual(f.starts[0].input, [{ type: 'text', text: 'Unrelated message' }]);
+
+	await f.model.selectThread({ session: f.session, threadId: 'A' });
+	assert.equal(f.model.creationKind, 'sheet');
+	assert.equal(f.model.setCreationKind(undefined), true);
+	await f.model.send('Continue without a type');
+	assert.deepEqual(f.starts[1].input, [{ type: 'text', text: 'Continue without a type' }]);
+});
+
+test('Acceptance consumes the promoted Slides choice after navigation', async () => {
+	const f = creationDraftFixture('slides');
+	using resources = f.resources;
+	await f.model.initialize();
+	const entered = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const start = f.turnApi.start;
+	f.turnApi.start = async input => {
+		void entered.complete();
+		await release.p;
+		return start(input);
+	};
+	const sending = f.model.send('Create a presentation');
+	await entered.p;
+	const active = { session: f.session, threadId: 'A' };
+	try {
+		assert.equal(readPendingCreationKind(f.storage, active), 'slides');
+		f.model.retarget({ kind: 'session', active: { session: f.session, threadId: 'B' } });
+	} finally {
+		await release.complete();
+		await sending;
+	}
+	assert.equal(readPendingCreationKind(f.storage, active), undefined);
+});
+
+test('Chat only projects a native generated file when the durable catalogue supplies it', async () => {
+	const value = creationHistory();
+	const f = fixture('Cowork', async threadId => ({
+		thread: { ...value.thread, threadId },
+		transcript: { ...value.transcript, threadId },
+		updates: [],
+	})); using resources = f.resources;
+	await f.model.initialize();
+	assert.equal(f.model.items.some(item => item.files?.length), false);
+	assert.deepEqual(f.publications, []);
+	const file = await f.generatedFiles.publishMarkdown({
+		providerId: 'local-agent-host', accountId: null,
+		sessionId: 'session', threadId: 'A', itemId: 'document', partId: 'markdown',
+	}, '# Document');
+	const card = f.model.items.find(item => item.files?.length)!;
+	assert.equal(card.feedbackSource?.itemId, 'document');
+	assert.deepEqual(card.files, [{ resource: file.resource.toString(), label: file.title }]);
+	f.reconnect();
+	await f.model.pendingHistoryBinding;
+	assert.equal(f.publications.length, 1, 'History replay performs no writes');
+	await f.model.selectThread({ session: f.session, threadId: 'B' });
+	assert.equal(f.model.items.some(item => item.files?.length), false, 'A sibling conversation does not inherit the file');
+});
 
 for (const kind of ['Code', 'Cowork'] as const) {
 	test(`${kind === 'Code' ? 'Code' : 'Native Chat'} restores Auto from the accepted Turn and sends it on the next request`, async () => {
@@ -761,7 +1031,7 @@ test('Code keeps a directoryless draft editable and blocks sending and voice unt
 		materializeUntitledSession: async () => { creations++; return { session: f.session, threadId: 'A' }; },
 		promoteUntitledSession: () => { },
 	} as unknown as ISessionsManagementService;
-	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.contextKeys);
+	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.generatedFiles, f.contextKeys);
 	await model.initialize();
 	const messages = chineseCatalog.bundles;
 	setNlsMessages('zh-CN', messages);
@@ -808,7 +1078,7 @@ test('Ash Chat can continue a directoryless conversation using the shared compos
 	const mode = SessionsWorkspaceModeContext.bindTo(contextKeys);
 	const session = { ...f.session, workspace: null };
 	const active = { session, threadId: 'A' };
-	using model = new ChatWidgetModel(f.chat, { kind: 'session', active }, f.sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, contextKeys);
+	using model = new ChatWidgetModel(f.chat, { kind: 'session', active }, f.sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.generatedFiles, contextKeys);
 	await model.initialize();
 
 	mode.set('code');
@@ -833,7 +1103,7 @@ test('voice source preparation materializes the model selected immediately befor
 		materializeUntitledSession: async () => { materializedModels.push(draft.model); return { session: { ...f.session, model: draft.model }, threadId: 'A' }; },
 		promoteUntitledSession: () => { },
 	} as unknown as ISessionsManagementService;
-	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessionService, f.prompts, f.models, f.executionSettings, resources.add(new TestConfigurationService()), f.storage, f.contextKeys);
+	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessionService, f.prompts, f.models, f.executionSettings, resources.add(new TestConfigurationService()), f.storage, f.generatedFiles, f.contextKeys);
 	await model.initialize();
 	const selecting = model.selectModel(selected);
 	const preparing = model.prepareConversation();
@@ -878,7 +1148,25 @@ for (const kind of ['Code'] as const) {
 	}
 }
 
-for (const kind of ['Code', 'Cowork'] as const) {
+test('Cowork keeps history without reading the conversation changes checkpoint', async () => {
+	const f = fixture('Cowork');
+	using resources = f.resources;
+	let reads = 0;
+	f.changeApi.summary = async () => {
+		reads++;
+		return { sequence: 1, revision: 'changes', statistics: { files: 3, additions: 4, deletions: 1 }, repositories: [], warnings: [] };
+	};
+	await f.model.initialize();
+	assert.equal(f.model.thread?.threadId, 'A');
+	await f.model.selectThread({ session: f.session, threadId: 'B' });
+	assert.equal(f.model.thread?.threadId, 'B');
+	assert.equal(reads, 0);
+	assert.equal(f.model.inputState.changes, undefined);
+	assert.equal(f.model.inputState.changesScope, undefined);
+});
+
+{
+	const kind = 'Code';
 	for (const failed of [false, true]) test(`${kind} checkpoint summary retires immediately on undo and rejects a delayed ${failed ? 'error' : 'result'}`, async () => {
 		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
 		await waitFor(() => f.model.inputState.changesRevision === 'initial');
@@ -901,7 +1189,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		await waitFor(() => f.model.thread?.sequence === 3);
 		// Code coalesces summary reads. Settle the invalidated read before
 		// waiting for its replacement, while checking that it never becomes visible.
-		if (kind === 'Code') assert.equal(reads.length, 1);
+		assert.equal(reads.length, 1);
 		if (failed) await reads[0]!.error(new Error('Old summary failure'));
 		else await reads[0]!.complete({ sequence: 2, revision: 'old', statistics: { files: 30, additions: 100, deletions: 1 }, repositories: [], warnings: [] });
 		await waitFor(() => reads.length === 2);
@@ -998,8 +1286,8 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		const sessions = { onDidChange: Event.None, untitledSessions: [draft], materializedSessions: materialized } as unknown as ISessionsManagementService;
 		using configuration = new TestConfigurationService();
 		using model = kind === 'Code'
-			? new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, configuration, f.storage, f.contextKeys)
-			: new AshChatModel({ kind: 'untitled', session: draft }, 'session', sessions, f.chat, f.prompts, f.models, f.execution, configuration, f.storage, undefined, { onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined } as unknown as INativeChatModelPreferencesService);
+			? new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, configuration, f.storage, f.generatedFiles, f.contextKeys)
+			: new AshChatModel({ kind: 'untitled', session: draft }, 'session', sessions, f.chat, f.prompts, f.models, f.execution, configuration, f.storage, f.generatedFiles, undefined, { onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined } as unknown as INativeChatModelPreferencesService);
 		await model.initialize();
 		model.selectMode('plan');
 		model.selectApprovalMode('auto');

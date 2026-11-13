@@ -1,5 +1,5 @@
 import type { ITerminalOutputSnapshot, ITerminalReconnectLease } from '../../terminal/common/terminal.js';
-import type { TitleBarStyleConfiguration, IColorScheme, IWindowAlwaysOnTopChangedEvent, IAuxiliaryWindowState, IAuxiliaryWindowStateEvent } from '../../window/common/window.js';
+import type { TitleBarStyleConfiguration, IColorScheme, IWindowAlwaysOnTopChangedEvent, IAuxiliaryWindowInitialization, IAuxiliaryWindowStateEvent } from '../../window/common/window.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
 import type { SessionMode } from '../../agentHost/common/agent.js';
 import type { DisposableHandle } from '../../ipc/common/ipc.js';
@@ -235,7 +235,7 @@ export interface INativeHostApi extends ICommonNativeHostService {
 	onDidChangeZoomLevel(listener: (level: number) => void): DisposableHandle;
 	setZoomLevel(level: number, windowName?: string, allWindows?: boolean): Promise<void>;
 	/** An optional name selects an auxiliary window owned by this workbench. */
-	getAuxiliaryWindowState(windowName: string): Promise<IAuxiliaryWindowState>;
+	getAuxiliaryWindowInitialization(windowName: string): Promise<IAuxiliaryWindowInitialization>;
 	onDidChangeAuxiliaryWindowState(listener: (event: IAuxiliaryWindowStateEvent) => void): DisposableHandle;
 	isAlwaysOnTop(windowName?: string): Promise<boolean>;
 	setAlwaysOnTop(enabled: boolean, windowName?: string): Promise<void>;
@@ -259,7 +259,7 @@ export interface INativeHostApi extends ICommonNativeHostService {
 	releaseAgentsWindowInvitation(id: string): Promise<void>;
 	syncSystemWideKeybindings(keybindings: readonly INativeSystemWideKeybinding[]): Promise<INativeSystemWideKeybindingResult>;
 	openExternal(target: string): Promise<boolean>;
-	onDidRequestOpenExternalUri(listener: (target: string) => void): DisposableHandle;
+	onDidRequestOpenExternalUri(listener: (target: string, sourceWindowName?: string) => void): DisposableHandle;
 	revealFile(path: string): Promise<void>;
 	setWindowTheme(theme: INativeWindowTheme): Promise<void>;
 	setWindowDimmed(dimmed: boolean): Promise<void>;

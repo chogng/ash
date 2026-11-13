@@ -5,6 +5,7 @@ use ash_automation::AutomationStore;
 use ash_protocol::AutomationRun;
 use ash_protocol::AutomationRunStatus;
 use ash_protocol::AutomationSession;
+use core_api::AgentRuntime;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
@@ -705,6 +706,415 @@ fn open_follow_up_server(
     .with_github_provider(Arc::new(FollowUpAccounts::default()), api)
     .unwrap();
     (server, store)
+}
+
+fn artifact_follow_up_plan(
+    server: &crate::AppServer,
+    store: &AutomationStore,
+    directory: &std::path::Path,
+    id: &str,
+    prompt: &str,
+) -> AutomationRun {
+    let mut connection = server.connection();
+    let initialized = call(
+        server,
+        &mut connection,
+        json!({"jsonrpc":"2.0", "id":1,
+        "method":"initialize", "params":{"clientInfo":{"name":"test","version":"1"}}}),
+    );
+    assert!(initialized.get("error").is_none(), "{initialized}");
+    let created = super::create_session(server, &mut connection, 2, id);
+    let session = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let reference = json!({"repository":{"host":"github.com","owner":"team","name":"repo"},"number":7,"isArtifact":true});
+    let attached = call(
+        server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":3,
+        "method":"github/session/pullRequest/attach","params":{"sessionId":session,"reference":reference}}),
+    );
+    assert!(attached.get("error").is_none(), "{attached}");
+    let listed = call(
+        server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":4,
+        "method":"github/session/pullRequests","params":{"sessionId":session}}),
+    );
+    let artifact = listed["result"]["references"][0]["artifactId"]
+        .as_str()
+        .unwrap();
+    let authorized = call(
+        server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":5,
+        "method":"automation/write","params":{"commandId":format!("authorize-{id}"),"id":id,"expectedRevision":0,"status":"enabled",
+        "definition":{"title":"Artifact follow-up","prompt":prompt,"directory":directory,
+            "session":{"type":"continue","sessionId":session,"threadId":session},
+            "schedule":{"type":"interval","anchor":0,"minutes":1},
+            "condition":{"type":"gitHubChecks","host":"github.com","owner":"team","repository":"repo","number":7,
+                "accountId":"account","credentialRevision":"1","artifactId":artifact}}}}),
+    );
+    assert_eq!(authorized["result"]["status"], "enabled", "{authorized}");
+    store
+        .run_now(id, &format!("check-{id}"), ash_automation::now().unwrap())
+        .unwrap()
+}
+
+/// Model selection runs after the dispatcher's artifact check and before Core admission.
+/// Blocking here exercises that production window without a scheduler timing dependency.
+struct FollowUpAdmissionCatalog {
+    before_default: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>,
+}
+
+impl crate::model_catalog::ModelCatalog for FollowUpAdmissionCatalog {
+    fn set_preferences(
+        &self,
+        _: crate::model_catalog::ModelPreferencesCommand,
+    ) -> Result<ash_config::ConfigCommandResult, crate::model_catalog::ModelPreferencesError> {
+        unreachable!("this fixture does not accept preference writes")
+    }
+
+    fn list(
+        &self,
+    ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, core_api::CoreError>
+    {
+        Ok(Vec::new())
+    }
+
+    fn current_access(
+        &self,
+        _: &ash_protocol::ModelRef,
+    ) -> Result<ash_protocol::ModelAccess, core_api::CoreError> {
+        Ok(ash_protocol::ModelAccess::Unknown)
+    }
+
+    fn configured_default(&self) -> Result<Option<ash_protocol::ModelRef>, core_api::CoreError> {
+        if let Some(callback) = self.before_default.lock().unwrap().take() {
+            callback();
+        }
+        Ok(None)
+    }
+}
+
+#[test]
+fn artifact_follow_up_detached_after_dispatch_check_cannot_admit_a_turn() {
+    for reattach in [false, true] {
+        for prompt in ["Fix CI", "/develop Fix CI"] {
+            let profile = tempfile::tempdir().unwrap();
+            let directory = tempfile::tempdir().unwrap();
+            let api = Arc::new(FollowUpApi::default());
+            let (server, store) =
+                open_follow_up_server(profile.path(), directory.path(), api.clone());
+            let run = artifact_follow_up_plan(&server, &store, directory.path(), "revoked", prompt);
+            let independent =
+                artifact_follow_up_plan(&server, &store, directory.path(), "independent", "Fix CI");
+            let AutomationSession::Continue {
+                session_id,
+                thread_id,
+            } = &run.definition.session
+            else {
+                panic!("artifact follow-up must continue its source")
+            };
+            let source = ash_protocol::ThreadId::new(session_id.as_str()).unwrap();
+            // This independent connection stands in for the concurrent detach request.
+            let references =
+                ash_state::SqliteThreadStore::open(profile.path().join("state.sqlite3")).unwrap();
+            let invoked = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let reached = invoked.clone();
+            let server = server.with_model_catalog(Arc::new(FollowUpAdmissionCatalog {
+                before_default: std::sync::Mutex::new(Some(Box::new(move || {
+                    let repository =
+                        github::Repository::new("github.com".into(), "team".into(), "repo".into())
+                            .unwrap();
+                    let generation = references
+                        .pull_request_artifact_id(&source, &repository, 7)
+                        .unwrap()
+                        .unwrap();
+                    assert!(
+                        references
+                            .detach_pull_request(&source, &repository, 7)
+                            .unwrap()
+                    );
+                    if reattach {
+                        assert!(
+                            references
+                                .record_pull_request(&source, &repository, 7)
+                                .unwrap()
+                        );
+                        assert_ne!(
+                            references
+                                .pull_request_artifact_id(&source, &repository, 7)
+                                .unwrap(),
+                            Some(generation)
+                        );
+                    }
+                    reached.store(true, std::sync::atomic::Ordering::SeqCst);
+                }))),
+            }));
+            let observed = server
+                .advance_automation_run(&run, ash_automation::now().unwrap())
+                .unwrap();
+            assert!(invoked.load(std::sync::atomic::Ordering::SeqCst));
+            assert!(
+                observed.turn_id.is_none(),
+                "revoked artifact admitted a Turn: {observed:?}"
+            );
+            assert_eq!(observed.status, AutomationRunStatus::Stopped);
+            assert!(
+                server
+                    .threads()
+                    .read_thread(thread_id)
+                    .unwrap()
+                    .turns
+                    .is_empty()
+            );
+            assert_eq!(
+                store
+                    .list()
+                    .unwrap()
+                    .into_iter()
+                    .find(|plan| plan.id == run.automation_id)
+                    .unwrap()
+                    .status,
+                ash_protocol::AutomationStatus::Paused
+            );
+            store.observe(&observed).unwrap();
+            let healthy = server
+                .advance_automation_run(&independent, ash_automation::now().unwrap())
+                .unwrap();
+            let healthy_thread = healthy.thread_id.clone().unwrap();
+            assert!(healthy.turn_id.is_some(), "{healthy:?}");
+            super::wait_for_latest_turn(
+                &server,
+                healthy.session_id.as_ref().unwrap().as_str(),
+                ash_protocol::TurnStatus::Completed,
+            );
+            drop(server);
+            drop(store);
+            // Recovery must neither revive revoked consent nor duplicate a valid receipt.
+            let (server, store) = open_follow_up_server(profile.path(), directory.path(), api);
+            assert_eq!(
+                server
+                    .advance_automation_run(&run, ash_automation::now().unwrap())
+                    .unwrap(),
+                observed
+            );
+            server.resume_recovered_agent_coordinations().unwrap();
+            assert!(
+                server
+                    .threads()
+                    .read_thread(thread_id)
+                    .unwrap()
+                    .turns
+                    .is_empty()
+            );
+            let retried = server
+                .advance_automation_run(&independent, ash_automation::now().unwrap())
+                .unwrap();
+            assert_eq!(retried.turn_id, healthy.turn_id);
+            assert_eq!(
+                server
+                    .threads()
+                    .read_thread(&healthy_thread)
+                    .unwrap()
+                    .turns
+                    .len(),
+                1
+            );
+            assert!(store.get_run(&run.id).unwrap().turn_id.is_none());
+        }
+    }
+}
+
+#[test]
+fn queued_pr_workflows_from_before_admission_guards_recover_only_with_original_authority() {
+    for (detach, reattach, already_accepted) in [
+        (false, false, false),
+        (true, false, false),
+        (true, true, false),
+        (true, false, true),
+    ] {
+        let profile = tempfile::tempdir().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let api = Arc::new(FollowUpApi::default());
+        let (server, store) = open_follow_up_server(profile.path(), directory.path(), api.clone());
+        let run = artifact_follow_up_plan(
+            &server,
+            &store,
+            directory.path(),
+            "legacy",
+            "/develop Fix CI",
+        );
+        let event = ash_protocol::AutomationEvent {
+            key: "legacy-ci-failure".into(),
+            context: "Build failed".into(),
+        };
+        let text = format!("{}\n\n{}", run.definition.prompt, event.context);
+        assert!(store.claim_event(&run.id, event).unwrap());
+        let AutomationSession::Continue { thread_id, .. } = &run.definition.session else {
+            unreachable!();
+        };
+        let database = profile.path().join("state.sqlite3");
+        let workflows = workflows::Store::open(&database).unwrap();
+        let threads = server.threads();
+        let agents = ash_core::MultiAgentCoordinator::new(threads.clone(), Default::default());
+        let backend = FollowUpStartFailure {
+            starts: Default::default(),
+            error: core_api::CoreError::Execution("fixture only prepares the workflow".into()),
+        };
+        let runtime = workflows::Runtime {
+            store: &workflows,
+            threads,
+            agents: &agents,
+            backend: &backend,
+        };
+        let snapshot = threads.read_thread(thread_id).unwrap();
+        let command = ash_protocol::CommandId::new(format!(
+            "automation-start-{}",
+            ash_protocol::ContentDigest::sha256(run.id.as_bytes())
+                .to_string()
+                .replace(':', "-")
+        ))
+        .unwrap();
+        let request = ash_core::StartTurnRequest {
+            context_policy: Default::default(),
+            mode: Default::default(),
+            advisor: None,
+            kind: ash_protocol::TurnKind::Coding,
+            instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+            command_id: command.clone(),
+            expected_sequence: core_api::SequenceExpectation::Exact(snapshot.sequence),
+            model: None,
+            reasoning_effort: None,
+            policy_revision: "test-policy-v1".into(),
+            approval_mode: ash_protocol::ApprovalMode::Manual,
+            tool_mode: ash_protocol::ToolMode::Direct,
+            tool_profile: Some(server.agent_runtime().tool_profile().unwrap()),
+            activated_skills: Vec::new(),
+            input: vec![ash_protocol::UserInput::Text { text: text.clone() }],
+        };
+        let mut original_turn = None;
+        // The old writer stored the same submission with no precondition in the workflow log.
+        let interrupted = runtime.execute_with_turn_submission(
+            thread_id,
+            workflows::Command::parse(&text).unwrap().unwrap(),
+            request,
+            None,
+            None,
+            |thread, request, _| {
+                if already_accepted {
+                    original_turn = Some(threads.start_turn(thread, request).unwrap().turn_id);
+                }
+                Err(core_api::CoreError::Execution(
+                    "shutdown during submission".into(),
+                ))
+            },
+        );
+        assert!(
+            matches!(interrupted, Err(core_api::CoreError::Execution(message)) if message == "shutdown during submission")
+        );
+        if detach {
+            let history = ash_state::SqliteThreadStore::open(&database).unwrap();
+            let repository =
+                github::Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
+            assert!(
+                history
+                    .detach_pull_request(thread_id, &repository, 7)
+                    .unwrap()
+            );
+            if reattach {
+                assert!(
+                    history
+                        .record_pull_request(thread_id, &repository, 7)
+                        .unwrap()
+                );
+            }
+        }
+        drop(agents);
+        drop(workflows);
+        drop(server);
+        drop(store);
+
+        let (server, store) = open_follow_up_server(profile.path(), directory.path(), api);
+        let accepted = server
+            .agent_runtime()
+            .accepted_turn(thread_id, &command)
+            .unwrap();
+        assert_eq!(
+            accepted.is_some(),
+            !detach || already_accepted,
+            "detach={detach}, reattach={reattach}, already_accepted={already_accepted}"
+        );
+        if already_accepted {
+            assert_eq!(accepted, original_turn);
+        }
+        let snapshot = server.threads().read_thread(thread_id).unwrap();
+        assert_eq!(snapshot.turns.len(), usize::from(accepted.is_some()));
+        if !already_accepted {
+            assert_eq!(snapshot.delegations.len(), usize::from(!detach));
+        }
+        if detach && !already_accepted {
+            assert_eq!(server.resume_recovered_agent_coordinations().unwrap(), 0);
+            let observed = server
+                .advance_automation_run(&run, ash_automation::now().unwrap())
+                .unwrap();
+            assert_eq!(observed.status, AutomationRunStatus::Stopped);
+            assert!(observed.turn_id.is_none());
+            store.observe(&observed).unwrap();
+            assert_eq!(
+                store.get(&run.automation_id).unwrap().unwrap().status,
+                ash_protocol::AutomationStatus::Paused
+            );
+        }
+    }
+}
+
+#[test]
+fn artifact_follow_up_stop_and_configuration_changes_still_revoke_pending_dispatch() {
+    for change_configuration in [false, true] {
+        let profile = tempfile::tempdir().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let api = Arc::new(FollowUpApi::default());
+        let (server, store) = open_follow_up_server(profile.path(), directory.path(), api.clone());
+        let run = artifact_follow_up_plan(&server, &store, directory.path(), "stopped", "Fix CI");
+        let stopping = store.clone();
+        let original = run.clone();
+        *api.before_checks.lock().unwrap() = Some(Box::new(move || {
+            if change_configuration {
+                let mut definition = original.definition;
+                definition.prompt = "Changed follow-up instructions".into();
+                stopping
+                    .write(
+                        &ash_automation::AutomationWrite {
+                            command_id: "change-follow-up".into(),
+                            id: original.automation_id,
+                            expected_revision: original.revision,
+                            definition,
+                            status: ash_protocol::AutomationStatus::Enabled,
+                        },
+                        ash_automation::now().unwrap(),
+                    )
+                    .unwrap();
+            } else {
+                stopping.stop_run(&original.id).unwrap();
+            }
+        }));
+        let observed = server
+            .advance_automation_run(&run, ash_automation::now().unwrap())
+            .unwrap();
+        assert_eq!(observed.status, AutomationRunStatus::Stopped);
+        assert!(observed.turn_id.is_none());
+        let AutomationSession::Continue { thread_id, .. } = &run.definition.session else {
+            unreachable!()
+        };
+        assert!(
+            server
+                .threads()
+                .read_thread(thread_id)
+                .unwrap()
+                .turns
+                .is_empty()
+        );
+    }
 }
 
 #[test]

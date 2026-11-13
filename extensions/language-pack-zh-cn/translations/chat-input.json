@@ -109,7 +109,7 @@
     "chat.notice.unavailable": "当前没有可用的聊天通知。",
     "chat.notice.help": "聊天通知显示在消息上方。通知优先于功能介绍和提示。使用 {0} 在可见通知与消息之间切换焦点。使用 Tab 访问通知操作。Escape 可从通知返回消息，或关闭功能介绍并停止其录音。隐藏的功能介绍会停止录音，并在通知消失后恢复显示。关闭通知会隐藏当前通知。通知操作应用于此输入框。",
     "chat.input.commandArguments": "命令参数：{0}",
-    "chat.input.sessionLinksHelp": "在 IDE 聊天输入框中，将光标移到会话链接内，在命令面板运行“打开链接”，即可打开对应会话。也可以按住 Ctrl（macOS 上为 Command）并点击链接。在桌面端，打开已保存 SSH 宿主的会话链接时，可能会提示你连接。确认宿主和工作区后，选择“连接并打开”或“取消”。使用“Agents：管理已连接宿主”管理其他远程连接。宿主选择器会朗读连接状态，并在可用时提供“重新连接”操作。聊天历史记录会显示远程会话所在的宿主。后续消息会发送到该会话所在的宿主。打开链接不会发送草稿。",
+    "chat.input.sessionLinksHelp": "在聊天输入框中，按住 Ctrl（macOS 上为 Command）并点击会话或作品链接即可打开。也可以将光标移到链接内，在命令面板运行“打开链接”。在桌面端，打开已保存 SSH 宿主的会话链接时，可能会提示你连接。确认宿主和工作区后，选择“连接并打开”或“取消”。使用“Agents：管理已连接宿主”管理其他远程连接。宿主选择器会朗读连接状态，并在可用时提供“重新连接”操作。聊天历史记录会显示远程会话所在的宿主。后续消息会发送到该会话所在的宿主。打开链接不会发送草稿。",
     "chat.input.contextCompletionHelp": "在词首输入 @ 或 # 可补全文件、文件夹、打开的编辑器和已附加的上下文。用方向键选择，按 Enter 或 Tab 附加所选项，按 Escape 关闭候选。接受补全不会发送消息。撤销和重做会恢复引用及其捕获的内容。",
     "chat.input.commandArgumentsHelp": "斜杠命令接受参数时，输入区域会提示所需内容。消息输入框获得焦点时会朗读提示。输入参数后提示消失，提示不会进入消息或撤销历史。 仅输入 / 后接受命令补全，紧接着按 Backspace 可删除整个命令。输入部分命令后接受补全仍按普通字符删除。输入文字或移动光标后恢复逐字符删除；撤销可恢复已删除的命令。",
     "chat.queue.removeAll": "聊天：移除所有队列消息",
@@ -351,12 +351,6 @@
     "chat.attach.addConnector": "添加连接器",
     "chat.attach.designSystem": "设计系统",
     "chat.attach.plugins": "插件",
-    "chat.attach.webSearch": "网络搜索",
-    "chat.attach.webSearchEnabled": "已启用网络搜索",
-    "chat.attach.webSearchDisabled": "已停用网络搜索",
-    "chat.attach.memory": "记忆",
-    "chat.attach.memoryEnabled": "已启用记忆",
-    "chat.attach.memoryDisabled": "已停用记忆",
     "chat.attach.loading": "正在加载…",
     "chat.attach.noItems": "无可用项",
     "chat.attach.noProjects": "无项目",
@@ -600,6 +594,9 @@
     "prompt.import.allowAccess": "允许目录访问"
   },
   "ash.workbench": {
+    "chat.input.replyHelp": "按 Enter 发送，按 Shift+Enter 换行。按 Tab 聚焦附件、听写和模型控件。按 Enter 或空格打开菜单，按 Escape 返回。以斜杠开头的文字会作为普通消息发送。",
+    "chat.input.replyContextHelp": "使用“添加上下文”上传文件或搜索附件。按方向键选择结果，按 Enter 添加。回复进行时发送的后续消息会排队，等当前回复结束后发送。",
+    "chat.queue.replyEditHint": "编辑期间此消息将暂停。按 Ctrl 或 Command+Enter 保存，按 Escape 取消。附加输入和未发送的草稿会保留。原来已暂停或失败的消息取消编辑后仍保持暂停。",
     "chat.input.conversationChangesHelp": "会话有变更时，按 Tab 到达输入框上方的“更改”，按 Enter 或空格打开当前检查点的净变更。撤销和重做会更新摘要。"
   }
 }

@@ -90,8 +90,9 @@ export class PdfAnnotationModel {
 	}
 
 	markSaved(snapshot: PdfAnnotationSnapshot): void {
-		this.document = clone(snapshot.document);
-		this.saved = serializePdfAnnotationDocument(this.document);
+		// The acknowledged document may predate edits, undo or redo made while saving.
+		// Only advance the durable baseline; the current document and history stay local.
+		this.saved = serializePdfAnnotationDocument(snapshot.document);
 		this._revision = snapshot.revision;
 		this.changeEmitter.fire();
 	}

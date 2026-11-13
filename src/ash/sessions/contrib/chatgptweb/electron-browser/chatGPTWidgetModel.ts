@@ -10,19 +10,20 @@ import { findLast } from '../../../../base/common/arraysFind.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { ICompactChatModel } from '../../chat/browser/chatViewFactory.js';
-import type { ArtifactKind } from '../../../common/artifactKind.js';
+import type { ChatCreationKind } from '../../../common/chatCreation.js';
 import type { ChatRequestVersion } from '../../../../workbench/contrib/chat/browser/chat.js';
 import type { ChatResponseActions } from '../../../../workbench/contrib/chat/browser/widget/chatListRenderer.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { chatListItem, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
-import { decodeChatGPTReply } from '../browser/chatGPTRichContent.js';
+import { chatGPTWritingSource, decodeChatGPTReply } from '../browser/chatGPTRichContent.js';
 import { chatGPTResourceKey, mergeChatGPTResources, type ChatGPTMessage } from '../browser/chatGPTClient.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
 import { canQueueChatGPTCreation, linkedTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 import type { ChatEntityDetailsSource } from '../../chat/browser/chatEntityDetails.js';
+import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
 
 export const ChatGPTResponseCanOpenOriginalContext = 'sessions.chatgpt.responseCanOpenOriginal';
 export const ChatGPTResponseOnlineContext = 'sessions.chatgpt.responseOnline';
@@ -89,6 +90,7 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 		@IChatGPTService private readonly backend: IChatGPTService,
 		@ISessionPrimaryProviderServices private readonly primary: SessionProviderServices,
 		@ICommandService private readonly commands: ICommandService,
+		@IGeneratedFilesService private readonly generatedFiles: IGeneratedFilesService,
 	) {
 		super();
 		const ashModelsChanged = observableSignalFromEvent(this, primary.models.onDidChangeModels);
@@ -116,7 +118,8 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 			const previous = this.transcriptState;
 			if (!previous || previous.messages !== state.messages || previous.voiceTranscript !== state.voiceTranscript
 				|| previous.linkedTasks !== state.linkedTasks || previous.sending !== state.sending
-				|| previous.conversationId !== state.conversationId || previous.localConversationId !== state.localConversationId) {
+				|| previous.conversationId !== state.conversationId || previous.localConversationId !== state.localConversationId
+				|| previous.catalogScope !== state.catalogScope) {
 				this.currentItems = this.projectTranscript(state);
 			}
 			this.transcriptState = state;
@@ -126,6 +129,10 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 		this._register(autorun(reader => {
 			ashModelsChanged.read(reader);
 			void this.loadAshModels();
+		}));
+		this._register(generatedFiles.onDidChange(() => {
+			this.currentItems = this.projectTranscript(backend.state.get());
+			this.changed.fire();
 		}));
 	}
 
@@ -140,8 +147,8 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 	get items(): readonly IChatListItem[] { return this.currentItems; }
 
 	newChat(): void { this.backend.newChat(); }
-	get artifactDraftKind(): ArtifactKind | undefined { return this.backend.state.get().draftArtifactKind; }
-	setArtifactDraftKind(kind: ArtifactKind | undefined): boolean { return this.backend.setDraftArtifactKind(kind); }
+	get creationKind(): ChatCreationKind | undefined { return this.backend.state.get().draftCreationKind; }
+	setCreationKind(kind: ChatCreationKind | undefined): boolean { return this.backend.setDraftCreationKind(kind); }
 
 	readWelcomeDraft(reader: IReader): { readonly id: string; readonly revision: number; } | undefined {
 		const state = this.backend.state.read(reader);
@@ -413,6 +420,24 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 				const itemId = id('message', message.id);
 				const decoded = message.role === 'assistant' ? this.decodeReply(message, resourceConversationId) : undefined;
 				const resources = projectResources(message, decoded, resourceConversationId);
+				let writingIndex = 0;
+				const files: { resource: string; label: string; }[] = [];
+				const richContent = decoded?.richContent && {
+					...decoded.richContent,
+					parts: decoded.richContent.parts.map(part => {
+						if (part.kind !== 'writing') return part;
+						const index = writingIndex++;
+						if (!state.catalogScope) return part;
+						const source = state.conversationId && chatGPTWritingSource(state.catalogScope, state.conversationId, message.id, index);
+						const file = source && this.generatedFiles.findBySource(source);
+						if (!file) {
+							return message === latest || message.completion === 'complete' ? { ...part, awaitingPublication: true } : part;
+						}
+						const resource = file.resource.toString();
+						files.push({ resource, label: file.title });
+						return { ...part, resource };
+					}),
+				};
 				sources.set(itemId, { messageId: message.id, conversationId: resourceConversationId });
 				const text = message.role === 'user' && resources?.some(resource => resource.kind === 'image')
 					? message.editableText ?? message.text : decoded?.text ?? message.text;
@@ -422,7 +447,8 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 					type: message.role === 'user' ? 'userMessage' : 'agentMessage',
 					text,
 					timestamp: message.timestamp,
-					markdown: decoded && { supportHtml: true, richContent: decoded.richContent, linkPolicy: 'external' },
+					markdown: decoded && { supportHtml: true, richContent, linkPolicy: 'external' },
+					files: files.length ? files : undefined,
 					label: message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
 					resources,
 					citations,

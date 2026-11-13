@@ -445,13 +445,13 @@ test('sidebar destination commands act on the captured chat and reread the proje
 		setGroupAppearance: async () => { throw new Error('Unexpected group appearance update'); },
 		create: async () => { throw new Error('Unexpected group creation'); }, rename: async () => { }, delete: async () => { }, reorder: async () => { },
 	});
-	const projectAction = current.commands.executeCommand('agentSession.addToProject', 'second');
+	const projectAction = current.commands.executeCommand('agentSession.addToProject', 'second', 'chat');
 	const projectPicker = await pickerFor(current.quickInput);
 	projectPicker.activeItems = [projectPicker.items[0] as IQuickPickItem];
 	projectPicker.accept();
 	await projectAction;
 	assert.deepEqual(added, [[9, 'second']]);
-	assert.deepEqual(projectScopes, ['code', 'code']);
+	assert.deepEqual(projectScopes, ['chat', 'chat']);
 	const groupAction = current.commands.executeCommand('agentSession.moveToGroup', 'second');
 	const groupPicker = await pickerFor(current.quickInput);
 	groupPicker.activeItems = [groupPicker.items[2] as IQuickPickItem];

@@ -2,6 +2,7 @@
 //! Engines and index processes stay behind the same structured query contract.
 
 mod jobs;
+mod ordered_scan;
 mod ripgrep;
 mod service;
 mod types;

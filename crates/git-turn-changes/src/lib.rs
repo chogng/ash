@@ -26,7 +26,9 @@ pub use summary::summarize_checkpoints;
 #[cfg(test)]
 #[path = "turn_changes_tests.rs"]
 mod tests;
+pub use ledger::MessageCapture;
 pub use ledger::MessageCaptureTarget;
+pub use ledger::MessageCaptureTurn;
 pub use ledger::RepositoryCaptureTarget;
 pub use ledger::ToolChangeScope;
 pub use ledger::TurnChangeBeginRequest;

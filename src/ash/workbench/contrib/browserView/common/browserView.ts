@@ -6,9 +6,11 @@ import { IBrowserViewService, type BrowserViewEvent, type IBrowserViewBounds, ty
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { BrowserEditorInput, IBrowserEditorInputData } from './browserEditorInput.js';
 import type { IntegratedBrowserOpenSource } from '../../../../platform/browserView/common/browserViewTelemetry.js';
-import type { EditorOpenOptions } from '../../../services/editor/common/editorService.js';
+import type { EditorOpenOptions, EditorOpenTarget } from '../../../services/editor/common/editorService.js';
 
 export const BrowserViewEditorId = 'workbench.editor.browser';
+export const BrowserNewTabPlacementSettingId = 'workbench.browser.newTabPlacement';
+export type BrowserNewTabPlacement = 'activeGroup' | 'sideGroup' | 'window';
 
 export const IBrowserViewWorkbenchService = createServiceIdentifier<IBrowserViewWorkbenchService>('browserViewWorkbenchService');
 
@@ -47,6 +49,12 @@ export interface IBrowserViewWorkbenchCreateOptions extends Omit<IBrowserViewCre
 	readonly session?: IBrowserViewCreateOptions['session'];
 }
 
+export interface IBrowserViewOpenOptions {
+	readonly sourceWindowId?: number;
+	readonly openToSide?: boolean;
+	readonly target?: EditorOpenTarget;
+}
+
 export interface IBrowserViewWorkbenchService {
 	readonly onDidChangeBrowserViews: Event<void>;
 	initialize(): Promise<void>;
@@ -56,9 +64,10 @@ export interface IBrowserViewWorkbenchService {
 	registerOpenHandler(handler: IBrowserViewOpenHandler): IDisposable;
 	registerNetworkResolver(resolver: IBrowserViewNetworkResolver): IDisposable;
 	resolveNetwork(owner: IBrowserViewOwner): IBrowserViewNetwork | undefined;
+	getNetworkStatus(network: IBrowserViewNetwork): IBrowserViewNetworkStatus;
 	replaceBrowserView(input: BrowserEditorInput, session: IBrowserViewSessionOptions): Promise<BrowserEditorInput>;
 	getOrCreateLazy(data: IBrowserEditorInputData): BrowserEditorInput;
-	createBrowserView(options: IBrowserViewWorkbenchCreateOptions, source?: IntegratedBrowserOpenSource): Promise<BrowserEditorInput>;
+	createBrowserView(options: IBrowserViewWorkbenchCreateOptions, source?: IntegratedBrowserOpenSource, openOptions?: IBrowserViewOpenOptions): Promise<BrowserEditorInput>;
 }
 
 export interface IBrowserViewModel extends IDisposable {
@@ -87,7 +96,7 @@ export interface IBrowserViewModel extends IDisposable {
 	reload(hard?: boolean): Promise<void>;
 	stop(): Promise<void>;
 	focus(): Promise<void>;
-	layout(bounds: IBrowserViewBounds): Promise<void>;
+	layout(bounds: IBrowserViewBounds, windowName?: string): Promise<void>;
 	setVisible(visible: boolean): Promise<void>;
 	getSharing(): Promise<readonly string[]>;
 	setSharing(threadIds: readonly string[]): Promise<void>;
@@ -170,7 +179,7 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 	public reload(hard?: boolean): Promise<void> { return this.service.reload(this.id, hard); }
 	public stop(): Promise<void> { return this.service.stop(this.id); }
 	public focus(): Promise<void> { return this.service.focus(this.id); }
-	public layout(bounds: IBrowserViewBounds): Promise<void> { return this.service.layout(this.id, bounds); }
+	public layout(bounds: IBrowserViewBounds, windowName?: string): Promise<void> { return this.service.layout(this.id, bounds, windowName); }
 	public setVisible(visible: boolean): Promise<void> { return this.service.setVisible(this.id, visible); }
 	public getSharing(): Promise<readonly string[]> { return this.service.getSharing(this.id); }
 	public setSharing(threadIds: readonly string[]): Promise<void> { return this.service.setSharing(this.id, threadIds); }

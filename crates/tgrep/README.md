@@ -4,11 +4,11 @@
 
 ## 安装与生命周期
 
-- 固定正式版 1.2.3 上游提交 `58629d208fcb508614b0ce6824bd78197647148f`，Ash 包内版本为 `1.2.3-ash.58629d2.1`。沿用上游的原生 watcher 修复、周期内容校验、引用感知回收、请求行上限和查询统计／批量读取；Ash 保留文件名、取消、宿主所有权和旧协议增量提示等仍有消费者的适配。源码和接入补丁的校验值见 [`runtime-lock.json`](../../third_party/tgrep/runtime-lock.json)。构建时编译，查询时不下载或编译。
+- 固定正式版 1.2.7 上游提交 `70c3b0a7cd2c3becae0d613fc08df6b74a483731`，Ash 包内版本为 `1.2.7-ash.70c3b0a.1`。保留上游的托管任务调度、独立查询线程池、范围内候选筛选和无效监听事件过滤。引擎在构建时编译。[源码和补丁校验值](../../third_party/tgrep/runtime-lock.json)
 - 开发准备、发布构建与 Remote runtime 都包含 `ash-resources/tgrep/tgrep[.exe]`。查询不联网下载，不搜索系统 `PATH`。显式 `ASH_TGREP_PATH` 可指定开发 executable；覆盖路径无效时直接报错。
 - `just test` / `scripts/cargo.py run` 对依赖本 crate 的开发目标准备锁定的 executable；普通产品从安装目录解析。
 - 进程池按 executable 与仓库存储键协调首次启动，全局表锁只做查找；同键等待检查取消，不同仓库可并行启动。池仅保存进程弱引用，最后一个 Session 释放后不会留住进程。
-- Git worktree 首次查询懒启动 `tgrep serve --shared --shared-storage <目录> --shared-policy <策略> --ash-parent`，默认使用 managed v2。从 Git common directory 的 `tgrep-daemon-v2.json` 发现服务，包内凭据辅助命令复用上游私有文件权限校验读取认证信息。每个请求携带 namespace、instance、repository 和认证，每个成功响应及 worktree 查询分别校验服务身份、root、view、version 和精确 generation。
+- Git worktree 首次注册时启动 `tgrep serve --shared --shared-storage <目录> --shared-policy <策略> --ash-parent`，默认使用 managed v2。App Server 在工作区目录授权后后台注册，首次查询也可按需注册。从 Git common directory 的 `tgrep-daemon-v2.json` 发现服务，包内凭据辅助命令复用上游私有文件权限校验读取认证信息。每个请求携带 namespace、instance、repository 和认证，每个成功响应及 worktree 查询分别校验服务身份、root、view、version 和精确 generation。
 - 每个 Session 持有独立 owner、OS guard 和 lease；owner 准备明确绑定宿主管道，宿主异常退出时也能释放未完成的 bootstrap，等待已接收工作排空后退出服务；先持久化操作 token 与请求，再提交操作，持久化终态 receipt 后才 acknowledge。丢失响应使用同一 token 查询或重放，不用新 token 猜测是否提交。关闭先 fence owner，等待已接收工作终止和目录读取排空，再释放 guard 与宿主租约。
 - 默认在线回收目标为 2 GiB，分批检查和删除，活动 generation、checkpoint、引用与宽限期对象受保护，因此这是软目标。构建工作、队列、游标与 receipt 另有预算；这些预算不是进程 RSS 上限。固定基线策略关闭 adaptive advancement；显式 `Session::rebuild` / 公共 `rebuild_index` 捕获当前 HEAD 并版本化推进，同一提交则刷新 checkpoint。v1 存储不自动导入或回收，原协议仍保留回归测试。
 - 单目录服务的内容就绪还要求当前进程完成首次磁盘核对，避免重新启用索引时把旧索引的完整覆盖误当作已处理停机期间的修改；文件名查询仍不等待内容就绪。

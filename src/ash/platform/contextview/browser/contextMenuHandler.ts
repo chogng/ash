@@ -7,7 +7,7 @@ import {
 	type ContextMenuAnchor,
 	type IContextMenuDelegate,
 } from '../../../base/browser/contextmenu.js';
-import { isNode } from '../../../base/browser/dom.js';
+import { addDisposableListener, h, isNode } from '../../../base/browser/dom.js';
 import {
 	AnchorPosition,
 	ContextView,
@@ -18,7 +18,7 @@ import {
 import { Menu } from '../../../base/browser/ui/menu/menu.js';
 import { ActionRunner, type IAction } from '../../../base/common/actions.js';
 import { toErrorMessage } from '../../../base/common/errorMessage.js';
-import { Disposable, DisposableMap, DisposableStore } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IRectangle } from '../../../base/common/layout.js';
 import type { IKeybindingService } from '../../keybinding/common/keybinding.js';
 import type { INotificationService } from '../../notification/common/notification.js';
@@ -112,14 +112,32 @@ export class ContextMenuHandler extends Disposable {
 		if (didHide) { return false; }
 		const anchor = toContextViewAnchor(delegate.getAnchor());
 		if (didHide) { return false; }
-		const dialog = isNode(anchor) ? ContextView.getContainingDialog(anchor) : undefined;
-		const container = dialog?.element ?? this.contextViewService.container;
-		if (dialog) {
-			// An action menu anchored in a dialog must leave the dialog mounted.
-			view = disposables.add(new ContextView(container));
-			disposables.add(dialog.onDidHide(() => request.hide()));
+		const anchorDocument = isNode(anchor) ? anchor.ownerDocument : anchor.targetWindow?.document;
+		const owner = delegate.domForShadowRoot;
+		const shadowOwner = owner?.isConnected && (!anchorDocument || owner.ownerDocument === anchorDocument) ? owner : undefined;
+		const dialogAnchor = shadowOwner ?? (isNode(anchor) ? anchor : undefined);
+		const dialog = dialogAnchor && ContextView.getContainingDialog(dialogAnchor);
+		let menuContainer = dialog?.element ?? this.contextViewService.container;
+		let container: HTMLElement | ShadowRoot = menuContainer;
+		if (shadowOwner) {
+			const host = h(shadowOwner.ownerDocument, 'div');
+			const root = host.attachShadow({ mode: 'open' });
+			shadowOwner.append(host);
+			disposables.add(toDisposable(() => host.remove()));
+			// A menu click must not become a click on the editor behind it.
+			for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'contextmenu', 'wheel', 'keydown', 'keyup']) {
+				disposables.add(addDisposableListener(root, type, event => event.stopPropagation()));
+			}
+			container = root;
 		}
-		const menu = new Menu(container, actions, {
+		if (shadowOwner || dialog) {
+			// A local menu can open without replacing the containing dialog.
+			const localView = disposables.add(new ContextView(container));
+			view = localView;
+			if (shadowOwner) menuContainer = localView.element;
+			if (dialog) disposables.add(dialog.onDidHide(() => request.hide()));
+		}
+		const menu = new Menu(menuContainer, actions, {
 			buttonStyles: defaultButtonStyles,
 			keybindingLabelStyles: defaultKeybindingLabelStyles,
 			openSubmenusImmediatelyOnHover: delegate.openSubmenusImmediatelyOnHover,

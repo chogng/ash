@@ -1,5 +1,6 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { QuickAccessRegistry } from '../../../../../platform/quickinput/common/quickAccess.js';
@@ -13,7 +14,7 @@ QuickAccessRegistry.register({
 	get helpLabel() { return localize('terminal.quickAccess.help', 'Show All Opened Terminals'); },
 });
 
-registerAction2(class SwitchActiveTerminalAction extends Action2 {
+registerEditorToolAction(class SwitchActiveTerminalAction extends Action2 {
 	constructor() {
 		super({ id: 'workbench.action.quickOpenTerm', title: localize2('terminal.quickAccess.switch', 'Terminal: Switch Active Terminal'), f1: true });
 	}

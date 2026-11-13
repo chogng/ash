@@ -1,3 +1,4 @@
+import { getWindowId } from '../../../base/browser/window.js';
 import { getDocument } from '../../../base/browser/dom.js';
 import { renderMarkdown, type IRenderedMarkdown, type MarkdownRenderOptions } from '../../../base/browser/markdownRenderer.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
@@ -47,7 +48,7 @@ export class MarkdownRendererService implements IMarkdownRendererService {
 			...options,
 			ownerDocument,
 			codeBlockRenderer,
-			actionHandler: options.actionHandler ?? ((href, source) => { void openLinkFromMarkdown(this.opener, href, source.isTrusted); }),
+			actionHandler: options.actionHandler ?? ((href, source) => { void openLinkFromMarkdown(this.opener, href, source.isTrusted, undefined, ownerDocument.defaultView ? getWindowId(ownerDocument.defaultView) : undefined); }),
 		}, outElement);
 	}
 
@@ -57,7 +58,7 @@ export class MarkdownRendererService implements IMarkdownRendererService {
 }
 
 /** Trust is carried into the opener even when a caller supplies an already sanitized link. */
-export async function openLinkFromMarkdown(openerService: IOpenerService, link: string, isTrusted: boolean | MarkdownStringTrustedOptions | undefined, skipValidation?: boolean): Promise<boolean> {
+export async function openLinkFromMarkdown(openerService: IOpenerService, link: string, isTrusted: boolean | MarkdownStringTrustedOptions | undefined, skipValidation?: boolean, sourceWindowId?: number): Promise<boolean> {
 	const allowCommands = isTrusted === true ? true : isTrusted ? isTrusted.enabledCommands : false;
 	try {
 		return await openerService.open(link, {
@@ -65,6 +66,7 @@ export async function openLinkFromMarkdown(openerService: IOpenerService, link: 
 			allowContributedOpeners: true,
 			allowCommands,
 			skipValidation,
+			...(sourceWindowId === undefined ? {} : { sourceWindowId }),
 		});
 	} catch (error) {
 		onUnexpectedError(error);

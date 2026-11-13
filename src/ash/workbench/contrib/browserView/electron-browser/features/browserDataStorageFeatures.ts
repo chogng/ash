@@ -1,5 +1,6 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { IBrowserViewService, BrowserViewStorageScope } from '../../../../../platform/browserView/common/browserView.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -13,7 +14,7 @@ for (const scope of Object.values(BrowserViewStorageScope)) {
 		[BrowserViewStorageScope.Ephemeral]: localize({ bundle: 'ash.workbench', key: 'browser.storageEphemeral' }, 'Ephemeral'),
 		[BrowserViewStorageScope.Agent]: localize({ bundle: 'ash.workbench', key: 'browser.storageAgent' }, 'Agent'),
 	}[scope];
-	registerAction2(class ClearBrowserStorageAction extends Action2 {
+	registerEditorToolAction(class ClearBrowserStorageAction extends Action2 {
 		constructor() { super({ id: `workbench.action.browser.clear${scope[0]!.toUpperCase() + scope.slice(1)}Storage`, title: localize2({ bundle: 'ash.workbench', key: 'browser.clearStorageCommand' }, 'Browser: Clear {0} Storage', scopeLabel), f1: true }); }
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			const editors = accessor.get(IEditorService);

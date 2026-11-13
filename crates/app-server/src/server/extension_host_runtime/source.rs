@@ -821,7 +821,7 @@ pub(super) fn plugin_deployments(
     let mut deployments = Vec::new();
     for package in activation.packages() {
         let fence = authority
-            .invocation_fence(package)
+            .invocation_fence(activation, package)
             .ok_or(ExtensionHostRuntimeError::Internal)?;
         for contribution in &package.manifest().contributions.editor_extensions {
             // Old package metadata remains readable for management and uninstall. It

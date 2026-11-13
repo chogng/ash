@@ -7,9 +7,15 @@ export const ITrustedDomainService = createServiceIdentifier<ITrustedDomainServi
 export interface ITrustedDomainService {
 	readonly _serviceBrand: undefined;
 	readonly onDidChangeTrustedDomains: Event<void>;
+	/** Product and user rules applied by outgoing link protection. */
 	readonly trustedDomains: readonly string[];
+	readonly userTrustedDomains: readonly string[];
 	isValid(resource: URI): boolean;
-	/** The editable JSONC document is the sole persisted representation. */
+	/** The user JSONC document with the current product defaults rendered as comments. */
 	readonly content: string;
-	setTrustedDomains(content: string, expectedContent?: string): Promise<void>;
+	/** Returns the published document for the virtual file's revision. */
+	setTrustedDomains(content: string, expectedContent?: string): Promise<string>;
+	addTrustedDomain(pattern: string): Promise<void>;
+	updateTrustedDomain(original: string, pattern: string): Promise<string>;
+	removeTrustedDomain(pattern: string): Promise<void>;
 }

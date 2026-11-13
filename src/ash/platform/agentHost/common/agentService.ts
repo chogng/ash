@@ -17,6 +17,7 @@ import type { IIssueReporterService } from '../../issue/common/issue.js';
 import type { IGitHubService } from '../../github/common/githubService.js';
 import type { ILocalGitService } from '../../git/common/localGitService.js';
 import type { IBackupService } from '../../backup/common/backup.js';
+import type { IGeneratedFileCatalog } from '../../generatedFiles/common/generatedFiles.js';
 import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common/networkDiagnosticsService.js';
 import type { IChannelService } from '../../collab/common/channelService.js';
 import type { ICallService } from '../../call/common/callService.js';
@@ -64,6 +65,8 @@ export interface IAgentConnection {
 	readonly contextResourceHost?: IDisposable;
 	/** Available when the host supplies profile-backed recovery storage. */
 	readonly backup?: IBackupService;
+	/** Profile-local catalogue support is supplied by the owning product host. */
+	readonly generatedFiles?: IGeneratedFileCatalog;
 	readonly assets: IAssetService;
 	readonly projects: IProjectService;
 	readonly testing: ITestExecutionService;

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { suite, test } from 'mocha';
 import { chatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
-import { ChatGPTClient, ChatGPTRequestError, decodeChatGPTStream, readChatGPTVoiceUpdate } from '../../browser/chatGPTClient.js';
+import { ChatGPTClient, ChatGPTRequestError, chatGPTRequestText, decodeChatGPTStream, readChatGPTVoiceUpdate } from '../../browser/chatGPTClient.js';
 
 const signal = (): AbortSignal => new AbortController().signal;
 const json = (value: unknown): Response => Response.json(value);
@@ -14,6 +14,51 @@ async function collect<T>(values: AsyncIterable<T>): Promise<T[]> {
 }
 
 suite('Bundled ChatGPT client', () => {
+	test('preserves explicit successful completion and rejects failed or partial writing in streams and history', async () => {
+		const cases = [
+			{ status: 'finished_successfully', metadata: {}, expected: 'complete' },
+			{ status: 'finished_successfully', metadata: { finish_details: { type: 'stop' } }, expected: 'complete' },
+			{ status: 'in_progress', metadata: {}, expected: 'incomplete' },
+			{ status: 'finished_partial', metadata: {}, expected: 'incomplete' },
+			{ status: 'failed', metadata: {}, expected: 'failed' },
+			{ status: 'finished_successfully', metadata: { is_error: true }, expected: 'failed' },
+			{ status: 'finished_successfully', metadata: { finish_details: { type: 'interrupted' } }, expected: 'incomplete' },
+			{ status: 'finished_successfully', metadata: { finish_details: { type: 'max_tokens' } }, expected: 'incomplete' },
+			{ status: undefined, metadata: {}, expected: undefined },
+		];
+		const messages = cases.map((entry, index) => ({
+			...message(`reply-${index}`, 'assistant', ':::writing{title="Document"}\n# Complete envelope\n:::'),
+			id: `reply-${index}`, status: entry.status, metadata: entry.metadata,
+		}));
+		const stream = new Response(messages.map(message => `data: ${JSON.stringify({ conversation_id: 'chat', message })}\n\n`).join('') + 'data: [DONE]\n\n').body!;
+		assert.deepEqual((await collect(decodeChatGPTStream(stream, signal()))).filter(frame => frame.message).map(frame => frame.message!.completion), cases.map(entry => entry.expected));
+		for (const native of [false, true]) {
+			const client = new ChatGPTClient((async () => json(native ? { current_node: messages.at(-1)!.id, messages, page_info: { has_previous_page: false } } : {
+				current_node: messages.at(-1)!.id,
+				mapping: Object.fromEntries(messages.map((message, index) => [message.id, { parent: messages[index - 1]?.id, message }])),
+			})) as typeof fetch, native);
+			assert.deepEqual((await client.history('chat', signal())).messages.map(message => message.completion), cases.map(entry => entry.expected));
+		}
+	});
+
+	test('history shows the original creation prompt and only removes the exact Ash request suffix', async () => {
+		const original = '请写一份报告\n\n保留用户的段落。';
+		const request = chatGPTRequestText(original, 'docs');
+		const custom = original + '\n\n<ash_context name="ash.creation.docs">\nUser-authored context\n</ash_context>';
+		const messages = [message('creation', 'user', request), message('custom', 'user', custom), message('answer', 'assistant', request)];
+		const client = new ChatGPTClient((async () => json({
+			current_node: 'answer', mapping: {
+				creation: { parent: null, message: messages[0] }, custom: { parent: 'creation', message: messages[1] }, answer: { parent: 'custom', message: messages[2] },
+			}
+		})) as typeof fetch);
+		const history = await client.history('chat', signal());
+		assert.deepEqual(history.messages.map(({ text, editableText, creationKind }) => ({ text, editableText, creationKind })), [
+			{ text: original, editableText: original, creationKind: 'docs' },
+			{ text: custom, editableText: custom, creationKind: undefined },
+			{ text: request, editableText: undefined, creationKind: undefined },
+		]);
+	});
+
 	test('experimental history requests older pages only on demand through the native route', async () => {
 		const paths: string[] = [];
 		const client = new ChatGPTClient((async input => {
@@ -463,7 +508,7 @@ suite('Bundled ChatGPT client', () => {
 			if (path.endsWith('/conversation/chat-one')) {
 				return json({
 					title: 'Chosen branch', current_node: 'reply-two', mapping: {
-						root: { parent: null }, user: { parent: 'root', message: message('user', 'user', 'Question') },
+						root: { parent: null }, user: { parent: 'root', message: message('user', 'user', chatGPTRequestText('Question', 'slides')) },
 						'reply-one': { parent: 'user', message: message('reply-one', 'assistant', 'Other branch') },
 						'reply-two': { parent: 'user', message: message('reply-two', 'assistant', 'Selected answer') },
 					}
@@ -473,7 +518,8 @@ suite('Bundled ChatGPT client', () => {
 		}) as typeof fetch);
 		const history = await client.history('chat-one', signal());
 		assert.deepEqual(history.messages.map(item => item.text), ['Question', 'Selected answer']);
-		assert.deepEqual(await client.prepareMessageEdit('chat-one', 'user', 'reply-two', signal()), { parentId: 'root', files: [] });
+		assert.equal(history.messages[0]?.editableText, 'Question');
+		assert.deepEqual(await client.prepareMessageEdit('chat-one', 'user', 'reply-two', signal()), { parentId: 'root', files: [], creationKind: 'slides' });
 		await assert.rejects(client.prepareMessageEdit('chat-one', 'user', 'reply-one', signal()), /Reload the ChatGPT conversation/u);
 		await assert.rejects(client.prepareMessageEdit('chat-one', 'reply-one', 'reply-two', signal()), /unavailable for editing/u);
 		const output = await collect(client.send({ text: 'Follow up', model: 'fixture-model', parentId: history.parentId, conversationId: history.id, messageId: 'new-user' }, signal()));

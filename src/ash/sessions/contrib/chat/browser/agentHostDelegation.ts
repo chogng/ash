@@ -12,6 +12,7 @@ import { approvalModeDefinitions } from '../../../../platform/agentHost/common/a
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -34,6 +35,8 @@ import { ISessionsService } from '../../../services/sessions/browser/sessionsSer
 import type { ISession } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
+const canCompareAgents = ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('code'), ContextKeyExpr.not(`config.${ChatAIDisabledSettingId}`));
+
 registerAction2(class CompareAgentsAction extends Action2 {
 	constructor() {
 		super({
@@ -41,11 +44,12 @@ registerAction2(class CompareAgentsAction extends Action2 {
 			title: localize2('sessions.chat.compareAgents', 'Compare Agents…'),
 			f1: true,
 			menu: { id: Menus.SidebarCodeSessionContext, when: SessionsMenuActiveConversationContext.isEqualTo(true), group: '4_conversation' },
-			precondition: ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('code'), ContextKeyExpr.not(`config.${ChatAIDisabledSettingId}`)),
+			precondition: canCompareAgents,
 		});
 	}
 
 	async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(canCompareAgents)) return;
 		const views = accessor.get(ISessionsService);
 		const sessions = accessor.get(ISessionsManagementService);
 		const providers = accessor.get(ISessionsProvidersService);
@@ -294,11 +298,12 @@ registerAction2(class EvaluateComparisonAction extends Action2 {
 			id: 'sessions.chat.evaluateComparison',
 			title: localize2('sessions.compare.evaluate', 'Evaluate Agent Comparison…'),
 			f1: true,
-			precondition: ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('code'), ContextKeyExpr.not(`config.${ChatAIDisabledSettingId}`)),
+			precondition: canCompareAgents,
 		});
 	}
 
 	async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(canCompareAgents)) return;
 		const views = accessor.get(ISessionsService);
 		const groups = accessor.get(ISessionGroupsService);
 		const comparisons = accessor.get(ISessionComparisonService);

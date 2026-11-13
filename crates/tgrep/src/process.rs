@@ -42,6 +42,8 @@ struct OwnedChild {
     #[cfg(windows)]
     job: ash_utils_pty::JobObject,
     closed: bool,
+    diagnostics: Option<thread::JoinHandle<String>>,
+    stderr: String,
 }
 impl OwnedChild {
     fn spawn(mut command: Command) -> std::io::Result<Self> {
@@ -58,7 +60,20 @@ impl OwnedChild {
             #[cfg(windows)]
             job,
             closed: false,
+            diagnostics: None,
+            stderr: String::new(),
         })
+    }
+
+    fn capture_diagnostics(&mut self) {
+        let mut stderr = self.child.stderr.take().expect("piped server stderr");
+        self.diagnostics = Some(thread::spawn(move || {
+            let mut retained = Vec::new();
+            let _ = stderr.by_ref().take(4096).read_to_end(&mut retained);
+            // Keep draining after the diagnostic limit so a long-lived server cannot block.
+            let _ = std::io::copy(&mut stderr, &mut std::io::sink());
+            String::from_utf8_lossy(&retained).into_owned()
+        }));
     }
     fn try_wait(&mut self) -> std::io::Result<Option<ExitStatus>> {
         if self.closed {
@@ -90,6 +105,9 @@ impl OwnedChild {
         self.closed = reaped.is_ok();
         tree?;
         reaped?;
+        if let Some(diagnostics) = self.diagnostics.take() {
+            self.stderr = diagnostics.join().unwrap_or_default();
+        }
         Ok(())
     }
 }
@@ -305,15 +323,18 @@ impl Server {
                 },
             )
             .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        let child = Arc::new(Mutex::new(OwnedChild::spawn(command)?));
+            .stderr(Stdio::piped());
+        let mut process = OwnedChild::spawn(command)?;
+        process.capture_diagnostics();
+        let child = Arc::new(Mutex::new(process));
         register(&child);
         let (address, protocol) = loop {
             check(cancellation, deadline)?;
             let mut process = child.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(status) = process.try_wait()? {
                 return Err(failed(format!(
-                    "tgrep server exited during startup: {status}"
+                    "tgrep server exited during startup: {status}: {}",
+                    process.stderr.trim()
                 )));
             }
             let pid = process.child.id();

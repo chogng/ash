@@ -42,6 +42,10 @@
 	font-size: var(--ash-fontSize-body2);
 	color: var(--ash-description-foreground);
 }
+.ash-browser-toolbar > .ash-browser-status {
+	flex: 0 1 auto;
+	min-width: 0;
+}
 
 .ash-browser-viewport {
 	flex: 1;

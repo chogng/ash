@@ -7,6 +7,10 @@ import { createTestLanguageModelToolsService } from '../common/tools/testLanguag
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
 import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
@@ -45,7 +49,7 @@ import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/commo
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -61,6 +65,7 @@ import { suite, suiteSetup, test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { createCodeEditorServices, createTestCodeEditor, registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
+import { BrowserLayoutService, ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { chatListItem, chatTranscriptListItems } from '../../common/model/chatViewModel.js';
 import type { ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
@@ -80,9 +85,15 @@ import { createTestPathService } from '../../../../test/common/workbenchHostTest
 
 const document = browserEnvironment.window.document;
 
+function createChatListTestServices(resources: DisposableStore, parent?: Parameters<typeof createCodeEditorServices>[1]) {
+	const services = createTestEditorServices(undefined, createCodeEditorServices(resources, parent));
+	services.registerSingleton(ILayoutService, () => new BrowserLayoutService({ root: document.body }));
+	return services;
+}
+
 test('Chat updates a structured Turn plan in place and keeps step text literal', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 	const plan = { id: 'plan', type: 'plan' as const, text: 'Prepare files', transient: false };
 	const step = 'Review [untrusted](https://example.test)';
@@ -99,7 +110,7 @@ test('Chat updates a structured Turn plan in place and keeps step text literal',
 
 test('Chat renders connection-qualified conversation links without permitting script links', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const opened: string[] = [];
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), { onDidRequestLink: (target: string) => opened.push(target) });
 	const link = buildOpenSessionLinkUri('session-1', 'peer-1', 'local').toString();
@@ -113,7 +124,7 @@ test('Chat renders connection-qualified conversation links without permitting sc
 
 test('Chat exposes explicit file references as streamed destinations complete', async () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const opened: string[] = [];
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), { onDidRequestLink: (target: string) => opened.push(target) });
 	const href = 'file:///workspace/src/main.ts#L12';
@@ -137,7 +148,7 @@ test('Chat exposes explicit file references as streamed destinations complete', 
 
 test('Chat file anchors copy the focused resource and use the most specific editor association in either group', async () => {
 	using resources = new DisposableStore();
-	const workbench = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const workbench = resources.add(createChatListTestServices(resources));
 	const services = resources.add(workbench.createChild());
 	const copy = mock.fn<IClipboardService['writeResources']>(async () => { });
 	const openEditor = mock.fn<IEditorService['openEditor']>(async () => { });
@@ -197,7 +208,7 @@ test('Chat opens explicit and plain-text file references at the correct line in 
 		await writeFile(join(second, 'src/suite.rs'), 'second checkout\nsecond line\nthird line\n');
 
 		using resources = new DisposableStore();
-		const workbench = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		const workbench = resources.add(createChatListTestServices(resources));
 		const services = resources.add(workbench.createChild());
 		const files = resources.add(new FileService());
 		resources.add(files.registerProvider('file', resources.add(new DiskFileSystemProvider([URI.file(first), URI.file(second)]))));
@@ -268,7 +279,7 @@ test('Chat opens explicit and plain-text file references at the correct line in 
 
 test('Chat tips use injected Markdown opening and share dismissal across composers', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const dismissed = resources.add(new Emitter<void>());
 	let visible = true;
 	const tips = {
@@ -306,7 +317,7 @@ suite('Chat hidden response resources', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('hidden response code blocks release documents and restore selection with current content', () => {
 		using resources = new DisposableStore();
-		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		const services = resources.add(createChatListTestServices(resources));
 		services.registerInstance(IAccessibilityService, {
 			onDidChangeScreenReaderOptimized: Event.None,
 			onDidChangeReducedMotion: Event.None,
@@ -348,7 +359,7 @@ suite('Chat hidden response resources', () => {
 
 test('code blocks inherit editor typography, retain their nodes on updates, and reset independently of message input', async () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'Fira Code');
 	await configuration.updateValue(CodeEditorConfiguration.fontSize, 16);
@@ -422,7 +433,7 @@ test('tool evidence is Turn-scoped and keeps result-before-call and orphan outpu
 
 test('accessible transcript reads current retained messages in display order after updates and removals', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const container = document.createElement('main'); document.body.append(container);
 	resources.add(toDisposable(() => container.remove()));
 	using widget = services.createInstance(ChatListWidget, container, {});
@@ -442,7 +453,7 @@ test('accessible transcript reads current retained messages in display order aft
 
 test('streaming tool content preserves disclosure focus, failure state and restored expansion', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	services.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
 	const container = document.createElement('main');
 	document.body.append(container);
@@ -498,7 +509,7 @@ test('tool invocation summaries and sections use the Chinese locale', () => {
 	setNlsMessages('zh-CN', chineseCatalog.bundles);
 	try {
 		using resources = new DisposableStore();
-		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		const services = resources.add(createChatListTestServices(resources));
 		services.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
 		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 		widget.render(chatTranscriptListItems([{ type: 'item', entryId: 'call', turnId: 'turn', transient: false, item: { type: 'toolCall', itemId: 'call', turnId: 'turn', toolCallId: 'read', name: 'read', argumentsJson: '{}' } }]));
@@ -512,7 +523,7 @@ test('tool invocation summaries and sections use the Chinese locale', () => {
 
 test('streaming Markdown reuses static blocks and code editors, then releases rewritten code', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 	const text = 'Stable text.\n\n```ts\nconst a = 1;';
 	widget.render([{ id: 'reply', type: 'agentMessage', text, transient: true }]);
@@ -531,7 +542,7 @@ test('streaming Markdown reuses static blocks and code editors, then releases re
 
 test('Skill diagnostic contribution handles open, edits, language changes and disposal without removing other markers', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	services.registerInstance(IPathService, createTestPathService({}, services.get(IWorkspaceContextService)));
 	services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 	const models = services.get(IModelService);
@@ -570,7 +581,7 @@ test('Skill diagnostic contribution handles open, edits, language changes and di
 
 test('Skill diagnostics follow shared editor bindings and cancel validation after the last editor detaches', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	services.registerInstance(IPathService, createTestPathService({}, services.get(IWorkspaceContextService)));
 	services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 	const models = services.get(IModelService);
@@ -608,7 +619,7 @@ test('Skill diagnostics follow shared editor bindings and cancel validation afte
 
 test('renders finalized web sources with response actions and code matches in a separate disclosure', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 	document.body.append(widget.element);
 	resources.add(toDisposable(() => widget.element.remove()));
@@ -663,7 +674,7 @@ test('renders finalized web sources with response actions and code matches in a 
 
 test('streamed memory references retain their buttons, code editor and focus as new references arrive', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const opened: string[] = [];
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), { onDidRequestMemoryReference: (value: string) => opened.push(value) });
 	document.body.append(widget.element);
@@ -739,7 +750,7 @@ test('Skill resource content provider shares readonly models and cancels a late 
 for (const classPrefix of ['ash-chat', 'ash-native-chat']) {
 	test(`${classPrefix} shows exact accepted context as inert text and preserves its disclosure and focus`, () => {
 		using resources = new DisposableStore();
-		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		const services = resources.add(createChatListTestServices(resources));
 		const container = document.createElement('main'); document.body.append(container); resources.add(toDisposable(() => container.remove()));
 		using widget = services.createInstance(ChatListWidget, container, { classPrefix });
 		const items = (content: string) => chatTranscriptListItems([{ type: 'item', entryId: 'context', turnId: 'turn', transient: false, item: { type: 'userContext', itemId: 'context', turnId: 'turn', name: 'Context name', content } }]);
@@ -762,7 +773,7 @@ for (const classPrefix of ['ash-chat', 'ash-native-chat']) {
 
 test('a saved pull request context opens the original PR above the first message', async () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = resources.add(createChatListTestServices(resources));
 	const url = 'https://github.com/team/repo/pull/7';
 	const opened: string[] = [];
 	services.get(IOpenerService).setDefaultExternalOpener({ openExternal: async href => { opened.push(href); return true; } });
@@ -789,6 +800,70 @@ test('a saved pull request context opens the original PR above the first message
 suite('Chat message copy ownership', () => {
 	suiteSetup(() => { getWindows(); });
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('transcript shortcuts and menu commands copy the same selection without taking over editor input', async () => {
+		using resources = new DisposableStore();
+		const services = resources.add(createChatListTestServices(resources));
+		let menu: IContextMenuDelegate | undefined;
+		const copies: { text: string; html: string; }[] = [];
+		const draft: string[] = [];
+		services.registerInstance(IContextMenuService, {
+			contextMenuStyle: 'custom',
+			onDidShowContextMenu: Event.None,
+			onDidHideContextMenu: Event.None,
+			hideContextMenu() { },
+			showContextMenu: delegate => { menu = delegate as IContextMenuDelegate; },
+		});
+		services.registerInstance(IClipboardService, resources.add(new class extends BrowserClipboardService {
+			constructor() { super(undefined); }
+			override async writeTextWithHtml(text: string, html: Promise<string>): Promise<void> {
+				copies.push({ text, html: await html });
+			}
+		}()));
+		services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
+		services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
+		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {
+			prepareAddSelectionToChat: (text: string) => () => { draft.push(text); },
+		});
+		document.body.append(widget.element);
+		resources.add(toDisposable(() => widget.element.remove()));
+		widget.render([{ id: 'reply', type: 'agentMessage', text: 'Before **selected words** after.', transient: false }]);
+		const row = widget.getRowElement('reply')!;
+		const selection = document.getSelection()!;
+		resources.add(toDisposable(() => selection.removeAllRanges()));
+		const copy = (target: HTMLElement) => target.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', {
+			key: 'c', metaKey: isMacintosh, ctrlKey: !isMacintosh, bubbles: true, cancelable: true,
+		}));
+		const openMenu = () => row.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', {
+			key: 'F10', shiftKey: true, bubbles: true, cancelable: true,
+		}));
+		assert.equal(openMenu(), true);
+		assert.equal(copy(row), true);
+		assert.equal(menu, undefined);
+		selection.selectAllChildren(row.querySelector('strong')!);
+		const input = document.createElement('textarea');
+		row.append(input);
+		assert.equal(copy(input), true);
+		input.remove();
+		assert.equal(copy(row), false);
+		assert.equal(openMenu(), false);
+		const openedMenu = menu as IContextMenuDelegate | undefined;
+		assert.ok(openedMenu);
+		const actions = openedMenu.getActions();
+		assert.deepEqual(actions.map(action => action.label), ['Copy', 'Add to Chat']);
+		assert.deepEqual(actions.map(action => action.icon?.id), ['copy', 'add']);
+		assert.equal(openedMenu.iconPlacement, 'leading-with-trailing-check');
+		selection.removeAllRanges();
+		await actions[0].run(openedMenu.getActionsContext?.());
+		await actions[1].run(openedMenu.getActionsContext?.());
+		assert.equal(copies.length, 2);
+		assert.equal(copies[0]?.text, 'selected words');
+		assert.match(copies[0]?.html ?? '', /<strong>selected words<\/strong>/);
+		assert.deepEqual(copies[1], copies[0]);
+		assert.deepEqual(draft, ['selected words']);
+		widget.setVisible(false);
+		assert.equal(openedMenu.cancellationToken?.isCancellationRequested, true);
+	});
+
 	test('the actual row command copies current raw text and releases feedback after removal', async () => {
 		using resources = new DisposableStore();
 		const parent = resources.add(new InstantiationService());
@@ -798,7 +873,7 @@ suite('Chat message copy ownership', () => {
 			public override async writeText(text: string): Promise<void> { writes++; await entered.complete(text); await completed.p; }
 		}());
 		parent.registerInstance(IClipboardService, clipboard);
-		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources, parent)));
+		const services = resources.add(createChatListTestServices(resources, parent));
 		resources.add(services.createInstance(ChatCopyActionRendering));
 		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 		document.body.append(widget.element);
@@ -981,6 +1056,75 @@ suite('chatRenderer browser component', () => {
 	});
 
 
+	test('Markdown table downloads protect formula text and preserve ordinary CSV on repeated exports', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?locale=zh-CN');
+		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), [
+			'| Text | Code |', '| --- | --- |',
+			'| =1+1 | `=1+1` |', '| +1+1 | `-1+1` |', '| @SUM(1) | `-42` |',
+			'| &#160;=1+1 | &#65279;&#8203;=1+1 |', '| =1+1",=2+2 | `=SUM(1,2)` |',
+			'', '| Name | Value |', '| --- | --- |', '| 中文 | 42 |', '| say "hi", please | `00123` |', '| line break | |',
+		].join('\n'));
+		const buttons = page.getByRole('button', { name: '将表格导出为 CSV', exact: true });
+		await expect(buttons).toHaveCount(2);
+		const cells = await page.getByRole('cell').allInnerTexts();
+		assert.deepEqual(cells.slice(0, 10), ['=1+1', '=1+1', '+1+1', '-1+1', '@SUM(1)', '-42', '\u00a0=1+1', '\ufeff\u200b=1+1', '=1+1",=2+2', '=SUM(1,2)']);
+		const expected = [
+			'"Text","Code"\r\n"\'=1+1","\'=1+1"\r\n"\'+1+1","\'-1+1"\r\n"\'@SUM(1)","\'-42"\r\n"\'\u00a0=1+1","\'\ufeff\u200b=1+1"\r\n"\'=1+1"",=2+2","\'=SUM(1,2)"\r\n',
+			'"Name","Value"\r\n"中文","42"\r\n"say ""hi"", please","00123"\r\n"line break",""\r\n',
+		];
+		for (const index of [0, 1, 0]) {
+			const downloading = page.waitForEvent('download');
+			await buttons.nth(index).click();
+			const download = await downloading;
+			assert.equal(download.suggestedFilename(), 'table.csv');
+			assert.equal(await readFile((await download.path())!, 'utf8'), expected[index]);
+		}
+		assert.deepEqual(await page.getByRole('cell').allInnerTexts(), cells);
+	});
+
+	test('Markdown table copy uses the selected table and gives feedback after the clipboard write', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?locale=zh-CN');
+		const text = '| A |\n| --- |\n| B |\n\n| Name | Value |\n| --- | --- |\n| **中文** | |\n| Formula | `=1+1` |';
+		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), text);
+		const buttons = page.getByRole('button', { name: '复制表格', exact: true });
+		await expect(buttons).toHaveCount(2);
+		const compactTable = page.getByRole('region', { name: '可滚动表格' }).filter({ has: page.getByRole('columnheader', { name: 'A', exact: true }) });
+		assert.ok((await buttons.first().boundingBox())!.x >= (await compactTable.boundingBox())!.x - 0.5);
+		const copy = buttons.nth(1);
+		const icon = copy.locator('[data-ash-icon-id="copy"]');
+		const check = copy.locator('[data-ash-icon-id="check"]');
+		await expect(copy).toHaveAttribute('tabindex', '0');
+		await copy.focus();
+		const bounds = await copy.boundingBox();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.holdClipboard(true));
+		await copy.press('Space');
+		await expect(copy).toHaveAttribute('aria-busy', 'true');
+		await expect(icon).toBeVisible();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.releaseClipboard());
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().notifications))
+			.toContain('无法复制表格：Error: clipboard rejected');
+		await expect(check).toHaveCount(0);
+		await page.evaluate(() => {
+			window.ashChatTranscriptIntegration.holdClipboard();
+			window.ashChatTranscriptIntegration.releaseClipboard();
+		});
+		await copy.press('Enter');
+		await expect(check).toBeVisible();
+		await expect(copy).toBeFocused();
+		assert.deepEqual(await copy.boundingBox(), bounds);
+		assert.equal(await page.evaluate(() => window.ashChatTranscriptIntegration.state().copied), "Name\tValue\n中文\t\nFormula\t'=1+1");
+		await expect(page.locator('.ash-aria-status').filter({ hasText: '表格已复制。' })).toHaveCount(1);
+		await expect(icon).toBeVisible();
+
+		assert.equal(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(true)), true);
+		const view = page.locator('.ash-accessible-view-content');
+		await expect(view).toHaveValue(/聚焦“复制表格”后按 Enter 或空格可复制整张表格/);
+		await view.press('Escape');
+		await expect(copy).toBeFocused();
+	});
+
 	test('wide Markdown tables scroll with the keyboard and retain their viewport during streaming', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html?locale=zh-CN');
@@ -1025,9 +1169,18 @@ suite('chatRenderer browser component', () => {
 		await region.press('ArrowRight');
 		await expect.poll(() => viewport.evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
 		const scrollLeft = await viewport.evaluate(node => node.scrollLeft);
-		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), text + row(columns.map(() => 'Appended cell')));
+		const appended = columns.map(() => 'Appended cell');
+		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), text + row(appended));
 		await expect(viewport.getByRole('row')).toHaveCount(22);
 		await expect(region).toBeFocused();
+		assert.ok(await viewport.evaluate(node => node.scrollLeft) >= scrollLeft);
+		const copy = page.getByRole('button', { name: '复制表格', exact: true });
+		await page.getByRole('button', { name: '将表格导出为 CSV', exact: true }).focus();
+		await page.keyboard.press('Shift+Tab');
+		await expect(copy).toBeFocused();
+		await page.keyboard.press('Enter');
+		const expected = [columns, ...rows.map(() => columns), appended].map(cells => cells.join('\t')).join('\n');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(expected);
 		assert.ok(await viewport.evaluate(node => node.scrollLeft) >= scrollLeft);
 
 		await viewport.evaluate(node => { node.scrollLeft = 0; });
@@ -1038,7 +1191,7 @@ suite('chatRenderer browser component', () => {
 			const bounds = node.closest('.ash-chat-markdown-table-viewport')!.getBoundingClientRect();
 			return cell.left < bounds.right && cell.right > bounds.left;
 		})).toBe(true);
-		await page.evaluate(() => window.ashChatTranscriptIntegration.stream('| Fits |\n| --- |\n| Cell |', true));
+		await page.evaluate(() => window.ashChatTranscriptIntegration.stream('| Fits |\n| --- |\n| A compact row |', true));
 		await expect(region.getByRole('columnheader', { name: 'Fits' })).toBeVisible();
 		await expect(region.getByRole('scrollbar')).toHaveCount(0);
 		await expect(expand).toHaveCount(0);

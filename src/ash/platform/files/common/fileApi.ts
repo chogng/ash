@@ -34,6 +34,7 @@ interface FilePublication {
 
 export interface IFileSystemDirectory {
 	readonly uri: URI;
+	readonly exactFile?: URI;
 	readonly target: { readonly type: 'environment'; readonly dirId: string; } | { readonly type: 'session'; readonly sessionId: string; readonly path: string; };
 }
 

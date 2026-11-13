@@ -2,7 +2,7 @@ import { SessionBackgroundActivitiesControl } from './sessionBackgroundActivitie
 import { h } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, observableFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
+import { autorun, observableFromEvent, type IObservable } from '../../../../base/common/observable.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -24,16 +24,14 @@ import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/brows
 import type { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { BackgroundSendAvailableContext, ComposerSessionControls } from './sharedChatInputComposer.contribution.js';
 import { SharedChatInputComposer } from './sharedChatInputComposer.js';
-import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
-import { ASH_CHAT_SELECTED_CONTEXT, CODE_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
+import { CODE_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
 import { NewSessionPickersAvailableContext } from './newChatPickerKeybinding.js';
-import { SessionsChatResponseFileChangesService } from './sessionTurnChanges.js';
+import { SessionsChatResponseFileChangesProvider } from './sessionTurnChanges.js';
 import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
 import { resolveChatContextAttachment } from '../../../../workbench/services/chat/common/chatContextService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { ChatInputArtifactPill } from './chatInputArtifactPill.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
 import './media/newChatEnvironment.css';
@@ -76,12 +74,9 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		@IEditorService editors: IEditorService,
 	) {
 		let composer!: SharedChatInputComposer;
-		const turnChanges = instantiationService.createInstance(SessionsChatResponseFileChangesService, model);
-		const chatPresentation = observableFromEvent('native Chat presentation', contextKeys.onDidChangeContext,
-			() => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) === true);
+		const turnChanges = instantiationService.createInstance(SessionsChatResponseFileChangesProvider, model);
 		const codePresentation = observableFromEvent('Code presentation', contextKeys.onDidChangeContext,
 			() => contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code');
-		const welcomeTitle = observableValue<string | null | undefined>('native chat welcome', undefined);
 		super(container, panelId, model, createNewSession, contextMenus, contextViews, commands, accessibleViews, notifications,
 			undefined, editors, undefined,
 			(inputContainer, delegate) => {
@@ -105,8 +100,6 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 				};
 				composer = instantiationService.createInstance(SharedChatInputComposer, inputContainer, {
 					...delegate,
-					// The environment picker owns the selected checkout's pre-session changes.
-					readWorkspaceChanges: undefined,
 					get sendInBackground() { return model.untitledSessionId && !model.isNestedDraft ? sendInBackground : undefined; },
 					send: async (...args: Parameters<ChatInputDelegate['send']>) => {
 						const submissionSignal = args[4];
@@ -128,27 +121,20 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 							throw error;
 						}
 					},
-				}, model, chatPresentation, () => this.focusWorkspacePicker());
+				}, model, () => this.focusWorkspacePicker());
 				return composer.input;
 			}, {
-			promptTimelineChanges: prompt => turnChanges.getChangesForRequest(prompt),
+			// Before first send, the environment card reviews the selected checkout.
+			changes: { refreshConversation: () => model.refreshChanges() },
+			promptTimelineChanges: prompt => turnChanges.getChangesForPrompt(prompt),
 			getTurnChanges: source => turnChanges.getChangesForResponse(source),
 			messagePresentation,
+			messageActionSurface: 'code',
 			virtualizeHistoryFrom: codePresentation.map(code => code ? CODE_HISTORY_VIRTUALIZE_FROM : undefined),
-			welcomeTitle,
+			welcomeTitle: codePresentation.map(code => code && !model.isNestedDraft ? null : undefined),
 		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding, configuration);
 		this.composer = this._register(composer);
 		this.codePresentation = codePresentation;
-		const shown = observableFromEvent(this, this.onDidChangeVisibility, () => this.visible);
-		const draftId = observableFromEvent(this, model.onDidChange, () => model.welcomeDraftId);
-		const welcome = this._register(instantiationService.createInstance(ChatWelcomeTitle, (reader: IReader) => {
-			const id = chatPresentation.read(reader) && draftId.read(reader);
-			return id ? { id, revision: 0 } : undefined;
-		}, shown, false));
-		this._register(autorun(reader => {
-			const showEnvironment = codePresentation.read(reader) && !model.isNestedDraft;
-			welcomeTitle.set(chatPresentation.read(reader) ? welcome.title.read(reader) : showEnvironment ? null : undefined, undefined);
-		}));
 		const parent = this.input.element;
 		const inputContainer = this.input.composerForm;
 		const footer = this.input.composerFooter!;
@@ -169,7 +155,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 			container: tipContainer,
 			getSessionId: () => model.untitledSessionId,
 			isEligible: () => this.visible && configuration.getValue<boolean>(ChatConfiguration.TipsEnabled) !== false
-				&& !chatPresentation.get() && !this.model.isNestedDraft && !this.model.inputState.aiDisabled && !this.submittedInput && this.model.items.length === 0
+				&& !this.model.isNestedDraft && !this.model.inputState.aiDisabled && !this.submittedInput && this.model.items.length === 0
 				&& (this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading'))
 				&& !this.model.inputState.interaction
 				&& !widgets.getAllWidgets().some(widget => widget !== this && widget.visible && widget.domNode.ownerDocument === parent.ownerDocument),
@@ -197,7 +183,6 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 				tipContainer.inert = overlaps;
 			}));
 		}
-		this._register(new ChatInputArtifactPill(this.input, model));
 		this.renderDraftNotice(parent);
 		parent.append(footer);
 		this.input.useResponsiveFooter(() => this.sessionControls?.responsivePickers ?? []);
@@ -213,7 +198,6 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		};
 		this._register(this.onDidChangeVisibility(updatePickerAvailability));
 		this._register(autorun(reader => {
-			chatPresentation.read(reader);
 			codePresentation.read(reader);
 			this.updateComposer();
 		}));

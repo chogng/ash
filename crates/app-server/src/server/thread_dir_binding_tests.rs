@@ -19,6 +19,14 @@ fn git(directory: &Path, arguments: &[&str]) -> String {
             "user.name=Binding test",
             "-c",
             "user.email=binding@example.test",
+            "-c",
+            "commit.gpgSign=false",
+            "-c",
+            if cfg!(windows) {
+                "core.hooksPath=NUL"
+            } else {
+                "core.hooksPath=/dev/null"
+            },
         ])
         .args(arguments)
         .output()
@@ -447,6 +455,8 @@ fn comparison_forks_share_the_source_checkpoint_in_distinct_named_worktrees() {
     let repository = tempfile::tempdir().unwrap();
     let root = repository.path();
     git(root, &["init", "--quiet", "--initial-branch=main"]);
+    // These assertions compare checkout bytes across worktrees, independently of host Git settings.
+    git(root, &["config", "core.autocrlf", "false"]);
     std::fs::create_dir_all(root.join(".ash/agents")).unwrap();
     for name in ["alpha", "beta"] {
         std::fs::write(
@@ -555,4 +565,138 @@ fn comparison_forks_share_the_source_checkpoint_in_distinct_named_worktrees() {
         git(&checkouts[0], &["rev-parse", "HEAD"]),
         git(&checkouts[1], &["rev-parse", "HEAD"]),
     );
+}
+
+#[test]
+fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_contents() {
+    let profile = tempfile::tempdir().unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    git(repo.path(), &["init", "--quiet", "--initial-branch=main"]);
+    git(repo.path(), &["config", "user.name", "Ash Test"]);
+    git(repo.path(), &["config", "user.email", "ash@example.test"]);
+    std::fs::write(repo.path().join("tracked.txt"), "initial\n").unwrap();
+    git(repo.path(), &["add", "."]);
+    git(repo.path(), &["commit", "--quiet", "-m", "initial"]);
+    let search_root = ash_file_access::Dir::open_local(repo.path()).unwrap();
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_dir_root(repo.path()),
+        ash_app_server_diff::compute,
+    )
+    .unwrap();
+    // Use the host's one index service, including the registration created by warmup.
+    let grep = server
+        .env_runtime
+        .read()
+        .unwrap()
+        .workspace
+        .grep
+        .clone()
+        .unwrap();
+    assert_eq!(grep.backend(), grep::Backend::Tgrep);
+    let mut connection = server.connection();
+    crate::tests::call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"managed-worktree-delete-test","version":"1"},"capabilities":{}}}),
+    );
+    let created = crate::tests::call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-managed","title":"Managed work","kind":"code", "executionTarget":null}}),
+    );
+    assert!(created.get("error").is_none(), "{created}");
+    let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread_id = created["result"]["session"]["threads"][0]["threadId"]
+        .as_str()
+        .unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let manager =
+        worktree::WorktreeManager::new(worktree::WorktreeSettings::defaults(profile.path()));
+    let listed = runtime.block_on(manager.list(repo.path())).unwrap();
+    let checkout = listed
+        .iter()
+        .find(|worktree| worktree.owner_thread_id() == Some(thread_id))
+        .unwrap()
+        .checkout_root()
+        .to_path_buf();
+    std::fs::write(checkout.join("uncommitted.txt"), "discard me").unwrap();
+    let search_dir = ash_file_access::Dir::open_local(&checkout).unwrap();
+    let query = grep::Query {
+        query: "initial".into(),
+        pattern: grep::Pattern::Literal,
+        case_sensitivity: grep::CaseSensitivity::Sensitive,
+        scope: std::path::PathBuf::new(),
+        include_patterns: Vec::new(),
+        exclude_patterns: Vec::new(),
+        max_results: 100,
+        freshness: grep::Freshness::Indexed,
+    };
+    let cancellation = ash_async_utils::CancellationSource::new();
+    assert_eq!(
+        grep::Search::search(grep.as_ref(), &search_dir, &query, &cancellation.token())
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    assert_eq!(
+        grep::Search::search(grep.as_ref(), &search_root, &query, &cancellation.token())
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    let git_dir = git(&checkout, &["rev-parse", "--absolute-git-dir"]);
+    let marker = std::path::Path::new(git_dir.trim()).join("tgrep-view-v1.json");
+    assert!(marker.exists());
+    // The search service drains its own capability during deletion; release the test's extra
+    // directory handle too, otherwise Windows correctly refuses to remove the checkout.
+    drop(search_dir);
+    let inventory = crate::tests::call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"git/worktree/list","params":{}}),
+    );
+    assert!(
+        inventory["result"]["worktrees"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|worktree| worktree["state"] == "threadOwned")
+    );
+    let deleted = crate::tests::call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"git/worktree/delete","params":{"commandId":"delete-managed","checkoutRoot":checkout,"mode":"sessionAndWorktrees"}}),
+    );
+    assert!(deleted.get("error").is_none(), "{deleted}");
+    assert!(!checkout.exists());
+    assert!(!marker.exists());
+    assert_eq!(
+        grep::Search::search(grep.as_ref(), &search_root, &query, &cancellation.token())
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    assert_eq!(deleted["result"]["worktrees"].as_array().unwrap().len(), 1);
+    let sessions = crate::tests::call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"session/list","params":{}}),
+    );
+    assert!(
+        sessions["result"]["sessions"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    let missing = crate::tests::call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"session/read","params":{"sessionId":session_id}}),
+    );
+    assert!(missing.get("error").is_some(), "{missing}");
 }
