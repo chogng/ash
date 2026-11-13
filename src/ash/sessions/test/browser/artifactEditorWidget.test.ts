@@ -834,7 +834,7 @@ test('Design tool contribution draws a shape at document coordinates and hand ge
 	const pointer = (type: string, x: number, y: number): void => {
 		viewport.dispatchEvent(new browser.window.PointerEvent(type, { pointerId: 1, isPrimary: true, button: 0, clientX: x, clientY: y, bubbles: true, cancelable: true }));
 	};
-	const tools = view.domNode.querySelector('.ash-canvas-editor-toolbar')!;
+	const tools = view.domNode.querySelector('.ash-artifact-toolbar')!;
 	tools.querySelector<HTMLButtonElement>('button[aria-label="Rectangle"]')!.click();
 	pointer('pointerdown', 40, 30);
 	pointer('pointermove', 180, 90);
@@ -1323,7 +1323,7 @@ test('Creator offers Chat creation choices and retains each canvas document, sel
 	assert.equal(fixture.editors.activeEditor.get(), undefined);
 	assert.equal(fixture.page.domNode.ownerDocument.activeElement?.getAttribute('data-creation-kind'), 'design');
 	fixture.page.openMode(ArtifactWorkspaceId.Whiteboard);
-	const whiteboardToolbar = fixture.editors.activeEditor.get()!.domNode.querySelector('.ash-canvas-editor-toolbar')!;
+	const whiteboardToolbar = fixture.editors.activeEditor.get()!.domNode.querySelector('.ash-artifact-toolbar')!;
 	assert.ok(whiteboardToolbar.querySelector('[data-action-id="sessions.creator.whiteboard.note"]'));
 	assert.equal(whiteboardToolbar.querySelector('[data-action-id="sessions.creator.slides.add"]'), null);
 	fixture.click('Add note');
@@ -1344,7 +1344,7 @@ test('Creator offers Chat creation choices and retains each canvas document, sel
 		fixture.page.openMode(mode);
 		const editor = fixture.editors.activeEditor.get()!;
 		assert.equal(editor.documentController.model.value.mode, mode);
-		const toolbar = editor.domNode.querySelector('.ash-canvas-editor-toolbar')!;
+		const toolbar = editor.domNode.querySelector('.ash-artifact-toolbar')!;
 		assert.ok(toolbar.querySelector(`[data-action-id="sessions.creator.${mode}.${action}"]`));
 		assert.equal(toolbar.querySelector('[data-action-id="sessions.creator.whiteboard.note"]'), null);
 		assert.equal(fixture.editors.getDocument(mode).model.value.shapes.length, 0);
@@ -1423,7 +1423,7 @@ test('Creator reports generated file open failures and retains the published car
 test('Creator Slides order and Brand variants use their own complete undo history', () => {
 	using fixture = new CreatorFixture();
 	fixture.page.openMode(ArtifactWorkspaceId.Slides);
-	const toolbar = fixture.page.domNode.querySelector('.ash-canvas-editor-toolbar-workspace')!;
+	const toolbar = fixture.page.domNode.querySelector('.ash-artifact-toolbar-workspace')!;
 	const earlier = () => toolbar.querySelector<HTMLButtonElement>('[data-action-id="sessions.creator.slides.earlier"] button')!;
 	const later = () => toolbar.querySelector<HTMLButtonElement>('[data-action-id="sessions.creator.slides.later"] button')!;
 	assert.equal(earlier().disabled, true);

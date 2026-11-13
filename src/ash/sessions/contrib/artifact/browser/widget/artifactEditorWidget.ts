@@ -27,7 +27,8 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { DesignMediaPreview } from '../designMedia.js';
 import { CanvasViewport } from '../../../canvas/common/canvasViewport.js';
 import { DesignInputController } from '../controller/designInputController.js';
-import { ArtifactEditorToolbar } from './artifactEditorToolbar.js';
+import { ArtifactToolbar } from './artifactToolbar.js';
+import type { WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { ArtifactEditorActions } from '../artifactEditorActions.js';
 import type { DesignEditorContributionFactory, IDesignCanvasView, IDesignDrawingContribution, IDesignMotionContribution, IDesignPropertiesContribution, IDesignCodeContribution, IDesignPrototypeContribution } from '../designEditorBrowser.js';
 
@@ -49,7 +50,9 @@ export class ArtifactEditorWidget extends Disposable {
 	private readonly messageDomNode: HTMLElement;
 	private contextMenuVisible = false;
 	private vectorSelectionStatus: string | undefined;
-	private readonly toolbar: ArtifactEditorToolbar;
+	private readonly toolbar: ArtifactToolbar;
+	private readonly toolActions: WorkbenchToolBar;
+	private readonly modeActions: WorkbenchToolBar;
 	private readonly editorActions: ArtifactEditorActions;
 	private readonly text: import('../designEditorBrowser.js').IDesignTextContribution;
 	private readonly drawing: IDesignDrawingContribution;
@@ -83,7 +86,9 @@ export class ArtifactEditorWidget extends Disposable {
 		this.canvas = this._register(contributionsFactory.createCanvasView(ownerDocument));
 		this.canvas.setTool(this.tool);
 		const stage = h(ownerDocument, 'div', { className: 'ash-sessions-design-stage' });
-		this.toolbar = this._register(instantiationService.createInstance(ArtifactEditorToolbar, ownerDocument));
+		this.toolbar = this._register(instantiationService.createInstance(ArtifactToolbar, ownerDocument));
+		this.toolActions = this.toolbar.createActionGroup(localize('sessions.artifacts.canvasTools', 'Canvas tools'));
+		this.modeActions = this.toolbar.createActionGroup(localize('sessions.artifacts.canvasEditorModes', 'Editor modes'));
 		this.editorActions = new ArtifactEditorActions(
 			tool => commandService.executeCommand(`sessions.design.tool.${tool}`, this),
 			mode => commandService.executeCommand(`sessions.design.mode.${mode}`, this),
@@ -110,11 +115,11 @@ export class ArtifactEditorWidget extends Disposable {
 		this.motion = contributions.motion;
 		this.code = contributions.code;
 		this.prototype = contributions.prototype;
-		stage.append(this.canvas.domNode, this.code.domNode, this.motion.domNode, this.prototype.previewDomNode);
+		stage.append(this.canvas.domNode, this.code.domNode, this.motion.domNode, this.toolbar.domNode, this.prototype.previewDomNode);
 
 		this.contentDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-content', attributes: { 'aria-hidden': 'true' } });
 		this.messageDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-message', attributes: { role: 'status', 'aria-live': 'polite' } });
-		this.domNode.append(this.toolbar.domNode, stage, this.messageDomNode, this.contentDomNode);
+		this.domNode.append(stage, this.messageDomNode, this.contentDomNode);
 		const scopedContext = this._register(contextKeys.createScoped(this.domNode));
 		scopedContext.createKey('sessionsDesignCanvasFocused', true);
 		const active = scopedContext.createKey<boolean>('sessionsDesignCanvasActive', false);
@@ -203,7 +208,7 @@ export class ArtifactEditorWidget extends Disposable {
 		this.toolbar.setWorkspaceContext(context);
 	}
 	public prependToolbarControl(control: HTMLElement): void {
-		this.toolbar.domNode.prepend(control);
+		this.toolbar.prependControl(control);
 	}
 
 	public static getFocused(element: HTMLElement): ArtifactEditorWidget | undefined {
@@ -457,7 +462,10 @@ export class ArtifactEditorWidget extends Disposable {
 		const shapes = this.documentController.model.value.shapes;
 		const selected = this.selectedShape;
 		const editorActions = this.editorActions.update(this.tool, this.mode, this.documentController.isBusy);
-		if (editorActions) this.toolbar.setEditorActions(editorActions.tools, editorActions.modes);
+		if (editorActions) {
+			this.toolActions.setActions(editorActions.tools);
+			this.modeActions.setActions(editorActions.modes);
+		}
 		this.motion.update(selected, this.documentController.isBusy);
 		this.code.update(this.documentController.model.value, this.mode === DesignMode.Code, this.documentController.isBusy);
 

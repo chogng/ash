@@ -1,4 +1,5 @@
-.ash-canvas-editor-toolbar {
+.ash-artifact-toolbar {
+	--ash-toolbar-actionSize: 32px;
 	--ash-button-foreground: var(--ash-sessions-design-chromeForeground);
 	--ash-actionBar-toggledBackground: color-mix(
 		in srgb,
@@ -6,6 +7,7 @@
 		var(--ash-sessions-design-chromeBackground)
 	);
 	--ash-button-hoverBackground: var(--ash-actionBar-toggledBackground);
+	--ash-toolbar-hoverBackground: var(--ash-actionBar-toggledBackground);
 	--ash-button-activeBackground: color-mix(
 		in srgb,
 		var(--ash-sessions-design-chromeForeground) 30%,
@@ -14,6 +16,9 @@
 
 	display: flex;
 	align-items: center;
+	position: relative;
+	flex: 0 0 auto;
+	margin: var(--ash-spacing-size160) auto;
 	gap: var(--ash-spacing-size160);
 	box-sizing: border-box;
 	max-width: calc(100% - 32px);
@@ -27,15 +32,13 @@
 	font-size: var(--ash-fontSize-label1);
 }
 
-.ash-canvas-editor-toolbar-group .ash-button.ash-button-standard {
+.ash-artifact-toolbar-group .ash-button.ash-button-standard {
 	width: 32px;
 	height: 32px;
 	padding: 0;
 }
 
-.ash-canvas-editor-toolbar-group
-	.ash-dropdown-with-primary-dropdown
-	> .ash-button {
+.ash-artifact-toolbar-group .ash-dropdown-with-primary-dropdown > .ash-button {
 	width: 20px;
 	min-width: 0;
 }
@@ -78,20 +81,20 @@
 	box-shadow: none;
 }
 
-.ash-canvas-editor-toolbar-group {
+.ash-artifact-toolbar-group {
 	display: flex;
 	align-items: center;
 	flex: 0 0 auto;
 	gap: var(--ash-spacing-size40);
 }
 
-.ash-canvas-editor-toolbar-workspace {
+.ash-artifact-toolbar-workspace {
 	flex: 0 0 auto;
 	white-space: nowrap;
 }
 
-[data-color-scheme="hcDark"] .ash-canvas-editor-toolbar,
-[data-color-scheme="hcLight"] .ash-canvas-editor-toolbar {
+[data-color-scheme="hcDark"] .ash-artifact-toolbar,
+[data-color-scheme="hcLight"] .ash-artifact-toolbar {
 	border-color: var(--ash-contrastBorder);
 	box-shadow: none;
 }

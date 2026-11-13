@@ -2,7 +2,7 @@ import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/
 import '../../../../base/browser/ui/styles.css';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Event } from '../../../../base/common/event.js';
-import { setNlsMessages } from '../../../../nls.js';
+import { localize, setNlsMessages } from '../../../../nls.js';
 import { MenuService } from '../../../../platform/actions/common/menuService.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyService, IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -18,7 +18,7 @@ import { TestThemeService } from '../../../../platform/theme/test/common/testThe
 import { CommandService } from '../../../../workbench/services/commands/common/commandService.js';
 import { TestNotificationService } from '../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { bindTestColorTheme } from '../../../../../../test/fixtures/browser/themeFixture.js';
-import { ArtifactEditorToolbar } from '../../../contrib/artifact/browser/widget/artifactEditorToolbar.js';
+import { ArtifactToolbar } from '../../../contrib/artifact/browser/widget/artifactToolbar.js';
 import { ArtifactEditorActions } from '../../../contrib/artifact/browser/artifactEditorActions.js';
 import { DesignMode, DesignTool } from '../../../contrib/artifact/common/config/designEditorConfiguration.js';
 
@@ -58,7 +58,7 @@ let mode = DesignMode.Design;
 let busy = false;
 const update = (): void => {
 	const actions = editorActions.update(tool, mode, busy);
-	if (actions) widget.setEditorActions(actions.tools, actions.modes);
+	if (actions) { tools.setActions(actions.tools); modes.setActions(actions.modes); }
 	document.querySelector('output')!.textContent = `${tool}/${mode}`;
 };
 const editorActions = new ArtifactEditorActions(
@@ -66,7 +66,9 @@ const editorActions = new ArtifactEditorActions(
 	(selected: DesignMode) => { mode = selected; update(); },
 	() => { },
 );
-const widget = resources.add(services.createInstance(ArtifactEditorToolbar, document));
+const widget = resources.add(services.createInstance(ArtifactToolbar, document));
+const tools = widget.createActionGroup(localize('sessions.artifacts.canvasTools', 'Canvas tools'));
+const modes = widget.createActionGroup(localize('sessions.artifacts.canvasEditorModes', 'Editor modes'));
 document.querySelector('main')!.append(widget.domNode);
 update();
 window.ashArtifactEditorToolbarFixture = {

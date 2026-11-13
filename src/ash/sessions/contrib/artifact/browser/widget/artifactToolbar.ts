@@ -1,16 +1,15 @@
-import './artifactEditorToolbar.css';
+import './artifactToolbar.css';
 import { h } from '../../../../../base/browser/dom.js';
-import { ActionBar } from '../../../../../base/browser/ui/actionbar/actionbar.js';
+import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { IContextMenuProvider } from '../../../../../base/browser/contextmenu.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
-import { MenuWorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
-import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { registerColor } from '../../../../../platform/theme/common/colorUtils.js';
 import { Menus } from '../../../../browser/menus.js';
 
@@ -21,12 +20,18 @@ export interface ArtifactToolbarAction extends IAction {
 	readonly dropdown?: { readonly label: string; readonly actions: readonly IAction[]; };
 }
 
-/** Renders actions supplied by the canvas editor and its active workspace. */
-export class ArtifactEditorToolbar extends Disposable {
+class ArtifactActionGroup extends WorkbenchToolBar {
+	public override setActions(primary: readonly IAction[], secondary: readonly IAction[] = [], trailing: readonly IAction[] = []): void {
+		// Retain action views when selection changes so focus and split-button menus survive the refresh.
+		this.updateActions(primary, secondary, trailing);
+	}
+}
+
+/** Owns toolbar chrome and action-view lifetimes; contributors own actions and editor state. */
+export class ArtifactToolbar extends Disposable {
 	public readonly domNode: HTMLElement;
-	private readonly tools: ActionBar;
-	private readonly modes: ActionBar;
 	private readonly workspaceToolbar: MenuWorkbenchToolBar;
+	private readonly menuProvider: IContextMenuProvider;
 	private menuVisible = false;
 
 	constructor(
@@ -36,10 +41,8 @@ export class ArtifactEditorToolbar extends Disposable {
 		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
-		this.domNode = h(ownerDocument, 'div', { className: 'ash-canvas-editor-toolbar' });
-		const tools = h(ownerDocument, 'div', { className: 'ash-canvas-editor-toolbar-group' });
-		const modes = h(ownerDocument, 'div', { className: 'ash-canvas-editor-toolbar-group' });
-		const menuProvider: IContextMenuProvider = {
+		this.domNode = h(ownerDocument, 'div', { className: 'ash-artifact-toolbar' });
+		this.menuProvider = {
 			showContextMenu: delegate => {
 				contextMenus.showContextMenu({
 					...delegate,
@@ -54,35 +57,36 @@ export class ArtifactEditorToolbar extends Disposable {
 				this.menuVisible = true;
 			},
 		};
-		this._register(toDisposable(() => this.hideMenu()));
-		this.tools = this._register(new ActionBar(tools, {
-			actionViewItemOptions: { buttonStyles: defaultButtonStyles, iconOnly: true },
-			ariaLabel: localize('sessions.artifacts.canvasTools', 'Canvas tools'),
-			highlightToggledItems: true,
-			actionViewItemProvider: (action, options) => {
-				const { dropdown } = action as ArtifactToolbarAction;
-				if (!dropdown) return undefined;
-				const trigger: IAction = { id: `${action.id}.menu`, label: dropdown.label, tooltip: dropdown.label, enabled: action.enabled, run: () => undefined };
-				return new DropdownWithPrimaryActionViewItem(action, trigger, () => dropdown.actions, menuProvider, options);
-			},
+		this._register(toDisposable(() => {
+			this.hideMenu();
+			this.domNode.remove();
 		}));
-		this.modes = this._register(new ActionBar(modes, {
-			actionViewItemOptions: { buttonStyles: defaultButtonStyles, iconOnly: true },
-			ariaLabel: localize('sessions.artifacts.canvasEditorModes', 'Editor modes'),
-			highlightToggledItems: true,
-		}));
-		this.workspaceToolbar = this._register(new MenuWorkbenchToolBar(this.domNode, menuService, menuProvider, Menus.ArtifactEditorToolbar, {
+		this.workspaceToolbar = this._register(new MenuWorkbenchToolBar(this.domNode, menuService, this.menuProvider, Menus.ArtifactToolbar, {
 			ariaLabel: localize('sessions.creator.workspaceActions', 'Workspace actions'),
 			contextKeyService: contextKeys,
 			menuOptions: { shouldForwardArgs: true },
 		}));
-		this.workspaceToolbar.element.classList.add('ash-canvas-editor-toolbar-workspace');
-		this.domNode.append(tools, modes);
+		this.workspaceToolbar.element.classList.add('ash-artifact-toolbar-workspace');
 	}
 
-	public setEditorActions(tools: readonly ArtifactToolbarAction[], modes: readonly IAction[]): void {
-		this.tools.updateActions(tools);
-		this.modes.updateActions(modes);
+	/** The toolbar owns the group; the contributor supplies its accessible name and actions. */
+	public createActionGroup(ariaLabel: string): WorkbenchToolBar {
+		const container = h(this.domNode.ownerDocument, 'div', { className: 'ash-artifact-toolbar-group' });
+		this.domNode.append(container);
+		return this._register(new ArtifactActionGroup(container, this.menuProvider, {
+			ariaLabel,
+			highlightToggledItems: true,
+			actionViewItemProvider: (action, options) => {
+				const { dropdown } = action as ArtifactToolbarAction;
+				if (!dropdown) return new ButtonActionViewItem(action, { ...options, iconOnly: true });
+				const trigger: IAction = { id: `${action.id}.menu`, label: dropdown.label, tooltip: dropdown.label, enabled: action.enabled, run: () => undefined };
+				return new DropdownWithPrimaryActionViewItem(action, trigger, () => dropdown.actions, this.menuProvider, { ...options, iconOnly: true });
+			},
+		}));
+	}
+
+	public prependControl(control: HTMLElement): void {
+		this.domNode.prepend(control);
 	}
 
 	public setWorkspaceContext(context: unknown): void {

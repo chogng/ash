@@ -16,6 +16,8 @@
 .ash-sessions-design-stage {
 	position: relative;
 	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
 	flex: 1 1 auto;
 	min-width: 0;
 	min-height: 0;
@@ -26,11 +28,10 @@
 	outline: none;
 }
 
-.ash-sessions-design-view > .ash-canvas-editor-toolbar {
-	flex: none;
-	max-width: 100%;
-	border-radius: 0;
-	box-shadow: none;
+/* The viewport fills the stage; floating controls share flow so the timeline clears the toolbar. */
+.ash-sessions-design-stage > .ash-canvas-viewport {
+	position: absolute;
+	inset: 0;
 }
 
 .ash-sessions-design-stage > .ash-design-code-widget {
@@ -39,10 +40,9 @@
 }
 
 .ash-sessions-design-stage > .ash-design-motion-widget {
-	position: absolute;
-	left: var(--ash-spacing-size160);
-	right: var(--ash-spacing-size160);
-	bottom: var(--ash-spacing-size160);
+	position: relative;
+	flex: 0 1 auto;
+	margin: var(--ash-spacing-size160) var(--ash-spacing-size160) 0;
 	max-height: 35%;
 }
 

@@ -41,7 +41,7 @@ Sites 尚未提供网站布局重排、路由文档和发布，完整领域约�
 
 Design 的标题和窗口操作使用共用的 Artifact 标题栏，编辑工具位于画布工具栏。保存副本和导出 SVG 可从标题栏的「导出」菜单打开，也可使用画布右键菜单。添加画板和导入图片可使用快捷键或右键菜单；自动保存失败时，右键菜单提供重试保存。点击左侧 Artifacts 导航返回创作主页。
 
-画布工作区共用顶部工具栏。编辑器提供当前工具与编辑模式的动作。各工作区在各自的 `.contribution.ts` 中向 `ArtifactEditorToolbar` 注册命令，菜单通过工作区实例的上下文键确定显示和启用状态。Slides 和 Sites 的页码导航由各自的页面导航组件挂载到工具栏。
+画布工作区共用底部居中的浮动工具栏 `ArtifactToolbar`。工具栏拥有外壳、动作视图与菜单生命周期；编辑器提供当前工具与编辑模式的动作，各贡献持有业务状态和自有导航控件。各工作区在各自的 `.contribution.ts` 中向 `ArtifactToolbar` 注册命令，菜单通过工作区实例的上下文键确定显示和启用状态。Slides 和 Sites 的页码导航由各自的页面导航组件挂载到工具栏。
 
 ## 开发范例
 
@@ -67,7 +67,7 @@ Sessions 的 `artifact` contribution 负责 Agent Window 的作品目录、工�
 | [common/config/designEditorConfiguration.ts](common/config/designEditorConfiguration.ts)                                                       | Design 的配置键、默认值、作用域和校验                                                                                            |
 | [common/designSelection.ts](common/designSelection.ts)                                                                                         | 每个编辑器实例的对象选区和路径节点选择                                                                                           |
 | [browser/widget/artifactEditorWidget.ts](browser/widget/artifactEditorWidget.ts)                                                               | `ArtifactEditorWidget`，编辑器根 DOM、组件组合、实例状态、公共快捷键和贡献生命周期                                               |
-| [browser/widget/artifactEditorToolbar.ts](browser/widget/artifactEditorToolbar.ts)                                                             | 顶部单行工具栏、工具与模式选择、键盘导航                                                                                         |
+| [browser/widget/artifactToolbar.ts](browser/widget/artifactToolbar.ts)                                                                         | 共享浮动工具栏外壳、动作分组、菜单与键盘导航                                                                                     |
 | [designCanvasView.ts](../design/browser/designCanvasView.ts)、[designCanvasView.css](../design/browser/designCanvasView.css)                   | `DesignCanvasView`，挂载公共 Canvas，显示对象、绘制预览和路径控制点；只显示输入数据，不提交文档编辑                              |
 | [browser/controller/designInputController.ts](browser/controller/designInputController.ts)                                                     | 参与公共画布输入，拥有对象选择、移动和路径控制点编辑；通过输入契约调用绘制贡献                                                   |
 | [browser/designEditorBrowser.ts](browser/designEditorBrowser.ts)、[browser/designEditorContributions.ts](browser/designEditorContributions.ts) | 前者定义核心与贡献之间的契约，后者装配产品所需的能力实例                                                                         |

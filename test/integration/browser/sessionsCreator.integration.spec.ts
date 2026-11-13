@@ -426,7 +426,7 @@ test('Sessions Design resources bind variable modes and reuse styles with keyboa
 	await page.keyboard.press('Escape'); await expect(resources.getByRole('combobox', { name: 'Apply style', exact: true })).toBeFocused();
 	await resources.locator('[data-resource-section="bindings"] > summary').scrollIntoViewIfNeeded();
 	await page.screenshot({ path: testInfo.outputPath('design-resources.png') });
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 	const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
 	expect(code).toContain('"resources"'); expect(code).toContain('"styleBindings"'); expect(code).toContain('Surface'); expect(code).toContain('Brand');
 });
@@ -462,7 +462,7 @@ test('Sessions Design components inherit overrides and switch variants with keyb
 	await expect(canvas.locator('.ash-sessions-design-shapes [data-design-text]')).toContainText(['Default label', 'Default label', 'My instance']);
 	await canvas.press('ControlOrMeta+z');
 	await expect(layers.getByRole('treeitem', { name: 'Instance: Button', exact: true })).toBeVisible();
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 	const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
 	expect(code).toContain('"componentId"'); expect(code).toContain('"overrides"'); expect(code).toContain('My instance');
 });
@@ -727,7 +727,7 @@ test('Sessions Design layout edits reflow the canvas and preserve layer identity
 	await expect(rectangle).toHaveAttribute('width', '276');
 	await expect(rectangle).toHaveAttribute('data-shape-id', id!);
 	await page.screenshot({ path: testInfo.outputPath('design-layout.png') });
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 	const source = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
 	{
 		const preview = await page.context().newPage();
@@ -739,7 +739,7 @@ test('Sessions Design layout edits reflow the canvas and preserve layer identity
 			await expect(exported).toHaveCSS('width', '376px');
 		} finally { await preview.close(); }
 	}
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
 	await canvas.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Shift\+A[\s\S]*Constraints/);
 	await page.keyboard.press('Escape');
@@ -777,9 +777,9 @@ test('Sessions Design grid and wrap respect size limits in the canvas and respon
 	await select('Wrap', 'wrap'); await number('Width', '300'); await number('Line gap', '16');
 	await expect(properties.getByRole('spinbutton', { name: 'Height', exact: true })).toHaveValue('200');
 	const source = async (): Promise<string> => {
-		await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+		await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 		const value = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
-		await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
+		await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
 		return value;
 	};
 	const wrapped = await source();
@@ -940,7 +940,7 @@ test('Sessions Design typography wraps, preserves rich ranges and exports respon
 	await typography.getByRole('checkbox', { name: 'Truncate text', exact: true }).uncheck();
 	await features.focus(); await page.keyboard.press('Alt+F1'); await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Auto width grows.*Max lines/u); await page.keyboard.press('Escape');
 	await page.screenshot({ path: testInfo.outputPath('design-typography.png') });
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 	const source = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
 	{
 		const preview = await page.context().newPage();
@@ -1176,7 +1176,7 @@ design('Sessions Design color picker preserves formats, previews gestures and ex
 	await expect(fill).toBeFocused();
 	await canvas.press('ControlOrMeta+z');
 	await expect(shape).toHaveAttribute('fill', changedFill!);
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 	const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
 	expect(code).toContain(`background: ${changedFill}`);
 	const saved = code.match(/<script type="application\/json" id="ash-design-document">([\s\S]*?)<\/script>/u)![1];
@@ -1189,7 +1189,7 @@ design('Sessions Design color picker preserves formats, previews gestures and ex
 		} finally { await preview.close(); }
 		await page.setViewportSize({ width: 620, height: 700 });
 	}
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
 	await fill.click();
 	const popup = (await picker.boundingBox())!;
 	const viewport = page.viewportSize();
@@ -1273,7 +1273,7 @@ design('Sessions Design property pane groups fields, collapses with the keyboard
 
 design('Sessions Design frames keep child geometry, nested selection and whole-gesture undo', async ({ page }) => {
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
-	await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Add frame (F)', exact: true }).click();
+	await canvas.locator('.ash-artifact-toolbar').getByRole('button', { name: 'Add frame (F)', exact: true }).click();
 	const frame = canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]');
 	await expect(frame).toHaveAttribute('width', '640');
 	await canvas.focus(); await page.keyboard.press('r');
@@ -1381,6 +1381,45 @@ design('Sessions Design edits text and Bézier handles and transforms groups wit
 	await expect.poll(async () => (await canvas.locator('.ash-canvas-viewport').boundingBox())!.height).toBeGreaterThan(100);
 });
 
+design('Sessions artifact toolbar stays centered at the bottom and clears the motion timeline', async ({ page }, testInfo) => {
+	const canvas = page.getByRole('region', { name: 'Design canvas' });
+	const stage = canvas.locator('.ash-sessions-design-stage');
+	const viewport = canvas.locator('.ash-canvas-viewport');
+	const toolbar = canvas.locator('.ash-artifact-toolbar');
+	for (const [theme, background] of [
+		['ash-light', 'rgb(24, 24, 24)'],
+		['ash-dark', 'rgb(24, 24, 24)'],
+		['ash-high-contrast-dark', 'rgb(0, 0, 0)'],
+		['ash-high-contrast-light', 'rgb(255, 255, 255)'],
+	]) {
+		await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+		await expect(toolbar).toHaveCSS('background-color', background);
+		await expect(toolbar).toHaveCSS('border-radius', '12px');
+		await expect(toolbar.getByRole('button', { name: 'Design', exact: true })).toHaveCSS('width', '32px');
+		if (theme.includes('high-contrast')) await expect(toolbar).toHaveCSS('box-shadow', 'none');
+	}
+	for (const width of [1600, 600]) {
+		await page.setViewportSize({ width, height: 900 });
+		const area = (await stage.boundingBox())!;
+		const tools = (await toolbar.boundingBox())!;
+		expect(tools.x + tools.width / 2).toBeCloseTo(area.x + area.width / 2, 0);
+		expect(area.y + area.height - tools.y - tools.height).toBeCloseTo(16, 0);
+		expect(tools.width).toBeLessThanOrEqual(area.width - 32);
+		expect(await viewport.boundingBox()).toEqual(area);
+	}
+	await toolbar.getByRole('button', { name: 'Motion', exact: true }).click();
+	const timeline = canvas.locator('.ash-design-motion-widget');
+	await expect(timeline).toBeVisible();
+	const motion = (await timeline.boundingBox())!;
+	const tools = (await toolbar.boundingBox())!;
+	expect(motion.y + motion.height + 16).toBeLessThanOrEqual(tools.y + 1);
+	await testInfo.attach('artifact-toolbar-motion-narrow', { body: await canvas.screenshot(), contentType: 'image/png' });
+	await toolbar.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(canvas.locator('.ash-design-code-widget')).toBeVisible();
+	await toolbar.getByRole('button', { name: 'Design', exact: true }).click();
+	await expect(timeline).toBeHidden();
+});
+
 design('Sessions Design canvas keeps grid and cursor readable across themes', async ({ page }, testInfo) => {
 	for (const [theme, scheme] of [
 		['ash-light', 'light'],
@@ -1392,7 +1431,7 @@ design('Sessions Design canvas keeps grid and cursor readable across themes', as
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
 		const canvas = page.getByRole('region', { name: 'Design canvas' });
 		const viewport = canvas.locator('.ash-canvas-viewport');
-		const tools = canvas.locator('.ash-canvas-editor-toolbar');
+		const tools = canvas.locator('.ash-artifact-toolbar');
 		const chromeBackground = scheme === 'hcLight' ? 'rgb(255, 255, 255)' : scheme === 'hcDark' ? 'rgb(0, 0, 0)' : 'rgb(24, 24, 24)';
 		await expect(tools).toHaveCSS('background-color', chromeBackground);
 		await expect(tools).toHaveCSS('border-radius', '12px');
@@ -1478,7 +1517,7 @@ design('Sessions Design canvas keeps grid and cursor readable across themes', as
 
 design('Sessions Design floating tools draw, edit motion and expose reusable code', async ({ page }) => {
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
-	const tools = canvas.locator('.ash-canvas-editor-toolbar');
+	const tools = canvas.locator('.ash-artifact-toolbar');
 	const codeTabs = page.locator('[data-part="editor"] .ash-editor-group:not(.ash-editor-group-locked) .ash-editor-title-control').getByRole('tab', { includeHidden: true });
 	const codeTabsBefore = await codeTabs.allTextContents();
 	const viewport = canvas.locator('.ash-canvas-viewport');

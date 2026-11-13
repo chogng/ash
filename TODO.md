@@ -8,6 +8,10 @@
 
 - [ ] **验收** · 已将两个 Chat 入口默认统一为单行自适应，在设置 → 外观增加「Chat 输入框布局」单行／分层选项，切换保留草稿。配置、设置页面与 Chat 测试共 259 项通过，渲染器、自动化和测试类型检查及中文翻译检查通过。真实窗口测试入口因进程枚举触发 `spawn EPERM`，尚未完成视觉验收。在允许启动测试进程的环境运行 `pnpm test:smoke:ui test/smoke/areas/sessions/sessions-window.spec.ts --grep 'Chat input layout switches live|Sessions empty chat centers'`，检查默认单行、即时切换、长文本展开、重开保留和设置控件与背景色选项的视觉一致性；通过后删除本条。
 
+## Artifact 工具栏 · Desktop 验收
+
+- [ ] **验收** · `ArtifactToolbar` 已统一浮动外壳、动作分组和菜单生命周期，画布默认底部居中；103 项定向单测运行、2 项浏览器集成测试、渲染器与分层类型检查通过。Desktop 启动被语言包校验阻断：内置 `ash` bundle 有 10,003 条消息，`parseLanguagePackCatalog` 上限为 10,000，报 `Invalid display language resource`。修复该边界后运行 `node test/scenario/out/runScenario.js .build/ash-playwright-mcp/artifact-toolbar.cjs`，复核居中、Motion 时间线避让和模式切换，通过后删除本条。最终完整单测编译另被 `src/ash/sessions/test/common/sessions-configuration.test.ts:30` 的 `IConfigurationSettingSchema.options` 类型错误阻断；本轮定向运行使用已核对包含最新工具栏实现的编译产物。
+
 ## Docs · 空段落首次输入修复集成
 
 - [ ] **集成** · Mac Studio 已修复空白富文本段落首次输入的模型同步、选区恢复与输入法组合提交；新增工作副本备份／恢复回归及真实 Electron 输入、保存重开场景。定向编辑器测试 51 项通过，新增备份跟踪器回归 3 项通过，Electron UI 与连接 App Server 场景各 1 项通过。当前 checkout 的 `main` 基线为 `f06080352e`，远端 `origin/main` 为 `b98e8522fe`，另有 105 个既有修改／未跟踪文件；原内容已核对保留。按提交规范不能自动 stash 或切换工作区以 rebase，故本次只准备本地任务提交。由现有修改的 owner 收尾后，fetch 最新 main，仅 rebase 本任务未发布提交，复验受影响场景并通过 `just commit-check origin/main`，再串行非强制推送并核验远端；完成后删除本条。备份覆盖使用生产工作副本跟踪器与内存存储，Sessions 窗口当前未接入自动备份跟踪器，未验证其整窗崩溃恢复。

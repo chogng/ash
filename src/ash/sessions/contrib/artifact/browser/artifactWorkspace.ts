@@ -133,7 +133,7 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 						id: `${idPrefix}.${action.id}`,
 						title: action.title,
 						precondition,
-						menu: { id: Menus.ArtifactEditorToolbar, when: visible, group, order },
+						menu: { id: Menus.ArtifactToolbar, when: visible, group, order },
 					});
 				}
 				override run(_accessor: ServicesAccessor, workspace: unknown): unknown {

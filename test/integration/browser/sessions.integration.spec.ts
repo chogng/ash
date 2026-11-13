@@ -903,7 +903,7 @@ test('Artifacts canvas responds to wheel, drag and keyboard input', async ({ pag
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await expect(canvas).toBeVisible();
-	const tools = page.locator('.ash-canvas-editor-toolbar');
+	const tools = page.locator('.ash-artifact-toolbar');
 	const split = tools.locator('.ash-dropdown-with-primary-dropdown > .ash-button').first();
 	await expect(split).toHaveCSS('width', '20px');
 	await expect(split).toHaveCSS('height', '32px');

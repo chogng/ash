@@ -2,7 +2,7 @@ import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize2 } from '../../../../nls.js';
 import { DesignMode, DesignTool } from '../common/config/designEditorConfiguration.js';
-import type { ArtifactToolbarAction } from './widget/artifactEditorToolbar.js';
+import type { ArtifactToolbarAction } from './widget/artifactToolbar.js';
 
 export const artifactToolActions = [
 	[DesignTool.Select, () => localize2('sessions.design.selectTool', 'Select (V)'), Lxicon.cursor2],

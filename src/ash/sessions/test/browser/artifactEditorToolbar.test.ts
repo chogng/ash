@@ -20,7 +20,7 @@ suite('Canvas editor toolbar reuses shared action views', () => {
 				return { width: primary.width, height: primary.height, arrowWidth: secondary.width, arrowHeight: secondary.height, gap: secondary.left - primary.right, labelDisplay: getComputedStyle(main.querySelector('.ash-icon-label-container')!).display };
 			});
 			assert.deepEqual(geometry, { width: 32, height: 32, arrowWidth: 20, arrowHeight: 32, gap: 0, labelDisplay: 'none' });
-			await expect(page.locator('.ash-canvas-editor-toolbar .ash-icon-label-container:visible')).toHaveCount(0);
+			await expect(page.locator('.ash-artifact-toolbar .ash-icon-label-container:visible')).toHaveCount(0);
 			await expect(select).toHaveAttribute('aria-pressed', 'true');
 			await select.focus();
 			await select.press('ArrowRight');
@@ -53,7 +53,7 @@ suite('Canvas editor toolbar reuses shared action views', () => {
 			await dropdown.click();
 			await page.evaluate(() => window.ashArtifactEditorToolbarFixture.dispose());
 			await expect(page.getByRole('menu')).toHaveCount(0);
-			await expect(page.locator('.ash-canvas-editor-toolbar button')).toHaveCount(0);
+			await expect(page.locator('.ash-artifact-toolbar button')).toHaveCount(0);
 		});
 	}
 

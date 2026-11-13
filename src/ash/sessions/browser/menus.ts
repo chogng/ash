@@ -17,7 +17,7 @@ export const Menus = {
 	SidebarSessionsHeader: new MenuId('SidebarSessionsHeader'),
 	SessionsViewFilter: new MenuId('SessionsViewPaneFilterSubMenu'),
 	NewSessionChatInputToolbar: new MenuId('NewSessionChatInputToolbar'),
-	ArtifactEditorToolbar: new MenuId('ArtifactCanvasToolbar'),
+	ArtifactToolbar: new MenuId('ArtifactToolbar'),
 	ArtifactTitleBar: new MenuId('ArtifactTitleBar'),
 	MenubarMainMenu: new MenuId('SessionsMenubarMainMenu'),
 	MenubarFileMenu: new MenuId('SessionsMenubarFileMenu'),
