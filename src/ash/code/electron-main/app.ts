@@ -179,7 +179,7 @@ import { AuxiliaryWindowsMainService } from '../../platform/auxiliaryWindow/elec
 import { nodeWorkspacePathService } from '../../platform/workspaces/node/workspaces.js';
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
 import { fallbackLanguagePackCatalog, loadProductLanguagePackCatalog } from '../../../../.build/desktop/localization/localizationCatalogLoader.js';
-import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
+import { validateLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackContract.js';
 import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePackContract.js';
 import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
 import { HOST_RESTART_CHANNEL, OPEN_IDE_SESSION_CHANNEL, validateOpenIdeSessionRequest, WINDOW_OPEN_EXTERNAL_URI_CHANNEL, WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL } from '../../platform/window/common/window.js';
@@ -1360,7 +1360,7 @@ export class AshApplication extends Disposable {
 			},
 			{
 				channel: NLS_ACTIVATE_CHANNEL,
-				validate: value => { const catalog = parseLanguagePackCatalog(value); if (!catalog) { throw new TypeError('Invalid display language resource'); } return catalog; },
+				validate: validateLanguagePackCatalog,
 				invoke: catalog => {
 					this.activeLanguagePack = catalog as LanguagePackCatalog;
 					setNlsMessages(this.activeLanguagePack.locale, this.activeLanguagePack.bundles);

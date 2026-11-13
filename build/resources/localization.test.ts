@@ -405,6 +405,35 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	assert.notEqual(legacy.status, 0);
 	assert.match(legacy.stderr, /English declaration must live in its owning source module: ash\/obsolete/u);
 	await writeFile(join(root, 'localization/en/messages.json'), '{}');
+	const validOutputs = await readOutputs();
+	const invalidSource = join(root, 'src/ash/invalidCatalog.ts');
+	const invalidTranslation = join(root, chineseTranslations, 'invalid-catalog.json');
+	for (const locale of ['en', 'zh-CN']) {
+		await writeFile(invalidSource, `import { localize } from './nls.js'; localize('invalidCatalogMessage', ${JSON.stringify(locale === 'en' ? 'x'.repeat(65537) : 'Valid source message')});`);
+		await writeFile(invalidTranslation, JSON.stringify({ ash: { invalidCatalogMessage: locale === 'zh-CN' ? '译'.repeat(65537) : '有效翻译' } }));
+		for (const args of [['--check'], []]) {
+			const invalidCatalog = spawnSync(process.execPath, ['build/resources/localization.ts', ...args], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30_000 });
+			assert.equal(invalidCatalog.error, undefined);
+			assert.notEqual(invalidCatalog.status, 0);
+			assert.ok(invalidCatalog.stderr.includes(`Invalid localization catalog ${locale}: bundles["ash"]["invalidCatalogMessage"]: expected a string of at most 65536 characters`), invalidCatalog.stderr);
+			assert.deepEqual(await readOutputs(), validOutputs, 'invalid catalogs must not replace generated assets');
+		}
+	}
+	await rm(invalidSource);
+	await rm(invalidTranslation);
+
+	// A validator-only change must invalidate preparation even when declarations are unchanged.
+	const contract = join(root, 'src/ash/platform/languagePacks/common/languagePackContract.ts');
+	const contractSource = await readFile(contract, 'utf8');
+	await writeFile(contract, contractSource.replace('const maxMessages = 100_000;', 'const maxMessages = 1;'));
+	const changedContract = spawnSync(process.execPath, ['build/resources/localization.ts'], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30_000 });
+	assert.equal(changedContract.error, undefined);
+	assert.notEqual(changedContract.status, 0);
+	assert.match(changedContract.stderr, /Invalid localization catalog en: bundles\["ash"\]: expected 1–1 messages/u);
+	assert.deepEqual(await readOutputs(), validOutputs);
+	await writeFile(contract, contractSource);
+	run(['build/resources/localization.ts']);
+
 	await writeFile(join(root, 'extensions/language-pack-zh-cn/translations/messages.json'), JSON.stringify({ ash: { unknown: '未知' } }));
 	const invalid = spawnSync(process.execPath, ['build/resources/localization.ts', '--check'], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30_000 });
 	assert.equal(invalid.error, undefined);

@@ -4,7 +4,7 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { resolve, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { LanguagePackCatalog } from '../../src/ash/platform/languagePacks/common/languagePackContract.ts';
-import { ASH_LOCALIZATION_CATALOG_VERSION } from '../../src/ash/platform/languagePacks/common/languagePackContract.ts';
+import { ASH_LOCALIZATION_CATALOG_VERSION, validateLanguagePackCatalog } from '../../src/ash/platform/languagePacks/common/languagePackContract.ts';
 import { watchRebuild } from '../lib/watchRebuild.ts';
 import { fingerprintPaths, PreparedInputs } from '../lib/preparedInputs.ts';
 import { readPreinstalledLanguagePackIds } from './languagePacks.ts';
@@ -38,7 +38,7 @@ async function localizationFingerprint(): Promise<string> {
 		resolve(repository, 'localization'), resolve(repository, 'extensions'),
 		resolve(repository, '.build/protocol/typescript/ApprovalModes.ts'),
 		resolve(repository, '.build/protocol/typescript/ProductSlashCommands.ts'),
-		fileURLToPath(import.meta.url), resolve(repository, 'build/resources/languagePacks.ts'), resolve(repository, 'build/builtin/extensionManifest.ts'), resolve(repository, 'build/lib/preparedInputs.ts'), resolve(repository, 'pnpm-lock.yaml'),
+		fileURLToPath(import.meta.url), resolve(repository, 'src/ash/platform/languagePacks/common/languagePackContract.ts'), resolve(repository, 'build/resources/languagePacks.ts'), resolve(repository, 'build/builtin/extensionManifest.ts'), resolve(repository, 'build/lib/preparedInputs.ts'), resolve(repository, 'pnpm-lock.yaml'),
 	], (path, directory) => directory ? !['node_modules', 'test', 'generated', '.git', 'target'].includes(path.split(sep).at(-1)!) : path.startsWith(`${resolve(repository, 'extensions')}${sep}`) ? path.endsWith('.json') || clientEditorSource(path) : /\.(json|ts|yaml)$/.test(path));
 }
 
@@ -374,7 +374,12 @@ async function generate(check: boolean, reportMissing = false): Promise<boolean>
 			if (!isRecord(contents) || ![contents.package, contents.bundle].every(messages => isRecord(messages) && Object.values(messages).every(message => typeof message === 'string'))) { throw new Error(`Invalid extension translation: ${target.path}`); }
 			extensionTranslations[target.id] = { package: contents.package as Record<string, string>, bundle: contents.bundle as Record<string, string> };
 		}
-		catalogs.push({ schemaVersion: 1, ...language, catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION, bundles: sortBundles(bundles), ...(extension && Object.keys(extensionTranslations).length ? { extensionTranslations } : {}) });
+		const catalog = { schemaVersion: 1, ...language, catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION, bundles: sortBundles(bundles), ...(extension && Object.keys(extensionTranslations).length ? { extensionTranslations } : {}) };
+		try {
+			catalogs.push(validateLanguagePackCatalog(catalog));
+		} catch (error) {
+			throw new Error(`Invalid localization catalog ${language.locale}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+		}
 	}
 	if (check) { return false; }
 	const directory = resolve(repository, '.build/desktop/localization');
