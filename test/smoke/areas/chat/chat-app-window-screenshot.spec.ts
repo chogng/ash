@@ -48,6 +48,8 @@ test('app window screenshot captures a separate synthetic application and preser
 		await expect(page.getByRole('button', { name: 'Preview Screenshot', exact: true })).toHaveCount(0);
 		overlay = await pickWindow();
 		await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
+		await expect(overlay.getByRole('button', { name: 'Retake', exact: true })).toHaveCount(0);
+		await expect(overlay.getByRole('button', { name: 'Reset annotations', exact: true })).toBeVisible();
 		const pixels = await overlay.locator('canvas').evaluate(element => {
 			const canvas = element as HTMLCanvasElement;
 			return { width: canvas.width, height: canvas.height, pixel: [...canvas.getContext('2d')!.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data] };

@@ -48,6 +48,43 @@ async function uncoverDisplays(application: ElectronApplication, ids: number[]):
 	await application.evaluate(({ BrowserWindow }, ids) => { for (const id of ids) BrowserWindow.fromId(id)?.destroy(); }, ids);
 }
 
+test('desktop screenshot setup replaces a cancelled pending permission request', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }) => {
+	test.skip(process.platform !== 'darwin', 'macOS screen recording permission');
+	if (!('browserWindow' in application)) throw new Error('Expected Electron');
+	const desktop = application;
+	const state = await desktop.evaluateHandle(({ systemPreferences }) => {
+		const original = systemPreferences.getMediaAccessStatus;
+		const state = { calls: 0, release: undefined as (() => void) | undefined, restore() { systemPreferences.getMediaAccessStatus = original; } };
+		systemPreferences.getMediaAccessStatus = type => {
+			if (type !== 'screen') return original.call(systemPreferences, type);
+			if (++state.calls === 2) {
+				return new Promise<'denied'>(resolve => { state.release = () => resolve('denied'); }) as unknown as ReturnType<typeof original>;
+			}
+			return 'denied';
+		};
+		return state;
+	});
+	const owner = await desktop.browserWindow(workbench.page);
+	try {
+		await workbench.quickaccess.runCommand('workbench.action.chat.attachScreenshot');
+		await expect.poll(() => state.evaluate(state => state.calls)).toBe(2);
+		await owner.evaluate(window => window.webContents.send('ash:global-keybinding:trigger', { id: 'chat.screenshot' }));
+		const setup = workbench.page.getByRole('dialog', { name: 'Set Up Desktop Screenshots', exact: true });
+		await expect(setup).toBeVisible();
+		await expect.poll(() => state.evaluate(state => state.calls)).toBe(4);
+		await state.evaluate(state => state.release?.());
+		await expect(setup).toHaveCount(1);
+		await expect(setup).toBeVisible();
+		await setup.press('Escape');
+		await expect(setup).toHaveCount(0);
+		expect(desktop.windows().filter(page => page.url().includes('/imageView/imageView.html'))).toHaveLength(0);
+	} finally {
+		await state.evaluate(state => { state.release?.(); state.restore(); });
+		await state.dispose();
+		await owner.dispose();
+	}
+});
+
 test('standalone capture copies on Enter while Chat stays closed', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
 	if (!('browserWindow' in application)) throw new Error('Expected an Electron window');
 	const permission = await application.evaluate(({ systemPreferences }) => process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted');
@@ -459,7 +496,7 @@ test('screenshot shortcut reports occupancy, retains a working global binding an
 	}
 });
 
-test('built-in code images annotate and copy in a native window without screen permission', { tag: ['@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
+test('built-in code images annotate and copy in a native window without screen permission', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
 	if (!('browserWindow' in application)) throw new Error('Expected Electron');
 	const desktop = application;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
@@ -480,6 +517,7 @@ test('built-in code images annotate and copy in a native window without screen p
 		const frame = overlay;
 		const toolbar = frame.getByRole('group', { name: 'Screenshot tools' });
 		await expect(toolbar).toBeVisible();
+		await expect(toolbar.getByRole('button', { name: 'Retake', exact: true })).toHaveCount(0);
 		await expect.poll(() => toolbar.evaluate(element => [...element.ownerDocument.fonts].some(font => font.family.includes('Ash Snapshot Icons') && font.status === 'loaded'))).toBe(true);
 		const before = await frame.locator('canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL());
 		await toolbar.getByRole('button', { name: 'Arrow', exact: true }).click();
@@ -490,6 +528,11 @@ test('built-in code images annotate and copy in a native window without screen p
 		await overlay.mouse.up();
 		await expect(toolbar.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled();
 		expect(await frame.locator('canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL())).not.toBe(before);
+		const reset = toolbar.getByRole('button', { name: 'Reset annotations', exact: true });
+		await reset.focus();
+		await reset.press('Enter');
+		expect(await frame.locator('canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL())).toBe(before);
+		await expect(frame.getByRole('group', { name: 'Frozen screen and region selection' })).toBeFocused();
 		expect(await probe.evaluate(state => state.calls)).toBe(0);
 		await overlay.screenshot({ path: testInfo.outputPath('builtin-code-image-annotated.png') });
 		await toolbar.getByRole('button', { name: 'Copy', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });

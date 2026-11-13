@@ -29,11 +29,11 @@ function fixture(lifetime: DisposableStore) {
 	const accepted = lifetime.add(new Emitter<void>());
 	const hidden = lifetime.add(new Emitter<void>());
 	const calls: string[] = [];
-	const state = { windows: { kind: 'windows', windows: [window] } as INativeAppWindows, items: [] as readonly (IQuickPickItem & { window: typeof window; })[], selected: [] as readonly (IQuickPickItem & { window: typeof window; })[], disposed: false, read: async () => image };
+	const state = { windows: { kind: 'windows', windows: [window] } as INativeAppWindows, items: [] as readonly (IQuickPickItem & { window: typeof window; })[], selected: [] as readonly (IQuickPickItem & { window: typeof window; })[], disposed: false, signal: undefined as AbortSignal | undefined, read: async () => image };
 	services.registerInstance(INativeHostService, {
 		focusWindow: async () => { calls.push('focus'); },
 		getAppWindows: async () => { calls.push('list'); return state.windows; },
-		captureAppWindow: async value => { assert.deepEqual(value, window); calls.push('capture'); return state.read(); },
+		captureAppWindow: async (value, signal) => { assert.deepEqual(value, window); state.signal = signal; calls.push('capture'); return state.read(); },
 	} as INativeHostApi);
 	services.registerInstance(IStorageService, { getBoolean: () => false, onDidChangeValue: Event.None, store() { } } as unknown as IStorageService);
 	services.registerInstance(INotificationService, {
@@ -104,7 +104,11 @@ suite('App window screenshot acquisition', () => {
 		f.state.read = () => { void captured.complete(); return result.p; };
 		const controller = new AbortController();
 		const pending = f.service.capture({ signal: controller.signal });
-		await captured.p; controller.abort(); await result.complete(image);
+		await captured.p;
+		assert.equal(f.state.signal, controller.signal);
+		controller.abort();
+		assert.equal(f.state.signal.aborted, true);
+		await result.complete(image);
 		assert.equal((await pending).kind, 'cancelled');
 		assert.deepEqual(f.calls, ['list', 'capture']);
 	});

@@ -1,5 +1,4 @@
 import { isMacintosh } from '../../../../base/common/platform.js';
-import type { VSBuffer } from '../../../../base/common/buffer.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { SCREEN_CAPTURE_PERMISSION_REQUIRED } from '../../../../platform/native/common/native.js';
@@ -19,11 +18,8 @@ export class NativeScreenshotToolService extends ScreenshotToolService {
 		@INativeHostService private readonly native: INativeHostApi,
 		@IScreenCaptureSetupService private readonly setup: IScreenCaptureSetupService,
 	) { super(images, configuration); }
-	override captureAndEdit(signal: AbortSignal, options: IScreenshotToolOptions = {}): Promise<VSBuffer | undefined> {
-		return this.interact(signal, requestSignal => this.withDesktopPermission(options, requestSignal, () => super.captureAndEdit(requestSignal, options)));
-	}
-	override async show(options: IScreenshotToolOptions, signal: AbortSignal): Promise<void> {
-		await this.interact(signal, requestSignal => this.withDesktopPermission(options, requestSignal, () => super.show(options, requestSignal)));
+	protected override interact<T>(signal: AbortSignal, options: IScreenshotToolOptions, run: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
+		return super.interact(signal, options, requestSignal => this.withDesktopPermission(options, requestSignal, () => run(requestSignal)));
 	}
 	private async withDesktopPermission<T>(options: IScreenshotToolOptions, signal: AbortSignal, run: () => Promise<T>): Promise<T | undefined> {
 		if (signal.aborted || !this.isSupported) return undefined;

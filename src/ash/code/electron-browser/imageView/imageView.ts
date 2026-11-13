@@ -9,6 +9,7 @@ await openImageViewWindow(async (initial, complete, signal) => {
 	const input = initial.presentation.input;
 	return mountScreenshotTool(document, {
 		...input, image: initial.image, defaultAction: input.defaultAction ?? 'copy',
+		canRetake: initial.presentation.source === 'screen',
 		state: input.state ?? { help: getScreenshotAccessibilityHelp(), accessibilityHints: input.accessibilityHints !== false },
 		theme: input.theme ?? defaultImageEditorTheme(input.colorScheme),
 	} as unknown as ScreenshotToolInput, complete, signal);

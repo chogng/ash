@@ -40,6 +40,7 @@ import {
 import { showMessageBox } from '../../dialogs/electron-browser/dialog.js';
 import { normalizeExternalUrl } from '../../opener/common/opener.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
+import { raceCancellationError } from '../../../base/common/async.js';
 import { validateImageViewImage } from '../../imageView/common/imageView.js';
 import { CANCEL_TOAST_CHANNEL, SHOW_TOAST_CHANNEL } from '../common/native.js';
 import { isRecord } from '../../../base/common/types.js';
@@ -78,10 +79,12 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		},
 		getAppWindows: async () => validateAppWindows(await invoke<unknown>(NATIVE_HOST_APP_WINDOWS_CHANNEL)),
 		requestScreenCaptureAccess: () => invoke<void>(NATIVE_HOST_SCREEN_CAPTURE_ACCESS_CHANNEL),
-		async captureAppWindow(window) {
-			const image = await invoke<unknown>(NATIVE_HOST_CAPTURE_APP_WINDOW_CHANNEL, window);
+		async captureAppWindow(window, signal = new AbortController().signal) {
+			if (signal.aborted) return undefined;
+			const image = await raceCancellationError(invoke<unknown>(NATIVE_HOST_CAPTURE_APP_WINDOW_CHANNEL, window), signal);
+			if (signal.aborted) return undefined;
 			if (image !== undefined) return VSBuffer.wrap(new Uint8Array(validateImageViewImage(image)));
-			return captureDesktopMediaWindow(window.sourceId);
+			return captureDesktopMediaWindow(window.sourceId, signal);
 		},
 		async getScreenshot(rect) {
 			const value = await invoke<unknown>('ash:host:screenshot', rect);
@@ -170,12 +173,14 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 }
 
 /** Windows/Linux expose a selected window as a desktop stream; stop every track after one frame. */
-async function captureDesktopMediaWindow(sourceId: string): Promise<VSBuffer> {
+async function captureDesktopMediaWindow(sourceId: string, signal: AbortSignal): Promise<VSBuffer> {
+	signal.throwIfAborted();
 	const video = document.createElement('video');
 	video.muted = true;
 	let closed = false;
 	let stream: MediaStream | undefined;
 	let timer: ReturnType<typeof setTimeout> | undefined;
+	let frameCallback: number | undefined;
 	try {
 		const capture = async (): Promise<VSBuffer> => {
 			const acquired = await navigator.mediaDevices.getUserMedia({
@@ -190,7 +195,10 @@ async function captureDesktopMediaWindow(sourceId: string): Promise<VSBuffer> {
 			stream = acquired;
 			video.srcObject = stream;
 			await video.play();
-			await new Promise<void>(resolve => video.requestVideoFrameCallback(() => resolve()));
+			if (closed) throw new Error('Application window capture timed out');
+			await new Promise<void>(resolve => {
+				frameCallback = video.requestVideoFrameCallback(() => { frameCallback = undefined; resolve(); });
+			});
 			if (closed) throw new Error('Application window capture timed out');
 			const canvas = document.createElement('canvas');
 			canvas.width = video.videoWidth;
@@ -201,12 +209,13 @@ async function captureDesktopMediaWindow(sourceId: string): Promise<VSBuffer> {
 			if (!blob) throw new Error('Application window capture failed');
 			return VSBuffer.wrap(new Uint8Array(validateImageViewImage(new Uint8Array(await blob.arrayBuffer()))));
 		};
-		return await Promise.race([capture(), new Promise<never>((_resolve, reject) => {
+		return await raceCancellationError(Promise.race([capture(), new Promise<never>((_resolve, reject) => {
 			timer = setTimeout(() => reject(new Error('Application window capture timed out')), 5000);
-		})]);
+		})]), signal);
 	} finally {
 		closed = true;
 		clearTimeout(timer);
+		if (frameCallback !== undefined) video.cancelVideoFrameCallback(frameCallback);
 		video.pause();
 		video.srcObject = null;
 		stream?.getTracks().forEach(track => track.stop());

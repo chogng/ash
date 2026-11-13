@@ -10,8 +10,8 @@ export interface ICommonNativeHostService {
 	/** Captures this host's window as PNG, independent of desktop focus. Rectangle coordinates use renderer CSS pixels. */
 	getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined>;
 	getAppWindows(): Promise<INativeAppWindows>;
-	/** Captures a window from the sender's latest enumeration. */
-	captureAppWindow(window: INativeAppWindow): Promise<VSBuffer | undefined>;
+	/** Captures a window from the sender's latest enumeration; cancellation stops renderer-owned capture streams. */
+	captureAppWindow(window: INativeAppWindow, signal?: AbortSignal): Promise<VSBuffer | undefined>;
 	requestScreenCaptureAccess(): Promise<void>;
 	getMediaAccessStatus(mediaType: 'screen'): Promise<'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown'>;
 	showToast(options: IToastOptions, token: CancellationToken): Promise<IToastResult>;

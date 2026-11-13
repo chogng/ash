@@ -77,6 +77,7 @@ function paintScreenshotAnnotation(context: CanvasRenderingContext2D, annotation
 
 interface ScreenshotAnnotationEditorOptions {
 	readonly defaultAction: 'copy' | 'attach';
+	readonly canRetake: boolean;
 	readonly accessibilityHints: boolean;
 	readonly help: string;
 	readonly selectEntire?: boolean;
@@ -229,8 +230,9 @@ export class ScreenshotAnnotationEditor extends Disposable {
 			if (!this.fields.hidden) this.inputs.get('x')!.focus();
 		});
 		button(actions, localize('screenshot.helpTitle', 'Screenshot Help'), 'help', () => this.showAccessibleContent(false));
-		button(actions, localize('screenshot.retake', 'Retake'), 'retake', () => {
-			void this.complete({ kind: 'retake' });
+		button(actions, options.canRetake ? localize('screenshot.retake', 'Retake') : localize('screenshot.reset', 'Reset annotations'), 'retake', () => {
+			if (options.canRetake) void this.complete({ kind: 'retake' });
+			else this.resetAnnotations();
 		});
 		button(actions, localize('screenshot.cancel', 'Cancel'), 'cancel', () => {
 			void this.complete({ kind: 'cancel' });
@@ -389,6 +391,16 @@ export class ScreenshotAnnotationEditor extends Disposable {
 			button.classList.toggle('selected', candidate === tool);
 		}
 		this.imageArea.focus();
+	}
+
+	private resetAnnotations(): void {
+		this.textPoint = undefined;
+		this.textInput.hidden = true;
+		this.annotations = [];
+		this.pendingAnnotation = undefined;
+		this.selectTool('select');
+		this.paint();
+		this.announce();
 	}
 
 	private point(event: PointerEvent): ScreenshotPoint {

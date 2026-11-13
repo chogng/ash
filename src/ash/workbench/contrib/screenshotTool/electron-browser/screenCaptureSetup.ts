@@ -35,17 +35,19 @@ export const IScreenCaptureSetupService = createServiceIdentifier<IScreenCapture
 /** One permission setup per Workbench window; the originating operation owns its cancellation. */
 export class ScreenCaptureSetupService extends Disposable implements IScreenCaptureSetupService {
 	private readonly lifetime = new AbortController();
-	private pending: Promise<void> | undefined;
+	private pending: { readonly signal: AbortSignal; readonly operation: Promise<void>; } | undefined;
 	constructor(
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@INativeHostService private readonly native: INativeHostApi,
 	) { super(); }
 	show(options: IScreenCaptureSetupOptions, signal: AbortSignal): Promise<void> {
 		if (signal.aborted || this.isDisposed) return Promise.resolve();
-		if (this.pending) return this.pending;
+		if (this.pending && !this.pending.signal.aborted) return this.pending.operation;
 		const requestSignal = AbortSignal.any([signal, this.lifetime.signal]);
-		const operation = this.open(options, requestSignal).finally(() => { if (this.pending === operation) this.pending = undefined; });
-		return this.pending = operation;
+		// A cancelled operation may still be awaiting native focus or permission. It cannot own a new caller.
+		const operation = this.open(options, requestSignal).finally(() => { if (this.pending?.operation === operation) this.pending = undefined; });
+		this.pending = { signal: requestSignal, operation };
+		return operation;
 	}
 	private async open(options: IScreenCaptureSetupOptions, signal: AbortSignal): Promise<void> {
 		await this.native.focusWindow();

@@ -6,6 +6,7 @@ export interface ScreenshotToolInput {
 	readonly image?: Uint8Array;
 	readonly code?: CodeImageSnapshot;
 	readonly defaultAction: 'copy' | 'attach';
+	readonly canRetake: boolean;
 	readonly theme: ReturnType<typeof readImageEditorTheme>;
 	readonly colorScheme: string;
 	readonly state?: { readonly help: string; readonly accessibilityHints?: boolean; readonly code?: Parameters<typeof renderCodeImage>[2]; };
@@ -43,6 +44,7 @@ export async function mountScreenshotTool(document: Document, input: ScreenshotT
 	const image = input.code ? await renderCodeImage(document, input.code, state!.code!) : input.image!;
 	const editor = await ScreenshotAnnotationEditor.create(document, image, {
 		defaultAction: input.defaultAction,
+		canRetake: input.canRetake,
 		accessibilityHints: state?.accessibilityHints !== false,
 		help: state?.help ?? '',
 		selectEntire: !!input.code,

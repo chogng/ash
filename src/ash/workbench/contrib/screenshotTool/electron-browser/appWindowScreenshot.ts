@@ -110,7 +110,7 @@ export class AppWindowScreenshotService implements IAppWindowScreenshotService {
 			}
 			selected = pick.window;
 		}
-		const image = await this.native.captureAppWindow(selected).catch(() => undefined);
+		const image = await this.native.captureAppWindow(selected, signal).catch(() => undefined);
 		if (signal.aborted) {
 			return { kind: 'cancelled', target };
 		}

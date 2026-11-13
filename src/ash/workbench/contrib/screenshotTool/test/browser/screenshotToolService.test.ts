@@ -109,6 +109,40 @@ suite('chatScreenshot browser component', () => {
 		});
 	}
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`frozen code images reset annotations without recapturing in ${locale}`, async function () {
+			const { page } = browserTests;
+			const chinese = locale === 'zh-CN';
+			await openFixture(page, `/chatInput.html?screenshotFixture=1&inlineCode=1&locale=${locale}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			await page.getByRole('button', { name: 'Create code image', exact: true }).click();
+			const overlay = page.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true });
+			const canvas = overlay.locator('canvas');
+			const original = await canvas.evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL());
+			await expect(overlay.getByRole('button', { name: chinese ? '重新截图' : 'Retake', exact: true })).toHaveCount(0);
+			await overlay.getByRole('button', { name: chinese ? '矩形' : 'Rectangle', exact: true }).click();
+			const bounds = (await canvas.boundingBox())!;
+			await page.mouse.move(bounds.x + bounds.width * 0.2, bounds.y + bounds.height * 0.2);
+			await page.mouse.down();
+			await page.mouse.move(bounds.x + bounds.width * 0.7, bounds.y + bounds.height * 0.7, { steps: 3 });
+			await page.mouse.up();
+			expect(await canvas.evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL())).not.toBe(original);
+			const reset = overlay.getByRole('button', { name: chinese ? '重置标注' : 'Reset annotations', exact: true });
+			await reset.focus();
+			await reset.press('Enter');
+			await expect(overlay).toBeVisible();
+			expect(await canvas.evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL())).toBe(original);
+			const surface = overlay.getByRole('group', { name: chinese ? '冻结的屏幕与区域选择' : 'Frozen screen and region selection' });
+			await expect(surface).toBeFocused();
+			await surface.press('Alt+F1');
+			await expect(page.getByRole('dialog', { name: chinese ? '截图帮助' : 'Screenshot Help', exact: true }).getByRole('textbox')).toHaveValue(new RegExp(chinese ? '重置标注' : 'Reset annotations'));
+			await page.keyboard.press('Escape');
+			await overlay.getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click();
+			expect((await submittedImage(page)).pixel).toEqual([99, 102, 241, 255]);
+			expect(await page.evaluate(() => window.ashScreenshotIntegration.state().calls)).toBe(0);
+		});
+	}
+
 	for (const [locale, theme] of [['en', 'light'], ['zh-CN', 'dark'], ['en', 'hcDark'], ['zh-CN', 'hcLight']]) {
 		test(`screen selection, keyboard adjustment, accessible help and export in ${locale} ${theme}`, async function () {
 			const { page } = browserTests;

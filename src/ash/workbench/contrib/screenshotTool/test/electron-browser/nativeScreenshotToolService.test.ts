@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
+import type { VSBuffer } from '../../../../../base/common/buffer.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -14,15 +15,51 @@ import { IScreenCaptureSetupService } from '../../electron-browser/screenCapture
 
 suite('Desktop screenshot permission entry', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
-	function fixture(resources: DisposableStore, permission: () => ReturnType<INativeHostApi['getMediaAccessStatus']>) {
+	function fixture(resources: DisposableStore, permission: () => ReturnType<INativeHostApi['getMediaAccessStatus']>, images: Partial<IImageEditorService> = { capture: async () => assert.fail('Permission setup must not capture pixels') }) {
 		const services = resources.add(new InstantiationService());
 		const setups: { readonly title: string; readonly signal: AbortSignal; }[] = [];
-		services.registerInstance(IImageEditorService, { capture: async () => assert.fail('Permission setup must not capture pixels') } as unknown as IImageEditorService);
-		services.registerInstance(IConfigurationService, {} as IConfigurationService);
+		services.registerInstance(IImageEditorService, images as IImageEditorService);
+		services.registerInstance(IConfigurationService, { getValue: () => undefined } as unknown as IConfigurationService);
 		services.registerInstance(INativeHostService, { getMediaAccessStatus: permission } as unknown as INativeHostApi);
 		services.registerInstance(IScreenCaptureSetupService, { show: async (options, signal) => { setups.push({ title: options.title, signal }); } });
 		const screenshots = resources.add(services.createInstance(NativeScreenshotToolService));
 		return { screenshots, setups };
+	}
+	for (const entry of ['capture', 'show'] as const) {
+		for (const latePermission of ['granted', 'denied'] as const) {
+			test(`${entry} ignores an older ${latePermission} preflight after a newer screenshot opens`, async function () {
+				if (!isMacintosh) this.skip();
+				using resources = new DisposableStore();
+				const permissions: DeferredPromise<'granted' | 'denied'>[] = [];
+				const opened = new DeferredPromise<void>();
+				const completed = new DeferredPromise<VSBuffer | undefined>();
+				const signals: AbortSignal[] = [];
+				const capture = (signal: AbortSignal) => {
+					signals.push(signal);
+					void opened.complete();
+					return completed.p;
+				};
+				const value = fixture(resources, () => {
+					const permission = new DeferredPromise<'granted' | 'denied'>();
+					permissions.push(permission);
+					return permission.p;
+				}, { capture, show: async (_options, signal) => { await capture(signal); } });
+				const run = () => entry === 'capture'
+					? value.screenshots.captureAndEdit(new AbortController().signal)
+					: value.screenshots.show({}, new AbortController().signal);
+				const older = run();
+				const newer = run();
+				await permissions[1].complete('granted');
+				await opened.p;
+				await permissions[0].complete(latePermission);
+				await older;
+				assert.equal(signals.length, 1);
+				assert.equal(signals[0].aborted, false);
+				assert.deepEqual(value.setups, []);
+				await completed.complete(undefined);
+				await newer;
+			});
+		}
 	}
 	test('native screenshot construction requires the permission setup registration', () => {
 		using services = new InstantiationService();
