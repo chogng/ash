@@ -50,7 +50,6 @@ class URLFixture extends Disposable {
 	readonly dialogs = this._register(new DialogService());
 	readonly files = this._register(new FileService());
 	readonly opened: string[] = [];
-	readonly copied: string[] = [];
 	readonly editors: string[] = [];
 	lastInput: string | undefined;
 	readonly opener: OpenerService;
@@ -64,7 +63,6 @@ class URLFixture extends Disposable {
 		this.services.registerInstance(INotificationService, this.notifications);
 		this.services.registerInstance(IDialogService, this.dialogs);
 		this.services.registerInstance(IFileService, this.files);
-		this.services.registerInstance(IClipboardService, { writeText: async (value: string) => { this.copied.push(value); } } as IClipboardService);
 		this.services.registerInstance(IQuickInputService, {
 			...quickInputServiceTestControls,
 
@@ -103,12 +101,8 @@ suite('Workbench external link trust', () => {
 		assert.equal(fixture.trustedDomains.isValid(URI.parse('https://untrusted.test')), false);
 	});
 
-	test('copy and disposal deny the in-flight open, and disposal unregisters the validator', async () => {
+	test('disposal denies the in-flight open and unregisters the validator', async () => {
 		using fixture = new URLFixture();
-		const copying = fixture.opener.open('https://untrusted.test/path');
-		fixture.dialogs.model.dialogs[0]!.close({ button: DialogResult.Primary, buttonIndex: 1 });
-		assert.equal(await copying, false);
-		assert.deepEqual(fixture.copied, ['https://untrusted.test/path']);
 		const pending = fixture.opener.open('https://another.test');
 		fixture.host.dispose();
 		fixture.dialogs.model.dialogs[0]!.close({ button: DialogResult.Primary, buttonIndex: 0 });
@@ -186,7 +180,7 @@ suite('Workbench external link trust', () => {
 		const pending = fixture.opener.open('https://host.test/path%0Ainjected');
 		const request = fixture.dialogs.model.dialogs[0]!.request;
 		assert.equal(request.kind, 'choice');
-		if (request.kind === 'choice') assert.deepEqual(request.buttons, ['Open', 'Copy']);
+		if (request.kind === 'choice') assert.deepEqual(request.buttons, ['Open']);
 		fixture.dialogs.model.dialogs[0]!.close({ button: DialogResult.Cancel });
 		assert.equal(await pending, false);
 		assert.equal(await fixture.opener.open('mailto:person@host.test'), true);
@@ -196,6 +190,7 @@ suite('Workbench external link trust', () => {
 	test('extension openExternal requests pass through the contribution before the host opens them', async () => {
 		using fixture = new URLFixture();
 		// Other editor operations are outside this host request and must remain unused.
+		fixture.services.registerInstance(IClipboardService, {} as IClipboardService);
 		fixture.services.registerInstance(IFileDialogService, {} as IFileDialogService);
 		fixture.services.registerInstance(IHostService, {} as IHostService);
 		fixture.services.registerInstance(IPathService, {} as IPathService);

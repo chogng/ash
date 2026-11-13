@@ -69,6 +69,7 @@ export class DialogService extends Disposable
 			custom: options.custom,
 			title: options.title ?? localize('dialog.confirm', 'Confirm'),
 			detail: options.detail,
+			...(options.detailPresentation && { detailPresentation: options.detailPresentation }),
 			severity: options.severity,
 			checkbox: options.checkbox,
 			buttons: options.buttons.map(button => button.label),

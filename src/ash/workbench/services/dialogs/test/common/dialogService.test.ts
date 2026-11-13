@@ -80,6 +80,8 @@ test('action prompt executes only the chosen button with its checkbox result', a
 	const prompt = service.prompt({
 		message: 'Choose action',
 		custom: true,
+		detail: 'https://example.test',
+		detailPresentation: 'resource',
 		checkbox: { label: 'Remember choice' },
 		buttons: [
 			{ label: 'First', run: () => { calls.push('first'); return 'first'; } },
@@ -87,7 +89,8 @@ test('action prompt executes only the chosen button with its checkbox result', a
 		],
 	});
 	assert.deepEqual(service.model.dialogs[0]?.request, {
-		kind: 'choice', message: 'Choose action', custom: true, title: 'Confirm', detail: undefined,
+		kind: 'choice', message: 'Choose action', custom: true, title: 'Confirm',
+		detail: 'https://example.test', detailPresentation: 'resource',
 		severity: undefined,
 		checkbox: { label: 'Remember choice' }, buttons: ['First', 'Second'], cancelButton: 'Cancel',
 	});

@@ -48,8 +48,10 @@ export class BrowserDialogHandler implements IDialogHandler {
 			if (request.kind === 'prompt') buttons.push(request.secondaryButton);
 			if (request.kind !== 'message') buttons.push(request.cancelButton ?? localize('dialog.cancel', 'Cancel'));
 			const cancelId = request.kind === 'message' ? -1 : buttons.length - 1;
-			const formConfirmation = request.kind === 'confirmation' && this.presentation?.confirmationLayout === 'form';
-			const destructiveForm = formConfirmation && request.destructive;
+			const formConfirmation = (request.kind === 'confirmation' || request.kind === 'choice') && this.presentation?.confirmationLayout === 'form';
+			const destructiveForm = formConfirmation && request.kind === 'confirmation' && request.destructive;
+			const severity = request.kind === 'message' || request.kind === 'choice' ? request.severity : undefined;
+			const showSeverity = severity === DialogSeverity.Warning || severity === DialogSeverity.Error;
 			const title = this.presentation?.messageAsTitle ? request.message : request.title ?? defaultTitle(request);
 			const options = createWorkbenchDialogOptions({
 				...this.presentation,
@@ -61,8 +63,9 @@ export class BrowserDialogHandler implements IDialogHandler {
 				}),
 				...(destructiveForm && { buttonOptions: [{ presentation: 'danger' }, { presentation: 'secondary' }] }),
 				cancelId,
-				type: formConfirmation || this.presentation?.messageAsTitle ? 'none' : request.kind === 'message' || request.kind === 'choice' ? request.severity ?? 'question' : 'question',
+				type: this.presentation?.messageAsTitle || (formConfirmation && !showSeverity) ? 'none' : severity ?? 'question',
 				detail: request.detail,
+				detailPresentation: request.detailPresentation,
 				inputs: request.kind === 'input' ? request.inputs.map(input => ({ ...input })) : undefined,
 				checkboxLabel: request.checkbox?.label,
 				checkboxChecked: request.checkbox?.checked,

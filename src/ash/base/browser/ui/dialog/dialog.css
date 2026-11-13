@@ -154,6 +154,16 @@
 	outline-offset: -1px;
 }
 
+.ash-dialog-resource {
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-medium);
+	background: color-mix(in srgb, var(--ash-foreground) 7%, transparent);
+	color: var(--ash-foreground);
+	overflow-wrap: anywhere;
+}
+
 .ash-dialog-inputs {
 	display: flex;
 	flex-direction: column;
@@ -180,6 +190,19 @@
 
 .ash-dialog-actions .ash-button {
 	min-width: 80px;
+}
+
+.ash-dialog-form .ash-dialog-actions {
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	padding-top: var(--ash-spacing-size160);
+}
+
+.ash-dialog-form .ash-dialog-actions .ash-button {
+	--ash-icon-label-white-space: normal;
+	min-inline-size: 0;
+	max-inline-size: 100%;
+	overflow-wrap: anywhere;
 }
 
 .ash-dialog-vertical .ash-dialog-actions {

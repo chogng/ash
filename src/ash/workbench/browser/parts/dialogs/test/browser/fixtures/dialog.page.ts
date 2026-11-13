@@ -41,7 +41,7 @@ declare global {
 		ashDialogIntegration: {
 			show(detail: string): void;
 			showPrompt(): void;
-			showChoice(): void;
+			showChoice(form?: boolean): void;
 			showInput(): void;
 			showCheckboxConfirmation(): void;
 			showBare(): void;
@@ -155,9 +155,10 @@ window.ashDialogIntegration = {
 			secondaryButton: 'Discard',
 		}, controller.signal).then(result => { window.ashDialogIntegration.lastResult = result.button; });
 	},
-	showChoice(): void {
+	showChoice(form = false): void {
 		controller = new AbortController();
-		void handler.showDialog({
+		const choiceHandler = form ? new BrowserDialogHandler(document.body, { confirmationLayout: 'form' }) : handler;
+		void choiceHandler.showDialog({
 			kind: 'choice', severity: DialogSeverity.Warning, title: 'Choose action', message: 'Select one action.',
 			buttons: ['First', 'Second', 'Third'], cancelButton: 'Cancel',
 			checkbox: { label: 'Remember choice' },

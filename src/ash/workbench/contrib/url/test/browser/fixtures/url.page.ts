@@ -10,7 +10,6 @@ import { OpenerService } from '../../../../../../editor/browser/services/openerS
 import { StandaloneServiceCollection } from '../../../../../../editor/standalone/browser/standaloneServices.js';
 import { ITextModelService } from '../../../../../../editor/common/services/resolverService.js';
 import { setNlsMessages } from '../../../../../../nls.js';
-import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
@@ -54,7 +53,6 @@ declare global {
 		ashURLIntegration: {
 			readonly opened: readonly string[];
 			readonly contributed: readonly string[];
-			readonly copied: readonly string[];
 			readonly content: string;
 			readonly editorText: string;
 			link(target: string): void;
@@ -80,8 +78,6 @@ services.registerInstance(INotificationService, resources.add(new TestNotificati
 const dialogs = resources.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
 resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
-const copied: string[] = [];
-services.registerInstance(IClipboardService, { writeText: async (value: string) => { copied.push(value); } } as IClipboardService);
 services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) })));
 const opener = resources.add(services.createInstance(OpenerService));
 services.registerInstance(IOpenerService, opener);
@@ -138,7 +134,7 @@ resources.add(addDisposableListener(document.querySelector('#save')!, 'click', (
 	void editor.save().catch(error => { document.querySelector('#save-error')!.textContent = String(error.message); });
 }));
 window.ashURLIntegration = {
-	opened, contributed, copied,
+	opened, contributed,
 	get content() { return domains.content; },
 	get editorText() { return editor.getValue(); },
 	link: setLink,

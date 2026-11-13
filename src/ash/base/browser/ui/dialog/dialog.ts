@@ -62,6 +62,7 @@ export interface IDialogOptions {
 	readonly cancelId?: number;
 	readonly detail?: string;
 	readonly detailElement?: HTMLElement;
+	readonly detailPresentation?: 'resource';
 	readonly alignment?: DialogContentsAlignment;
 	readonly checkboxLabel?: string;
 	readonly checkboxChecked?: boolean;
@@ -167,6 +168,7 @@ export class Dialog extends Disposable {
 		this.customBodyRoots = Array.from(body.children).filter(isHTMLElement);
 		if (options.detailElement || options.detail) {
 			const detail = h(ownerDocument, 'div', { className: 'ash-dialog-detail' });
+			detail.classList.toggle('ash-dialog-resource', options.detailPresentation === 'resource');
 			detail.id = this.headingDomNode.id + '-detail';
 			if (options.detailElement) detail.append(options.detailElement);
 			else detail.textContent = options.detail!;
