@@ -4,6 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
+use std::sync::MutexGuard;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -152,6 +153,7 @@ impl Persistence {
 
 struct ConnectorAuthorityInner {
     state: Mutex<AuthorityState>,
+    credential_updates: Mutex<()>,
     drained: Condvar,
     persistence: Persistence,
     subscribers: Mutex<Vec<mpsc::Sender<ConnectorSnapshotGeneration>>>,
@@ -209,11 +211,22 @@ impl ConnectorAuthority {
                     in_flight: BTreeMap::new(),
                     credential_cleanup_pending,
                 }),
+                credential_updates: Mutex::new(()),
                 drained: Condvar::new(),
                 persistence,
                 subscribers: Mutex::new(Vec::new()),
             }),
         }
+    }
+
+    /// Serializes secret updates across the Directories sharing this profile authority.
+    pub(crate) fn lock_credential_updates(
+        &self,
+    ) -> Result<MutexGuard<'_, ()>, ConnectorAuthorityError> {
+        self.inner
+            .credential_updates
+            .lock()
+            .map_err(|_| persistence_error("connector credential update lock poisoned"))
     }
 
     pub fn snapshot(&self) -> ConnectorSnapshot {

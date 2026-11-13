@@ -1,8 +1,11 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::time::Duration;
 
 use crate::ConnectorAccountId;
+use crate::ConnectorConnectionGeneration;
 use crate::ConnectorConnectionState;
 use crate::ConnectorDefinition;
 use crate::ConnectorId;
@@ -234,6 +237,82 @@ fn connect_and_disconnect_requests_replay_without_restoring_readiness() {
         .unwrap();
     assert_eq!(replay.disposition, ConnectorCommandDisposition::Replayed);
     assert!(secrets.load(&credential_key).unwrap().is_none());
+}
+
+#[test]
+fn disconnect_draining_an_old_call_does_not_delete_another_directorys_reconnect() {
+    let definition = definition();
+    let connector_id = definition.id().clone();
+    let digest = definition.digest();
+    let authority = ConnectorAuthority::in_memory([definition]).unwrap();
+    let secrets = Arc::new(MemorySecretStore::default());
+    let first_directory = ConnectorCredentialService::new(authority.clone(), secrets.clone());
+    let second_directory = ConnectorCredentialService::new(authority.clone(), secrets.clone());
+    let connect = |service: &ConnectorCredentialService, command, generation, token: &[u8]| {
+        service
+            .connect_api_token(ConnectorApiTokenConnectRequest {
+                command_id: ConnectorCommandId::new(command).unwrap(),
+                expected_generation: authority.snapshot().generation(),
+                connector_id: connector_id.clone(),
+                connection_generation: ConnectorConnectionGeneration::new(generation),
+                account_id: ConnectorAccountId::new("octocat").unwrap(),
+                account_display_name: "Octocat".into(),
+                token: SecretValue::new(token.to_vec()),
+            })
+            .unwrap();
+    };
+    connect(&first_directory, "connect-old", 1, b"old-token");
+    let expected_generation = authority.snapshot().generation();
+    let updates = authority.subscribe();
+
+    std::thread::scope(|scope| {
+        let (admitted, admission) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let lease_authority = authority.clone();
+        let lease_connector = connector_id.clone();
+        scope.spawn(move || {
+            lease_authority
+                .with_authorized_invocation(
+                    &lease_connector,
+                    ConnectorConnectionGeneration::new(1),
+                    &digest,
+                    || {
+                        admitted.send(()).unwrap();
+                        released.recv().unwrap();
+                    },
+                )
+                .unwrap();
+        });
+        admission.recv_timeout(Duration::from_secs(5)).unwrap();
+        let disconnect_connector = connector_id.clone();
+        let disconnect = scope.spawn(move || {
+            first_directory
+                .disconnect(
+                    ConnectorCommandId::new("disconnect-old").unwrap(),
+                    expected_generation,
+                    disconnect_connector,
+                )
+                .unwrap()
+        });
+        updates.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(authority.credential_cleanup_pending(&connector_id));
+        connect(&second_directory, "connect-new", 3, b"new-token");
+        release.send(()).unwrap();
+        let result = disconnect.join().unwrap();
+        assert_eq!(
+            result.credential_cleanup,
+            ConnectorCredentialCleanup::AlreadyAbsent
+        );
+    });
+
+    assert!(!authority.credential_cleanup_pending(&connector_id));
+    assert_eq!(
+        second_directory
+            .load_connected_credential(&connector_id, ConnectorConnectionGeneration::new(3))
+            .unwrap()
+            .expose(),
+        b"new-token"
+    );
 }
 
 #[test]
