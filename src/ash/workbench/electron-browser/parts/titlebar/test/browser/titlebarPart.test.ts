@@ -112,7 +112,7 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 			getZoomLevel: async () => 0,
 			onDidChangeZoomLevel: () => ({ dispose() { } }),
 			setZoomLevel: async () => { },
-			getAuxiliaryWindowState: async () => { throw new Error('Unused window state'); },
+			getAuxiliaryWindowInitialization: async () => { throw new Error('Unused window state'); },
 			onDidChangeAuxiliaryWindowState: () => ({ dispose() { } }),
 			onDidChangeWindowAlwaysOnTop: pinChanges.event,
 			isAlwaysOnTop: async () => { const snapshot = pinned; await pinRead; return snapshot; },

@@ -11,7 +11,7 @@ import { createSshRemoteWorkspaceUri } from '../../remote/common/remote.js';
 import { type IAnyWorkspaceIdentifier, hasWorkspaceFileExtension, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, serializeWorkspace } from '../../workspace/common/workspace.js';
 import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from '../../workspace/common/workspaceIpc.js';
 import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier, type IWorkspacePathService, WorkspacePathKind } from '../../workspaces/node/workspaces.js';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, type IAuxiliaryWindowState, parseRestoreWindowsSetting, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo, type RestoreWindowsSetting } from '../../window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, type IAuxiliaryWindowInitialization, parseRestoreWindowsSetting, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo, type RestoreWindowsSetting } from '../../window/common/window.js';
 import { focusWindow, type IFocusableWindow, type WorkspaceContextMainService } from '../../window/electron-main/window.js';
 import type { WindowsStateHandler } from './windowsStateHandler.js';
 import { CodeWindow, type ICodeWindowHandle, type IWindowCreationOptions, type IWindowConstructorOptions, type IWindowWebPreferences } from './windowImpl.js';
@@ -612,13 +612,15 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		for (const [, host] of this.managedWindows) host.failClose(window, message);
 	}
 
-	public perform(source: TWindow, operation: WindowOperation): void | number | boolean | readonly IWorkbenchWindowInfo[] | IAuxiliaryWindowState | IWindowClientSize | Promise<void> {
+	public perform(source: TWindow, operation: WindowOperation): void | number | boolean | readonly IWorkbenchWindowInfo[] | IAuxiliaryWindowInitialization | IWindowClientSize | Promise<void> {
 		const windows = [...this.getWindows(), ...this.managedWindowValues(), ...this.auxiliaryWindowsMainService.getWindows().map(window => window.win)].filter(window => !window.isDestroyed());
 		if (!windows.includes(source)) throw new Error('Workbench window is closed');
 		// Same-renderer editor windows share their owner's IPC route. Resolve only its descendants.
-		const target = 'windowName' in operation && operation.windowName !== undefined
-			? this.auxiliaryWindowsMainService.getWindows().find(window => window.parentId === source.id && window.win.webContents.mainFrame.name === operation.windowName)?.win
-			: source;
+		const windowName = 'windowName' in operation ? operation.windowName : undefined;
+		const auxiliary = windowName === undefined ? undefined : this.auxiliaryWindowsMainService.getWindows().find(
+			window => window.parentId === source.id && window.win.webContents.mainFrame.name === windowName,
+		);
+		const target = windowName === undefined ? source : auxiliary?.win;
 		if (!target) throw new Error('Auxiliary window is closed or belongs to another workbench');
 		switch (operation.kind) {
 			case 'list':
@@ -651,12 +653,10 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 					if (window !== source) this.getWindowById(window.id)?.close();
 				}
 				return;
-			case 'getAuxiliaryState':
-				return this.auxiliaryWindowsMainService.getWindowByWebContents(target.webContents as unknown as import('electron').WebContents)!.getState();
+			case 'getAuxiliaryInitialization':
+				return { id: auxiliary!.id, state: auxiliary!.getState(), clientSize: auxiliary!.getClientSize() };
 			case 'getClientSize':
-				return operation.windowName === undefined
-					? this.getWindowById(source.id)?.getClientSize()
-					: this.auxiliaryWindowsMainService.getWindowByWebContents(target.webContents as unknown as import('electron').WebContents)?.getClientSize();
+				return auxiliary ? auxiliary.getClientSize() : this.getWindowById(source.id)?.getClientSize();
 			case 'getZoom':
 				return target.webContents.getZoomLevel();
 			case 'getZoomFactor':

@@ -16,6 +16,7 @@ import {
 	parseNewWindowDimensions, parseRestoreFullscreen, parseRestoreWindowsSetting, parseStartupWindow, type RestoreWindowsSetting,
 } from '../../platform/window/common/window.js';
 import { localize } from '../../nls.js';
+import { CONFIRM_BEFORE_CLOSE_SETTING } from '../../platform/window/common/window.js';
 import { NativeWindow } from './window.js';
 import { ILayoutService } from '../../platform/layout/browser/layoutService.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
@@ -139,6 +140,29 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		valueType: 'boolean',
 		get title() { return localize('window.restoreFullscreen.title', 'Restore full screen'); },
 		get description() { return localize('window.restoreFullscreen.description', 'Reopen windows in full screen if they were closed in full screen.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
+	key: CONFIRM_BEFORE_CLOSE_SETTING,
+	defaultValue: 'never',
+	parse: value => {
+		if (value === 'always' || value === 'never' || value === 'keyboardOnly') return value;
+		throw new TypeError('Invalid auxiliary window close confirmation policy');
+	},
+	scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'string', enum: ['always', 'never', 'keyboardOnly'] },
+	setting: {
+		valueType: 'select',
+		get title() { return localize('window.confirmBeforeClose.title', 'Confirm before closing auxiliary windows'); },
+		get description() { return localize('window.confirmBeforeClose.description', 'Choose when Ash asks for confirmation before closing an auxiliary window.'); },
+		get options() {
+			return [
+				{ value: 'always', label: localize('window.confirmBeforeClose.always', 'Always') },
+				{ value: 'never', label: localize('window.confirmBeforeClose.never', 'Never') },
+				{ value: 'keyboardOnly', label: localize('window.confirmBeforeClose.keyboardOnly', 'When a modifier key is held') },
+			] as const;
+		},
 	},
 });
 

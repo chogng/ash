@@ -38,22 +38,27 @@ export const onDidUnregisterWindow: Event<BrowserWindow> =
  * Registers an auxiliary browser window and owns resources scoped to its
  * lifetime.
  */
-export function registerWindow(targetWindow: Window): IDisposable {
+export function registerWindow(targetWindow: Window, windowId?: number): IDisposable {
 	registerMainWindowIfAvailable();
 	if (windowIds.has(targetWindow)) {
 		throw new Error('Browser window is already registered');
 	}
 
-	const id = nextWindowId++;
+	if (windowId === undefined) {
+		while (registrations.has(nextWindowId)) nextWindowId++;
+		windowId = nextWindowId++;
+	} else if (registrations.has(windowId)) {
+		throw new Error(`Browser window ID ${windowId} is already registered`);
+	}
 	const lifecycle = new WindowRegistrationLifecycle();
 	const registration: IRegisteredWindow = {
-		id,
+		id: windowId,
 		window: targetWindow as BrowserWindow,
 		disposables: lifecycle.disposables,
 	};
 	lifecycle.initialize(registration);
-	registrations.set(id, registration);
-	windowIds.set(targetWindow, id);
+	registrations.set(windowId, registration);
+	windowIds.set(targetWindow, windowId);
 	onDidRegisterEmitter.fire(registration);
 	return lifecycle;
 }

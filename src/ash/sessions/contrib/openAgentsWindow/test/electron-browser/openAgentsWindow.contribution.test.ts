@@ -99,7 +99,7 @@ class Fixture extends Disposable {
 			getZoomLevel: async () => 0,
 			onDidChangeZoomLevel: () => Disposable.None,
 			setZoomLevel: async () => { },
-			getAuxiliaryWindowState: async () => { throw new Error('Unused window state'); },
+			getAuxiliaryWindowInitialization: async () => { throw new Error('Unused window state'); },
 			onDidChangeAuxiliaryWindowState: () => ({ dispose() { } }),
 			onDidChangeWindowAlwaysOnTop: () => ({ dispose() { } }),
 			isAlwaysOnTop: async () => false,

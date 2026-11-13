@@ -6,6 +6,9 @@ import { AuxiliaryWindow, type IAuxiliaryWindow } from './auxiliaryWindow.js';
 import type { IAuxiliaryWindowsMainService } from './auxiliaryWindows.js';
 import type { TitleBarStyleConfiguration } from '../../window/common/window.js';
 import { resolveWindowTitleBarOptions, restoreWindowBounds } from '../../windows/electron-main/windowImpl.js';
+import { validateWindowState, type IWindowDisplay } from '../../windows/electron-main/windowsStateHandler.js';
+import { WindowMode, type IWindowBounds } from '../../window/electron-main/window.js';
+import { WorkbenchState } from '../../workspace/common/workspace.js';
 
 export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliaryWindowsMainService {
 	private readonly stateChanged = this._register(new Emitter<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent; }>());
@@ -15,11 +18,14 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 	private readonly windows = this._register(new DisposableMap<number, AuxiliaryWindow>());
 	private readonly listeners = this._register(new DisposableMap<number, DisposableStore>());
 
-	constructor(private readonly resolveWindow: (webContents: WebContents) => BrowserWindow | null) {
+	constructor(
+		private readonly resolveWindow: (webContents: WebContents) => BrowserWindow | null,
+		private readonly findDisplay: (bounds: IWindowBounds) => IWindowDisplay | undefined,
+	) {
 		super();
 	}
 
-	public createWindow(details: HandlerDetails, titleBarStyle: TitleBarStyleConfiguration, zoomLevel = 0): BrowserWindowConstructorOptions {
+	public createWindow(details: HandlerDetails, titleBarStyle: TitleBarStyleConfiguration, zoomLevel = 0, alwaysOnTop = false): BrowserWindowConstructorOptions {
 		this.assertNotDisposed();
 		if (details.url !== 'about:blank') {
 			throw new TypeError('Auxiliary windows require an empty same-origin document');
@@ -31,7 +37,11 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		const effectiveZoom = requestedZoom === null ? inheritedZoom : Number(requestedZoom);
 		if (!Number.isFinite(effectiveZoom) || effectiveZoom < -8 || effectiveZoom > 8) throw new TypeError('Invalid auxiliary zoom level');
 		options.webPreferences = { zoomFactor: 1.2 ** effectiveZoom };
-		options.alwaysOnTop = features.get('window-always-on-top') === 'yes';
+		const requestedPin = features.get('window-always-on-top');
+		if (requestedPin !== null && requestedPin !== 'yes' && requestedPin !== 'no') {
+			throw new TypeError('Invalid auxiliary always-on-top state');
+		}
+		options.alwaysOnTop = requestedPin === null ? alwaysOnTop : requestedPin === 'yes';
 		options.fullscreen = features.get('window-fullscreen') === 'yes';
 		if (features.get('window-maximized') === 'yes') options.show = false;
 		for (const key of ['x', 'y', 'left', 'top', 'width', 'height'] as const) {
@@ -49,6 +59,20 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 				options.y = number;
 			} else {
 				options[key] = number;
+			}
+		}
+		const { x, y, width, height } = options;
+		if (x !== undefined && y !== undefined && width !== undefined && height !== undefined) {
+			const bounds = { x, y, width, height, mode: WindowMode.Normal };
+			const display = this.findDisplay(bounds);
+			if (display) {
+				const placement = validateWindowState(bounds, [display], WorkbenchState.EMPTY);
+				if (placement) {
+					options.x = placement.x;
+					options.y = placement.y;
+					options.width = placement.width;
+					options.height = placement.height;
+				}
 			}
 		}
 		return options;

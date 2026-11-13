@@ -5722,7 +5722,8 @@ test('BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	});
 	services.registerInstance(IStorageService, storage);
 	const service = services.createInstance(BrowserAuxiliaryWindowService, opener.window as unknown as Window, root);
-	const auxiliary = await service.open({ title: 'Detached Editor', width: 640, height: 480 });
+	const stateKey = 'auxiliaryEditorWindowState';
+	const auxiliary = await service.open({ title: 'Detached Editor', width: 640, height: 480, stateKey });
 
 	assert.equal(auxiliary.container.getAttribute('aria-label'), 'Detached Editor');
 	assert.equal(auxiliary.window.document.documentElement.lang, 'zh-Hans');
@@ -5781,9 +5782,14 @@ test('BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	assert.equal(closed, 1);
 	assert.equal(service.getWindow(auxiliary.id), undefined);
 	nextPopup = reopenedPopup;
-	const reopened = await service.open();
+	const otherFeature = await service.open({ title: 'Voice', width: 400, height: 480 });
+	assert.match(openFeatures, /width=400,height=480$/);
+	otherFeature.dispose();
+	nextPopup = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: 'http://localhost' });
+	const reopened = await service.open({ stateKey });
 	assert.match(openFeatures, /width=740,height=560,x=120,y=90/);
 	reopened[Symbol.dispose]();
+	nextPopup.window.close();
 	service.dispose();
 	themes.dispose();
 	storage.dispose();
@@ -6436,6 +6442,7 @@ class TestAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 			veto: candidate => {
 				reason = candidate;
 			},
+			join: () => { },
 		});
 		return reason;
 	}

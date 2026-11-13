@@ -158,6 +158,7 @@ export type StartupWindow = 'default' | 'ide' | 'agents';
 export const DEFAULT_STARTUP_WINDOW: StartupWindow = 'default';
 export const NEW_WINDOW_DIMENSIONS_SETTING = 'window.newWindowDimensions';
 export const RESTORE_FULLSCREEN_SETTING = 'window.restoreFullscreen';
+export const CONFIRM_BEFORE_CLOSE_SETTING = 'window.confirmBeforeClose';
 export type NewWindowDimensions = 'default' | 'inherit' | 'offset' | 'maximized' | 'fullscreen';
 
 export function parseNewWindowDimensions(value: unknown): NewWindowDimensions {
@@ -254,6 +255,20 @@ export interface IAuxiliaryWindowState {
 export interface IAuxiliaryWindowStateEvent {
 	readonly windowName: string;
 	readonly state: IAuxiliaryWindowState;
+}
+
+export interface IAuxiliaryWindowInitialization {
+	readonly id: number;
+	readonly state: IAuxiliaryWindowState;
+	readonly clientSize: IWindowClientSize | undefined;
+}
+
+export function validateAuxiliaryWindowInitialization(value: unknown): IAuxiliaryWindowInitialization {
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'clientSize,id,state'
+		|| typeof value.id !== 'number' || !Number.isSafeInteger(value.id) || value.id <= 0) {
+		throw new TypeError('Invalid auxiliary window initialization');
+	}
+	return { id: value.id, state: validateAuxiliaryWindowState(value.state), clientSize: validateWindowClientSize(value.clientSize) };
 }
 
 export function validateAuxiliaryWindowState(value: unknown): IAuxiliaryWindowState {
@@ -398,7 +413,7 @@ export type WindowOperation =
 	| { readonly kind: 'setZoom'; readonly level: number; readonly windowName?: string; readonly allWindows?: true; }
 	| { readonly kind: 'getFullscreen'; }
 	| { readonly kind: 'getClientSize'; readonly windowName?: string; }
-	| { readonly kind: 'getAuxiliaryState'; readonly windowName: string; }
+	| { readonly kind: 'getAuxiliaryInitialization'; readonly windowName: string; }
 	| { readonly kind: 'getAlwaysOnTop'; readonly windowName?: string; }
 	| { readonly kind: 'setAlwaysOnTop'; readonly enabled: boolean; readonly windowName?: string; }
 	| { readonly kind: 'nativeTab'; readonly action: 'next' | 'previous' | 'newWindow' | 'merge' | 'toggleBar'; }
@@ -424,7 +439,7 @@ export function validateWindowOperation(value: unknown): WindowOperation {
 		case 'getAlwaysOnTop':
 			if (keys === 'kind' || keys === 'kind,windowName' && hasAuxiliaryWindowName) return operation as WindowOperation;
 			break;
-		case 'getAuxiliaryState':
+		case 'getAuxiliaryInitialization':
 			if (keys === 'kind,windowName' && hasAuxiliaryWindowName) return operation as WindowOperation;
 			break;
 		case 'focus':

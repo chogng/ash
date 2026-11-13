@@ -11,7 +11,7 @@ export const IAuxiliaryWindowsMainService = createServiceIdentifier<IAuxiliaryWi
 export interface IAuxiliaryWindowsMainService {
 	readonly onDidChangeWindowState: Event<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent; }>;
 	readonly onDidChangeWindowClientSize: Event<{ readonly parentId: number; readonly event: IWindowClientSizeEvent; }>;
-	createWindow(details: HandlerDetails, titleBarStyle: TitleBarStyleConfiguration, zoomLevel?: number): BrowserWindowConstructorOptions;
+	createWindow(details: HandlerDetails, titleBarStyle: TitleBarStyleConfiguration, zoomLevel?: number, alwaysOnTop?: boolean): BrowserWindowConstructorOptions;
 	/** The opener's resources own this registration, including any descendant windows. */
 	registerWindow(webContents: WebContents, parentId: number, options?: Pick<BrowserWindowConstructorOptions, 'x' | 'y' | 'width' | 'height' | 'show'>): IDisposable;
 	getWindowByWebContents(webContents: WebContents): IAuxiliaryWindow | undefined;

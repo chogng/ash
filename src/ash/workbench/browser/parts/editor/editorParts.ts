@@ -59,6 +59,7 @@ export const IEditorPartsService = createServiceIdentifier<IEditorPartsService>(
 /** Coordinates one primary EditorPart and zero or more auxiliary-window parts. */
 export class EditorParts extends Disposable implements IEditorPartsService {
 	private static readonly stateStorageKey = 'editorparts.state';
+	private static readonly windowStateStorageKey = 'auxiliaryEditorWindowState';
 	private readonly editorChangeEmitter = this._register(new Emitter<EditorPartChangeEvent>());
 	private readonly auxiliaryCreatedEmitter = this._register(new Emitter<IEditorPart>());
 	private readonly partWindows = new Map<IEditorPart, IAuxiliaryWindow>();
@@ -206,7 +207,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	async createAuxiliaryEditorPart(options?: AuxiliaryWindowOpenOptions): Promise<IEditorPart> {
 		this.assertNotDisposed();
 		if (!this.createPart) { throw new Error(localize('workbench.editor.auxiliaryUnavailable', 'Opening an editor in a new window is unavailable in this window.')); }
-		const auxiliaryWindow = await this.windows.open(options);
+		const auxiliaryWindow = await this.windows.open({ ...options, stateKey: EditorParts.windowStateStorageKey });
 		if (this.isDisposed) {
 			auxiliaryWindow.dispose();
 			throw new Error('Editor parts were disposed while opening an auxiliary window');
@@ -481,8 +482,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 				const veto = editor.input.canMove?.(group.id, target.id);
 				if (typeof veto === 'string') { event.veto(veto); return; }
 			}
-			event.veto(localize('auxiliaryWindow.returningEditors', 'Returning unsaved editors to the main window.'));
-			void this.closeAuxiliaryEditorPart(part).catch(onUnexpectedError);
+			event.join(() => this.closeAuxiliaryEditorPart(part));
 		}));
 		if (auxiliaryWindow) listeners.add(auxiliaryWindow.onDidClose(() => {
 			if (!this.isDisposed) void this.returnEditorsToMainPart(part);

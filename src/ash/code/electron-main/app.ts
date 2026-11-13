@@ -309,7 +309,10 @@ export class AshApplication extends Disposable {
 	private hasOpenedSessionsWindow = false;
 	private readonly windowServices = this._register(new InstantiationService(new ServiceCollection([
 		IAuxiliaryWindowsMainService,
-		new SyncDescriptor(AuxiliaryWindowsMainService, [(contents: Electron.WebContents) => BrowserWindow.fromWebContents(contents)]),
+		new SyncDescriptor(AuxiliaryWindowsMainService, [
+			(contents: Electron.WebContents) => BrowserWindow.fromWebContents(contents),
+			(bounds: Electron.Rectangle) => screen.getDisplayMatching(bounds),
+		]),
 	])));
 	private readonly auxiliaryWindowsMainService = this.windowServices.get(IAuxiliaryWindowsMainService);
 	private readonly windowsMainService: WindowsMainService<BrowserWindow> = this._register(this.windowServices.createInstance(WindowsMainService<BrowserWindow>,
@@ -2020,7 +2023,12 @@ export class AshApplication extends Disposable {
 				catch (error) { console.error('Could not request external link opening', error); }
 				return { action: 'deny' };
 			}
-			return { action: 'allow', overrideBrowserWindowOptions: this.auxiliaryWindowsMainService.createWindow(details, titleBarStyle, window.webContents.getZoomLevel()) };
+			return {
+				action: 'allow',
+				overrideBrowserWindowOptions: this.auxiliaryWindowsMainService.createWindow(
+					details, titleBarStyle, window.webContents.getZoomLevel(), openerWindow.isAlwaysOnTop(),
+				),
+			};
 		});
 		const onDidCreateWindow = (child: BrowserWindow, details: { readonly url: string; readonly options: BrowserWindowConstructorOptions; }): void => {
 			if (details.url !== 'about:blank') return;
