@@ -20,7 +20,6 @@ import { IGeneratedFilesService } from '../../../../services/generatedFiles/comm
 import { IChatGPTService, type ChatGPTState } from '../../browser/chatGPTService.js';
 import type { ChatGPTMessage } from '../../browser/chatGPTClient.js';
 import { ChatGPTWidgetModel } from '../../electron-browser/chatGPTWidgetModel.js';
-import { getSessionArtifactsAccessibilityHelp } from '../../../chat/browser/sessionArtifacts.js';
 
 const initialState: ChatGPTState = {
 	catalogScope: 'a'.repeat(64), localConversationId: 'local-chat', conversationId: 'provider-chat', title: 'ChatGPT', parentId: 'parent',
@@ -86,17 +85,14 @@ suite('ChatGPT generated Markdown publication', () => {
 		assert.doesNotMatch(render(), /chat-response-writing:/u);
 		f.state.set({ ...initialState, messages: [reply(text)] });
 		const first = f.registerFile(initialState.catalogScope!, 0, 'First');
-		assert.deepEqual(f.model.artifacts.map(artifact => artifact.id), [first.id]);
 		assert.deepEqual(f.model.items[0]?.files, [{ resource: first.resource.toString(), label: 'First' }]);
 		assert.deepEqual(parts()?.map(part => [part.resource, part.awaitingPublication]), [[first.resource.toString(), undefined], [undefined, true]]);
 
 		const secondAccount = 'b'.repeat(64);
 		f.state.set({ ...f.state.get(), catalogScope: secondAccount });
-		assert.equal(f.model.artifacts.length, 0);
 		assert.equal(f.model.items[0]?.files, undefined);
 		assert.deepEqual(parts()?.map(part => part.awaitingPublication), [true, true]);
 		const second = f.registerFile(secondAccount, 0, 'Second account');
-		assert.deepEqual(f.model.artifacts.map(artifact => artifact.id), [second.id]);
 		assert.deepEqual(f.model.items[0]?.files, [{ resource: second.resource.toString(), label: 'Second account' }]);
 		assert.match(render(), />Edit in Docs</u);
 		f.state.set({ ...initialState, catalogScope: 'c'.repeat(64), messages: [{ ...reply(text), completion: undefined }] });
@@ -105,7 +101,6 @@ suite('ChatGPT generated Markdown publication', () => {
 		initializeTestLocalization('zh-CN');
 		try {
 			assert.match(render(), />在 Docs 中编辑副本</u);
-			assert.match(getSessionArtifactsAccessibilityHelp(), /消息输入框上方的「会话产物」/u);
 		} finally {
 			initializeTestLocalization('en');
 		}

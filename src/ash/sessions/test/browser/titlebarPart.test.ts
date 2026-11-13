@@ -186,8 +186,8 @@ test('Sessions titlebar restores only the alerts ignored by each notification ac
 		storage,
 	);
 	const indicator = createIndicator();
-	const openList = () => showBlockedSessionsList(quickInput, {} as IChatSessionNavigationService, indicator,
-		{} as BlockedSessionsCIFixModel, notifications, browser.window.document.querySelector('button')!);
+	const openList = (fixes?: BlockedSessionsCIFixModel) => showBlockedSessionsList(quickInput, {} as IChatSessionNavigationService, indicator,
+		fixes, notifications, browser.window.document.querySelector('button')!);
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
@@ -213,8 +213,13 @@ test('Sessions titlebar restores only the alerts ignored by each notification ac
 		sessions = [createSession('first'), createSession('second', 2)];
 		headCommit = 'second-head';
 		catalogChanged.fire();
-		using batch = openList();
+		{
+			using chatList = openList();
+			assert.equal(picker.buttons.length, 1, 'Chat offers to ignore alerts');
+		}
 		assert.deepEqual(indicator.blockedSessions.get().map(alert => alert.reason), ['ci', 'input']);
+		using codeList = openList({} as BlockedSessionsCIFixModel);
+		assert.equal(picker.buttons.length, 2, 'Code also offers to fix failing checks');
 		headerButton.fire(picker.buttons[0]);
 		assert.deepEqual(indicator.blockedSessions.get(), []);
 		const batchNotice = notifications.model.getNotifications().at(-1);

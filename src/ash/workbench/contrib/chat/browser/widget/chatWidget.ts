@@ -204,6 +204,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		container.append(this.element);
 		const context = this.scopedContextKeys = this._register(contextKeys.createScoped(this.element));
 		ChatContextKeys.inChatSession.bindTo(context).set(true);
+		ChatContextKeys.messageActionSurface.bindTo(context).set(viewOptions?.messageActionSurface);
 		const activeRequest = ChatContextKeys.hasActiveRequest.bindTo(context);
 		activeRequest.set(model.inputState.canInterrupt);
 		this._register(model.onDidChange(() => activeRequest.set(model.inputState.canInterrupt)));
@@ -421,6 +422,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.input = this._register(createInputPart
 			? createInputPart(this.element, inputDelegate)
 			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading', configureModelInMenu: viewOptions?.configureModelInMenu, get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
+		ChatContextKeys.replyOnlyInput.bindTo(context).set(this.input.replyOnly === true);
 		this._register(widgets.register(this));
 		if (model.prepareConversation || model.sessionId) this._register(scopedInstantiation.createInstance(ChatRequestOriginPart, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');

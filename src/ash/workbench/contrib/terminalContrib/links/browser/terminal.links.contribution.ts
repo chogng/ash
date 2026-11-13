@@ -1,5 +1,6 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { TerminalViewPane } from '../../../terminal/browser/terminalView.js';
@@ -17,7 +18,7 @@ import { TerminalLinkProviderService } from './terminalLinkProviderService.js';
 registerSingleton(ITerminalLinkProviderService, TerminalLinkProviderService, InstantiationType.Delayed);
 registerTerminalContribution(TerminalLinkContribution.ID, TerminalLinkContribution);
 
-registerAction2(class OpenDetectedLinkAction extends Action2 {
+registerEditorToolAction(class OpenDetectedLinkAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.terminal.openDetectedLink', title: localize2('terminal.links.open', 'Terminal: Open Detected Link…'), f1: true,

@@ -1,5 +1,6 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { localize2 } from '../../../../../nls.js';
-import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2, MenuId } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -10,7 +11,7 @@ import { InstanceContext } from '../../../terminal/browser/terminalContextMenu.j
 
 registerTerminalContribution(TerminalVoiceContribution.ID, TerminalVoiceContribution);
 
-registerAction2(class TerminalStartVoiceAction extends Action2 {
+registerEditorToolAction(class TerminalStartVoiceAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.terminal.startVoice',
@@ -27,7 +28,7 @@ registerAction2(class TerminalStartVoiceAction extends Action2 {
 		await instance?.getContribution<TerminalVoiceContribution>(TerminalVoiceContribution.ID)?.start();
 	}
 });
-registerAction2(class TerminalStopVoiceAction extends Action2 {
+registerEditorToolAction(class TerminalStopVoiceAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.terminal.stopVoice',

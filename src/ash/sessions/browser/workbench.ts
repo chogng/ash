@@ -118,7 +118,7 @@ import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/
 import { IAgentHostInputCompletionService, IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../platform/models/common/agentModels.js';
 import { ITurnChangesApi } from '../../platform/turnChanges/common/turnChangesApi.js';
-import { AppServerAvailableContext, AuxiliaryBarVisibleContext, IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
+import { AppServerAvailableContext, AuxiliaryBarVisibleContext, IsSessionsWindowContext, SessionsCodeEditorContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
 import { EditorPanes } from '../../workbench/browser/editor.js';
 import { EditorContextKeyController } from '../../workbench/browser/parts/editor/editorContextKeys.js';
 import { WorkbenchEditorContextKeysHandler } from '../../workbench/browser/contextkeys.js';
@@ -992,13 +992,19 @@ export abstract class Workbench extends Disposable {
 		AppServerAvailableContext.bindTo(contextKeys).set(options.api.appServer.isAvailable);
 		IsSessionsWindowContext.bindTo(contextKeys).set(true);
 		ChatContextKeys.imagePreviewPresentation.bindTo(contextKeys).set('popup');
+		// The command palette uses the window context. Each chat widget still supplies its own input context.
+		const replyOnlyInput = ChatContextKeys.replyOnlyInput.bindTo(contextKeys);
+		replyOnlyInput.set(contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code');
+		this._register(toDisposable(() => replyOnlyInput.reset()));
 		const workspaceFolderCount = WorkspaceFolderCountContext.bindTo(contextKeys);
 		workspaceFolderCount.set(workspace.getWorkspace().folders.length);
 		this._register(workspace.onDidChangeWorkspace(() => workspaceFolderCount.set(workspace.getWorkspace().folders.length)));
 		const workspaceModeKeys = new Set([SessionsWorkspaceModeContext.key]);
 		this._register(contextKeys.onDidChangeContext(event => {
 			if (event.affectsSome(workspaceModeKeys)) {
-				this.sessionsView.setWorkspaceMode(contextKeys.getValue<'chat' | 'code'>(SessionsWorkspaceModeContext.key) ?? 'chat');
+				const mode = contextKeys.getValue<'chat' | 'code'>(SessionsWorkspaceModeContext.key) ?? 'chat';
+				replyOnlyInput.set(mode === 'chat');
+				this.sessionsView.setWorkspaceMode(mode);
 			}
 		}));
 		// Locale changes resolve the host, which uses this window's context keys.
@@ -1507,16 +1513,13 @@ export abstract class Workbench extends Disposable {
 		browsers: IBrowserViewWorkbenchService,
 	): void {
 		const contextKeys = services.get(IContextKeyService);
-		const commandService = services.get(ICommandService);
 		const editors = services.get(IEditorService);
 		const browserVisible = contextKeys.createKey<boolean>('sessions.browserVisible', false);
 		const updateBrowserContext = (): void => browserVisible.set(editors.visibleEditors.some(input => input.resource.scheme === BrowserViewUri.scheme));
 		this._register(toDisposable(() => browserVisible.reset()));
 		this._register(editor.onDidChangeEditors(updateBrowserContext));
 		this._register(CommandsRegistry.register('ash.sessions.toggleBrowser', async () => {
-			if (contextKeys.getValue('sessions.desktopCode') !== true) {
-				await commandService.executeCommand('sessions.open.code');
-			}
+			if (contextKeys.getValue(SessionsCodeEditorContext.key) !== true) return;
 			if (!await editor.toggleToolEditors(input => input.resource.scheme === BrowserViewUri.scheme)) {
 				const retained = browsers.getKnownBrowserViews().values().next().value;
 				if (retained) await editors.openEditor(retained, { pinned: true });
@@ -1677,7 +1680,7 @@ export abstract class Workbench extends Disposable {
 			}
 			await entryLayout.checkpointEditorLayout();
 		} catch (error) { notifications.error(getErrorMessage(error)); }
-		if (!contextKeys.getValue('sessions.desktopCode')) {
+		if (!contextKeys.getValue(SessionsCodeEditorContext.key)) {
 			for (const group of editor.groups) if (!previousGroups.has(group.id)) editor.setGroupVisible(group.id, false);
 		}
 		if (editor.groups.includes(previousActive)) editor.activateGroup(previousActive.id);

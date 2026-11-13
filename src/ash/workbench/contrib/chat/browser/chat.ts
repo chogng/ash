@@ -41,6 +41,7 @@ export class ChatMessageActionContext extends Disposable {
 		private currentItem: IChatListItem,
 		readonly actions: HTMLElement,
 		private readonly isVisible: () => boolean,
+		readonly surface?: IChatWidgetViewOptions['messageActionSurface'],
 	) { super(); }
 
 	get visible(): boolean { return !this.isDisposed && this.isVisible(); }
@@ -56,8 +57,9 @@ export class ChatRequestActionContext extends ChatMessageActionContext {
 		item: IChatListItem, actions: HTMLElement, isVisible: () => boolean,
 		readonly startEditing: (requestId: string) => void | Promise<void>,
 		readonly getVersions?: (item: IChatListItem) => Promise<readonly ChatRequestVersion[]>,
+		surface?: IChatWidgetViewOptions['messageActionSurface'],
 	) {
-		super(item, actions, isVisible);
+		super(item, actions, isVisible, surface);
 	}
 }
 
@@ -79,7 +81,8 @@ export class ChatResponseActionContext extends ChatMessageActionContext {
 		isVisible: () => boolean,
 		private readonly setReading: (reading: boolean) => void,
 		private readonly getFork?: () => (() => Promise<void>) | undefined,
-	) { super(item, actions, isVisible); }
+		surface?: IChatWidgetViewOptions['messageActionSurface'],
+	) { super(item, actions, isVisible, surface); }
 
 	get isReading(): boolean { return !!this.playback; }
 	get fork(): (() => Promise<void>) | undefined { return this.visible ? this.getFork?.() : undefined; }
@@ -189,6 +192,8 @@ export interface IChatWidgetViewOptions {
 	};
 	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	readonly messagePresentation?: ChatMessagePresentation;
+	/** Retained with the transcript even when its window switches workspaces. */
+	readonly messageActionSurface?: 'chat' | 'code';
 	readonly codeBlockPresentation?: 'card';
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;

@@ -798,36 +798,6 @@ suite('sessionGitHub browser component', () => {
 		await expect(action).toHaveCount(0);
 	});
 
-	test('the shared artifact picker opens conversation results and authorizes PR actions', async function () {
-		const { page } = browserTests;
-		await page.goto('/sessionGitHub.html');
-		await page.evaluate(() => sessionStorage.setItem('test-backend-pr-references', JSON.stringify([{
-			repository: { host: 'github.com', owner: 'team', name: 'one' }, number: 7,
-			isArtifact: true, artifactId: 'a'.repeat(32), artifactOrigin: { chat: 'thread', turnId: 'turn' },
-		}])));
-		await page.goto('/sessionGitHub.html?sessionArtifacts');
-		await expect(page.locator('.ash-session-chat-input-pr').filter({ hasText: 'one #7' })).toBeVisible();
-		const entry = page.getByRole('button', { name: 'Artifacts', exact: true });
-		const picker = page.getByRole('dialog', { name: 'Artifacts', exact: true });
-		for (const label of ['Release plan', 'Screenshot', 'output.txt']) {
-			await entry.press('Enter');
-			await picker.getByRole('option', { name: label, exact: true }).click();
-			await expect(picker).toHaveCount(0);
-		}
-		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.opened)).toEqual([
-			'ash-chat-artifact:/plan.md', 'ash-chat-artifact:/screenshot.png', 'file:///workspace/output.txt',
-		]);
-		await entry.press('Enter');
-		const pr = picker.getByRole('option', { name: /one #7/ });
-		await expect(pr).toBeVisible();
-		await pr.getByRole('button', { name: 'PR Actions' }).click();
-		await expect(page.getByRole('dialog', { name: 'Merge actions for team/one #7' })).toBeVisible();
-		await page.getByText('Enable GitHub auto-merge (Squash and merge)', { exact: true }).click();
-		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/autoMerge').length)).toBe(1);
-		await page.evaluate(() => window.ashSessionGitHub.selectDraft());
-		await expect(entry).toBeHidden();
-	});
-
 	test('Chinese PR Autopilot authorizes and pauses one persisted artifact generation', async function () {
 		const { page } = browserTests;
 		await page.goto('/sessionGitHub.html?checks&locale=zh-CN');

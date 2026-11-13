@@ -728,9 +728,5 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 
 /** Stable publication identity for a provider-owned writing block. */
 export function chatGPTWritingSource(accountId: string, conversationId: string, messageId: string, index: number): GeneratedFileSource {
-	return { ...chatGPTGeneratedFileChat(accountId, conversationId), itemId: messageId, partId: `writing:${index}` };
-}
-
-export function chatGPTGeneratedFileChat(accountId: string, conversationId: string): Omit<GeneratedFileSource, 'itemId' | 'partId'> {
-	return { providerId: 'chatgpt-web', accountId, sessionId: conversationId, threadId: conversationId };
+	return { providerId: 'chatgpt-web', accountId, sessionId: conversationId, threadId: conversationId, itemId: messageId, partId: `writing:${index}` };
 }

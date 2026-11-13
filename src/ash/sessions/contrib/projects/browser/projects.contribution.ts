@@ -11,6 +11,7 @@ import {
 	Extensions,
 	type IConfigurationRegistry,
 } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -98,13 +99,13 @@ registerAction2(
 				menu: { id: Menus.ActivityBar, group: 'navigation', order: 30, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') },
 			});
 		}
-		public override async run(accessor: ServicesAccessor, projectId?: unknown): Promise<void> {
+		public override async run(accessor: ServicesAccessor, projectId?: unknown, source?: unknown): Promise<void> {
 			const projects = accessor.get(IProjectsService);
+			const commands = accessor.get(ICommandService);
 			if (projectId === undefined) {
+				if (source !== 'search' && accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) !== 'chat') return;
 				const { selectedId, conversationProjectId } = projects.state.get();
-				if (selectedId !== undefined || conversationProjectId !== undefined) {
-					projects.showProjects();
-				}
+				if (selectedId !== undefined || conversationProjectId !== undefined) projects.showProjects();
 			} else {
 				if (typeof projectId !== 'string' || !projectId.trim())
 					throw new TypeError(localize('projects.invalidId', 'Choose a valid project.'));
@@ -115,7 +116,7 @@ registerAction2(
 					await projects.openProject(projectId);
 				}
 			}
-			await accessor.get(ICommandService).executeCommand('sessions.show.projects');
+			await commands.executeCommand('sessions.show.projects');
 		}
 	},
 );
@@ -126,10 +127,12 @@ registerAction2(class ToggleArchivedProjects extends Action2 {
 			id: 'sessions.toggleArchivedProjects',
 			title: localize2('projects.toggleArchived', 'Toggle Archived Projects'),
 			f1: true,
+			precondition: SessionsWorkspaceModeContext.isEqualTo('chat'),
 		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
+		if (accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) !== 'chat') return;
 		const editor = accessor.get(IEditorPart);
 		if (!(editor.activePane instanceof ProjectsEditorPane) || !editor.activePane.isVisible()) {
 			await accessor.get(ICommandService).executeCommand('sessions.show.projects');

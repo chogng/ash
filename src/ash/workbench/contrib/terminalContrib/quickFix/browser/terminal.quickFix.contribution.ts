@@ -1,3 +1,4 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { registerSingleton, InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
 import { ITerminalQuickFixService, type ITerminalQuickFix } from './quickFix.js';
 import { TerminalQuickFixService } from './terminalQuickFixService.js';
@@ -7,7 +8,7 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -58,7 +59,7 @@ function commandFixes(command: ITerminalCommand | undefined): string[] {
 	return [...fixes];
 }
 
-registerAction2(class ShowTerminalQuickFixesAction extends Action2 {
+registerEditorToolAction(class ShowTerminalQuickFixesAction extends Action2 {
 	constructor() {
 		super({
 			id: TerminalQuickFixCommandId.ShowQuickFixes,

@@ -134,7 +134,7 @@ for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const sc
 			const read = async (threadId: string, owner = sessionId) => (await client.request(methods['session/thread/read'], { sessionId: owner, threadId })).thread;
 			const before = await read(root);
 			await client.request(methods['session/request'], {
-				sessionId, commandId: 'request-actions-turn', request: {
+				sessionId, commandId: scenario === 'reply' ? 'ash-code-review-request-actions' : 'request-actions-turn', request: {
 					type: 'startTurn', threadId: root, expectedSequence: before.sequence, mode, approvalMode, model,
 					input: [{ type: 'context', name: 'Accepted file', content: 'Original immutable context' }, { type: 'text', text: 'Original request' }],
 				}
@@ -190,8 +190,9 @@ for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const sc
 				expect((await window.menus.inspect(application, () => openReplyMenu(1))).map(item => item.label)).not.toContain('Compare results');
 				const source = await read(root);
 				const rootDirectory = (await client.request(methods['session/thread/read'], { sessionId, threadId: root })).directory;
-				const checkpointMenu = request.getByRole('toolbar', { name: 'Request checkpoint actions', exact: true });
-				await window.menus.select(application, () => checkpointMenu.getByRole('button', { name: 'More Actions', exact: true }).press('Enter'), ['Run another version']);
+				const checkpointMenu = await window.menus.inspect(application, () => request.locator('pre').filter({ hasText: 'Original request' }).click({ button: 'right' }));
+				expect(checkpointMenu.map(item => item.label)).toEqual(['Run another version']);
+				await window.menus.select(application, () => request.press('Shift+F10'), ['Run another version']);
 				await expect(chat).not.toHaveAttribute('data-thread-id', root);
 				await chat.getByRole('button', { name: 'Approve once', exact: true }).click();
 				await expect(transcript).toContainText('Request action answer 3');
@@ -223,6 +224,8 @@ for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const sc
 				const toolbar = reply.getByRole('toolbar', { name: 'Response actions', exact: true });
 				await expect(toolbar.getByRole('button', { name: 'Copy message', exact: true })).toBeVisible();
 				await expect(toolbar.getByRole('button', { name: /ChatGPT/u })).toHaveCount(0);
+				await expect(toolbar.getByRole('button', { name: 'Share Ash response', exact: true })).toHaveCount(ashChat ? 1 : 0);
+				await expect(toolbar.getByRole('button', { name: 'Review comments', exact: true })).toHaveCount(ashChat ? 0 : 1);
 				if ('windows' in application) await expect(toolbar.getByRole('button', { name: 'Read aloud', exact: true })).toBeVisible();
 				else await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 				const readClipboard = () => 'windows' in application
@@ -241,7 +244,7 @@ for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const sc
 				}
 				const openMore = () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
 				expect((await window.menus.inspect(application, openMore)).map(item => item.label)).toEqual([
-					'Fork', 'Good response', 'Bad response', 'Give model feedback',
+					...(ashChat ? [] : ['Fork']), 'Good response', 'Bad response', 'Give model feedback',
 				]);
 				await window.menus.select(application, openMore, ['Good response']);
 				expect((await window.menus.inspect(application, openMore)).find(item => item.label === 'Good response')).toMatchObject({ checked: true });
@@ -249,7 +252,8 @@ for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const sc
 				const voted = await window.menus.inspect(application, openMore);
 				expect(voted.find(item => item.label === 'Good response')).toMatchObject({ checked: false });
 				expect(voted.find(item => item.label === 'Bad response')).toMatchObject({ checked: true });
-				await window.menus.select(application, openMore, ['Fork']);
+				if (ashChat) await toolbar.getByRole('button', { name: 'Fork', exact: true }).press('Enter');
+				else await window.menus.select(application, openMore, ['Fork']);
 				await expect(chat).not.toHaveAttribute('data-thread-id', root);
 				await expect(chat).toHaveAttribute('data-thread-id', /.+/u);
 				await expect(chat).toHaveAttribute('data-session-id', sessionId);

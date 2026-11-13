@@ -1,3 +1,5 @@
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { WorkbenchEditorToolsAvailable } from '../../../../common/contextkeys.js';
 import { matchesSubString } from '../../../../../base/common/filters.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { localize } from '../../../../../nls.js';
@@ -15,16 +17,20 @@ export class TerminalQuickAccessProvider extends PickerQuickAccessProvider<IPick
 		@ITerminalGroupService private readonly groups: ITerminalGroupService,
 		@ITerminalEditorService private readonly editors: ITerminalEditorService,
 		@ITerminalEditingService private readonly editing: ITerminalEditingService,
+		@IContextKeyService private readonly contexts: IContextKeyService,
 	) {
 		super(TerminalQuickAccessProvider.PREFIX, {
 			noResultsPick: () => ({ label: localize('terminal.quickAccess.empty', 'No matching terminals') }),
 		});
 		this._register(terminals.onDidChangeInstances(() => this.refresh()));
 		this._register(terminals.onDidChangeActiveInstance(() => this.refresh()));
+		this._register(contexts.onDidChangeContext(event => {
+			if (event.affectsSome(WorkbenchEditorToolsAvailable.keys())) this.refresh();
+		}));
 	}
 
 	protected override _getPicks(filter: string): IPickerQuickAccessItem[] {
-		const instances = new Set(this.terminals.instances);
+		const instances = new Set(this.contexts.contextMatchesRules(WorkbenchEditorToolsAvailable) ? this.terminals.instances : []);
 		for (const instance of this.picks.keys()) {
 			if (!instances.has(instance)) this.picks.delete(instance);
 		}
@@ -58,7 +64,7 @@ export class TerminalQuickAccessProvider extends PickerQuickAccessProvider<IPick
 			trigger: async index => {
 				// A displayed pick can outlive disposal or close confirmation. Identity is
 				// the instance object, never its reusable title, process ID or list index.
-				if (!this.terminals.instances.includes(instance)) return TriggerAction.REFRESH_PICKER;
+				if (!this.contexts.contextMatchesRules(WorkbenchEditorToolsAvailable) || !this.terminals.instances.includes(instance)) return TriggerAction.REFRESH_PICKER;
 				if (index === 0) {
 					await this.editing.rename(instance);
 				} else if (index === 1) {
@@ -75,7 +81,7 @@ export class TerminalQuickAccessProvider extends PickerQuickAccessProvider<IPick
 	}
 
 	private async reveal(instance: ITerminalInstance): Promise<void> {
-		if (!this.terminals.instances.includes(instance)) return;
+		if (!this.contexts.contextMatchesRules(WorkbenchEditorToolsAvailable) || !this.terminals.instances.includes(instance)) return;
 		this.terminals.setActiveInstance(instance);
 		if (instance.target === TerminalLocation.Editor) await this.editors.openEditor(instance);
 		else await this.groups.showPanel(true);

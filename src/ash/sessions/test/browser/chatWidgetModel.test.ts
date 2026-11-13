@@ -163,10 +163,10 @@ function creationDraftFixture(kind: ChatCreationKind = 'docs') {
 		},
 		completeBackgroundSend: () => { backgroundSends++; drafts = [{ ...draft, creationKind: undefined }]; },
 	} as unknown as ISessionsManagementService;
-	class RetainedChat extends ChatWidgetModel {
+	class RetainedChat extends AshChatModel {
 		retarget(selection: ConstructorParameters<typeof ChatWidgetModel>[1]): void { this.bindSelection(selection); }
 	}
-	const open = (selection: ConstructorParameters<typeof ChatWidgetModel>[1]) => f.resources.add(new RetainedChat(f.chat, selection, sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.generatedFiles, f.contextKeys));
+	const open = (selection: ConstructorParameters<typeof ChatWidgetModel>[1]) => f.resources.add(new RetainedChat(selection, 'session', sessions, f.chat, f.prompts, f.models, f.execution, f.configuration, f.storage, f.generatedFiles, undefined, undefined));
 	const model = open({ kind: 'untitled', session: draft });
 	return { ...f, model, open, sessions, draft, get backgroundSends() { return backgroundSends; } };
 }
@@ -197,6 +197,18 @@ test('Chat creation contexts use stable names and actionable directions for all 
 	assert.match(getChatCreationContext('docs').content, /complete, standalone Markdown document/);
 	assert.match(getChatCreationContext('docs').content, /without an outer code fence/);
 	assert.match(getChatCreationContext('docs').content, /Ash saves the final reply body as a \.md file/);
+});
+
+test('Code sends a restored draft as written when it contains a legacy Chat creation type', async () => {
+	const f = creationDraftFixture(); using resources = f.resources;
+	f.model.dispose();
+	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: f.draft }, f.sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.generatedFiles, f.contextKeys);
+	await model.initialize();
+	assert.equal(model.creationKind, undefined);
+	assert.equal(model.setCreationKind('slides'), false);
+	await model.send('Write a guide');
+	assert.deepEqual(f.starts[0].input, [{ type: 'text', text: 'Write a guide' }]);
+	assert.equal(readPendingCreationKind(f.storage, { session: f.session, threadId: 'A' }), undefined);
 });
 
 for (const background of [false, true]) {
@@ -351,16 +363,18 @@ test('Acceptance consumes the promoted Slides choice after navigation', async ()
 
 test('Chat only projects a native generated file when the durable catalogue supplies it', async () => {
 	const value = creationHistory();
-	const f = fixture('Cowork', async () => ({ ...value, updates: [] })); using resources = f.resources;
+	const f = fixture('Cowork', async threadId => ({
+		thread: { ...value.thread, threadId },
+		transcript: { ...value.transcript, threadId },
+		updates: [],
+	})); using resources = f.resources;
 	await f.model.initialize();
 	assert.equal(f.model.items.some(item => item.files?.length), false);
-	assert.equal(f.model.artifacts.length, 0);
 	assert.deepEqual(f.publications, []);
 	const file = await f.generatedFiles.publishMarkdown({
 		providerId: 'local-agent-host', accountId: null,
 		sessionId: 'session', threadId: 'A', itemId: 'document', partId: 'markdown',
 	}, '# Document');
-	assert.deepEqual(f.model.artifacts, [{ id: file.id, kind: 'file', uri: file.resource, label: file.title }]);
 	const card = f.model.items.find(item => item.files?.length)!;
 	assert.equal(card.feedbackSource?.itemId, 'document');
 	assert.deepEqual(card.files, [{ resource: file.resource.toString(), label: file.title }]);
@@ -368,56 +382,8 @@ test('Chat only projects a native generated file when the durable catalogue supp
 	await f.model.pendingHistoryBinding;
 	assert.equal(f.publications.length, 1, 'History replay performs no writes');
 	await f.model.selectThread({ session: f.session, threadId: 'B' });
-	assert.deepEqual(f.model.artifacts, [], 'A sibling conversation does not inherit the file');
+	assert.equal(f.model.items.some(item => item.files?.length), false, 'A sibling conversation does not inherit the file');
 });
-
-for (const kind of ['Code', 'Cowork'] as const) {
-	test(`${kind} projects plans, tool screenshots and created files for the selected conversation`, async () => {
-		const snapshotA = messageHistory('A', 3, 'Done');
-		const turnId = snapshotA.thread.turns[0]!.turnId;
-		const result: ThreadItem = {
-			type: 'toolResult', itemId: 'capture', turnId, toolCallId: 'screenshot', text: '', isError: false,
-			content: [{ type: 'imageAttachment', detail: 'auto', attachment: { contentDigest: 'digest', mediaType: 'png', encodedBytes: 42, width: 1, height: 1 } }],
-		};
-		const f = fixture(kind, async threadId => ({
-			...(threadId === 'A' ? {
-				thread: snapshotA.thread,
-				transcript: {
-					...snapshotA.transcript, entries: [
-						{ type: 'turnPlan', entryId: 'plan', turnId, plan: { steps: [{ step: 'Verify', status: 'completed' }] } },
-						{ type: 'item', entryId: 'result', turnId, item: result, transient: false },
-					]
-				},
-			} : snapshot(threadId)),
-			updates: [],
-		}));
-		using resources = f.resources;
-		const change = {
-			sessionId: 'session', threadId: 'A', turnId, changeSetId: 'capture', repositoryId: 'repo', revision: 1, captureState: 'sealed',
-			statistics: { files: 4, additions: 3, deletions: 2 }, messageState: 'unconfigured', commitState: 'idle',
-			committedPaths: [], dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [],
-		} satisfies Awaited<ReturnType<ITurnChangesApi['read']>>['summary'];
-		f.changeApi.list = async ({ threadId }) => ({ changeSets: threadId === 'A' ? [change] : [] });
-		f.changeApi.read = async () => ({
-			summary: change, files: [
-				{ path: 'output.txt', kind: 'added', binary: false, additions: 1, deletions: 0 },
-				{ path: 'existing.ts', kind: 'modified', binary: false, additions: 1, deletions: 1 },
-				{ path: 'docs/release-plan-v2.md', kind: 'modified', binary: false, additions: 1, deletions: 1 },
-				{ path: 'assets/preview.png', kind: 'added', binary: true, additions: 0, deletions: 0 },
-			]
-		});
-		await f.model.initialize();
-		await waitFor(() => f.model.artifacts.length === 4);
-		assert.deepEqual(f.model.artifacts.map(({ kind, label }) => [kind, label]), [
-			['image', 'Screenshot'], ['plan', 'Plan'], ['file', 'output.txt'], ['plan', 'release-plan-v2.md'],
-		]);
-		const image = f.model.artifacts.find(artifact => artifact.kind === 'image');
-		assert.ok(image?.kind === 'image' && image.source?.kind === 'attachment');
-		assert.deepEqual(image.source.coordinate, { sessionId: 'session', threadId: 'A', itemId: 'capture', contentIndex: 0 });
-		await f.model.selectThread({ session: f.session, threadId: 'B' });
-		assert.deepEqual(f.model.artifacts, []);
-	});
-}
 
 for (const kind of ['Code', 'Cowork'] as const) {
 	test(`${kind === 'Code' ? 'Code' : 'Native Chat'} restores Auto from the accepted Turn and sends it on the next request`, async () => {

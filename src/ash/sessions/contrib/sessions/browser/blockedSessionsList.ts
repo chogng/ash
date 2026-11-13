@@ -12,7 +12,7 @@ export function showBlockedSessionsList(
 	quickInput: IQuickInputService,
 	navigation: IChatSessionNavigationService,
 	indicator: IBlockedSessionsIndicatorService,
-	fixes: BlockedSessionsCIFixModel,
+	fixes: BlockedSessionsCIFixModel | undefined,
 	notifications: INotificationService,
 	anchor: HTMLElement,
 ): IDisposable {
@@ -51,7 +51,7 @@ export function showBlockedSessionsList(
 		const items = indicator.blockedSessions.get();
 		if (button === ignoreAll) {
 			ignoreWithUndo(items);
-		} else if (button === fixAll) {
+		} else if (button === fixAll && fixes) {
 			picker.hide();
 			void fixes.fixAll(items, item => indicator.blockedSessions.get().some(current =>
 				current.session.sessionId === item.session.sessionId && current.threadId === item.threadId && current.occurrence === item.occurrence))
@@ -76,7 +76,7 @@ export function showBlockedSessionsList(
 			picker.hide();
 			return;
 		}
-		picker.buttons = blocked.some(item => item.checks?.some(request => request.headCommit)) ? [ignoreAll, fixAll] : [ignoreAll];
+		picker.buttons = fixes && blocked.some(item => item.checks?.some(request => request.headCommit)) ? [ignoreAll, fixAll] : [ignoreAll];
 		picker.items = blocked.map(item => ({
 			...item,
 			label: item.session.title || localize('sessions.list.untitled', 'Untitled Session'),

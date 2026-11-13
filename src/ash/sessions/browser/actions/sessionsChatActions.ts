@@ -14,15 +14,15 @@ import { ForkConversationAction } from '../../../workbench/contrib/chat/browser/
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ModelReasoningEffort } from '../../../workbench/services/chat/common/modelCatalog.js';
-import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
+import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 
 registerAction2(class extends ForkConversationAction {
 	protected override readonly target = 'thread' as const;
 
 	constructor() {
 		super({
-			primaryWhen: SessionsWorkspaceModeContext.isEqualTo('chat'),
-			secondaryWhen: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'chat'),
+			primaryWhen: ChatContextKeys.messageActionSurface.isEqualTo('chat'),
+			secondaryWhen: ContextKeyExpr.notEquals(ChatContextKeys.messageActionSurface.key, 'chat'),
 		});
 	}
 });

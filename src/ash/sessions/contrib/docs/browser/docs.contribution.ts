@@ -6,6 +6,9 @@ import { isRetainedDocsInput } from './docsArtifactCatalog.js';
 import { URI } from '../../../../base/common/uri.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../nls.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -139,9 +142,13 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 });
 
+const chatWorkspace = ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code');
+
 registerAction2(class ChooseDocsEditor extends Action2 {
-	constructor() { super({ id: 'sessions.creator.chooseDocsEditor', title: localize2('sessions.artifacts.chooseEditor', 'Choose Docs editor'), f1: true }); }
+	constructor() { super({ id: 'sessions.creator.chooseDocsEditor', title: localize2('sessions.artifacts.chooseEditor', 'Choose Docs editor'), f1: true, precondition: chatWorkspace }); }
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const contextKeys = accessor.get(IContextKeyService);
+		if (!contextKeys.contextMatchesRules(chatWorkspace)) return;
 		const configuration = accessor.get(IConfigurationService);
 		const commands = accessor.get(ICommandService);
 		const current = configuration.getValue<DocsEditorPreference>(DOCS_EDITOR_SETTING) ?? 'rich';
@@ -158,7 +165,7 @@ registerAction2(class ChooseDocsEditor extends Action2 {
 			store.add(picker.onDidHide(() => resolve(undefined)));
 			picker.show();
 		});
-		if (!selected) { return; }
+		if (!selected || !contextKeys.contextMatchesRules(chatWorkspace)) { return; }
 		if (selected === 'blank') { await commands.executeCommand('sessions.creator.newDocument'); return; }
 		await configuration.updateValue(DOCS_EDITOR_SETTING, selected, ConfigurationTarget.USER_LOCAL);
 	}
@@ -191,9 +198,11 @@ CommandsRegistry.register('sessions.restore.creatorDocs', async (accessor, sourc
 
 registerAction2(class NewDocumentAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.document.new', title: localize2('document.new', 'New Document'), f1: true, menu: { id: MenuId.MenubarFileMenu, group: '1_file', order: -0.5 } });
+		super({ id: 'workbench.action.document.new', title: localize2('document.new', 'New Document'), f1: true, precondition: chatWorkspace, menu: { id: MenuId.MenubarFileMenu, when: chatWorkspace, group: '1_file', order: -0.5 } });
 	}
-	override run(accessor: ServicesAccessor): Promise<void> { return createGeneralDocument(accessor); }
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		if (accessor.get(IContextKeyService).contextMatchesRules(chatWorkspace)) await createGeneralDocument(accessor);
+	}
 });
 
 for (const format of ['text', 'markdown'] as const) {
@@ -220,6 +229,22 @@ for (const format of ['text', 'markdown'] as const) {
 }
 
 for (const operation of ['import', 'export'] as const) registerAction2(class DocumentArtifactAction extends Action2 {
-	constructor() { super({ id: `workbench.action.document.${operation}.file`, title: operation === 'import' ? localize2('document.output.import', 'Import Document File…') : localize2('document.output.export', 'Export Document File…'), f1: true, menu: { id: MenuId.MenubarFileMenu, group: '2_files', order: operation === 'import' ? 10 : 11 } }); }
-	override run(accessor: ServicesAccessor, format?: unknown): Promise<void> { return operation === 'import' ? importDocumentArtifact(accessor) : exportDocumentArtifact(accessor, typeof format === 'string' ? format : undefined); }
+	constructor() {
+		const importing = operation === 'import';
+		const when = importing ? chatWorkspace : undefined;
+		super({
+			id: `workbench.action.document.${operation}.file`,
+			title: importing ? localize2('document.output.import', 'Import Document File…') : localize2('document.output.export', 'Export Document File…'),
+			f1: true,
+			precondition: when,
+			menu: { id: MenuId.MenubarFileMenu, when, group: '2_files', order: importing ? 10 : 11 },
+		});
+	}
+	override async run(accessor: ServicesAccessor, format?: unknown): Promise<void> {
+		if (operation === 'import') {
+			if (accessor.get(IContextKeyService).contextMatchesRules(chatWorkspace)) await importDocumentArtifact(accessor);
+		} else {
+			await exportDocumentArtifact(accessor, typeof format === 'string' ? format : undefined);
+		}
+	}
 });

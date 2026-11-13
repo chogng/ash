@@ -2,6 +2,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
@@ -12,10 +13,11 @@ import { sessionResource } from '../../../browser/chatHistoryModel.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { resolveSessionThreadSelection } from '../../../browser/sessionActionsService.js';
-import { SessionsMenuActiveConversationContext } from '../../../common/contextkeys.js';
+import { SessionsMenuActiveConversationContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import type { ISession } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
+const canShowSessionDetails = ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ChatContextKeys.enabled.isEqualTo(true), SessionsWorkspaceModeContext.isEqualTo('code'));
 const detailsTitle = () => localize({ bundle: 'ash.sessions', key: 'sessions.details.editorTitle' }, 'Session Details');
 
 function formatSessionDetails(catalog: readonly ISession[]): string {
@@ -45,11 +47,12 @@ registerAction2(class ShowSessionDetailsAction extends Action2 {
 			id: 'sessions.showSessionDetails',
 			title: localize2({ bundle: 'ash.sessions', key: 'sessions.details.command' }, 'Developer: Show Session Details'),
 			f1: true,
-			precondition: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ChatContextKeys.enabled.isEqualTo(true)),
+			precondition: canShowSessionDetails,
 		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(canShowSessionDetails)) return;
 		const catalog = accessor.get(ISessionsManagementService).sessions;
 		await accessor.get(IEditorService).openEditor({
 			resource: URI.from({ scheme: 'ash-session-details', path: '/sessions.txt', query: generateUuid() }),
@@ -69,11 +72,12 @@ registerAction2(class ShowConversationRecapAction extends Action2 {
 			title: localize2({ bundle: 'ash.sessions', key: 'sessions.recap.command' }, 'Show Conversation Recap'),
 			f1: true,
 			menu: { id: Menus.SidebarCodeSessionContext, group: '4_conversation', when: SessionsMenuActiveConversationContext.isEqualTo(true) },
-			precondition: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ChatContextKeys.enabled.isEqualTo(true)),
+			precondition: canShowSessionDetails,
 		});
 	}
 
 	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(canShowSessionDetails)) return;
 		const sessions = accessor.get(ISessionsManagementService);
 		const target = argument === undefined ? accessor.get(ISessionsService).activeSelection : resolveSessionThreadSelection(sessions, argument);
 		if (target?.kind !== 'session') { return; }

@@ -9,7 +9,6 @@ import { URI } from '../../../../base/common/uri.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
 import type { ChatCreationKind } from '../../../common/chatCreation.js';
-import type { AgentAttachmentSource } from '../../../../platform/agentHost/common/agent.js';
 
 export const enum SessionChangesetOperationScope {
 	Changeset = 'changeset',
@@ -214,25 +213,6 @@ export interface IActiveSessionThread {
 	readonly session: ISession;
 	readonly threadId: ThreadId;
 }
-
-/** An openable conversation result. Source coordinates let the owner serve bytes on demand. */
-export type ISessionArtifact = {
-	readonly id: string;
-	readonly label: string;
-	readonly uri: URI;
-} & ({
-	readonly kind: 'file' | 'plan' | 'image';
-	readonly source?:
-	| { readonly kind: 'text'; readonly text: string; }
-	| { readonly kind: 'bytes'; readonly bytes: Uint8Array; readonly mimeType: string; }
-	| { readonly kind: 'attachment' | 'toolResource'; readonly coordinate: AgentAttachmentSource & { readonly contentIndex: number; }; readonly mimeType: string; }
-	| { readonly kind: 'dataImage'; readonly data: string; readonly mimeType: string; }
-	| { readonly kind: 'response'; readonly itemId: string; readonly mimeType: string | undefined; }
-	| { readonly kind: 'capture'; readonly change: ISessionFileChange; };
-} | {
-	readonly kind: 'pullRequest';
-	readonly sessionId: SessionId;
-});
 
 export interface SessionEnvironmentSelection {
 	readonly id: string;

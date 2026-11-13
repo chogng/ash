@@ -594,6 +594,9 @@
     "prompt.import.allowAccess": "允许目录访问"
   },
   "ash.workbench": {
+    "chat.input.replyHelp": "按 Enter 发送，按 Shift+Enter 换行。按 Tab 聚焦附件、听写和模型控件。按 Enter 或空格打开菜单，按 Escape 返回。以斜杠开头的文字会作为普通消息发送。",
+    "chat.input.replyContextHelp": "使用“添加上下文”上传文件或搜索附件。按方向键选择结果，按 Enter 添加。回复进行时发送的后续消息会排队，等当前回复结束后发送。",
+    "chat.queue.replyEditHint": "编辑期间此消息将暂停。按 Ctrl 或 Command+Enter 保存，按 Escape 取消。附加输入和未发送的草稿会保留。原来已暂停或失败的消息取消编辑后仍保持暂停。",
     "chat.input.conversationChangesHelp": "会话有变更时，按 Tab 到达输入框上方的“更改”，按 Enter 或空格打开当前检查点的净变更。撤销和重做会更新摘要。"
   }
 }

@@ -13,20 +13,24 @@ import { Event } from '../../../../../base/common/event.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ChatWidgetService } from '../../browser/widget/chatWidgetService.js';
 import type { IChatWidget } from '../../browser/chat.js';
+import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
 test('Chat widget targeting belongs to one window and releases each registered focus listener', () => {
 	const dom = new JSDOM('<!doctype html><body><input></body>');
 	using close = toDisposable(() => dom.window.close());
-	using firstWindow = new ChatWidgetService();
-	using secondWindow = new ChatWidgetService();
+	using firstContext = new ContextKeyService();
+	using secondContext = new ContextKeyService();
+	using firstWindow = new ChatWidgetService(firstContext);
+	using secondWindow = new ChatWidgetService(secondContext);
 	const input = dom.window.document.querySelector('input')!;
 	const widget: IChatWidget = {
 		sessionId: undefined, threadId: undefined, onDidChangeVisibility: Event.None, domNode: input, visible: true, inputEditor: undefined, isTranscriptProgressActive: false, onDidHide: Event.None, onDidChangeViewModel: Event.None,
 		acquireContext: async () => { throw new Error('Unexpected context preparation'); },
 		getFindController: () => undefined,
-		get input(): never { throw new Error('Unexpected composer operation'); },
+		input: { replyOnly: true } as IChatWidget['input'],
 		retryFailedTurn: async () => { throw new Error('Unexpected retry'); },
 		focusCodeBlock: () => { throw new Error('Unexpected code block navigation'); },
 		acceptInput: async () => { },
@@ -44,10 +48,13 @@ test('Chat widget targeting belongs to one window and releases each registered f
 	input.focus();
 	assert.equal(firstWindow.lastFocusedWidget, widget);
 	assert.equal(secondWindow.lastFocusedWidget, undefined);
+	assert.equal(firstContext.getValue(ChatContextKeys.replyOnlyInput.key), true);
+	assert.equal(secondContext.getValue(ChatContextKeys.replyOnlyInput.key), false);
 	registration.dispose();
 	input.blur();
 	input.focus();
 	assert.equal(firstWindow.lastFocusedWidget, undefined);
+	assert.equal(firstContext.getValue(ChatContextKeys.replyOnlyInput.key), false);
 	assert.deepEqual(firstWindow.getAllWidgets(), []);
 });
 

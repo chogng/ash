@@ -105,7 +105,7 @@ test('opens a local Chat conversation before the backend session request settles
 	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
 	services.registerSingleton(IImageEditorService, () => new class extends ImageEditorService { async capture(): Promise<never> { throw new Error('Image capture is outside this fixture'); } }());
-	services.registerSingleton(IChatWidgetService, () => new ChatWidgetService());
+	services.registerSingleton(IChatWidgetService, () => services.createInstance(ChatWidgetService));
 	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, focusActiveEditor() { }, openEditor: async () => { } });
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));

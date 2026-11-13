@@ -45,8 +45,11 @@ export class ArtifactCatalog extends Disposable {
 		if (!missing.length) return;
 		void Promise.all(missing.map(async ([key, resource]) => {
 			// A missing or inaccessible timestamp does not make the artifact itself unavailable.
-			const modifiedAt = await this.files.stat(resource).then(stat => stat.modifiedAtMillis, () => undefined);
-			return [key, modifiedAt] as const;
+			try {
+				return [key, (await this.files.stat(resource)).modifiedAtMillis] as const;
+			} catch {
+				return [key, undefined] as const;
+			}
 		})).then(results => {
 			if (this.isDisposed || generation !== this.generation) return;
 			for (const [key, modifiedAt] of results) this.modified.set(key, modifiedAt);

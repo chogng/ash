@@ -4,7 +4,7 @@ import { isSearchEditorInput, OpenNewEditorCommandId } from '../../../../workben
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ExplorerFolderContext, VIEW_ID } from '../../../../workbench/contrib/files/common/files.js';
-import { WorkspaceFolderCountContext } from '../../../../workbench/common/contextkeys.js';
+import { SessionsCodeEditorContext, WorkspaceFolderCountContext } from '../../../../workbench/common/contextkeys.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -22,6 +22,7 @@ import {
 	Extensions,
 	type IConfigurationRegistry,
 } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -32,7 +33,7 @@ import { ISessionsSearchService, SessionsSearchService } from './searchService.j
 
 registerSingleton(ISessionsSearchService, SessionsSearchService, InstantiationType.Delayed);
 
-const canSearchFiles = ContextKeyExpr.and(ContextKeyExpr.has('sessions.desktopCode'), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0));
+const canSearchFiles = ContextKeyExpr.and(SessionsCodeEditorContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0));
 const openSearchEditor = 'ash.sessions.openSearchEditor';
 registerAction2(class OpenSearchEditorAction extends Action2 {
 	constructor() {
@@ -46,6 +47,7 @@ registerAction2(class OpenSearchEditorAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(canSearchFiles)) return;
 		const editor = accessor.get(IEditorPart) as EditorParts;
 		const groups = editor.getToolGroups(isSearchEditorInput);
 		const group = groups.find(group => group.id === editor.activeGroup.id) ?? groups[0];
@@ -82,6 +84,7 @@ registerAction2(class FindInFolderAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor, folder?: unknown): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(canSearchFiles)) return;
 		if (folder instanceof URI) await accessor.get(ICommandService).executeCommand(OpenNewEditorCommandId, { folder });
 	}
 });

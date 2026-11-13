@@ -1,8 +1,9 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
 import { Disposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize2 } from '../../../../../nls.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2, MenuId } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -46,7 +47,7 @@ AccessibleViewRegistry.register(new TerminalFindAccessibilityHelp());
 
 const focused = ContextKeyExpr.or(TerminalContextKeys.focus.isEqualTo(true), TerminalContextKeys.findFocus.isEqualTo(true));
 
-registerAction2(class TerminalFindFocusAction extends Action2 {
+registerEditorToolAction(class TerminalFindFocusAction extends Action2 {
 	constructor() {
 		super({
 			id: TerminalFindCommandId.FindFocus,
@@ -117,7 +118,7 @@ const actions: readonly {
 	];
 for (const action of actions) {
 	const navigation = action.id === TerminalFindCommandId.FindNext || action.id === TerminalFindCommandId.FindPrevious;
-	registerAction2(class TerminalFindAction extends Action2 {
+	registerEditorToolAction(class TerminalFindAction extends Action2 {
 		constructor() {
 			super({
 				id: action.id,

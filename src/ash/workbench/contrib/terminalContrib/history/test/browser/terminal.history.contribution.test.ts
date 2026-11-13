@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -32,6 +33,7 @@ test('Terminal history contribution keeps commands across PTY reuse and rejects 
 		const configuration = resources.add(new WorkbenchConfigurationService());
 		const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'history-contribution', backend: dom.window.localStorage, flushInterval: 0 }));
 		const services = resources.add(new InstantiationService());
+		services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 		services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'history', folders: [{ id: 'folder', uri: URI.file('/workspace'), name: 'root', index: 0 }] })));
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IStorageService, storage);
@@ -74,6 +76,7 @@ test('Run Recent Command executes only an accepted item in the still-active term
 		const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'history-action', backend: dom.window.localStorage, flushInterval: 0 }));
 		new TerminalCommandHistory(configuration, storage).record('bash', 'succeeded', 'echo explicitly accepted', true, false);
 		const services = resources.add(new InstantiationService());
+		services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IStorageService, storage);
 		services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'history-action', folders: [] })));
@@ -146,6 +149,7 @@ function createHistoryPickerTest(resources: DisposableStore) {
 	new TerminalCommandHistory(configuration, storage).record('bash', 'succeeded', 'echo accepted', true, false);
 	new TerminalDirectoryHistory(configuration, storage).record(JSON.stringify(['history-lifetime', '', 'file', '']), '/saved directory', true, false);
 	const services = resources.add(new InstantiationService());
+	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(IWorkspaceContextService, workspace);

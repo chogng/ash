@@ -26,6 +26,7 @@ export class AshChatModel extends ChatWidgetModel {
 	protected override get useCodeModelDefaults(): boolean { return false; }
 	protected override get initializeInConstructor(): boolean { return false; }
 	protected override get supportsConversationChangeReview(): boolean { return false; }
+	protected override get supportsChatCreation(): boolean { return true; }
 	override get commandInterpretation(): 'literal' { return 'literal'; }
 	protected override get isCodeConversation(): boolean { return false; }
 	protected override get useSkillSelectors(): boolean { return this.presentation === 'session'; }

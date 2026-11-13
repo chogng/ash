@@ -188,9 +188,7 @@ Turn-level comparisons use `IChatResponseFileChangesProvider`, queried by canoni
 
 ### Artifacts, references, and customizations
 
-The Code and Chat composers share one conversation artifact picker. It reads published Markdown from the generated-file catalog, plans and tool resources from the thread transcript, and new text files and saved Markdown plans from sealed turn captures. GitHub supplies recorded PRs and their live status. File activation goes to the existing resource owner. PR actions resolve through the window's artifact integration registry, prepare after explicit selection and use the existing GitHub mutation API. PR Autopilot configuration and run history remain with App Server.
-
-The picker is scoped to the selected chat. A GitHub record's `isArtifact` field distinguishes a produced result from a reference. Produced PRs use their recorded origin chat; older records without an origin appear in the root chat. GitHub continues to own attaching and removing references, and removing a reference does not alter the remote resource.
+Generated files and media are accessible from their replies, and the Artifacts workspace lists published documents. A GitHub record's `isArtifact` field distinguishes a produced result from a reference. GitHub owns attaching and removing references, and removing a reference does not alter the remote resource. PR actions resolve through the window's artifact integration registry, prepare after explicit selection and use the existing GitHub mutation API. PR Autopilot configuration and run history remain with App Server.
 
 Desktop chats present live Canvases opened through the originating Thread's Browser Host or an admitted SDK Canvas provider. Main owns native page membership; providers own their applications, and the Workbench Canvas service projects editor identities and presentation metadata. Session selection controls eligibility even when Code covers the chat widget. Session-shared layouts retain sibling Chat canvases; Chat-scoped layouts admit only the selected Thread. Working-set application defers explicit opens and restores retained inputs without revealing a hidden editor area or taking focus.
 
@@ -198,7 +196,7 @@ The Canvas context picker, composer controls and Add Tab menu consume one provid
 
 Workbench owns Canvas editor presentation, shared commands and the picker. Each desktop entry registers its own Canvas context, menu placement and editor-input restoration. The Editor Window resolves the active context from its visible chat widgets and places Canvas under New Chat. The Agent Window resolves it from Sessions selection and owns Add Tab, Activity Bar, sidebar pins and session working-set restoration. A menu choice to open a provider definition is bound to the conversation that offered it.
 
-GitHub resolves recorded associations even without a workspace and combines them with pull requests discovered from repository branches. The conversation artifact picker uses only the recorded PR artifacts. A repository-discovered PR can still appear in the dedicated GitHub controls.
+GitHub resolves recorded associations even without a workspace and combines them with pull requests discovered from repository branches for the dedicated GitHub controls.
 
 ## Provider contract
 

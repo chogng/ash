@@ -5,6 +5,7 @@ import { Event } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { resetNlsResolver } from '../../../../../nls.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -36,6 +37,7 @@ function project(id: string, sessionIds: readonly string[], archived = false): P
 }
 
 class Fixture extends Disposable {
+	readonly contexts = this._register(new ContextKeyService());
 	readonly services = this._register(new InstantiationService());
 	readonly archived: string[] = [];
 	readonly created: Project[] = [];
@@ -52,6 +54,7 @@ class Fixture extends Disposable {
 		const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 		this._register(toDisposable(() => dom.window.close()));
 		this.input = this._register(new TestQuickInputService({ container: dom.window.document.body, instantiationService: this.services }));
+		this.services.registerInstance(IContextKeyService, this.contexts);
 		this.services.registerInstance(IQuickInputService, this.input);
 		this.services.registerInstance(INotificationService, { info() { } } as unknown as INotificationService);
 		const fixture = this;
@@ -87,6 +90,7 @@ class Fixture extends Disposable {
 	}
 
 	async run(id: string) {
+		this.contexts.setContext('sessions.workspaceMode', 'code');
 		return this.services.invokeFunction(CommandsRegistry.getCommand(id)!);
 	}
 

@@ -1170,6 +1170,8 @@ suite('sessions browser component', () => {
 		await chatTitle.getByText('New Chat', { exact: true }).click();
 		await expect(chatTitle).toHaveAttribute('aria-expanded', 'true');
 		await expect(rename).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: 'Open in new window', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('menuitem', { name: 'Set Workspace…', exact: true })).toHaveCount(0);
 		await expect(input).toBeHidden();
 		await page.keyboard.press('Escape');
 		await expect(chatTitle).toBeFocused();

@@ -447,7 +447,8 @@ export class ChatListItemRenderer extends Disposable {
 		ChatContextKeys.requestCanEdit.bindTo(context).set(editable);
 		ChatContextKeys.requestHasVersions.bindTo(context).set(!!(this.item.requestHasVersions && this.options.getRequestVersions));
 		const toolbar = this.createMessageToolbar(actions, MenuId.ChatMessageTitle, localize('chat.request.actions', 'Message actions'), context, lifetime);
-		toolbar.context = this.requestActionContext = lifetime.add(new ChatRequestActionContext(this.item, actions, this.options.isVisible, this.options.onDidRequestEdit, this.options.getRequestVersions));
+		toolbar.context = this.requestActionContext = lifetime.add(new ChatRequestActionContext(this.item, actions, this.options.isVisible,
+			this.options.onDidRequestEdit, this.options.getRequestVersions, this.contextKeys.getValue(ChatContextKeys.messageActionSurface.key)));
 		if (editable) {
 			this.installRequestEditor(requestText, lifetime, actions, () => {
 				toolbar.element.querySelector<HTMLButtonElement>(`[data-action-id="${EditChatRequestActionId}"] > button`)?.focus({ preventScroll: true });
@@ -501,6 +502,7 @@ export class ChatListItemRenderer extends Disposable {
 				if (toolbar && index >= 0 && toolbar.getItemAction(index)?.id !== focusedAction?.id) toolbar.focus(index);
 			},
 			this.options.getResponseActions && (() => getActions()?.fork),
+			this.contextKeys.getValue(ChatContextKeys.messageActionSurface.key),
 		));
 		let menuContext: readonly string[] | undefined;
 		let canProviderFork = false;
@@ -511,7 +513,7 @@ export class ChatListItemRenderer extends Disposable {
 			hasFeedbackSurvey.set(hasCompletedSource && this.item.canGiveModelFeedback === true);
 			hasConversationLink.set(hasCompletedSource);
 			requestClientId.set(hasCompletedSource ? this.item.requestClientId ?? '' : '');
-			hasLoadedSkills.set(!!this.item.loadedSkills?.length);
+			hasLoadedSkills.set(!this.contextKeys.getValue(ChatContextKeys.replyOnlyInput.key) && !!this.item.loadedSkills?.length);
 			canProviderFork = !!available?.fork;
 			canFork.set(canProviderFork || (hasCompletedSource && this.item.canForkAfterResponse === true));
 			canCompareResults.set(hasCompletedSource && this.item.canCompareResults === true);
@@ -611,12 +613,12 @@ export class ChatListItemRenderer extends Disposable {
 		};
 	}
 
-	private installRequestCheckpointMenu(requestText: HTMLElement, source: NonNullable<IChatListItem['requestSource']>, lifetime: DisposableStore): void {
+	private installRequestCheckpointMenu(requestText: HTMLElement, lifetime: DisposableStore): void {
 		const context = lifetime.add(this.contextKeys.createScoped(requestText));
 		ChatContextKeys.requestCanRunAnotherVersion.bindTo(context).set(true);
 		const menu = lifetime.add(this.menus.createMenu(MenuId.ChatMessageCheckpoint, context));
 		const showMenu = (event: MouseEvent | KeyboardEvent) => {
-			const actions = menu.getActions({ arg: source }).flatMap(([, group]) => group);
+			const actions = menu.getActions({ arg: this.requestActionContext }).flatMap(([, group]) => group);
 			if (!actions.length) return;
 			event.preventDefault();
 			event.stopPropagation();
@@ -1161,9 +1163,10 @@ export class ChatListItemRenderer extends Disposable {
 		} else if (item.queueTarget) {
 			const actions = this.createMessageActions();
 			this.options.pendingDrag?.attachDragHandle(article, actions, () => this.item.queueTarget, disposables);
+			const canSendImmediately = !this.contextKeys.getValue(ChatContextKeys.replyOnlyInput.key);
 			this.renderMessageCommandActions(actions, disposables, [
 				{ id: ChatEditPendingRequestAction.ID, label: localize('chat.queue.rowEdit', 'Edit queued message'), icon: Lxicon.edit },
-				{ id: ChatSendPendingImmediatelyAction.ID, label: localize('chat.queue.rowSendNow', 'Send queued message immediately'), icon: Lxicon.enter },
+				...(canSendImmediately ? [{ id: ChatSendPendingImmediatelyAction.ID, label: localize('chat.queue.rowSendNow', 'Send queued message immediately'), icon: Lxicon.enter }] : []),
 				{ id: ChatRemovePendingRequestAction.ID, label: localize('chat.queue.rowRemove', 'Remove queued message'), icon: Lxicon.close },
 			], () => this.item.queueTarget);
 		} else if (requestText) {
@@ -1175,7 +1178,7 @@ export class ChatListItemRenderer extends Disposable {
 					disposables.add(this.instantiationService.createInstance(ChatForkActionViewItem, actions, { sessionId, threadId, beforeItemId: itemId }, this.options.isVisible));
 				}
 			}
-			if (item.canRunAnotherVersion && item.requestSource) this.installRequestCheckpointMenu(requestText, item.requestSource, disposables);
+			if (item.canRunAnotherVersion && item.requestSource) this.installRequestCheckpointMenu(requestText, disposables);
 		}
 	}
 

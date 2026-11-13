@@ -282,7 +282,7 @@ test('Sessions restarts the visible saved terminal in place and keeps a recovere
 	assert.equal(saved.activeResource, fixture.instances[1]!.resource);
 	assert.equal(saved.label, 'Shell');
 	assert.equal(fixture.attempts.length, 1);
-	assert.equal(fixture.attempts[0]?.deferEditorOpen, true);
+	assert.equal(typeof fixture.attempts[0]?.placeInEditor, 'function');
 	assert.equal(fixture.attempts[0]?.preserveFocus, true);
 });
 
@@ -406,7 +406,13 @@ function terminalLayoutFixture(owner: DisposableStore, options: {
 				throw options.creationError;
 			}
 			const instance = addInstance(URI.parse(`vscode-terminal:/created/${attempts.length}`));
-			if (!launch.deferEditorOpen) {
+			if (launch.placeInEditor) {
+				try { launch.placeInEditor(instance); }
+				catch (error) {
+					instances.splice(instances.indexOf(instance), 1);
+					throw error;
+				}
+			} else if (!launch.deferEditorOpen) {
 				await openEditor(instance, typeof launch.location === 'object' && 'viewColumn' in launch.location ? launch.location : undefined);
 			}
 			return instance;

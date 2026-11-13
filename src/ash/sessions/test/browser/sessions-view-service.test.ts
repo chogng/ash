@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWindowUsageService } from '../../services/sessions/browser/sessionsWindowUsageService.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { autorun, constObservable, observableValue } from '../../../base/common/observable.js';
@@ -573,6 +574,10 @@ test('Reopen Closed Chat or Session restores the closed pane in place and consum
 	using storage = createTestStorage();
 	using view = createView(sessions, storage);
 	using services = new InstantiationService();
+	using contexts = new ContextKeyService();
+	contexts.setContext('isSessionsWindow', true);
+	contexts.setContext('sessions.workspaceMode', 'code');
+	services.registerInstance(IContextKeyService, contexts);
 	services.registerInstance(ISessionsService, view);
 	using commands = new CommandService(services);
 	await view.initialize();

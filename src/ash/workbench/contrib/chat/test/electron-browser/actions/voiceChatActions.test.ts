@@ -10,6 +10,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/
 import { StandaloneCommandService } from '../../../../../../editor/standalone/browser/standaloneServices.js';
 import { ExtensionIdentifier } from '../../../../../../platform/extensions/common/extensions.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
+import { ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { SpeechService } from '../../../../speech/browser/speechService.js';
 import { ISpeechService } from '../../../../speech/common/speechService.js';
 import '../../../electron-browser/actions/voiceChatActions.js';
@@ -123,7 +124,7 @@ suite('Desktop built-in Voice Mode command', () => {
 	test('starts through the focused registered Chat owner and rejects retired or foreign targets', async () => {
 		using owner = new DisposableStore();
 		const services = owner.add(new InstantiationService());
-		const widgets = owner.add(new ChatWidgetService());
+		const widgets = owner.add(new ChatWidgetService(owner.add(new ContextKeyService())));
 		services.registerInstance(IChatWidgetService, widgets);
 		const commands = owner.add(new StandaloneCommandService(services));
 		const input = document.createElement('input');
@@ -136,7 +137,7 @@ suite('Desktop built-in Voice Mode command', () => {
 			onDidHide: Event.None, onDidChangeViewModel: Event.None,
 			acquireContext: async () => { throw new Error('Unexpected context preparation'); },
 			getFindController: () => undefined,
-			get input(): never { throw new Error('Unexpected composer operation'); },
+			input: {} as IChatWidget['input'],
 			retryFailedTurn: async () => { throw new Error('Unexpected retry'); },
 			focusCodeBlock: () => { throw new Error('Unexpected code block navigation'); },
 			acceptInput: async () => { },

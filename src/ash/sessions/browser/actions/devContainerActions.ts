@@ -1,3 +1,4 @@
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { Action2, registerAction2 } from '../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
@@ -9,6 +10,7 @@ import { CancellationTokenSource, CancellationToken } from '../../../base/common
 import { canceled } from '../../../base/common/errors.js';
 import { localize, localize2 } from '../../../nls.js';
 import { IDevContainerAgentHostService } from '../../common/devContainerAgentHostService.js';
+import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { SessionsCategories } from '../../common/categories.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { selectionFromWorkspace } from '../../common/agentHostSessionWorkspace.js';
@@ -26,15 +28,18 @@ registerAction2(class NewDevContainerSession extends Action2 {
 			title: localize2('sessions.devContainer.new', 'New Session in Dev Container...'),
 			category: SessionsCategories.Sessions,
 			f1: true,
+			precondition: SessionsWorkspaceModeContext.isEqualTo('code'),
 		});
 	}
 	async run(accessor: ServicesAccessor): Promise<void> {
+		const contextKeys = accessor.get(IContextKeyService);
+		if (contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code') return;
 		const workspace = selectionFromWorkspace(accessor.get(IWorkspaceContextService).getWorkspace());
 		using selection = accessor.get(IInstantiationService).createInstance(WorkspacePicker, {});
 		const source = workspace.type === 'local' ? workspace
 			: workspace.type === 'provider' && workspace.providerId === 'ash.dev-containers' ? { type: 'local' as const, root: workspace.workspace }
 				: await selection.pick(workspace.type === 'multiple' ? workspace.folders : [], target => target.type === 'local');
-		if (!source || source.type !== 'local') { return; }
+		if (!source || source.type !== 'local' || contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code') { return; }
 		const containers = accessor.get(IDevContainerAgentHostService);
 		const sessions = accessor.get(ISessionsManagementService);
 		const views = accessor.get(IViewsService);
@@ -45,6 +50,7 @@ registerAction2(class NewDevContainerSession extends Action2 {
 				throw new Error(localize('sessions.devContainer.requirements', 'Dev Containers require Docker, the Dev Container CLI, and a workspace with devcontainer.json.'));
 			}
 			if (token.isCancellationRequested) { throw canceled(); }
+			if (contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code') return;
 			const draft = sessions.createUntitledSession(localize('sessions.devContainer.draft', 'Dev Container Chat'), source, LOCAL_AGENT_HOST_PROVIDER_ID);
 			sessions.setUntitledSessionWorkspace(draft.untitledSessionId, source, { devContainer: true });
 			await commands.executeCommand('sessions.open.code');
@@ -64,9 +70,12 @@ for (const operation of ['stop', 'remove'] as const) {
 					: localize2('sessions.devContainer.remove', 'Remove Dev Container...'),
 				category: SessionsCategories.Sessions,
 				f1: true,
+				precondition: SessionsWorkspaceModeContext.isEqualTo('code'),
 			});
 		}
 		async run(accessor: ServicesAccessor): Promise<void> {
+			const contextKeys = accessor.get(IContextKeyService);
+			if (contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code') return;
 			const service = accessor.get(IDevContainerAgentHostService);
 			const targets = await service.getTargets(CancellationToken.None);
 			const sessions = accessor.get(ISessionsManagementService);
@@ -84,6 +93,7 @@ for (const operation of ['stop', 'remove'] as const) {
 				const confirm = await pick(accessor.get(IQuickInputService), choice.workspace, [{ label: localize('sessions.devContainer.confirmRemove', 'Remove this container'), remove: true }, { label: localize('sessions.devContainer.cancel', 'Cancel'), remove: false }]);
 				if (!confirm?.remove) { return; }
 			}
+			if (contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code') return;
 			const title = operation === 'stop'
 				? localize('sessions.devContainer.stopping', 'Stopping Dev Container...')
 				: localize('sessions.devContainer.removing', 'Removing Dev Container...');

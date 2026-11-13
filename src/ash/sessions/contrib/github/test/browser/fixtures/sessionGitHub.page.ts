@@ -27,9 +27,6 @@ import type { IMenuService } from '../../../../../../platform/actions/common/act
 import { CommandsRegistry, type ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import type { ISCMService } from '../../../../../../workbench/contrib/scm/common/scm.js';
 import { IEditorService } from '../../../../../../workbench/services/editor/common/editorService.js';
-import { IAgentThreadService } from '../../../../../../platform/agentHost/common/agentService.js';
-import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
-import { SessionArtifacts } from '../../../../chat/browser/sessionArtifacts.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -302,26 +299,6 @@ toolbarServices.registerInstance(IContextViewService, resources.add(new BrowserC
 toolbarServices.registerInstance(IEditorService, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService);
 toolbarServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 const toolbar = resources.add(toolbarServices.createInstance(SessionChatInputToolbar, main, () => input.focus(), undefined));
-if (new URL(location.href).searchParams.has('sessionArtifacts')) {
-	main.classList.add(chatInputStackClass);
-	toolbarServices.registerInstance(IQuickInputService, quickInput);
-	toolbarServices.registerInstance(IAgentThreadService, host.thread);
-	toolbarServices.registerInstance(IChatService, {} as IChatService);
-	resources.add(toolbarServices.createInstance(SessionArtifacts, { element: main, composerForm: input, focus: () => input.focus() }, {
-		get sessionId() { return selection?.kind === 'session' ? selection.active.session.sessionId : undefined; },
-		get threadId() { return selection?.kind === 'session' ? selection.active.threadId : undefined; },
-		onDidChange: selected.event,
-		onDidChangeComposer: selected.event,
-		items: [],
-		get artifacts() {
-			return selection ? [
-				{ id: 'plan', kind: 'plan' as const, label: 'Release plan', uri: URI.parse('ash-chat-artifact:/plan.md'), source: { kind: 'text' as const, text: 'Verify' } },
-				{ id: 'image', kind: 'image' as const, label: 'Screenshot', uri: URI.parse('ash-chat-artifact:/screenshot.png'), source: { kind: 'dataImage' as const, data: 'AQID', mimeType: 'image/png' } },
-				{ id: 'file', kind: 'file' as const, label: 'output.txt', uri: URI.file('/workspace/output.txt') },
-			] : [];
-		},
-	}));
-}
 if (inputStack) {
 	// Exercise the real PR producer against the same slot contract used by NewChatWidget.
 	main.classList.add('ash-chat-input-part', chatInputStackClass);

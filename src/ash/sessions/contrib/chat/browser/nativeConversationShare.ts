@@ -16,7 +16,6 @@ import type { ChatResponseFeedbackTarget } from '../../../../workbench/contrib/c
 import { getCompletedChatResponseSource } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { shareConversationLink } from './conversationShareDialog.js';
 
 const shareServiceSetting = 'sessions.chat.shareServiceUrl';
@@ -54,13 +53,13 @@ export function registerNativeConversationSharing(): void {
 				icon: Lxicon.share,
 				menu: {
 					id: MenuId.ChatMessageFooter, group: 'navigation', order: 11,
-					when: ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('chat'), ChatContextKeys.enabled.isEqualTo(true), ChatContextKeys.responseHasConversationLink.isEqualTo(true)),
+					when: ContextKeyExpr.and(ChatContextKeys.messageActionSurface.isEqualTo('chat'), ChatContextKeys.enabled.isEqualTo(true), ChatContextKeys.responseHasConversationLink.isEqualTo(true)),
 				},
 			});
 		}
 
 		override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
-			const source = context instanceof ChatResponseActionContext && context.visible && getCompletedChatResponseSource(context.item);
+			const source = context instanceof ChatResponseActionContext && context.visible && context.surface === 'chat' && getCompletedChatResponseSource(context.item);
 			if (!source) return;
 			const sharing = accessor.get(IInstantiationService).createInstance(NativeConversationShare);
 			await sharing.share(source.sessionId, source.threadId, source);

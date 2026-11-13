@@ -1,6 +1,7 @@
 import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
 import { SessionsChatService } from '../../browser/agentHost/sessionsChatService.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
@@ -111,6 +112,9 @@ test('Sessions Files contribution opens its editor through the invoking window',
 	services.registerInstance(ICommandService, {
 		executeCommand: async (id: string) => { opened.push(id); },
 	} as unknown as ICommandService);
+	using contexts = new ContextKeyService();
+	contexts.setContext('sessions.desktopCode', true);
+	services.registerInstance(IContextKeyService, contexts);
 	const command = CommandsRegistry.getCommand(SESSIONS_FILES_CONTAINER_ID);
 	assert.ok(command);
 	await services.invokeFunction(command);

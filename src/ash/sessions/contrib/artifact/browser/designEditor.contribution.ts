@@ -1,8 +1,9 @@
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import './artifactCanvasCatalog.js';
 import { AuxiliaryBarVisibleContext } from '../../../../workbench/common/contextkeys.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
-import { SessionsEntryDetailsContext } from '../../../common/contextkeys.js';
+import { SessionsEntryDetailsContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import { Menus } from '../../../browser/menus.js';
 import { ArtifactWorkspace } from './artifactWorkspace.js';
@@ -260,7 +261,7 @@ ArtifactWorkspace.registerFileActions();
 
 registerAction2(class ToggleArtifactDetails extends Action2 {
 	constructor() {
-		const when = SessionsEntryDetailsContext.isEqualTo(DESIGN_PROPERTIES_CONTAINER_ID);
+		const when = ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('chat'), SessionsEntryDetailsContext.isEqualTo(DESIGN_PROPERTIES_CONTAINER_ID));
 		const show = localize2({ bundle: 'ash.actions', key: 'showSecondarySidebar' }, 'Show Secondary Side Bar');
 		const hide = localize2({ bundle: 'ash.actions', key: 'hideSecondarySidebar' }, 'Hide Secondary Side Bar');
 		super({
@@ -271,6 +272,7 @@ registerAction2(class ToggleArtifactDetails extends Action2 {
 		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(this.desc.precondition)) return;
 		const layout = accessor.get(IAgentWorkbenchLayoutService);
 		if (layout.isPartVisible('auxiliarybar')) {
 			const hadFocus = layout.mainContainer.querySelector('[data-part="auxiliarybar"]')?.contains(getActiveElement(layout.mainContainer.ownerDocument));

@@ -5,6 +5,7 @@ import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
 import { IViewsService } from '../../../../../services/views/common/viewsService.js';
 import { IChatSessionNavigationService } from '../../../../../services/chat/common/chatSessionNavigationService.js';
@@ -14,6 +15,7 @@ import '../../browser/terminal.chat.contribution.js';
 
 function fixture(owner: DisposableStore) {
 	const services = owner.add(new InstantiationService());
+	services.registerInstance(IContextKeyService, owner.add(new ContextKeyService()));
 	const changed = owner.add(new Emitter<ITerminalInstance | undefined>());
 	const instance = { id: 'one', title: 'Shell', cwd: '/workspace', onDidChangeState: Event.None } as unknown as ITerminalInstance;
 	services.registerInstance(ITerminalService, { activeInstance: instance, instances: [instance], onDidChangeActiveInstance: changed.event, onDidDisposeInstance: Event.None } as unknown as ITerminalService);

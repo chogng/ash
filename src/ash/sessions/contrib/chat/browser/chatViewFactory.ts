@@ -26,9 +26,8 @@ import type { IChatListItem } from '../../../../workbench/contrib/chat/common/mo
 import { ReplyChatInputFactory, type ReplyChatDraftPicker } from './replyChatInput.js';
 import { ChatInputArtifactPill, getChatCreationHelp, type ChatCreationModel } from './chatInputArtifactPill.js';
 import { ChatView, NewChatView } from './chatView.js';
-import type { SessionArtifactSource } from './sessionArtifacts.js';
 
-export interface ICompactChatModel extends IChatWidgetModel, ChatCreationModel, SessionArtifactSource {
+export interface ICompactChatModel extends IChatWidgetModel, ChatCreationModel {
 	getEntityDetailsSource?(item: IChatListItem): ChatEntityDetailsSource | undefined;
 	newChat(): void;
 	readWelcomeDraft(reader: IReader): { readonly id: string; readonly revision: number; } | undefined;
@@ -51,7 +50,6 @@ export interface IChatViewSource {
 	readonly persistentDraftScope?: string;
 	readonly useWorkbenchModelManagement?: true;
 	readonly explicitModelSelection?: true;
-	readonly literalServerCommands?: true;
 	readonly advanceWelcomePhrase?: false;
 	readonly createDraftPicker?: (instantiation: IInstantiationService, footer: HTMLElement, visible: IObservable<boolean>, model: ICompactChatModel) => ReplyChatDraftPicker;
 	readonly accessibility: {
@@ -146,12 +144,11 @@ class CompactChatWidgetFactory {
 						const input = inputFactory.create(container, delegate, model, {
 							inputLabel: options.inputLabel(),
 							explicitModelSelection: options.explicitModelSelection,
-							literalServerCommands: options.literalServerCommands,
 							useWorkbenchModelManagement: options.useWorkbenchModelManagement,
 							persistentDraftScope: options.persistentDraftScope,
 							createDraftPicker: createDraftPicker && (footer => createDraftPicker(instantiation, footer, shown, model)),
 							accessibilityHelp: () => `${getChatPromptStartersHelp()}\n${getChatCreationHelp()}`,
-						}, owner);
+						});
 						owner.add(new ChatInputArtifactPill(input, model));
 						input.element.classList.add('chat-composer');
 						const starters = owner.add(new ChatPromptStarters(input.element, input));
@@ -172,6 +169,7 @@ class CompactChatWidgetFactory {
 						}),
 						welcomeTitle: welcome.title,
 						codeBlockPresentation: 'card',
+						messageActionSurface: 'chat',
 						virtualizeHistoryFrom: scrollOptimization && derived(reader => scrollOptimization.read(reader) ? 100 : undefined),
 					} satisfies IChatWidgetViewOptions);
 			} catch (error) {

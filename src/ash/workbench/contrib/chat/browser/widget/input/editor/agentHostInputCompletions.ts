@@ -22,6 +22,8 @@ interface AcceptedCompletion {
 
 /** Composer-owned admission; the provider never keeps a second attachment inventory. */
 export interface AgentHostInputCompletionHost {
+	readonly commands: boolean;
+	readonly skills: boolean;
 	currentLifecycle(): AbortSignal;
 	getContext(): { readonly sessionId?: string; readonly threadId?: string; };
 	isEnabled(): boolean;
@@ -60,7 +62,10 @@ export class AgentHostInputCompletions extends AgentHostInputCompletionsBase {
 		const service = this.completions;
 		const host = this.host;
 		this.registerProvider({
-			get triggerCharacters() { return service.getTriggerCharacters(host.getContext().sessionId); },
+			get triggerCharacters() {
+				return service.getTriggerCharacters(host.getContext().sessionId)
+					.filter(character => (character !== '/' || host.commands) && (character !== '$' || host.skills));
+			},
 			provideCompletions: (request, signal) => this.provideCandidates(request, signal),
 			executeCompletionCommand: async (request, signal) => {
 				const id = request.command.arguments[0];
@@ -86,8 +91,10 @@ export class AgentHostInputCompletions extends AgentHostInputCompletionsBase {
 		const found = await raceCancellationError(this.completions.complete({ text, offset, ...this.host.getContext(), directories: workspace.folders.map(folder => ({ resource: folder.uri, target: { type: 'workspace', dirId: folder.id } })) }, signal), signal);
 		if (signal.aborted || workspace !== this.workspace.getWorkspace() || generation !== this.generation) throw new CancellationError();
 		this.candidates.clear();
+		const candidates = found.filter(item => (item.value.kind !== 'command' || this.host.commands)
+			&& (item.value.kind !== 'skill' || this.host.skills));
 		return {
-			items: found.map((item, index) => {
+			items: candidates.map((item, index) => {
 				const id = `${generation}:${index}`;
 				const value = item.value;
 				// A resource is replaced only after capture succeeds. Failed reads preserve the query.

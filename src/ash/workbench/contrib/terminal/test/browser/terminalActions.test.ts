@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CancellationError, isCancellationError } from '../../../../../base/common/errors.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
@@ -111,6 +112,7 @@ class SelectionFixture extends Disposable {
 
 	constructor() {
 		super();
+		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => this.editor } as ICodeEditorService);
 		const fixture = this;
 		this.services.registerInstance(ITerminalService, {
@@ -268,6 +270,8 @@ suite('Terminal dropdown commands', () => {
 	for (const result of [true, false, undefined]) {
 		test(`New Terminal waits for initialized permissions and the trust decision ${result}`, async () => {
 			using services = new InstantiationService();
+			using contexts = new ContextKeyService();
+			services.registerInstance(IContextKeyService, contexts);
 			using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 			const initialized = new DeferredPromise<void>();
 			const requested = new DeferredPromise<void>();
@@ -309,6 +313,8 @@ suite('Terminal dropdown commands', () => {
 
 	test('settings opens the graphical editor filtered to terminal settings', async () => {
 		using services = new InstantiationService();
+		using contexts = new ContextKeyService();
+		services.registerInstance(IContextKeyService, contexts);
 		const requests: unknown[] = [];
 		services.registerInstance(IPreferencesService, { openSettings: async options => { requests.push(options); } } as IPreferencesService);
 		using commands = new CommandService(services);
@@ -319,6 +325,8 @@ suite('Terminal dropdown commands', () => {
 	for (const initialized of [true, false]) {
 		test(`New Terminal creates before revealing a ${initialized ? 'populated' : 'hidden'} panel`, async () => {
 			using services = new InstantiationService();
+			using contexts = new ContextKeyService();
+			services.registerInstance(IContextKeyService, contexts);
 			const effects: unknown[] = [];
 			const terminal = { xterm: { focus: () => { effects.push('focus'); } } } as ITerminalInstance;
 			using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
@@ -349,6 +357,8 @@ suite('Terminal dropdown commands', () => {
 	for (const outcome of ['opened', 'canceled', 'failed', 'blocked', 'closed', 'focus-failed'] as const) {
 		test(`new terminal window ${outcome} keeps process and window lifetimes together`, async () => {
 			using services = new InstantiationService();
+			using contexts = new ContextKeyService();
+			services.registerInstance(IContextKeyService, contexts);
 			const effects: unknown[] = [];
 			const instances: ITerminalInstance[] = [];
 			const terminal = new InputTerminal().instance;

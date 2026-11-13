@@ -5,6 +5,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -39,12 +40,14 @@ registerAction2(class OpenBots extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.open.bots', title, icon: Lxicon.bot, f1: true,
+			precondition: SessionsWorkspaceModeContext.isEqualTo('code'),
 			toggled: ContextKeyExpr.has(selectedContext),
 			menu: { id: Menus.ActivityBar, group: 'navigation', order: 25, when: SessionsWorkspaceModeContext.isEqualTo('code') },
 		});
 	}
-	public override run(accessor: ServicesAccessor, source?: unknown): Promise<void> {
-		return accessor.get(ISessionsEntryService).openEntry({
+	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> {
+		if (source !== 'restore' && accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) !== 'code') return;
+		await accessor.get(ISessionsEntryService).openEntry({
 			id: 'bots', workspaceMode: 'code', activityContext: selectedContext,
 			content: 'editor', sidebarContainerId: botsNavigationId, showWorkspaceModeControl: false, showEditorTabs: false,
 			restoreCommand: 'sessions.open.bots', focus: 'sidebar',

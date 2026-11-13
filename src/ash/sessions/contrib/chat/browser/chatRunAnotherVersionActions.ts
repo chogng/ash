@@ -3,14 +3,14 @@ import { localize, localize2 } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { ChatRequestActionContext } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { isChatResponseFeedbackTarget } from '../../../../workbench/contrib/chat/common/chatResponseFeedback.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { completedTurnChangeSets } from '../../../browser/turnMultiDiffSource.js';
-import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 
-const code = SessionsWorkspaceModeContext.isEqualTo('code');
+const code = ChatContextKeys.messageActionSurface.isEqualTo('code');
 
 registerAction2(class RunAnotherChatVersionAction extends Action2 {
 	private readonly pending = new Set<string>();
@@ -24,7 +24,9 @@ registerAction2(class RunAnotherChatVersionAction extends Action2 {
 		});
 	}
 
-	override async run(accessor: ServicesAccessor, target: unknown): Promise<void> {
+	override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
+		if (!(context instanceof ChatRequestActionContext) || context.surface !== 'code' || !context.visible || !context.item.canRunAnotherVersion) return;
+		const target = context.item.requestSource;
 		if (!isChatResponseFeedbackTarget(target)) return;
 		const navigation = accessor.get(IChatSessionNavigationService);
 		const revision = navigation.revision;

@@ -57,7 +57,7 @@ export class SessionsSearchService extends Disposable implements ISessionsSearch
 				break;
 			}
 			case 'newSession': await this.commands.executeCommand('sessions.newSession'); break;
-			case 'projects': await this.commands.executeCommand('sessions.open.projects'); break;
+			case 'projects': await this.commands.executeCommand('sessions.open.projects', undefined, 'search'); break;
 		}
 	}
 

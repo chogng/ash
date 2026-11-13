@@ -21,6 +21,8 @@ suite('Sessions Chat accessibility help', () => {
 			const content = page.locator('.ash-accessible-view-content');
 			await expect(content).toBeVisible();
 			const text = await content.inputValue();
+			expect(text).not.toMatch(locale === 'en' ? /If a draft has an artifact type/ : /草稿有作品类型时/);
+			expect(text).not.toMatch(locale === 'en' ? /reach Artifacts above the message input/ : /会话产物/);
 			expect(text).toMatch(locale === 'en' ? /Chat: Configure Tools/ : /聊天：配置工具/);
 			expect(text).toMatch(locale === 'en' ? /run Compare Agents from the Command Palette/ : /从命令面板运行“比较 Agent”/);
 			expect(text).toMatch(locale === 'en' ? /Enable model evaluation tools in Settings/ : /在设置中启用模型评测工具/);

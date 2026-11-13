@@ -4,6 +4,7 @@ import { basename, join } from 'node:path';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+import { Menus } from '../../../automation/menus.js';
 import { Editor } from '../../../automation/editor.js';
 import { drawImageAnnotation } from '../../../automation/design.js';
 import type { Workbench } from '../../../automation/workbench.js';
@@ -391,7 +392,7 @@ async function createConversationShareServer() {
 	return { origin, records, [Symbol.asyncDispose]: () => server[Symbol.asyncDispose]() };
 }
 
-function createAshModelServer(ashRequests: string[], replySuffix = '', codeMatch?: { url: string; license: string; snippet: string; }) {
+function createAshModelServer(ashRequests: string[], replySuffix = '', codeMatch?: { url: string; license: string; snippet: string; }, firstReply?: Promise<void>) {
 	return createServer(async (request, response) => {
 		if (request.method === 'GET') {
 			response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ data: [{ id: ashFixtureModel.model }] }));
@@ -400,6 +401,7 @@ function createAshModelServer(ashRequests: string[], replySuffix = '', codeMatch
 		const chunks: Buffer[] = [];
 		for await (const chunk of request) chunks.push(Buffer.from(chunk));
 		ashRequests.push((JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string; }).model);
+		if (ashRequests.length === 1) await firstReply;
 		const content = JSON.stringify('Answer from Ash' + replySuffix);
 		const annotations = codeMatch ? `data: ${JSON.stringify({ choices: [{ index: 0, delta: { copilot_annotations: { IPCodeCitations: [{ citations: codeMatch }] } } }] })}\n\n` : '';
 		response.writeHead(200, { 'Content-Type': 'text/event-stream' }).end(`data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":${content}},"finish_reason":null}]}\n\n${annotations}data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n`);
@@ -493,6 +495,59 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
+
+	test('keeps ChatGPT composer commands in the active ChatGPT page', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
+		await installService(application as ElectronApplication);
+		const page = await workbench.openAgentsWindow('electron');
+		const chat = new Editor(page.getByRole('region', { name: 'ChatGPT', exact: true }));
+		const mode = page.locator('.ash-window-mode-control');
+		const palette = new QuickAccess(page);
+		const commands = ['reload', 'toggleScrollOptimization', 'signIn', 'useCodexLogin', 'signOut'];
+		const commandItem = (id: string) => palette.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText(`sessions.chatgpt.${id}`, { exact: true }) });
+		await chat.waitForEditorFocus();
+		await palette.open();
+		for (const command of commands) {
+			await palette.search(`>sessions.chatgpt.${command}`);
+			await expect(commandItem(command)).toBeVisible();
+		}
+		await palette.close();
+		await mode.getByRole('button', { name: '代码', exact: true }).click();
+		await new Editor(page.locator('.ash-sessions-chat-slot.active:visible .chat-composer')).waitForEditorFocus();
+		await palette.open();
+		for (const command of commands) {
+			await palette.search(`>sessions.chatgpt.${command}`);
+			await expect(commandItem(command)).toHaveCount(0);
+		}
+		await palette.close();
+		await mode.getByRole('button', { name: '聊天 / Agents', exact: true }).click();
+		await chat.waitForEditorFocus();
+		await palette.open('>sessions.chatgpt.reload');
+		await expect(commandItem('reload')).toBeVisible();
+		await palette.close();
+	});
+
+	test('sends slash text to ChatGPT without exposing Code composer commands', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
+		const electron = application as ElectronApplication;
+		await installService(electron);
+		const page = await workbench.openAgentsWindow('electron');
+		const chat = page.getByRole('region', { name: 'ChatGPT', exact: true });
+		const composer = new Editor(chat);
+		await composer.waitForEditorFocus();
+		const palette = new QuickAccess(page);
+		await palette.open('>workbench.action.chat.openModelPicker');
+		await expect(palette.items.filter({ hasText: '聊天：打开模型选择器' })).toBeVisible();
+		for (const command of ['openModePicker', 'openPermissionPicker', 'openWorkspacePicker', 'configureTools', 'steerWithMessage']) {
+			await palette.search(`>workbench.action.chat.${command}`);
+			await expect(palette.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText(`workbench.action.chat.${command}`, { exact: true }) })).toHaveCount(0);
+		}
+		await palette.close();
+		await composer.waitForEditorFocus();
+		await page.keyboard.insertText('/btw check the draft');
+		await composer.input.press('Enter');
+		await expect(chat).toContainText('/btw check the draft');
+		await expect(chat).toContainText('First chunk');
+		expect(await electron.evaluate(() => ashNativeFixture.sends)).toBe(1);
+	});
 
 	test('exports chat Markdown tables as safe CSV through cancellation and repeated saves', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }, testInfo) => {
 		const electron = application as ElectronApplication;
@@ -1022,6 +1077,7 @@ test.describe('Unified Chat sidebar', () => {
 		}
 		const attachment = page.getByRole('link', { name: `下载 ${workbook.name}`, exact: true });
 		await expect(attachment.locator('[data-ash-icon-id="xls-green"][aria-hidden="true"]')).toBeVisible();
+		await expect(page.getByRole('button', { name: '会话产物', exact: true })).toHaveCount(0);
 		await expect(attachment).toHaveCSS('text-decoration-line', 'underline');
 		await expect(attachment).toHaveCSS('text-decoration-style', 'dotted');
 		const workbookRequests = () => electron.evaluate(() => globalThis.ashNativeFixture.workbookRequests);
@@ -1079,7 +1135,7 @@ test.describe('Unified Chat sidebar', () => {
 		const codeMatch = { url: 'https://github.com/example/repo/blob/main/example.ts', license: 'MIT', snippet: lines.join('\n') };
 		await installService(application, false, fence);
 		await application.evaluate(({ clipboard }) => { clipboard.writeText = async () => { }; });
-		await using catalog = createAshModelServer([], fence, codeMatch);
+		await using catalog = createAshModelServer([], 'Here is a TypeScript example.' + fence, codeMatch);
 		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
 		const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
 		try {
@@ -1102,9 +1158,9 @@ test.describe('Unified Chat sidebar', () => {
 			const answer = (await readThread()).turns[0]?.items.find(item => item.type === 'agentMessage');
 			expect(answer?.citations).toEqual([{ type: 'code', ...codeMatch }]);
 			const page = await workbench.openAgentsWindow(target.kind);
-			for (const [source, selector, canApply] of [
-				['ChatGPT', 'chatgpt:history-one', false],
-				['Ash', `ash:${sessionId}`, true],
+			for (const [source, selector] of [
+				['ChatGPT', 'chatgpt:history-one'],
+				['Ash', `ash:${sessionId}`],
 			] as const) {
 				await page.locator(`[data-item="${selector}"] .ash-sessions-list-item`).click();
 				const card = page.locator('.ash-chat-code-block-card:visible');
@@ -1153,13 +1209,21 @@ test.describe('Unified Chat sidebar', () => {
 					await expect(copy).toBeFocused();
 				}
 				await testInfo.attach(`${source}-copied-code`, { body: await card.screenshot(), contentType: 'image/png' });
-				const more = card.getByRole('button', { name: '更多操作', exact: true });
-				await more.press('Enter');
-				const apply = page.getByRole('menuitem', { name: '应用到编辑器', exact: true });
-				if (canApply) await expect(apply).toBeEnabled();
-				else await expect(apply).toBeDisabled();
-				await page.keyboard.press('Escape');
-				await expect(more).toBeFocused();
+				await expect(toolbars[2].getByRole('button')).toHaveCount(1);
+				const paragraph = reply.locator('.ash-chat-markdown-part p').first();
+				const position = await paragraph.evaluate(element => {
+					const range = element.ownerDocument.createRange();
+					range.selectNodeContents(element);
+					const selection = element.ownerDocument.getSelection()!;
+					selection.removeAllRanges();
+					selection.addRange(range);
+					const text = range.getClientRects()[0];
+					const box = element.getBoundingClientRect();
+					return { x: text.left - box.left + text.width / 2, y: text.top - box.top + text.height / 2 };
+				});
+				const menu = await new Menus(page).inspect(application, () => paragraph.click({ button: 'right', position }));
+				expect(menu.map(item => item.label)).toEqual(['复制', '添加到对话']);
+				await paragraph.evaluate(element => element.ownerDocument.getSelection()?.removeAllRanges());
 				const codeMatches = reply.locator('.ash-chat-code-citations');
 				if (source === 'Ash') {
 					const summary = codeMatches.locator('summary');
@@ -1235,6 +1299,59 @@ test.describe('Unified Chat sidebar', () => {
 		} finally { await close(); }
 	});
 
+	test('queues an Ash Chat follow-up with Enter and edits it without Code send options', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
+		const electron = application as ElectronApplication;
+		await installService(electron);
+		const { promise: firstReply, resolve: finishFirstReply } = Promise.withResolvers<void>();
+		const modelRequests: string[] = [];
+		await using catalog = createAshModelServer(modelRequests, '', undefined, firstReply);
+		await configureAshModel(catalog, electron, workbench, testWorkspace.directory);
+		const { client, close } = await connectProfile(electron, undefined, testWorkspace.directory, workbench.page);
+		try {
+			const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: 'native-reply-queue', title: 'Native reply queue', kind: 'chat', executionTarget: null, agent: { type: 'default' },
+			});
+			const { sessionId } = session;
+			const { threadId } = session.threads[0];
+			const read = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
+			const queued = async () => (await client.request(APP_SERVER_METHODS['queue/list'], { sessionId, threadId })).messages[0];
+			const page = await workbench.openAgentsWindow(target.kind);
+			await page.locator(`[data-item="ash:${sessionId}"] .ash-sessions-list-item`).press('Enter');
+			const chat = page.locator('.ash-native-chat-widget .ash-chat');
+			await expect(chat).toHaveAttribute('data-thread-id', threadId);
+			await client.request(APP_SERVER_METHODS['session/request'], {
+				commandId: 'native-reply-queue-active', sessionId, request: {
+					type: 'startTurn', threadId, expectedSequence: (await read()).sequence, model: ashFixtureModel,
+					mode: 'agent', approvalMode: 'manual', input: [{ type: 'text', text: 'First Chat message' }],
+				},
+			});
+			await expect.poll(() => modelRequests.length).toBe(1);
+			const composer = new Editor(chat);
+			await composer.waitForTypeInEditor('Queued Chat follow-up');
+			const sendOptions = page.getByRole('button', { name: '更多发送选项', exact: true });
+			await expect(sendOptions).toHaveCount(0);
+			await composer.input.press('Enter');
+			await expect.poll(async () => (await queued())?.status).toBe('pending');
+			expect((await read()).turns.map(turn => turn.status)).toEqual(['running']);
+			const row = chat.locator('.ash-chat-item-queuedMessage').filter({ hasText: 'Queued Chat follow-up' });
+			await expect(row.getByRole('button', { name: '立即发送排队消息', exact: true })).toHaveCount(0);
+			await expect(row.getByRole('button', { name: '移除排队消息', exact: true })).toBeVisible();
+			await row.getByRole('button', { name: '编辑排队消息', exact: true }).press('Enter');
+			const edit = page.getByRole('textbox', { name: '编辑队列消息', exact: true });
+			await expect(edit).toHaveAccessibleDescription(/按 Ctrl 或 Command\+Enter 保存，按 Escape 取消/);
+			await expect(sendOptions).toHaveCount(0);
+			await edit.fill('Edited Chat follow-up');
+			await edit.press('Control+Enter');
+			await expect(chat.locator('.ash-chat-item-queuedMessage')).toContainText('Edited Chat follow-up');
+			finishFirstReply();
+			await expect.poll(async () => (await read()).turns.map(turn => turn.status)).toEqual(['completed', 'completed']);
+			await expect(chat).toContainText('Edited Chat follow-up');
+		} finally {
+			finishFirstReply();
+			await close();
+		}
+	});
+
 	test('continues the selected version of a workspace-bound native Chat in Code', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
 		const application = browser as ElectronApplication;
 		await installService(application);
@@ -1254,7 +1371,10 @@ test.describe('Unified Chat sidebar', () => {
 			await client.request(APP_SERVER_METHODS['session/request'], {
 				commandId: 'first-native-chat-turn', sessionId, request: {
 					type: 'startTurn', threadId, expectedSequence: (await readThread()).sequence, model: ashFixtureModel,
-					mode: 'agent', approvalMode: 'manual', input: [{ type: 'text', text: 'Original Chat message' }],
+					mode: 'agent', approvalMode: 'manual', input: [
+						{ type: 'text', text: 'Original Chat message' },
+						{ type: 'context', name: 'ash.creation.docs', content: 'Write Markdown.' },
+					],
 				},
 			});
 			await expect.poll(async () => (await readThread()).turns[0]?.status).toBe('completed');
@@ -1263,6 +1383,25 @@ test.describe('Unified Chat sidebar', () => {
 			await row.press('Enter');
 			const chat = page.locator('.ash-native-chat-widget .ash-chat');
 			await expect(chat).toHaveAttribute('data-thread-id', threadId);
+			const titlebar = page.locator('.ash-sessions-titlebar-widget');
+			const share = titlebar.getByRole('button', { name: '分享', exact: true });
+			const openInNewWindow = page.getByRole('menuitem', { name: '在新窗口中打开', exact: true });
+			const recap = page.getByRole('menuitem', { name: '显示对话回顾', exact: true });
+			await expect(share).toBeVisible();
+			await titlebar.getByRole('button', { name: /^聊天操作/u }).press('Enter');
+			await expect(page.getByRole('menuitem', { name: '重命名', exact: true })).toBeVisible();
+			await expect(openInNewWindow).toHaveCount(0);
+			await page.keyboard.press('Escape');
+			await expect(chat.locator('.ash-chat-file-buttons').getByRole('button', { name: 'Answer from Ash', exact: true })).toBeVisible();
+			await expect(chat.getByRole('button', { name: '会话产物', exact: true })).toHaveCount(0);
+			await chat.getByRole('button', { name: '添加上下文', exact: true }).press('Enter');
+			await page.getByRole('menuitem', { name: '搜索附件', exact: true }).press('Enter');
+			const attachments = page.getByRole('dialog', { name: '搜索附件', exact: true });
+			await expect(attachments.getByRole('option', { name: '添加附件', exact: true })).toBeVisible();
+			for (const source of ['工具…', '指令…', '拉取请求…', '终端…']) {
+				await expect(attachments.getByRole('option', { name: source, exact: true })).toHaveCount(0);
+			}
+			await page.keyboard.press('Escape');
 			const workspace = chat.locator('.ash-session-workspace-status');
 			await expect(workspace).toBeHidden();
 			await expect(chat.getByRole('button', { name: '使用工作区', exact: true })).toHaveCount(0);
@@ -1290,17 +1429,23 @@ test.describe('Unified Chat sidebar', () => {
 			await row.press('Shift+F10');
 			await expect(continueInCode).toBeEnabled();
 			await expect(workspaceActions).toHaveCount(0);
+			await expect(openInNewWindow).toHaveCount(0);
+			await expect(recap).toHaveCount(0);
 			await continueInCode.press('Enter');
 			const code = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 			await expect(code).toHaveAttribute('data-session-id', sessionId);
 			await expect(code).toHaveAttribute('data-thread-id', threadId);
+			await expect(share).toHaveCount(0);
 			await expect(code).toContainText('Original Chat message');
 			await expect(code).toContainText('Answer from Ash');
+			await expect(code.locator('.ash-chat-file-buttons').getByRole('button', { name: 'Answer from Ash', exact: true })).toBeVisible();
+			await expect(code.getByRole('button', { name: '会话产物', exact: true })).toHaveCount(0);
 			await expect(code.locator('.ash-session-workspace-status')).toHaveCount(0);
 			const originalDirectory = (await readConversation()).directory!.root;
 			const originalFile = join(originalDirectory, 'baseline.txt');
 			await writeFile(originalFile, 'at submission');
 			const composer = new Editor(code);
+			await composer.input.focus();
 			await composer.waitForEditorFocus();
 			await composer.waitForTypeInEditor('Follow up from Code');
 			await composer.input.press('Enter');
@@ -1315,6 +1460,8 @@ test.describe('Unified Chat sidebar', () => {
 			const titleMenu = page.locator('.ash-sessions-titlebar-menu');
 			await titleMenu.press('Enter');
 			await expect(page.getByRole('menuitem', { name: '重命名', exact: true })).toBeVisible();
+			await expect(openInNewWindow).toBeVisible();
+			await expect(continueInCode).toHaveCount(0);
 			await expect(workspaceActions).toHaveCount(0);
 			await page.keyboard.press('Escape');
 			await expect(titleMenu).toBeFocused();
@@ -2104,6 +2251,7 @@ test.describe('ChatGPT project conversation title', () => {
 		const help = page.locator('.ash-accessible-view-content');
 		await expect(help).toHaveValue(/聚焦回复中的文件链接并按 Enter 可下载文件/u);
 		await expect(help).toHaveValue(/选择「重命名」或双击标题可原地编辑/u);
+		await expect(help).not.toHaveValue(/会话产物/u);
 		await expect(help).not.toHaveValue(/激活窗口标题栏中的项目名称/u);
 		await page.keyboard.press('Escape');
 		await browserWindow.evaluate((value, size) => value.setSize(...size), [width, height] as const);
@@ -2552,8 +2700,12 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await composer.waitForEditorFocus();
 			}
 			await retainedHistory!.dispose();
-			await page.locator('.ash-window-mode-control').getByRole('button', { name: locale === 'en' ? 'Code' : '代码', exact: true }).click();
+			await codeMode.click();
 			await expect(editor).toBeHidden();
+			await commands.open('>sessions.open.chatgpt');
+			await expect(commands.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('sessions.open.chatgpt', { exact: true }) })).toHaveCount(0);
+			await commands.close();
+			await chatMode.click();
 			await commands.runCommand('sessions.open.chatgpt');
 			await expect(editor).toContainText('History one answer');
 			await composer.waitForEditorContents(text => text === 'Draft in first history');

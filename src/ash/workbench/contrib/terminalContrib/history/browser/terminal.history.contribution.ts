@@ -1,7 +1,8 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { CONTEXT_ACCESSIBILITY_MODE_ENABLED } from '../../../../../platform/accessibility/common/accessibility.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -64,7 +65,7 @@ function directoryScope(workspace: IWorkspaceContextService, instance: ITerminal
 	return root ? JSON.stringify([current.id, current.remoteAuthority ?? '', root.uri.scheme, root.uri.authority]) : undefined;
 }
 
-registerAction2(class GoToRecentDirectoryAction extends Action2 {
+registerEditorToolAction(class GoToRecentDirectoryAction extends Action2 {
 	constructor() {
 		super({ id: TerminalHistoryCommandId.GoToRecentDirectory, title: localize2('terminal.history.goToDirectory', 'Terminal: Go to Recent Directory...'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) });
 	}
@@ -117,7 +118,7 @@ interface CommandHistoryPick extends IQuickPickItem {
 	readonly shellId: string;
 }
 
-registerAction2(class RunRecentCommandAction extends Action2 {
+registerEditorToolAction(class RunRecentCommandAction extends Action2 {
 	constructor() {
 		super({
 			id: TerminalHistoryCommandId.RunRecentCommand,
@@ -193,7 +194,7 @@ registerAction2(class RunRecentCommandAction extends Action2 {
 	}
 });
 
-registerAction2(class ClearPreviousSessionHistoryAction extends Action2 {
+registerEditorToolAction(class ClearPreviousSessionHistoryAction extends Action2 {
 	constructor() {
 		super({
 			id: TerminalHistoryCommandId.ClearPreviousSessionHistory,

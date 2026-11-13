@@ -213,7 +213,7 @@ export class AttachContextAction extends Disposable {
 			const widget = this.widgets.getAllWidgets().find(widget => widget.input === this.host.target);
 			const sources: ContextSourceItem[] = [{ label: localize('chat.attach.files', 'Attach files'), iconClass: ThemeIcon.asClassName(Lxicon.paperclip), source: 'upload' }];
 			if (this.workspace.getWorkspace().folders.length) sources.unshift({ label: localize('chat.context.filesAndFolders', 'Files & Folders…'), iconClass: ThemeIcon.asClassName(Lxicon.folders), source: 'workspace' });
-			const contexts: readonly [IChatContextValueItem, number][] = [
+			const contexts: readonly [IChatContextValueItem, number][] = widget?.input.replyOnly ? [] : [
 				[instantiation.createInstance(GitHubContextValuePick, 'issue'), -450],
 				[instantiation.createInstance(GitHubContextValuePick, 'pullRequest'), -450],
 				[instantiation.createInstance(TerminalContext), -475],

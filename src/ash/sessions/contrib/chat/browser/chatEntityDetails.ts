@@ -17,6 +17,7 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../../workbench/browser/parts/views/viewPane.js';
 import { ChatListWidget } from '../../../../workbench/contrib/chat/browser/widget/chatListWidget.js';
+import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { renderChatRichContentText } from '../../../../workbench/contrib/chat/browser/widget/chatMarkdownRichContent.js';
 import type { ChatMarkdownEntity } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import type { IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
@@ -165,6 +166,7 @@ class ChatEntityDetailsView extends ViewPane {
 		body.append(title, status, transcript);
 		const scope = this._register(contextKeys.createScoped(body));
 		scope.createKey(detailsFocusContext, true);
+		ChatContextKeys.messageActionSurface.bindTo(scope).set('chat');
 		const scoped = this._register(instantiation.createChild(new ServiceCollection([IContextKeyService, scope])));
 		const list = this._register(scoped.createInstance(ChatListWidget, transcript, {
 			readResponseResource: (item: IChatListItem, resource: URI, signal: AbortSignal) => details.readResource(item, resource.toString(), signal),

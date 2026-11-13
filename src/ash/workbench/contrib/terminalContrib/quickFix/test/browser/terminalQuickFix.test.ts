@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ITerminalQuickFixService, type ITerminalQuickFixProvider } from '../../browser/quickFix.js';
 import { TerminalQuickFixService } from '../../browser/terminalQuickFixService.js';
 import { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
@@ -43,6 +44,7 @@ function completedCommand(text: string, output: string, exitCode = 1): ITerminal
 function fixture(command = completedCommand('git sttatus', typoOutput), initialInput = '') {
 	const lifetime = new DisposableStore();
 	const services = lifetime.add(new InstantiationService());
+	services.registerInstance(IContextKeyService, lifetime.add(new ContextKeyService()));
 	const quickFixes = lifetime.add(new TerminalQuickFixService());
 	services.registerInstance(ITerminalQuickFixService, quickFixes);
 	services.registerInstance(IExtensionService, { activateByEvent: async () => undefined } as unknown as IExtensionService);

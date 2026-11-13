@@ -1,6 +1,9 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { WorkbenchEditorToolsAvailable } from '../../../../common/contextkeys.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { BrowserViewStorageScope, BrowserViewCommandId, normalizeBrowserViewUrl } from '../../../../../platform/browserView/common/browserView.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -10,7 +13,7 @@ import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
 
 interface BrowserTabPick extends IQuickPickItem { readonly viewId?: string; }
 
-registerAction2(class QuickOpenBrowserAction extends Action2 {
+registerEditorToolAction(class QuickOpenBrowserAction extends Action2 {
 	constructor() {
 		super({
 			id: BrowserViewCommandId.QuickOpen,
@@ -20,6 +23,7 @@ registerAction2(class QuickOpenBrowserAction extends Action2 {
 	}
 
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const contexts = accessor.get(IContextKeyService);
 		const browsers = accessor.get(IBrowserViewWorkbenchService);
 		const editors = accessor.get(IEditorService);
 		const quickInput = accessor.get(IQuickInputService);
@@ -58,7 +62,7 @@ registerAction2(class QuickOpenBrowserAction extends Action2 {
 			refresh();
 			picker.show();
 		});
-		if (!request) { return; }
+		if (!request || !contexts.contextMatchesRules(WorkbenchEditorToolsAvailable)) return;
 		if (request.viewId) {
 			// Selection may outlive a page close or a Session switch while the picker is being dismissed.
 			const input = browsers.getContextualBrowserViews().get(request.viewId);
@@ -74,7 +78,7 @@ import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { BrowserEditorInput } from '../../common/browserEditorInput.js';
 
 for (const id of [BrowserViewCommandId.Open, BrowserViewCommandId.NewTab]) {
-	registerAction2(class OpenBrowserAction extends Action2 {
+	registerEditorToolAction(class OpenBrowserAction extends Action2 {
 		constructor() { super({ id, title: id === BrowserViewCommandId.Open ? localize2({ bundle: 'ash.workbench', key: 'command.OpenBrowser' }, 'Browser: Open Browser') : localize2({ bundle: 'ash.workbench', key: 'browser.newTabCommand' }, 'Browser: New Tab'), f1: true }); }
 		override async run(accessor: ServicesAccessor, url?: unknown): Promise<void> {
 			if (url !== undefined && typeof url !== 'string') { throw new TypeError('Invalid browser address'); }
@@ -82,15 +86,17 @@ for (const id of [BrowserViewCommandId.Open, BrowserViewCommandId.NewTab]) {
 		}
 	});
 }
-registerAction2(class OpenBrowserFileAction extends Action2 {
+registerEditorToolAction(class OpenBrowserFileAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.OpenFile, title: localize2({ bundle: 'ash.workbench', key: 'browser.openFileCommand' }, 'Browser: Open File'), f1: true }); }
 	override async run(accessor: ServicesAccessor): Promise<void> {
+		const contexts = accessor.get(IContextKeyService);
+		const browsers = accessor.get(IBrowserViewWorkbenchService);
 		const files = await accessor.get(IFileDialogService).showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: false, availableFileSystems: ['file'] });
-		if (files?.[0]) { await accessor.get(IBrowserViewWorkbenchService).createBrowserView({ initialUrl: files[0].toString(), owner: { type: 'user' } }); }
+		if (files?.[0] && contexts.contextMatchesRules(WorkbenchEditorToolsAvailable)) { await browsers.createBrowserView({ initialUrl: files[0].toString(), owner: { type: 'user' } }); }
 	}
 });
 for (const id of [BrowserViewCommandId.CloseAll, BrowserViewCommandId.CloseAllInGroup]) {
-	registerAction2(class CloseBrowserTabsAction extends Action2 {
+	registerEditorToolAction(class CloseBrowserTabsAction extends Action2 {
 		constructor() { super({ id, title: id === BrowserViewCommandId.CloseAll ? localize2({ bundle: 'ash.workbench', key: 'browser.closeAllCommand' }, 'Browser: Close All Tabs') : localize2({ bundle: 'ash.workbench', key: 'browser.closeGroupCommand' }, 'Browser: Close Tabs in Group'), f1: true }); }
 		override async run(accessor: ServicesAccessor): Promise<void> {
 			const part = accessor.get(IEditorPart);
@@ -106,14 +112,14 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { OpenSettingsCommandId } from '../../../../contrib/preferences/common/preferences.js';
-registerAction2(class OpenBrowserExternallyAction extends Action2 {
+registerEditorToolAction(class OpenBrowserExternallyAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.OpenExternal, title: localize2({ bundle: 'ash.workbench', key: 'browser.externalCommand' }, 'Browser: Open in System Browser'), f1: true }); }
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const input = accessor.get(IEditorService).activeEditor;
 		if (input instanceof BrowserEditorInput && input.model && /^https?:/u.test(input.model.state.url)) { await accessor.get(IOpenerService).open(URI.parse(input.model.state.url), { openExternal: true, allowContributedOpeners: false, allowCommands: false }); }
 	}
 });
-registerAction2(class OpenBrowserSettingsAction extends Action2 {
+registerEditorToolAction(class OpenBrowserSettingsAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.OpenSettings, title: localize2({ bundle: 'ash.workbench', key: 'browser.settingsCommand' }, 'Browser: Open Settings'), f1: true }); }
 	override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand(OpenSettingsCommandId, 'Browser'); }
 });

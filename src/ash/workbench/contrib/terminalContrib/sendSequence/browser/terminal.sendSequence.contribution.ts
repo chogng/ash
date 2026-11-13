@@ -1,9 +1,10 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { raceCancellation } from '../../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -12,7 +13,7 @@ import { ITerminalService } from '../../../terminal/browser/terminal.js';
 import { TerminalCommandId } from '../../../terminal/common/terminal.js';
 import { TerminalHasActiveInstanceContext } from '../../../terminal/common/terminalContextKey.js';
 
-registerAction2(class SendSequenceAction extends Action2 {
+registerEditorToolAction(class SendSequenceAction extends Action2 {
 	constructor() {
 		super({
 			id: TerminalCommandId.SendSequence,

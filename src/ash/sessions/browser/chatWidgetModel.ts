@@ -18,9 +18,8 @@ import { localize } from '../../nls.js';
 import type { SkillReference } from '../../platform/agentHost/common/appServerApi.js';
 import type { ResolvedChatContext } from '../../workbench/services/chat/common/chatContextService.js';
 import type { SessionHistoryBindingDiagnostic } from '../services/sessions/browser/sessionOpenTelemetryService.js';
-import { chatExecutionWorkspace, findAgentNode, type IActiveSessionThread, type ISession, type ISessionArtifact, type IUntitledChatSession, type ModelRef, type SessionId, type ThreadId } from '../services/sessions/common/session.js';
+import { chatExecutionWorkspace, findAgentNode, type IActiveSessionThread, type ISession, type IUntitledChatSession, type ModelRef, type SessionId, type ThreadId } from '../services/sessions/common/session.js';
 import { parseSessionIdentity } from '../services/sessions/common/sessionIdentity.js';
-import { getCapturedSessionArtifacts, getThreadSessionArtifacts } from './sessionArtifactSources.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import type { ChatCreationKind } from '../common/chatCreation.js';
 import { chatQueuedMessageListItems, chatStreamingResponseUpdate, chatTranscriptListItems, type ChatStreamingResponseUpdate, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
@@ -46,7 +45,8 @@ import { readChatRequestVersions } from './chatRequestVersions.js';
 import { isNative } from '../../base/common/platform.js';
 import { getChatCreationContext } from '../common/chatCreation.js';
 import { readPendingCreationKind, writePendingCreationKind } from '../services/sessions/browser/sessionGridState.js';
-import { getGeneratedFileSessionArtifacts, IGeneratedFilesService, type GeneratedFileSource } from '../services/generatedFiles/common/generatedFilesService.js';
+import { IGeneratedFilesService, type GeneratedFileSource } from '../services/generatedFiles/common/generatedFilesService.js';
+import { IsSessionsWindowContext } from '../../workbench/common/contextkeys.js';
 
 const historyPageTurns = 20;
 
@@ -151,6 +151,7 @@ export class ChatWidgetModel extends Disposable {
 	protected get initializeInConstructor(): boolean { return true; }
 	/** Chat can still use captured files as artifacts without presenting a changes review. */
 	protected get supportsConversationChangeReview(): boolean { return true; }
+	protected get supportsChatCreation(): boolean { return false; }
 	get commandInterpretation(): 'literal' | undefined { return undefined; }
 	protected get useSkillSelectors(): boolean { return this.commandInterpretation !== 'literal'; }
 	protected get snapshotHistory(): ThreadSnapshotHistory | undefined {
@@ -177,7 +178,6 @@ export class ChatWidgetModel extends Disposable {
 			const keys = new Set([SessionsWorkspaceModeContext.key]);
 			this._register(contextKeys.onDidChangeContext(event => {
 				if (event.affectsSome(keys)) {
-					this.refreshRequestVersions.schedule();
 					this._onDidChange.fire();
 				}
 			}));
@@ -278,7 +278,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private get requiresWorkspaceSelection(): boolean {
-		if (this.selection.kind === 'session' || !this.isCodeConversation) return false;
+		if (this.selection.kind === 'session' || !this.isCodeConversation || this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) !== 'code') return false;
 		const { forkSource } = this.selection.session;
 		if (forkSource) {
 			const session = this.sessionService.sessions.find(candidate => candidate.sessionId === forkSource.sessionId);
@@ -384,19 +384,6 @@ export class ChatWidgetModel extends Disposable {
 		return this.selection.kind === 'session' ? this.selection.active.session : undefined;
 	}
 
-	get artifacts(): readonly ISessionArtifact[] {
-		const active = this.activeSession;
-		if (!active) return [];
-		const files = getGeneratedFileSessionArtifacts(this.generatedFiles.files, this.generatedFileChat(active.session.sessionId, active.threadId));
-		const thread = this._thread;
-		if (thread?.sessionId !== active.session.sessionId || thread.threadId !== active.threadId) return files;
-		const captures = this._changeSets.flatMap(summary => {
-			const details = this.changeDetails.get(summary.changeSetId);
-			return details?.summary.revision === summary.revision ? [details] : [];
-		});
-		return [...files, ...getThreadSessionArtifacts(thread, this.transcriptEntries), ...getCapturedSessionArtifacts(thread, captures)];
-	}
-
 	get isNestedDraft(): boolean {
 		return this.selection.kind === 'untitled' && this.selection.session.forkSource !== undefined;
 	}
@@ -406,12 +393,14 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	get creationKind(): ChatCreationKind | undefined {
+		if (!this.supportsChatCreation) return undefined;
 		if (this.selection.kind === 'untitled') return this.selection.session.creationKind;
 		if (this._thread?.turns.length) return undefined;
 		return readPendingCreationKind(this.storage, this.selection.active);
 	}
 
 	setCreationKind(kind: ChatCreationKind | undefined): boolean {
+		if (!this.supportsChatCreation) return false;
 		if (this.selection.kind === 'session') {
 			if (!this.creationKind) return false;
 			writePendingCreationKind(this.storage, this.selection.active, kind);
@@ -551,7 +540,8 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	protected get isCodeConversation(): boolean {
-		return this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) === 'code';
+		// In the Sessions window the base model backs Code; Chat supplies its own model.
+		return this.contextKeys?.getValue(IsSessionsWindowContext.key) === true;
 	}
 
 	private async loadRequestVersions(): Promise<void> {
@@ -1724,16 +1714,14 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private generatedFileSource(thread: Thread, itemId: string): GeneratedFileSource {
-		return { ...this.generatedFileChat(thread.sessionId, thread.threadId), itemId, partId: 'markdown' };
-	}
-
-	private generatedFileChat(sessionId: SessionId, threadId: ThreadId): Omit<GeneratedFileSource, 'itemId' | 'partId'> {
-		const identity = parseSessionIdentity(sessionId, LOCAL_AGENT_HOST_PROVIDER_ID);
+		const identity = parseSessionIdentity(thread.sessionId, LOCAL_AGENT_HOST_PROVIDER_ID);
 		return {
 			providerId: this.session?.providerId ?? identity.providerId,
 			accountId: null,
 			sessionId: identity.backendSessionId,
-			threadId: parseSessionIdentity(threadId, LOCAL_AGENT_HOST_PROVIDER_ID).backendSessionId,
+			threadId: parseSessionIdentity(thread.threadId, LOCAL_AGENT_HOST_PROVIDER_ID).backendSessionId,
+			itemId,
+			partId: 'markdown',
 		};
 	}
 

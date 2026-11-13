@@ -233,7 +233,7 @@ for (const surface of ['IDE', 'Agents Code'] as const) {
 			await page.keyboard.press('ControlOrMeta+.');
 			const modes = page.locator('.ash-chat-input-mode-menu');
 			await expect(modes).toBeVisible();
-			await modes.getByRole('menuitemradio', { name: 'Ask', exact: true }).click();
+			await modes.getByRole('menuitemradio', { name: 'Ask', exact: true }).press('Enter');
 			await expect(modes).toBeHidden();
 			await draft.focus();
 			await window.quickaccess.runCommand('workbench.action.chat.openModePicker');
@@ -440,7 +440,7 @@ for (const surface of ['IDE', 'Agents Code'] as const) {
 					const saved = JSON.parse(await readFile(path, 'utf8'));
 					expect(saved.messages.some((message: { text: string; }) => message.text === controlledReply)).toBe(true);
 					await window.quickaccess.runCommand('workbench.action.chat.import');
-					await expect(window.editors.element.getByRole('tab', { name: `Saved Chat: ${saved.title}` })).toBeVisible();
+					await expect(page.getByRole('tab', { name: `Saved Chat: ${saved.title}`, exact: true })).toBeVisible();
 					const content = page.getByRole('tabpanel', { name: `Saved Chat: ${saved.title}`, exact: true });
 					await expect(content.locator('.stanza-editor-input:visible')).toHaveAttribute('aria-readonly', 'true');
 					await expect(content.locator('.view-lines')).toContainText('Controlled execution is running.');

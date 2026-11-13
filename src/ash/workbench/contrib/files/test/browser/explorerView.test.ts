@@ -32,7 +32,7 @@ import { IHoverService, type IManagedHover } from '../../../../../platform/hover
 import { ListConfiguration } from '../../../../../platform/list/browser/listService.js';
 import type { EditorOpenOptions, EditorOpenTarget, IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
-import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -266,6 +266,7 @@ test('ExplorerView opens workspace files on single click', async () => {
 		services.registerInstance(IPathService, paths);
 		using storageService = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: workspaceContextService.getWorkspace().id, flushInterval: 0, onError: () => { } });
 		using commands = new CommandService(services);
+		services.registerInstance(IContextKeyService, contextKeyService);
 		const menus = new MenuService(commands, contextKeyService);
 		services.registerInstance(IExplorerService, explorerService);
 		using pane = new ExplorerView(

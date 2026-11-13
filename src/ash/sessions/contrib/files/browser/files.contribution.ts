@@ -7,6 +7,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { KeybindingsRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -15,7 +16,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ASH_REMOTE_SCHEME } from '../../../../platform/remote/common/remote.js';
-import { FocusedViewContext, IsSessionsWindowContext, ResourceSchemeContext, WorkspaceFolderCountContext } from '../../../../workbench/common/contextkeys.js';
+import { FocusedViewContext, IsSessionsWindowContext, ResourceSchemeContext, SessionsCodeEditorContext, WorkspaceFolderCountContext } from '../../../../workbench/common/contextkeys.js';
 import { resolveCommandsContext } from '../../../../workbench/browser/parts/editor/editorCommandsContext.js';
 import { FileDownload } from '../../../../workbench/contrib/files/browser/fileImportExport.js';
 import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
@@ -50,11 +51,15 @@ class FilesViewContribution extends Disposable {
 registerWorkbenchContribution('sessions.contrib.filesView', WorkbenchPhase.BlockStartup,
 	services => services.get(IInstantiationService).createInstance(FilesViewContribution));
 
+const codeFiles = SessionsCodeEditorContext.isEqualTo(true);
+const canCollapseFolders = ContextKeyExpr.and(codeFiles, ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0));
+
 export const SESSIONS_FILES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.filesContainer';
 
 registerAction2(class extends Action2 {
 	constructor() { super({ id: SESSIONS_FILES_CONTAINER_ID, title: localize2('sessions.files.title', 'Files') }); }
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(codeFiles)) return;
 		await accessor.get(ICommandService).executeCommand(NEW_FILE_TAB_COMMAND_ID);
 	}
 });
@@ -63,7 +68,7 @@ registerAction2(class extends Action2 {
 KeybindingsRegistry.registerKeybindingRule({
 	command: SESSIONS_FILES_CONTAINER_ID,
 	keybinding: Keybinding.single(logicalKey('e', { primaryKey: true, shiftKey: true })),
-	when: IsSessionsWindowContext.isEqualTo(true),
+	when: codeFiles,
 });
 
 registerAction2(class extends Action2 {
@@ -72,12 +77,13 @@ registerAction2(class extends Action2 {
 			id: 'sessions.files.action.collapseExplorerFolders',
 			title: localize2({ bundle: 'ash', key: 'sessions.files.collapseFolders' }, 'Collapse folders'),
 			icon: Lxicon.chevronUp,
-			precondition: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
+			precondition: canCollapseFolders,
 			f1: true,
 		});
 	}
 
 	public override run(accessor: ServicesAccessor): void {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(canCollapseFolders)) return;
 		const view = accessor.get(IViewsService).getViewWithId(SESSIONS_FILES_VIEW_ID);
 		if (view instanceof SessionsExplorerView) {
 			view.collapseAll();

@@ -143,7 +143,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			},
 		];
 		for (const { id, title, run } of splitCommands) {
-			this._register(CommandsRegistry.register(id, run));
+			this._register(CommandsRegistry.register(id, () => { if (this.splitActive.get()) run(); }));
 			this._register(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
 				command: { id, title },
 				when: ContextKeyExpr.has('sessions.splitActive'),

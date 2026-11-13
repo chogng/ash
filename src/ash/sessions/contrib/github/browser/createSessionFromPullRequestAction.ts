@@ -3,6 +3,7 @@ import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -32,6 +33,8 @@ registerAction2(class NewSessionFromPullRequestAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
+		const contextKeys = accessor.get(IContextKeyService);
+		if (!contextKeys.contextMatchesRules(when)) return;
 		const commands = accessor.get(ICommandService);
 		const extensions = accessor.get(IExtensionService);
 		const quickInput = accessor.get(IQuickInputService);
@@ -58,7 +61,7 @@ registerAction2(class NewSessionFromPullRequestAction extends Action2 {
 		if (!repositoryChoice) return;
 		const repository = repositoryChoice.repository;
 		const number = await pickPullRequest(quickInput, github, repository, picker.signal);
-		if (number === undefined) return;
+		if (number === undefined || !contextKeys.contextMatchesRules(when)) return;
 
 		using cancellation = new CancellationTokenSource();
 		const snapshot = await progress.withProgress({

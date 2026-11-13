@@ -14,6 +14,7 @@ import { openArtifactCommands, openLinkedArtifactCommand, type ArtifactWorkspace
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -71,7 +72,10 @@ registerAction2(class OpenCreator extends Action2 {
 	constructor() {
 		super({ id: 'sessions.open.creator', title: localize2('sessions.creator.title', 'Artifacts'), icon: Lxicon.artifacts, toggled: ContextKeyExpr.has('sessions.activity.creatorSelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 50, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') } });
 	}
-	public override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand('sessions.show.creator'); }
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) !== 'chat') return;
+		await accessor.get(ICommandService).executeCommand('sessions.show.creator');
+	}
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({

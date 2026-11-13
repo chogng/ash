@@ -95,10 +95,10 @@ export class SessionsTitleBarWidget extends Disposable {
 		element.append(titleContainer);
 		const modeKey = SessionsWorkspaceModeContext.key;
 		const modeKeys = new Set([modeKey]);
-		const mode = observableFromEvent(this, listener => contextKeys.onDidChangeContext(event => {
+		const mode = observableFromEvent<'chat' | 'code'>(this, listener => contextKeys.onDidChangeContext(event => {
 			if (event.affectsSome(modeKeys)) listener(event);
-		}), () => contextKeys.getValue(modeKey));
-		const desktopChat = mode.map(value => environment.runtime === 'electron' && value !== 'code');
+		}), () => contextKeys.getValue(modeKey) === 'code' ? 'code' : 'chat');
+		const desktopChat = mode.map(value => environment.runtime === 'electron' && value === 'chat');
 		const activeChat = derived(reader => {
 			if (!desktopChat.read(reader) || !conversation.hasDesktopChatSource.read(reader)) return undefined;
 			for (const source of catalog.sources) {
@@ -110,7 +110,8 @@ export class SessionsTitleBarWidget extends Disposable {
 		const activeKey = () => {
 			const entry = activeChat.get();
 			if (entry) return chatTitleKey(entry);
-			return desktopChat.get() ? undefined : JSON.stringify(renameTarget(sessions.activeSelection));
+			const target = renameTarget(sessions.activeSelection);
+			return desktopChat.get() || target === undefined ? undefined : JSON.stringify([mode.get(), target]);
 		};
 		const canAct = (entry: ChatListEntry) => !entry.disabled && !entry.actionsDisabled;
 		const button = this._register(new Button(titleContainer, {
@@ -120,7 +121,7 @@ export class SessionsTitleBarWidget extends Disposable {
 			label: '',
 			onClick: event => {
 				if (indicator.blockedSessions.get().length) {
-					picker.value = showBlockedSessionsList(quickInput, navigation, indicator, fixes, notifications, button.domNode);
+					picker.value = showBlockedSessionsList(quickInput, navigation, indicator, mode.get() === 'code' ? fixes : undefined, notifications, button.domNode);
 					return;
 				}
 				const target = renameTarget(sessions.activeSelection);
@@ -136,7 +137,7 @@ export class SessionsTitleBarWidget extends Disposable {
 		titleContainer.append(titleMenuHost);
 		const titleAction = this._register(new Action('sessions.titlebar.chatActions'));
 		const titleMenu = this._register(new TitleMenuActionViewItem(titleAction, () => {
-			return desktopChat.get() ? getDesktopChatActions() : getSessionActions(true);
+			return desktopChat.get() ? getDesktopChatActions() : getSessionActions('chat', true);
 		}, contextMenus, () => getRenameAction()));
 		titleMenu.render(titleMenuHost);
 		const menuOpen = observableValue('sessionTitleMenuOpen', false);
@@ -162,7 +163,7 @@ export class SessionsTitleBarWidget extends Disposable {
 			try {
 				const captured = sessionActions.resolveTarget(target);
 				beginEdit({
-					key: JSON.stringify(target), title: captured.title,
+					key: JSON.stringify([mode.get(), target]), title: captured.title,
 					rename: async title => sessionActions.renameSession((await captured.resolve()).sessionId, title),
 				}, restoreFocus);
 			} catch (error) {
@@ -217,7 +218,7 @@ export class SessionsTitleBarWidget extends Disposable {
 				return;
 			}
 			const key = activeKey();
-			const actions = getSessionActions(keyboard);
+			const actions = getSessionActions('code', keyboard);
 			if (!key || !actions.length) return;
 			const cancellation = new CancellationTokenSource();
 			const request = { key, cancellation };
@@ -294,21 +295,26 @@ export class SessionsTitleBarWidget extends Disposable {
 			});
 			return actions;
 		};
-		const getSessionActions = (restoreFocus: boolean): IAction[] => {
+		const getSessionActions = (surface: 'chat' | 'code', restoreFocus: boolean): IAction[] => {
+			if (mode.get() !== surface) return [];
 			const selection = sessions.activeSelection;
 			const target = renameTarget(selection);
 			if (!selection || target === undefined) return [];
-			const targetKey = JSON.stringify(target);
-			const workspaceActions = selection.kind === 'session'
+			const targetKey = JSON.stringify([surface, target]);
+			const workspaceActions = surface === 'code' && selection.kind === 'session'
 				? createSessionWorkspaceActions(selection.active.session.sessionId, selection.active.threadId, management, commands)
 				: [];
-			const actions = Separator.join(workspaceActions, [...createSessionItemActions(selection, commands, listModel, notifications,
-				() => commands.executeCommand('sessions.openInNewWindow', selection))]);
-			return actions.map(action => action.id === 'agentSession.rename' ? {
+			const actions = Separator.join(workspaceActions, [...createSessionItemActions(selection, commands, listModel, notifications, {
+				projectScope: surface,
+				openInNewWindow: surface === 'code' ? () => commands.executeCommand('sessions.openInNewWindow', selection) : undefined,
+			})]);
+			return actions.map(action => action instanceof Separator ? action : {
 				...action, run: () => {
-					if (activeKey() === targetKey) beginSessionEdit(target, restoreFocus);
+					if (activeKey() !== targetKey) return;
+					if (action.id === 'agentSession.rename') return beginSessionEdit(target, restoreFocus);
+					return action.run();
 				},
-			} : action);
+			});
 		};
 		const menuButton = this._register(new Button(element, {
 			...defaultButtonStyles,
@@ -346,13 +352,19 @@ export class SessionsTitleBarWidget extends Disposable {
 		const folders = observableFromEvent(this, workspace.onDidChangeWorkspaceFolders, () => workspace.getWorkspace().folders);
 		let displayedKey: string | undefined;
 		this._register(autorun(reader => {
+			mode.read(reader);
+			picker.clear();
+		}));
+		this._register(autorun(reader => {
 			const selection = sessions.getSelection(reader).activeSelection;
-			const codeMode = mode.read(reader) === 'code';
+			const surface = mode.read(reader);
+			const codeMode = surface === 'code';
 			const useDesktopCatalog = desktopChat.read(reader);
 			const entry = activeChat.read(reader);
 			const count = useDesktopCatalog ? 0 : indicator.blockedSessions.read(reader).length;
 			const covered = !!customViews.activeCustomView.read(reader);
-			const key = entry ? chatTitleKey(entry) : JSON.stringify(renameTarget(selection));
+			const target = renameTarget(selection);
+			const key = entry ? chatTitleKey(entry) : target === undefined ? undefined : JSON.stringify([surface, target]);
 			const sharePending = sharing.read(reader);
 			const hasActions = useDesktopCatalog
 				? !!(entry && (entry.rename || entry.setPinned || entry.archive || entry.sessionId || entry.remove))

@@ -58,7 +58,11 @@ export function getChatSelectionAccessibilityHelp(): string {
 }
 
 export function getChatCodeBlockCardAccessibilityHelp(): string {
-	return localize('chat.code.cardHelp', 'Use Tab to reach the code block actions. Press Left or Right to move between More Actions and Copy. Open More Actions to insert the code at the cursor, open it in a new file, or apply it to the editor when available. Press Escape to close the menu and return to More Actions.') + '\n' + getChatMermaidAccessibilityHelp();
+	return getChatCodeBlockCopyAccessibilityHelp() + '\n' + getChatMermaidAccessibilityHelp();
+}
+
+function getChatCodeBlockCopyAccessibilityHelp(): string {
+	return localize('chat.code.cardHelp', 'Use Tab to reach Copy in a code block and press Enter or Space to copy the code.');
 }
 
 export function getChatTableAccessibilityHelp(): string {
@@ -69,8 +73,16 @@ function getChatMermaidAccessibilityHelp(): string {
 	return localize('chat.mermaid.help', 'When a Mermaid diagram is rendered, use Tab to reach its preview button or Mermaid source. Press Enter or Space to open the image preview or expand the code. Escape closes the preview and returns focus to the diagram.');
 }
 
+export function getReplyInputAccessibilityHelp(providerManagesDraft: boolean): string {
+	return [
+		localize({ bundle: 'ash.workbench', key: 'chat.input.replyHelp' }, 'Press Enter to send and Shift+Enter for a new line. Use Tab to reach the attachment, dictation, and model controls. Press Enter or Space to open a menu and Escape to return. Slash-prefixed text is sent as a normal message.'),
+		providerManagesDraft ? undefined : localize({ bundle: 'ash.workbench', key: 'chat.input.replyContextHelp' }, 'Use Add context to upload files or search for attachments. Use the arrow keys to choose a result and Enter to add it. While a reply is running, sending a follow-up queues it until the reply finishes.'),
+		getChatInputNoticeHelp(),
+	].filter(Boolean).join('\n');
+}
+
 /** Shared input operations; product composers append their own layout and session help. */
-export function getChatInputAccessibilityHelp(screenshotHelp: string, secondaryToolbarVisible: boolean, slashCommands: boolean, changes?: 'workspace' | 'conversation'): string {
+export function getChatInputAccessibilityHelp(screenshotHelp: string, secondaryToolbarVisible: boolean, slashCommands: boolean, changes?: 'workspace' | 'conversation', canEditCode = true): string {
 	return [
 		getChatInputNoticeHelp(),
 		localize('dictation.downloadHelp', 'The dictation button shows when the local model is downloading. Activate it again, or press Escape in the input to cancel. The microphone opens after the model is ready.'),
@@ -78,10 +90,10 @@ export function getChatInputAccessibilityHelp(screenshotHelp: string, secondaryT
 		localize('chat.message.actionsHelp', 'Use Tab to reach Response actions below a reply. Press Left or Right to move between actions, then Enter or Space to activate the focused action.'),
 		getChatMermaidAccessibilityHelp(),
 		getChatRequestAccessibilityHelp(),
-		localize('chat.request.codeVersionsHelp', 'In Code, right-click an eligible message or press Shift+F10 on its row to open Run another version.'),
+		canEditCode && localize('chat.request.codeVersionsHelp', 'In Code, right-click an eligible message or press Shift+F10 on its row to open Run another version.'),
 		localize('chat.modelPicker.sliderHelp', 'In the Chat model picker, press Enter or Space on the model name to expand or collapse the model list. The current thinking level appears below the model name. Use the arrow keys on the slider to change the level.'),
 		localize('chat.modelPicker.ultraSliderHelp', 'In the Chat model picker, Ultra can move the effort slider to the level used for requests. Selecting a different level while this override is active turns off Ultra and applies your choice. Turning Ultra off with its button restores your previous choice. On models that accept your chosen effort during Ultra, the slider applies your selection with Ultra still on.'),
-		localize('chat.code.applyHelp', 'Use Apply to editor on a completed reply to ask its model to merge a code block into the open text file. This creates a side chat and keeps the source conversation and draft. Changes appear in the existing file review controls, where you can accept or reject them. Cancel from the progress notification to stop receiving edits; changes already received remain reviewable. Editing or closing the target file stops further edits.'),
+		canEditCode ? localize('chat.code.applyHelp', 'Use Apply to editor on a completed reply to ask its model to merge a code block into the open text file. This creates a side chat and keeps the source conversation and draft. Changes appear in the existing file review controls, where you can accept or reject them. Cancel from the progress notification to stop receiving edits; changes already received remain reviewable. Editing or closing the target file stops further edits.') : getChatCodeBlockCopyAccessibilityHelp(),
 		localize('chat.status.help', 'Run Focus Status Bar in the Command Palette, then use the arrow keys to reach AI status. Enter or Space opens account status and links to account management, model connections and chat usage. Use Up and Down to choose, Enter to open, and Escape to return. Subscription account status does not determine API model availability. Subscription quota rows show remaining percentages and reset times when reported. Use Refresh Account Status and Limits to retry failed queries. Unknown limits are not treated as unlimited. Chat usage shows conversation tokens, independently of subscription quota.'),
 		slashCommands && localize('approvalEnvironment.commandUsage', 'Use /guardian or /guardian setup to prepare review background.'),
 		localize('chat.queuePicker.help', 'While a task is running, Enter and the follow-up button use chat.requestQueuing.defaultAction: queue waits for completion; steer adds instructions to the current task. Hold Alt to use the other action. More Send Options opens queue, steer and Stop and Send choices with descriptions. Use Left and Right Arrow between the two buttons, Up or Down Arrow to open the menu, and Escape to return to its button. Stop and Send waits for stopping before sending the captured draft and attachments. Failed submissions restore an unedited draft; switching conversations cancels the old input operation.'),

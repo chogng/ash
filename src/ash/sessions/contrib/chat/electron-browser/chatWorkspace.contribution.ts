@@ -15,7 +15,6 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { getChatCodeBlockCardAccessibilityHelp, getChatRequestAccessibilityHelp, getChatTableAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
-import { getSessionArtifactsAccessibilityHelp } from '../browser/sessionArtifacts.js';
 import { getSessionsListGroupingHelp } from '../../sessions/browser/views/sessionsListActions.js';
 import type { IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { IChatViewFactory, type ChatDraftModelSource, type ICompactChatModel, type IChatViewSource } from '../browser/chatViewFactory.js';
@@ -53,7 +52,6 @@ const ashChatViewSource = {
 	advanceWelcomePhrase: false,
 	useWorkbenchModelManagement: true,
 	explicitModelSelection: true,
-	literalServerCommands: true,
 	createDraftPicker: (instantiation, footer, _visible, model) => instantiation.createInstance(SessionWorkspaceStatus, footer, model),
 	accessibility: {
 		focusContext: 'ashNativeChatFocused',
@@ -267,7 +265,6 @@ function registerAshChatAccessibility(): void {
 						+ '\n\n' + localize('sessions.chat.ashResponseActionsHelp', 'Use Tab to reach the response toolbar, then use the arrow keys to move between actions. Share asks for confirmation before sharing the conversation through this response. Fork starts a new Ash conversation through this response.')
 						+ '\n\n' + getChatCodeBlockCardAccessibilityHelp()
 						+ '\n\n' + getChatTableAccessibilityHelp()
-						+ '\n\n' + getSessionArtifactsAccessibilityHelp()
 						+ '\n\n' + localize('sessions.chat.versionsHelp', 'For a conversation with edits, open More actions on its sidebar row and choose Conversation versions. Use Right Arrow to open the submenu and Enter to open a version.')
 						+ '\n\n' + localize('sessions.list.forkSidebarHelp', 'In the sidebar, Tab to the Fork icon and press Enter to open its source conversation. Focus Conversation branches and press Enter to expand or collapse the tree. On the conversation row, Right Arrow expands the tree or moves to its first branch, and Left Arrow collapses it.')
 						+ '\n\n' + localize('sessions.titlebar.ashChatHelp', 'For a saved chat, focus its title and press Enter or Down Arrow to open the actions menu. Choose Rename or double-click the title to edit it in place. Press Enter to save or Escape to cancel. The menu also offers pin, archive, and delete actions when available. Share at the right of the title bar asks for confirmation before creating and copying a link to the conversation text.')

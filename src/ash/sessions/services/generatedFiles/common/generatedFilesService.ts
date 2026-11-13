@@ -4,7 +4,6 @@ import type { IObservable } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { GeneratedFile, GeneratedFileSource } from '../../../../platform/generatedFiles/common/generatedFiles.js';
-import type { ISessionArtifact } from '../../sessions/common/session.js';
 
 export type { GeneratedFile, GeneratedFileSource } from '../../../../platform/generatedFiles/common/generatedFiles.js';
 
@@ -25,10 +24,3 @@ export interface IGeneratedFilesService {
 }
 
 export const IGeneratedFilesService = createServiceIdentifier<IGeneratedFilesService>('generatedFilesService');
-
-/** Projects the current chat's artifacts from the same catalogue used by the Artifacts home. */
-export function getGeneratedFileSessionArtifacts(files: readonly GeneratedFile[], chat: Omit<GeneratedFileSource, 'itemId' | 'partId'>): readonly ISessionArtifact[] {
-	return files.filter(({ source }) => source.providerId === chat.providerId && source.accountId === chat.accountId
-		&& source.sessionId === chat.sessionId && source.threadId === chat.threadId)
-		.map(file => ({ id: file.id, kind: 'file', label: file.title, uri: file.resource }));
-}

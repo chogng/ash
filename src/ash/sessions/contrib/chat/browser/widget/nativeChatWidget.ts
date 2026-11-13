@@ -37,7 +37,7 @@ export class NativeChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel
 		@IConfigurationService configuration: IConfigurationService,
 	) {
 		super(container, panelId, model, createUntitledSession, contextMenus, contextViews, commands, accessibleViews, notifications,
-			undefined, undefined, undefined, createInput, { classPrefix: 'ash-native-chat', showWelcome: false },
+			undefined, undefined, undefined, createInput, { classPrefix: 'ash-native-chat', showWelcome: false, messageActionSurface: 'chat' },
 			instantiation, dialogs, quickInput, widgets, contextKeys, voiceOnboarding, configuration);
 	}
 }

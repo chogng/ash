@@ -4,7 +4,7 @@ import { raceCancellationError } from '../../../../base/common/async.js';
 import { canceled } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, observableSignalFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
-import { URI } from '../../../../base/common/uri.js';
+import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { findLast } from '../../../../base/common/arraysFind.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -17,14 +17,13 @@ import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/
 import { chatListItem, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
-import { chatGPTGeneratedFileChat, chatGPTWritingSource, decodeChatGPTReply } from '../browser/chatGPTRichContent.js';
+import { chatGPTWritingSource, decodeChatGPTReply } from '../browser/chatGPTRichContent.js';
 import { chatGPTResourceKey, mergeChatGPTResources, type ChatGPTMessage } from '../browser/chatGPTClient.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
 import { canQueueChatGPTCreation, linkedTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 import type { ChatEntityDetailsSource } from '../../chat/browser/chatEntityDetails.js';
-import { getGeneratedFileSessionArtifacts, IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
-import type { ISessionArtifact } from '../../../services/sessions/common/session.js';
+import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
 
 export const ChatGPTResponseCanOpenOriginalContext = 'sessions.chatgpt.responseCanOpenOriginal';
 export const ChatGPTResponseOnlineContext = 'sessions.chatgpt.responseOnline';
@@ -146,26 +145,6 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 
 	get composerGeneration(): number { return this.generation; }
 	get items(): readonly IChatListItem[] { return this.currentItems; }
-	get artifacts(): readonly ISessionArtifact[] {
-		const { catalogScope, conversationId } = this.backend.state.get();
-		if (!catalogScope || !conversationId) return [];
-		const artifacts = new Map(getGeneratedFileSessionArtifacts(this.generatedFiles.files, chatGPTGeneratedFileChat(catalogScope, conversationId))
-			.map(file => [file.uri.toString(), file]));
-		for (const item of this.currentItems) {
-			if (item.type !== 'agentMessage' || item.transient) continue;
-			for (const resource of item.resources ?? []) {
-				if (resource.kind !== 'image' && resource.kind !== 'document' || resource.frameOrigin) continue;
-				const uri = URI.parse(resource.uri);
-				const id = uri.toString();
-				if (!artifacts.has(id)) artifacts.set(id, {
-					id, kind: resource.kind === 'image' ? 'image' : /plan\.md$/iu.test(resource.name) ? 'plan' : 'file',
-					label: resource.name, uri,
-					source: { kind: 'response', itemId: item.id, mimeType: resource.mimeType },
-				});
-			}
-		}
-		return [...artifacts.values()];
-	}
 
 	newChat(): void { this.backend.newChat(); }
 	get creationKind(): ChatCreationKind | undefined { return this.backend.state.get().draftCreationKind; }

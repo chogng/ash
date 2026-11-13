@@ -16,6 +16,7 @@ import { IWorkspacesService } from '../../../../platform/workspaces/common/works
 import { IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionFolderAuthorizationService } from '../../../common/sessionWorkspace.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { projectForFolder, readCodeProjects } from './sessionWorkspaceProjects.js';
@@ -24,7 +25,7 @@ interface FolderPick extends IQuickPickItem {
 	readonly folder?: URI;
 }
 
-const canStartSession = ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ChatContextKeys.enabled.isEqualTo(true));
+const canStartSession = ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ChatContextKeys.enabled.isEqualTo(true), SessionsWorkspaceModeContext.isEqualTo('code'));
 
 function isLocalFolder(folder: URI): boolean {
 	return folder.scheme === 'file' && !folder.authority && folder.path.startsWith('/') && !folder.query && !folder.fragment;

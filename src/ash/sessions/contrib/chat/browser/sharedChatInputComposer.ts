@@ -6,7 +6,6 @@ import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/b
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
-import { autorun, type IObservable } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -23,7 +22,6 @@ import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
 import { getSessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import { SessionReferenceCompletions } from './sessionReferenceCompletions.js';
-import { SessionArtifacts } from './sessionArtifacts.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
@@ -39,7 +37,6 @@ export class SharedChatInputComposer extends Disposable {
 		container: HTMLElement,
 		delegate: ChatInputDelegate,
 		model: ChatWidgetModel,
-		chatPresentation: IObservable<boolean>,
 		openWorkspacePicker: (() => void) | undefined,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextViewService contextViews: IContextViewService,
@@ -89,9 +86,7 @@ export class SharedChatInputComposer extends Disposable {
 			layout: 'compact', modelPickerPosition: 'trailing', configureModelInMenu: true, renderSecondaryToolbar: false, draftStorage: 'host',
 			stageImages: true,
 			contextUsageInFooter: true,
-			get modePicker() { return chatPresentation.get() ? 'hidden' : 'visible'; },
-			get chatModelSlider() { return chatPresentation.get(); },
-			get showContextUsage() { return !chatPresentation.get(); },
+			modePicker: 'visible',
 			accessibilityHelp: getSessionsChatAccessibilityHelp,
 			statusText: (state, contexts, status) => {
 				// The host exposes catalog loading through aria-busy. Keep actionable draft status visible.
@@ -106,7 +101,7 @@ export class SharedChatInputComposer extends Disposable {
 			},
 			attachGitHubReference: (kind, signal) => attachSessionGitHubReference(kind, model, github, quickInput, signal),
 			attachMenuHost: {
-				getWorkspaceAction: () => openWorkspacePicker && !chatPresentation.get() && model.untitledSessionId && !model.isNestedDraft
+				getWorkspaceAction: () => openWorkspacePicker && model.untitledSessionId && !model.isNestedDraft
 					&& !model.inputState.aiDisabled && model.inputState.phase !== 'submitting' ? {
 					id: 'sessions.focusNewSessionWorkspacePicker',
 					label: localize({ bundle: 'ash.sessions', key: 'sessions.project.choose' }, 'Choose project'),
@@ -114,14 +109,9 @@ export class SharedChatInputComposer extends Disposable {
 					run: openWorkspacePicker,
 				} : undefined,
 			},
-			get primaryPermissionPicker() { return chatPresentation.get() ? undefined : permissionPicker; },
+			primaryPermissionPicker: permissionPicker,
 		} satisfies ChatInputPartOptions);
-		this._register(instantiationService.createInstance(SessionArtifacts, input, model));
 		this._register(instantiationService.createInstance(SessionReferenceCompletions, input, model));
-		this._register(autorun(reader => {
-			chatPresentation.read(reader);
-			input.refreshPresentation();
-		}));
 		const form = input.composerForm;
 		this._register(addDisposableListener(form, 'focusin', event => {
 			if (form.contains(event.relatedTarget as Node | null)) return;

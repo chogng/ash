@@ -21,7 +21,7 @@ import { AgentHostInputCompletions, type AgentHostInputCompletionHost } from '..
 suite('AgentHostInputCompletions', () => {
 	const resource = URI.parse('vscode-remote://ssh-remote+test/project/src/main.ts');
 	const file: AgentHostInputCompletionItem = { label: '#src/main.ts', insertText: '#src/main.ts ', start: 7, end: 17, preselect: true, value: { kind: 'resource', resource, isDirectory: false } };
-	function fixture(resources: DisposableStore, complete: IAgentHostInputCompletionService['complete']) {
+	function fixture(resources: DisposableStore, complete: IAgentHostInputCompletionService['complete'], capabilities = { commands: true, skills: true }) {
 		const services = resources.add(new InstantiationService());
 		const features = resources.add(new LanguageFeaturesService());
 		const model = resources.add(new TextModel('Review #src/ma.ts after', { languageId: 'ash-chat-input' }));
@@ -36,6 +36,7 @@ suite('AgentHostInputCompletions', () => {
 		services.registerInstance(IAgentHostInputCompletionService, { complete, onDidChangeConnection: connection.event, getTriggerCharacters: () => triggers });
 		services.registerInstance(IWorkspaceContextService, { getWorkspace: () => workspace, onDidChangeWorkspace: changes.event } as unknown as IWorkspaceContextService);
 		const completions = resources.add(services.createInstance(AgentHostInputCompletions, model, {
+			...capabilities,
 			currentLifecycle: () => lifecycle.signal, getContext: () => ({ sessionId: 'session', threadId: 'thread' }),
 			isEnabled: () => enabled, acceptSkill: skill => { accepted.push(skill); },
 			acceptResource: async (resource, directory, range) => { accepted.push([resource, directory, { start: range.start, end: range.end }]); },
@@ -57,7 +58,20 @@ suite('AgentHostInputCompletions', () => {
 		using features = new LanguageFeaturesService();
 		using model = new TextModel('', { languageId: 'ash-chat-input' });
 		services.registerInstance(ILanguageFeaturesService, features);
-		assert.throws(() => services.createInstance(AgentHostInputCompletions, model, { currentLifecycle: () => new AbortController().signal, getContext: () => ({}), isEnabled: () => true, acceptSkill: () => { }, acceptResource: async () => { } }), /Unknown service: agentHostInputCompletionService/u);
+		assert.throws(() => services.createInstance(AgentHostInputCompletions, model, { commands: true, skills: true, currentLifecycle: () => new AbortController().signal, getContext: () => ({}), isEnabled: () => true, acceptSkill: () => { }, acceptResource: async () => { } }), /Unknown service: agentHostInputCompletionService/u);
+	});
+
+	test('a reply composer keeps resource completions and excludes host commands and Skills', async () => {
+		using resources = new DisposableStore();
+		const skill = { id: { source: 'host', name: 'review' }, version: { type: 'pinnedDigest' as const, digest: 'original' } };
+		const value = fixture(resources, async () => [
+			file,
+			{ ...file, label: '/init', value: { kind: 'command' } },
+			{ ...file, label: '$review', value: { kind: 'skill', skill } },
+		], { commands: false, skills: false });
+		assert.deepEqual(value.provider.triggerCharacters, ['@', '#']);
+		const result = await value.provider.provideCompletions(value.request(), new AbortController().signal);
+		assert.deepEqual(result?.items.map(item => item.label), [file.label]);
 	});
 
 	test('sends full context and UTF-16 cursor to the host and admits a remote resource without an early edit', async () => {

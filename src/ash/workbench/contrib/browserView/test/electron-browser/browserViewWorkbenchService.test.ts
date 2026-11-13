@@ -12,7 +12,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAgentHostConnectionsService, type IAgentHostConnectionInfo } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
 import { createProviderRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { DialogsModel, IDialogsModel } from '../../../../common/dialogs.js';
@@ -28,7 +28,6 @@ import { BrowserViewEditorId, IBrowserViewWorkbenchService } from '../../common/
 import '../../electron-browser/features/browserTabManagementFeatures.js';
 import '../../electron-browser/features/browserDevToolsFeature.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
-import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -432,7 +431,7 @@ function fixture() {
 			onDidChangeWorkbenchState: Event.None,
 			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'browser-test', folders: [], ...(f.remote ? { remoteAuthority: f.remote } : {}) }), getWorkbenchState: () => f.state, getWorkspaceFolder: () => null
 		}],
-		[IWorkspaceTrustManagementService, resources.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => { if (f.trustUnavailable) { throw new Error('Backend unavailable'); } return { isTrusted: f.trusted, isReadOnly: false }; } } satisfies Partial<IWorkspaceTrustManagementService>))], [IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, service], [IEditorService, editors], [IEditorPart, editorPart], [IEditorPartsService, editorPart as IEditorPartsService], [IContextKeyService, { getValue: () => undefined } as unknown as IContextKeyService], [IAgentHostConnectionsService, {
+		[IWorkspaceTrustManagementService, resources.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => { if (f.trustUnavailable) { throw new Error('Backend unavailable'); } return { isTrusted: f.trusted, isReadOnly: false }; } } satisfies Partial<IWorkspaceTrustManagementService>))], [IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, service], [IEditorService, editors], [IEditorPart, editorPart], [IEditorPartsService, editorPart as IEditorPartsService], [IContextKeyService, resources.add(new ContextKeyService())], [IAgentHostConnectionsService, {
 			_serviceBrand: undefined,
 			get ambientConnection(): never { throw new Error('Unexpected connection acquisition'); },
 			onDidChangeConnections: Event.None, get connections() { return f.hosts; },

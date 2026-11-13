@@ -1,6 +1,7 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -11,7 +12,7 @@ export const enum TerminalSendSignalCommandId {
 	SendSignal = 'workbench.action.terminal.sendSignal',
 }
 
-registerAction2(class SendSignalAction extends Action2 {
+registerEditorToolAction(class SendSignalAction extends Action2 {
 	constructor() {
 		super({
 			id: TerminalSendSignalCommandId.SendSignal,

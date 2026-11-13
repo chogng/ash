@@ -16,6 +16,7 @@ export namespace ChatContextKeys {
 	export const hasActiveRequest = new RawContextKey<boolean>('chatSessionHasActiveRequest', false);
 	export const inChatSession = new RawContextKey<boolean>('inChat', false);
 	export const contextMenuCanAddSelectionToChat = new RawContextKey<boolean>('chatContextMenuCanAddSelectionToChat', false);
+	export const messageActionSurface = new RawContextKey<'chat' | 'code' | undefined>('chatMessageActionSurface', undefined);
 	export const responseHasText = new RawContextKey<boolean>('chatResponseHasText', false);
 	export const requestHasText = new RawContextKey<boolean>('chatRequestHasText', false);
 	/** The popup presentation uses thumbnails for sent images and opens images in place. */
@@ -35,6 +36,8 @@ export namespace ChatContextKeys {
 	export const responseIsReadingAloud = new RawContextKey<boolean>('chatResponseIsReadingAloud', false);
 	export const inputCursorAtTop = new RawContextKey<boolean>('chatCursorAtTop', false);
 	export const inChatInput = new RawContextKey<boolean>('inChatInput', false);
+	/** The selected composer accepts replies without local task controls. */
+	export const replyOnlyInput = new RawContextKey<boolean>('chatReplyOnlyInput', false);
 	export const inQuickChat = new RawContextKey<boolean>('quickChatHasFocus', false);
 	export const findSupported = new RawContextKey<boolean>('chatFindSupported', false);
 	export const findWidgetVisible = new RawContextKey<boolean>('chatFindWidgetVisible', false);

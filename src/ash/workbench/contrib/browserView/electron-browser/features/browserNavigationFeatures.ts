@@ -1,3 +1,4 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { h } from '../../../../../base/browser/dom.js';
@@ -272,7 +273,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 
 }
 
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { BrowserViewCommandId } from '../../../../../platform/browserView/common/browserView.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
@@ -287,7 +288,7 @@ for (const command of [
 	{ id: BrowserViewCommandId.Reload, title: localize2({ bundle: 'ash.workbench', key: 'browser.reloadCommand' }, 'Browser: Reload'), run: (model: import('../../common/browserView.js').IBrowserViewModel) => model.reload() },
 	{ id: BrowserViewCommandId.HardReload, title: localize2({ bundle: 'ash.workbench', key: 'browser.hardReloadCommand' }, 'Browser: Reload Without Cache'), run: (model: import('../../common/browserView.js').IBrowserViewModel) => model.reload(true) },
 ]) {
-	registerAction2(class BrowserNavigationAction extends Action2 {
+	registerEditorToolAction(class BrowserNavigationAction extends Action2 {
 		constructor() {
 			super({
 				id: command.id, title: command.title, f1: true, precondition: ContextKeyExpr.and(ActiveEditorContext.isEqualTo(BrowserViewEditorId),
@@ -307,7 +308,7 @@ for (const command of [
 		}
 	});
 }
-registerAction2(class FocusBrowserAddressAction extends Action2 {
+registerEditorToolAction(class FocusBrowserAddressAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.FocusUrlInput, title: localize2({ bundle: 'ash.workbench', key: 'browser.focusAddressCommand' }, 'Browser: Focus Address Bar'), f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 	override run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): void {
 		const pane = accessor.get(IEditorPart).activePane;

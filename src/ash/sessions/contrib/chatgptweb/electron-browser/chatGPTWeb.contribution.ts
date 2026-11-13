@@ -154,21 +154,28 @@ CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, mod
 	});
 });
 
+const chatWorkspace = SessionsWorkspaceModeContext.isEqualTo('chat');
+const experimentalChatAvailable = ContextKeyExpr.and(chatWorkspace, ContextKeyExpr.not('config.chat.disableAIFeatures'));
 const chatNewSessionMenu = ContextKeyExpr.and(
 	ActivityBarItemContext.isEqualTo('sessions.newSession'),
-	ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code'),
+	chatWorkspace,
 );
 
 registerAction2(class OpenChatGPT extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.open.chatgpt', title: localize2('sessions.chatgpt.webTitle', 'ChatGPT Web'), icon: Lxicon.openai,
+			precondition: chatWorkspace,
 			toggled: ContextKeyExpr.has(chatGPTSelectedContext),
 			menu: { id: Menus.ActivityBarContext, when: ContextKeyExpr.and(chatNewSessionMenu, ContextKeyExpr.has(experimentalChatGPTSelected)), group: 'navigation' },
 			f1: true,
 		});
 	}
-	public override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand(SHOW_CHATGPT_COMMAND); }
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (accessor.get(IContextKeyService).contextMatchesRules(chatWorkspace)) {
+			await accessor.get(ICommandService).executeCommand(SHOW_CHATGPT_COMMAND);
+		}
+	}
 });
 
 registerAction2(class OpenExperimentalChatGPT extends Action2 {
@@ -177,7 +184,7 @@ registerAction2(class OpenExperimentalChatGPT extends Action2 {
 			id: 'sessions.open.experimentalChatgpt',
 			title: localize2('sessions.chatgpt.experimentalTitle', 'ChatGPT (Experimental)'),
 			icon: Lxicon.openai,
-			precondition: ContextKeyExpr.not('config.chat.disableAIFeatures'),
+			precondition: experimentalChatAvailable,
 			menu: {
 				id: Menus.ActivityBarContext,
 				when: ContextKeyExpr.and(chatNewSessionMenu, ContextKeyExpr.not(experimentalChatGPTSelected)),
@@ -187,15 +194,21 @@ registerAction2(class OpenExperimentalChatGPT extends Action2 {
 		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(ICommandService).executeCommand(SHOW_EXPERIMENTAL_CHATGPT);
+		if (accessor.get(IContextKeyService).contextMatchesRules(experimentalChatAvailable)) {
+			await accessor.get(ICommandService).executeCommand(SHOW_EXPERIMENTAL_CHATGPT);
+		}
 	}
 });
 
+const chatGPTActive = ContextKeyExpr.and(chatWorkspace, ContextKeyExpr.or(ContextKeyExpr.has(chatGPTSelectedContext), ContextKeyExpr.has(experimentalChatGPTSelected)));
+const chatGPTWebActive = ContextKeyExpr.and(chatWorkspace, ContextKeyExpr.has(chatGPTSelectedContext));
+
 registerAction2(class ToggleChatGPTScrolling extends Action2 {
 	constructor() {
-		super({ id: 'sessions.chatgpt.toggleScrollOptimization', title: localize2('sessions.chatgpt.toggleOptimization', 'ChatGPT: Toggle Scrolling Optimization'), f1: true });
+		super({ id: 'sessions.chatgpt.toggleScrollOptimization', title: localize2('sessions.chatgpt.toggleOptimization', 'ChatGPT: Toggle Scrolling Optimization'), f1: true, precondition: chatGPTActive });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(chatGPTActive)) return;
 		const configuration = accessor.get(IConfigurationService);
 		await configuration.updateValue(chatGPTScrollOptimization, !configuration.getValue<boolean>(chatGPTScrollOptimization));
 	}
@@ -209,47 +222,53 @@ registerAction2(class ReloadChatGPT extends Action2 {
 			shortTitle: localize2('sessions.chatgpt.reloadShort', 'Reload'),
 			menu: {
 				id: Menus.ActivityBarContext,
-				when: ContextKeyExpr.and(chatNewSessionMenu, ContextKeyExpr.or(ContextKeyExpr.has(chatGPTSelectedContext), ContextKeyExpr.has(experimentalChatGPTSelected))),
+				when: ContextKeyExpr.and(chatNewSessionMenu, chatGPTActive),
 				group: 'navigation',
 			},
 			f1: true,
+			precondition: chatGPTActive,
 		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
-		const experimental = accessor.get(IContextKeyService).getValue(experimentalChatGPTSelected) === true;
+		const context = accessor.get(IContextKeyService);
+		if (!context.contextMatchesRules(chatGPTActive)) return;
+		const experimental = context.getValue(experimentalChatGPTSelected) === true;
 		await accessor.get(experimental ? IChatGPTNativeService : IChatGPTService).reload();
 	}
 });
 
 const authenticationMenu = {
 	id: Menus.ActivityBarContext,
-	when: ContextKeyExpr.and(chatNewSessionMenu, ContextKeyExpr.has(chatGPTSelectedContext)),
+	when: ContextKeyExpr.and(chatNewSessionMenu, chatGPTWebActive),
 	group: 'authentication',
 };
 
 registerAction2(class SignInChatGPT extends Action2 {
 	constructor() {
-		super({ id: 'sessions.chatgpt.signIn', title: localize2('sessions.chatgpt.signIn', 'ChatGPT: Sign In to Ash'), f1: true, menu: authenticationMenu });
+		super({ id: 'sessions.chatgpt.signIn', title: localize2('sessions.chatgpt.signIn', 'ChatGPT: Sign In to Ash'), f1: true, menu: authenticationMenu, precondition: chatGPTWebActive });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(chatGPTWebActive)) return;
 		await signInChatGPT(accessor.get(IAccountService), accessor.get(INotificationService), accessor.get(IProgressService));
 	}
 });
 
 registerAction2(class UseCodexChatGPTLogin extends Action2 {
 	constructor() {
-		super({ id: 'sessions.chatgpt.useCodexLogin', title: localize2('sessions.chatgpt.useCodexLogin', 'ChatGPT: Use Codex Login'), f1: true, menu: authenticationMenu });
+		super({ id: 'sessions.chatgpt.useCodexLogin', title: localize2('sessions.chatgpt.useCodexLogin', 'ChatGPT: Use Codex Login'), f1: true, menu: authenticationMenu, precondition: chatGPTWebActive });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(chatGPTWebActive)) return;
 		await accessor.get(IAccountService).startLogin({ type: 'chatGptWebCodex' });
 	}
 });
 
 registerAction2(class SignOutChatGPT extends Action2 {
 	constructor() {
-		super({ id: 'sessions.chatgpt.signOut', title: localize2('sessions.chatgpt.signOut', 'ChatGPT: Sign Out of Ash'), f1: true, menu: authenticationMenu });
+		super({ id: 'sessions.chatgpt.signOut', title: localize2('sessions.chatgpt.signOut', 'ChatGPT: Sign Out of Ash'), f1: true, menu: authenticationMenu, precondition: chatGPTWebActive });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		if (!accessor.get(IContextKeyService).contextMatchesRules(chatGPTWebActive)) return;
 		await accessor.get(IAccountService).logout('chatgpt-web');
 	}
 });

@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -21,6 +22,7 @@ test('Terminal font commands update the shared effective configuration and persi
 	using resources = new DisposableStore();
 	const configuration = resources.add(new TestConfigurationService());
 	const services = resources.add(new InstantiationService());
+	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerInstance(IConfigurationService, configuration);
 	const terminalConfiguration = resources.add(services.createInstance(TerminalConfigurationService));
 	await configuration.updateValue('terminal.integrated.fontSize', 18);
@@ -41,6 +43,7 @@ test('Terminal font commands respect bounds and reset to the registered platform
 	using resources = new DisposableStore();
 	const configuration = resources.add(new TestConfigurationService());
 	const services = resources.add(new InstantiationService());
+	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerInstance(IConfigurationService, configuration);
 	const run = (id: TerminalZoomCommandId) => services.invokeFunction(CommandsRegistry.getCommand(id)!);
 
@@ -59,6 +62,7 @@ function wheelFixture(resources: DisposableStore) {
 	resources.add(toDisposable(() => dom.window.close()));
 	const configuration = resources.add(new TestConfigurationService());
 	const services = resources.add(new InstantiationService());
+	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerInstance(IConfigurationService, configuration);
 	const definition = TerminalExtensionsRegistry.getTerminalContributions().find(value => value.id === 'terminal.mouseWheelZoom');
 	assert.ok(definition);

@@ -45,6 +45,7 @@ Do not load the learning inbox by default. Search its headings and scopes, then 
 - Trace the current implementation and its existing tests.
 - Search for shared helpers, context keys, menu IDs, entry-point imports, and provider abstractions before adding new ones.
 - Confirm which layer owns the behavior. Keep provider-specific decisions in the provider and view/layout decisions in Sessions-owned browser code.
+- For actions that may cross between Chat and Code, use the [Chat and Code boundary audit](../agent-window-chat-code-boundaries/SKILL.md).
 - For visible UI components, use the [Agent Window component workflow](../agent-window-components/SKILL.md).
 - For agent, LLM, policy, permissions, telemetry, or managed-setting changes, invoke the applicable specialist skill before implementation.
 

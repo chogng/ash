@@ -1446,6 +1446,7 @@ window.ashChatTranscriptIntegration = {
 		container.style.cssText = 'height:700px;width:800px;background:var(--ash-editor-background);color:var(--ash-foreground);font-family:system-ui';
 		document.body.append(container);
 		appChat = cowork ? resources.add(chatServices.createInstance(NativeChatWidget, container, 'app-chat', model, () => { }, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(ReplyChatInputFactory).createSessionInput(host, delegate, model, resources))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), chatServices.get(IOpenerService), undefined, undefined, undefined, {
+			messageActionSurface: new URLSearchParams(location.search).has('sessions') ? 'code' : undefined,
 			virtualizeHistoryFrom: virtualizeHistory ? constObservable(48) : undefined,
 			changes: { refreshConversation: async () => { } },
 		}));

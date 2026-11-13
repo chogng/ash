@@ -117,7 +117,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			const workspaceActions = captured.kind === 'session'
 				? createSessionWorkspaceActions(captured.active.session.sessionId, captured.active.threadId, sessionService, commandService)
 				: [];
-			return [...workspaceActions, ...createSessionItemActions(captured, commandService, this.listModel, notifications, () => this.openInNewWindow(captured))];
+			return [...workspaceActions, ...createSessionItemActions(captured, commandService, this.listModel, notifications, {
+				projectScope: 'chat', openInNewWindow: () => this.openInNewWindow(captured),
+			})];
 		}, preserveFocus => {
 			const focusChat = !this.sessionsSideBySide || !preserveFocus;
 			this.hideSessionsAfterSelection();
@@ -516,7 +518,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 	}
 
 	private getSessionTabActions(selection: SessionsViewSelection): readonly IAction[] {
-		const actions = createSessionItemActions(selection, this.commandService, this.listModel, this.notifications, () => this.openInNewWindow(selection))
+		const actions = createSessionItemActions(selection, this.commandService, this.listModel, this.notifications, {
+			projectScope: 'chat', openInNewWindow: () => this.openInNewWindow(selection),
+		})
 			.filter(action => ['agentSession.rename', 'sessions.list.togglePin', 'sessions.openInNewWindow'].includes(action.id));
 		const rename = actions.find(action => action.id === 'agentSession.rename')!;
 		return [

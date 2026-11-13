@@ -115,7 +115,10 @@ const changed = resources.add(new Emitter<void>());
 const configuration = resources.add(new WorkbenchConfigurationService());
 services.registerInstance(IConfigurationService, configuration);
 const commitPreview = new URL(location.href).searchParams.has('commitPreview');
-services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
+const contextKeys = resources.add(new ContextKeyService());
+contextKeys.setContext('isSessionsWindow', true);
+contextKeys.setContext('sessions.workspaceMode', 'code');
+services.registerInstance(IContextKeyService, contextKeys);
 services.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
 	root: document.body,
 	configurationService: accessor.get(IConfigurationService),
@@ -503,7 +506,7 @@ window.ashChangesIntegration = {
 		const entries = items.map(item => ({ type: 'item', entryId: item.itemId, turnId: item.turnId, transient: false, item })) as readonly ThreadTranscriptEntry[];
 		const reply = chatTranscriptListItems(entries, 'review-turn', [{ turnId: 'review-turn', status: 'completed', items } as unknown as Turn],
 			{ sessionId, threadId: request.threadId }).find(item => item.type === 'agentMessage');
-		using context = new ChatResponseActionContext(reply!, reviewHost!, window, () => true, () => { });
+		using context = new ChatResponseActionContext(reply!, reviewHost!, window, () => true, () => { }, undefined, 'code');
 		await CommandsRegistry.getCommand('sessions.openResponseCodeReview')!(reviewServices!, context);
 	},
 	activeTurn: value => { activeTurn = value; },

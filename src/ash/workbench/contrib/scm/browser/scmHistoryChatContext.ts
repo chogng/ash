@@ -26,7 +26,7 @@ export class ScmHistoryChatContextContribution extends Disposable {
 		const label = localize('chat.context.sourceControl', 'Source Control');
 		this._register(contextPickService.registerChatContextItem({
 			type: 'pickerPick', label, icon: Lxicon.gitCommit,
-			isEnabled: async () => [...scmService.repositories].some(repository => repository.provider.historyProvider !== undefined),
+			isEnabled: widget => !widget?.input.replyOnly && [...scmService.repositories].some(repository => repository.provider.historyProvider !== undefined),
 			asPicker: () => ({ placeholder: localize('chat.context.select', 'Select {0}', label), picks: picksWithPromiseFn(query => historyPicks(scmService, query, resolver)) }),
 		}));
 	}

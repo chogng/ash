@@ -5,21 +5,27 @@ import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
-import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { groupSessionsForPicker, pickSessionDestination, type ISessionPickItem } from './sessionsPicker.js';
 import { runSessionsListMove } from './views/sessionsListChatMove.js';
 import { Menus } from '../../../browser/menus.js';
-import { SessionsMenuCanMoveConversationContext } from '../../../common/contextkeys.js';
+import { SHOW_ASH_CHAT_COMMAND } from '../../chat/common/constants.js';
+import { SessionsMenuCanMoveConversationContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 
 export const SHOW_SESSIONS_PICKER_COMMAND_ID = 'sessions.showSessionsPicker';
 
 function showSessionsPicker(accessor: ServicesAccessor): void {
+	const contextKeys = accessor.get(IContextKeyService);
+	const mode = contextKeys.getValue(SessionsWorkspaceModeContext.key);
+	const nativeChat = mode === 'chat' && CommandsRegistry.hasCommand(SHOW_ASH_CHAT_COMMAND);
+	const commands = nativeChat ? accessor.get(ICommandService) : undefined;
 	const catalog = accessor.get(ISessionsManagementService);
 	const sessions = accessor.get(ISessionsService);
 	const lifetime = new DisposableStore();
@@ -27,8 +33,13 @@ function showSessionsPicker(accessor: ServicesAccessor): void {
 	picker.placeholder = localize({ bundle: 'ash.sessions', key: 'sessions.picker.placeholder' }, 'Select a session');
 	picker.ariaLabel = picker.placeholder;
 	picker.sortByLabel = false;
-	const selected = sessions.activeSelection;
-	const groups = groupSessionsForPicker(catalog.sessions, sessions.recentSessions, entry => sessions.getLastViewedAt(entry), selected?.kind === 'session'
+	const selected = nativeChat ? sessions.getChatSelection() : sessions.activeSelection;
+	const candidates = catalog.sessions.filter(session => {
+		if (mode === 'code') return session.kind === 'code';
+		if (nativeChat) return session.kind === 'chat' && session.backendSessionId === undefined;
+		return true;
+	});
+	const groups = groupSessionsForPicker(candidates, sessions.recentSessions, entry => sessions.getLastViewedAt(entry), selected?.kind === 'session'
 		? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined);
 	picker.items = [
 		...groups.needsInput,
@@ -43,7 +54,14 @@ function showSessionsPicker(accessor: ServicesAccessor): void {
 		const item = picker.selectedItems[0];
 		if (!item) return;
 		picker.hide();
-		void sessions.openSession(item.sessionId, item.threadId, { reveal: 'code' }).catch(onUnexpectedError);
+		if (contextKeys.getValue(SessionsWorkspaceModeContext.key) !== mode) return;
+		if (commands) {
+			void commands.executeCommand(SHOW_ASH_CHAT_COMMAND).then(() => {
+				if (contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'chat') sessions.selectChatThread(item.sessionId, item.threadId);
+			}).catch(onUnexpectedError);
+		} else {
+			void sessions.openSession(item.sessionId, item.threadId, mode === 'code' ? { reveal: 'code' } : undefined).catch(onUnexpectedError);
+		}
 	}));
 	lifetime.add(picker.onDidHide(() => lifetime.dispose()));
 	picker.show();

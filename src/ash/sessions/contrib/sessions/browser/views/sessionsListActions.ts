@@ -6,6 +6,7 @@ import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import { getFlatContextMenuActions } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import type { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IProjectService } from '../../../../../platform/projects/common/projectService.js';
@@ -18,7 +19,7 @@ import type { CatalogProjectCreator, SessionsCatalogRow } from './sessionsCatalo
 export type ConversationMenuTarget = { readonly sessionId: string; readonly threadId?: string; } | { readonly catalogId: string; } | { readonly untitledSessionId: string; };
 
 export function conversationMenuActions(
-	mode: SessionsListMode, menus: IMenuService, context: IContextKeyService | undefined,
+	mode: SessionsListMode, menus: IMenuService, commands: ICommandService, context: IContextKeyService | undefined,
 	target: ConversationMenuTarget | undefined, pinned: boolean, actions: IAction[],
 ): IAction[] {
 	if (context && target && 'sessionId' in target) {
@@ -26,8 +27,12 @@ export function conversationMenuActions(
 		SessionsMenuConversationPinnedContext.bindTo(context).set(pinned);
 	}
 	const menu = mode === 'code' ? Menus.SidebarCodeSessionContext : Menus.SidebarChatSessionContext;
-	return Separator.join(actions, getFlatContextMenuActions(menus.getMenuActions(menu, { arg: target }, context))).map(action =>
-		action.id === 'agentSession.delete' ? { ...action, class: 'ash-session-delete-action', run: () => action.run() } : action);
+	const contributed = getFlatContextMenuActions(menus.getMenuActions(menu, { arg: target }, context));
+	return Separator.join(actions, contributed).map(action => {
+		if (action.id === 'agentSession.addToProject') return { ...action, run: () => commands.executeCommand(action.id, target, mode) };
+		if (action.id === 'agentSession.delete') return { ...action, class: 'ash-session-delete-action', run: () => action.run() };
+		return action;
+	});
 }
 
 export async function catalogConversationActions(

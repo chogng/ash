@@ -199,6 +199,10 @@ test('switching modes separates conversations, projects and Activity Bar entries
 			await expect(page.getByRole('menuitem', { name: 'Compare Agents…', exact: true })).toHaveCount(mode === 'code' ? 1 : 0);
 			await expect(page.getByRole('menuitem', { name: 'Show Conversation Recap', exact: true })).toHaveCount(mode === 'code' ? 1 : 0);
 			await expect(page.getByRole('menuitem', { name: 'Open in new window', exact: true })).toHaveCount(mode === 'code' ? 1 : 0);
+			if (mode === 'code') {
+				await expect(page.getByRole('menuitem', { name: 'Continue in Code', exact: true })).toHaveCount(0);
+				await expect(page.getByRole('menuitem', { name: 'Share', exact: true })).toHaveCount(0);
+			}
 		};
 		await expect(activity.locator('[data-action-id="sessions.open.projects"]')).toBeVisible();
 		await expect(activity.locator('[data-action-id="sessions.open.creator"]')).toBeVisible();
@@ -296,7 +300,12 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		await expect(code).toBeVisible();
 		await conversation.click({ button: 'right' });
 		await expectConversationMenu('code');
-		await page.keyboard.press('Escape');
+		const chatMode = mode.getByRole('button', { name: 'Chat / Agents', exact: true });
+		// Switch without an outside pointer event, so dismissal must come from the sidebar.
+		await chatMode.evaluate(button => (button as HTMLButtonElement).click());
+		await expect(chat).toBeVisible();
+		await expect(page.getByRole('menu')).toHaveCount(0);
+		await codeMode.click();
 		await conversation.press('Shift+F10');
 		await expectConversationMenu('code');
 		await page.getByRole('menuitem', { name: 'Remove from project', exact: true }).click();

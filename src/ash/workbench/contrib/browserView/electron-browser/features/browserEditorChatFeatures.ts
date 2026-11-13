@@ -1,3 +1,4 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { IChatContextPickService, picksWithPromiseFn } from '../../../chat/browser/attachments/chatContextPickService.js';
@@ -172,7 +173,7 @@ class BrowserPageSelections extends Disposable {
 	}
 }
 
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { BrowserViewCommandId } from '../../../../../platform/browserView/common/browserView.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { BrowserViewEditorId } from '../../common/browserView.js';
@@ -183,7 +184,7 @@ for (const command of [
 	{ id: BrowserViewCommandId.AddScreenshotToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.pageCommand' }, 'Browser: Capture Screenshot for Chat'), run: (pane: BrowserEditor) => pane.getContribution(BrowserEditorChatIntegration)?.addScreenshotToChat(false) },
 	{ id: BrowserViewCommandId.AddFullPageScreenshotToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.fullPageCommand' }, 'Browser: Capture Full Page Screenshot for Chat'), run: (pane: BrowserEditor) => pane.getContribution(BrowserEditorChatIntegration)?.addScreenshotToChat(true) },
 ]) {
-	registerAction2(class BrowserCaptureAction extends Action2 {
+	registerEditorToolAction(class BrowserCaptureAction extends Action2 {
 		constructor() { super({ id: command.id, title: command.title, f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 		override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 			const pane = accessor.get(IEditorPart).activePane;

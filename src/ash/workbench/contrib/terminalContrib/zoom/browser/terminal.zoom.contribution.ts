@@ -1,10 +1,11 @@
+import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { TaskQueue } from '../../../../../base/common/async.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
 import { localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { ITerminalContribution, IXtermTerminal } from '../../../terminal/browser/terminal.js';
@@ -88,7 +89,7 @@ for (const action of [
 	{ id: TerminalZoomCommandId.FontZoomOut, title: localize2('terminal.fontZoomOut.title', 'Terminal: Decrease Font Size'), change: -1 },
 	{ id: TerminalZoomCommandId.FontZoomReset, title: localize2('terminal.fontZoomReset.title', 'Terminal: Reset Font Size'), change: 0 },
 ]) {
-	registerAction2(class TerminalFontZoomAction extends Action2 {
+	registerEditorToolAction(class TerminalFontZoomAction extends Action2 {
 		constructor() {
 			super({ id: action.id, title: action.title, f1: true });
 		}

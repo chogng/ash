@@ -10,7 +10,9 @@ import type { ArtifactKind } from '../../../common/artifactKind.js';
 import type { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import { localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 
 export interface IArtifactWorkspace extends IDisposable {
 	readonly domNode: HTMLElement;
@@ -90,9 +92,10 @@ export function registerArtifactWorkspace(contribution: ArtifactWorkspaceContrib
 	artifactWorkspaces.set(contribution.id, contribution);
 	registerAction2(class OpenWorkspace extends Action2 {
 		constructor() {
-			super({ id: `sessions.creator.open.${contribution.id}`, title: localize2('sessions.artifacts.openMode', 'Open {0}', contribution.title), f1: true });
+			super({ id: `sessions.creator.open.${contribution.id}`, title: localize2('sessions.artifacts.openMode', 'Open {0}', contribution.title), f1: true, precondition: SessionsWorkspaceModeContext.isEqualTo('chat') });
 		}
 		public override async run(accessor: ServicesAccessor): Promise<void> {
+			if (accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) !== 'chat') return;
 			await accessor.get(ICommandService).executeCommand('sessions.creator.openMode', contribution.id);
 		}
 	});
