@@ -5,6 +5,9 @@ use ash_client::ClientRequest;
 use ash_client::ClientResponse;
 use ash_client::OperationClient;
 use ash_secrets::MemorySecretStore;
+use ash_secrets::ProfileSecretStore;
+use ash_secrets::SessionSecretStore;
+use ash_secrets::UnavailableSecretStore;
 use base64::Engine;
 use std::collections::VecDeque;
 use std::path::Path;
@@ -876,6 +879,68 @@ fn web_and_model_subscription_disconnect_states_do_not_control_each_other() {
         .unwrap();
     assert!(model.read_account().unwrap().is_some());
     assert!(driver.read_account().unwrap().is_none());
+}
+
+#[test]
+fn unreadable_web_source_blocks_implicit_codex_reuse_after_logout() {
+    let profile = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let token = access("external", 4_000_000_000);
+    write(home.path(), "external-user", &token);
+    let keyring = Arc::new(MemorySecretStore::default());
+    let client = Arc::new(Client::default());
+    let reopen = |keyring: Arc<dyn SecretStore>| {
+        let persisted = ProfileSecretStore::open(profile.path(), keyring).unwrap();
+        web_owner(
+            profile.path(),
+            home.path(),
+            Arc::new(SessionSecretStore::new(Arc::new(persisted))),
+            client.clone(),
+        )
+    };
+
+    let owner = reopen(keyring.clone());
+    let service = LoginService::deferred(owner.login_driver());
+    assert_eq!(service.read_or_refresh().unwrap().accounts.len(), 1);
+    service.logout_provider("chatgpt-web").unwrap();
+    drop(service);
+    drop(owner);
+
+    let owner = reopen(Arc::new(UnavailableSecretStore));
+    let mut web = owner.session().unwrap();
+    assert!(owner.login_driver().read_account().is_err());
+    assert!(web.cache_scope().is_none());
+    assert_eq!(
+        web.authorize("aaaa", &web.context().to_owned()),
+        Err(ChatGptWebAuthError::Unavailable)
+    );
+    let mut codex = owner.codex_session().unwrap();
+    assert_token(
+        &codex
+            .authorize("aaaa", &codex.context().to_owned())
+            .unwrap(),
+        &token,
+    );
+
+    let service = LoginService::deferred(owner.login_driver());
+    assert!(service.read_or_refresh().is_err());
+    service.begin(LoginMethod::ChatGptWebCodex).unwrap();
+    assert_eq!(service.read_or_refresh().unwrap().accounts.len(), 1);
+    assert!(web.synchronize().unwrap());
+    assert_token(
+        &web.authorize("bbbb", &web.context().to_owned()).unwrap(),
+        &token,
+    );
+    service.logout_provider("chatgpt-web").unwrap();
+    assert!(service.read_or_refresh().unwrap().accounts.is_empty());
+    assert!(
+        reopen(keyring)
+            .login_driver()
+            .read_account()
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(*client.calls.lock().unwrap(), 0);
 }
 
 #[test]

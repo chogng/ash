@@ -73,6 +73,21 @@ struct ManagedMetadata {
     generation: u64,
 }
 
+#[derive(Clone, Copy)]
+enum ManagedRead {
+    Confirmed,
+    Session,
+}
+
+fn web_source(bytes: Option<&[u8]>) -> Result<(WebCredentialSource, u64), ChatGptError> {
+    let Some(bytes) = bytes else {
+        return Ok((WebCredentialSource::Codex, 0));
+    };
+    let state: ManagedMetadata = serde_json::from_slice(bytes)
+        .map_err(|_| ChatGptError::new("ChatGPT Web credential state is invalid"))?;
+    Ok((state.source, state.generation))
+}
+
 pub(crate) struct AuthWriteGuard {
     _file: fs::File,
 }
@@ -236,30 +251,29 @@ impl CodexAuthStore {
         SecretKey::new("provider/chatgpt-web/credentials-v1").expect("static secret key")
     }
 
-    fn managed_bytes(&self) -> Result<Option<Zeroizing<Vec<u8>>>, ChatGptError> {
-        self.managed
-            .as_ref()
-            .expect("managed credential store")
-            .load(&Self::managed_key())
-            .map_err(|_| ChatGptError::new("ChatGPT Web credentials could not be read"))?
-            .map(|value| {
-                if value.expose().len() as u64 > MAX_AUTH_BYTES {
-                    return Err(ChatGptError::new(
-                        "ChatGPT Web credentials exceed the size limit",
-                    ));
-                }
-                Ok(Zeroizing::new(value.expose().to_vec()))
-            })
-            .transpose()
+    fn managed_bytes(&self, read: ManagedRead) -> Result<Option<Zeroizing<Vec<u8>>>, ChatGptError> {
+        let store = self.managed.as_ref().expect("managed credential store");
+        let key = Self::managed_key();
+        match read {
+            ManagedRead::Confirmed => store.load_confirmed(&key),
+            ManagedRead::Session => store.load(&key),
+        }
+        .map_err(|_| ChatGptError::new("ChatGPT Web credentials could not be read"))?
+        .map(|value| {
+            if value.expose().len() as u64 > MAX_AUTH_BYTES {
+                return Err(ChatGptError::new(
+                    "ChatGPT Web credentials exceed the size limit",
+                ));
+            }
+            Ok(Zeroizing::new(value.expose().to_vec()))
+        })
+        .transpose()
     }
 
     pub(crate) fn web_source(&self) -> Result<(WebCredentialSource, u64), ChatGptError> {
-        let Some(bytes) = self.managed_bytes()? else {
-            return Ok((WebCredentialSource::Codex, 0));
-        };
-        let state: ManagedMetadata = serde_json::from_slice(&bytes)
-            .map_err(|_| ChatGptError::new("ChatGPT Web credential state is invalid"))?;
-        Ok((state.source, state.generation))
+        // Only confirmed absence permits implicit reuse of the external login.
+        let bytes = self.managed_bytes(ManagedRead::Confirmed)?;
+        web_source(bytes.as_deref().map(Vec::as_slice))
     }
 
     /// Source selection and tokens share one guarded record. Its generation
@@ -269,14 +283,15 @@ impl CodexAuthStore {
         source: WebCredentialSource,
     ) -> Result<(), ChatGptError> {
         let _guard = self.lock_updates()?;
-        let bytes = self.managed_bytes()?;
+        // An explicit user choice can start a temporary session while the keyring is locked.
+        let bytes = self.managed_bytes(ManagedRead::Session)?;
+        let (_, generation) = web_source(bytes.as_deref().map(Vec::as_slice))?;
         let mut document = match bytes.as_deref() {
             Some(bytes) => serde_json::from_slice(bytes)
                 .map_err(|_| ChatGptError::new("ChatGPT Web credential state is invalid"))?,
             None => serde_json::json!({"auth_mode":"chatgpt","tokens":null}),
         };
         let result = (|| {
-            let (_, generation) = self.web_source()?;
             document["_ash_source"] = serde_json::to_value(source).expect("source enum");
             document["_ash_generation"] = generation
                 .checked_add(1)
@@ -290,8 +305,8 @@ impl CodexAuthStore {
 
     pub(crate) fn disconnect_web(&self) -> Result<(), ChatGptError> {
         let _guard = self.lock_updates()?;
-        let generation = self
-            .web_source()?
+        let bytes = self.managed_bytes(ManagedRead::Session)?;
+        let generation = web_source(bytes.as_deref().map(Vec::as_slice))?
             .1
             .checked_add(1)
             .ok_or_else(|| ChatGptError::new("ChatGPT Web account generation exhausted"))?;
@@ -310,7 +325,7 @@ impl CodexAuthStore {
 
     pub(crate) fn managed_login_write(&self) -> Result<LoginWrite, ChatGptError> {
         let bytes = self
-            .managed_bytes()?
+            .managed_bytes(ManagedRead::Confirmed)?
             .ok_or_else(|| ChatGptError::new("ChatGPT Web login source is missing"))?;
         Ok(LoginWrite::Managed {
             revision: sha2::Sha256::digest(&*bytes).into(),
@@ -356,7 +371,7 @@ impl CodexAuthStore {
         config: &AuthConfig,
     ) -> Result<(CredentialLocation, Option<Zeroizing<Vec<u8>>>), ChatGptError> {
         if self.managed.is_some() {
-            let bytes = self.managed_bytes()?;
+            let bytes = self.managed_bytes(ManagedRead::Confirmed)?;
             if let Some(bytes) = &bytes {
                 #[derive(Deserialize)]
                 struct Presence {
@@ -600,7 +615,7 @@ impl CodexAuthStore {
         if let LoginWrite::Managed { revision } = write {
             let _guard = self.lock_updates()?;
             let bytes = self
-                .managed_bytes()?
+                .managed_bytes(ManagedRead::Confirmed)?
                 .ok_or_else(|| ChatGptError::new("ChatGPT Web login was retired"))?;
             if <[u8; 32]>::from(sha2::Sha256::digest(&*bytes)) != revision
                 || self.web_source()?.0 != WebCredentialSource::Ash
