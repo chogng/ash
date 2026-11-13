@@ -1,3 +1,4 @@
+import { TerminalWindowRecovery } from './terminalWindowRecovery.js';
 import { BrowserNetworkProxy } from '../../platform/browserView/electron-main/browserNetworkProxy.js';
 import { WSLRemoteAgentHostService } from '../../platform/agentHost/node/wslRemoteAgentHostService.js';
 import { TunnelAgentHostService } from '../../platform/agentHost/node/tunnelAgentHostService.js';
@@ -213,6 +214,7 @@ interface RendererEntry {
 interface WorkbenchWindowRecord {
 	readonly id: number;
 	readonly windowSessionId: string;
+	readonly terminalRecovery: TerminalWindowRecovery;
 	terminalTransferStartup: boolean;
 	readonly window: BrowserWindow;
 	readonly workspaceContext: WorkspaceContextMainService;
@@ -1248,7 +1250,7 @@ export class AshApplication extends Disposable {
 		return window ? this.workbenchWindowData.get(window.id) : undefined;
 	}
 
-	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, options: { readonly windowSessionId?: string; readonly terminalTransferStartup?: boolean; readonly restoring?: boolean; } = {}): Promise<WorkbenchWindowRecord | undefined> {
+	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, options: { readonly windowSessionId?: string; readonly terminalTransferStartup?: boolean; readonly restoring?: boolean; readonly terminalRecovery?: TerminalWindowRecovery; } = {}): Promise<WorkbenchWindowRecord | undefined> {
 		let windowSessionId = options.windowSessionId;
 		const existingWindow = this.windowsMainService.findWorkspace(workspace);
 		const existing = existingWindow ? this.workbenchWindowData.get(existingWindow.id) : undefined;
@@ -1284,7 +1286,7 @@ export class AshApplication extends Disposable {
 				resources.dispose();
 				return undefined;
 			}
-			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, resources, windowSessionId, options.terminalTransferStartup ?? false);
+			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, resources, windowSessionId, options.terminalTransferStartup ?? false, options.terminalRecovery);
 		} catch (error) {
 			resources.dispose();
 			throw error;
@@ -1605,17 +1607,23 @@ export class AshApplication extends Disposable {
 		resources: DisposableStore,
 		windowSessionId: string,
 		terminalTransferStartup = false,
+		terminalRecovery = new TerminalWindowRecovery(resources => this.terminalLifetimeRoutes(resources)),
 	): Promise<WorkbenchWindowRecord> {
+		resources.add(terminalRecovery);
 		const windowsStateHandler = this.createWindowsStateHandler(workspaceContext.getWorkspace());
 		const windowState = this.windowsMainService.getNewWindowState(windowsStateHandler, this.windowConfigurationValues(), this.lifecycleMainService.wasRestarted);
 		const titleBarStyle = this.titleBarStyle;
 		const windowHost = this.windowsMainService.createWindow(options => new BrowserWindow(options), {
-			reopen: async () => {
-				const replacement = await this.openWorkspace(workspaceContext.getWorkspace(), workspaces, true);
+			reopen: () => terminalRecovery.reopen(async recovery => {
+				const replacement = await this.performOpenWorkspace(workspaceContext.getWorkspace(), workspaces, true, { terminalRecovery: recovery });
 				if (!replacement) throw new Error('Window recovery did not open a replacement');
+				if (windowHost.win.isDestroyed()) {
+					replacement.window.destroy();
+					throw new Error('Source window closed during recovery');
+				}
 				replacement.window.setBounds(windowHost.getBounds());
 				replacement.window.focus();
-			},
+			}),
 			workspace: workspaceContext.getWorkspace(),
 			state: windowState,
 			titleBarStyle,
@@ -1638,6 +1646,7 @@ export class AshApplication extends Disposable {
 		const record: WorkbenchWindowRecord = {
 			id: window.id,
 			windowSessionId,
+			terminalRecovery,
 			terminalTransferStartup,
 			window,
 			workspaceContext,
@@ -1801,7 +1810,7 @@ export class AshApplication extends Disposable {
 		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
 		const ipcRoutes = [
 			...this.mainProcessIpcRoutes(window, () => getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()) ? undefined : supervisor),
-			...this.terminalLifetimeRoutes(windowDisposables),
+			...terminalRecovery.routes,
 			...this.remoteAgentHostRoutes(window, rendererEntry.url, windowDisposables),
 			...workspaceHost.routes(),
 			...supervisor.routes(window.webContents, () => {
@@ -2055,7 +2064,7 @@ export class AshApplication extends Disposable {
 		contextMenu: ElectronContextMenu,
 	): InstantiationService {
 		const context = `window:${window.id}`;
-		const secrets = windowDisposables.add(new BaseSecretStorageService());
+		const secrets = this.workbenchWindowData.get(window.id)?.terminalRecovery.secrets ?? windowDisposables.add(new BaseSecretStorageService());
 		const windowSessionId = this.workbenchWindowData.get(window.id)?.windowSessionId;
 		if (windowSessionId) void secrets.set(TERMINAL_REVIVE_STATE_KEY, `terminal.revive.${windowSessionId}`).catch(error => this.logService.error('terminal', error));
 		this.secretChannels.set(context, ProxyChannel.fromService(secrets, windowDisposables));

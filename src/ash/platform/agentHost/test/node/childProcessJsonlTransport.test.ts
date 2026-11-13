@@ -1,3 +1,7 @@
+import { spawn } from 'node:child_process';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { strict as assert } from 'node:assert';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter, once } from 'node:events';
@@ -235,4 +239,46 @@ test('byte output forwards unterminated and invalid UTF-8 chunks without JSONL d
 	} finally {
 		await carrier.close();
 	}
+});
+
+
+test('Desktop carrier closure lets a started command release its operation lock before exiting', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-carrier-close-'));
+	const lock = join(directory, 'operation');
+	const child = spawn(process.execPath, ['-e', `const fs=require('fs');const lock=process.argv[1];fs.mkdirSync(lock);process.stdin.resume();process.stdin.on('end',()=>{fs.rmdirSync(lock);process.exit(0);});console.log('locked');`, lock], { stdio: ['pipe', 'pipe', 'pipe'] });
+	const carrier = new ChildProcessJsonlTransport(child, { stdoutMode: 'bytes', closeMode: 'stdin' });
+	const ready = new DeferredPromise<void>();
+	using output = carrier.onData(() => { void ready.complete(); });
+	try {
+		await ready.p;
+		await carrier.close();
+		await assert.rejects(stat(lock), { code: 'ENOENT' });
+		assert.equal(child.exitCode, 0);
+		assert.equal(child.signalCode, null);
+	} finally {
+		await carrier.close();
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test('EOF closure still force-terminates a command that ignores its closed input', async () => {
+	const child = new FakeChildProcess();
+	const carrier = transport(child, { closeMode: 'stdin', closeTimeoutMs: 10 });
+	try {
+		const exited = once(child, 'exit');
+		await carrier.close();
+		await exited;
+		assert.equal(child.signalCode, 'SIGKILL');
+		assert.equal(child.stdin.writableEnded, true);
+	} finally { child.stdin.destroy(); }
+});
+
+test('EOF closure handles a failed input pipe without an unhandled stream error', async () => {
+	const child = new FakeChildProcess();
+	const carrier = transport(child, { closeMode: 'stdin' });
+	const closed = carrier.close();
+	child.stdin.emit('error', new Error('synthetic closed pipe'));
+	await closed;
+	assert.equal(child.signalCode, 'SIGTERM');
+	child.stdin.destroy();
 });

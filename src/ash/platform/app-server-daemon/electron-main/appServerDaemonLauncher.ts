@@ -10,6 +10,8 @@ import { LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS } from '../../agentHost/common/a
 import { appServerDaemonExecutablePath, appServerExecutablePath, developmentAppServerGenerationPath, packagedAppServerDaemonSha256, packagedAppServerSha256, type AppServerDaemonPackageLocation } from '../node/appServerDaemonPackage.js';
 import { readDevelopmentAppServerGenerationSync } from '../node/developmentAppServerGeneration.js';
 import { acquireDevelopmentAppServerRuntime, type IDevelopmentAppServerRuntime } from './developmentAppServerRuntime.js';
+import { ChildProcessJsonlTransport } from '../../agentHost/node/childProcessJsonlTransport.js';
+import type { IAppServerByteTransport } from '../../agentHost/common/appServerTransport.js';
 
 interface AppServerDaemonConnectionOptions {
 	readonly packageLocation: AppServerDaemonPackageLocation;
@@ -196,6 +198,11 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 		delete environment.ASH_DESKTOP_STARTUP_TRACE_CARRIER_PID;
 		if (environment.ASH_DESKTOP_STARTUP_TRACE === '1') environment.ASH_DESKTOP_STARTUP_TRACE_ID = randomUUID();
 		return this.spawnProcess(this.executable, this.options.args, { environment });
+	}
+
+	/** Let a cancelled window's command release daemon operation locks before exiting. */
+	public openTransport(): Promise<IAppServerByteTransport> {
+		return Promise.resolve(new ChildProcessJsonlTransport(this.launch(), { stdoutMode: 'bytes', closeMode: 'stdin' }));
 	}
 
 	/** The daemon owns endpoint layout. Read its diagnostic location without starting a backend. */

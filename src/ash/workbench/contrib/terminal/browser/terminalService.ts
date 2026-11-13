@@ -322,7 +322,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 	private async restoreTerminals(): Promise<void> {
 		const encoded = await this.secrets.get(TerminalStorageKeys.Reload);
 		if (this.isDisposed || this.configuration.getValue<boolean>('terminal.integrated.enablePersistentSessions') === false) return;
-		const credentials = encoded ? parseTerminalReloadCredentials(encoded) : undefined;
+		let credentials = encoded ? parseTerminalReloadCredentials(encoded) : undefined;
 		if (credentials && credentials.expiresAt < Date.now()) return;
 		const text = this.storage.get(credentials?.stateKey ?? parseTerminalReviveStateKey(await this.secrets.get(TERMINAL_REVIVE_STATE_KEY)), StorageScope.WORKSPACE);
 		if (!text && !credentials) return;
@@ -373,6 +373,22 @@ export class TerminalService extends Disposable implements ITerminalService {
 			} catch (error) {
 				if (this.isDisposed || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspaceContext.getWorkspace()))) throw error;
 				failures.push(error);
+			}
+			if (credentials && this.processService.getReconnectLease) {
+				try {
+					// Attachment consumes its old credential even if a later information
+					// query or screen construction fails. Keep the owning process service's
+					// rotated lease in the checkpoint so partial recovery can be reopened.
+					const lease = await this.processService.getReconnectLease(snapshot.process.terminalId);
+					if (this.isDisposed || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspaceContext.getWorkspace()))) throw new CancellationError();
+					if (lease) {
+						credentials = { ...credentials, leases: credentials.leases.map(candidate => candidate.terminalId === snapshot.process.terminalId && candidate.dirId === snapshot.processDirId ? lease : candidate) };
+						await this.secrets.set(TerminalStorageKeys.Reload, JSON.stringify(credentials));
+					}
+				} catch (error) {
+					if (this.isDisposed || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspaceContext.getWorkspace()))) throw error;
+					failures.push(error);
+				}
 			}
 		}
 		await Promise.all(screens);
