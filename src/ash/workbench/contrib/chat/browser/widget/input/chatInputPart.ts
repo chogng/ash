@@ -245,6 +245,9 @@ export interface IChatInputPart extends IDisposable {
 	attachFiles(files: readonly File[], signal?: AbortSignal): Promise<void>;
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]>;
 	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;
+	/** Moves the live draft between retained composers for the same conversation. */
+	moveDraftTo(target: Pick<IChatInputPart, 'replaceDraft'>): void;
+	replaceDraft(draft: IChatComposerDraft): void;
 	appendToDraft(text: string): void;
 	/** Inserts a source-qualified Skill selector and retains its exact revision for submission. */
 	attachSkill(skill: SkillReference): void;
@@ -266,6 +269,12 @@ export interface IChatInputPart extends IDisposable {
 	focusConfirmation(): boolean;
 	setVisible(visible: boolean): void;
 	render(state: ChatInputState): void;
+}
+
+interface IChatComposerDraft {
+	readonly mode: ChatInputMode;
+	readonly text: string;
+	readonly contexts: readonly ChatContextAttachment[];
 }
 
 interface InputHistoryDraft {
@@ -293,6 +302,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private historyInputRevision = 0;
 	private draftSkills: { readonly text: string; readonly references: readonly SkillReference[]; } | undefined;
 	private persistentDrafts = false;
+	private ownsDraftStorage = true;
+	private retireDraftWrite?: () => void;
 	private draftIdentity: ChatInputState['draftIdentity'];
 	private readonly conversationDrafts = new Map<string, InputHistoryDraft & { readonly mode: ChatInputMode; }>();
 	private readonly inputChanges = this._register(new PauseableEmitter<void>({ merge: () => undefined }));
@@ -1226,24 +1237,48 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
-		if (this.input.value || this.contexts.length > 0) throw new Error(localize('chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'));
-		this.delegate.selectMode(draft.mode);
-		const attachments = draft.contexts.map(restoreChatVariableEntry);
-		const { text, contexts } = this.options.stageImages ? projectChatDraftReferences(draft.text, attachments, true)
-			: { text: draft.text, contexts: attachments };
-		this.setInputValue(text !== draft.text && !text.trim() && !contexts.some(context => context.reference) ? '' : text);
-		const references: ChatContextAttachment[] = [];
-		const legacyReferences: ChatContextAttachment[] = [];
-		for (const attachment of contexts) {
-			if (attachment.reference || this.inlineContext.shouldStageImage(attachment)) references.push(attachment);
-			else legacyReferences.push(attachment);
+		// Live context can already be projected in a composer without any user draft.
+		const current = this.snapshotDraftReferences();
+		if (current.text.trim() || current.contexts.length > 0 || this.attachmentModel.hasPendingContext) {
+			throw new Error(localize('chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'));
 		}
-		this.setReferenceState(references);
-		// Older drafts have snapshots without text positions; retain each as a reference at the message end.
-		for (const attachment of legacyReferences) this.inlineContext.addReference(attachment, false);
-		this.draftRevision++;
-		this.renderToolbar();
-		this.inputChanges.fire();
+		this.applyDraft({ ...draft, contexts: draft.contexts.map(restoreChatVariableEntry) });
+	}
+
+	moveDraftTo(target: Pick<IChatInputPart, 'replaceDraft'>): void {
+		target.replaceDraft({ mode: this.mode, ...this.snapshotDraftReferences() });
+		this.ownsDraftStorage = false;
+		this.retireDraftWrite?.();
+		// Clearing the retained composer must never erase the active composer's saved draft.
+		this.applyDraft({ mode: this.mode, text: '', contexts: [] });
+	}
+
+	replaceDraft(draft: IChatComposerDraft): void {
+		this.ownsDraftStorage = true;
+		this.applyDraft(draft);
+	}
+
+	private applyDraft(draft: IChatComposerDraft): void {
+		this.inputChanges.pause();
+		try {
+			this.delegate.selectMode(draft.mode);
+			const { text, contexts } = this.options.stageImages ? projectChatDraftReferences(draft.text, draft.contexts, true) : draft;
+			this.setInputValue(text !== draft.text && !text.trim() && !contexts.some(context => context.reference) ? '' : text);
+			const references: ChatContextAttachment[] = [];
+			const legacyReferences: ChatContextAttachment[] = [];
+			for (const attachment of contexts) {
+				if (attachment.reference || this.inlineContext.shouldStageImage(attachment)) references.push(attachment);
+				else legacyReferences.push(attachment);
+			}
+			this.setReferenceState(references);
+			// Older drafts have snapshots without text positions; retain each as a reference at the message end.
+			for (const attachment of legacyReferences) this.inlineContext.addReference(attachment, false);
+			this.draftRevision++;
+			this.renderToolbar();
+			this.inputChanges.fire();
+		} finally {
+			this.inputChanges.resume();
+		}
 	}
 
 	async acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
@@ -1614,6 +1649,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		let restoring = false;
 		let restoreFailed = false;
 		const revisions = new Map<string, number>();
+		this.retireDraftWrite = () => {
+			const revision = revisions.get(identity);
+			if (revision !== undefined) revisions.set(identity, revision + 1);
+		};
 		const pending = new Set<Promise<void>>();
 		const restore = (): void => {
 			restoreFailed = false;
@@ -1637,7 +1676,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (draft && revision === revisions.get(draftId)) storage.write(draftId, draft);
 		};
 		const save = (reportError = true): Promise<void> | undefined => {
-			if (restoreFailed || restoring) return;
+			if (!this.ownsDraftStorage || restoreFailed || restoring) return;
 			const operation = write();
 			pending.add(operation);
 			void operation.then(() => pending.delete(operation), error => {
@@ -1658,8 +1697,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			event.join((async () => {
 				// File selection can still be preparing its snapshot when the window closes.
 				while (this.attachmentModel.hasPendingContext) await this.attachmentModel.resolvePendingContext();
-				// A mode switch clears the retained renderer after transferring its draft.
-				// Its shutdown must not overwrite the active renderer's persisted input.
 				const draft = this.snapshotDraftReferences();
 				if (this.visible || draft.text.length > 0 || draft.contexts.length > 0) save();
 				await Promise.all([...pending]);
@@ -1677,11 +1714,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				return;
 			}
 			const promoted = wasUntitled && model.threadId !== undefined && generation === nextGeneration;
-			if (promoted) {
+			if (promoted && this.ownsDraftStorage) {
 				// Promotion consumes the untitled identity without creating another composer.
 				revisions.set(identity, (revisions.get(identity) ?? 0) + 1);
 				storage.write(identity, undefined);
-			} else {
+			} else if (!promoted) {
 				save();
 				restoring = true;
 				this.setInputValue('');
@@ -1690,7 +1727,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			generation = nextGeneration;
 			wasUntitled = model.threadId === undefined;
 			identity = nextIdentity;
-			if (!promoted) restore();
+			if (!promoted && this.ownsDraftStorage) restore();
 			restoring = false;
 			save();
 		}));

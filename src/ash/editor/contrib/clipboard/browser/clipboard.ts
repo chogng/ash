@@ -83,6 +83,18 @@ onActivate(() => MenusRegistry.appendMenuItem(MenuId.EditorContext, {
 
 registerExecCommandImpl(CutAction, 'cut');
 registerExecCommandImpl(CopyAction, 'copy');
+onActivate(() => CopyAction.addImplementation(11_000, 'selected-dom-text', accessor => {
+	const document = getActiveDocument();
+	const selection = document.getSelection();
+	const text = selection?.toString();
+	if (!text) return false;
+	const active = getActiveElement(document);
+	if (active && isEditableElement(active)) return false;
+	// The native Edit menu invokes this command even when the last active editor has lost focus.
+	// Focusing that editor would discard the Workbench's selection.
+	if (executeDocumentCommand('copy')) return true;
+	return accessor.get(IClipboardService).writeText(text);
+}));
 
 if (PasteAction) {
 	onActivate(() => PasteAction.addImplementation(10_000, 'code-editor', accessor => {

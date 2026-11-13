@@ -10,6 +10,7 @@ import '../contrib/files/browser/files.contribution.js';
 import { registerOutlineView } from '../contrib/outline/browser/outline.contribution.js';
 import { registerTimelineView } from '../contrib/timeline/browser/timeline.contribution.js';
 import '../contrib/accessibility/browser/accessibility.contribution.js';
+import '../contrib/accessibility/browser/accessibilityStatus.js';
 import {
 	registerSCMViews,
 } from '../contrib/scm/browser/scm.contribution.js';

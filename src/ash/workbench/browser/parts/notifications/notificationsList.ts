@@ -1,4 +1,4 @@
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, h, isEditableElement } from '../../../../base/browser/dom.js';
 import type { IActionRunner } from '../../../../base/common/actions.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -40,6 +40,9 @@ export class NotificationsList extends Disposable {
 			this.domNode.setAttribute('aria-label', localize('notifications.toasts', 'Notifications'));
 		}
 		container.append(this.domNode);
+		// Selecting toast text can leave focus outside the row. macOS can deliver Cmd+C
+		// without a Chromium copy event, so write the visible selection through the host.
+		this._register(addDisposableListener(container.ownerDocument, 'keydown', event => this.copySelection(event)));
 		this._register(addDisposableListener(this.domNode, 'contextmenu', event => this.showCopyMenu(event)));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
 			if (!event.defaultPrevented && !event.isComposing && (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) {
@@ -133,6 +136,24 @@ export class NotificationsList extends Disposable {
 				item.updateVisibility(visible);
 			}
 		}
+	}
+
+	private copySelection(event: KeyboardEvent): void {
+		if (event.defaultPrevented || event.isComposing || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'c') return;
+		if (!(isMacintosh ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey)) return;
+		const document = this.domNode.ownerDocument;
+		const active = getActiveElement(document);
+		if (active && isEditableElement(active)) return;
+		const selection = document.getSelection();
+		if (!selection?.rangeCount || selection.isCollapsed) return;
+		const node = selection.getRangeAt(0).commonAncestorContainer;
+		if (!this.domNode.contains(node)) return;
+		const message = (node.nodeType === 1 ? node as Element : node.parentElement)?.closest('.ash-notification-message');
+		if (!message || !message.checkVisibility({ checkVisibilityCSS: true })) return;
+		const text = selection.toString();
+		if (!text) return;
+		event.preventDefault();
+		void this.actionRunner.run(this.copyAction, text);
 	}
 
 	private showCopyMenu(event: MouseEvent | KeyboardEvent): void {

@@ -18,6 +18,7 @@ export class ScopedSessionConversationPane extends Disposable implements ISessio
 	get element() { return this.pane.element; }
 	get sessionId() { return this.pane.sessionId; }
 	get model() { return this.pane.model; }
+	get input() { return this.pane.input; }
 	focus(): void { this.pane.focus(); }
 	startVoiceConversation(): Promise<void> { return this.pane.startVoiceConversation(); }
 	addContext(...args: Parameters<ISessionsConversationPane['addContext']>): void { this.pane.addContext(...args); }

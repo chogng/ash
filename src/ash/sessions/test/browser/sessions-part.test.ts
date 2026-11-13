@@ -58,6 +58,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictati
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { autorun, observableValue } from '../../../base/common/observable.js';
+import { isCancellationError } from '../../../base/common/errors.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -574,9 +575,18 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	const retainedCoworkInput = coworkView.querySelector('.ash-chat-input-part');
 	part.appendToDraft('Continue the presentation in Cowork');
 	const coworkDraft = (await part.captureActiveDraft())!.draft;
-	await part.setConversationKind('code');
+	const preparing = new DeferredPromise<[]>();
+	const acquiring = assert.rejects(part.acquireContext(() => preparing.p), isCancellationError);
+	const switching = part.setConversationKind('code');
+	// An unfinished attachment cannot hold up switching or discard the latest input.
+	part.appendToDraft('Keep the latest text while switching');
+	await switching;
+	await acquiring;
+	await preparing.complete([]);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
-	assert.deepEqual((await part.captureActiveDraft())?.draft, coworkDraft);
+	const latestDraft = { ...coworkDraft, text: `${coworkDraft.text}\n\nKeep the latest text while switching` };
+	assert.deepEqual((await part.captureActiveDraft())?.draft, latestDraft);
+	assert.deepEqual(readNewChatDraftState(storage, `untitled:${selected.session.untitledSessionId}`, chatInputStatePersistence), latestDraft);
 	const transferred = await part.captureActiveDraft();
 	transferred!.clear();
 	await part.setConversationKind('chat');

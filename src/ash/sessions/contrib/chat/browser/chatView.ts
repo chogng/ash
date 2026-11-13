@@ -55,6 +55,7 @@ export class ChatView<TWidget extends ChatWidget = ChatWidget> extends Disposabl
 	}
 
 	get model(): TWidget['model'] { return this.widget.model; }
+	get input(): ISessionChatView['input'] { return this.widget.input; }
 	get sessionId(): ISessionChatView['sessionId'] { return this.widget.sessionId; }
 	focus(): void { this.widget.focus(); }
 	startVoiceConversation(): Promise<void> { return this.widget.startVoiceConversation(); }

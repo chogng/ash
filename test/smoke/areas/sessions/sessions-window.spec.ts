@@ -266,16 +266,20 @@ test(
 );
 
 test(
-	'Sessions desktop follows system screen-reader detection and live changes in its editor',
+	'Sessions desktop follows system screen-reader detection without the IDE configuration prompt',
 	{ tag: ['@electron-ui', '@electron-app-server'] },
 	async ({ application, target, workbench }) => {
 		if (!('windows' in application)) {
 			throw new Error('Expected Electron windows');
 		}
 		const initialSupport = await application.evaluate(({ app }) => app.isAccessibilitySupportEnabled());
+		const screenReaderPrompt = (page: Page) => page.locator('.ash-notification-message').filter({ hasText: 'Choose how Ash enables screen reader optimization.' });
 		try {
+			await application.evaluate(({ app }) => app.setAccessibilitySupportEnabled(false));
 			await application.evaluate(({ app }) => app.setAccessibilitySupportEnabled(true));
+			await expect(screenReaderPrompt(workbench.page).filter({ visible: true })).toBeVisible();
 			const page = await workbench.openAgentsWindow(target.kind);
+			await expect(screenReaderPrompt(page)).toHaveCount(0);
 			const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-native-chat):visible').first();
 			const editor = new Editor(chat);
 			await replaceChatInput(editor, 'System screen-reader detection');
@@ -288,6 +292,13 @@ test(
 			await application.evaluate(({ app }) => app.setAccessibilitySupportEnabled(true));
 			await expect(mirror).toHaveAttribute('aria-hidden', 'false');
 			await expect(mirror).toHaveText('System screen-reader detection');
+			const commands = new QuickAccess(page);
+			await commands.open('>showEditorScreenReaderNotification');
+			await expect(commands.items).toHaveCount(0);
+			await commands.close();
+			await commands.runCommand('notifications.showList');
+			await expect(page.getByRole('region', { name: 'Notification Center', exact: true })).toBeVisible();
+			await expect(screenReaderPrompt(page)).toHaveCount(0);
 		} finally {
 			await application.evaluate(
 				({ app }, enabled) => app.setAccessibilitySupportEnabled(enabled),

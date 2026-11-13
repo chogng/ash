@@ -4,9 +4,9 @@ import { IAccessibilityService } from '../../../../platform/accessibility/common
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Severity, INotificationService, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
-import type { IWorkbenchContribution } from '../../../common/contributions.js';
+import { registerWorkbenchContribution, WorkbenchPhase, type IWorkbenchContribution } from '../../../common/contributions.js';
 import { IStatusbarService, StatusbarAlignment, type IStatusbarEntryAccessor } from '../../../services/statusbar/browser/statusbar.js';
 
 export class AccessibilityStatus extends Disposable implements IWorkbenchContribution {
@@ -54,6 +54,9 @@ export class AccessibilityStatus extends Disposable implements IWorkbenchContrib
 		}
 	}
 }
+
+registerWorkbenchContribution(AccessibilityStatus.ID, WorkbenchPhase.BlockRestore, accessor =>
+	accessor.get(IInstantiationService).createInstance(AccessibilityStatus));
 
 function showScreenReaderNotification(configuration: IConfigurationService, notifications: INotificationService): INotificationHandle {
 	const notification = notifications.notify({

@@ -212,13 +212,10 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		const switchKind = async () => {
 			if (this.isDisposed) return;
 			this.kind = kind;
-			await Promise.all(
-				[...this.entries.values()]
-					.filter(view => !this.detachedPlaceholders.has(view))
-					.map(view => view.setConversationKind(kind)),
-			);
+			for (const view of this.entries.values()) {
+				if (!this.detachedPlaceholders.has(view)) view.setConversationKind(kind);
+			}
 		};
-		// Entry commands may overlap while a composer flushes its pending edits.
 		this.switching = this.switching.then(switchKind, switchKind);
 		return this.switching;
 	}
@@ -289,7 +286,8 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			this.options.activateSelection(view.currentSelection);
 			this.reconcileGrid();
 			view.setVisible(this.agentViewsVisible);
-			void view.setConversationKind(this.kind).catch(error => this.notifications.error(String(error)));
+			try { view.setConversationKind(this.kind); }
+			catch (error) { this.notifications.error(String(error)); }
 			if (this.agentViewsVisible && this.activeAgentView === view) view.focus();
 		}));
 		resources.add(window.onWillLayout(dimension => view.layout({
@@ -475,7 +473,6 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 					createPane: (kind, container, panelId, selected) =>
 						this.createPane(kind, container, panelId, selected),
 					bindPane: bindAgentSession,
-					bindingKey: selection => selection.kind === 'session' ? selection.active.threadId : selection.session.untitledSessionId,
 					shouldRecreatePane: (previous, next) => previous.kind === 'untitled' && next.kind === 'untitled'
 						&& previous.session.providerId !== next.session.providerId,
 					activateSelection: this.options.activateSelection,

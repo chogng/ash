@@ -28,7 +28,7 @@ export class ConfigureNotificationAction extends SubmenuAction {
 	}
 }
 
-/** Copies the model's message; the menu execution owner reports clipboard failures. */
+/** Copies the full message from the menu or the selected text from the keyboard. */
 export class CopyNotificationMessageAction implements IAction {
 	static readonly ID = 'workbench.action.copyNotificationMessage';
 	static readonly LABEL = localize('notifications.copyText', 'Copy Text');
@@ -41,7 +41,7 @@ export class CopyNotificationMessageAction implements IAction {
 		@IClipboardService private readonly clipboardService: IClipboardService,
 	) { }
 
-	async run(notification: NotificationItem): Promise<void> {
-		await this.clipboardService.writeText(notification.message);
+	async run(value: NotificationItem | string): Promise<void> {
+		await this.clipboardService.writeText(typeof value === 'string' ? value : value.message);
 	}
 }
