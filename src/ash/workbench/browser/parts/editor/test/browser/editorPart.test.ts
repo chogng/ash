@@ -132,7 +132,7 @@ import {
 import type { LanguageLocation } from '../../../../../../editor/common/languages.js';
 import type { CommandId } from '../../../../../../platform/commands/common/commands.js';
 import { type Context } from '../../../../../../platform/contextkey/common/contextkey.js';
-import { MenuId } from '../../../../../../platform/actions/common/actions.js';
+import { IMenuService, MenuId } from '../../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../../platform/actions/common/menuService.js';
 import { GroupDirection, IEditorGroupsService } from '../../../../../services/editor/common/editorGroupsService.js';
 import {
@@ -5963,7 +5963,7 @@ test('Academy Save As transfers every view to one typed v2 resource and working 
 });
 
 test('general document commands preserve dirty source text, create a backed-up draft and save typed content', async () => {
-	await import('../../../../../../sessions/contrib/artifacts/contrib/docs/browser/docs.contribution.js');
+	await import('../../../../../../sessions/contrib/docs/browser/docs.contribution.js');
 	const { DocumentEditorPane } = await import('../../../../../contrib/documentEditor/browser/documentEditorPane.js');
 	const { DocumentTypes } = await import('../../../../../services/documentEditor/common/documentTypes.js');
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
@@ -5984,13 +5984,14 @@ test('general document commands preserve dirty source text, create a backed-up d
 		using codeEditors = new StandaloneCodeEditorService();
 		services.registerInstance(ICodeEditorService, codeEditors);
 		services.registerSingleton(ICommandService, () => new CommandService(services));
+		services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
 		services.registerSingleton(IOpenerService, () => services.createInstance(OpenerService));
 		using files = createTestTextFileService(sourceFiles);
 		const copies = services.get(IWorkingCopyService);
 		using models = new DocumentEditorTextModelService(files, copies);
 		services.registerInstance(IDocumentEditorTextModelService, models);
 		using registry = new EditorPaneRegistry();
-		const { DOCS_ARTIFACT_EDITOR_ID, GENERAL_DOCUMENT_CONTENT_TYPE } = await import('../../../../../../sessions/contrib/artifacts/contrib/docs/common/docs.js');
+		const { DOCS_ARTIFACT_EDITOR_ID, GENERAL_DOCUMENT_CONTENT_TYPE } = await import('../../../../../../sessions/contrib/docs/common/docs.js');
 		const { ISessionsEntryService } = await import('../../../../../../sessions/services/layout/common/sessionsEntryService.js');
 		const { IContextMenuService } = await import('../../../../../../platform/contextview/browser/contextView.js');
 		const { INotificationService } = await import('../../../../../../platform/notification/common/notification.js');

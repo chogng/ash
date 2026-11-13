@@ -36,7 +36,7 @@ const { CommandService } = await import('../../../workbench/services/commands/co
 const { IEditorService } = await import('../../../workbench/services/editor/common/editorService.js');
 const { ISessionsEntryService } = await import('../../services/layout/common/sessionsEntryService.js');
 const { IProjectsService } = await import('../../contrib/projects/browser/projectsService.js');
-const { IDesignEditorService } = await import('../../contrib/artifacts/browser/designEditorService.js');
+const { IDesignEditorService } = await import('../../contrib/artifact/browser/designEditorService.js');
 const { URI } = await import('../../../base/common/uri.js');
 const { DisposableStore } = await import('../../../base/common/lifecycle.js');
 const { Menus } = await import('../../browser/menus.js');
@@ -499,6 +499,6 @@ function registerMenus(services: InstanceType<typeof InstantiationService>): Ins
 	resources.add(registry.register('sessions.show.projects', CommandsRegistry.getCommand('sessions.show.projects')!));
 	resources.add(registry.register('sessions.show.creator', () => select('creator')));
 	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string; }; }) => select(input.resource.scheme === 'ash-projects' ? 'projects' : 'creator') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
-	services.registerInstance(IDesignEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/artifacts/browser/designEditorService.js').IDesignEditorService);
+	services.registerInstance(IDesignEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/artifact/browser/designEditorService.js').IDesignEditorService);
 	return resources;
 }

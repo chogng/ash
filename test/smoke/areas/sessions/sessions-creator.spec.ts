@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
-import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifacts/common/model/designDocument.js';
+import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifact/common/model/designDocument.js';
 
 test('Sessions mode and page-tab activation reuse Parts while retaining the conversation and dirty document', async ({ target, workbench, testWorkspace }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
@@ -73,7 +73,7 @@ test('Sessions Artifacts retains Design and Slides canvases independently', asyn
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const creator = page.locator('.ash-creator');
-	await expect(creator.getByRole('heading', { name: 'Artifacts', exact: true })).toBeVisible();
+	await expect(page.locator('[data-part="titlebar"]').getByRole('heading', { name: 'Artifacts', exact: true })).toBeVisible();
 	await expect(creator.locator('.ash-artifacts-create')).toHaveCount(7);
 	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="editor"] .ash-creator')).toBeVisible();
@@ -208,9 +208,10 @@ test('Sessions Creator uses Chinese mode names, actions and keyboard help', asyn
 	await expect(pages.locator('option')).toHaveText(['第 1 页', '第 2 页']);
 	await creator.getByRole('button', { name: '添加幻灯片', exact: true }).click();
 	await expect(pages.locator('option:checked')).toHaveText('第 3 页');
-	await creator.getByRole('button', { name: 'Artifacts 首页', exact: true }).click();
+	const titlebar = page.locator('[data-part="titlebar"]');
+	await titlebar.getByRole('button', { name: 'Artifacts 首页', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
-	await expect(creator.locator('.ash-creator-header')).toBeHidden();
+	await expect(titlebar.locator('.ash-sessions-titlebar-editor-page h1')).toBeVisible();
 	await expect(creator.locator('[data-creator-mode="design"] .ash-creator-workspace-navigation')).toHaveCount(0);
 	const canvas = page.getByRole('region', { name: '设计画布', exact: true });
 	await canvas.press('r');
@@ -221,9 +222,13 @@ test('Sessions Creator uses Chinese mode names, actions and keyboard help', asyn
 	await page.keyboard.press('Escape');
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await expect(creator.getByRole('button', { name: '设计', exact: true })).toBeVisible();
-	await creator.getByRole('button', { name: '电子表格', exact: true }).press('Enter');
-	await expect(creator.getByRole('button', { name: '导出 CSV', exact: true })).toBeVisible();
-	await expect(creator.getByRole('button', { name: '添加行', exact: true })).toBeVisible();
+	await creator.locator('[data-artifact-example="sheet"]').press('Enter');
+	await expect(titlebar.getByRole('heading', { name: '电子表格范例', exact: true })).toBeVisible();
+	const back = titlebar.getByRole('button', { name: 'Artifacts 首页', exact: true });
+	await back.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/使用窗口标题栏返回 Artifacts/u);
+	await page.keyboard.press('Escape');
+	await expect(back).toBeFocused();
 });
 
 test('Sessions Design vector booleans keep editable operands, holes, history and exported paths', async ({ target, workbench }, testInfo) => {
@@ -628,6 +633,7 @@ test('Sessions Design converts shaped variable-font text to editable outlines an
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
+	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
 	await canvas.press('t'); await canvas.locator('.ash-canvas-viewport').click({ position: { x: 160, y: 160 } }); await page.keyboard.press('Escape');
 	const content = properties.getByRole('textbox', { name: 'Text content', exact: true }); await content.fill('office AV\nB8'); await content.press('Tab');
@@ -945,9 +951,9 @@ test('Sessions Slides example autosaves to Artifacts and exports an independent 
 		page = await workbench.reopenAgentsWindow(application, page);
 		await openArtifacts(page);
 		await page.getByRole('tab', { name: 'Yours', exact: true }).click();
-		const card = page.locator('[data-slides-artifact]').filter({ hasText: 'Studio launch' });
+		const card = page.locator('.ash-artifacts-card.slides[data-artifact-workspace]').filter({ hasText: 'Studio launch' });
 		await expect(card).toHaveCount(1);
-		expect(await card.getAttribute('data-slides-artifact')).not.toBe(snapshot.documentId);
+		expect(await card.getAttribute('data-artifact-workspace')).not.toBe(`canvas:${snapshot.documentId}`);
 		await card.press('Enter');
 		await expect(page.locator('[data-creator-mode="slides"]:visible').getByRole('combobox', { name: 'Pages', exact: true }).getByRole('option')).toHaveCount(3);
 		expect(await exported()).toEqual(snapshot);
@@ -962,7 +968,7 @@ test('Sessions Design automatically retains an untitled draft across window reop
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	let canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
-	await expect(page.locator('.ash-creator-header')).toBeHidden();
+	await expect(page.locator('[data-part="titlebar"] .ash-sessions-titlebar-editor-page h1')).toHaveText('Untitled design');
 	await expect(page.locator('[data-creator-mode="design"] .ash-creator-workspace-navigation')).toHaveCount(0);
 	// Removed tabs, controls and the footer reserve no space around the canvas.
 	await expect.poll(async () => {

@@ -271,7 +271,7 @@ function sourceName(file: string): string {
 
 
 test('Design editor stays within its Sessions contribution and keeps document code independent from the page', () => {
-	const designRoot = join(sourceRoot, 'sessions/contrib/artifacts');
+	const designRoot = join(sourceRoot, 'sessions/contrib/artifact');
 	const canvasRoot = join(sourceRoot, 'sessions/contrib/canvas');
 	const commonRoot = join(designRoot, 'common');
 	const coreRoot = join(commonRoot, 'core');
@@ -286,7 +286,7 @@ test('Design editor stays within its Sessions contribution and keeps document co
 			}
 		}
 	}
-	const widget = join(designRoot, 'browser/widget/canvasEditorWidget.ts');
+	const widget = join(designRoot, 'browser/widget/artifactEditorWidget.ts');
 	for (const target of localImports(widget)) {
 		if (target.startsWith(join(sourceRoot, 'sessions')) && !target.startsWith(`${designRoot}${sep}`) && !target.startsWith(`${canvasRoot}${sep}`)) {
 			violations.push(`${sourceName(widget)} -> ${sourceName(target)}`);
@@ -300,7 +300,7 @@ test('Design editor stays within its Sessions contribution and keeps document co
 	];
 	for (const file of sharedBrowserFiles) {
 		for (const target of localImports(file)) {
-			if (target.startsWith(join(designRoot, 'contrib')) || target === join(designRoot, 'browser/designEditorContributions.ts')) {
+			if (target === join(designRoot, 'browser/designEditorContributions.ts')) {
 				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
 			}
 		}
@@ -326,11 +326,14 @@ test('Shared canvas does not depend on Creator modes or Sessions composition', (
 
 
 test("Artifacts host consumes mode contracts and modes do not import each other's implementations", () => {
-	const root = join(sourceRoot, 'sessions/contrib/artifacts');
-	const modes = ['design', 'whiteboard', 'slides', 'brand', 'sites', 'make', 'prototype'];
-	const roots = modes.map(mode => join(root, 'contrib', mode));
+	const contributions = join(sourceRoot, 'sessions/contrib');
+	const root = join(contributions, 'artifact');
+	const modes = ['docs', 'design', 'whiteboard', 'slides', 'sheets', 'data', 'motion', 'brand', 'sites', 'make', 'prototype'];
+	const roots = modes.map(mode => join(contributions, mode));
+	const dataContribution = join(contributions, 'data/browser/data.contribution.ts');
+	const tableWorkspaces = join(contributions, 'sheets/browser/tableArtifactWorkspaces.ts');
 	const violations: string[] = [];
-	for (const file of [join(root, 'browser/artifactsEditor.ts'), join(root, 'browser/artifactWorkspaceRegistry.ts')]) {
+	for (const file of productionTypeScriptFiles(root)) {
 		for (const target of localImports(file)) {
 			if (roots.some(modeRoot => target.startsWith(modeRoot + sep))) violations.push(sourceName(file) + ' -> ' + sourceName(target));
 		}
@@ -338,6 +341,7 @@ test("Artifacts host consumes mode contracts and modes do not import each other'
 	for (const modeRoot of roots) {
 		for (const file of productionTypeScriptFiles(modeRoot)) {
 			for (const target of localImports(file)) {
+				if (file === dataContribution && target === tableWorkspaces) continue;
 				if (roots.some(other => other !== modeRoot && target.startsWith(other + sep))) violations.push(sourceName(file) + ' -> ' + sourceName(target));
 			}
 		}

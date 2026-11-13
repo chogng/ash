@@ -570,9 +570,10 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(edit).toHaveCount(2);
 		await edit.nth(1).press('Enter');
 		const workspace = page.locator('.ash-code-page-group .ash-docs-workspace:visible');
+		const header = page.locator('[data-part="titlebar"] .ash-sessions-titlebar-editor-page');
 		const docs = workspace.locator('.stanza-structured-editor-pane');
 		await expect(docs).toBeVisible();
-		await expect(workspace.locator('.ash-docs-workspace-title')).toHaveText('Travel draft.ash-doc');
+		await expect(header.getByRole('heading')).toHaveText('Travel draft.ash-doc');
 		await expect(page.getByRole('tab', { name: /^Travel draft\.ash-doc/u })).toHaveCount(0);
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
 		await expect(docs.locator('table')).toBeVisible();
@@ -588,7 +589,7 @@ test.describe('Unified Chat sidebar', () => {
 		await electron.evaluate(({ dialog }, filePath) => {
 			dialog.showSaveDialog = async () => ({ canceled: false, filePath });
 		}, path);
-		await workspace.getByRole('button', { name: '保存文档' }).press('Enter');
+		await header.getByRole('button', { name: '保存文档' }).press('Enter');
 		await expect.poll(() => readFile(path, 'utf8').catch(() => '')).toContain('Edited weekend itinerary');
 		const saved = await readFile(path, 'utf8');
 		expect(saved).toContain('echo ready');
@@ -596,9 +597,9 @@ test.describe('Unified Chat sidebar', () => {
 		expect(saved).toContain('"textAlign":"end"');
 		expect(saved).toContain('https://example.com/map');
 		expect(saved).not.toContain('First block only');
-		await expect(workspace.locator('.ash-docs-workspace-title')).toHaveText('Travel draft.ash-doc');
+		await expect(header.getByRole('heading')).toHaveText('Travel draft.ash-doc');
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
-		await workspace.getByRole('button', { name: '返回 Artifacts' }).press('Enter');
+		await header.getByRole('button', { name: '返回 Artifacts' }).press('Enter');
 		await expect(docs).toHaveCount(0);
 		await page.locator('.ash-artifacts-card.docs:not([data-artifact-example])').getByText('Travel draft', { exact: true }).click();
 		await expect(docs.locator('.stanza-document-rich-text-input').first()).toHaveText('Edited weekend itinerary');

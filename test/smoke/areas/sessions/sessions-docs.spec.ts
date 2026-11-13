@@ -27,7 +27,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(navigation.locator('[data-action-id="sessions.open.creator"] .ash-icon')).toHaveAttribute('data-ash-icon-id', 'artifacts');
 		await page.locator('[data-artifact-example="docs"]').press('Enter');
 		const docs = page.locator('.ash-code-page-group .ash-docs-workspace:visible');
-		const toolbar = docs.getByRole('toolbar', { name: locale === 'en' ? 'Docs actions' : 'Docs 操作' });
+		const header = page.locator('[data-part="titlebar"] .ash-sessions-titlebar-editor-page');
+		const toolbar = header.getByRole('toolbar', { name: locale === 'en' ? 'Docs actions' : 'Docs 操作' });
 		await expect(toolbar).toBeVisible();
 		const editorFrame = page.locator('.ash-workbench-part-frame.ash-sessions-editor-frame-divider');
 		const titlebarFrame = page.locator('.ash-workbench-part-frame.ash-sessions-titlebar-frame-divider');
@@ -44,7 +45,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const edge = getComputedStyle(frame, '::after');
 			return { x: bounds.left + parseFloat(edge.left), bottom: bounds.bottom - parseFloat(edge.bottom), width: edge.borderLeftWidth };
 		})).toEqual({ x: editorBounds.x, bottom: editorBounds.y, width: '1px' });
-		await expect(docs.locator('.ash-docs-workspace-title')).toHaveText(locale === 'en' ? 'Docs example' : '文档范例');
+		await expect(header.getByRole('heading')).toHaveText(locale === 'en' ? 'Docs example' : '文档范例');
+		await expect.poll(async () => (await header.boundingBox())!.x).toBeCloseTo(editorBounds.x, 0);
 		await expect(docs.locator('.stanza-document-heading').first()).toBeVisible();
 		await expect(docs.locator('.stanza-document-paragraph').first()).toContainText(locale === 'en' ? 'guide the public release.' : /公开发布/u);
 		await expect(docs.locator('table')).toBeVisible();
@@ -53,7 +55,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(checks.first()).toBeChecked();
 		await expect(checks.first()).toBeDisabled();
 		await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
-		await expect(docs.locator('.ash-docs-workspace-header').locator('xpath=following-sibling::*[1]')).toHaveClass('ash-docs-workspace-body');
+		await expect(docs.locator(':scope > :first-child')).toHaveClass('ash-docs-workspace-body');
 		await page.screenshot({ path: testInfo.outputPath(`docs-example-${locale}.png`) });
 		const tools = toolbar.getByRole('button', { name: locale === 'en' ? 'Document tools' : '文档工具' });
 		await tools.press('Enter');
@@ -67,7 +69,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		if (target.kind === 'browser' && viewport) {
 			await page.setViewportSize({ width: 900, height: viewport.height });
 			await expect(toolbar).toBeInViewport();
-			expect(await docs.locator('.ash-docs-workspace-header').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+			expect(await header.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 			await page.setViewportSize(viewport);
 		}
 		await toolbar.getByRole('button', { name: locale === 'en' ? 'Back to Artifacts' : '返回 Artifacts' }).press('Enter');
@@ -83,7 +85,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(quick.items.filter({ hasText: 'Markdown' }).last().locator('.ash-quick-pick-row-content')).toHaveClass(/picked/);
 		await quick.select(locale === 'en' ? 'New blank document' : '新建空白文档');
 		const markdownPane = page.locator('.ash-code-page-group [data-docs-format="markdown"]:visible');
-		await expect(markdownPane.getByRole('toolbar', { name: locale === 'en' ? 'Docs actions' : 'Docs 操作' })).toBeVisible();
+		await expect(toolbar).toBeVisible();
 		await expect(markdownPane.locator('.minimap, .line-numbers')).toHaveCount(0);
 		await expect(page.locator('[data-part="sessions"]')).toBeVisible();
 		const markdown = new Editor(markdownPane);
@@ -102,9 +104,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await application.evaluate(({ dialog }, filePath) => {
 				dialog.showSaveDialog = async () => ({ canceled: false, filePath });
 			}, output);
-			await markdownPane.getByRole('button', { name: 'Save document', exact: true }).press('Enter');
+			await toolbar.getByRole('button', { name: 'Save document', exact: true }).press('Enter');
 			await expect.poll(() => readFile(output, 'utf8').catch(() => '')).toBe('# Retained Docs draft');
-			await expect(markdownPane.getByRole('heading', { name: 'retained-docs.md', exact: true })).toBeVisible();
+			await expect(header.getByRole('heading', { name: 'retained-docs.md', exact: true })).toBeVisible();
 		}
 		await page.screenshot({ path: testInfo.outputPath(`docs-markdown-${locale}.png`) });
 		await chooseEditor();

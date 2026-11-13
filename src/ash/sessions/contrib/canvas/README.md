@@ -1,6 +1,6 @@
 # 公共画布
 
-`canvas` 是与 `creator` 平级的 Sessions contrib。七个 Creator 模式的画布编辑器使用这份实现；其他空间编辑器也可以通过相同接口挂载自己的内容。
+`canvas` 是与 `artifact` 平级的 Sessions contrib。共享的 Artifact 编辑器使用这份实现，其他空间编辑器也可以通过相同接口挂载自己的内容。
 
 | 模块                                                          | 职责                                                               |
 | ------------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -14,4 +14,4 @@
 
 编辑器拥有可聚焦的具名区域、键盘操作、无障碍帮助、文本内容视图和状态播报。Canvas 呈现共享焦点提示，装饰性选框对辅助技术隐藏。每个视图拥有独立 CanvasViewport，共享文档不会共享相机。
 
-单元测试位于 [test](test)，验证缩放锚点、捕获与取消约定。实际键盘、滚轮、绘制、主题和多视图行为沿用 [编辑器测试](../../test/browser/canvasEditorWidget.test.ts)；Playwright 的 Sessions Design 与 Creator 场景覆盖 Browser 和 Electron UI 调用链。
+单元测试位于 [test](test)，验证缩放锚点、捕获与取消约定。实际键盘、滚轮、绘制、主题和多视图行为沿用 [编辑器测试](../../test/browser/artifactEditorWidget.test.ts)；Playwright 的 Sessions Design 与 Creator 场景覆盖 Browser 和 Electron UI 调用链。

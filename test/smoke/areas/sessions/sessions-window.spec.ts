@@ -17,7 +17,7 @@ import {
 	drawImageAnnotation,
 	rightClickCanvasShape,
 } from '../../../automation/design.js';
-import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifacts/common/model/designDocument.js';
+import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifact/common/model/designDocument.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
 import type { IKeyboardLayoutDefinition } from '../../../../src/ash/platform/keyboardLayout/common/keyboardLayout.js';

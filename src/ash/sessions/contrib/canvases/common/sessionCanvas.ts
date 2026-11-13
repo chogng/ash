@@ -7,6 +7,5 @@ export const ISessionCanvasRegistryService = createServiceIdentifier<ISessionCan
 
 export interface ISessionCanvasRegistryService {
 	readonly availableCanvases: IObservable<readonly ICanvasDefinition[]>;
-	getActiveOwner(): ICanvasOwner | undefined;
-	openCanvas(canvas: ICanvasDefinition): Promise<void>;
+	openCanvas(owner: ICanvasOwner, canvas: ICanvasDefinition): Promise<void>;
 }

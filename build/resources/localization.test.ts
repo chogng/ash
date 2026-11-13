@@ -180,7 +180,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 			"localize('chat.newAction', 'New chat action');",
 		].join('\n'),
 		'src/ash/sessions/contrib/chat/feature.ts': "import { localize } from '../../../nls.js';\nlocalize('untranslatedSessionAction', 'Open session');",
-		'src/ash/sessions/contrib/artifacts/feature.ts': "import { localize } from '../../../nls.js';\nlocalize('untranslatedArtifactAction', 'Open artifact');",
+		'src/ash/sessions/contrib/artifact/feature.ts': "import { localize } from '../../../nls.js';\nlocalize('untranslatedArtifactAction', 'Open artifact');",
 		'src/ash/platform/terminal/feature.ts': "import { localize } from '../../nls.js';\nlocalize('untranslatedTerminalAction', 'Open terminal');",
 		'src/ash/ignored.test.ts': `import { localize } from './nls.js'; localize('hello', 'Ignored test');`,
 		'src/ash/test/ignored.ts': `import { localize } from '../nls.js'; localize('hello', 'Ignored test directory');`,
@@ -231,7 +231,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		['ash/chat.markdown.missing', 'src/ash/workbench/contrib/chat/browser/feature.ts:3:1', 'chat-transcript.json'],
 		['ash/chat.newAction', 'src/ash/workbench/contrib/chat/browser/feature.ts:5:1', 'chat.json'],
 		['ash/untranslatedSessionAction', 'src/ash/sessions/contrib/chat/feature.ts:2:1', 'sessions-chat.json'],
-		['ash/untranslatedArtifactAction', 'src/ash/sessions/contrib/artifacts/feature.ts:2:1', 'artifacts.json'],
+		['ash/untranslatedArtifactAction', 'src/ash/sessions/contrib/artifact/feature.ts:2:1', 'artifacts.json'],
 		['ash/untranslatedTerminalAction', 'src/ash/platform/terminal/feature.ts:2:1', 'workbench-terminal.json'],
 		['ash/slash.permission.description', 'crates/slash-commands/src/definition.rs', 'workbench.json'],
 	] as const) {

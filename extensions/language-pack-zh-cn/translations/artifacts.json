@@ -8,7 +8,7 @@
     "sessions.creator.verbosityInvalid": "Artifacts 无障碍提示设置必须为布尔值。",
     "sessions.creator.verbosityTitle": "Artifacts 无障碍帮助",
     "sessions.creator.verbosityDescription": "提示如何打开 Artifacts 无障碍帮助。",
-    "sessions.creator.help": "Artifacts\n使用 Tab 和 Shift+Tab 访问筛选、搜索、视图选项、创建卡片和已有作品。在创建卡片上按 Enter 会打开新的聊天草稿，并在输入框下方显示所选的作品类型。工具栏位于内容上方。「显示辅助侧栏」可打开当前画布支持的属性面板。在已有作品上按 Enter 会打开该作品。用左右方向键在全部、我的和与你共享之间移动焦点，按 Enter 或空格键应用当前聚焦的筛选。搜索按标题筛选，排序切换标题顺序。使用「网格布局」在网格和列表视图之间切换。点击 Artifacts 导航返回首页并保留各工作区。在命令面板运行「选择 Docs 编辑器」可设置编辑器偏好或新建空白文档。Docs 会按编辑器偏好使用富文档或 Markdown 格式。Design 自动保存。使用「保存文档」保存通过 Slides 工作区打开的文件。预览支持左右方向键切换幻灯片，Escape 返回。",
+    "sessions.creator.help": "Artifacts\n使用 Tab 和 Shift+Tab 访问筛选、搜索、视图选项、创建卡片和已有作品。在创建卡片上按 Enter 会打开新的聊天草稿，并在输入框下方显示所选的作品类型。使用窗口标题栏返回 Artifacts。「显示辅助侧栏」可打开当前画布支持的属性面板。在已有作品上按 Enter 会打开该作品。用左右方向键在全部、我的和与你共享之间移动焦点，按 Enter 或空格键应用当前聚焦的筛选。搜索按标题筛选，排序切换标题顺序。使用「网格布局」在网格和列表视图之间切换。点击 Artifacts 导航返回首页并保留各工作区。在命令面板运行「选择 Docs 编辑器」可设置编辑器偏好或新建空白文档。Docs 会按编辑器偏好使用富文档或 Markdown 格式。Design 自动保存。使用「保存文档」保存通过 Slides 工作区打开的文件。预览支持左右方向键切换幻灯片，Escape 返回。",
     "sessions.creator.workspaceActions": "工作空间操作",
     "sessions.creator.open": "打开文档",
     "sessions.creator.save": "保存文档",
@@ -331,7 +331,7 @@
     "actions": "Docs 操作",
     "back": "返回 Artifacts",
     "tools": "文档工具",
-    "workspaceHelp": "使用文档上方的 Docs 操作栏返回 Artifacts 或打开文档工具。文档工具会在右侧栏显示排版、查找和大纲。"
+    "workspaceHelp": "使用窗口标题栏中的 Docs 操作返回 Artifacts 或打开文档工具。文档工具会在右侧栏显示排版、查找和大纲。"
   },
   "ash.artifacts": {
     "untitledMotion": "未命名动效",
@@ -339,7 +339,7 @@
     "addColumn": "添加列",
     "exportCsv": "导出 CSV",
     "tableSaveFailed": "无法保存表格修改。你的编辑仍在 Artifacts 中打开。",
-    "tableHelp": "在可编辑表格中，按 Tab 可在单元格间移动，也可访问「添加行」「添加列」和「导出 CSV」。修改会自动保存，可从 Artifacts 重新打开表格。",
+    "tableHelp": "在可编辑表格中，按 Tab 可在单元格间移动，也可访问「添加行」和「添加列」。「导出 CSV」位于窗口标题栏。修改会自动保存，可从 Artifacts 重新打开表格。",
     "cell": "单元格 {0}"
   }
 }

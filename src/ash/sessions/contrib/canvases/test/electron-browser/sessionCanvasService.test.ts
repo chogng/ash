@@ -35,7 +35,9 @@ suite('Sessions Canvas ownership', () => {
 		const configuration = resources.add(new InMemoryConfigurationService(registry));
 		const selection = { kind: 'session', active: { session: { sessionId: 'source-session' }, threadId: 'source-thread' } } as SessionsViewSelection;
 		const visibleSelections = [selection];
-		services.registerInstance(ISessionsService, { onDidChange: changed.event, visibleSelections } as unknown as ISessionsService);
+		services.registerInstance(ISessionsService, {
+			onDidChange: changed.event, visibleSelections, get activeSelection() { return visibleSelections[0]; },
+		} as unknown as ISessionsService);
 		const backgroundGroup = { id: 1, inputs: [], isLocked: false };
 		const documentGroup = { id: 2, inputs: [] as CanvasInput[], isLocked: false };
 		services.registerInstance(IEditorPart, { groups: [backgroundGroup, documentGroup], activeGroup: backgroundGroup } as unknown as IEditorPart);
@@ -53,6 +55,7 @@ suite('Sessions Canvas ownership', () => {
 		documentGroup.inputs.push(input);
 		assert.equal(context.getEditorGroup(owner, input, false), documentGroup as unknown as IEditorGroup);
 		assert.equal(context.isOwnerVisible(owner), true);
+		assert.deepEqual(context.getActiveContext()?.owner, owner);
 		assert.equal(context.isOwnerVisible({ ...owner, session: URI.parse('ash-session:/other-session') }), false);
 		assert.equal(context.isOwnerVisible({ ...owner, providerId: 'remote-provider' }), false);
 		assert.equal(context.isOwnerVisible({ ...owner, chat: URI.parse('ash-thread:/other-thread') }), false);
@@ -60,6 +63,7 @@ suite('Sessions Canvas ownership', () => {
 		resources.add(context.onDidChangeVisibility(() => notifications++));
 		visibleSelections.splice(0); changed.fire();
 		assert.equal(context.isOwnerVisible(owner), false);
+		assert.equal(context.getActiveContext(), undefined);
 		visibleSelections.push(selection); changed.fire();
 		await configuration.updateValue(CanvasesEnabledSettingId, false);
 		assert.equal(context.isOwnerVisible(owner), false);

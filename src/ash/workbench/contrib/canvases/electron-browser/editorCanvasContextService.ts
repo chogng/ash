@@ -13,8 +13,9 @@ import { IChatWidgetService } from '../../chat/browser/chat.js';
 import { canvasOwnerKey, isCanvasOwner, type ICanvasOwner } from '../../../common/canvasReference.js';
 import type { ICanvasContextService, CanvasInput } from '../common/canvas.js';
 import type { IEditorGroup } from '../../../services/editor/common/editorGroupsService.js';
+import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 
-/** Both products register their visible conversations in the same window-scoped registry. */
+/** The Editor Window presents canvases for its visible chat widgets. */
 export class EditorCanvasContextService extends Disposable implements ICanvasContextService {
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChangeVisibility = this.changed.event;
@@ -31,6 +32,7 @@ export class EditorCanvasContextService extends Disposable implements ICanvasCon
 		@IAgentHostCanvasCollection private readonly collection: IAgentHostCanvasCollection,
 		@IAgentSessionService private readonly sessions: IAgentSessionService,
 		@IChatService chat: IChatService,
+		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
 	) {
 		super();
 		const changes = observableSignalFromEvent(this, this.changed.event);
@@ -74,6 +76,13 @@ export class EditorCanvasContextService extends Disposable implements ICanvasCon
 
 	getContext(owner: ICanvasOwner, reader?: IReader) { return (reader ? this.contexts.read(reader) : this.contexts.get()).find(context => isCanvasOwner(context.owner, owner)); }
 	getFrontendSessionResource(owner: ICanvasOwner, reader?: IReader): URI | undefined { return this.getContext(owner, reader)?.owner.session; }
+
+	getActiveContext(reader?: IReader) {
+		const contexts = this.contexts.read(reader);
+		const selected = this.navigation.getActiveConversation();
+		return selected ? contexts.find(({ owner }) => this.isOwnerVisible(owner)
+			&& owner.session.path.slice(1) === selected.sessionId && owner.chat.path.slice(1) === selected.threadId) : undefined;
+	}
 
 	isOwnerVisible(owner: ICanvasOwner): boolean {
 		return owner.providerId === 'local-agent-host'

@@ -1,5 +1,5 @@
 import { QuickAccess } from '../../automation/quickaccess.js';
-import { parseDesignDocument } from '../../../src/ash/sessions/contrib/artifacts/common/model/designDocument.js';
+import { parseDesignDocument } from '../../../src/ash/sessions/contrib/artifact/common/model/designDocument.js';
 import { expect, test as base, type Page, type Locator } from '@playwright/test';
 import { paintColor, paintPixel, clickCanvasMenu, inspectCanvasMenu, drawBezierPath, rightClickCanvasShape } from '../../automation/design.js';
 
@@ -23,12 +23,15 @@ test('Artifact details share the conversation and dock their views in the editor
 	const navigation = page.locator('[data-part="sidebar"]');
 	const conversation = page.locator('[data-part="sessions"]');
 	const editor = page.locator('[data-part="editor"]');
+	const titlebar = page.locator('[data-part="titlebar"]');
+	const header = titlebar.locator('.ash-sessions-titlebar-editor-page');
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const dock = editor.locator('[data-part="tool-editor"] > [data-part="auxiliarybar"]');
 	const commands = new QuickAccess(page);
 	await home.click();
 	await expect(conversation).toBeHidden();
 	await commands.runCommand('sessions.creator.open.design');
+	await header.getByRole('button', { name: 'Show Secondary Side Bar' }).click();
 	await expect(dock).toBeVisible();
 	await expect(conversation).toBeVisible();
 	const [navBox, chatBox, editorBox, detailsBox] = await Promise.all([navigation, conversation, editor, dock].map(part => part.boundingBox()));
@@ -55,11 +58,12 @@ test('Artifact details share the conversation and dock their views in the editor
 	await expect(dock).toBeVisible();
 	await expect(conversation).toBeVisible();
 	await page.setViewportSize({ width: 900, height: 900 });
-	await expect(properties).toBeHidden();
 	await expect(editor).toBeVisible();
+	await expect(header.getByRole('button', { name: 'Artifacts home' })).toBeInViewport();
 	await page.setViewportSize({ width: 600, height: 700 });
 	await expect(dock).toBeVisible();
 	await expect(navigation).toBeHidden();
+	await expect(header.getByRole('button', { name: 'Artifacts home' })).toBeInViewport();
 	await page.setViewportSize({ width: 1600, height: 900 });
 	await expect(dock).toBeVisible();
 	await expect(navigation).toBeVisible();
@@ -70,14 +74,42 @@ test('Artifact details share the conversation and dock their views in the editor
 		await page.locator(`[data-artifact-example="${kind}"]`).click();
 		await expect(conversation).toBeVisible();
 		await expect(editor).toBeVisible();
-		if (kind === 'docs' || kind === 'sheet' || kind === 'data') await expect(properties).toBeHidden();
-		else await expect(dock).toBeVisible();
+		await expect(header.getByRole('heading')).toBeVisible();
+		await expect.poll(async () => Math.abs((await header.boundingBox())!.x - (await editor.boundingBox())!.x)).toBeLessThan(1);
+		const windowRow = (await titlebar.boundingBox())!;
+		const artifactRow = (await header.boundingBox())!;
+		expect(artifactRow.y).toBe(windowRow.y);
+		expect(artifactRow.height).toBe(windowRow.height);
+		await expect(header.getByRole('button', { name: /^(Artifacts home|Back to Artifacts)$/u })).toBeVisible();
+		if (kind !== 'docs' && kind !== 'sheet' && kind !== 'data') {
+			const toggle = header.getByRole('button', { name: /^(Show|Hide) Secondary Side Bar$/u });
+			if (await toggle.getAttribute('aria-pressed') !== 'true') await toggle.click();
+			await expect(dock).toBeVisible();
+		} else {
+			await expect(properties).toBeHidden();
+		}
 	}
+	for (const mode of ['brand', 'sites', 'make', 'prototype']) {
+		await commands.runCommand(`sessions.creator.open.${mode}`);
+		await expect(editor.locator(`[data-creator-mode="${mode}"]:visible`)).toBeVisible();
+		await expect(header.getByRole('heading')).toBeVisible();
+		await expect(header.getByRole('button', { name: 'Artifacts home' })).toBeVisible();
+	}
+	await commands.runCommand('sessions.creator.chooseDocsEditor');
+	await commands.select('Markdown');
 	await commands.runCommand('sessions.creator.chooseDocsEditor');
 	await commands.select('New blank document');
 	await expect(editor.locator('.stanza-editor:visible')).toBeVisible();
 	await expect(conversation).toBeVisible();
 	await expect(properties).toBeHidden();
+	const back = header.getByRole('button', { name: 'Back to Artifacts' });
+	await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
+	await expect(header).toHaveCSS('border-bottom-style', 'solid');
+	await back.press('Enter');
+	await expect(header.getByRole('heading', { name: 'Artifacts', exact: true })).toBeVisible();
+	await expect(back).toHaveCount(0);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await expect(header).toHaveCount(0);
 });
 
 async function openDesignLayers(page: Page): Promise<Locator> {
@@ -85,10 +117,15 @@ async function openDesignLayers(page: Page): Promise<Locator> {
 	return page.getByRole('tree', { name: 'Layers', exact: true });
 }
 
+async function openArtifactDetails(page: Page): Promise<Locator> {
+	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	return page.locator('[data-part="auxiliarybar"]');
+}
+
 test('Sessions Prototype expressions, ordered conditional actions and custom springs run without changing variables', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.prototype');
-	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = await openArtifactDetails(page);
 	const prototype = properties.locator('.ash-prototype-properties'), resources = properties.locator('.ash-design-resources');
 	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]'), layers = await openDesignLayers(page);
 	for (const name of ['Home', 'Cart', 'Empty', 'Confirmation']) {
@@ -138,7 +175,7 @@ test('Sessions Prototype connects screens by dragging and plays transitions, bra
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.prototype');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
-	const properties = page.locator('[data-part="auxiliarybar"]');
+	const properties = await openArtifactDetails(page);
 	const prototype = properties.locator('.ash-prototype-properties');
 	const layers = await openDesignLayers(page);
 	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]');
@@ -185,7 +222,7 @@ test('Sessions Prototype Change to previews interactive component variants witho
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
-	const properties = page.locator('[data-part="auxiliarybar"]'); const prototype = properties.locator('.ash-prototype-properties');
+	const properties = await openArtifactDetails(page); const prototype = properties.locator('.ash-prototype-properties');
 	const layers = await openDesignLayers(page);
 	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('textbox', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
 	await canvas.press('t'); await canvas.locator('.ash-canvas-viewport').click({ position: { x: 200, y: 100 } }); await page.keyboard.press('Escape'); await field('Text content', 'Off'); await canvas.press('ControlOrMeta+Alt+k'); await field('Layer name', 'Toggle');
@@ -310,7 +347,7 @@ test('Sessions Creator Slides presents reordered pages and Brand undoes an entir
 test('Sessions Prototype scrolls with wheel, drag and keyboard, pins layers and animates Scroll to', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.prototype');
-	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]'), layers = await openDesignLayers(page);
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = await openArtifactDetails(page), layers = await openDesignLayers(page);
 	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]'), prototype = properties.locator('.ash-prototype-properties');
 	const text = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('textbox', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
 	const number = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };

@@ -224,6 +224,8 @@ test('Artifacts examples use the retained editor and conversation', { tag: ['@br
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const artifacts = navigation.getByRole('button', { name: 'Artifacts', exact: true });
 	const editor = page.locator('[data-part="editor"] .ash-code-page-group');
+	const titlebar = page.locator('[data-part="titlebar"]');
+	const header = titlebar.locator('.ash-sessions-titlebar-editor-page');
 	const sessions = page.locator('[data-part="sessions"]');
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const details = page.locator('[data-part="auxiliarybar"]');
@@ -231,28 +233,32 @@ test('Artifacts examples use the retained editor and conversation', { tag: ['@br
 	await conversation.waitForTypeInEditor('Keep this conversation alongside Artifacts');
 	const retained = await sessions.elementHandle();
 	const cases = [
-		['docs', '.ash-docs-workspace-header', '.ash-docs-workspace-body'],
-		['slides', '.ash-canvas-editor-toolbar', '.ash-sessions-design-stage'],
-		['design', '.ash-canvas-editor-toolbar', '.ash-sessions-design-stage'],
-		['sheet', '.ash-creator-header', '.ash-artifact-table-workspace'],
-		['whiteboard', '.ash-canvas-editor-toolbar', '.ash-sessions-design-stage'],
-		['data', '.ash-creator-header', '.ash-artifact-table-workspace'],
-		['motion', '.ash-canvas-editor-toolbar', '.ash-sessions-design-stage'],
+		['docs', '.ash-docs-workspace-body'],
+		['slides', '.ash-sessions-design-stage'],
+		['design', '.ash-sessions-design-stage'],
+		['sheet', '.ash-artifact-table-workspace'],
+		['whiteboard', '.ash-sessions-design-stage'],
+		['data', '.ash-artifact-table-workspace'],
+		['motion', '.ash-sessions-design-stage'],
 	] as const;
-	for (const [kind, toolbarSelector, bodySelector] of cases) {
+	for (const [kind, bodySelector] of cases) {
 		await artifacts.click();
 		await editor.locator(`[data-artifact-example="${kind}"]`).press('Enter');
-		const toolbar = editor.locator(`${toolbarSelector}:visible`);
 		const body = editor.locator(`${bodySelector}:visible`);
-		await expect(toolbar).toBeVisible();
+		await expect(header.getByRole('heading')).toBeVisible();
 		await expect(body).toBeVisible();
 		await expect(editor.locator('.ash-editor-tabs')).toBeHidden();
 		await expect(editor.locator('.stanza-editor-pane:visible')).toHaveCount(0);
 		await expect(sidebar).toBeVisible();
 		await expect(sessions).toBeVisible();
 		await expect(details).toBeHidden();
-		expect((await toolbar.boundingBox())!.y).toBeLessThan((await body.boundingBox())!.y);
-		const toggle = toolbar.getByRole('button', { name: kind === 'docs' ? 'Document tools' : 'Show Secondary Side Bar', exact: true });
+		const titlebarBounds = (await titlebar.boundingBox())!;
+		const headerBounds = (await header.boundingBox())!;
+		expect(headerBounds.y).toBe(titlebarBounds.y);
+		expect(headerBounds.x).toBeCloseTo((await editor.boundingBox())!.x, 0);
+		expect(headerBounds.y + headerBounds.height).toBeLessThanOrEqual((await body.boundingBox())!.y);
+		await expect(editor.getByRole('button', { name: /^(Artifacts home|Back to Artifacts|Document tools|Show Secondary Side Bar)$/u })).toHaveCount(0);
+		const toggle = header.getByRole('button', { name: kind === 'docs' ? 'Document tools' : 'Show Secondary Side Bar', exact: true });
 		if (kind === 'sheet' || kind === 'data') {
 			await expect(body.getByRole('table')).toBeVisible();
 			await expect(toggle).toHaveCount(0);
@@ -261,7 +267,7 @@ test('Artifacts examples use the retained editor and conversation', { tag: ['@br
 			await expect(details).toBeVisible();
 			expect(await details.evaluate(element => element.closest('[data-part="editor"]') !== null)).toBe(true);
 			if (kind === 'slides') continue;
-			await toolbar.getByRole('button', { name: kind === 'docs' ? 'Document tools' : 'Hide Secondary Side Bar', exact: true }).click();
+			await header.getByRole('button', { name: kind === 'docs' ? 'Document tools' : 'Hide Secondary Side Bar', exact: true }).click();
 			await expect(details).toBeHidden();
 		}
 	}
@@ -331,10 +337,12 @@ test('Artifacts restores editable Sheet and Data drafts after reopening', { tag:
 	const openArtifacts = () => page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const openTable = (kind: string) => page.locator(`.ash-artifacts-card.${kind}[data-artifact-workspace]`).press('Enter');
 	const table = (kind: string) => page.locator(`.ash-artifact-table-workspace.editable.${kind}:visible`);
+	const exportCsv = () => page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Export CSV', exact: true });
 	for (const [kind, value] of drafts) {
 		await openArtifacts();
 		await openTable(kind);
 		const body = table(kind);
+		await expect(exportCsv()).toBeVisible();
 		await expect(body.getByRole('textbox', { name: 'Cell A1', exact: true })).toHaveValue(value);
 		await body.getByRole('button', { name: 'Add row', exact: true }).press('Enter');
 		const cell = body.getByRole('textbox', { name: 'Cell A2', exact: true });
@@ -347,7 +355,7 @@ test('Artifacts restores editable Sheet and Data drafts after reopening', { tag:
 			await application.evaluate(({ dialog }, filePath) => {
 				dialog.showSaveDialog = async () => ({ canceled: false, filePath });
 			}, output);
-			await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
+			await exportCsv().click();
 			await expect.poll(() => readFile(output, 'utf8').catch(() => '')).toBe('"Quarterly budget","","",""\r\n"Quarterly budget details","","",""');
 		}
 	}
@@ -379,7 +387,7 @@ test('Artifacts home keeps the conversation sidebar and offers seven creation ty
 	await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const home = page.locator('.ash-creator-home');
 	await expect(home).toBeVisible();
-	await expect(page.locator('.ash-creator-title')).toHaveText('Artifacts');
+	await expect(page.locator('[data-part="titlebar"] .ash-sessions-titlebar-editor-page h1')).toHaveText('Artifacts');
 	await expect(sidebar.locator('[data-view-container-id="sessions.creator.navigation"]')).toHaveCount(0);
 	expect(await sidebar.locator('[data-view-container-id]:visible').evaluate((element, retained) => element === retained, originalList)).toBe(true);
 	const tiles = home.locator('.ash-artifacts-create');
@@ -433,6 +441,8 @@ test('Artifacts home keeps the conversation sidebar and offers seven creation ty
 	await expect(canvas.locator('[data-shape-id]')).toHaveCount(1);
 	await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const quick = new QuickAccess(page);
+	await quick.runCommand('sessions.creator.chooseDocsEditor');
+	await quick.select('Markdown');
 	await quick.runCommand('sessions.creator.chooseDocsEditor');
 	await quick.select('New blank document');
 	const document = new Editor(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)'));

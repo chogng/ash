@@ -8,7 +8,7 @@ import { localize } from '../../../../nls.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatInputPart, IChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ArtifactKind } from '../../../common/artifactKind.js';
-import { appendArtifactIcon, getArtifactTitle } from '../../artifacts/browser/artifactKindPresentation.js';
+import { appendArtifactIcon, getArtifactTitle } from '../../artifact/browser/artifactKindPresentation.js';
 import './media/chatInputArtifactPill.css';
 
 export interface ArtifactDraftModel {

@@ -6,7 +6,7 @@ import { URI } from '../../../base/common/uri.js';
 import { StorageTarget } from '../../../platform/storage/common/storage.js';
 import { suite, test, setup, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
-import { DOCS_EDITOR_SETTING } from '../../contrib/artifacts/contrib/docs/common/docs.js';
+import { DOCS_EDITOR_SETTING } from '../../contrib/docs/common/docs.js';
 
 suite('sessions browser component', () => {
 	const browserTests = useBrowserTests();
@@ -1284,7 +1284,7 @@ suite('sessions browser component', () => {
 		const titlebar = page.locator('[data-part="titlebar"]');
 		const titleMenu = titlebar.locator('.ash-sessions-titlebar-menu');
 		const tools = titlebar.getByRole('toolbar', { name: 'Code layout', exact: true });
-		const toolHeaders = titlebar.locator('.ash-sessions-titlebar-tool-headers');
+		const toolHeaders = titlebar.locator('.ash-sessions-titlebar-editor-headers');
 		const filesHeader = toolHeaders.locator('[data-editor-tool="files"] > .ash-editor-group-header');
 		const editor = page.locator('[data-part="editor"]');
 		const conversation = page.locator('[data-part="sessions"]');

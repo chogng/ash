@@ -12,7 +12,7 @@ import type { ICanvasOwner } from '../../../../workbench/common/canvasReference.
 import { MainThreadCanvases } from '../../../../workbench/api/browser/mainThreadCanvases.js';
 import { IBrowserViewWorkbenchService } from '../../../../workbench/contrib/browserView/common/browserView.js';
 import { parseSessionIdentity, sessionIdentity } from '../../../services/sessions/common/sessionIdentity.js';
-import { remoteAgentHostProviderId } from '../../providers/remoteAgentHost/browser/remoteAgentHostSessionsProvider.js';
+import { remoteAgentHostProviderId } from '../../../common/agentHostSessionsProvider.js';
 import { getNLSLanguage } from '../../../../nls.js';
 
 /** Borrows each connection's runtime; native presentation and membership stay window-owned. */

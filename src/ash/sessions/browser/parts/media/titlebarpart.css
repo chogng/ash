@@ -29,7 +29,11 @@
 	pointer-events: none;
 }
 
-.ash-sessions-titlebar-code:not(.has-page-content, .is-new-session)::before {
+.ash-sessions-titlebar-code:not(
+		.has-page-content,
+		.has-editor-page-header,
+		.is-new-session
+	)::before {
 	/* The Code title bar spans the conversation and tools below it. */
 	content: "";
 	position: absolute;
@@ -86,33 +90,65 @@
 	display: none;
 }
 
-.ash-sessions-titlebar-tool-headers:not([hidden]) {
+.ash-sessions-titlebar-editor-headers:not([hidden]) {
 	box-sizing: border-box;
 	display: flex;
 	flex: 0 0 auto;
 	min-width: 0;
 	align-self: stretch;
-	padding-left: var(--ash-strokeThickness);
 	overflow: auto hidden;
 	scrollbar-width: none;
 }
 
-.ash-workbench[data-runtime="electron"] .ash-sessions-titlebar-tool-headers {
+.ash-sessions-titlebar.has-tool-headers .ash-sessions-titlebar-editor-headers {
+	padding-left: var(--ash-strokeThickness);
+}
+
+.ash-workbench[data-runtime="electron"] .ash-sessions-titlebar-editor-headers {
 	-webkit-app-region: drag;
 }
 
 .ash-sessions-window[data-layout-style="flat"]
-	.ash-sessions-titlebar-tool-headers:not([hidden]) {
+	.ash-sessions-titlebar.has-tool-headers
+	.ash-sessions-titlebar-editor-headers {
 	padding-left: 0;
 }
 
-.ash-sessions-titlebar.has-tool-headers .ash-sessions-titlebar-right {
+.ash-sessions-titlebar:is(.has-tool-headers, .has-editor-page-header)
+	.ash-sessions-titlebar-right {
 	padding-right: var(--ash-spacing-size40);
 }
 
 .ash-sessions-titlebar.has-tool-headers .ash-sessions-titlebar-session-content {
 	box-sizing: border-box;
 	min-width: var(--ash-spacing-size320);
+}
+
+.ash-sessions-titlebar-editor-page {
+	display: flex;
+	align-items: center;
+	flex: 1;
+	min-width: 0;
+	gap: var(--ash-spacing-size80);
+	padding-inline: var(--ash-spacing-size120) var(--ash-spacing-size40);
+	border-bottom: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+}
+
+.ash-sessions-titlebar-editor-page > h1 {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	margin: 0;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-sessions-titlebar-editor-page .ash-toolbar {
+	flex: none;
+	-webkit-app-region: no-drag;
 }
 
 .ash-sessions-titlebar-page-content,

@@ -10,13 +10,12 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import type { ICanvasContext, ICanvasContextService, ICanvasDefinition, ICanvasService } from '../../../../../workbench/contrib/canvases/common/canvas.js';
 import { SessionCanvasRegistryService } from '../../electron-browser/sessionCanvasService.js';
-import type { ISessionsService, SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
+import { isCanvasOwner } from '../../../../../workbench/common/canvasReference.js';
 
 suite('Session Canvas registry targeting', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('clears stale definitions on focus changes and never dispatches a peer or remote definition', async () => {
 		using lifetime = new DisposableStore();
-		const changed = lifetime.add(new Emitter<void>());
 		const definitionsChanged = lifetime.add(new Emitter<void>());
 		const services = lifetime.add(new InstantiationService());
 		services.registerInstance(ILogService, new NullLoggerService());
@@ -29,19 +28,20 @@ suite('Session Canvas registry targeting', () => {
 				onDidChangeDefinitions: definitionsChanged.event, listCanvases: () => thread === 'first' ? stale.promise : Promise.resolve([definition, { ...definition, canvasId: 'requires-input', requiresInput: true }]), openCanvas: async () => { opened.push(thread); },
 			}
 		})));
-		const selection = (thread: string, providerId = 'local-agent-host') => ({ kind: 'session', active: { session: { sessionId: 'one', providerId }, threadId: thread } }) as SessionsViewSelection;
-		let activeSelection = selection('first');
-		const registry = lifetime.add(new SessionCanvasRegistryService({ onDidChange: changed.event, get activeSelection() { return activeSelection; } } as ISessionsService,
-			{ contexts, isOwnerVisible: () => true } as unknown as ICanvasContextService, { enabled: constObservable(true) } as unknown as ICanvasService, services));
+		const selected = observableValue('selected canvas owner', owner('first'));
+		const registry = lifetime.add(new SessionCanvasRegistryService({
+			getActiveContext: reader => contexts.read(reader).find(context => isCanvasOwner(context.owner, selected.read(reader))),
+		} as ICanvasContextService, { enabled: constObservable(true) } as ICanvasService, services));
 		await settle();
-		activeSelection = selection('second'); changed.fire(); await settle();
+		selected.set(owner('second'), undefined); await settle();
 		assert.deepEqual(registry.availableCanvases.get(), [definition]);
 		stale.resolve([{ ...definition, canvasId: 'old' }]); await settle();
 		assert.deepEqual(registry.availableCanvases.get(), [definition]);
-		await registry.openCanvas(definition); assert.deepEqual(opened, ['second']);
-		activeSelection = selection('second', 'remote-provider'); changed.fire(); await settle();
+		await assert.rejects(registry.openCanvas(owner('first'), definition));
+		await registry.openCanvas(owner('second'), definition); assert.deepEqual(opened, ['second']);
+		selected.set(owner('second', 'remote-provider'), undefined); await settle();
 		assert.deepEqual(registry.availableCanvases.get(), []);
-		await assert.rejects(registry.openCanvas(definition));
+		await assert.rejects(registry.openCanvas(owner('second'), definition));
 		assert.deepEqual(opened, ['second']);
 	});
 });
