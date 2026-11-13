@@ -1837,7 +1837,10 @@ fn rpc_agent_tools_search_unsaved_content_and_persist_edits_through_the_originat
         call(
             connection,
             "initialize",
-            json!({"clientInfo":{"name":"desktop-test","version":"1"},"capabilities":{"textDocuments":{"version":2}}}),
+            json!({"clientInfo":{"name":"desktop-test","version":"1"},"capabilities":{
+                "textDocuments":{"version":2},
+                "agentInteractions":{"version":1,"kinds":["approval"]}
+            }}),
         );
     }
     let created = call(
@@ -1846,6 +1849,11 @@ fn rpc_agent_tools_search_unsaved_content_and_persist_edits_through_the_originat
         json!({"commandId":"documents-session","title":"Edit document","kind":"code", "executionTarget":null,"agent":{"type":"default"}}),
     );
     let session = created["session"]["sessionId"].as_str().unwrap();
+    call(
+        &mut origin,
+        "session/thread/subscribe",
+        json!({"sessionId":session,"threadId":session,"afterSequence":0}),
+    );
     call(
         &mut origin,
         "session/request",
@@ -1904,6 +1912,25 @@ fn rpc_agent_tools_search_unsaved_content_and_persist_edits_through_the_originat
             let snapshot = threads
                 .read_thread(&ash_protocol::ThreadId::new(session).unwrap())
                 .unwrap();
+            if let Some(interaction) = &snapshot.turns[turn_index].pending_interaction {
+                let ash_protocol::AgentRequest::Approval { request } = &interaction.request else {
+                    panic!("unexpected document fixture interaction: {interaction:?}");
+                };
+                // Windows cmd built-ins require confirmation even under the fixture's policy.
+                // Resolve the real interaction instead of weakening the shared command policy.
+                assert_eq!(turn_index, 0);
+                let command = request.command.as_ref().expect("shell command approval");
+                assert_eq!(command.arguments, ["/d", "/c", "type", "file.txt"]);
+                call(
+                    &mut origin,
+                    "session/request",
+                    json!({"commandId":"documents-shell-approval","sessionId":session,"request":{
+                        "type":"resolveInteraction","threadId":session,"turnId":snapshot.turns[turn_index].turn_id,
+                        "expectedSequence":snapshot.sequence,"requestId":interaction.request_id,
+                        "response":{"type":"approval","response":{"decision":"approveOnce"}}
+                    }}),
+                );
+            }
             if snapshot.turns[turn_index].status == ash_protocol::TurnStatus::Completed {
                 break;
             }

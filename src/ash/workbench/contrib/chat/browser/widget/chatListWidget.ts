@@ -2,7 +2,7 @@ import type { MemoryNamespace } from '../../../../../platform/memories/common/me
 import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichContent.js';
 import type { ChatTurnChangesOpener } from '../chat.js';
 import { PromptTimelineModel } from '../promptTimeline/promptTimelineModel.js';
-import type { IChatResponseFileChangesService } from '../chatResponseFileChangesService.js';
+import type { ChatResponseFileChangesPresentation } from '../chatResponseFileChangesService.js';
 import { PromptTimelineWidgetContrib } from '../promptTimeline/promptTimelineWidgetContrib.js';
 import { getImageGenerationBatches } from './chatContentParts/toolInvocationParts/chatToolPartUtilities.js';
 import { ChatImageGenerationBatchPart } from './chatContentParts/chatImageGenerationBatchPart.js';
@@ -59,8 +59,8 @@ interface ChatListWidgetOptions {
 	readonly canEditRequest?: () => boolean;
 	readonly submitRequestEdit?: (item: IChatListItem, text: string, commandId: string) => Promise<void>;
 	readonly getRequestVersions?: (item: IChatListItem) => Promise<readonly import('../chat.js').ChatRequestVersion[]>;
-	readonly promptTimelineChanges?: IChatResponseFileChangesService['getChangesForRequest'];
-	readonly getTurnChanges?: IChatResponseFileChangesService['getChangesForResponse'];
+	readonly promptTimelineChanges?: ChatResponseFileChangesPresentation['getChangesForPrompt'];
+	readonly getTurnChanges?: ChatResponseFileChangesPresentation['getChangesForResponse'];
 	readonly showPromptTimeline?: boolean;
 	readonly virtualizeHistoryFrom?: IObservable<number | undefined>;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;

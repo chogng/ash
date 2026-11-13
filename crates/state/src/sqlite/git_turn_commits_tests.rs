@@ -450,7 +450,7 @@ async fn published_commit_without_a_database_receipt_recovers_once_after_reopeni
     let TurnPublication::Prepared { commit: prepared } = &commit.publication else {
         panic!("prepared request");
     };
-    git_transaction::GitTransactions::new(&scenario.git)
+    ash_git::GitTransactions::new(&scenario.git)
         .publish_prepared_tree_commit(&target, prepared)
         .await
         .unwrap();

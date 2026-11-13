@@ -1,4 +1,4 @@
-import type { IChatResponseFileChangesService } from './chatResponseFileChangesService.js';
+import type { ChatResponseFileChangesPresentation } from './chatResponseFileChangesService.js';
 import type { ChatMode } from '../../../services/chat/common/chatService.js';
 import type { IChatInputPart } from './widget/input/chatInputPart.js';
 import type { ChatRequestQueueKind, QueuedMessage } from '../../../services/chat/common/chatService.js';
@@ -169,8 +169,8 @@ export interface IChatWidgetViewOptions {
 	readonly showPromptTimeline?: boolean;
 	/** Minimum number of loaded rows for virtualization. Undefined keeps the full transcript mounted. */
 	readonly virtualizeHistoryFrom?: import('../../../../base/common/observable.js').IObservable<number | undefined>;
-	readonly promptTimelineChanges?: IChatResponseFileChangesService['getChangesForRequest'];
-	readonly getTurnChanges?: IChatResponseFileChangesService['getChangesForResponse'];
+	readonly promptTimelineChanges?: ChatResponseFileChangesPresentation['getChangesForPrompt'];
+	readonly getTurnChanges?: ChatResponseFileChangesPresentation['getChangesForResponse'];
 	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	readonly messagePresentation?: ChatMessagePresentation;

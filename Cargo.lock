@@ -1817,6 +1817,7 @@ dependencies = [
  "futures",
  "pretty_assertions",
  "serde",
+ "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "tokio",
@@ -1847,18 +1848,6 @@ dependencies = [
  "tempfile",
  "url",
  "urlencoding",
-]
-
-[[package]]
-name = "ash-git-transaction"
-version = "0.1.0"
-dependencies = [
- "ash-git",
- "dunce",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
 ]
 
 [[package]]
@@ -3172,7 +3161,6 @@ dependencies = [
  "ash-core-api",
  "ash-file-access",
  "ash-git",
- "ash-git-transaction",
  "ash-github",
  "ash-guardian-environment",
  "ash-history",
@@ -6650,7 +6638,6 @@ version = "0.1.0"
 dependencies = [
  "ash-file-watcher",
  "ash-git",
- "ash-git-transaction",
  "ash-protocol",
  "log",
  "pretty_assertions",

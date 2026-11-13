@@ -7,6 +7,22 @@ import type { Range } from '../../../../../editor/common/core/range.js';
 import { createServiceIdentifier } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { ChatEditSource, ChatEditOutcome } from '../../../../services/chat/common/chatService.js';
 
+/** A comparison supplied by the owner of an editing session or a captured agent turn. */
+export interface IEditSessionEntryDiff {
+	readonly originalURI: URI;
+	readonly modifiedURI: URI;
+	/** Frozen right-hand content, when the live file may already contain later edits. */
+	readonly modifiedSnapshotURI?: URI;
+	readonly isCreated?: boolean;
+	readonly isDeleted?: boolean;
+	readonly added: number;
+	readonly removed: number;
+	readonly quitEarly: boolean;
+	readonly identical: boolean;
+	readonly isFinal: boolean;
+	readonly isBusy: boolean;
+}
+
 export interface IModifiedFileEntryChangeHunk {
 	readonly range: Range;
 	readonly originalText: string;

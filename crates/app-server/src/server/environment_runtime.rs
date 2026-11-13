@@ -89,6 +89,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
+use std::thread::JoinHandle;
 
 pub(super) struct EnvRuntime {
     pub(super) selected_grant: Option<Grant>,
@@ -183,11 +184,23 @@ pub(super) struct WorkspaceRuntime {
     pub(super) session_dir_search: BTreeMap<(SessionId, PathBuf), Arc<ContentSearchService>>,
     pub(super) grep: Option<Arc<grep::Service>>,
     grep_warmup: Option<ash_async_utils::CancelOnDrop>,
+    grep_warmup_workers: Vec<JoinHandle<()>>,
     pub(super) codebase: Option<Arc<CodebaseRuntime>>,
     pub(super) symbol_index: Option<Arc<SymbolIndexRuntime>>,
     pub(super) codebase_semantic: Option<Arc<CodebaseSemanticService>>,
     pub(super) codebase_semantic_job: Option<Arc<SemanticIndexJobController>>,
     pub(super) cloud_codebase: Option<Arc<CloudCodebaseController>>,
+}
+
+impl Drop for WorkspaceRuntime {
+    fn drop(&mut self) {
+        self.grep_warmup = None;
+        // Warmup owns directory grants independently of EnvRuntime. The last host must wait
+        // for cancellation to release those handles before its directory can be removed.
+        for worker in self.grep_warmup_workers.drain(..) {
+            let _ = worker.join();
+        }
+    }
 }
 
 /// Interactive execution resources bound to the selected directory authorization.
@@ -232,6 +245,9 @@ impl EnvRuntime {
 
     fn schedule_grep_warmup(&mut self) {
         self.workspace.grep_warmup = None;
+        self.workspace
+            .grep_warmup_workers
+            .retain(|worker| !worker.is_finished());
         let Some(grep) = self
             .workspace
             .grep
@@ -279,7 +295,10 @@ impl EnvRuntime {
                     }
                 }
             }) {
-            Ok(_) => self.workspace.grep_warmup = Some(cancellation.cancel_on_drop()),
+            Ok(worker) => {
+                self.workspace.grep_warmup_workers.push(worker);
+                self.workspace.grep_warmup = Some(cancellation.cancel_on_drop());
+            }
             Err(error) => log::debug!("failed to start grep index warmup: {error}"),
         }
     }
@@ -2932,6 +2951,7 @@ impl AppServer {
                 session_dir_search: BTreeMap::new(),
                 grep,
                 grep_warmup: None,
+                grep_warmup_workers: Vec::new(),
                 codebase,
                 symbol_index,
                 codebase_semantic: None,
@@ -3218,6 +3238,7 @@ impl AppServer {
                 session_dir_search: BTreeMap::new(),
                 grep: Some(grep),
                 grep_warmup: None,
+                grep_warmup_workers: Vec::new(),
                 codebase,
                 symbol_index,
                 codebase_semantic,
@@ -4458,6 +4479,7 @@ fn retire_env_runtime(
     retained_debug_adapters: Option<&Arc<crate::debug_service::DebugAdapterService>>,
 ) {
     runtime.workspace.grep_warmup = None;
+    let warmup_workers = std::mem::take(&mut runtime.workspace.grep_warmup_workers);
     if let Some(grant) = runtime.execution.projectless_terminal_grant.take() {
         grant.revoke();
     }
@@ -4484,12 +4506,17 @@ fn retire_env_runtime(
     }
     let grep = runtime.workspace.grep.take();
     drop(runtime);
-    // Keep the last service reference off the directory-open path: tgrep can wait for its
-    // worktree registration to drain while detaching.
-    if let Some(grep) = grep {
+    // Directory switches retire workers and the last service reference off the directory-open
+    // path. Final host disposal still joins its own warmup workers in WorkspaceRuntime::drop.
+    if grep.is_some() || !warmup_workers.is_empty() {
         let _ = std::thread::Builder::new()
             .name("grep-retire".into())
-            .spawn(move || drop(grep));
+            .spawn(move || {
+                for worker in warmup_workers {
+                    let _ = worker.join();
+                }
+                drop(grep);
+            });
     }
 }
 

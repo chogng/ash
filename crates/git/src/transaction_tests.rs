@@ -3,17 +3,17 @@ use super::CommitJournal;
 use super::GitTransactions;
 use super::journal_path;
 use super::write_journal;
+use crate::GitClient;
+use crate::GitDetachedWorktreeRequest;
 use crate::GitPrepareTreeCommitResult;
 use crate::GitPreparedTreeCommitRequest;
 use crate::GitTreeCommitConflict;
 use crate::GitTreeCommitRecovery;
 use crate::GitTreeCommitRequest;
 use crate::GitTreeCommitResult;
+use crate::GitTreeId;
+use crate::GitWorktreeRemovalMode;
 use crate::test_support::TestRepository;
-use ash_git::GitClient;
-use ash_git::GitDetachedWorktreeRequest;
-use ash_git::GitTreeId;
-use ash_git::GitWorktreeRemovalMode;
 
 fn tree(repository: &TestRepository, revision: &str) -> GitTreeId {
     GitTreeId::new(repository.git(&["rev-parse", &format!("{revision}^{{tree}}")]))
@@ -150,14 +150,14 @@ async fn immutable_deltas_reconstruct_only_committed_turns_for_managed_discard()
         .replay_tree_delta(&repository, &baseline, &baseline, &after_a)
         .await
         .expect("replay A");
-    let ash_git::GitTreeReplayResult::Clean(desired) = desired else {
+    let crate::GitTreeReplayResult::Clean(desired) = desired else {
         panic!("A must replay cleanly");
     };
     let desired = client
         .replay_tree_delta(&repository, &before_c, &desired, &after_c)
         .await
         .expect("replay C");
-    let ash_git::GitTreeReplayResult::Clean(desired) = desired else {
+    let crate::GitTreeReplayResult::Clean(desired) = desired else {
         panic!("C must replay cleanly");
     };
     fixture.write("untracked.txt", "discard me\n");
@@ -657,7 +657,7 @@ fn git_with_race(fixture: &TestRepository, injection: &str) -> (tempfile::TempDi
     .unwrap();
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
     let client =
-        GitClient::with_executable(executable, ash_git::GitExecutionLimits::default()).unwrap();
+        GitClient::with_executable(executable, crate::GitExecutionLimits::default()).unwrap();
     (directory, client)
 }
 

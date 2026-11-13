@@ -284,7 +284,7 @@ Git 操作的接入位置：
 
 Thread 提交不走普通 `git/commit`。`git-turn-changes` 保存每轮不可变 before/after tree，
 用户从同一 Session / Thread 选择一轮或多轮的部分文件。Git 对象能力按捕获顺序重放选中 delta，
-随后 `ash-git-transaction` 准备固定目标 HEAD 与最终 commit 的预览。确认只发布这份准备结果，
+随后 `ash-git` 的 `GitTransactions` 准备固定目标 HEAD 与最终 commit 的预览。确认只发布这份准备结果，
 目标在预览期间移动时必须重新预览。
 
 每个 Thread 使用独立受管目录；提交读取保留对象，不读取或改写正在执行的 Thread 内容。

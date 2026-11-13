@@ -2827,14 +2827,6 @@ impl AppServer {
         Ok(self)
     }
 
-    /// Enables connection-owned directory search using a shared grep capability.
-    pub fn with_grep(mut self, dir: ash_file_access::Dir, grep: Arc<grep::Service>) -> Self {
-        let search = Arc::new(grep::Jobs::new(dir, grep.clone()));
-        self.env_runtime_mut().workspace.grep = Some(grep);
-        self.env_runtime_mut().workspace.content_search = Some(search);
-        self
-    }
-
     /// Enables connection-owned and leased interactive terminals under one execution authorization.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_terminal_root(
@@ -3194,7 +3186,17 @@ impl AppServer {
         let workflows =
             self.workflow_runtime()
                 .recover(|thread, request, routing, precondition| {
-                    self.recover_workflow_turn(thread, request, routing, precondition)
+                    let command = request.command_id.clone();
+                    self.with_workflow_recovery_admission(
+                        thread,
+                        &command,
+                        precondition,
+                        |admission| {
+                            self.threads.start_turn_with_admission(
+                                thread, request, None, routing, admission,
+                            )
+                        },
+                    )
                 })?;
         Ok(workflows + self.agent_runtime().recover_agents()?)
     }

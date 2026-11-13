@@ -28,7 +28,7 @@ import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CODE_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
 import { NewSessionPickersAvailableContext } from './newChatPickerKeybinding.js';
-import { SessionsChatResponseFileChangesService } from './sessionTurnChanges.js';
+import { SessionsChatResponseFileChangesProvider } from './sessionTurnChanges.js';
 import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
 import { resolveChatContextAttachment } from '../../../../workbench/services/chat/common/chatContextService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -76,7 +76,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		@IEditorService editors: IEditorService,
 	) {
 		let composer!: SharedChatInputComposer;
-		const turnChanges = instantiationService.createInstance(SessionsChatResponseFileChangesService, model);
+		const turnChanges = instantiationService.createInstance(SessionsChatResponseFileChangesProvider, model);
 		const chatPresentation = observableFromEvent('native Chat presentation', contextKeys.onDidChangeContext,
 			() => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) === true);
 		const codePresentation = observableFromEvent('Code presentation', contextKeys.onDidChangeContext,
@@ -131,7 +131,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 				}, model, chatPresentation, () => this.focusWorkspacePicker());
 				return composer.input;
 			}, {
-			promptTimelineChanges: prompt => turnChanges.getChangesForRequest(prompt),
+			promptTimelineChanges: prompt => turnChanges.getChangesForPrompt(prompt),
 			getTurnChanges: source => turnChanges.getChangesForResponse(source),
 			messagePresentation,
 			virtualizeHistoryFrom: codePresentation.map(code => code ? CODE_HISTORY_VIRTUALIZE_FROM : undefined),

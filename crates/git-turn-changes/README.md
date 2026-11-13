@@ -2,7 +2,7 @@
 
 本 crate 保存 Agent 每轮修改的来源，并让同一 Session / Thread 从一轮或多轮选择部分文件提交。
 它依赖 [`ash-git`](../git/README.md) 的对象能力和
-[`ash-git-transaction`](../git-transaction/README.md) 的发布事务；目录物化、绑定与清理由
+[条件提交事务](../git/README.md#条件提交与恢复)；目录物化、绑定与清理由
 [`worktree`](../worktree/README.md) 拥有。产品流程见
 [Turn 变更账本](../../docs/chat-session-inspector.md) 和 [能力方案](../../docs/git-capabilities.md)。
 

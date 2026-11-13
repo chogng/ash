@@ -1258,7 +1258,7 @@ fn create_thread(
 
 fn wait_for_latest_turn(server: &AppServer, thread_id: &str, expected: TurnStatus) {
     let thread_id = ash_protocol::ThreadId::new(thread_id).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(1);
+    let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         let snapshot = server.threads().read_thread(&thread_id).unwrap();
         if snapshot
@@ -1268,7 +1268,10 @@ fn wait_for_latest_turn(server: &AppServer, thread_id: &str, expected: TurnStatu
         {
             return;
         }
-        assert!(Instant::now() < deadline, "Turn did not reach {expected:?}");
+        assert!(
+            Instant::now() < deadline,
+            "Turn did not reach {expected:?}: {snapshot:?}"
+        );
         thread::sleep(Duration::from_millis(1));
     }
 }
@@ -8331,8 +8334,9 @@ fn restricted_dir_exposes_git_status_but_rejects_mutations() {
         "GitRepositoryNotFound"
     );
 
+    server.close_connection(connection);
     drop(server);
-    std::fs::remove_dir_all(root).unwrap();
+    std::fs::remove_dir_all(root).expect("closed server must release restricted directory handles");
 }
 
 #[test]

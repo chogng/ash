@@ -138,7 +138,7 @@ verbosity 设置，补充选择、预览、部分提交和结果内容；焦点�
 | 能力                              | 当前实现位置                                                                                                             |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | Git 查询、普通修改与对象能力      | `crates/git/src/{working_copy,history,references,remote,objects,worktree}.rs` 及所属子目录                               |
-| 目标发布、checkout 保持与事务恢复 | `crates/git-transaction/src/lib.rs`                                                                                      |
+| 目标发布、checkout 保持与事务恢复 | `crates/git/src/transaction.rs`                                                                                          |
 | Turn 捕获、选择、预览与提交进度   | `crates/git-turn-changes/src/{ledger,model,commit}.rs`                                                                   |
 | SQLite 记录、原子占用与迁移       | `crates/state/src/sqlite/{git_turn_changes,git_turn_commits}.rs`                                                         |
 | 协议与领域装配                    | `crates/app-server-protocol/src/protocol/turn_changes.rs`、App Server 的 `git_turn_changes_*` 与 `thread_dir_binding.rs` |
@@ -162,7 +162,7 @@ verbosity 设置，补充选择、预览、部分提交和结果内容；焦点�
 | 验证入口                                                                                              | 实际结果                                                                                                                                          |
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `just verify ash-git`                                                                                 | 正常 check、87 项测试和 warning gate 通过；包含 stash / 内部引用图过滤与真实 Git 文件选择                                                         |
-| `just verify ash-git-transaction`                                                                     | 正常 check、10 项测试和 warning gate 通过；覆盖 checkout 各层保持、条件发布与恢复后外部分支推进                                                   |
+| `just verify ash-git`                                                                                 | 正常 check、10 项测试和 warning gate 通过；覆盖 checkout 各层保持、条件发布与恢复后外部分支推进                                                   |
 | `just verify git-turn-changes`                                                                        | 正常 check、9 项测试和 warning gate 通过；覆盖归属、版本、证据、捕获完成与迟到刷新                                                                |
 | `just verify ash-state`                                                                               | 正常 check、92 项测试和 warning gate 通过，1 项既有测试忽略；真实 Git / SQLite 覆盖部分提交、多轮、双 Session、冻结消息、请求重放、迁移与中断恢复 |
 | `just verify worktree`                                                                                | 正常 check、20 项测试和 warning gate 通过                                                                                                         |

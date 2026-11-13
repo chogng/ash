@@ -10,7 +10,7 @@
 graph、local/remote-tracking refs、credential-free remote identity、最近 commit、revision file content、HEAD-to-working-tree 文本 Diff/增删行统计、typed
 stage/unstage/discard/commit/fetch/pull/push、local branch switch、worktree inventory、linked worktree mutation、
 仓库初始化、分支改名、远端分支删除、merge/rebase/cherry-pick 及继续或中止、stash、tag、remote 管理、amend/undo、部分 index 编辑、
-不可变 tree/blob 操作、任务快照的有界对象包导出/导入和选定 tree delta 的重放。提交事务由 [`ash-git-transaction`](../git-transaction/README.md) 拥有。任务包保留准确的
+不可变 tree/blob 操作、任务快照的有界对象包导出/导入和选定 tree delta 的重放。提交事务由本 crate 的 [`transaction`](src/transaction.rs) 模块拥有。任务包保留准确的
 HEAD 与工作树对象，导入验证摘要之外的 Git 完整性和对象类型，且不修改接收目录或 index；子模块
 和嵌入仓库不能由单个对象库表示，直接拒绝。持续监听、状态缓存和自动 fetch 由 [App Server GitRuntime](../app-server/src/server/git_runtime.rs) 拥有。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
 不属于本 crate。
@@ -57,6 +57,7 @@ Git domain owner 下，而不是建立平级的 `ash-git-utils`：
 | `src/remote.rs`                              | remote 清单与配置身份、fetch/pull/push、分支推送                                                                            | `GitRemote`、`GitRemoteIdentity`                                                                                  |
 | `src/objects.rs` 与 `src/objects/`           | tree/blob 捕获与保留、精确文件 delta、三方重放、commit 对象、对象包完整性                                                   | `GitTreeId`、`GitTreeReplayResult`、`GitPrivateRef`、`GitPackBase`                                                |
 | `src/worktree.rs`                            | Git worktree 清单、创建、锁定、修复和删除原语                                                                               | `GitWorktree`、`GitWorktreeAvailability`                                                                          |
+| `src/transaction.rs`                         | 条件发布、checkout/index 分层保持与中断恢复                                                                                 | `GitTransactions`、`GitPreparedTreeCommit`                                                                        |
 | `src/operation_lock.rs`                      | 按 common directory 协调目标发布与交互 Git 写入                                                                             | `repository_operation_lock`                                                                                       |
 | `src/fsmonitor.rs`                           | effective config 与 built-in daemon capability 探测                                                                         | private `detect_fsmonitor_override`                                                                               |
 | `src/path.rs`                                | porcelain path bytes 到 platform `PathBuf`                                                                                  | private `path_from_git_bytes`                                                                                     |
@@ -340,8 +341,8 @@ policy/approval。它们都不能复制本 crate 的 command/parsing 实现。
 测试随能力放在所属模块的独立测试文件；共享真实仓库 fixture 位于 `test_support.rs`。
 工作区覆盖 status、部分 index 编辑、普通提交与 patch；引用覆盖分支、stash、整合及条件更新；
 历史覆盖分页起点与内容；远端使用本地 bare 仓库验证同步；对象测试覆盖选择、重命名、删除、
-二进制、mode 和同文件文本合并。事务恢复、目标移动与 checkout 层保持测试已归
-[`ash-git-transaction`](../git-transaction/README.md)，不再由 Git 原语 crate 持有。
+二进制、mode 和同文件文本合并。事务恢复、目标移动与 checkout 层保持由
+[`transaction_tests.rs`](src/transaction_tests.rs) 的真实仓库测试覆盖。
 
 测试仓库固定 `core.autocrlf=false` 与 LF，避免继承开发机全局配置；需要验证平台换行语义的测试
 必须显式覆盖 repository-local config。本地 remote 测试不访问网络或用户凭据。
@@ -398,3 +399,38 @@ bazel test //crates/git:git-unit-tests
 这两个接口只处理对象。Session/Thread/Turn 归属、选择版本、提交记录与进度由
 [`git-turn-changes`](../git-turn-changes/README.md) 持有；条件发布与恢复由提交事务持有。
 详细能力边界见 [Git 能力划分方案](../../docs/git-capabilities.md)。
+
+## 条件提交与恢复
+
+`transaction` 模块把已经准备好的 Git commit 条件发布到目标分支，并在进程中断后恢复同一事务。
+它复用本 crate 的类型化对象、引用和工作区接口，不知道 Session、Turn、
+SQLite、工作目录归属或界面。调用方通过 `GitTransactions::new(&git)` 复用已有执行器。
+
+| 阶段        | 保证                                                                               |
+| ----------- | ---------------------------------------------------------------------------------- |
+| prepare     | 固定目标 HEAD/tree、最终 tree、用户 Git identity、时间和消息，生成确切 commit 对象 |
+| publish     | 检查目标与 checkout，保存 journal 和对象保留引用，以 expected HEAD CAS 发布        |
+| checkout    | 分别保持原 index、未暂存和未跟踪内容；安装前再次检查版本，冲突不丢弃用户修改       |
+| recover     | 复用事务身份和保留对象，恢复 checkout 或报告冲突；不盲目创建第二个 commit          |
+| acknowledge | 调用方持久保存成功回执后，清理事务保留引用与 journal；重放仍可安全确认             |
+
+提交事务要求调用方持有 `repository_operation_lock`。该锁按 Git common directory 共享，
+协调不同目录指向同一仓库的操作；外部 Git 由 ref CAS、真实 index lock 和 checkout tree 比较检测。
+活动 checkout 使用临时 index 的受保护双树合并安装，不执行强制 reset。最终捕获之后的保存
+由 Git 安装边界再次校验；并发修改不会触发旧快照的强制恢复。
+不执行仓库 commit hooks，真实发布使用仓库配置的 author/committer。三方合并所需的临时对象身份
+只用于计算，不能作为用户提交身份。
+
+journal 位于 `<common directory>/ash/commit-transactions`。发布之前保留原/目标 checkout tree
+和 commit；即使 Git GC，也能恢复。checkout 安装完成标记单独持久保存，后续外部提交推进分支
+不会被旧事务回滚。ref 发布后安装失败时，保留已发布 commit、原/目标 tree 引用和 journal，
+统一返回 `CheckoutPending`（含冲突路径或 I/O 诊断）；不将已经发布的事务归为提交前冲突，
+也不回滚 ref 或覆盖实际文件。恢复会重新校验 index 与 worktree，变化时报告
+冲突并继续保留证据，也能完成仅 worktree 已安装、真实 index 尚未替换的中断事务。
+调用方的数据库回执和 Git journal 各有明确职责，不能提前删除恢复信息。
+已知发布后的恢复使用 `recover_published_tree_commit`：即使外部将 ref 退回旧值，也保留 journal
+并报告阻塞，不能当作未发布事务删除证据或再次发布。
+
+`commit_tree_delta` 保留给旧整轮请求的一次性存储迁移流程；新选择走
+`prepare_tree_commit` → `publish_prepared_tree_commit`，确认期间目标移动必须重新预览。
+未出生分支可以创建首次提交；已删除或已移动的分支、detached 目标和文件冲突返回显式结果。

@@ -171,6 +171,9 @@ fn independent_web_cold_profile_uses_one_owner_before_native_authorization() {
                     format!("Bearer {expected}")
                 );
             }
+            // Signal EOF before joining the host, independently of duplicated socket handles
+            // inherited by concurrently starting child processes on Windows.
+            writer.shutdown(std::net::Shutdown::Both).unwrap();
             drop(reader);
             drop(writer);
             worker.join().unwrap();

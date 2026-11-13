@@ -12,7 +12,6 @@ use ash_protocol::ContentDigest;
 use ash_protocol::SessionId;
 use ash_protocol::SessionKind;
 use ash_protocol::ThreadId;
-use ash_protocol::TurnModelRouting;
 use ash_protocol::TurnStatus;
 use ash_protocol::UnixMillis;
 use core_api::AgentRuntime;
@@ -424,31 +423,31 @@ impl AppServer {
         Ok(observed)
     }
 
-    pub(super) fn recover_workflow_turn(
+    /// Keeps recovery admission under the automation store's dispatch guard while the server
+    /// assembly owns the concrete turn submission. Accepted commands remain replayable.
+    pub(super) fn with_workflow_recovery_admission<T, F>(
         &self,
         thread: &ThreadId,
-        request: ash_core::StartTurnRequest,
-        routing: Option<TurnModelRouting>,
+        command: &CommandId,
         precondition: Option<&ThreadEventPrecondition>,
-    ) -> Result<ash_core::StartTurnResult, CoreError> {
-        let submit = |request, precondition| {
-            self.threads
-                .start_turn_with_admission(thread, request, None, routing, precondition)
-        };
-        if !is_automation_start(&request.command_id) {
-            return submit(request, precondition);
+        submit: F,
+    ) -> Result<T, CoreError>
+    where
+        F: FnOnce(Option<&ThreadEventPrecondition>) -> Result<T, CoreError>,
+    {
+        if !is_automation_start(command) {
+            return submit(precondition);
         }
 
         let revoked =
             || CoreError::ThreadStore(thread_store::ThreadStoreError::AuthorizationRevoked);
-        let command = request.command_id.clone();
-        let replay_if_accepted = |request| {
+        let replay_if_accepted = |submit: F| {
             if self
                 .agent_runtime()
-                .accepted_turn(thread, &command)?
+                .accepted_turn(thread, command)?
                 .is_some()
             {
-                submit(request, precondition)
+                submit(precondition)
             } else {
                 Err(revoked())
             }
@@ -456,19 +455,19 @@ impl AppServer {
         // Core replays an accepted receipt before evaluating any admission precondition.
         if self
             .agent_runtime()
-            .accepted_turn(thread, &command)?
+            .accepted_turn(thread, command)?
             .is_some()
         {
-            return submit(request, precondition);
+            return submit(precondition);
         }
         let store = self.automation_processor.store().ok_or_else(revoked)?;
         let run = store
             .active_runs()
             .map_err(|error| CoreError::Journal(error.to_string()))?
             .into_iter()
-            .find(|run| command_id(AUTOMATION_START_ACTION, &run.id).as_ref() == Ok(&command));
+            .find(|run| command_id(AUTOMATION_START_ACTION, &run.id).as_ref() == Ok(command));
         let Some(run) = run else {
-            return replay_if_accepted(request);
+            return replay_if_accepted(submit);
         };
         // Older workflow records omitted the condition. Recover the original binding from the
         // immutable run, since a fresh lookup of the PR could select a replacement artifact.
@@ -476,15 +475,15 @@ impl AppServer {
         if precondition.is_some() && precondition != original.as_ref() {
             return Err(revoked());
         }
-        let mut request = Some(request);
+        let mut submit = Some(submit);
         match store
             .dispatch_if_current(&run.id, || {
-                submit(request.take().expect("one admission"), original.as_ref())
+                submit.take().expect("one admission")(original.as_ref())
             })
             .map_err(|error| CoreError::Journal(error.to_string()))?
         {
             Some(result) => result,
-            None => replay_if_accepted(request.expect("dispatch skipped")),
+            None => replay_if_accepted(submit.expect("dispatch skipped")),
         }
     }
 

@@ -64,7 +64,7 @@ import { ChatTurnPillsContentPart } from './chatContentParts/chatTurnPillsPart.j
 import { ChatReferencesContentPart } from './chatContentParts/chatReferencesContentPart.js';
 import { ChatResponseCitationsContentPart } from './chatContentParts/chatResponseCitationsContentPart.js';
 import type { ChatPendingDragController } from './chatPendingDragAndDrop.js';
-import type { IChatResponseFileChangesService } from '../chatResponseFileChangesService.js';
+import type { ChatResponseFileChangesPresentation } from '../chatResponseFileChangesService.js';
 import { ChatRequestActionContext, ChatResponseActionContext, type ChatTurnChangesOpener } from '../chat.js';
 import { ChatConfiguration } from '../../common/constants.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
@@ -111,7 +111,7 @@ interface ChatListItemRendererOptions {
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void | Promise<void>;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
-	readonly getTurnChanges?: IChatResponseFileChangesService['getChangesForResponse'];
+	readonly getTurnChanges?: ChatResponseFileChangesPresentation['getChangesForResponse'];
 	readonly onDidRequestLink?: (target: string) => void;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
 	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;

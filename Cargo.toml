@@ -205,7 +205,6 @@ members = [
     "crates/thread-store",
     "crates/thread-transcript",
     "crates/git-turn-changes",
-    "crates/git-transaction",
     "crates/tools",
     "crates/uds",
     "crates/tui",
@@ -561,7 +560,6 @@ ash-package-store = { path = "crates/package-store" }
 ash-file-watcher = { path = "crates/file-watcher" }
 github = { package = "ash-github", path = "crates/github" }
 ash-git = { path = "crates/git" }
-git-transaction = { package = "ash-git-transaction", path = "crates/git-transaction" }
 ash-history = { path = "crates/history" }
 ash-home = { path = "crates/ash-home" }
 message-history = { package = "ash-message-history", path = "crates/message-history" }

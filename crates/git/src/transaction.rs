@@ -1,14 +1,14 @@
 //! Conditional Git commit publication and durable checkout recovery.
 
-use ash_git::GitClient;
-use ash_git::GitCommitRequest;
-use ash_git::GitError;
-use ash_git::GitHead;
-use ash_git::GitPrivateRef;
-use ash_git::GitRepository;
-use ash_git::GitResult;
-use ash_git::GitTreeId;
-use ash_git::GitTreeReplayResult;
+use crate::GitClient;
+use crate::GitCommitRequest;
+use crate::GitError;
+use crate::GitHead;
+use crate::GitPrivateRef;
+use crate::GitRepository;
+use crate::GitResult;
+use crate::GitTreeId;
+use crate::GitTreeReplayResult;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -17,7 +17,7 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-/// Immutable Turn delta and the target branch revision observed when commit work starts.
+/// Immutable tree delta and the target branch revision observed when commit work starts.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitTreeCommitRequest {
     transaction_id: String,
@@ -193,7 +193,7 @@ pub enum GitTreeCommitConflict {
     TargetDetached,
 }
 
-/// Result of committing one sealed tree delta without reading the managed Thread checkout.
+/// Result of publishing an immutable tree delta to the target checkout.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GitTreeCommitResult {
     Committed {
@@ -1007,7 +1007,7 @@ fn validate_object_id(value: &str, field: &'static str) -> GitResult<()> {
     Ok(())
 }
 
-fn changed_paths(changes: Vec<ash_git::GitTreeChange>) -> Vec<PathBuf> {
+fn changed_paths(changes: Vec<crate::GitTreeChange>) -> Vec<PathBuf> {
     let mut paths = BTreeSet::new();
     for change in changes {
         if let Some(previous) = change.previous_path() {
@@ -1021,10 +1021,6 @@ fn changed_paths(changes: Vec<ash_git::GitTreeChange>) -> Vec<PathBuf> {
 #[cfg(test)]
 #[path = "transaction_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "../../git/src/test_support.rs"]
-pub mod test_support;
 
 fn preparation_time() -> GitResult<u64> {
     std::time::SystemTime::now()
