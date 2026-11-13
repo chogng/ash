@@ -1494,7 +1494,7 @@ suite('Chat command hint browser behavior', () => {
 			await expect(message).toBeFocused();
 			const help = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
 			assert.ok(help.help?.includes(locale === 'zh-CN' ? '斜杠命令接受参数时' : 'After a slash command that accepts arguments'));
-			assert.ok(help.help?.includes(locale === 'zh-CN' ? '在 IDE 聊天输入框中' : 'In IDE Chat'));
+			assert.ok(help.help?.includes(locale === 'zh-CN' ? '会话或作品链接' : 'conversation or artifact link'));
 			assert.equal(await page.evaluate(() => window.ashChatInputIntegration.dropState().text), '/review ');
 			const colors = await placeholder.evaluate(element => {
 				const probe = element.ownerDocument.createElement('span');
@@ -1533,7 +1533,7 @@ suite('Chat command hint browser behavior', () => {
 		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.inputLinkAtCursor())).toBe(target);
 		await page.evaluate(() => window.ashChatInputIntegration.openInputLink());
 		await expect(page.getByLabel('Opened sources')).toHaveText(JSON.stringify([{
-			resource: target, options: { openToSide: false, fromUserGesture: true, allowContributedOpeners: true },
+			resource: target, options: { openToSide: false, sourceWindowId: 1, fromUserGesture: true, allowContributedOpeners: true },
 		}]));
 		assert.equal(await page.evaluate(() => window.ashChatInputIntegration.dropState().text), target);
 		await expect(message).toBeFocused();
