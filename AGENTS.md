@@ -2,6 +2,8 @@
 
 This is your repo, you have the most full priority to implement various architectural approaches, all with the goal of making the code more robust, stable, highly cohesive and loosely coupled.
 
+在写文案的时候，请使用直白，第三人称语言，凝练简洁，不要过渡解释
+
 If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `../zed`, `../warp`, `../livekit`
 
 ## Repository ownership
