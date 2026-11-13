@@ -13,6 +13,9 @@ import { FileKind } from '../../../../../platform/files/common/files.js';
 import { EditorPaneMatch } from '../../../../../workbench/browser/parts/editor/editorPane.js';
 import { PdfEditorPane } from '../../../../../../../extensions/pdf-viewer/browser/pdfEditorPane.js';
 import type { IPdfAnnotationStore, PdfAnnotationSnapshot } from '../../../../../../../extensions/pdf-viewer/browser/pdfAnnotationStore.js';
+import { WorkspacePdfAnnotationStore } from '../../../../../../../extensions/pdf-viewer/browser/pdfAnnotationStore.js';
+import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
+import { FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../../platform/files/common/files.js';
 import { WorkspacePdfDocumentLoader } from '../../../../../../../extensions/pdf-viewer/browser/pdfDocumentLoader.js';
 import type { IPdfRenderResult, IPdfRenderer, PdfRenderRequest } from '../../../../../../../extensions/pdf-viewer/browser/pdfRenderer.js';
 import { matchPdfEditor } from '../../../../../../../extensions/pdf-viewer/browser/pdfEditorInput.js';
@@ -272,6 +275,49 @@ interface SavingFixture extends IDisposable {
 	readonly annotations: DelayedAnnotationStore;
 	readonly provider: AbortController;
 	readonly resourceInput: IResourceEditorInput;
+}
+
+for (const concurrent of [false, true]) {
+	test(`PDF windows preserve the rejected first-save draft and its undo history (${concurrent ? 'concurrent' : 'sequential'})`, async () => {
+		using memory = new InMemoryFileSystemProvider();
+		await memory.createDirectory(URI.file('/workspace'));
+		const resource = URI.file('/workspace/paper.pdf');
+		using files = createTestFileService(memory);
+		const doms = [new JSDOM('<!doctype html><body></body>'), new JSDOM('<!doctype html><body></body>')];
+		using firstServices = createTestComponentServices(undefined, undefined, doms[0].window.document);
+		using secondServices = createTestComponentServices(undefined, undefined, doms[1].window.document);
+		const panes = [firstServices, secondServices].map(services => registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, new WorkspacePdfAnnotationStore(files), new TestRenderer()));
+		try {
+			for (let index = 0; index < panes.length; index++) {
+				panes[index].create(doms[index].window.document.body);
+				await panes[index].setInput({ resource }, new AbortController().signal);
+				addNote(doms[index]);
+				const text = doms[index].window.document.querySelector<HTMLTextAreaElement>('.ash-pdf-annotation-text')!;
+				text.value = `Window ${index}`;
+				text.dispatchEvent(new doms[index].window.Event('change'));
+			}
+			const results = concurrent ? await Promise.allSettled(panes.map(pane => pane.save())) : [await panes[0].save().then(() => ({ status: 'fulfilled' as const })), ...await Promise.allSettled([panes[1].save()])];
+			assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+			const loser = results.findIndex(result => result.status === 'rejected');
+			const rejected = results[loser];
+			assert.ok(rejected.status === 'rejected');
+			assert.equal(toFileSystemProviderErrorCode(rejected.reason), FileSystemProviderErrorCode.FileExists);
+			const dom = doms[loser];
+			const items = () => [...dom.window.document.querySelectorAll('.ash-pdf-annotation-list-item')].map(item => item.textContent);
+			assert.deepEqual(items(), [`Note 1: Window ${loser}`]);
+			assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, false);
+			assert.match(dom.window.document.querySelector('.ash-pdf-annotation-status')!.textContent!, /Could not save annotations/);
+			actionButton(dom, 'ash.pdf.annotations.undo').click();
+			actionButton(dom, 'ash.pdf.annotations.redo').click();
+			assert.deepEqual(items(), [`Note 1: Window ${loser}`]);
+			const store = new WorkspacePdfAnnotationStore(files);
+			const persisted = await store.load(resource, new AbortController().signal);
+			await assert.rejects(panes[loser].save(), error => toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileExists);
+			assert.deepEqual(items(), [`Note 1: Window ${loser}`]);
+			assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, false);
+			assert.deepEqual(await store.load(resource, new AbortController().signal), persisted);
+		} finally { for (const pane of panes) pane.dispose(); for (const dom of doms) dom.window.close(); }
+	});
 }
 
 async function createSavingFixture(): Promise<SavingFixture> {
