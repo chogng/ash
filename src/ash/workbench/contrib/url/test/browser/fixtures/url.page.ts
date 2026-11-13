@@ -65,6 +65,9 @@ declare global {
 }
 
 const resources = new DisposableStore();
+if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
+}
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const base = resources.add(new StandaloneServiceCollection({}));
 const services = resources.add(base.createChild());

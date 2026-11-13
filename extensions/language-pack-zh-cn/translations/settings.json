@@ -1,8 +1,8 @@
 {
   "ash.settings": {
     "trustedDomains.title": "可信域名",
-    "trustedDomains.description": "打开符合规则的外部链接时跳过确认。",
-    "trustedDomains.help": "可信域名规则立即生效。按 Tab 可访问“添加域名”以及每条规则的“编辑”和“移除”操作。选择“编辑”或双击规则可在行内编辑。按 Enter 保存，按 Esc 取消。选择“移除”可撤销规则。命令面板中的“管理可信域名”会以 JSONC 打开同一份列表。",
+    "trustedDomains.description": "添加自己的规则，打开符合规则的外部链接时跳过确认。",
+    "trustedDomains.help": "你添加的可信域名规则立即生效。按 Tab 可访问“添加域名”以及每条规则的“编辑”和“移除”操作。选择“编辑”或双击规则可在行内编辑。按 Enter 保存，按 Esc 取消。命令面板中的“管理可信域名”会以 JSONC 打开你的规则，并在注释中列出产品默认项。",
     "trustedDomains.rule": "域名规则",
     "trustedDomains.input": "要信任的域名",
     "trustedDomains.add": "添加域名",

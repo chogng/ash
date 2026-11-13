@@ -2315,10 +2315,10 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.rebaseWhenSync)?.defaultValue, false);
 	assert.equal(defaults.get(GitConfiguration.rebaseWhenSync).valueType, 'boolean');
 	assert.equal(
-		defaults.all.every(setting => ['boolean', 'number', 'numberWithOptions', 'select', 'text', 'stringMap', 'complex'].includes(setting.valueType)),
+		defaults.all.every(setting => ['boolean', 'number', 'numberWithOptions', 'select', 'text', 'array', 'stringMap', 'complex'].includes(setting.valueType)),
 		true,
 	);
-	assert.equal(defaults.get('git.ignoredRepositories').valueType, 'complex');
+	assert.equal(defaults.get('git.ignoredRepositories').valueType, 'array');
 	const themeSetting = defaults.get(WorkbenchConfiguration.colorTheme);
 	assert.equal(themeSetting.valueType, 'select');
 	if (themeSetting.valueType === 'select') {
@@ -3513,12 +3513,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const domains = editorServices.get(ITrustedDomainService);
 	const trustedDomains = root.querySelector<HTMLElement>('[data-settings-item-id="workbench.trustedDomains"]')!;
 	assert.ok(trustedDomains.closest('.ash-settings-card'));
-	assert.ok(trustedDomains.querySelector('button[aria-label="Edit https://github.com/"].icon-only'));
+	assert.equal(trustedDomains.querySelector('button[aria-label="Edit https://github.com/"]'), null);
 	const form = trustedDomains.querySelector('form')!;
 	form.querySelector('input')!.value = 'https://example.test/ide';
 	const domainSaved = new Promise<void>(resolve => { disposables.add(AshEvent.once(domains.onDidChangeTrustedDomains)(resolve)); });
 	form.dispatchEvent(new browserEnvironment.window.Event('submit', { cancelable: true }));
 	await domainSaved;
+	assert.ok(trustedDomains.querySelector('button[aria-label="Edit https://example.test/ide"].icon-only'));
 	assert.match(domains.content, /"https:\/\/example\.test\/ide"/u);
 	await domains.setTrustedDomains('// Saved in the JSONC editor\n["https://example.test/jsonc"]');
 	assert.equal(trustedDomains.querySelector('tbody td')?.textContent, 'https://example.test/jsonc');

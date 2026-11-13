@@ -1639,19 +1639,15 @@ test.describe('Sessions settings components', () => {
 		await settings.locator('[data-settings-category-id="browser"]').click();
 		await expect(settings.getByRole('button', { name: 'Open Browser settings', exact: true })).toHaveCount(0);
 		const table = settings.getByRole('table', { name: 'Trusted domains', exact: true });
-		const card = settings.locator('.ash-settings-card').filter({ has: page.getByRole('table', { name: 'Trusted domains', exact: true }) }).last();
 		const input = settings.getByRole('textbox', { name: 'Domain to trust', exact: true });
+		const card = settings.locator('.ash-settings-card').filter({ has: page.getByRole('textbox', { name: 'Domain to trust', exact: true }) }).last();
 		await expect(input).toBeVisible();
 		await expect(card).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect(table.getByRole('cell', { name: 'https://github.com/', exact: true })).toBeVisible();
-		const removeRules = table.getByRole('button', { name: /^Remove https:/u });
-		for (let remaining = await removeRules.count(); remaining > 0; remaining--) {
-			await removeRules.last().click();
-		}
 		await expect(table).toBeHidden();
 		await input.fill('https://example.test/docs?source=settings#top');
 		await input.press('Enter');
 		await expect(table.getByRole('cell', { name: 'https://example.test/docs', exact: true })).toBeVisible();
+		await expect(table.getByRole('cell', { name: 'https://github.com/', exact: true })).toHaveCount(0);
 		await table.getByRole('button', { name: 'Edit https://example.test/docs', exact: true }).click();
 		const edit = table.getByRole('textbox', { name: 'Edit https://example.test/docs', exact: true });
 		await expect(edit).toBeFocused();

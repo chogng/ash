@@ -67,11 +67,11 @@ export function trustedDomainsSetting(domains: ITrustedDomainService): IBoundStr
 			return localize({ bundle: 'ash.settings', key: 'trustedDomains.title' }, 'Trusted domains');
 		},
 		get description() {
-			return localize({ bundle: 'ash.settings', key: 'trustedDomains.description' }, 'Open matching external links without confirmation.');
+			return localize({ bundle: 'ash.settings', key: 'trustedDomains.description' }, 'Add your own rules to open matching external links without confirmation.');
 		},
 		accessibility: {
 			verbositySetting: AccessibilityVerbositySettingId.TrustedDomainsSettings,
-			help: localize({ bundle: 'ash.settings', key: 'trustedDomains.help' }, 'Trusted domain rules apply immediately. Use Tab to reach Add Domain and the Edit and Remove actions for each rule. Activate Edit or double-click a rule to edit it in place. Press Enter to save or Escape to cancel. Use Remove to revoke a rule. The Manage Trusted Domains command opens the same list as JSONC.'),
+			help: localize({ bundle: 'ash.settings', key: 'trustedDomains.help' }, 'Your trusted domain rules apply immediately. Use Tab to reach Add Domain and the Edit and Remove actions for each rule. Activate Edit or double-click a rule to edit it in place. Press Enter to save or Escape to cancel. The Manage Trusted Domains command opens your rules as JSONC and lists the product defaults in comments.'),
 		},
 		columnLabel: localize({ bundle: 'ash.settings', key: 'trustedDomains.rule' }, 'Domain rule'),
 		inputLabel: localize({ bundle: 'ash.settings', key: 'trustedDomains.input' }, 'Domain to trust'),
@@ -79,7 +79,7 @@ export function trustedDomainsSetting(domains: ITrustedDomainService): IBoundStr
 		addLabel: localize({ bundle: 'ash.settings', key: 'trustedDomains.add' }, 'Add Domain'),
 		binding: {
 			onDidChange: domains.onDidChangeTrustedDomains,
-			getValue: () => domains.trustedDomains,
+			getValue: () => domains.userTrustedDomains,
 			apply: edit => {
 				switch (edit.kind) {
 					case 'add': return domains.addTrustedDomain(edit.value);

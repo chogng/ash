@@ -73,19 +73,20 @@ suite('url browser component', () => {
 
 		await page.getByRole('button', { name: 'Manage domains', exact: true }).click();
 		await expect(page.locator('#editor .stanza-editor')).toBeVisible();
+		await expect.poll(() => page.evaluate(() => window.ashURLIntegration.editorText)).toMatch(/\/\/ - "https:\/\/github\.com"[\s\S]*\[\]\s*$/u);
 		const source = '// Preserve this comment\n["https://docs.example.test",]\n';
 		await page.evaluate(content => window.ashURLIntegration.edit(content), source);
 		await page.getByRole('button', { name: 'Save document', exact: true }).click();
-		await expect.poll(() => page.evaluate(() => window.ashURLIntegration.content)).toBe(source);
+		await expect.poll(() => page.evaluate(() => window.ashURLIntegration.content)).toContain(source);
 		await page.getByRole('link', { name: 'Chat documentation' }).click();
 		await expect.poll(() => page.evaluate(() => window.ashURLIntegration.contributed.length)).toBe(1);
 		await page.evaluate(() => window.ashURLIntegration.edit('[false]'));
 		await page.getByRole('button', { name: 'Save document', exact: true }).click();
 		await expect(page.locator('#save-error')).toContainText('Invalid trusted domain pattern');
-		expect(await page.evaluate(() => window.ashURLIntegration.content)).toBe(source);
+		expect(await page.evaluate(() => window.ashURLIntegration.content)).toContain(source);
 		await page.evaluate(() => window.ashURLIntegration.edit('[]\n'));
 		await page.getByRole('button', { name: 'Save document', exact: true }).click();
-		await expect.poll(() => page.evaluate(() => window.ashURLIntegration.content)).toBe('[]\n');
+		await expect.poll(() => page.evaluate(() => window.ashURLIntegration.content)).toMatch(/\/\/ - "https:\/\/github\.com"[\s\S]*\[\]\s*$/u);
 		await page.getByRole('link', { name: 'Chat documentation' }).click();
 		await expect(page.getByRole('dialog', { name: 'Open External Link', exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
@@ -120,6 +121,13 @@ suite('url browser component', () => {
 		await chooser.getByRole('combobox').press('Escape');
 		await expect(chooser).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashURLIntegration.contributed)).toEqual([]);
+	});
+
+	test('the Chinese management document labels the product defaults', async function () {
+		const { page } = browserTests;
+		await page.goto('/url.html?locale=zh-CN');
+		await page.getByRole('button', { name: 'Manage domains', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashURLIntegration.editorText)).toMatch(/\/\/ Ash 默认信任 localhost 及以下域名。\n[\s\S]*\/\/ - "https:\/\/github\.com"[\s\S]*\[\]\s*$/u);
 	});
 
 	test('disposing a window contribution cancels an active trust picker without granting trust', async function () {
