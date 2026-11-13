@@ -278,20 +278,22 @@ impl Runtime<'_> {
         })
     }
 
-    /// Replays committed workflow actions after host services and Thread journals are restored.
-    pub fn recover(&self) -> Result<usize, CoreError> {
+    /// Replays committed workflow actions through the host's admission authority.
+    pub fn recover(
+        &self,
+        mut submit: impl FnMut(
+            &ThreadId,
+            StartTurnRequest,
+            Option<protocol::TurnModelRouting>,
+            Option<&ash_core::ThreadEventPrecondition>,
+        ) -> Result<ash_core::StartTurnResult, CoreError>,
+    ) -> Result<usize, CoreError> {
         let pending = self.store.pending()?;
         let count = pending.len();
         for (root, plan) in pending {
             let precondition = plan.submission.precondition.clone();
             match self.finish(&root, plan, |thread, request, routing| {
-                self.threads.start_turn_with_admission(
-                    thread,
-                    request,
-                    None,
-                    routing,
-                    precondition.as_ref(),
-                )
+                submit(thread, request, routing, precondition.as_ref())
             }) {
                 Ok(_)
                 | Err(CoreError::ThreadStore(ash_core::ThreadStoreError::AuthorizationRevoked)) => {

@@ -5,6 +5,7 @@ use ash_automation::AutomationStore;
 use ash_protocol::AutomationRun;
 use ash_protocol::AutomationRunStatus;
 use ash_protocol::AutomationSession;
+use core_api::AgentRuntime;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
@@ -920,6 +921,149 @@ fn artifact_follow_up_detached_after_dispatch_check_cannot_admit_a_turn() {
                 1
             );
             assert!(store.get_run(&run.id).unwrap().turn_id.is_none());
+        }
+    }
+}
+
+#[test]
+fn queued_pr_workflows_from_before_admission_guards_recover_only_with_original_authority() {
+    for (detach, reattach, already_accepted) in [
+        (false, false, false),
+        (true, false, false),
+        (true, true, false),
+        (true, false, true),
+    ] {
+        let profile = tempfile::tempdir().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let api = Arc::new(FollowUpApi::default());
+        let (server, store) = open_follow_up_server(profile.path(), directory.path(), api.clone());
+        let run = artifact_follow_up_plan(
+            &server,
+            &store,
+            directory.path(),
+            "legacy",
+            "/develop Fix CI",
+        );
+        let event = ash_protocol::AutomationEvent {
+            key: "legacy-ci-failure".into(),
+            context: "Build failed".into(),
+        };
+        let text = format!("{}\n\n{}", run.definition.prompt, event.context);
+        assert!(store.claim_event(&run.id, event).unwrap());
+        let AutomationSession::Continue { thread_id, .. } = &run.definition.session else {
+            unreachable!();
+        };
+        let database = profile.path().join("state.sqlite3");
+        let workflows = workflows::Store::open(&database).unwrap();
+        let threads = server.threads();
+        let agents = ash_core::MultiAgentCoordinator::new(threads.clone(), Default::default());
+        let backend = FollowUpStartFailure {
+            starts: Default::default(),
+            error: core_api::CoreError::Execution("fixture only prepares the workflow".into()),
+        };
+        let runtime = workflows::Runtime {
+            store: &workflows,
+            threads,
+            agents: &agents,
+            backend: &backend,
+        };
+        let snapshot = threads.read_thread(thread_id).unwrap();
+        let command = ash_protocol::CommandId::new(format!(
+            "automation-start-{}",
+            ash_protocol::ContentDigest::sha256(run.id.as_bytes())
+                .to_string()
+                .replace(':', "-")
+        ))
+        .unwrap();
+        let request = ash_core::StartTurnRequest {
+            context_policy: Default::default(),
+            mode: Default::default(),
+            advisor: None,
+            kind: ash_protocol::TurnKind::Coding,
+            instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+            command_id: command.clone(),
+            expected_sequence: core_api::SequenceExpectation::Exact(snapshot.sequence),
+            model: None,
+            reasoning_effort: None,
+            policy_revision: "test-policy-v1".into(),
+            approval_mode: ash_protocol::ApprovalMode::Manual,
+            tool_mode: ash_protocol::ToolMode::Direct,
+            tool_profile: Some(server.agent_runtime().tool_profile().unwrap()),
+            activated_skills: Vec::new(),
+            input: vec![ash_protocol::UserInput::Text { text: text.clone() }],
+        };
+        let mut original_turn = None;
+        // The old writer stored the same submission with no precondition in the workflow log.
+        let interrupted = runtime.execute_with_turn_submission(
+            thread_id,
+            workflows::Command::parse(&text).unwrap().unwrap(),
+            request,
+            None,
+            None,
+            |thread, request, _| {
+                if already_accepted {
+                    original_turn = Some(threads.start_turn(thread, request).unwrap().turn_id);
+                }
+                Err(core_api::CoreError::Execution(
+                    "shutdown during submission".into(),
+                ))
+            },
+        );
+        assert!(
+            matches!(interrupted, Err(core_api::CoreError::Execution(message)) if message == "shutdown during submission")
+        );
+        if detach {
+            let history = ash_state::SqliteThreadStore::open(&database).unwrap();
+            let repository =
+                github::Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
+            assert!(
+                history
+                    .detach_pull_request(thread_id, &repository, 7)
+                    .unwrap()
+            );
+            if reattach {
+                assert!(
+                    history
+                        .record_pull_request(thread_id, &repository, 7)
+                        .unwrap()
+                );
+            }
+        }
+        drop(agents);
+        drop(workflows);
+        drop(server);
+        drop(store);
+
+        let (server, store) = open_follow_up_server(profile.path(), directory.path(), api);
+        let accepted = server
+            .agent_runtime()
+            .accepted_turn(thread_id, &command)
+            .unwrap();
+        assert_eq!(
+            accepted.is_some(),
+            !detach || already_accepted,
+            "detach={detach}, reattach={reattach}, already_accepted={already_accepted}"
+        );
+        if already_accepted {
+            assert_eq!(accepted, original_turn);
+        }
+        let snapshot = server.threads().read_thread(thread_id).unwrap();
+        assert_eq!(snapshot.turns.len(), usize::from(accepted.is_some()));
+        if !already_accepted {
+            assert_eq!(snapshot.delegations.len(), usize::from(!detach));
+        }
+        if detach && !already_accepted {
+            assert_eq!(server.resume_recovered_agent_coordinations().unwrap(), 0);
+            let observed = server
+                .advance_automation_run(&run, ash_automation::now().unwrap())
+                .unwrap();
+            assert_eq!(observed.status, AutomationRunStatus::Stopped);
+            assert!(observed.turn_id.is_none());
+            store.observe(&observed).unwrap();
+            assert_eq!(
+                store.get(&run.automation_id).unwrap().unwrap().status,
+                ash_protocol::AutomationStatus::Paused
+            );
         }
     }
 }

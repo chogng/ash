@@ -11,11 +11,14 @@ use ash_protocol::CommandId;
 use ash_protocol::ContentDigest;
 use ash_protocol::SessionId;
 use ash_protocol::SessionKind;
+use ash_protocol::ThreadId;
+use ash_protocol::TurnModelRouting;
 use ash_protocol::TurnStatus;
 use ash_protocol::UnixMillis;
 use core_api::AgentRuntime;
 use core_api::CoreError;
 use core_api::StartThreadRequest;
+use thread_store::ThreadEventPrecondition;
 
 impl AppServer {
     /// Called after archiving has committed the Session's terminal events and before deleting
@@ -142,7 +145,7 @@ impl AppServer {
         }
         let mut observed = run.clone();
         observed.message = None;
-        let command = command_id("start", &run.id)?;
+        let command = command_id(AUTOMATION_START_ACTION, &run.id)?;
         let chat = run.definition.session == AutomationSession::NewChat;
         let snapshot = match &run.thread_id {
             Some(id) => self.agent_runtime().read_thread(id),
@@ -277,20 +280,7 @@ impl AppServer {
                         -32030, ash_app_server_protocol::protocol::error::AppServerErrorName::AccountAuthenticationRequired, message,
                     ))?;
                 }
-                let precondition = match (&run.definition.condition, &run.definition.session) {
-                    (
-                        Some(ash_protocol::AutomationCondition::GitHubChecks {
-                            artifact_id: Some(artifact_id),
-                            ..
-                        }),
-                        AutomationSession::Continue { session_id, .. },
-                    ) => Some(thread_store::ThreadEventPrecondition::PullRequestArtifact {
-                        source_thread_id: ash_protocol::ThreadId::new(session_id.as_str())
-                            .map_err(|error| core_error(CoreError::Execution(error.to_string())))?,
-                        artifact_id: artifact_id.clone(),
-                    }),
-                    _ => None,
-                };
+                let precondition = artifact_admission(&run.definition).map_err(core_error)?;
                 self.agent_processor()
                     .with_turn_precondition(precondition)
                     .start_turn_request(
@@ -433,6 +423,71 @@ impl AppServer {
         }
         Ok(observed)
     }
+
+    pub(super) fn recover_workflow_turn(
+        &self,
+        thread: &ThreadId,
+        request: ash_core::StartTurnRequest,
+        routing: Option<TurnModelRouting>,
+        precondition: Option<&ThreadEventPrecondition>,
+    ) -> Result<ash_core::StartTurnResult, CoreError> {
+        let submit = |request, precondition| {
+            self.threads
+                .start_turn_with_admission(thread, request, None, routing, precondition)
+        };
+        if !is_automation_start(&request.command_id) {
+            return submit(request, precondition);
+        }
+
+        let revoked =
+            || CoreError::ThreadStore(thread_store::ThreadStoreError::AuthorizationRevoked);
+        let command = request.command_id.clone();
+        let replay_if_accepted = |request| {
+            if self
+                .agent_runtime()
+                .accepted_turn(thread, &command)?
+                .is_some()
+            {
+                submit(request, precondition)
+            } else {
+                Err(revoked())
+            }
+        };
+        // Core replays an accepted receipt before evaluating any admission precondition.
+        if self
+            .agent_runtime()
+            .accepted_turn(thread, &command)?
+            .is_some()
+        {
+            return submit(request, precondition);
+        }
+        let store = self.automation_processor.store().ok_or_else(revoked)?;
+        let run = store
+            .active_runs()
+            .map_err(|error| CoreError::Journal(error.to_string()))?
+            .into_iter()
+            .find(|run| command_id(AUTOMATION_START_ACTION, &run.id).as_ref() == Ok(&command));
+        let Some(run) = run else {
+            return replay_if_accepted(request);
+        };
+        // Older workflow records omitted the condition. Recover the original binding from the
+        // immutable run, since a fresh lookup of the PR could select a replacement artifact.
+        let original = artifact_admission(&run.definition)?;
+        if precondition.is_some() && precondition != original.as_ref() {
+            return Err(revoked());
+        }
+        let mut request = Some(request);
+        match store
+            .dispatch_if_current(&run.id, || {
+                submit(request.take().expect("one admission"), original.as_ref())
+            })
+            .map_err(|error| CoreError::Journal(error.to_string()))?
+        {
+            Some(result) => result,
+            None => replay_if_accepted(request.expect("dispatch skipped")),
+        }
+    }
+
     /// The durable record owns the binding. Recreating a PR association cannot revive consent.
     pub(super) fn artifact_binding_is_current(
         &self,
@@ -638,6 +693,44 @@ impl AppServer {
             }
         }
     }
+}
+
+fn artifact_admission(
+    definition: &ash_protocol::AutomationDefinition,
+) -> Result<Option<ThreadEventPrecondition>, CoreError> {
+    let Some(ash_protocol::AutomationCondition::GitHubChecks {
+        artifact_id: Some(artifact_id),
+        ..
+    }) = &definition.condition
+    else {
+        return Ok(None);
+    };
+    let AutomationSession::Continue { session_id, .. } = &definition.session else {
+        return Err(CoreError::InvalidInput(
+            "PR artifact follow-up requires an existing session".into(),
+        ));
+    };
+    let source_thread_id = ThreadId::new(session_id.as_str())
+        .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+    Ok(Some(ThreadEventPrecondition::PullRequestArtifact {
+        source_thread_id,
+        artifact_id: artifact_id.clone(),
+    }))
+}
+
+const AUTOMATION_START_ACTION: &str = "start";
+const AUTOMATION_START_PREFIX: &str = "automation-start-sha256-";
+
+fn is_automation_start(command: &CommandId) -> bool {
+    command
+        .as_str()
+        .strip_prefix(AUTOMATION_START_PREFIX)
+        .is_some_and(|digest| {
+            digest.len() == 64
+                && digest
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        })
 }
 
 fn command_id(action: &str, run_id: &str) -> Result<CommandId, String> {

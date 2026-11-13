@@ -115,8 +115,8 @@ fn prepared_artifact_workflow_retains_its_authority_across_restart() {
         fixture.agents =
             MultiAgentCoordinator::new(fixture.threads.clone(), AgentTreeLimits::default());
         fixture.store = Store::open(&database).unwrap();
-        assert_eq!(fixture.runtime().recover().unwrap(), 1);
-        assert_eq!(fixture.runtime().recover().unwrap(), 0);
+        assert_eq!(fixture.recover().unwrap(), 1);
+        assert_eq!(fixture.recover().unwrap(), 0);
         let source = fixture.threads.read_thread(&fixture.root).unwrap();
         assert_eq!(source.turns.len(), usize::from(!revoke));
         assert_eq!(source.delegations.len(), usize::from(!revoke));
@@ -163,6 +163,13 @@ impl Fixture {
             agents: &self.agents,
             backend: &self.backend,
         }
+    }
+    fn recover(&self) -> Result<usize, CoreError> {
+        self.runtime()
+            .recover(|thread, request, routing, precondition| {
+                self.threads
+                    .start_turn_with_admission(thread, request, None, routing, precondition)
+            })
     }
     fn request(&self, id: &str, text: &str) -> StartTurnRequest {
         StartTurnRequest {
@@ -684,8 +691,8 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
                 .unwrap();
         }
         fixture.store = Store::open(&database).unwrap();
-        assert_eq!(fixture.runtime().recover().unwrap(), 1);
-        assert_eq!(fixture.runtime().recover().unwrap(), 0);
+        assert_eq!(fixture.recover().unwrap(), 1);
+        assert_eq!(fixture.recover().unwrap(), 0);
         let snapshot = fixture.threads.read_thread(&fixture.root).unwrap();
         assert_eq!(snapshot.turns.len(), 1);
         assert_eq!(

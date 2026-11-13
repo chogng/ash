@@ -3191,7 +3191,11 @@ impl AppServer {
 
     /// Reconciles durable Agent spawn/delivery sagas and starts newly materialized child Turns.
     pub fn resume_recovered_agent_coordinations(&self) -> Result<usize, CoreError> {
-        let workflows = self.workflow_runtime().recover()?;
+        let workflows =
+            self.workflow_runtime()
+                .recover(|thread, request, routing, precondition| {
+                    self.recover_workflow_turn(thread, request, routing, precondition)
+                })?;
         Ok(workflows + self.agent_runtime().recover_agents()?)
     }
 
