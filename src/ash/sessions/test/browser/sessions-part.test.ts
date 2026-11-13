@@ -73,6 +73,12 @@ import { IChatService, type ThreadUpdateEnvelope } from '../../../workbench/serv
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import type { ISession, IUntitledChatSession } from '../../services/sessions/common/session.js';
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { IChatWindowService } from '../../../workbench/contrib/chatWindow/browser/chatWindow.js';
+import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
+import { ServiceCollection } from '../../../platform/instantiation/common/serviceCollection.js';
+import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import { ISessionsConversationService } from '../../services/sessions/common/sessionsConversation.js';
+import { DeferredPromise } from '../../../base/common/async.js';
 import { ISessionsService, SessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { IGeneratedFilesService } from '../../services/generatedFiles/common/generatedFilesService.js';
@@ -116,6 +122,8 @@ const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
 const { registerTitleService } = await import('../../services/title/browser/titleService.js');
 await import('../../contrib/artifact/browser/designEditor.contribution.js');
 await import('../../../workbench/contrib/chat/browser/chat.shared.contribution.js');
+await import('../../../workbench/contrib/chatWindow/browser/chatWindow.contribution.js');
+await import('../../contrib/sessions/browser/views/sessionsViewActions.js');
 const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
 const { NativeChatPaneFactory } = await import('../../contrib/chat/browser/nativeChatPaneFactory.js');
 const { NativeChatModelPreferences } = await import('../../contrib/chat/common/nativeChatModelPreferences.js');
@@ -391,27 +399,41 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerSingleton(INativeChatModelPreferencesService, () => services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
-	const popup = new JSDOM('', { pretendToBeVisual: true });
-	resources.add(toDisposable(() => popup.window.close()));
-	const popupClosed = resources.add(new Emitter<void>());
-	let popupFocused = false;
-	popup.window.document.hasFocus = () => popupFocused;
-	popup.window.focus = () => { };
-	const auxiliaryWindow = resources.add(new class extends Disposable {
-		readonly id = 100;
-		readonly window = popup.window as unknown as Window;
-		readonly container = popup.window.document.body;
-		readonly onWillLayout = Event.None;
-		readonly onDidLayout = Event.None;
-		readonly onBeforeUnload = Event.None;
-		readonly onDidClose = popupClosed.event;
-		readonly whenStylesHaveLoaded = Promise.resolve();
-		layout() { }
-		createState(): never { throw new Error('Unexpected popup state capture'); }
-	}());
+	const openedPopups: { document: Document; window: JSDOM['window']; close(): void; focused: boolean; focusCount: number; }[] = [];
+	let pendingPopup: DeferredPromise<void> | undefined;
+	const popupLayoutError = new Error('Popup layout failed after mounting');
+	let failPopupLayout = false;
 	services.registerInstance(IAuxiliaryWindowService, resources.add(new class extends Disposable {
 		readonly onDidOpenWindow = Event.None;
-		async open() { return auxiliaryWindow; }
+		async open() {
+			const popup = new JSDOM('', { pretendToBeVisual: true });
+			resources.add(toDisposable(() => popup.window.close()));
+			const closed = resources.add(new Emitter<void>());
+			const state = { document: popup.window.document, window: popup.window, close: () => closed.fire(), focused: false, focusCount: 0 };
+			openedPopups.push(state);
+			popup.window.document.hasFocus = () => state.focused;
+			popup.window.focus = () => { state.focusCount++; };
+			const layoutError = failPopupLayout ? popupLayoutError : undefined;
+			const id = 100 + openedPopups.length;
+			await pendingPopup?.p;
+			return resources.add(new class extends Disposable {
+				readonly id = id;
+				readonly window = popup.window as unknown as Window;
+				readonly container = state.document.body;
+				readonly onWillLayout = Event.None;
+				readonly onDidLayout = Event.None;
+				readonly onBeforeUnload = Event.None;
+				readonly onDidClose = closed.event;
+				readonly whenStylesHaveLoaded = Promise.resolve();
+				async focus(): Promise<void> { this.window.focus(); }
+				layout(): void { if (layoutError) throw layoutError; }
+				createState(): never { throw new Error('Unexpected popup state capture'); }
+				protected override disposeCore(): void {
+					this.container.replaceChildren();
+					super.disposeCore();
+				}
+			}());
+		}
 		getWindow() { return undefined; }
 	}()));
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
@@ -457,6 +479,9 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	paneServices.registerInstance(ISessionsChatViewStateService, new SessionsChatViewStateService());
 	using composerContribution = paneServices.createInstance(SharedChatInputComposerContribution);
 	paneServices.registerSingleton(IChatViewFactory, () => paneServices.createInstance(ChatViewFactory));
+	const chatWindowRegistration = getSingletonServiceDescriptors().find(([id]) => id === IChatWindowService);
+	assert.ok(chatWindowRegistration);
+	paneServices.registerCollection(new ServiceCollection(chatWindowRegistration));
 	using part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
 		newDraftVisible: observableValue('draft visibility', false),
 		createChatPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
@@ -465,6 +490,8 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		closeSelection: selection => viewService.closeVisibleSelection(selection),
 		createNewSession: () => { viewService.openNewSession(); },
 	} satisfies SessionsPartOptions);
+	paneServices.registerInstance(ISessionsConversationService, part);
+	using commands = new CommandService(paneServices);
 	using partListener = autorun(reader => {
 		const { visibleSelections, activeSelection } = viewService.getSelection(reader);
 		part.updateVisibleSessions(visibleSelections, activeSelection);
@@ -564,6 +591,37 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	assert.equal(await part.didActiveCodeHistoryFail(), false);
+
+	failPopupLayout = true;
+	await assert.rejects(commands.executeCommand('sessions.openInNewWindow', selected), popupLayoutError);
+	assert.equal(openedPopups.length, 1);
+	const failedPopup = openedPopups[0]!;
+	assert.equal(failedPopup.document.body.childElementCount, 0);
+	assert.throws(() => titleService.getPart(failedPopup.document.body), /no titlebar registered/);
+	assert.equal(part.domNode.querySelector('.ash-chat-detached-chat'), null);
+	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
+
+	failPopupLayout = false;
+	pendingPopup = new DeferredPromise<void>();
+	const opening = commands.executeCommand('sessions.openInNewWindow', selected);
+	const duplicate = commands.executeCommand('sessions.openInNewWindow', selected);
+	await Promise.resolve();
+	assert.equal(openedPopups.length, 2);
+	await pendingPopup.complete();
+	pendingPopup = undefined;
+	await Promise.all([opening, duplicate]);
+	const draftPopup = openedPopups[1]!;
+	assert.equal(draftPopup.document.querySelector('.ash-chat-input-part'), retainedCodeInput);
+	assert.equal(draftPopup.focusCount, 1);
+	await commands.executeCommand('sessions.openInNewWindow', selected);
+	assert.equal(openedPopups.length, 2);
+	assert.equal(draftPopup.focusCount, 2);
+	draftPopup.close();
+	assert.equal(draftPopup.document.querySelector('.ash-chat-input-part'), null);
+	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
+	assert.ok(retainedCodeInput?.contains(dom.window.document.activeElement));
+	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
+
 	const unavailable = {
 		kind: 'session',
 		active: {
@@ -587,6 +645,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		onDidChange.fire();
 	};
 	await part.openInNewWindow(unavailable);
+	const popup = openedPopups[2]!;
 	assert.ok(popup.window.document.querySelector('.ash-chat-auxiliary-content'));
 	const auxiliaryTitlebar = titleService.getPart(popup.window.document.body);
 	assert.notEqual(auxiliaryTitlebar, titleService.getPart(dom.window.document.body));
@@ -595,20 +654,20 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	publishActivity(100);
 	assert.equal(viewService.getLastViewedAt(entry), undefined);
 
-	popupFocused = true;
+	popup.focused = true;
 	popup.window.dispatchEvent(new popup.window.Event('focus'));
 	assert.equal(viewService.getLastViewedAt(entry), 100);
 	publishActivity(200);
 	assert.equal(viewService.getLastViewedAt(entry), 200);
 
-	popupFocused = false;
+	popup.focused = false;
 	publishActivity(300);
 	assert.equal(viewService.getLastViewedAt(entry), 200);
-	popupClosed.fire();
+	popup.close();
 	assert.equal(popup.window.document.querySelector('.ash-chat-auxiliary-titlebar'), null);
 	assert.throws(() => titleService.getPart(popup.window.document.body), /no titlebar registered/);
 	const lastViewedAfterClose = viewService.getLastViewedAt(entry);
-	popupFocused = true;
+	popup.focused = true;
 	publishActivity(Date.now() + 60_000);
 	assert.equal(viewService.getLastViewedAt(entry), lastViewedAfterClose);
 });

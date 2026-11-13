@@ -62,6 +62,11 @@ class ElectronAuxiliaryWindow extends AuxiliaryWindow {
 		this._register(toDisposable(() => changed.dispose()));
 	}
 
+	override focus(): Promise<void> {
+		// Chromium's Window.focus() does not activate the existing native popup.
+		return this.host.focusWindow(this.window.name);
+	}
+
 	async initializeHostState(): Promise<void> {
 		if (this.isDisposed) {
 			throw new Error('Auxiliary window closed before initialization');

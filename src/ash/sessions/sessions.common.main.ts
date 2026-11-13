@@ -4,6 +4,7 @@ import '../workbench/contrib/workspace/browser/workspace.contribution.js';
 import './contrib/workspace/browser/workspace.contribution.js';
 import './services/generatedFiles/browser/generatedFiles.contribution.js';
 import './contrib/chat/browser/chat.contribution.js';
+import '../workbench/contrib/chatWindow/browser/chatWindow.contribution.js';
 import './contrib/sessionComparison/browser/sessionComparison.contribution.js';
 import './contrib/chat/browser/sharedChatInputComposer.contribution.js';
 import './contrib/github/browser/github.contribution.js';

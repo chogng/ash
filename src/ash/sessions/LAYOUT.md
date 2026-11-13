@@ -271,7 +271,7 @@ Explicit session and chat open actions dismiss the active custom view. Reactive 
 
 ## Part lifecycle
 
-Web and Electron register `ITitleService` in the Agents Window scope. It owns the main titlebar and tracks each detached conversation titlebar by its window document. Closing the popup releases its titlebar registration. `SessionsPart` retains ownership of the conversation and reattaches it to the main window on close.
+Web and Electron register `IChatWindowService` and `ITitleService` in the Agents Window scope. The Workbench chat window service tracks pending and open popups by retained view and releases each popup and its titlebar registration on close. `SessionsPart` owns the conversation and its grid placeholder, and reattaches the same view to the main window before the popup is disposed.
 
 The workbench:
 

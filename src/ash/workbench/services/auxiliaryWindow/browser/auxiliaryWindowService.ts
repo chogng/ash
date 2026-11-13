@@ -62,6 +62,7 @@ export interface IAuxiliaryWindow extends Disposable {
 		readonly onDidChange: Event<boolean>;
 		set(value: boolean): Promise<void>;
 	};
+	focus(): Promise<void>;
 	layout(): void;
 	createState(): AuxiliaryWindowState;
 }
@@ -211,6 +212,10 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 			if (!this.closed && !window.closed) window.close();
 			this.publishClosed();
 		}));
+	}
+
+	async focus(): Promise<void> {
+		this.window.focus();
 	}
 
 	layout(): void {

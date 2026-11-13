@@ -6402,6 +6402,7 @@ class TestAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	readonly onDidClose = this.closeEmitter.event;
 	readonly window = this.dom.window as unknown as Window;
 	readonly container = this.dom.window.document.querySelector<HTMLElement>('main')!;
+	async focus(): Promise<void> { }
 
 	constructor() {
 		super();

@@ -5713,6 +5713,7 @@ class TestChatAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	private readonly closed = this._register(new Emitter<void>());
 	readonly onDidClose = this.closed.event;
 	readonly whenStylesHaveLoaded = Promise.resolve();
+	async focus(): Promise<void> { this.window.focus(); }
 	focusCount = 0;
 	private closing = false;
 	private readonly closeDocument = this.dom.window.close.bind(this.dom.window);
