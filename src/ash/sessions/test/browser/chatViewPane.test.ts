@@ -7587,6 +7587,92 @@ test('IDE background item retains its composer in one light Agent auxiliary wind
 	assert.equal(f.fake.turnStartRequests.length, 0);
 });
 
+for (const locale of ['en', 'zh-CN']) for (const state of ['pagination', 'paginationRetry', 'recovery'] as const) for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+	test(`Chat history ${state} ${type} follows its target across auxiliary documents in ${locale}`, async () => {
+		initializeTestLocalization(locale);
+		try {
+			let subscriptions = 0;
+			let recovered = false;
+			const fixture = await createNavigationInputPane('{}', undefined, {
+				subscribe: async ({ threadId }) => {
+					if (++subscriptions === 1 && state === 'recovery') {
+						throw new Error('Synthetic initial history failure');
+					}
+					return { ...navigationThreadSnapshot(threadId), updates: [], history: { hasOlderTurns: true, oldestTurnId: 'boundary' } };
+				},
+				read: async ({ threadId }) => {
+					if (!recovered) {
+						throw new Error('Synthetic earlier history failure');
+					}
+					return navigationThreadSnapshot(threadId);
+				},
+			});
+			using resources = fixture.resources;
+			const { pane, chatPane, input, dom } = fixture;
+			const status = chatPane.querySelector<HTMLElement>(state === 'recovery' ? '.ash-chat-history-status' : '.ash-chat-history-pagination')!;
+			await waitFor(() => !status.hidden);
+			const button = status.querySelector<HTMLButtonElement>('button')!;
+			if (state === 'paginationRetry') {
+				button.click();
+				await waitFor(() => status.textContent!.includes('Synthetic earlier history failure'));
+			}
+			await pane.openInNewWindow();
+			const popup = fixture.auxiliaryWindows.windows[0]!;
+			assert.equal(chatPane.ownerDocument, popup.window.document);
+			assert.notEqual(chatPane.ownerDocument, dom.window.document);
+
+			// Another document retains a history button as its active element. Only
+			// the registry's requested target may select a provider or receive focus.
+			const peer = await createNavigationInputPane('{}', undefined, { subscribe: async () => { throw new Error('Other window history'); } });
+			using peerResources = peer.resources;
+			const peerStatus = peer.chatPane.querySelector<HTMLElement>('.ash-chat-history-status')!;
+			await waitFor(() => !peerStatus.hidden);
+			const peerButton = peerStatus.querySelector<HTMLButtonElement>('button')!;
+			peerButton.focus();
+			button.focus();
+			const implementations = AccessibleViewRegistry.getImplementations().filter(provider => provider.type === type && provider.name.startsWith('chatHistory-'));
+			const providers = implementations.map(provider => provider.getProvider({} as ServicesAccessor, button)).filter(provider => provider !== undefined);
+			assert.equal(providers.length, 1);
+			using provider = providers[0]!;
+			if (state === 'recovery') {
+				assert.match(provider.provideContent(), locale === 'en' ? /Retry loading chat/u : /重新加载聊天/u);
+			} else {
+				assert.match(provider.provideContent(), locale === 'en' ? /earlier messages/u : /更早的消息/u);
+			}
+			const reader = popup.window.document.createElement('textarea');
+			popup.container.append(reader);
+			reader.focus();
+			provider.dispose();
+			assert.equal(popup.window.document.activeElement, button);
+			assert.equal(peer.dom.window.document.activeElement, peerButton);
+			const fallback = implementations.map(implementation => implementation.getProvider({} as ServicesAccessor)).filter(candidate => candidate !== undefined);
+			assert.equal(fallback.length, 2);
+			fallback.forEach(candidate => candidate.dispose());
+
+			popup.window.close();
+			assert.equal(chatPane.ownerDocument, dom.window.document);
+			button.focus();
+			const returned = implementations.map(implementation => implementation.getProvider({} as ServicesAccessor, button)).filter(candidate => candidate !== undefined);
+			assert.equal(returned.length, 1);
+			using returnedProvider = returned[0]!;
+			const returnedReader = dom.window.document.createElement('textarea');
+			dom.window.document.body.append(returnedReader);
+			returnedReader.focus();
+			returnedProvider.dispose();
+			assert.equal(dom.window.document.activeElement, button);
+			using recoveringProvider = implementations.map(implementation => implementation.getProvider({} as ServicesAccessor, button)).find(candidate => candidate !== undefined)!;
+			recovered = true;
+			button.click();
+			await waitFor(() => status.hidden === true);
+			returnedReader.focus();
+			recoveringProvider.dispose();
+			assert.equal(dom.window.document.activeElement, input);
+			assert.equal(peer.dom.window.document.activeElement, peerButton);
+			assert.equal(fixture.fake.turnStartRequests.length, 0);
+		} finally { resetNlsResolver(); }
+	});
+}
+
 test('IDE auxiliary opening closes a late window when its owning chat is disposed', async () => {
 	const f = await createNavigationInputPane();
 	using resources = f.resources;

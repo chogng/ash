@@ -262,8 +262,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			this._register(AccessibleViewRegistry.register({
 				type, priority: 100, name: `chatHistory-${type}-${historyAccessibilityId}`,
-				getProvider: () => {
-					const focused = ownerDocument.activeElement as HTMLElement | null;
+				getProvider: (_accessor, target) => {
+					// Retained chats move between documents when opened in an auxiliary window.
+					const focused = (target ?? this.element.ownerDocument.activeElement) as HTMLElement | null;
 					const pagination = !!focused && this.olderHistoryElement.contains(focused);
 					if (!focused || !pagination && !this.historyStatusElement.contains(focused)) return undefined;
 					const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => pagination
