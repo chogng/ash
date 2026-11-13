@@ -314,8 +314,9 @@ services.get(IKeybindingService);
 
 const dictationSession = resources.add(services.createInstance(DictationInput, editor, preview, () => true, async () => { }, 'chat'));
 const contextViews = services.get(IContextViewService);
-services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
-const secondInput = resources.add(services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {
+const secondInputServices = resources.add(services.createChild());
+secondInputServices.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
+const secondInput = resources.add(secondInputServices.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {
 	create: (options: ChatInputEditorOptions) => services.createInstance(ChatInputEditor, options),
 }, [], { modePicker: 'visible', modelPickerPosition: 'leading' }));
 secondInput.element.id = 'second-input';
