@@ -197,6 +197,8 @@ export interface ChatInputPartOptions {
 	readonly renderLeadingFooter?: (footer: HTMLElement) => IDisposable;
 	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
 	readonly layout?: 'compact';
+	/** Keep the adaptive composer's controls below the editor, including short drafts. */
+	readonly alwaysExpanded?: IObservable<boolean>;
 	/** Places captured images in the attachment row, outside the editable message text. */
 	readonly stageImages?: boolean;
 	readonly inputLabel?: string;
@@ -504,6 +506,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			},
 			modelPickerPosition: options.modelPickerPosition,
 			layout: options.layout,
+			alwaysExpanded: options.alwaysExpanded,
 			actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
 		}));
 		this.inputContainer = surface.form;

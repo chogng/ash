@@ -1734,6 +1734,68 @@ focusTest(
 	},
 );
 
+test('Chat input layout switches live in Settings and survives reopening', { tag: ['@electron-ui', '@browser-ui'] }, async ({ application, target, workbench }, testInfo) => {
+	let page = await workbench.openAgentsWindow(target.kind);
+	await openSessionsComposer(page, 'Collab');
+	const cardSelector = '.ash-native-chat:visible .ash-chat-input-container';
+	let card = page.locator(cardSelector);
+	await expect(card).toHaveClass(/ash-chat-input-adaptive/u);
+	await expect(card).not.toHaveClass(/\bexpanded\b/u);
+	let editor = new Editor(card);
+	await editor.waitForEditorFocus();
+	await editor.waitForTypeInEditor('Keep this draft');
+	const compactHeight = (await card.boundingBox())!.height;
+
+	const openLayoutSettings = async (): Promise<Locator> => {
+		const navigation = page.locator('.ash-sessions-activity-bottom');
+		await new Workbench(page).menus.select(application,
+			() => navigation.getByRole('button', { name: 'Accounts', exact: true }).click(), ['Settings']);
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+		await settings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Appearance', exact: true }).click();
+		return settings;
+	};
+	let settings = await openLayoutSettings();
+	const layoutSelector = '[data-configuration-key="sessions.chat.inputLayout"]';
+	let picker = settings.locator(layoutSelector).getByRole('combobox');
+	await expect(picker).toHaveText('Single line');
+	// Both preferences use the same Settings control and type scale.
+	const reference = settings.locator('[data-configuration-key="sessions.backgroundColor"]').getByRole('combobox');
+	expect(await picker.evaluate(element => getComputedStyle(element).fontSize)).toBe(await reference.evaluate(element => getComputedStyle(element).fontSize));
+	await picker.focus();
+	await picker.press('Enter');
+	await page.getByRole('option', { name: 'Stacked', exact: true }).click();
+	await expect(card).toHaveClass(/\bexpanded\b/u);
+	await testInfo.attach('chat-input-layout-settings', { body: await settings.screenshot(), contentType: 'image/png' });
+	await page.keyboard.press('Escape');
+	await editor.waitForEditorContents(text => text === 'Keep this draft');
+	expect((await card.boundingBox())!.height).toBeGreaterThan(compactHeight);
+	await testInfo.attach('chat-input-stacked', { body: await card.screenshot(), contentType: 'image/png' });
+
+	page = await workbench.reopenAgentsWindow(application, page);
+	await openSessionsComposer(page, 'Collab');
+	card = page.locator(cardSelector);
+	await expect(card).toHaveClass(/\bexpanded\b/u);
+	settings = await openLayoutSettings();
+	picker = settings.locator(layoutSelector).getByRole('combobox');
+	await expect(picker).toHaveText('Stacked');
+	await picker.click();
+	await page.getByRole('option', { name: 'Single line', exact: true }).click();
+	await page.keyboard.press('Escape');
+	await expect(card).not.toHaveClass(/\bexpanded\b/u);
+	editor = new Editor(card);
+	await editor.waitForEditorFocus();
+	await editor.input.press('ControlOrMeta+a');
+	await page.keyboard.insertText('Short draft');
+	await expect(card).not.toHaveClass(/\bexpanded\b/u);
+	await testInfo.attach('chat-input-single-line', { body: await card.screenshot(), contentType: 'image/png' });
+	await page.keyboard.insertText(' with more detail'.repeat(80));
+	await expect(card).toHaveClass(/\bexpanded\b/u);
+	await editor.input.press('ControlOrMeta+a');
+	await page.keyboard.insertText('Short again');
+	await expect(card).not.toHaveClass(/\bexpanded\b/u);
+	await expect(editor.input).toBeFocused();
+});
+
 test('Sessions empty chat centers a growing input card and keeps the draft across themes and navigation', async ({
 	application,
 	target,
@@ -1752,10 +1814,8 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	// Windows display scaling can serialize a one-pixel border as a fractional CSS width.
 	expect(await card.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderTopWidth)))).toBe(1);
 	await expect(chat.locator(':is(.ash-chat-textarea-input,.ash-native-chat-textarea-input)')).toHaveCount(0);
-	await expect(chat.locator(':is(.ash-chat-input-editor,.ash-native-chat-input-editor):visible')).toHaveCSS(
-		'height',
-		'32px',
-	);
+	await expect(card).not.toHaveClass(/\bexpanded\b/u);
+	await expect(editor.lines).toHaveCount(1);
 	const bounds = await chat.boundingBox();
 	const cardBounds = await card.boundingBox();
 	expect(Math.abs(cardBounds!.x + cardBounds!.width / 2 - bounds!.x - bounds!.width / 2)).toBeLessThanOrEqual(1);

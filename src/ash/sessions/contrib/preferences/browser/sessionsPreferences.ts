@@ -631,6 +631,7 @@ export class SessionsPreferences extends Disposable {
 				title: localize('sessions.settings.messageInputFontSize', 'User message font size'),
 				description: localize('sessions.settings.messageInputFontSize.description', 'Set the font size in pixels for the message input, sent user messages, and inline editing. The IDE shares this user setting for its message input.'),
 			},
+			defaults.get(SessionsConfiguration.chatInputLayout),
 			defaults.get(ChatConfiguration.AutoFollowReplies),
 			defaults.get(ChatConfiguration.ShowAgentReplyTimestamps),
 			...[SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP].map(id => defaults.get(id)),
