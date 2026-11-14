@@ -199,8 +199,14 @@ impl SqliteCodebaseIndexStore {
     }
 
     fn source(&self, relative_path: &Path) -> SourceResult<Option<StoredSource>> {
+        // Scans only admit UTF-8 paths. A lossy key could identify a different file.
+        if relative_path.to_str().is_none() {
+            return Ok(None);
+        }
         let connection = self.connection.lock().expect("codebase store poisoned");
-        let path = storage_path(relative_path);
+        // Path equality ignores redundant separators; preserve that contract for SQL keys.
+        let normalized: PathBuf = relative_path.components().collect();
+        let path = storage_path(&normalized);
         connection
             .query_row(
                 "SELECT source_revision, source_bytes FROM codebase_files WHERE path = ?1",
@@ -494,44 +500,46 @@ fn apply_updates(transaction: &Transaction<'_>, updates: Vec<FileUpdate>) -> rus
 
 fn insert_file(transaction: &Transaction<'_>, file: &PreparedFile) -> rusqlite::Result<()> {
     let path = storage_path(&file.relative_path);
-    transaction.execute(
+    let mut file_insert = transaction.prepare_cached(
         "INSERT INTO codebase_files(
              path, source_revision, language, source_bytes, chunk_count, chunk_limit_hit
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![
-            path,
-            file.source_revision.as_str(),
-            file.language.as_str(),
-            to_i64(file.source_bytes),
-            to_i64(file.chunks.len()),
-            flag_value(file.chunk_limit_hit),
-        ],
     )?;
-    for (ordinal, chunk) in file.chunks.iter().enumerate() {
-        transaction.execute(
-            "INSERT INTO codebase_chunks(
+    file_insert.execute(params![
+        path,
+        file.source_revision.as_str(),
+        file.language.as_str(),
+        to_i64(file.source_bytes),
+        to_i64(file.chunks.len()),
+        flag_value(file.chunk_limit_hit),
+    ])?;
+    // A projection contains many rows with the same statement shape. Retain one prepared
+    // statement per shape across both chunk iterations and successive source files.
+    let mut chunk_insert = transaction.prepare_cached(
+        "INSERT INTO codebase_chunks(
                  path, ordinal, source_revision, chunk_key, content_hash, language,
                  start_byte, end_byte, start_line, end_line_exclusive, content
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            params![
-                path,
-                to_i64(ordinal),
-                file.source_revision.as_str(),
-                chunk.key.as_str(),
-                chunk.content_hash.as_str(),
-                file.language.as_str(),
-                to_i64(chunk.span.start_byte),
-                to_i64(chunk.span.end_byte),
-                to_i64(chunk.span.start_line),
-                to_i64(chunk.span.end_line_exclusive),
-                chunk.content,
-            ],
-        )?;
+    )?;
+    let mut fts_insert = transaction.prepare_cached(
+        "INSERT INTO codebase_chunks_fts(path, content, chunk_rowid) VALUES (?1, ?2, ?3)",
+    )?;
+    for (ordinal, chunk) in file.chunks.iter().enumerate() {
+        chunk_insert.execute(params![
+            path,
+            to_i64(ordinal),
+            file.source_revision.as_str(),
+            chunk.key.as_str(),
+            chunk.content_hash.as_str(),
+            file.language.as_str(),
+            to_i64(chunk.span.start_byte),
+            to_i64(chunk.span.end_byte),
+            to_i64(chunk.span.start_line),
+            to_i64(chunk.span.end_line_exclusive),
+            chunk.content,
+        ])?;
         let rowid = transaction.last_insert_rowid();
-        transaction.execute(
-            "INSERT INTO codebase_chunks_fts(path, content, chunk_rowid) VALUES (?1, ?2, ?3)",
-            params![path, chunk.content, rowid],
-        )?;
+        fts_insert.execute(params![path, chunk.content, rowid])?;
     }
     Ok(())
 }

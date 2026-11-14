@@ -341,16 +341,13 @@ impl Codebase {
         document: CodebaseOverlayDocument,
     ) -> Result<CodebaseOverlaySnapshot, CodebaseError> {
         validate_overlay_path(&document.relative_path)?;
-        let persistent = self
-            .manifest()?
-            .sources
-            .into_iter()
-            .find(|source| source.relative_path == document.relative_path);
+        // Overlay identity needs only this file's revision, not every source and chunk.
+        let persistent = self.store.source(&document.relative_path)?;
         self.overlay.synchronize(
             &self.root_id,
             &self.limits,
             document,
-            persistent.as_ref().map(|source| &source.source_revision),
+            persistent.as_ref().map(|source| &source.revision),
         )
     }
 
