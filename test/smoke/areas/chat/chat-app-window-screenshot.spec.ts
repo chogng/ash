@@ -35,14 +35,13 @@ test('app window screenshot captures a separate synthetic application and preser
 			await expect(picker).toBeVisible();
 			await picker.fill('Ash app window capture fixture');
 			await picker.press('Enter');
-			await expect.poll(() => desktop.windows().filter(window => window.url().includes('/imageView/imageView.html')).length).toBe(1);
-			const overlay = desktop.windows().find(window => window.url().includes('/imageView/imageView.html'))!;
+			const overlay = page;
 			await expect(overlay.getByRole('dialog', { name: 'Screen Capture', exact: true })).toBeVisible();
 			return overlay;
 		};
 		let overlay = await pickWindow();
 		await overlay.keyboard.press('Escape').catch(error => { if (!overlay.isClosed()) throw error; });
-		await expect.poll(() => desktop.windows().filter(window => window.url().includes('/imageView/imageView.html')).length).toBe(0);
+		await expect.poll(() => desktop.windows().filter(window => window.url().includes('/screenshot/screenshot.html')).length).toBe(0);
 		await expect(input).toBeFocused();
 		await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Keep the app screenshot draft');
 		await expect(page.getByRole('button', { name: 'Preview Screenshot', exact: true })).toHaveCount(0);
@@ -50,7 +49,7 @@ test('app window screenshot captures a separate synthetic application and preser
 		await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
 		await expect(overlay.getByRole('button', { name: 'Retake', exact: true })).toHaveCount(0);
 		await expect(overlay.getByRole('button', { name: 'Reset annotations', exact: true })).toBeVisible();
-		const pixels = await overlay.locator('canvas').evaluate(element => {
+		const pixels = await overlay.locator('.ash-screenshot-overlay canvas').evaluate(element => {
 			const canvas = element as HTMLCanvasElement;
 			return { width: canvas.width, height: canvas.height, pixel: [...canvas.getContext('2d')!.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data] };
 		});
@@ -60,7 +59,7 @@ test('app window screenshot captures a separate synthetic application and preser
 		expect(pixels.pixel[3]).toBe(255);
 		await testInfo.attach('synthetic app screenshot editor', { body: await overlay.screenshot(), contentType: 'image/png' });
 		await overlay.getByRole('button', { name: 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
-		await expect.poll(() => desktop.windows().filter(window => window.url().includes('/imageView/imageView.html')).length).toBe(0);
+		await expect.poll(() => desktop.windows().filter(window => window.url().includes('/screenshot/screenshot.html')).length).toBe(0);
 		await expect(input).toBeFocused();
 		await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Keep the app screenshot draft');
 		await expect(page.getByRole('button', { name: 'Preview Screenshot', exact: true })).toBeVisible();
@@ -85,7 +84,7 @@ test('app window screenshot permission and capture IPC reject unexpected window 
 	for (const window of result.windows.windows ?? []) expect(ownIds).not.toContain(window.sourceId);
 });
 
-test('frozen app pixels cross the native editor without desktop capture permission', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }) => {
+test('frozen pixels pin without acquiring desktop capture permission', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }) => {
 	if (!('browserWindow' in application)) throw new Error('Expected Electron');
 	const desktop = application;
 	const probe = await desktop.evaluateHandle(({ desktopCapturer, systemPreferences }) => {
@@ -103,34 +102,19 @@ test('frozen app pixels cross the native editor without desktop capture permissi
 			const context = canvas.getContext('2d')!; context.fillStyle = '#2563eb'; context.fillRect(0, 0, canvas.width, canvas.height);
 			const blob = await new Promise<Blob>(resolve => canvas.toBlob(value => resolve(value!), 'image/png'));
 			const image = new Uint8Array(await blob.arrayBuffer());
-			const html = `<body><canvas></canvas><button>Attach frozen image</button><script>
-				let image;
-				addEventListener('message', async event => {
-					if (event.source !== parent || event.data.type !== 'initialize') return;
-					image = event.data.image;
-					const bitmap = await createImageBitmap(new Blob([image], { type: 'image/png' }));
-					const canvas = document.querySelector('canvas'); canvas.width = bitmap.width; canvas.height = bitmap.height;
-					canvas.getContext('2d').drawImage(bitmap, 0, 0); bitmap.close();
-					parent.postMessage({ type: 'ready' }, '*');
-				});
-				document.querySelector('button').onclick = () => parent.postMessage({ type: 'complete', result: { kind: 'attach', image } }, '*');
-				parent.postMessage({ type: 'initialize' }, '*');
-			</script>`;
-			(globalThis as unknown as { frozenAppResult: Promise<unknown>; }).frozenAppResult = host.ipcRenderer.invoke('ash:image-view:open', {
-				id: crypto.randomUUID(), title: 'Synthetic frozen app image', source: 'image', image, html, input: {},
-			});
+			await host.ipcRenderer.invoke('ash:screenshot:pin', { image, input: { colorScheme: 'dark' } });
 		});
-		await expect.poll(() => desktop.windows().filter(window => window.url().includes('/imageView/imageView.html')).length).toBe(1);
-		const overlay = desktop.windows().find(window => window.url().includes('/imageView/imageView.html'))!;
-		const frame = overlay.frameLocator('iframe');
-		await expect(frame.getByRole('button', { name: 'Attach frozen image' })).toBeVisible();
-		await expect.poll(() => frame.locator('canvas').evaluate(element => {
-			const canvas = element as HTMLCanvasElement;
+		await expect.poll(() => desktop.windows().filter(window => window.url().includes('/screenshot/screenshot.html')).length).toBe(1);
+		const overlay = desktop.windows().find(window => window.url().includes('/screenshot/screenshot.html'))!;
+		await expect(overlay.getByRole('main', { name: 'Pinned screenshot' })).toBeVisible();
+		await expect.poll(() => overlay.locator('img').evaluate(element => {
+			const image = element as HTMLImageElement;
+			const canvas = image.ownerDocument.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+			canvas.getContext('2d')!.drawImage(image, 0, 0);
 			return [canvas.width, canvas.height, ...canvas.getContext('2d')!.getImageData(80, 48, 1, 1).data];
 		})).toEqual([160, 96, 37, 99, 235, 255]);
-		await frame.getByRole('button', { name: 'Attach frozen image' }).click().catch(error => { if (!overlay.isClosed()) throw error; });
-		const signature = await workbench.page.evaluate(async () => [...((await (globalThis as unknown as { frozenAppResult: Promise<Uint8Array>; }).frozenAppResult)).slice(0, 8)]);
-		expect(signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+		await overlay.getByRole('button', { name: 'Close pinned screenshot', exact: true }).click().catch(error => { if (!overlay.isClosed()) { throw error; } });
+		await expect.poll(() => overlay.isClosed()).toBe(true);
 		expect(await probe.evaluate(state => ({ captures: state.captures, permissionChecks: state.permissionChecks }))).toEqual({ captures: 0, permissionChecks: 0 });
 	} finally {
 		await probe.evaluate(state => state.restore());
@@ -193,7 +177,7 @@ test('app screenshot setup rechecks permissions, preserves the draft, and does n
 			await expect(dialog).toBeHidden();
 			await expect(input).toBeFocused();
 			await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Keep the permission setup draft');
-			expect(desktop.windows().filter(window => window.url().includes('/imageView/imageView.html'))).toHaveLength(0);
+			expect(desktop.windows().filter(window => window.url().includes('/screenshot/screenshot.html'))).toHaveLength(0);
 			await probe.evaluate(state => { state.permission = 'restricted'; });
 			await workbench.quickaccess.runCommand('workbench.action.chat.attachAppWindowScreenshot');
 			await expect(dialog).toContainText('Screen Recording: Restricted');

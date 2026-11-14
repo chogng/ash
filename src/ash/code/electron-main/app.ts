@@ -12,8 +12,8 @@ import { parseDefaultLogLevels } from '../../workbench/services/log/common/defau
 import { LogLevelToString } from '../../platform/log/common/log.js';
 import { LOCAL_APP_SERVER_DIAGNOSTICS_CHANNEL, LOCAL_APP_SERVER_RESTART_CHANNEL, type AppServerConnectionTarget, type LocalAppServerDiagnosticOperation } from '../../platform/agentHost/common/appServerTransport.js';
 import { RemoteAgentHostConnectionPool } from '../../platform/remote/electron-main/remoteConnectionIpc.js';
-import type { ImageViewMainService } from '../../platform/imageView/electron-main/imageViewMainService.js';
-import { IMAGE_VIEW_ATTACH_CHANNEL, IMAGE_VIEW_CANCEL_CHANNEL, IMAGE_VIEW_OPEN_CHANNEL, validateImageViewId, validateImageViewRequest, type ImageViewRequest } from '../../platform/imageView/common/imageView.js';
+import type { ScreenshotMainService } from '../../platform/screenshot/electron-main/screenshotMainService.js';
+import { SCREENSHOT_ATTACH_CHANNEL, SCREENSHOT_CANCEL_CHANNEL, SCREENSHOT_OPEN_CHANNEL, SCREENSHOT_PIN_CHANNEL, validateScreenshotPinRequest, type ScreenshotPinRequest, validateScreenshotId, validateScreenshotRequest, type ScreenshotWindowRequest } from '../../platform/screenshot/common/screenshot.js';
 import { AshWorkbenchName } from '../common/application.js';
 import '../../platform/update/common/update.config.contribution.js';
 import { SystemPolicyService } from '../../platform/policy/node/systemPolicyService.js';
@@ -1863,7 +1863,7 @@ export class AshApplication extends Disposable {
 			...(localSupervisor?.routes(window.webContents, () => ({ workspaceId: 'local-profile', workspaceRoot: this.profileRoot })) ?? []),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
 			...rendererSystemHostRoutes(window, this.auxiliaryWindowsMainService, this.opener, request => this.directoryPermissionPrompt(request)),
-			...this.windowImageRoutes(window, windowDisposables),
+			...this.windowScreenshotRoutes(window, windowDisposables),
 			userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 			...remoteWindowContext.ipcRoutes,
 			windowOperationIpcRoute(this.windowsMainService, window),
@@ -1941,43 +1941,54 @@ export class AshApplication extends Disposable {
 			});
 	}
 
-	private windowImageRoutes(window: BrowserWindow, lifetime: DisposableStore): readonly IpcRoute<unknown, unknown>[] {
-		let imageView: Promise<ImageViewMainService | undefined> | undefined;
-		const loadImageView = () => {
-			if (imageView) return imageView;
+	private windowScreenshotRoutes(window: BrowserWindow, lifetime: DisposableStore): readonly IpcRoute<unknown, unknown>[] {
+		let screenshotWindow: Promise<ScreenshotMainService | undefined> | undefined;
+		const loadScreenshotWindow = () => {
+			if (screenshotWindow) return screenshotWindow;
 			const contents = window.webContents;
 			// Cover navigation during the import, before the service can own cancellation.
-			const invalidate = () => { imageView = undefined; };
+			const invalidate = () => { screenshotWindow = undefined; };
 			const navigating = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean) => {
 				if (mainFrame && !inPlace) invalidate();
 			};
 			contents.on('did-start-navigation', navigating);
 			contents.on('render-process-gone', invalidate);
-			const loading = import('../../platform/imageView/electron-main/imageViewMainService.js').then(({ ImageViewMainService }) => {
-				if (imageView !== loading || lifetime.isDisposed || window.isDestroyed() || contents.isDestroyed()) return undefined;
-				return lifetime.add(new ImageViewMainService(window, {
-					entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
+			const loading = import('../../platform/screenshot/electron-main/screenshotMainService.js').then(({ ScreenshotMainService }) => {
+				if (screenshotWindow !== loading || lifetime.isDisposed || window.isDestroyed() || contents.isDestroyed()) return undefined;
+				// Transfer interruption ownership before the service installs its persistent listener.
+				contents.off('did-start-navigation', navigating);
+				contents.off('render-process-gone', invalidate);
+				return lifetime.add(new ScreenshotMainService(window, {
+					entry: this.resolveRendererEntry('screenshot'), webPreferences: this.createSandboxWebPreferences(),
 					router: this.trustedIpcRouter, localization: () => this.activeLanguagePack,
 				}));
 			}).catch(error => {
-				if (imageView === loading) imageView = undefined;
+				if (screenshotWindow === loading) screenshotWindow = undefined;
 				throw error;
 			}).finally(() => {
 				contents.off('did-start-navigation', navigating);
 				contents.off('render-process-gone', invalidate);
 			});
-			return imageView = loading;
+			return screenshotWindow = loading;
 		};
 		return [
 			{
-				channel: IMAGE_VIEW_OPEN_CHANNEL,
-				validate: validateImageViewRequest,
-				invoke: async value => (await loadImageView())?.show(value as ImageViewRequest),
+				channel: SCREENSHOT_PIN_CHANNEL,
+				validate: validateScreenshotPinRequest,
+				invoke: async value => {
+					const request = value as ScreenshotPinRequest;
+					await (await loadScreenshotWindow())?.pin(request.image, request.input);
+				},
 			},
 			{
-				channel: IMAGE_VIEW_CANCEL_CHANNEL,
-				validate: validateImageViewId,
-				invoke: async value => (await imageView)?.cancel(value as string),
+				channel: SCREENSHOT_OPEN_CHANNEL,
+				validate: validateScreenshotRequest,
+				invoke: async value => (await loadScreenshotWindow())?.show(value as ScreenshotWindowRequest),
+			},
+			{
+				channel: SCREENSHOT_CANCEL_CHANNEL,
+				validate: validateScreenshotId,
+				invoke: async value => (await screenshotWindow)?.cancel(value as string),
 			},
 			...this.globalKeybindings.createWindowRoutes(window, lifetime, (id, commandId) => {
 				if (id !== ScreenshotShortcutId || commandId !== ScreenshotCommandId) return false;
@@ -1985,12 +1996,12 @@ export class AshApplication extends Disposable {
 				const colorScheme = nativeTheme.shouldUseHighContrastColors
 					? (nativeTheme.shouldUseDarkColors ? 'hcDark' : 'hcLight') : (nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
 				const hints = this.persistentServices?.configuration.getValue<boolean>('accessibility.verbosity.chatScreenshot') !== false;
-				void loadImageView().then(service => service?.captureDesktop(colorScheme, hints)).then(image => {
+				void loadScreenshotWindow().then(service => service?.captureDesktop(colorScheme, hints)).then(image => {
 					if (!image || window.isDestroyed() || window.webContents.isDestroyed()) return;
 					// Only the explicit attachment action returns the user to the owning window.
 					if (window.isMinimized()) window.restore();
 					window.show();
-					window.webContents.send(IMAGE_VIEW_ATTACH_CHANNEL, image);
+					window.webContents.send(SCREENSHOT_ATTACH_CHANNEL, image);
 				}).catch(error => {
 					if (String(error).includes(SCREEN_CAPTURE_PERMISSION_REQUIRED) && !window.isDestroyed() && !window.webContents.isDestroyed()) {
 						window.webContents.send(GLOBAL_KEYBINDING_TRIGGER_CHANNEL, { id: ScreenshotShortcutId });
@@ -2343,7 +2354,7 @@ export class AshApplication extends Disposable {
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
 						...rendererSystemHostRoutes(window, this.auxiliaryWindowsMainService, this.opener),
-						...this.windowImageRoutes(window, windowDisposables),
+						...this.windowScreenshotRoutes(window, windowDisposables),
 						userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 						...remoteWindowContext.ipcRoutes,
 						windowOperationIpcRoute(this.windowsMainService, window),
@@ -2515,8 +2526,8 @@ export class AshApplication extends Disposable {
 		return true;
 	}
 
-	private resolveRendererEntry(kind: 'workbench' | 'sessions' | 'remoteRuntimeInstall' | 'imageView'): RendererEntry {
-		const entry = kind === 'imageView' ? 'imageView' : kind === 'workbench'
+	private resolveRendererEntry(kind: 'workbench' | 'sessions' | 'remoteRuntimeInstall' | 'screenshot'): RendererEntry {
+		const entry = kind === 'screenshot' ? 'screenshot' : kind === 'workbench'
 			? 'workbench'
 			: kind === 'sessions'
 				? 'sessions'

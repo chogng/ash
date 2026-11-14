@@ -1,3 +1,4 @@
+import { IImageResizeService } from '../../../../../platform/imageResize/common/imageResizeService.js';
 import { Event } from '../../../../../base/common/event.js';
 import { AppWindowScreenshotHint } from './chatAppWindowScreenshotHint.js';
 import { getAppWindowScreenshotSetupOptions } from './chatAppWindowScreenshotSetup.js';
@@ -164,6 +165,7 @@ class AppWindowScreenshotContextValuePick implements IChatContextValueItem {
 		@INativeHostService private readonly native: INativeHostApi,
 		@IScreenshotToolService private readonly imageEditors: IScreenshotToolService,
 		@IScreenCaptureSetupService private readonly setup: IScreenCaptureSetupService,
+		@IImageResizeService private readonly imageResize: IImageResizeService,
 	) { }
 	public isEnabled(widget?: IChatWidget): boolean { return widget?.input.supportsImages() ?? true; }
 	public async asAttachment(widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
@@ -174,7 +176,7 @@ class AppWindowScreenshotContextValuePick implements IChatContextValueItem {
 		if (!image || signal.aborted) {
 			return undefined;
 		}
-		const attachment = await convertBufferToScreenshotVariable(image);
+		const attachment = await convertBufferToScreenshotVariable(image, this.imageResize);
 		return signal.aborted ? undefined : attachment;
 	}
 }

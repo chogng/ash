@@ -20,7 +20,7 @@ import { pickFiles } from '../../../../../base/browser/fileAccess.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { basename, extUri } from '../../../../../base/common/resources.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { FileKind } from '../../../../../platform/files/common/files.js';
@@ -80,10 +80,8 @@ export function registerAddSelectionToChatAction(): void {
 }
 
 /** Registers editor context commands for the lifetime of their Workbench host. */
-export function registerChatContextActions(imageEditors: IImageEditorService, commands: ICommandService): DisposableStore {
-	const store = new DisposableStore();
-	store.add(imageEditors.registerAttachmentHandler(capture => commands.executeCommand(ScreenshotCommandId, capture)));
-	store.add(registerAction2(class AttachSelectionToChatAction extends EditorAction2 {
+export function registerChatContextActions(): IDisposable {
+	return registerAction2(class AttachSelectionToChatAction extends EditorAction2 {
 		constructor() {
 			super({
 				id: 'workbench.action.chat.attachSelection',
@@ -116,8 +114,13 @@ export function registerChatContextActions(imageEditors: IImageEditorService, co
 			const target = await accessor.get(IViewsService).openView<IView & IChatContextTarget>(CHAT_VIEW_ID);
 			target?.addContext({ id: `code-selection:${createUuid()}`, kind: 'codeSelection', name, resource, resolve: async () => ({ name, content }) });
 		}
-	}));
+	});
+}
 
+/** Shared by IDE and Agent windows, including the late-bound attachment target. */
+export function registerChatScreenshotActions(imageEditors: IImageEditorService, commands: ICommandService): DisposableStore {
+	const store = new DisposableStore();
+	store.add(imageEditors.registerAttachmentHandler(capture => commands.executeCommand(ScreenshotCommandId, capture)));
 	store.add(registerAction2(class CaptureScreenshotAction extends Action2 {
 		constructor() {
 			super({
@@ -137,6 +140,13 @@ export function registerChatContextActions(imageEditors: IImageEditorService, co
 			if (capture !== undefined && typeof capture !== 'function') throw new TypeError('Expected a host-owned image capture');
 			if (!capture) {
 				await accessor.get(IScreenshotToolService).show({}, new AbortController().signal);
+				return;
+			}
+			// Agent welcome composers are registered widgets without an active Chat view pane.
+			const widgets = accessor.get(IChatWidgetService);
+			const widget = widgets.lastFocusedWidget ?? widgets.getAllWidgets().find(candidate => candidate.visible);
+			if (widget) {
+				await widget.input.captureScreenshot(capture);
 				return;
 			}
 			const target = await accessor.get(IViewsService).openView<IView & IChatContextTarget>(CHAT_VIEW_ID);

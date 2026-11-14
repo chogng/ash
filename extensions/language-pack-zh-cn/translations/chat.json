@@ -468,7 +468,7 @@
     "screenshot.builtin.code.windowControls": "在代码图片中显示装饰性窗口按钮。",
     "screenshot.builtin.code.windowTitle": "在代码图片中显示文件名。",
     "screenshot.builtin.code.transparent": "代码图片使用透明的外围背景。",
-    "screenshot.builtin.capture.help": "屏幕截图\n拖动框选区域。在选区内拖动可移动选区，拖动八个控制点可调整大小。标注后先选择“选择”，再调整区域。方向键移动区域；Shift+方向键调整大小；按住 Ctrl 或 Command 将步长增加到 10 像素。“整个屏幕”选择完整图片。“坐标”提供以图片像素为单位的 X、Y、宽度和高度输入框。矩形、箭头、画笔、文字和马赛克可用于标注。绘制前可选择颜色和线宽。文字工具会在点击位置打开输入框，Enter 确认，Escape 放弃该文字。“撤销”移除最后一个标注。“重新截图”重新采集屏幕。冻结的应用窗口图片和代码图片提供“重置标注”，移除所有标注并保留图片和选区。“复制”复制最终图片，“保存”让你选择文件位置。从聊天发起时，“加入聊天”将图片加入原草稿；独立截图时则加入当前聊天。选区获得焦点时，Enter 复制独立的屏幕截图和代码图片；从聊天发起时，Enter 将图片加入聊天。Escape 取消截图。Tab 和 Shift+Tab 在控件之间移动。Alt+F1 打开帮助；Alt+F2 朗读选区坐标和标注数量。不描述图片内容。\n在编辑器中选择代码，运行“截图：生成代码图片”，即可将选区生成为图片，无需采集屏幕。代码图片的无障碍视图包含选中的文本。\n全桌面截图是 Ash 的增强功能。若 macOS 需要屏幕录制权限，会先打开截图设置。可选择“在设置中允许”和“重新检查”，或按需重启 Ash。授权后重新发起截图。代码图片和已有图片不需要屏幕录制权限。",
+    "screenshot.builtin.capture.help": "屏幕截图\n拖动框选区域。在选区内拖动可移动选区，拖动八个控制点可调整大小。标注后先选择“选择”，再调整区域。方向键移动区域；Shift+方向键调整大小；按住 Ctrl 或 Command 将步长增加到 10 像素。“整个屏幕”选择完整图片。“坐标”提供以图片像素为单位的 X、Y、宽度和高度输入框。矩形、箭头、画笔、文字和马赛克可用于标注。绘制前可选择颜色和线宽。文字工具会在点击位置打开输入框，Enter 确认，Escape 放弃该文字。“撤销”移除最后一个标注。“重新截图”重新采集屏幕。冻结的应用窗口图片和代码图片提供“重置标注”，移除所有标注并保留图片和选区。桌面端的“贴图”将带标注的选区放入独立置顶窗口。移动或缩放窗口不改变导出图片。关闭草稿或重新截图不会关闭贴图。“复制”复制最终图片，“保存”让你选择文件位置。从聊天发起时，“加入聊天”将图片加入原草稿；独立截图时则加入当前聊天。选区获得焦点时，Enter 复制独立的屏幕截图和代码图片；从聊天发起时，Enter 将图片加入聊天。Escape 取消截图。Tab 和 Shift+Tab 在控件之间移动。Alt+F1 打开帮助；Alt+F2 朗读选区坐标和标注数量。不描述图片内容。\n在编辑器中选择代码，运行“截图：生成代码图片”，即可将选区生成为图片，无需采集屏幕。代码图片的无障碍视图包含选中的文本。\n全桌面截图是 Ash 的增强功能。若 macOS 需要屏幕录制权限，会先打开截图设置。可选择“在设置中允许”和“重新检查”，或按需重启 Ash。授权后重新发起截图。代码图片和已有图片不需要屏幕录制权限。",
     "screenshot.builtin.code.padding.title": "图片留白",
     "screenshot.builtin.code.scale.title": "分辨率倍率",
     "screenshot.builtin.code.background.title": "背景颜色",
@@ -526,7 +526,15 @@
     "screenshot.setup.title": "设置桌面截图",
     "screenshot.setup.description": "Ash 仅在收到请求时截取桌面。屏幕录制权限允许跨应用框选区域。",
     "screenshot.setup.help": "使用 Tab 和 Shift+Tab 切换“在设置中允许”“重新检查”“重启 Ash”和“关闭”。从系统设置返回时会重新检查权限。Escape 关闭设置。授权后重新发起截图。",
-    "screenshot.setup.helpHint": "截图设置。无障碍帮助介绍权限控件。"
+    "screenshot.setup.helpHint": "截图设置。无障碍帮助介绍权限控件。",
+    "screenshot.pin": "贴图",
+    "screenshot.pinned.title": "截图贴图",
+    "screenshot.pinned.image": "截图贴图。不描述图片内容。",
+    "screenshot.pinned.help": "贴图保持置顶，直到关闭。拖动窗口标题栏可移动贴图，调整窗口大小可缩放预览。复制和保存使用包含标注的原始图片。Tab 和 Shift+Tab 在控件之间移动。Escape 关闭贴图。Alt+F1 打开帮助。Alt+F2 朗读图片尺寸。不描述图片内容。",
+    "screenshot.pinned.dimensions": "宽度 {0}，高度 {1} 像素。不描述图片内容。",
+    "screenshot.pinned.copied": "已复制图片。",
+    "screenshot.pinned.close": "关闭贴图",
+    "screenshot.pinned.hint": "截图贴图。按 Alt+F1 打开帮助。"
   },
   "ash.workbench": {
     "command.OpenCalls": "打开通话",

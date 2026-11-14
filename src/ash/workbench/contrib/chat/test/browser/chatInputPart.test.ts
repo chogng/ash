@@ -1,3 +1,4 @@
+import { ImageResizeService } from '../../../../../platform/imageResize/browser/imageResizeService.js';
 import { ChatUserImageAttachmentService, IChatUserImageAttachmentService } from '../../browser/attachments/chatUserImageAttachments.js';
 import { IChatSlashCommandService, ChatSlashCommandService } from '../../common/participants/chatSlashCommands.js';
 import { IVoiceInputModeService } from '../../browser/voiceInputMode/voiceInputMode.js';
@@ -165,6 +166,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 			{} as IFileSearchService,
 			{} as IWorkspaceContextService,
 			partServices.get(IChatContextService),
+			new ImageResizeService(),
 		));
 	}
 	if (!partServices.has(IHostService)) partServices.registerInstance(IHostService, new TestHostService());

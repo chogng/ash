@@ -10,7 +10,7 @@ import type { IKeybindingService } from '../../../../../platform/keybinding/comm
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { ILogService } from '../../../../../platform/log/common/log.js';
 import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL, type GlobalKeybindingResult } from '../../../../../platform/globalKeybindings/common/globalKeybindings.js';
-import { IMAGE_VIEW_ATTACH_CHANNEL } from '../../../../../platform/imageView/common/imageView.js';
+import { SCREENSHOT_ATTACH_CHANNEL } from '../../../../../platform/screenshot/common/screenshot.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import type { IScreenshotToolService } from '../../../screenshotTool/browser/screenshotTool.js';
 import type { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
@@ -41,8 +41,8 @@ suite('Chat screenshot shortcut policy', () => {
 						return response;
 					},
 					on: (channel: string, listener: (value: unknown) => void) => {
-						assert.ok([IMAGE_VIEW_ATTACH_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL].includes(channel));
-						const group = channel === IMAGE_VIEW_ATTACH_CHANNEL ? listeners : triggers;
+						assert.ok([SCREENSHOT_ATTACH_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL].includes(channel));
+						const group = channel === SCREENSHOT_ATTACH_CHANNEL ? listeners : triggers;
 						group.add(listener);
 						return { dispose: () => { group.delete(listener); } };
 					},

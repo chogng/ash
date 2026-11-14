@@ -1,3 +1,4 @@
+import { IImageResizeService } from '../../../../../../platform/imageResize/common/imageResizeService.js';
 import { IChatUserImageAttachmentService, getAddedImageIds } from '../../attachments/chatUserImageAttachments.js';
 import { ChatToolConfirmationCarouselPart } from '../chatContentParts/toolInvocationParts/chatToolConfirmationCarouselPart.js';
 import { ExtensionsInstallConfirmationWidgetSubPart } from '../chatContentParts/toolInvocationParts/chatExtensionsInstallToolSubPart.js';
@@ -413,6 +414,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IMenuService menuService: IMenuService,
 		@IChatAttachmentResolveService private readonly attachmentResolver: IChatAttachmentResolveService,
+		@IImageResizeService private readonly imageResize: IImageResizeService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IChatInputNoticeHubService private readonly noticeHub: IChatInputNoticeHubService,
 		@IChatInputNotificationService private readonly inputNotifications: IChatInputNotificationService,
@@ -1133,7 +1135,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (!capture && !this.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 			const attachments = await this.acquireContext(async signal => {
 				const image = await (capture ? capture(signal) : this.imageEditors.captureAndEdit(signal));
-				const selection = image && !signal.aborted ? await convertBufferToScreenshotVariable(image) : undefined;
+				const selection = image && !signal.aborted ? await convertBufferToScreenshotVariable(image, this.imageResize) : undefined;
 				if (selection && !this.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 				return selection ? [selection] : [];
 			}, lifecycle);

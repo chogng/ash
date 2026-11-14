@@ -1,3 +1,8 @@
+import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { IWebviewService } from '../../../src/ash/workbench/contrib/webview/browser/webview.js';
+import { WebviewService } from '../../../src/ash/workbench/contrib/webview/browser/webviewService.js';
+import { ImageResizeService } from '../../../src/ash/platform/imageResize/browser/imageResizeService.js';
+import { IImageResizeService } from '../../../src/ash/platform/imageResize/common/imageResizeService.js';
 import { IScreenshotToolService } from '../../../src/ash/workbench/contrib/screenshotTool/browser/screenshotTool.js';
 import { ScreenshotToolService } from '../../../src/ash/workbench/contrib/screenshotTool/browser/screenshotToolService.js';
 import { registerTestWorkbenchHostServices } from '../../../src/ash/workbench/test/common/workbenchHostTestServices.js';
@@ -126,7 +131,7 @@ import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import type { ITextModel } from '../../../src/ash/editor/common/model.js';
 import { Selection } from '../../../src/ash/editor/common/core/selection.js';
 import { Range } from '../../../src/ash/editor/common/core/range.js';
-import { registerChatContextActions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatContextActions.js';
+import { registerChatContextActions, registerChatScreenshotActions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatContextActions.js';
 import { CHAT_VIEW_ID } from '../../../src/ash/workbench/contrib/chat/common/chat.js';
 import type { ChatInputDelegate, ChatInputState } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -228,6 +233,8 @@ if (new URLSearchParams(location.search).has('gestureAncestor')) {
 	resources.add(addDisposableListener(main, EventType.Tap, event => { stopEvent(event); document.querySelector('output')!.textContent = 'Ancestor tap'; }));
 }
 const services = resources.add(new InstantiationService());
+services.registerInstance(IFileDialogService, { showSaveDialog: async () => undefined } as unknown as IFileDialogService);
+services.registerSingleton(IWebviewService, () => services.createInstance(WebviewService));
 services.registerInstance(IAppServerRemoteAgentService, {
 	connection: undefined, connectionState: undefined,
 	onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None,
@@ -278,6 +285,7 @@ services.registerInstance(IThemeService, theme);
 services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
 services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === AGENTS_VOICE_TOGGLE_MUTE_COMMAND_ID || id === 'workbench.action.chat.askInSideChat' || id === 'workbench.action.chat.submit' || id === 'workbench.action.chat.queueMessage' || id === 'workbench.action.chat.steerWithMessage' || id === 'git.getRepositoryContexts' || id === 'editor.action.openLink' || id === 'editor.action.showHover' || id === 'editor.action.selectAll' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
+services.registerInstance(IImageResizeService, services.createInstance(ImageResizeService));
 const contextKeys = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contextKeys);
 contextKeys.createKey('chatIsEnabled', true);
@@ -954,7 +962,8 @@ resources.add(services.createInstance(ChatReferenceAttachmentWidgetContribution)
 resources.add(languageFeatures.documentPasteEditProvider.register({ scheme: '*', hasAccessToAllModels: true }, services.createInstance(CopyTextProvider)));
 if (inlineCode || new URLSearchParams(location.search).has('screenshotFixture')) {
 	ChatContextKeys.enabled.bindTo(services.get(IContextKeyService)).set(true);
-	resources.add(registerChatContextActions(services.get(IImageEditorService), services.get(ICommandService)));
+	resources.add(registerChatContextActions());
+	resources.add(registerChatScreenshotActions(services.get(IImageEditorService), services.get(ICommandService)));
 }
 let inlineEditor: ChatInputEditor | undefined;
 const editorProvider = inlineCode ? { create: (options: Parameters<typeof ChatInputEditors.create>[0]) => inlineEditor = services.createInstance(ChatInputEditor, { ...options, hostCompletions: hostInputCompletions }) } : ChatInputEditors;

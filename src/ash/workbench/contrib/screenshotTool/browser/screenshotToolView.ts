@@ -1,5 +1,5 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
-import type { ImageViewCompletion as ImageEditorCompletion } from '../../../../platform/imageView/common/imageView.js';
+import type { ScreenshotToolCompletion as ImageEditorCompletion } from './screenshotTool.js';
 import type { CodeImageSnapshot } from '../../../services/imageEditor/common/imageEditorService.js';
 import type { readImageEditorTheme } from '../../../services/imageEditor/browser/imageEditorTheme.js';
 export interface ScreenshotToolInput {
@@ -7,6 +7,7 @@ export interface ScreenshotToolInput {
 	readonly code?: CodeImageSnapshot;
 	readonly defaultAction: 'copy' | 'attach';
 	readonly canRetake: boolean;
+	readonly canPin?: boolean;
 	readonly theme: ReturnType<typeof readImageEditorTheme>;
 	readonly colorScheme: string;
 	readonly state?: { readonly help: string; readonly accessibilityHints?: boolean; readonly code?: Parameters<typeof renderCodeImage>[2]; };
@@ -45,6 +46,7 @@ export async function mountScreenshotTool(document: Document, input: ScreenshotT
 	const editor = await ScreenshotAnnotationEditor.create(document, image, {
 		defaultAction: input.defaultAction,
 		canRetake: input.canRetake,
+		canPin: input.canPin,
 		accessibilityHints: state?.accessibilityHints !== false,
 		help: state?.help ?? '',
 		selectEntire: !!input.code,

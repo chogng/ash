@@ -1,66 +1,15 @@
-import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { addDisposableListener } from '../../../../base/browser/dom.js';
-import { createUuid } from '../../../../base/common/uuid.js';
-import { VSBuffer } from '../../../../base/common/buffer.js';
-import type { JsonValue } from '../../../../base/common/jsonValue.js';
-import { IMAGE_VIEW_OPEN_CHANNEL, IMAGE_VIEW_CANCEL_CHANNEL, validateImageViewImage, type ImageViewRequest } from '../../../../platform/imageView/common/imageView.js';
-import { invoke } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
+import { BrowserImageEditorService } from '../browser/browserImageEditorService.js';
+import { IImageEditorService } from '../common/imageEditorService.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { localize } from '../../../../nls.js';
-import { IImageEditorService, type ImageEditorOptions } from '../common/imageEditorService.js';
-import { ImageEditorService } from '../browser/imageEditorService.js';
-import { readImageEditorTheme } from '../browser/imageEditorTheme.js';
+import { invoke } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
+import { NATIVE_HOST_DESKTOP_SCREENSHOT_CHANNEL } from '../../../../platform/native/common/nativeHost.js';
+import { validatePngImage } from '../../../../platform/imageResize/common/imageData.js';
 
-/** Binds each provider interaction to its native presentation and cancellation lease. */
-export class NativeImageEditorService extends ImageEditorService {
-	private readonly desktopCaptureLifetime = this._register(new MutableDisposable());
-	public async capture(signal: AbortSignal, options?: ImageEditorOptions): Promise<VSBuffer | undefined> {
-		if (signal.aborted || this.isDisposed) return undefined;
-		// Own cancellation before provider resolution so a late older request cannot replace a newer one.
-		const controller = new AbortController();
-		const lifetime = toDisposable(() => controller.abort());
-		this.desktopCaptureLifetime.value = lifetime;
-		try {
-			const resolved = await this.resolveInput(options, AbortSignal.any([signal, controller.signal]));
-			signal = resolved.signal;
-			if (signal.aborted) return undefined;
-			const id = createUuid();
-			const root = document.querySelector('.ash-workbench');
-			const colorScheme = root?.getAttribute('data-color-scheme');
-			const request: ImageViewRequest = {
-				id, title: resolved.displayName, html: resolved.view.html,
-				...(resolved.view.renderer ? { renderer: resolved.view.renderer } : {}),
-				source: options?.image ? 'image' : options?.code ? 'content' : 'screen',
-				...(options?.image ? { image: options.image.buffer } : {}),
-				input: {
-					defaultAction: options?.defaultAction ?? 'attach',
-					...(options?.code ? { code: options.code } : {}),
-					...(resolved.view.state !== undefined ? { state: resolved.view.state } : {}),
-					theme: readImageEditorTheme(document),
-					colorScheme: colorScheme === 'light' || colorScheme === 'hcDark' || colorScheme === 'hcLight' ? colorScheme : 'dark',
-				} as unknown as Readonly<Record<string, JsonValue>>,
-			};
-			using cancellation = addDisposableListener(signal, 'abort', () => {
-				void invoke<void>(IMAGE_VIEW_CANCEL_CHANNEL, id).catch(() => { });
-			}, { once: true });
-			const result = await invoke<unknown>(IMAGE_VIEW_OPEN_CHANNEL, request);
-			if (signal.aborted || this.isDisposed || result === undefined) return undefined;
-			return VSBuffer.wrap(new Uint8Array(validateImageViewImage(result)));
-		} catch (error) {
-			const message = String(error);
-			if (message.includes('ScreenshotUnavailable'))
-				throw new Error(localize('screenshot.unavailable', 'Screen capture is unavailable. Try again.'));
-			if (message.includes('ScreenshotTooLarge'))
-				throw new Error(localize('chat.screenshot.tooLarge', 'The screenshot is too large to preview.'));
-			if (message.includes('ImageViewUnavailable'))
-				throw new Error(
-					localize('screenshot.overlayUnavailable', 'The screen capture window could not be opened.')
-				);
-			throw error;
-		} finally {
-			if (this.desktopCaptureLifetime.value === lifetime) this.desktopCaptureLifetime.clear();
-			lifetime.dispose();
-		}
+/** Extension HTML uses the shared Webview host; Native contributes only pixel acquisition. */
+export class NativeImageEditorService extends BrowserImageEditorService {
+	protected override async getImage(signal: AbortSignal): Promise<Uint8Array | undefined> {
+		const image = await invoke<unknown>(NATIVE_HOST_DESKTOP_SCREENSHOT_CHANNEL);
+		return image !== undefined && !signal.aborted ? validatePngImage(image) : undefined;
 	}
 }
 

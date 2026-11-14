@@ -1,3 +1,4 @@
+import { ImageResizeService } from '../../../src/ash/platform/imageResize/browser/imageResizeService.js';
 import { createTestGeneratedFilesService } from '../../../src/ash/sessions/test/common/testGeneratedFilesService.js';
 import './chatFixtureLocalization.js';
 import { projectMaterialFilesScheme } from '../../../src/ash/platform/projects/common/projectMaterialFiles.js';
@@ -355,6 +356,7 @@ services.registerInstance(IChatAttachmentResolveService, new ChatAttachmentResol
 	{} as ConstructorParameters<typeof ChatAttachmentResolveService>[2],
 	{} as ConstructorParameters<typeof ChatAttachmentResolveService>[3],
 	services.get(IChatContextService),
+	new ImageResizeService(),
 ));
 services.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(
 	menuService, services.get(IContextKeyService),

@@ -1,5 +1,9 @@
+import { IHostService } from '../../../../services/host/browser/host.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
 import assert from 'node:assert/strict';
-import { suite, test } from 'mocha';
+import { suite, suiteSetup, suiteTeardown, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import type { VSBuffer } from '../../../../../base/common/buffer.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
@@ -10,10 +14,16 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import type { INativeHostApi } from '../../../../../platform/native/common/nativeHost.js';
 import { INativeHostService } from '../../../../common/services.js';
 import { IImageEditorService } from '../../../../services/imageEditor/common/imageEditorService.js';
-import { NativeScreenshotToolService } from '../../electron-browser/nativeScreenshotToolService.js';
 import { IScreenCaptureSetupService } from '../../electron-browser/screenCaptureSetup.js';
 
 suite('Desktop screenshot permission entry', () => {
+	const previous = Object.getOwnPropertyDescriptor(globalThis, 'ash');
+	let NativeScreenshotToolService: typeof import('../../electron-browser/nativeScreenshotToolService.js').NativeScreenshotToolService;
+	suiteSetup(async () => {
+		Object.defineProperty(globalThis, 'ash', { configurable: true, value: { ipcRenderer: {} } });
+		NativeScreenshotToolService = (await import('../../electron-browser/nativeScreenshotToolService.js')).NativeScreenshotToolService;
+	});
+	suiteTeardown(() => { if (previous) { Object.defineProperty(globalThis, 'ash', previous); } else { Reflect.deleteProperty(globalThis, 'ash'); } });
 	ensureNoDisposablesAreLeakedInTestSuite();
 	function fixture(resources: DisposableStore, permission: () => ReturnType<INativeHostApi['getMediaAccessStatus']>, images: Partial<IImageEditorService> = { capture: async () => assert.fail('Permission setup must not capture pixels') }) {
 		const services = resources.add(new InstantiationService());
@@ -21,8 +31,15 @@ suite('Desktop screenshot permission entry', () => {
 		services.registerInstance(IImageEditorService, images as IImageEditorService);
 		services.registerInstance(IConfigurationService, { getValue: () => undefined } as unknown as IConfigurationService);
 		services.registerInstance(INativeHostService, { getMediaAccessStatus: permission } as unknown as INativeHostApi);
+		services.registerInstance(IHostService, {} as IHostService);
+		services.registerInstance(IClipboardService, {} as IClipboardService);
+		services.registerInstance(IFileDialogService, {} as IFileDialogService);
+		services.registerInstance(IFileService, {} as IFileService);
 		services.registerInstance(IScreenCaptureSetupService, { show: async (options, signal) => { setups.push({ title: options.title, signal }); } });
-		const screenshots = resources.add(services.createInstance(NativeScreenshotToolService));
+		class Acquisition extends NativeScreenshotToolService {
+			protected override capture(_options: unknown, signal: AbortSignal): Promise<VSBuffer | undefined> { return images.capture!(signal); }
+		}
+		const screenshots = resources.add(services.createInstance(Acquisition));
 		return { screenshots, setups };
 	}
 	for (const entry of ['capture', 'show'] as const) {
@@ -66,6 +83,10 @@ suite('Desktop screenshot permission entry', () => {
 		services.registerInstance(IImageEditorService, {} as IImageEditorService);
 		services.registerInstance(IConfigurationService, {} as IConfigurationService);
 		services.registerInstance(INativeHostService, {} as INativeHostApi);
+		services.registerInstance(IHostService, {} as IHostService);
+		services.registerInstance(IClipboardService, {} as IClipboardService);
+		services.registerInstance(IFileDialogService, {} as IFileDialogService);
+		services.registerInstance(IFileService, {} as IFileService);
 		assert.throws(() => services.createInstance(NativeScreenshotToolService), /screenCaptureSetupService/);
 	});
 	test('denied desktop capture opens setup and completes without acquiring an image', async function () {

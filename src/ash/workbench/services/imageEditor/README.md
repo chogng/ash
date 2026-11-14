@@ -1,7 +1,7 @@
-# 通用图片编辑服务
+# 扩展图片编辑服务
 
-`IImageEditorService` 管理外部图片编辑 Provider、呈现请求、取消和输出目标。扩展适配器通过注册标识选择 Provider；内置产品界面可以直接提供可信的呈现，不参与扩展默认 Provider 解析。
+`IImageEditorService` 管理外部 Provider、代码图片快照和附件目标。Browser 与 Native 共用 Workbench 内的 Webview 呈现，HTML 使用现有 Webview 的独立来源和文档级消息通道。Native 适配器仅获取当前窗口所在显示器的桌面图片，不创建编辑窗口。
 
-Browser 与 Native 适配器分别承载隔离帧和原生窗口。`imageEditorSelection.ts` 读取代码选区、字体和语法样式快照；扩展仅接收快照，不取得编辑器模型。原生窗口、剪贴板和文件输出归 `platform/imageView`。系统权限由 Native 层提供，截图入口协调 Setup，通用图片编辑协议不提供授权操作。
+扩展的 initialize、ready、complete 协议保持不变。Pin 和权限操作不属于扩展协议。复制使用 Clipboard Service；保存使用 File Dialog 与 File Service。取消、扩展停用或请求替换时释放本次 Webview。
 
-内置截图的配置、选区、标注、代码图片渲染、撤销和界面构建归 [`screenshotTool`](../../contrib/screenshotTool/README.md)。通用服务不注册内置默认 Provider。
+内置截图不经过 Provider 解析或扩展呈现，选区、标注和原生覆盖窗口由 `screenshotTool` 与 `platform/screenshot` 持有。图片解码、缩放和编码归 `platform/imageResize`；附件身份和草稿归属由 Chat 管理。

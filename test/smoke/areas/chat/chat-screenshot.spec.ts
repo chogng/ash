@@ -4,6 +4,7 @@ import { expect, test } from '../../../automation/test.js';
 import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { ElectronApplication, Page } from '@playwright/test';
 import type { BaseWindow, SaveDialogOptions } from 'electron';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 
 const screenshotShortcut = process.platform === 'darwin' ? 'Control+Meta+a' : 'Control+Alt+s';
 
@@ -24,10 +25,15 @@ test('Agents screenshot shortcut survives initial navigation, reload and reopeni
 });
 
 async function screenOverlay(application: ElectronApplication, chinese = false): Promise<Page> {
-	await expect.poll(() => application.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBeGreaterThan(0);
-	const page = application.windows().find(page => page.url().includes('/imageView/imageView.html'))!;
-	await expect(page.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toBeVisible();
-	return page;
+	const name = chinese ? '屏幕截图' : 'Screen Capture';
+	let selected: Page | undefined;
+	await expect.poll(async () => {
+		for (const page of application.windows()) {
+			if (await page.getByRole('dialog', { name, exact: true }).isVisible().catch(() => false)) { selected = page; return true; }
+		}
+		return false;
+	}).toBe(true);
+	return selected!;
 }
 
 /** Cover the desktop with test-owned pixels so screen capture evidence contains only synthetic content. */
@@ -77,7 +83,7 @@ test('desktop screenshot setup replaces a cancelled pending permission request',
 		await expect(setup).toBeVisible();
 		await setup.press('Escape');
 		await expect(setup).toHaveCount(0);
-		expect(desktop.windows().filter(page => page.url().includes('/imageView/imageView.html'))).toHaveLength(0);
+		expect(desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html'))).toHaveLength(0);
 	} finally {
 		await state.evaluate(state => { state.release?.(); state.restore(); });
 		await state.dispose();
@@ -100,7 +106,7 @@ test('standalone capture copies on Enter while Chat stays closed', { tag: ['@ele
 		await expect(overlay.getByRole('button', { name: 'Copy', exact: true })).toHaveClass(/primary/);
 		const surface = overlay.getByRole('group', { name: 'Frozen screen and region selection' });
 		await surface.press('Enter').catch(error => { if (!overlay.isClosed()) throw error; });
-		await expect.poll(() => application.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
+		await expect.poll(() => application.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
 		expect(await application.evaluate(async ({ clipboard }) => {
 			const image = (await clipboard.read()).find(item => item.types.includes('image/png'));
 			const data = image && await image.getType('image/png');
@@ -157,7 +163,7 @@ test('Agent window screenshots retain their target with another window open and 
 		expect(capture.height).toBe(Math.round(96 * capture.scale));
 		for (const [index, expected] of [37, 99, 235, 255].entries()) expect(Math.abs(capture.pixel[index] - expected)).toBeLessThanOrEqual(2);
 		expect(application.windows()).toHaveLength(count);
-		expect(application.windows().filter(window => window.url().includes('/imageView/imageView.html'))).toHaveLength(0);
+		expect(application.windows().filter(window => window.url().includes('/screenshot/screenshot.html'))).toHaveLength(0);
 		await expect(page.getByRole('dialog', { name: 'Screen Capture', exact: true })).toHaveCount(0);
 	} finally {
 		await page.evaluate(() => document.getElementById('target-screenshot-marker')?.remove());
@@ -192,7 +198,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await input.press(screenshotShortcut);
 			let overlay = await screenOverlay(desktop, chinese);
 			await overlay.keyboard.press('Escape').catch(error => { if (!overlay.isClosed()) throw error; });
-			await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
+			await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
 			await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Screenshot draft');
 			await input.press(screenshotShortcut);
 			overlay = await screenOverlay(desktop, chinese);
@@ -209,10 +215,10 @@ for (const locale of ['en', 'zh-CN']) {
 				return [...element.ownerDocument.fonts].some(font => font.family.includes('Ash Snapshot Icons') && font.status === 'loaded');
 			})).toBe(true);
 			// The independent window-capture endpoint remains usable while manual selection is open.
-			const overlayCount = desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length;
+			const overlayCount = desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length;
 			const raw = await page.evaluate(async () => [...(await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:host:screenshot', { x: 0, y: 0, width: 80, height: 60 }) as Uint8Array).slice(0, 8)]);
 			expect(raw).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
-			expect(desktop.windows().filter(page => page.url().includes('/imageView/imageView.html'))).toHaveLength(overlayCount);
+			expect(desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html'))).toHaveLength(overlayCount);
 			const pixels = await overlay.locator('canvas').evaluate(canvas => {
 				const image = canvas as HTMLCanvasElement;
 				const context = image.getContext('2d')!;
@@ -229,7 +235,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await overlay.screenshot({ path });
 			await testInfo.attach('synthetic desktop selection', { path, contentType: 'image/png' });
 			await overlay.getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
-			await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
+			await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
 			await expect(input).toBeFocused();
 			await expect(page.getByRole('button', { name: chinese ? '预览 截图' : 'Preview Screenshot', exact: true })).toBeVisible();
 			const originals = await desktop.evaluateHandle(async ({ dialog, clipboard, ClipboardItem }) => ({
@@ -237,7 +243,7 @@ for (const locale of ['en', 'zh-CN']) {
 				clipboard: await Promise.all((await clipboard.read()).filter(item => item.types.length > 0).map(async item => new ClipboardItem(Object.fromEntries(await Promise.all(item.types.map(async type => [type, await item.getType(type)])))))),
 			}));
 			try {
-				await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
+				await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
 				await input.press(screenshotShortcut);
 				overlay = await screenOverlay(desktop, chinese);
 				await overlay.getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
@@ -259,7 +265,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect.poll(() => readFile(destination).then(bytes => [...bytes.subarray(0, 8)]).catch(error => { if (error.code === 'ENOENT') return []; throw error; })).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
 				expect(await savedDialogs.jsonValue()).toEqual([{ title: chinese ? '保存图像' : 'Save image', defaultPath: 'Image.png' }]);
 				await savedDialogs.dispose();
-				await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
+				await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
 				await input.press(screenshotShortcut);
 				overlay = await screenOverlay(desktop, chinese);
 				await overlay.getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
@@ -269,7 +275,7 @@ for (const locale of ['en', 'zh-CN']) {
 				overlay = await screenOverlay(desktop, chinese);
 				await overlay.getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
 				await overlay.getByRole('button', { name: chinese ? '复制' : 'Copy', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
-				await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
+				await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
 				const copied = await desktop.evaluate(async ({ clipboard }) => {
 					for (const item of await clipboard.read()) {
 						if (!item.types.includes('image/png')) continue;
@@ -322,14 +328,14 @@ for (const locale of ['en', 'zh-CN']) {
 		try {
 			const denied = await page.evaluate(async () => {
 				try {
-					await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:image-view:open', {
-						id: crypto.randomUUID(), title: 'Permission boundary probe', source: 'screen', html: '', input: {},
+					await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:screenshot:open', {
+						id: crypto.randomUUID(), input: {},
 					});
 					return '';
 				} catch (error) { return String(error); }
 			});
 			expect(denied).toContain('ScreenCapturePermissionRequired');
-			expect(desktop.windows().filter(page => page.url().includes('/imageView/imageView.html'))).toHaveLength(0);
+			expect(desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html'))).toHaveLength(0);
 			await workbench.quickaccess.runCommand('workbench.action.openSettings');
 			const settings = workbench.settingsEditor.element;
 			await expect(settings).toBeVisible();
@@ -342,7 +348,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await input.focus(); await input.press(screenshotShortcut);
 			const setup = page.getByRole('dialog', { name: chinese ? '设置桌面截图' : 'Set Up Desktop Screenshots', exact: true });
 			await expect(setup).toBeVisible();
-			expect(desktop.windows().filter(page => page.url().includes('/imageView/imageView.html'))).toHaveLength(0);
+			expect(desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html'))).toHaveLength(0);
 			expect(await state.evaluate(state => state.opened)).toEqual([]);
 			expect(await state.evaluate(state => state.captures)).toBe(0);
 			const recheck = setup.getByRole('button', { name: chinese ? '重新检查' : 'Check Again', exact: true });
@@ -358,7 +364,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await recheck.click();
 			await expect(setup).toBeHidden();
 			expect(await state.evaluate(state => state.captures)).toBe(0);
-			expect(desktop.windows().filter(page => page.url().includes('/imageView/imageView.html'))).toHaveLength(0);
+			expect(desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html'))).toHaveLength(0);
 			await state.evaluate(state => { state.permission = 'restricted'; });
 			await input.focus(); await input.press(screenshotShortcut);
 			await expect(setup).toBeVisible();
@@ -472,7 +478,7 @@ test('screenshot shortcut reports occupancy, retains a working global binding an
 			await setup.press('Escape');
 			await expect(setup).toBeHidden();
 		}
-		await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
+		await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
 		await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Global capture draft');
 		await uncoverDisplays(desktop, covers); covers = [];
 
@@ -496,7 +502,7 @@ test('screenshot shortcut reports occupancy, retains a working global binding an
 	}
 });
 
-test('built-in code images annotate and copy in a native window without screen permission', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
+test('built-in code images annotate and copy in the Workbench without screen permission', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
 	if (!('browserWindow' in application)) throw new Error('Expected Electron');
 	const desktop = application;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
@@ -506,7 +512,10 @@ test('built-in code images annotate and copy in a native window without screen p
 	await workbench.page.keyboard.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a');
 	const probe = await desktop.evaluateHandle(({ desktopCapturer, systemPreferences }) => {
 		const original = { capture: desktopCapturer.getSources, access: systemPreferences.getMediaAccessStatus };
-		const state = { original, calls: 0 };
+		const warnings: string[] = [];
+		const warning = (value: Error): void => { if (value.name === 'MaxListenersExceededWarning' && value.message.includes('render-process-gone')) { warnings.push(value.message); } };
+		process.on('warning', warning);
+		const state = { original, calls: 0, warnings, warning };
 		desktopCapturer.getSources = async () => { state.calls++; throw new Error('Code images must not acquire desktop pixels'); };
 		systemPreferences.getMediaAccessStatus = type => type === 'screen' ? 'denied' : original.access.call(systemPreferences, type);
 		return state;
@@ -519,30 +528,208 @@ test('built-in code images annotate and copy in a native window without screen p
 		await expect(toolbar).toBeVisible();
 		await expect(toolbar.getByRole('button', { name: 'Retake', exact: true })).toHaveCount(0);
 		await expect.poll(() => toolbar.evaluate(element => [...element.ownerDocument.fonts].some(font => font.family.includes('Ash Snapshot Icons') && font.status === 'loaded'))).toBe(true);
-		const before = await frame.locator('canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL());
+		const before = await frame.locator('.ash-screenshot-overlay canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL());
 		await toolbar.getByRole('button', { name: 'Arrow', exact: true }).click();
-		const bounds = (await frame.locator('canvas').boundingBox())!;
+		const bounds = (await frame.locator('.ash-screenshot-overlay canvas').boundingBox())!;
 		await overlay.mouse.move(bounds.x + bounds.width * 0.2, bounds.y + bounds.height * 0.4);
 		await overlay.mouse.down();
 		await overlay.mouse.move(bounds.x + bounds.width * 0.8, bounds.y + bounds.height * 0.6, { steps: 5 });
 		await overlay.mouse.up();
 		await expect(toolbar.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled();
-		expect(await frame.locator('canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL())).not.toBe(before);
+		expect(await frame.locator('.ash-screenshot-overlay canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL())).not.toBe(before);
 		const reset = toolbar.getByRole('button', { name: 'Reset annotations', exact: true });
 		await reset.focus();
 		await reset.press('Enter');
-		expect(await frame.locator('canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL())).toBe(before);
+		expect(await frame.locator('.ash-screenshot-overlay canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL())).toBe(before);
 		await expect(frame.getByRole('group', { name: 'Frozen screen and region selection' })).toBeFocused();
 		expect(await probe.evaluate(state => state.calls)).toBe(0);
+		expect(await probe.evaluate(state => state.warnings)).toEqual([]);
 		await overlay.screenshot({ path: testInfo.outputPath('builtin-code-image-annotated.png') });
 		await toolbar.getByRole('button', { name: 'Copy', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
-		await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
+		await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
 		expect(await desktop.evaluate(async ({ clipboard }) => (await clipboard.read()).some(item => item.types.includes('image/png')))).toBe(true);
+		const owner = await desktop.browserWindow(workbench.page);
+		try {
+			const listeners = await owner.evaluate(window => window.webContents.listenerCount('render-process-gone'));
+			for (let index = 0; index < 3; index++) {
+				await workbench.quickaccess.runCommand('snapshot.code');
+				const next = await screenOverlay(desktop);
+				await next.getByRole('button', { name: 'Cancel', exact: true }).click().catch(error => { if (!next.isClosed()) { throw error; } });
+				await expect(next.getByRole('dialog', { name: 'Screen Capture', exact: true })).toHaveCount(0);
+				expect(await owner.evaluate(window => window.webContents.listenerCount('render-process-gone'))).toBe(listeners);
+			}
+			expect(await probe.evaluate(state => state.warnings)).toEqual([]);
+		} finally {
+			await owner.dispose();
+		}
+
 	} finally {
 		await desktop.evaluate(({ desktopCapturer, systemPreferences }, state) => {
 			desktopCapturer.getSources = state.original.capture;
 			systemPreferences.getMediaAccessStatus = state.original.access;
+			process.off('warning', state.warning);
 		}, probe);
 		await probe.dispose();
+	}
+});
+
+for (const [locale, theme] of [['en', 'ash-dark'], ['zh-CN', 'ash-light'], ['en', 'ash-high-contrast-dark'], ['zh-CN', 'ash-high-contrast-light']]) {
+	test.describe(`Pinned screenshot ${locale} ${theme}`, () => {
+		test.use({ electronUserSettings: { 'workbench.locale': locale, 'workbench.colorTheme': theme } });
+		const chinese = locale === 'zh-CN';
+		test(`pinned annotated code images survive another capture and their originating window in ${locale}`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
+			if (!('browserWindow' in application)) { throw new Error('Expected Electron'); }
+			const desktop = application;
+			// UI-only launches have no extension theme catalog; drive the system appearance boundary.
+			await desktop.evaluate(({ nativeTheme }, theme) => {
+				nativeTheme.themeSource = theme.endsWith('dark') ? 'dark' : 'light';
+				if (theme.includes('high-contrast')) {
+					Object.defineProperty(nativeTheme, 'shouldUseHighContrastColors', { configurable: true, get: () => true });
+				}
+				nativeTheme.emit('updated');
+			}, theme);
+			let scheme = theme.endsWith('dark') ? 'dark' : 'light';
+			if (theme.includes('high-contrast')) {
+				scheme = theme.endsWith('dark') ? 'hcDark' : 'hcLight';
+			}
+			await expect(workbench.page.locator('.ash-workbench')).toHaveAttribute('data-color-scheme', scheme);
+			await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+			const editor = workbench.editors.groupAt(0).editor;
+			await editor.waitForEditorFocus();
+			await editor.waitForTypeInEditor('const pinned = "Synthetic annotation fixture";');
+			await workbench.page.keyboard.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a');
+			await workbench.quickaccess.runCommand('snapshot.code');
+			const overlay = await screenOverlay(desktop, chinese);
+			await overlay.getByRole('button', { name: chinese ? '画笔' : 'Pen', exact: true }).click();
+			const bounds = (await overlay.locator('.ash-screenshot-overlay canvas').boundingBox())!;
+			await overlay.mouse.move(bounds.x + bounds.width * 0.2, bounds.y + bounds.height * 0.4);
+			await overlay.mouse.down();
+			await overlay.mouse.move(bounds.x + bounds.width * 0.8, bounds.y + bounds.height * 0.6, { steps: 5 });
+			await overlay.mouse.up();
+			const expected = await overlay.locator('.ash-screenshot-overlay canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL().split(',')[1]);
+			await overlay.getByRole('button', { name: chinese ? '贴图' : 'Pin', exact: true }).click().catch(error => { if (!overlay.isClosed()) { throw error; } });
+			await expect.poll(() => desktop.windows().some(page => page !== overlay && page.url().includes('/screenshot/screenshot.html'))).toBe(true);
+			const pinned = desktop.windows().find(page => page !== overlay && page.url().includes('/screenshot/screenshot.html'))!;
+			await expect(pinned.getByRole('main', { name: chinese ? '截图贴图' : 'Pinned screenshot' })).toBeVisible();
+			await expect(overlay.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toHaveCount(0);
+			const pixels = async (): Promise<string> => pinned.locator('img').evaluate(image => {
+				const picture = image as HTMLImageElement;
+				const canvas = image.ownerDocument.createElement('canvas');
+				canvas.width = picture.naturalWidth;
+				canvas.height = picture.naturalHeight;
+				canvas.getContext('2d')!.drawImage(picture, 0, 0);
+				return canvas.toDataURL().split(',')[1];
+			});
+			expect(await pixels()).toBe(expected);
+			const appearance = await pinned.getByRole('main').evaluate(element => {
+				const style = getComputedStyle(element);
+				return { background: style.backgroundColor, contrast: style.getPropertyValue('--ash-pinned-contrastBorder') };
+			});
+			expect(appearance.background).not.toBe('rgba(0, 0, 0, 0)');
+			if (theme.includes('high-contrast')) { expect(appearance.contrast.trim()).not.toBe(''); expect(appearance.contrast).not.toBe('transparent'); }
+			const window = await desktop.browserWindow(pinned);
+			const owner = await desktop.browserWindow(workbench.page);
+			const savePath = testInfo.outputPath('pinned.png');
+			const saveDialog = await desktop.evaluateHandle(({ dialog }, filePath) => {
+				const original = dialog.showSaveDialog;
+				dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+				return { restore() { dialog.showSaveDialog = original; } };
+			}, savePath);
+			try {
+				expect(await window.evaluate(window => window.isAlwaysOnTop())).toBe(true);
+				await window.evaluate(window => window.setBounds({ x: 80, y: 80, width: 420, height: 320 }));
+				expect(await pixels()).toBe(expected);
+				await pinned.screenshot({ path: testInfo.outputPath('pinned-preview.png') });
+				await pinned.getByRole('button', { name: chinese ? '截图帮助' : 'Screenshot Help' }).focus();
+				await pinned.keyboard.press('Alt+F2');
+				await expect(pinned.getByRole('dialog').getByRole('textbox')).toHaveValue(chinese ? /宽度 \d+，高度 \d+ 像素/ : /Width \d+, Height \d+ pixels/);
+				await pinned.getByRole('button', { name: chinese ? '关闭帮助' : 'Close help', exact: true }).click();
+				await expect(pinned.getByRole('button', { name: chinese ? '截图帮助' : 'Screenshot Help' })).toBeFocused();
+				await workbench.quickaccess.runCommand('snapshot.code');
+				const next = await screenOverlay(desktop, chinese);
+				await expect(next.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toBeVisible();
+				await next.getByRole('button', { name: chinese ? '取消' : 'Cancel', exact: true }).click().catch(error => { if (!next.isClosed()) { throw error; } });
+				await expect(next.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toHaveCount(0);
+				expect(await pixels()).toBe(expected);
+				await owner.evaluate(window => window.destroy());
+				await expect(pinned.getByRole('main')).toBeVisible();
+				await pinned.getByRole('button', { name: chinese ? '复制' : 'Copy', exact: true }).click();
+				await expect(pinned.getByRole('status')).toHaveText(chinese ? '已复制图片。' : 'Image copied.');
+				expect(await desktop.evaluate(async ({ clipboard }) => (await clipboard.read()).some(item => item.types.includes('image/png')))).toBe(true);
+				await pinned.getByRole('button', { name: chinese ? '保存' : 'Save', exact: true }).click();
+				await expect.poll(async () => (await readFile(savePath).catch(() => Buffer.alloc(0))).toString('base64')).toBe(expected);
+				await pinned.keyboard.press('Escape').catch(error => { if (!pinned.isClosed()) { throw error; } });
+				await expect.poll(() => pinned.isClosed()).toBe(true);
+			} finally {
+				await saveDialog.evaluate(state => state.restore());
+				await saveDialog.dispose();
+				await owner.dispose();
+				await window.dispose();
+			}
+		});
+
+	});
+}
+
+
+test('Agents screenshot command and shortcut work in Chat and Code modes', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ application, workbench, target }) => {
+	if (!('browserWindow' in application)) { throw new Error('Expected Electron'); }
+	const desktop = application;
+	const permission = await desktop.evaluateHandle(({ systemPreferences }) => {
+		const original = systemPreferences.getMediaAccessStatus;
+		systemPreferences.getMediaAccessStatus = type => type === 'screen' ? 'denied' : original.call(systemPreferences, type);
+		return { restore() { systemPreferences.getMediaAccessStatus = original; } };
+	});
+	try {
+		const page = await workbench.openAgentsWindow(target.kind);
+		const modes = page.locator('.ash-window-mode-control');
+		const commands = new QuickAccess(page);
+		for (const mode of ['Chat / Agents', 'Code']) {
+			const button = modes.getByRole('button', { name: mode, exact: true });
+			await button.click();
+			await expect(button).toHaveAttribute('aria-pressed', 'true');
+			if (mode === 'Chat / Agents') {
+				await commands.runCommand('workbench.action.chat.attachScreenshot');
+			} else {
+				await page.keyboard.press(screenshotShortcut);
+			}
+			const setup = page.getByRole('dialog', { name: 'Set Up Desktop Screenshots', exact: true });
+			await expect(setup).toBeVisible();
+			await setup.press('Escape');
+			await expect(setup).toHaveCount(0);
+			await expect(button).toHaveAttribute('aria-pressed', 'true');
+		}
+		// Supply only this isolated Workbench's pixels; the test never reads the user's desktop.
+		const sources = await desktop.evaluateHandle(async ({ BrowserWindow, desktopCapturer, screen, systemPreferences }) => {
+			const original = desktopCapturer.getSources;
+			const image = await BrowserWindow.getAllWindows()[0].webContents.capturePage();
+			systemPreferences.getMediaAccessStatus = () => 'granted';
+			desktopCapturer.getSources = async () => screen.getAllDisplays().map(display => ({
+				id: `screen:${display.id}:0`, name: 'Synthetic display', display_id: String(display.id),
+				thumbnail: image, appIcon: image
+			}));
+			return { restore() { desktopCapturer.getSources = original; } };
+		});
+		try {
+			await page.keyboard.press(screenshotShortcut);
+			const overlay = await screenOverlay(desktop);
+			await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
+			await overlay.getByRole('button', { name: 'Copy', exact: true }).click().catch(error => { if (!overlay.isClosed()) { throw error; } });
+			await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
+			expect(await desktop.evaluate(async ({ clipboard }) => (await clipboard.read()).some(item => item.types.includes('image/png')))).toBe(true);
+			await expect(modes.getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-pressed', 'true');
+			await commands.runCommand('workbench.action.chat.attachScreenshot');
+			const attachment = await screenOverlay(desktop);
+			await attachment.getByRole('button', { name: 'Entire screen', exact: true }).click();
+			await attachment.getByRole('button', { name: 'Add to Chat', exact: true }).click().catch(error => { if (!attachment.isClosed()) { throw error; } });
+			await expect(page.getByRole('button', { name: 'Preview Screenshot', exact: true })).toBeVisible();
+
+		} finally {
+			await sources.evaluate(state => state.restore());
+			await sources.dispose();
+		}
+	} finally {
+		await permission.evaluate(state => state.restore());
+		await permission.dispose();
 	}
 });

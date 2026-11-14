@@ -1,3 +1,4 @@
+import './services/imageResize/electron-browser/imageResizeService.js';
 import './contrib/screenshotTool/electron-browser/screenshotTool.contribution.js';
 import './services/imageEditor/electron-browser/nativeImageEditorService.js';
 import './contrib/relauncher/browser/relauncher.contribution.js';

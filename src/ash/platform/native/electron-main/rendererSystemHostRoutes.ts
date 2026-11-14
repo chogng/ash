@@ -4,13 +4,13 @@ import { collectElectronMemory } from '../../memory/electron-main/electronMemory
 import { URI } from '../../../base/common/uri.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { desktopCapturer, Notification, systemPreferences, type BrowserWindow } from 'electron/main';
+import { desktopCapturer, screen, Notification, systemPreferences, type BrowserWindow } from 'electron/main';
 import { ElectronMainClipboardService } from '../../clipboard/electron-main/electronMainClipboardService.js';
 import { type ElectronOpenerService, validateImageOpenExtension, validateImageOpenRequest } from '../../opener/electron-main/electronOpenerService.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { DialogRequest } from '../../dialogs/common/dialogs.js';
-import { NATIVE_HOST_MEDIA_ACCESS_STATUS_CHANNEL, NATIVE_HOST_APP_WINDOWS_CHANNEL, NATIVE_HOST_CAPTURE_APP_WINDOW_CHANNEL, NATIVE_HOST_SCREEN_CAPTURE_ACCESS_CHANNEL, validateAppWindow, NATIVE_HOST_IMAGE_APPLICATIONS_CHANNEL, NATIVE_HOST_OPEN_IMAGE_CHANNEL, validateScreenshotRectangle } from '../common/nativeHost.js';
-import { getAppWindows, captureAppWindow, getScreenshot } from './nativeHostMainService.js';
+import { NATIVE_HOST_DESKTOP_SCREENSHOT_CHANNEL, NATIVE_HOST_MEDIA_ACCESS_STATUS_CHANNEL, NATIVE_HOST_APP_WINDOWS_CHANNEL, NATIVE_HOST_CAPTURE_APP_WINDOW_CHANNEL, NATIVE_HOST_SCREEN_CAPTURE_ACCESS_CHANNEL, validateAppWindow, NATIVE_HOST_IMAGE_APPLICATIONS_CHANNEL, NATIVE_HOST_OPEN_IMAGE_CHANNEL, validateScreenshotRectangle } from '../common/nativeHost.js';
+import { getDesktopScreenshots, getAppWindows, captureAppWindow, getScreenshot } from './nativeHostMainService.js';
 import { nativeToastRoutes, type INativeToast } from './nativeToast.js';
 import { REQUEST_MICROPHONE_ACCESS_CHANNEL, type IToastOptions } from '../common/native.js';
 import type { DirectoryPermissionRequest } from '../../workspace/common/workspaceTrust.js';
@@ -80,6 +80,17 @@ export function rendererSystemHostRoutes(
 		return { resources, operation };
 	};
 	return [
+		{
+			channel: NATIVE_HOST_DESKTOP_SCREENSHOT_CHANNEL,
+			validate: value => { if (value !== undefined) { throw new TypeError('Unexpected screenshot arguments'); } },
+			invoke: async () => {
+				if (process.platform === 'darwin' && systemPreferences.getMediaAccessStatus('screen') !== 'granted') { throw new Error('ScreenCapturePermissionRequired'); }
+				const images = await getDesktopScreenshots();
+				if (window.isDestroyed()) { return undefined; }
+				const display = screen.getDisplayMatching(window.getBounds());
+				return images.find(image => image.displayId === display.id)?.image.buffer;
+			},
+		},
 		{
 			channel: NATIVE_HOST_MEDIA_ACCESS_STATUS_CHANNEL,
 			validate: value => { if (value !== 'screen') { throw new TypeError('Invalid media access type'); } },

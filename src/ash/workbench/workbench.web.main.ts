@@ -1,5 +1,6 @@
+import './services/imageResize/browser/imageResizeService.js';
 import './contrib/screenshotTool/browser/screenshotTool.web.contribution.js';
-import './services/imageEditor/browser/browserImageEditorService.js';
+import './services/imageEditor/browser/imageEditor.contribution.js';
 import './contrib/splash/browser/splash.contribution.js';
 import '../platform/meteredConnection/browser/meteredConnectionService.js';
 import { IRemoteTunnelService } from '../platform/remoteTunnel/common/remoteTunnel.js';

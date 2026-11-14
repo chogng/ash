@@ -95,7 +95,7 @@ export default defineConfig(({ mode, command }) => {
 		[electronEntry]: resolve(sourceRoot, `${electronEntry}.html`),
 		...sessionsInputs,
 		...remoteRuntimeInstallInput,
-		'electron-browser/imageView/imageView': resolve(sourceRoot, 'electron-browser/imageView/imageView.html'),
+		'electron-browser/screenshot/screenshot': resolve(sourceRoot, 'electron-browser/screenshot/screenshot.html'),
 	};
 
 	return {

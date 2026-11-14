@@ -5,8 +5,6 @@ import { registerAgentSessionsLayoutActions } from './agentSessions/agentSession
 import { registerChatOpenAgentDebugPanelAction } from './actions/chatOpenAgentDebugPanelAction.js';
 import { registerChatActions } from './actions/chatActions.js';
 import { registerChatContextActions } from './actions/chatContextActions.js';
-import { IImageEditorService } from '../../../services/imageEditor/common/imageEditorService.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import './chat.shared.contribution.js';
 import { registerHookActions } from './promptSyntax/hookActions.js';
 import { registerChatEditingActions } from './chatEditing/chatEditingActions.js';
@@ -22,5 +20,5 @@ registerMoveActions();
 registerAgentSessionsLayoutActions();
 registerChatOpenAgentDebugPanelAction();
 registerWorkbenchContribution(AgentHostOpenSessionLinkOpenerContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(AgentHostOpenSessionLinkOpenerContribution));
-registerWorkbenchContribution('workbench.contrib.chatContextActions', WorkbenchPhase.BlockStartup, accessor => registerChatContextActions(accessor.get(IImageEditorService), accessor.get(ICommandService)));
+registerWorkbenchContribution('workbench.contrib.chatContextActions', WorkbenchPhase.BlockStartup, () => registerChatContextActions());
 registerHookActions();

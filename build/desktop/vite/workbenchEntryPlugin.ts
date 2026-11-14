@@ -51,8 +51,10 @@ export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.h
 		},
 		transformIndexHtml: {
 			order: 'pre',
-			async handler(html) {
+			async handler(html, context) {
 				if (!development || !cssDevelopment?.service.isEnabled) return html;
+				// The isolated image host loads component CSS through Vite; Workbench's blob import map violates its CSP.
+				if (context.path === '/electron-browser/screenshot/screenshot.html') return html;
 				const modules = await Promise.all((await cssDevelopment.service.getCssModules()).map(async module => {
 					const source = resolve(cssDevelopment.sourceRoot, module);
 					// Match Vite's resolved module identity, including symlinked source roots.

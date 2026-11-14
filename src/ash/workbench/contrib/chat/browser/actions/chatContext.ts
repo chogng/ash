@@ -1,3 +1,4 @@
+import { IImageResizeService } from '../../../../../platform/imageResize/common/imageResizeService.js';
 import { IChatContextPickService, picksWithPromiseFn, type IChatContextValueItem, type IChatContextPickerItem, type IChatContextPicker, type IChatContextPickerPickItem } from '../attachments/chatContextPickService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { derived, observableSignalFromEvent } from '../../../../../base/common/observable.js';
@@ -206,12 +207,13 @@ class ScreenshotContextValuePick implements IChatContextValueItem {
 	public readonly commandId = ScreenshotCommandId;
 	public readonly icon = Lxicon.openPreview;
 	public get label(): string { return localize('chat.context.screenshotWeb', 'Screenshot…'); }
-	constructor(@IScreenshotToolService private readonly imageEditors: IScreenshotToolService) { }
+	constructor(@IScreenshotToolService private readonly imageEditors: IScreenshotToolService,
+		@IImageResizeService private readonly imageResize: IImageResizeService) { }
 	public isEnabled(widget?: IChatWidget): boolean { return widget?.input.supportsImages() ?? true; }
 	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
 		const image = await this.imageEditors.captureAndEdit(signal);
 		if (!image || signal.aborted) return undefined;
-		const attachment = await convertBufferToScreenshotVariable(image);
+		const attachment = await convertBufferToScreenshotVariable(image, this.imageResize);
 		return signal.aborted ? undefined : attachment;
 	}
 }

@@ -23,7 +23,7 @@ export interface WebviewInitInfo {
 
 export interface WebviewContentOptions {
 	/** The MCP App transport sends raw JSON-RPC; ordinary extension views keep their acquired API. */
-	readonly messageProtocol?: 'mcp';
+	readonly messageProtocol?: 'mcp' | 'imageEditor';
 	/** Declared origins normalized by the content owner; omitted capabilities remain blocked. */
 	readonly contentSecurityPolicy?: {
 		readonly connectDomains: readonly string[];

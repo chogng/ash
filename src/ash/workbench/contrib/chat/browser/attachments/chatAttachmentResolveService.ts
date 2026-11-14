@@ -1,3 +1,4 @@
+import { IImageResizeService } from '../../../../../platform/imageResize/common/imageResizeService.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
@@ -64,6 +65,7 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 		@IFileSearchService private readonly search: IFileSearchService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IChatContextService private readonly contexts: IChatContextService,
+		@IImageResizeService private readonly imageResize: IImageResizeService,
 	) { }
 
 	public async resolveEditorAttachContext(editor: IResourceEditorInput, signal?: AbortSignal): Promise<ChatContextAttachment | undefined> {
@@ -194,7 +196,7 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 			if (signal?.aborted) {
 				throw new CancellationError();
 			}
-			const attachment = await createImageAttachment(image.name, image.data, image.mimeType ?? 'image/png');
+			const attachment = await createImageAttachment(image.name, image.data, image.mimeType ?? 'image/png', this.imageResize);
 			if (signal?.aborted) {
 				throw new CancellationError();
 			}

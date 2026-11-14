@@ -1,3 +1,4 @@
+import { IImageResizeService } from '../../../../../../../platform/imageResize/common/imageResizeService.js';
 import { createImageAttachment } from '../../../chatImageUtils.js';
 import type { ChatContextAttachment } from '../../../../../../services/chat/common/chatContextService.js';
 import { triggerDownload } from '../../../../../../../base/browser/fileAccess.js';
@@ -74,6 +75,7 @@ export class ChatMcpAppModel extends Disposable {
 		@IDialogsModel private readonly dialogs: IDialogsModel,
 		@ILogService private readonly logs: ILogService,
 		@IChatOutputPartStateCache private readonly outputState: IChatOutputPartStateCache,
+		@IImageResizeService private readonly imageResize: IImageResizeService,
 	) {
 		super();
 		this.argumentsJson = argumentsJson;
@@ -328,7 +330,7 @@ export class ChatMcpAppModel extends Disposable {
 				bytes += resource.bytes.byteLength;
 				if (bytes > 262_144) throw new Error(localize('chat.mcpApp.contextTooLarge', 'The App context exceeds the size limit.'));
 				if (resource.encoding !== 'text' && ['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(resource.mimeType)) {
-					images.push(await createImageAttachment(localize('chat.mcpApp.imageContext', 'App image {0}', images.length + 1), resource.bytes, resource.mimeType));
+					images.push(await createImageAttachment(localize('chat.mcpApp.imageContext', 'App image {0}', images.length + 1), resource.bytes, resource.mimeType, this.imageResize));
 				} else if (resource.encoding === 'text' || /^(?:text\/|application\/(?:json|xml)(?:$|;))/u.test(resource.mimeType)) {
 					const value = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(resource.bytes);
 					text.push(block.type === 'image' ? value : localize('chat.mcpApp.resourceContext', 'Resource {0}:\n{1}', embedded.uri as string, value));

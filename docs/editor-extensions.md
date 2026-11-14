@@ -155,7 +155,7 @@ PDF.js 和 Worker 随扩展客户端打包，JS／CSS 摘要覆盖其字节。�
 
 ### 浏览器 Worker 与后端宿主的生命周期
 
-截图是内置 Workbench 功能，由 [`workbench/contrib/screenshotTool`](../src/ash/workbench/contrib/screenshotTool/README.md) 拥有截图编排、配置、选区与标注界面。通用 `services/imageEditor` 保留外部 Provider、代码图片快照和隔离窗口承载，Chat 持有附件目标与草稿取消，`platform/imageView` 负责原生呈现窗口与图像输出，Native 层提供取屏和权限操作，截图入口协调权限 Setup。区域截图、应用窗口截图和代码图片共用一份标注界面，不启动 Snapshot 扩展或 Worker。
+截图是内置 Workbench 功能，由 [`workbench/contrib/screenshotTool`](../src/ash/workbench/contrib/screenshotTool/README.md) 拥有截图编排、配置、代码图片、选区与标注界面。已有图片和代码图片在请求窗口内编辑；`platform/screenshot` 承载桌面选区和独立置顶窗口。`services/imageEditor` 管理外部 Provider，通过共享 Webview 承载扩展界面。Chat 持有附件目标与草稿取消，Native 层提供取屏和权限操作，剪贴板和文件服务负责输出。图片缩放由 `platform/imageResize` 实现，`workbench/services/imageResize` 按运行环境注册。区域截图、应用窗口截图和代码图片共用一份标注界面，不启动 Snapshot 扩展或 Worker。
 
 普通 TS 扩展仍可通过 `@ash/sdk` 的 `window.registerImageEditorProvider`、`window.showImageEditor` 和既有 `image.editor.v1` capability 提供显式选择的图片编辑器。扩展只接收选区快照，不访问内部编辑器模型；注册、调用、撤销和隔离视图沿已有契约处理。内置截图不依赖扩展注册。
 

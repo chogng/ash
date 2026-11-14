@@ -41,7 +41,7 @@ import { showMessageBox } from '../../dialogs/electron-browser/dialog.js';
 import { normalizeExternalUrl } from '../../opener/common/opener.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { raceCancellationError } from '../../../base/common/async.js';
-import { validateImageViewImage } from '../../imageView/common/imageView.js';
+import { validatePngImage } from '../../imageResize/common/imageData.js';
 import { CANCEL_TOAST_CHANNEL, SHOW_TOAST_CHANNEL } from '../common/native.js';
 import { isRecord } from '../../../base/common/types.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
@@ -83,7 +83,7 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 			if (signal.aborted) return undefined;
 			const image = await raceCancellationError(invoke<unknown>(NATIVE_HOST_CAPTURE_APP_WINDOW_CHANNEL, window), signal);
 			if (signal.aborted) return undefined;
-			if (image !== undefined) return VSBuffer.wrap(new Uint8Array(validateImageViewImage(image)));
+			if (image !== undefined) return VSBuffer.wrap(new Uint8Array(validatePngImage(image)));
 			return captureDesktopMediaWindow(window.sourceId, signal);
 		},
 		async getScreenshot(rect) {
@@ -207,7 +207,7 @@ async function captureDesktopMediaWindow(sourceId: string, signal: AbortSignal):
 			canvas.getContext('2d')!.drawImage(video, 0, 0);
 			const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
 			if (!blob) throw new Error('Application window capture failed');
-			return VSBuffer.wrap(new Uint8Array(validateImageViewImage(new Uint8Array(await blob.arrayBuffer()))));
+			return VSBuffer.wrap(new Uint8Array(validatePngImage(new Uint8Array(await blob.arrayBuffer()))));
 		};
 		return await raceCancellationError(Promise.race([capture(), new Promise<never>((_resolve, reject) => {
 			timer = setTimeout(() => reject(new Error('Application window capture timed out')), 5000);

@@ -1,5 +1,6 @@
+import '../../workbench/services/imageResize/browser/imageResizeService.js';
 import '../../workbench/contrib/screenshotTool/browser/screenshotTool.web.contribution.js';
-import '../../workbench/services/imageEditor/browser/browserImageEditorService.js';
+import '../../workbench/services/imageEditor/browser/imageEditor.contribution.js';
 import { migrateLegacyBrowserSettings } from '../../workbench/services/userData/browser/userDataInit.js';
 import { URI as SettingsURI } from '../../base/common/uri.js';
 import '../../workbench/contrib/url/browser/url.contribution.js';
@@ -128,6 +129,7 @@ export class SessionsBrowserMain extends Disposable {
 					'chat.promptActions',
 					'workbench.contrib.chatSetup',
 					'workbench.contrib.chatContextContribution',
+					'workbench.contrib.chatScreenshotActions',
 					'chat.contextContributions',
 					'workbench.contrib.chatReferenceAttachmentWidgetFactory',
 					'chat.sessionReferenceContext',

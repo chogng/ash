@@ -1,4 +1,3 @@
-import type { ImageViewCompletion } from '../../../../platform/imageView/common/imageView.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -17,9 +16,10 @@ export interface CodeImageSnapshot {
 export interface ImageEditorView {
 	readonly html: string;
 	readonly state?: unknown;
-	readonly renderer?: 'builtin';
-	readonly mount?: (image: Uint8Array | undefined, complete: (result: ImageViewCompletion) => Promise<boolean>, signal: AbortSignal) => Promise<IDisposable>;
 }
+export type ImageEditorCompletion =
+	{ readonly kind: 'cancel' | 'retake'; } | { readonly kind: 'error'; readonly message: string; }
+	| { readonly kind: 'attach' | 'copy' | 'save'; readonly image: Uint8Array; };
 interface ImageEditorProviderIdentity {
 	readonly id: string;
 	readonly displayName: string;
@@ -32,8 +32,6 @@ export type ImageEditorProvider = ImageEditorProviderIdentity & (
 	| { activate(signal: AbortSignal): Promise<void>; }
 );
 export interface ImageEditorOptions {
-	/** Trusted product presentation; extension callers continue to resolve their exact provider. */
-	readonly presentation?: ImageEditorView & { readonly displayName: string; };
 	readonly editorId?: string;
 	/** A frozen app-window capture to annotate without capturing the desktop again. */
 	readonly image?: VSBuffer;
@@ -51,6 +49,7 @@ export interface IImageEditorService {
 	register(provider: ImageEditorProvider): IDisposable;
 	resolve(source: 'screen' | 'selection', signal: AbortSignal, id?: string): Promise<{ readonly view: ImageEditorView; readonly displayName: string; readonly signal: AbortSignal; }>;
 	capture(signal: AbortSignal, options?: ImageEditorOptions): Promise<VSBuffer | undefined>;
+	attach(capture: ImageEditorCapture): Promise<void>;
 	show(options: ImageEditorOptions, signal: AbortSignal): Promise<void>;
 	registerAttachmentHandler(handler: (capture: ImageEditorCapture) => Promise<void>): IDisposable;
 }

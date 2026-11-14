@@ -201,6 +201,6 @@ export async function captureAppWindow(sourceId: string): Promise<VSBuffer | und
 	if (process.platform !== 'darwin') return undefined;
 	const { captureMacWindow } = await import('./macScreenWindows.js');
 	const bytes = await captureMacWindow(sourceId);
-	const { validateImageViewImage } = await import('../../imageView/common/imageView.js');
-	return VSBuffer.wrap(new Uint8Array(validateImageViewImage(bytes)));
+	const { validatePngImage } = await import('../../imageResize/common/imageData.js');
+	return VSBuffer.wrap(new Uint8Array(validatePngImage(bytes)));
 }

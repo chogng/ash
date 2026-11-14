@@ -1,3 +1,4 @@
+export const NATIVE_HOST_DESKTOP_SCREENSHOT_CHANNEL = 'ash:native-host:desktop-screenshot';
 import type { ITerminalOutputSnapshot, ITerminalReconnectLease } from '../../terminal/common/terminal.js';
 import type { TitleBarStyleConfiguration, IColorScheme, IWindowAlwaysOnTopChangedEvent, IAuxiliaryWindowInitialization, IAuxiliaryWindowStateEvent } from '../../window/common/window.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';

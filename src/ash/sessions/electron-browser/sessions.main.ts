@@ -1,3 +1,4 @@
+import '../../workbench/services/imageResize/electron-browser/imageResizeService.js';
 import { CancellationError, isCancellationError } from '../../base/common/errors.js';
 import type { IWorkspaceTrustApi } from '../../platform/workspace/common/workspaceTrust.js';
 import { createSessionFolderTrustRequestService } from '../contrib/workspace/browser/workspace.contribution.js';
@@ -371,6 +372,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'chat.promptActions',
 					'workbench.contrib.chatSetup',
 					'workbench.contrib.chatContextContribution',
+					'workbench.contrib.chatScreenshotActions',
 					'chat.contextContributions',
 					'workbench.contrib.chatReferenceAttachmentWidgetFactory',
 					'chat.sessionReferenceContext',

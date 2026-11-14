@@ -31,3 +31,8 @@ export function getScreenshotToolImageData(image: IScreenshotToolImage): { reado
 		mimeType: image.dataUrl.slice(5, image.dataUrl.indexOf(';')),
 	};
 }
+
+/** Product operations shared by the local editor and the native screenshot adapter. */
+export type ScreenshotToolCompletion =
+	{ readonly kind: 'cancel' | 'retake'; } | { readonly kind: 'error'; readonly message: string; }
+	| { readonly kind: 'copy' | 'save' | 'attach' | 'pin'; readonly image: Uint8Array; };

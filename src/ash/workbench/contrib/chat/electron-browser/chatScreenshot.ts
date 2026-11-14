@@ -8,7 +8,8 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL, validateGlobalKeybindingResult } from '../../../../platform/globalKeybindings/common/globalKeybindings.js';
-import { IMAGE_VIEW_ATTACH_CHANNEL, validateImageViewImage } from '../../../../platform/imageView/common/imageView.js';
+import { SCREENSHOT_ATTACH_CHANNEL } from '../../../../platform/screenshot/common/screenshot.js';
+import { validatePngImage } from '../../../../platform/imageResize/common/imageData.js';
 import { invoke, subscribe } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { IScreenshotToolService } from '../../screenshotTool/browser/screenshotTool.js';
@@ -46,8 +47,8 @@ export class ChatScreenshotContribution extends Disposable {
 			// Main handles authorized background capture; permission failures return to this window's normal entry.
 			void commands.executeCommand(ScreenshotCommandId).catch(error => log.error('Could not start the screenshot', error));
 		});
-		const attach = subscribe<unknown>(IMAGE_VIEW_ATTACH_CHANNEL, value => {
-			const image = VSBuffer.wrap(new Uint8Array(validateImageViewImage(value)));
+		const attach = subscribe<unknown>(SCREENSHOT_ATTACH_CHANNEL, value => {
+			const image = VSBuffer.wrap(new Uint8Array(validatePngImage(value)));
 			void commands.executeCommand(ScreenshotCommandId, async () => image).catch(error => log.error('Could not attach the screenshot', error));
 		});
 		this._register(toDisposable(() => {

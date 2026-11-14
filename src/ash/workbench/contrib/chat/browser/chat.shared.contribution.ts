@@ -1,3 +1,5 @@
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IImageEditorService } from '../../../services/imageEditor/common/imageEditorService.js';
 import '../../screenshotTool/browser/screenshotTool.contribution.js';
 import { ChatUserImageAttachmentService, IChatUserImageAttachmentService } from './attachments/chatUserImageAttachments.js';
 import './promptTimeline/promptTimeline.contribution.js';
@@ -31,7 +33,7 @@ import { ChatOutputPartStateCache, IChatOutputPartStateCache } from './widget/ch
 import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
 import { ChatLayoutService } from './widget/chatLayoutService.js';
 import { registerChatCopyActions } from './actions/chatCopyActions.js';
-import { registerAddSelectionToChatAction } from './actions/chatContextActions.js';
+import { registerAddSelectionToChatAction, registerChatScreenshotActions } from './actions/chatContextActions.js';
 import { registerChatApprovalEnvironmentActions } from './actions/chatApprovalEnvironmentActions.js';
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
 import { registerChatToolActions } from './actions/chatToolActions.js';
@@ -736,3 +738,5 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 }
 
 registerSingleton(IChatUserImageAttachmentService, ChatUserImageAttachmentService, InstantiationType.Delayed);
+
+registerWorkbenchContribution('workbench.contrib.chatScreenshotActions', WorkbenchPhase.BlockStartup, accessor => registerChatScreenshotActions(accessor.get(IImageEditorService), accessor.get(ICommandService)));

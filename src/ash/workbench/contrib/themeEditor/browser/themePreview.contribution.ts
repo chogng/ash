@@ -1,3 +1,4 @@
+import '../../../services/imageEditor/browser/imageEditor.contribution.js';
 import '../../screenshotTool/browser/screenshotTool.web.contribution.js';
 // The preview uses production chrome and editor registrations without loading
 // the entire Web product (terminal add-ons, tasks, testing and extension hosts).
@@ -14,7 +15,6 @@ import '../../speech/browser/speech.contribution.js';
 import '../../terminal/common/terminalExtensionPoints.contribution.js';
 import '../../bulkEdit/browser/bulkEditService.js';
 import '../../../services/dialogs/common/dialogService.js';
-import '../../../services/imageEditor/browser/browserImageEditorService.js';
 import '../../../services/path/browser/pathService.js';
 import '../../../services/dataChannel/browser/dataChannelService.js';
 import '../../../services/configurationResolver/browser/configurationResolverService.js';

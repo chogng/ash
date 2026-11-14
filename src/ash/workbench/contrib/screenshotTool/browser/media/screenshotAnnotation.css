@@ -313,3 +313,9 @@
 	outline: var(--snapshot-border-width) solid var(--snapshot-focus-border);
 	outline-offset: -1px;
 }
+
+.ash-screenshot-overlay .ash-screenshot-text-button {
+	flex: 0 0 auto;
+	width: auto;
+	padding-inline: var(--snapshot-spacing-2);
+}

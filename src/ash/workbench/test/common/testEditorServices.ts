@@ -1,3 +1,5 @@
+import { ImageResizeService } from '../../../platform/imageResize/browser/imageResizeService.js';
+import { IImageResizeService } from '../../../platform/imageResize/common/imageResizeService.js';
 import { registerTestWorkbenchHostServices } from './workbenchHostTestServices.js';
 import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
@@ -122,6 +124,7 @@ export function createTestComponentServices(storage?: IStorageService, parent?: 
 }
 
 export function registerTestComponentServices(services: InstantiationService, document: Document = globalThis.document): InstantiationService {
+	if (!services.has(IImageResizeService)) { services.registerSingleton(IImageResizeService, () => services.createInstance(ImageResizeService)); }
 	if (!services.has(IActionViewItemService)) {
 		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IActionViewItemService)![1];
 		services.registerSingleton(IActionViewItemService, () => services.createInstance(descriptor));

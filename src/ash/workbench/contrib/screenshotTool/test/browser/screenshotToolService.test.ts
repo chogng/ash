@@ -214,6 +214,7 @@ suite('chatScreenshot browser component', () => {
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await openScreenshot(page);
 		const overlay = page.getByRole('dialog', { name: 'Screen Capture', exact: true });
+		await expect(overlay.getByRole('button', { name: 'Pin', exact: true })).toHaveCount(0);
 		await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
 		const image = (await overlay.locator('canvas').boundingBox())!;
 		const point = (x: number, y: number) => ({ x: image.x + x * image.width / 800, y: image.y + y * image.height / 480 });

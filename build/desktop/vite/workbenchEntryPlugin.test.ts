@@ -112,6 +112,10 @@ for (const preserveSymlinks of [false, true]) {
 			const origin = `http://127.0.0.1:${address.port}`;
 			const html = await (await fetch(`${origin}/index.html`)).text();
 			assert.match(html, /ash-workbench-css-modules/u);
+			const imageHost = await readFile(resolve(import.meta.dirname, '../../../src/ash/code/electron-browser/screenshot/screenshot.html'), 'utf8');
+			const isolated = await server.transformIndexHtml('/electron-browser/screenshot/screenshot.html', imageHost);
+			assert.doesNotMatch(isolated, /ash-workbench-css-modules|_ASH_CSS_LOAD|importmap/u);
+			assert.match(isolated, /script-src 'self' 'unsafe-inline';/u);
 			const data = /type="application\/json">\s*([^<]+)<\/script>/u.exec(html)?.[1];
 			assert.ok(data, html);
 			const modules = JSON.parse(data) as { specifiers: string[]; stylesheet: string; }[];

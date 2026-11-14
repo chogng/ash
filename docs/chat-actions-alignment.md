@@ -86,7 +86,7 @@
 | `platform/native/common/native.ts`、`nativeHost.ts`、`electron-browser/nativeHostApi.ts`、`electron-main/nativeHostMainService.ts`，双方都有 | 加入真实调用的窗口枚举与截图 API；元数据枚举不批量获取窗口像素，Renderer IPC 校验身份及 PNG。                           |
 | `platform/native/electron-main/macScreenWindows.ts`，仅上游原有                                                                              | Core Graphics 元数据与系统窗口 PNG 捕获；排除当前 Ash 进程、限制进程运行时间、清理私有临时目录。                        |
 | `platform/native/electron-main/rendererSystemHostRoutes.ts`，Ash IPC owner                                                                   | 将窗口身份限定为发送窗口最近枚举所得的集合；已有 screenshot endpoint 仍只截发送方自身窗口。                             |
-| `platform/imageView` 与 `workbench/services/imageEditor`，Ash 图片编辑 owner                                                                 | 已有图片输入不触发整屏捕获，也不检查屏幕录制权限；原编辑器与原插件生命周期继续生效。                                    |
+| `platform/screenshot` 与 `workbench/services/imageEditor`，Ash 图片编辑 owner                                                                | 已有图片输入不触发整屏捕获，也不检查屏幕录制权限；扩展编辑器通过共享 Webview 承载。                                     |
 | `code/electron-main/app.ts`，双方都有                                                                                                        | 系统快捷键在 Ash 失焦时选择最后活动窗口；各窗口租约仍由平台 registry 管理。                                             |
 | 原测试替身、中文语言包与 Chat 无障碍帮助                                                                                                     | 同批补齐 Native Host 依赖，覆盖权限、取消、草稿退役、目标会话、图片传递和中文命令。                                     |
 
@@ -102,11 +102,11 @@ macOS 权限不足时打开 Setup。允许设置跳转、只读复查、返回�
 
 ## 内置截图编辑器
 
-已确认的 Ash 扩展能力归入 `workbench/contrib/screenshotTool`：截图后停留、矩形、箭头、画笔、文字、马赛克、撤销、复制、保存与加入 Chat。`screenshotTool.contribution.ts` 注册窗口级 `IScreenshotToolService`；服务编排内置呈现与取消，通用 Native／Browser 图片适配器承载交互，`platform/imageView` 持有原生窗口和输出，Native 层检查权限，截图入口协调 Setup。
+已确认的 Ash 扩展能力归入 `workbench/contrib/screenshotTool`：截图后停留、矩形、箭头、画笔、文字、马赛克、撤销、复制、保存、置顶与加入 Chat。`screenshotTool.contribution.ts` 注册窗口级 `IScreenshotToolService`；已有图片和代码图片在请求窗口内编辑，`platform/screenshot` 承载桌面选区和独立置顶窗口。Native 层检查权限，截图入口协调 Setup。外部图像编辑 Provider 由 `workbench/services/imageEditor` 通过共享 Webview 承载；输出复用剪贴板和文件服务。
 
 `screenshotToolView.ts` 启动用户确认的增强编辑界面；从 Ash 自有 Snapshot 实现迁移，保持画布、坐标和历史模型，不复制 VS Code 标注实现。`imageEditorSelection.ts` 将代码快照从扩展适配器归还图片编辑领域，内置命令和扩展适配器复用同一读取逻辑。`snapshot.code`、`snapshot.code.*` 和截图快捷键配置保留现有身份；设置导航改为 Workbench 的 Screenshot 分类。
 
-`extensions/snapshot` 已移除，产品构建通过标准 Renderer 模块加载内置组件；默认截图不再经过扩展目录、SDK 或 Worker 激活。字体、主题、无障碍帮助与中英文文案随内置界面加载。Pin、OCR 与翻译不在本次迁移范围。
+`extensions/snapshot` 已移除，产品构建通过标准 Renderer 模块加载内置组件；默认截图不再经过扩展目录、SDK 或 Worker 激活。字体、主题、无障碍帮助与中英文文案随内置界面加载。置顶窗口保留最终标注像素，关闭来源窗口后仍可使用；OCR 与翻译不在本次迁移范围。
 
 权限职责归位后，32 项定向单元／浏览器测试与 10 个 Ash Desktop 自托管场景分批通过。覆盖通用图片协议拒绝旧权限卡片、隔离帧忽略权限操作、桌面截图准入与取消、Chat 命令回退、标注导出、中英文 Setup、权限不足时的后台快捷键，以及已有图片和代码图片不取屏。Main、Renderer、Common、自动化类型、七环境分层、构建和 CSS 检查通过，中文缺失项为零。4 个真实桌面／其他应用像素场景因测试宿主缺少 macOS 屏幕录制权限跳过，保留根目录既有实机验收条目。
 

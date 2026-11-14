@@ -53,7 +53,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	private readonly bootstrapUrl: URL;
 	private readonly localResourceRoots: readonly URI[];
 	private readonly allowScripts: boolean;
-	private readonly messageProtocol: 'mcp' | undefined;
+	private readonly messageProtocol: 'mcp' | 'imageEditor' | undefined;
 	private readonly contentSecurityPolicy: WebviewContentOptions['contentSecurityPolicy'];
 	private readonly resourceRequests = this._register(new MutableDisposable());
 	private documentCancellation: CancellationTokenSource | undefined;

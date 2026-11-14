@@ -1,3 +1,4 @@
+import { ImageResizeService } from '../../../../../platform/imageResize/browser/imageResizeService.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import assert from 'node:assert/strict';
@@ -19,6 +20,7 @@ const resolver = new ChatAttachmentResolveService(
 	{} as IFileSearchService,
 	{} as IWorkspaceContextService,
 	{} as IChatContextService,
+	new ImageResizeService(),
 );
 
 test('native text drops retain their real source URI alongside the captured bytes', async () => {

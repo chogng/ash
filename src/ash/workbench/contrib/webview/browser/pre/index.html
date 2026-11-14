@@ -59,6 +59,10 @@
 				});
 				window.addEventListener('message', event => {
 					if (closed) return;
+					if (messageProtocol === 'imageEditor' && event.source === frame?.contentWindow && event.data?.channel === undefined && ['initialize', 'ready', 'complete'].includes(event.data?.type)) {
+						host.postMessage({ channel: documentChannel, message: event.data }, '*');
+						return;
+					}
 					if (messageProtocol === 'mcp' && event.source === frame?.contentWindow && event.data?.jsonrpc === '2.0' && (typeof event.data.method !== 'string' || !event.data.method.startsWith('ui/notifications/sandbox-'))) {
 						host.postMessage({ channel: documentChannel, message: event.data }, '*');
 						return;

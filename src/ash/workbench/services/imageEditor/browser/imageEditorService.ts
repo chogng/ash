@@ -42,10 +42,6 @@ export abstract class ImageEditorService extends Disposable implements IImageEdi
 		return { view, displayName: provider.displayName, signal: requestSignal };
 	}
 	protected resolveInput(options: ImageEditorOptions | undefined, signal: AbortSignal) {
-		if (options?.presentation) {
-			signal.throwIfAborted();
-			return Promise.resolve({ view: options.presentation, displayName: options.presentation.displayName, signal });
-		}
 		return this.resolve(options?.code ? 'selection' : 'screen', signal, options?.editorId);
 	}
 	registerAttachmentHandler(handler: (capture: ImageEditorCapture) => Promise<void>) {
@@ -65,19 +61,24 @@ export abstract class ImageEditorService extends Disposable implements IImageEdi
 		// Add to Chat returns pixels; copy, save and cancel never open a chat.
 		const image = await this.capture(signal, { ...options, defaultAction: 'copy' });
 		if (!image || signal.aborted || this.isDisposed) return;
+		await this.attach(async draftSignal => signal.aborted || draftSignal.aborted ? undefined : image);
+	}
+	async attach(capture: ImageEditorCapture): Promise<void> {
+		this.assertNotDisposed();
 		const handler = this.attachmentHandler;
-		if (!handler) throw new Error(localize('imageEditor.attachmentUnavailable', 'No image attachment target is registered.'));
-		await handler.run(async draftSignal => {
-			if (signal.aborted || draftSignal.aborted || handler.lifetime.signal.aborted) return undefined;
-			return image;
+		if (!handler) { throw new Error(localize('imageEditor.attachmentUnavailable', 'No image attachment target is registered.')); }
+		await handler.run(signal => {
+			const request = AbortSignal.any([signal, handler.lifetime.signal]);
+			return request.aborted ? Promise.resolve(undefined) : capture(request);
 		});
 	}
+
 	abstract capture(signal: AbortSignal, options?: ImageEditorOptions): Promise<VSBuffer | undefined>;
-	override dispose(): void {
+	protected override disposeCore(): void {
 		this.attachmentHandler?.lifetime.abort();
 		this.attachmentHandler = undefined;
 		for (const provider of this.providers.values()) provider.dispose();
 		this.providers.clear();
-		super.dispose();
+		super.disposeCore();
 	}
 }

@@ -1,18 +1,26 @@
-import type { ImageViewCompletion } from '../../../../platform/imageView/common/imageView.js';
+import type { ImageEditorCompletion } from '../common/imageEditorService.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
+import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
+import { IWebviewService } from '../../../contrib/webview/browser/webview.js';
+import { writeImageOutput } from './imageEditorOutput.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { IHostService } from '../../host/browser/host.js';
-import { IImageEditorService, type ImageEditorOptions } from '../common/imageEditorService.js';
+import { type ImageEditorOptions } from '../common/imageEditorService.js';
 import { ImageEditorService } from './imageEditorService.js';
-import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { createImageViewFrame } from '../../../../platform/imageView/browser/imageViewFrame.js';
+import { createImageEditorWebview } from './imageEditorWebview.js';
 import { readImageEditorTheme } from './imageEditorTheme.js';
 
 export class BrowserImageEditorService extends ImageEditorService {
 	private readonly interactionLifetime = this._register(new MutableDisposable());
 	constructor(
 		@IHostService private readonly host: IHostService,
+		@IWebviewService private readonly webviews: IWebviewService,
+		@IClipboardService private readonly clipboard: IClipboardService,
+		@IFileDialogService private readonly dialogs: IFileDialogService,
+		@IFileService private readonly files: IFileService,
 	) { super(); }
 
 	public async capture(signal: AbortSignal, options?: ImageEditorOptions): Promise<VSBuffer | undefined> {
@@ -35,7 +43,7 @@ export class BrowserImageEditorService extends ImageEditorService {
 				const cancellation = addDisposableListener(resolved.signal, 'abort', abort, { once: true });
 				const open = async (): Promise<void> => {
 					try {
-						const image = options?.image?.buffer ?? (options?.code ? undefined : (await this.host.getScreenshot())?.buffer);
+						const image = options?.image?.buffer ?? (options?.code ? undefined : await this.getImage(resolved.signal));
 						if (finished) return;
 						if (!image && !options?.code) { finish(); return; }
 						const input = {
@@ -43,7 +51,7 @@ export class BrowserImageEditorService extends ImageEditorService {
 							image, code: options?.code, state: resolved.view.state, theme: readImageEditorTheme(document),
 							colorScheme: (document.querySelector('.ash-workbench') ?? document.body)?.getAttribute('data-color-scheme') ?? 'dark',
 						};
-						const complete = async (result: ImageViewCompletion): Promise<boolean> => {
+						const complete = async (result: ImageEditorCompletion): Promise<boolean> => {
 							if (result.kind === 'error') { finish(undefined, new Error(result.message)); return true; }
 							if (result.kind === 'retake') {
 								frame?.dispose(); frame = undefined;
@@ -51,19 +59,13 @@ export class BrowserImageEditorService extends ImageEditorService {
 								if (!finished) void open();
 								return true;
 							}
-							if (result.kind === 'copy') await navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(result.image)], { type: 'image/png' }) })]);
-							if (result.kind === 'save') {
-								const url = URL.createObjectURL(new Blob([new Uint8Array(result.image)], { type: 'image/png' }));
-								const link = document.createElement('a'); link.href = url; link.download = 'Image.png'; link.click();
-								setTimeout(() => URL.revokeObjectURL(url), 1000);
+							if (result.kind === 'copy' || result.kind === 'save') {
+								if (!await writeImageOutput(result.kind, result.image, this.clipboard, this.dialogs, this.files)) { return false; }
 							}
 							finish(result.kind === 'attach' ? result.image : undefined);
 							return true;
 						};
-						if (resolved.view.mount) {
-							const mounted = await resolved.view.mount(image, complete, resolved.signal);
-							if (finished) mounted.dispose(); else frame = mounted;
-						} else frame = createImageViewFrame(document, resolved.displayName, resolved.view.html, input, complete, () => { });
+						frame = createImageEditorWebview(document, this.webviews, resolved.displayName, resolved.view.html, input, complete);
 					} catch (error) { finish(undefined, error); }
 				};
 				if (resolved.signal.aborted) finish(); else void open();
@@ -73,6 +75,5 @@ export class BrowserImageEditorService extends ImageEditorService {
 			lifetime.dispose();
 		}
 	}
+	protected async getImage(_signal: AbortSignal): Promise<Uint8Array | undefined> { return (await this.host.getScreenshot())?.buffer; }
 }
-
-registerSingleton(IImageEditorService, BrowserImageEditorService, InstantiationType.Delayed);

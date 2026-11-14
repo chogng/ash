@@ -3,7 +3,7 @@ import './media/screenshotAnnotation.css';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import iconManifest from './media/icons.json' with { type: 'json' };
-import type { ImageViewCompletion as ScreenshotCompletion } from '../../../../platform/imageView/common/imageView.js';
+import type { ScreenshotToolCompletion as ScreenshotCompletion } from './screenshotTool.js';
 const SCREENSHOT_MAX_PIXELS = 16_777_216;
 const iconGlyphs = new Map(iconManifest.glyphs.map(icon => [icon.id, String.fromCodePoint(parseInt(icon.unicode, 16))]));
 type ScreenshotIcon = ScreenshotTool | 'undo' | 'coordinates' | 'help' | 'retake' | 'cancel' | 'save' | 'copy' | 'attach' | 'entire';
@@ -78,6 +78,7 @@ function paintScreenshotAnnotation(context: CanvasRenderingContext2D, annotation
 interface ScreenshotAnnotationEditorOptions {
 	readonly defaultAction: 'copy' | 'attach';
 	readonly canRetake: boolean;
+	readonly canPin?: boolean;
 	readonly accessibilityHints: boolean;
 	readonly help: string;
 	readonly selectEntire?: boolean;
@@ -171,16 +172,21 @@ export class ScreenshotAnnotationEditor extends Disposable {
 		this.toolbar.setAttribute('role', 'group');
 		this.toolbar.setAttribute('aria-label', localize('screenshot.tools', 'Screenshot tools'));
 		this.toolbar.hidden = true;
-		const button = (parent: HTMLElement, label: string, icon: ScreenshotIcon, run: () => void, primary = false): HTMLButtonElement => {
+		const button = (parent: HTMLElement, label: string, icon: ScreenshotIcon | undefined, run: () => void, primary = false): HTMLButtonElement => {
 			const element = node('button', 'ash-screenshot-icon-button');
 			element.type = 'button';
 			element.setAttribute('aria-label', label);
 			element.title = label;
-			const glyph = node('span', 'ash-screenshot-icon');
-			glyph.setAttribute('aria-hidden', 'true');
-			glyph.dataset.icon = icon;
-			glyph.dataset.glyph = iconGlyphs.get(icon)!;
-			element.append(glyph);
+			if (icon) {
+				const glyph = node('span', 'ash-screenshot-icon');
+				glyph.setAttribute('aria-hidden', 'true');
+				glyph.dataset.icon = icon;
+				glyph.dataset.glyph = iconGlyphs.get(icon)!;
+				element.append(glyph);
+			} else {
+				element.textContent = label;
+				element.classList.add('ash-screenshot-text-button');
+			}
 			if (primary) element.classList.add('primary');
 			this._register(addDisposableListener(element, 'click', run));
 			this.controls.push(element);
@@ -237,6 +243,9 @@ export class ScreenshotAnnotationEditor extends Disposable {
 		button(actions, localize('screenshot.cancel', 'Cancel'), 'cancel', () => {
 			void this.complete({ kind: 'cancel' });
 		});
+		if (options.canPin) {
+			button(actions, localize('screenshot.pin', 'Pin'), undefined, () => { void this.export('pin'); });
+		}
 		button(actions, localize('screenshot.save', 'Save'), 'save', () => {
 			void this.export('save');
 		}).title = localize('screenshot.saveTitle', 'Save screenshot');
@@ -732,7 +741,7 @@ export class ScreenshotAnnotationEditor extends Disposable {
 		content.focus();
 	}
 
-	private async export(kind: 'attach' | 'copy' | 'save'): Promise<void> {
+	private async export(kind: 'attach' | 'copy' | 'save' | 'pin'): Promise<void> {
 		if (!this.region || this.busy) return;
 		this.commitText();
 		const { x, y, width, height } = this.region;
