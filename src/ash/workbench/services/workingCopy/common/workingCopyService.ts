@@ -40,6 +40,10 @@ export interface IWorkingCopyService extends IDisposable {
 	readonly onDidRegister: Event<IWorkingCopy>;
 	readonly onDidUnregister: Event<IWorkingCopy>;
 	readonly onDidChangeDirty: Event<void>;
+	readonly onDidChangeAutoSave: Event<void>;
+	/** Domain save policies lease scheduling so the configured saver does not race them. */
+	registerAutoSave(workingCopy: IWorkingCopy): IDisposable;
+	isAutoSaveManaged(workingCopy: IWorkingCopy): boolean;
 	readonly hasDirtyWorkingCopies: boolean;
 	register(workingCopy: IWorkingCopy): IDisposable;
 	get(resource: URI): readonly IWorkingCopy[];

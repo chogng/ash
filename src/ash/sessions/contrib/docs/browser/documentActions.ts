@@ -1,3 +1,7 @@
+import { getArtifactDraftHome } from '../../artifact/browser/artifactStorage.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
+import { IWorkingCopyBackupService } from '../../../../workbench/services/workingCopy/common/workingCopyBackupService.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -53,6 +57,21 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 	const instantiation = accessor.get(IInstantiationService);
 	const remember = (resource: URI) => storage.store(activeDocsKey, resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	return async (resource: URI, options: { source?: 'restore'; label?: string; initialText?: string; } = {}) => {
+		const draftSource = resource.scheme === Schemas.untitled ? resource : undefined;
+		// Chat drafts have an internal file identity before editing; export chooses a separate destination.
+		if (resource.scheme === Schemas.untitled) {
+			const { files, profiles, workspace, backups } = instantiation.invokeFunction(accessor => ({
+				files: accessor.get(IFileService), profiles: accessor.get(IUserDataProfileService),
+				workspace: accessor.get(IWorkspaceContextService), backups: accessor.get(IWorkingCopyBackupService),
+			}));
+			const backup = await backups.resolve(resource);
+			const home = URI.joinPath(getArtifactDraftHome(profiles.currentProfile.location, workspace.getWorkspace().id), 'docs', generateUuid());
+			await files.createDirectory(home);
+			const target = URI.joinPath(home, basename(resource));
+			await files.writeFile({ resource: target, content: options.initialText ?? (backup?.kind === 'text' ? backup.content : '') });
+			options = { ...options, label: options.label ?? basename(resource), initialText: undefined };
+			resource = target;
+		}
 		const source = { resource, label: options.label, initialText: options.initialText };
 		const input = /\.ash-doc$/iu.test(resource.path) ? await instantiation.invokeFunction(accessor => migrateLegacyDocsInput(source, accessor)) : createArkdownDocsInput(source);
 		const entry = {
@@ -67,6 +86,7 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 			remember(input.resource);
 			return entry;
 		}, { source: options.source });
+		if (draftSource) await instantiation.invokeFunction(accessor => accessor.get(IWorkingCopyBackupService)).delete(draftSource);
 	};
 }
 

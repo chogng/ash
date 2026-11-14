@@ -1499,18 +1499,11 @@ test('Artifacts menu commands use their originating workspace and reject hidden 
 	first.click('More Actions');
 	const menu = contextMenu!;
 	const actions = menu.getActions();
-	assert.deepEqual(actions.map(action => action.label), ['Open document', 'Save document']);
+	assert.deepEqual(actions.map(action => action.label), ['Open document']);
 	const menuContext = menu.getActionsContext?.();
 	assert.equal(menuContext, source);
-	const addButton = () => first.page.domNode.querySelector<HTMLButtonElement>(`[data-action-id="${addSlide}"] button`)!;
-	let disabledWhileSaving = false;
-	using saving = firstDocument.onDidChange(() => {
-		if (firstDocument.isBusy) disabledWhileSaving = addButton().disabled;
-	});
 	services.get(IContextMenuService).hideContextMenu();
-	await menu.actionRunner!.run(actions[1], menuContext);
-	assert.equal(disabledWhileSaving, true);
-	assert.equal(addButton().disabled, false);
+	assert.equal(await firstDocument.flushAutoSave(), true);
 	assert.equal(firstDocument.isDirty, false);
 	assert.equal(parseArtifactCanvasDocument(fileContent).documentId, firstSlides.value.documentId);
 
@@ -1541,7 +1534,7 @@ test('Artifacts saves workspace identity and refuses to replace another mode wit
 });
 
 
-test('Artifacts shutdown checks dirty documents in hidden modes', async () => {
+test('Artifacts shutdown automatically saves dirty documents in hidden modes', async () => {
 	using child = services.createChild();
 	using shutdown = new Emitter<IBeforeShutdownEvent>();
 	child.registerInstance(ILifecycleService, { ...services.get(ILifecycleService), onBeforeShutdown: shutdown.event });
@@ -1554,8 +1547,8 @@ test('Artifacts shutdown checks dirty documents in hidden modes', async () => {
 		saveDecision = ConfirmResult.CANCEL;
 		const vetoes: (boolean | Promise<boolean>)[] = [];
 		shutdown.fire({ reason: 'windowClose', veto: value => { vetoes.push(value); } });
-		assert.equal((await Promise.all(vetoes)).some(Boolean), true);
-		assert.equal(slides.isDirty, true);
+		assert.equal((await Promise.all(vetoes)).some(Boolean), false);
+		assert.equal(slides.isDirty, false);
 		assert.equal(editors.activeEditor.get(), undefined);
 	} finally { saveDecision = ConfirmResult.DONT_SAVE; }
 });
@@ -2679,9 +2672,11 @@ test('Slides opens packages and rejects standalone JSON', async () => {
 	await fixture.files.writeFile({ resource: loose, content: serializeArtifactCanvasDocument(source.model.value) });
 	assert.equal(await source.saveDocument(fixture.copyResource), true);
 	using opened = child.createInstance(ArtifactCanvasDocumentController, ArtifactWorkspaceId.Slides);
+	await opened.ready;
+	const before = opened.model.value;
 	await opened.openDocument();
 	assert.match(errorDetail!, /Choose an Ash Slides file package/u);
-	assert.equal(opened.model.value.shapes.length, 0);
+	assert.deepEqual(opened.model.value, before);
 	selected = fixture.copyResource;
 	await opened.openDocument();
 	assert.deepEqual(opened.model.value, source.model.value);

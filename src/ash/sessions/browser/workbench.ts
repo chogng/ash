@@ -1,3 +1,4 @@
+import { IArtifactAutoSaveService } from '../services/artifactAutoSave/common/artifactAutoSaveService.js';
 import { IBackupService } from '../../platform/backup/common/backup.js';
 import { IWorkingCopyBackupService } from '../../workbench/services/workingCopy/common/workingCopyBackupService.js';
 import { WorkingCopyBackupService } from '../../workbench/services/workingCopy/browser/workingCopyBackupService.js';
@@ -1398,7 +1399,12 @@ export abstract class Workbench extends Disposable {
 		const editorArea = this._register(services.createInstance(DesktopEditorArea, this.domNode));
 		const titlebarHeight = observableFromEvent(this, titlebar.onDidChangeConstraints, () => titlebar.minimumHeight);
 		const fileDialogService = services.get(IFileDialogService);
+		const artifactAutoSave = services.get(IArtifactAutoSaveService);
 		const editorOptions: IEditorPartOptions = {
+			beforeCloseEditor: async resource => {
+				try { await artifactAutoSave.flush(resource); return true; }
+				catch { return false; }
+			},
 			headerRowHeight: derived(reader => flatLayout.read(reader) ? titlebarHeight.read(reader) : undefined),
 			configurationService: this.configurationService,
 			modalContainer: this.domNode,

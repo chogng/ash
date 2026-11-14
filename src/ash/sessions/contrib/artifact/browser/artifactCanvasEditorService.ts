@@ -124,6 +124,7 @@ export class ArtifactCanvasEditorService extends Disposable implements IArtifact
 		lifetime.add(document.onDidChangeLabel(updateTitle));
 		lifetime.add(document.onDidChangeContent(updateTitle));
 		lifetime.add(this.workingCopies.register(document));
+		lifetime.add(this.workingCopies.registerAutoSave(document));
 		lifetime.add(document);
 		this.artifacts.set(new Map(this.artifacts.get()).set(id, document));
 	}
@@ -142,6 +143,7 @@ export class ArtifactCanvasEditorService extends Disposable implements IArtifact
 		if (!document) {
 			document = this._register(this.instantiation.createInstance(ArtifactCanvasDocumentController, mode));
 			this._register(this.workingCopies.register(document));
+			this._register(this.workingCopies.registerAutoSave(document));
 			this.documents.set(mode, document);
 		}
 		return document;

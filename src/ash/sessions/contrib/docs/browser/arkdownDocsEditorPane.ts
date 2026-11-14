@@ -1,10 +1,10 @@
 import './docsEditorPane.css';
 import { ArkdownEditorPane } from './arkdown/arkdownEditorPane.js';
 import type { ArkdownEditor } from './arkdown/arkdownEditor.js';
+import { MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { IArtifactAutoSaveService } from '../../../services/artifactAutoSave/common/artifactAutoSaveService.js';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { Action } from '../../../../base/common/actions.js';
-import { isCancellationError } from '../../../../base/common/errors.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
 import { isNative } from '../../../../base/common/platform.js';
 import { basename, extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -12,7 +12,6 @@ import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
@@ -35,7 +34,7 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 	private root!: HTMLElement;
 	private body!: HTMLElement;
 	private documentInput: IResourceEditorInput | undefined;
-	private saveAction!: Action;
+	private readonly autoSaveScope = this._register(new MutableDisposable());
 	private exportAction!: Action;
 	public get titlebarContent(): HTMLElement { return this.titlebar.domNode; }
 	public get workingCopy(): EditorWorkingCopy | undefined { return this.editor.workingCopy; }
@@ -46,13 +45,13 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
 		@IFileDialogService private readonly fileDialogs: IFileDialogService,
-		@INotificationService private readonly notifications: INotificationService,
+		@IArtifactAutoSaveService private readonly autoSave: IArtifactAutoSaveService,
 		@IFileTextModelService private readonly models: IFileTextModelService,
 		@IWorkingCopyBackupService private readonly backups: IWorkingCopyBackupService,
 	) {
 		super(DOCS_ARKDOWN_EDITOR_ID, theme, storage);
 		this.editor = this._register(instantiation.createInstance(ArkdownEditorPane, { id: DOCS_ARKDOWN_EDITOR_ID, onSave }));
-		this._register(this.editor.onTitleAreaUpdate(() => this.updateReadOnly()));
+		this._register(this.editor.onTitleAreaUpdate(() => this.refreshActions()));
 	}
 
 	override create(parent: HTMLElement): void {
@@ -67,10 +66,6 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 		parent.append(this.root);
 		this.editor.create(this.body);
 		super.create(this.root);
-		this.saveAction = this._register(new Action('sessions.docs.save', localize('sessions.artifacts.save', 'Save document'), '', true, async () => {
-			try { await this.save(); } catch (error) { if (!isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error)); }
-		}));
-		this.saveAction.icon = Lxicon.save;
 		this.exportAction = this._register(new Action('sessions.docs.export.markdown', localize({ bundle: 'ash.docs', key: 'exportMarkdown' }, 'Markdown file (.md)'), '', true, () => this.exportMarkdown()));
 		this.refreshActions();
 	}
@@ -83,13 +78,14 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 		await this.editor.setInput(input, signal);
 		if (backup?.kind === 'text' && this.workingCopy && !this.workingCopy.isDirty) this.workingCopy.restoreBackup(backup.content);
 		this.documentInput = input;
+		if (this.workingCopy) this.autoSaveScope.value = this.autoSave.register(this.workingCopy);
 		this.editor.setMode(this.configuration.getValue<DocsEditorMode>(DOCS_DEFAULT_MODE_SETTING) ?? 'rich');
 		this.titlebar.setTitle(input.label ?? basename(input.resource));
 		this.titlebar.refreshTitleActions();
-		this.updateReadOnly();
+		this.refreshActions();
 	}
 
-	override clearInput(): void { this.titlebar?.closeTitleMenu(); this.documentInput = undefined; this.editor.clearInput(); }
+	override clearInput(): void { this.titlebar?.closeTitleMenu(); this.autoSaveScope.clear(); this.documentInput = undefined; this.editor.clearInput(); }
 	override layout(dimension: IDimension): void { this.root.style.width = `${dimension.width}px`; this.root.style.height = `${dimension.height}px`; this.editor.layout(dimension); }
 	override focus(): void { this.editor.focus(); }
 	override setVisible(visible: boolean): void { super.setVisible(visible); this.editor.setVisible(visible); if (!visible) this.titlebar?.closeTitleMenu(); }
@@ -110,12 +106,11 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 	}
 
 	private refreshActions(): void {
+		if (!this.exportAction) return;
 		this.titlebar.setActions([
-			{ id: this.saveAction.id, label: this.saveAction.label, tooltip: this.saveAction.label, icon: this.saveAction.icon, enabled: this.saveAction.enabled, run: () => this.saveAction.run() },
 			...this.editor.getActions(),
 		], [this.exportAction]);
 	}
-	private updateReadOnly(): void { if (!this.documentInput) return; const readOnly = this.documentInput.readOnly === true || !!this.editor.isReadonly; this.saveAction.enabled = !readOnly; this.refreshActions(); }
 	private async exportMarkdown(): Promise<void> {
 		const input = this.documentInput;
 		if (!input || !this.editor.getControl()) return;

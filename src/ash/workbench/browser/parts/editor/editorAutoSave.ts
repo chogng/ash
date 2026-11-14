@@ -26,6 +26,9 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 		for (const workingCopy of workingCopies.getAll()) this.attach(workingCopy);
 		this._register(workingCopies.onDidRegister(workingCopy => this.attach(workingCopy)));
 		this._register(workingCopies.onDidUnregister(workingCopy => this.detach(workingCopy)));
+		this._register(workingCopies.onDidChangeAutoSave(() => {
+			for (const copy of workingCopies.getAll()) this.schedule(copy);
+		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (!event.affectsConfiguration(EditorAutoSaveConfiguration) && !event.affectsConfiguration(EditorAutoSaveDelayConfiguration)) return;
 			this.clearTimers();
@@ -81,7 +84,7 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 
 	private schedule(workingCopy: IWorkingCopy): void {
 		this.clearTimer(workingCopy);
-		if (this.isDisposed || this.mode !== 'afterDelay' || !workingCopy.isDirty || workingCopy.hasExternalChange) return;
+		if (this.isDisposed || this.mode !== 'afterDelay' || this.workingCopies.isAutoSaveManaged(workingCopy) || !workingCopy.isDirty || workingCopy.hasExternalChange) return;
 		const ownerWindow = this.editorPart.domNode.ownerDocument.defaultView;
 		if (!ownerWindow) return;
 		const handle = ownerWindow.setTimeout(() => {
@@ -98,7 +101,7 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 	}
 
 	private async save(workingCopy: IWorkingCopy, reason: SaveReason): Promise<void> {
-		if (workingCopy.resource.scheme === 'untitled' || !workingCopy.isDirty || workingCopy.hasExternalChange || this.saving.has(workingCopy)) return;
+		if (this.workingCopies.isAutoSaveManaged(workingCopy) || workingCopy.resource.scheme === 'untitled' || !workingCopy.isDirty || workingCopy.hasExternalChange || this.saving.has(workingCopy)) return;
 		this.saving.add(workingCopy);
 		try {
 			await workingCopy.save(new AbortController().signal, { reason });

@@ -33,6 +33,7 @@ import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/cha
 import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { ForkConversationAction } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import '../services/generatedFiles/browser/generatedFiles.contribution.js';
+import '../services/artifactAutoSave/browser/artifactAutoSave.contribution.js';
 import '../../workbench/contrib/chatWindow/browser/chatWindow.contribution.js';
 import '../contrib/sessions/browser/sessionsActions.js';
 import '../contrib/sessions/browser/views/sessionsViewActions.js';

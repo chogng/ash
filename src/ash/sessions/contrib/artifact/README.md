@@ -19,7 +19,7 @@ Artifacts 是 Sessions 的创作主页。七项新建入口打开 Chat 草稿，
 
 `EditorPart` 管布局和切换，编辑器及其模型管内容、交互、保存和导出。`ArtifactCanvasView` 是画布类作品的正文组件。会话 Canvases 是另一条打开路径，由 [`CanvasEditor`](../../../workbench/contrib/canvases/electron-browser/canvasEditor.ts) 通过 Electron `WebContentsView` 呈现交互网页。
 
-在命令面板运行 Choose default Docs view，可以新建空白文档，或选择文档与 Markdown 源码作为默认视图。Docs 统一使用 Arkdown 和 `.md`，旧 `.ash-doc` 单向迁移并保留原文件。默认视图由 UI profile 的 `sessions.docs.editor` 设置持有。[Docs](../docs/README.md) 持有文档产品能力，复用 Workbench 的工作副本、保存和备份。ChatGPT Web 已登记的写作块打开原有 Markdown；编辑副本会打开独立草稿。Sheet 和 Data 的草稿自动保存在当前工作区，重开后可从 Artifacts 继续编辑。导出 CSV 会生成独立文件。
+在命令面板运行 Choose default Docs view，可以新建空白文档，或选择文档与 Markdown 源码作为默认视图。Docs 统一使用 Arkdown 和 `.md`，新建草稿直接持久化到 UI profile 的 `creator/<workspace-id>/docs/<document-id>/`。Docs 与生成文件共用 `IArtifactAutoSaveService`，通过现有工作副本保存，关闭前等待最新修改落盘。旧 `.ash-doc` 单向迁移并保留原文件。默认视图由 UI profile 的 `sessions.docs.editor` 设置持有。[Docs](../docs/README.md) 持有文档产品能力，复用 Workbench 的工作副本、保存和备份。ChatGPT Web 已登记的写作块打开原有 Markdown；编辑副本会打开独立草稿。Sheet 和 Data 的草稿自动保存在当前工作区，重开后可从 Artifacts 继续编辑。导出 CSV 会生成独立文件。
 
 ## 画布工作区
 
@@ -118,7 +118,7 @@ Typography 面板面向整层或当前字符选区，显示混合值，支持字
 | 当前工具与模式                           | 每个 Widget                                 | 否                             |
 | 文件 URI、读取版本、已保存内容和操作状态 | `ArtifactCanvasDocumentController`          | 否                             |
 
-多个 Widget 可以使用同一个文档控制器，共享已提交内容与历史，同时保留各自的选区和视口。Widget 借用控制器的模型；单独释放 Widget 会取消手势，释放 View、输入控制器、共享工具栏及该实例的全部贡献，并清理订阅和命令查找记录。View 释放画布的主题与配置订阅，Motion 释放播放时钟；文档仍由控制器持有。活动页切换隐藏对应编辑组或 EditorPane，`ArtifactEditorView` 保留页面组件与 Widget；隐藏画布会取消手势并停止动画播放，回到设计页时恢复原选区和视口。Artifacts 页面使用 EditorPart 中保留的产品编辑组，不进入会话 Code 工作集，页面切换不会触发关闭确认。Design 文档由控制器自动保存：未命名草稿以现有设计文件包格式保存在当前 UI profile 的兼容磁盘路径 `creator/<workspace-id>/<document-id>.ash-design`（运行时状态使用 `artifacts.*`）；工作空间机器状态只记录上次文档 URI，重新进入 Design 时加载该文件包。已打开的文件保留版本检查并自动写回。正常关闭等待全部修改保存，不询问保存；失败时保留画布内容并阻止关闭，可重试。保存副本、导出与发布仍需显式操作。其他 Artifacts 模式继续通过关闭生命周期确认保存、放弃或取消；窗口关闭后释放文档。
+多个 Widget 可以使用同一个文档控制器，共享已提交内容与历史，同时保留各自的选区和视口。Widget 借用控制器的模型；单独释放 Widget 会取消手势，释放 View、输入控制器、共享工具栏及该实例的全部贡献，并清理订阅和命令查找记录。View 释放画布的主题与配置订阅，Motion 释放播放时钟；文档仍由控制器持有。活动页切换隐藏对应编辑组或 EditorPane，`ArtifactEditorView` 保留页面组件与 Widget；隐藏画布会取消手势并停止动画播放，回到设计页时恢复原选区和视口。Artifacts 页面使用 EditorPart 中保留的产品编辑组，不进入会话 Code 工作集，页面切换不会触发关闭确认。画布工作区由控制器自动保存：未命名草稿以现有设计文件包格式保存在当前 UI profile 的兼容磁盘路径 `creator/<workspace-id>/<document-id>.ash-design`（运行时状态使用 `artifacts.*`）；工作空间机器状态只记录上次文档 URI，重新进入 Design 时加载该文件包。已打开的文件保留版本检查并自动写回。正常关闭等待全部修改保存，不询问保存；失败时保留画布内容并阻止关闭，可重试。保存副本、导出与发布仍需显式操作。窗口关闭后释放文档。
 
 文档文件保存所属模式；打开和恢复备份必须匹配当前工作空间。原有未记录模式的 Design 文件保持 Design 语义。每种模式的工作副本资源为 `ash-artifacts:/<mode>`，窗口导航迁移旧的 Design 命令顺序与页面选择。
 

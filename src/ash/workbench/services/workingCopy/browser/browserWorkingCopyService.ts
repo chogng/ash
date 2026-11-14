@@ -7,6 +7,9 @@ import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uri
 
 /** Browser registry for editor-domain working copies. */
 export class BrowserWorkingCopyService extends Disposable implements IWorkingCopyService {
+	private readonly autoSaveOwners = new Map<IWorkingCopy, number>();
+	private readonly autoSaveChanged = this._register(new Emitter<void>());
+	readonly onDidChangeAutoSave = this.autoSaveChanged.event;
 	private readonly copies = new Map<string, Set<IWorkingCopy>>();
 	private readonly dirtySubscriptions = this._register(new DisposableMap<IWorkingCopy>());
 	private readonly _onDidRegister = this._register(new Emitter<IWorkingCopy>());
@@ -19,7 +22,7 @@ export class BrowserWorkingCopyService extends Disposable implements IWorkingCop
 
 	constructor(@IUriIdentityService private readonly uriIdentity: IUriIdentityService) {
 		super();
-		this._register(toDisposable(() => this.copies.clear()));
+		this._register(toDisposable(() => { this.copies.clear(); this.autoSaveOwners.clear(); }));
 	}
 
 	register(workingCopy: IWorkingCopy): ReturnType<typeof toDisposable> {
@@ -46,6 +49,21 @@ export class BrowserWorkingCopyService extends Disposable implements IWorkingCop
 			this._onDidUnregister.fire(workingCopy);
 			if (workingCopy.isDirty) this._onDidChangeDirty.fire();
 		});
+	}
+
+	registerAutoSave(copy: IWorkingCopy): ReturnType<typeof toDisposable> {
+		this.autoSaveOwners.set(copy, (this.autoSaveOwners.get(copy) ?? 0) + 1);
+		this.autoSaveChanged.fire();
+		return toDisposable(() => {
+			const count = (this.autoSaveOwners.get(copy) ?? 1) - 1;
+			if (count) this.autoSaveOwners.set(copy, count);
+			else this.autoSaveOwners.delete(copy);
+			this.autoSaveChanged.fire();
+		});
+	}
+
+	isAutoSaveManaged(copy: IWorkingCopy): boolean {
+		return [...this.autoSaveOwners.keys()].some(owner => this.uriIdentity.extUri.isEqual(owner.resource, copy.resource));
 	}
 
 	get hasDirtyWorkingCopies(): boolean {

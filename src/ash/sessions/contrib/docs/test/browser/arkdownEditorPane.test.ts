@@ -16,6 +16,7 @@ suite('Arkdown editor pane', () => {
 		await expect(browser.page.locator('body')).toHaveAttribute('data-ready', 'true');
 		const help = await browser.page.evaluate(() => window.arkdownPaneFixture.help.join(' '));
 		assert.ok(help.includes('有序列表') && help.includes('Shift+Tab') && help.includes('新增一行') && help.includes('断线编辑') && help.includes('撤销本地编辑'));
+		assert.ok(help.includes('自动保存') && help.includes('独立副本'));
 		assert.ok(help.includes('切换标签页') && help.includes('256') && help.includes('释放此前历史'));
 		await expect(browser.page.getByRole('textbox', { name: '文档正文', exact: true })).toBeVisible();
 	});

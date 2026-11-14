@@ -106,7 +106,6 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		);
 		ArtifactWorkspace.registerActions(ArtifactWorkspace, 'sessions.artifacts.canvas', 'file', when, [
 			{ id: 'open', title: localize2('sessions.artifacts.open', 'Open document'), when: ArtifactWorkspaceHasManagedDocument.isEqualTo(false), run: workspace => workspace.document.openDocument() },
-			{ id: 'save', title: localize2('sessions.artifacts.save', 'Save document'), when: ArtifactWorkspaceHasManagedDocument.isEqualTo(false), run: workspace => workspace.editor.saveDocument() },
 		]);
 	}
 

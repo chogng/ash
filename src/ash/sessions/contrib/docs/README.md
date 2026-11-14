@@ -15,7 +15,7 @@ Docs 持有 Sessions 的文档创建、打开、默认视图选择、HTML 写作
 
 Docs 命令使用 `sessions.docs.*`，恢复入口为 `sessions.restore.docs`。恢复时读取并迁移旧的 Artifacts 文档指针。作品标题栏和作品页布局属于 Artifacts 的共享呈现能力，Docs 通过公共契约消费。生成 Markdown 的通用链接根据当前模式打开，Chat 进入 Docs，Code 使用文件编辑器。显式 Docs 命令通过作品入口进入 Chat。
 
-`DocsEditorMode` 表达 Arkdown 的正文与 Markdown 源码视图。默认视图由 `DOCS_DEFAULT_MODE_SETTING` 持有，持久化键为 `sessions.docs.editor`，命令 ID 为 `sessions.docs.chooseEditor`。设置使用现有 Application 范围与用户配置文件，`automatic` 读取为 `rich`。新建入口共用 `createDocsDocument`，新建、文本转换、HTML 写作块与通用 DOCX 导入均创建 `.md`。论文 DOCX 继续交给论文编辑器。
+`DocsEditorMode` 表达 Arkdown 的正文与 Markdown 源码视图。默认视图由 `DOCS_DEFAULT_MODE_SETTING` 持有，持久化键为 `sessions.docs.editor`，命令 ID 为 `sessions.docs.chooseEditor`。设置使用现有 Application 范围与用户配置文件，`automatic` 读取为 `rich`。新建入口共用 `createDocsDocument`，新建、文本转换、HTML 写作块与通用 DOCX 导入均创建内部持久化 `.md` 草稿，使用 Artifacts 自动保存策略；导出创建独立副本。论文 DOCX 继续交给论文编辑器。
 
 Arkdown 的 Markdown 入口接续文档导出命令：Markdown 导出保留源码，纯文本导出读取正文投影；文件导出当前提供 `.md`。超过解析复杂度限制时保留原文并切换到可编辑源码，可缩减内容后返回正文视图。
 

@@ -85,7 +85,7 @@ export class SessionsBrowserMain extends Disposable {
 					return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 				} : undefined,
 				contributionIds: [
-					'sessions.generatedFileAutoSave',
+					'sessions.artifactAutoSave',
 					'sessions.generatedFileOpener',
 					'sessions.docs.backup',
 					'sessions.chat.copyActionRendering',

@@ -1,3 +1,5 @@
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { IUserDataProfileService } from '../../../../../workbench/services/userDataProfile/common/userDataProfile.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -26,7 +28,7 @@ import { BrowserStorageService } from '../../../../../workbench/services/storage
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { EditorPanes } from '../../../../../workbench/browser/editor.js';
 import { DOCS_ARKDOWN_EDITOR_ID, DOCS_DEFAULT_MODE_SETTING, LEGACY_DOCS_EDITOR_ID, LEGACY_DOCS_FILE_EDITOR_ID } from '../../common/docs.js';
-import { newDocsResource, restoredDocsResource } from '../../browser/documentActions.js';
+import { createDocsOpener, newDocsResource, restoredDocsResource } from '../../browser/documentActions.js';
 import { createArkdownDocsInput } from '../../browser/docsEditorInput.js';
 import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
 import { IGeneratedFilesService } from '../../../../services/generatedFiles/common/generatedFilesService.js';
@@ -43,10 +45,41 @@ for (const [key, value] of Object.entries({ window: browser.window, document: br
 }
 await import('../../browser/docs.contribution.js');
 
+
+function draftPersistence(services: InstantiationService, previous: Partial<IFileService> = {}, backups?: IWorkingCopyBackupService): Map<string, string> {
+	const contents = new Map<string, string>();
+	services.registerInstance(IUserDataProfileService, { currentProfile: { location: URI.file('/profile') } } as IUserDataProfileService);
+	services.registerInstance(IWorkspaceContextService, { getWorkspace: () => ({ id: 'docs-test' }) } as IWorkspaceContextService);
+	services.registerInstance(IWorkingCopyBackupService, backups ?? { resolve: async () => undefined, delete: async () => { } } as unknown as IWorkingCopyBackupService);
+	services.registerInstance(IFileService, { ...previous, createDirectory: async () => { }, writeFile: async ({ resource, content }: { resource: URI; content: string; }) => { contents.set(resource.toString(), content); return { revision: '1' }; } } as unknown as IFileService);
+	return contents;
+}
+
 test('Docs resource creation always uses Markdown', () => {
 	assert.ok(newDocsResource('Document').path.endsWith('.md'));
 	assert.equal(DOCS_DEFAULT_MODE_SETTING, 'sessions.docs.editor');
 	assert.equal(DOCS_ARKDOWN_EDITOR_ID, 'sessions.editor.docs.markdown');
+});
+
+for (const failOpen of [false, true]) test(`Docs recovers an untitled backup and retires it only after opening succeeds: ${!failOpen}`, async () => {
+	using lifetime = new DisposableStore();
+	const services = lifetime.add(new InstantiationService());
+	const backups = lifetime.add(new InMemoryWorkingCopyBackupService('backup-docs'));
+	const persisted = draftPersistence(services, {}, backups);
+	services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: `backup-${failOpen}`, flushInterval: 0 })));
+	const original = newDocsResource('Recovered');
+	await backups.store({ resource: original, kind: 'text', content: 'Recovered content', updatedAt: 1 });
+	services.registerInstance(ISessionsEntryService, {
+		openEntry: async (entry: ISessionsEntry) => {
+			assert.equal(persisted.get(entry.editorInput!.resource.toString()), 'Recovered content');
+			assert.ok(await backups.resolve(original));
+			if (failOpen) throw new Error('Open failed');
+		}
+	} as ISessionsEntryService);
+	const open = services.invokeFunction(createDocsOpener);
+	if (failOpen) await assert.rejects(open(original), /Open failed/);
+	else await open(original);
+	assert.equal(!!await backups.resolve(original), failOpen);
 });
 
 test('Docs catalog retains Markdown inputs with uppercase extensions and explicit content types', () => {
@@ -144,10 +177,14 @@ for (const [preference, extension] of [
 	services.registerInstance(IViewsService, { getVisibleViewContainer: () => null } as unknown as IViewsService);
 	const entries: ISessionsEntry[] = [];
 	services.registerInstance(ISessionsEntryService, { openEntry: async (entry: ISessionsEntry) => { entries.push(entry); } } as unknown as ISessionsEntryService);
+	const persisted = draftPersistence(services);
 	await services.invokeFunction(accessor => CommandsRegistry.getCommand('sessions.docs.newDocument')!(accessor));
 	assert.equal(entries.length, 1);
 	const input = entries[0].editorInput!;
 	assert.ok(input.resource.path.endsWith(extension));
+	assert.equal(input.resource.scheme, 'file');
+	assert.ok(input.resource.path.startsWith('/profile/creator/docs-test/docs/'));
+	assert.equal(persisted.get(input.resource.toString()), '');
 	assert.equal(input.contentType, 'text/markdown');
 	assert.equal(EditorPanes.getEditorPane(input)?.id, DOCS_ARKDOWN_EDITOR_ID);
 	assert.equal(entries[0].activityContext, 'sessions.activity.artifactsSelected');
@@ -185,7 +222,7 @@ test('Docs text conversion captures unsaved source and embeds local images into 
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(IEditorPart, { activeInput: { resource }, domNode: browser.window.document.body } as IEditorPart);
 	services.registerInstance(IFileTextModelService, { getModel: () => ({ getValue: () => text }) } as unknown as IFileTextModelService);
-	services.registerInstance(IFileService, { readFileBytes: async (resource: URI) => { reads.push(resource.toString()); return { bytes: new Uint8Array([0, 127, 255]) }; } } as IFileService);
+	const persisted = draftPersistence(services, { readFileBytes: async (resource: URI) => { reads.push(resource.toString()); return { bytes: new Uint8Array([0, 127, 255]) }; } } as Partial<IFileService>);
 	services.registerInstance(ISessionsEntryService, { openEntry: async (entry: ISessionsEntry) => { entries.push(entry); } } as ISessionsEntryService);
 	const { convertActiveTextToDocument } = await import('../../browser/documentActions.js');
 	const pending = services.invokeFunction(accessor => convertActiveTextToDocument(accessor, 'markdown'));
@@ -195,8 +232,8 @@ test('Docs text conversion captures unsaved source and embeds local images into 
 	assert.equal(entries.length, 1);
 	assert.equal(entries[0].editorInput?.editorId, DOCS_ARKDOWN_EDITOR_ID);
 	assert.ok(entries[0].editorInput?.resource.path.endsWith('.md'));
-	assert.match(entries[0].editorInput!.initialText!, /# Unsaved title[\s\S]*data:image\/png;base64,AH\/\//u);
-	assert.doesNotMatch(entries[0].editorInput!.initialText!, /Edited while conversion awaits/u);
+	assert.match(persisted.get(entries[0].editorInput!.resource.toString())!, /# Unsaved title[\s\S]*data:image\/png;base64,AH\/\//u);
+	assert.doesNotMatch(persisted.get(entries[0].editorInput!.resource.toString())!, /Edited while conversion awaits/u);
 });
 
 test('Docs imports a general DOCX directly into an Arkdown Markdown draft', async () => {
@@ -212,13 +249,13 @@ test('Docs imports a general DOCX directly into an Arkdown Markdown draft', asyn
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(IEditorPart, { domNode: browser.window.document.body } as IEditorPart);
 	services.registerInstance(IFileDialogService, { showOpenDialog: async () => [URI.file('/import.docx')] } as unknown as IFileDialogService);
-	services.registerInstance(IFileService, { stat: async () => ({ sizeBytes: bytes.length }), readFileBytes: async () => ({ bytes }) } as unknown as IFileService);
+	const persisted = draftPersistence(services, { stat: async () => ({ sizeBytes: bytes.length }), readFileBytes: async () => ({ bytes }) } as unknown as Partial<IFileService>);
 	services.registerInstance(ISessionsEntryService, { openEntry: async (entry: ISessionsEntry) => { entries.push(entry); } } as ISessionsEntryService);
 	const { importDocumentArtifact } = await import('../../browser/documentActions.js');
 	await services.invokeFunction(importDocumentArtifact);
 	assert.equal(entries[0].editorInput?.editorId, DOCS_ARKDOWN_EDITOR_ID);
 	assert.ok(entries[0].editorInput?.resource.path.endsWith('/import.md'));
-	assert.equal(entries[0].editorInput?.initialText?.trim(), 'Imported Word document');
+	assert.equal(persisted.get(entries[0].editorInput!.resource.toString())?.trim(), 'Imported Word document');
 });
 
 test('Docs recovery checks the refreshed account catalog and retains Code source presentation', async () => {

@@ -22,8 +22,8 @@ import { TestNotificationService } from '../../../../../workbench/services/notif
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { BrowserWorkingCopyService } from '../../../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
-import { GeneratedFileAutoSave } from '../../browser/generatedFileAutoSave.js';
-import { IGeneratedFilesService } from '../../common/generatedFilesService.js';
+import { ArtifactAutoSaveService } from '../../browser/artifactAutoSaveService.js';
+import { IGeneratedFilesService } from '../../../generatedFiles/common/generatedFilesService.js';
 
 class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	public readonly backupKind = 'text';
@@ -113,7 +113,7 @@ class Fixture extends Disposable {
 		});
 	}
 
-	public start(): GeneratedFileAutoSave { return this._register(this.services.createInstance(GeneratedFileAutoSave)); }
+	public start(): ArtifactAutoSaveService { return this._register(this.services.createInstance(ArtifactAutoSaveService)); }
 
 	public open(generated = true): { readonly copy: TestWorkingCopy; readonly registration: IDisposable; } {
 		const copy = this._register(new TestWorkingCopy(URI.file(`/generated-files/${this.workingCopies.getAll().length}.md`)));
@@ -125,7 +125,7 @@ class Fixture extends Disposable {
 	public catalogChanged(): void { this.catalogChangeEmitter.fire(); }
 }
 
-suite('GeneratedFileAutoSave', () => {
+suite('ArtifactAutoSaveService', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	setup(() => mock.timers.enable({ apis: ['setTimeout'] }));
 	teardown(() => mock.timers.reset());
@@ -138,9 +138,92 @@ suite('GeneratedFileAutoSave', () => {
 			for (const dependency of dependencies) {
 				if (dependency !== missing) services.registerInstance(dependency, fixture.services.get(dependency));
 			}
-			assert.throws(() => services.createInstance(GeneratedFileAutoSave), { message: `Unknown service: ${missing}` });
+			assert.throws(() => services.createInstance(ArtifactAutoSaveService), { message: `Unknown service: ${missing}` });
 		});
 	}
+
+	test('explicit artifact scopes share one scheduler and the final close drains pending edits', async () => {
+		using fixture = new Fixture();
+		const autoSave = fixture.start();
+		const { copy } = fixture.open(false);
+		using first = autoSave.register(copy);
+		using second = autoSave.register(copy);
+		copy.restoreBackup('artifact edit');
+		first.dispose();
+		mock.timers.tick(300);
+		await setImmediate();
+		assert.deepEqual(copy.writes, ['artifact edit']);
+		copy.restoreBackup('close before debounce');
+		await autoSave.flush(copy.resource);
+		assert.equal(copy.disk, 'close before debounce');
+		second.dispose();
+		copy.restoreBackup('ordinary file again');
+		mock.timers.tick(300);
+		await setImmediate();
+		assert.deepEqual(copy.writes, ['artifact edit', 'close before debounce']);
+	});
+
+	test('an artifact that is also generated saves once and remains tracked after its editor scope ends', async () => {
+		using fixture = new Fixture();
+		const autoSave = fixture.start();
+		const { copy } = fixture.open();
+		using scope = autoSave.register(copy);
+		copy.restoreBackup('shared generated artifact');
+		mock.timers.tick(300);
+		await setImmediate();
+		assert.deepEqual(copy.writes, ['shared generated artifact']);
+		scope.dispose();
+		copy.restoreBackup('generated edit');
+		await autoSave.flush(copy.resource);
+		assert.equal(copy.disk, 'generated edit');
+	});
+
+	test('failed automatic saves expose a retry action that persists the retained edits', async () => {
+		using fixture = new Fixture();
+		const autoSave = fixture.start();
+		const { copy } = fixture.open(false);
+		using scope = autoSave.register(copy);
+		copy.nextSave = async () => { throw new Error('Disk unavailable'); };
+		copy.restoreBackup('retained artifact');
+		mock.timers.tick(300);
+		await setImmediate();
+		assert.equal(copy.isDirty, true);
+		const retry = fixture.notifications.model.getNotifications()[0].actions?.primary?.[0];
+		assert.ok(retry);
+		await retry.run();
+		assert.equal(copy.disk, 'retained artifact');
+		assert.equal(copy.isDirty, false);
+		assert.equal(fixture.notifications.model.getNotifications().length, 0);
+	});
+
+	test('retiring a generated artifact scope never reattaches an unregistered working copy', async () => {
+		using fixture = new Fixture();
+		const autoSave = fixture.start();
+		const { copy, registration } = fixture.open();
+		using scope = autoSave.register(copy);
+		copy.restoreBackup('retired edit');
+		registration.dispose();
+		scope.dispose();
+		mock.timers.tick(300);
+		await setImmediate();
+		await autoSave.flush(copy.resource);
+		assert.equal(copy.attempts.length, 0);
+	});
+
+	test('closing before debounce reports failures with retry and retains dirty content', async () => {
+		using fixture = new Fixture();
+		const autoSave = fixture.start();
+		const { copy } = fixture.open(false);
+		using scope = autoSave.register(copy);
+		copy.nextSave = async () => { throw new Error('Write unavailable during close'); };
+		copy.restoreBackup('close immediately');
+		await assert.rejects(autoSave.flush(copy.resource), /Write unavailable/);
+		assert.equal(copy.isDirty, true);
+		const retry = fixture.notifications.model.getNotifications()[0].actions?.primary?.[0];
+		assert.ok(retry);
+		await retry.run();
+		assert.equal(copy.disk, 'close immediately');
+	});
 
 	test('debounces edits and saves the latest content through the working copy with AUTO reason', async () => {
 		using fixture = new Fixture();

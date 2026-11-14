@@ -14,7 +14,7 @@ import type { IWorkingCopy } from '../../../../services/workingCopy/common/worki
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
-test('File auto save writes a dirty working copy after the configured delay', async () => {
+test('File auto save defers to a domain policy and resumes after its final lease ends', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>', { pretendToBeVisual: true });
 	using configuration = new InMemoryConfigurationService();
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
@@ -55,6 +55,14 @@ test('File auto save writes a dirty working copy after the configured delay', as
 		dirty = true;
 		dirtyChanges.fire();
 		contentChanges.fire();
+		using owner = workingCopies.registerAutoSave(copy);
+		using peerOwner = workingCopies.registerAutoSave({ ...copy, resource: URI.file('/project/main.ts') });
+		await new Promise(resolve => setTimeout(resolve, 150));
+		assert.equal(saves, 0);
+		owner.dispose();
+		assert.equal(workingCopies.isAutoSaveManaged(copy), true);
+		peerOwner.dispose();
+		assert.equal(workingCopies.isAutoSaveManaged(copy), false);
 		await waitFor(() => saves === 1);
 		assert.equal(dirty, false);
 	} finally {

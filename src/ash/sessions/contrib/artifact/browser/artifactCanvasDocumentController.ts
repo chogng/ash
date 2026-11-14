@@ -82,7 +82,7 @@ export class ArtifactCanvasDocumentController extends Disposable implements IWor
 	private readonly draftHome: URI;
 	public readonly ready: Promise<void>;
 	public get automaticallySaves(): boolean {
-		return this.artifact !== undefined || this.mode === ArtifactWorkspaceId.Design;
+		return true;
 	}
 	public get needsSaveRetry(): boolean { return this.autoSaveError || this.restoreFailed; }
 	public get isRestoring(): boolean { return this.restoring; }
