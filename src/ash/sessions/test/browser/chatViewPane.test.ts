@@ -1,3 +1,4 @@
+import { IDocsService } from '../../contrib/docs/common/docsService.js';
 import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import { ISessionContext } from '../../services/sessions/browser/sessionContext.js';
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
@@ -11,8 +12,8 @@ import { ILocalGitService } from '../../../platform/git/common/localGitService.j
 import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
 import { IChatEntitlementService } from '../../../workbench/services/chat/common/chatEntitlementService.js';
 import { IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
-import { IGeneratedFilesService } from '../../services/generatedFiles/common/generatedFilesService.js';
-import { createTestGeneratedFilesService } from '../common/testGeneratedFilesService.js';
+import { IArtifactCatalogService } from '../../services/artifactCatalog/common/artifactCatalogService.js';
+import { createTestArtifactCatalogService, createTestDocsService } from '../common/testArtifactCatalogService.js';
 import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import type { IChatWidgetViewOptions } from '../../../workbench/contrib/chat/browser/chat.js';
 import { IWorkspacesService } from '../../../platform/workspaces/common/workspaces.js';
@@ -206,7 +207,8 @@ function createInputServices(
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), editorServices));
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
-	services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+	services.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+	if (!services.has(IDocsService)) services.registerInstance(IDocsService, createTestDocsService());
 	services.registerInstance(ILayoutService, layout ?? inputResources.add(new BrowserLayoutService({ root: contextView.container })));
 	services.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 	services.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
@@ -271,7 +273,8 @@ function registerTestChatWindowService(services: InstantiationService, root: HTM
 
 function createSessionChatViewPane(...args: SessionChatViewPaneTestArguments): InstanceType<typeof SessionChatViewPane> {
 	const services = inputResources.add(args[12].createChild());
-	if (!services.has(IGeneratedFilesService)) services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+	if (!services.has(IArtifactCatalogService)) services.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+	if (!services.has(IDocsService)) services.registerInstance(IDocsService, createTestDocsService());
 	services.registerInstance(IChatService, args[2]);
 	services.registerInstance(ISessionsManagementService, args[3]);
 	services.registerInstance(IMenuService, args[4]);
@@ -321,6 +324,8 @@ class SessionsManagementService extends BaseSessionsManagementService {
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 		services.registerInstance(IAgentConnection, api);
+		services.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+		if (!services.has(IDocsService)) services.registerInstance(IDocsService, createTestDocsService());
 		services.registerInstance(IAppServerApi, api.appServer);
 		services.registerInstance(IAgentSessionService, api.session);
 		services.registerSingleton(IDevContainerAgentHostService, () => services.createInstance(DevContainerAgentHostService));
@@ -373,7 +378,8 @@ const { ReplyChatInputFactory } = await import('../../contrib/chat/browser/reply
 
 function createSessionAshChatModel(services: InstantiationService, chat: IChatService, selection: ConstructorParameters<typeof AshChatModel>[0], sessions: ISessionsManagementService): AshChatModel {
 	if (!services.has(IChatService)) services.registerInstance(IChatService, chat);
-	if (!services.has(IGeneratedFilesService)) services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+	if (!services.has(IArtifactCatalogService)) services.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+	if (!services.has(IDocsService)) services.registerInstance(IDocsService, createTestDocsService());
 	if (!services.has(ISessionsManagementService)) services.registerInstance(ISessionsManagementService, sessions);
 	if (!services.has(IContextKeyService)) services.registerInstance(IContextKeyService, undefined);
 	return services.createInstance(AshChatModel, selection, 'session');
@@ -1697,7 +1703,8 @@ for (const background of [false, true]) test(background
 		const editorRoot = createCodeEditorServices(editorResources);
 		registerTestExtensionService(editorResources, editorRoot);
 		const editorServices = editorResources.add(createTestEditorServices(undefined, editorRoot, dom.window.document, composerStorage));
-		editorServices.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+		editorServices.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+		if (!editorServices.has(IDocsService)) editorServices.registerInstance(IDocsService, createTestDocsService());
 		editorServices.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 		editorServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 		editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
@@ -3059,7 +3066,8 @@ function modelsFor(chat: IChatService): ILanguageModelsService {
 }
 function createWidgetModel(chat: IChatService, selection: import('../../browser/chatWidgetModel.js').ChatWidgetSelection, sessions: ISessionsManagementService, execution?: IAgentExecutionSettingsService, configuration?: WorkbenchConfigurationService): ChatWidgetModel {
 	const services = inputResources.add(new InstantiationService());
-	services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+	services.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+	if (!services.has(IDocsService)) services.registerInstance(IDocsService, createTestDocsService());
 	services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
@@ -3423,7 +3431,8 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: { session: session('session-1'), threadId: 'thread-1' } };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
-		services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+		services.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+		if (!services.has(IDocsService)) services.registerInstance(IDocsService, createTestDocsService());
 		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : createSessionAshChatModel(services, chat, selection, sessions);
 		await widget.initialize();
 		assert.deepEqual(scopes, ['session-1']);
@@ -3919,7 +3928,8 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: sessions.active! };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
-		services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+		services.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+		if (!services.has(IDocsService)) services.registerInstance(IDocsService, createTestDocsService());
 		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : createSessionAshChatModel(services, chat, selection, sessions);
 		await widget.initialize();
 		assert.deepEqual({ catalog: sessions.active?.session.model, picker: widget.inputState.selectedModel }, { catalog: rootModel, picker: rootModel });
@@ -3956,7 +3966,8 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: sessions.active! };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
-		services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+		services.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+		if (!services.has(IDocsService)) services.registerInstance(IDocsService, createTestDocsService());
 		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : createSessionAshChatModel(services, chat, selection, sessions);
 		await widget.initialize();
 		await widget.selectModel(manualModel);
@@ -7466,7 +7477,8 @@ for (const kind of ['Chat', 'Cowork']) {
 		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'untitled' as const, session: sessions.createUntitledSession() };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
-		services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+		services.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+		if (!services.has(IDocsService)) services.registerInstance(IDocsService, createTestDocsService());
 		using model = kind === 'Chat' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : createSessionAshChatModel(services, chat, selection, sessions);
 		await model.initialize();
 		await configuration.updateValue(ChatAIDisabledSettingId, true);

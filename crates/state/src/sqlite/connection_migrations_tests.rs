@@ -186,8 +186,8 @@ fn team_and_event_stores_can_install_their_schemas_in_either_order() {
             versions,
             [
                 ("event-store".into(), 17),
-                ("generated-files".into(), 2),
                 ("teams".into(), 1),
+                ("thread-completions".into(), 1),
                 ("thread-history-index".into(), 2),
                 ("thread-voice-index".into(), 1),
             ]

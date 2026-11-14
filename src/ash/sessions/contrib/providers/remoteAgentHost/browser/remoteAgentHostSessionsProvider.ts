@@ -9,6 +9,7 @@ import { IAgentHostFileSystemService } from '../../../../../workbench/services/a
 import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
 import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { IArtifactCatalogService } from '../../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { AppServerSessionsProvider, type AppServerSessionsProviderHost } from '../../agentHost/browser/appServerSessionsProvider.js';
 
 interface IRemoteSessionsProviderHost extends AppServerSessionsProviderHost {
@@ -32,8 +33,9 @@ export class RemoteAgentHostSessionsProvider extends AppServerSessionsProvider {
 		@IDevContainerAgentHostService containers: IDevContainerAgentHostService,
 		@IAgentHostFileSystemService private readonly files: IAgentHostFileSystemService,
 		@ISessionsManagementService private readonly management: ISessionsManagementService,
+		@IArtifactCatalogService artifactCatalog: IArtifactCatalogService,
 	) {
-		super(remoteHost, appServer, sessionApi, modelApi, turnApi, hostApi, instantiation, containers);
+		super(remoteHost, appServer, sessionApi, modelApi, turnApi, hostApi, instantiation, containers, artifactCatalog);
 		this._register(management.onDidChange(() => this.synchronizeDirectories()));
 		this.synchronizeDirectories();
 	}

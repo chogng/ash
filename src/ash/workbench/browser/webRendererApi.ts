@@ -1,6 +1,6 @@
 import { AppServerTcpService } from '../../platform/network/browser/appServerTcpService.js';
 import { AppServerProjectService } from '../../platform/projects/browser/appServerProjectService.js';
-import { AppServerGeneratedFileCatalog } from '../../platform/generatedFiles/browser/appServerGeneratedFileCatalog.js';
+import { AppServerArtifactCatalog } from '../../platform/artifactCatalog/browser/appServerArtifactCatalog.js';
 import { DisposableStore } from '../../base/common/lifecycle.js';
 import type { AppServerFrameDecoder } from '../../platform/agentHost/browser/appServerFrameDecoder.js';
 import { AgentHostResourceService } from '../services/agentHost/common/agentHostResourceService.js';
@@ -146,7 +146,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 			terminal: new AppServerTerminalProcessService(connection, appServer),
 			assets: new AppServerAssetService(connection),
 			projects: new AppServerProjectService(connection),
-			generatedFiles: connection.capabilities?.contracts.generatedFiles?.version === 1 ? new AppServerGeneratedFileCatalog(connection) : undefined,
+			artifactCatalog: connection.capabilities?.contracts.artifactCatalog?.version === 1 ? new AppServerArtifactCatalog(connection) : undefined,
 			testing: new AppServerTestExecutionService(connection),
 			...capabilities,
 			events: createAppServerServerEventApi(connection),

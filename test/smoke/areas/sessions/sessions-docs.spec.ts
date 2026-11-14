@@ -85,7 +85,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await chooseEditor();
 		await expect(quick.items.first().locator('.ash-quick-pick-row-content')).toHaveClass(/picked/);
 		await quick.input.press('Escape');
-		await expect(page.locator('[data-generated-file-resource]')).toHaveCount(0);
+		await expect(page.locator('[data-artifact-resource]')).toHaveCount(0);
 		const draft = locale === 'en' ? 'Untitled document' : '未命名文档';
 		await page.locator('.ash-artifacts-card.docs .ash-button-content').getByText(draft, { exact: true }).click();
 		await markdown.waitForEditorContents(text => text === '# Retained Docs draft');

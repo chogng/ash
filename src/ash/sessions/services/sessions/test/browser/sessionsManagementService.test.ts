@@ -6,6 +6,9 @@ import { test } from 'mocha';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import { SessionArtifactType } from '../../../../../platform/agentHost/common/sessionArtifacts.js';
+import type { ArtifactResource } from '../../../../../platform/artifactCatalog/common/artifactCatalog.js';
 import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as BackendSession } from '../../../../../../../.build/protocol/typescript/index.js';
 import { IAppServerApi, type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { createAppServerAgentSessionService } from '../../../../../platform/agentHost/browser/appServerAgentService.js';
@@ -23,6 +26,8 @@ import type { IUntitledChatSession, ModelRef, SessionExecutionTarget, SessionWor
 import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
 import { DevContainerAgentHostService } from '../../../../contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
+import { IArtifactCatalogService } from '../../../artifactCatalog/common/artifactCatalogService.js';
+import { createTestArtifactCatalogService, createTestDocsService } from '../../../../test/common/testArtifactCatalogService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 
 type SessionDto = Omit<BackendSession, 'executionTarget'> & Pick<import('../../../../../platform/agentHost/common/agent.js').AgentSession, 'executionTarget'>;
@@ -414,7 +419,62 @@ test('the App Server provider requires the window connection service when create
 	assert.throws(() => services.createInstance(AppServerSessionsProvider, fake.host), /AppServerApi/);
 });
 
-for (const dependency of [IAppServerApi, IAgentSessionService, IAgentModelsService, IAgentTurnService, IAgentConnection, IDevContainerAgentHostService]) {
+test('the local provider projects live published artifacts without importing another account, provider or session', async () => {
+	const fake = sessionHost([session('first', 'root'), session('second', 'root')]);
+	using changes = new Emitter<void>();
+	const file: ArtifactResource = {
+		id: 'catalog-identity', title: 'Published document', contentType: 'text/markdown', createdAt: 123,
+		resource: URI.file('/documents/plan.md'),
+		source: { providerId: LOCAL_AGENT_HOST_PROVIDER_ID, accountId: null, sessionId: 'first', threadId: 'root', itemId: 'reply', partId: 'markdown' },
+	};
+	let files: readonly ArtifactResource[] = [];
+	let listeners = 0;
+	const documents: IArtifactCatalogService = {
+		...createTestArtifactCatalogService(),
+		get files() { return files; },
+		onDidChange: listener => {
+			listeners++;
+			const subscription = changes.event(listener);
+			return toDisposable(() => { listeners--; subscription.dispose(); });
+		},
+	};
+	using provider = createProvider(fake, undefined, undefined, undefined, { files: documents });
+	const [first, second] = await provider.list();
+	assert.deepEqual(first.artifacts?.get(), []);
+	assert.deepEqual(second.artifacts?.get(), []);
+	const notifications: unknown[] = [];
+	const observer = first.artifacts!.onDidChange(value => notifications.push(value));
+	try {
+		files = [file,
+			{ ...file, source: { ...file.source, providerId: 'another-provider' } },
+			{ ...file, source: { ...file.source, accountId: 'another-account' } },
+			{ ...file, source: { ...file.source, sessionId: 'another-session' } },
+			{ ...file, source: { ...file.source, partId: 'another-part' } },
+		];
+		changes.fire();
+		const expected = [{
+			id: '["root","reply","markdown"]', chat: 'root', type: SessionArtifactType.File,
+			label: file.title, isArtifact: true, uri: file.resource.toString()
+		}];
+		assert.deepEqual(first.artifacts!.get(), expected);
+		assert.deepEqual(notifications, [expected]);
+		assert.deepEqual(second.artifacts?.get(), []);
+		const hydrated = await provider.subscribe(first);
+		assert.equal(hydrated.artifacts, first.artifacts, 'Hydration retains the provider projection');
+		assert.deepEqual((await provider.readCatalog('first'))?.artifacts?.get(), expected);
+		assert.deepEqual((await provider.renameSession(hydrated, 'Renamed')).artifacts?.get(), expected);
+		using remote = createProvider(fake, undefined, undefined, undefined, { files: documents, providerId: 'remote' });
+		assert.equal((await remote.list())[0].artifacts, undefined, 'A matching remote ID cannot inherit local documents');
+		files = [];
+		changes.fire();
+		assert.deepEqual(first.artifacts!.get(), []);
+	} finally {
+		observer.dispose();
+	}
+	assert.equal(listeners, 0, 'Releasing the consumer releases the publisher subscription');
+});
+
+for (const dependency of [IAppServerApi, IAgentSessionService, IAgentModelsService, IAgentTurnService, IAgentConnection, IDevContainerAgentHostService, IArtifactCatalogService]) {
 	test(`the Session provider rejects missing ${dependency.description} at creation`, () => {
 		assert.throws(() => createProvider(sessionHost([]), dependency), { message: `Unknown service: ${dependency.description}` });
 	});
@@ -879,8 +939,9 @@ test('a failed catalog restoration retries on the next ready connection', async 
 	assert.equal(service.error, undefined);
 });
 
-function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown, containers?: IDevContainerAgentHostService, isWorkspaceTrusted?: (target: SessionExecutionTarget) => Promise<boolean>): AppServerSessionsProvider {
+function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown, containers?: IDevContainerAgentHostService, isWorkspaceTrusted?: (target: SessionExecutionTarget) => Promise<boolean>, documents?: { readonly files: IArtifactCatalogService; readonly providerId?: string; }): AppServerSessionsProvider {
 	using services = new InstantiationService();
+	if (omitted !== IArtifactCatalogService) { services.registerInstance(IArtifactCatalogService, documents?.files ?? createTestArtifactCatalogService()); }
 	if (omitted !== IAgentConnection) { services.registerInstance(IAgentConnection, fake.host as unknown as IAgentConnection); }
 	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, fake.appServer); }
 	if (omitted !== IAgentSessionService) { services.registerInstance(IAgentSessionService, fake.host.session); }
@@ -894,7 +955,7 @@ function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown,
 			getTargets: async () => [], stopContainer: async () => { }, removeContainer: async () => { },
 		} as IDevContainerAgentHostService);
 	}
-	return services.createInstance(AppServerSessionsProvider, { workspace: fake.host.workspace, selectWorkspace: fake.host.selectWorkspace, isWorkspaceTrusted });
+	return services.createInstance(AppServerSessionsProvider, { id: documents?.providerId, workspace: fake.host.workspace, selectWorkspace: fake.host.selectWorkspace, isWorkspaceTrusted });
 }
 
 function createManagement(fake: ReturnType<typeof sessionHost>, containers?: IDevContainerAgentHostService): SessionsManagementService {

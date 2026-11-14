@@ -84,6 +84,21 @@ use crate::protocol::approval_environment::ApprovalEnvironmentScanParams;
 use crate::protocol::approval_environment::ApprovalEnvironmentScanResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::approval_environment::ApprovalEnvironmentScope;
+use crate::protocol::artifact_catalog::ArtifactCatalogChanged;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::artifact_catalog::ArtifactCatalogListParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::artifact_catalog::ArtifactCatalogListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::artifact_catalog::ArtifactCatalogRegisterParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::artifact_catalog::ArtifactCatalogRegisterResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::artifact_catalog::ArtifactRegistrationDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::artifact_catalog::ArtifactResourceDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::artifact_catalog::ArtifactSourceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::assets::AssetCatalogEntry;
 #[cfg(any(test, feature = "export"))]
@@ -198,21 +213,6 @@ use crate::protocol::extension_packages::ExtensionsUpdatePolicyDto;
 use crate::protocol::extension_packages::ExtensionsUpdatesResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::{ExtensionRegistryKindDto, ExtensionsSourceDto};
-use crate::protocol::generated_files::GeneratedFileChanged;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::generated_files::GeneratedFileDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::generated_files::GeneratedFileListParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::generated_files::GeneratedFileListResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::generated_files::GeneratedFileRegisterParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::generated_files::GeneratedFileRegisterResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::generated_files::GeneratedFileRegistrationDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::generated_files::GeneratedFileSourceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitAIContributionParams;
 #[cfg(any(test, feature = "export"))]
@@ -5237,8 +5237,8 @@ client_methods! {
     BackupMove => "backup/move" { params: BackupMoveParams, response: BackupMoveResult, serialization: None, },
     BackupDiscard => "backup/discard" { params: BackupDiscardParams, response: (), serialization: None, },
     // The owning SQLite transaction serializes registration across connections and processes.
-    GeneratedFileRegister => "generatedFile/register" { params: GeneratedFileRegisterParams, response: GeneratedFileRegisterResult, serialization: None, },
-    GeneratedFileList => "generatedFile/list" { params: GeneratedFileListParams, response: GeneratedFileListResult, serialization: None, },
+    ArtifactCatalogRegister => "artifactCatalog/register" { params: ArtifactCatalogRegisterParams, response: ArtifactCatalogRegisterResult, serialization: None, },
+    ArtifactCatalogList => "artifactCatalog/list" { params: ArtifactCatalogListParams, response: ArtifactCatalogListResult, serialization: None, },
     FsReadBinaryFile => "fs/readBinaryFile" {
         params: FsReadBinaryFileParams,
         response: FsReadBinaryFileResult,
@@ -6465,8 +6465,8 @@ server_notifications! {
     TurnChangesChanged => "turnChanges/changed" {
         params: TurnChangesChanged,
     },
-    GeneratedFileChanged => "generatedFile/changed" {
-        params: GeneratedFileChanged,
+    ArtifactCatalogChanged => "artifactCatalog/changed" {
+        params: ArtifactCatalogChanged,
     },
     ProjectChanged => "project/changed" {
         params: ProjectChanged,
@@ -6684,14 +6684,14 @@ typescript_bindings! {
     BackupMoveParams,
     BackupMoveResult,
     BackupRevisionDto,
-    GeneratedFileSourceDto,
-    GeneratedFileRegistrationDto,
-    GeneratedFileDto,
-    GeneratedFileRegisterParams,
-    GeneratedFileRegisterResult,
-    GeneratedFileListParams,
-    GeneratedFileListResult,
-    GeneratedFileChanged,
+    ArtifactSourceDto,
+    ArtifactRegistrationDto,
+    ArtifactResourceDto,
+    ArtifactCatalogRegisterParams,
+    ArtifactCatalogRegisterResult,
+    ArtifactCatalogListParams,
+    ArtifactCatalogListResult,
+    ArtifactCatalogChanged,
     AccountLoginCancelParams,
     AccountLoginCancelResult,
     AccountLoginCancelStatusDto,

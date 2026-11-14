@@ -350,7 +350,7 @@ export class ArtifactEditorView extends Disposable {
 		button.domNode.setAttribute('aria-label', `${card.title}, ${card.detail}`);
 		button.domNode.dataset.artifactId = card.resource?.toString() ?? card.workspaceKey ?? `${card.kind}:${card.title}`;
 		if (card.workspaceKey) { button.domNode.dataset.artifactWorkspace = card.workspaceKey; }
-		if (card.generatedFileResource) button.domNode.dataset.generatedFileResource = card.generatedFileResource;
+		if (card.artifactResource) button.domNode.dataset.artifactResource = card.artifactResource;
 		button.domNode.prepend(this.createIllustration(card.kind));
 		const timestamp = card.modifiedAt ?? card.createdAt;
 		const date = h(this.domNode.ownerDocument, 'time', { className: 'ash-artifacts-card-detail', attributes: { id: artifactResultsIds.nextId() } }) as HTMLTimeElement;

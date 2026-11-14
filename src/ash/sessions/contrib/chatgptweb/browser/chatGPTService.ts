@@ -1,4 +1,5 @@
-import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
+import { IDocsService } from '../../docs/common/docsService.js';
+import { IArtifactCatalogService } from '../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { expandChatRichContentForCopy } from '../../../../workbench/contrib/chat/browser/widget/chatMarkdownRichContent.js';
 import { ChatTimelineStorage, type ChatTimeline, type ChatTimelineTask } from '../../../browser/chatTimelineStorage.js';
 import { ResourceQueue } from '../../../../base/common/async.js';
@@ -378,7 +379,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		@IStorageService private readonly storage: IStorageService,
 		@ILifecycleService private readonly lifecycle: ILifecycleService,
 		@INotificationService private readonly notifications: INotificationService,
-		@IGeneratedFilesService private readonly generatedFiles: IGeneratedFilesService,
+		@IArtifactCatalogService private readonly artifactCatalog: IArtifactCatalogService,
+		@IDocsService private readonly docs: IDocsService,
 		@IInstantiationService private readonly instantiation?: IInstantiationService,
 	) {
 		super();
@@ -387,7 +389,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.newDraftIdKey = this.storagePrefix + '.newDraftId';
 		this.timeline = new ChatTimelineStorage(storage, transport.native ? 'chatgpt-native' : 'chatgpt-web');
 		this.draftAttachments = this._register(new ChatGPTDraftAttachmentStorage(storage, this.storagePrefix));
-		this._register(generatedFiles.trackAccount(this.documentAccount));
+		this._register(artifactCatalog.trackAccount(this.documentAccount));
 		this._register(lifecycle.onWillShutdown(event => {
 			if (this.documentPublications.size) event.join(async () => {
 				await Promise.allSettled(this.documentPublications);
@@ -1485,13 +1487,13 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			for (const part of content.parts) {
 				if (part.kind !== 'writing') continue;
 				const source = chatGPTWritingSource(account, history.id, message.id, index++);
-				if (this.generatedFiles.findBySource(source)) continue;
-				const publication = this.generatedFiles.publishMarkdown(source, expandChatRichContentForCopy(part.markdown, content), part.title);
+				if (this.artifactCatalog.findBySource(source)) continue;
+				const publication = this.docs.importMarkdown(source, expandChatRichContentForCopy(part.markdown, content), part.title);
 				if (this.documentPublications.has(publication)) continue;
 				this.documentPublications.add(publication);
 				void publication.catch(error => {
 					if (!this.isDisposed && this.cacheScope === account) this.notifications.error(localize(
-						{ bundle: 'ash.artifacts', key: 'generatedFilePublishFailed' }, 'Could not save the generated Markdown file: {0}', this.errorText(error)));
+						{ bundle: 'ash.artifacts', key: 'documentImportFailed' }, 'Could not save the generated Markdown file: {0}', this.errorText(error)));
 				}).finally(() => this.documentPublications.delete(publication));
 			}
 		}
@@ -2947,9 +2949,10 @@ export class ChatGPTNativeService extends ChatGPTService {
 		@IStorageService storage: IStorageService,
 		@ILifecycleService lifecycle: ILifecycleService,
 		@INotificationService notifications: INotificationService,
-		@IGeneratedFilesService generatedFiles: IGeneratedFilesService,
+		@IArtifactCatalogService artifactCatalog: IArtifactCatalogService,
+		@IDocsService docs: IDocsService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
-		super(transport, storage, lifecycle, notifications, generatedFiles, instantiation);
+		super(transport, storage, lifecycle, notifications, artifactCatalog, docs, instantiation);
 	}
 }

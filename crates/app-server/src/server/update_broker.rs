@@ -3,6 +3,7 @@ use crate::server::notification_queue::NotificationQueue;
 use crate::server::notification_queue::NotificationQueueHandle;
 use ash_app_server_protocol::protocol::account::AccountLoginCompleted;
 use ash_app_server_protocol::protocol::account::AccountUpdated;
+use ash_app_server_protocol::protocol::artifact_catalog::ArtifactCatalogChanged;
 use ash_app_server_protocol::protocol::collaboration::RoomPresenceSnapshot;
 use ash_app_server_protocol::protocol::collaboration::RoomUpdate;
 use ash_app_server_protocol::protocol::common::AgentInteractionCapability;
@@ -13,7 +14,6 @@ use ash_app_server_protocol::protocol::extension_host::ExtensionHostChanged;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostInvokeCompleted;
 use ash_app_server_protocol::protocol::extension_packages::ExtensionsChanged;
 use ash_app_server_protocol::protocol::fs::FsChanged;
-use ash_app_server_protocol::protocol::generated_files::GeneratedFileChanged;
 use ash_app_server_protocol::protocol::git::GitIgnoreChanged;
 use ash_app_server_protocol::protocol::git::GitStatusChanged;
 use ash_app_server_protocol::protocol::git::GitStatusResult;
@@ -126,7 +126,7 @@ struct Subscriber {
     scope_id: u64,
     agent_interactions: Option<AgentInteractionCapability>,
     product_host: bool,
-    generated_files: Option<bool>,
+    artifact_catalog: Option<bool>,
     chat_project_memories: bool,
     collaboration_rooms: BTreeSet<String>,
     catalog: bool,
@@ -353,7 +353,7 @@ impl UpdateBroker {
                     scope_id: self.scope_id,
                     agent_interactions: None,
                     product_host,
-                    generated_files: None,
+                    artifact_catalog: None,
                     chat_project_memories: false,
                     collaboration_rooms: BTreeSet::new(),
                     catalog: false,
@@ -364,7 +364,7 @@ impl UpdateBroker {
         }
     }
 
-    pub(super) fn enable_generated_file_notifications(
+    pub(super) fn enable_artifact_catalog_notifications(
         &self,
         connection_id: u64,
         native_only: bool,
@@ -372,7 +372,7 @@ impl UpdateBroker {
         if let Ok(mut state) = self.state.lock()
             && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
-            subscriber.generated_files = Some(native_only);
+            subscriber.artifact_catalog = Some(native_only);
         }
     }
 
@@ -1470,7 +1470,7 @@ impl UpdateBroker {
         );
     }
 
-    pub(super) fn publish_generated_file_changed(&self, changed: GeneratedFileChanged) {
+    pub(super) fn publish_artifact_catalog_changed(&self, changed: ArtifactCatalogChanged) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
@@ -1479,11 +1479,11 @@ impl UpdateBroker {
                 return false;
             };
             // Browser connections only observe native documents, never imports or their namespaces.
-            if subscriber.generated_files.is_some_and(|native_only| {
-                !native_only || changed.client_id == ash_state::NATIVE_GENERATED_FILE_CLIENT
+            if subscriber.artifact_catalog.is_some_and(|native_only| {
+                !native_only || changed.client_id == ash_artifact_catalog::NATIVE_ARTIFACT_CLIENT
             }) {
                 queue.push(notification(
-                    ServerNotificationMethod::GeneratedFileChanged,
+                    ServerNotificationMethod::ArtifactCatalogChanged,
                     &changed,
                 ));
             }

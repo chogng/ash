@@ -188,7 +188,7 @@ suite('sessions browser component', () => {
 		expect((await panel.boundingBox())!.height).toBeGreaterThan((await empty.boundingBox())!.height);
 
 		for (let count = 0; count < 2; count++) {
-			await page.evaluate(count => window.ashSessionsIntegration.publishGeneratedFile(`layout-${count}`, '未命名文档'), count);
+			await page.evaluate(count => window.ashSessionsIntegration.publishArtifactResource(`layout-${count}`, '未命名文档'), count);
 		}
 		const cards = panel.getByRole('button', { name: /^未命名文档/u });
 		await expect(cards).toHaveCount(2);

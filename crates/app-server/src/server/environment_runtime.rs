@@ -3557,7 +3557,7 @@ impl AppServer {
             .local_env_host
             .as_ref()
             .is_some_and(|host| host.grants.is_web_session())
-            && let Some(route) = self.generated_files_processor.web_file_route(path)
+            && let Some(route) = self.documents_processor.web_file_route(path)
         {
             return Ok(route);
         }
@@ -3704,7 +3704,7 @@ impl AppServer {
             .local_env_host
             .as_ref()
             .is_some_and(|host| host.grants.is_web_session())
-            && let Some(files) = self.generated_files_processor.web_file_system(dir_id)?
+            && let Some(files) = self.documents_processor.web_file_system(dir_id)?
         {
             return Ok(files);
         }

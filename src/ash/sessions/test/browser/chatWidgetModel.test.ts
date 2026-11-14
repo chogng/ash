@@ -1,18 +1,19 @@
 import { languagePackCatalog as chineseCatalog } from '../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
-import { createTestGeneratedFilesService } from '../common/testGeneratedFilesService.js';
 import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSettings.js';
 import { ChatRequestQueueKind } from '../../../workbench/services/chat/common/chatService.js';
-import { observableValue } from '../../../base/common/observable.js';
+import { observableFromEvent, observableValue } from '../../../base/common/observable.js';
 import { TestConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
+import { IsSessionsWindowContext } from '../../../workbench/common/contextkeys.js';
 import type { IStorageService } from '../../../platform/storage/common/storage.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../base/common/errors.js';
-import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { ChatWidgetModel } from '../../browser/chatWidgetModel.js';
 import { AshChatModel } from '../../contrib/chat/browser/ashChatModel.js';
 import { codeConversationWorkspaceKey } from '../../common/codeConversationDefaults.js';
@@ -34,10 +35,12 @@ import type { ISession, IUntitledChatSession } from '../../services/sessions/com
 import { resolveChatContextAttachment, type ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
 import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
 import { URI } from '../../../base/common/uri.js';
-import { generatedFileSourceKey } from '../../../platform/generatedFiles/common/generatedFiles.js';
-import type { GeneratedFile, GeneratedFileSource, IGeneratedFilesService } from '../../services/generatedFiles/common/generatedFilesService.js';
+import { SessionArtifactType, type ISessionArtifact } from '../../../platform/agentHost/common/sessionArtifacts.js';
+import { agentHostResponseArtifactId } from '../../common/agentHostSessionArtifacts.js';
 import { readPendingCreationKind, writePendingCreationKind } from '../../services/sessions/browser/sessionGridState.js';
 import { chatCreationKinds, getChatCreationContext, isChatCreationKind, type ChatCreationKind } from '../../common/chatCreation.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 function snapshot(threadId: string, sequence = 1, waiting = false): ThreadRead {
 	const usage = { modelInvocations: 0, inputTokens: { reported: 0, complete: true }, outputTokens: { reported: 0, complete: true }, cachedInputTokens: { reported: 0, complete: true }, cacheWriteInputTokens: { reported: 0, complete: true }, reasoningTokens: { reported: 0, complete: true } };
@@ -106,7 +109,8 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 		isModelVisible: () => true,
 		setModelVisible: async () => undefined,
 	};
-	const session: ISession = { sessionId: 'session', kind: 'code' as const, title: 'Session', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'A', origin: { type: 'root' }, status: 'active' }, { threadId: 'B', origin: { type: 'fork', parentThreadId: 'A', parentSequence: 1 }, status: 'active' }] };
+	const artifacts = observableValue<readonly ISessionArtifact[]>('session artifacts', []);
+	const session: ISession = { artifacts, sessionId: 'session', kind: 'code' as const, title: 'Session', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'A', origin: { type: 'root' }, status: 'active' }, { threadId: 'B', origin: { type: 'fork', parentThreadId: 'A', parentSequence: 1 }, status: 'active' }] };
 	// Tests select a thread explicitly. An empty catalog keeps fork-version reads out of transcript tests.
 	const sessions = { onDidChange: Event.None, sessions: [], untitledSessions: [] } as unknown as ISessionsManagementService;
 	const selection = { kind: 'session' as const, active: { session, threadId: 'A' } };
@@ -116,27 +120,10 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 		store: (key: string, value: string | undefined) => value === undefined ? stored.delete(key) : stored.set(key, value),
 		remove: (key: string) => stored.delete(key),
 	} as unknown as IStorageService;
-	const generatedFileChanges = resources.add(new Emitter<void>());
-	const publishedFiles: GeneratedFile[] = [];
-	const publications: { source: GeneratedFileSource; markdown: string; }[] = [];
-	const generatedFiles: IGeneratedFilesService = {
-		...createTestGeneratedFilesService(),
-		onDidChange: generatedFileChanges.event, files: publishedFiles, loading: false, error: undefined,
-		refresh: async () => { },
-		findBySource: source => publishedFiles.find(file => generatedFileSourceKey(file.source) === generatedFileSourceKey(source)),
-		isGeneratedResource: resource => publishedFiles.some(file => file.resource.toString() === resource.toString()),
-		publishMarkdown: async (source, markdown, title) => {
-			publications.push({ source, markdown });
-			const file: GeneratedFile = { id: `file-${publishedFiles.length}`, resource: URI.file(`/generated/file-${publishedFiles.length}.md`), title: title ?? 'Generated document', contentType: 'text/markdown', source, createdAt: 1 };
-			publishedFiles.push(file);
-			generatedFileChanges.fire();
-			return file;
-		},
-	};
 	const contextKeys = resources.add(new ContextKeyService());
 	SessionsWorkspaceModeContext.bindTo(contextKeys).set(kind === 'Code' ? 'code' : 'chat');
-	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, configuration, storage, generatedFiles, contextKeys) : new AshChatModel(selection, 'session', sessions, routedChat, prompts, models, execution, configuration, storage, generatedFiles, undefined, preferences));
-	return { resources, model, configuration, storage, generatedFiles, publications, publishedFiles, contextKeys, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, changeApi, modelApi, execution, starts, queues, steers, consults, compacts, historyRequests, updates, transcripts, offers, session, sessions, reconnect: () => { generation++; connection.fire('ready'); } };
+	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, configuration, storage, contextKeys) : new AshChatModel(selection, 'session', sessions, routedChat, prompts, models, execution, configuration, storage, undefined, preferences));
+	return { resources, model, configuration, storage, artifacts, contextKeys, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, changeApi, modelApi, execution, starts, queues, steers, consults, compacts, historyRequests, updates, transcripts, offers, session, sessions, reconnect: () => { generation++; connection.fire('ready'); } };
 }
 
 async function turnTask(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
@@ -166,7 +153,7 @@ function creationDraftFixture(kind: ChatCreationKind = 'docs') {
 	class RetainedChat extends AshChatModel {
 		retarget(selection: ConstructorParameters<typeof ChatWidgetModel>[1]): void { this.bindSelection(selection); }
 	}
-	const open = (selection: ConstructorParameters<typeof ChatWidgetModel>[1]) => f.resources.add(new RetainedChat(selection, 'session', sessions, f.chat, f.prompts, f.models, f.execution, f.configuration, f.storage, f.generatedFiles, undefined, undefined));
+	const open = (selection: ConstructorParameters<typeof ChatWidgetModel>[1]) => f.resources.add(new RetainedChat(selection, 'session', sessions, f.chat, f.prompts, f.models, f.execution, f.configuration, f.storage, undefined, undefined));
 	const model = open({ kind: 'untitled', session: draft });
 	return { ...f, model, open, sessions, draft, get backgroundSends() { return backgroundSends; } };
 }
@@ -202,7 +189,7 @@ test('Chat creation contexts use stable names and actionable directions for all 
 test('Code sends a restored draft as written when it contains a legacy Chat creation type', async () => {
 	const f = creationDraftFixture(); using resources = f.resources;
 	f.model.dispose();
-	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: f.draft }, f.sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.generatedFiles, f.contextKeys);
+	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: f.draft }, f.sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.contextKeys);
 	await model.initialize();
 	assert.equal(model.creationKind, undefined);
 	assert.equal(model.setCreationKind('slides'), false);
@@ -361,7 +348,7 @@ test('Acceptance consumes the promoted Slides choice after navigation', async ()
 	assert.equal(readPendingCreationKind(f.storage, active), undefined);
 });
 
-test('Chat only projects a native generated file when the durable catalogue supplies it', async () => {
+test('Chat observes published response files through the session artifact contract', async () => {
 	const value = creationHistory();
 	const f = fixture('Cowork', async threadId => ({
 		thread: { ...value.thread, threadId },
@@ -370,19 +357,54 @@ test('Chat only projects a native generated file when the durable catalogue supp
 	})); using resources = f.resources;
 	await f.model.initialize();
 	assert.equal(f.model.items.some(item => item.files?.length), false);
-	assert.deepEqual(f.publications, []);
-	const file = await f.generatedFiles.publishMarkdown({
-		providerId: 'local-agent-host', accountId: null,
-		sessionId: 'session', threadId: 'A', itemId: 'document', partId: 'markdown',
-	}, '# Document');
+	const file: ISessionArtifact = {
+		id: agentHostResponseArtifactId('A', 'document'), chat: 'A',
+		type: SessionArtifactType.File, label: 'Document', isArtifact: true, uri: 'file:///documents/plan.md',
+	};
+	f.artifacts.set([
+		{ ...file, isArtifact: false },
+		{ ...file, type: SessionArtifactType.Resource },
+		{ ...file, chat: 'B' },
+	]);
+	assert.equal(f.model.items.some(item => item.files?.length), false, 'References and other chats cannot become reply documents');
+	let notifications = 0;
+	using changed = f.model.onDidChange(() => notifications++);
+	f.artifacts.set([file]);
+	assert.equal(notifications, 1, 'Publication invalidates the retained transcript');
 	const card = f.model.items.find(item => item.files?.length)!;
 	assert.equal(card.feedbackSource?.itemId, 'document');
-	assert.deepEqual(card.files, [{ resource: file.resource.toString(), label: file.title }]);
+	assert.deepEqual(card.files, [{ resource: file.uri, label: file.label }]);
 	f.reconnect();
 	await f.model.pendingHistoryBinding;
-	assert.equal(f.publications.length, 1, 'History replay performs no writes');
+	assert.deepEqual(f.artifacts.get(), [file], 'History replay does not replace provider-owned artifacts');
 	await f.model.selectThread({ session: f.session, threadId: 'B' });
 	assert.equal(f.model.items.some(item => item.files?.length), false, 'A sibling conversation does not inherit the file');
+});
+
+test('Chat releases artifact observations when its session snapshot is replaced and when disposed', async () => {
+	const f = fixture('Cowork'); using resources = f.resources;
+	await f.model.initialize();
+	using changed = new Emitter<void>();
+	let listeners = 0;
+	const artifacts = observableFromEvent<readonly ISessionArtifact[]>('replacement artifacts', listener => {
+		listeners++;
+		const subscription = changed.event(listener);
+		return toDisposable(() => { listeners--; subscription.dispose(); });
+	}, () => []);
+	await f.model.selectThread({ session: { ...f.session, artifacts }, threadId: 'A' });
+	assert.equal(listeners, 1);
+	let notifications = 0;
+	using observer = f.model.onDidChange(() => notifications++);
+	f.artifacts.set([]);
+	assert.equal(notifications, 0, 'The previous snapshot no longer invalidates Chat');
+	changed.fire();
+	assert.equal(notifications, 1);
+	await f.model.selectThread({ session: f.session, threadId: 'A' });
+	assert.equal(listeners, 0);
+	await f.model.selectThread({ session: { ...f.session, artifacts }, threadId: 'A' });
+	assert.equal(listeners, 1);
+	f.model.dispose();
+	assert.equal(listeners, 0);
 });
 
 for (const kind of ['Code', 'Cowork'] as const) {
@@ -1023,6 +1045,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 test('Code keeps a directoryless draft editable and blocks sending and voice until a workspace is selected', async () => {
 	const f = fixture('Code');
 	using resources = f.resources;
+	IsSessionsWindowContext.bindTo(f.contextKeys).set(true);
 	const draft = { untitledSessionId: 'directoryless', title: 'New Chat', model: undefined, agent: undefined, workspace: { type: 'current' as const } };
 	let creations = 0;
 	const sessions = {
@@ -1031,7 +1054,7 @@ test('Code keeps a directoryless draft editable and blocks sending and voice unt
 		materializeUntitledSession: async () => { creations++; return { session: f.session, threadId: 'A' }; },
 		promoteUntitledSession: () => { },
 	} as unknown as ISessionsManagementService;
-	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.generatedFiles, f.contextKeys);
+	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.contextKeys);
 	await model.initialize();
 	const messages = chineseCatalog.bundles;
 	setNlsMessages('zh-CN', messages);
@@ -1078,7 +1101,7 @@ test('Ash Chat can continue a directoryless conversation using the shared compos
 	const mode = SessionsWorkspaceModeContext.bindTo(contextKeys);
 	const session = { ...f.session, workspace: null };
 	const active = { session, threadId: 'A' };
-	using model = new ChatWidgetModel(f.chat, { kind: 'session', active }, f.sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.generatedFiles, contextKeys);
+	using model = new ChatWidgetModel(f.chat, { kind: 'session', active }, f.sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, contextKeys);
 	await model.initialize();
 
 	mode.set('code');
@@ -1103,7 +1126,7 @@ test('voice source preparation materializes the model selected immediately befor
 		materializeUntitledSession: async () => { materializedModels.push(draft.model); return { session: { ...f.session, model: draft.model }, threadId: 'A' }; },
 		promoteUntitledSession: () => { },
 	} as unknown as ISessionsManagementService;
-	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessionService, f.prompts, f.models, f.executionSettings, resources.add(new TestConfigurationService()), f.storage, f.generatedFiles, f.contextKeys);
+	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessionService, f.prompts, f.models, f.executionSettings, resources.add(new TestConfigurationService()), f.storage, f.contextKeys);
 	await model.initialize();
 	const selecting = model.selectModel(selected);
 	const preparing = model.prepareConversation();
@@ -1286,8 +1309,8 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		const sessions = { onDidChange: Event.None, untitledSessions: [draft], materializedSessions: materialized } as unknown as ISessionsManagementService;
 		using configuration = new TestConfigurationService();
 		using model = kind === 'Code'
-			? new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, configuration, f.storage, f.generatedFiles, f.contextKeys)
-			: new AshChatModel({ kind: 'untitled', session: draft }, 'session', sessions, f.chat, f.prompts, f.models, f.execution, configuration, f.storage, f.generatedFiles, undefined, { onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined } as unknown as INativeChatModelPreferencesService);
+			? new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, configuration, f.storage, f.contextKeys)
+			: new AshChatModel({ kind: 'untitled', session: draft }, 'session', sessions, f.chat, f.prompts, f.models, f.execution, configuration, f.storage, undefined, { onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined } as unknown as INativeChatModelPreferencesService);
 		await model.initialize();
 		model.selectMode('plan');
 		model.selectApprovalMode('auto');

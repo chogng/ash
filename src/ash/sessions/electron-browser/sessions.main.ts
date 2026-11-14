@@ -317,7 +317,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					: undefined,
 				contributionIds: [
 					'sessions.artifactAutoSave',
-					'sessions.generatedFileOpener',
+					'sessions.docs.resourceOpener',
 					'sessions.docs.backup',
 					'sessions.projectMaterialFiles',
 					'sessions.chat.copyActionRendering',

@@ -32,7 +32,7 @@ import { registerChatSessionsActions } from '../../workbench/contrib/chat/browse
 import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { ForkConversationAction } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
-import '../services/generatedFiles/browser/generatedFiles.contribution.js';
+import '../services/artifactCatalog/browser/artifactCatalog.contribution.js';
 import '../services/artifactAutoSave/browser/artifactAutoSave.contribution.js';
 import '../../workbench/contrib/chatWindow/browser/chatWindow.contribution.js';
 import '../contrib/sessions/browser/sessionsActions.js';

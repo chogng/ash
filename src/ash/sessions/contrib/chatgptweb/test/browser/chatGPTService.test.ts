@@ -1,6 +1,7 @@
+import { IDocsService } from '../../../../contrib/docs/common/docsService.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { IGeneratedFilesService } from '../../../../services/generatedFiles/common/generatedFilesService.js';
-import { createTestGeneratedFilesService } from '../../../../test/common/testGeneratedFilesService.js';
+import { IArtifactCatalogService } from '../../../../services/artifactCatalog/common/artifactCatalogService.js';
+import { createTestArtifactCatalogService, createTestDocsService } from '../../../../test/common/testArtifactCatalogService.js';
 import { ILifecycleService } from '../../../../../workbench/services/lifecycle/common/lifecycle.js';
 import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { Thread } from '../../../../../workbench/services/chat/common/chatService.js';
@@ -42,7 +43,7 @@ function notificationService(model?: NotificationsModel): INotificationService {
 	} as INotificationService;
 }
 
-function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, options?: { values?: Map<string, string>; instantiation?: IInstantiationService; cacheScope?: () => string | undefined; onDidChangeAuthentication?: Event<void>; notifications?: NotificationsModel; native?: true; generated?: IGeneratedFilesService; }) {
+function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, options?: { values?: Map<string, string>; instantiation?: IInstantiationService; cacheScope?: () => string | undefined; onDidChangeAuthentication?: Event<void>; notifications?: NotificationsModel; native?: true; generated?: IArtifactCatalogService; docs?: IDocsService; }) {
 	const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
 	const transport: IChatGPTTransport = {
 		native: options?.native,
@@ -59,7 +60,7 @@ function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRe
 		async cancel(id) { const request = requests.get(id); requests.delete(id); request?.controller.abort(); await request?.reader?.cancel().catch(() => { }); },
 	};
 	const values = options?.values ?? new Map<string, string>();
-	return new ChatGPTService(transport, { get: (key: string) => values.get(key), keys: () => [...values.keys()], store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); }, flush: async () => { } } as unknown as IStorageService, lifecycle, notificationService(options?.notifications), options?.generated ?? createTestGeneratedFilesService(), options?.instantiation);
+	return new ChatGPTService(transport, { get: (key: string) => values.get(key), keys: () => [...values.keys()], store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); }, flush: async () => { } } as unknown as IStorageService, lifecycle, notificationService(options?.notifications), options?.generated ?? createTestArtifactCatalogService(), options?.docs ?? createTestDocsService(), options?.instantiation);
 }
 function response(path: string): Response {
 	assert.ok(!path.endsWith('/me'), 'The chat must not request an account identity');
@@ -115,9 +116,9 @@ suite('ChatGPT shared service', () => {
 	test('confirmed history publishes complete writing without an active Chat widget', async () => {
 		const document = new DeferredPromise<{ markdown: string; account: string | null; }>();
 		const writing = ':::writing{title="Published"}\n# Published\n\n<text>Body</text>\n:::';
-		const generated: IGeneratedFilesService = {
-			...createTestGeneratedFilesService(),
-			async publishMarkdown(source, markdown) {
+		const docs: IDocsService = {
+			...createTestDocsService(),
+			async importMarkdown(source, markdown) {
 				await document.complete({ markdown, account: source.accountId });
 				return { id: 'published', source, title: 'Published', resource: URI.file('/published.md'), contentType: 'text/markdown', createdAt: 1 };
 			},
@@ -130,7 +131,7 @@ suite('ChatGPT shared service', () => {
 					incomplete: { parent: null, message: { id: 'incomplete', status: 'in_progress', author: { role: 'assistant' }, content: { parts: [writing] } } },
 				}
 			});
-		}, { generated });
+		}, { docs });
 		await chat.reload();
 		await chat.select('one');
 		const publication = await document.p;
@@ -629,7 +630,8 @@ suite('ChatGPT shared service', () => {
 			[INotificationService, notificationService()],
 			[IChatGPTTransport, new SyncDescriptor(ElectronChatGPTTransport, [], true)],
 			[IChatGPTService, new SyncDescriptor(ChatGPTService, [], true)],
-			[IGeneratedFilesService, createTestGeneratedFilesService()],
+			[IArtifactCatalogService, createTestArtifactCatalogService()],
+			[IDocsService, createTestDocsService()],
 			[IStorageService, { get: () => undefined, keys: () => [], store() { }, remove() { } } as unknown as IStorageService],
 			[IMainProcessService, { _serviceBrand: undefined, getChannel: () => channel, registerChannel() { } }],
 		));

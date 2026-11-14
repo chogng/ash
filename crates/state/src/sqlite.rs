@@ -20,6 +20,8 @@ mod projects;
 mod teams;
 #[path = "sqlite/thread.rs"]
 mod thread;
+#[path = "sqlite/thread_completions.rs"]
+mod thread_completions;
 #[path = "sqlite/thread_history.rs"]
 mod thread_history;
 #[path = "sqlite/thread_pull_requests.rs"]
@@ -33,6 +35,7 @@ pub use memories::SqliteMemoryStore;
 pub use projects::SqliteProjectStore;
 pub use teams::SqliteTeamStore;
 pub use thread::SqliteThreadStore;
+pub use thread_completions::ThreadCompletion;
 
 #[cfg(test)]
 #[path = "sqlite/git_turn_commits_tests.rs"]

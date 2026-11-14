@@ -71,6 +71,8 @@ mod app_tools_adapter;
 mod app_tools_operations;
 #[path = "server/request_processors/approval_environment.rs"]
 mod approval_environment_operations;
+#[path = "server/request_processors/artifact_catalog.rs"]
+mod artifact_catalog_processor;
 #[path = "server/request_processors/assets.rs"]
 mod asset_operations;
 #[cfg(test)]
@@ -88,8 +90,8 @@ mod browser_file_access;
 #[path = "server/request_processors/browser.rs"]
 mod browser_processor;
 mod browser_workspace;
-#[path = "server/request_processors/generated_files.rs"]
-mod generated_files_processor;
+#[path = "server/request_processors/documents.rs"]
+mod documents_processor;
 mod host_credentials;
 pub(crate) use browser_workspace::WebWorkspaceRollback;
 
@@ -316,7 +318,8 @@ pub struct AppServer {
         Option<Arc<crate::session_runtime_provider::SessionRuntimeProvider>>,
     pub(crate) task_delivery: Option<Arc<task_delivery::Runtime>>,
     backup_processor: backup_processor::BackupRequestProcessor,
-    generated_files_processor: generated_files_processor::GeneratedFileRequestProcessor,
+    artifact_catalog_processor: artifact_catalog_processor::ArtifactCatalogRequestProcessor,
+    documents_processor: documents_processor::DocumentPublication,
     diff_processor: diff_operations::DiffRequestProcessor,
     queue: Option<Arc<queue::QueueStore>>,
     queue_directory: Option<String>,
@@ -1249,20 +1252,30 @@ impl AppServer {
         self
     }
 
-    pub(crate) fn with_generated_file_store(
+    pub(crate) fn with_artifact_catalog(
         mut self,
-        store: Arc<ash_state::SqliteGeneratedFileStore>,
+        store: Arc<ash_artifact_catalog::SqliteArtifactCatalog>,
         directory: std::path::PathBuf,
-    ) -> Self {
-        self.generated_files_processor =
-            generated_files_processor::GeneratedFileRequestProcessor::new(store, Some(directory));
-        self.generated_files_processor.publish_native(&self.updates);
+        completions: Option<Arc<ash_state::SqliteThreadStore>>,
+    ) -> Result<Self, ash_artifact_catalog::ArtifactCatalogError> {
+        let documents = Arc::new(ash_documents::Documents::new(
+            store.clone(),
+            dunce::simplified(&directory).to_owned(),
+        ));
+        self.artifact_catalog_processor =
+            artifact_catalog_processor::ArtifactCatalogRequestProcessor::new(
+                store,
+                Some(documents.clone()),
+            );
+        self.documents_processor =
+            documents_processor::DocumentPublication::new(documents, completions);
+        self.documents_processor.publish_native(&self.updates);
         let executor = self
             .turn_executor_snapshot()
             .with_thread_updates(self.thread_update_sink());
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;
-        self
+        Ok(self)
     }
 
     pub(crate) fn with_backup_store(mut self, backups: Arc<ash_state::SqliteBackupStore>) -> Self {
@@ -1360,7 +1373,7 @@ impl AppServer {
             threads: Arc::clone(&threads),
             grants: Arc::clone(&directory_grants),
             updates: updates.clone(),
-            generated_files: Default::default(),
+            documents: Default::default(),
         }))
         .with_extensions(Arc::clone(&agent_extensions));
         let multi_agent = Arc::new(MultiAgentCoordinator::new(
@@ -1451,8 +1464,9 @@ impl AppServer {
             resources,
             asset_processor: asset_operations::AssetsRequestProcessor::default(),
             backup_processor: backup_processor::BackupRequestProcessor::default(),
-            generated_files_processor:
-                generated_files_processor::GeneratedFileRequestProcessor::default(),
+            artifact_catalog_processor:
+                artifact_catalog_processor::ArtifactCatalogRequestProcessor::default(),
+            documents_processor: documents_processor::DocumentPublication::default(),
             diff_processor: diff_operations::DiffRequestProcessor::new(diff_handler),
             memories: None,
             approval_environment: None,
@@ -2974,7 +2988,7 @@ impl AppServer {
                 .dir_grants
                 .clone(),
             updates: Arc::clone(&self.updates),
-            generated_files: self.generated_files_processor.clone(),
+            documents: self.documents_processor.clone(),
         })
     }
 
@@ -4738,16 +4752,12 @@ impl AppServer {
             Some(ClientMethod::FsReadFile) => self
                 .fs_processor()
                 .fs_read_file(connection.connection_id, &request.params),
-            Some(ClientMethod::GeneratedFileRegister) => self.generated_files_processor.register(
-                connection.authority,
-                &request.params,
-                &self.updates,
-            ),
-            Some(ClientMethod::GeneratedFileList) => self.generated_files_processor.list(
-                connection.authority,
-                &request.params,
-                &self.updates,
-            ),
+            Some(ClientMethod::ArtifactCatalogRegister) => self
+                .artifact_catalog_processor
+                .register(connection.authority, &request.params, &self.updates),
+            Some(ClientMethod::ArtifactCatalogList) => self
+                .artifact_catalog_processor
+                .list(connection.authority, &request.params),
             Some(ClientMethod::BackupWorkspaces) => self
                 .backup_processor
                 .workspaces(connection.authority, &request.params),
@@ -5217,14 +5227,14 @@ struct AppServerThreadUpdates {
     client_host: Arc<crate::client_host::ClientHost>,
     threads: Arc<ThreadController>,
     updates: Arc<UpdateBroker>,
-    generated_files: generated_files_processor::GeneratedFileRequestProcessor,
+    documents: documents_processor::DocumentPublication,
 }
 
 impl ThreadUpdateSink for AppServerThreadUpdates {
     fn publish(&self, update: ThreadUpdateEnvelope) {
         if let ash_protocol::ThreadUpdate::Committed { event } = &update.update {
             if matches!(event, ash_protocol::ThreadEvent::TurnCompleted { .. }) {
-                self.generated_files.publish_native(&self.updates);
+                self.documents.publish_native(&self.updates);
             }
             match event {
                 ash_protocol::ThreadEvent::TurnCompleted { turn_id, .. }

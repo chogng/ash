@@ -1,3 +1,4 @@
+import { IDocsService } from '../../contrib/docs/common/docsService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
 import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
@@ -24,8 +25,8 @@ import { CommandService } from '../../../workbench/services/commands/common/comm
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
-import { IGeneratedFilesService } from '../../services/generatedFiles/common/generatedFilesService.js';
-import { createTestGeneratedFilesService } from '../common/testGeneratedFilesService.js';
+import { IArtifactCatalogService } from '../../services/artifactCatalog/common/artifactCatalogService.js';
+import { createTestArtifactCatalogService, createTestDocsService } from '../common/testArtifactCatalogService.js';
 import { IKeybindingService } from '../../../platform/keybinding/common/keybinding.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
@@ -140,7 +141,8 @@ test('opens a local Chat conversation before the backend session request settles
 	viewServices.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	viewServices.registerInstance(IChatService, chat);
 	viewServices.registerInstance(ISessionsManagementService, sessionService);
-	viewServices.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+	viewServices.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+	if (!viewServices.has(IDocsService)) viewServices.registerInstance(IDocsService, createTestDocsService());
 	viewServices.registerInstance(IWorkbenchLayoutService, layoutService);
 	viewServices.registerInstance(IFileService, files);
 	viewServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);

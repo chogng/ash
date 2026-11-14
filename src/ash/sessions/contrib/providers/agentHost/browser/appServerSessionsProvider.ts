@@ -10,7 +10,10 @@ import { createUuid } from '../../../../../base/common/uuid.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
 import { findAgentNode, type AgentThreadExecutionStatus, type AgentTreeNode, type IActiveSessionThread, type ISession, type ModelRef, type SessionExecutionTarget, type SessionId, type SessionWorkspaceSelection, type ThreadId } from '../../../../services/sessions/common/session.js';
-import { observableValue } from '../../../../../base/common/observable.js';
+import { observableFromEvent, observableValue, type IObservable } from '../../../../../base/common/observable.js';
+import type { ISessionArtifact } from '../../../../../platform/agentHost/common/sessionArtifacts.js';
+import { IArtifactCatalogService } from '../../../../services/artifactCatalog/common/artifactCatalogService.js';
+import { agentHostSessionArtifacts } from '../../../../common/agentHostSessionArtifacts.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../../common/agentHostSessionsProvider.js';
 import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
@@ -68,6 +71,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		@IAgentConnection private readonly rendererHost: IAgentConnection,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IDevContainerAgentHostService private readonly containers: IDevContainerAgentHostService,
+		@IArtifactCatalogService private readonly artifactCatalog: IArtifactCatalogService,
 	) {
 		super();
 		this.id = host.id ?? LOCAL_AGENT_HOST_PROVIDER_ID;
@@ -142,7 +146,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		}
 		this.assertCurrentConnection(generation, epoch);
 		this.catalogSubscribed = true;
-		return result.sessions.map(session => toSession(session));
+		return result.sessions.map(session => toSession(session, this.sessionArtifacts(session.sessionId)));
 	}
 
 	async listAgents(): Promise<readonly ChatAgent[]> {
@@ -162,7 +166,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		const epoch = this.connectionEpoch;
 		const result = await this.sessionApi.readCatalog({ sessionId });
 		this.assertCurrentConnection(generation, epoch);
-		return result.session ? toSession(result.session, [], previous) : undefined;
+		return result.session ? toSession(result.session, this.sessionArtifacts(sessionId), [], previous) : undefined;
 	}
 
 	subscribe(session: ISession): Promise<ISession> {
@@ -195,7 +199,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		this.assertCurrentConnection(generation, epoch);
 		if ((this.subscriptionRevisions.get(session.sessionId) ?? 0) !== revision) throw canceled();
 		this.subscribed.add(session.sessionId);
-		const next = toSession(result.session, result.threadSnapshots, session, result.agentTree.roots);
+		const next = toSession(result.session, session.artifacts, result.threadSnapshots, session, result.agentTree.roots);
 		if (next.sessionId !== session.sessionId) {
 			this.subscribed.delete(session.sessionId);
 			await this.sessionApi.unsubscribe({ sessionId: session.sessionId });
@@ -330,7 +334,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		if (target.sessionId !== sessionId) throw new Error(localize('sessions.nestedChat.unavailable', 'The new conversation is unavailable.'));
 		const result = await this.sessionApi.read({ sessionId });
 		this.assertCurrentConnection(generation, epoch);
-		const session = toSession(result.session, [], undefined, result.agentTree.roots);
+		const session = toSession(result.session, this.sessionArtifacts(sessionId), [], undefined, result.agentTree.roots);
 		if (session.sessionId !== sessionId || !session.chats.some(chat => chat.threadId === target.threadId)) {
 			throw new Error(localize('sessions.nestedChat.unavailable', 'The new conversation is unavailable.'));
 		}
@@ -397,9 +401,9 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 			if (options?.catalogOnly && !hadDetails) {
 				await this.unsubscribe(created.session.sessionId);
 				this.assertCurrentConnection(generation, epoch);
-				return { session: toSession(created.session), threadId: root.threadId };
+				return { session: toSession(created.session, this.sessionArtifacts(created.session.sessionId)), threadId: root.threadId };
 			}
-			const session = await this.subscribe(toSession(created.session));
+			const session = await this.subscribe(toSession(created.session, this.sessionArtifacts(created.session.sessionId)));
 			this.assertCurrentConnection(generation, epoch);
 			if (!session.chats.some(candidate => candidate.threadId === root.threadId && candidate.status === 'active')) {
 				throw new Error(localize('sessions.create.noActiveChat', 'The new session has no active chat.'));
@@ -426,7 +430,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		this.assertCurrentConnection(generation, epoch);
 		await this.unsubscribe(session.sessionId);
 		this.assertCurrentConnection(generation, epoch);
-		return toSession(result.session, [], session);
+		return toSession(result.session, session.artifacts, [], session);
 	}
 
 	async stop(session: ISession): Promise<ISession> {
@@ -437,7 +441,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		this.assertCurrentConnection(generation, epoch);
 		await this.unsubscribe(session.sessionId);
 		this.assertCurrentConnection(generation, epoch);
-		return toSession(result.session, [], session);
+		return toSession(result.session, session.artifacts, [], session);
 	}
 
 	async renameSession(session: ISession, title: string): Promise<ISession> {
@@ -446,7 +450,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		const epoch = this.connectionEpoch;
 		const result = await this.sessionApi.rename({ commandId: commandId('rename-session'), sessionId: session.sessionId, title });
 		this.assertCurrentConnection(generation, epoch);
-		return toSession(result.session, [], session, result.agentTree.roots);
+		return toSession(result.session, session.artifacts, [], session, result.agentTree.roots);
 	}
 
 	async deleteSession(session: ISession): Promise<void> {
@@ -464,7 +468,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		const epoch = this.connectionEpoch;
 		const result = await this.sessionApi.restore({ commandId: commandId('restore-session'), sessionId: session.sessionId });
 		this.assertCurrentConnection(generation, epoch);
-		return toSession(result.session, [], session);
+		return toSession(result.session, session.artifacts, [], session);
 	}
 
 	async interrupt(session: ISession, threadId: ThreadId): Promise<void> {
@@ -487,6 +491,14 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 	private assertCurrentConnection(generation: number, epoch: number): void {
 		if (this.isDisposed || !this.connectionReady || generation !== this.appServer.connectionGeneration || epoch !== this.connectionEpoch) throw canceled();
 	}
+
+	private sessionArtifacts(sessionId: SessionId): IObservable<readonly ISessionArtifact[]> | undefined {
+		// This window's document library belongs to the local provider. A remote host
+		// must publish its own artifacts instead of inheriting matching local IDs.
+		if (this.id !== LOCAL_AGENT_HOST_PROVIDER_ID) return undefined;
+		return observableFromEvent(this, this.artifactCatalog.onDidChange,
+			() => this.isDisposed ? [] : agentHostSessionArtifacts(this.artifactCatalog.files, sessionId));
+	}
 }
 
 function connectionStatus(state: AppServerConnectionState): 'connecting' | 'connected' | 'disconnected' {
@@ -495,7 +507,7 @@ function connectionStatus(state: AppServerConnectionState): 'connecting' | 'conn
 	return 'disconnected';
 }
 
-function toSession(session: AgentSession, threads: readonly ThreadSubscription[] = [], previous?: ISession, agentTree?: readonly AgentExecutionNode[]): ISession {
+function toSession(session: AgentSession, artifacts: IObservable<readonly ISessionArtifact[]> | undefined, threads: readonly ThreadSubscription[] = [], previous?: ISession, agentTree?: readonly AgentExecutionNode[]): ISession {
 	const byId = new Map(threads.map(entry => [entry.thread.threadId, entry]));
 	const workspace = buildAgentHostSessionWorkspace(session.executionTarget);
 	const directoryChanged = previous?.workspace?.authorityId !== workspace?.authorityId || previous?.workspace?.root !== workspace?.root;
@@ -509,6 +521,7 @@ function toSession(session: AgentSession, threads: readonly ThreadSubscription[]
 		workspace,
 		model: session.model,
 		management: { ...session.manager },
+		artifacts,
 		nextApprovalMode: previous?.nextApprovalMode ?? 'manual',
 		chats: session.threads.map(thread => {
 			const snapshot = byId.get(thread.threadId);

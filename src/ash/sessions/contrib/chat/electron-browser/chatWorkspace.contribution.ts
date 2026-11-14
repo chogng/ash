@@ -38,7 +38,6 @@ import { SessionsView } from '../../sessions/browser/views/sessionsView.js';
 import type { SessionsCatalogAccessibility } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { ISessionsEntryService, type ISessionsEntry } from '../../../services/layout/common/sessionsEntryService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { INativeChatModelPreferencesService } from '../common/nativeChatModelPreferencesService.js';
 import '../browser/chat.contribution.js';
@@ -72,14 +71,13 @@ class NativeChatWorkspaceModel extends AshChatModel implements ICompactChatModel
 		@ICommandService private readonly commands: ICommandService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IStorageService storage: IStorageService,
-		@IGeneratedFilesService generatedFiles: IGeneratedFilesService,
 		@IContextKeyService contexts: IContextKeyService,
 		@IInstantiationService instantiation: IInstantiationService,
 		@INativeChatModelPreferencesService modelPreferences: INativeChatModelPreferencesService,
 	) {
 		const initial = view.getChatSelection();
 		if (!initial) throw new Error('The compact Chat view needs a restored Sessions selection');
-		super(initial, 'compact', management, primary.chat, primary.prompts, primary.models, primary.execution, configuration, storage, generatedFiles, contexts, modelPreferences);
+		super(initial, 'compact', management, primary.chat, primary.prompts, primary.models, primary.execution, configuration, storage, contexts, modelPreferences);
 		this.draftModels = instantiation.createInstance(modelSource);
 		let previous: ReturnType<typeof view.chatSelection.get>;
 		this._register(autorun(reader => {

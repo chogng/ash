@@ -25,11 +25,16 @@ function mapOrigin(origin: ThreadOrigin, map: (value: string) => string): Thread
 	return origin.type === 'root' ? origin : { ...origin, parentThreadId: map(origin.parentThreadId) };
 }
 
-function mapSessionThreads(session: ISession, map: (value: string) => string): Pick<ISession, 'chats' | 'agentTree'> {
+function mapSessionThreads(session: ISession, map: (value: string) => string): Pick<ISession, 'chats' | 'agentTree' | 'artifacts'> {
 	const tree = (node: AgentTreeNode): AgentTreeNode => ({ ...node, threadId: map(node.threadId), origin: mapOrigin(node.origin, map), children: node.children.map(tree) });
 	return {
 		chats: session.chats.map(chat => ({ ...chat, threadId: map(chat.threadId), origin: mapOrigin(chat.origin, map) })),
 		agentTree: session.agentTree?.map(tree),
+		artifacts: session.artifacts?.map(artifacts => artifacts.map(artifact => ({
+			...artifact,
+			...(artifact.chat === undefined ? {} : { chat: map(artifact.chat) }),
+			...(artifact.origin ? { origin: { ...artifact.origin, chat: map(artifact.origin.chat) } } : {}),
+		}))),
 	};
 }
 

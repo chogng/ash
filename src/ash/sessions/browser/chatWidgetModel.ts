@@ -12,7 +12,7 @@ import { toSkillSelectors } from '../../workbench/contrib/chat/common/skillSelec
 import { ILanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
 import { Emitter, Event } from '../../base/common/event.js';
 import { canceled, isCancellationError } from '../../base/common/errors.js';
-import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import type { AgentInteractionDecision, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from '../../workbench/services/chat/common/chatService.js';
 import { localize } from '../../nls.js';
 import type { SkillReference } from '../../platform/agentHost/common/appServerApi.js';
@@ -45,7 +45,8 @@ import { readChatRequestVersions } from './chatRequestVersions.js';
 import { isNative } from '../../base/common/platform.js';
 import { getChatCreationContext } from '../common/chatCreation.js';
 import { readPendingCreationKind, writePendingCreationKind } from '../services/sessions/browser/sessionGridState.js';
-import { IGeneratedFilesService, type GeneratedFileSource } from '../services/generatedFiles/common/generatedFilesService.js';
+import { SessionArtifactType } from '../../platform/agentHost/common/sessionArtifacts.js';
+import { agentHostResponseArtifactId } from '../common/agentHostSessionArtifacts.js';
 import { IsSessionsWindowContext } from '../../workbench/common/contextkeys.js';
 
 const historyPageTurns = 20;
@@ -89,6 +90,7 @@ export class ChatWidgetModel extends Disposable {
 	private olderHistoryRequest: Promise<void> | undefined;
 	private olderHistoryError: string | undefined;
 	private selection: ChatWidgetSelection;
+	private readonly artifactListener = this._register(new MutableDisposable());
 	private _thread: Thread | undefined;
 	private comparableVersionTurns = new Set<string>();
 	private requestVersionRevision = 0;
@@ -167,13 +169,13 @@ export class ChatWidgetModel extends Disposable {
 		return composer?.generation === this.composerGeneration && composer.threadId === this.threadId ? composer.untitledSessionId : undefined;
 	}
 
-	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService, @IGeneratedFilesService private readonly generatedFiles: IGeneratedFilesService, @IContextKeyService private readonly contextKeys?: IContextKeyService) {
+	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService, @IContextKeyService private readonly contextKeys?: IContextKeyService) {
 		super();
 		this.chatService = chatService;
 		this.historyRedo = this._register(new ChatHistoryRedoModel(chatService, () => this._onDidChange.fire()));
 		this.sessionService = sessionService;
 		this.selection = selection;
-		this._register(generatedFiles.onDidChange(() => this._onDidChange.fire()));
+		this.observeSessionArtifacts();
 		if (contextKeys) {
 			const keys = new Set([SessionsWorkspaceModeContext.key]);
 			this._register(contextKeys.onDidChangeContext(event => {
@@ -504,9 +506,13 @@ export class ChatWidgetModel extends Disposable {
 			archived: thread?.status === 'archived', hasOlderTurns: this.historyBoundary?.hasOlderTurns,
 		}, this.supportsConversationChangeReview ? this._changeSets : undefined), this.session, thread?.threadId);
 		if (thread) {
+			const files = new Map((this.session?.artifacts?.get() ?? [])
+				.filter(artifact => artifact.type === SessionArtifactType.File && artifact.isArtifact && artifact.chat === thread.threadId && artifact.uri)
+				.map(artifact => [artifact.id, artifact]));
+			const threadId = parseSessionIdentity(thread.threadId, LOCAL_AGENT_HOST_PROVIDER_ID).backendSessionId;
 			transcript = transcript.map(item => {
-				const file = item.feedbackSource && this.generatedFiles.findBySource(this.generatedFileSource(thread, item.feedbackSource.itemId));
-				return file ? { ...item, files: [{ resource: file.resource.toString(), label: file.title }] } : item;
+				const file = item.feedbackSource && files.get(agentHostResponseArtifactId(threadId, item.feedbackSource.itemId));
+				return file ? { ...item, files: [{ resource: file.uri!, label: file.label }] } : item;
 			});
 		}
 		const firstRequest = this.selection.kind === 'session' && this.selection.firstRequestClientId;
@@ -641,6 +647,7 @@ export class ChatWidgetModel extends Disposable {
 			this._onDidChangeComposer.fire();
 		}
 		this.selection = { kind: 'session', active };
+		this.observeSessionArtifacts();
 		// Catalog hydration changes metadata; reselecting the same conversation must not
 		// erase a failed history read or start another read beside initialization/Retry.
 		if (previousThreadId === active.threadId) {
@@ -660,6 +667,7 @@ export class ChatWidgetModel extends Disposable {
 		}
 		const sameProvider = this.selection.session.providerId === session.providerId;
 		this.selection = { kind: 'untitled', session };
+		this.observeSessionArtifacts();
 		if (sameProvider) this.applyDefaultNewChatModel();
 		this._onDidChange.fire();
 		void this.loadModels();
@@ -670,6 +678,7 @@ export class ChatWidgetModel extends Disposable {
 		if (selection.kind === 'untitled' && selection.session.untitledSessionId === this.untitledSessionId) {
 			if (selection.session !== (this.selection.kind === 'untitled' && this.selection.session)) {
 				this.selection = selection;
+				this.observeSessionArtifacts();
 				this._onDidChange.fire();
 			}
 			return;
@@ -684,6 +693,7 @@ export class ChatWidgetModel extends Disposable {
 		this.generation++;
 		if (previous) void this.chatService.unsubscribeThread(previous.session.sessionId, previous.threadId, this);
 		this.selection = selection;
+		this.observeSessionArtifacts();
 		this.subscriptionThreadId = undefined;
 		this.subscriptionPromise = undefined;
 		this.initializePromise = undefined;
@@ -776,6 +786,7 @@ export class ChatWidgetModel extends Disposable {
 		this.sessionService.setUntitledSessionAgent(untitledSessionId, agent);
 		const session = this.sessionService.untitledSessions.find(candidate => candidate.untitledSessionId === untitledSessionId)!;
 		this.selection = { kind: 'untitled', session };
+		this.observeSessionArtifacts();
 		this._onDidChange.fire();
 	}
 
@@ -1257,6 +1268,7 @@ export class ChatWidgetModel extends Disposable {
 		const session = this.sessionService.untitledSessions.find(candidate => candidate.untitledSessionId === previous.untitledSessionId);
 		if (!session || session === previous) return;
 		this.selection = { kind: 'untitled', session };
+		this.observeSessionArtifacts();
 		this._onDidChange.fire();
 	}
 
@@ -1713,16 +1725,8 @@ export class ChatWidgetModel extends Disposable {
 		return { thread, transcript };
 	}
 
-	private generatedFileSource(thread: Thread, itemId: string): GeneratedFileSource {
-		const identity = parseSessionIdentity(thread.sessionId, LOCAL_AGENT_HOST_PROVIDER_ID);
-		return {
-			providerId: this.session?.providerId ?? identity.providerId,
-			accountId: null,
-			sessionId: identity.backendSessionId,
-			threadId: parseSessionIdentity(thread.threadId, LOCAL_AGENT_HOST_PROVIDER_ID).backendSessionId,
-			itemId,
-			partId: 'markdown',
-		};
+	private observeSessionArtifacts(): void {
+		this.artifactListener.value = this.session?.artifacts?.onDidChange(() => this._onDidChange.fire());
 	}
 
 	/** Reconnection can skip more than one window. Fill that gap in bounded reads before
@@ -1847,6 +1851,7 @@ export class ChatWidgetModel extends Disposable {
 		const currentDraft = this.sessionService.untitledSessions.find(draft => draft.untitledSessionId === untitledSession.untitledSessionId) ?? untitledSession;
 		const draftModel = this.readDraftModel(currentDraft);
 		this.selection = { kind: 'session', active: created };
+		this.observeSessionArtifacts();
 		// The durable Session may authorize directory Skills absent from the untitled catalog.
 		this._skillSelectors = [];
 		void this.loadSkillSelectors();

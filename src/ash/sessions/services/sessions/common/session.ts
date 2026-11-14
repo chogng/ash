@@ -9,6 +9,7 @@ import { URI } from '../../../../base/common/uri.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
 import type { ChatCreationKind } from '../../../common/chatCreation.js';
+import type { ISessionArtifact } from '../../../../platform/agentHost/common/sessionArtifacts.js';
 
 export const enum SessionChangesetOperationScope {
 	Changeset = 'changeset',
@@ -204,6 +205,8 @@ export interface ISession {
 	readonly workspace?: ISessionWorkspace | null;
 	readonly nextApprovalMode: ApprovalMode;
 	readonly chats: readonly IChat[];
+	/** Provider-owned artifacts and references. Absence means the provider has no projection. */
+	readonly artifacts?: IObservable<readonly ISessionArtifact[]>;
 	/** Server-owned projection; absent only before an active Session has been subscribed. */
 	readonly agentTree?: readonly AgentTreeNode[];
 }

@@ -23,7 +23,7 @@ import { ISessionPrimaryProviderServices, type SessionProviderServices } from '.
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
 import { canQueueChatGPTCreation, linkedTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 import type { ChatEntityDetailsSource } from '../../chat/browser/chatEntityDetails.js';
-import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
+import { IArtifactCatalogService } from '../../../services/artifactCatalog/common/artifactCatalogService.js';
 
 export const ChatGPTResponseCanOpenOriginalContext = 'sessions.chatgpt.responseCanOpenOriginal';
 export const ChatGPTResponseOnlineContext = 'sessions.chatgpt.responseOnline';
@@ -90,7 +90,7 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 		@IChatGPTService private readonly backend: IChatGPTService,
 		@ISessionPrimaryProviderServices private readonly primary: SessionProviderServices,
 		@ICommandService private readonly commands: ICommandService,
-		@IGeneratedFilesService private readonly generatedFiles: IGeneratedFilesService,
+		@IArtifactCatalogService private readonly artifactCatalog: IArtifactCatalogService,
 	) {
 		super();
 		const ashModelsChanged = observableSignalFromEvent(this, primary.models.onDidChangeModels);
@@ -130,7 +130,7 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 			ashModelsChanged.read(reader);
 			void this.loadAshModels();
 		}));
-		this._register(generatedFiles.onDidChange(() => {
+		this._register(artifactCatalog.onDidChange(() => {
 			this.currentItems = this.projectTranscript(backend.state.get());
 			this.changed.fire();
 		}));
@@ -429,7 +429,7 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 						const index = writingIndex++;
 						if (!state.catalogScope) return part;
 						const source = state.conversationId && chatGPTWritingSource(state.catalogScope, state.conversationId, message.id, index);
-						const file = source && this.generatedFiles.findBySource(source);
+						const file = source && this.artifactCatalog.findBySource(source);
 						if (!file) {
 							return message === latest || message.completion === 'complete' ? { ...part, awaitingPublication: true } : part;
 						}

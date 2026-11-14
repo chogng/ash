@@ -2,7 +2,7 @@ import './contrib/splash/browser/splash.contribution.js';
 import '../workbench/contrib/remote/browser/remote.contribution.js';
 import '../workbench/contrib/workspace/browser/workspace.contribution.js';
 import './contrib/workspace/browser/workspace.contribution.js';
-import './services/generatedFiles/browser/generatedFiles.contribution.js';
+import './services/artifactCatalog/browser/artifactCatalog.contribution.js';
 import './services/artifactAutoSave/browser/artifactAutoSave.contribution.js';
 import './contrib/chat/browser/chat.contribution.js';
 import '../workbench/contrib/chatWindow/browser/chatWindow.contribution.js';

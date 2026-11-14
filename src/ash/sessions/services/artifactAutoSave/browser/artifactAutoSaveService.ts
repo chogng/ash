@@ -8,7 +8,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { SaveReason } from '../../../../workbench/common/editor.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
-import { IGeneratedFilesService } from '../../generatedFiles/common/generatedFilesService.js';
+import { IArtifactCatalogService } from '../../artifactCatalog/common/artifactCatalogService.js';
 import { IArtifactAutoSaveService } from '../common/artifactAutoSaveService.js';
 import type { URI } from '../../../../base/common/uri.js';
 
@@ -19,7 +19,7 @@ export class ArtifactAutoSaveService extends Disposable implements IArtifactAuto
 	private readonly saves = new Map<IWorkingCopy, Promise<void>>();
 
 	constructor(
-		@IGeneratedFilesService private readonly generatedFiles: IGeneratedFilesService,
+		@IArtifactCatalogService private readonly artifactCatalog: IArtifactCatalogService,
 		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
 		@ILifecycleService lifecycle: ILifecycleService,
 		@ILogService private readonly log: ILogService,
@@ -28,7 +28,7 @@ export class ArtifactAutoSaveService extends Disposable implements IArtifactAuto
 		super();
 		this._register(workingCopies.onDidRegister(copy => this.track(copy)));
 		this._register(workingCopies.onDidUnregister(copy => { this.copies.deleteAndDispose(copy); }));
-		this._register(generatedFiles.onDidChange(() => { for (const copy of workingCopies.getAll()) this.track(copy); }));
+		this._register(artifactCatalog.onDidChange(() => { for (const copy of workingCopies.getAll()) this.track(copy); }));
 		for (const copy of workingCopies.getAll()) this.track(copy);
 		this._register(lifecycle.onWillShutdown(event => {
 			event.join(async () => {
@@ -56,7 +56,7 @@ export class ArtifactAutoSaveService extends Disposable implements IArtifactAuto
 	}
 
 	private owns(copy: IWorkingCopy): boolean {
-		return this.managed.has(copy) || this.generatedFiles.isGeneratedResource(copy.resource);
+		return this.managed.has(copy) || this.artifactCatalog.hasResource(copy.resource);
 	}
 
 	private track(copy: IWorkingCopy): void {
@@ -92,7 +92,7 @@ export class ArtifactAutoSaveService extends Disposable implements IArtifactAuto
 		}), { keepOpen: true }));
 		const notification = this.notifications.notify({
 			severity: Severity.Error,
-			message: localize({ bundle: 'ash.artifacts', key: 'generatedFileSaveFailed' }, 'Could not save changes to {0}. Your edits remain open. Resolve the save error before closing the file.', copy.backupLabel ?? copy.resource.path.split('/').at(-1) ?? ''),
+			message: localize({ bundle: 'ash.artifacts', key: 'artifactSaveFailed' }, 'Could not save changes to {0}. Your edits remain open. Resolve the save error before closing the file.', copy.backupLabel ?? copy.resource.path.split('/').at(-1) ?? ''),
 			actions: { primary: [retry] },
 		});
 	}

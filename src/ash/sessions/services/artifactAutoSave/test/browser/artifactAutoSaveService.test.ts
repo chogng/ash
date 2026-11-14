@@ -1,4 +1,4 @@
-import { createTestGeneratedFilesService } from '../../../../test/common/testGeneratedFilesService.js';
+import { createTestArtifactCatalogService, createTestDocsService } from '../../../../test/common/testArtifactCatalogService.js';
 import assert from 'node:assert/strict';
 import { setImmediate } from 'node:timers/promises';
 import { mock } from 'node:test';
@@ -23,7 +23,7 @@ import { BrowserStorageService } from '../../../../../workbench/services/storage
 import { BrowserWorkingCopyService } from '../../../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { ArtifactAutoSaveService } from '../../browser/artifactAutoSaveService.js';
-import { IGeneratedFilesService } from '../../../generatedFiles/common/generatedFilesService.js';
+import { IArtifactCatalogService } from '../../../artifactCatalog/common/artifactCatalogService.js';
 
 class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	public readonly backupKind = 'text';
@@ -102,14 +102,13 @@ class Fixture extends Disposable {
 		this.services.registerInstance(IWorkingCopyService, this.workingCopies);
 		this.notifications = this._register(new TestNotificationService());
 		this.services.registerInstance(INotificationService, this.notifications);
-		this.services.registerInstance(IGeneratedFilesService, {
-			...createTestGeneratedFilesService(),
+		this.services.registerInstance(IArtifactCatalogService, {
+			...createTestArtifactCatalogService(),
 			onDidChange: this.catalogChangeEmitter.event,
 			files: [], loading: false, error: undefined,
 			refresh: async () => { },
-			publishMarkdown: async () => { throw new Error('Unexpected publication'); },
 			findBySource: () => undefined,
-			isGeneratedResource: resource => this.generated.has(resource.toString()),
+			hasResource: resource => this.generated.has(resource.toString()),
 		});
 	}
 
@@ -130,7 +129,7 @@ suite('ArtifactAutoSaveService', () => {
 	setup(() => mock.timers.enable({ apis: ['setTimeout'] }));
 	teardown(() => mock.timers.reset());
 
-	const dependencies: readonly ServiceIdentifier<unknown>[] = [IGeneratedFilesService, IWorkingCopyService, ILifecycleService, ILogService, INotificationService];
+	const dependencies: readonly ServiceIdentifier<unknown>[] = [IArtifactCatalogService, IWorkingCopyService, ILifecycleService, ILogService, INotificationService];
 	for (const missing of dependencies) {
 		test(`requires the ${missing.description} registration during production construction`, () => {
 			using fixture = new Fixture();

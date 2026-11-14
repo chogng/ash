@@ -1,7 +1,8 @@
+import { IDocsService } from '../../../../contrib/docs/common/docsService.js';
 import { chatMarkdownRichContentExtension } from '../../../../../workbench/contrib/chat/browser/widget/chatMarkdownRichContent.js';
 import { Marked } from '../../../../../base/common/marked/marked.js';
 import { initializeTestLocalization } from '../../../../../workbench/services/localization/test/common/localizationTestUtils.js';
-import { createTestGeneratedFilesService } from '../../../../test/common/testGeneratedFilesService.js';
+import { createTestArtifactCatalogService, createTestDocsService } from '../../../../test/common/testArtifactCatalogService.js';
 import { chatGPTWritingSource } from '../../browser/chatGPTRichContent.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -12,11 +13,11 @@ import { observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { generatedFileSourceKey, type GeneratedFile } from '../../../../../platform/generatedFiles/common/generatedFiles.js';
+import { artifactSourceKey, type ArtifactResource } from '../../../../../platform/artifactCatalog/common/artifactCatalog.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
-import { IGeneratedFilesService } from '../../../../services/generatedFiles/common/generatedFilesService.js';
+import { IArtifactCatalogService } from '../../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { IChatGPTService, type ChatGPTState } from '../../browser/chatGPTService.js';
 import type { ChatGPTMessage } from '../../browser/chatGPTClient.js';
 import { ChatGPTWidgetModel } from '../../electron-browser/chatGPTWidgetModel.js';
@@ -35,15 +36,15 @@ function fixture(options?: { registerGenerated?: boolean; }) {
 	const resources = new DisposableStore();
 	const changed = resources.add(new Emitter<void>());
 	const state = observableValue<ChatGPTState>('ChatGPT publication test', initialState);
-	const files: GeneratedFile[] = [];
-	const generated: IGeneratedFilesService = {
-		...createTestGeneratedFilesService(),
+	const files: ArtifactResource[] = [];
+	const generated: IArtifactCatalogService = {
+		...createTestArtifactCatalogService(),
 		onDidChange: changed.event, files, loading: false, error: undefined,
-		findBySource: source => files.find(file => generatedFileSourceKey(file.source) === generatedFileSourceKey(source)),
+		findBySource: source => files.find(file => artifactSourceKey(file.source) === artifactSourceKey(source)),
 	};
-	const registerFile = (account: string, index: number, title: string): GeneratedFile => {
+	const registerFile = (account: string, index: number, title: string): ArtifactResource => {
 		const source = chatGPTWritingSource(account, initialState.conversationId!, 'reply', index);
-		const file: GeneratedFile = { id: String(files.length), resource: URI.file(`/generated/${files.length}.md`), title, contentType: 'text/markdown', source, createdAt: 1 };
+		const file: ArtifactResource = { id: String(files.length), resource: URI.file(`/generated/${files.length}.md`), title, contentType: 'text/markdown', source, createdAt: 1 };
 		files.push(file);
 		changed.fire();
 		return file;
@@ -53,7 +54,7 @@ function fixture(options?: { registerGenerated?: boolean; }) {
 		[ISessionPrimaryProviderServices, { models: { onDidChangeModels: Event.None, listModelCatalog: async () => [], isModelVisible: () => true } } as unknown as SessionProviderServices],
 		[ICommandService, { executeCommand: async () => undefined } as unknown as ICommandService],
 	);
-	if (options?.registerGenerated !== false) collection.set(IGeneratedFilesService, generated);
+	if (options?.registerGenerated !== false) collection.set(IArtifactCatalogService, generated);
 	const services = resources.add(new InstantiationService(collection));
 	try {
 		const model = resources.add(services.createInstance(ChatGPTWidgetModel));
@@ -68,7 +69,7 @@ suite('ChatGPT generated Markdown publication', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('production model construction requires the generated files service', () => {
-		assert.throws(() => fixture({ registerGenerated: false }), /generatedFilesService/u);
+		assert.throws(() => fixture({ registerGenerated: false }), /artifactCatalogService/u);
 	});
 
 	test('a managed writing block exposes its editor only after its exact file has been published', () => {

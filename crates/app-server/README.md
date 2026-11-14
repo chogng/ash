@@ -24,6 +24,8 @@ Desktop 的 ChatGPT Web 凭据消费者使用 daemon 的 `credentials` 原生连
 6. 为窗口装配通话协调服务；通话与识别分别通过现有 LiveKit、语音客户端按需启动本机媒体辅助程序，连接关闭时释放该窗口的通话资源。远程基础包与可选媒体包的选择见 [Remote distribution](../../remote-server/README.md)。
 7. 将产品 Turn 绑定到发起连接，通过生成协议委托该窗口编辑未保存文档。
 
+原生文档创建由 `ash-documents` 接收已完成 Turn 的 Docs 输出；`ash-artifact-catalog` 只持有持久资源引用。Thread 存储原子记录通用完成快照，App Server 在启动和完成通知时调度 Docs，成功后确认。目录 RPC 不创建文件，模型工具不持有文档规则。文档位于 `documents`，目录身份位于 `artifact-catalog/client-id`；旧布局的一次性迁移入口已移除。
+
 `client_host` 管理双向宿主请求和 Turn 的连接身份；浏览器和文档领域各自拥有
 `browser_host`、`text_document_host` 的领域状态与协议转换。文档工具只依赖
 `ash-file-system::TextDocumentEditor`，不依赖 Renderer 模型或 App Server DTO。

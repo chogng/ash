@@ -1,3 +1,5 @@
+import { IDocsService } from '../../common/docsService.js';
+import { createTestDocsService } from '../../../../test/common/testArtifactCatalogService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IUserDataProfileService } from '../../../../../workbench/services/userDataProfile/common/userDataProfile.js';
 import assert from 'node:assert/strict';
@@ -31,7 +33,7 @@ import { DOCS_ARKDOWN_EDITOR_ID, DOCS_DEFAULT_MODE_SETTING, LEGACY_DOCS_EDITOR_I
 import { createDocsOpener, newDocsResource, restoredDocsResource } from '../../browser/documentActions.js';
 import { createArkdownDocsInput } from '../../browser/docsEditorInput.js';
 import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
-import { IGeneratedFilesService } from '../../../../services/generatedFiles/common/generatedFilesService.js';
+import { IArtifactCatalogService } from '../../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { IWorkingCopyBackupService, InMemoryWorkingCopyBackupService } from '../../../../../workbench/services/workingCopy/common/workingCopyBackupService.js';
 import { IWorkingCopyService } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { ILifecycleService } from '../../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -83,10 +85,10 @@ for (const failOpen of [false, true]) test(`Docs recovers an untitled backup and
 });
 
 test('Docs catalog retains Markdown inputs with uppercase extensions and explicit content types', () => {
-	const generated = { isProfileGeneratedPath: () => false, isGeneratedResource: () => false } as unknown as IGeneratedFilesService;
-	assert.equal(isRetainedDocsInput({ resource: URI.file('/notes/UPPER.MD') }, generated), true);
-	assert.equal(isRetainedDocsInput({ resource: URI.parse('untitled:/draft'), contentType: 'text/markdown' }, generated), true);
-	assert.equal(isRetainedDocsInput({ resource: URI.file('/notes/plain.txt') }, generated), false);
+	const generated = { hasResource: () => false } as unknown as IArtifactCatalogService;
+	assert.equal(isRetainedDocsInput({ resource: URI.file('/notes/UPPER.MD') }, generated, createTestDocsService()), true);
+	assert.equal(isRetainedDocsInput({ resource: URI.parse('untitled:/draft'), contentType: 'text/markdown' }, generated, createTestDocsService()), true);
+	assert.equal(isRetainedDocsInput({ resource: URI.file('/notes/plain.txt') }, generated, createTestDocsService()), false);
 });
 
 test('retired Docs identities expose one legacy importer and remain absent from Markdown editor choices', () => {
@@ -135,14 +137,14 @@ for (const initialMode of ['chat', 'code'] as const) {
 			services.registerInstance(ISessionsEntryService, {
 				openEntry: async (entry: ISessionsEntry) => { entries.push(entry); },
 			} as unknown as ISessionsEntryService);
-			services.registerInstance(IGeneratedFilesService, {
-				isProfileGeneratedPath: () => true,
+			services.registerInstance(IArtifactCatalogService, {
 				refresh: () => refreshed.p,
 				files: [{ resource, title: 'Report', contentType: 'text/markdown' }],
-			} as unknown as IGeneratedFilesService);
+			} as unknown as IArtifactCatalogService);
 			const opener = lifetime.add(services.createInstance(OpenerService));
 			services.registerInstance(IOpenerService, opener);
-			using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['sessions.generatedFileOpener']);
+			services.registerInstance(IDocsService, { ...createTestDocsService(), isProfileDocumentPath: () => true });
+			using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['sessions.docs.resourceOpener']);
 			host.advance(WorkbenchPhase.BlockRestore);
 			const pending = opener.open(resource);
 			mode.set(finalMode);
@@ -277,12 +279,12 @@ test('Docs recovery checks the refreshed account catalog and retains Code source
 	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None, onDidShutdown: Event.None, onDidShutdownError: Event.None, onBeforeShutdownError: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(INotificationService, { error: (error: unknown) => assert.fail(String(error)) } as unknown as INotificationService);
-	services.registerInstance(IGeneratedFilesService, {
-		isProfileGeneratedPath: () => false,
-		isGeneratedResource: (resource: URI) => currentCatalog.some(file => file.toString() === resource.toString()),
+	services.registerInstance(IDocsService, { ...createTestDocsService(), recoverImports: async () => { await services.get(IArtifactCatalogService).refresh(); } });
+	services.registerInstance(IArtifactCatalogService, {
+		hasResource: (resource: URI) => currentCatalog.some(file => file.toString() === resource.toString()),
 		refresh: async () => { currentCatalog = []; },
 		get files() { return []; },
-	} as unknown as IGeneratedFilesService);
+	} as unknown as IArtifactCatalogService);
 	services.registerInstance(IEditorPart, {
 		domNode: browser.window.document.body, pageGroupId: 1, groups: [{ id: 0 }, { id: 1 }],
 		openEditor: async (input: IResourceEditorInput, _options: unknown, target: { groupId: number; }) => {

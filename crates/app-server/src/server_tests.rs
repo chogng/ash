@@ -22,12 +22,12 @@ mod memories_live_tests;
 #[path = "message_history_tests.rs"]
 mod message_history_tests;
 
+#[path = "artifact_catalog_tests.rs"]
+mod artifact_catalog_tests;
 #[path = "automation_tests.rs"]
 mod automation_tests;
 #[path = "backup_tests.rs"]
 mod backup_tests;
-#[path = "generated_files_tests.rs"]
-mod generated_files_tests;
 #[path = "git_repository_contexts_tests.rs"]
 mod git_repository_contexts_tests;
 #[path = "infrastructure_tests.rs"]

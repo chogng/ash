@@ -10,7 +10,6 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
 import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
 import { AshChatModel } from '../../chat/browser/ashChatModel.js';
 
@@ -25,14 +24,13 @@ export class ProjectChatModel extends AshChatModel {
 		@ISessionPrimaryProviderServices primary: SessionProviderServices,
 		@IConfigurationService configuration: IConfigurationService,
 		@IStorageService storage: IStorageService,
-		@IGeneratedFilesService generatedFiles: IGeneratedFilesService,
 		@IContextKeyService contexts: IContextKeyService,
 		@ISessionsService view: ISessionsService,
 		@ICommandService commands: ICommandService,
 		@INotificationService notifications: INotificationService,
 		@IOpenerService opener: IOpenerService,
 	) {
-		super({ kind: 'untitled', session: draft }, 'compact', management, primary.chat, primary.prompts, primary.models, primary.execution, configuration, storage, generatedFiles, contexts, undefined);
+		super({ kind: 'untitled', session: draft }, 'compact', management, primary.chat, primary.prompts, primary.models, primary.execution, configuration, storage, contexts, undefined);
 		// Let the shared input clear the accepted draft before navigation hides it.
 		this.reveal = this._register(new RunOnceScheduler(() => {
 			const open = draft.kind === 'chat'

@@ -182,14 +182,14 @@ impl AppServer {
         };
         capabilities.advertise_contracts();
         if self
-            .generated_files_processor
+            .artifact_catalog_processor
             .is_available(connection.authority)
         {
             capabilities.contracts.insert(
-                "generatedFiles".into(),
+                "artifactCatalog".into(),
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
             );
-            self.updates.enable_generated_file_notifications(
+            self.updates.enable_artifact_catalog_notifications(
                 connection.connection_id,
                 connection.authority == super::ConnectionAuthority::Browser,
             );

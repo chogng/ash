@@ -1,3 +1,4 @@
+import { IDocsService } from '../common/docsService.js';
 import { Event } from '../../../../base/common/event.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -12,7 +13,7 @@ import { WorkingCopyBackupTracker } from '../../../../workbench/services/working
 import { IWorkingCopyBackupService } from '../../../../workbench/services/workingCopy/common/workingCopyBackupService.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import type { EditorParts } from '../../../browser/parts/editorParts.js';
-import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
+import { IArtifactCatalogService } from '../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { LEGACY_DOCS_CONTENT_TYPE } from '../common/docs.js';
 import { createArkdownDocsInput } from './docsEditorInput.js';
 import { migrateLegacyDocsInput } from './legacyDocsMigration.js';
@@ -28,7 +29,8 @@ export function createDocsBackupContribution(accessor: ServicesAccessor): IWorkb
 	const lifecycle = accessor.get(ILifecycleService);
 	const log = accessor.get(ILogService);
 	const notifications = accessor.get(INotificationService);
-	const generated = accessor.get(IGeneratedFilesService);
+	const generated = accessor.get(IArtifactCatalogService);
+	const docs = accessor.get(IDocsService);
 	// Source and Docs facades share a Markdown model, including after either view closes.
 	const isDocsCopy = (copy: IWorkingCopy) => copy.backupContentType === 'text/markdown' || copy.backupContentType === LEGACY_DOCS_CONTENT_TYPE || /\.md$/iu.test(copy.resource.path);
 	const docsEvent = (event: Event<IWorkingCopy>): Event<IWorkingCopy> => (listener, thisArgs, disposables) =>
@@ -52,11 +54,11 @@ export function createDocsBackupContribution(accessor: ServicesAccessor): IWorkb
 		async onWorkspaceRestored(): Promise<void> {
 			const pending = await backups.list();
 			const generatedResources = new Set(pending
-				.filter(backup => generated.isProfileGeneratedPath(backup.resource) || generated.isGeneratedResource(backup.resource))
+				.filter(backup => docs.isProfileDocumentPath(backup.resource) || generated.hasResource(backup.resource))
 				.map(backup => backup.resource.toString()));
 			let generatedReady = false;
 			if (generatedResources.size) {
-				try { await generated.refresh(); generatedReady = true; }
+				try { await docs.recoverImports(); generatedReady = true; }
 				catch (error) { log.error('Docs generated-file recovery catalog failed', error); }
 			}
 			for (const backup of pending) {

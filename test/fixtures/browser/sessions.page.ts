@@ -1,3 +1,4 @@
+import { IDocsService } from '../../../src/ash/sessions/contrib/docs/common/docsService.js';
 import { IAgentHostConnectionsService } from '../../../src/ash/platform/agentHost/common/agentHostConnectionsService.js';
 import { ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
@@ -24,8 +25,8 @@ import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
-import type { GeneratedFile } from '../../../src/ash/platform/generatedFiles/common/generatedFiles.js';
-import { IGeneratedFilesService } from '../../../src/ash/sessions/services/generatedFiles/common/generatedFilesService.js';
+import type { ArtifactResource } from '../../../src/ash/platform/artifactCatalog/common/artifactCatalog.js';
+import { IArtifactCatalogService } from '../../../src/ash/sessions/services/artifactCatalog/common/artifactCatalogService.js';
 import type { } from '../../../src/ash/workbench/browser/web.api.js';
 import { codeSessionsProfile } from '../../../src/ash/code/common/codeSessionsProfile.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
@@ -101,17 +102,17 @@ const { SessionsBrowserMain } = await import('../../../src/ash/sessions/browser/
 // Mount the renderer's real Parts, settings and canvas without a product process or backend.
 // A disconnected host that advertises automation still owns its saved management entry.
 const disconnectedApi = createDisconnectedRendererApi();
-const generatedEntries = new Map<string, GeneratedFile>();
+const generatedEntries = new Map<string, ArtifactResource>();
 const generatedChanges = new Emitter<void>();
 window.addEventListener('pagehide', () => generatedChanges.dispose(), { once: true });
-let publishGeneratedFile: (itemId: string, title: string) => Promise<void>;
+let publishArtifactResource: (itemId: string, title: string) => Promise<void>;
 registerWorkbenchServiceContribution({
-	service: createServiceIdentifier<object>('test.generatedFiles'),
-	dependencies: [IGeneratedFilesService],
+	service: createServiceIdentifier<object>('test.artifactCatalog'),
+	dependencies: [IDocsService],
 	install: context => {
-		const files = context.container.get(IGeneratedFilesService);
-		publishGeneratedFile = async (itemId, title) => {
-			await files.publishMarkdown({ providerId: 'fixture', accountId: null, sessionId: 'layout', threadId: 'thread', itemId, partId: 'markdown' }, `# ${title}`, title);
+		const files = context.container.get(IDocsService);
+		publishArtifactResource = async (itemId, title) => {
+			await files.importMarkdown({ providerId: 'fixture', accountId: null, sessionId: 'layout', threadId: 'thread', itemId, partId: 'markdown' }, `# ${title}`, title);
 		};
 		return {};
 	},
@@ -119,7 +120,7 @@ registerWorkbenchServiceContribution({
 globalThis.ashWebWorkbenchHost = {
 	api: {
 		...disconnectedApi,
-		generatedFiles: {
+		artifactCatalog: {
 			onDidChange: generatedChanges.event,
 			list: async () => [...generatedEntries.values()],
 			register: async (_clientId, registration) => {
@@ -445,7 +446,7 @@ window.addEventListener('pagehide', stopObservingErrors, { once: true });
 declare global {
 	interface Window {
 		ashSessionsIntegration: {
-			publishGeneratedFile(itemId: string, title: string): Promise<void>;
+			publishArtifactResource(itemId: string, title: string): Promise<void>;
 			refreshProject(): void;
 			completeCustomizeDetails(): void;
 			setCustomizeDetailsRead(mode: 'hold' | 'fail'): void;
@@ -467,7 +468,7 @@ declare global {
 }
 
 window.ashSessionsIntegration = {
-	publishGeneratedFile: (itemId, title) => publishGeneratedFile(itemId, title),
+	publishArtifactResource: (itemId, title) => publishArtifactResource(itemId, title),
 	refreshProject: () => projectChanges.fire(),
 	completeCustomizeDetails: () => completeCustomizeDetails(),
 	setCustomizeDetailsRead: mode => { customizeDetailsRead = mode; },

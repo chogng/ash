@@ -1,3 +1,4 @@
+import { IDocsService } from '../../contrib/docs/common/docsService.js';
 import { ChatViewFactory, IChatViewFactory } from '../../contrib/chat/browser/chatViewFactory.js';
 import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import { SharedChatInputComposerContribution } from '../../contrib/chat/browser/sharedChatInputComposer.contribution.js';
@@ -83,8 +84,8 @@ import { ISessionsConversationService } from '../../services/sessions/common/ses
 import { DeferredPromise } from '../../../base/common/async.js';
 import { ISessionsService, SessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
-import { IGeneratedFilesService } from '../../services/generatedFiles/common/generatedFilesService.js';
-import { createTestGeneratedFilesService } from '../common/testGeneratedFilesService.js';
+import { IArtifactCatalogService } from '../../services/artifactCatalog/common/artifactCatalogService.js';
+import { createTestArtifactCatalogService, createTestDocsService } from '../common/testArtifactCatalogService.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -387,7 +388,8 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(INotificationService, notifications);
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
-	services.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+	services.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+	if (!services.has(IDocsService)) services.registerInstance(IDocsService, createTestDocsService());
 	services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: dom.window.document.body })));
 	registerTestVoiceInputServices(services);
 	services.registerInstance(ISessionsManagementService, sessionService);

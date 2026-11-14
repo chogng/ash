@@ -605,6 +605,7 @@ dependencies = [
  "ash-app-tools",
  "ash-apply-patch",
  "ash-arg0",
+ "ash-artifact-catalog",
  "ash-assets",
  "ash-async-utils",
  "ash-attachment-store",
@@ -630,6 +631,7 @@ dependencies = [
  "ash-debug-manager",
  "ash-diagnostics",
  "ash-diff",
+ "ash-documents",
  "ash-exec-server",
  "ash-exec-server-protocol",
  "ash-execpolicy",
@@ -840,6 +842,16 @@ dependencies = [
  "unicode-segmentation",
  "wasm-bindgen",
  "yrs",
+]
+
+[[package]]
+name = "ash-artifact-catalog"
+version = "0.1.0"
+dependencies = [
+ "ash-sqlite",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -1527,6 +1539,19 @@ version = "0.1.0"
 dependencies = [
  "thiserror 2.0.21",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "ash-documents"
+version = "0.1.0"
+dependencies = [
+ "ash-artifact-catalog",
+ "ash-file-access",
+ "ash-file-system",
+ "ash-protocol",
+ "ash-utils-path",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

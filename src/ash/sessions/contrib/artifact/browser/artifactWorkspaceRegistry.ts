@@ -60,7 +60,7 @@ export interface ArtifactCard {
 	readonly createdAt?: number;
 	readonly modifiedAt?: number;
 	readonly workspaceKey?: string;
-	readonly generatedFileResource?: string;
+	readonly artifactResource?: string;
 	readonly command: { readonly id: string; readonly args: readonly unknown[]; };
 }
 

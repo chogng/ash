@@ -37,7 +37,7 @@ impl SqliteThreadStore {
         let path = path.into();
         let mut connection = open(&path).map_err(ThreadStoreError::Storage)?;
         super::thread_history::create_schema(&mut connection)?;
-        crate::generated_files::migrate(&mut connection).map_err(ThreadStoreError::Storage)?;
+        super::thread_completions::migrate(&mut connection)?;
         super::voice_history::migrate(&mut connection)?;
         let catalog_connection = open(&path).map_err(ThreadStoreError::Storage)?;
         Ok(Self {
@@ -49,6 +49,22 @@ impl SqliteThreadStore {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Reads a bounded page of committed completions for application-side reconciliation.
+    /// Advance past failed entries to let independent completions make progress.
+    pub fn pending_turn_completions(
+        &self,
+        after_id: i64,
+    ) -> Result<Vec<super::ThreadCompletion>, ThreadStoreError> {
+        let connection = self.connection.lock().map_err(storage_error)?;
+        super::thread_completions::pending(&connection, after_id)
+    }
+
+    /// Acknowledge only after the application's durable side effects have completed.
+    pub fn acknowledge_turn_completion(&self, id: i64) -> Result<(), ThreadStoreError> {
+        let connection = self.connection.lock().map_err(storage_error)?;
+        super::thread_completions::acknowledge(&connection, id)
     }
 
     /// Finds legacy Threads that still need a catalog row without reading their histories.
@@ -1022,9 +1038,11 @@ impl SqliteThreadStore {
                         .iter()
                         .find(|entry| &entry.turn.turn_id == turn_id)
                 {
-                    crate::generated_files::stage_native_turn(
+                    super::thread_completions::stage(
                         &transaction,
-                        &index.thread,
+                        &batch.catalog.session_id,
+                        &batch.thread_id,
+                        event.sequence,
                         &entry.turn,
                     )?;
                 }

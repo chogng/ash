@@ -86,7 +86,7 @@ export class SessionsBrowserMain extends Disposable {
 				} : undefined,
 				contributionIds: [
 					'sessions.artifactAutoSave',
-					'sessions.generatedFileOpener',
+					'sessions.docs.resourceOpener',
 					'sessions.docs.backup',
 					'sessions.chat.copyActionRendering',
 					'chat.queuePickerRendering',

@@ -146,6 +146,8 @@ ash-teams = { workspace = true }
 ash-rollout = { workspace = true }
 ash-rollout-trace = { workspace = true }
 ash-state = { workspace = true }
+ash-artifact-catalog = { workspace = true }
+ash-documents = { workspace = true }
 message-history = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-file-access = { workspace = true }

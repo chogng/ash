@@ -1,8 +1,11 @@
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
+import { IDocsService } from '../common/docsService.js';
+import { DocsService } from './docsService.js';
 import './arkdown/arkdown.contribution.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
-import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
+import { IArtifactCatalogService } from '../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { isRetainedDocsInput } from './docsArtifactCatalog.js';
 import { URI } from '../../../../base/common/uri.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -32,22 +35,26 @@ import { migrateLegacyDocsInput } from './legacyDocsMigration.js';
 import { ArkdownDocsEditorPane } from './arkdownDocsEditorPane.js';
 import { createDocsBackupContribution } from './docsBackupContribution.js';
 
+registerSingleton(IDocsService, DocsService, InstantiationType.Delayed);
+
 DocumentTypes.enableFileEditors();
 
 registerWorkbenchContribution('sessions.docs.backup', WorkbenchPhase.BlockRestore, createDocsBackupContribution);
 
-registerWorkbenchContribution('sessions.generatedFileOpener', WorkbenchPhase.BlockRestore, accessor => {
-	const generated = accessor.get(IGeneratedFilesService);
+registerWorkbenchContribution('sessions.docs.resourceOpener', WorkbenchPhase.BlockRestore, accessor => {
+	const generated = accessor.get(IArtifactCatalogService);
+	const docs = accessor.get(IDocsService);
 	const open = createDocsOpener(accessor);
 	const contextKeys = accessor.get(IContextKeyService);
 	return accessor.get(IOpenerService).registerOpener({
 		open: async (target, options) => {
 			if (options?.openExternal) return false;
 			const resource = typeof target === 'string' ? URI.parse(target) : target;
-			if (!generated.isProfileGeneratedPath(resource) && !generated.isGeneratedResource(resource)) return false;
+			if (!docs.isProfileDocumentPath(resource) && !generated.hasResource(resource)) return false;
 			await generated.refresh();
 			const file = generated.files.find(file => file.resource.toString() === resource.toString());
-			if (!file) throw new Error(localize({ bundle: 'ash.artifacts', key: 'generatedFileUnavailable' }, 'This generated file is unavailable.'));
+			if (!file) throw new Error(localize({ bundle: 'ash.artifacts', key: 'artifactUnavailable' }, 'This artifact is unavailable.'));
+			if (file.contentType !== 'text/markdown' && file.contentType !== LEGACY_DOCS_CONTENT_TYPE) return false;
 			// Resolve the current presentation after the account-scoped catalog refresh.
 			if (contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code') return false;
 			await open(file.resource, { label: file.title });
@@ -144,9 +151,9 @@ registerAction2(class ChooseDocsMode extends Action2 {
 
 CommandsRegistry.register('sessions.docs.openDocument', (accessor, value) => {
 	// Card targets must still belong to a retained document editor.
-	const generated = accessor.get(IGeneratedFilesService);
+	const generated = accessor.get(IArtifactCatalogService);
 	const input = accessor.get(IEditorPart).groups.flatMap(group => group.editors.map(editor => editor.input)).find(input =>
-		input.resource.toString() === value && isRetainedDocsInput(input, generated));
+		input.resource.toString() === value && isRetainedDocsInput(input, generated, accessor.get(IDocsService)));
 	if (!input) { throw new TypeError(localize('sessions.artifacts.unavailableDocument', 'This document is no longer open.')); }
 	return createDocsOpener(accessor)(input.resource);
 });
@@ -156,8 +163,8 @@ CommandsRegistry.register('sessions.restore.docs', async (accessor, source) => {
 	if (!resource) return commands.executeCommand('sessions.show.artifacts', source);
 	const open = createDocsOpener(accessor);
 	if (resource.scheme === Schemas.vscodeUserData) {
-		const generated = accessor.get(IGeneratedFilesService);
-		if (generated.isProfileGeneratedPath(resource)) {
+		const generated = accessor.get(IArtifactCatalogService);
+		if (accessor.get(IDocsService).isProfileDocumentPath(resource)) {
 			await generated.refresh().catch(() => undefined);
 			const file = generated.files.find(file => file.resource.toString() === resource.toString());
 			if (!file) return commands.executeCommand('sessions.show.artifacts', source);

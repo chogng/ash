@@ -11,14 +11,6 @@ pub use backup::BackupError;
 pub use backup::BackupRecord;
 pub use backup::BackupWorkspace;
 pub use backup::SqliteBackupStore;
-mod generated_files;
-pub use generated_files::GeneratedFileError;
-pub use generated_files::GeneratedFileRecord;
-pub use generated_files::GeneratedFileRegistration;
-pub use generated_files::GeneratedFileRegistrationOutcome;
-pub use generated_files::GeneratedFileSource;
-pub use generated_files::NATIVE_GENERATED_FILE_CLIENT;
-pub use generated_files::SqliteGeneratedFileStore;
 mod dir_index;
 mod issue_cache;
 mod message_history;
@@ -36,7 +28,7 @@ pub use ash_sqlite::open_sqlite_database;
 pub use dir_index::{ClearOutcome, DirIndexKind, DirIndexLease, StateRuntime};
 pub use sqlite::{
     HistoryImport, SqliteEnvironmentStore, SqliteMemoryStore, SqliteProjectStore, SqliteTeamStore,
-    SqliteThreadStore, SqliteTurnChangeStore, TurnChangeCommandOutcome,
+    SqliteThreadStore, SqliteTurnChangeStore, ThreadCompletion, TurnChangeCommandOutcome,
 };
 
 #[cfg(test)]

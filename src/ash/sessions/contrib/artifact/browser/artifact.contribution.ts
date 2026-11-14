@@ -1,6 +1,6 @@
 import { buildOpenSessionLinkUri } from '../../../../platform/agentHost/common/openSessionLink.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { IGeneratedFilesService } from '../../../services/generatedFiles/common/generatedFilesService.js';
+import { IArtifactCatalogService } from '../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
 import { OPEN_ARTIFACT_CONVERSATION_COMMAND_ID, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID } from '../../chat/common/constants.js';
 import { getActiveElement } from '../../../../base/browser/dom.js';
@@ -48,10 +48,10 @@ CommandsRegistry.register(OPEN_ARTIFACT_CONVERSATION_COMMAND_ID, async (accessor
 	if (typeof id !== 'string' || !/^[a-f0-9]{64}$/u.test(id)) throw new TypeError('Invalid generated file identity');
 	const opener = accessor.get(IOpenerService);
 	const commands = accessor.get(ICommandService);
-	const files = accessor.get(IGeneratedFilesService);
+	const files = accessor.get(IArtifactCatalogService);
 	await files.refresh();
 	const source = files.files.find(file => file.id === id)?.source;
-	if (!source) throw new Error(localize({ bundle: 'ash.artifacts', key: 'generatedFileUnavailable' }, 'This generated file is unavailable.'));
+	if (!source) throw new Error(localize({ bundle: 'ash.artifacts', key: 'artifactUnavailable' }, 'This artifact is unavailable.'));
 	if (source.providerId === LOCAL_AGENT_HOST_PROVIDER_ID && source.accountId === null) {
 		if (await opener.open(buildOpenSessionLinkUri(source.sessionId, source.threadId, 'local'), { fromUserGesture: true })) return;
 	} else if (source.accountId && CommandsRegistry.getCommand(OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID)) {

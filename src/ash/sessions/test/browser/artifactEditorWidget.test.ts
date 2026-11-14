@@ -1,3 +1,4 @@
+import { IDocsService } from '../../contrib/docs/common/docsService.js';
 import { DocumentCommands } from '../../contrib/artifact/common/commands/documentCommands.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
@@ -5,10 +6,10 @@ import { flattenArtifactCanvasShapes, type ArtifactCanvasShape } from '../../con
 import { InMemoryFileSystemProvider } from '../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { createTestFileService } from '../../../workbench/test/common/testEditorServices.js';
 import { IAssetService } from '../../../platform/assets/common/assetService.js';
-import { IGeneratedFilesService, type GeneratedFile } from '../../services/generatedFiles/common/generatedFilesService.js';
+import { IArtifactCatalogService, type ArtifactResource } from '../../services/artifactCatalog/common/artifactCatalogService.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { parseOpenSessionLinkUri } from '../../../platform/agentHost/common/openSessionLink.js';
-import { createTestGeneratedFilesService } from '../common/testGeneratedFilesService.js';
+import { createTestArtifactCatalogService, createTestDocsService } from '../common/testArtifactCatalogService.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { generateUuid } from '../../../base/common/uuid.js';
@@ -1269,7 +1270,8 @@ class ArtifactFixture extends Disposable {
 		const child = this._register(parent.createChild());
 		this.editors = this._register(child.createInstance(ArtifactCanvasEditorService));
 		child.registerInstance(IArtifactCanvasEditorService, this.editors);
-		if (!child.has(IGeneratedFilesService)) child.registerInstance(IGeneratedFilesService, createTestGeneratedFilesService());
+		if (!child.has(IArtifactCatalogService)) child.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+		if (!child.has(IDocsService)) child.registerInstance(IDocsService, createTestDocsService());
 		child.registerInstance(INotificationService, notifications);
 		child.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for help.', show: () => { throw new Error('Unexpected accessible view'); }, disableHint: unexpected, showAccessibleViewHelp: () => { throw new Error('Unexpected accessible view'); }, dispose() { }, [Symbol.dispose]() { } });
 		const storage = this._register(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 }));
@@ -1390,14 +1392,14 @@ test('Design owns HTML preview and retires the independent Make entry', () => {
 test('Artifacts opens the originating conversation from a published artifact card', async () => {
 	using scoped = services.createChild();
 	using changed = new Emitter<void>();
-	const file: GeneratedFile = {
+	const file: ArtifactResource = {
 		id: 'a'.repeat(64), title: 'Launch notes', resource: URI.file('/generated/launch-notes.md'), contentType: 'text/markdown', createdAt: 1,
 		source: { providerId: 'local-agent-host', accountId: null, sessionId: 'session', threadId: 'thread', itemId: 'reply', partId: 'markdown' },
 	};
-	let catalog: readonly GeneratedFile[] = [];
+	let catalog: readonly ArtifactResource[] = [];
 	let refreshes = 0;
-	scoped.registerInstance(IGeneratedFilesService, {
-		...createTestGeneratedFilesService(), onDidChange: changed.event, get files() { return catalog; },
+	scoped.registerInstance(IArtifactCatalogService, {
+		...createTestArtifactCatalogService(), onDidChange: changed.event, get files() { return catalog; },
 		refresh: async () => { refreshes++; },
 	});
 	const opened = new DeferredPromise<URI | string>();
@@ -1408,15 +1410,19 @@ test('Artifacts opens the originating conversation from a published artifact car
 	using commands = new CommandService(scoped);
 	scoped.registerInstance(ICommandService, commands);
 	using fixture = new ArtifactFixture(scoped);
-	assert.equal(fixture.page.domNode.querySelector('[data-generated-file-resource]'), null);
+	assert.equal(fixture.page.domNode.querySelector('[data-artifact-resource]'), null);
+	// Non-document catalog entries must not be presented as Docs.
+	catalog = [{ ...file, id: 'b'.repeat(64), title: 'Chart', contentType: 'image/svg+xml', resource: URI.file('/chart.svg') }];
+	changed.fire();
+	assert.equal(fixture.page.domNode.querySelector('[data-artifact-resource]'), null);
 	catalog = [file];
 	changed.fire();
-	const card = fixture.page.domNode.querySelector<HTMLButtonElement>('[data-generated-file-resource]');
+	const card = fixture.page.domNode.querySelector<HTMLButtonElement>('[data-artifact-resource]');
 	assert.ok(card);
-	assert.equal(card.dataset.generatedFileResource, file.resource.toString());
+	assert.equal(card.dataset.artifactResource, file.resource.toString());
 	assert.equal(card.title, file.title);
 	assert.equal(card.querySelector('time')?.dateTime, new Date(file.createdAt).toISOString());
-	assert.equal(fixture.page.domNode.querySelectorAll('[data-generated-file-resource]').length, 1);
+	assert.equal(fixture.page.domNode.querySelectorAll('[data-artifact-resource]').length, 1);
 	card.click();
 	const target = await opened.p;
 	assert.equal(refreshes, 1);
@@ -1427,23 +1433,23 @@ test('Artifacts opens the originating conversation from a published artifact car
 
 test('Artifacts reports generated file open failures and retains the published card', async () => {
 	using scoped = services.createChild();
-	const file: GeneratedFile = {
+	const file: ArtifactResource = {
 		id: 'b'.repeat(64), title: 'Saved document', resource: URI.file('/generated/saved-document.md'), contentType: 'text/markdown', createdAt: 1,
 		source: { providerId: 'local-agent-host', accountId: null, sessionId: 'session', threadId: 'thread', itemId: 'reply', partId: 'markdown' },
 	};
-	scoped.registerInstance(IGeneratedFilesService, { ...createTestGeneratedFilesService(), files: [file], refresh: async () => { throw new Error('Catalog unavailable'); } });
+	scoped.registerInstance(IArtifactCatalogService, { ...createTestArtifactCatalogService(), files: [file], refresh: async () => { throw new Error('Catalog unavailable'); } });
 	using commands = new CommandService(scoped);
 	scoped.registerInstance(ICommandService, commands);
 	const notified = new DeferredPromise<string>();
 	using listener = notifications.model.onDidAdd(notification => { void notified.complete(notification.message); });
 	using fixture = new ArtifactFixture(scoped);
-	const card = fixture.page.domNode.querySelector<HTMLButtonElement>('[data-generated-file-resource]');
+	const card = fixture.page.domNode.querySelector<HTMLButtonElement>('[data-artifact-resource]');
 	assert.ok(card);
 	card.click();
 	assert.equal(await notified.p, 'Catalog unavailable');
-	const retained = fixture.page.domNode.querySelectorAll<HTMLButtonElement>('[data-generated-file-resource]');
+	const retained = fixture.page.domNode.querySelectorAll<HTMLButtonElement>('[data-artifact-resource]');
 	assert.equal(retained.length, 1);
-	assert.equal(retained[0].dataset.generatedFileResource, file.resource.toString());
+	assert.equal(retained[0].dataset.artifactResource, file.resource.toString());
 	assert.equal(fixture.page.domNode.querySelector<HTMLElement>('.ash-artifacts-home')?.hidden, false);
 });
 

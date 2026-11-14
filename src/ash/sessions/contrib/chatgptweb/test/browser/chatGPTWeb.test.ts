@@ -1,3 +1,4 @@
+import { IDocsService } from '../../../../contrib/docs/common/docsService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -52,8 +53,8 @@ import { ISessionsConversationService } from '../../../../services/sessions/comm
 import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
 import type { ChatCreationKind } from '../../../../common/chatCreation.js';
-import { IGeneratedFilesService } from '../../../../services/generatedFiles/common/generatedFilesService.js';
-import { createTestGeneratedFilesService } from '../../../../test/common/testGeneratedFilesService.js';
+import { IArtifactCatalogService } from '../../../../services/artifactCatalog/common/artifactCatalogService.js';
+import { createTestArtifactCatalogService, createTestDocsService } from '../../../../test/common/testArtifactCatalogService.js';
 
 const newChatState = { conversations: [], messages: [], linkedTasks: [] } satisfies Partial<ChatGPTState>;
 
@@ -380,7 +381,8 @@ suite('ChatGPT entry', () => {
 		using services = new InstantiationService(new ServiceCollection(
 			[IChatViewFactory, chatViews],
 			[IChatGPTService, { native: true, state, newDraftRevision: 1 } as unknown as IChatGPTService],
-			[IGeneratedFilesService, createTestGeneratedFilesService()],
+			[IArtifactCatalogService, createTestArtifactCatalogService()],
+			[IDocsService, createTestDocsService()],
 			[IClipboardService, {} as IClipboardService],
 			[IDialogService, {} as IDialogService],
 			[IOpenerService, {} as IOpenerService],

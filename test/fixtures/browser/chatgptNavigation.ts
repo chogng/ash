@@ -1,5 +1,6 @@
+import { IDocsService } from '../../../src/ash/sessions/contrib/docs/common/docsService.js';
 import { ImageResizeService } from '../../../src/ash/platform/imageResize/browser/imageResizeService.js';
-import { createTestGeneratedFilesService } from '../../../src/ash/sessions/test/common/testGeneratedFilesService.js';
+import { createTestArtifactCatalogService, createTestDocsService } from '../../../src/ash/sessions/test/common/testArtifactCatalogService.js';
 import './chatFixtureLocalization.js';
 import { projectMaterialFilesScheme } from '../../../src/ash/platform/projects/common/projectMaterialFiles.js';
 import { IWorkbenchEnvironmentService } from '../../../src/ash/workbench/services/environment/common/environmentService.js';
@@ -48,8 +49,8 @@ import { OpenerService } from '../../../src/ash/editor/browser/services/openerSe
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { ChatGPTService, IChatGPTService, chatGPTProjectConversationId } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
-import { generatedFileSourceKey, type GeneratedFile } from '../../../src/ash/platform/generatedFiles/common/generatedFiles.js';
-import { IGeneratedFilesService } from '../../../src/ash/sessions/services/generatedFiles/common/generatedFilesService.js';
+import { artifactSourceKey, type ArtifactResource } from '../../../src/ash/platform/artifactCatalog/common/artifactCatalog.js';
+import { IArtifactCatalogService } from '../../../src/ash/sessions/services/artifactCatalog/common/artifactCatalogService.js';
 import { ChatGPTList } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTList.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND } from '../../../src/ash/sessions/contrib/chat/common/constants.js';
 import { registerChatWorkspaceNavigation } from '../../../src/ash/sessions/contrib/chat/electron-browser/chatWorkspace.contribution.js';
@@ -286,28 +287,36 @@ services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async
 services.registerSingleton(IProjectDialogService, () => services.createInstance(ProjectDialogService, { readEnabled: async () => true }));
 registerTestVoiceInputServices(services);
 registerTestComponentServices(services);
-const generatedFiles: GeneratedFile[] = [];
-let nextGeneratedFile = 0;
-const generatedFilesChanged = resources.add(new Emitter<void>());
-const generated: IGeneratedFilesService = {
-	...createTestGeneratedFilesService(),
-	onDidChange: generatedFilesChanged.event, files: generatedFiles, loading: false, error: undefined,
-	async refresh() { generatedFilesChanged.fire(); },
-	findBySource: source => generatedFiles.find(file => generatedFileSourceKey(file.source) === generatedFileSourceKey(source)),
-	isGeneratedResource: resource => generatedFiles.some(file => file.resource.toString() === resource.toString()),
-	async publishMarkdown(source, markdown, title) {
-		const existing = generated.findBySource(source);
-		if (existing) return existing;
-		const id = `fixture-markdown-${nextGeneratedFile++}`;
-		const resource = URI.file(`/generated/${id}.md`);
-		await services.get(IFileService).writeFileBytes(resource, new TextEncoder().encode(markdown));
-		const file: GeneratedFile = { id, resource, title: title ?? 'Document', contentType: 'text/markdown', source, createdAt: Date.now() };
-		generatedFiles.push(file);
-		generatedFilesChanged.fire();
-		return file;
+const artifactCatalog: ArtifactResource[] = [];
+let nextArtifactResource = 0;
+const artifactCatalogChanged = resources.add(new Emitter<void>());
+const generated: IArtifactCatalogService = {
+	...createTestArtifactCatalogService(),
+	onDidChange: artifactCatalogChanged.event, files: artifactCatalog, loading: false, error: undefined,
+	async refresh() { artifactCatalogChanged.fire(); },
+	findBySource: source => artifactCatalog.find(file => artifactSourceKey(file.source) === artifactSourceKey(source)),
+	hasResource: resource => artifactCatalog.some(file => file.resource.toString() === resource.toString()),
+	async register(file) {
+		const entry = { ...file, createdAt: Date.now() };
+		artifactCatalog.push(entry);
+		artifactCatalogChanged.fire();
+		return entry;
 	},
 };
-services.registerInstance(IGeneratedFilesService, generated);
+services.registerInstance(IArtifactCatalogService, generated);
+services.registerInstance(IDocsService, { ...createTestDocsService(),
+	async importMarkdown(source, markdown, title) {
+		const existing = generated.findBySource(source);
+		if (existing) return existing;
+		const id = `fixture-markdown-${nextArtifactResource++}`;
+		const resource = URI.file(`/generated/${id}.md`);
+		await services.get(IFileService).writeFileBytes(resource, new TextEncoder().encode(markdown));
+		const file: ArtifactResource = { id, resource, title: title ?? 'Document', contentType: 'text/markdown', source, createdAt: Date.now() };
+		artifactCatalog.push(file);
+		artifactCatalogChanged.fire();
+		return file;
+	},
+});
 if (parameters.has('projectMaterials')) {
 	Object.assign(services.get(IWorkbenchEnvironmentService), { userRoamingDataHome: URI.file('/fixture-profile') });
 	const provider = new class extends MemoryFileService {

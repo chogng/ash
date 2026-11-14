@@ -35,6 +35,8 @@ members = [
     "crates/feedback-contract",
     "crates/collab-contract",
     "crates/arkdown",
+    "crates/artifact-catalog",
+    "crates/documents",
     "crates/call-contract",
     "crates/queue-contract",
     "crates/features",
@@ -618,6 +620,8 @@ ash-slash-launcher = { path = "crates/slash-launcher" }
 ash-skills = { path = "crates/skills" }
 assets = { package = "ash-assets", path = "crates/assets" }
 ash-state = { path = "crates/state" }
+ash-artifact-catalog = { path = "crates/artifact-catalog" }
+ash-documents = { path = "crates/documents" }
 ash-sqlite = { path = "crates/sqlite" }
 ash-teams = { path = "crates/teams" }
 ash-syntax = { path = "crates/syntax" }
