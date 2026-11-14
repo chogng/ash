@@ -10,7 +10,6 @@ use crate::IndexRootId;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
 
-use crate::IndexedSymbol;
 use crate::SymbolIndexError;
 use crate::SymbolIndexLimits;
 use crate::SymbolIndexQuery;
@@ -58,10 +57,7 @@ impl SymbolIndex {
     ) -> Result<Self, SymbolIndexError> {
         validate_limits(&limits)?;
         let projection = store.load_projection(codebase.root_id())?;
-        let matcher = SymbolMatcher::new(
-            flatten_symbols(projection.sources.values()),
-            limits.matcher_threads,
-        );
+        let matcher = SymbolMatcher::new(projection.sources.into_values(), limits.matcher_threads);
         let empty_overlay_matcher = SymbolMatcher::new(Vec::new(), limits.matcher_threads);
         Ok(Self {
             codebase,
@@ -96,6 +92,13 @@ impl SymbolIndex {
             .operation
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // Most watcher reconciliations leave the source generation unchanged.
+        // Read only the summaries before loading every source and symbol row.
+        let source_snapshot = self.codebase.snapshot()?;
+        let symbol_snapshot = self.store.snapshot(self.codebase.root_id())?;
+        if symbol_snapshot.source_generation == source_snapshot.generation {
+            return Ok(SymbolIndexRefreshOutcome::NoChange);
+        }
         let manifest = self.codebase.manifest()?;
         if manifest.snapshot.root_id != *self.codebase.root_id() {
             return Err(SymbolIndexError::SourceRootMismatch);
@@ -120,7 +123,7 @@ impl SymbolIndex {
                 materialize.push(source.clone());
             }
         }
-        let materialized = self
+        let mut materialized = self
             .codebase
             .materialize_sources(&materialize)?
             .into_iter()
@@ -132,9 +135,9 @@ impl SymbolIndex {
         let mut total_limit_hit = false;
         for source in &manifest.sources {
             let mut source_symbols = if let Some(materialized) =
-                materialized.get(&source.relative_path)
+                materialized.remove(&source.relative_path)
             {
-                let extracted = extract_source(materialized, self.limits.max_symbols_per_source)?;
+                let extracted = extract_source(&materialized, self.limits.max_symbols_per_source)?;
                 SourceSymbols {
                     source: source.clone(),
                     symbols: extracted.symbols,
@@ -166,8 +169,10 @@ impl SymbolIndex {
             &sources,
             total_limit_hit,
         )?;
-        let matcher =
-            SymbolMatcher::new(flatten_symbols(sources.iter()), self.limits.matcher_threads);
+        // File metadata is shared inside the matcher. Build it before publication
+        // so the first query does not pay for loading the entire stored projection.
+        drop(stored);
+        let matcher = SymbolMatcher::new(sources, self.limits.matcher_threads);
         *self
             .matcher
             .write()
@@ -205,7 +210,7 @@ impl SymbolIndex {
         let matcher = self
             .matcher
             .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(|error| error.into_inner())
             .clone();
         let mut hits = matcher
             .lock()
@@ -257,9 +262,10 @@ impl SymbolIndex {
             .iter()
             .map(|document| document.source.reference.relative_path.clone())
             .collect();
-        let mut symbols = Vec::new();
+        let mut sources = Vec::new();
+        let mut symbol_count = 0usize;
         for document in snapshot.documents {
-            let remaining = self.limits.max_total_symbols.saturating_sub(symbols.len());
+            let remaining = self.limits.max_total_symbols.saturating_sub(symbol_count);
             if remaining == 0 {
                 break;
             }
@@ -267,9 +273,14 @@ impl SymbolIndex {
                 &document.source,
                 self.limits.max_symbols_per_source.min(remaining),
             )?;
-            symbols.extend(extracted.symbols);
+            symbol_count += extracted.symbols.len();
+            sources.push(SourceSymbols {
+                source: document.source.reference,
+                symbols: extracted.symbols,
+                symbol_limit_hit: extracted.symbol_limit_hit,
+            });
         }
-        let matcher = SymbolMatcher::new(symbols, self.limits.matcher_threads);
+        let matcher = SymbolMatcher::new(sources, self.limits.matcher_threads);
         *self
             .overlay
             .write()
@@ -280,13 +291,6 @@ impl SymbolIndex {
         };
         Ok(())
     }
-}
-
-fn flatten_symbols<'a>(sources: impl IntoIterator<Item = &'a SourceSymbols>) -> Vec<IndexedSymbol> {
-    sources
-        .into_iter()
-        .flat_map(|source| source.symbols.iter().cloned())
-        .collect()
 }
 
 fn validate_limits(limits: &SymbolIndexLimits) -> Result<(), SymbolIndexError> {

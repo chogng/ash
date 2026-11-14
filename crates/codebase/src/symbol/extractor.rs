@@ -6,14 +6,13 @@ use ash_syntax::SyntaxDocument;
 use ash_syntax::SyntaxLanguage;
 use ash_syntax::SyntaxRange;
 
-use crate::IndexedSymbol;
+use crate::SourceSymbol;
 use crate::SymbolIndexError;
 use crate::SymbolKind;
 use crate::SymbolRange;
-use crate::SymbolReference;
 
 pub(crate) struct ExtractedSource {
-    pub symbols: Vec<IndexedSymbol>,
+    pub symbols: Vec<SourceSymbol>,
     pub symbol_limit_hit: bool,
 }
 
@@ -52,17 +51,10 @@ pub(crate) fn extract_source(
         .iter()
         .take(max_symbols)
         .enumerate()
-        .map(|(ordinal, symbol)| IndexedSymbol {
-            reference: SymbolReference {
-                root_id: source.reference.root_id.clone(),
-                relative_path: source.reference.relative_path.clone(),
-                source_revision: source.reference.source_revision.clone(),
-                language: source.reference.language.clone(),
-                source_bytes: source.reference.source_bytes,
-                ordinal,
-                declaration_range: symbol_range(&symbol.range),
-                selection_range: symbol_range(&symbol.selection_range),
-            },
+        .map(|(ordinal, symbol)| SourceSymbol {
+            ordinal,
+            declaration_range: symbol_range(&symbol.range),
+            selection_range: symbol_range(&symbol.selection_range),
             name: symbol.name.clone(),
             kind: symbol_kind(symbol.kind),
             container_name: None,

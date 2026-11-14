@@ -34,6 +34,122 @@ fn codebase(directory: &TempDir) -> Arc<Codebase> {
 }
 
 #[test]
+fn unchanged_generation_does_not_reload_symbol_payloads() {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    use crate::IndexRootId;
+    use crate::SourceSymbols;
+    use crate::StoredSymbolProjection;
+    use crate::SymbolIndexSnapshot;
+    use crate::SymbolIndexStore;
+    use crate::symbol::memory_store::InMemorySymbolIndexStore;
+
+    struct CountingStore {
+        inner: InMemorySymbolIndexStore,
+        loads: AtomicUsize,
+    }
+    impl SymbolIndexStore for CountingStore {
+        fn snapshot(&self, root: &IndexRootId) -> Result<SymbolIndexSnapshot, SymbolIndexError> {
+            self.inner.snapshot(root)
+        }
+        fn load_projection(
+            &self,
+            root: &IndexRootId,
+        ) -> Result<StoredSymbolProjection, SymbolIndexError> {
+            self.loads.fetch_add(1, Ordering::Relaxed);
+            self.inner.load_projection(root)
+        }
+        fn replace_projection(
+            &self,
+            root: &IndexRootId,
+            generation: u64,
+            sources: &[SourceSymbols],
+            limited: bool,
+        ) -> Result<SymbolIndexSnapshot, SymbolIndexError> {
+            self.inner
+                .replace_projection(root, generation, sources, limited)
+        }
+    }
+
+    let directory = dir();
+    let content = (0..100)
+        .map(|i| format!("pub fn symbol_{i}() {{}}\n"))
+        .collect::<String>();
+    for i in 0..100 {
+        fs::write(directory.path().join(format!("source_{i}.rs")), &content).unwrap();
+    }
+    let codebase = codebase(&directory);
+    let store = Arc::new(CountingStore {
+        inner: InMemorySymbolIndexStore::new(codebase.root_id().clone()),
+        loads: AtomicUsize::new(0),
+    });
+    let index = SymbolIndex::open(
+        codebase.clone(),
+        store.clone(),
+        SymbolIndexLimits::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        store.loads.load(Ordering::Relaxed),
+        1,
+        "opening prepares the compact matcher"
+    );
+    index.reconcile().unwrap();
+    let loads = store.loads.load(Ordering::Relaxed);
+    let started = std::time::Instant::now();
+    for _ in 0..3 {
+        assert!(matches!(
+            index.reconcile().unwrap(),
+            SymbolIndexRefreshOutcome::NoChange
+        ));
+    }
+    eprintln!(
+        "unchanged reconciliation, 10,000 symbols x 3: {:?}",
+        started.elapsed()
+    );
+    assert_eq!(
+        store.loads.load(Ordering::Relaxed),
+        loads,
+        "unchanged generations must not materialize symbol rows"
+    );
+    let first_search = std::time::Instant::now();
+    assert_eq!(
+        index.search(&SymbolIndexQuery::new("symbol_99")).unwrap()[0]
+            .symbol
+            .name,
+        "symbol_99"
+    );
+    eprintln!(
+        "first symbol search, 10,000 symbols: {:?}",
+        first_search.elapsed()
+    );
+    assert_eq!(store.loads.load(Ordering::Relaxed), loads);
+    index.search(&SymbolIndexQuery::new("symbol_98")).unwrap();
+    assert_eq!(
+        store.loads.load(Ordering::Relaxed),
+        loads,
+        "first and repeated searches use the prepared matcher without storage reads"
+    );
+    fs::write(
+        directory.path().join("added.rs"),
+        "pub fn newly_added() {}\n",
+    )
+    .unwrap();
+    codebase.rebuild().unwrap();
+    assert!(matches!(
+        index.reconcile().unwrap(),
+        SymbolIndexRefreshOutcome::Published(_)
+    ));
+    assert_eq!(
+        index.search(&SymbolIndexQuery::new("newly_added")).unwrap()[0]
+            .symbol
+            .name,
+        "newly_added"
+    );
+}
+
+#[test]
 fn reconciles_verified_sources_and_fuzzy_searches_symbols() {
     let directory = dir();
     fs::write(
@@ -59,6 +175,78 @@ fn reconciles_verified_sources_and_fuzzy_searches_symbols() {
     assert_eq!(hits[0].symbol.kind, SymbolKind::Struct);
     assert_eq!(hits[0].symbol.reference.relative_path, Path::new("auth.rs"));
     assert!(!hits[0].matched_indices.is_empty());
+}
+
+#[test]
+fn compact_candidates_preserve_each_files_identity_ranges_and_unicode() {
+    use crate::SourceSymbols;
+    use crate::symbol::extractor::extract_source;
+    use crate::symbol::matcher::SymbolMatcher;
+
+    let directory = dir();
+    fs::write(directory.path().join("first.rs"), "pub fn café() {}\n").unwrap();
+    fs::write(
+        directory.path().join("second.rs"),
+        "// 😀 different revision and range\npub fn café() { let value = 42; }\n",
+    )
+    .unwrap();
+    let codebase = codebase(&directory);
+    let manifest = codebase.manifest().unwrap();
+    let materialized = codebase.materialize_sources(&manifest.sources).unwrap();
+    let sources: Vec<_> = materialized
+        .iter()
+        .map(|source| {
+            let mut extracted = extract_source(source, 100).unwrap();
+            for symbol in &mut extracted.symbols {
+                symbol.container_name = Some("container".into());
+            }
+            SourceSymbols {
+                source: source.reference.clone(),
+                symbols: extracted.symbols,
+                symbol_limit_hit: false,
+            }
+        })
+        .collect();
+    let expected = sources.clone();
+    let mut matcher = SymbolMatcher::new(sources, 2);
+    let cancellation = CancellationSource::new();
+    cancellation.cancel();
+    assert!(matches!(
+        matcher.search("café", 10, &cancellation.token()),
+        Err(SymbolIndexError::Cancelled(_))
+    ));
+    let active = CancellationSource::new();
+    let hits = matcher.search("café", 10, &active.token()).unwrap();
+    assert_eq!(hits.len(), 2);
+    for hit in hits {
+        let source = expected
+            .iter()
+            .find(|source| source.source.relative_path == hit.symbol.reference.relative_path)
+            .unwrap();
+        let declaration = &source.symbols[hit.symbol.reference.ordinal];
+        assert_eq!(hit.symbol.reference.root_id, source.source.root_id);
+        assert_eq!(
+            hit.symbol.reference.source_revision,
+            source.source.source_revision
+        );
+        assert_eq!(hit.symbol.reference.language, source.source.language);
+        assert_eq!(
+            hit.symbol.reference.source_bytes,
+            source.source.source_bytes
+        );
+        assert_eq!(
+            hit.symbol.reference.declaration_range,
+            declaration.declaration_range
+        );
+        assert_eq!(
+            hit.symbol.reference.selection_range,
+            declaration.selection_range
+        );
+        assert_eq!(hit.symbol.name, declaration.name);
+        assert_eq!(hit.symbol.kind, declaration.kind);
+        assert_eq!(hit.symbol.container_name, declaration.container_name);
+        assert_eq!(hit.matched_indices, vec![0, 1, 2, 3]);
+    }
 }
 
 #[test]

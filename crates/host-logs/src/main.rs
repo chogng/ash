@@ -1,3 +1,7 @@
+// This pipe-only Desktop helper never needs a console. A console-subsystem
+// executable creates a hidden conhost even when Electron sets windowsHide.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 use std::process::ExitCode;
 
 fn main() -> ExitCode {

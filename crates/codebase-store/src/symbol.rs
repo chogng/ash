@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use ash_codebase::{
-    IndexRootId, IndexedSourceReference, IndexedSymbol, SourceRevision, SourceSymbols,
+    IndexRootId, IndexedSourceReference, SourceRevision, SourceSymbol, SourceSymbols,
     StoredSymbolProjection, SymbolIndexError, SymbolIndexSnapshot, SymbolIndexStore, SymbolKind,
-    SymbolRange, SymbolReference,
+    SymbolRange,
 };
 use ash_state::{SqliteDurability, open_in_memory_database, open_sqlite_database};
 use ash_syntax::SYNTAX_FACTS_VERSION;
@@ -316,22 +316,22 @@ fn insert_source(transaction: &Transaction<'_>, source: &SourceSymbols) -> Symbo
              )",
             params![
                 path,
-                to_i64(symbol.reference.ordinal),
+                to_i64(symbol.ordinal),
                 symbol.name,
                 symbol.kind.id(),
                 symbol.container_name,
-                to_i64(symbol.reference.declaration_range.start_byte),
-                to_i64(symbol.reference.declaration_range.end_byte),
-                to_i64(symbol.reference.declaration_range.start_line),
-                to_i64(symbol.reference.declaration_range.start_column),
-                to_i64(symbol.reference.declaration_range.end_line),
-                to_i64(symbol.reference.declaration_range.end_column),
-                to_i64(symbol.reference.selection_range.start_byte),
-                to_i64(symbol.reference.selection_range.end_byte),
-                to_i64(symbol.reference.selection_range.start_line),
-                to_i64(symbol.reference.selection_range.start_column),
-                to_i64(symbol.reference.selection_range.end_line),
-                to_i64(symbol.reference.selection_range.end_column),
+                to_i64(symbol.declaration_range.start_byte),
+                to_i64(symbol.declaration_range.end_byte),
+                to_i64(symbol.declaration_range.start_line),
+                to_i64(symbol.declaration_range.start_column),
+                to_i64(symbol.declaration_range.end_line),
+                to_i64(symbol.declaration_range.end_column),
+                to_i64(symbol.selection_range.start_byte),
+                to_i64(symbol.selection_range.end_byte),
+                to_i64(symbol.selection_range.start_line),
+                to_i64(symbol.selection_range.start_column),
+                to_i64(symbol.selection_range.end_line),
+                to_i64(symbol.selection_range.end_column),
             ],
         )?;
     }
@@ -341,7 +341,7 @@ fn insert_source(transaction: &Transaction<'_>, source: &SourceSymbols) -> Symbo
 fn load_symbols(
     connection: &Connection,
     source: &IndexedSourceReference,
-) -> SymbolStoreResult<Vec<IndexedSymbol>> {
+) -> SymbolStoreResult<Vec<SourceSymbol>> {
     let path = storage_path(&source.relative_path);
     let mut statement = connection.prepare(
         "SELECT ordinal, name, kind, container_name,
@@ -368,17 +368,10 @@ fn load_symbols(
         let (ordinal, name, kind, container_name, declaration_range, selection_range) = row?;
         let kind = SymbolKind::from_id(&kind)
             .ok_or_else(|| SymbolIndexError::InvalidStoredSymbolKind(kind.clone()))?;
-        Ok(IndexedSymbol {
-            reference: SymbolReference {
-                root_id: source.root_id.clone(),
-                relative_path: source.relative_path.clone(),
-                source_revision: source.source_revision.clone(),
-                language: source.language.clone(),
-                source_bytes: source.source_bytes,
-                ordinal,
-                declaration_range,
-                selection_range,
-            },
+        Ok(SourceSymbol {
+            ordinal,
+            declaration_range,
+            selection_range,
             name,
             kind,
             container_name,

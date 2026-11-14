@@ -13,7 +13,7 @@ mod types;
 
 pub use error::SymbolIndexError;
 pub use index::SymbolIndex;
-pub use store::{SourceSymbols, StoredSymbolProjection, SymbolIndexStore};
+pub use store::{SourceSymbol, SourceSymbols, StoredSymbolProjection, SymbolIndexStore};
 pub use types::IndexedSymbol;
 pub use types::SymbolIndexLimits;
 pub use types::SymbolIndexQuery;
