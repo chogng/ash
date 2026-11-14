@@ -108,9 +108,37 @@
   - 内置浏览器按基础网页浏览验收：打开网页、站内跳转、前进／后退、刷新，以及常见网页的输入和登录。Agent 浏览器自动化和 Electron 专用调试集成不作为退场前置。外部网页使用独立的浏览视图和存储分区，与 Ash 工作台的认证及宿主 IPC 隔离。普通浏览器中的 Ash 继续走独立 Web 入口。
 - [ ] **Rust 前端计算与渲染演进** · 沿真实 DOM 更新、布局、文本／差异计算和渲染调度热点选择 Rust／WASM 等切片，以匹配负载测量输入到可见更新、帧时间和内存。保持模型／编辑历史唯一 owner，覆盖 IME、选区、焦点、键盘和无障碍；现有 [WebGPU 渲染任务](#多文件审阅--webgpu) 按其独立范围验收，不把引擎 GPU 合成或 Rust 代码存在当作渲染优化完成。
 
+## Terminal · 滚动命令的渲染就绪边界
+
+- [ ] **修复候选 · 终端冷加载期间的滚动命令**：`src/ash/workbench/contrib/terminal/browser/terminalActions.ts` 的六个滚动命令在 active instance 已有 screen 且未 disposed 时直接读取 `screen.raw.buffer`；但 `terminalInstance.ts` 在异步 `initialize` 前就暴露 screen，而 `xterm/xtermTerminal.ts` 的 `raw` 在模块加载完成前会抛错。参考 [VS Code 在 renderer 附着前保护终端滚动](https://github.com/microsoft/vscode/pull/339330)（2026-11-04 已合并，已包含于 [VS Code 1.146.0](https://github.com/microsoft/vscode/releases/tag/1.146.0) 稳定版），沿现有终端 owner 补安全的就绪检查，避免冷加载时由命令面板／命令调用触发异常。此处是静态调用链确认，尚未运行 Ash 时序复现，不宣称全部终端命令受影响。
+  - 范围与前提：区分 screen 对象存在、底层 Terminal 已初始化和 renderer 已 open；恢复终端可先有缓冲而未打开 DOM，滚动命令不为就绪而强制 reveal／open。未就绪时安全返回，若选择等待则绑定原实例并重查释放／活动身份，不在异步完成后滚动另一个终端。不改 PTY、输出恢复或持久化，不额外排队；已退出和只读终端的可见历史仍可滚动，alternate buffer 保持现有边界。
+  - 验收：在 `src/ash/workbench/contrib/terminal/test/browser/terminalActions.test.ts` 补 screen 已存在但 raw 尚不可用、初始化完成但恢复 renderer 未 open、等待中关闭／切换 active instance，以及正常就绪、已退出／只读和 alternate buffer 六组边界；使用受控延迟的真实初始化路径复核冷开终端时触发六个滚动命令无异常、无意外打开面板、不修改输入，原终端可见后滚动正常。不要把现有完整 fake raw 或 undefined screen 测试算作该竞态通过。
+
+## 上下文菜单 · 原生窗口按钮避让
+
+- [ ] **验收剩余 · 原生窗口按钮与浮动菜单**：[共享浮动菜单避让](https://github.com/chogng/ash/commit/d25ce1a8a0fd7458cef050b4c361b772d9a467e3) 已在 `src/ash/base/browser/ui/contextview/contextview.ts` 接入目标窗口可见 WCO 几何及 `geometrychange`，由 `windowControlsOverlay.ts` 先向下、再横移、最后按视口回退；子菜单沿既有 ContextView 复用。原“只按完整 viewport 定位、未消费按钮区域”的实现缺口已消除，保留原生 Windows 主／辅助窗口的实际遮挡与点击验收。参考 [VS Code 菜单避让窗口按钮](https://github.com/microsoft/vscode/pull/345326)（2026-11-02 已合并，已包含于 [VS Code 1.146.0](https://github.com/microsoft/vscode/releases/tag/1.146.0) 稳定版），不重复建立另一套定位器。
+  - 已有证据与边界：`windowControlsOverlay.test.ts` 覆盖左右按钮区、高菜单、偏移 viewport 与无效几何；`contextview.test.ts` 覆盖 owner window、可见性更新和隐藏后释放监听；`menu.browser.test.ts` 覆盖多级菜单、主题和键盘。浏览器 fixture 注入 WCO 几何，不能等同原生按钮命中验收；提交记录的 Electron IPC smoke／构建通过也不替代该场景。当前窗口配置证据来自 Electron `windowImpl.ts`；[Windows Rust 预览宿主已移除](https://github.com/chogng/ash/commit/34dec548b372cb61795c3d3183b30c935deb4cf1)，不再将已删除的 AppWindow／DirectComposition 实现列为本项验收目标。
+  - 剩余验收：在实际 Windows 自定义标题栏，以 Activity Bar 顶部账户／管理入口右键菜单及键盘子菜单核对主窗口和弹出窗口，包含缩放、窄窗口、高菜单、全屏／system 标题栏及 WCO 隐藏或不可用；菜单不被按钮遮住且可点击，焦点、Escape 和取消保持可用。记录当前 Electron 主／辅助窗口的 API 可用性和几何来源，不新增跨宿主模拟层。[已完成的 Windows 缩放验收](https://github.com/chogng/ash/commit/0953132eeb23cef0001eeebe38dfb217df62c945) 不等同于本项菜单遮挡与按钮命中验收；未来宿主切换按其届时契约另行验证。
+
 ## Connectors 面板 · 点击后窗口无响应
 
 - [ ] **历史现场复核** · 2026-10-21 用户随后确认点击已正常；实际开发窗口的只读检查也显示主线程响应、无活动动画、Connectors 读取已结束。隔离 Desktop 中全折叠后展开／键盘切换通过，尚未建立原先整窗无响应的故障链。潜在的状态通知请求放大已单独复现并修复：25 次通知在读取进行中不再追加 25 组读取，只在结束后补读一次；保留最新状态、隐藏时撤销待补读，显式导航及可物理取消的市场查询仍可抢占。原始故障仅在再次出现时采集实际 Renderer／Main 栈继续归因，不把这一防护称为历史根因修复；证据与运行限制见 `.build/ash-playwright-mcp/connectors-validation.json`。
+
+- [ ] **可做 · Connector OAuth 连接取消**：`src/ash/workbench/contrib/extensions/browser/extensionEditor.ts` 的 Sign in／重新授权和 `extensionsActions.ts` 的添加连接经 `AppServerConnectorService.connectOAuth` 后没有取消入口；`src/ash/platform/connectors/browser/connectorApi.ts` 的 device 等待／轮询与 browser callback 等待不接收调用方取消。服务端已有按 flow ID 的 cancel，当前只在异常等收尾路径触达。参考 [连接详情取消](https://github.com/microsoft/vscode/pull/344192)（2026-10-26 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)），补齐等待授权时的退出和重试；本项为静态链路缺口，不是上述历史面板无响应的根因。
+  - 范围与兼容：沿 `IConnectorService`／`IConnectorApi` 及既有 browser／device OAuth owner 传递取消，详情提供可键盘访问的取消动作，随后按最新 catalog 恢复操作；复用 `connector/connect/oauth/cancel` 与 `connector/connect/oauth/device/cancel`，关闭本次 callback 并停止本次等待／后续轮询，不撤销已完成授权或其他连接。上游只取消本地轮询，不能照搬为 Ash 的服务端保证；先核对 device poll 暂时移出 pending 与 cancel／complete 的竞争，保留 flow／generation 校验，不用隐藏 UI 代替取消。
+  - 验收：在 Connector API／service、Extensions 入口及 `crates/ext/connectors/src/oauth_tests.rs`、`device_oauth_tests.rs` 和 `crates/app-server/src/server/connector_operations_tests.rs` 覆盖授权前、待 callback／轮询时取消、打开浏览器失败、关闭／切换入口、重复取消、取消与完成并发及旧结果晚到；确认停止新轮询、callback 释放、按钮与焦点恢复、不误报成功或覆盖新连接。正常成功、重新授权、过期及普通 MCP OAuth 保持回归；不承诺撤回外部浏览器已完成的授权。
+
+## Git 推送 · TODO
+
+- [ ] **修复候选 · 推送拒绝的稳定分类与恢复提示**：当前 `crates/app-server/src/server/request_processors/git.rs` 已保留有界 Git 命令诊断，`extensions/git/src/api.rs`／`commands.rs` 已提供单行错误、打开 Git 日志及只读命令输出，不能再列为“只能显示泛化失败”；参考 [Ash 诊断接线](https://github.com/chogng/ash/commit/e17eb2d3c9116cf9b45c4a569727f8b6ea3307d0)与[输出查看入口](https://github.com/chogng/ash/commit/e20fc992a2013b42e79f2257acd3e7be7fdd90c1)。剩余候选是 `crates/git/src/remote.rs` 的 reviewed push 仍未提供经核实的 non-fast-forward／fetch-first 类型化结果；参考 [非快进推送拒绝提示](https://github.com/zed-industries/zed/pull/47296)（2026-10-27 已合并，已包含于 [Zed v1.27.0](https://github.com/zed-industries/zed/releases/tag/v1.27.0) 稳定版），先确认机器可读结果契约，再由执行 owner 窄分类，沿既有协议补充先获取、审阅并整合远端变更后再推送的恢复方向。本轮仅静态复核，不标为完成。
+  - 范围与风险：保留现有一般诊断及用户选择的日志／只读输出入口，不重做通用错误展示层；类型化判断不依赖任意自然语言子串，不把认证、网络、hook 或 lease 拒绝误认作分支落后。未知结果保持既有回退，新分类与本地化恢复提示不增加原始 stderr、含凭据 URL 或路径披露；检查现有诊断边界但不扩大输出采集或持久化范围。不自动 fetch／pull／rebase／force-push／重试，保持 reviewed commit／upstream、权限、取消及失败后状态刷新。
+  - 验收：在 `crates/git/src/remote_tests.rs`、`crates/app-server/src/server_tests.rs` 与 `extensions/git/tests/host.rs` 扩展受控 remote 的 diverged／fetch-first、成功、认证／hook／lease 拒绝、取消、未知格式和部分 ref 成功场景；核对分类与本地化恢复提示不泄露新增敏感信息，目标远端／ref 不变且无额外自动操作。复用现有扩展进程反馈测试，保持状态先落定、取消静默、只提示一次、日志与只读输出查看可用，并覆盖本地／SSH 及适用平台；现有合成一般错误测试不等同于推送拒绝分类验收。
+
+## Git 未合并状态识别与解决入口 · TODO
+
+- [ ] **修复候选 · AA／DD 冲突识别**：`crates/git/src/working_copy.rs` 的 `parse_unmerged` 读取 porcelain-v2 的 `u` 记录后，仅保留 XY 两列；`is_conflicted()` 只判断是否含 `U`，因此 `AA`／`DD` 被判为非冲突。`crates/app-server/src/server/git_runtime.rs` 将此结果写入状态 DTO，`extensions/git/src/scm.rs` 与 `extensions/git/src/changes.rs` 据此分组和选择解决入口，App Server 的冲突读取／完成接口也要求该判断为真。参考 [Zed 未合并状态解析回归](https://github.com/zed-industries/zed/pull/66648)（2026-11-11 已合并 main，稳定 v1.28.1 尚不包含），在现有 Git 状态 owner 保留权威未合并身份并接回既有解决流程；Ash 的问题是冲突身份丢失，不是照搬上游 `DD` 两侧元数据修正。本项由静态调用链确认，尚无 Ash 运行时复现。
+  - 范围与风险：保留两侧 Added／Deleted 等状态，不把所有双列变化都判为冲突；同时核对 `crates/git/src/working_copy/content.rs` 对 stage 2／3 同时缺失的拒绝，合法 `DD` 可只有 stage 1，不能仅修分组后仍无法读取。沿既有显式解决操作、仓库锁、stage ID／结果版本校验处理删除结果，不新增自动解决、暂存、提交或恢复文件行为，不宣称已发生数据丢失。
+  - 验收：扩展 `working_copy_tests.rs`、冲突内容／App Server 测试及 Git 扩展与 Desktop SCM 场景，覆盖全部七种未合并 XY（DD／AU／UD／UA／DU／AA／UU）、普通双列变化、add/add 与双向重命名产生的 `DD`；核对状态 DTO、Merge 分组、打开／刷新、stage 1-only 的合法缺侧与索引已清空的区别，以及显式解决后的 index 状态。保留脏编辑、外部 Git 改写、旧 stage ID／结果版本、取消和部分暂存保护，确认未解决时不落入普通变更动作；真实 Git／Desktop 通过前不标完成。
 
 ## SCM 普通文件点击 · 残余极端往返
 
@@ -143,7 +171,44 @@
 
 - [ ] **验收** · 完成指定 Windows 主机真实 Desktop → SSH／Tailscale 全部十步、远端清理和证据 QA；同机 SSH fixture 不能替代跨机器验收。2026-10-19 已通过严格主机校验、公钥登录及原检出的 major10 Windows runtime 构建，真实冷部署一步通过；FILES 在扩展激活超时后的重连中失败，其余步骤未执行。SSH 握手／通道持续不稳定，按用户要求停止重试；待连接稳定后重跑全套并复核远端清理。失败证据保留在 `.build/ash-playwright-mcp/evidence/desktop-cross-machine-windows-major10-2026-10-19T13-46-20-671Z/report.html`，本轮未据此消项。
 
+## Ash Code · 线程展示缓存淘汰时保留输入
+
+- [ ] **修复候选 · 非活动线程的未发送输入**：`crates/tui/src/thread/presentation_store.rs` 为每个线程保存 input 与 queue，超过 32 个展示状态后，`evict_inactive` 直接移除最旧的非活动项；再次切回时创建默认展示状态，未发送草稿不会由服务端队列恢复；`recovery_drafts` 也只能读取仍在缓存中的草稿。参考 [Codex 按线程保留草稿与队列](https://github.com/openai/codex/pull/61216)（2026-11-13 已合并 main），补齐容量淘汰时的输入保留。本项为静态调用链确认，尚未运行 Ash 复现；不宣称持久会话记录丢失，与 `/fork` 提交前校验消耗草稿的候选分开处理。
+  - 范围与风险：沿现有 presentation、composer 和 queue owner 区分可丢弃展示缓存与未提交输入，保留文本、光标、附件绑定及本地队列顺序。先明确有界存储与恢复契约，不把 32 项限制简单改为无限缓存，不新增自动发送或对结果未知请求的自动重试；已由服务端接收的输入仍以其权威状态为准，不另建竞争队列。
+  - 验收：扩展 `crates/tui/src/thread/presentation_store_tests.rs`，让含文本、附件与队列的线程经历 32→33 个不同线程切换后返回，核对完整输入、目标线程和顺序；覆盖连续超限、空状态淘汰、重复返回、恢复草稿再次超限及结果未知的投递。在 `crates/tui/src/thread/queue_tests.rs` 与 `crates/tui/src/app/state_tests.rs` 区分本地未提交项、队列编辑草稿和服务端已接收项的刷新，核对 command_id／revision 与目标线程一致且不重复提交。保留现有两线程切换和空缓存 LRU 测试，再走 Inline／Fullscreen 的真实输入与返回流程。当前容量测试未填入草稿或队列，不能作为本项通过证据。
+
+## Ash Code · `/fork` 拒绝时保留草稿
+
+- [ ] **修复候选 · `/fork` 本地校验拒绝不消耗草稿**：`crates/tui/src/thread/composer/input/state.rs` 的普通提交和活动任务队列入口，对本地命令先清空输入及附件，再交给 `crates/tui/src/app/state.rs` 校验；运行中拒绝 `/fork` 或 `text_arguments()` 拒绝图片等非文本参数时，当前草稿已不再可编辑。纯文本虽进入输入历史，带附件的提交不会记录到该历史，不能以历史恢复替代保留完整草稿。参考 [Codex 在消耗草稿前校验 fork](https://github.com/openai/codex/pull/58767)（2026-11-01 已合并；尚未包含于当前稳定版 [0.167.2](https://github.com/openai/codex/releases/tag/rust-v0.167.2)），先闭合本地校验与草稿消耗的顺序。本项为静态调用链确认，未运行端到端复现，不将其描述为持久文件或历史会话丢失。
+  - 范围与风险：仅修现有 `/fork` 提交链，复用 composer 的完整 draft／附件绑定；本地拒绝后保留文本、光标、附件占位及后续编辑能力，校验通过后仅消耗一次。保持运行中禁止 fork 和只接受文本参数的现有规则，不顺带允许图片／Skill、放宽状态门禁或移植 Codex 的 MCP／side-conversation 产品语义。不要把已发出的 RPC 失败自动恢复为可重试 fork，避免结果未知时重复创建会话；其他 slash 命令及普通 queue／steer 行为保持回归。
+  - 验收：扩展 `crates/tui/src/app/state_tests.rs` 的 `fork_rejects_image_arguments_before_session_creation`，并在 composer submission 测试覆盖空闲非法附件、运行中纯文本／带附件拒绝、修正后再次提交和成功清空；断言拒绝不产生 SessionCommand、不调用 fork RPC、草稿和附件绑定保持且可继续编辑，纯文本历史不重复。覆盖 Inline／Fullscreen 与取消任务后再次提交；保留 `crates/tui/src/sessions/completion_tests.rs` 中成功 fork 不切换当前会话、无 prompt 不启动任务、有 prompt 仅启动一次的既有语义。
+
+## Ash Code · 粘贴路径的图片探测
+
+- [ ] **修复候选 · 非普通文件路径粘贴不阻塞输入**：`crates/tui/src/thread/composer/input/state.rs` 在粘贴处理中同步调用 `attachments.rs` 的图片探测；后者先 `File::open` 再检查已打开文件的 `is_file`，无写入端的 FIFO 可在检查前等待。参考 [粘贴图片路径的普通文件门禁](https://github.com/openai/codex/pull/57774)（2026-10-28 已合并，已包含于 [Codex 0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)），在打开探测前排除已知非普通文件，使其仍作为可编辑文本粘贴。本项为静态调用链确认，未运行 Ash FIFO 复现；不泛化为所有慢文件系统均不会阻塞。
+  - 范围与风险：仅调整现有图片探测 owner，不改变纯文本、路径引号／转义、图片签名、16 MiB 限制或附件原子编辑语义；保留打开后的类型校验。明确符号链接的目标文件语义，不能将路径预检声称为消除检查与打开之间的替换竞争；若要保证该竞争下也不等待，须另核实适用平台的安全打开方式。非普通文件不读取内容、不升级为图片错误提示，不引入后台任务或全局文件读取重构。
+  - 验收：在 `crates/tui/src/thread/composer/input/attachments_tests.rs` 及真实粘贴事件链补隔离、带硬超时的 Unix FIFO（无写入端）、目录、普通非图片和图片场景，覆盖带引号／空格／非 ASCII 路径、符号链接、缺失与不可读路径；FIFO 路径应保持文本且可 Backspace／继续输入，正常图片仍生成相同附件，超限与失败提示保持原约定。记录 Unix 平台范围；不使用真实串口或用户文件做破坏性测试，Windows 保持现有普通文件行为并核实对应特殊路径策略。
+
+## Ash Code · 终端兼容性
+
+- [ ] **修复候选 · 旧 VTE 的终端状态输出门禁**：`crates/tui/src/terminal/session.rs` 对交互终端直接调用 `program_status.rs` 输出 OSC 7501，尚未区分已知不兼容的 VTE 后端；`crates/terminal-detection/src/host.rs` 优先识别 GNOME 等应用身份，不能可靠保留同时存在的 `VTE_VERSION`。参考 [旧 VTE 状态协议门禁](https://github.com/openai/codex/pull/57612)（2026-10-28 已合并，已包含于 [Codex 0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)），为已知低于 0.54 的 VTE 后端禁用该状态序列，减少旧 Linux 终端误解析为可见文本的风险。本项为静态兼容缺口，未在真实旧 VTE 复现；不是所有未知终端均安全的保证。
+  - 范围与前提：在现有 terminal-detection owner 保留独立于应用身份的后端版本信息，明确 VTE_VERSION 的优先级与空／畸形值规则，不以 GNOME 应用版本冒充 VTE 版本；仅门禁 Ash 已有 OSC 7501，不引入上游 OSC 21337、不全局关闭语音或扩张终端架构。较新／未知版本保持现有策略，未知值不伪造支持结论；保留内置终端的状态与 dictation 能力、非 TTY 抑制和现有失败重试行为。
+  - 验收：在 `crates/terminal-detection/src/host_tests.rs`、`crates/tui/src/terminal/program_status_tests.rs` 与 session 测试覆盖 GNOME／其他应用身份同时有 VTE_VERSION、5399／5400 边界、空值／畸形／缺失、应用版本冲突及 multiplexer；已知旧 VTE 的 set／clear／挂起／退出均不写状态序列，较新／未知版本保持约定输出，flush 失败后的重试与刷新不失效。补真实旧 VTE 无状态乱码及受支持终端的状态／dictation 回归，记录 Linux 范围并确认 macOS／Windows 不受误判。
+
 ## AgentHost · TODO
+
+- [ ] **修复候选 · 保留 Provider 流错误的稳定分类**：沿 `crates/ash-api/src/requests.rs`、endpoint decoder、`crates/app-server/src/model_provider_error.rs` 到 `crates/core/src/turn/executor.rs` 核对以下独立缺口，避免将可诊断的失败降为通用无效响应。既有配置／认证／限流提示已存在，不重复建设错误展示层；以下依据静态调用链，尚未运行真实端点验收，各出处的合并与发布状态分别标注。
+  - **Chat Completions 错误帧**：`crates/ash-api/src/sse/openai_chat_completions.rs` 未识别 `error` envelope，无 `choices` 时直接忽略；若随后结束或只有 `[DONE]`，错误会变为缺少终态的 `InvalidResponse`。参考 [流错误分类保留](https://github.com/zed-industries/zed/pull/66038)（2026-10-23 已合并 main，已包含于 [Zed v1.27.0](https://github.com/zed-industries/zed/releases/tag/v1.27.0) 稳定版），在普通 chunk／usage 处理前识别经确认的错误帧并接回已有分类入口，不照搬上游类型装箱修复。Core 对无效响应只立即重试一次，而 transient 有等待及独立重试预算；须让额度／认证错误终止并给出正确恢复方向、过载沿原 transient 策略处理，而非一概关闭重试。
+  - **Responses 模型不可用代码**：`requests.rs` 仍按正文子串识别，裸 `model_not_found` 从 `error`／`response.failed` 落为 `InvalidResponse`，同样可能多发一次请求；HTTP 403 则在读取该代码前归为认证错误。参考 [模型不可用终态错误](https://github.com/openai/codex/pull/56445)（2026-10-23 已合并，已包含于 [Codex 0.165.0](https://github.com/openai/codex/releases/tag/rust-v0.165.0)），优先识别可信协议结构中的精确 code，并沿现有稳定错误契约给出更换模型／检查模型访问的恢复方向，不凭自然语言子串推断、不自动切换模型。HTTP 400／404 与含 `invalid_request_error` 的现有路径本已不可重试，不能把所有模型不存在都描述为重试缺陷；未知 403 仍保留原认证语义。
+  - **Responses 预算耗尽代码**：当已配置的 Responses 端点实际返回精确 `budget_reached` 流错误且未同时命中现有额度／无效请求正文分类，也会沿 `error`／`response.failed` 落为 `InvalidResponse` 并立即重试一次。参考 [预算耗尽终态分类](https://github.com/openai/codex/pull/59228)（2026-11-03 已合并；尚未包含于 [Codex 0.167.2](https://github.com/openai/codex/releases/tag/rust-v0.167.2)），在同一精确 code 分类入口保留不可重试结果与有界提示，不新增错误架构、不自动换模型或推断额度恢复时间。HTTP 400 的现有路径本已不可重试；含 `usage_limit`／`insufficient_quota`／`invalid_request_error` 等已命中分类的正文不算本缺口。此项为静态协议与调用链核对，未断言真实端点已发生故障。
+  - **Responses 内容策略拒绝代码**：当已配置的 Responses 端点实际返回精确 `content_policy_violation` 流错误，且正文未命中现有认证／额度／无效请求等分类时，`requests.rs` 仍将其降为 `InvalidResponse`，Core 会立即再调用一次。参考 [内容策略拒绝终态分类](https://github.com/openai/codex/pull/60479)（2026-11-10 已合并 main，尚未包含于 [Codex 0.167.2](https://github.com/openai/codex/releases/tag/rust-v0.167.2)），在同一精确 code 分类入口保留不可重试终态并给出有界、脱敏的拒绝提示，避免自动重发相同请求；不自动改写输入、换模型或绕过端点策略。HTTP 400 的现有路径本已不可重试，不算本缺口。本项为静态协议与调用链核对，未断言真实端点已发生故障。
+  - **范围与验收**：在 `crates/ash-api/src/sse/openai_chat_completions_tests.rs`、`crates/ash-api/src/endpoint/responses/events_tests.rs` 和 `crates/app-server/src/model_provider_error_tests.rs` 补受控错误帧与完整 Core 调用次数断言；覆盖错误出现在首帧／部分输出之后、缺少／附带 `[DONE]`、普通 usage-only 帧、嵌套 `response.failed`、SSE／WebSocket 共用解码、400／403／404、取消、未知或畸形错误。额度／认证／已确认模型不可用不额外调用，过载仍按预算等待，终态与历史恢复提示一致；保留既有上下文溢出处理、错误正文截断和脱敏，不把原始 provider 正文直传 UI 或新增账号／provider 抽象。补精确 `budget_reached` 的顶层／嵌套错误帧、部分输出后失败、携带 retry-after 后跟 completed、已有额度／无效请求正文命中及 HTTP 400 场景，断言终态不多调用模型；未知 code 与正常 transient 的原重试策略不变。补精确 `content_policy_violation` 的顶层／嵌套错误帧、部分输出后失败、携带 retry-after 后跟 completed、空／缺失提示及 HTTP 400 场景，断言一次请求即清晰终止，不自动换模型或重写输入；未知 code、正常 transient 及既有认证／额度分类保持原策略。
+
+- [ ] **修复候选 · 兼容 Chat Completions 的结构化流内容**：`crates/ash-api/src/sse/openai_chat_completions.rs` 仍把 `delta.content` 限定为字符串，已启用 native streaming 的 OpenAI-compatible 端点遇到 text/thinking 数组会报错；参考 [Zed 混合流适配](https://github.com/zed-industries/zed/pull/65915)（已合并 main，已包含于 [Zed v1.26.2](https://github.com/zed-industries/zed/releases/tag/v1.26.2) 稳定版），沿现有 decoder 与 terminal assembly 支持经确认的结构化内容，保持思考与正文分离。不新增 provider 抽象或账号接线。
+  - 兼容与验收：记录的 string／thinking-array／text-array 交替流应完整结束，实时事件顺序与最终输出一致；覆盖空 thinking、可选 closed、usage、tool-call 分片、取消和严格 DONE。同步参照 [推理字段选择](https://github.com/zed-industries/zed/pull/65926)（已包含于 [Zed v1.26.2](https://github.com/zed-industries/zed/releases/tag/v1.26.2) 稳定版）验证 reasoning／reasoning_content 的明确优先级与空值回退，不按全局文本去重；Ash 当前只读后者，不把上游双发缺陷误写成已复现 Ash 问题。保留原有 DeepSeek／Kimi／GLM 行为，对未知内容类型明确报错；本条依据静态核对，真实 provider 回归待实施时验收。
+
+- [ ] **修复候选 · Responses 推理文本兼容性**：`crates/ash-api/src/endpoint/responses/events.rs` 仅消费 `response.reasoning_summary_text.delta`，`responses.rs` 的最终推理项也只读取 `summary`；已配置 Responses 的兼容端点若只提供 `reasoning_text`，实时思考与最终推理文本均可能缺失。参考 [Responses 推理文本适配](https://github.com/zed-industries/zed/pull/65938)（2026-10-22 已合并 main，已包含于 [Zed v1.27.0](https://github.com/zed-industries/zed/releases/tag/v1.27.0) 稳定版），沿现有 decoder 与最终解析补齐经确认的事件和内容类型，不新增 provider 抽象或账号入口。本项为静态核对的兼容缺口，尚未复现真实端点故障，与上方 Chat Completions 协议不同。
+  - 范围与验收：先明确 summary 与 reasoning content 共存时的选择规则，不盲目拼接或按全局文本去重；保留加密 `ReasoningState` 的回放边界，不能把密文当作展示文本。在 `crates/ash-api/src/endpoint/responses/events_tests.rs`、`responses_tests.rs` 覆盖空／非空 delta、done 不重复发全文、`output_item.done` 与终态合成、非流式 content、未知内容项、仅 summary、两类共存、工具交错、usage、取消与 WebSocket 共用 decoder；实时事件和最终结果保持一致，既有终态／身份校验不放宽。真实兼容端点回归通过后才关闭本项。
 
 以下新产品能力和专项环境验收暂缓，按实际使用需要恢复。
 
@@ -185,6 +250,13 @@
 
 - [ ] **验收前置 · 上游同场景对照** · Ash 当前命令提示、补全、链接及快照已取得 86 项定向回归、2 项链接补验和 Windows Desktop 两个自托管场景的通过证据，范围见 `docs/chat.md`。Actions 的移动命令、工作区选择入口及四个内置 context 来源已完成本地迁移，128 项上下文界面回归、36 项最终定向测试和 macOS Electron 键盘流程通过。后续听写显式注册、New Chat／Helpful 命令契约与 Find 行为已通过本地定向测试，新的 New Chat ID 及附件键盘流程也通过 macOS Electron 自托管。 本轮三个诊断命令、Agent 窗口目录服务装配及日志导出共享入口已通过 IDE／Agent Window 两个 Electron/App Server 场景。本轮插件管理入口及 New Chat 的共享注册／窗口焦点委派通过 89 项定向测试和两个 Desktop 场景。只读 VS Code 源码的测试产物已由其原编译工具补齐，官方 Chromium runner 的 105 项 actions／插件入口测试通过；上游真实桌面的 Plugins 查询、重复打开、搜索焦点及未发送草稿四项语义也已补验。其内置 GitHub／Emmet／Git 扩展产物仍不齐，这组通过结果不覆盖插件安装、授权或 marketplace。仍需对 `chatMoveActions`、`chatExecuteActions`、`chatContext`、`chatNewActions`、`chatTitleActions`、`chatFindActions`、`chatSpeechToTextActions`、`chatDeveloperActions` 的完整界面场景复核输入、焦点／选区、换行和主题；完整上游 API／UI 对齐验收仍未完成。
 - [ ] **PromptSyntax 剩余能力（用户已确认六类均需要）** · 已实现 Skill／Agent／Instructions 的原生 schema 编辑、引用补全与跳转、正文原生文件引用补全、Quick Fix、Agent／Instructions 文件创建与角色管理、保留来源及 digest 的 Skill 执行、从当前已保存 Agent 打开草稿并正常发送，以及项目 Instructions 的审阅导入与后续加载；这些链路已有中英文 Ash 自举与定向回归。已接入用户级 Claude／Codex Instructions 导入、Agent 工具列表 CodeLens 和新聊天浮层。Claude 同步 POSIX PreToolUse 命令可审阅后导入为禁用，重复来源可识别，后端执行继续使用原 Hook 权限。本轮按 Ash 原生范围继续，第三方 harness Hook 兼容与迁移暂缓。原生剩余项包括扩展来源作者契约、模型引用的目录校验（已接入目录补全和引用格式校验）、工具集编辑、通用改写和 URL 入口。当前 Markdown 已可另存为原生 Agent 或 Instructions；逐条沿原 owner 实现并验收，不能以补文件计完成。范围与现状见 [promptSyntax 目录对应](docs/chat.md#promptsyntax-目录对应)，跨产品同场景复核仍待执行。
+
+- [ ] **边界验收 · Chat 回复的相对文件链接**：[按回复工作目录解析](https://github.com/chogng/ash/commit/4ed9c4593a965328b520cd0dc2d956b0dff78f82) 已记录并持久化每个 Turn 的执行目录，经 `src/ash/sessions/common/agentHostSessionWorkspace.ts`、`chatViewModel.ts` 与 `ChatListItemRenderer` 传入 `chatContentParts/chatMarkdownFileReferences.ts`，完成回复中的显式相对文件链接已可解析并沿既有 `openChatMarkdownLink` 打开；不再将缺少 `baseUri` 等同于功能缺失。参考 [相对回复链接解析](https://github.com/microsoft/vscode/pull/344087)（已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)）。现有实现同时识别唯一的普通文本文件名，缺文件或同名歧义不激活；不扩大本项范围。
+  - 已有依据与边界：源码测试覆盖两个真实 Git worktree 的同名文件、显式相对链接与行号、缺文件、歧义文件名及流式未完成时不激活；提交记录报告 macOS Electron 重开窗口后的双 worktree 点击、60 项 Chat／文件搜索测试，以及协议和 SQLite 目录历史测试通过，本轮未重跑。文件搜索 API 测试已有 SSH／中文 URI 映射及取消后晚到结果隔离，不能重复列为缺失。解析使用记录的目录与 authority、既有文件服务和打开边界；目录缺失不猜测当前工作区，外部 Web 回复保留独立策略，越出记录根目录的相对路径仍拒绝，不全局放宽 file scheme 或信任模型 Markdown。
+  - 剩余验收：沿现有 Chat 集成链补齐尚未证实的历史回复缺目录、本地／SSH 同名文件的真实点击、切换线程或目录时的异步解析取消／过期结果、空格／Unicode 路径；重复利用已覆盖的本地 worktree 和行号用例，不重建另一套状态。保留外链、已有会话链接、脚本及未信任 command 拒绝的回归，核实恢复与流式重渲染不会将旧结果绑定到新回复；上述边界通过前不标记整项完成。
+
+- [ ] **可做 · Chat 表格单元格换行**：`src/ash/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.ts` 的普通助手 Markdown 未开启 HTML，表格里的 `<br>` 当前会显示为字面文本。参考 [VS Code 表格换行](https://github.com/microsoft/vscode/pull/342956)（2026-10-20 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)），仅在 Chat 的 table header／body 内递归处理 inline token，将严格无属性的 `<br>`、`<BR/>`、`<br />` 转为原生换行 token，改善模型多行表格的可读性；复用现有 marked token walk、数学扩展和 sanitizer，不打开通用 HTML，也不改变共享基础 Markdown 的默认策略。
+  - 风险与验收：在 `src/ash/workbench/contrib/chat/test/browser/widget/chatContentMarkdownRenderer.test.ts` 覆盖完整渲染、逐字流式与前缀纠正输出一致，包含表头／单元格、嵌套强调／链接、未闭合及长表格。代码字面量和表格外 HTML 仍按原语义显示，带属性标签和脚本不放行；保留数学、代码块与 sanitizer 回归。当前依据源码核对，未运行新行为测试；Ash 已通过 parser 执行 token walk，不照搬上游另一条 lexer 旁路修补。
 
 - [ ] **后端前置** · MCP App sampling、media context 与双向 App tools 按原 Core 权限和能力契约逐项补齐；现有 tools/call、资源、消息/context、CSP、导出、诊断和 fullscreen 保持回归，缺失 capability 不宣告。
 
@@ -275,7 +347,21 @@ Git 首次发现已由 watcher 或首个 Git 查询接手。使用同一 Electro
 测量入口与约束见[审计与测量](docs/ash-app-server-data-path-audit.md)。以下先量化，再决定方案，不能把隔离 microbenchmark 当成整条 Desktop 收益。
 
 - [ ] **测量** · 量化 receive／assemble／decode／parse／schema／adapter／apply／paint 阶段、队列 bytes／elapsed 与真实 task yield；核对 ACK 跟随消费和跨进程时钟关系。
+- [ ] **具体消费者测量 · 长 Chat 历史首次解析**：[长历史虚拟化](https://github.com/chogng/ash/commit/f45230bb2adb9a53229ce20886cd4bffeb880290)及[渲染修复](https://github.com/chogng/ash/commit/2a73c6cd733cc9317afee24bc989da9956512734)后，`src/ash/workbench/contrib/chat/browser/widget/chatListWidget.ts` 已通过 `chatVirtualRows.ts` 选择视口缓冲区与交互保留行，再创建 `ChatListItemRenderer` 和 Markdown，不再一概为全部已加载条目首次解析。`chatViewPane.ts` 默认从 48 项启用，ChatGPT 回复页在滚动优化开启时从 100 项启用；[媒体行虚拟化](https://github.com/chogng/ash/commit/fa015b0dd8027a7c5a66a0ccd51449cf2fb57532)已取消图片生成与 MCP App 导致的整段历史回退，按需挂载图片批次并保留已访问媒体，播放中媒体与活动／交互工具行按行保留。屏幕阅读器模式仍回退，未配置阈值的入口保持原策略。参考 [按需首次解析 Markdown](https://github.com/zed-industries/zed/pull/65470)（2026-10-21 已合并，已包含于 [Zed v1.27.0](https://github.com/zed-industries/zed/releases/tag/v1.27.0) 稳定版），剩余工作是测量既有实现及回退场景，不重复提出全列表虚拟化。提交记录报告长历史回归、Desktop smoke、渲染类型检查和定向测试；本轮未重跑，也未取得可比较的首次解析／内存收益数据。
+  - 验收与测量：用相同普通文本、代码、工具 Markdown 及图片／MCP App 长历史，分别记录阈值内外、视口缓冲区／交互保留行及回退入口的首次解析次数、主线程时间、峰值内存和首次可读绘制；区分已获准挂载的屏幕外行与意外全量解析，不把减少 DOM 行数等同于整条性能通过。复用已有工具展开恢复和聚焦代码选区测试，核对阅读锚点、异步高度、流式尾部、复制／搜索／导出、辅助阅读与焦点；仅在剩余成本有实测依据时调整现有 owner，保留完整原文与唯一 transcript，不另建缓存、不移用上游收益，收益及行为门禁均通过前不标记整项完成。
 - [ ] **测量** · 把后端结果构造和 writer／producer 等待纳入资源准入测量，评估有界数据／控制输出契约与同连接队头阻塞；不靠降低既有文件上限掩盖成本。
+
+- [ ] **测量 · 消息文件检查点的提交与完成成本**：`crates/core/src/thread_controller.rs` 在含 `ItemCompleted` 的批次同步捕获一次检查点并供批内条目共享；`crates/app-server/src/server/message_checkpoints.rs` 经 `crates/git-turn-changes/src/ledger.rs` 等待各仓库捕获，`crates/git/src/objects.rs` 创建临时索引并执行 `read-tree`／`add --all`／`write-tree`，普通目录则由 `crates/worktree/src/directory_checkpoint.rs` 完整复制与散列后才按 digest 去重。参考 [消息检查点成本反馈](https://github.com/zed-industries/zed/pull/65989)（2026-10-26 已合并，已包含于 [Zed v1.27.0](https://github.com/zed-industries/zed/releases/tag/v1.27.0) 稳定版），先量化大目录或无文件变化时的排队、复制／Git 捕获、持久提交与首次模型调用时间；没有 Ash 实测，不能移用上游卡顿结论或删除恢复能力。
+  - 范围与前提：记录文件／字节量、仓库数和重复样本，分别覆盖本地与 SSH 执行 owner；保留事件／文件恢复顺序、写租约、目录身份、真实 Git index、私有 ref 生命周期及外部编辑冲突语义。不预设跳过捕获、增加开关／缓存或改变异步边界；只有捕获成本确有实质占比才选择保持同一快照语义的窄优化，否则记录结果并停止。
+  - 验收：复用 `crates/core/src/thread_controller/restore_tests.rs`、`crates/git/src/objects/tree_tests.rs`、`crates/git-turn-changes/src/turn_changes_tests.rs`、`crates/worktree/src/worktree_tests.rs` 及 `crates/app-server/src/checkpoint_live_tests.rs`，覆盖大仓库无变更／已修改、未跟踪／忽略文件、多仓库、普通目录与符号链接、活动写入时不可用、捕获中断清理、重启／fork／恢复及私有 ref 释放；记录 Windows／macOS／Linux 各自真实测量边界，不能用局部耗时替代整条提交体验或恢复正确性。
+
+- [ ] **测量 · 流式文件路径索引的重复存储**：`crates/file-search/src/lib.rs` 的 `walker_worker` 为每条路径同时保存 `Arc<str>` 与 Nucleo 的 `Utf32String` 列，`build_snapshot` 再从原路径计算排名与高亮。参考 [Codex 减少路径索引副本](https://github.com/openai/codex/pull/55351)（2026-10-19 已合并，已包含于 [Codex 0.164.0](https://github.com/openai/codex/releases/tag/rust-v0.164.0)），先量化 TUI `@file` 与独立文件搜索 CLI 所用 `Service::start` 在大目录的分配字节、峰值内存、扫描和连续查询耗时，再决定是否让纯 ASCII 路径复用匹配列；尚无 Ash 收益测量，不泛化到使用 tgrep 的 Desktop 搜索。
+  - 范围与风险：保留单根、仅普通文件、目录准入、取消和 `query_revision` 契约，不引入多根索引或第二份缓存。Unicode 匹配列并非原路径的无损表示，组合字符与 emoji 不能由该列重建；非 ASCII 路径仍须保留可精确返回的原串。
+  - 验收：在 `crates/file-search/src/file_search_tests.rs`、`ranking_tests.rs` 及 TUI／CLI 消费链覆盖 ASCII、中文、组合字符、emoji、同分排序、截断、快速改查询和取消；对比原路径、分数、顺序与高亮索引，并记录相同目录与查询的重复样本。仅在内存确有下降且延迟及行为不退化时采用，不把局部测量当作整条 IDE 性能结论。
+
+- [ ] **测量 · Git 扩展安装的历史传输成本**：`src/ash/workbench/services/extensionManagement/browser/appServerPluginManagementService.ts` 经现有 Git 服务克隆后，只复制目标包且递归排除 `.git`；`crates/git/src/client.rs` 的 `clone_reserved` 仍获取完整历史。参考 [插件来源浅克隆](https://github.com/microsoft/vscode/pull/343514)（2026-10-22 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)），先在固定多提交仓库测量安装下载字节、临时目录峰值和耗时，再评估仅此安装入口的显式浅克隆选项；不把上游收益当成 Ash 实测结果，不改变普通工作区 clone 的完整历史默认值。
+  - 前提与范围：沿现有 `git/cloneTo` 领域契约传递窄范围选项，并在服务端校验；默认分支、指定 branch／tag 与完整 commit ID 分别处理。旧 pin 必须精确获取并核对最终 HEAD；服务端不支持获取该提交时明确失败或采用已定义的保真回退，不能静默改取最新分支。保留目标目录原子占用、取消、现有权限、包子路径校验、元数据排除和安装 authority，不新增克隆缓存或来源信任。
+  - 验收：扩展 `crates/git/src/client_tests.rs` 与 `src/ash/workbench/services/extensionManagement/test/browser/pluginGitInstallation.test.ts`，用能实际传输对象的受控 Git remote 覆盖默认分支／branch／tag／旧 SHA、拒绝未知 pin、现存目录、取消和错误清理；检查包内容及 digest 与完整克隆一致，普通 clone 历史不变。仅在下载／落盘成本确有下降且兼容及生命周期回归通过后采用，不先承诺速度倍数。
 
 ## 发展候选（未排期）
 
@@ -287,6 +373,55 @@ Git 首次发现已由 watcher 或首个 Git 查询接手。使用同一 Electro
 | Sessions 跨客户端审阅与 provider changeset | 当前 read marker 只属于窗口并绑定 revision。需要跨客户端 reviewed-file、transient/provider changeset、隔离或反馈评论时，先确定共享领域契约和真实消费者，不因上游身份模型不同新增 facade。                                                                                                                                                                                                                  |
 | Configuration 其他契约                     | configuration variables、Remote User、缓存默认值／实验覆盖、跨 profile 规则，以及 registry／schema、typed parse/serialize、控件描述与 `ashBinding` 均按具体调用需求复核，不按上游成员表整体补齐；Rust `config.toml` 的编辑入口仍归其宿主。设置呈现与接入规则见 [Settings 接入边界](src/ash/workbench/contrib/preferences/README.md#当前实现)。                                                             |
 | 托管策略强制新鲜度门禁                     | 当前生产账户映射仅 `ChatDefaultModel`；未接入 `forceRemoteSettingsRefresh`、跨重启的刷新要求或执行端门禁。若纳入企业治理，先确定 Ash 管理来源、作用域、启动／重载要求及 App Server 执行 owner，再贯通 pending／blocked／satisfied、显式恢复和跨端校验；普通网络失败不自动升级为全产品 AI 禁用，Renderer 禁用输入不作为执行端强制保证。                                                                     |
+
+### TUI 剪贴板图片文件的显示方向
+
+- [ ] **修复候选 · TUI 剪贴板图片文件的显示方向**：`crates/tui/src/keymap/bindings.rs` 的 `Attach clipboard image` 经 `host.rs` 调用 `host/clipboard.rs`；该入口优先读取剪贴板 `file_list`，用 `image::open` 解码后重新编码为 PNG。当前锁定的 image 0.25.10 不自动应用 EXIF 方向，`DynamicImage::write_to` 也不保留该元数据，因此依赖方向标记的文件会按原始像素方向进入附件。参考 [图片解码应用显示方向](https://github.com/openai/codex/pull/60455)（2026-11-09 已合并 main，尚未包含于 [Codex 0.167.2](https://github.com/openai/codex/releases/tag/rust-v0.167.2)），在现有剪贴板文件解码 owner 内应用方向后再计算尺寸／指纹并编码；这是静态链路确认的候选，尚未执行 Ash 剪贴板复现。
+  - 范围与风险：仅限实际从系统剪贴板文件列表取得并重编码的图片，保留文件优先级、失败回退、附件目标及异步结果代次检查。普通文本路径粘贴经 `attachments.rs` 保留原始 bytes，不列为同一缺口；系统剪贴板原生 RGBA 已是像素数据，不能猜测或重复旋转。现有共享图片处理已能保留方向元数据，不重构它、不扩大到 Desktop，也不一并引入 macOS 专属 pasteboard 或 TIFF 性能改造。按当前解码限制处理，不为修方向放宽资源上限；不复制不必要的 EXIF 隐私字段。
+  - 验收：在 `crates/tui/src/host/clipboard_tests.rs` 用不对称合成 JPEG／PNG 覆盖八种 EXIF 方向、无方向、无效元数据和解码失败，断言输出 PNG 的像素排列、旋转后宽高及指纹一致，不仅检查文件头。沿 `app/state_tests.rs` 复用附件落入目标线程与旧结果拒绝测试，保留普通路径粘贴、原生 RGBA 和非图片回退。再于支持文件列表的真实终端／系统剪贴板走一次复制文件 → 附图流程，明确实际平台；不把 macOS 上游验证当作 Ash Windows／Linux 已通过。
+
+### Chat 粘贴完成后再发送
+
+- [ ] **修复候选 · Chat 发送等待正在应用的粘贴**：`src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.ts` 的 `acceptInput` 等待听写与已登记的附件准备，但在捕获草稿前未等待 `src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.ts` 的 `currentPaste`。`input/editor/chatPasteProviders.ts` 的 HTML／复制引用 provider 会异步读取或准备粘贴结果；已有非空草稿可在该编辑落入模型前进入发送，已登记附件的等待不能替代这段操作。参考 [VS Code 等待粘贴再发送](https://github.com/microsoft/vscode/pull/347212)（2026-11-10 已合并 main，稳定版 [1.146.0](https://github.com/microsoft/vscode/releases/tag/1.146.0) 尚不包含），在现有粘贴 owner 与 Chat 提交入口间闭合完成结果及取消契约；本项为静态时序缺口，尚未运行 Ash 快速粘贴后发送的行为复现，不声称已发生内容丢失。
+  - 范围与风险：区分成功应用、失败和取消；现有 `finishedPaste(): Promise<void>` 不能证明编辑成功，不只盲等后继续发送。等待期间若草稿、编辑器模型、会话／线程或提交权限改变，应取消此次发送并保留当前草稿，不能把新编辑并入旧提交；粘贴自身正常写入与用户随后编辑须区分。复用现有 revision／lifecycle、附件准备和重复发送门禁，明确普通发送、客户端命令、队列／后台发送及显式文本调用的适用边界；不增加第二份草稿或绕过已有 provider 取消与授权。
+  - 验收：在 `src/ash/workbench/contrib/chat/test/browser/chatInputPart.test.ts`、`chatInputEditor.test.ts` 与粘贴控制器测试用可控延迟的真实 provider 链覆盖非空草稿粘贴后立即发送、文本／HTML／复制引用成功、失败／取消、期间编辑或切会话及连续发送。断言实际提交载荷只包含最终获准的文本与引用，取消时没有请求、草稿可继续编辑；保留现有文件附件等待、普通同步粘贴、命令与队列语义。补真实 Desktop 键盘粘贴后发送场景，不能用手工先 await `finishedPaste` 的测试替代发送入口门禁。
+
+### Overview Ruler 分数缩放边缘绘制
+
+- [ ] **修复候选 · Overview Ruler 分数缩放边缘绘制**：`src/ash/editor/browser/viewParts/overviewRuler/decorationsOverviewRuler.ts` 对装饰画布设置 `contain: strict`，位图宽高按逻辑尺寸乘像素比向下取整，CSS 仍保留原逻辑尺寸；该层背景承担遮住滚动轨道下方文字的职责。参考 [VS Code 分数缩放边缘绘制修复](https://github.com/microsoft/vscode/pull/346835)（2026-11-08 已合并 main，已包含于 [VS Code 1.146.0](https://github.com/microsoft/vscode/releases/tag/1.146.0) 稳定版），核实 paint containment 在分数缩放下裁掉末列设备像素的相同风险，并在现有 owner 内调整 containment；这是匹配到相同绘制前提的静态候选，尚未在 Ash 复现可见漏绘，不把上游截图当作 Ash 结果。
+  - 范围与风险：先限定装饰 Overview Ruler，不全局移除编辑器 containment、不顺带修改 Minimap 或另一种 `OverviewRuler`。保留尺寸隔离、画布背景／主题透明度、装饰 lane、光标、滚动条位置和点击行为；若 Ash 真实场景不复现且没有可观察收益，不仅为源码一致性改变绘制策略。
+  - 验收：扩展 `src/ash/editor/test/browser/codeEditorPresentation.test.ts` 的轨道对齐场景，在整数与分数 DPR／Electron 缩放组合中记录逻辑宽度、位图宽度、有效像素比及右缘像素；用长行横向滚动与静止／纵向滚动对照，确认默认实色主题下末列不透出正文且 lane／光标／边框未裁掉。覆盖亮暗与高对比主题、Minimap 关闭／左右布局及缩放后重绘，复用已有几何与主题测试；补真实 Desktop 观察并明确平台，不能用几何相等或改 CSS 属性代替像素验收。
+
+### Minimap · 视图空白与导航坐标
+
+- [ ] **修复候选 · 滑块覆盖行与点击位置一致性**：`src/ash/editor/browser/viewParts/minimap/minimap.ts` 按 `projection.visualLineCount` 绘制行图，却用包含视图空白的 `scrollTop / (scrollHeight - viewportHeight)` 定位滑块，`moveTo` 再把比例直接乘实际最大滚动位置；`src/ash/editor/common/viewLayout/viewLayout.ts` 已提供 whitespace／view-zone 布局。参考 [VS Code 修正 Minimap 视图空白映射](https://github.com/microsoft/vscode/pull/346852)（2026-11-12 已合并 main），先复现 fit／fill 下较大或密集 view zone 的错位，再闭合行图与实际滚动位置的双向映射。本项为静态坐标空间核对，尚未运行 Ash 可见错位复现，不宣称所有模式都受影响。
+  - 范围与风险：沿现有 Minimap 与 ViewLayout owner 处理，不复制上游布局类或另建行模型；保留折叠、换行、padding、横向滚动条、DPR、点击和拖动语义。起拖后没有垂直位移时不跳过当前 zone，拖到末尾仍能到达文档末尾；不扩大为 Minimap 重构，标题重叠与注释结束符候选保持独立。
+  - 验收：使用实际 View 与 whitespace 布局，在 `src/ash/editor/test/browser/editorDecorationViewport.test.ts` 的 Canvas／几何测试中覆盖长 zone、密集 zone、自定义行高、zone 内起拖、仅横向移动、末尾及无 zone 对照；核对 fit／fill／proportional、折叠和换行后滑块覆盖行、点击及拖动落点，并补真实 Desktop 场景。上游结果不计入 Ash 验收。
+
+### Minimap 相邻区段标题可读性
+
+- [ ] **修复候选 · Minimap 相邻区段标题重叠**：`src/ash/editor/contrib/sectionHeaders/browser/sectionHeadersController.ts` 已将 region／MARK 标题交给现有 Minimap；`src/ash/editor/browser/viewParts/minimap/minimap.ts` 仍逐条按源行位置绘制完整字号的标题与背景，没有处理相邻标题的占用区域。行距小于标题高度时，后绘制的标题会覆盖前一条。参考 [VS Code 区段标题防重叠](https://github.com/microsoft/vscode/pull/346190)（2026-11-05 已合并 main，已包含于 [VS Code 1.146.0](https://github.com/microsoft/vscode/releases/tag/1.146.0) 稳定版），在现有绘制 owner 内按源行顺序处理标题碰撞，保留每个标题的可读性；这是静态绘制链确认的修复候选，尚未完成 Ash 实机复现。
+  - 范围与风险：只调整标题标签的布局，不新增扫描器或第二份文档模型，不隐藏冲突标题；非冲突标题、分隔线、标记及点击／拖动导航保持既有源行语义。密集标题堆叠可能占用更多缩略图区，须明确视口底部裁切与滚动时的稳定行为；不顺带导入上游 fill 模式缩放或编辑器边框改动。
+  - 验收：扩展 `src/ash/editor/test/browser/editorDecorationViewport.test.ts` 的 Canvas 绘制记录及 Minimap 定向测试，覆盖相邻／嵌套 region、长标题后紧邻另一标题、分散标题、空标签与分隔线，并在真实编辑器核对字体大小、DPI、滚动、折叠、换行与紧凑采样场景。断言每个应显示标签均保留且绘制区域不互相覆盖，原有导航与非标题装饰不退化；不得把上游截图或测试数量当作 Ash 验收。
+
+### Minimap MARK 区段标题的注释结束符
+
+- [ ] **修复候选 · MARK 标题排除块注释结束符**：`src/ash/editor/contrib/sectionHeaders/browser/sectionHeaders.contribution.ts` 将默认 MARK 正则交给 `SectionHeadersController`；`src/ash/editor/common/services/findSectionHeaders.ts` 直接使用 label 捕获，控制器虽检查注释 token，却未传入语言的块注释起止符。因此 `/* MARK: Section */`／`<!-- MARK: Section -->` 的结束符仍随标题进入现有 Minimap。参考 [VS Code MARK 标题清理](https://github.com/microsoft/vscode/pull/346189)（2026-11-05 已合并 main，已包含于 [VS Code 1.146.0](https://github.com/microsoft/vscode/releases/tag/1.146.0) 稳定版），在现有语言配置与标题提取链内，只去除已确认属于当前块注释的尾部结束符；保留原文、装饰 owner、导航和用户自定义正则，不以全局字符串替换清理标签。静态调用链已确认，尚无 Ash 真实编辑器复现。
+  - 验收：扩展 `src/ash/editor/test/common/services/findSectionHeaders.test.ts` 与 `src/ash/editor/test/browser/sectionHeadersController.test.ts`，覆盖 HTML／C 风格、同形起止符、空标签／仅分隔线、结束符跨 separator 与 label 捕获、正则自行消费注释符，以及行注释或已闭合注释后标签中的字面 `*/`；保持自定义／多行匹配范围与缓存失效正确。在真实编辑器核对语言切换后的标签及 Minimap 显示；不把相邻标题防重叠候选或上游测试当作本项通过。
+
+### 网络目录上的状态数据库策略
+
+- [ ] **验证 · 网络目录上的状态数据库策略**：ASH_HOME 可落在 NFS，当前 state.sqlite3 的共享连接策略仍固定 WAL；[数据库迁移整理](https://github.com/chogng/ash/commit/46fb022f42805cd225a7e037f3b8be608b320b53)后，automation 已复用 `crates/state/src/sqlite_runtime.rs`，`crates/ext/queue/src/store.rs` 仍独立指定 WAL。参考 [Codex 按数据库目录选择初始化 journal](https://github.com/openai/codex/pull/56552)（2026-10-23 已合并，已包含于 [Codex 0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)），先核实支持范围及实际 NFS 启动／重开行为；统一每个数据库实际目录的探测和 owner 策略，避免仅改共享连接后被其他 owner 改回。若不支持此布局，启动时明确诊断；若纳入支持，再评估新库 DELETE，已有库不自动切换或搬迁。
+  - 前提与验收：适配 rusqlite 而非照搬 SQLx；保持 Durable 至少现有 FULL 耐久性，DELETE 评估 EXTRA，不将 WAL 改为上游 NORMAL。覆盖本地新库、NFS 新库、已有 WAL／DELETE、初始化中断、目录探测失败、多个 owner 重开和持锁并发，确认实际 pragma 返回值与错误可诊断；对回滚 journal 的读写竞争及吞吐做基线测量。是否正式支持多主机共用 profile 属单独产品决定，不由此候选授权。
+  - 上游后续已合并[已有库迁移与初始化门禁](https://github.com/openai/codex/pull/57225)及[迁移权限说明](https://github.com/openai/codex/pull/57226)（2026-10-26，已包含于 [Codex 0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)）：迁移要求所有主机的客户端停用、跨客户端锁有效，并保留 WAL 备份和中断恢复；替换文件仅保留 mode bits，不继承原 owner／group／扩展 ACL。此处仍不授权 Ash 自动迁移或照搬 unsafe 开关；若之后单独批准迁移，再将锁竞争、恢复、权限变化披露与失败不触发损坏重建纳入验收，不能把初始化 journal 选择等同于已有数据安全转换。
+
+  - 目录判定补充：参考 [本地与网络目录 journal 区分](https://github.com/microsoft/vscode/pull/345014)（2026-10-29 已合并，已包含于 [VS Code 1.145.0](https://github.com/microsoft/vscode/releases/tag/1.145.0)），把 Windows UNC／映射网络盘、Linux 网络挂载／FUSE、目录解析或探测失败，以及既有 WAL 库移到另一类目录后的重开加入上述验证矩阵；仅看路径形式或新库初始化不足以确认实际模式。按数据库实际目录核实各平台探测能力，不能把上游 macOS 默认视为本地直接当作 Ash 保证。保持现有 Durable FULL，不采用上游 NORMAL 或自动切换旧库；被连接锁阻止时保留原库并明确诊断实际 journal，不能宣称目录已适配。此补充仍是支持范围与失败诊断验证，不批准网络 profile、多主机共用或迁移实现。
+
+### 共享登录记录格式兼容（前提变化，暂缓）
+
+2026-10-30 核对当前生产接线后，将原“共享 Codex 登录记录兼容性”移为暂缓复核，不标为已实现：`crates/app-server/src/local.rs` 与 `crates/chatgpt/src/oauth.rs` 的外部 Codex 登录固定为只读复用，缺少或过期时要求在 Codex 完成登录；独立 ChatGPT Web 登录经 `web_auth.rs`／`storage.rs` 写入 Ash profile 私有凭据，显式选择来源并保留 generation／revision 校验，不再以补写共享文件为当前缺口。
+
+保留 [Codex 登录来源与登录标识](https://github.com/openai/codex/pull/55397)（已包含于 [Codex 0.164.0](https://github.com/openai/codex/releases/tag/rust-v0.164.0)）作为格式演进依据。只有明确出现当前只读消费者与上游新记录不兼容，或另行批准共享写入／新增可信登录来源时，再用合成记录核对 `oauth_provenance`／`login_owner_id` 的实际需要；不得仅因字段缺失扩张接口，不从 token 声明推断可信 issuer，不改变外部凭据不刷新、不覆盖的边界。保留来源切换、旧回调晚到、同账户重登、刷新提交失败、登出和错误脱敏验收；本轮仅静态复核生产入口与测试定义，未运行真实登录或凭据迁移。
 
 ### Rust 分析缓存持久化（暂缓）
 
@@ -312,10 +447,29 @@ Git 首次发现已由 watcher 或首个 Git 查询接手。使用同一 Electro
 
 ### Sessions 按关联 PR 号查找
 
-未排期的新工作流增强。`src/ash/sessions/browser/parts/sidebar/sessionsList.ts` 目前只按标题／provider label 过滤，随后才读取已有 `IGitHubService.getSessionPullRequests()` 绘制 PR 标记；关联 PR 的 number 已存在，不需要新增后端发现服务。参考 [VS Code Sessions PR 号查找](https://github.com/microsoft/vscode/pull/338904)，让用户能从 PR 号找回标题不含该号码的会话。
+未排期的新工作流增强。2026-10-23 的独立 Search 已由 `src/ash/sessions/contrib/search/browser/searchModel.ts` 按会话／线程标题与 provider label 过滤，最新侧栏 `src/ash/sessions/contrib/sessions/browser/views/sessionsList.ts` 已通过 `SessionsListSearch` 恢复局部查找，并保留分组与已有 `IGitHubService.getSessionPullRequests()` 的 PR 标记；局部查找已消费含 `#number` 的 PR label，不能继续列为侧栏缺失；它采用子串匹配，不等同本候选拟议的精确号码语义。关联 PR 的 number 已存在，但独立 Search 结果尚未消费它，不需要新增后端发现服务。参考 [VS Code Sessions PR 号查找](https://github.com/microsoft/vscode/pull/338904)，让用户能从 PR 号找回标题不含该号码的会话。
 
-- 进入条件与范围：先确认 `#N` 与纯数字 `N` 精确匹配关联 PR 号的产品语义，再在现有 Sessions 列表 owner 内实现；仅消费已有分支关联／手动附加 PR 数据，不新增网络请求、第二份关联状态或通用搜索层。
-- 风险与验收：在 `src/ash/sessions/test/browser/sessions-list.test.ts` 和真实列表场景覆盖两种输入、同号跨仓库的全部匹配、多个 PR、无 PR、关联解除／刷新以及不存在的号码；标题、provider、分组、焦点与清空查询行为保持可用。PR-only 命中不能伪造标题高亮；仅有现有关联数据的会话可按 PR 查找，不承诺尚未提供元数据的外部 provider。
+- 进入条件与范围：先确认 `#N` 与纯数字 `N` 精确匹配关联 PR 号的产品语义，再由独立 Search model 消费现有 GitHub 关联 owner 并响应关联变更，保留精确 session／thread 导航；仅消费已有分支关联／手动附加 PR 数据，不新增网络请求、第二份关联状态或通用搜索层。
+- 风险与验收：在 `src/ash/sessions/contrib/search/test/browser/searchModel.test.ts` 和真实搜索对话框场景覆盖两种输入、同号跨仓库的全部匹配、多个 PR、无 PR、关联解除／刷新以及不存在的号码；标题、provider、分类、多个活动 thread、关闭／重开、焦点与清空查询行为保持可用；侧栏已有局部查找与分组保持原样，不自动把本候选扩展为两个搜索入口同步改造。PR-only 命中不能伪造标题高亮；仅有现有关联数据的会话可按 PR 查找，不承诺尚未提供元数据的外部 provider。
+
+### Workbench 模型选择器容错搜索
+
+未排期的查找体验增强。`src/ash/platform/actionWidget/browser/actionList.ts` 目前按空格拆词、匹配名称与详情的连续子串并保留目录顺序；Workbench `modelPickerItems.ts` 经 `modelPickerItemPrimitives.ts` 已包含 provider 与模型 ID，`modelPickerTabbedWidget.ts` 已将所有启用模型交给同一列表并支持跨 provider 搜索（[Ash 统一列表改动](https://github.com/chogng/ash/commit/90df1306b4fff532eb6161d101a20a1ef8f55f74)），不能把这些搜索能力列为缺失。参考 [Zed 模型选择器搜索](https://github.com/zed-industries/zed/pull/64147)（2026-10-20 已合并，已包含于 [Zed v1.26.2](https://github.com/zed-industries/zed/releases/tag/v1.26.2) 稳定版），补充 `gpt6.1` 对 `GPT-6.1 Sol` 这类非连续匹配，并让名称命中优先于仅详情命中；现有 `GPT 6.1` 分词查询本就可用。
+
+- 进入条件与范围：先确定查询及排序语义，再在 `src/ash/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerTabbedWidget.ts` 的弹出层 owner 内接入，`modelPickerWidget.ts` 仅保留现有触发职责；可评估既有 `src/ash/base/common/fuzzyScorer.ts`，但 ActionList 尚无领域专用评分入口，须先提供窄范围的可选接入，不全局替换通用列表语义、不新建平行 picker、不顺带扩张到独立 Sessions picker 或后端模型目录。
+- 风险与验收：保留 provider／模型 ID、跨字段及不同词序的既有查询；名称和详情分别评分、同分稳定、空查询恢复原顺序，元数据命中不伪造名称高亮。保持现有跨 provider 统一列表范围、详情返回时同一查询的保留，以及 Auto 时隐藏列表与筛选框的行为，不恢复 provider tabs 或引入每 tab 缓存。由 `src/ash/workbench/contrib/chat/test/browser/modelPickerWidget.test.ts`、`modelPickerTabbedWidget.test.ts` 与真实输入场景覆盖精确名称、紧凑输入、非拉丁文字、同名跨 provider、目录刷新／移除、已选身份、禁用项、Auto、键盘与焦点；通用 ActionList 行为保持不变。不移植上游 GPUI 任务模型或把其基准当作 Ash 性能收益。
+
+### Desktop 文件粘贴路径回退
+
+- [ ] **候选／链路补齐（未排期）· Desktop 文件粘贴的路径回退**：现有 `src/ash/editor/browser/controller/editContext/clipboardUtils.ts` 在无文本、无编辑器元数据而有文件时只插入 `File.name`；EditContext 与 TextArea 共用此入口。补齐文件管理器复制文件后在普通文本编辑器粘贴可定位路径的操作链路，参考 [VS Code 文件粘贴路径回退](https://github.com/microsoft/vscode/pull/342695)（2026-10-19 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)）。这是现有文件名回退的增强，不是已复现的文件内容丢失缺陷。
+  - 范围与前提：复用 `src/ash/platform/dnd/browser/dnd.ts` 的既有宿主 File 路径解析边界，保持 editor → platform 依赖方向，不直接引入 Electron；不让浏览器读取本地路径，不读取文件内容、不自动打开文件、不改变 URI-list provider、普通文本及编辑器元数据的优先级。无宿主路径时仍回退文件名。
+  - 验收：扩展 `src/ash/editor/contrib/dropOrPasteInto/test/browser/copyPasteController.test.ts`，覆盖单／多文件、空格与非 ASCII 路径、宿主无路径或异常、文本与元数据优先，并保留“不读取文件内容”断言；分别走 EditContext／TextArea，补真实 Electron 文件管理器复制粘贴与 Web 回退验收，记录平台差异。
+
+### SCM 文件拖入终端
+
+- [ ] **候选／链路补齐（未排期）· SCM 文件拖入终端**：`src/ash/workbench/contrib/scm/browser/scmViewPane.ts` 的变更树尚未提供 drag policy，共享 Tree／List 仅在消费者提供 `dnd.getDragURI` 时启用行拖动；终端已接入 URI-list 文件拖放和 `sendPath(resource, false)`。参考 [Zed Git 面板文件拖放](https://github.com/zed-industries/zed/pull/66423)（2026-11-02 已合并 main，已包含于 [Zed v1.28.1](https://github.com/zed-industries/zed/releases/tag/v1.28.1) 稳定版），补齐从已显示的 SCM 工作文件到现有终端的路径输入，减少先定位 Explorer 或复制路径的步骤。本项是静态确认的入口缺口，不是执行失败或数据丢失缺陷。
+  - 前提与范围：先限定单个文件行，沿现有 `TreeDragAndDrop` 和 Explorer 的 `text/uri-list` 契约导出权威 `sourceUri`，终端继续使用既有宿主 URI 转换及 shell 引号；只允许可确认的本地／同连接远端工作文件，分组、目录、已删除项、Git 历史／虚拟资源不伪装为工作文件。拖放只填入路径，不附加回车、不执行命令，不增加文件读写、上传或 provider 动作。当前终端只消费首个 URI，不能把上游多选行为直接照搬或静默截断成“多文件支持”；本候选不扩张到批量拖放。
+  - 风险与验收：在 `src/ash/workbench/contrib/scm/test/browser/scmViewPane.test.ts` 与 `src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts` 补来源／接收链测试，并走真实 Desktop SCM → 终端拖放；覆盖 staged／unstaged 同一工作文件、删除与重命名、列表／树视图、刷新后旧行、空格／中文／引号／shell 元字符、本地与 SSH 同名路径。异连接、只读或已退出终端、未知 shell、控制字符及转换期间进程重启仍拒绝；点击预览、键盘打开、inline actions 和文件菜单不退化。沿用现有取消与执行主机检查，不绕开 `sendPath`。
 
 ## Chat accessibility · 缺失宿主入口
 
