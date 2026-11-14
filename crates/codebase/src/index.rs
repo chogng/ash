@@ -407,23 +407,29 @@ impl Codebase {
     ) -> Result<Vec<MaterializedSource>, CodebaseError> {
         references
             .iter()
-            .map(|reference| {
-                self.validate_root(&reference.root_id)?;
-                if let Some(materialized) = self.overlay.materialize_source(reference) {
-                    return materialized;
-                }
-                let content = read_source_for_verification(
-                    &self.root,
-                    &reference.relative_path,
-                    self.limits.max_file_bytes,
-                )?;
-                validate_source_revision(&content, &reference.source_revision)?;
-                Ok(MaterializedSource {
-                    reference: reference.clone(),
-                    content,
-                })
-            })
+            .map(|reference| self.materialize_source(reference))
             .collect()
+    }
+
+    /// Verifies one source without retaining the text of the rest of its generation.
+    pub(crate) fn materialize_source(
+        &self,
+        reference: &IndexedSourceReference,
+    ) -> Result<MaterializedSource, CodebaseError> {
+        self.validate_root(&reference.root_id)?;
+        if let Some(materialized) = self.overlay.materialize_source(reference) {
+            return materialized;
+        }
+        let content = read_source_for_verification(
+            &self.root,
+            &reference.relative_path,
+            self.limits.max_file_bytes,
+        )?;
+        validate_source_revision(&content, &reference.source_revision)?;
+        Ok(MaterializedSource {
+            reference: reference.clone(),
+            content,
+        })
     }
 
     /// Rereads each selected source at most once and verifies all selected chunk identities.

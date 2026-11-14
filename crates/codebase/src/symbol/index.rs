@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -6,7 +5,13 @@ use std::sync::Mutex;
 use std::sync::RwLock;
 
 use crate::Codebase;
+use crate::CodebaseManifest;
 use crate::IndexRootId;
+use crate::SymbolProjectionUpdate;
+use crate::symbol::projection::DiskProjection;
+use crate::symbol::projection::MAX_DELTA_FACT_BYTES;
+use crate::symbol::projection::MAX_DELTA_FILES;
+use crate::symbol::projection::fact_bytes;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
 
@@ -29,14 +34,14 @@ pub struct SymbolIndex {
     limits: SymbolIndexLimits,
     store: Arc<dyn SymbolIndexStore>,
     operation: Mutex<()>,
-    matcher: RwLock<Arc<Mutex<SymbolMatcher>>>,
+    projection: RwLock<Arc<DiskProjection>>,
     overlay: RwLock<OverlayProjection>,
 }
 
 struct OverlayProjection {
     generation: u64,
     dirty_paths: BTreeSet<PathBuf>,
-    matcher: Arc<Mutex<SymbolMatcher>>,
+    matcher: Option<Arc<Mutex<SymbolMatcher>>>,
 }
 
 impl SymbolIndex {
@@ -57,18 +62,21 @@ impl SymbolIndex {
     ) -> Result<Self, SymbolIndexError> {
         validate_limits(&limits)?;
         let projection = store.load_projection(codebase.root_id())?;
-        let matcher = SymbolMatcher::new(projection.sources.into_values(), limits.matcher_threads);
-        let empty_overlay_matcher = SymbolMatcher::new(Vec::new(), limits.matcher_threads);
+        let projection = DiskProjection::new(
+            projection.snapshot,
+            projection.sources.into_values(),
+            limits.matcher_threads,
+        );
         Ok(Self {
             codebase,
             limits,
             store,
             operation: Mutex::new(()),
-            matcher: RwLock::new(Arc::new(Mutex::new(matcher))),
+            projection: RwLock::new(Arc::new(projection)),
             overlay: RwLock::new(OverlayProjection {
                 generation: 0,
                 dirty_paths: BTreeSet::new(),
-                matcher: Arc::new(Mutex::new(empty_overlay_matcher)),
+                matcher: None,
             }),
         })
     }
@@ -80,7 +88,12 @@ impl SymbolIndex {
 
     /// Returns the currently published symbol projection without reading source files.
     pub fn snapshot(&self) -> Result<SymbolIndexSnapshot, SymbolIndexError> {
-        self.store.snapshot(self.codebase.root_id())
+        Ok(self
+            .projection
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .snapshot
+            .clone())
     }
 
     /// Reconciles this projection against the current Codebase manifest.
@@ -92,67 +105,172 @@ impl SymbolIndex {
             .operation
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        // Most watcher reconciliations leave the source generation unchanged.
-        // Read only the summaries before loading every source and symbol row.
         let source_snapshot = self.codebase.snapshot()?;
         let symbol_snapshot = self.store.snapshot(self.codebase.root_id())?;
+        let published = Arc::clone(
+            &self
+                .projection
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        );
         if symbol_snapshot.source_generation == source_snapshot.generation {
-            return Ok(SymbolIndexRefreshOutcome::NoChange);
+            if symbol_snapshot.generation == published.snapshot.generation {
+                return Ok(SymbolIndexRefreshOutcome::NoChange);
+            }
+            // Another publisher can advance shared storage. Rebase before applying any deltas.
+            let stored = self.store.load_projection(self.codebase.root_id())?;
+            let snapshot = stored.snapshot.clone();
+            let projection = DiskProjection::new(
+                stored.snapshot,
+                stored.sources.into_values(),
+                self.limits.matcher_threads,
+            );
+            *self
+                .projection
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = Arc::new(projection);
+            return Ok(SymbolIndexRefreshOutcome::Published(snapshot));
         }
         let manifest = self.codebase.manifest()?;
         if manifest.snapshot.root_id != *self.codebase.root_id() {
             return Err(SymbolIndexError::SourceRootMismatch);
         }
-        let stored = self.store.load_projection(self.codebase.root_id())?;
+        'incremental: {
+            if symbol_snapshot.generation == 0
+                || symbol_snapshot.symbol_limit_hit
+                || symbol_snapshot.generation != published.snapshot.generation
+            {
+                break 'incremental;
+            }
+            let stored = self.store.load_manifest(self.codebase.root_id())?;
+            if stored.snapshot.generation != symbol_snapshot.generation {
+                return Err(SymbolIndexError::storage(
+                    "symbol projection changed while preparing an update",
+                ));
+            }
+            let current_paths: BTreeSet<_> = manifest
+                .sources
+                .iter()
+                .map(|source| source.relative_path.clone())
+                .collect();
+            let removed: Vec<_> = stored
+                .sources
+                .keys()
+                .filter(|path| !current_paths.contains(*path))
+                .cloned()
+                .collect();
+            let mut changed = Vec::new();
+            let mut changed_symbols = 0;
+            let mut changed_bytes = 0;
+            let mut symbol_count = stored.snapshot.indexed_symbol_count;
+            for path in &removed {
+                symbol_count = symbol_count.saturating_sub(stored.sources[path].symbol_count);
+            }
+            for source in &manifest.sources {
+                let previous = stored.sources.get(&source.relative_path);
+                if previous.is_some_and(|previous| previous.source == *source) {
+                    continue;
+                }
+                if changed.len() + removed.len() >= MAX_DELTA_FILES {
+                    break 'incremental;
+                }
+                let materialized = self.codebase.materialize_source(source)?;
+                let extracted = extract_source(&materialized, self.limits.max_symbols_per_source)?;
+                symbol_count = symbol_count
+                    .saturating_sub(previous.map_or(0, |source| source.symbol_count))
+                    .saturating_add(extracted.symbols.len());
+                if symbol_count > self.limits.max_total_symbols {
+                    break 'incremental;
+                }
+                let extracted = SourceSymbols {
+                    source: source.clone(),
+                    symbols: extracted.symbols,
+                    symbol_limit_hit: extracted.symbol_limit_hit,
+                };
+                changed_symbols += extracted.symbols.len();
+                changed_bytes += fact_bytes(&extracted);
+                // Stop staging a bulk edit as soon as it requires compaction; do not retain
+                // an entire changed workspace only to discard it before the full pass.
+                if changed_symbols > published.delta_symbol_budget()
+                    || changed_bytes > MAX_DELTA_FACT_BYTES
+                {
+                    break 'incremental;
+                }
+                changed.push(extracted);
+            }
+            let Some(mut projection) = published.updated(&removed, &changed) else {
+                break 'incremental;
+            };
+            let snapshot = self.store.update_projection(
+                self.codebase.root_id(),
+                SymbolProjectionUpdate {
+                    expected_generation: stored.snapshot.generation,
+                    source_generation: manifest.snapshot.generation,
+                    removed: &removed,
+                    changed: &changed,
+                    symbol_limit_hit: changed.iter().any(|source| source.symbol_limit_hit),
+                },
+            )?;
+            projection.snapshot = snapshot.clone();
+            *self
+                .projection
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = Arc::new(projection);
+            return Ok(SymbolIndexRefreshOutcome::Published(snapshot));
+        }
+        self.reconcile_full(manifest)
+    }
+
+    // Limit changes can move the truncation boundary into unchanged files. Rebuild that
+    // exceptional case in manifest order so coverage and limit flags retain their meaning.
+    fn reconcile_full(
+        &self,
+        manifest: CodebaseManifest,
+    ) -> Result<SymbolIndexRefreshOutcome, SymbolIndexError> {
+        let mut stored = self.store.load_projection(self.codebase.root_id())?;
         if stored.snapshot.source_generation == manifest.snapshot.generation {
-            return Ok(SymbolIndexRefreshOutcome::NoChange);
+            let snapshot = stored.snapshot.clone();
+            let projection = DiskProjection::new(
+                stored.snapshot,
+                stored.sources.into_values(),
+                self.limits.matcher_threads,
+            );
+            *self
+                .projection
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = Arc::new(projection);
+            return Ok(SymbolIndexRefreshOutcome::Published(snapshot));
         }
 
         let reuse_allowed = !stored.snapshot.symbol_limit_hit;
-        let mut materialize = Vec::new();
-        for source in &manifest.sources {
-            let reusable = reuse_allowed
-                && stored
-                    .sources
-                    .get(&source.relative_path)
-                    .is_some_and(|previous| {
-                        previous.source.source_revision == source.source_revision
-                            && previous.source.language == source.language
-                    });
-            if !reusable {
-                materialize.push(source.clone());
-            }
-        }
-        let mut materialized = self
-            .codebase
-            .materialize_sources(&materialize)?
-            .into_iter()
-            .map(|source| (source.reference.relative_path.clone(), source))
-            .collect::<BTreeMap<_, _>>();
-
         let mut sources = Vec::with_capacity(manifest.sources.len());
         let mut remaining = self.limits.max_total_symbols;
         let mut total_limit_hit = false;
         for source in &manifest.sources {
-            let mut source_symbols = if let Some(materialized) =
-                materialized.remove(&source.relative_path)
-            {
+            // Retire changed cached facts before parsing their replacement. Source text is
+            // verified and extracted one file at a time; publication remains all-or-nothing.
+            let previous = stored
+                .sources
+                .remove(&source.relative_path)
+                .filter(|previous| {
+                    reuse_allowed
+                        && previous.source.source_revision == source.source_revision
+                        && previous.source.language == source.language
+                });
+            let mut source_symbols = if let Some(previous) = previous {
+                SourceSymbols {
+                    source: source.clone(),
+                    symbols: previous.symbols,
+                    symbol_limit_hit: previous.symbol_limit_hit,
+                }
+            } else {
+                let materialized = self.codebase.materialize_source(source)?;
                 let extracted = extract_source(&materialized, self.limits.max_symbols_per_source)?;
                 SourceSymbols {
                     source: source.clone(),
                     symbols: extracted.symbols,
                     symbol_limit_hit: extracted.symbol_limit_hit,
                 }
-            } else {
-                stored
-                    .sources
-                    .get(&source.relative_path)
-                    .map(|previous| SourceSymbols {
-                        source: source.clone(),
-                        symbols: previous.symbols.clone(),
-                        symbol_limit_hit: previous.symbol_limit_hit,
-                    })
-                    .ok_or(SymbolIndexError::SourceRootMismatch)?
             };
             if source_symbols.symbols.len() > remaining {
                 source_symbols.symbols.truncate(remaining);
@@ -172,11 +290,12 @@ impl SymbolIndex {
         // File metadata is shared inside the matcher. Build it before publication
         // so the first query does not pay for loading the entire stored projection.
         drop(stored);
-        let matcher = SymbolMatcher::new(sources, self.limits.matcher_threads);
+        let projection =
+            DiskProjection::new(snapshot.clone(), sources, self.limits.matcher_threads);
         *self
-            .matcher
+            .projection
             .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Arc::new(Mutex::new(matcher));
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Arc::new(projection);
         Ok(SymbolIndexRefreshOutcome::Published(snapshot))
     }
 
@@ -205,26 +324,28 @@ impl SymbolIndex {
                 .overlay
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            (overlay.dirty_paths.clone(), Arc::clone(&overlay.matcher))
+            (overlay.dirty_paths.clone(), overlay.matcher.clone())
         };
-        let matcher = self
-            .matcher
-            .read()
-            .unwrap_or_else(|error| error.into_inner())
-            .clone();
-        let mut hits = matcher
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .search(query.text(), self.limits.max_results, cancellation)?
-            .into_iter()
-            .filter(|hit| !dirty_paths.contains(&hit.symbol.reference.relative_path))
-            .collect::<Vec<_>>();
-        hits.extend(
-            overlay_matcher
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .search(query.text(), result_limit, cancellation)?,
+        let projection = Arc::clone(
+            &self
+                .projection
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
         );
+        let mut hits = projection.search(
+            query.text(),
+            self.limits.max_results,
+            cancellation,
+            &dirty_paths,
+        )?;
+        if let Some(overlay_matcher) = overlay_matcher {
+            hits.extend(
+                overlay_matcher
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .search(query.text(), result_limit, cancellation)?,
+            );
+        }
         sort_hits(&mut hits);
         hits.truncate(result_limit);
         Ok(hits)
@@ -280,14 +401,24 @@ impl SymbolIndex {
                 symbol_limit_hit: extracted.symbol_limit_hit,
             });
         }
-        let matcher = SymbolMatcher::new(sources, self.limits.matcher_threads);
+        // Dirty paths still mask disk symbols when their text has no declarations.
+        // Only a populated overlay needs a matcher and its private worker pool.
+        let matcher = sources
+            .iter()
+            .any(|source| !source.symbols.is_empty())
+            .then(|| {
+                Arc::new(Mutex::new(SymbolMatcher::new(
+                    sources,
+                    self.limits.matcher_threads,
+                )))
+            });
         *self
             .overlay
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = OverlayProjection {
             generation,
             dirty_paths,
-            matcher: Arc::new(Mutex::new(matcher)),
+            matcher,
         };
         Ok(())
     }

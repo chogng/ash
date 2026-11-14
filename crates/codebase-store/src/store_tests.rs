@@ -24,6 +24,65 @@ fn dir() -> TempDir {
 }
 
 #[test]
+fn incremental_symbol_generation_survives_closing_the_database() {
+    let dir = dir();
+    let profile = tempfile::tempdir().unwrap();
+    let state = StateRuntime::open(profile.path()).unwrap();
+    let root = Dir::open_local(dir.path()).unwrap();
+    let store = CodebaseStore::open(&state, &root.id()).unwrap();
+    let codebase = Arc::new(
+        store
+            .open_codebase(root.clone(), CodebaseLimits::default())
+            .unwrap(),
+    );
+    codebase.rebuild().unwrap();
+    let symbols = store
+        .open_symbol_index(Arc::clone(&codebase), SymbolIndexLimits::default())
+        .unwrap();
+    symbols.reconcile().unwrap();
+    let path = dir.path().join("lib.rs");
+    std::fs::write(&path, "pub fn persisted_after_delta() {}\n").unwrap();
+    codebase
+        .refresh_observed_paths(std::slice::from_ref(&path))
+        .unwrap();
+    symbols.reconcile().unwrap();
+    let snapshot = symbols.snapshot().unwrap();
+    assert_eq!(snapshot.generation, 2);
+    drop(symbols);
+    drop(codebase);
+    drop(store);
+
+    let reopened = CodebaseStore::open(&state, &root.id()).unwrap();
+    let codebase = Arc::new(
+        reopened
+            .open_codebase(root, CodebaseLimits::default())
+            .unwrap(),
+    );
+    let symbols = reopened
+        .open_symbol_index(codebase, SymbolIndexLimits::default())
+        .unwrap();
+    assert_eq!(symbols.snapshot().unwrap(), snapshot);
+    assert!(matches!(
+        symbols.reconcile().unwrap(),
+        SymbolIndexRefreshOutcome::NoChange
+    ));
+    assert_eq!(
+        symbols
+            .search(&SymbolIndexQuery::new("persisted_after_delta"))
+            .unwrap()[0]
+            .symbol
+            .name,
+        "persisted_after_delta"
+    );
+    assert!(
+        symbols
+            .search(&SymbolIndexQuery::new("persisted_codebase_symbol"))
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
 fn one_database_reopens_source_symbol_and_vector_generations() {
     let dir = dir();
     let profile = tempfile::tempdir().expect("profile");

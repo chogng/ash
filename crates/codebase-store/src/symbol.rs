@@ -3,12 +3,23 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use ash_codebase::{
-    IndexRootId, IndexedSourceReference, SourceRevision, SourceSymbol, SourceSymbols,
-    StoredSymbolProjection, SymbolIndexError, SymbolIndexSnapshot, SymbolIndexStore, SymbolKind,
-    SymbolRange,
-};
-use ash_state::{SqliteDurability, open_in_memory_database, open_sqlite_database};
+use ash_codebase::IndexRootId;
+use ash_codebase::IndexedSourceReference;
+use ash_codebase::SourceRevision;
+use ash_codebase::SourceSymbol;
+use ash_codebase::SourceSymbols;
+use ash_codebase::StoredSymbolManifest;
+use ash_codebase::StoredSymbolProjection;
+use ash_codebase::SymbolIndexError;
+use ash_codebase::SymbolIndexSnapshot;
+use ash_codebase::SymbolIndexStore;
+use ash_codebase::SymbolKind;
+use ash_codebase::SymbolProjectionUpdate;
+use ash_codebase::SymbolRange;
+use ash_codebase::SymbolSourceSummary;
+use ash_state::SqliteDurability;
+use ash_state::open_in_memory_database;
+use ash_state::open_sqlite_database;
 use ash_syntax::SYNTAX_FACTS_VERSION;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
@@ -139,6 +150,109 @@ impl SqliteSymbolIndexStore {
         Ok(StoredSymbolProjection { snapshot, sources })
     }
 
+    fn load_manifest(&self, root_id: &IndexRootId) -> SymbolStoreResult<StoredSymbolManifest> {
+        let mut connection = self
+            .connection
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // File identities, counts and the generation must come from one read snapshot.
+        let transaction = connection.transaction()?;
+        let snapshot = snapshot_from_connection(&transaction, root_id)?;
+        let sources = {
+            let mut statement = transaction.prepare_cached(
+                "SELECT f.path, f.source_revision, f.language, f.source_bytes, COALESCE(c.symbol_count, 0) \
+                 FROM symbol_index_files AS f LEFT JOIN \
+                 (SELECT path, COUNT(*) AS symbol_count FROM symbol_index_symbols GROUP BY path) AS c \
+                 ON c.path = f.path ORDER BY f.path",
+            )?;
+            let rows = statement.query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            })?;
+            let mut sources = BTreeMap::new();
+            for row in rows {
+                let (path, revision, language, bytes, count) = row?;
+                let relative_path = PathBuf::from(path);
+                sources.insert(
+                    relative_path.clone(),
+                    SymbolSourceSummary {
+                        source: IndexedSourceReference {
+                            root_id: root_id.clone(),
+                            relative_path,
+                            source_revision: SourceRevision::parse(revision)?,
+                            language: crate::read_language_id(&language)?,
+                            source_bytes: to_usize(bytes),
+                        },
+                        symbol_count: to_usize(count),
+                    },
+                );
+            }
+            sources
+        };
+        transaction.commit()?;
+        Ok(StoredSymbolManifest { snapshot, sources })
+    }
+
+    fn update_projection(
+        &self,
+        root_id: &IndexRootId,
+        update: SymbolProjectionUpdate<'_>,
+    ) -> SymbolStoreResult<SymbolIndexSnapshot> {
+        let mut connection = self
+            .connection
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let transaction = connection.transaction()?;
+        let generation = metadata(&transaction, "generation")?
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0);
+        if generation != update.expected_generation {
+            return Err(SymbolIndexError::storage(
+                "symbol projection changed while preparing an update",
+            )
+            .into());
+        }
+        for path in update.removed.iter().chain(
+            update
+                .changed
+                .iter()
+                .map(|source| &source.source.relative_path),
+        ) {
+            let path = storage_path(path);
+            transaction
+                .prepare_cached("DELETE FROM symbol_index_symbols WHERE path = ?1")?
+                .execute([&path])?;
+            transaction
+                .prepare_cached("DELETE FROM symbol_index_files WHERE path = ?1")?
+                .execute([&path])?;
+        }
+        for source in update.changed {
+            insert_source(&transaction, source)?;
+        }
+        set_metadata(
+            &transaction,
+            "generation",
+            &generation.saturating_add(1).to_string(),
+        )?;
+        set_metadata(
+            &transaction,
+            "source_generation",
+            &update.source_generation.to_string(),
+        )?;
+        set_metadata(
+            &transaction,
+            "symbol_limit_hit",
+            if update.symbol_limit_hit { "1" } else { "0" },
+        )?;
+        transaction.commit()?;
+        snapshot_from_connection(&connection, root_id)
+    }
+
     fn replace_projection(
         &self,
         root_id: &IndexRootId,
@@ -223,6 +337,21 @@ impl SymbolIndexStore for SqliteSymbolIndexStore {
         SqliteSymbolIndexStore::load_projection(self, root_id).map_err(Into::into)
     }
 
+    fn load_manifest(
+        &self,
+        root_id: &IndexRootId,
+    ) -> Result<StoredSymbolManifest, SymbolIndexError> {
+        SqliteSymbolIndexStore::load_manifest(self, root_id).map_err(Into::into)
+    }
+
+    fn update_projection(
+        &self,
+        root_id: &IndexRootId,
+        update: SymbolProjectionUpdate<'_>,
+    ) -> Result<SymbolIndexSnapshot, SymbolIndexError> {
+        SqliteSymbolIndexStore::update_projection(self, root_id, update).map_err(Into::into)
+    }
+
     fn replace_projection(
         &self,
         root_id: &IndexRootId,
@@ -289,21 +418,22 @@ fn reset_projection(connection: &mut Connection) -> rusqlite::Result<()> {
 
 fn insert_source(transaction: &Transaction<'_>, source: &SourceSymbols) -> SymbolStoreResult<()> {
     let path = storage_path(&source.source.relative_path);
-    transaction.execute(
+    let mut file_insert = transaction.prepare_cached(
         "INSERT INTO symbol_index_files(
              path, source_revision, language, source_bytes, symbol_limit_hit
          ) VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![
-            path,
-            source.source.source_revision.as_str(),
-            source.source.language.as_str(),
-            to_i64(source.source.source_bytes),
-            flag_value(source.symbol_limit_hit),
-        ],
     )?;
-    for symbol in &source.symbols {
-        transaction.execute(
-            "INSERT INTO symbol_index_symbols(
+    file_insert.execute(params![
+        path,
+        source.source.source_revision.as_str(),
+        source.source.language.as_str(),
+        to_i64(source.source.source_bytes),
+        flag_value(source.symbol_limit_hit),
+    ])?;
+    // Reuse the prepared statement across rows and source files in this transaction,
+    // so large projections do not compile the same SQL once per symbol.
+    let mut symbol_insert = transaction.prepare_cached(
+        "INSERT INTO symbol_index_symbols(
                  path, ordinal, name, kind, container_name,
                  declaration_start_byte, declaration_end_byte,
                  declaration_start_line, declaration_start_column,
@@ -314,26 +444,27 @@ fn insert_source(transaction: &Transaction<'_>, source: &SourceSymbols) -> Symbo
              ) VALUES (
                  ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17
              )",
-            params![
-                path,
-                to_i64(symbol.ordinal),
-                symbol.name,
-                symbol.kind.id(),
-                symbol.container_name,
-                to_i64(symbol.declaration_range.start_byte),
-                to_i64(symbol.declaration_range.end_byte),
-                to_i64(symbol.declaration_range.start_line),
-                to_i64(symbol.declaration_range.start_column),
-                to_i64(symbol.declaration_range.end_line),
-                to_i64(symbol.declaration_range.end_column),
-                to_i64(symbol.selection_range.start_byte),
-                to_i64(symbol.selection_range.end_byte),
-                to_i64(symbol.selection_range.start_line),
-                to_i64(symbol.selection_range.start_column),
-                to_i64(symbol.selection_range.end_line),
-                to_i64(symbol.selection_range.end_column),
-            ],
-        )?;
+    )?;
+    for symbol in &source.symbols {
+        symbol_insert.execute(params![
+            path,
+            to_i64(symbol.ordinal),
+            symbol.name,
+            symbol.kind.id(),
+            symbol.container_name,
+            to_i64(symbol.declaration_range.start_byte),
+            to_i64(symbol.declaration_range.end_byte),
+            to_i64(symbol.declaration_range.start_line),
+            to_i64(symbol.declaration_range.start_column),
+            to_i64(symbol.declaration_range.end_line),
+            to_i64(symbol.declaration_range.end_column),
+            to_i64(symbol.selection_range.start_byte),
+            to_i64(symbol.selection_range.end_byte),
+            to_i64(symbol.selection_range.start_line),
+            to_i64(symbol.selection_range.start_column),
+            to_i64(symbol.selection_range.end_line),
+            to_i64(symbol.selection_range.end_column),
+        ])?;
     }
     Ok(())
 }
@@ -343,7 +474,7 @@ fn load_symbols(
     source: &IndexedSourceReference,
 ) -> SymbolStoreResult<Vec<SourceSymbol>> {
     let path = storage_path(&source.relative_path);
-    let mut statement = connection.prepare(
+    let mut statement = connection.prepare_cached(
         "SELECT ordinal, name, kind, container_name,
                 declaration_start_byte, declaration_end_byte,
                 declaration_start_line, declaration_start_column,
@@ -445,6 +576,10 @@ fn storage_path(path: &Path) -> String {
     path.to_string_lossy()
         .replace(std::path::MAIN_SEPARATOR, "/")
 }
+
+#[cfg(test)]
+#[path = "symbol_store_tests.rs"]
+mod tests;
 
 fn to_i64(value: usize) -> i64 {
     i64::try_from(value).unwrap_or(i64::MAX)
