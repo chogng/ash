@@ -1413,13 +1413,23 @@ App Server 先检查当前 `network.allowedHosts`，再通过 Core 的网络审�
 | [`BrowserContextMenuService`](../src/ash/platform/contextview/browser/contextMenuService.ts)、`ContextMenuHandler`、`Menu` / `ContextView` | 保留唯一的动作执行、键盘导航、菜单 DOM、ARIA 和浮层生命周期。窗口宿主仅接收挂载 root 与几何信息。                                        |
 | [`ContextMenuWindow`（Main）](../src/ash/base/parts/contextmenu/electron-main/contextMenuWindow.ts)                                        | 创建非模态、无边框的沙箱子窗口，阻止导航和派生窗口，管理父子窗口的释放。该窗口不注册为产品窗口或辅助 EditorPart。                        |
 
+Shadow DOM 隔离同一 Renderer 内的菜单样式；Popover 将 DOM 浮层放进该 Renderer 的顶层。两者都不改变原生 `WebContentsView` 的合成层级。浏览器工具栏菜单由独立原生子窗口承载。
+
 原生菜单窗口不会在来源文档中形成遮挡，不因菜单服务的可见性事件而隐藏网页。普通 DOM 菜单、Quick Input、Hover、通知及模态对话框仍经过原遮挡链；CSS `z-index` 不能覆盖原生网页。
 
-菜单动作、取消、失焦和窗口关闭均释放临时窗口、样式镜像与监听器。父窗口移动、缩放、隐藏、最小化、导航或关闭也会结束菜单。Escape 先恢复来源控件的焦点，再通知调用方；调用方随后打开的菜单或指定的焦点不能被旧请求覆盖。失焦不主动回焦。关闭回调即使抛错，已显示菜单的隐藏事件仍须发出，避免残留可见性状态。
+Main 创建菜单窗口时设置 `show: false`，并独占原生窗口的显隐控制。初始窗口参数由 Main 统一设置，并保持在父窗口所在显示器。Renderer 通过 `cloneDocumentStyles` 镜像样式；首次按级联顺序批量附加，后续更新保留已加载的样式链接。等待样式加载、挂载菜单并测量最终尺寸后，再通过受校验的 `presentWindow` IPC 请求 Main 定位并显示。Main 仅接受所属窗口树内的菜单请求，先设置最终边界，再调用 `show()`；菜单随后获取焦点。该顺序避免窗口先在左上角闪现，也避免隐藏窗口首次缩放导致焦点丢失。取消后到达的呈现结果不再聚焦或重开菜单。
+
+macOS 将主窗口身份与键盘输入归属分开：父窗口保持 AppKit `main window`，菜单接收 `key window` 输入。Main 在菜单获得键盘焦点时，通过[原生窗口桥](../src/ash/base/parts/contextmenu/electron-main/macContextMenuWindow.ts)调用公开的 `NSWindow.makeMainWindow` 保留父窗口身份，交通灯继续显示激活状态。桥接复用现有 Koffi，只绑定公开 Objective-C runtime 与 AppKit 方法，不修改 Electron 窗口类。该操作不调用父窗口的 `focus()`，不会从菜单抢走方向键或 Escape；菜单失焦时也不会重新激活父窗口。
+
+菜单动作、取消、失焦和窗口关闭均释放临时窗口、样式镜像与监听器。父窗口移动、缩放、隐藏、最小化、导航或关闭也会结束菜单。父窗口失焦时，Main 取消尚未显示的菜单，阻止等待中的样式或呈现请求随后抢回焦点；已显示菜单的正常焦点交接不受影响。Escape 先恢复来源控件的焦点，再通知调用方；调用方随后打开的菜单或指定的焦点不能被旧请求覆盖。失焦不主动回焦。关闭回调即使抛错，已显示菜单的隐藏事件仍须发出，避免残留可见性状态。
+
+macOS 的 Electron [`show` 事件](https://github.com/electron/electron/blob/v44.4.5/shell/browser/ui/cocoa/electron_ns_window_delegate.mm#L39-L69)来自原生遮挡状态通知，不能单独作为首次显示或交互就绪的时间点。性能测量分别记录呈现调用后的可见状态、菜单焦点和 `show` 通知，保留通知延迟样本。
+
+可见原生窗口测试使用 `active` 模式，沿用产品的 GPU 合成，不注入 `--disable-gpu` 或 `--in-process-gpu`；后台测试保留软件渲染。菜单截图固定选取对应的 Renderer 页面；不能将当前聚焦的菜单子窗口截图当成整个父窗口，也不能以 Renderer 截图代替原生合成画面。
 
 页面与模型所有权、菜单动作和 `ContextView` 的职责沿用 VS Code 的边界；独立的非模态菜单窗口是 Ash 的补强，不表示所有浏览器 API 已与上游等同。当前入口是浏览器工具栏菜单，其余浮层保留各自宿主。
 
-关闭重入、焦点交接、关闭原因和异常清理由[菜单服务测试](../src/ash/workbench/services/contextmenu/test/electron-browser/contextMenuService.test.ts)覆盖；父子窗口释放由 [Main 测试](../src/ash/base/parts/contextmenu/test/electron-main/contextMenuWindow.test.ts)覆盖；DOM 菜单及点击遮罩的网页可见性由[页面宿主测试](../src/ash/workbench/contrib/browserView/test/electron-browser/webContentsViewHost.test.ts)覆盖。macOS 实窗验证覆盖网页保持可见、Electron 滚轮输入、Escape 回焦、菜单动作、四种主题与 120% 缩放。实际系统滚轮命中及 Windows/Linux 原生输入尚未验证。
+关闭重入、焦点交接、关闭原因和异常清理由[菜单服务测试](../src/ash/workbench/services/contextmenu/test/electron-browser/contextMenuService.test.ts)覆盖；首次显示位置、父窗口激活能力及父子窗口释放由 [Main 测试](../src/ash/base/parts/contextmenu/test/electron-main/contextMenuWindow.test.ts)覆盖；DOM 菜单及点击遮罩的网页可见性由[页面宿主测试](../src/ash/workbench/contrib/browserView/test/electron-browser/webContentsViewHost.test.ts)覆盖。macOS 实窗验证覆盖菜单隐藏创建、首帧即位于最终边界、父窗口与菜单的 AppKit main/key 状态、网页保持可见、Electron 滚轮输入、Escape 回焦、菜单动作、四种主题与 120% 缩放。实际系统滚轮命中及 Windows/Linux 原生输入尚未验证。
 
 ### 7.2 当前限制与计划演进
 

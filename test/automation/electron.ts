@@ -106,8 +106,8 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 	return {
 		executablePath: electronExecutablePath,
 		args: [
-			'--disable-gpu',
-			'--in-process-gpu',
+			// Visible native-window checks need the product's compositor, including transparent menus.
+			...(windowMode === 'active' ? [] : ['--disable-gpu', '--in-process-gpu']),
 			...(options.useInMemorySecretStorage === false ? [] : ['--use-inmemory-secretstorage']),
 			// Chromium cookie encryption bypasses the application's credential service.
 			// Test profiles use the native test facility rather than a system keychain.

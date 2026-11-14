@@ -321,7 +321,7 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 	readonly onDidHideContextMenu = this._onDidHideContextMenu.event;
 
 	constructor(
-		api: INativeContextMenuApi,
+		private readonly api: INativeContextMenuApi,
 		menuStyle: 'configuration' | 'custom',
 		@IConfigurationService configurationService: IConfigurationService,
 		@IMenuService menuService: IMenuService,
@@ -394,7 +394,7 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 		}
 		let host: ContextMenuWindow;
 		try {
-			host = new ContextMenuWindow(anchor, this.contextViews.container);
+			host = new ContextMenuWindow(anchor, this.contextViews.container, request => this.api.presentWindow(request));
 		} catch (error) {
 			delegate.onHide?.(true);
 			this.windowNotifications.error(toErrorMessage(error));
@@ -432,6 +432,11 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 		lifetime.add(host);
 		if (delegate.cancellationToken) lifetime.add(delegate.cancellationToken.onCancellationRequested(() => hide()));
 		host.onBlur(() => hide(ContextViewHideReason.WindowBlur));
+		const fail = (error: unknown): void => {
+			if (closed) return;
+			hide();
+			if (!this.isDisposed) this.windowNotifications.error(toErrorMessage(error));
+		};
 		void host.whenReady.then(() => {
 			if (closed || this.isDisposed || delegate.cancellationToken?.isCancellationRequested) return;
 			mounted = true;
@@ -444,13 +449,13 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 				anchorAxisAlignment: AnchorAxisAlignment.Vertical,
 				anchorPosition: AnchorPosition.Below,
 				gap: 4,
-				onDidRenderMenu: root => { host.layout(root); delegate.onDidRenderMenu?.(root); },
+				onDidRenderMenu: async root => {
+					await host.layout(root);
+					if (!closed) await delegate.onDidRenderMenu?.(root);
+				},
 				onHide: (cancelled, reason) => finish(cancelled, closingReason ?? reason),
 			});
-		}).catch(error => {
-			hide();
-			if (!this.isDisposed) this.windowNotifications.error(toErrorMessage(error));
-		});
+		}).catch(fail);
 	}
 
 	hideContextMenu(): void {

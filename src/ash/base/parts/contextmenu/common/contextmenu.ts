@@ -2,6 +2,7 @@ export const NATIVE_CONTEXT_MENU_POPUP_CHANNEL =
 	'ash:context-menu:popup';
 export const NATIVE_CONTEXT_MENU_CLOSE_CHANNEL =
 	'ash:context-menu:close';
+export const NATIVE_CONTEXT_MENU_PRESENT_WINDOW_CHANNEL = 'ash:context-menu:present-window';
 
 export const CONTEXT_MENU_WINDOW_NAME_PREFIX = 'ash-context-menu-';
 
@@ -46,12 +47,40 @@ export interface INativeContextMenuResult {
 	readonly selectedId?: string;
 }
 
-/** Narrow host capability used to present a serialized native context menu. */
+export interface IContextMenuWindowPresentation {
+	readonly windowName: string;
+	readonly bounds: {
+		readonly x: number;
+		readonly y: number;
+		readonly width: number;
+		readonly height: number;
+	};
+}
+
+/** Validates the presentation boundary before Main touches a native window. */
+export function validateContextMenuWindowPresentation(value: unknown): IContextMenuWindowPresentation {
+	const request = exactRecord(value, ['windowName', 'bounds']);
+	if (typeof request.windowName !== 'string' || !isContextMenuWindowName(request.windowName)) throw new TypeError('Invalid menu window name');
+	const bounds = exactRecord(request.bounds, ['x', 'y', 'width', 'height']);
+	const read = (key: 'x' | 'y' | 'width' | 'height'): number => {
+		const value = bounds[key];
+		if (typeof value !== 'number' || !Number.isSafeInteger(value) || Math.abs(value) > MAX_COORDINATE ||
+			((key === 'width' || key === 'height') && value <= 0)) {
+			throw new TypeError(`Invalid menu window ${key}`);
+		}
+		return value;
+	};
+	return { windowName: request.windowName, bounds: { x: read('x'), y: read('y'), width: read('width'), height: read('height') } };
+}
+
+/** Desktop menu capabilities; native windows carry the trusted custom presentation. */
 export interface INativeContextMenuApi {
 	popup(
 		request: INativeContextMenuRequest,
 	): Promise<INativeContextMenuResult>;
 	close(): Promise<void>;
+	/** Applies final bounds before showing an owned menu; false means it was released. */
+	presentWindow(request: IContextMenuWindowPresentation): Promise<boolean>;
 }
 
 const MAX_MENU_DEPTH = 8;

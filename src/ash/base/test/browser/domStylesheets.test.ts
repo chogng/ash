@@ -72,3 +72,29 @@ test('document style mirror retains loaded links while synchronizing changed sty
 		target.window.close();
 	}
 });
+
+test('document style mirror preserves cascade order through initial attachment, reordering and removal', async () => {
+	const source = new JSDOM('<!doctype html><head><style id="first">.item { color: red; }</style><style id="last">.item { color: blue; }</style></head><body></body>');
+	const target = new JSDOM('<!doctype html><head><style id="local">.item { color: green; }</style></head><body></body>');
+	using mirror = cloneDocumentStyles(source.window.document, target.window.document);
+	const order = () => [...target.window.document.head.querySelectorAll('style')].map(style => style.id);
+	try {
+		await mirror.whenStylesHaveLoaded;
+		assert.deepEqual(order(), ['local', 'first', 'last']);
+		const first = target.window.document.getElementById('first');
+		const last = target.window.document.getElementById('last');
+		source.window.document.head.prepend(source.window.document.getElementById('last')!);
+		await Promise.resolve();
+		assert.deepEqual(order(), ['local', 'last', 'first']);
+		assert.equal(target.window.document.getElementById('first'), first);
+		assert.equal(target.window.document.getElementById('last'), last);
+		source.window.document.getElementById('first')!.remove();
+		await Promise.resolve();
+		assert.deepEqual(order(), ['local', 'last']);
+		mirror.dispose();
+		assert.deepEqual(order(), ['local']);
+	} finally {
+		source.window.close();
+		target.window.close();
+	}
+});

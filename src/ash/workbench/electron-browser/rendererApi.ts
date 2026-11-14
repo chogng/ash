@@ -57,7 +57,7 @@ import { ReconnectableTerminalProcessService } from '../../platform/terminal/bro
 import { operatingSystemFromNodePlatform } from '../../base/common/environment.js';
 import { sandboxProcess } from '../../base/parts/sandbox/electron-browser/globals.js';
 import { ILogService } from '../../platform/log/common/log.js';
-import { popup as popupContextMenu, close as closeContextMenu } from '../../base/parts/contextmenu/electron-browser/contextmenu.js';
+import { popup as popupContextMenu, close as closeContextMenu, presentWindow as presentContextMenuWindow } from '../../base/parts/contextmenu/electron-browser/contextmenu.js';
 import { createNativeKeyboardLayoutApi } from '../../platform/keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js';
 import { createUserKeyboardLayoutApi } from '../../platform/keyboardLayout/electron-browser/userKeyboardLayoutApi.js';
 import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../platform/files/common/diskFileSystemProviderClient.js';
@@ -106,7 +106,7 @@ export class ElectronRendererLocalApi extends Disposable {
 	readonly keyboardLayout: INativeKeyboardLayoutApi;
 	readonly userKeyboardLayout: IUserKeyboardLayoutApi;
 	readonly paths: Promise<readonly [userDataHome: URI, localUserHome: URI]>;
-	readonly nativeContextMenu = { popup: popupContextMenu, close: closeContextMenu };
+	readonly nativeContextMenu = { popup: popupContextMenu, close: closeContextMenu, presentWindow: presentContextMenuWindow };
 
 	constructor(@IMainProcessService main: IMainProcessService) {
 		super();

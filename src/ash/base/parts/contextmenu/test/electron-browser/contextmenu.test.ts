@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { setup, suite, suiteSetup, suiteTeardown, test } from 'mocha';
 import type { ISandboxGlobals } from '../../../sandbox/electron-browser/sandboxTypes.js';
-import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, type INativeContextMenuRequest } from '../../common/contextmenu.js';
+import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, NATIVE_CONTEXT_MENU_PRESENT_WINDOW_CHANNEL, type INativeContextMenuRequest } from '../../common/contextmenu.js';
 
 suite('Electron context menu transport', () => {
 	const originalGlobals = Object.getOwnPropertyDescriptor(globalThis, 'ash');
@@ -67,5 +67,14 @@ suite('Electron context menu transport', () => {
 		invokeError = new Error('Renderer window closed');
 		await assert.rejects(menus.popup({ items: [], x: 0, y: 0 }), error => error === invokeError);
 		await assert.rejects(menus.close(), error => error === invokeError);
+	});
+
+	test('menu presentation waits for Main and preserves a cancelled or failed result', async () => {
+		const request = { windowName: 'ash-context-menu-11111111-1111-4111-8111-111111111111', bounds: { x: 1200, y: 100, width: 200, height: 400 } };
+		invokeResult = false;
+		assert.equal(await menus.presentWindow(request), false);
+		assert.deepEqual(calls, [{ channel: NATIVE_CONTEXT_MENU_PRESENT_WINDOW_CHANNEL, params: request }]);
+		invokeError = new Error('Window was released');
+		await assert.rejects(menus.presentWindow(request), error => error === invokeError);
 	});
 });

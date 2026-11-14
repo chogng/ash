@@ -3,7 +3,25 @@ import { test } from 'mocha';
 import {
 	validateNativeContextMenuClose,
 	validateNativeContextMenuRequest,
+	validateContextMenuWindowPresentation,
 } from '../../parts/contextmenu/common/contextmenu.js';
+
+test('menu window presentation validates menu names and integer native bounds', () => {
+	const request = { windowName: 'ash-context-menu-11111111-1111-4111-8111-111111111111', bounds: { x: -500, y: 33, width: 200, height: 400 } };
+	assert.deepEqual(validateContextMenuWindowPresentation(request), request);
+	for (const windowName of ['main', 'ash-auxiliary-11111111', '', 1]) {
+		assert.throws(() => validateContextMenuWindowPresentation({ ...request, windowName }));
+	}
+	for (const bounds of [
+		{ ...request.bounds, x: NaN }, { ...request.bounds, y: Infinity },
+		{ ...request.bounds, width: 0 }, { ...request.bounds, height: -1 },
+		{ ...request.bounds, x: 0.5 }, { ...request.bounds, width: 1_000_001 },
+		{ ...request.bounds, extra: true },
+	]) {
+		assert.throws(() => validateContextMenuWindowPresentation({ ...request, bounds }));
+	}
+	assert.throws(() => validateContextMenuWindowPresentation({ ...request, parentId: 1 }));
+});
 
 test('native context menu validation accepts bounded nested menus', () => {
 	assert.deepEqual(

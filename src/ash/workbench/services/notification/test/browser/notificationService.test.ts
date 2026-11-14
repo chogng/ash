@@ -967,7 +967,7 @@ for (const change of ['add', 'remove', 'hide', 'clear', 'dispose'] as const) {
 		const popup = promiseWithResolvers<INativeContextMenuResult>();
 		const requests: INativeContextMenuRequest[] = [];
 		let closed = 0;
-		using fixture = new NotificationsFixture(undefined, { popup: request => { requests.push(request); return popup.promise; }, async close() { closed++; } });
+		using fixture = new NotificationsFixture(undefined, { popup: request => { requests.push(request); return popup.promise; }, async close() { closed++; }, async presentWindow() { return true; } });
 		const handle = fixture.service.notify({ severity: Severity.Info, message: 'Original' });
 		const handleItem = fixture.service.model.getNotifications().at(-1)!;
 		openCopyMenu(fixture, handleItem.id);
@@ -988,7 +988,7 @@ for (const change of ['add', 'remove', 'hide', 'clear', 'dispose'] as const) {
 test('system selection copies through the same action and reports a clipboard denial once', async () => {
 	const popup = promiseWithResolvers<INativeContextMenuResult>();
 	const request = promiseWithResolvers<INativeContextMenuRequest>();
-	using fixture = new NotificationsFixture(undefined, { popup: value => { request.resolve(value); return popup.promise; }, async close() { } });
+	using fixture = new NotificationsFixture(undefined, { popup: value => { request.resolve(value); return popup.promise; }, async close() { }, async presentWindow() { return true; } });
 	const handle = fixture.service.notify({ severity: Severity.Info, message: 'System message\n第二行' });
 	const handleItem = fixture.service.model.getNotifications().at(-1)!;
 	const reported = promiseWithResolvers<void>();
@@ -1006,7 +1006,7 @@ test('system Copy Text releases its presentation before starting the selected wr
 	const popup = promiseWithResolvers<INativeContextMenuResult>();
 	let request: INativeContextMenuRequest | undefined;
 	let closeRequests = 0;
-	using fixture = new NotificationsFixture(undefined, { popup: value => { request = value; return popup.promise; }, async close() { closeRequests++; } });
+	using fixture = new NotificationsFixture(undefined, { popup: value => { request = value; return popup.promise; }, async close() { closeRequests++; }, async presentWindow() { return true; } });
 	const handle = fixture.service.notify({ severity: Severity.Info, message: 'Selected system message\n第二行' });
 	const handleItem = fixture.service.model.getNotifications().at(-1)!;
 	const order: string[] = [];
