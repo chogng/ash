@@ -3,15 +3,18 @@
 //! Room DTOs are owned by `ash-collab-contract` so the process-local App
 //! Server and the durable remote host use one transport-neutral vocabulary.
 
-pub use collaboration::DocumentCollaborationOpenParams;
-pub use collaboration::DocumentCollaborationOpenResult;
-pub use collaboration::DocumentCollaborationPresence;
-pub use collaboration::DocumentCollaborationPresenceParams;
-pub use collaboration::DocumentCollaborationPresenceReadParams;
-pub use collaboration::DocumentCollaborationPresenceSnapshot;
-pub use collaboration::DocumentCollaborationSnapshot;
-pub use collaboration::DocumentCollaborationSubmitParams;
-pub use collaboration::DocumentCollaborationSubmitResult;
-pub use collaboration::DocumentCollaborationUpdate;
+pub use collaboration::RoomOpenParams;
+pub use collaboration::RoomOpenResult;
+pub use collaboration::RoomPresence;
+pub use collaboration::RoomPresenceParams;
+pub use collaboration::RoomPresenceReadParams;
+pub use collaboration::RoomPresenceSnapshot;
+pub use collaboration::RoomSnapshot;
+pub use collaboration::RoomSubmitParams;
+pub use collaboration::RoomSubmitResult;
+pub use collaboration::RoomUpdate;
 
 pub use collaboration::channels::*;
+
+pub use collaboration::RoomStatus;
+pub use collaboration::RoomStatusParams;

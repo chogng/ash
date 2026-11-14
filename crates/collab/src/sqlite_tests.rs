@@ -1,11 +1,49 @@
-use crate::DocumentCollaborationOpenParams;
-use crate::DocumentCollaborationPrincipal;
-use crate::DocumentCollaborationReplay;
-use crate::DocumentCollaborationRoomRole;
-use crate::DocumentCollaborationSubmitParams;
-use crate::DocumentCollaborationSubmitResult;
-use crate::SqliteDocumentCollaborationRooms;
+use crate::RoomOpenParams;
+use crate::RoomPrincipal;
+use crate::RoomReplay;
+use crate::RoomRole;
+use crate::RoomSubmitParams;
+use crate::RoomSubmitResult;
+use crate::SqliteRoomStore;
 use tempfile::TempDir;
+
+#[test]
+fn sqlite_legacy_update_receipts_survive_checkpoint_migration() {
+    let directory = TempDir::new().unwrap();
+    let path = directory.path().join("legacy.sqlite3");
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute_batch(include_str!("../migrations/document-rooms/0001_rooms.sql"))
+        .unwrap();
+    let request = submit("legacy-room", "legacy-client", 1, 0, "saved");
+    connection.execute("INSERT INTO document_collaboration_rooms(room_id,schema_id,document,version) VALUES (?1,'stanza-document-v1',?2,1)", rusqlite::params![request.room_id,request.document]).unwrap();
+    connection
+        .execute(
+            "INSERT INTO document_collaboration_updates VALUES (?1,1,?2,1,0,?3,?4)",
+            rusqlite::params![
+                request.room_id,
+                request.client_id,
+                request.transaction,
+                request.document
+            ],
+        )
+        .unwrap();
+    drop(connection);
+    let rooms = SqliteRoomStore::open_at(&path).unwrap();
+    assert_eq!(accepted_version(&rooms.submit(request.clone()).unwrap()), 1);
+    let mut changed = request;
+    changed.document = document("different");
+    assert!(rooms.submit(changed).is_err());
+    let joined = rooms
+        .open(open_params(
+            Some("legacy-room".into()),
+            "new-client",
+            document("ignored"),
+        ))
+        .unwrap();
+    assert_eq!(joined.snapshot.document, document("saved"));
+    assert_eq!(joined.snapshot.version, 1);
+}
 
 #[test]
 fn concurrent_open_installs_empty_and_legacy_room_schemas() {
@@ -15,7 +53,7 @@ fn concurrent_open_installs_empty_and_legacy_room_schemas() {
             .path()
             .join(format!("collaboration-{legacy}.sqlite3"));
         let room = legacy.then(|| {
-            let rooms = SqliteDocumentCollaborationRooms::open_at(&path).unwrap();
+            let rooms = SqliteRoomStore::open_at(&path).unwrap();
             let opened = rooms
                 .open(open_params(None, "client-a", document("old")))
                 .unwrap();
@@ -38,7 +76,7 @@ fn concurrent_open_installs_empty_and_legacy_room_schemas() {
             for _ in 0..4 {
                 scope.spawn(|| {
                     barrier.wait();
-                    let rooms = SqliteDocumentCollaborationRooms::open_at(&path).unwrap();
+                    let rooms = SqliteRoomStore::open_at(&path).unwrap();
                     if let Some(room) = &room {
                         let snapshot = rooms
                             .open(open_params(
@@ -63,7 +101,7 @@ fn concurrent_open_installs_empty_and_legacy_room_schemas() {
                     |row| row.get(0),
                 )
                 .unwrap();
-            assert_eq!(version, 1);
+            assert_eq!(version, if component == "document-rooms" { 2 } else { 1 });
         }
     }
 }
@@ -73,7 +111,7 @@ fn sqlite_rooms_recover_ordered_snapshots_after_reopening() {
     let directory = TempDir::new().unwrap();
     let path = directory.path().join("collaboration.sqlite3");
     let room_id = {
-        let rooms = SqliteDocumentCollaborationRooms::open_at(&path).unwrap();
+        let rooms = SqliteRoomStore::open_at(&path).unwrap();
         let opened = rooms
             .open(open_params(None, "client-a", document("initial")))
             .unwrap();
@@ -84,7 +122,7 @@ fn sqlite_rooms_recover_ordered_snapshots_after_reopening() {
         assert_eq!(accepted_version(&accepted), 1);
         room_id
     };
-    let rooms = SqliteDocumentCollaborationRooms::open_at(&path).unwrap();
+    let rooms = SqliteRoomStore::open_at(&path).unwrap();
     let joined = rooms
         .open(open_params(
             Some(room_id.clone()),
@@ -96,7 +134,7 @@ fn sqlite_rooms_recover_ordered_snapshots_after_reopening() {
     assert_eq!(joined.snapshot.document, document("first"));
     let replay = rooms.replay(&room_id, 0).unwrap();
     assert!(
-        matches!(replay, DocumentCollaborationReplay::Updates(updates) if updates.len() == 1 && updates[0].client_id == "client-a")
+        matches!(replay, RoomReplay::Updates(updates) if updates.len() == 1 && updates[0].client_id == "client-a")
     );
 }
 
@@ -109,7 +147,7 @@ fn sqlite_rooms_upgrade_legacy_snapshots_to_typed_v2_without_recreating_the_room
     envelope["documentType"] = "general".into();
     let encoded = envelope.to_string();
     let room_id = {
-        let rooms = SqliteDocumentCollaborationRooms::open_at(&path).unwrap();
+        let rooms = SqliteRoomStore::open_at(&path).unwrap();
         let opened = rooms
             .open(open_params(None, "client-a", document("legacy")))
             .unwrap();
@@ -119,7 +157,7 @@ fn sqlite_rooms_upgrade_legacy_snapshots_to_typed_v2_without_recreating_the_room
         assert_eq!(accepted_version(&rooms.submit(update).unwrap()), 1);
         room_id
     };
-    let rooms = SqliteDocumentCollaborationRooms::open_at(&path).unwrap();
+    let rooms = SqliteRoomStore::open_at(&path).unwrap();
     let joined = rooms
         .open(open_params(Some(room_id), "client-b", document("ignored")))
         .unwrap();
@@ -186,7 +224,7 @@ fn persisted_channel_members_with_long_unicode_names_can_open_notes() {
                 .unwrap()
         };
         // Reopen from persisted channel membership rather than shortening an existing name.
-        let rooms = SqliteDocumentCollaborationRooms::open_at(&path).unwrap();
+        let rooms = SqliteRoomStore::open_at(&path).unwrap();
         let member_principal = rooms
             .principal_for_access_token(&access.resource_id, &access.credential)
             .unwrap()
@@ -223,9 +261,7 @@ fn persisted_channel_members_with_long_unicode_names_can_open_notes() {
 #[test]
 fn sqlite_rooms_make_submit_retries_idempotent() {
     let directory = TempDir::new().unwrap();
-    let rooms =
-        SqliteDocumentCollaborationRooms::open_at(directory.path().join("collaboration.sqlite3"))
-            .unwrap();
+    let rooms = SqliteRoomStore::open_at(directory.path().join("collaboration.sqlite3")).unwrap();
     let room_id = rooms
         .open(open_params(None, "client-a", document("initial")))
         .unwrap()
@@ -248,9 +284,7 @@ fn sqlite_rooms_make_submit_retries_idempotent() {
 #[test]
 fn sqlite_rooms_persist_member_roles_credentials_and_audit_history() {
     let directory = TempDir::new().unwrap();
-    let rooms =
-        SqliteDocumentCollaborationRooms::open_at(directory.path().join("collaboration.sqlite3"))
-            .unwrap();
+    let rooms = SqliteRoomStore::open_at(directory.path().join("collaboration.sqlite3")).unwrap();
     let owner = principal("owner", "Owner");
     let room_id = rooms
         .open_as(
@@ -262,12 +296,7 @@ fn sqlite_rooms_persist_member_roles_credentials_and_audit_history() {
         .room_id;
 
     let viewer_invite = rooms
-        .create_invite(
-            &room_id,
-            &owner,
-            "Viewer",
-            DocumentCollaborationRoomRole::Viewer,
-        )
+        .create_invite(&room_id, &owner, "Viewer", RoomRole::Viewer)
         .unwrap();
     let viewer = rooms
         .principal_for_access_token(&room_id, &viewer_invite.access_token)
@@ -325,12 +354,7 @@ fn sqlite_rooms_persist_member_roles_credentials_and_audit_history() {
     assert_eq!(presence.presences.first().unwrap().selection, selection());
 
     let editor_invite = rooms
-        .create_invite(
-            &room_id,
-            &owner,
-            "Editor",
-            DocumentCollaborationRoomRole::Editor,
-        )
+        .create_invite(&room_id, &owner, "Editor", RoomRole::Editor)
         .unwrap();
     let editor = rooms
         .principal_for_access_token(&room_id, &editor_invite.access_token)
@@ -414,9 +438,7 @@ fn sqlite_rooms_persist_member_roles_credentials_and_audit_history() {
 #[test]
 fn sqlite_rooms_initialize_only_pre_membership_rooms_for_a_bootstrap_owner() {
     let directory = TempDir::new().unwrap();
-    let rooms =
-        SqliteDocumentCollaborationRooms::open_at(directory.path().join("collaboration.sqlite3"))
-            .unwrap();
+    let rooms = SqliteRoomStore::open_at(directory.path().join("collaboration.sqlite3")).unwrap();
     let room_id = rooms
         .open(open_params(None, "legacy-client", document("initial")))
         .unwrap()
@@ -441,12 +463,9 @@ fn sqlite_rooms_initialize_only_pre_membership_rooms_for_a_bootstrap_owner() {
     );
 }
 
-fn open_params(
-    room_id: Option<String>,
-    client_id: &str,
-    document: String,
-) -> DocumentCollaborationOpenParams {
-    DocumentCollaborationOpenParams {
+fn open_params(room_id: Option<String>, client_id: &str, document: String) -> RoomOpenParams {
+    RoomOpenParams {
+        lease: None,
         room_id,
         client_id: client_id.into(),
         schema_id: "stanza-document-v1".into(),
@@ -454,8 +473,8 @@ fn open_params(
     }
 }
 
-fn principal(id: &str, display_name: &str) -> DocumentCollaborationPrincipal {
-    DocumentCollaborationPrincipal {
+fn principal(id: &str, display_name: &str) -> RoomPrincipal {
+    RoomPrincipal {
         id: id.into(),
         display_name: display_name.into(),
     }
@@ -467,8 +486,9 @@ fn submit(
     sequence: u64,
     base_version: u64,
     value: &str,
-) -> DocumentCollaborationSubmitParams {
-    DocumentCollaborationSubmitParams {
+) -> RoomSubmitParams {
+    RoomSubmitParams {
+        epoch: None,
         room_id: room_id.into(),
         client_id: client_id.into(),
         sequence,
@@ -492,9 +512,9 @@ fn selection() -> &'static str {
     r#"{"kind":"text","anchor":{"nodeId":"text-1","offset":0},"head":{"nodeId":"text-1","offset":1}}"#
 }
 
-fn accepted_version(result: &DocumentCollaborationSubmitResult) -> u64 {
+fn accepted_version(result: &RoomSubmitResult) -> u64 {
     match result {
-        DocumentCollaborationSubmitResult::Accepted { update } => update.version,
+        RoomSubmitResult::Accepted { update } => update.version,
         _ => panic!("expected an accepted collaboration update"),
     }
 }

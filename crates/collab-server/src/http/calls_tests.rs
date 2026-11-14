@@ -1,5 +1,5 @@
 use super::*;
-use ash_collab::SqliteDocumentCollaborationRooms;
+use ash_collab::SqliteRoomStore;
 use std::io::Write;
 use std::net::TcpListener;
 use std::sync::atomic::AtomicBool;
@@ -140,11 +140,7 @@ fn recovery_completes_failed_rotations_without_another_client_request() {
             path.clone(),
             "0123456789abcdef0123456789abcdef",
         );
-        let mut host = HttpRuntime::new(
-            SqliteDocumentCollaborationRooms::open_at(&path).unwrap(),
-            options,
-        )
-        .unwrap();
+        let mut host = HttpRuntime::new(SqliteRoomStore::open_at(&path).unwrap(), options).unwrap();
         host.calls = Some(calls);
         let host = Arc::new(host);
         let generation = host.updates.current();
@@ -205,11 +201,7 @@ fn startup_keeps_pending_rooms_unjoinable_until_media_recovers() {
         path.clone(),
         "0123456789abcdef0123456789abcdef",
     );
-    let mut host = HttpRuntime::new(
-        SqliteDocumentCollaborationRooms::open_at(&path).unwrap(),
-        options,
-    )
-    .unwrap();
+    let mut host = HttpRuntime::new(SqliteRoomStore::open_at(&path).unwrap(), options).unwrap();
     host.calls = Some(calls);
     let host = Arc::new(host);
     let recovery = Recovery::start(&host).unwrap();
@@ -255,18 +247,15 @@ fn document_links_notify_call_members_without_granting_document_access() {
         path.clone(),
         "0123456789abcdef0123456789abcdef",
     );
-    let mut host = HttpRuntime::new(
-        SqliteDocumentCollaborationRooms::open_at(&path).unwrap(),
-        options,
-    )
-    .unwrap();
+    let mut host = HttpRuntime::new(SqliteRoomStore::open_at(&path).unwrap(), options).unwrap();
     host.calls = Some(calls);
     let host = Arc::new(host);
-    let document_owner = ash_collab::DocumentCollaborationPrincipal {
+    let document_owner = ash_collab::RoomPrincipal {
         id: "document-owner".into(),
         display_name: "Owner".into(),
     };
-    let room = host.rooms.open_as(&document_owner, ash_collab::DocumentCollaborationOpenParams {
+    let room = host.rooms.open_as(&document_owner, ash_collab::RoomOpenParams {
+lease: None,
         room_id: None, client_id: "owner-client".into(), schema_id: "stanza-document-v1".into(),
         document: r#"{"format":"ash.document","version":1,"document":{"id":"document","type":"doc","attrs":{},"marks":[],"content":[]}}"#.into(),
     }).unwrap();
@@ -276,7 +265,7 @@ fn document_links_notify_call_members_without_granting_document_access() {
             &room.snapshot.room_id,
             &document_owner,
             "Document viewer",
-            ash_collab::DocumentCollaborationRoomRole::Viewer,
+            ash_collab::RoomRole::Viewer,
         )
         .unwrap();
     let document = json!({"serverUrl":"https://documents.example","roomId":room.snapshot.room_id,"schemaId":"stanza-document-v1","contentType":"application/test-document","title":"Shared notes"});

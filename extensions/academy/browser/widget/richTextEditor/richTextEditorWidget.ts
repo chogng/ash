@@ -24,9 +24,9 @@ import { DocumentTransaction } from '../../../common/model/documentTransaction.j
 import { EditorDom } from 'ash:editor/editor/browser/editorDom.js';
 import type { DocumentContribution, DocumentFormattingContribution } from '../../documentContributions.js';
 import { DocumentOutlineNavigator } from '../documentOutlineNavigator.js';
-import { DocumentCollaborationController } from '../../../common/contrib/collaboration/controller.js';
+import { CollabController } from '../../../common/contrib/collaboration/controller.js';
 import { createDocumentFragmentFromHtml } from './htmlDocumentFragment.js';
-import type { DocumentCollaborationConnection, DocumentCollaborationPresence } from '../../../common/services/documentCollaborationService.js';
+import type { RoomTransport, RoomPresence } from '../../../common/services/collabService.js';
 import { addDisposableListener, h, fragment as createFragment } from 'ash:editor/base/browser/dom.js';
 import { IDialogService } from 'ash:editor/platform/dialogs/common/dialogs.js';
 import { IOpenerService } from 'ash:editor/platform/opener/common/opener.js';
@@ -137,7 +137,7 @@ export class RichTextEditorWidget extends Disposable {
 	private visible = true;
 	private savedView: { readonly top: number; readonly left: number; readonly controls: readonly unknown[]; } | undefined;
 	private readonly modelChangeListenerSlot = this._register(new MutableDisposable<IDisposable>());
-	private readonly collaborationControllerSlot = this._register(new MutableDisposable<DocumentCollaborationController>());
+	private readonly collaborationControllerSlot = this._register(new MutableDisposable<CollabController>());
 	private readonly collaborationPresenceListenerSlot = this._register(new MutableDisposable<IDisposable>());
 	private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView; }>();
 	private editorDom: EditorDom | undefined;
@@ -151,7 +151,7 @@ export class RichTextEditorWidget extends Disposable {
 	private pageZoom = 1;
 	private reviewAuthor = localize('document.review.authorDefault', 'Author');
 	private restoringFocus = false;
-	private remotePresences: readonly DocumentCollaborationPresence[] = [];
+	private remotePresences: readonly RoomPresence[] = [];
 	private dimension: IDimension = { width: 0, height: 0 };
 
 	constructor(private readonly options: RichTextEditorOptions = {}, @IDialogService private readonly dialogs: IDialogService, @IOpenerService private readonly opener: IOpenerService) {
@@ -1654,9 +1654,9 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	/** Attaches document synchronization; the connection follows the current model lifetime. */
-	public setCollaborationConnection(connection: DocumentCollaborationConnection): DocumentCollaborationController {
+	public setCollaborationConnection(connection: RoomTransport): CollabController {
 		this.clearCollaboration();
-		const controller = new DocumentCollaborationController(this.requireModel(), connection);
+		const controller = new CollabController(this.requireModel(), connection);
 		this.collaborationControllerSlot.value = controller;
 		this.remotePresences = controller.presences;
 		const listeners = new DisposableStore();
@@ -1903,7 +1903,7 @@ function resolveViewDecorations(model: DocumentTextModel, externalDecorations: r
 	return Object.freeze(result);
 }
 
-function remotePresenceDecorations(document: DocumentNode, presences: readonly DocumentCollaborationPresence[]): readonly DocumentDecoration[] {
+function remotePresenceDecorations(document: DocumentNode, presences: readonly RoomPresence[]): readonly DocumentDecoration[] {
 	const decorations: DocumentDecoration[] = [];
 	for (const presence of presences) {
 		if (presence.selection.kind !== 'text') continue;

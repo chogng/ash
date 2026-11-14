@@ -4,7 +4,7 @@ import { ICallService, type CallDocument, type ScreenFrame, type ScreenSource } 
 import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { DocumentTypes, isDocumentCollaborationEditor } from '../../../services/documentEditor/common/documentTypes.js';
+import { DocumentTypes, isCollabEditor } from '../../../services/documentEditor/common/documentTypes.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
@@ -241,7 +241,7 @@ export class CallViewPane extends ViewPane {
 	private async linkCurrentDocument(): Promise<void> {
 		const active = this.editors.activeEditor;
 		const pane = this.editors.visibleEditorPanes.find(pane => pane.workingCopy?.resource.toString() === active?.resource.toString());
-		const document = isDocumentCollaborationEditor(pane) ? pane.getCollaborationDocument() : undefined;
+		const document = isCollabEditor(pane) ? pane.getCollaborationDocument() : undefined;
 		if (!document) {
 			throw new Error(localize({ bundle: 'ash.workbench', key: 'call.document.startFirst' }, 'Start remote collaboration in the active document editor before linking it to this call.'));
 		}
@@ -256,7 +256,7 @@ export class CallViewPane extends ViewPane {
 		await this.editors.openEditor({ resource, contentType: document.contentType, label: document.title });
 		if (this.isDisposed) return;
 		const pane = this.editors.visibleEditorPanes.find(pane => pane.workingCopy?.resource.toString() === resource.toString());
-		if (!isDocumentCollaborationEditor(pane)) {
+		if (!isCollabEditor(pane)) {
 			throw new Error(localize({ bundle: 'ash.workbench', key: 'call.document.unavailable' }, 'Enable an editor for this document format before opening it.'));
 		}
 		await pane.joinCollaborationDocument(document);

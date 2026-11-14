@@ -1,7 +1,7 @@
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
-use crate::sqlite_migrations::Migration;
-use crate::sqlite_migrations::Migrator;
+use ash_sqlite::Migration;
+use ash_sqlite::Migrator;
 use assets::AssetError;
 use assets::AssetStore;
 use assets::AssetVersion;

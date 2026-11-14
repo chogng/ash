@@ -25,7 +25,7 @@ import { createDisconnectedContentSearchApi, createDisconnectedContentSearchConf
 import { createDisconnectedAgentHostInputCompletionService, createDisconnectedAgentSessionService, createDisconnectedAgentThreadService, createDisconnectedAgentTurnService } from '../../platform/agentHost/browser/appServerAgentService.js';
 import { createDisconnectedAgentModelsService } from '../../platform/models/browser/appServerAgentModels.js';
 import { DisconnectedTerminalProcessService } from '../../platform/terminal/browser/disconnectedTerminalProcessService.js';
-import { createDisconnectedDocumentCollaborationApi } from '../../platform/collab/browser/documentCollaborationApi.js';
+import { createDisconnectedCollabApi } from '../../platform/collab/browser/collabApi.js';
 import { createDisconnectedCodebaseApi } from '../../platform/codebase/browser/codebaseApi.js';
 import { createDisconnectedCodebaseSymbolsApi } from '../../platform/codebaseSymbols/browser/codebaseSymbolsApi.js';
 import { createDisconnectedConnectorApi } from '../../platform/connectors/browser/connectorApi.js';
@@ -100,7 +100,7 @@ export function createDisconnectedRendererApi(isAvailable = false): IWorkbenchHo
 		turnChanges: createDisconnectedTurnChangesApi(unavailableOperation),
 		skills: createDisconnectedSkillOperations(unavailableOperation),
 		instructions: createDisconnectedInstructionService(unavailableOperation),
-		documentCollaboration: createDisconnectedDocumentCollaborationApi(unavailableOperation),
+		collab: createDisconnectedCollabApi(unavailableOperation),
 		resource: createDisconnectedResourceApi(unavailableOperation),
 		extensions: createDisconnectedExtensionApi(unavailableOperation),
 		extensionHost: createDisconnectedExtensionHostApi(unavailableOperation),

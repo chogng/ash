@@ -4,17 +4,17 @@ mod wire;
 
 use crate::CollaborationServerError;
 use crate::CollaborationServerOptions;
-use ash_collab::DocumentCollaborationAuditEvent;
-use ash_collab::DocumentCollaborationMember;
-use ash_collab::DocumentCollaborationOpenParams;
-use ash_collab::DocumentCollaborationPrincipal;
-use ash_collab::DocumentCollaborationReplay;
-use ash_collab::DocumentCollaborationRoomRole;
-use ash_collab::DocumentCollaborationSnapshot;
-use ash_collab::DocumentCollaborationSubmitParams;
-use ash_collab::DocumentCollaborationSubmitResult;
-use ash_collab::DocumentCollaborationUpdate;
-use ash_collab::SqliteDocumentCollaborationRooms;
+use ash_collab::RoomAuditEvent;
+use ash_collab::RoomMember;
+use ash_collab::RoomOpenParams;
+use ash_collab::RoomPrincipal;
+use ash_collab::RoomReplay;
+use ash_collab::RoomRole;
+use ash_collab::RoomSnapshot;
+use ash_collab::RoomSubmitParams;
+use ash_collab::RoomSubmitResult;
+use ash_collab::RoomUpdate;
+use ash_collab::SqliteRoomStore;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
@@ -51,7 +51,7 @@ const EXTERNAL_HOST_RECHECK: Duration = Duration::from_millis(250);
 pub(crate) fn serve(options: CollaborationServerOptions) -> Result<(), CollaborationServerError> {
     let listener =
         TcpListener::bind(options.listen_address()).map_err(CollaborationServerError::http)?;
-    let rooms = SqliteDocumentCollaborationRooms::open_at(options.database_path())
+    let rooms = SqliteRoomStore::open_at(options.database_path())
         .map_err(CollaborationServerError::storage)?;
     let media = options
         .media_service
@@ -65,7 +65,7 @@ pub(crate) fn serve(options: CollaborationServerOptions) -> Result<(), Collabora
 }
 
 struct HttpRuntime {
-    rooms: SqliteDocumentCollaborationRooms,
+    rooms: SqliteRoomStore,
     channels: ash_collab::channels::ChannelStore,
     options: CollaborationServerOptions,
     active_connections: AtomicUsize,
@@ -75,7 +75,7 @@ struct HttpRuntime {
 
 impl HttpRuntime {
     fn new(
-        rooms: SqliteDocumentCollaborationRooms,
+        rooms: SqliteRoomStore,
         options: CollaborationServerOptions,
     ) -> Result<Self, CollaborationServerError> {
         let channels = ash_collab::channels::ChannelStore::open(options.database_path())
@@ -222,6 +222,9 @@ fn handle_connection(
         return calls::handle(&mut stream, runtime, &request, path);
     }
     match (request.method.as_str(), path) {
+        ("POST", "/v1/document-collaboration/rooms/status") => {
+            handle_status(&mut stream, runtime, &request)
+        }
         ("POST", OPEN_PATH) => handle_open(&mut stream, runtime, &request),
         ("POST", SUBMIT_PATH) => handle_submit(&mut stream, runtime, &request),
         ("POST", INVITES_PATH) => handle_create_invite(&mut stream, runtime, &request),
@@ -260,7 +263,7 @@ fn handle_open(
     runtime: &HttpRuntime,
     request: &HttpRequest,
 ) -> Result<(), CollaborationServerError> {
-    let Some(params) = decode_json::<DocumentCollaborationOpenParams>(request) else {
+    let Some(params) = decode_json::<RoomOpenParams>(request) else {
         return write_error(
             stream,
             runtime,
@@ -299,25 +302,13 @@ struct RemoteOpenResult {
     client_id: String,
     principal_id: String,
     schema_id: String,
-    snapshot: DocumentCollaborationSnapshot,
+    snapshot: RoomSnapshot,
     can_edit: bool,
     can_manage_members: bool,
 }
 
-impl
-    From<(
-        ash_collab::DocumentCollaborationOpenResult,
-        DocumentCollaborationPrincipal,
-        DocumentCollaborationRoomRole,
-    )> for RemoteOpenResult
-{
-    fn from(
-        value: (
-            ash_collab::DocumentCollaborationOpenResult,
-            DocumentCollaborationPrincipal,
-            DocumentCollaborationRoomRole,
-        ),
-    ) -> Self {
+impl From<(ash_collab::RoomOpenResult, RoomPrincipal, RoomRole)> for RemoteOpenResult {
+    fn from(value: (ash_collab::RoomOpenResult, RoomPrincipal, RoomRole)) -> Self {
         let (result, principal, role) = value;
         Self {
             client_id: result.client_id,
@@ -335,7 +326,7 @@ fn handle_submit(
     runtime: &HttpRuntime,
     request: &HttpRequest,
 ) -> Result<(), CollaborationServerError> {
-    let Some(params) = decode_json::<DocumentCollaborationSubmitParams>(request) else {
+    let Some(params) = decode_json::<RoomSubmitParams>(request) else {
         return write_error(
             stream,
             runtime,
@@ -351,7 +342,7 @@ fn handle_submit(
     };
     match runtime.rooms.submit_as(&principal, params) {
         Ok(result) => {
-            if matches!(result, DocumentCollaborationSubmitResult::Accepted { .. }) {
+            if matches!(result, RoomSubmitResult::Accepted { .. }) {
                 runtime.updates.notify();
             }
             write_json(stream, runtime, request, 200, "OK", &result)
@@ -365,7 +356,7 @@ fn handle_submit(
 struct CreateInviteParams {
     room_id: String,
     display_name: String,
-    role: DocumentCollaborationRoomRole,
+    role: RoomRole,
 }
 
 fn handle_create_invite(
@@ -489,7 +480,7 @@ fn handle_audit(
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RoomMembers {
-    members: Vec<DocumentCollaborationMember>,
+    members: Vec<RoomMember>,
 }
 
 fn handle_members(
@@ -610,7 +601,7 @@ fn handle_presence(
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AuditEvents {
-    events: Vec<DocumentCollaborationAuditEvent>,
+    events: Vec<RoomAuditEvent>,
 }
 
 fn handle_updates(
@@ -646,7 +637,7 @@ fn handle_updates(
             Ok(replay) => replay,
             Err(error) => return write_domain_error(stream, runtime, request, error),
         };
-        if !matches!(replay, DocumentCollaborationReplay::Updates(ref updates) if updates.is_empty())
+        if !matches!(replay, RoomReplay::Updates(ref updates) if updates.is_empty())
             || Instant::now() >= deadline
         {
             break replay;
@@ -676,7 +667,7 @@ fn authenticate_open_principal(
     runtime: &HttpRuntime,
     request: &HttpRequest,
     room_id: Option<&str>,
-) -> Result<DocumentCollaborationPrincipal, AuthenticationError> {
+) -> Result<RoomPrincipal, AuthenticationError> {
     match room_id {
         Some(room_id) => authenticate_room_principal(runtime, request, room_id),
         None if authorized(request, runtime.options.bearer_token()) => Ok(bootstrap_principal()),
@@ -688,7 +679,7 @@ fn authenticate_room_principal(
     runtime: &HttpRuntime,
     request: &HttpRequest,
     room_id: &str,
-) -> Result<DocumentCollaborationPrincipal, AuthenticationError> {
+) -> Result<RoomPrincipal, AuthenticationError> {
     if !room_id.starts_with("channel-notes-") && authorized(request, runtime.options.bearer_token())
     {
         let principal = bootstrap_principal();
@@ -708,8 +699,8 @@ fn authenticate_room_principal(
         .ok_or(AuthenticationError::Unauthorized)
 }
 
-fn bootstrap_principal() -> DocumentCollaborationPrincipal {
-    DocumentCollaborationPrincipal {
+fn bootstrap_principal() -> RoomPrincipal {
+    RoomPrincipal {
         id: "server-admin".into(),
         display_name: "Server administrator".into(),
     }
@@ -740,19 +731,15 @@ fn room_id_for_path<'a>(path: &'a str, suffix: &str) -> Option<&'a str> {
 #[derive(Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 enum RemoteReplay {
-    Updates {
-        updates: Vec<DocumentCollaborationUpdate>,
-    },
-    Resync {
-        snapshot: DocumentCollaborationSnapshot,
-    },
+    Updates { updates: Vec<RoomUpdate> },
+    Resync { snapshot: RoomSnapshot },
 }
 
-impl From<DocumentCollaborationReplay> for RemoteReplay {
-    fn from(value: DocumentCollaborationReplay) -> Self {
+impl From<RoomReplay> for RemoteReplay {
+    fn from(value: RoomReplay) -> Self {
         match value {
-            DocumentCollaborationReplay::Updates(updates) => Self::Updates { updates },
-            DocumentCollaborationReplay::Resync(snapshot) => Self::Resync { snapshot },
+            RoomReplay::Updates(updates) => Self::Updates { updates },
+            RoomReplay::Resync(snapshot) => Self::Resync { snapshot },
         }
     }
 }
@@ -893,3 +880,28 @@ fn write_domain_error(
 #[cfg(test)]
 #[path = "http/tests.rs"]
 mod tests;
+
+fn handle_status(
+    stream: &mut TcpStream,
+    runtime: &HttpRuntime,
+    request: &HttpRequest,
+) -> Result<(), CollaborationServerError> {
+    let Some(params) = decode_json::<ash_collab::RoomStatusParams>(request) else {
+        return write_error(
+            stream,
+            runtime,
+            request,
+            400,
+            "Bad Request",
+            "Invalid collaboration status request",
+        );
+    };
+    let principal = match authenticate_room_principal(runtime, request, &params.room_id) {
+        Ok(value) => value,
+        Err(error) => return write_authentication_error(stream, runtime, request, error),
+    };
+    match runtime.rooms.status_as(Some(&principal), params) {
+        Ok(status) => write_json(stream, runtime, request, 200, "OK", &status),
+        Err(error) => write_domain_error(stream, runtime, request, error),
+    }
+}

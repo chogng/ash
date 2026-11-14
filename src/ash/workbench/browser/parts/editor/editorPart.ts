@@ -37,7 +37,7 @@ import { FileNotFoundError, type IFileService } from '../../../../platform/files
 import type { IDiffService } from '../../../services/diff/common/diffService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
-import type { IDocumentCollaborationApi } from '../../../../platform/collab/common/documentCollaborationApi.js';
+import type { ICollabApi } from '../../../../platform/collab/common/collabApi.js';
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { Part } from '../../part.js';
 import { EditorGroupView, EditorOpenSupersededError, type EditorGroupOptions } from './editorGroupView.js';
@@ -153,7 +153,7 @@ export interface IEditorPartOptions {
 	readonly diffService?: IDiffService;
 	readonly accessibilityService?: IAccessibilityService;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly documentCollaborationApi?: IDocumentCollaborationApi;
+	readonly collabApi?: ICollabApi;
 	readonly serverEvents?: IServerEventApi;
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly dialogService?: IDialogService;
@@ -254,7 +254,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			diffService: options.diffService,
 			accessibilityService: options.accessibilityService,
 			languageDiagnosticsService: options.languageDiagnosticsService,
-			documentCollaborationApi: options.documentCollaborationApi,
+			collabApi: options.collabApi,
 			serverEvents: options.serverEvents,
 			workingCopyService: options.workingCopyService,
 			onWillCloseEditor: (group, input, pane, closingGroups, closingEditors) => this.confirmEditorClose(group, input, pane, closingGroups, closingEditors),
@@ -309,7 +309,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				diffService: options.diffService,
 				accessibilityService: options.accessibilityService,
 				languageDiagnosticsService: options.languageDiagnosticsService,
-				documentCollaborationApi: options.documentCollaborationApi,
+				collabApi: options.collabApi,
 				serverEvents: options.serverEvents,
 				workingCopyService: options.workingCopyService,
 				onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range, selectionSource: TextEditorSelectionSource.JUMP }).then(() => undefined),
@@ -550,7 +550,14 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			throw error;
 		}
 		this.assertNotDisposed();
-		input = this._activeGroup.resolveEditorInput(input, options);
+		const requestedInput = input;
+		try {
+			const resolution = this._activeGroup.resolveEditorInput(input, options);
+			input = resolution instanceof Promise ? await resolution : resolution;
+		}
+		catch { /* The group presents resolution failures in its normal error pane. */ }
+		if (input.editorId !== requestedInput.editorId) options = { ...options, preferredEditorId: input.editorId };
+		if (controller.signal.aborted) throw new EditorOpenSupersededError(input);
 		if (target === 'modalGroup') {
 			const modalInput = this.modalEditor.activeInput;
 			if (modalInput && !this.isSameEditor(modalInput, input) && !await this.closeEditor(modalInput)) {
@@ -1312,14 +1319,20 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const target = workingSet === 'empty' ? emptyWorkingSet() : parseEditorWorkingSet(workingSet, Math.max(...this._groups.map(host => host.group.id)));
 		this.restoreMaximizedGroup();
 		const startup = options.startup;
-		const resolveEditors = (group: EditorGroupWorkingSet) => group.editors.flatMap((editor, index) => {
-			try { return [{ editor, index, input: this._activeGroup.resolveEditorInput(this.inputSerializers.deserialize(editor.input), { preferredEditorId: editor.paneId }) }]; }
+		const resolveEditors = async (group: EditorGroupWorkingSet) => (await Promise.all(group.editors.map(async (editor, index) => {
+			try {
+				const source = this.inputSerializers.deserialize(editor.input);
+				let input = source;
+				try { input = await this._activeGroup.resolveEditorInput(source, { preferredEditorId: editor.paneId }); }
+				catch { /* Opening retains the legacy identity and presents the migration error. */ }
+				return [{ editor, index, input }];
+			}
 			catch (error) {
 				if (error instanceof UnknownEditorInputSerializerError) { return []; }
 				throw error;
 			}
-		});
-		const restoredGroups = target.groups.map(group => ({ ...group, resolved: startup ? undefined : resolveEditors(group) }));
+		}))).flat();
+		const restoredGroups = await Promise.all(target.groups.map(async group => ({ ...group, resolved: startup ? undefined : await resolveEditors(group) })));
 		const savedActiveGroup = restoredGroups[target.activeGroupIndex]!;
 		const groups = options.excludeEmptyGroups ? restoredGroups.filter(group => (group.resolved?.length ?? group.editors.length) > 0) : restoredGroups;
 		if (groups.length === 0) {
@@ -1368,7 +1381,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			if (this.isDisposed) return;
 		}
 		for (const { state, group } of destinations) {
-			const entries = state.resolved ?? resolveEditors(state);
+			const entries = state.resolved ?? await resolveEditors(state);
 			for (const [index, { editor, input }] of entries.entries()) {
 				for (; ;) {
 					if (startup) {
@@ -1385,7 +1398,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 						await group.openEditor(input, {
 							index,
 							pinned: !editor.preview || (startup?.hasOpened() === true && group === this._activeGroup),
-							preferredEditorId: editor.paneId,
+							preferredEditorId: input.editorId ?? editor.paneId,
 							preserveFocus: true,
 							inactive: true,
 							restoring: true,

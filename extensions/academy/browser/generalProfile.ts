@@ -38,18 +38,14 @@ export function createEditorProfileConfiguration(schema: DocumentSchema, options
 	};
 }
 
-/** Free-form writing and channel notes share Academy semantics, not paper constraints. */
-export function createGeneralDocumentProfile(flowingText: boolean): EditorProfile {
-	return Object.freeze({
-		id: 'general', editorId: 'ash.editor.document', contentType: 'application/vnd.ash.document+json',
-		create: () => {
-			const schema = createDefaultDocumentSchema();
-			return createEditorProfileConfiguration(schema, { flowingText, outlineNavigator: true, contributions: documentContributions }, undefined, () => schema.createDocument([schema.createNode('paragraph')]));
-		},
-	});
-}
-
-export const generalProfile = createGeneralDocumentProfile(false);
+/** Legacy general files and channel notes retain Academy's structured schema. */
+export const generalProfile: EditorProfile = Object.freeze({
+	id: 'general', editorId: 'ash.editor.document', contentType: 'application/vnd.ash.document+json',
+	create: () => {
+		const schema = createDefaultDocumentSchema();
+		return createEditorProfileConfiguration(schema, { outlineNavigator: true, contributions: documentContributions }, undefined, () => schema.createDocument([schema.createNode('paragraph')]));
+	},
+});
 
 export const channelNotesProfile: EditorProfile = Object.freeze({
 	id: 'ash.collaboration.notes', contentType: 'application/vnd.ash.channel-notes+json',

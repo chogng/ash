@@ -1,4 +1,3 @@
-import { renderWorkbenchMarkdown } from '../../../../base/browser/markdownRenderer.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
@@ -7,7 +6,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { registerWorkbenchServiceContribution } from '../../../../workbench/browser/workbenchServiceContributions.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
-import { createDocsInput } from '../../../contrib/docs/browser/documentActions.js';
+import { createArkdownDocsInput } from '../../../contrib/docs/browser/docsEditorInput.js';
 import { artifactCanvasModes } from '../../../contrib/artifact/common/artifactWorkspace.js';
 import { getArtifactDraftHome } from '../../../contrib/artifact/browser/artifactStorage.js';
 import { documentFromShapes, serializeArtifactCanvasDocument, type ArtifactCanvasShape } from '../../../contrib/artifact/common/model/artifactCanvasDocument.js';
@@ -22,10 +21,10 @@ registerWorkbenchServiceContribution({
 	install: ({ container, blockRestorationUntil }) => {
 		const editors = container.get(IEditorPart);
 		const ready = prepareArtifactFixtures(container.get(IFileService), container.get(IUserDataProfileService).currentProfile.location,
-			container.get(IWorkspaceContextService).getWorkspace().id, editors.domNode.ownerDocument).then(async resource => {
+			container.get(IWorkspaceContextService).getWorkspace().id).then(async resource => {
 			// Retained Docs use the ordinary editor catalog. Open the file before the host restores its selected page.
 			if (!editors.groups.some(group => group.editors.some(editor => editor.input.resource.toString() === resource.toString()))) {
-				await editors.openEditor(createDocsInput({ resource }), { pinned: true, inactive: true, preserveFocus: true });
+				await editors.openEditor(createArkdownDocsInput({ resource }), { pinned: true, inactive: true, preserveFocus: true });
 			}
 		});
 		blockRestorationUntil(ready);
@@ -34,10 +33,10 @@ registerWorkbenchServiceContribution({
 });
 
 /** Seed once, including a completion marker so deleted fixtures stay deleted and edits survive reload. */
-export async function prepareArtifactFixtures(files: IFileService, profile: URI, workspaceId: string, ownerDocument: Document): Promise<URI> {
+export async function prepareArtifactFixtures(files: IFileService, profile: URI, workspaceId: string): Promise<URI> {
 	const home = getArtifactDraftHome(profile, workspaceId);
-	const marker = home.joinPathSegment('test-data-v1');
-	const docs = home.joinPathSegment('studio-launch.ash-doc');
+	const marker = home.joinPathSegment('test-data-v2');
+	const docs = home.joinPathSegment('studio-launch.md');
 	try { await files.stat(marker); return docs; } catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
 	await files.createDirectory(home);
 	for (const [kind, shapes] of [['slides', createSlides()], ['design', createDesign()], ['whiteboard', createWhiteboard()], ['motion', createMotion()]] as const) {
@@ -57,11 +56,13 @@ export async function prepareArtifactFixtures(files: IFileService, profile: URI,
 	] as const) {
 		await writeMissing(files, tables.joinPathSegment(`${fixtureTableIds[kind]}.json`), JSON.stringify({ kind, rows, createdAt: Date.now(), title: exampleText('exampleTitle', '{0} example', getArtifactTitle(kind)) }));
 	}
-	const { generalProfile } = await import('../../../../../../extensions/academy/browser/generalProfile.js');
-	const { importDocsHtml } = await import('../../../contrib/docs/browser/docsEditorProfile.js');
-	const document = importDocsHtml(renderWorkbenchMarkdown(exampleText('exampleDocsContent', '# Studio launch brief\n\nLaunch a shared home for the studio’s work. Start with a small pilot and use feedback to guide the public release.\n\n## Readiness checklist\n\n- [x] Review the visual direction\n- [ ] Invite the pilot group\n- [ ] Publish the launch notes\n\n## Schedule\n\n| Milestone | Target |\n| --- | --- |\n| Pilot | Tuesday |\n| Feedback review | Thursday |\n| Public launch | Next Monday |')), ownerDocument);
-	if (!document) throw new Error('Invalid document fixture');
-	await writeMissing(files, docs, generalProfile.create().codec.serialize(document));
+	let markdown = exampleText('exampleDocsContent', '# Studio launch brief\n\nLaunch a shared home for the studio’s work. Start with a small pilot and use feedback to guide the public release.\n\n## Readiness checklist\n\n- [x] Review the visual direction\n- [ ] Invite the pilot group\n- [ ] Publish the launch notes\n\n## Schedule\n\n| Milestone | Target |\n| --- | --- |\n| Pilot | Tuesday |\n| Feedback review | Thursday |\n| Public launch | Next Monday |');
+	try {
+		const legacy = await files.readFile(home.joinPathSegment('studio-launch.ash-doc'));
+		const { legacyDocsToMarkdown } = await import('../../../contrib/docs/browser/docsImport.js');
+		markdown = legacyDocsToMarkdown(legacy.content);
+	} catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
+	await writeMissing(files, docs, markdown);
 	await files.writeFile({ resource: marker, content: '1' });
 	return docs;
 }

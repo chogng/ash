@@ -1,6 +1,6 @@
 import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import type { EditorGroupId } from './editorState.js';
-import { isSerializedEditorInput, type SerializedEditorInput } from './editorInputSerializer.js';
+import { isSerializedEditorInput, migrateLegacyEditorId, type SerializedEditorInput } from './editorInputSerializer.js';
 import { validateJsonValue, type JsonValue } from '../../../../base/common/jsonValue.js';
 import type { IEditorPane, IResourceEditorInput } from '../../../common/editor.js';
 
@@ -140,6 +140,17 @@ export function parseEditorWorkingSet(value: EditorWorkingSet, lastGroupId: numb
 		}
 		sizeTotal += group.size;
 	}
+	// Pane selection is stored separately from the resource input. Migrate both
+	// persistence fields before resolving a retired editor during restoration.
+	value = {
+		...value, groups: value.groups.map(group => ({
+			...group,
+			editors: group.editors.map(editor => {
+				const paneId = migrateLegacyEditorId(editor.paneId);
+				return paneId === editor.paneId ? editor : { ...editor, paneId };
+			}),
+		}))
+	};
 	if (value.layout !== undefined) {
 		if (groupIds.size !== value.groups.length) throw new TypeError('Editor Grid layout requires an ID for every group');
 		return { ...value, layout: parseEditorWorkingSetLayout(value.layout, groupIds) };

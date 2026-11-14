@@ -1,15 +1,15 @@
 import type { EditorProfile } from '../../../services/documentEditor/browser/documentEditorProfile.js';
 import { DocumentEditorPane } from './documentEditorPane.js';
 import type { EditorPaneCreationOptions } from '../../../browser/parts/editor/editorPane.js';
-import { AppServerDocumentCollaborationService } from '../../../services/documentCollaboration/browser/appServerDocumentCollaborationService.js';
-import { DocumentCollaborationService } from '../../../services/documentCollaboration/browser/documentCollaborationService.js';
+import { AppServerCollabService } from '../../../services/collab/browser/appServerCollabService.js';
+import { CollabService } from '../../../services/collab/browser/collabService.js';
 import type { EditorPaneOptions } from './documentEditorPane.js';
 
 export interface EditorRuntimeOptions {
 	readonly providerSignal?: AbortSignal;
 	readonly modelCompatibility?: string;
 	readonly onSave?: () => Promise<void | boolean>;
-	readonly createDocumentCollaborationService?: EditorPaneOptions['createDocumentCollaborationService'];
+	readonly createCollabService?: EditorPaneOptions['createCollabService'];
 }
 
 /** Materializes one profile into pane options while keeping Workbench services at the composition root. */
@@ -28,11 +28,11 @@ export function resolveDocumentPaneOptions(profile: EditorProfile, options: Edit
 		onSave: options.onSave,
 		providerSignal,
 		modelCompatibility,
-		createDocumentCollaborationService: () => {
-			const appServerService = options.documentCollaborationApi && options.serverEvents
-				? new AppServerDocumentCollaborationService(options.documentCollaborationApi, options.serverEvents)
+		createCollabService: () => {
+			const appServerService = options.collabApi && options.serverEvents
+				? new AppServerCollabService(options.collabApi, options.serverEvents)
 				: undefined;
-			return instantiationService.createInstance(DocumentCollaborationService, appServerService);
+			return instantiationService.createInstance(CollabService, appServerService);
 		},
 	});
 }

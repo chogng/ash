@@ -2533,13 +2533,33 @@ class AutoSaveFixture extends Disposable {
 	async readActive(): Promise<ReturnType<typeof parseArtifactCanvasDocument>> { return parseArtifactCanvasDocument((await this.files.readFile(URI.joinPath(this.activeResource, 'manifest.json'))).content); }
 }
 
+test('Artifact fixtures migrate the existing Docs content before seeding a Markdown successor', async () => {
+	using fixture = new AutoSaveFixture();
+	const { prepareArtifactFixtures } = await import('./fixtures/artifactExamples.contribution.js');
+	const { getArtifactDraftHome } = await import('../../contrib/artifact/browser/artifactStorage.js');
+	const { createDefaultDocumentSchema } = await import('../../../../../extensions/academy/common/model/documentSchema.js');
+	const { serializeDocument } = await import('../../../../../extensions/academy/common/model/documentSerialization.js');
+	const profile = fixture.child.get(IUserDataProfileService).currentProfile.location;
+	const workspace = fixture.child.get(IWorkspaceContextService).getWorkspace().id;
+	const home = getArtifactDraftHome(profile, workspace);
+	await fixture.files.createDirectory(home);
+	const legacy = home.joinPathSegment('studio-launch.ash-doc');
+	const schema = createDefaultDocumentSchema();
+	const content = serializeDocument(schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('Existing Docs edits')] })]), schema);
+	await fixture.files.writeFile({ resource: legacy, content });
+	const docs = await prepareArtifactFixtures(fixture.files, profile, workspace);
+	assert.ok(docs.path.endsWith('.md'));
+	assert.equal((await fixture.files.readFile(docs)).content.trim(), 'Existing Docs edits');
+	assert.equal((await fixture.files.readFile(legacy)).content, content);
+});
+
 test('Artifact fixtures restore as ordinary editable documents and never overwrite edits or deleted work', async () => {
 	using fixture = new AutoSaveFixture();
 	const { prepareArtifactFixtures } = await import('./fixtures/artifactExamples.contribution.js');
 	const { ArtifactTableService } = await import('../../contrib/artifact/browser/artifactTableService.js');
 	const profile = fixture.child.get(IUserDataProfileService).currentProfile.location;
 	const workspace = fixture.child.get(IWorkspaceContextService).getWorkspace().id;
-	const docs = await prepareArtifactFixtures(fixture.files, profile, workspace, browser.window.document);
+	const docs = await prepareArtifactFixtures(fixture.files, profile, workspace);
 	assert.ok((await fixture.files.readFile(docs)).content.includes('Studio launch brief'));
 	using view = new ArtifactFixture(fixture.child);
 	await view.editors.loadArtifactDocuments();
@@ -2558,7 +2578,7 @@ test('Artifact fixtures restore as ordinary editable documents and never overwri
 	await tables.rename(sheet, 'Saved budget');
 	const data = [...tables.drafts.get().values()].find(draft => draft.kind === 'data')!;
 	await tables.delete(data);
-	await prepareArtifactFixtures(fixture.files, profile, workspace, browser.window.document);
+	await prepareArtifactFixtures(fixture.files, profile, workspace);
 	using restored = new ArtifactFixture(fixture.child);
 	await restored.editors.loadArtifactDocuments();
 	assert.equal(restored.editors.artifactDocuments.get().size, 4);
@@ -2959,7 +2979,7 @@ test('Table cell edits persist in the file model after disposing and reopening t
 	const { ArtifactTableService } = await import('../../contrib/artifact/browser/artifactTableService.js');
 	const { ArtifactTableEditorWidget } = await import('../../contrib/artifact/browser/artifactTableEditorWidget.js');
 	await prepareArtifactFixtures(fixture.files, fixture.child.get(IUserDataProfileService).currentProfile.location,
-		fixture.child.get(IWorkspaceContextService).getWorkspace().id, browser.window.document);
+		fixture.child.get(IWorkspaceContextService).getWorkspace().id);
 	using tables = fixture.child.createInstance(ArtifactTableService);
 	await tables.ready;
 	for (const source of tables.drafts.get().values()) {
@@ -2990,7 +3010,7 @@ test('Table artifact commands open resource inputs and restore the same file wit
 	const { ArtifactTableEditor } = await import('../../contrib/artifact/browser/artifactTableEditor.js');
 	await import('../../contrib/artifact/browser/artifactTableCatalog.js');
 	await prepareArtifactFixtures(fixture.files, fixture.child.get(IUserDataProfileService).currentProfile.location,
-		fixture.child.get(IWorkspaceContextService).getWorkspace().id, browser.window.document);
+		fixture.child.get(IWorkspaceContextService).getWorkspace().id);
 	using tables = fixture.child.createInstance(ArtifactTableService);
 	fixture.child.registerInstance(IArtifactTableService, tables);
 	const entries: import('../../services/layout/common/sessionsEntryService.js').ISessionsEntry[] = [];

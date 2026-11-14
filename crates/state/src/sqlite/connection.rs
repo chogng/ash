@@ -1,7 +1,7 @@
-use crate::sqlite_migrations::Migration;
-use crate::sqlite_migrations::Migrator;
 use ash_protocol::ContentDigest;
 use ash_protocol::SessionId;
+use ash_sqlite::Migration;
+use ash_sqlite::Migrator;
 use ash_thread_store::ThreadCatalogRecord;
 use ash_thread_store::ThreadStoreError;
 use rusqlite::Connection;

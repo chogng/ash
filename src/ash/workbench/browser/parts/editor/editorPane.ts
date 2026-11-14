@@ -9,7 +9,7 @@ import type { IFileService } from '../../../../platform/files/common/files.js';
 import type { IDiffService } from '../../../services/diff/common/diffService.js';
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
-import type { IDocumentCollaborationApi } from '../../../../platform/collab/common/documentCollaborationApi.js';
+import type { ICollabApi } from '../../../../platform/collab/common/collabApi.js';
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { type LanguageLocation, type LanguageWorkspaceEdit } from '../../../../editor/common/languages.js';
 import type { ILanguageDiagnosticsService } from '../../../services/language/common/languageDiagnosticsService.js';
@@ -65,7 +65,7 @@ export interface EditorPaneCreationOptions {
 	readonly instantiationService?: IInstantiationService;
 	readonly accessibilityService?: IAccessibilityService;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly documentCollaborationApi?: IDocumentCollaborationApi;
+	readonly collabApi?: ICollabApi;
 	readonly serverEvents?: IServerEventApi;
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly onSave?: () => Promise<void | boolean>;

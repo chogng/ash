@@ -4,47 +4,47 @@ import { Disposable } from 'ash:editor/base/common/lifecycle.js';
 import { DocumentTextModel } from '../../model/documentTextModel.js';
 import { TextModelRemoteHistoryPolicy } from '../../model/textModelBlockState.js';
 import { serializeDocument } from '../../model/documentSerialization.js';
-import type { DocumentCollaborationConnection } from '../../services/documentCollaborationService.js';
-import type { DocumentCollaborationPresence } from '../../services/documentCollaborationService.js';
-import type { DocumentCollaborationSnapshot } from '../../services/documentCollaborationService.js';
-import type { DocumentCollaborationSubmitOutcome } from '../../services/documentCollaborationService.js';
-import type { DocumentCollaborationEnvelope } from '../../services/documentCollaborationService.js';
-import type { DocumentCollaborationRemoteEnvelope } from '../../services/documentCollaborationService.js';
+import type { RoomTransport } from '../../services/collabService.js';
+import type { RoomPresence } from '../../services/collabService.js';
+import type { RoomSnapshot } from '../../services/collabService.js';
+import type { RoomSubmitOutcome } from '../../services/collabService.js';
+import type { RoomEnvelope } from '../../services/collabService.js';
+import type { RemoteRoomEnvelope } from '../../services/collabService.js';
 import { rebaseDocumentHistory, rebaseDocumentTransaction } from './rebase.js';
-import { DocumentCollaborationSynchronizer } from './synchronizer.js';
+import { CollabSynchronizer } from './synchronizer.js';
 import { DocumentTransaction } from '../../model/documentTransaction.js';
 
-export type DocumentCollaborationState = 'connected' | 'resyncRequired' | 'error';
+export type CollabState = 'connected' | 'resyncRequired' | 'error';
 
-export interface DocumentCollaborationStateChange {
-	readonly state: DocumentCollaborationState;
+export interface CollabStateChange {
+	readonly state: CollabState;
 	readonly roomId: string;
 	readonly message?: string;
 }
 
 /** Current remote selections projected by one connected collaboration transport. */
-export interface DocumentCollaborationPresenceChange {
-	readonly presences: readonly DocumentCollaborationPresence[];
+export interface CollabPresenceChange {
+	readonly presences: readonly RoomPresence[];
 }
 
 /** Binds one structured Stanza DocumentTextModel to a server-ordered collaboration connection. */
-export class DocumentCollaborationController extends Disposable {
-	private readonly stateEmitter = this._register(new Emitter<DocumentCollaborationStateChange>());
+export class CollabController extends Disposable {
+	private readonly stateEmitter = this._register(new Emitter<CollabStateChange>());
 	private readonly confirmedEmitter = this._register(new Emitter<DocumentNode>());
 	/** The exact server-confirmed document, excluding unacknowledged local edits. */
 	readonly onDidConfirmDocument = this.confirmedEmitter.event;
-	private readonly presenceEmitter = this._register(new Emitter<DocumentCollaborationPresenceChange>());
-	private readonly synchronizer: DocumentCollaborationSynchronizer;
+	private readonly presenceEmitter = this._register(new Emitter<CollabPresenceChange>());
+	private readonly synchronizer: CollabSynchronizer;
 	private submitting = false;
 	private synchronizingModel = false;
-	private _presences: readonly DocumentCollaborationPresence[] = [];
+	private _presences: readonly RoomPresence[] = [];
 
-	readonly onDidChangeState: Event<DocumentCollaborationStateChange> = this.stateEmitter.event;
-	readonly onDidChangePresence: Event<DocumentCollaborationPresenceChange> = this.presenceEmitter.event;
+	readonly onDidChangeState: Event<CollabStateChange> = this.stateEmitter.event;
+	readonly onDidChangePresence: Event<CollabPresenceChange> = this.presenceEmitter.event;
 
-	constructor(private readonly model: DocumentTextModel, private readonly connection: DocumentCollaborationConnection) {
+	constructor(private readonly model: DocumentTextModel, private readonly connection: RoomTransport) {
 		super();
-		this.synchronizer = this._register(new DocumentCollaborationSynchronizer({
+		this.synchronizer = this._register(new CollabSynchronizer({
 			schema: model.schema,
 			document: connection.initialSnapshot.document,
 			clientId: connection.clientId,
@@ -87,11 +87,11 @@ export class DocumentCollaborationController extends Disposable {
 		this.connection.dispose();
 	}
 
-	get state(): DocumentCollaborationState {
+	get state(): CollabState {
 		return this._state;
 	}
 
-	get presences(): readonly DocumentCollaborationPresence[] {
+	get presences(): readonly RoomPresence[] {
 		return this._presences;
 	}
 
@@ -99,9 +99,9 @@ export class DocumentCollaborationController extends Disposable {
 
 
 
-	private _state: DocumentCollaborationState = 'connected';
+	private _state: CollabState = 'connected';
 
-	private submit(envelope: DocumentCollaborationEnvelope): void {
+	private submit(envelope: RoomEnvelope): void {
 		if (this.isDisposed || this.submitting || this._state !== 'connected') return;
 		const document = this.synchronizer.inFlightDocument;
 		if (!document || this.synchronizer.inFlight?.sequence !== envelope.sequence) {
@@ -125,7 +125,7 @@ export class DocumentCollaborationController extends Disposable {
 		});
 	}
 
-	private acceptSubmitOutcome(outcome: DocumentCollaborationSubmitOutcome): void {
+	private acceptSubmitOutcome(outcome: RoomSubmitOutcome): void {
 		if (this.isDisposed || this._state !== 'connected') return;
 		switch (outcome.kind) {
 			case 'accepted':
@@ -140,7 +140,7 @@ export class DocumentCollaborationController extends Disposable {
 		}
 	}
 
-	private acceptUpdate(update: DocumentCollaborationRemoteEnvelope): void {
+	private acceptUpdate(update: RemoteRoomEnvelope): void {
 		if (this.isDisposed || this._state !== 'connected' || update.version <= this.synchronizer.version) return;
 		try {
 			if (update.clientId === this.connection.clientId) {
@@ -157,7 +157,7 @@ export class DocumentCollaborationController extends Disposable {
 		}
 	}
 
-	private receiveRemoteUpdate(update: DocumentCollaborationRemoteEnvelope): void {
+	private receiveRemoteUpdate(update: RemoteRoomEnvelope): void {
 		const document = this.model.document;
 		const remote = documentTransactionOnly(update.transaction);
 		const pending = this.synchronizer.pending;
@@ -177,7 +177,7 @@ export class DocumentCollaborationController extends Disposable {
 		}
 	}
 
-	private acceptResync(snapshot: DocumentCollaborationSnapshot): void {
+	private acceptResync(snapshot: RoomSnapshot): void {
 		try {
 			this.synchronizer.replaceSnapshot(snapshot.document, snapshot.version);
 			this.synchronizeModel();
@@ -204,7 +204,7 @@ export class DocumentCollaborationController extends Disposable {
 		}
 	}
 
-	private setState(state: DocumentCollaborationState, message?: string): void {
+	private setState(state: CollabState, message?: string): void {
 		if (this._state === state && message === undefined) return;
 		this._state = state;
 		this.stateEmitter.fire(Object.freeze({ state, roomId: this.connection.roomId, ...(message === undefined ? {} : { message }) }));

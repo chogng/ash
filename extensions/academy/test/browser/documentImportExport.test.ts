@@ -73,7 +73,7 @@ for (const [feature, cell] of [
 
 test('Markdown import rejects unsupported content and identifies a source location', () => {
 	const schema = createDefaultDocumentSchema();
-	for (const input of ['First\n\n<div>HTML</div>', '- [x] task', '~~deleted~~', '[label](https://example.com "title")', '![Figure](blob:temporary)']) {
+	for (const input of ['First\n\n<div>HTML</div>', '~~deleted~~', '[label](https://example.com "title")', '![Figure](blob:temporary)']) {
 		assert.throws(() => importDocumentText(input, 'markdown', schema, environment.window.document, source), error => error instanceof DocumentConversionError && /^\d+:\d+$/.test(error.location));
 	}
 	assert.throws(() => importDocumentText('First\n\n<div>HTML</div>', 'markdown', schema, environment.window.document, source), error => error instanceof DocumentConversionError && error.location === '3:1');
@@ -107,11 +107,24 @@ test('Markdown round trips adjacent styled runs and literal syntax characters', 
 	assert.deepEqual(semantics(importDocumentText(exportDocumentText(spaced, schema, 'markdown'), 'markdown', schema, environment.window.document, source)), semantics(spaced));
 });
 
+test('Markdown task lists preserve checked states, nested content and ordinary items', () => {
+	const schema = createDefaultDocumentSchema();
+	const input = '- [x] Done\n- [ ] Pending\n  - Nested\n- Ordinary\n\n2. [ ] Ordered\n3. [x] Finished\n';
+	const document = importDocumentText(input, 'markdown', schema, environment.window.document, source);
+	assert.deepEqual(document.content[0]!.content.map(item => item.attrs.checked), [true, false, undefined]);
+	assert.deepEqual(semantics(importDocumentText(exportDocumentText(document, schema, 'markdown'), 'markdown', schema, environment.window.document, source)), semantics(document));
+});
+
+test('Markdown table column alignment survives export and reimport', () => {
+	const schema = createDefaultDocumentSchema();
+	const input = '| Left | Center | Right |\n| :--- | :---: | ---: |\n| A | B | C |\n';
+	const document = importDocumentText(input, 'markdown', schema, environment.window.document, source);
+	assert.deepEqual(semantics(importDocumentText(exportDocumentText(document, schema, 'markdown'), 'markdown', schema, environment.window.document, source)), semantics(document));
+});
+
 test('unsupported conversion errors use the active language and retain the source position', () => {
 	setNlsMessages('zh-CN', { ash: chineseCatalog.bundles.ash });
 	try {
-		assert.throws(() => importDocumentText('- [x] task', 'markdown', createDefaultDocumentSchema(), environment.window.document, source), {
-			message: '无法保留 1:1 处的 任务列表。',
-		});
+		assert.throws(() => importDocumentText('~~deleted~~', 'markdown', createDefaultDocumentSchema(), environment.window.document, source), error => error instanceof DocumentConversionError && error.location === '1:1' && error.message.startsWith('无法保留'));
 	} finally { resetNlsResolver(); }
 });

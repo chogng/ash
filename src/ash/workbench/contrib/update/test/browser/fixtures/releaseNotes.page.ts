@@ -7,7 +7,7 @@ import { IOnboardingTryoutService } from '../../../../onboarding/common/onboardi
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { createTestComponentServices } from '../../../../../test/common/testEditorServices.js';
 import { ReleaseNotesEditor, releaseNotesResource } from '../../../browser/releaseNotesEditor.js';
-import { MarkdownDocumentView } from '../../../../markdown/browser/markdownDocumentRenderer.js';
+import { MarkdownDocumentView } from '../../../../markdown/browser/markdownDocumentView.js';
 import { prepareReleaseNotesMarkdown } from '../../../browser/releaseNotesTryouts.js';
 
 declare global {

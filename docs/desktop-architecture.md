@@ -892,8 +892,8 @@ sanitizer 实例，防止 hook 跨窗口或跨消费者泄漏。`base/browser/ma
 普通 Markdown 组件、Markdown 标签/属性 allowlist 和 URL policy。
 `workbench/contrib/markdown/browser/markdownPreview.ts` 负责完整文档解析、预览样式及 iframe
 链接消息桥接，通过 `IWebviewService` 创建并持有容器。
-`workbench/contrib/markdown/browser/markdownDocumentRenderer.ts` 将预览适配为 Editor Part
-可持有的 `MarkdownDocumentView`，并拥有产品级链接打开回调。
+`workbench/contrib/markdown/browser/markdownDocumentView.ts` 将预览封装为
+`MarkdownDocumentView`，通过调用方提供的回调打开链接。
 
 `workbench/contrib/markdown/browser/markdown.contribution.ts` 是 Workbench 功能入口，由
 `workbench.contribution.ts` 静态加载；该层只接入产品视图和样式，不重复解析器或 sanitizer。

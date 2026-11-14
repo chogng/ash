@@ -3,6 +3,12 @@ import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI } from '../../../../base/common/uri.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
+
+/** Retired file-backed Arkdown views restore as source; Chat Docs has its own ID. */
+export function migrateLegacyEditorId(id: string | undefined): string | undefined {
+	return id === 'ash.editor.markdown' ? CODE_EDITOR_ID : id;
+}
 
 export interface SerializedEditorInput {
 	readonly typeId: string;
@@ -95,7 +101,7 @@ function deserializeBaseEditorInput(value: unknown): IResourceEditorInput {
 	const record = requireRecord(value, 'serialized editor input');
 	const resource = requireString(record.resource, 'serialized editor resource');
 	const preferredResource = optionalString(record.preferredResource, 'serialized preferred resource');
-	const editorId = optionalString(record.editorId, 'serialized editor ID');
+	const editorId = migrateLegacyEditorId(optionalString(record.editorId, 'serialized editor ID'));
 	const contentType = optionalString(record.contentType, 'serialized editor content type');
 	const languageId = optionalString(record.languageId, 'serialized editor language ID');
 	const label = optionalString(record.label, 'serialized editor label');

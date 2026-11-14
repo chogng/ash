@@ -194,7 +194,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				},
 			});
 			return registerLocalTranscriptionService(transcriptionServices, localClient);
-		}], { browser: true, textDocuments: true, appTools: true, agentHosts: true }, workspaceTrust, mainProcessService);
+		}], { browser: true, textDocuments: true, appTools: true, agentHosts: true, backupClientId: 'ash-sessions' }, workspaceTrust, mainProcessService);
 		sessions.add(api);
 		const profileFiles = sessions.add(profileServices.createInstance(FileService));
 		sessions.add(profileFiles.registerProvider(api.userDataHome.scheme, api.localFiles));
@@ -317,6 +317,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				contributionIds: [
 					'sessions.generatedFileAutoSave',
 					'sessions.generatedFileOpener',
+					'sessions.docs.backup',
 					'sessions.projectMaterialFiles',
 					'sessions.chat.copyActionRendering',
 					'chat.queuePickerRendering',

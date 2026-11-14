@@ -8,13 +8,13 @@ import type { IEditorPane } from '../../../common/editor.js';
 import type { CallDocument } from '../../../../platform/call/common/callService.js';
 
 /** Document-pane operations used by Calls and Channels. Models remain editor-owned. */
-export interface IDocumentCollaborationEditor extends IEditorPane {
+export interface ICollabEditor extends IEditorPane {
 	getCollaborationDocument(): CallDocument | undefined;
 	joinCollaborationDocument(document: CallDocument, channel?: ChannelReference): Promise<void>;
 }
 
-export function isDocumentCollaborationEditor(pane: IEditorPane | undefined): pane is IDocumentCollaborationEditor {
-	const candidate = pane as Partial<IDocumentCollaborationEditor> | undefined;
+export function isCollabEditor(pane: IEditorPane | undefined): pane is ICollabEditor {
+	const candidate = pane as Partial<ICollabEditor> | undefined;
 	return typeof candidate?.getCollaborationDocument === 'function' && typeof candidate.joinCollaborationDocument === 'function';
 }
 

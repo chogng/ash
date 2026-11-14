@@ -3,7 +3,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { ICallService } from '../../../../platform/call/common/callService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { isDocumentCollaborationEditor, DocumentTypes } from '../../../services/documentEditor/common/documentTypes.js';
+import { isCollabEditor, DocumentTypes } from '../../../services/documentEditor/common/documentTypes.js';
 import './media/collab.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
@@ -278,7 +278,7 @@ export class CollabViewPane extends ViewPane {
 				await editors.openEditor({ resource, contentType, label: title, showBreadcrumbs: false }, { pinned: true, revealIfOpened: true });
 				if (this.isDisposed || generation !== this.connectionGeneration) return;
 				const pane = editors.visibleEditorPanes.find(pane => pane.workingCopy?.resource.toString() === resource.toString());
-				if (!isDocumentCollaborationEditor(pane)) throw new Error(localize('collaboration.notesUnavailable', 'Enable the document editor to open channel notes.'));
+				if (!isCollabEditor(pane)) throw new Error(localize('collaboration.notesUnavailable', 'Enable the document editor to open channel notes.'));
 				await pane.joinCollaborationDocument({ serverUrl: space.serverUrl, roomId: `channel-notes-${id}`, schemaId: 'stanza-document-v1', contentType, title }, reference);
 			}
 		} catch (error) {

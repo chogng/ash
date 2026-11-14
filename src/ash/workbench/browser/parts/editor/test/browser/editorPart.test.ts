@@ -19,7 +19,6 @@ import {
 	registerTestComponentServices,
 	createTestEditorServices,
 	createTestTextFileService,
-	createTestFileService,
 } from '../../../../../test/common/testEditorServices.js';
 import { registerCodeEditorServices } from '../../../../../../editor/test/browser/testCodeEditor.js';
 import { MemoryFileService } from '../../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
@@ -112,7 +111,6 @@ import {
 	type TextModelReference,
 } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IUntitledTextEditorService } from '../../../../../services/untitled/common/untitledTextEditorService.js';
-import { StandaloneCodeEditorService } from '../../../../../../editor/standalone/browser/standaloneCodeEditorService.js';
 import {
 	TextResourceConflictError,
 	type ITextResourceStore,
@@ -3118,6 +3116,42 @@ test('EditorParts restores supported editors around missing serializers and pres
 	}
 });
 
+test('EditorPart resolves migrated resources before routing and restoring active sticky tabs', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		const migrated = { resource: URI.file('/canonical.md'), editorId: 'test.migrated' };
+		registry.registerEditorPane({
+			id: 'test.legacy', name: 'Legacy',
+			canOpen: source => source.resource.path.endsWith('.old') ? EditorPaneMatch.Default : EditorPaneMatch.None,
+			resolveInput: async () => migrated,
+			create() { throw new Error('Legacy pane must never be created'); },
+		});
+		registry.registerEditorPane({
+			id: 'test.migrated', name: 'Migrated',
+			canOpen: source => source.editorId === 'test.migrated' ? EditorPaneMatch.Default : EditorPaneMatch.None,
+			create: () => new TestEditorPane('test.migrated'),
+		});
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		await editor.openEditor({ resource: URI.file('/legacy.old'), editorId: 'test.legacy' }, { preferredEditorId: 'test.legacy' });
+		assert.equal(editor.activePane?.id, 'test.migrated');
+		assert.equal(editor.activeInput, migrated);
+		const saved = editor.saveWorkingSet('legacy');
+		const legacy = {
+			...saved, groups: saved.groups.map(group => ({
+				...group, editors: group.editors.map(entry => ({
+					...entry, paneId: 'test.legacy', sticky: true, input: { typeId: 'workbench.editorInput.resource', value: { resource: 'file:///legacy.old', editorId: 'test.legacy' } },
+				}))
+			}))
+		};
+		await editor.applyWorkingSet(legacy);
+		assert.equal(editor.activePane?.id, 'test.migrated');
+		assert.equal(editor.activeInput?.resource.toString(), migrated.resource.toString());
+		assert.equal(editor.activeGroup.isSticky(editor.activeInput!), true);
+		assert.equal(editor.activeGroup.inputs.length, 1);
+	} finally { dom.window.close(); }
+});
+
 test('EditorPart saves and restores groups, tabs, previews, active state, and pane ownership', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
@@ -4006,6 +4040,28 @@ test('editor input snapshots reject malformed editor IDs and accept legacy input
 	assert.deepEqual(registry.deserialize(snapshot), input);
 	snapshot.value.editorId = 42;
 	assert.throws(() => registry.deserialize(snapshot), /editor ID must be a string/);
+});
+
+test('retired Arkdown file views restore as source without changing Chat Docs identity', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('stanza.editor.code', '.md', () => new TestEditorPane('stanza.editor.code')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const serializers = new EditorInputSerializerRegistry();
+		const initialText = '# Retained draft\n\nUnsaved content';
+		const input = serializers.serialize({ resource: URI.parse('untitled:/retained.md'), editorId: 'ash.editor.markdown', languageId: 'markdown', initialText });
+		const saved = { id: 'retired-arkdown', activeGroupIndex: 0, groups: [{ id: 1, size: 1, activeEditorIndex: 0, editors: [{ input, paneId: 'ash.editor.markdown', preview: false }] }] };
+		await editor.applyWorkingSet(saved);
+		assert.equal(editor.activePane?.id, 'stanza.editor.code');
+		assert.equal(editor.activeInput?.editorId, 'stanza.editor.code');
+		assert.equal(editor.activeInput?.initialText, initialText);
+		assert.equal(editor.saveWorkingSet('migrated').groups[0].editors[0].paneId, 'stanza.editor.code');
+		assert.equal(saved.groups[0].editors[0].paneId, 'ash.editor.markdown');
+		const docs = serializers.deserialize(serializers.serialize({ resource: URI.parse('untitled:/docs.md'), editorId: 'sessions.editor.docs.markdown', initialText }));
+		assert.equal(docs.editorId, 'sessions.editor.docs.markdown');
+		assert.equal(docs.initialText, initialText);
+	} finally { dom.window.close(); }
 });
 
 test('editor input snapshots preserve semantic icon colors and reject malformed icons', () => {
@@ -5963,172 +6019,6 @@ test('Academy Save As transfers every view to one typed v2 resource and working 
 		assert.equal(saved.version, 2);
 		assert.equal(saved.documentType, 'academy');
 		assert.equal(saved.document.content[0].content[0].content[0].text, 'Shared paper');
-	} finally {
-		dom.window.close();
-	}
-});
-
-test('general document commands preserve dirty source text, create a backed-up draft and save typed content', async () => {
-	await import('../../../../../../sessions/contrib/docs/browser/docs.contribution.js');
-	const { DocumentEditorPane } = await import('../../../../../contrib/documentEditor/browser/documentEditorPane.js');
-	const { DocumentTypes } = await import('../../../../../services/documentEditor/common/documentTypes.js');
-	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
-	try {
-		const source = URI.file('/notes/source.md');
-		const target = URI.file('/notes/converted.ash-doc');
-		using sourceFiles = createTestFileService(
-			new MemoryFileService([
-				[source, '# On disk'],
-				[URI.file('/notes/diagram.png'), 'image bytes'],
-			]),
-		);
-		using parent = new InstantiationService();
-		parent.registerInstance(IFileService, sourceFiles);
-		using services = createTestEditorServices(undefined, parent, dom.window.document);
-		using dialogs = new DialogService();
-		services.registerInstance(IDialogService, dialogs);
-		using codeEditors = new StandaloneCodeEditorService();
-		services.registerInstance(ICodeEditorService, codeEditors);
-		services.registerSingleton(ICommandService, () => new CommandService(services));
-		services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
-		services.registerSingleton(IOpenerService, () => services.createInstance(OpenerService));
-		using files = createTestTextFileService(sourceFiles);
-		const copies = services.get(IWorkingCopyService);
-		using models = new DocumentEditorTextModelService(files, copies);
-		services.registerInstance(IDocumentEditorTextModelService, models);
-		using registry = new EditorPaneRegistry();
-		const { DOCS_EDITOR_ID, GENERAL_DOCUMENT_CONTENT_TYPE } = await import('../../../../../../sessions/contrib/docs/common/docs.js');
-		const { ISessionsEntryService } = await import('../../../../../../sessions/services/layout/common/sessionsEntryService.js');
-		const { IContextMenuService } = await import('../../../../../../platform/contextview/browser/contextView.js');
-		const { INotificationService } = await import('../../../../../../platform/notification/common/notification.js');
-		const { IWorkbenchLayoutService } = await import('../../../../../services/layout/browser/layoutService.js');
-		const { IViewsService } = await import('../../../../../services/views/common/viewsService.js');
-		services.registerInstance(IContextMenuService, {
-			showContextMenu() { },
-		} as unknown as import('../../../../../../platform/contextview/browser/contextView.js').IContextMenuService);
-		services.registerInstance(INotificationService, {
-			error(message: unknown) { assert.fail(String(message)); },
-		} as unknown as import('../../../../../../platform/notification/common/notification.js').INotificationService);
-		services.registerInstance(IWorkbenchLayoutService, {
-			isPartVisible: () => false,
-			onDidChangePartVisibility: Event.None,
-		} as unknown as import('../../../../../services/layout/browser/layoutService.js').IWorkbenchLayoutService);
-		services.registerInstance(IViewsService, {
-			getVisibleViewContainer: () => undefined,
-			onDidChangeViewContainerVisibility: Event.None,
-		} as unknown as import('../../../../../services/views/common/viewsService.js').IViewsService);
-		const paneRequested = new DeferredPromise<void>();
-		const allowPane = new DeferredPromise<void>();
-		const documentPane = EditorPanes.getEditorPane({ resource: target, editorId: DOCS_EDITOR_ID, contentType: GENERAL_DOCUMENT_CONTENT_TYPE })!;
-		registry.registerEditorPane({
-			...documentPane,
-			async create(options) {
-				void paneRequested.complete();
-				await allowPane.p;
-				return documentPane.create(options);
-			},
-		});
-		registry.registerEditorPane({
-			id: 'test.source',
-			name: 'Text',
-			canOpen: input =>
-				input.resource.path.endsWith('.ash-doc') ? EditorPaneMatch.None : EditorPaneMatch.Default,
-			create: () => new TestEditorPane('test.source'),
-		});
-		using main = createEditorPart(
-			dom.window.document.body,
-			{
-				registry,
-				saveAsResource: async () => target,
-				replaceEditorResource: (group, input, replacement) => group.replaceEditor(input, replacement),
-			},
-			services,
-		);
-		services.registerInstance(IEditorPart, main);
-		using editorService = new BrowserEditorService(main);
-		services.registerInstance(IEditorService, editorService);
-		services.registerInstance(ISessionsEntryService, {
-			async openEntry(entry, initialize) {
-				await main.openEditor(entry.editorInput!, { pinned: true });
-				initialize?.();
-			},
-		} satisfies Pick<import('../../../../../../sessions/services/layout/common/sessionsEntryService.js').ISessionsEntryService, 'openEntry'> as import('../../../../../../sessions/services/layout/common/sessionsEntryService.js').ISessionsEntryService);
-
-		using text = await services
-			.get(IFileTextModelService)
-			.acquire(
-				{ resource: source, initialText: '# Original', languageId: 'markdown' },
-				new AbortController().signal,
-			);
-		const draftText = '# Unsaved title\n\nBody with **bold**.\n\n![Diagram](diagram.png)';
-		text.model.setValue(draftText);
-		await main.openEditor({ resource: source }, { pinned: true });
-		const commands = services.get(ICommandService);
-		const conversion = commands.executeCommand('workbench.action.document.import.markdown');
-		await paneRequested.p;
-		const subsequentSource = draftText + '\n\nEdited while Docs opens.';
-		text.model.setValue(subsequentSource);
-		await allowPane.complete();
-		await conversion;
-		assert.ok(main.activePane instanceof DocumentEditorPane);
-		assert.equal(DocumentTypes.find(main.activeInput!)?.id, 'general');
-		assert.equal(copies.get(main.activeInput!.resource)[0]!.isDirty, true);
-		const imported = JSON.parse(copies.get(main.activeInput!.resource)[0]!.backup());
-		assert.equal(imported.documentType, 'general');
-		assert.equal(
-			imported.document.content.length,
-			3,
-			'conversion uses the command-time snapshot while source typing continues',
-		);
-		assert.equal(imported.document.content[0].content[0].text, 'Unsaved title');
-		assert.deepEqual(imported.document.content[2].content[0].attrs, {
-			src: 'data:image/png;base64,aW1hZ2UgYnl0ZXM=',
-			alt: 'Diagram',
-		});
-		assert.equal(text.model.getValue(), subsequentSource);
-		assert.equal((await files.resolve({ resource: source }, new AbortController().signal)).text, '# On disk');
-		await assert.rejects(
-			copies
-				.get(main.activeInput!.resource)[0]!
-				.saveAs(URI.file('/notes/incorrect.md'), new AbortController().signal),
-			/supported extension/u,
-		);
-		assert.equal(copies.get(main.activeInput!.resource)[0]!.isDirty, true);
-		await main.saveActiveEditor();
-		assert.equal(main.activeInput!.resource.toString(), target.toString());
-		assert.equal(copies.get(target).length, 1);
-		assert.deepEqual(
-			JSON.parse((await files.resolve({ resource: target }, new AbortController().signal)).text),
-			imported,
-		);
-		main.activePane!.focus();
-		const focused = dom.window.document.activeElement;
-		const { AccessibleViewRegistry } =
-			await import('../../../../../../platform/accessibility/browser/accessibleViewRegistry.js');
-		for (const implementation of AccessibleViewRegistry.getImplementations().filter(
-			value => value.name === 'document',
-		)) {
-			const provider = services.invokeFunction(accessor => implementation.getProvider(accessor));
-			assert.ok(provider);
-			assert.ok(
-				provider
-					.provideContent()
-					.includes(implementation.type === 'help' ? 'Convert Active Markdown' : 'Unsaved title'),
-			);
-			provider.dispose();
-			assert.equal(dom.window.document.activeElement, focused);
-		}
-		await commands.executeCommand('workbench.action.document.export.markdown');
-		const exported = services.get(IUntitledTextEditorService).get(main.activeInput!.resource)!;
-		assert.ok(exported.textEditorModel!.getValue().includes('**bold**'));
-		assert.ok(main.activeInput!.resource.path.endsWith('.md'));
-		assert.equal((await files.resolve({ resource: source }, new AbortController().signal)).text, '# On disk');
-		await commands.executeCommand('workbench.action.document.new');
-		assert.ok(main.activePane instanceof DocumentEditorPane);
-		assert.deepEqual(
-			main.activePane.getDocument().content.map(node => node.type),
-			['paragraph'],
-		);
 	} finally {
 		dom.window.close();
 	}

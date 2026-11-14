@@ -4,14 +4,20 @@
 //! expose UTF-8 byte offsets. A Markdown source range is not a rendered DOM range:
 //! escaping, entities and hidden syntax still require host-side selection mapping.
 
+mod buffer;
 mod document;
 mod error;
+mod incremental;
 mod markdown;
+mod operations;
 mod source;
 
 #[cfg(all(feature = "wasm", target_arch = "wasm32"))]
 mod wasm;
 
+pub use buffer::Buffer;
+pub use buffer::BufferAction;
+pub use buffer::BufferSizes;
 pub use document::Change;
 pub use document::ChangeKind;
 pub use document::Document;
@@ -24,6 +30,9 @@ pub use markdown::Node;
 pub use markdown::NodeKind;
 pub use markdown::parse;
 pub use markdown::render_html;
+pub use operations::ListKind;
+pub use operations::Operation;
+pub use operations::operation_edits;
 pub use source::ByteRange;
 pub use source::SourceIndex;
 pub use source::SourceSpan;

@@ -1,17 +1,18 @@
-use crate::DocumentCollaborationOpenParams;
-use crate::DocumentCollaborationPresenceParams;
-use crate::DocumentCollaborationPresenceReadParams;
-use crate::DocumentCollaborationReplay;
-use crate::DocumentCollaborationSubmitParams;
-use crate::DocumentCollaborationSubmitResult;
-use crate::InMemoryDocumentCollaborationRooms;
+use crate::MemoryRoomStore;
+use crate::RoomOpenParams;
+use crate::RoomPresenceParams;
+use crate::RoomPresenceReadParams;
+use crate::RoomReplay;
+use crate::RoomSubmitParams;
+use crate::RoomSubmitResult;
 
 #[test]
 fn in_memory_rooms_order_updates_and_replay_stale_clients() {
-    let mut rooms = InMemoryDocumentCollaborationRooms::default();
+    let mut rooms = MemoryRoomStore::default();
     let document = document("initial");
     let opened = rooms
-        .open(DocumentCollaborationOpenParams {
+        .open(RoomOpenParams {
+            lease: None,
             room_id: None,
             client_id: "client-a".into(),
             schema_id: "stanza-document-v1".into(),
@@ -25,13 +26,13 @@ fn in_memory_rooms_order_updates_and_replay_stale_clients() {
     assert_eq!(accepted_version(&accepted), 1);
     let replay = rooms.replay(&opened.snapshot.room_id, 0).unwrap();
     assert!(
-        matches!(replay, DocumentCollaborationReplay::Updates(updates) if updates.len() == 1 && updates[0].version == 1)
+        matches!(replay, RoomReplay::Updates(updates) if updates.len() == 1 && updates[0].version == 1)
     );
 }
 
 #[test]
 fn in_memory_rooms_return_the_same_result_for_an_exact_retry() {
-    let mut rooms = InMemoryDocumentCollaborationRooms::default();
+    let mut rooms = MemoryRoomStore::default();
     let room_id = open_room(&mut rooms);
     let first = rooms
         .submit(submit(&room_id, "client-a", 1, 0, "first"))
@@ -46,8 +47,9 @@ fn in_memory_rooms_return_the_same_result_for_an_exact_retry() {
 
 #[test]
 fn collaboration_authorities_reject_invalid_document_and_transaction_envelopes() {
-    let mut rooms = InMemoryDocumentCollaborationRooms::default();
-    let invalid_document = rooms.open(DocumentCollaborationOpenParams {
+    let mut rooms = MemoryRoomStore::default();
+    let invalid_document = rooms.open(RoomOpenParams {
+        lease: None,
         room_id: None,
         client_id: "client-a".into(),
         schema_id: "stanza-document-v1".into(),
@@ -56,7 +58,7 @@ fn collaboration_authorities_reject_invalid_document_and_transaction_envelopes()
     assert!(invalid_document.unwrap_err().contains("ash.document v1"));
 
     let room_id = open_room(&mut rooms);
-    let invalid_transaction = DocumentCollaborationSubmitParams {
+    let invalid_transaction = RoomSubmitParams { epoch: None,
         room_id,
         client_id: "client-a".into(),
         sequence: 1,
@@ -75,13 +77,14 @@ fn collaboration_authorities_reject_invalid_document_and_transaction_envelopes()
 #[test]
 fn collaboration_accepts_typed_v2_snapshots_and_rejects_invalid_kinds() {
     for document_type in ["general", "academy"] {
-        let mut rooms = InMemoryDocumentCollaborationRooms::default();
+        let mut rooms = MemoryRoomStore::default();
         let mut envelope: serde_json::Value = serde_json::from_str(&document("initial")).unwrap();
         envelope["version"] = 2.into();
         envelope["documentType"] = document_type.into();
         let encoded = envelope.to_string();
         let opened = rooms
-            .open(DocumentCollaborationOpenParams {
+            .open(RoomOpenParams {
+                lease: None,
                 room_id: None,
                 client_id: "client-a".into(),
                 schema_id: "test-schema".into(),
@@ -109,10 +112,10 @@ fn collaboration_accepts_typed_v2_snapshots_and_rejects_invalid_kinds() {
 
 #[test]
 fn in_memory_rooms_publish_and_clear_ephemeral_presence_without_advancing_document_version() {
-    let mut rooms = InMemoryDocumentCollaborationRooms::default();
+    let mut rooms = MemoryRoomStore::default();
     let room_id = open_room(&mut rooms);
     let published = rooms
-        .publish_presence(DocumentCollaborationPresenceParams {
+        .publish_presence(RoomPresenceParams {
             room_id: room_id.clone(),
             client_id: "client-a".into(),
             selection: Some(selection().into()),
@@ -122,10 +125,10 @@ fn in_memory_rooms_publish_and_clear_ephemeral_presence_without_advancing_docume
     assert_eq!(published.presences.len(), 1);
     assert_eq!(
         rooms.replay(&room_id, 0).unwrap(),
-        DocumentCollaborationReplay::Updates(Vec::new())
+        RoomReplay::Updates(Vec::new())
     );
     let cleared = rooms
-        .publish_presence(DocumentCollaborationPresenceParams {
+        .publish_presence(RoomPresenceParams {
             room_id: room_id.clone(),
             client_id: "client-a".into(),
             selection: None,
@@ -135,15 +138,16 @@ fn in_memory_rooms_publish_and_clear_ephemeral_presence_without_advancing_docume
     assert!(cleared.presences.is_empty());
     assert_eq!(
         rooms
-            .read_presence(DocumentCollaborationPresenceReadParams { room_id })
+            .read_presence(RoomPresenceReadParams { room_id })
             .unwrap(),
         cleared
     );
 }
 
-fn open_room(rooms: &mut InMemoryDocumentCollaborationRooms) -> String {
+fn open_room(rooms: &mut MemoryRoomStore) -> String {
     rooms
-        .open(DocumentCollaborationOpenParams {
+        .open(RoomOpenParams {
+            lease: None,
             room_id: None,
             client_id: "client-a".into(),
             schema_id: "stanza-document-v1".into(),
@@ -160,8 +164,9 @@ fn submit(
     sequence: u64,
     base_version: u64,
     value: &str,
-) -> DocumentCollaborationSubmitParams {
-    DocumentCollaborationSubmitParams {
+) -> RoomSubmitParams {
+    RoomSubmitParams {
+        epoch: None,
         room_id: room_id.into(),
         client_id: client_id.into(),
         sequence,
@@ -185,9 +190,9 @@ fn document(value: &str) -> String {
     )
 }
 
-fn accepted_version(result: &DocumentCollaborationSubmitResult) -> u64 {
+fn accepted_version(result: &RoomSubmitResult) -> u64 {
     match result {
-        DocumentCollaborationSubmitResult::Accepted { update } => update.version,
+        RoomSubmitResult::Accepted { update } => update.version,
         _ => panic!("expected an accepted collaboration update"),
     }
 }

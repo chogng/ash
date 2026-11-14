@@ -1,7 +1,7 @@
 use super::HttpRuntime;
 use super::serve_listener;
 use crate::CollaborationServerOptions;
-use ash_collab::SqliteDocumentCollaborationRooms;
+use ash_collab::SqliteRoomStore;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -75,7 +75,7 @@ fn media_calls_enforce_membership_and_rotate_self_hosted_rooms() {
             .with_allowed_origin(ORIGIN);
     let calls = super::calls::CallRuntime::open(options.database_path(), service).unwrap();
     let mut runtime = HttpRuntime::new(
-        SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
+        SqliteRoomStore::open_at(options.database_path()).unwrap(),
         options,
     )
     .unwrap();
@@ -220,7 +220,7 @@ fn remote_host_authenticates_origins_and_orders_cross_client_updates() {
             .with_allowed_origin(ORIGIN);
     let runtime = Arc::new(
         HttpRuntime::new(
-            SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
+            SqliteRoomStore::open_at(options.database_path()).unwrap(),
             options,
         )
         .unwrap(),
@@ -280,6 +280,18 @@ fn remote_host_authenticates_origins_and_orders_cross_client_updates() {
         .unwrap()
         .to_string();
     assert_eq!(opened_body["snapshot"]["version"], 0);
+    let status = send_json(
+        address,
+        "/v1/document-collaboration/rooms/status",
+        &serde_json::json!({ "roomId": room_id, "clientId": "client-a" }),
+    );
+    assert_eq!(status.status, 200);
+    let status: Value = serde_json::from_slice(&status.body).unwrap();
+    assert_eq!(status["roomId"], room_id);
+    assert_eq!(status["version"], 0);
+    assert_eq!(status["epoch"], opened_body["snapshot"]["epoch"]);
+    assert_eq!(status["canEdit"], true);
+    assert!(status.get("document").is_none());
     assert_eq!(opened_body["canEdit"], true);
     assert_eq!(opened_body["canManageMembers"], true);
 
@@ -343,7 +355,7 @@ fn remote_host_enforces_room_roles_rotates_credentials_and_exposes_owner_audit()
             .with_allowed_origin(ORIGIN);
     let runtime = Arc::new(
         HttpRuntime::new(
-            SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
+            SqliteRoomStore::open_at(options.database_path()).unwrap(),
             options,
         )
         .unwrap(),
@@ -570,14 +582,14 @@ fn remote_hosts_recheck_shared_sqlite_for_cross_instance_updates() {
         .with_allowed_origin(ORIGIN);
     let runtime_a = Arc::new(
         HttpRuntime::new(
-            SqliteDocumentCollaborationRooms::open_at(options_a.database_path()).unwrap(),
+            SqliteRoomStore::open_at(options_a.database_path()).unwrap(),
             options_a,
         )
         .unwrap(),
     );
     let runtime_b = Arc::new(
         HttpRuntime::new(
-            SqliteDocumentCollaborationRooms::open_at(options_b.database_path()).unwrap(),
+            SqliteRoomStore::open_at(options_b.database_path()).unwrap(),
             options_b,
         )
         .unwrap(),
@@ -749,7 +761,7 @@ fn channel_accounts_share_durable_trees_and_enforce_remote_permissions() {
             .with_allowed_origin(ORIGIN);
     let host = Arc::new(
         HttpRuntime::new(
-            SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
+            SqliteRoomStore::open_at(options.database_path()).unwrap(),
             options,
         )
         .unwrap(),
@@ -906,7 +918,7 @@ fn fragmented_channel_request_waits_on_an_accepted_nonblocking_socket() {
     let options =
         CollaborationServerOptions::new(address, directory.path().join("channels.sqlite"), TOKEN);
     let runtime = HttpRuntime::new(
-        SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
+        SqliteRoomStore::open_at(options.database_path()).unwrap(),
         options,
     )
     .unwrap();
@@ -945,13 +957,8 @@ fn channel_notes_share_one_durable_room_and_follow_live_channel_permissions() {
     let address = listener.local_addr().unwrap();
     let options =
         CollaborationServerOptions::new(address, path.clone(), TOKEN).with_allowed_origin(ORIGIN);
-    let host = Arc::new(
-        HttpRuntime::new(
-            SqliteDocumentCollaborationRooms::open_at(&path).unwrap(),
-            options,
-        )
-        .unwrap(),
-    );
+    let host =
+        Arc::new(HttpRuntime::new(SqliteRoomStore::open_at(&path).unwrap(), options).unwrap());
     let shutdown = Arc::new(AtomicBool::new(false));
     let stop = shutdown.clone();
     let worker = thread::spawn(move || serve_listener(listener, host, stop).unwrap());
@@ -1141,7 +1148,7 @@ fn channel_notes_share_one_durable_room_and_follow_live_channel_permissions() {
     );
     shutdown.store(true, Ordering::Release);
     worker.join().unwrap();
-    let rooms = SqliteDocumentCollaborationRooms::open_at(path).unwrap();
+    let rooms = SqliteRoomStore::open_at(path).unwrap();
     let principal = rooms
         .principal_for_access_token(&owner_access.resource_id, &owner_access.credential)
         .unwrap()

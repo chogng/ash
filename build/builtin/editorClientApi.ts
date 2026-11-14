@@ -14,7 +14,7 @@ const typeModules = [
 	'editor/common/core/2d/dimension.js',
 	'editor/common/core/textChange.js',
 	'workbench/common/editor.js',
-	'workbench/services/documentCollaboration/common/documentCollaborationService.js',
+	'workbench/services/collab/common/collabService.js',
 	'workbench/services/documentEditor/browser/documentEditorProfile.js',
 	'workbench/services/documentEditor/common/documentCodec.js',
 ];

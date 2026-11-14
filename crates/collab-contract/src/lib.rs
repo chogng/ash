@@ -7,10 +7,14 @@ use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
 
-/// Opens one shared structured-document room or joins an existing room.
+/// Opens one shared schema-bound room or joins an existing room.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationOpenParams {
+pub struct RoomOpenParams {
+    /// Opts into renewable, bounded replay receipts. Legacy clients keep their existing contract.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub lease: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub room_id: Option<String>,
@@ -26,25 +30,28 @@ pub struct DocumentCollaborationOpenParams {
 /// Versioned canonical document snapshot returned while opening or resynchronizing a room.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationSnapshot {
+pub struct RoomSnapshot {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub epoch: Option<String>,
     pub room_id: String,
     #[ts(type = "number")]
     pub version: u64,
     pub document: String,
 }
 
-/// Result of opening a shared structured-document room.
+/// Result of opening a shared schema-bound room.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationOpenResult {
+pub struct RoomOpenResult {
     pub client_id: String,
     pub schema_id: String,
-    pub snapshot: DocumentCollaborationSnapshot,
+    pub snapshot: RoomSnapshot,
 }
 
 /// Authenticated person or service principal acting in a collaboration room.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DocumentCollaborationPrincipal {
+pub struct RoomPrincipal {
     pub id: String,
     pub display_name: String,
 }
@@ -52,13 +59,13 @@ pub struct DocumentCollaborationPrincipal {
 /// Permission assigned to one authenticated collaboration room member.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub enum DocumentCollaborationRoomRole {
+pub enum RoomRole {
     Owner,
     Editor,
     Viewer,
 }
 
-impl DocumentCollaborationRoomRole {
+impl RoomRole {
     /// Returns whether this role may create server-ordered document updates.
     pub fn can_submit(self) -> bool {
         matches!(self, Self::Owner | Self::Editor)
@@ -73,11 +80,11 @@ impl DocumentCollaborationRoomRole {
 /// One newly provisioned room member access credential.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationInvite {
+pub struct RoomInvite {
     pub room_id: String,
     pub principal_id: String,
     pub display_name: String,
-    pub role: DocumentCollaborationRoomRole,
+    pub role: RoomRole,
     /// Secret bearer credential shown only when the invitation is created.
     pub access_token: String,
 }
@@ -85,16 +92,16 @@ pub struct DocumentCollaborationInvite {
 /// One active authenticated member of a collaboration room, visible to room owners.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationMember {
+pub struct RoomMember {
     pub principal_id: String,
     pub display_name: String,
-    pub role: DocumentCollaborationRoomRole,
+    pub role: RoomRole,
 }
 
 /// One immutable room-security event retained for owner audit and incident review.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationAuditEvent {
+pub struct RoomAuditEvent {
     pub room_id: String,
     #[ts(type = "number")]
     pub event_id: u64,
@@ -108,7 +115,7 @@ pub struct DocumentCollaborationAuditEvent {
 /// One active client selection announced independently from document history.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationPresence {
+pub struct RoomPresence {
     pub client_id: String,
     /// Serialized Document Engine selection, validated as a bounded selection envelope by the authority.
     pub selection: String,
@@ -117,16 +124,16 @@ pub struct DocumentCollaborationPresence {
 /// Current ephemeral room presence after one monotonically increasing generation.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationPresenceReplay {
+pub struct RoomPresenceReplay {
     #[ts(type = "number")]
     pub generation: u64,
-    pub presences: Vec<DocumentCollaborationPresence>,
+    pub presences: Vec<RoomPresence>,
 }
 
 /// One local-process presence mutation requested through the App Server protocol.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationPresenceParams {
+pub struct RoomPresenceParams {
     #[schemars(length(min = 1))]
     pub room_id: String,
     #[schemars(length(min = 1))]
@@ -140,17 +147,17 @@ pub struct DocumentCollaborationPresenceParams {
 /// Full current local-process presence projection for one collaboration room.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationPresenceSnapshot {
+pub struct RoomPresenceSnapshot {
     pub room_id: String,
     #[ts(type = "number")]
     pub generation: u64,
-    pub presences: Vec<DocumentCollaborationPresence>,
+    pub presences: Vec<RoomPresence>,
 }
 
 /// Reads the current ephemeral presence projection after opening a room.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationPresenceReadParams {
+pub struct RoomPresenceReadParams {
     #[schemars(length(min = 1))]
     pub room_id: String,
 }
@@ -158,7 +165,10 @@ pub struct DocumentCollaborationPresenceReadParams {
 /// One server-ordered opaque Document Engine transaction.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationUpdate {
+pub struct RoomUpdate {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub epoch: Option<String>,
     pub room_id: String,
     pub client_id: String,
     #[ts(type = "number")]
@@ -174,7 +184,10 @@ pub struct DocumentCollaborationUpdate {
 /// Submits one optimistic local transaction alongside its resulting document snapshot.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct DocumentCollaborationSubmitParams {
+pub struct RoomSubmitParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub epoch: Option<String>,
     #[schemars(length(min = 1))]
     pub room_id: String,
     #[schemars(length(min = 1))]
@@ -193,14 +206,27 @@ pub struct DocumentCollaborationSubmitParams {
 /// Server outcome for an optimistic document submission.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "status", rename_all = "camelCase")]
-pub enum DocumentCollaborationSubmitResult {
-    Accepted {
-        update: DocumentCollaborationUpdate,
-    },
-    Conflict {
-        updates: Vec<DocumentCollaborationUpdate>,
-    },
-    Resync {
-        snapshot: DocumentCollaborationSnapshot,
-    },
+pub enum RoomSubmitResult {
+    Accepted { update: RoomUpdate },
+    Conflict { updates: Vec<RoomUpdate> },
+    Resync { snapshot: RoomSnapshot },
+}
+
+/// Lightweight incarnation/version probe. Active leased clients renew their lease here.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomStatusParams {
+    pub room_id: String,
+    pub client_id: String,
+}
+
+/// Contains no document payload; suitable for connection heartbeats.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomStatus {
+    pub room_id: String,
+    pub epoch: String,
+    #[ts(type = "number")]
+    pub version: u64,
+    pub can_edit: bool,
 }

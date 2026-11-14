@@ -45,19 +45,12 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const edge = getComputedStyle(frame, '::after');
 			return { x: bounds.left + parseFloat(edge.left), bottom: bounds.bottom - parseFloat(edge.bottom), width: edge.borderLeftWidth };
 		})).toEqual({ x: editorBounds.x, bottom: editorBounds.y, width: '1px' });
-		await expect(header.getByRole('heading')).toHaveText(locale === 'en' ? 'Untitled.ash-doc' : '未命名.ash-doc');
+		await expect(header.getByRole('heading')).toHaveText(locale === 'en' ? 'Untitled.md' : '未命名.md');
 		await expect.poll(async () => (await header.boundingBox())!.x).toBeCloseTo(editorBounds.x, 0);
 		await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 		await expect(docs.locator(':scope > :first-child')).toHaveClass('ash-docs-workspace-body');
 		await page.screenshot({ path: testInfo.outputPath(`docs-editor-${locale}.png`) });
-		const tools = toolbar.getByRole('button', { name: locale === 'en' ? 'Document tools' : '文档工具' });
-		await tools.press('Enter');
-		const dock = page.locator('[data-part="auxiliarybar"] .ash-docs-workspace-controls');
-		await expect(dock).toBeVisible();
-		await expect(dock.getByRole('toolbar', { name: 'Text formatting' })).toBeVisible();
-		expect(await dock.evaluate(element => element.closest('[data-part="editor"]') !== null)).toBe(true);
-		await tools.press('Enter');
-		await expect(dock).toBeHidden();
+		await expect(docs.getByRole('textbox', { name: locale === 'en' ? 'Document body' : '文档正文', exact: true })).toHaveAttribute('data-arkdown-engine', 'wasm');
 		const viewport = page.viewportSize();
 		if (target.kind === 'browser' && viewport) {
 			await page.setViewportSize({ width: 900, height: viewport.height });
@@ -75,7 +68,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await chooseEditor();
 		await expect(quick.items).toHaveCount(3);
 		await expect(quick.items.first().locator('.ash-quick-pick-row-content')).toHaveClass(/picked/);
-		await quick.select('Markdown');
+		await quick.select(locale === 'en' ? 'Markdown source' : 'Markdown 源码');
 		await chooseEditor();
 		await expect(quick.items.filter({ hasText: 'Markdown' }).last().locator('.ash-quick-pick-row-content')).toHaveClass(/picked/);
 		await quick.select(locale === 'en' ? 'New blank document' : '新建空白文档');
@@ -88,7 +81,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await markdown.waitForTypeInEditor('# Retained Docs draft');
 		await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 		await chooseEditor();
-		await quick.select(locale === 'en' ? 'Rich document' : '富文档');
+		await quick.select(locale === 'en' ? 'Document' : '文档');
 		await chooseEditor();
 		await expect(quick.items.first().locator('.ash-quick-pick-row-content')).toHaveClass(/picked/);
 		await quick.input.press('Escape');
@@ -118,7 +111,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.screenshot({ path: testInfo.outputPath(`docs-markdown-${locale}.png`) });
 		await chooseEditor();
 		await quick.select(locale === 'en' ? 'New blank document' : '新建空白文档');
-		const rich = page.locator('.ash-docs-workspace:visible .stanza-document-rich-text-input').first();
+		const rich = page.locator('.ash-docs-workspace:visible .stanza-arkdown-prose').first();
 		await expect(rich).toBeEditable();
 		await rich.fill('Built-in Docs draft');
 		await expect(rich).toHaveText('Built-in Docs draft');

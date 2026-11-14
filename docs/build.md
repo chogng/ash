@@ -578,6 +578,18 @@ python -B scripts/check_blob_size.py --head HEAD
 
 ### 历史测量与适用范围
 
+#### 2026-11-13：macOS corgi 兼容性试验
+
+在 Apple M2 Max（12 核、32 GiB）、macOS arm64、Rust 1.99.1 上试用 corgi 0.1.106，目标为 `ash-app-server` 的默认功能集、`dev-small` 和 8 个 jobs。工具使用上游发布包并核验 SHA-256；Rust、Clang 和 SDK 使用本机工具链。试验未接入默认构建入口。
+
+原版 corgi 在读取根 `.cargo/config.toml` 时拒绝 `env.RUSTY_V8_MIRROR` 的 `{ value, relative = true }` 写法；临时改为字符串后，又拒绝 `target.x86_64-pc-windows-msvc.linker`，即使本次目标是 macOS。包级 `corgi.toml` 配合 `-C crates/app-server-host` 也被 Corgi project root 与 Cargo workspace root 的一致性检查拒绝。当前版本不能直接使用 Ash 的现有配置，不能把临时覆盖共享配置作为常驻入口。
+
+后续探测仅临时覆盖 macOS 有效的 Cargo 配置，并声明包级资源、SQL 迁移、跨包语法查询、协议 metadata、锁定校验值的语法库工具和构建提交号。显式原生工具链还需提供 Xcode 的 `usr` 目录，单独指定 Clang 无法启动链接器。最初放在 checkout 内的 corgi store 使缓存自身路径触发产物路径检测，该轮无效；改用仓库外独立 store 后，原生依赖未再出现该误报。
+
+最后一次探测的 857 个构建动作中，848 个成功、8 个因依赖失败跳过、1 个在协作契约包的 `ts-rs` 派生处失败；完整 App Server 未构建完成。工作区业务源码在探测期间发生变化，报错字段随后已被修改，不能据此判定 corgi 的编译兼容性缺陷。未建立匹配的 Cargo/corgi 性能基线，未验证跨 worktree 复用、分支切换、真实源码编辑、测试结果缓存或 Desktop 自举，不给出提速结论。
+
+本轮结论为暂不接入 corgi 0.1.106；原有 Cargo 配置和构建入口保留。临时配置与独立缓存已清理，工具校验信息、探测配置、复现脚本、日志及结构化报告位于 `.build/build-health/corgi-20261113/`，汇总为 `summary.json`。后续试验需先解决 Cargo 配置支持，并固定源码输入再建立性能对照。
+
 #### 2026-11-02：Desktop 后端依赖查询与功能组复用
 
 Desktop 增量后端入口在 `.build/desktop/dev/app-server/build-plan.json` 保存成功的依赖查询和四个 Cargo 功能组的输入记录；发布与普通 CLI 构建不使用此缓存。清单、锁文件、Cargo 配置、环境、目标、profile 或工具链身份变化时重新查询。功能组复用会检查本地包文件集合和内容、Cargo dep-info、build.rs 声明的外部输入及产物身份；共享内容校验只在同一次请求内复用，运行 Cargo 后重新校验。源码增删、内容修改、产物缺失和未知输入状态会交给 Cargo；失败或中断不保留可复用记录。原有核心与三个音视频组的包集合、features 和编译参数保持不变，缓存校验与发布期间持有原有 Cargo 缓存租约。

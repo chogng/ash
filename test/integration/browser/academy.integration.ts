@@ -10,7 +10,7 @@ import { bindTestColorTheme } from '../../fixtures/browser/themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
-import type { IDocumentCollaborationApi } from '../../../src/ash/platform/collab/common/documentCollaborationApi.js';
+import type { ICollabApi } from '../../../src/ash/platform/collab/common/collabApi.js';
 import { generalProfile, createEditorProfileConfiguration } from '../../../extensions/academy/browser/generalProfile.js';
 import { documentContributions } from '../../../extensions/academy/browser/documentContributions.js';
 import { DocumentTextModel } from '../../../extensions/academy/common/model/documentTextModel.js';
@@ -41,18 +41,18 @@ import { DocumentEditorPane } from '../../../src/ash/workbench/contrib/documentE
 import type { DocumentNode } from '../../../extensions/academy/common/model/document.js';
 import { documentFromPlainText, serializeDocument } from '../../../extensions/academy/common/model/documentSerialization.js';
 import type { DocumentSchema } from '../../../extensions/academy/common/model/documentSchema.js';
-import type { DocumentCollaborationRoom } from '../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js';
-import type { DocumentCollaborationInvite } from '../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js';
-import type { DocumentCollaborationMember } from '../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js';
-import type { DocumentCollaborationOpenInput } from '../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js';
-import type { DocumentCollaborationPresence } from '../../../extensions/academy/common/services/documentCollaborationService.js';
-import type { DocumentCollaborationRoomRole } from '../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js';
+import type { Room } from '../../../src/ash/workbench/services/collab/common/collabService.js';
+import type { RoomInvite } from '../../../src/ash/workbench/services/collab/common/collabService.js';
+import type { RoomMember } from '../../../src/ash/workbench/services/collab/common/collabService.js';
+import type { RoomOpenInput } from '../../../src/ash/workbench/services/collab/common/collabService.js';
+import type { RoomPresence } from '../../../extensions/academy/common/services/collabService.js';
+import type { RoomRole } from '../../../src/ash/workbench/services/collab/common/collabService.js';
 import type { DocumentSelection } from '../../../extensions/academy/common/core/documentSelection.js';
-import type { DocumentCollaborationSnapshot } from '../../../extensions/academy/common/services/documentCollaborationService.js';
-import type { DocumentCollaborationRemoteEnvelope } from '../../../extensions/academy/common/services/documentCollaborationService.js';
-import type { DocumentCollaborationEnvelope } from '../../../extensions/academy/common/services/documentCollaborationService.js';
-import type { DocumentCollaborationSubmitOutcome } from '../../../extensions/academy/common/services/documentCollaborationService.js';
-import type { IDocumentCollaborationService } from '../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js';
+import type { RoomSnapshot } from '../../../extensions/academy/common/services/collabService.js';
+import type { RemoteRoomEnvelope } from '../../../extensions/academy/common/services/collabService.js';
+import type { RoomEnvelope } from '../../../extensions/academy/common/services/collabService.js';
+import type { RoomSubmitOutcome } from '../../../extensions/academy/common/services/collabService.js';
+import type { IDocumentRoomService } from '../../../src/ash/workbench/services/collab/common/collabService.js';
 import { MemoryTextFiles } from '../../fixtures/browser/memoryTextFiles.js';
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
@@ -123,19 +123,19 @@ declare global {
 
 const collaborationDocuments = new Map<string, DocumentNode>();
 
-class BrowserDocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
-	async open(input: DocumentCollaborationOpenInput, _signal: AbortSignal): Promise<DocumentCollaborationRoom> {
+class BrowserCollabService extends Disposable implements IDocumentRoomService {
+	async open(input: RoomOpenInput, _signal: AbortSignal): Promise<Room> {
 		const roomId = input.roomId ?? 'editor-browser-room';
 		const document = collaborationDocuments.get(roomId) ?? input.document;
 		collaborationDocuments.set(roomId, document);
-		return new BrowserDocumentCollaborationConnection(schema, input.clientId, document, roomId, true);
+		return new BrowserCollabConnection(schema, input.clientId, document, roomId, true);
 	}
 }
 
-class BrowserDocumentCollaborationConnection extends Disposable implements DocumentCollaborationRoom {
-	private readonly updates = this._register(new Emitter<DocumentCollaborationRemoteEnvelope>());
-	private readonly snapshots = this._register(new Emitter<DocumentCollaborationSnapshot>());
-	private readonly presences = this._register(new Emitter<readonly DocumentCollaborationPresence[]>());
+class BrowserCollabConnection extends Disposable implements Room {
+	private readonly updates = this._register(new Emitter<RemoteRoomEnvelope>());
+	private readonly snapshots = this._register(new Emitter<RoomSnapshot>());
+	private readonly presences = this._register(new Emitter<readonly RoomPresence[]>());
 	private readonly failures = this._register(new Emitter<Error>());
 	private version = 0;
 
@@ -143,11 +143,11 @@ class BrowserDocumentCollaborationConnection extends Disposable implements Docum
 	readonly canEdit = true;
 	readonly serverUrl = 'https://documents.example';
 	readonly principalId: string | undefined;
-	readonly onDidReceiveUpdate: Event<DocumentCollaborationRemoteEnvelope> = this.updates.event;
-	readonly onDidReceiveSnapshot: Event<DocumentCollaborationSnapshot> = this.snapshots.event;
-	readonly onDidReceivePresence: Event<readonly DocumentCollaborationPresence[]> = this.presences.event;
+	readonly onDidReceiveUpdate: Event<RemoteRoomEnvelope> = this.updates.event;
+	readonly onDidReceiveSnapshot: Event<RoomSnapshot> = this.snapshots.event;
+	readonly onDidReceivePresence: Event<readonly RoomPresence[]> = this.presences.event;
 	readonly onDidFail: Event<Error> = this.failures.event;
-	readonly currentPresence: readonly DocumentCollaborationPresence[] = [];
+	readonly currentPresence: readonly RoomPresence[] = [];
 
 	constructor(readonly schema: DocumentSchema, readonly clientId: string, document: DocumentNode, readonly roomId: string, readonly canManageMembers: boolean) {
 		super();
@@ -155,7 +155,7 @@ class BrowserDocumentCollaborationConnection extends Disposable implements Docum
 		this.initialSnapshot = Object.freeze({ roomId, version: this.version, document });
 	}
 
-	async submit(envelope: DocumentCollaborationEnvelope, _document: DocumentNode, _signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
+	async submit(envelope: RoomEnvelope, _document: DocumentNode, _signal: AbortSignal): Promise<RoomSubmitOutcome> {
 		this.version += 1;
 		collaborationDocuments.set(this.roomId, _document);
 		return {
@@ -172,12 +172,12 @@ class BrowserDocumentCollaborationConnection extends Disposable implements Docum
 
 	async updatePresence(_selection: DocumentSelection | undefined, _signal: AbortSignal): Promise<void> { }
 
-	async createInvite(displayName: string, role: DocumentCollaborationRoomRole, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
+	async createInvite(displayName: string, role: RoomRole, _signal: AbortSignal): Promise<RoomInvite> {
 		if (!this.canManageMembers) throw new Error('This collaboration member cannot create room invitations');
 		return Object.freeze({ roomId: this.roomId, principalId: 'browser-member', displayName, role, accessToken: 'editor-browser-member-token' });
 	}
 
-	async listMembers(_signal: AbortSignal): Promise<readonly DocumentCollaborationMember[]> {
+	async listMembers(_signal: AbortSignal): Promise<readonly RoomMember[]> {
 		if (!this.canManageMembers) throw new Error('This collaboration member cannot inspect room members');
 		return Object.freeze([
 			Object.freeze({ principalId: 'browser-owner', displayName: 'Browser owner', role: 'owner' }),
@@ -185,7 +185,7 @@ class BrowserDocumentCollaborationConnection extends Disposable implements Docum
 		]);
 	}
 
-	async rotateMemberAccessToken(principalId: string, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
+	async rotateMemberAccessToken(principalId: string, _signal: AbortSignal): Promise<RoomInvite> {
 		if (!this.canManageMembers) throw new Error('This collaboration member cannot manage room credentials');
 		return Object.freeze({ roomId: this.roomId, principalId, displayName: principalId === 'browser-owner' ? 'Browser owner' : 'Writer', role: principalId === 'browser-owner' ? 'owner' : 'editor', accessToken: 'editor-browser-rotated-token' });
 	}
@@ -269,7 +269,8 @@ const structuredFiles = new MemoryTextFiles(structuredResource, structuredText);
 const collaborationSubmissions: string[] = [];
 // This fixture supplies the server's JSON boundary; the production adapter and package codec
 // still serialize, validate and deserialize every acknowledgement into the active factory.
-const documentCollaborationApi: IDocumentCollaborationApi = {
+const collabApi: ICollabApi = {
+	readStatus: async params => ({ roomId: params.roomId, epoch: "epoch-test", version: 0, canEdit: true }),
 	open: async request => ({ clientId: request.clientId, schemaId: request.schemaId, snapshot: { roomId: request.roomId ?? 'restart-room', version: 0, document: request.document } }),
 	submit: async request => {
 		collaborationSubmissions.push(request.transaction);
@@ -344,10 +345,10 @@ if (new URLSearchParams(location.search).has('academyExtension') || generalDocum
 	await academyExtensionService.update(academySnapshot!);
 }
 let structuredPane = disposables.add(academyExtensionService
-	? await EditorPanes.getEditorPane({ resource: structuredResource })!.create({ input: { resource: structuredResource }, instantiationService: services, documentCollaborationApi, serverEvents }) as DocumentEditorPane
+	? await EditorPanes.getEditorPane({ resource: structuredResource })!.create({ input: { resource: structuredResource }, instantiationService: services, collabApi, serverEvents }) as DocumentEditorPane
 	: generalDocument
-		? EditorPanes.getEditorPane({ resource: structuredResource }, { preferredEditorId: DOCUMENT_EDITOR_ID })!.create({ input: { resource: structuredResource }, instantiationService: services, documentCollaborationApi, serverEvents }) as DocumentEditorPane
-		: services.createInstance(DocumentEditorPane, { ...createEditorProfileConfiguration(schema, { outlineNavigator: false, contributions: documentContributions }), contentType: 'application/vnd.ash.document+json', createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() }));
+		? EditorPanes.getEditorPane({ resource: structuredResource }, { preferredEditorId: DOCUMENT_EDITOR_ID })!.create({ input: { resource: structuredResource }, instantiationService: services, collabApi, serverEvents }) as DocumentEditorPane
+		: services.createInstance(DocumentEditorPane, { ...createEditorProfileConfiguration(schema, { outlineNavigator: false, contributions: documentContributions }), contentType: 'application/vnd.ash.document+json', createCollabService: () => new BrowserCollabService() }));
 
 codeBlockPane.create(requiredElement('#code-block'));
 structuredPane.create(requiredElement('#document-editor'));
@@ -373,7 +374,7 @@ services.registerInstance(IEditorPart, {
 		const container = document.createElement('section'); container.id = 'imported-document'; document.body.append(container);
 		disposables.add(toDisposable(() => container.remove()));
 		const descriptor = EditorPanes.getEditorPane(input)!;
-		importedPane = disposables.add(await descriptor.create({ input, instantiationService: services, documentCollaborationApi, serverEvents }) as DocumentEditorPane);
+		importedPane = disposables.add(await descriptor.create({ input, instantiationService: services, collabApi, serverEvents }) as DocumentEditorPane);
 		importedPane.create(container); await importedPane.setInput(input, new AbortController().signal); importedPane.layout({ width: 900, height: 600 });
 		return importedPane;
 	},
@@ -405,7 +406,7 @@ if (new URLSearchParams(location.search).has('callDocuments')) {
 			container.id = 'call-document-editor';
 			document.body.append(container);
 			disposables.add(toDisposable(() => container.remove()));
-			joinedDocumentPane = disposables.add(services.createInstance(DocumentEditorPane, { ...createEditorProfileConfiguration(schema, { outlineNavigator: false, contributions: documentContributions }), contentType: input.contentType!, createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() }));
+			joinedDocumentPane = disposables.add(services.createInstance(DocumentEditorPane, { ...createEditorProfileConfiguration(schema, { outlineNavigator: false, contributions: documentContributions }), contentType: input.contentType!, createCollabService: () => new BrowserCollabService() }));
 			joinedDocumentPane.create(container);
 			joinedDocumentPane.layout({ width: 900, height: 300 });
 			await joinedDocumentPane.setInput(input, new AbortController().signal);
@@ -466,7 +467,7 @@ window.ashAcademyIntegration = {
 	reopenStructured: async () => {
 		if (academyExtensionService) {
 			const previous = structuredPane;
-			const next = await EditorPanes.getEditorPane({ resource: structuredResource })!.create({ input: { resource: structuredResource }, instantiationService: services, documentCollaborationApi, serverEvents }) as DocumentEditorPane;
+			const next = await EditorPanes.getEditorPane({ resource: structuredResource })!.create({ input: { resource: structuredResource }, instantiationService: services, collabApi, serverEvents }) as DocumentEditorPane;
 			try {
 				next.create(requiredElement('#document-editor'));
 				await next.setInput({ resource: structuredResource, label: 'paper' }, new AbortController().signal);

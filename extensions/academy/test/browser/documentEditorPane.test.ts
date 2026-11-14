@@ -2085,7 +2085,7 @@ test('switching a document cancels a pending room and disposes a late connection
 	let openingSignal: AbortSignal | undefined;
 	let disposed = false;
 	using pane = new EditorPane(environment.window.document, new MemoryTextFiles('First'), {
-		createDocumentCollaborationService: () => ({
+		createCollabService: () => ({
 			dispose() { },
 			[Symbol.dispose]() { },
 			async open(input, signal) {
@@ -2138,7 +2138,7 @@ test('call document joins use a separate untitled working copy and preserve the 
 	let pendingOpen: Promise<void> | undefined;
 	let selectedServer: string | undefined;
 	using pane = new EditorPane(environment.window.document, new MemoryTextFiles('Local text'), {
-		createDocumentCollaborationService: () => ({
+		createCollabService: () => ({
 			dispose() { }, [Symbol.dispose]() { },
 			async open(input) {
 				opens++;

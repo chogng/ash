@@ -233,6 +233,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arc-swap"
+version = "1.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84a22b5d51209f6de83d37a0b33d320acb8da88823e42a94c075140708f032a5"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "arraydeque"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -830,6 +839,7 @@ dependencies = [
  "serde_json",
  "unicode-segmentation",
  "wasm-bindgen",
+ "yrs",
 ]
 
 [[package]]
@@ -954,7 +964,7 @@ dependencies = [
  "ash-install-context",
  "ash-package-store",
  "ash-secrets",
- "ash-state",
+ "ash-sqlite",
  "rand 0.9.5",
  "rusqlite",
  "serde",
@@ -1168,9 +1178,12 @@ dependencies = [
 name = "ash-collab"
 version = "0.1.0"
 dependencies = [
+ "ash-arkdown",
  "ash-collab-contract",
  "ash-http-client",
  "ash-secrets",
+ "ash-sqlite",
+ "base64 0.22.1",
  "getrandom 0.2.17",
  "rusqlite",
  "serde",
@@ -3171,6 +3184,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-sqlite"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "tempfile",
+]
+
+[[package]]
 name = "ash-state"
 version = "0.1.0"
 dependencies = [
@@ -3189,6 +3210,7 @@ dependencies = [
  "ash-message-history",
  "ash-projects",
  "ash-protocol",
+ "ash-sqlite",
  "ash-teams",
  "ash-thread-store",
  "ash-utils-path",
@@ -6218,6 +6240,9 @@ name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
+dependencies = [
+ "getrandom 0.4.3",
+]
 
 [[package]]
 name = "fax"
@@ -12440,6 +12465,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
+name = "smallstr"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "862077b1e764f04c251fe82a2ef562fd78d7cadaeb072ca7c2bcaf7217b1ff3b"
+dependencies = [
+ "smallvec",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15132,6 +15166,24 @@ dependencies = [
  "quote",
  "syn 2.0.119",
  "synstructure",
+]
+
+[[package]]
+name = "yrs"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89512f2d869f9947e1c58d57ef86c8f4ca1b1e8ccf24d6e1ff8c7cdbd67d54df"
+dependencies = [
+ "arc-swap",
+ "async-lock",
+ "async-trait",
+ "dashmap",
+ "fastrand",
+ "serde",
+ "serde_json",
+ "smallstr",
+ "smallvec",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

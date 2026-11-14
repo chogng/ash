@@ -27,17 +27,17 @@ pub use issue_cache::IssueCacheKey;
 pub use issue_cache::SqliteIssueCache;
 pub use message_history::SqliteMessageHistory;
 mod sqlite;
-mod sqlite_migrations;
-mod sqlite_runtime;
 
+pub use ash_sqlite::Migration as SqliteMigration;
+pub use ash_sqlite::Migrator as SqliteMigrator;
+pub use ash_sqlite::SqliteDurability;
+pub use ash_sqlite::open_in_memory_database;
+pub use ash_sqlite::open_sqlite_database;
 pub use dir_index::{ClearOutcome, DirIndexKind, DirIndexLease, StateRuntime};
 pub use sqlite::{
     HistoryImport, SqliteEnvironmentStore, SqliteMemoryStore, SqliteProjectStore, SqliteTeamStore,
     SqliteThreadStore, SqliteTurnChangeStore, TurnChangeCommandOutcome,
 };
-pub use sqlite_migrations::Migration as SqliteMigration;
-pub use sqlite_migrations::Migrator as SqliteMigrator;
-pub use sqlite_runtime::{SqliteDurability, open_in_memory_database, open_sqlite_database};
 
 #[cfg(test)]
 #[path = "sqlite_tests.rs"]

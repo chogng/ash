@@ -87,6 +87,7 @@ export class SessionsBrowserMain extends Disposable {
 				contributionIds: [
 					'sessions.generatedFileAutoSave',
 					'sessions.generatedFileOpener',
+					'sessions.docs.backup',
 					'sessions.chat.copyActionRendering',
 					'chat.queuePickerRendering',
 					'workbench.contrib.btwSlashCommand',

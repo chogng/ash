@@ -16,12 +16,28 @@ import type { WorkingCopyBackup } from '../../common/workingCopyBackupService.js
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
-function assemble(services: InstantiationService, backend: IBackupService, context: TestWorkspaceService): WorkingCopyBackupService {
+function assemble(services: InstantiationService, backend: IBackupService, context: TestWorkspaceService, fixedWorkspace?: IBackupWorkspace): WorkingCopyBackupService {
 	services.registerInstance(IBackupService, backend);
 	services.registerInstance(IWorkspaceContextService, context);
 	services.registerInstance(ILogService, new NullLoggerService());
-	return services.createInstance(WorkingCopyBackupService);
+	return services.createInstance(WorkingCopyBackupService, fixedWorkspace);
 }
+
+test('profile-owned Docs backup scope survives conversation workspace changes', async () => {
+	using services = new InstantiationService();
+	using context = new TestWorkspaceService({ id: 'conversation-one' });
+	const backend = new VersionedBackups();
+	using backups = assemble(services, backend, context, { id: 'sessions-docs', folders: [] });
+	const resource = URI.parse('untitled:/docs/draft.md');
+	await backups.store({ resource, kind: 'text', content: 'Docs draft', contentType: 'text/markdown', updatedAt: 1 });
+	context.updateWorkspace({ id: 'conversation-two' });
+	assert.equal((await backups.resolve(resource))?.content, 'Docs draft');
+	assert.equal((await backups.list()).length, 1);
+	assert.deepEqual((await backend.getWorkspaces()).map(workspace => workspace.id), ['sessions-docs']);
+	assert.throws(() => backups.switchWorkspace('conversation-two'), /fixed backup scope/u);
+	await assert.rejects(backups.moveBackups({ id: 'conversation-two', folders: [] }), /fixed backup scope/u);
+	assert.equal((await backups.resolve(resource))?.content, 'Docs draft');
+});
 
 test('startup reads durable backups once when there are no legacy drafts', async () => {
 	using services = new InstantiationService();
@@ -110,7 +126,7 @@ test("stale editors preserve another window's latest backup when writing or dele
 	using context = new TestWorkspaceService({ id: 'one' });
 	const backend = new VersionedBackups();
 	using first = assemble(services, backend, context);
-	using second = services.createInstance(WorkingCopyBackupService);
+	using second = services.createInstance(WorkingCopyBackupService, undefined);
 	const backup: WorkingCopyBackup = { resource: URI.parse('untitled:/draft'), kind: 'text', content: 'first', updatedAt: 1 };
 	await first.store(backup);
 	await second.list();
@@ -141,7 +157,7 @@ test('a saved checkpoint cannot discard a later recovery version from another wr
 	using context = new TestWorkspaceService({ id: 'save-checkpoint' });
 	const backend = new VersionedBackups();
 	using saving = assemble(services, backend, context);
-	using other = services.createInstance(WorkingCopyBackupService);
+	using other = services.createInstance(WorkingCopyBackupService, undefined);
 	const checkpoint: WorkingCopyBackup = { resource: URI.file('/save/checkpoint.txt'), kind: 'text', content: 'published checkpoint', updatedAt: 1 };
 	await saving.store(checkpoint);
 	await other.list();
@@ -166,7 +182,7 @@ test('unreadable backup content stays durable while supported backups still rest
 
 test('working-copy backup construction requires its registered backend', () => {
 	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(WorkingCopyBackupService), /backupService/);
+	assert.throws(() => services.createInstance(WorkingCopyBackupService, undefined), /backupService/);
 });
 
 for (const operation of ['list', 'store', 'delete'] as const) {

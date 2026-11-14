@@ -3,8 +3,8 @@ use crate::server::notification_queue::NotificationQueue;
 use crate::server::notification_queue::NotificationQueueHandle;
 use ash_app_server_protocol::protocol::account::AccountLoginCompleted;
 use ash_app_server_protocol::protocol::account::AccountUpdated;
-use ash_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
-use ash_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
+use ash_app_server_protocol::protocol::collaboration::RoomPresenceSnapshot;
+use ash_app_server_protocol::protocol::collaboration::RoomUpdate;
 use ash_app_server_protocol::protocol::common::AgentInteractionCapability;
 use ash_app_server_protocol::protocol::common::EmptyParams;
 use ash_app_server_protocol::protocol::config::ConfigChanged;
@@ -662,7 +662,7 @@ impl UpdateBroker {
         }
     }
 
-    pub(super) fn subscribe_document_collaboration(&self, connection_id: u64, room_id: String) {
+    pub(super) fn subscribe_room(&self, connection_id: u64, room_id: String) {
         if let Ok(mut state) = self.state.lock()
             && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
@@ -670,7 +670,7 @@ impl UpdateBroker {
         }
     }
 
-    pub(super) fn publish_document_collaboration(&self, update: DocumentCollaborationUpdate) {
+    pub(super) fn publish_room(&self, update: RoomUpdate) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
@@ -681,19 +681,13 @@ impl UpdateBroker {
             if subscriber.scope_id == self.scope_id
                 && subscriber.collaboration_rooms.contains(&update.room_id)
             {
-                queue.push(notification(
-                    ServerNotificationMethod::DocumentCollaborationUpdate,
-                    &update,
-                ));
+                queue.push(notification(ServerNotificationMethod::RoomUpdate, &update));
             }
             true
         });
     }
 
-    pub(super) fn publish_document_collaboration_presence(
-        &self,
-        snapshot: DocumentCollaborationPresenceSnapshot,
-    ) {
+    pub(super) fn publish_room_presence(&self, snapshot: RoomPresenceSnapshot) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
@@ -705,7 +699,7 @@ impl UpdateBroker {
                 && subscriber.collaboration_rooms.contains(&snapshot.room_id)
             {
                 queue.push(notification(
-                    ServerNotificationMethod::DocumentCollaborationPresence,
+                    ServerNotificationMethod::RoomPresence,
                     &snapshot,
                 ));
             }

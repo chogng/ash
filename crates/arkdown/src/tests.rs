@@ -308,3 +308,449 @@ fn bounded_history_drops_oldest_transactions_without_reusing_revisions() {
     assert_eq!(document.revision(), 812);
     assert_eq!(document.source(), changed);
 }
+
+#[test]
+fn structural_edits_preserve_task_spelling_tables_and_history() {
+    use crate::Operation;
+    use crate::operation_edits;
+    let source = "- [X] 中文\r\n\r\n| a | b |\r\n| :- | -: |\r\n| 一 | 二 |\r\n\r\nafter\r\n";
+    let mut document = Document::new(source).unwrap();
+    let edits = operation_edits(
+        source,
+        Operation::SetTaskChecked {
+            offset: 3,
+            checked: false,
+        },
+    )
+    .unwrap();
+    apply(&mut document, edits);
+    assert!(document.source().starts_with("- [ ] 中文\r\n"));
+    let row = document.source().find("| 一").unwrap();
+    let offset = SourceIndex::new(document.source())
+        .unwrap()
+        .byte_to_utf16(row)
+        .unwrap();
+    let edits = operation_edits(document.source(), Operation::InsertTableRow { offset }).unwrap();
+    apply(&mut document, edits);
+    assert!(
+        document
+            .source()
+            .contains("| 一 | 二 |\r\n|   |   |\r\n\r\nafter")
+    );
+    let edits = operation_edits(document.source(), Operation::DeleteTableRow { offset }).unwrap();
+    apply(&mut document, edits);
+    assert!(!document.source().contains("| 一"));
+    for _ in 0..3 {
+        document.undo(document.revision()).unwrap();
+    }
+    assert_eq!(document.source(), source);
+    assert!(operation_edits(source, Operation::DeleteTableRow { offset: 0 }).is_err());
+    let header = SourceIndex::new(source)
+        .unwrap()
+        .byte_to_utf16(source.find("| a").unwrap())
+        .unwrap();
+    assert!(operation_edits(source, Operation::DeleteTableRow { offset: header }).is_err());
+}
+
+#[test]
+fn incremental_plain_text_matches_full_parse_and_shifts_unicode_suffixes() {
+    for source in [
+        "alpha beta\n\n# 后面🙂\n\n- tail\n",
+        "# alpha beta\r\n\r\n后面🙂\r\n",
+    ] {
+        for replacement in ["中文", "🙂", "", "z", "**bold**", "\n\n> quote\n"] {
+            let start = source.find("pha").unwrap();
+            let mut document = Document::new(source).unwrap();
+            document.snapshot().unwrap();
+            apply(
+                &mut document,
+                vec![edit(start as u32, start as u32 + 3, replacement)],
+            );
+            assert_eq!(
+                document.snapshot().unwrap().nodes,
+                parse(document.source()).unwrap()
+            );
+            document.undo(1).unwrap();
+            assert_eq!(document.snapshot().unwrap().nodes, parse(source).unwrap());
+            document.redo(2).unwrap();
+            assert_eq!(
+                document.snapshot().unwrap().nodes,
+                parse(document.source()).unwrap()
+            );
+        }
+    }
+    let source = "alpha beta\n\n# tail\n\nthird\n\nfourth\n\nfifth\n";
+    let mut nodes = parse(source).unwrap();
+    assert!(crate::incremental::update(
+        source,
+        "al中文 beta\n\n# tail\n\nthird\n\nfourth\n\nfifth\n",
+        &mut nodes,
+        &[edit(2, 5, "中文")]
+    ));
+    assert_eq!(
+        nodes,
+        parse("al中文 beta\n\n# tail\n\nthird\n\nfourth\n\nfifth\n").unwrap()
+    );
+}
+
+#[test]
+fn host_projection_tracks_authoritative_source_and_recovers_after_parse_failure() {
+    let mut projection = crate::incremental::Projection::default();
+    for source in [
+        "alpha beta\n\n# 后面🙂\n",
+        "al中文 beta\n\n# 后面🙂\n",
+        "al🙂 beta\n\n# 后面🙂\n",
+        "[link][ref]\n\n[ref]: /first\n",
+        "[link][ref]\n\n[ref]: /second\n",
+        "\n",
+        "",
+        "# last",
+    ] {
+        assert_eq!(projection.parse(source).unwrap(), parse(source).unwrap());
+        assert_eq!(projection.parse(source).unwrap(), parse(source).unwrap());
+    }
+    assert!(
+        projection
+            .parse(&format!("{}text", "> ".repeat(150)))
+            .is_err()
+    );
+    assert_eq!(
+        projection.parse("# last").unwrap(),
+        parse("# last").unwrap()
+    );
+}
+
+#[test]
+fn projection_matches_full_parser_across_markdown_context_boundaries() {
+    let sources = [
+        "# alpha beta\n\nnext🙂\n",
+        "[label][ref]\n\n[ref]: /first\n\nplain text\n",
+        "*unclosed text\n\nplain text\n",
+        "# title #\r\n\r\nplain text\r\n",
+        "alpha\n---\n\nplain text\n",
+        "```\nplain text\n```\n\nlast\n",
+        "| a | b |\n| - | - |\n| c | d |\n\nlast\n",
+        "- [ ] item\n\nlast\n",
+        "[ref]: /url\n\npara [ref]\n",
+    ];
+    for source in sources {
+        let positions: Vec<usize> = source
+            .char_indices()
+            .map(|(offset, _)| offset)
+            .chain(std::iter::once(source.len()))
+            .collect();
+        for &start in &positions {
+            for &end in positions.iter().filter(|&&end| end >= start) {
+                for text in ["中", "", "x", "*", "\n", "🙂"] {
+                    let mut projection = crate::incremental::Projection::default();
+                    projection.parse(source).unwrap();
+                    let mut changed = source.to_owned();
+                    changed.replace_range(start..end, text);
+                    assert_eq!(
+                        projection.parse(&changed).unwrap(),
+                        parse(&changed).unwrap(),
+                        "{source:?}, {start}..{end}, {text:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn task_noops_preserve_uppercase_marker() {
+    assert!(
+        crate::operation_edits(
+            "- [X] task",
+            crate::Operation::SetTaskChecked {
+                offset: 3,
+                checked: true
+            }
+        )
+        .unwrap()
+        .is_empty()
+    );
+}
+
+#[test]
+fn collaborative_updates_converge_and_selective_history_preserves_remote_text() {
+    use crate::Buffer;
+    let mut a = Buffer::new(11, "alpha🙂 beta").unwrap();
+    let mut b = Buffer::new(22, "").unwrap();
+    b.apply_update(&a.encode_update(&[]).unwrap()).unwrap();
+    assert!(!b.can_undo());
+    for (doc, text) in [(&mut a, "甲"), (&mut b, "乙")] {
+        doc.apply(Transaction {
+            expected_revision: doc.revision(),
+            edits: vec![edit(2, 2, text)],
+        })
+        .unwrap();
+    }
+    let ua = a.encode_update(&b.state_vector()).unwrap();
+    let ub = b.encode_update(&a.state_vector()).unwrap();
+    a.apply_update(&ub).unwrap();
+    b.apply_update(&ua).unwrap();
+    assert_eq!(a.source(), b.source());
+    assert!(a.source().contains('甲') && a.source().contains('乙'));
+    let before = a.source();
+    let revision = a.revision();
+    assert!(!a.apply_update(&ub).unwrap().changed);
+    assert_eq!(a.revision(), revision);
+    assert!(a.can_undo());
+    a.undo(a.revision()).unwrap();
+    assert!(!a.source().contains('甲'));
+    assert!(a.source().contains('乙'));
+    b.apply_update(&a.encode_update(&b.state_vector()).unwrap())
+        .unwrap();
+    assert_eq!(a.source(), b.source());
+    a.redo(a.revision()).unwrap();
+    assert_eq!(a.source(), before);
+    b.apply_update(&a.encode_update(&b.state_vector()).unwrap())
+        .unwrap();
+    assert_eq!(a.source(), b.source());
+    let revision = a.revision();
+    assert!(a.apply_update(&[255]).is_err());
+    assert_eq!(a.source(), before);
+    assert_eq!(a.revision(), revision);
+    assert!(
+        a.apply(Transaction {
+            expected_revision: revision - 1,
+            edits: vec![edit(0, 0, "bad")]
+        })
+        .is_err()
+    );
+}
+
+#[test]
+fn collaborative_updates_buffer_missing_dependencies_and_validate_unicode_edits() {
+    use crate::Buffer;
+    let mut a = Buffer::new(31, "🙂").unwrap();
+    let initial = a.encode_update(&[]).unwrap();
+    let state = a.state_vector();
+    a.apply(Transaction {
+        expected_revision: 0,
+        edits: vec![edit(2, 2, "one")],
+    })
+    .unwrap();
+    let first = a.encode_update(&state).unwrap();
+    let state = a.state_vector();
+    a.apply(Transaction {
+        expected_revision: 1,
+        edits: vec![edit(5, 5, "two")],
+    })
+    .unwrap();
+    let second = a.encode_update(&state).unwrap();
+    let mut b = Buffer::new(32, "").unwrap();
+    b.apply_update(&second).unwrap();
+    b.apply_update(&first).unwrap();
+    b.apply_update(&initial).unwrap();
+    assert_eq!(a.source(), b.source());
+    assert!(!b.can_undo());
+    assert!(
+        b.apply(Transaction {
+            expected_revision: b.revision(),
+            edits: vec![edit(1, 2, "bad")]
+        })
+        .is_err()
+    );
+    assert_eq!(a.source(), b.source());
+}
+
+#[test]
+fn incremental_windows_reparse_structures_and_converge_with_full_parser() {
+    let prefix = "first\n\nsecond\n\n";
+    let suffix = "\n\nthird\n\nfourth\n\nfifth\n\nsixth\n";
+    for (body, from, to) in [
+        ("alpha beta", "pha", "**bold**"),
+        ("alpha beta", "pha", "🙂\n\n- one\n- two\n\n"),
+        ("- alpha\n- beta", "pha", "中文"),
+        ("| a | b |\n| - | - |\n| c | d |", "c", "中文"),
+        ("```rust\nalpha\n```", "pha", "中文"),
+    ] {
+        let source = format!("{prefix}{body}{suffix}");
+        let start = source.find(from).unwrap();
+        let index = SourceIndex::new(&source).unwrap();
+        let mut changed = source.clone();
+        changed.replace_range(start..start + from.len(), to);
+        let mut nodes = parse(&source).unwrap();
+        assert!(
+            crate::incremental::update(
+                &source,
+                &changed,
+                &mut nodes,
+                &[edit(
+                    index.byte_to_utf16(start).unwrap(),
+                    index.byte_to_utf16(start + from.len()).unwrap(),
+                    to
+                )]
+            ),
+            "{body}"
+        );
+        assert_eq!(nodes, parse(&changed).unwrap(), "{body}");
+    }
+}
+
+#[test]
+fn heading_and_list_operations_preserve_unicode_line_endings_and_undo() {
+    use crate::ListKind;
+    use crate::Operation;
+    let mut doc = Document::new("中文🙂\r\n\r\ntail\r\n").unwrap();
+    for operation in [
+        Operation::SetHeading {
+            offset: 1,
+            level: 2,
+        },
+        Operation::SetHeading {
+            offset: 4,
+            level: 0,
+        },
+        Operation::SetListKind {
+            offset: 1,
+            list: ListKind::Task,
+        },
+        Operation::SetListKind {
+            offset: 8,
+            list: ListKind::Ordered,
+        },
+    ] {
+        let edits = crate::operation_edits(doc.source(), operation).unwrap();
+        apply(&mut doc, edits);
+    }
+    assert_eq!(doc.source(), "1. 中文🙂\r\n\r\ntail\r\n");
+    for _ in 0..4 {
+        doc.undo(doc.revision()).unwrap();
+    }
+    assert_eq!(doc.source(), "中文🙂\r\n\r\ntail\r\n");
+}
+
+#[test]
+fn collaborative_undo_size_limit_preserves_live_source_and_history() {
+    use crate::Buffer;
+    let mut a = Buffer::new(51, "").unwrap();
+    a.apply(Transaction {
+        expected_revision: 0,
+        edits: vec![edit(0, 0, &"x".repeat(crate::MAX_SOURCE_BYTES))],
+    })
+    .unwrap();
+    let mut b = Buffer::new(52, "").unwrap();
+    b.apply_update(&a.encode_update(&[]).unwrap()).unwrap();
+    a.apply(Transaction {
+        expected_revision: a.revision(),
+        edits: vec![edit(0, 1, "")],
+    })
+    .unwrap();
+    b.apply_update(&a.encode_update(&b.state_vector()).unwrap())
+        .unwrap();
+    b.apply(Transaction {
+        expected_revision: b.revision(),
+        edits: vec![edit(0, 0, "r")],
+    })
+    .unwrap();
+    a.apply_update(&b.encode_update(&a.state_vector()).unwrap())
+        .unwrap();
+    let before = a.source();
+    let revision = a.revision();
+    assert!(matches!(
+        a.undo(revision),
+        Err(Error::SourceTooLarge { .. })
+    ));
+    assert_eq!(a.source(), before);
+    assert_eq!(a.revision(), revision);
+    assert!(a.can_undo());
+}
+
+#[test]
+fn structural_conversion_preserves_list_indentation_and_removes_heading_closer() {
+    let mut doc = Document::new("  - 中文🙂\r\n  - next\r\n").unwrap();
+    let edits = crate::operation_edits(
+        doc.source(),
+        crate::Operation::SetListKind {
+            offset: 5,
+            list: crate::ListKind::Ordered,
+        },
+    )
+    .unwrap();
+    apply(&mut doc, edits);
+    assert_eq!(doc.source(), "  1. 中文🙂\r\n  2. next\r\n");
+    let mut doc = Document::new("  ## 中文🙂 ##  \r\n").unwrap();
+    let edits = crate::operation_edits(
+        doc.source(),
+        crate::Operation::SetHeading {
+            offset: 5,
+            level: 0,
+        },
+    )
+    .unwrap();
+    apply(&mut doc, edits);
+    assert_eq!(doc.source(), "  中文🙂\r\n");
+}
+
+#[test]
+fn collaborative_preview_and_gc_preserve_selective_undo() {
+    let mut local = crate::Buffer::new(301, "abcdef").unwrap();
+    let initial = local.encode_update(&[]).unwrap();
+    let sizes = local
+        .preview(
+            crate::BufferAction::Edit {
+                edits: vec![edit(1, 4, "")],
+            },
+            &[],
+        )
+        .unwrap();
+    assert_eq!(local.source(), "abcdef");
+    assert!(!local.can_undo());
+    local
+        .apply(Transaction {
+            expected_revision: 0,
+            edits: vec![edit(1, 4, "")],
+        })
+        .unwrap();
+    assert_eq!(
+        sizes.snapshot_bytes,
+        local.encode_update(&[]).unwrap().len()
+    );
+    let mut server = crate::Buffer::new(302, "").unwrap();
+    server.apply_update(&initial).unwrap();
+    server
+        .apply_update(&local.encode_update(&server.state_vector()).unwrap())
+        .unwrap();
+    server.compact();
+    local
+        .apply_update(&server.encode_update(&[]).unwrap())
+        .unwrap();
+    let preview = local
+        .preview(crate::BufferAction::Undo, &server.state_vector())
+        .unwrap();
+    assert!(preview.update_bytes > 2);
+    assert_eq!(local.source(), "aef");
+    local.undo(local.revision()).unwrap();
+    server
+        .apply_update(&local.encode_update(&server.state_vector()).unwrap())
+        .unwrap();
+    assert_eq!(server.source(), "abcdef");
+}
+
+#[test]
+fn collaborative_history_checkpoints_bound_deleted_contents() {
+    let mut local = crate::Buffer::new(303, "x".repeat(1024).as_str()).unwrap();
+    let mut server = crate::Buffer::new(304, "").unwrap();
+    server
+        .apply_update(&local.encode_update(&[]).unwrap())
+        .unwrap();
+    for i in 0..600 {
+        let next = if i % 2 == 0 { "y" } else { "x" }.repeat(1024);
+        local
+            .apply(Transaction {
+                expected_revision: local.revision(),
+                edits: vec![edit(0, 1024, &next)],
+            })
+            .unwrap();
+        server
+            .apply_update(&local.encode_update(&server.state_vector()).unwrap())
+            .unwrap();
+    }
+    assert!(local.encode_update(&[]).unwrap().len() < 256 * 1024);
+    assert!(server.encode_update(&[]).unwrap().len() < 8 * 1024);
+    assert_eq!(server.source(), local.source());
+    assert!(local.can_undo());
+}

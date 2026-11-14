@@ -59,9 +59,9 @@ test('Optional Academy opens research papers alongside built-in Docs', { tag: ['
 	await expect(page.locator('.stanza-structured-editor-pane[data-ash-editor-client]:visible')).toBeVisible();
 	await quick.runCommand('sessions.docs.chooseEditor');
 	await quick.select('New blank document');
-	const rich = page.locator('.ash-docs-workspace:visible .stanza-document-rich-text-input').first();
+	const rich = page.locator('.ash-docs-workspace:visible .stanza-arkdown-prose').first();
 	await expect(rich).toBeVisible({ timeout: 20_000 });
-	await rich.fill('Rich Docs draft');
-	await expect(rich).toHaveText('Rich Docs draft');
+	await rich.fill('Arkdown Docs draft');
+	await expect(rich).toHaveText('Arkdown Docs draft');
 	await expect(page.locator('.stanza-structured-editor-pane[data-ash-editor-client]:visible')).toHaveCount(0);
 });

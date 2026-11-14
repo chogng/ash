@@ -1,7 +1,7 @@
-use crate::sqlite_migrations::Migration;
-use crate::sqlite_migrations::Migrator;
 use crate::{SqliteDurability, open_sqlite_database};
 use ash_protocol::{AgentId, CommandId, SessionId, TeamId, TeamRunId, ThreadId};
+use ash_sqlite::Migration;
+use ash_sqlite::Migrator;
 use ash_teams::{
     Team, TeamCommandRequest, TeamError, TeamMember, TeamMessage, TeamRun, TeamRunRequest,
     TeamStatus, TeamStore,

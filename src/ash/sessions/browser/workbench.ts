@@ -1,5 +1,14 @@
+import { IBackupService } from '../../platform/backup/common/backup.js';
+import { IWorkingCopyBackupService } from '../../workbench/services/workingCopy/common/workingCopyBackupService.js';
+import { WorkingCopyBackupService } from '../../workbench/services/workingCopy/browser/workingCopyBackupService.js';
+import { IndexedDbWorkingCopyBackupService } from '../../workbench/services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
+import { IBufferCollabService } from '../../workbench/services/collab/common/bufferCollabService.js';
+import { BufferCollabService } from '../../workbench/services/collab/browser/bufferCollabService.js';
+import { ICollabService } from '../../workbench/services/collab/common/collabService.js';
+import { CollabService } from '../../workbench/services/collab/browser/collabService.js';
+import { AppServerCollabService } from '../../workbench/services/collab/browser/appServerCollabService.js';
 import { IDiffEditorCommandsService } from '../../workbench/browser/parts/editor/diffEditorCommandsService.js';
-import { SessionsDiffEditorCommandsService } from '../contrib/editor/browser/diffEditor.sessions.contribution.js';
+import { SessionsDiffEditorCommandsService } from '../contrib/editor/browser/sessionsDiffEditorCommandsService.js';
 import { registerAddFileAsContextAction } from '../contrib/editor/browser/editor.contribution.js';
 import { ISessionSectionOrderService, SessionSectionOrderService } from '../services/sessions/browser/sessionSectionOrderService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
@@ -797,6 +806,13 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ITextFileService, textFiles);
 		const workingCopies = this._register(services.createInstance(BrowserWorkingCopyService));
 		services.registerInstance(IWorkingCopyService, workingCopies);
+		// Docs is profile-owned and remains open across conversation workspace changes.
+		const docsBackupScope = { id: 'sessions-docs', folders: [] };
+		if (options.api.backup) services.registerInstance(IBackupService, options.api.backup);
+		const docsBackups = options.api.backup
+			? services.createInstance(WorkingCopyBackupService, docsBackupScope)
+			: new IndexedDbWorkingCopyBackupService(docsBackupScope.id);
+		services.registerInstance(IWorkingCopyBackupService, this._register(docsBackups));
 		services.registerInstance(IDocumentEditorTextModelService, this._register(services.createInstance(DocumentEditorTextModelService)));
 		services.registerInstance(ISyntaxApi, options.api.syntax);
 		const treeSitterLibrary = this._register(services.createInstance(TreeSitterLibraryService));
@@ -821,6 +837,8 @@ export abstract class Workbench extends Disposable {
 			),
 		}));
 		services.registerInstance(ITextModelResourceService, textModels);
+		services.registerSingleton(ICollabService, () => services.createInstance(CollabService, new AppServerCollabService(options.api.collab, options.api.events)));
+		services.registerSingleton(IBufferCollabService, () => services.createInstance(BufferCollabService));
 		services.registerInstance(IFileTextModelService, textModels);
 		if (!options.api.appServer.isAvailable) services.registerInstance(IContentSearchService, new FileContentSearchService(fileService));
 		services.registerSingleton(IKeybindingEditingService, () => services.createInstance(KeybindingsEditingService));

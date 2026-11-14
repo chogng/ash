@@ -7,6 +7,7 @@ use crate::parse;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::VecDeque;
+use std::sync::OnceLock;
 
 const MAX_TRANSACTION_EDITS: usize = 4096;
 const MAX_HISTORY_ENTRIES: usize = 256;
@@ -33,6 +34,7 @@ pub enum ChangeKind {
     Edit,
     Undo,
     Redo,
+    External,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -72,6 +74,7 @@ pub struct Document {
     undo: VecDeque<HistoryEntry>,
     redo: Vec<HistoryEntry>,
     history_bytes: usize,
+    projection: OnceLock<Result<Vec<Node>, Error>>,
 }
 
 impl Document {
@@ -84,6 +87,7 @@ impl Document {
             undo: VecDeque::new(),
             redo: Vec::new(),
             history_bytes: 0,
+            projection: OnceLock::new(),
         })
     }
 
@@ -101,11 +105,16 @@ impl Document {
     }
 
     pub fn snapshot(&self) -> Result<Snapshot, Error> {
+        let nodes = self
+            .projection
+            .get_or_init(|| parse(&self.source))
+            .as_ref()
+            .map_err(Clone::clone)?;
         Ok(Snapshot {
             revision: self.revision,
             source: self.source.clone(),
             utf16_len: self.source.encode_utf16().count() as u32,
-            nodes: parse(&self.source)?,
+            nodes: nodes.clone(),
         })
     }
 
@@ -118,6 +127,7 @@ impl Document {
         let revision = self.next_revision()?;
         let edits = entry.forward.clone();
         // All fallible validation completes before state or history is changed.
+        self.update_projection(&next_source, &edits);
         self.source = next_source;
         self.revision = revision;
         for entry in self.redo.drain(..) {
@@ -148,6 +158,7 @@ impl Document {
         let (source, prepared) = self.prepare(entry.inverse.clone())?;
         let revision = self.next_revision()?;
         let entry = self.undo.pop_back().expect("entry was validated");
+        self.update_projection(&source, &prepared.forward);
         self.source = source;
         self.revision = revision;
         self.redo.push(entry);
@@ -167,6 +178,7 @@ impl Document {
         let (source, prepared) = self.prepare(entry.forward.clone())?;
         let revision = self.next_revision()?;
         let entry = self.redo.pop().expect("entry was validated");
+        self.update_projection(&source, &prepared.forward);
         self.source = source;
         self.revision = revision;
         self.undo.push_back(entry);
@@ -176,6 +188,17 @@ impl Document {
             kind: ChangeKind::Redo,
             edits: prepared.forward,
         })
+    }
+
+    fn update_projection(&mut self, source: &str, edits: &[TextEdit]) {
+        let reused = self.projection.get_mut().is_some_and(|result| {
+            result
+                .as_mut()
+                .is_ok_and(|nodes| crate::incremental::update(&self.source, source, nodes, edits))
+        });
+        if !reused {
+            self.projection.take();
+        }
     }
 
     fn check_revision(&self, expected: u32) -> Result<(), Error> {

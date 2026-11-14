@@ -91,6 +91,8 @@ export function importDocumentText(text: string, format: DocumentTextFormat, sch
 					content.push(schema.createNode('image', { attrs: { src: destination(token.href, at), alt: decode(token.text) } }));
 					break;
 				case 'br': content.push(schema.createNode('hardBreak')); break;
+				// Marked emits task checkboxes in either inline or block tokens for loose/tight lists.
+				case 'checkbox': break;
 				default: fail(token.type, at);
 			}
 		}
@@ -104,7 +106,7 @@ export function importDocumentText(text: string, format: DocumentTextFormat, sch
 			const at = found < 0 ? cursor : found;
 			cursor = at + token.raw.length;
 			switch (token.type) {
-				case 'space': case 'def': break;
+				case 'space': case 'def': case 'checkbox': break;
 				case 'paragraph': case 'text':
 					content.push(schema.createNode('paragraph', { content: token.tokens ? inline(token.tokens as MarkedToken[], at) : token.text ? [schema.createText(decode(token.text))] : [] }));
 					break;
@@ -125,15 +127,24 @@ export function importDocumentText(text: string, format: DocumentTextFormat, sch
 							const found = normalized.indexOf(item.raw, itemCursor);
 							const itemAt = found < 0 ? itemCursor : found;
 							itemCursor = itemAt + item.raw.length;
-							if (item.task) fail('task list', itemAt);
-							return schema.createNode('listItem', { content: blocks(item.tokens as MarkedToken[], itemAt) });
+							return schema.createNode('listItem', {
+								...(item.task ? { attrs: { checked: item.checked === true } } : {}),
+								content: blocks(item.tokens as MarkedToken[], itemAt),
+							});
 						}),
 					}));
 					break;
 				case 'table': {
-					if (token.align.some(value => value !== null)) fail('table alignment', at);
 					const row = (cells: readonly Tokens.TableCell[]): DocumentNode => schema.createNode('tableRow', {
-						content: cells.map(cell => schema.createNode('tableCell', { content: [schema.createNode('paragraph', { content: inline(cell.tokens as MarkedToken[], at) })] })),
+						content: cells.map((cell, column) => {
+							const alignment = token.align[column];
+							const textAlign = alignment === 'left' ? 'start' : alignment === 'right' ? 'end' : alignment;
+							return schema.createNode('tableCell', {
+								content: [schema.createNode('paragraph', {
+									...(textAlign ? { attrs: { textAlign } } : {}), content: inline(cell.tokens as MarkedToken[], at),
+								})]
+							});
+						}),
 					});
 					content.push(schema.createNode('table', { attrs: { markdownHeader: true }, content: [row(token.header), ...token.rows.map(row)] }));
 					break;
@@ -214,25 +225,30 @@ export function exportDocumentText(document: DocumentNode, schema: DocumentSchem
 			case 'bulletList': case 'orderedList':
 				attributes(node, node.type === 'orderedList' ? ['order'] : []);
 				return node.content.map((item, index) => {
-					attributes(item, []);
+					attributes(item, ['checked']);
 					const marker = node.type === 'orderedList' ? `${Number(node.attrs.order ?? 1) + index}. ` : '- ';
-					return blocks(item.content).split('\n').map((line, lineIndex) => `${lineIndex ? ' '.repeat(marker.length) : marker}${line}`).join('\n');
+					const task = item.attrs.checked === undefined ? '' : item.attrs.checked ? '[x] ' : '[ ] ';
+					return blocks(item.content).split('\n').map((line, lineIndex) => `${lineIndex ? ' '.repeat(marker.length) : marker + task}${line}`).join('\n');
 				}).join('\n\n');
 			case 'table': {
 				attributes(node, ['markdownHeader']);
 				if (node.attrs.markdownHeader !== true) return fail(node, 'table without a Markdown header');
+				const alignments = node.content[0]!.content.map(cell => cell.content[0]?.attrs.textAlign);
 				const rows = node.content.map(row => {
 					attributes(row, []);
-					return row.content.map(cell => {
+					return row.content.map((cell, column) => {
 						attributes(cell, []);
-						if (cell.content.length !== 1 || cell.content[0]!.type !== 'paragraph' || Object.keys(cell.content[0]!.attrs).length) return fail(cell, 'table cell structure');
+						if (cell.content.length !== 1 || cell.content[0]!.type !== 'paragraph') return fail(cell, 'table cell structure');
+						const paragraph = cell.content[0]!;
+						attributes(paragraph, ['textAlign']);
+						if (paragraph.attrs.textAlign !== alignments[column] || ![undefined, 'start', 'center', 'end'].includes(paragraph.attrs.textAlign as string | undefined)) return fail(cell, 'table alignment');
 						const value = inline(cell.content[0]!.content, true);
 						if (value.includes('\n')) return fail(cell, 'multiline table cell');
 						return value;
 					});
 				});
 				if (rows.some(row => row.length !== rows[0]!.length)) return fail(node, 'unequal table rows');
-				rows.splice(1, 0, rows[0]!.map(() => '---'));
+				rows.splice(1, 0, alignments.map(alignment => alignment === 'start' ? ':---' : alignment === 'center' ? ':---:' : alignment === 'end' ? '---:' : '---'));
 				return rows.map(row => `| ${row.join(' | ')} |`).join('\n');
 			}
 			default: return fail(node, node.type);

@@ -13,9 +13,9 @@ use serde_json::json;
 use std::path::Path;
 use std::sync::Mutex;
 
-const MIGRATOR: ash_state::SqliteMigrator<'_> = ash_state::SqliteMigrator::new(
+const MIGRATOR: ash_sqlite::Migrator<'_> = ash_sqlite::Migrator::new(
     "calls",
-    &[ash_state::SqliteMigration::sql(
+    &[ash_sqlite::Migration::sql(
         1,
         include_str!("../migrations/0001_calls.sql"),
     )],
@@ -27,8 +27,10 @@ pub struct CallStore {
 
 impl CallStore {
     pub fn open(path: &Path) -> Result<Self, CallError> {
-        let mut connection = Connection::open(path).map_err(storage)?;
-        ash_collab::channels::configure_resources(&connection).map_err(storage)?;
+        let mut connection =
+            ash_sqlite::open_sqlite_database(path, ash_sqlite::SqliteDurability::Durable)
+                .map_err(storage)?;
+        ash_collab::channels::configure_resources(&mut connection).map_err(storage)?;
         MIGRATOR.run(&mut connection).map_err(storage)?;
         Ok(Self {
             connection: Mutex::new(connection),

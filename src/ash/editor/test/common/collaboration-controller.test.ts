@@ -11,20 +11,20 @@ import type { DocumentNode } from '../../../../../extensions/academy/common/mode
 import { createDefaultDocumentSchema, type DocumentSchema } from '../../../../../extensions/academy/common/model/documentSchema.js';
 import { DocumentTransaction } from '../../../../../extensions/academy/common/model/documentTransaction.js';
 import { textSelection, type DocumentSelection } from '../../../../../extensions/academy/common/core/documentSelection.js';
-import type { DocumentCollaborationConnection } from '../../../../../extensions/academy/common/services/documentCollaborationService.js';
-import type { DocumentCollaborationSnapshot } from '../../../../../extensions/academy/common/services/documentCollaborationService.js';
-import type { DocumentCollaborationPresence } from '../../../../../extensions/academy/common/services/documentCollaborationService.js';
-import type { DocumentCollaborationSubmitOutcome } from '../../../../../extensions/academy/common/services/documentCollaborationService.js';
-import { DocumentCollaborationController } from '../../../../../extensions/academy/common/contrib/collaboration/controller.js';
-import type { DocumentCollaborationEnvelope } from '../../../../../extensions/academy/common/services/documentCollaborationService.js';
-import type { DocumentCollaborationRemoteEnvelope } from '../../../../../extensions/academy/common/services/documentCollaborationService.js';
+import type { RoomTransport } from '../../../../../extensions/academy/common/services/collabService.js';
+import type { RoomSnapshot } from '../../../../../extensions/academy/common/services/collabService.js';
+import type { RoomPresence } from '../../../../../extensions/academy/common/services/collabService.js';
+import type { RoomSubmitOutcome } from '../../../../../extensions/academy/common/services/collabService.js';
+import { CollabController } from '../../../../../extensions/academy/common/contrib/collaboration/controller.js';
+import type { RoomEnvelope } from '../../../../../extensions/academy/common/services/collabService.js';
+import type { RemoteRoomEnvelope } from '../../../../../extensions/academy/common/services/collabService.js';
 
 test('Academy structural replay conflict retains local content and stops resubmission', async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 	using model = DocumentTextModel.create(schema, document);
-	const connection = new FakeDocumentCollaborationConnection(schema, document);
-	using controller = new DocumentCollaborationController(model, connection);
+	const connection = new FakeCollabConnection(schema, document);
+	using controller = new CollabController(model, connection);
 	const states: string[] = [];
 	using listener = controller.onDidChangeState(event => states.push(event.message ?? ''));
 	model.dispatch(new DocumentTransaction().deleteNode('text-1').insertNode('paragraph-1', 0, schema.createText('Hxllo', { id: 'text-1' })));
@@ -40,8 +40,8 @@ test('Stanza collaboration submits only the in-flight snapshot while later typin
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 	using model = DocumentTextModel.create(schema, document);
-	const connection = new FakeDocumentCollaborationConnection(schema, document);
-	using controller = new DocumentCollaborationController(model, connection);
+	const connection = new FakeCollabConnection(schema, document);
+	using controller = new CollabController(model, connection);
 	const confirmed: string[] = [];
 	using listener = controller.onDidConfirmDocument(document => confirmed.push(firstText(document) ?? ''));
 
@@ -73,8 +73,8 @@ test("Stanza collaboration shares an author's undo and redo as ordered transacti
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 	using model = DocumentTextModel.create(schema, document);
-	const connection = new FakeDocumentCollaborationConnection(schema, document);
-	using controller = new DocumentCollaborationController(model, connection);
+	const connection = new FakeCollabConnection(schema, document);
+	using controller = new CollabController(model, connection);
 
 	model.dispatch(new DocumentTransaction().replaceText('text-1', 0, 0, 'A'));
 	connection.accept(0, 1);
@@ -103,8 +103,8 @@ test("Stanza collaboration preserves a local author's history through an acknowl
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 	using model = DocumentTextModel.create(schema, document);
-	const connection = new FakeDocumentCollaborationConnection(schema, document);
-	using controller = new DocumentCollaborationController(model, connection);
+	const connection = new FakeCollabConnection(schema, document);
+	using controller = new CollabController(model, connection);
 
 	model.dispatch(new DocumentTransaction().replaceText('text-1', 0, 0, 'A'));
 	connection.accept(0, 1);
@@ -147,8 +147,8 @@ test('Stanza collaboration preserves local history when a remote update rebases 
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 	using model = DocumentTextModel.create(schema, document);
-	const connection = new FakeDocumentCollaborationConnection(schema, document);
-	using controller = new DocumentCollaborationController(model, connection);
+	const connection = new FakeCollabConnection(schema, document);
+	using controller = new CollabController(model, connection);
 
 	model.dispatch(new DocumentTransaction().replaceText('text-1', 0, 0, 'A'));
 	connection.conflictWithRemote(0, new DocumentTransaction().replaceText('text-1', 1, 1, 'B'), 1);
@@ -178,8 +178,8 @@ test('Stanza collaboration publishes local selections without versioning them an
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 	using model = DocumentTextModel.create(schema, document);
-	const connection = new FakeDocumentCollaborationConnection(schema, document);
-	using controller = new DocumentCollaborationController(model, connection);
+	const connection = new FakeCollabConnection(schema, document);
+	using controller = new CollabController(model, connection);
 	const received: (readonly { readonly clientId: string; }[])[] = [];
 	controller.onDidChangePresence(change => received.push(change.presences));
 
@@ -205,20 +205,20 @@ async function flushMicrotasks(): Promise<void> {
 	await Promise.resolve();
 }
 
-class FakeDocumentCollaborationConnection extends Disposable implements DocumentCollaborationConnection {
-	private readonly updateEmitter = this._register(new Emitter<DocumentCollaborationRemoteEnvelope>());
-	private readonly snapshotEmitter = this._register(new Emitter<DocumentCollaborationSnapshot>());
-	private readonly presenceEmitter = this._register(new Emitter<readonly DocumentCollaborationPresence[]>());
+class FakeCollabConnection extends Disposable implements RoomTransport {
+	private readonly updateEmitter = this._register(new Emitter<RemoteRoomEnvelope>());
+	private readonly snapshotEmitter = this._register(new Emitter<RoomSnapshot>());
+	private readonly presenceEmitter = this._register(new Emitter<readonly RoomPresence[]>());
 	private readonly failureEmitter = this._register(new Emitter<Error>());
 
 	readonly roomId = 'stanza-test-room';
 	readonly clientId = 'client-a';
 	readonly canEdit = true;
-	readonly initialSnapshot: DocumentCollaborationSnapshot;
-	readonly currentPresence: readonly DocumentCollaborationPresence[] = [];
-	readonly onDidReceiveUpdate: Event<DocumentCollaborationRemoteEnvelope> = this.updateEmitter.event;
-	readonly onDidReceiveSnapshot: Event<DocumentCollaborationSnapshot> = this.snapshotEmitter.event;
-	readonly onDidReceivePresence: Event<readonly DocumentCollaborationPresence[]> = this.presenceEmitter.event;
+	readonly initialSnapshot: RoomSnapshot;
+	readonly currentPresence: readonly RoomPresence[] = [];
+	readonly onDidReceiveUpdate: Event<RemoteRoomEnvelope> = this.updateEmitter.event;
+	readonly onDidReceiveSnapshot: Event<RoomSnapshot> = this.snapshotEmitter.event;
+	readonly onDidReceivePresence: Event<readonly RoomPresence[]> = this.presenceEmitter.event;
 	readonly onDidFail: Event<Error> = this.failureEmitter.event;
 	readonly submissions: Submission[] = [];
 	readonly presenceUpdates: (DocumentSelection | undefined)[] = [];
@@ -228,7 +228,7 @@ class FakeDocumentCollaborationConnection extends Disposable implements Document
 		this.initialSnapshot = Object.freeze({ roomId: this.roomId, version: 0, document });
 	}
 
-	submit(envelope: DocumentCollaborationEnvelope, document: DocumentNode, _signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
+	submit(envelope: RoomEnvelope, document: DocumentNode, _signal: AbortSignal): Promise<RoomSubmitOutcome> {
 		const submission = new Submission(envelope, document);
 		this.submissions.push(submission);
 		return submission.promise;
@@ -243,7 +243,7 @@ class FakeDocumentCollaborationConnection extends Disposable implements Document
 
 
 
-	acceptPresence(presences: readonly DocumentCollaborationPresence[]): void {
+	acceptPresence(presences: readonly RoomPresence[]): void {
 		this.presenceEmitter.fire(presences);
 	}
 
@@ -274,16 +274,16 @@ class FakeDocumentCollaborationConnection extends Disposable implements Document
 }
 
 class Submission {
-	private readonly deferred: Deferred<DocumentCollaborationSubmitOutcome>;
+	private readonly deferred: Deferred<RoomSubmitOutcome>;
 
-	readonly promise: Promise<DocumentCollaborationSubmitOutcome>;
+	readonly promise: Promise<RoomSubmitOutcome>;
 
-	constructor(readonly envelope: DocumentCollaborationEnvelope, readonly document: DocumentNode) {
-		this.deferred = new Deferred<DocumentCollaborationSubmitOutcome>();
+	constructor(readonly envelope: RoomEnvelope, readonly document: DocumentNode) {
+		this.deferred = new Deferred<RoomSubmitOutcome>();
 		this.promise = this.deferred.promise;
 	}
 
-	resolve(value: DocumentCollaborationSubmitOutcome): void {
+	resolve(value: RoomSubmitOutcome): void {
 		this.deferred.resolve(value);
 	}
 }
@@ -304,8 +304,8 @@ test('Academy style creation and undo preserve remote paragraph formatting throu
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 	using model = DocumentTextModel.create(schema, document);
-	const connection = new FakeDocumentCollaborationConnection(schema, document);
-	using controller = new DocumentCollaborationController(model, connection);
+	const connection = new FakeCollabConnection(schema, document);
+	using controller = new CollabController(model, connection);
 	model.dispatch(createDefineParagraphStyleCommand(model.document, 'paragraph-1', 'Essay')!.transaction);
 	const styleId = getDocumentParagraphStyles(model.document)[0]!.id;
 	connection.accept(0, 1);
@@ -332,8 +332,8 @@ test('Academy replace-all collaboration rebases atomic marked-run edits and reta
 	const schema = createDefaultDocumentSchema();
 	const document = schema.createDocument([schema.createNode('paragraph', { id: 'paragraph-1', content: [schema.createText('Hel', { id: 'text-1', marks: [{ type: 'strong', attrs: {} }] }), schema.createText('lo Hello', { id: 'text-2' })] })]);
 	using model = DocumentTextModel.create(schema, document);
-	const connection = new FakeDocumentCollaborationConnection(schema, document);
-	using controller = new DocumentCollaborationController(model, connection);
+	const connection = new FakeCollabConnection(schema, document);
+	using controller = new CollabController(model, connection);
 	const matches = findDocumentText(model.document, 'Hello', { matchCase: true, wholeWord: false });
 	model.dispatch(createReplaceDocumentMatchesCommand(schema, model.document, matches, 'World')!.transaction);
 	connection.accept(0, 1);

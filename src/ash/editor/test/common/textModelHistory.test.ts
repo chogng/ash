@@ -259,3 +259,33 @@ function createRandom(seed: number): () => number {
 		return state / 0x1_0000_0000;
 	};
 }
+
+
+test('collaboration participant rejects changes before buffer mutation and owns history only for its lease', () => {
+	using model = new TextModel('before');
+	model.pushEditOperations(null, [{ range: new Range(1, 7, 1, 7), text: ' seed' }], null);
+	let reject = true, undoCalls = 0, redoCalls = 0, changes = 0;
+	using listener = model.onDidChangeContent(() => changes++);
+	const lease = model.registerEditParticipant({
+		beforeEdit: edits => { assert.ok(edits.every(edit => edit.startOffset <= edit.endOffset)); if (reject) throw new Error('Read only'); },
+		canUndo: () => true, canRedo: () => true,
+		undo: () => { undoCalls++; return undefined; }, redo: () => { redoCalls++; return undefined; },
+	});
+	assert.throws(() => model.registerEditParticipant({ beforeEdit() { }, canUndo: () => false, canRedo: () => false, undo: () => undefined, redo: () => undefined }), /already attached/);
+	const version = model.getVersionId();
+	assert.throws(() => model.pushEditOperations(null, [{ range: new Range(1, 1, 1, 1), text: 'bad' }], null), /Read only/);
+	assert.equal(model.getValue(), 'before seed');
+	assert.equal(model.getVersionId(), version);
+	assert.equal(changes, 0);
+	reject = false;
+	model.pushEditOperations(null, [{ range: new Range(1, 1, 1, 1), text: 'ok ' }], null);
+	assert.equal(changes, 1);
+	assert.equal(model.createUndoRedoSnapshot(), undefined);
+	model.undo(); model.redo();
+	assert.equal(undoCalls, 1); assert.equal(redoCalls, 1);
+	lease.dispose();
+	assert.equal(model.canUndo(), false); assert.equal(model.canRedo(), false);
+	model.pushEditOperations(null, [{ range: new Range(1, 1, 1, 1), text: 'local ' }], null);
+	model.undo();
+	assert.equal(model.getValue(), 'ok before seed');
+});

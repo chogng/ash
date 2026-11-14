@@ -1,3 +1,6 @@
+import { ICollabService } from '../services/collab/common/collabService.js';
+import { CollabService } from '../services/collab/browser/collabService.js';
+import { AppServerCollabService } from '../services/collab/browser/appServerCollabService.js';
 import { ISymphonyBackendService } from '../../platform/symphony/common/symphonyService.js';
 import { IRemoteAgentHostService, NullRemoteAgentHostService } from '../../platform/agentHost/common/remoteAgentHostService.js';
 import { ILanguageServerStatusService } from '../services/language/common/languageServerStatusService.js';
@@ -775,6 +778,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAppServerRemoteAgentService, remoteAgentService);
 		services.registerInstance(IRemoteConnectionApi, api.remoteConnections ?? UnavailableRemoteConnectionApi);
 		services.registerSingleton(IRemoteConnectionService, () => services.createInstance(RemoteConnectionService));
+		services.registerSingleton(ICollabService, () => services.createInstance(CollabService, new AppServerCollabService(api.collab, api.events)));
 		const dialogService = services.get(IDialogService) as DialogService;
 		services.registerInstance(IDialogsModel, dialogService.model);
 		if (nativeHostApi) {
@@ -1228,7 +1232,7 @@ export class Workbench extends Disposable {
 			diffService,
 			accessibilityService,
 			languageDiagnosticsService,
-			documentCollaborationApi: api.documentCollaboration,
+			collabApi: api.collab,
 			serverEvents: api.events,
 			workingCopyService,
 			replaceEditorResource: (source, input, replacement) => editorParts.replaceEditorResource(source, input, replacement),

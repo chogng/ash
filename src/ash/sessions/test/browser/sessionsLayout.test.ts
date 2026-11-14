@@ -6,7 +6,7 @@ import { URI } from '../../../base/common/uri.js';
 import { StorageTarget } from '../../../platform/storage/common/storage.js';
 import { suite, test, setup, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
-import { DOCS_EDITOR_SETTING } from '../../contrib/docs/common/docs.js';
+import { DOCS_DEFAULT_MODE_SETTING } from '../../contrib/docs/common/docs.js';
 
 suite('sessions browser component', () => {
 	const browserTests = useBrowserTests();
@@ -166,7 +166,7 @@ suite('sessions browser component', () => {
 		await page.evaluate(async setting => {
 			await window.ashSessionsIntegration.setTheme('ash-light');
 			await window.ashSessionsIntegration.updateConfiguration(setting, 'markdown');
-		}, DOCS_EDITOR_SETTING);
+		}, DOCS_DEFAULT_MODE_SETTING);
 		const home = page.locator('.ash-sessions-navigation').getByRole('button', { name: 'Artifacts', exact: true });
 		await home.click();
 		const creator = page.locator('.ash-artifacts');

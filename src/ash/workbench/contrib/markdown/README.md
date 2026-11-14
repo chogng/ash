@@ -1,16 +1,19 @@
 # Markdown
 
-`MarkdownEditorPane` 是 IDE 和 Sessions Docs 共用的 Markdown 文件编辑器。普通 `.md` 文件默认使用 Text Editor；“Reopen With…” 中的“Markdown document”打开 Arkdown 正文视图。正文与源码通过同一个 `TextModel` 编辑，源码视图使用现有 `CodeEditorWidget`。
+通用 Markdown 显示与源码辅助功能。
 
-| 文件                       | 职责                                                 |
-| -------------------------- | ---------------------------------------------------- |
-| `markdown.contribution.ts` | 可选编辑器注册、富文本快捷键与现有 Markdown 贡献     |
-| `markdownEditorPane.ts`    | 文本工作副本、文件生命周期、模式操作与宿主无障碍契约 |
-| `arkdown.ts`               | Rust/WASM 边界及只读语法投影                         |
-| `arkdownEditor.ts`         | 正文 DOM、选区、输入及共用 CodeEditor 源码视图       |
+| 场景                     | 入口与职责                                                                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chat 消息正文            | [`ChatMarkdownContentPart`](../chat/browser/widget/chatContentParts/chatMarkdownContentPart.ts) 使用流式 Markdown 渲染，持有增量片段、DOM 复用与修正回退。 |
+| Chat Docs                | [Sessions Docs 的 Arkdown 编辑器](../../../sessions/contrib/docs/ARKDOWN.md) 持有正文编辑与语法投影。                                                      |
+| IDE 和 Agent Window Code | [Markdown 扩展](../../../../../extensions/markdown-language-features) 持有 Markdown 文件预览与语言能力，源码编辑使用共用 CodeEditor。                      |
 
-`EditorWorkingCopy` 与文本模型继续持有保存、dirty、外部变更和撤销历史。Arkdown 的语法树是投影，不保留第二份可写文档。Sessions 的 `MarkdownDocsEditorPane` 持有 Docs 标题栏、作品操作及默认模式，借用本目录的编辑器，不再创建自己的工作副本。
+| 文件                                                      | 职责                                   |
+| --------------------------------------------------------- | -------------------------------------- |
+| `markdown.contribution.ts`                                | 通用样式与图片粘贴贡献注册             |
+| `markdownImageDropOrPaste.ts`                             | Markdown 源码中的图片拖放与粘贴        |
+| `markdownPreview.ts`                                      | Webview 沙箱中的只读预览与链接事件     |
+| `markdownDocumentView.ts`                                 | 产品预览宿主与链接回调，供发行说明使用 |
+| `markedKatexSupport.ts`、`common/markedKatexExtension.ts` | 数学公式渲染支持                       |
 
-`MarkdownPreview`、聊天和悬浮提示的只读渲染有各自的资源及安全边界，继续由原 owner 持有。原有 `.ash-doc` 结构化文档不经过 Markdown 往返转换。
-
-Clarkdown 的对齐以直接编辑行为为依据：源码保真、选区、中文输入、剪贴板、结构操作、历史与外部更新分别验证。当前 Arkdown 仍使用完整解析；列表、表格等结构命令和协作尚未达到 Clarkdown 的对应能力。安装包取证记录见 [Docs](../../../sessions/contrib/docs/README.md#claude-文档链路)。
+[`ChatContentMarkdownRenderer`](../chat/browser/widget/chatContentMarkdownRenderer.ts) 持有聊天内容的渲染策略，流式调度位于 [`chatIncrementalRendering`](../chat/browser/widget/chatContentParts/chatIncrementalRendering/chatIncrementalRendering.ts)。通用解析和清理边界由 [`platform/markdown`](../../../platform/markdown/browser/markdownRenderer.ts) 与 [`base/browser/markdownRenderer`](../../../base/browser/markdownRenderer.ts) 持有。

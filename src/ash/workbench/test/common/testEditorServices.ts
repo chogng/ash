@@ -1,5 +1,8 @@
 import { ImageResizeService } from '../../../platform/imageResize/browser/imageResizeService.js';
 import { IImageResizeService } from '../../../platform/imageResize/common/imageResizeService.js';
+import { IBufferCollabService } from '../../services/collab/common/bufferCollabService.js';
+import { BufferCollabService } from '../../services/collab/browser/bufferCollabService.js';
+import { ICollabService } from '../../services/collab/common/collabService.js';
 import { registerTestWorkbenchHostServices } from './workbenchHostTestServices.js';
 import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
@@ -159,6 +162,8 @@ export function registerTestComponentServices(services: InstantiationService, do
 		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: document.defaultView!, workspaceId: 'test-components', backend: new TestStorageBackend(), flushInterval: 0 }));
 	}
 	if (!services.has(IAuxiliaryWindowService)) services.registerSingleton(IAuxiliaryWindowService, () => services.createInstance(BrowserAuxiliaryWindowService, document.defaultView!, document.body));
+	if (!services.has(IBufferCollabService)) services.registerSingleton(IBufferCollabService, () => services.createInstance(BufferCollabService));
+	if (!services.has(ICollabService)) services.registerInstance(ICollabService, { open: async () => { throw new Error('This test host has no collaboration backend'); }, dispose() { }, [Symbol.dispose]() { } });
 	return services;
 }
 

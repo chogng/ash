@@ -297,11 +297,7 @@
     "sessions.artifacts.untitledDocument": "未命名文档",
     "sessions.artifacts.unavailableDocument": "此文档已关闭。",
     "sessions.artifacts.openMode": "打开{0}",
-    "sessions.artifacts.invalidEditor": "请为 Docs 选择富文档或 Markdown。",
-    "sessions.artifacts.docsEditor": "Docs 编辑器",
-    "sessions.artifacts.rich": "富文档",
     "sessions.artifacts.markdown": "Markdown",
-    "sessions.artifacts.chooseEditor": "选择 Docs 编辑器",
     "sessions.artifacts.writingImportFailed": "无法在 Docs 中打开此写作块。",
     "sessions.artifacts.sortAndFilter": "排序和筛选",
     "sessions.artifacts.lastEdited": "最后编辑时间",
@@ -327,11 +323,18 @@
     "sessions.design.agentRequest": "修改附带的 Design HTML，并返回可运行的预览。"
   },
   "ash.docs": {
-    "editorDescription": "为新文档选择格式化编辑或 Markdown 源码编辑。",
+    "invalidMode": "请为 Docs 选择文档或 Markdown 源码视图。",
+    "defaultMode": "Docs 默认视图",
+    "defaultModeDescription": "选择 Markdown 文档的默认视图。",
+    "formattedView": "文档",
+    "sourceView": "Markdown 源码",
+    "chooseMode": "选择 Docs 默认视图",
     "actions": "Docs 操作",
     "exportMarkdown": "Markdown 文件 (.md)",
-    "tools": "文档工具",
-    "workspaceHelp": "当标题是按钮时，按 Enter 打开作品操作，按 Escape 返回标题。在窗口标题栏可以导出、放大或关闭作品区域。文档工具会在右侧栏显示排版、查找和大纲。"
+    "invalidLegacyResource": "无法迁移此旧版文档资源。",
+    "missingLegacyDraft": "旧版文档草稿没有可恢复的内容。",
+    "migrationConflict": "旧版文档与对应的 Markdown 文档存在冲突修改。两份文件均已保留。",
+    "legacyDocument": "旧版文档"
   },
   "ash.artifacts": {
     "tableMissing": "无法打开表格文件。",
@@ -355,15 +358,36 @@
     "tableHelp": "在可编辑表格中，按 Tab 和 Shift+Tab 在单元格间移动；在首尾单元格可离开表格。按上、下方向键和 Enter 在行间移动，左、右方向键移动文本光标。粘贴由制表符分隔的多行文本可填充单元格区域，表格按需扩展。「添加行」和「添加列」扩展表格；「删除行」和「删除列」删除当前单元格所在的行或列，始终保留至少一行一列。在窗口标题栏的「导出」菜单中选择「导出 CSV」。修改会自动保存，可从 Artifacts 重新打开表格。",
     "cell": "单元格 {0}"
   },
-  "ash.markdown": {
+  "ash.collab": {
+    "joinReplace": "用共享文档替换当前文档？",
+    "joinReplaceDetail": "加入后使用房间内容。取消可保留当前文档。",
+    "joinRoom": "加入房间",
+    "joinChanged": "加入期间文档发生变化，请重试。",
+    "roomReadOnly": "此协作房间为只读。"
+  },
+  "ash.arkdown": {
+    "collaborate": "协作",
+    "chooseRoom": "输入要加入的房间 ID，留空则创建房间。",
+    "leaveCollaboration": "离开协作",
+    "copyRoom": "复制房间 ID",
+    "collaborationRoom": "房间 {0}",
+    "reconnecting": "正在重新连接协作，已保留本地编辑。",
+    "roomConnected": "已连接协作房间。",
+    "collaborationFailed": "无法加入协作房间，请检查服务器、房间 ID 和访问令牌。",
+    "structureUnavailable": "此处无法修改该结构。嵌套区块或 Setext 标题可在 Markdown 源码中编辑。",
+    "taskCompleted": "已完成任务",
+    "taskIncomplete": "未完成任务",
     "documentBody": "文档正文",
     "markdownSource": "Markdown 源码",
     "showSource": "显示 Markdown 源码",
     "showDocument": "显示文档",
     "bold": "加粗",
     "italic": "斜体",
-    "arkdownHelp": "直接编辑文档。按 Control 或 Command+B 加粗，按 Control 或 Command+I 设置斜体，按 Control 或 Command+Z 撤销。“显示 Markdown 源码”用代码编辑器打开同一文档，“显示文档”返回格式化正文。按 <keybinding:workbench.action.files.save> 保存文件。只读文件不能编辑。",
+    "arkdownHelp": "直接编辑文档。按 Control 或 Command+B 加粗，按 Control 或 Command+I 设置斜体，按 Control 或 Command+Z 撤销。按 Control 或 Command+Alt+0 至 6 设置段落或标题。按 Control 或 Command+Shift+7、8、9 设置有序列表、无序列表或任务列表。在表格中按 Tab 或 Shift+Tab 切换单元格；在最后一个单元格按 Tab 新增一行。“显示 Markdown 源码”用代码编辑器打开同一文档，“显示文档”返回格式化正文。按 <keybinding:workbench.action.files.save> 保存文件。只读文件不能编辑。“协作”可创建或加入房间。“复制房间 ID”共享房间标识，远端房间还需要访问令牌。协作撤销仅撤销本地编辑，保留远端修改。断线编辑会在重连后重试。“离开协作”停止同步并保留当前本地文档。保存仍写入本地文件。切换标签页或视图后协作仍保持连接；离开房间可停止协作。协作撤销历史每 256 次操作或 16 MiB 建立检查点，释放此前历史。",
     "arkdownSourceFallback": "文档无法排版，可继续编辑 Markdown 源码。",
-    "editorName": "Markdown 文档"
+    "collabConnecting": "正在连接协作房间。",
+    "collabRejected": "协作更新被拒绝，已保留本地编辑。",
+    "collabForbidden": "协作访问权限已失效。离开后重新加入可继续协作。",
+    "collabSizeLimit": "此编辑超出协作大小限制，请缩小单次编辑。"
   }
 }

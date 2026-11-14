@@ -593,23 +593,27 @@ use crate::protocol::collaboration::ChannelRole;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::collaboration::ChannelSnapshot;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::collaboration::DocumentCollaborationOpenParams;
+use crate::protocol::collaboration::RoomOpenParams;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::collaboration::DocumentCollaborationOpenResult;
+use crate::protocol::collaboration::RoomOpenResult;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::collaboration::DocumentCollaborationPresence;
+use crate::protocol::collaboration::RoomPresence;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::collaboration::DocumentCollaborationPresenceParams;
+use crate::protocol::collaboration::RoomPresenceParams;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::collaboration::DocumentCollaborationPresenceReadParams;
-use crate::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
+use crate::protocol::collaboration::RoomPresenceReadParams;
+use crate::protocol::collaboration::RoomPresenceSnapshot;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::collaboration::DocumentCollaborationSnapshot;
+use crate::protocol::collaboration::RoomSnapshot;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::collaboration::DocumentCollaborationSubmitParams;
+use crate::protocol::collaboration::RoomStatus;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::collaboration::DocumentCollaborationSubmitResult;
-use crate::protocol::collaboration::DocumentCollaborationUpdate;
+use crate::protocol::collaboration::RoomStatusParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::RoomSubmitParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::RoomSubmitResult;
+use crate::protocol::collaboration::RoomUpdate;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::common::AgentInteractionCapability;
 #[cfg(any(test, feature = "export"))]
@@ -4099,24 +4103,25 @@ client_methods! {
     ChannelNotes => "channels/notes" { params: ChannelResourceParams, response: ChannelResourceAccess, serialization: None, },
     ChannelCall => "channels/call" { params: ChannelResourceParams, response: ChannelResourceAccess, serialization: None, },
     ChannelDisconnect => "channels/disconnect" { params: EmptyParams, response: (), serialization: None, },
-    DocumentCollaborationOpen => "document/collaboration/open" {
-        params: DocumentCollaborationOpenParams,
-        response: DocumentCollaborationOpenResult,
+    RoomStatus => "document/collaboration/status" { params: RoomStatusParams, response: RoomStatus, serialization: GlobalExclusive, },
+    RoomOpen => "document/collaboration/open" {
+        params: RoomOpenParams,
+        response: RoomOpenResult,
         serialization: GlobalExclusive,
     },
-    DocumentCollaborationSubmit => "document/collaboration/submit" {
-        params: DocumentCollaborationSubmitParams,
-        response: DocumentCollaborationSubmitResult,
+    RoomSubmit => "document/collaboration/submit" {
+        params: RoomSubmitParams,
+        response: RoomSubmitResult,
         serialization: GlobalExclusive,
     },
-    DocumentCollaborationPresencePublish => "document/collaboration/presence/publish" {
-        params: DocumentCollaborationPresenceParams,
-        response: DocumentCollaborationPresenceSnapshot,
+    RoomPresencePublish => "document/collaboration/presence/publish" {
+        params: RoomPresenceParams,
+        response: RoomPresenceSnapshot,
         serialization: GlobalExclusive,
     },
-    DocumentCollaborationPresenceRead => "document/collaboration/presence/read" {
-        params: DocumentCollaborationPresenceReadParams,
-        response: DocumentCollaborationPresenceSnapshot,
+    RoomPresenceRead => "document/collaboration/presence/read" {
+        params: RoomPresenceReadParams,
+        response: RoomPresenceSnapshot,
         serialization: GlobalSharedRead,
     },
     SessionEnvironmentProfileRead => "session/environmentProfile/read" {
@@ -6391,11 +6396,11 @@ server_notifications! {
     DictationEnded => "dictation/ended" { params: DictationEnded, },
     DictationModelProgress => "dictation/model/progress" { params: DictationModelProgress, },
     DictationModelChanged => "dictation/model/changed" { params: DictationModelChanged, },
-    DocumentCollaborationUpdate => "document/collaboration/update" {
-        params: DocumentCollaborationUpdate,
+    RoomUpdate => "document/collaboration/update" {
+        params: RoomUpdate,
     },
-    DocumentCollaborationPresence => "document/collaboration/presence" {
-        params: DocumentCollaborationPresenceSnapshot,
+    RoomPresence => "document/collaboration/presence" {
+        params: RoomPresenceSnapshot,
     },
     SessionThreadUpdate => "session/thread/update" {
         params: ThreadUpdateEnvelope,
@@ -7005,16 +7010,18 @@ typescript_bindings! {
     ChannelResourceParams,
     ChannelResourceAccess,
     MediaState,
-    DocumentCollaborationOpenParams,
-    DocumentCollaborationSnapshot,
-    DocumentCollaborationOpenResult,
-    DocumentCollaborationPresence,
-    DocumentCollaborationPresenceParams,
-    DocumentCollaborationPresenceReadParams,
-    DocumentCollaborationPresenceSnapshot,
-    DocumentCollaborationUpdate,
-    DocumentCollaborationSubmitParams,
-    DocumentCollaborationSubmitResult,
+    RoomOpenParams,
+    RoomStatus,
+    RoomStatusParams,
+    RoomSnapshot,
+    RoomOpenResult,
+    RoomPresence,
+    RoomPresenceParams,
+    RoomPresenceReadParams,
+    RoomPresenceSnapshot,
+    RoomUpdate,
+    RoomSubmitParams,
+    RoomSubmitResult,
     ModelRefDto,
     TaskModelSelectionDto,
     CodebaseModelsDto,

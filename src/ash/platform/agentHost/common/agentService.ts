@@ -33,7 +33,7 @@ import type { IContentSearchApi } from '../../search/common/searchApi.js';
 import type { IAgentModelsService } from '../../models/common/agentModels.js';
 import type { ILanguageServerService } from '../../language/common/languageServerService.js';
 import type { ITerminalProcessService } from '../../terminal/common/terminal.js';
-import type { IDocumentCollaborationApi } from '../../collab/common/documentCollaborationApi.js';
+import type { ICollabApi } from '../../collab/common/collabApi.js';
 import type { ICodebaseApi } from '../../codebase/common/codebaseApi.js';
 import type { IConnectorApi } from '../../connectors/common/connectorApi.js';
 import type { IToolSearchApi } from '../../toolSearch/common/toolSearchApi.js';
@@ -92,7 +92,7 @@ export interface IAgentConnection {
 	readonly skills: IAppServerSkillApi;
 	readonly instructions: IInstructionService;
 	readonly languageServers: ILanguageServerService;
-	readonly documentCollaboration: IDocumentCollaborationApi;
+	readonly collab: ICollabApi;
 	readonly resource: IResourceApi;
 	readonly extensions: IExtensionApi;
 	readonly extensionHost: IExtensionHostApi;

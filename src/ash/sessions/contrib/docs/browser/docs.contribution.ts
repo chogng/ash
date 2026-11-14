@@ -1,3 +1,4 @@
+import './arkdown/arkdown.contribution.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
@@ -14,7 +15,6 @@ import { CommandsRegistry, ICommandService } from '../../../../platform/commands
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -22,20 +22,24 @@ import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { isResourceDiffEditorInput } from '../../../../workbench/common/editor.js';
-import { ViewContainerLocation, type IView } from '../../../../workbench/common/views.js';
+import { CODE_EDITOR_ID } from '../../../../workbench/common/editor/codeEditorId.js';
 import { EDIT_CHAT_WRITING_COMMAND_ID } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import { DocumentTypes } from '../../../../workbench/services/documentEditor/common/documentTypes.js';
-import { SessionsViewRegistry } from '../../../common/views.js';
-import { DOCS_EDITOR_ID, DOCS_EDITOR_SETTING, DOCS_MARKDOWN_EDITOR_ID, DOCS_TOOLS_CONTAINER_ID, GENERAL_DOCUMENT_CONTENT_TYPE, GENERAL_DOCUMENT_EDITOR_ID, type DocsEditorPreference } from '../common/docs.js';
-import { convertActiveTextToDocument, createDocsInput, createDocsOpener, createGeneralDocument, createMarkdownDocsInput, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact, newDocsResource, openWritingDraft, restoredDocsResource } from './documentActions.js';
-import { DocsEditorPane, DocsToolsView } from './docsEditorPane.js';
-import { MarkdownDocsEditorPane } from './markdownDocsEditorPane.js';
+import { DOCS_DEFAULT_MODE_SETTING, DOCS_ARKDOWN_EDITOR_ID, LEGACY_DOCS_CONTENT_TYPE, LEGACY_DOCS_FILE_EDITOR_ID, LEGACY_DOCS_EDITOR_ID, type DocsEditorMode } from '../common/docs.js';
+import { convertActiveTextToDocument, createDocsOpener, createDocsDocument, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact, openWritingDraft, restoredDocsResource } from './documentActions.js';
+import { createArkdownDocsInput } from './docsEditorInput.js';
+import { migrateLegacyDocsInput } from './legacyDocsMigration.js';
+import { ArkdownDocsEditorPane } from './arkdownDocsEditorPane.js';
+import { createDocsBackupContribution } from './docsBackupContribution.js';
 
 DocumentTypes.enableFileEditors();
+
+registerWorkbenchContribution('sessions.docs.backup', WorkbenchPhase.BlockRestore, createDocsBackupContribution);
 
 registerWorkbenchContribution('sessions.generatedFileOpener', WorkbenchPhase.BlockRestore, accessor => {
 	const generated = accessor.get(IGeneratedFilesService);
 	const open = createDocsOpener(accessor);
+	const contextKeys = accessor.get(IContextKeyService);
 	return accessor.get(IOpenerService).registerOpener({
 		open: async (target, options) => {
 			if (options?.openExternal) return false;
@@ -44,62 +48,42 @@ registerWorkbenchContribution('sessions.generatedFileOpener', WorkbenchPhase.Blo
 			await generated.refresh();
 			const file = generated.files.find(file => file.resource.toString() === resource.toString());
 			if (!file) throw new Error(localize({ bundle: 'ash.artifacts', key: 'generatedFileUnavailable' }, 'This generated file is unavailable.'));
+			// Resolve the current presentation after the account-scoped catalog refresh.
+			if (contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code') return false;
 			await open(file.resource, { label: file.title });
 			return true;
 		}
 	});
 });
 
-const resolveDocumentProfile = async () => (await import('../../../../../../extensions/academy/browser/generalProfile.js')).generalProfile;
-registerEditorPane({
-	id: GENERAL_DOCUMENT_EDITOR_ID,
-	get name() { return localize('sessions.artifacts.rich', 'Rich document'); },
-	documentType: { id: 'general', contentType: GENERAL_DOCUMENT_CONTENT_TYPE, extensions: ['.ash-doc'] },
-	canOpen: input => !isResourceDiffEditorInput(input) &&
-		(input.contentType?.split(';', 1)[0].trim().toLowerCase() === GENERAL_DOCUMENT_CONTENT_TYPE || input.resource.path.toLowerCase().endsWith('.ash-doc'))
-		? EditorPaneMatch.Builtin : EditorPaneMatch.None,
-	resolveDocumentProfile,
-	async create(options) {
-		const [{ createDocumentEditorPane }, profile] = await Promise.all([
-			import('../../../../workbench/contrib/documentEditor/browser/editorProfile.js'),
-			resolveDocumentProfile(),
-		]);
-		return createDocumentEditorPane(profile, options);
+for (const id of [LEGACY_DOCS_FILE_EDITOR_ID, LEGACY_DOCS_EDITOR_ID]) registerEditorPane({
+	id,
+	get name() { return localize({ bundle: 'ash.docs', key: 'legacyDocument' }, 'Legacy document'); },
+	canOpen: input => {
+		if (isResourceDiffEditorInput(input)) return EditorPaneMatch.None;
+		const matchesLegacyFile = id === LEGACY_DOCS_FILE_EDITOR_ID && input.editorId !== LEGACY_DOCS_EDITOR_ID
+			&& (/\.ash-doc$/iu.test(input.resource.path) || input.contentType === LEGACY_DOCS_CONTENT_TYPE);
+		return input.editorId === id || matchesLegacyFile ? EditorPaneMatch.Builtin : EditorPaneMatch.None;
 	},
+	async resolveInput(input, accessor) {
+		const migrated = await migrateLegacyDocsInput(input, accessor);
+		// Ordinary files retain the Code workflow. Explicit legacy Docs retains its product host.
+		return input.editorId === LEGACY_DOCS_EDITOR_ID ? migrated
+			: { ...migrated, editorId: CODE_EDITOR_ID, rename: undefined, showBreadcrumbs: input.showBreadcrumbs };
+	},
+	create() { throw new Error('Legacy Docs must resolve to Arkdown before pane creation'); },
 });
 
 registerEditorPane({
-	id: DOCS_EDITOR_ID,
+	id: DOCS_ARKDOWN_EDITOR_ID,
 	get name() { return localize('sessions.artifacts.docs', 'Docs'); },
-	canOpen: input => !isResourceDiffEditorInput(input) && input.editorId === DOCS_EDITOR_ID && input.contentType === GENERAL_DOCUMENT_CONTENT_TYPE
-		? EditorPaneMatch.Default : EditorPaneMatch.None,
-	createInput: createDocsInput,
-	resolveDocumentProfile,
-	async create(options) {
-		const [{ resolveDocumentPaneOptions }, { docsEditorProfile }] = await Promise.all([
-			import('../../../../workbench/contrib/documentEditor/browser/editorProfile.js'),
-			import('./docsEditorProfile.js'),
-		]);
-		return options.instantiationService!.createInstance(DocsEditorPane, resolveDocumentPaneOptions({ ...docsEditorProfile, editorId: DOCS_EDITOR_ID }, options));
-	},
-});
-
-registerEditorPane({
-	id: DOCS_MARKDOWN_EDITOR_ID,
-	get name() { return localize('sessions.artifacts.markdown', 'Markdown'); },
-	canOpen: input => input.editorId === DOCS_MARKDOWN_EDITOR_ID && !isResourceDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
-	createInput: createMarkdownDocsInput,
+	canOpen: input => input.editorId === DOCS_ARKDOWN_EDITOR_ID && !isResourceDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	createInput: createArkdownDocsInput,
 	create(options) {
 		if (!options.instantiationService) throw new Error('Docs requires the Workbench instantiation service');
-		return options.instantiationService.createInstance(MarkdownDocsEditorPane, options.onSave);
+		return options.instantiationService.createInstance(ArkdownDocsEditorPane, options.onSave);
 	},
 });
-
-const docsToolsTitle = { title: 'Document tools', localizationKey: { bundle: 'ash.docs', key: 'tools' } };
-SessionsViewRegistry.registerStaticViewContainer({ id: DOCS_TOOLS_CONTAINER_ID, ...docsToolsTitle, location: ViewContainerLocation.AuxiliaryBar });
-SessionsViewRegistry.registerStaticViews(DOCS_TOOLS_CONTAINER_ID, [{
-	id: `${DOCS_TOOLS_CONTAINER_ID}.view`, ...docsToolsTitle, ctorDescriptor: new SyncDescriptor<IView>(DocsToolsView), canToggleVisibility: false,
-}]);
 
 CommandsRegistry.register(EDIT_CHAT_WRITING_COMMAND_ID, (accessor, html, title) => {
 	if (typeof html !== 'string' || title !== undefined && typeof title !== 'string') {
@@ -109,52 +93,52 @@ CommandsRegistry.register(EDIT_CHAT_WRITING_COMMAND_ID, (accessor, html, title) 
 });
 
 CommandsRegistry.register('sessions.docs.newDocument', accessor => {
-	return createDocsOpener(accessor)(newDocsResource(localize('sessions.artifacts.untitledDocument', 'Untitled document'), '.md'));
+	return createDocsDocument(accessor, localize('sessions.artifacts.untitledDocument', 'Untitled document'));
 });
 
-Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<DocsEditorPreference>({
-	key: DOCS_EDITOR_SETTING, scope: ConfigurationScope.APPLICATION, defaultValue: 'rich',
-	parse(value: unknown): DocsEditorPreference {
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<DocsEditorMode>({
+	key: DOCS_DEFAULT_MODE_SETTING, scope: ConfigurationScope.APPLICATION, defaultValue: 'rich',
+	parse(value: unknown): DocsEditorMode {
 		if (value === 'automatic') return 'rich';
-		if (value !== 'rich' && value !== 'markdown') { throw new TypeError(localize('sessions.artifacts.invalidEditor', 'Choose Rich document or Markdown for Docs.')); }
+		if (value !== 'rich' && value !== 'markdown') { throw new TypeError(localize({ bundle: 'ash.docs', key: 'invalidMode' }, 'Choose Document or Markdown source for Docs.')); }
 		return value;
 	},
 	setting: {
-		valueType: 'select', title: localize('sessions.artifacts.docsEditor', 'Docs editor'),
-		description: localize({ bundle: 'ash.docs', key: 'editorDescription' }, 'Choose formatted document editing or Markdown source editing for new Docs.'),
+		valueType: 'select', title: localize({ bundle: 'ash.docs', key: 'defaultMode' }, 'Default Docs view'),
+		description: localize({ bundle: 'ash.docs', key: 'defaultModeDescription' }, 'Choose the default view for Markdown Docs.'),
 		options: [
-			{ value: 'rich', label: localize('sessions.artifacts.rich', 'Rich document') },
-			{ value: 'markdown', label: localize('sessions.artifacts.markdown', 'Markdown') },
+			{ value: 'rich', label: localize({ bundle: 'ash.docs', key: 'formattedView' }, 'Document') },
+			{ value: 'markdown', label: localize({ bundle: 'ash.docs', key: 'sourceView' }, 'Markdown source') },
 		],
 	},
 });
 
 const chatWorkspace = ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code');
 
-registerAction2(class ChooseDocsEditor extends Action2 {
-	constructor() { super({ id: 'sessions.docs.chooseEditor', title: localize2('sessions.artifacts.chooseEditor', 'Choose Docs editor'), f1: true, precondition: chatWorkspace }); }
+registerAction2(class ChooseDocsMode extends Action2 {
+	constructor() { super({ id: 'sessions.docs.chooseEditor', title: localize2({ bundle: 'ash.docs', key: 'chooseMode' }, 'Choose default Docs view'), f1: true, precondition: chatWorkspace }); }
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const contextKeys = accessor.get(IContextKeyService);
 		if (!contextKeys.contextMatchesRules(chatWorkspace)) return;
 		const configuration = accessor.get(IConfigurationService);
 		const commands = accessor.get(ICommandService);
-		const current = configuration.getValue<DocsEditorPreference>(DOCS_EDITOR_SETTING) ?? 'rich';
+		const current = configuration.getValue<DocsEditorMode>(DOCS_DEFAULT_MODE_SETTING) ?? 'rich';
 		using store = new DisposableStore();
-		const picker = store.add(accessor.get(IQuickInputService).createQuickPick<{ readonly id: DocsEditorPreference | 'blank'; readonly label: string; readonly picked?: boolean; }>());
-		picker.placeholder = picker.ariaLabel = localize('sessions.artifacts.chooseEditor', 'Choose Docs editor');
+		const picker = store.add(accessor.get(IQuickInputService).createQuickPick<{ readonly id: DocsEditorMode | 'blank'; readonly label: string; readonly picked?: boolean; }>());
+		picker.placeholder = picker.ariaLabel = localize({ bundle: 'ash.docs', key: 'chooseMode' }, 'Choose default Docs view');
 		picker.items = [
-			{ id: 'rich', label: localize('sessions.artifacts.rich', 'Rich document'), picked: current === 'rich' },
-			{ id: 'markdown', label: localize('sessions.artifacts.markdown', 'Markdown'), picked: current === 'markdown' },
+			{ id: 'rich', label: localize({ bundle: 'ash.docs', key: 'formattedView' }, 'Document'), picked: current === 'rich' },
+			{ id: 'markdown', label: localize({ bundle: 'ash.docs', key: 'sourceView' }, 'Markdown source'), picked: current === 'markdown' },
 			{ id: 'blank', label: localize('sessions.artifacts.newBlankDocument', 'New blank document') },
 		];
-		const selected = await new Promise<DocsEditorPreference | 'blank' | undefined>(resolve => {
+		const selected = await new Promise<DocsEditorMode | 'blank' | undefined>(resolve => {
 			store.add(picker.onDidAccept(() => { resolve(picker.selectedItems[0]?.id); picker.hide(); }));
 			store.add(picker.onDidHide(() => resolve(undefined)));
 			picker.show();
 		});
 		if (!selected || !contextKeys.contextMatchesRules(chatWorkspace)) { return; }
 		if (selected === 'blank') { await commands.executeCommand('sessions.docs.newDocument'); return; }
-		await configuration.updateValue(DOCS_EDITOR_SETTING, selected, ConfigurationTarget.USER_LOCAL);
+		await configuration.updateValue(DOCS_DEFAULT_MODE_SETTING, selected, ConfigurationTarget.USER_LOCAL);
 	}
 });
 
@@ -188,7 +172,7 @@ registerAction2(class NewDocumentAction extends Action2 {
 		super({ id: 'workbench.action.document.new', title: localize2('document.new', 'New Document'), f1: true, precondition: chatWorkspace, menu: { id: MenuId.MenubarFileMenu, when: chatWorkspace, group: '1_file', order: -0.5 } });
 	}
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		if (accessor.get(IContextKeyService).contextMatchesRules(chatWorkspace)) await createGeneralDocument(accessor);
+		if (accessor.get(IContextKeyService).contextMatchesRules(chatWorkspace)) await createDocsDocument(accessor);
 	}
 });
 

@@ -42,7 +42,7 @@ Rust 作者继续使用 `sdk/rust` 的 Host RPC v1 接口。文档客户端的 `
 
 ## 快速理解
 
-通用 Code 编辑功能由客户端 `src/ash/editor` 内置。IDE 的可选 Markdown 文档编辑器与 Agent Window Docs 共用 Workbench Markdown 窗格，源码视图复用 CodeEditor，文本模型、保存和撤销保持同一 owner。现有 `.ash-doc` 文档继续复用 Academy 的通用文档模型和工作台的工作副本。Academy 的论文编辑器、PDF 查看器与文献管理器独立安装，资源加载与 Provider 生命周期沿公开 SDK 和客户端桥。
+通用 Code 编辑功能由客户端 `src/ash/editor` 内置。IDE 和 Agent Window Code 使用 Markdown 源码编辑及扩展预览，Chat 正文使用流式 Markdown，Chat Docs 使用 Sessions 内的 Arkdown。Docs 的源码视图复用 CodeEditor，文本模型、保存和撤销保持同一 owner。旧 `.ash-doc` 复用 Academy 的格式转换器单向迁移为 Markdown，原文件保留。Academy 的论文编辑器、PDF 查看器与文献管理器独立安装，专业结构化模型与排版继续由 Academy 持有。资源加载与 Provider 生命周期沿公开 SDK 和客户端桥。
 
 Ash 的共享核心服务 App、TUI 与其他客户端，拥有 Agent 执行、权威状态、权限裁决和通用资源机制。服务商认证、托管平台 API 和特定产品工作流由可选扩展提供；实现需要 Rust、后台执行或跨窗口存活，都不能单独成为进入核心的理由。
 

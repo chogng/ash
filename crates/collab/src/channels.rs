@@ -80,8 +80,10 @@ pub struct ChannelStore {
 }
 impl ChannelStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, ChannelError> {
-        let connection = Connection::open(path)?;
-        configure_resources(&connection)?;
+        let mut connection =
+            ash_sqlite::open_sqlite_database(path.as_ref(), ash_sqlite::SqliteDurability::Durable)
+                .map_err(|_| ChannelError::Storage)?;
+        configure_resources(&mut connection)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })
@@ -510,18 +512,19 @@ impl ChannelResourceKind {
 
 /// Shared-database initialization allows notes and media to authorize inside their own
 /// SQLite transactions, rather than checking a stale membership snapshot over an RPC.
-pub fn configure_resources(connection: &Connection) -> Result<(), ChannelError> {
-    crate::store_schema::configure_connection(connection)?;
-    crate::store_schema::migrate(connection, "channel-resources", RESOURCE_MIGRATIONS)
-        .map_err(|_| ChannelError::Storage)?;
-    Ok(())
+pub fn configure_resources(connection: &mut Connection) -> Result<(), ChannelError> {
+    RESOURCE_MIGRATOR
+        .run(connection)
+        .map_err(|_| ChannelError::Storage)
 }
 
-const RESOURCE_MIGRATIONS: &[crate::store_schema::Migration] = &[|transaction| {
-    transaction.execute_batch(include_str!(
-        "../migrations/channel-resources/0001_resources.sql"
-    ))
-}];
+const RESOURCE_MIGRATOR: ash_sqlite::Migrator<'_> = ash_sqlite::Migrator::new(
+    "channel-resources",
+    &[ash_sqlite::Migration::sql(
+        1,
+        include_str!("../migrations/channel-resources/0001_resources.sql"),
+    )],
+);
 
 /// Resolves the current inherited membership for a resource. None means an independent
 /// resource; an empty list means a channel was deleted and all access has been revoked.

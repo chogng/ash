@@ -125,6 +125,16 @@ export interface TextEditOptions {
 	readonly editSource?: TextModelEditSource;
 }
 
+/** Scoped collaboration participant. The TextModel remains the only mutable
+ * editor buffer; the participant validates proposals and owns selective history. */
+export interface TextModelEditParticipant {
+	beforeEdit(edits: readonly { readonly startOffset: number; readonly endOffset: number; readonly text: string; }[]): void;
+	canUndo(): boolean;
+	canRedo(): boolean;
+	undo(): TextModelChange | undefined;
+	redo(): TextModelChange | undefined;
+}
+
 export interface TextModelUndoRedoSnapshot {
 	readonly contentSHA1: string;
 	readonly contentLength: number;
@@ -178,6 +188,7 @@ export class TextModel implements ITextModel {
 	private lineInjectedTextCache: { readonly version: number; readonly lines: ReadonlyMap<number, readonly LineInjectedText[]>; } | undefined;
 	private nextDecorationId = 1;
 	private readonly history: TextModelHistory;
+	private editParticipant: TextModelEditParticipant | undefined;
 	private readonly maintenance: TextModelMaintenanceOptions | undefined;
 	private readonly pendingMaintenance = this._register(new MutableDisposable<IDisposable>());
 	private buffer: ITextBuffer;
@@ -385,17 +396,31 @@ export class TextModel implements ITextModel {
 
 	canUndo(): boolean {
 		this.assertNotDisposed();
-		return this.history.canUndo;
+		return this.editParticipant?.canUndo() ?? this.history.canUndo;
 	}
 
 	canRedo(): boolean {
 		this.assertNotDisposed();
-		return this.history.canRedo;
+		return this.editParticipant?.canRedo() ?? this.history.canRedo;
+	}
+
+	/** Transfers history for one live collaboration session. Stale local history
+	 * is discarded on both boundaries so it cannot later erase remote edits. */
+	registerEditParticipant(participant: TextModelEditParticipant): IDisposable {
+		this.assertNotDisposed();
+		this.ensureDirectTextMutationAllowed();
+		if (this.editParticipant) throw new Error('A TextModel edit participant is already attached');
+		this.history.reset();
+		this.editParticipant = participant;
+		return toDisposable(() => {
+			if (this.editParticipant === participant) { this.editParticipant = undefined; this.history.reset(); }
+		});
 	}
 
 	/** Captures model-local history for a resolver that is about to release this model instance. */
 	createUndoRedoSnapshot(): TextModelUndoRedoSnapshot | undefined {
 		if (this.isDisposed() && !this.disposing) throw new ReferenceError('TextModel is already disposed');
+		if (this.editParticipant) return undefined;
 		const history = this.history.createSnapshot();
 		if (!history || history.undo.length === 0 && history.redo.length === 0) return undefined;
 		const text = this.buffer.createSnapshot().getText();
@@ -788,6 +813,7 @@ export class TextModel implements ITextModel {
 			transactionId: coalescingEntry?.transactionId,
 		});
 		if (!result) return;
+		if (this.editParticipant) { this.publishTextChange(result.change); return; }
 		this.history.prepareForEdit(undefined);
 		this.history.clearRedo();
 		if (coalescingEntry) {
@@ -1547,6 +1573,7 @@ export class TextModel implements ITextModel {
 			},
 		);
 		if (!result) return undefined;
+		if (this.editParticipant) { this.publishTextChange(result.change); return result; }
 		this.history.prepareForEdit(options.historyGroup);
 		this.history.clearRedo();
 		if (coalescingEntry) {
@@ -1704,6 +1731,7 @@ export class TextModel implements ITextModel {
 	undo(): TextModelChange | undefined {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
+		if (this.editParticipant) return this.editParticipant.undo();
 		this.history.prepareForEdit(undefined);
 		const entry = this.history.takeUndo();
 		if (!entry) return undefined;
@@ -1742,6 +1770,7 @@ export class TextModel implements ITextModel {
 	redo(): TextModelChange | undefined {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
+		if (this.editParticipant) return this.editParticipant.redo();
 		this.history.prepareForEdit(undefined);
 		const entry = this.history.takeRedo();
 		if (!entry) return undefined;
@@ -1883,6 +1912,15 @@ export class TextModel implements ITextModel {
 			} else {
 				nextLineIds = this.mapLineIds(this.projectLineIds(prepared), reservedLineIds);
 			}
+		}
+
+		if (this.editParticipant) {
+			if (eolChanged) {
+				let text = this.getValue();
+				for (const edit of [...prepared].reverse()) text = text.slice(0, edit.startOffset) + edit.text + text.slice(edit.endOffset);
+				const eol = targetEOL === EndOfLineSequence.CRLF ? '\r\n' : '\n';
+				this.editParticipant.beforeEdit([{ startOffset: 0, endOffset: this.getValueLength(), text: text.replace(/\r\n|\r|\n/gu, eol) }]);
+			} else this.editParticipant.beforeEdit(prepared);
 		}
 
 		const bufferResult = this.buffer.applyEdits(

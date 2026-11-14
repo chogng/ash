@@ -3699,18 +3699,21 @@ impl AppServer {
                 | ClientMethod::ChannelNotes
                 | ClientMethod::ChannelCall),
             ) => channel_operations::execute(&self.channels, connection, method, &request.params),
-            Some(ClientMethod::DocumentCollaborationOpen) => self
+            Some(ClientMethod::RoomStatus) => {
+                self.collaboration_processor.room_status(&request.params)
+            }
+            Some(ClientMethod::RoomOpen) => self
                 .collaboration_processor
-                .document_collaboration_open(connection, &request.params),
-            Some(ClientMethod::DocumentCollaborationSubmit) => self
+                .room_open(connection, &request.params),
+            Some(ClientMethod::RoomSubmit) => {
+                self.collaboration_processor.room_submit(&request.params)
+            }
+            Some(ClientMethod::RoomPresencePublish) => self
                 .collaboration_processor
-                .document_collaboration_submit(&request.params),
-            Some(ClientMethod::DocumentCollaborationPresencePublish) => self
+                .room_presence_publish(&request.params),
+            Some(ClientMethod::RoomPresenceRead) => self
                 .collaboration_processor
-                .document_collaboration_presence_publish(&request.params),
-            Some(ClientMethod::DocumentCollaborationPresenceRead) => self
-                .collaboration_processor
-                .document_collaboration_presence_read(&request.params),
+                .room_presence_read(&request.params),
             Some(
                 method @ (ClientMethod::GitHubNotificationsList
                 | ClientMethod::GitHubManagedSettings

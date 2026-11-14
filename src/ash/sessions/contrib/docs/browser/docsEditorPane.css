@@ -12,12 +12,3 @@
 	min-width: 0;
 	min-height: 0;
 }
-
-.ash-docs-tools-view {
-	overflow: auto;
-}
-
-.ash-docs-workspace-controls .stanza-document-outline {
-	border-inline-end: 0;
-	border-top: var(--ash-strokeThickness) solid var(--ash-border);
-}

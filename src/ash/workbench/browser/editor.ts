@@ -6,6 +6,7 @@ import type { EditorOpenOptions } from '../services/editor/common/editorService.
 import { DocumentTypes, type DocumentType } from '../services/documentEditor/common/documentTypes.js';
 import { EditorPaneMatch, type EditorPane, type EditorPaneCreationOptions } from './parts/editor/editorPane.js';
 import type { EditorProfile } from '../services/documentEditor/browser/documentEditorProfile.js';
+import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 
 /** Resource matchers are pure; an editor can normalize requests into its own input model. */
 export interface IEditorPaneDescriptor {
@@ -17,6 +18,8 @@ export interface IEditorPaneDescriptor {
 	canOpen(input: IResourceEditorInput): EditorPaneMatch;
 	/** Create the editor's input, returning an already matching input unchanged. */
 	createInput?(source: IResourceEditorInput): IResourceEditorInput;
+	/** Resolve persisted resource migrations before routing or creating a pane. */
+	resolveInput?(source: IResourceEditorInput, accessor: ServicesAccessor): Promise<IResourceEditorInput>;
 	/** Resolves the live package's document semantics for host-owned creation and conversion. */
 	resolveDocumentProfile?(): Promise<EditorProfile>;
 	create(options: EditorPaneCreationOptions): EditorPane | Promise<EditorPane>;

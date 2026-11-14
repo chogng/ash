@@ -21,7 +21,7 @@ import type { IDiffService } from '../../../services/diff/common/diffService.js'
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
 import type { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
-import type { IDocumentCollaborationApi } from '../../../../platform/collab/common/documentCollaborationApi.js';
+import type { ICollabApi } from '../../../../platform/collab/common/collabApi.js';
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { EditorOpenOptions } from './editorInput.js';
 import type { EditorCloseOptions } from '../../../services/editor/common/editorGroupsService.js';
@@ -82,7 +82,7 @@ export interface EditorGroupOptions extends IEditorGroupViewOptions {
 	readonly diffService?: IDiffService;
 	readonly accessibilityService?: IAccessibilityService;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly documentCollaborationApi?: IDocumentCollaborationApi;
+	readonly collabApi?: ICollabApi;
 	readonly serverEvents?: IServerEventApi;
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly onSave?: (group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane) => Promise<IResourceEditorInput | undefined>;
@@ -153,7 +153,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private readonly instantiationService: IInstantiationService;
 	private readonly accessibilityService: IAccessibilityService | undefined;
 	private readonly languageDiagnosticsService: ILanguageDiagnosticsService | undefined;
-	private readonly documentCollaborationApi: IDocumentCollaborationApi | undefined;
+	private readonly collabApi: ICollabApi | undefined;
 	private readonly serverEvents: IServerEventApi | undefined;
 	private readonly workingCopyService: IWorkingCopyService | undefined;
 	private readonly onSave: EditorGroupOptions['onSave'];
@@ -206,7 +206,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.diffService = options.diffService;
 		this.accessibilityService = options.accessibilityService;
 		this.languageDiagnosticsService = options.languageDiagnosticsService;
-		this.documentCollaborationApi = options.documentCollaborationApi;
+		this.collabApi = options.collabApi;
 		this.serverEvents = options.serverEvents;
 		this.workingCopyService = options.workingCopyService;
 		this.onSave = options.onSave;
@@ -524,13 +524,19 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	/** Resolve before routing requests so tab identity is consistent across groups and restores. */
-	public resolveEditorInput(input: IResourceEditorInput, options: EditorOpenOptions = {}): IResourceEditorInput {
+	public resolveEditorInput(input: IResourceEditorInput, options: EditorOpenOptions = {}): IResourceEditorInput | Promise<IResourceEditorInput> {
+		let descriptor: IEditorPaneDescriptor | undefined;
 		try {
-			return this.resolveEditorPane(input, options)?.createInput?.(input) ?? input;
+			descriptor = this.resolveEditorPane(input, options);
 		} catch {
 			// Opening owns error reporting and placeholders, including unavailable editor types.
 			return input;
 		}
+		if (descriptor?.resolveInput) {
+			if (!this.instantiationService) throw new Error('Editor input resolution requires the instantiation service');
+			return this.instantiationService.invokeFunction(accessor => descriptor.resolveInput!(input, accessor));
+		}
+		return descriptor?.createInput?.(input) ?? input;
 	}
 
 	private resolveEditorPane(input: IResourceEditorInput, options: EditorOpenOptions): IEditorPaneDescriptor | undefined {
@@ -573,6 +579,13 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		let existing = this.entry(input);
 		let descriptor: IEditorPaneDescriptor;
 		try {
+			const resolution = this.resolveEditorInput(input, options);
+			const resolved = resolution instanceof Promise ? await resolution : resolution;
+			if (resolved.editorId !== input.editorId) options = { ...options, preferredEditorId: resolved.editorId };
+			input = resolved;
+			const resolvedIdentity = this.uriIdentity.resolveCanonicalUri(input.resource);
+			if (!(resolvedIdentity instanceof URI)) await resolvedIdentity;
+			if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
 			const selected = this.resolveEditorPane(input, options);
 			if (!selected) {
 				throw new RangeError(`No editor can open ${input.resource}`);
@@ -639,7 +652,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 				instantiationService: this.instantiationService,
 				accessibilityService: this.accessibilityService,
 				languageDiagnosticsService: this.languageDiagnosticsService,
-				documentCollaborationApi: this.documentCollaborationApi,
+				collabApi: this.collabApi,
 				serverEvents: this.serverEvents,
 				workingCopyService: this.workingCopyService,
 				onOpenLocation: this.onOpenLocation,
@@ -841,7 +854,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	async replaceEditor(input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void> {
-		replacement = this.resolveEditorInput(replacement);
+		replacement = await this.resolveEditorInput(replacement);
 		const index = this.model.indexOf(input);
 		if (index < 0) throw new RangeError(`Editor is not open in this group: ${input.resource}`);
 		const wasSticky = this.isSticky(input);

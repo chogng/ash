@@ -4,22 +4,22 @@ import { validateDocumentSelection } from '../../core/documentSelection.js';
 import { freezeDocumentNode, type DocumentNode } from '../../model/document.js';
 import { DocumentSchema } from '../../model/documentSchema.js';
 import { applyDocumentTransaction, DocumentTransaction, type DocumentStep } from '../../model/documentTransaction.js';
-import type { DocumentCollaborationAcknowledgement, DocumentCollaborationEnvelope, DocumentCollaborationRemoteEnvelope } from '../../services/documentCollaborationService.js';
+import type { RoomAcknowledgement, RoomEnvelope, RemoteRoomEnvelope } from '../../services/collabService.js';
 import { rebaseDocumentTransaction } from './rebase.js';
 
-export interface DocumentCollaborationSynchronizerOptions {
+export interface CollabSynchronizerOptions {
 	readonly schema: DocumentSchema;
 	readonly document: DocumentNode;
 	readonly clientId: string;
 	readonly version?: number;
 }
 
-export interface DocumentCollaborationSynchronizationChange {
+export interface CollabSynchronizationChange {
 	readonly kind: 'local' | 'remote' | 'acknowledged';
 	readonly document: DocumentNode;
 	readonly canonicalDocument: DocumentNode;
 	readonly pending: DocumentTransaction | undefined;
-	readonly envelope: DocumentCollaborationEnvelope;
+	readonly envelope: RoomEnvelope;
 	readonly droppedSteps: readonly DocumentStep[];
 }
 
@@ -30,18 +30,18 @@ export interface DocumentCollaborationSynchronizationChange {
  * in flight, later transactions are buffered, and remote updates rebase the
  * combined local intent before the next submission is issued.
  */
-export class DocumentCollaborationSynchronizer extends Disposable {
-	private readonly changeEmitter = this._register(new Emitter<DocumentCollaborationSynchronizationChange>());
+export class CollabSynchronizer extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<CollabSynchronizationChange>());
 	private _canonicalDocument: DocumentNode;
 	private _document: DocumentNode;
-	private _inFlight: DocumentCollaborationEnvelope | undefined;
+	private _inFlight: RoomEnvelope | undefined;
 	private _buffer: DocumentTransaction | undefined;
 	private _version: number;
 	private _sequence = 0;
 
-	readonly onDidChange: Event<DocumentCollaborationSynchronizationChange> = this.changeEmitter.event;
+	readonly onDidChange: Event<CollabSynchronizationChange> = this.changeEmitter.event;
 
-	constructor(options: DocumentCollaborationSynchronizerOptions) {
+	constructor(options: CollabSynchronizerOptions) {
 		super();
 		if (typeof options.clientId !== 'string' || options.clientId.trim().length === 0) throw new TypeError('A collaboration client id is required');
 		const version = options.version ?? 0;
@@ -81,7 +81,7 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 	}
 
 	/** The exact envelope currently awaiting an ordered collaboration result. */
-	get inFlight(): DocumentCollaborationEnvelope | undefined {
+	get inFlight(): RoomEnvelope | undefined {
 		this.assertNotDisposed();
 		return this._inFlight;
 	}
@@ -98,7 +98,7 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 	}
 
 	/** Applies a local transaction optimistically and returns an immediately sendable envelope when idle. */
-	dispatchLocal(transaction: DocumentTransaction): DocumentCollaborationEnvelope | undefined {
+	dispatchLocal(transaction: DocumentTransaction): RoomEnvelope | undefined {
 		this.assertNotDisposed();
 		const applied = applySynchronizerTransaction(this._document, this.schema, transaction);
 		this._document = applied.document;
@@ -113,7 +113,7 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 	}
 
 	/** Returns the buffered local transaction once the preceding server submission has settled. */
-	takeNextSubmission(): DocumentCollaborationEnvelope | undefined {
+	takeNextSubmission(): RoomEnvelope | undefined {
 		this.assertNotDisposed();
 		if (this._inFlight || !this._buffer) return undefined;
 		const envelope = this.beginSubmission(this._buffer);
@@ -123,10 +123,10 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 	}
 
 	/** Applies a server-ordered remote update and rebases every unsent local change. */
-	receiveRemote(envelope: DocumentCollaborationRemoteEnvelope): DocumentCollaborationSynchronizationChange {
+	receiveRemote(envelope: RemoteRoomEnvelope): CollabSynchronizationChange {
 		this.assertNotDisposed();
 		this.validateRemoteEnvelope(envelope);
-		if (envelope.clientId === this.clientId) throw new DocumentCollaborationError('A local update must be acknowledged, not received as remote');
+		if (envelope.clientId === this.clientId) throw new CollabError('A local update must be acknowledged, not received as remote');
 		const remote = applySynchronizerTransaction(this._canonicalDocument, this.schema, envelope.transaction);
 		const local = this.pending;
 		const rebased = local ? rebaseDocumentTransaction(this._canonicalDocument, this.schema, local, envelope.transaction) : undefined;
@@ -139,11 +139,11 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 	}
 
 	/** Commits the exact server-accepted in-flight transaction while retaining later local input. */
-	acknowledge(envelope: DocumentCollaborationAcknowledgement): DocumentCollaborationSynchronizationChange {
+	acknowledge(envelope: RoomAcknowledgement): CollabSynchronizationChange {
 		this.assertNotDisposed();
 		this.validateRemoteEnvelope(envelope);
-		if (envelope.clientId !== this.clientId) throw new DocumentCollaborationError('Only the local client can acknowledge its own update');
-		if (!this._inFlight || envelope.sequence !== this._inFlight.sequence) throw new DocumentCollaborationError('The acknowledgement does not match the current in-flight update');
+		if (envelope.clientId !== this.clientId) throw new CollabError('Only the local client can acknowledge its own update');
+		if (!this._inFlight || envelope.sequence !== this._inFlight.sequence) throw new CollabError('The acknowledgement does not match the current in-flight update');
 		const committed = applySynchronizerTransaction(this._canonicalDocument, this.schema, envelope.transaction);
 		this._canonicalDocument = committed.document;
 		this._version = envelope.version;
@@ -155,7 +155,7 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 	/** Replaces the canonical snapshot only when no local intent would be lost. */
 	replaceSnapshot(document: DocumentNode, version: number): void {
 		this.assertNotDisposed();
-		if (this.pending) throw new DocumentCollaborationError('Cannot replace a collaboration snapshot while local updates are pending');
+		if (this.pending) throw new CollabError('Cannot replace a collaboration snapshot while local updates are pending');
 		if (!Number.isSafeInteger(version) || version < 0) throw new RangeError('A collaboration document version must be a non-negative safe integer');
 		const normalized = freezeDocumentNode(document);
 		this.schema.validate(normalized);
@@ -164,23 +164,23 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 		this._version = version;
 	}
 
-	private beginSubmission(transaction: DocumentTransaction): DocumentCollaborationEnvelope {
+	private beginSubmission(transaction: DocumentTransaction): RoomEnvelope {
 		this._sequence += 1;
 		const envelope = Object.freeze({ clientId: this.clientId, sequence: this._sequence, baseVersion: this._version, transaction });
 		this._inFlight = envelope;
 		return envelope;
 	}
 
-	private validateRemoteEnvelope(envelope: DocumentCollaborationRemoteEnvelope): void {
+	private validateRemoteEnvelope(envelope: RemoteRoomEnvelope): void {
 		if (!envelope || typeof envelope !== 'object') throw new TypeError('A collaboration envelope is required');
 		if (typeof envelope.clientId !== 'string' || envelope.clientId.trim().length === 0) throw new TypeError('A collaboration envelope requires a client id');
 		if (!Number.isSafeInteger(envelope.sequence) || envelope.sequence < 1) throw new RangeError('A collaboration envelope sequence must be a positive safe integer');
-		if (!Number.isSafeInteger(envelope.baseVersion) || envelope.baseVersion !== this._version) throw new DocumentCollaborationError(`Collaboration update is based on version ${envelope.baseVersion}, expected ${this._version}`);
-		if (!Number.isSafeInteger(envelope.version) || envelope.version <= envelope.baseVersion) throw new DocumentCollaborationError('A collaboration update must advance the document version');
+		if (!Number.isSafeInteger(envelope.baseVersion) || envelope.baseVersion !== this._version) throw new CollabError(`Collaboration update is based on version ${envelope.baseVersion}, expected ${this._version}`);
+		if (!Number.isSafeInteger(envelope.version) || envelope.version <= envelope.baseVersion) throw new CollabError('A collaboration update must advance the document version');
 		if (!(envelope.transaction instanceof DocumentTransaction)) throw new TypeError('A collaboration envelope requires a Stanza transaction');
 	}
 
-	private emitChange(options: { readonly kind: DocumentCollaborationSynchronizationChange['kind']; readonly envelope: DocumentCollaborationEnvelope; readonly droppedSteps: readonly DocumentStep[]; }): DocumentCollaborationSynchronizationChange {
+	private emitChange(options: { readonly kind: CollabSynchronizationChange['kind']; readonly envelope: RoomEnvelope; readonly droppedSteps: readonly DocumentStep[]; }): CollabSynchronizationChange {
 		const change = Object.freeze({ kind: options.kind, document: this._document, canonicalDocument: this._canonicalDocument, pending: this.pending, envelope: options.envelope, droppedSteps: Object.freeze([...options.droppedSteps]) });
 		this.changeEmitter.fire(change);
 		return change;
@@ -188,10 +188,10 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 
 }
 
-export class DocumentCollaborationError extends Error {
+export class CollabError extends Error {
 	constructor(message: string, options?: ErrorOptions) {
 		super(message, options);
-		this.name = 'DocumentCollaborationError';
+		this.name = 'CollabError';
 	}
 }
 

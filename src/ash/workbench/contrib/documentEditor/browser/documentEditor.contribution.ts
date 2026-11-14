@@ -53,7 +53,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 }
 
 class DocumentAccessibilityContribution extends Disposable {
-	constructor(@ILayoutService layout: ILayoutService, @IAccessibleViewService views: IAccessibleViewService, @IAccessibilityService accessibility: IAccessibilityService) {
+	constructor(@ILayoutService layout: ILayoutService, @IEditorPart editors: IEditorPart, @IAccessibleViewService views: IAccessibleViewService, @IAccessibilityService accessibility: IAccessibilityService) {
 		super();
 		const listeners = this._register(new DisposableMap<HTMLElement, IDisposable>());
 		const synchronize = (): void => {
@@ -63,8 +63,9 @@ class DocumentAccessibilityContribution extends Disposable {
 				if (listeners.has(container)) continue;
 				listeners.set(container, addDisposableListener(container, 'focusin', event => {
 					if (!isHTMLElement(event.target)) return;
-					const pane = event.target.closest('.stanza-structured-editor-pane, .stanza-arkdown-editor');
-					if (!pane || event.relatedTarget instanceof container.ownerDocument.defaultView!.Node && pane.contains(event.relatedTarget)) return;
+					const pane = editors.activePane;
+					if (!isDocumentAccessibleEditor(pane) || !pane.containsAccessibilityFocus(event.target)) return;
+					if (isHTMLElement(event.relatedTarget) && pane.containsAccessibilityFocus(event.relatedTarget)) return;
 					if (!accessibility.isScreenReaderOptimized()) return;
 					const hint = views.getOpenAriaHint(AccessibilityVerbositySettingId.Document);
 					if (hint) accessibility.status(hint);

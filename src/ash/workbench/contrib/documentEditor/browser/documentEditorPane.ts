@@ -8,7 +8,7 @@ import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.j
 import { CancellationError } from '../../../../base/common/errors.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
-import type { DocumentCollaborationRoom } from '../../../services/documentCollaboration/common/documentCollaborationService.js';
+import type { Room } from '../../../services/collab/common/collabService.js';
 import { CollaborationContribution, type CollaborationStartResult } from './collaborationContribution.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import type { TextModelWorkingCopyReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
@@ -19,7 +19,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import type { DocumentSelection } from '../../../services/documentEditor/common/documentCodec.js';
 import type { DocumentNode } from '../../../services/documentEditor/common/documentCodec.js';
 import type { DocumentOutline } from '../../../services/documentEditor/common/documentCodec.js';
-import type { IDocumentCollaborationService } from '../../../services/documentCollaboration/common/documentCollaborationService.js';
+import type { IDocumentRoomService } from '../../../services/collab/common/collabService.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IDocumentEditorTextModelService } from '../../../services/documentEditor/common/documentTypes.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
@@ -41,7 +41,7 @@ export interface EditorPaneOptions extends Pick<DocumentEditorConfiguration, 'co
 	readonly collaborationSchemaId?: string;
 	readonly onSave?: () => Promise<void | boolean>;
 	readonly createEmptyDocument?: () => DocumentNode;
-	readonly createDocumentCollaborationService?: () => IDocumentCollaborationService;
+	readonly createCollabService?: () => IDocumentRoomService;
 }
 
 /** Workbench pane that hosts one structured document editor. */
@@ -52,9 +52,9 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	private inputGeneration = 0;
 	private artifactLifetime = new AbortController();
 	private readonly options: EditorPaneOptions;
-	private collaborationService: IDocumentCollaborationService | undefined;
+	private collaborationService: IDocumentRoomService | undefined;
 	private collaboration: CollaborationContribution | undefined;
-	private room: DocumentCollaborationRoom | undefined;
+	private room: Room | undefined;
 	private channel: ChannelReference | undefined;
 	private roomRequest: AbortController | undefined;
 	private readonly roomStateListener = this._register(new MutableDisposable<IDisposable>());
@@ -133,8 +133,8 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		this.container = container;
 		const controls = this.getControlsHost();
 		const controlsParent = controls?.container ?? container;
-		const { createDocumentCollaborationService } = this.options;
-		this.collaborationService = createDocumentCollaborationService ? this._register(createDocumentCollaborationService()) : undefined;
+		const { createCollabService } = this.options;
+		this.collaborationService = createCollabService ? this._register(createCollabService()) : undefined;
 		const collaboration = this._register(new CollaborationContribution(controlsParent, {
 			fixedRoom: () => this.channel ? `channel-notes-${this.channel.channelId}` : undefined,
 			onStart: roomId => this.startCollaboration(roomId, this.channel?.serverUrl, this.channel),
@@ -357,7 +357,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		this.collaboration?.setState(this.collaborationService ? 'inactive' : 'unavailable');
 	}
 
-	private requireRoom(): DocumentCollaborationRoom {
+	private requireRoom(): Room {
 		if (!this.room || !this.roomRequest || this.roomRequest.signal.aborted) throw new Error('Document collaboration is not connected');
 		if (!this.room.canManageMembers) throw new Error('This collaboration member cannot manage room credentials');
 		return this.room;

@@ -1,29 +1,29 @@
-use crate::DocumentCollaborationAuditEvent;
-use crate::DocumentCollaborationInvite;
-use crate::DocumentCollaborationMember;
-use crate::DocumentCollaborationOpenParams;
-use crate::DocumentCollaborationOpenResult;
-use crate::DocumentCollaborationPresence;
-use crate::DocumentCollaborationPresenceReplay;
-use crate::DocumentCollaborationPrincipal;
-use crate::DocumentCollaborationRoomRole;
-use crate::DocumentCollaborationSubmitParams;
-use crate::DocumentCollaborationSubmitResult;
-use crate::DocumentCollaborationUpdate;
-use crate::room::DocumentCollaborationReplay;
+use crate::RoomAuditEvent;
+use crate::RoomInvite;
+use crate::RoomMember;
+use crate::RoomOpenParams;
+use crate::RoomOpenResult;
+use crate::RoomPresence;
+use crate::RoomPresenceReplay;
+use crate::RoomPrincipal;
+use crate::RoomRole;
+use crate::RoomSubmitParams;
+use crate::RoomSubmitResult;
+use crate::RoomUpdate;
 use crate::room::MAX_JAVASCRIPT_SAFE_INTEGER;
 use crate::room::MAX_ROOM_HISTORY;
+use crate::room::RoomReplay;
 use crate::room::random_access_token;
 use crate::room::random_principal_id;
 use crate::room::random_room_id;
 use crate::room::replay;
 use crate::room::replay_submit_result;
 use crate::room::snapshot;
-use crate::room::validate_document;
+use crate::room::submit_profile;
 use crate::room::validate_identifier;
 use crate::room::validate_javascript_safe_integer;
 use crate::room::validate_presence_selection;
-use crate::room::validate_transaction;
+use crate::room::validate_profile_document;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Transaction;
@@ -37,42 +37,41 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 /// SQLite-backed collaboration authority that survives remote-host restarts.
-pub struct SqliteDocumentCollaborationRooms {
+pub struct SqliteRoomStore {
     connection: Mutex<Connection>,
 }
 
 struct PersistedRoom {
+    epoch: String,
+    checkpoint: u64,
     schema_id: String,
     document: String,
     version: u64,
     presence_generation: u64,
 }
 
-impl SqliteDocumentCollaborationRooms {
+impl SqliteRoomStore {
     /// Opens or creates the collaboration authority at an explicit SQLite path.
     pub fn open_at(path: impl AsRef<Path>) -> Result<Self, String> {
-        let connection = Connection::open(path).map_err(sqlite_error)?;
-        crate::store_schema::configure_connection(&connection).map_err(sqlite_error)?;
-        crate::store_schema::migrate(&connection, "document-rooms", ROOM_MIGRATIONS)?;
-        crate::channels::configure_resources(&connection).map_err(|e| e.to_string())?;
+        let mut connection =
+            ash_sqlite::open_sqlite_database(path.as_ref(), ash_sqlite::SqliteDurability::Durable)?;
+        ROOM_MIGRATOR.run(&mut connection)?;
+        crate::channels::configure_resources(&mut connection).map_err(|e| e.to_string())?;
         Ok(Self {
             connection: Mutex::new(connection),
         })
     }
 
-    pub fn open(
-        &self,
-        params: DocumentCollaborationOpenParams,
-    ) -> Result<DocumentCollaborationOpenResult, String> {
+    pub fn open(&self, params: RoomOpenParams) -> Result<RoomOpenResult, String> {
         self.open_inner(None, params)
     }
 
     /// Opens or creates a room while requiring the principal to be a room member.
     pub fn open_as(
         &self,
-        principal: &DocumentCollaborationPrincipal,
-        params: DocumentCollaborationOpenParams,
-    ) -> Result<DocumentCollaborationOpenResult, String> {
+        principal: &RoomPrincipal,
+        params: RoomOpenParams,
+    ) -> Result<RoomOpenResult, String> {
         validate_principal(principal)?;
         self.open_inner(Some(principal), params)
     }
@@ -85,7 +84,7 @@ impl SqliteDocumentCollaborationRooms {
     pub fn initialize_owner_if_unowned(
         &self,
         room_id: &str,
-        principal: &DocumentCollaborationPrincipal,
+        principal: &RoomPrincipal,
     ) -> Result<(), String> {
         validate_identifier(room_id, "roomId")?;
         validate_principal(principal)?;
@@ -104,13 +103,7 @@ impl SqliteDocumentCollaborationRooms {
             return Err("The collaboration room does not exist".into());
         }
         if count_room_members(&transaction, room_id)? == 0 {
-            insert_room_member(
-                &transaction,
-                room_id,
-                principal,
-                DocumentCollaborationRoomRole::Owner,
-                None,
-            )?;
+            insert_room_member(&transaction, room_id, principal, RoomRole::Owner, None)?;
             record_audit(
                 &transaction,
                 room_id,
@@ -124,9 +117,9 @@ impl SqliteDocumentCollaborationRooms {
 
     fn open_inner(
         &self,
-        principal: Option<&DocumentCollaborationPrincipal>,
-        mut params: DocumentCollaborationOpenParams,
-    ) -> Result<DocumentCollaborationOpenResult, String> {
+        principal: Option<&RoomPrincipal>,
+        mut params: RoomOpenParams,
+    ) -> Result<RoomOpenResult, String> {
         validate_identifier(&params.client_id, "clientId")?;
         validate_identifier(&params.schema_id, "schemaId")?;
         let mut connection = self.connection.lock().map_err(lock_error)?;
@@ -156,29 +149,26 @@ impl SqliteDocumentCollaborationRooms {
             if let Some(principal) = principal {
                 require_room_role(&transaction, &room_id, &principal.id)?;
             }
-            let result = DocumentCollaborationOpenResult {
-                client_id: params.client_id,
-                schema_id: room.schema_id,
-                snapshot: snapshot(&room_id, room.version, room.document),
+            if params.lease == Some(true) {
+                renew_lease(&transaction, &room_id, &params.client_id)?;
+            }
+            let result = RoomOpenResult {
+                client_id: params.client_id.clone(),
+                schema_id: room.schema_id.clone(),
+                snapshot: persisted_snapshot(&room_id, &room),
             };
             transaction.commit().map_err(sqlite_error)?;
             return Ok(result);
         }
-        validate_document(&params.document)?;
+        validate_profile_document(&params.schema_id, &params.document)?;
         transaction
             .execute(
-                "INSERT INTO document_collaboration_rooms (room_id, schema_id, document, version) VALUES (?1, ?2, ?3, 0)",
+                "INSERT INTO document_collaboration_rooms (room_id, schema_id, document, version, epoch) VALUES (?1, ?2, ?3, 0, lower(hex(randomblob(16))))",
                 params![room_id, params.schema_id, params.document],
             )
             .map_err(sqlite_error)?;
         if let Some(principal) = principal.filter(|_| !channel_notes) {
-            insert_room_member(
-                &transaction,
-                &room_id,
-                principal,
-                DocumentCollaborationRoomRole::Owner,
-                None,
-            )?;
+            insert_room_member(&transaction, &room_id, principal, RoomRole::Owner, None)?;
             record_audit(
                 &transaction,
                 &room_id,
@@ -187,28 +177,30 @@ impl SqliteDocumentCollaborationRooms {
                 &principal.id,
             )?;
         }
-        let result = DocumentCollaborationOpenResult {
-            client_id: params.client_id,
+        if params.lease == Some(true) {
+            renew_lease(&transaction, &room_id, &params.client_id)?;
+        }
+        let mut initial = snapshot(&room_id, 0, params.document);
+        initial.epoch = Some(room_epoch(&transaction, &room_id)?);
+        let result = RoomOpenResult {
+            client_id: params.client_id.clone(),
             schema_id: params.schema_id,
-            snapshot: snapshot(&room_id, 0, params.document),
+            snapshot: initial,
         };
         transaction.commit().map_err(sqlite_error)?;
         Ok(result)
     }
 
-    pub fn submit(
-        &self,
-        params: DocumentCollaborationSubmitParams,
-    ) -> Result<DocumentCollaborationSubmitResult, String> {
+    pub fn submit(&self, params: RoomSubmitParams) -> Result<RoomSubmitResult, String> {
         self.submit_inner(None, params)
     }
 
     /// Submits one update only when the principal has owner or editor authority.
     pub fn submit_as(
         &self,
-        principal: &DocumentCollaborationPrincipal,
-        params: DocumentCollaborationSubmitParams,
-    ) -> Result<DocumentCollaborationSubmitResult, String> {
+        principal: &RoomPrincipal,
+        params: RoomSubmitParams,
+    ) -> Result<RoomSubmitResult, String> {
         validate_principal(principal)?;
         self.submit_inner(Some(principal), params)
     }
@@ -216,9 +208,9 @@ impl SqliteDocumentCollaborationRooms {
     /// Resolves the current room role for an authenticated principal.
     pub fn room_role_as(
         &self,
-        principal: &DocumentCollaborationPrincipal,
+        principal: &RoomPrincipal,
         room_id: &str,
-    ) -> Result<DocumentCollaborationRoomRole, String> {
+    ) -> Result<RoomRole, String> {
         validate_principal(principal)?;
         validate_identifier(room_id, "roomId")?;
         let connection = self.connection.lock().map_err(lock_error)?;
@@ -227,9 +219,9 @@ impl SqliteDocumentCollaborationRooms {
 
     fn submit_inner(
         &self,
-        principal: Option<&DocumentCollaborationPrincipal>,
-        params: DocumentCollaborationSubmitParams,
-    ) -> Result<DocumentCollaborationSubmitResult, String> {
+        principal: Option<&RoomPrincipal>,
+        params: RoomSubmitParams,
+    ) -> Result<RoomSubmitResult, String> {
         validate_identifier(&params.room_id, "roomId")?;
         validate_identifier(&params.client_id, "clientId")?;
         validate_javascript_safe_integer(params.sequence, "sequence", 1)?;
@@ -247,22 +239,26 @@ impl SqliteDocumentCollaborationRooms {
                 return Err("The collaboration room member is read-only".into());
             }
         }
-        if let Some(existing) = load_client_update(
-            &transaction,
-            &params.room_id,
-            &params.client_id,
-            params.sequence,
-        )? {
-            if existing.update.base_version != params.base_version
-                || existing.update.transaction != params.transaction
-                || existing.document != params.document
-            {
-                return Err("sequence has already been used by this collaboration client".into());
-            }
-            transaction.commit().map_err(sqlite_error)?;
-            return Ok(DocumentCollaborationSubmitResult::Accepted {
-                update: existing.update,
+        if params
+            .epoch
+            .as_deref()
+            .is_some_and(|epoch| epoch != room.epoch)
+        {
+            return Ok(RoomSubmitResult::Resync {
+                snapshot: persisted_snapshot(&params.room_id, &room),
             });
+        }
+        let lease = transaction.query_row("SELECT expires, last_sequence FROM collaboration_clients WHERE room_id=?1 AND client_id=?2", params![params.room_id, params.client_id], |row| Ok((from_sql_integer(row.get(0)?)?,from_sql_integer(row.get(1)?)?))).optional().map_err(sqlite_error)?;
+        let now = crate::room::now_millis()?;
+        if lease.is_some_and(|(expires, _)| expires <= now) {
+            return Err("collab.leaseExpired".into());
+        }
+        if let Some(update) = load_client_update(&transaction, &params)? {
+            transaction.commit().map_err(sqlite_error)?;
+            return Ok(RoomSubmitResult::Accepted { update });
+        }
+        if lease.is_some_and(|(_, sequence)| params.sequence <= sequence) {
+            return Err("collab.leaseExpired".into());
         }
         if params.base_version > room.version {
             return Err("baseVersion cannot be newer than the collaboration room".into());
@@ -272,8 +268,12 @@ impl SqliteDocumentCollaborationRooms {
             transaction.commit().map_err(sqlite_error)?;
             return Ok(replay_submit_result(replay));
         }
-        validate_transaction(&params.transaction)?;
-        validate_document(&params.document)?;
+        let canonical_document = submit_profile(
+            &room.schema_id,
+            &room.document,
+            &params.transaction,
+            &params.document,
+        )?;
         let version = room
             .version
             .checked_add(1)
@@ -282,20 +282,17 @@ impl SqliteDocumentCollaborationRooms {
                 "The collaboration room version exceeded JavaScript's safe integer range"
                     .to_string()
             })?;
-        let update = DocumentCollaborationUpdate {
-            room_id: params.room_id,
-            client_id: params.client_id,
+        let update = RoomUpdate {
+            epoch: Some(room.epoch.clone()),
+            room_id: params.room_id.clone(),
+            client_id: params.client_id.clone(),
             sequence: params.sequence,
             base_version: params.base_version,
             version,
-            transaction: params.transaction,
+            transaction: params.transaction.clone(),
         };
-        transaction
-            .execute(
-                "UPDATE document_collaboration_rooms SET document = ?2, version = ?3 WHERE room_id = ?1",
-                params![&update.room_id, &params.document, to_sql_integer(version)?],
-            )
-            .map_err(sqlite_error)?;
+        let checkpoint = room.schema_id != crate::markdown::SCHEMA || version % 64 == 0;
+        transaction.execute("UPDATE document_collaboration_rooms SET document=CASE WHEN ?4 THEN ?2 ELSE document END, checkpoint_version=CASE WHEN ?4 THEN ?3 ELSE checkpoint_version END, version=?3 WHERE room_id=?1", params![&update.room_id, &canonical_document, to_sql_integer(version)?, checkpoint]).map_err(sqlite_error)?;
         if let Some(principal) = principal {
             record_audit(
                 &transaction,
@@ -305,49 +302,95 @@ impl SqliteDocumentCollaborationRooms {
                 &update.client_id,
             )?;
         }
+        transaction.execute("INSERT INTO document_collaboration_updates (room_id, version, client_id, sequence, base_version, transaction_json) VALUES (?1,?2,?3,?4,?5,?6)", params![update.room_id, to_sql_integer(version)?, update.client_id, to_sql_integer(update.sequence)?, to_sql_integer(update.base_version)?, update.transaction]).map_err(sqlite_error)?;
         transaction
             .execute(
-                "INSERT INTO document_collaboration_updates (room_id, version, client_id, sequence, base_version, transaction_json, document) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT INTO collaboration_receipts VALUES (?1,?2,?3,?4,?5)",
                 params![
-                    &update.room_id,
-                    to_sql_integer(update.version)?,
-                    &update.client_id,
+                    update.room_id,
+                    update.client_id,
                     to_sql_integer(update.sequence)?,
-                    to_sql_integer(update.base_version)?,
-                    &update.transaction,
-                    &params.document,
+                    to_sql_integer(version)?,
+                    crate::room::request_digest(&params)
+                ],
+            )
+            .map_err(sqlite_error)?;
+        if lease.is_some() {
+            transaction.execute("UPDATE collaboration_clients SET last_sequence=?3, expires=?4 WHERE room_id=?1 AND client_id=?2", params![update.room_id, update.client_id, to_sql_integer(update.sequence)?, unix_millis()? + crate::room::LEASE_MILLIS as i64]).map_err(sqlite_error)?;
+            transaction.execute("DELETE FROM collaboration_receipts WHERE room_id=?1 AND client_id=?2 AND sequence <= ?3", params![update.room_id, update.client_id, to_sql_integer(update.sequence.saturating_sub(crate::room::RECEIPTS_PER_CLIENT))?]).map_err(sqlite_error)?;
+        }
+        transaction
+            .execute(
+                "DELETE FROM document_collaboration_updates WHERE room_id=?1 AND version <= ?2",
+                params![
+                    update.room_id,
+                    to_sql_integer(version.saturating_sub(MAX_ROOM_HISTORY as u64))?
                 ],
             )
             .map_err(sqlite_error)?;
         transaction.commit().map_err(sqlite_error)?;
-        Ok(DocumentCollaborationSubmitResult::Accepted { update })
+        Ok(RoomSubmitResult::Accepted { update })
     }
 
-    pub fn replay(
+    pub fn status_as(
         &self,
-        room_id: &str,
-        after_version: u64,
-    ) -> Result<DocumentCollaborationReplay, String> {
+        principal: Option<&RoomPrincipal>,
+        params: crate::RoomStatusParams,
+    ) -> Result<crate::RoomStatus, String> {
+        validate_identifier(&params.room_id, "roomId")?;
+        validate_identifier(&params.client_id, "clientId")?;
+        let mut connection = self.connection.lock().map_err(lock_error)?;
+        let tx = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(sqlite_error)?;
+        let can_edit = if let Some(principal) = principal {
+            require_room_role(&tx, &params.room_id, &principal.id)?.can_submit()
+        } else {
+            true
+        };
+        let (epoch, version) = tx
+            .query_row(
+                "SELECT epoch, version FROM document_collaboration_rooms WHERE room_id=?1",
+                [&params.room_id],
+                |row| Ok((row.get::<_, String>(0)?, from_sql_integer(row.get(1)?)?)),
+            )
+            .optional()
+            .map_err(sqlite_error)?
+            .ok_or("The collaboration room does not exist")?;
+        let leased: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM collaboration_clients WHERE room_id=?1 AND client_id=?2)", params![params.room_id,params.client_id], |row| row.get(0)).map_err(sqlite_error)?;
+        if leased {
+            renew_lease(&tx, &params.room_id, &params.client_id)?;
+        }
+        tx.commit().map_err(sqlite_error)?;
+        Ok(crate::RoomStatus {
+            room_id: params.room_id,
+            epoch,
+            version,
+            can_edit,
+        })
+    }
+
+    pub fn replay(&self, room_id: &str, after_version: u64) -> Result<RoomReplay, String> {
         self.replay_inner(None, room_id, after_version)
     }
 
     /// Reads room replay state only when the principal is a current member.
     pub fn replay_as(
         &self,
-        principal: &DocumentCollaborationPrincipal,
+        principal: &RoomPrincipal,
         room_id: &str,
         after_version: u64,
-    ) -> Result<DocumentCollaborationReplay, String> {
+    ) -> Result<RoomReplay, String> {
         validate_principal(principal)?;
         self.replay_inner(Some(principal), room_id, after_version)
     }
 
     fn replay_inner(
         &self,
-        principal: Option<&DocumentCollaborationPrincipal>,
+        principal: Option<&RoomPrincipal>,
         room_id: &str,
         after_version: u64,
-    ) -> Result<DocumentCollaborationReplay, String> {
+    ) -> Result<RoomReplay, String> {
         validate_identifier(room_id, "roomId")?;
         validate_javascript_safe_integer(after_version, "afterVersion", 0)?;
         let connection = self.connection.lock().map_err(lock_error)?;
@@ -367,10 +410,10 @@ impl SqliteDocumentCollaborationRooms {
     pub fn create_invite(
         &self,
         room_id: &str,
-        owner: &DocumentCollaborationPrincipal,
+        owner: &RoomPrincipal,
         display_name: &str,
-        role: DocumentCollaborationRoomRole,
-    ) -> Result<DocumentCollaborationInvite, String> {
+        role: RoomRole,
+    ) -> Result<RoomInvite, String> {
         validate_identifier(room_id, "roomId")?;
         validate_principal(owner)?;
         validate_display_name(display_name)?;
@@ -379,12 +422,12 @@ impl SqliteDocumentCollaborationRooms {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(sqlite_error)?;
         let owner_role = require_room_role(&transaction, room_id, &owner.id)?;
-        if owner_role != DocumentCollaborationRoomRole::Owner {
+        if owner_role != RoomRole::Owner {
             return Err("Only collaboration room owners may invite members".into());
         }
         let principal_id = create_principal_id(&transaction, room_id)?;
         let access_token = random_access_token()?;
-        let principal = DocumentCollaborationPrincipal {
+        let principal = RoomPrincipal {
             id: principal_id.clone(),
             display_name: display_name.into(),
         };
@@ -397,7 +440,7 @@ impl SqliteDocumentCollaborationRooms {
             &principal_id,
         )?;
         transaction.commit().map_err(sqlite_error)?;
-        Ok(DocumentCollaborationInvite {
+        Ok(RoomInvite {
             room_id: room_id.into(),
             principal_id,
             display_name: display_name.into(),
@@ -411,7 +454,7 @@ impl SqliteDocumentCollaborationRooms {
         &self,
         room_id: &str,
         access_token: &str,
-    ) -> Result<Option<DocumentCollaborationPrincipal>, String> {
+    ) -> Result<Option<RoomPrincipal>, String> {
         validate_identifier(room_id, "roomId")?;
         if access_token.is_empty() {
             return Ok(None);
@@ -424,12 +467,12 @@ impl SqliteDocumentCollaborationRooms {
                 crate::channels::ChannelResourceKind::Notes,
             )
             .map(|identity| {
-                identity.filter(|(id, _)| id == room_id).map(|(_, member)| {
-                    DocumentCollaborationPrincipal {
+                identity
+                    .filter(|(id, _)| id == room_id)
+                    .map(|(_, member)| RoomPrincipal {
                         id: member.id,
                         display_name: member.name,
-                    }
-                })
+                    })
             })
             .or_else(|error| match error {
                 crate::channels::ChannelError::Denied => Ok(None),
@@ -439,7 +482,7 @@ impl SqliteDocumentCollaborationRooms {
         connection.query_row(
             "SELECT principal_id, display_name FROM document_collaboration_room_members WHERE room_id = ?1 AND token_hash = ?2 AND revoked_at_ms IS NULL",
             params![room_id, token_hash(access_token)],
-            |row| Ok(DocumentCollaborationPrincipal { id: row.get(0)?, display_name: row.get(1)? }),
+            |row| Ok(RoomPrincipal { id: row.get(0)?, display_name: row.get(1)? }),
         ).optional().map_err(sqlite_error)
     }
 
@@ -447,14 +490,12 @@ impl SqliteDocumentCollaborationRooms {
     pub fn list_members(
         &self,
         room_id: &str,
-        owner: &DocumentCollaborationPrincipal,
-    ) -> Result<Vec<DocumentCollaborationMember>, String> {
+        owner: &RoomPrincipal,
+    ) -> Result<Vec<RoomMember>, String> {
         validate_identifier(room_id, "roomId")?;
         validate_principal(owner)?;
         let connection = self.connection.lock().map_err(lock_error)?;
-        if require_room_role(&connection, room_id, &owner.id)?
-            != DocumentCollaborationRoomRole::Owner
-        {
+        if require_room_role(&connection, room_id, &owner.id)? != RoomRole::Owner {
             return Err("Only collaboration room owners may inspect members".into());
         }
         let mut statement = connection
@@ -476,7 +517,7 @@ impl SqliteDocumentCollaborationRooms {
         records
             .into_iter()
             .map(|(principal_id, display_name, role)| {
-                Ok(DocumentCollaborationMember {
+                Ok(RoomMember {
                     principal_id,
                     display_name,
                     role: role_from_sql(&role)?,
@@ -489,7 +530,7 @@ impl SqliteDocumentCollaborationRooms {
     pub fn revoke_member(
         &self,
         room_id: &str,
-        owner: &DocumentCollaborationPrincipal,
+        owner: &RoomPrincipal,
         principal_id: &str,
     ) -> Result<(), String> {
         validate_identifier(room_id, "roomId")?;
@@ -499,9 +540,7 @@ impl SqliteDocumentCollaborationRooms {
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(sqlite_error)?;
-        if require_room_role(&transaction, room_id, &owner.id)?
-            != DocumentCollaborationRoomRole::Owner
-        {
+        if require_room_role(&transaction, room_id, &owner.id)? != RoomRole::Owner {
             return Err("Only collaboration room owners may revoke members".into());
         }
         if principal_id == owner.id {
@@ -528,9 +567,9 @@ impl SqliteDocumentCollaborationRooms {
     pub fn rotate_member_access_token(
         &self,
         room_id: &str,
-        owner: &DocumentCollaborationPrincipal,
+        owner: &RoomPrincipal,
         principal_id: &str,
-    ) -> Result<DocumentCollaborationInvite, String> {
+    ) -> Result<RoomInvite, String> {
         validate_identifier(room_id, "roomId")?;
         validate_principal(owner)?;
         validate_identifier(principal_id, "principalId")?;
@@ -538,9 +577,7 @@ impl SqliteDocumentCollaborationRooms {
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(sqlite_error)?;
-        if require_room_role(&transaction, room_id, &owner.id)?
-            != DocumentCollaborationRoomRole::Owner
-        {
+        if require_room_role(&transaction, room_id, &owner.id)? != RoomRole::Owner {
             return Err("Only collaboration room owners may rotate member credentials".into());
         }
         let (display_name, role) = transaction.query_row(
@@ -563,7 +600,7 @@ impl SqliteDocumentCollaborationRooms {
             principal_id,
         )?;
         transaction.commit().map_err(sqlite_error)?;
-        Ok(DocumentCollaborationInvite {
+        Ok(RoomInvite {
             room_id: room_id.into(),
             principal_id: principal_id.into(),
             display_name,
@@ -576,14 +613,12 @@ impl SqliteDocumentCollaborationRooms {
     pub fn audit_events(
         &self,
         room_id: &str,
-        owner: &DocumentCollaborationPrincipal,
-    ) -> Result<Vec<DocumentCollaborationAuditEvent>, String> {
+        owner: &RoomPrincipal,
+    ) -> Result<Vec<RoomAuditEvent>, String> {
         validate_identifier(room_id, "roomId")?;
         validate_principal(owner)?;
         let connection = self.connection.lock().map_err(lock_error)?;
-        if require_room_role(&connection, room_id, &owner.id)?
-            != DocumentCollaborationRoomRole::Owner
-        {
+        if require_room_role(&connection, room_id, &owner.id)? != RoomRole::Owner {
             return Err("Only collaboration room owners may inspect the audit log".into());
         }
         let mut statement = connection.prepare(
@@ -591,7 +626,7 @@ impl SqliteDocumentCollaborationRooms {
         ).map_err(sqlite_error)?;
         let events = statement
             .query_map([room_id], |row| {
-                Ok(DocumentCollaborationAuditEvent {
+                Ok(RoomAuditEvent {
                     room_id: room_id.into(),
                     event_id: from_sql_integer(row.get(0)?)?,
                     actor_principal_id: row.get(1)?,
@@ -607,7 +642,7 @@ impl SqliteDocumentCollaborationRooms {
     /// Publishes or clears one client selection without affecting document history.
     pub fn update_presence_as(
         &self,
-        principal: &DocumentCollaborationPrincipal,
+        principal: &RoomPrincipal,
         room_id: &str,
         client_id: &str,
         selection: Option<&str>,
@@ -654,10 +689,10 @@ impl SqliteDocumentCollaborationRooms {
     /// Replays the current ephemeral selection set when its generation changed.
     pub fn replay_presence_as(
         &self,
-        principal: &DocumentCollaborationPrincipal,
+        principal: &RoomPrincipal,
         room_id: &str,
         after_generation: u64,
-    ) -> Result<DocumentCollaborationPresenceReplay, String> {
+    ) -> Result<RoomPresenceReplay, String> {
         validate_principal(principal)?;
         validate_identifier(room_id, "roomId")?;
         validate_javascript_safe_integer(after_generation, "afterGeneration", 0)?;
@@ -677,7 +712,7 @@ impl SqliteDocumentCollaborationRooms {
         ).map_err(sqlite_error)?;
         let presences = statement
             .query_map(params![room_id, stale_before], |row| {
-                Ok(DocumentCollaborationPresence {
+                Ok(RoomPresence {
                     client_id: row.get(0)?,
                     selection: row.get(1)?,
                 })
@@ -685,7 +720,7 @@ impl SqliteDocumentCollaborationRooms {
             .map_err(sqlite_error)?
             .collect::<Result<Vec<_>, _>>()
             .map_err(sqlite_error)?;
-        Ok(DocumentCollaborationPresenceReplay {
+        Ok(RoomPresenceReplay {
             generation: room.presence_generation,
             presences,
         })
@@ -704,9 +739,20 @@ fn count_room_members(connection: &Connection, room_id: &str) -> Result<i64, Str
 
 const PRESENCE_TTL_MILLIS: i64 = 60_000;
 
-const ROOM_MIGRATIONS: &[crate::store_schema::Migration] = &[adopt_rooms_v1];
+const ROOM_MIGRATOR: ash_sqlite::Migrator<'_> = ash_sqlite::Migrator::new(
+    "document-rooms",
+    &[ash_sqlite::Migration::legacy_baseline(2, adopt_rooms_v2)],
+);
 
-fn adopt_rooms_v1(transaction: &rusqlite::Transaction<'_>) -> rusqlite::Result<()> {
+fn adopt_rooms_v2(
+    transaction: &rusqlite::Transaction<'_>,
+    _version: Option<u32>,
+) -> Result<(), String> {
+    adopt_rooms_schema(transaction).map_err(sqlite_error)?;
+    upgrade_rooms_v2(transaction)
+}
+
+fn adopt_rooms_schema(transaction: &rusqlite::Transaction<'_>) -> rusqlite::Result<()> {
     transaction.execute_batch(include_str!("../migrations/document-rooms/0001_rooms.sql"))?;
     let has_presence_generation = transaction.query_row(
         "SELECT EXISTS(SELECT 1 FROM pragma_table_info('document_collaboration_rooms')
@@ -725,8 +771,8 @@ fn adopt_rooms_v1(transaction: &rusqlite::Transaction<'_>) -> rusqlite::Result<(
 fn insert_room_member(
     connection: &Connection,
     room_id: &str,
-    principal: &DocumentCollaborationPrincipal,
-    role: DocumentCollaborationRoomRole,
+    principal: &RoomPrincipal,
+    role: RoomRole,
     access_token: Option<&str>,
 ) -> Result<(), String> {
     connection.execute(
@@ -740,7 +786,7 @@ fn require_room_role(
     connection: &Connection,
     room_id: &str,
     principal_id: &str,
-) -> Result<DocumentCollaborationRoomRole, String> {
+) -> Result<RoomRole, String> {
     if room_id.starts_with("channel-notes-") {
         let member = crate::channels::resource_members(connection, room_id)
             .map_err(|e| e.to_string())?
@@ -752,9 +798,9 @@ fn require_room_role(
         // must never mint an independent invitation that bypasses channel revocation.
         return Ok(match member.role {
             crate::channels::ChannelRole::Owner | crate::channels::ChannelRole::Editor => {
-                DocumentCollaborationRoomRole::Editor
+                RoomRole::Editor
             }
-            crate::channels::ChannelRole::Viewer => DocumentCollaborationRoomRole::Viewer,
+            crate::channels::ChannelRole::Viewer => RoomRole::Viewer,
         });
     }
     connection.query_row(
@@ -798,7 +844,7 @@ fn token_hash(value: &str) -> String {
     format!("{:x}", Sha256::digest(value.as_bytes()))
 }
 
-fn validate_principal(principal: &DocumentCollaborationPrincipal) -> Result<(), String> {
+fn validate_principal(principal: &RoomPrincipal) -> Result<(), String> {
     validate_identifier(&principal.id, "principalId")?;
     validate_display_name(&principal.display_name)
 }
@@ -819,19 +865,19 @@ fn unix_millis() -> Result<i64, String> {
 }
 
 // SQLite's stored role spelling belongs to storage, not the shared wire contract.
-fn role_to_sql(role: DocumentCollaborationRoomRole) -> &'static str {
+fn role_to_sql(role: RoomRole) -> &'static str {
     match role {
-        DocumentCollaborationRoomRole::Owner => "owner",
-        DocumentCollaborationRoomRole::Editor => "editor",
-        DocumentCollaborationRoomRole::Viewer => "viewer",
+        RoomRole::Owner => "owner",
+        RoomRole::Editor => "editor",
+        RoomRole::Viewer => "viewer",
     }
 }
 
-fn role_from_sql(value: &str) -> Result<DocumentCollaborationRoomRole, String> {
+fn role_from_sql(value: &str) -> Result<RoomRole, String> {
     match value {
-        "owner" => Ok(DocumentCollaborationRoomRole::Owner),
-        "editor" => Ok(DocumentCollaborationRoomRole::Editor),
-        "viewer" => Ok(DocumentCollaborationRoomRole::Viewer),
+        "owner" => Ok(RoomRole::Owner),
+        "editor" => Ok(RoomRole::Editor),
+        "viewer" => Ok(RoomRole::Viewer),
         _ => Err("The collaboration room contains an invalid member role".into()),
     }
 }
@@ -846,54 +892,46 @@ fn create_room_id(transaction: &Transaction<'_>) -> Result<String, String> {
 }
 
 fn load_room(connection: &Connection, room_id: &str) -> Result<Option<PersistedRoom>, String> {
-    connection
-        .query_row(
-            "SELECT schema_id, document, version, presence_generation FROM document_collaboration_rooms WHERE room_id = ?1",
-            [room_id],
-            |row| {
-                Ok(PersistedRoom {
-                    schema_id: row.get(0)?,
-                    document: row.get(1)?,
-                    version: from_sql_integer(row.get(2)?)?,
-                    presence_generation: from_sql_integer(row.get(3)?)?,
+    let mut room = connection.query_row("SELECT schema_id, document, version, presence_generation, epoch, checkpoint_version FROM document_collaboration_rooms WHERE room_id=?1", [room_id], |row| Ok(PersistedRoom { schema_id: row.get(0)?, document: row.get(1)?, version: from_sql_integer(row.get(2)?)?, presence_generation: from_sql_integer(row.get(3)?)?, epoch: row.get(4)?, checkpoint: from_sql_integer(row.get(5)?)? })).optional().map_err(sqlite_error)?;
+    if let Some(room) = &mut room {
+        if room.schema_id == crate::markdown::SCHEMA && room.checkpoint < room.version {
+            let mut statement = connection.prepare("SELECT transaction_json FROM document_collaboration_updates WHERE room_id=?1 AND version>?2 ORDER BY version").map_err(sqlite_error)?;
+            let updates = statement
+                .query_map(params![room_id, to_sql_integer(room.checkpoint)?], |row| {
+                    row.get::<_, String>(0)
                 })
-            },
-        )
-        .optional()
-        .map_err(sqlite_error)
-}
-
-struct PersistedUpdate {
-    update: DocumentCollaborationUpdate,
-    document: String,
+                .map_err(sqlite_error)?;
+            for update in updates {
+                room.document =
+                    crate::markdown::merge(&room.document, &update.map_err(sqlite_error)?)?;
+            }
+        }
+    }
+    Ok(room)
 }
 
 fn load_client_update(
     connection: &Connection,
-    room_id: &str,
-    client_id: &str,
-    sequence: u64,
-) -> Result<Option<PersistedUpdate>, String> {
-    connection
-        .query_row(
-            "SELECT version, base_version, transaction_json, document FROM document_collaboration_updates WHERE room_id = ?1 AND client_id = ?2 AND sequence = ?3",
-            params![room_id, client_id, to_sql_integer(sequence)?],
-            |row| {
-                Ok(PersistedUpdate {
-                    update: DocumentCollaborationUpdate {
-                        room_id: room_id.into(),
-                        client_id: client_id.into(),
-                        sequence,
-                        base_version: from_sql_integer(row.get(1)?)?,
-                        version: from_sql_integer(row.get(0)?)?,
-                        transaction: row.get(2)?,
-                    },
-                    document: row.get(3)?,
-                })
-            },
-        )
-        .optional()
-        .map_err(sqlite_error)
+    params: &RoomSubmitParams,
+) -> Result<Option<RoomUpdate>, String> {
+    let receipt = connection.query_row("SELECT version, digest FROM collaboration_receipts WHERE room_id=?1 AND client_id=?2 AND sequence=?3", params![params.room_id, params.client_id, to_sql_integer(params.sequence)?], |row| Ok((from_sql_integer(row.get(0)?)?,row.get::<_,String>(1)?))).optional().map_err(sqlite_error)?;
+    match receipt {
+        None => Ok(None),
+        Some((version, digest)) => {
+            if digest != crate::room::request_digest(params) {
+                return Err("sequence has already been used by this collaboration client".into());
+            }
+            Ok(Some(RoomUpdate {
+                epoch: Some(room_epoch(connection, &params.room_id)?),
+                room_id: params.room_id.clone(),
+                client_id: params.client_id.clone(),
+                sequence: params.sequence,
+                base_version: params.base_version,
+                version,
+                transaction: params.transaction.clone(),
+            }))
+        }
+    }
 }
 
 fn replay_room(
@@ -901,7 +939,7 @@ fn replay_room(
     room_id: &str,
     room: PersistedRoom,
     after_version: u64,
-) -> Result<DocumentCollaborationReplay, String> {
+) -> Result<RoomReplay, String> {
     let updates = load_updates(connection, room_id)?;
     Ok(replay(
         room_id,
@@ -912,10 +950,7 @@ fn replay_room(
     ))
 }
 
-fn load_updates(
-    connection: &Connection,
-    room_id: &str,
-) -> Result<Vec<DocumentCollaborationUpdate>, String> {
+fn load_updates(connection: &Connection, room_id: &str) -> Result<Vec<RoomUpdate>, String> {
     let mut statement = connection
         .prepare(
             "SELECT version, client_id, sequence, base_version, transaction_json FROM document_collaboration_updates WHERE room_id = ?1 ORDER BY version DESC LIMIT ?2",
@@ -923,7 +958,8 @@ fn load_updates(
         .map_err(sqlite_error)?;
     let rows = statement
         .query_map(params![room_id, MAX_ROOM_HISTORY as i64], |row| {
-            Ok(DocumentCollaborationUpdate {
+            Ok(RoomUpdate {
+                epoch: None,
                 room_id: room_id.into(),
                 version: from_sql_integer(row.get(0)?)?,
                 client_id: row.get(1)?,
@@ -952,4 +988,87 @@ fn lock_error<T>(_: std::sync::PoisonError<T>) -> String {
 
 fn sqlite_error(error: rusqlite::Error) -> String {
     format!("Collaboration database error: {error}")
+}
+
+fn persisted_snapshot(id: &str, room: &PersistedRoom) -> crate::RoomSnapshot {
+    crate::RoomSnapshot {
+        room_id: id.into(),
+        epoch: Some(room.epoch.clone()),
+        version: room.version,
+        document: room.document.clone(),
+    }
+}
+fn room_epoch(connection: &Connection, id: &str) -> Result<String, String> {
+    connection
+        .query_row(
+            "SELECT epoch FROM document_collaboration_rooms WHERE room_id=?1",
+            [id],
+            |row| row.get(0),
+        )
+        .map_err(sqlite_error)
+}
+fn renew_lease(connection: &Connection, room: &str, client: &str) -> Result<(), String> {
+    let now = unix_millis()?;
+    let expires = connection
+        .query_row(
+            "SELECT expires FROM collaboration_clients WHERE room_id=?1 AND client_id=?2",
+            params![room, client],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(sqlite_error)?;
+    if expires.is_some_and(|expires| expires <= now) {
+        return Err("collab.leaseExpired".into());
+    }
+    if expires.is_some_and(|expires| expires - now > crate::room::LEASE_MILLIS as i64 / 2) {
+        return Ok(());
+    }
+    connection.execute("INSERT INTO collaboration_clients VALUES (?1,?2,?3,0) ON CONFLICT(room_id,client_id) DO UPDATE SET expires=excluded.expires", params![room,client, now + crate::room::LEASE_MILLIS as i64]).map_err(sqlite_error)?;
+    // Expired clients can never reuse their identities, so their receipts can be reclaimed.
+    connection.execute("DELETE FROM collaboration_receipts WHERE room_id=?1 AND client_id IN (SELECT client_id FROM collaboration_clients WHERE room_id=?1 AND expires<=?2)", params![room,now]).map_err(sqlite_error)?;
+    Ok(())
+}
+fn upgrade_rooms_v2(tx: &Transaction<'_>) -> Result<(), String> {
+    let upgraded: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('document_collaboration_rooms') WHERE name='epoch')", [], |row| row.get(0)).map_err(sqlite_error)?;
+    if upgraded {
+        return Ok(());
+    }
+    tx.execute_batch(include_str!(
+        "../migrations/document-rooms/0002_checkpoints.sql"
+    ))
+    .map_err(sqlite_error)?;
+    let mut statement = tx.prepare("SELECT room_id,client_id,sequence,version,base_version,transaction_json,document FROM document_collaboration_updates").map_err(sqlite_error)?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                RoomSubmitParams {
+                    epoch: None,
+                    room_id: row.get(0)?,
+                    client_id: row.get(1)?,
+                    sequence: from_sql_integer(row.get(2)?)?,
+                    base_version: from_sql_integer(row.get(4)?)?,
+                    transaction: row.get(5)?,
+                    document: row.get(6)?,
+                },
+                from_sql_integer(row.get(3)?)?,
+            ))
+        })
+        .map_err(sqlite_error)?;
+    for row in rows {
+        let (params, version) = row.map_err(sqlite_error)?;
+        tx.execute(
+            "INSERT INTO collaboration_receipts VALUES (?1,?2,?3,?4,?5)",
+            params![
+                params.room_id,
+                params.client_id,
+                to_sql_integer(params.sequence)?,
+                to_sql_integer(version)?,
+                crate::room::request_digest(&params)
+            ],
+        )
+        .map_err(sqlite_error)?;
+    }
+    drop(statement);
+    tx.execute_batch("ALTER TABLE document_collaboration_updates DROP COLUMN document;")
+        .map_err(sqlite_error)
 }

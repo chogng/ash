@@ -6,9 +6,9 @@ import type { IAction } from '../../../../base/common/actions.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { DocumentCollaborationInvite } from '../../../services/documentCollaboration/common/documentCollaborationService.js';
-import type { DocumentCollaborationMember } from '../../../services/documentCollaboration/common/documentCollaborationService.js';
-import type { DocumentCollaborationRoomRole } from '../../../services/documentCollaboration/common/documentCollaborationService.js';
+import type { RoomInvite } from '../../../services/collab/common/collabService.js';
+import type { RoomMember } from '../../../services/collab/common/collabService.js';
+import type { RoomRole } from '../../../services/collab/common/collabService.js';
 import { addDisposableListener, h, fragment as createFragment } from '../../../../base/browser/dom.js';
 import type { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 
@@ -24,9 +24,9 @@ export interface CollaborationContributionOptions {
 	readonly fixedRoom?: () => string | undefined;
 	readonly onStart: (roomId: string | undefined) => Promise<CollaborationStartResult>;
 	readonly onStop: () => void;
-	readonly onInvite: (displayName: string, role: DocumentCollaborationRoomRole) => Promise<DocumentCollaborationInvite>;
-	readonly onListMembers: () => Promise<readonly DocumentCollaborationMember[]>;
-	readonly onRotateMemberAccessToken: (principalId: string) => Promise<DocumentCollaborationInvite>;
+	readonly onInvite: (displayName: string, role: RoomRole) => Promise<RoomInvite>;
+	readonly onListMembers: () => Promise<readonly RoomMember[]>;
+	readonly onRotateMemberAccessToken: (principalId: string) => Promise<RoomInvite>;
 	readonly onRevokeMember: (principalId: string) => Promise<void>;
 }
 
@@ -258,7 +258,7 @@ export class CollaborationContribution extends Disposable {
 		);
 	}
 
-	private renderMembers(members: readonly DocumentCollaborationMember[]): void {
+	private renderMembers(members: readonly RoomMember[]): void {
 		const document = this.element.ownerDocument;
 		const fragment = createFragment(document);
 		const listeners = new DisposableStore();
@@ -303,7 +303,7 @@ export class CollaborationContribution extends Disposable {
 		this.memberList.replaceChildren(fragment);
 	}
 
-	private rotateMemberAccessToken(member: DocumentCollaborationMember): void {
+	private rotateMemberAccessToken(member: RoomMember): void {
 		if (this._state !== 'connected' || !this.roomId || !this.canManageMembers) return;
 		const roomId = this.roomId;
 		const principalId = this.principalId;
@@ -330,7 +330,7 @@ export class CollaborationContribution extends Disposable {
 		);
 	}
 
-	private async revokeMember(member: DocumentCollaborationMember): Promise<void> {
+	private async revokeMember(member: RoomMember): Promise<void> {
 		if (this._state !== 'connected' || !this.roomId || !this.canManageMembers || member.principalId === this.principalId) return;
 		const roomId = this.roomId;
 		const principalId = this.principalId;
@@ -358,14 +358,14 @@ export class CollaborationContribution extends Disposable {
 		);
 	}
 
-	private parseInviteRole(entered: string): DocumentCollaborationRoomRole | undefined {
+	private parseInviteRole(entered: string): RoomRole | undefined {
 		const role = entered.trim().toLowerCase();
 		if (role === 'owner' || role === 'editor' || role === 'viewer') return role;
 		if (this.roomId) this.setState('connected', { roomId: this.roomId, principalId: this.principalId, canManageMembers: true, message: 'Collaboration role must be owner, editor, or viewer' });
 		return undefined;
 	}
 
-	private showInvitation(invite: DocumentCollaborationInvite): void {
+	private showInvitation(invite: RoomInvite): void {
 		this.invitationToken.textContent = `Room ID: ${invite.roomId}\nAccess token: ${invite.accessToken}`;
 		this.invitation.hidden = false;
 	}

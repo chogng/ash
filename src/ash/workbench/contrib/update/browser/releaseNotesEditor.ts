@@ -8,7 +8,7 @@ import { localize } from '../../../../nls.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
-import { MarkdownDocumentView } from '../../markdown/browser/markdownDocumentRenderer.js';
+import { MarkdownDocumentView } from '../../markdown/browser/markdownDocumentView.js';
 import { ILocaleService } from '../../../services/localization/common/locale.js';
 import { IOnboardingTryoutService } from '../../onboarding/common/onboardingTryout.js';
 import { prepareReleaseNotesMarkdown, releaseNotesTryoutId } from './releaseNotesTryouts.js';

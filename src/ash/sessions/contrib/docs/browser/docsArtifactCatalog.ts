@@ -8,11 +8,11 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { getArtifactTitle } from '../../artifact/browser/artifactKindPresentation.js';
 import { registerArtifactCatalogSource, type ArtifactCard } from '../../artifact/browser/artifactWorkspaceRegistry.js';
-import { GENERAL_DOCUMENT_CONTENT_TYPE } from '../common/docs.js';
+import { LEGACY_DOCS_CONTENT_TYPE } from '../common/docs.js';
 
 export function isRetainedDocsInput(input: IResourceEditorInput, generated: IGeneratedFilesService): boolean {
 	const { resource, contentType } = input;
-	return (contentType === GENERAL_DOCUMENT_CONTENT_TYPE || resource.path.endsWith('.md'))
+	return (contentType === LEGACY_DOCS_CONTENT_TYPE || contentType === 'text/markdown' || /\.md$/iu.test(resource.path))
 		&& !generated.isProfileGeneratedPath(resource) && !generated.isGeneratedResource(resource);
 }
 
@@ -38,7 +38,7 @@ registerArtifactCatalogSource(accessor => {
 				if (documents.has(identity)) continue;
 				documents.add(identity);
 				cards.push({
-					title: input.label ?? basename(input.resource).replace(/\.(?:ash-doc|md)$/u, ''),
+					title: input.label ?? basename(input.resource).replace(/\.(?:ash-doc|md)$/iu, ''),
 					kind: 'docs', owner: 'you', resource: input.resource,
 					detail: getArtifactTitle('docs'),
 					command: { id: 'sessions.docs.openDocument', args: [identity] },

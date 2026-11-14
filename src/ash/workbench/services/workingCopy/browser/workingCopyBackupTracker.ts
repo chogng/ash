@@ -28,7 +28,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 	private drainedGeneration = -1;
 	private shutdownPromise: Promise<void> | undefined;
 
-	constructor(private readonly workingCopies: IWorkingCopyService, private readonly backups: IWorkingCopyBackupService, private readonly ownerWindow: Window, private readonly onError: (error: unknown) => void = error => console.error('Failed to update working-copy backup', error), private readonly retainRecovery?: (resource: URI) => boolean) {
+	constructor(private readonly workingCopies: Pick<IWorkingCopyService, 'getAll' | 'get' | 'onDidRegister' | 'onDidUnregister'>, private readonly backups: IWorkingCopyBackupService, private readonly ownerWindow: Window, private readonly onError: (error: unknown) => void = error => console.error('Failed to update working-copy backup', error), private readonly retainRecovery?: (resource: URI) => boolean) {
 		super();
 		this.registrations.add(workingCopies.onDidRegister(copy => this.track(copy)));
 		this.registrations.add(workingCopies.onDidUnregister(copy => this.untrack(copy)));

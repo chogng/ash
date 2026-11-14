@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { suite, test, suiteSetup, suiteTeardown } from 'mocha';
 import { startMarkdownMathExtension } from '../../../../../../../../test/fixtures/markdownExtension.js';
 import { ensureNoStylesAreLeakedInTestSuite } from '../../../../../../../../test/unit/documentStyles.js';
-import { getWindow, scheduleAtNextAnimationFrame } from '../../../../../../base/browser/dom.js';
+import { getWindow, getWindowId, scheduleAtNextAnimationFrame } from '../../../../../../base/browser/dom.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
@@ -571,7 +571,7 @@ suite('Shared chat Markdown rendering', () => {
 		await changedUntil(part.domNode, () => !!part.domNode.querySelector('a'));
 		const link = part.domNode.querySelector('a')!;
 		link.click();
-		assert.deepEqual(opened, [['command:allowed.command', { fromUserGesture: true, allowContributedOpeners: true, allowCommands: ['allowed.command'], skipValidation: undefined }]]);
+		assert.deepEqual(opened, [['command:allowed.command', { fromUserGesture: true, allowContributedOpeners: true, allowCommands: ['allowed.command'], skipValidation: undefined, sourceWindowId: getWindowId(document.defaultView!) }]]);
 		part.dispose();
 		const click = new document.defaultView!.MouseEvent('click', { bubbles: true, cancelable: true });
 		click.preventDefault();

@@ -1,10 +1,10 @@
 use super::connection::from_sql_integer;
 use super::connection::sql_error;
 use super::connection::to_sql_integer;
-use crate::sqlite_migrations::Migration;
-use crate::sqlite_migrations::Migrator;
 use ash_protocol::ContentDigest;
 use ash_protocol::ThreadId;
+use ash_sqlite::Migration;
+use ash_sqlite::Migrator;
 use ash_thread_store::ThreadHistoryIndexMode;
 use ash_thread_store::ThreadHistoryIndexUpdate;
 use ash_thread_store::ThreadHistoryPage;

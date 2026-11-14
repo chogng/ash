@@ -1,6 +1,6 @@
 # `ash-state`
 
-- 产生 Profile 数据库与索引路径，并统一 SQLite 打开参数、文件权限和迁移。
+- 产生 Profile 数据库与索引路径；SQLite 打开参数、文件权限和迁移执行器复用 `ash-sqlite`，既有公开导出保持可用。
 - Issue 浏览缓存按 GitHub 主机、仓库、账号与授权隔离。读取授权由 GitHub 领域核对；存储不选择账号、不保存 token，清理仅影响当前授权的仓库页面。
 - 提供本机输入历史的 SQLite 存储，独立迁移、原子追加与裁剪、稳定游标和文字搜索。
 - 提供 Thread、Git Turn Changes、Project 与 Memory 的 SQLite 存储；各领域使用独立 migration component，Session tree 仍由 Thread 的 `session_id` 聚合。

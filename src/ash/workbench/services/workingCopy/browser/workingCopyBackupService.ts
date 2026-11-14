@@ -22,12 +22,13 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 	private movedRevisions: { workspaceId: string; revisions: ReadonlyMap<string, string>; } | undefined;
 
 	constructor(
+		private readonly fixedWorkspace: IBackupWorkspace | undefined,
 		@IBackupService private readonly backups: IBackupService,
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 		@ILogService private readonly logService: ILogService,
 	) {
 		super();
-		this.workspaceId = workspaceContext.getWorkspace().id;
+		this.workspaceId = (fixedWorkspace ?? workspaceContext.getWorkspace()).id;
 		this.legacy = this._register(new IndexedDbWorkingCopyBackupService(this.workspaceId));
 	}
 
@@ -125,6 +126,10 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 	}
 
 	async moveBackups(target: IBackupWorkspace): Promise<void> {
+		if (this.fixedWorkspace) {
+			if (target.id !== this.fixedWorkspace.id) throw new Error('A fixed backup scope cannot move workspace');
+			return;
+		}
 		if (target.id === this.workspaceId) return;
 		const generation = this.workspaceGeneration;
 		const sourceId = this.workspaceId;
@@ -141,6 +146,7 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 
 	switchWorkspace(workspaceId: string): void {
 		this.assertNotDisposed();
+		if (this.fixedWorkspace && this.fixedWorkspace.id !== workspaceId) throw new Error('A fixed backup scope cannot switch workspace');
 		this.legacy.switchWorkspace(workspaceId);
 		this.workspaceId = workspaceId;
 		this.workspaceGeneration++;
@@ -161,9 +167,11 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 	}
 
 	private workspace(): IBackupWorkspace {
-		const workspace = this.workspaceContext.getWorkspace();
-		if (workspace.id !== this.workspaceId) throw new Error('Backup workspace does not match the current workspace');
-		return { id: workspace.id, folders: workspace.folders.map(folder => folder.uri), ...(workspace.configuration ? { configuration: workspace.configuration } : {}), ...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}) };
+		const workspace = this.fixedWorkspace;
+		if (workspace) return workspace;
+		const current = this.workspaceContext.getWorkspace();
+		if (current.id !== this.workspaceId) throw new Error('Backup workspace does not match the current workspace');
+		return { id: current.id, folders: current.folders.map(folder => folder.uri), ...(current.configuration ? { configuration: current.configuration } : {}), ...(current.remoteAuthority ? { remoteAuthority: current.remoteAuthority } : {}) };
 	}
 
 	private prepare(generation: number): Promise<void> {

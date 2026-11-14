@@ -20,7 +20,8 @@ import { emptyEditorServiceState } from '../../../../../workbench/test/common/te
 import { SESSIONS_DIFF_VIEW_MODE } from '../../../../common/configuration.js';
 import { ConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
 import { SessionChangesEditor } from '../../../changes/browser/sessionChangesEditor.js';
-import { SessionsDiffEditorCommandsService } from '../../browser/diffEditor.sessions.contribution.js';
+import '../../browser/diffEditor.sessions.contribution.js';
+import { SessionsDiffEditorCommandsService } from '../../browser/sessionsDiffEditorCommandsService.js';
 
 test('Changes can set the shared diff view without a mounted diff and the single-file toggle restores Automatic', async () => {
 	using configuration = new (testConfigurationService(ConfigurationService))();

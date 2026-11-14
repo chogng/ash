@@ -1,6 +1,6 @@
-use crate::DocumentCollaborationSnapshot;
-use crate::DocumentCollaborationSubmitResult;
-use crate::DocumentCollaborationUpdate;
+use crate::RoomSnapshot;
+use crate::RoomSubmitResult;
+use crate::RoomUpdate;
 use getrandom::getrandom;
 use serde_json::Value;
 
@@ -18,9 +18,9 @@ pub(crate) fn valid_display_name(value: &str, max_length: usize) -> bool {
 
 /// Recoverable ordered history returned by a durable collaboration authority.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DocumentCollaborationReplay {
-    Updates(Vec<DocumentCollaborationUpdate>),
-    Resync(DocumentCollaborationSnapshot),
+pub enum RoomReplay {
+    Updates(Vec<RoomUpdate>),
+    Resync(RoomSnapshot),
 }
 
 pub(crate) fn validate_identifier(value: &str, name: &str) -> Result<(), String> {
@@ -119,12 +119,9 @@ pub(crate) fn validate_presence_selection(value: &str) -> Result<(), String> {
     validate_selection(&Value::Object(selection))
 }
 
-pub(crate) fn snapshot(
-    room_id: &str,
-    version: u64,
-    document: String,
-) -> DocumentCollaborationSnapshot {
-    DocumentCollaborationSnapshot {
+pub(crate) fn snapshot(room_id: &str, version: u64, document: String) -> RoomSnapshot {
+    RoomSnapshot {
+        epoch: None,
         room_id: room_id.into(),
         version,
         document,
@@ -135,17 +132,17 @@ pub(crate) fn replay(
     room_id: &str,
     version: u64,
     document: String,
-    updates: Vec<DocumentCollaborationUpdate>,
+    updates: Vec<RoomUpdate>,
     base_version: u64,
-) -> DocumentCollaborationReplay {
+) -> RoomReplay {
     let history_start = updates
         .first()
         .map(|update| update.base_version)
         .unwrap_or(version);
     if base_version < history_start {
-        return DocumentCollaborationReplay::Resync(snapshot(room_id, version, document));
+        return RoomReplay::Resync(snapshot(room_id, version, document));
     }
-    DocumentCollaborationReplay::Updates(
+    RoomReplay::Updates(
         updates
             .into_iter()
             .filter(|update| update.version > base_version)
@@ -153,16 +150,10 @@ pub(crate) fn replay(
     )
 }
 
-pub(crate) fn replay_submit_result(
-    replay: DocumentCollaborationReplay,
-) -> DocumentCollaborationSubmitResult {
+pub(crate) fn replay_submit_result(replay: RoomReplay) -> RoomSubmitResult {
     match replay {
-        DocumentCollaborationReplay::Updates(updates) => {
-            DocumentCollaborationSubmitResult::Conflict { updates }
-        }
-        DocumentCollaborationReplay::Resync(snapshot) => {
-            DocumentCollaborationSubmitResult::Resync { snapshot }
-        }
+        RoomReplay::Updates(updates) => RoomSubmitResult::Conflict { updates },
+        RoomReplay::Resync(snapshot) => RoomSubmitResult::Resync { snapshot },
     }
 }
 
@@ -371,4 +362,52 @@ fn validate_safe_integer(value: Option<&Value>, name: &str) -> Result<(), String
         ));
     }
     Ok(())
+}
+
+/// Schema selection is bound at room creation and checked again on join.
+pub(crate) fn validate_profile_document(schema: &str, document: &str) -> Result<(), String> {
+    if schema == crate::markdown::SCHEMA {
+        crate::markdown::validate_document(document)
+    } else {
+        validate_document(document)
+    }
+}
+
+pub(crate) fn submit_profile(
+    schema: &str,
+    previous: &str,
+    transaction: &str,
+    proposed: &str,
+) -> Result<String, String> {
+    if schema == crate::markdown::SCHEMA {
+        crate::markdown::submit(previous, transaction, proposed)
+    } else {
+        validate_transaction(transaction)?;
+        validate_document(proposed)?;
+        Ok(proposed.to_owned())
+    }
+}
+
+pub(crate) const LEASE_MILLIS: u64 = 86_400_000;
+pub(crate) const RECEIPTS_PER_CLIENT: u64 = 512;
+
+pub(crate) fn now_millis() -> Result<u64, String> {
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
+    Ok(SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis() as u64)
+}
+
+/// Length-delimited JSON prevents ambiguous concatenations; only a digest is retained.
+pub(crate) fn request_digest(params: &crate::RoomSubmitParams) -> String {
+    use sha2::Digest;
+    format!(
+        "{:x}",
+        sha2::Sha256::digest(
+            serde_json::to_vec(&(params.base_version, &params.transaction, &params.document))
+                .expect("strings serialize")
+        )
+    )
 }

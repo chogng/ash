@@ -272,7 +272,7 @@ export class DesktopMain extends Disposable {
 					} : undefined,
 					createWorkingCopyBackupService: (services, workspaceId) => {
 						if (!api.backup) return new IndexedDbWorkingCopyBackupService(workspaceId);
-						return services.createChild(new ServiceCollection([IBackupService, api.backup])).createInstance(WorkingCopyBackupService);
+						return services.createChild(new ServiceCollection([IBackupService, api.backup])).createInstance(WorkingCopyBackupService, undefined);
 					},
 				};
 			});

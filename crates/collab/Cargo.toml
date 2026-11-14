@@ -11,6 +11,9 @@ name = "ash_collab"
 path = "src/lib.rs"
 
 [dependencies]
+ash-sqlite = { workspace = true }
+ash-arkdown = { path = "../arkdown" }
+base64 = { workspace = true }
 contract = { package = "ash-collab-contract", path = "../collab-contract" }
 getrandom = { workspace = true }
 rusqlite = { workspace = true }

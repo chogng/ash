@@ -1,7 +1,7 @@
 use super::ServerNotification;
 use super::decode;
-use ash_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
-use ash_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
+use ash_app_server_protocol::protocol::collaboration::RoomPresenceSnapshot;
+use ash_app_server_protocol::protocol::collaboration::RoomUpdate;
 use ash_app_server_protocol::protocol::config::ConfigChanged;
 use ash_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use ash_app_server_protocol::protocol::extension_packages::ExtensionsChanged;
@@ -129,7 +129,8 @@ fn decodes_document_collaboration_update_notification() {
 
     assert_eq!(
         notification,
-        ServerNotification::DocumentCollaborationUpdate(DocumentCollaborationUpdate {
+        ServerNotification::RoomUpdate(RoomUpdate {
+            epoch: None,
             room_id: "document-room".into(),
             client_id: "client-a".into(),
             sequence: 1,
@@ -157,11 +158,11 @@ fn decodes_document_collaboration_presence_notification() {
 
     assert_eq!(
         notification,
-        ServerNotification::DocumentCollaborationPresence(DocumentCollaborationPresenceSnapshot {
+        ServerNotification::RoomPresence(RoomPresenceSnapshot {
             room_id: "document-room".into(),
             generation: 3,
             presences: vec![
-                ash_app_server_protocol::protocol::collaboration::DocumentCollaborationPresence {
+                ash_app_server_protocol::protocol::collaboration::RoomPresence {
                     client_id: "client-a".into(),
                     selection: "anchor=0".into(),
                 }

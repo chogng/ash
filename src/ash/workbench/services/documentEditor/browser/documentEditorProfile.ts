@@ -5,7 +5,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
-import type { DocumentCollaborationConnection } from '../../documentCollaboration/common/documentCollaborationService.js';
+import type { RoomTransport } from '../../collab/common/collabService.js';
 
 /** Optional host for the same editor-owned controls outside the document body. */
 export interface DocumentEditorControlsHost {
@@ -30,7 +30,7 @@ export interface DocumentEditorWidget extends IDisposable {
 	getDocumentSelection(): DocumentSelection | undefined;
 	getOutline(): DocumentOutline;
 	clearCollaboration(): void;
-	setCollaborationConnection(connection: DocumentCollaborationConnection): {
+	setCollaborationConnection(connection: RoomTransport): {
 		readonly onDidChangeState: Event<{ readonly state: 'connected' | 'resyncRequired' | 'error'; readonly message?: string; }>;
 		readonly onDidConfirmDocument: Event<DocumentNode>;
 		invalidate(message: string): void;

@@ -21,11 +21,12 @@ import { saveResourceAs } from '../../../../workbench/services/files/browser/res
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { artifactDetailEntry } from '../../artifact/common/artifactWorkspace.js';
-import { DOCS_EDITOR_ID, DOCS_MARKDOWN_EDITOR_ID, DOCS_TOOLS_CONTAINER_ID, GENERAL_DOCUMENT_CONTENT_TYPE } from '../common/docs.js';
-import { MarkdownDocsEditorPane } from './markdownDocsEditorPane.js';
+import { createArkdownDocsInput } from './docsEditorInput.js';
+import { migrateLegacyDocsInput } from './legacyDocsMigration.js';
+import { ArkdownDocsEditorPane } from './arkdownDocsEditorPane.js';
 
-export async function createGeneralDocument(accessor: ServicesAccessor): Promise<void> {
-	await createDocsOpener(accessor)(newDocsResource(localize('document.untitled', 'Untitled'), '.md'));
+export async function createDocsDocument(accessor: ServicesAccessor, title = localize('document.untitled', 'Untitled')): Promise<void> {
+	await createDocsOpener(accessor)(newDocsResource(title));
 }
 
 const activeDocsKey = 'sessions.docs.activeDocument';
@@ -42,42 +43,20 @@ export function restoredDocsResource(storage: IStorageService): URI | undefined 
 	return resource;
 }
 
-export function newDocsResource(name: string, extension = '.ash-doc'): URI {
-	return URI.from({ scheme: 'untitled', path: `/${generateUuid()}/${name}${extension}` });
-}
-
-export function createDocsInput(source: IResourceEditorInput): IResourceEditorInput {
-	if (source.rename) return source;
-	return {
-		...source,
-		editorId: DOCS_EDITOR_ID,
-		contentType: GENERAL_DOCUMENT_CONTENT_TYPE,
-		showBreadcrumbs: false,
-		rename: target => createDocsInput({ resource: target }),
-	};
-}
-
-export function createMarkdownDocsInput(source: IResourceEditorInput): IResourceEditorInput {
-	if (source.editorId === DOCS_MARKDOWN_EDITOR_ID && source.rename) return source;
-	return {
-		...source, editorId: DOCS_MARKDOWN_EDITOR_ID, languageId: 'markdown', contentType: 'text/markdown', showBreadcrumbs: false,
-		...(source.resource.scheme === 'untitled' ? { initialText: source.initialText ?? '' } : {}),
-		rename: resource => createMarkdownDocsInput({ resource }),
-	};
+export function newDocsResource(name: string): URI {
+	return URI.from({ scheme: 'untitled', path: `/${generateUuid()}/${name}.md` });
 }
 
 export function createDocsOpener(accessor: ServicesAccessor) {
-	const editors = accessor.get(IEditorPart);
 	const storage = accessor.get(IStorageService);
 	const layout = accessor.get(ISessionsEntryService);
+	const instantiation = accessor.get(IInstantiationService);
 	const remember = (resource: URI) => storage.store(activeDocsKey, resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	return async (resource: URI, options: { source?: 'restore'; label?: string; initialText?: string; document?: DocumentNode; } = {}) => {
-		const rich = resource.path.toLowerCase().endsWith('.ash-doc');
-		const input = rich ? createDocsInput({ resource, label: options.label, initialText: options.initialText })
-			: createMarkdownDocsInput({ resource, label: options.label, initialText: options.initialText });
+	return async (resource: URI, options: { source?: 'restore'; label?: string; initialText?: string; } = {}) => {
+		const source = { resource, label: options.label, initialText: options.initialText };
+		const input = /\.ash-doc$/iu.test(resource.path) ? await instantiation.invokeFunction(accessor => migrateLegacyDocsInput(source, accessor)) : createArkdownDocsInput(source);
 		const entry = {
 			...artifactDetailEntry, id: 'docs',
-			detailsContainerId: rich ? DOCS_TOOLS_CONTAINER_ID : undefined,
 			restoreCommand: 'sessions.restore.docs',
 			editorInput: input,
 			onEditorInputReplaced: (previous: IResourceEditorInput, replacement: IResourceEditorInput) => {
@@ -85,14 +64,7 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 			},
 		} as const;
 		await layout.openEntry(entry, () => {
-			if (options.document) {
-				const pane = editors.activePane;
-				if (!(pane instanceof DocumentEditorPane) || pane.workingCopy?.resource.toString() !== resource.toString()) {
-					throw new Error(localize('document.creation.failed', 'The document editor could not open the new draft.'));
-				}
-				pane.restoreDraft(options.document);
-			}
-			remember(resource);
+			remember(input.resource);
 			return entry;
 		}, { source: options.source });
 	};
@@ -101,14 +73,13 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 export async function openWritingDraft(accessor: ServicesAccessor, html: string, title?: string): Promise<void> {
 	const open = createDocsOpener(accessor);
 	const editors = accessor.get(IEditorPart);
-	const { importDocsHtml } = await import('./docsEditorProfile.js');
+	const { importDocsHtml } = await import('./docsImport.js');
 	const document = importDocsHtml(html, editors.domNode.ownerDocument);
 	if (!document) throw new Error(localize('sessions.artifacts.writingImportFailed', 'This writing block could not be opened in Docs.'));
 	// Provider titles are untrusted display text, but this name also becomes the proposed filename.
 	const safeTitle = title?.replace(/[<>:"/\\|?*\p{Cc}\p{Cf}\p{Cs}]/gu, ' ').trim();
 	const name = safeTitle && Array.from(safeTitle).slice(0, 60).join('').trimEnd();
-	const { docsEditorProfile } = await import('./docsEditorProfile.js');
-	await open(newDocsResource(name || localize('sessions.artifacts.untitledDocument', 'Untitled document'), '.md'), { initialText: docsEditorProfile.create().exportText!(document, 'markdown') });
+	await open(newDocsResource(name || localize('sessions.artifacts.untitledDocument', 'Untitled document')), { initialText: document });
 }
 
 export async function convertActiveTextToDocument(accessor: ServicesAccessor, format: DocumentTextFormat): Promise<void> {
@@ -121,18 +92,15 @@ export async function convertActiveTextToDocument(accessor: ServicesAccessor, fo
 	// Package loading and image reads may outlive navigation or further typing.
 	const sourceText = model.getValue();
 	const ownerDocument = editors.domNode.ownerDocument;
-	const profile = (await resolveGeneralProfile()).create();
-	const imported = await profile.importText(sourceText, format, ownerDocument, input.resource, async resource => {
-		const value = await files.readFileBytes(resource);
-		return new Uint8Array(value.bytes);
-	});
-	await open(newDocsResource(basename(input.resource).replace(/\.[^.]+$/, '')), { document: imported });
+	const { importDocsText } = await import('./docsImport.js');
+	const markdown = await importDocsText(sourceText, format, ownerDocument, input.resource, async resource => (await files.readFileBytes(resource)).bytes);
+	await open(newDocsResource(basename(input.resource).replace(/\.[^.]+$/, '')), { initialText: markdown });
 }
 
 export async function exportActiveDocument(accessor: ServicesAccessor, format: DocumentTextFormat): Promise<void> {
 	const editors = accessor.get(IEditorPart);
 	const pane = editors.activePane;
-	if (!(pane instanceof DocumentEditorPane) && !(pane instanceof MarkdownDocsEditorPane)) throw new Error(localize('document.conversion.documentRequired', 'Open a document before exporting its content.'));
+	if (!(pane instanceof DocumentEditorPane) && !(pane instanceof ArkdownDocsEditorPane)) throw new Error(localize('document.conversion.documentRequired', 'Open a document before exporting its content.'));
 	const copy = pane.workingCopy;
 	if (!copy) return;
 	const text = pane.exportText(format);
@@ -145,7 +113,7 @@ export async function exportActiveDocument(accessor: ServicesAccessor, format: D
 	await editors.openEditor(new UntitledTextEditorInput(untitled), { pinned: true });
 }
 
-async function openDraft(editors: IEditorPart, document?: DocumentNode, name = localize('document.untitled', 'Untitled'), contentType = GENERAL_DOCUMENT_CONTENT_TYPE, extension = '.ash-doc'): Promise<void> {
+async function openDraft(editors: IEditorPart, document: DocumentNode, name: string, contentType: string, extension: string): Promise<void> {
 	const resource = URI.from({ scheme: 'untitled', path: `/${generateUuid()}/${name}${extension}` });
 	const pane = await editors.openEditor({ resource, contentType }, { pinned: true });
 	if (!(pane instanceof DocumentEditorPane)) throw new Error(localize('document.creation.failed', 'The document editor could not open the new draft.'));
@@ -156,18 +124,12 @@ async function openDraft(editors: IEditorPart, document?: DocumentNode, name = l
 	}
 }
 
-async function resolveGeneralProfile() {
-	const descriptor = EditorPanes.getEditorPane({ resource: URI.parse('untitled:/document.ash-doc'), contentType: GENERAL_DOCUMENT_CONTENT_TYPE });
-	if (!descriptor?.resolveDocumentProfile) throw new Error(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'));
-	return descriptor.resolveDocumentProfile();
-}
-
 /** Host-owned target selection and binary IO; the admitted package owns all format semantics. */
 export async function exportDocumentArtifact(accessor: ServicesAccessor, formatId?: string): Promise<void> {
 	const editors = accessor.get(IEditorPart), dialogs = accessor.get(IFileDialogService);
 	const instantiation = accessor.get(IInstantiationService);
 	const pane = editors.activePane;
-	if (!(pane instanceof DocumentEditorPane) && !(pane instanceof MarkdownDocsEditorPane) || !pane.workingCopy) throw new Error(localize('document.conversion.documentRequired', 'Open a document before exporting its content.'));
+	if (!(pane instanceof DocumentEditorPane) && !(pane instanceof ArkdownDocsEditorPane) || !pane.workingCopy) throw new Error(localize('document.conversion.documentRequired', 'Open a document before exporting its content.'));
 	const formats = pane.getArtifactFormats();
 	const id = formatId ?? await chooseArtifactFormat(accessor, formats);
 	const format = formats.find(format => format.id === id); if (!format) return;
@@ -188,26 +150,26 @@ export async function exportDocumentArtifact(accessor: ServicesAccessor, formatI
 export async function importDocumentArtifact(accessor: ServicesAccessor): Promise<void> {
 	const open = createDocsOpener(accessor);
 	const files = accessor.get(IFileService), dialogs = accessor.get(IFileDialogService), editors = accessor.get(IEditorPart);
-	const profile = (await resolveGeneralProfile()).create();
-	const formats = profile.artifactFormats?.filter(format => format.canImport) ?? [];
-	if (!profile.importBinary || !formats.length) throw new Error(localize('document.output.unavailable', 'This document provider does not support the selected output.'));
-	const resource = (await dialogs.showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: false, filters: formats.map(format => ({ name: format.label, extensions: [format.extension] })) }))?.[0];
+	const resource = (await dialogs.showOpenDialog({
+		canSelectFiles: true, canSelectFolders: false, canSelectMany: false,
+		filters: [{ name: localize('document.output.docx', 'Word document (DOCX)'), extensions: ['docx'] }]
+	}))?.[0];
 	if (!resource) return;
-	const format = formats.find(format => resource.path.toLowerCase().endsWith('.' + format.extension));
-	if (!format) throw new Error(localize('document.output.unsupportedInput', 'The selected file format is not supported by this document provider.'));
+	if (!resource.path.toLowerCase().endsWith('.docx')) throw new Error(localize('document.output.unsupportedInput', 'The selected file format is not supported by this document provider.'));
 	if ((await files.stat(resource)).sizeBytes > 64 * 1024 * 1024) throw new RangeError(localize('document.output.tooLarge', 'Document output exceeds 64 MiB.'));
 	const bytes = (await files.readFileBytes(resource)).bytes;
 	if (!(bytes instanceof Uint8Array) || bytes.length > 64 * 1024 * 1024) throw new RangeError(localize('document.output.tooLarge', 'Document output exceeds 64 MiB.'));
-	const imported = await profile.importBinary(bytes, format.id, editors.domNode.ownerDocument, new AbortController().signal);
-	if (!imported || typeof imported.documentType !== 'string') throw new TypeError('Invalid document import result');
-	const descriptor = EditorPanes.getEditorPanes().find(pane => pane.documentType?.id === imported.documentType);
-	if (!descriptor?.resolveDocumentProfile || !descriptor.documentType?.extensions[0]) throw new Error(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'));
-	const destination = await descriptor.resolveDocumentProfile();
-	destination.create().codec.validate(imported.document);
+	const { importDocxDocument } = await import('../../../../../../extensions/academy/browser/contrib/documentOutput/docx.js');
+	const imported = await importDocxDocument(bytes, editors.domNode.ownerDocument, new AbortController().signal);
 	const name = basename(resource).replace(/\.[^.]+$/, '');
-	if (destination.contentType === GENERAL_DOCUMENT_CONTENT_TYPE) {
-		await open(newDocsResource(name), { document: imported.document });
+	if (imported.documentType === 'general') {
+		const { documentToDocsMarkdown } = await import('./docsImport.js');
+		await open(newDocsResource(name), { initialText: documentToDocsMarkdown(imported.document) });
 	} else {
+		const descriptor = EditorPanes.getEditorPanes().find(pane => pane.documentType?.id === imported.documentType);
+		if (!descriptor?.resolveDocumentProfile || !descriptor.documentType?.extensions[0]) throw new Error(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'));
+		const destination = await descriptor.resolveDocumentProfile();
+		destination.create().codec.validate(imported.document);
 		await openDraft(editors, imported.document, name, destination.contentType, descriptor.documentType.extensions[0]);
 	}
 }
