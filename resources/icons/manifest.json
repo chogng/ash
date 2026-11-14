@@ -72,6 +72,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "arrow-up-right",
+      "file": "arrow-up-right.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "artifacts",
       "file": "artifacts.svg",
       "rendering": "symbolic"
@@ -492,6 +497,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "discard-alt",
+      "file": "discard-alt.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "docx",
       "file": "docx.svg",
       "rendering": "symbolic"
@@ -539,6 +549,16 @@
     {
       "id": "edit-2",
       "file": "edit-2.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "edit-line",
+      "file": "edit-line.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "edit-squiggle",
+      "file": "edit-squiggle.svg",
       "rendering": "symbolic"
     },
     {
@@ -1067,6 +1087,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "mosaic",
+      "file": "mosaic.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "motion",
       "file": "motion.svg",
       "rendering": "symbolic"
@@ -1364,6 +1389,11 @@
     {
       "id": "settings",
       "file": "settings.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "shape",
+      "file": "shape.svg",
       "rendering": "symbolic"
     },
     {

@@ -93,7 +93,8 @@
     "mic-filled": [1],
     "play": [0],
     "symbol-method": [0, 1],
-    "artifacts": [0]
+    "artifacts": [0],
+    "mosaic": [2, 4]
   },
   "outlineShapes": {
     "account": [0, 2],
