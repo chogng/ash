@@ -1057,6 +1057,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "maximize",
+      "file": "maximize.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "menu",
       "file": "menu.svg",
       "rendering": "symbolic"
@@ -1074,6 +1079,11 @@
     {
       "id": "mic-filled",
       "file": "mic-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "minimize",
+      "file": "minimize.svg",
       "rendering": "symbolic"
     },
     {
