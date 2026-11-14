@@ -388,7 +388,12 @@ suite('DesktopLayoutController', () => {
 
 	test('required controller services are resolved by the production creation path', () => {
 		using services = new InstantiationService();
-		assert.throws(() => services.createInstance(DesktopLayoutController, 'pages', { isSessionContent: true, sessionEditorRestorationEnabled: observableValue('restoreEditors', true), isDocumentContent: true, documentContent: observableValue('documents', true), isChangingContent: false, runOperation: async (operation: () => Promise<void>) => operation() }), /sessionsService/);
+		assert.throws(() => services.createInstance(DesktopLayoutController, 'pages', {
+			isSessionContent: true, sessionEditorRestorationEnabled: observableValue('restoreEditors', true),
+			isDocumentContent: true, documentContent: observableValue('documents', true), isChangingContent: false,
+			isConversationEditorGroup: () => false, isActiveConversationEditorGroup: () => false,
+			runOperation: async (operation: () => Promise<void>) => operation(),
+		}), /sessionsService/);
 	});
 });
 

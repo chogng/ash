@@ -232,6 +232,27 @@ export class EditorParts extends WorkbenchEditorParts {
 	}
 
 	public get pageGroupId(): number { return this.filesPart.pageGroupId; }
+	public createRetainedGroup(tool: DesktopEditorTool): IEditorGroupView {
+		const host = this.hosts.get(tool)!;
+		if (!(host instanceof DesktopToolEditorPart)) throw new Error('Retained conversation editors require a tool host');
+		return host.createRetainedGroup();
+	}
+	public async restoreRetainedGroup(tool: DesktopEditorTool, saved: EditorWorkingSet): Promise<IEditorGroupView> {
+		if (saved.groups.length !== 1 || saved.groups[0]!.editors.some(editor => serializedTool(editor) !== tool)) {
+			throw new TypeError('Retained editor state must contain one group for its tool');
+		}
+		const host = this.hosts.get(tool)!;
+		const previous = host.groups.map(group => group.id);
+		const active = this.activeGroup;
+		await host.applyWorkingSet({ ...saved, layout: undefined, groups: saved.groups.map(group => ({ ...group, id: undefined })) }, {
+			preserveGroups: previous, preserveFocus: true,
+		});
+		const restored = host.groups.find(group => !previous.includes(group.id))!;
+		host.setGroupVisible(restored.id, false);
+		if (this.groups.includes(active)) this.activateGroup(active.id);
+		this.syncArea();
+		return restored;
+	}
 	public get mainWindowGroups(): readonly IEditorGroupView[] { return [...this.hosts.values()].flatMap(part => part.groups); }
 	public get filesDetailsOpen(): boolean { return this.filesPart.detailsOpen; }
 	public get filesDetailsVisible(): boolean { return this.filesPart.detailsVisible; }

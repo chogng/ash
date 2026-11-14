@@ -1,4 +1,3 @@
-import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, constObservable, derived, observableFromEvent, type IObservable, type IReader } from '../../../../base/common/observable.js';
@@ -27,6 +26,17 @@ import type { IChatListItem } from '../../../../workbench/contrib/chat/common/mo
 import { ReplyChatInputFactory, type ReplyChatDraftPicker } from './replyChatInput.js';
 import { ChatInputArtifactPill, getChatCreationHelp, type ChatCreationModel } from './chatInputArtifactPill.js';
 import { ChatView, NewChatView } from './chatView.js';
+import { normalizeBrowserViewUrl } from '../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewWorkbenchService } from '../../../../workbench/contrib/browserView/common/browserView.js';
+import { BrowserEditorInput } from '../../../../workbench/contrib/browserView/common/browserEditorInput.js';
+import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
+import type { URI } from '../../../../base/common/uri.js';
+import { localize } from '../../../../nls.js';
+import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
+
+export function getChatBrowserAccessibilityHelp(): string {
+	return localize({ bundle: 'ash', key: 'sessions.chat.browserHelp' }, 'Press Enter on a web link to open it in the browser beside Chat. Browser tabs stay with Chat when switching to Code. Close the last browser tab to return to the full conversation. The browser toolbar also offers Open in External Browser.');
+}
 
 export interface ICompactChatModel extends IChatWidgetModel, ChatCreationModel {
 	getEntityDetailsSource?(item: IChatListItem): ChatEntityDetailsSource | undefined;
@@ -105,7 +115,19 @@ class CompactChatWidgetFactory {
 		@INotificationService private readonly notifications: INotificationService,
 		@IOpenerService private readonly opener: IOpenerService,
 		@IEditorService private readonly editors: IEditorService,
+		@IBrowserViewWorkbenchService private readonly browsers: IBrowserViewWorkbenchService,
+		@ISessionsEntryService private readonly entries: ISessionsEntryService,
 	) { }
+
+	private async openWebLink(resource: URI): Promise<void> {
+		const url = normalizeBrowserViewUrl(resource.toString());
+		await this.entries.openConversationBrowser(async target => {
+			const existing = this.entries.conversationEditors.find((input): input is BrowserEditorInput =>
+				input instanceof BrowserEditorInput && input.model?.state.url === url);
+			if (existing) await this.editors.openEditor(existing, { pinned: true }, target);
+			else await this.browsers.createBrowserView({ initialUrl: url, owner: { type: 'user' } }, undefined, { target });
+		});
+	}
 
 	createView(container: HTMLElement, options: IChatViewSource): ChatView {
 		return new ChatView(container, (root, owner, shown) => {
@@ -171,6 +193,7 @@ class CompactChatWidgetFactory {
 						welcomeTitle: welcome.title,
 						codeBlockPresentation: 'card',
 						messageActionSurface: 'chat',
+						openWebLink: resource => this.openWebLink(resource),
 						virtualizeHistoryFrom: scrollOptimization
 							? derived(reader => scrollOptimization.read(reader) ? 100 : undefined)
 							: constObservable(CHAT_HISTORY_VIRTUALIZE_FROM),

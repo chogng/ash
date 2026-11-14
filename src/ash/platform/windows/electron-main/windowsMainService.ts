@@ -32,6 +32,7 @@ export interface IWorkbenchWindow<TWindow> extends IFocusableWindow, ICodeWindow
 	on(event: 'enter-full-screen' | 'leave-full-screen' | 'unresponsive' | 'responsive', listener: () => void): unknown;
 	off(event: 'enter-full-screen' | 'leave-full-screen' | 'unresponsive' | 'responsive', listener: () => void): unknown;
 	readonly webContents: {
+		focus(): void;
 		isDestroyed(): boolean;
 		reload(): void;
 		on(event: 'render-process-gone', listener: (event: unknown, details: Electron.RenderProcessGoneDetails) => void): unknown;

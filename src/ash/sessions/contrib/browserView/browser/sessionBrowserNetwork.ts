@@ -1,3 +1,5 @@
+import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { autorun, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import { IAgentHostConnectionsService, type IAgentHostConnectionInfo } from '../../../../platform/agentHost/common/agentHostConnectionsService.js';
@@ -42,6 +44,7 @@ export class SessionBrowserNetworkContribution extends Disposable implements IWo
 		@IEditorPart private readonly editors: IEditorPart,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@ILogService private readonly log: ILogService,
+		@IContextKeyService private readonly contexts: IContextKeyService,
 	) {
 		super();
 		const resolver: IBrowserViewNetworkResolver = {
@@ -61,7 +64,8 @@ export class SessionBrowserNetworkContribution extends Disposable implements IWo
 			shouldOpenEditor: () => true,
 			onWillCreateBrowserView: (owner, _id, replaces) => {
 				const selection = sessions.activeSelection;
-				if (replaces || owner.type !== 'user' || selection?.kind !== 'untitled') { return undefined; }
+				if (replaces || owner.type !== 'user' || this.contexts.getValue(SessionsWorkspaceModeContext.key) === 'chat'
+					|| selection?.kind !== 'untitled') { return undefined; }
 				const draftId = selection.session.untitledSessionId;
 				return input => {
 					if (input) {
@@ -92,6 +96,7 @@ export class SessionBrowserNetworkContribution extends Disposable implements IWo
 			const session = resolveBrowserOwnerSession(this.management, owner.sessionId);
 			return session ? this.sessionContext(session, owner.sessionId) : null;
 		}
+		if (this.contexts.getValue(SessionsWorkspaceModeContext.key) === 'chat') return undefined;
 		const selected = this.sessions.activeSelection;
 		return selected?.kind === 'session' ? this.sessionContext(selected.active.session, selected.active.threadId)
 			: selected?.kind === 'untitled' ? this.draftContext(selected.session.workspace, selected.session.providerId) : undefined;

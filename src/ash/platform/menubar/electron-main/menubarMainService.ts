@@ -7,6 +7,7 @@ import {
 	NATIVE_MENUBAR_SELECT_CHANNEL,
 	NATIVE_MENUBAR_UPDATE_CHANNEL,
 	type NativeMenubarItem,
+	type NativeMenubarEditRole,
 	type INativeTouchBarItem,
 	validateNativeMenubarData,
 } from '../common/nativeMenubar.js';
@@ -32,7 +33,7 @@ export interface INativeMenubarMainWindow {
 
 export interface INativeMenubarMainMenuItem {
 	readonly type?: 'normal' | 'separator' | 'submenu' | 'checkbox';
-	readonly role?: 'about' | 'services' | 'hide' | 'hideOthers' | 'unhide' | 'quit' | 'windowMenu' | 'minimize' | 'zoom' | 'front';
+	readonly role?: NativeMenubarEditRole | 'about' | 'services' | 'hide' | 'hideOthers' | 'unhide' | 'quit' | 'windowMenu' | 'minimize' | 'zoom' | 'front';
 	readonly label?: string;
 	readonly enabled?: boolean;
 	readonly checked?: boolean;
@@ -169,6 +170,11 @@ function toTemplate(
 					submenu: toTemplate(item.items, select),
 				};
 			case 'action':
+				// Cocoa resolves these against the focused input or native page. A renderer
+				// command callback alone does not install their system keyboard shortcuts.
+				if (item.role) {
+					return { role: item.role, label: item.label, enabled: item.enabled };
+				}
 				return {
 					type: item.checked === undefined ? 'normal' : 'checkbox',
 					label: item.label,

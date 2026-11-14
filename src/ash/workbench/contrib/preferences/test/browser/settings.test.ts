@@ -3456,6 +3456,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		lookupKeybinding: () => undefined,
 	});
 	services.registerInstance(IHostService, {
+		focus: async () => { },
 		getWindows: async () => [],
 		reload: async () => {
 			throw new Error('Unexpected reload in this fixture');

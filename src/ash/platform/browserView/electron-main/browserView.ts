@@ -721,6 +721,9 @@ export class BrowserView extends Disposable {
 	setVisible(visible: boolean): void {
 		if (visible && !this.laidOut) throw new Error('BrowserTargetNotLaidOut');
 		if (visible === this.visible) return;
+		if (!visible && this.webContents.isFocused() && !this.presentationWindow.isDestroyed()) {
+			this.presentationWindow.webContents.focus();
+		}
 		this.visible = visible; this.view.setVisible(visible); this.emitState();
 	}
 	loadURL(url: string, signal: AbortSignal = this.signal, networkToken?: string | null): Promise<void> {

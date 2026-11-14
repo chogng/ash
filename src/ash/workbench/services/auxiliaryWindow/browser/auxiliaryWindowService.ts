@@ -16,6 +16,10 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import type { IAuxiliaryWindowState } from '../../../../platform/window/common/window.js';
 import { localize } from '../../../../nls.js';
 import { getContainerDimension } from '../../../../platform/layout/browser/layoutService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { BaseWindow } from '../../../browser/window.js';
+import { IHostService } from '../../host/browser/host.js';
+import type { CodeWindow } from '../../../../base/browser/window.js';
 
 const WORKBENCH_ROOT_CLASSES = ['ash-reduce-motion', 'ash-enable-motion', 'ash-reduce-transparency', 'ash-underline-links', 'hc-black', 'hc-light', 'ash-high-contrast'] as const;
 const WORKBENCH_ROOT_ATTRIBUTES = ['data-os', 'data-runtime', 'data-workbench-state', 'data-color-theme', 'data-color-scheme'] as const;
@@ -93,8 +97,8 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 	constructor(
 		protected readonly opener: Window,
 		protected readonly workbenchRoot: HTMLElement,
-		@IThemeService protected readonly themeService: IThemeService,
 		@IStorageService private readonly storageService: IStorageService,
+		@IInstantiationService protected readonly instantiationService: IInstantiationService,
 	) {
 		super();
 	}
@@ -165,7 +169,7 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 	}
 
 	protected createAuxiliaryWindow(target: Window, title: string): AuxiliaryWindow {
-		return new AuxiliaryWindow(this.opener, target, this.workbenchRoot, this.themeService, title);
+		return this.instantiationService.createInstance(AuxiliaryWindow, this.opener, target, this.workbenchRoot, title);
 	}
 
 	getWindow(id: number): IAuxiliaryWindow | undefined {
@@ -176,7 +180,7 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 	}
 }
 
-export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
+export class AuxiliaryWindow extends BaseWindow implements IAuxiliaryWindow {
 	readonly alwaysOnTop: IAuxiliaryWindow['alwaysOnTop'] = undefined;
 	private readonly willLayoutEmitter = this._register(new Emitter<IDimension>());
 	private readonly layoutEmitter = this._register(new Emitter<IDimension>());
@@ -205,10 +209,11 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 		sourceWindow: Window,
 		readonly window: Window,
 		workbenchRoot: HTMLElement,
-		themeService: IThemeService,
 		title: string,
+		@IThemeService themeService: IThemeService,
+		@IHostService hostService: IHostService,
 	) {
-		super();
+		super(window as CodeWindow, hostService);
 		const targetDocument = window.document;
 		const { documentElement, body } = targetDocument;
 		this.container = h(sourceWindow.document, 'main');

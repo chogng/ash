@@ -46,6 +46,13 @@
 	flex: 0 1 auto;
 	min-width: 0;
 }
+/* Keep ordinary navigation announcements out of the toolbar layout. */
+.ash-browser-status.announcement-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	clip-path: inset(50%);
+}
 
 .ash-browser-viewport {
 	flex: 1;

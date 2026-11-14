@@ -341,8 +341,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				},
 			} satisfies IChatMcpAppDelegate,
 			onDidRequestLink: (target: string) => {
-				void openChatMarkdownLink(target, openerService, editorService, configuration, getWindowId(this.element.ownerDocument.defaultView!)).catch(error => console.error('Could not open Markdown link', error));
+				void openChatMarkdownLink(target, openerService, editorService, configuration, getWindowId(this.element.ownerDocument.defaultView!), this.viewOptions?.openWebLink).catch(error => console.error('Could not open Markdown link', error));
 			},
+			openWebLink: this.viewOptions?.openWebLink,
 			get memoryNamespace() { return model.memoryNamespace; },
 			onDidRequestMemoryReference: (reference: string) => { void commandService.executeCommand('ash.memories.openReference', reference).catch(error => console.error('Could not open memory reference', error)); },
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => this.handleTurnErrorAction(action),
@@ -893,6 +894,7 @@ export async function openChatMarkdownLink(
 	editorService: Pick<IEditorService, 'openEditor'> | undefined,
 	configuration?: IConfigurationService,
 	sourceWindowId?: number,
+	openWebLink?: IChatWidgetViewOptions['openWebLink'],
 ): Promise<void> {
 	if (target.startsWith('#') || target.startsWith(`${Schemas.internal}:`)) return;
 	if (target.startsWith(`${Schemas.command}:`)) {
@@ -911,6 +913,10 @@ export async function openChatMarkdownLink(
 		return;
 	}
 	const resource = URI.parse(target);
+	if (openWebLink && (resource.scheme === Schemas.http || resource.scheme === Schemas.https)) {
+		await openWebLink(resource);
+		return;
+	}
 	if (resource.scheme === OPEN_SESSION_LINK_SCHEME || isArtifactLink(resource)) {
 		if (openerService) await openerService.open(resource, { fromUserGesture: true });
 		return;

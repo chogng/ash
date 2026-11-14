@@ -1,8 +1,10 @@
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
+import type { URI } from '../../../../base/common/uri.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import type { SessionsConversationKind } from '../../sessions/common/sessionsConversation.js';
+import type { EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
 
 /** Features describe their shared hosts; resource categories and workspace models stay with the feature. */
 export interface ISessionsEntry {
@@ -42,6 +44,11 @@ export interface ISessionsEntryOpenOptions {
 }
 
 export interface ISessionsEntryService extends IDisposable {
+	/** Editors retained beside the active compact Chat entry, independently of Code working sets. */
+	readonly conversationEditors: readonly IResourceEditorInput[];
+	isConversationEditor(resource: URI, activeOnly?: boolean): boolean;
+	/** Keeps browser creation and editor opening inside the active Chat composition transaction. */
+	openConversationBrowser(open: (target: EditorOpenTarget) => Promise<void>): Promise<void>;
 	/** Saves the restored editor layout after startup attaches retained tool editors. */
 	checkpointEditorLayout(): Promise<void>;
 	readonly newSessionCommand?: string;

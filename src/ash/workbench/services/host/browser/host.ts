@@ -14,6 +14,8 @@ export interface IHostService {
 	/** Enumerates this host's windows using the native registry roles where available. */
 	getWindows(options: { readonly includeAuxiliaryWindows: boolean; }): Promise<readonly IWorkbenchWindowInfo[]>;
 	readonly onDidChangeFocus: Event<boolean>;
+	/** Gives keyboard focus to the Workbench controls in the requested window. */
+	focus(targetWindow: Window): Promise<void>;
 	openWindow(options?: IOpenEmptyWindowOptions): Promise<void>;
 	openWindow(toOpen: readonly IWindowOpenable[], options?: IOpenWindowOptions): Promise<void>;
 	restart(): Promise<void>;

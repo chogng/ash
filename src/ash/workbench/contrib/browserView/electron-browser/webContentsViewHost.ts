@@ -6,8 +6,12 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import type { IBrowserViewModel } from '../common/browserView.js';
 import { BrowserOverlayManager } from './overlayManager.js';
 
+// Native page focus must bypass the Workbench's element-to-window handoff.
+const originalHtmlElementFocus = mainWindow?.HTMLElement.prototype.focus;
+
 export function focusWebContentsViewContainer(container: HTMLElement): void {
-	container.focus();
+	const focus = originalHtmlElementFocus ?? container.ownerDocument.defaultView!.HTMLElement.prototype.focus;
+	focus.call(container);
 	container.ownerDocument.getSelection()?.removeAllRanges();
 }
 
@@ -143,7 +147,9 @@ export class WebContentsViewHost extends Disposable {
 				await model.focus();
 			}
 		}).catch(error => {
-			if (!presentation.closed) { this.logService.error('browserView', 'Failed to present browser page', error); }
+			// Closing the final tab detaches its host before Main publishes the page's close event.
+			const detachedClose = presentation.hosts.size === 0 && error instanceof Error && error.message === 'BrowserTargetUnavailable';
+			if (!presentation.closed && !detachedClose) { this.logService.error('browserView', 'Failed to present browser page', error); }
 		});
 	}
 }

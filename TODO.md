@@ -1,5 +1,9 @@
 # 待办
 
+## Desktop · 提交前定向回归失败
+
+- [ ] **复核** · 本次剩余工作区改动的 22 个测试文件执行 862 项，5 项失败：`settings.test.ts` 的设置分类预期缺少 screenshot、Git autofetch 下拉未找到 aria-controls、本地听写模型安装按钮查询失败；`chatViewPane.test.ts` 的英文／中文帮助未找到预期的 Configure Tools 文案。失败断言及对应功能不在本次修改 hunk 中，尚未单独执行干净基线，不能认定具体根因。需核对现有产品交互与测试预期后修复并重跑这 5 项。日志：`.build/commit-all/unit.log`、`.build/commit-all/chat-help.log`；完整定向命令：`.build/commit-all/unit-command.txt`。
+
 ## 浏览器菜单 · 自动化时遮罩闪烁
 
 - [ ] **复现／验收** · 用户反馈自动化点击菜单时出现遮罩闪烁，手动点击没有。已移除 active 测试强制关闭 GPU 的参数，并改为按已知 Renderer 采集菜单截图；配置测试 4 项、原生 smoke 2 项及实窗场景通过，但尚未取得操作系统合成层逐帧证据，不能认定瞬时闪烁完全消失。下一步在同一窗口对照原生点击与自动化点击，区分窗口合成、焦点模拟和截图／录屏干预，再按复现结果修正对应 owner。原测试进程屏幕采集权限为 denied，不得为诊断触发系统授权弹窗。证据与复跑入口：`.build/menu-automation-flash/report.md`、`.build/ash-playwright-mcp/browser-menu-compositor.cjs`。

@@ -12,7 +12,11 @@ export interface INativeMenubarAction {
 	readonly label: string;
 	readonly enabled: boolean;
 	readonly checked?: boolean;
+	/** Native clipboard actions must participate in the macOS responder chain. */
+	readonly role?: NativeMenubarEditRole;
 }
+
+export type NativeMenubarEditRole = 'cut' | 'copy' | 'paste';
 
 export interface INativeMenubarSubmenu {
 	readonly type: 'submenu';
@@ -141,6 +145,7 @@ function validateItems(
 				const keys = ['enabled', 'id', 'label', 'type'];
 				if (item.altId !== undefined) keys.push('altId');
 				if (item.checked !== undefined) keys.push('checked');
+				if (item.role !== undefined) keys.push('role');
 				requireExactKeys(
 					item,
 					keys,
@@ -153,6 +158,7 @@ function validateItems(
 					type: 'action',
 					id,
 					...(altId ? { altId } : {}),
+					...(item.role === undefined ? {} : { role: editRole(item.role) }),
 					label: boundedString(
 						item.label,
 						`items[${index}].label`,
@@ -188,6 +194,11 @@ function validateItems(
 				throw new Error(`items[${index}].type is invalid`);
 		}
 	});
+}
+
+function editRole(value: unknown): NativeMenubarEditRole {
+	if (value === 'cut' || value === 'copy' || value === 'paste') { return value; }
+	throw new Error('menubar edit role is invalid');
 }
 
 function uniqueActionId(

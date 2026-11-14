@@ -100,6 +100,8 @@ test('editor contributions follow layout state, serialize open commands without 
 		get isDocumentContent() { return documentContent.get(); },
 		documentContent,
 		isChangingContent: false,
+		isConversationEditorGroup: () => false,
+		isActiveConversationEditorGroup: () => false,
 		runOperation(operation) {
 			queue = queue.then(operation);
 			return queue;

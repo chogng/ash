@@ -56,6 +56,31 @@ function fixture() {
 
 suite('Desktop tool EditorParts', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('retains separate Chat and Code browser groups in the existing browser Part', async () => {
+		using hosts = fixture();
+		const code = { resource: URI.parse('ash-browser:/code') };
+		const chat = { resource: URI.parse('ash-browser:/chat') };
+		await hosts.editor.openEditor(code, { pinned: true });
+		const codeGroup = hosts.editor.activeGroup;
+		const chatGroup = hosts.editor.createRetainedGroup('browser');
+		using scope = hosts.editor.setGroupScope(id => id === chatGroup.id);
+		hosts.editor.setGroupVisible(codeGroup.id, false);
+		await hosts.editor.openEditor(chat, { pinned: true }, { groupId: chatGroup.id });
+		assert.equal(hosts.editor.activeGroup, chatGroup);
+		assert.equal(hosts.tools.get('browser')!.groups.length, 2);
+		assert.deepEqual(codeGroup.inputs, [code]);
+		assert.deepEqual(chatGroup.inputs, [chat]);
+		assert.equal(hosts.editor.isGroupVisible(codeGroup.id), false);
+		await hosts.editor.openEditor({ resource: URI.parse('ash-browser:/chat-popup') }, { pinned: true });
+		assert.equal(chatGroup.inputs.length, 2);
+		assert.equal(codeGroup.inputs.length, 1);
+		const saved = hosts.editor.saveWorkingSet('chat-browser', hosts.editor.groups.filter(group => group !== chatGroup).map(group => group.id));
+		const restored = await hosts.editor.restoreRetainedGroup('browser', saved);
+		assert.notEqual(restored.id, chatGroup.id);
+		assert.deepEqual(restored.inputs.map(input => input.resource.toString()), chatGroup.inputs.map(input => input.resource.toString()));
+		assert.deepEqual(codeGroup.inputs, [code]);
+		assert.equal(hosts.editor.isGroupVisible(restored.id), false);
+	});
 
 	test('requires the window context service before mounting any tool Parts', () => {
 		using services = createTestEditorServices(undefined, undefined, browserEnvironment.window.document);

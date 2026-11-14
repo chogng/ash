@@ -13,14 +13,14 @@ export class BrowserEditorErrorFeatures extends BrowserEditorContribution {
 		super(editor);
 		const document = editor.browserContainer.ownerDocument;
 		this.status = h(document, 'div');
-		this.status.className = 'ash-browser-status';
+		this.status.className = 'ash-browser-status announcement-only';
 		this.status.setAttribute('role', 'status');
 		this.downloads = h(document, 'div');
 		this.downloads.className = 'ash-browser-status';
 		this.downloads.hidden = true;
 		this.downloads.setAttribute('role', 'status');
 		this.downloads.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'browser.downloads' }, 'Downloads'));
-		this._register(editor.onDidChangeStatus(message => { this.status.textContent = message; }));
+		this._register(editor.onDidChangeStatus(message => this.setStatus(message)));
 	}
 	override get widgets(): readonly IBrowserEditorWidget[] {
 		return [
@@ -34,17 +34,21 @@ export class BrowserEditorErrorFeatures extends BrowserEditorContribution {
 		store.add(model.onDidEvent(event => this.accept(event)));
 	}
 	override onModelDetached(): void {
-		this.status.textContent = '';
+		this.setStatus('', false);
 		this.downloads.hidden = true;
 	}
 	public render(state: IBrowserViewState): void {
-		this.status.textContent = state.errorDescription
+		this.setStatus(state.errorDescription
 			? localize({ bundle: 'ash.workbench', key: 'browser.loadFailure' }, 'Unable to load page: {0}', state.errorDescription)
-			: state.loading ? localize({ bundle: 'ash.workbench', key: 'browser.loading' }, 'Loading page…') : state.title || state.url;
+			: state.loading ? localize({ bundle: 'ash.workbench', key: 'browser.loading' }, 'Loading page…') : state.title || state.url, !!state.errorDescription);
+	}
+	private setStatus(message: string, visible = true): void {
+		this.status.classList.toggle('announcement-only', !visible);
+		this.status.textContent = message;
 	}
 	public accept(event: BrowserViewEvent): void {
-		if (event.type === 'loadFailed') { this.status.textContent = localize({ bundle: 'ash.workbench', key: 'browser.loadFailure' }, 'Unable to load page: {0}', event.errorDescription); }
-		if (event.type === 'renderProcessGone') { this.status.textContent = localize({ bundle: 'ash.workbench', key: 'browser.processGone' }, 'Page stopped: {0}', event.reason); }
+		if (event.type === 'loadFailed') { this.setStatus(localize({ bundle: 'ash.workbench', key: 'browser.loadFailure' }, 'Unable to load page: {0}', event.errorDescription)); }
+		if (event.type === 'renderProcessGone') { this.setStatus(localize({ bundle: 'ash.workbench', key: 'browser.processGone' }, 'Page stopped: {0}', event.reason)); }
 		if (event.type === 'downloadProgress') {
 			this.downloads.hidden = false;
 			const state = event.state === 'progressing' ? localize({ bundle: 'ash.workbench', key: 'browser.downloading' }, 'downloading')

@@ -185,6 +185,8 @@ export interface IChatWidgetViewOptions {
 	readonly promptTimelineChanges?: ChatResponseFileChangesPresentation['getChangesForPrompt'];
 	readonly getTurnChanges?: ChatResponseFileChangesPresentation['getChangesForResponse'];
 	readonly openTurnChanges?: ChatTurnChangesOpener;
+	/** The product host owns placement of web links opened from its transcript. */
+	readonly openWebLink?: (resource: URI) => Promise<void>;
 	readonly changes?: {
 		refreshConversation(): Promise<void>;
 		/** Only hosts that own a window workspace may supply its change summary. */

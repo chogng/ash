@@ -3,13 +3,53 @@ import {
 	isRegisteredWindow,
 	mainWindow,
 	registerWindow,
+	type CodeWindow,
 } from '../../base/browser/window.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import { environment } from '../../base/common/platform.js';
 import { type WorkbenchState, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
 import { type IWorkbenchHostService, type WorkbenchTextDownload } from '../services/host/common/workbenchHostService.js';
-import { h } from '../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../base/browser/dom.js';
+import { IHostService } from '../services/host/browser/host.js';
+
+/** Coordinates element and host-window focus for a window's lifetime. */
+export abstract class BaseWindow extends Disposable {
+	constructor(
+		targetWindow: CodeWindow,
+		@IHostService protected readonly hostService: IHostService,
+	) {
+		super();
+		const prototype = targetWindow.HTMLElement.prototype;
+		const originalFocus = prototype.focus;
+		const owner = this;
+		let focusRevision = 0;
+		this._register(addDisposableListener(targetWindow, 'blur', () => { focusRevision++; }));
+		const focus = function (this: HTMLElement, options?: FocusOptions): void {
+			const revision = ++focusRevision;
+			const document = this.ownerDocument;
+			const needsWindowFocus = !document.hasFocus();
+			originalFocus.call(this, options);
+			if (!needsWindowFocus) { return; }
+			// The native page can have focus while every Workbench document is blurred.
+			// Ask the existing host registry before bringing a window to the front.
+			void owner.hostService.getWindows({ includeAuxiliaryWindows: true }).then(windows => {
+				const window = document.defaultView;
+				if (owner.isDisposed || revision !== focusRevision || !window || window.closed ||
+					!this.isConnected || document.activeElement !== this || !windows.some(window => window.focused)) {
+					return;
+				}
+				return owner.hostService.focus(window);
+			}).catch(error => {
+				if (!owner.isDisposed) { onUnexpectedError(error); }
+			});
+		};
+		prototype.focus = focus;
+		this._register(toDisposable(() => {
+			if (prototype.focus === focus) { prototype.focus = originalFocus; }
+		}));
+	}
+}
 
 export interface WorkbenchWindowOptions {
 	readonly root: HTMLElement;

@@ -19,6 +19,7 @@ import {
 import type {
 	INativeMenubarData,
 	NativeMenubarItem,
+	NativeMenubarEditRole,
 	INativeTouchBarItem,
 } from '../../../../platform/menubar/common/nativeMenubar.js';
 import { IMenubarService } from '../../../../platform/menubar/electron-browser/menubar.js';
@@ -121,6 +122,12 @@ interface ISerializedMenubar {
 	readonly actions: ReadonlyMap<string, IAction>;
 }
 
+const nativeEditRoles = new Map<string, NativeMenubarEditRole>([
+	['editor.action.clipboardCutAction', 'cut'],
+	['editor.action.clipboardCopyAction', 'copy'],
+	['editor.action.clipboardPasteAction', 'paste'],
+]);
+
 function serializeMenubar(
 	actions: readonly IAction[],
 	revision: number,
@@ -161,10 +168,12 @@ function serializeMenubar(
 				? `action-${nextId++}`
 				: undefined;
 			if (altId && alternate) actionMap.set(altId, alternate);
+			const role = nativeEditRoles.get(action.id);
 			items.push({
 				type: 'action',
 				id,
 				...(altId ? { altId } : {}),
+				...(role ? { role } : {}),
 				label: action.label,
 				enabled: action.enabled,
 				...(action.checked === undefined

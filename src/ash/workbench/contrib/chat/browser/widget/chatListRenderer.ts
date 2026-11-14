@@ -114,6 +114,7 @@ interface ChatListItemRendererOptions {
 	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly getTurnChanges?: ChatResponseFileChangesPresentation['getChangesForResponse'];
 	readonly onDidRequestLink?: (target: string) => void;
+	readonly openWebLink?: (resource: URI) => Promise<void>;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
 	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	readonly getResponseActions?: (item: IChatListItem) => ChatResponseActions | undefined;
@@ -538,7 +539,7 @@ export class ChatListItemRenderer extends Disposable {
 				actions.insertBefore(web, this.messageTime ?? null);
 				citations = lifetime.add(this.instantiationService.createInstance(
 					ChatResponseCitationsContentPart, this.element, web,
-					(url: string) => { void this.opener.open(url, { openExternal: true, fromUserGesture: true }); },
+					(url: string) => { void this.openPortableLink(url).catch(error => this.notifications.error(String(error))); },
 					() => { this.options.onDidChangeHeight(); this.options.onDidChangeContent(); },
 				));
 			}
@@ -897,11 +898,21 @@ export class ChatListItemRenderer extends Disposable {
 			return;
 		}
 		if (externalLinks) {
-			if (isPortableLinkTarget(target)) await this.opener.open(target, { openExternal: true, fromUserGesture: true });
+			await this.openPortableLink(target);
 		} else if (this.options.onDidRequestLink) {
 			this.options.onDidRequestLink(target);
 		} else {
 			await openLinkFromMarkdown(this.opener, target, false);
+		}
+	}
+
+	private async openPortableLink(target: string): Promise<void> {
+		if (!isPortableLinkTarget(target)) return;
+		const resource = URI.parse(target);
+		if (this.options.openWebLink && (resource.scheme === 'http' || resource.scheme === 'https')) {
+			await this.options.openWebLink(resource);
+		} else {
+			await this.opener.open(target, { openExternal: true, fromUserGesture: true });
 		}
 	}
 

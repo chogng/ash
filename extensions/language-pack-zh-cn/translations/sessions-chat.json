@@ -1,5 +1,6 @@
 {
   "ash": {
+    "sessions.chat.browserHelp": "在网页链接上按 Enter，在 Chat 右侧打开内置浏览器。切换到 Code 时，浏览器标签仍保留在 Chat。关闭最后一个浏览器标签后，对话恢复完整宽度。浏览器工具栏也提供「在外部浏览器中打开」。",
     "sessions.requestVersions.run": "另跑一个版本",
     "sessions.requestVersions.compare": "比较结果",
     "sessions.requestVersions.original": "原始版本",

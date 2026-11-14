@@ -81,6 +81,7 @@ export interface IWindowCreationOptions {
 export interface ICodeWindowHandle<TWindow = Electron.BrowserWindow> {
 	readonly id: number;
 	readonly webContents: {
+		focus(): void;
 		on(event: 'will-prevent-unload' | 'zoom-changed', listener: () => void): unknown;
 		off(event: 'will-prevent-unload' | 'zoom-changed', listener: () => void): unknown;
 		on(
@@ -390,6 +391,8 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 		if (this.isDisposed || this.win.isDestroyed()) return;
 		if (this.win.isMinimized()) this.win.restore();
 		this.win.focus();
+		// Selecting an OS window can retain a child WebContentsView as its responder.
+		this.win.webContents.focus();
 	}
 
 	public close(): void {

@@ -5,7 +5,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { observableValue, type IReader } from '../../../../../base/common/observable.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { IBrowserViewService, BrowserViewStorageScope, type BrowserViewEvent, type IBrowserViewInfo } from '../../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewService, BrowserViewStorageScope, getBrowserViewSessionNetwork, type BrowserViewEvent, type IBrowserViewInfo } from '../../../../../platform/browserView/common/browserView.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
@@ -30,12 +30,32 @@ import { IAgentHostConnectionsService } from '../../../../../platform/agentHost/
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { SessionBrowserViewController } from '../../browser/sessionBrowserView.js';
+import { ISessionsEntryService } from '../../../../services/layout/common/sessionsEntryService.js';
+import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
 
 const first = session('session-one', 'thread-one');
 const second = session('session-two', 'thread-two');
 
 suite('Session browser page policy', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('Chat pages use local browsing and survive the retained Code session being archived', async () => {
+		using f = fixture();
+		f.catalog = [{ ...first, workspace: { authorityId: 'ssh+code-host', root: '/code' } }, second];
+		f.selection.set(selected(f.catalog[0]!));
+		f.mode = 'chat';
+		const input = await f.create();
+		f.chatPages.add(input.resource.toString());
+		assert.equal(getBrowserViewSessionNetwork(f.pages.get(input.id)!.session), undefined);
+		assert.deepEqual(f.opened, [input]);
+		f.catalog = [{ ...first, status: 'archived' }, second];
+		f.catalogChanged.fire();
+		await f.controller.onWorkspaceRestored();
+		assert.deepEqual(f.destroyed, []);
+		f.mode = 'code';
+		assert.deepEqual([...f.views.getContextualBrowserViews().values()], []);
+		f.mode = 'chat';
+		assert.deepEqual([...f.views.getContextualBrowserViews().values()], [input]);
+	});
 
 	test('a Main close supersedes queued archive cleanup instead of destroying the page twice', async () => {
 		using f = fixture();
@@ -334,6 +354,7 @@ function fixture() {
 	const selection = observableValue<SessionsViewSelection | undefined>('browser foreground', selected(first));
 	const materialized = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string; }>>('browser draft promotion', new Map());
 	const f = {
+		mode: 'code' as 'chat' | 'code', chatPages: new Set<string>(),
 		pages: new Map<string, IBrowserViewInfo>(), catalog: [first, second] as readonly ISession[], drafts: [] as readonly IUntitledChatSession[],
 		workbenchState: WorkbenchState.FOLDER, windowRemote: undefined as string | undefined, providerWorkspace: undefined as SessionWorkspaceSelection | undefined,
 		replacements: [] as { from: BrowserEditorInput; to: BrowserEditorInput; }[],
@@ -402,12 +423,15 @@ function fixture() {
 			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'browser-test', folders: [], remoteAuthority: f.windowRemote }), getWorkbenchState: () => f.workbenchState, getWorkspaceFolder: () => null
 		}],
 		[IWorkspaceTrustManagementService, resources.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) } satisfies Partial<IWorkspaceTrustManagementService>))],
-		[IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, pages], [IEditorService, editors], [IEditorPart, editorPart], [IEditorPartsService, editorPart as IEditorPartsService], [IContextKeyService, { getValue: () => undefined } as unknown as IContextKeyService], [IDialogsModel, dialogs],
+		[IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, pages], [IEditorService, editors], [IEditorPart, editorPart], [IEditorPartsService, editorPart as IEditorPartsService], [IContextKeyService, { getValue: (key: string) => key === SessionsWorkspaceModeContext.key ? f.mode : undefined } as unknown as IContextKeyService], [IDialogsModel, dialogs],
 		[ITelemetryService, new NullTelemetryServiceShape()], [ILogService, new NullLoggerService()],
 		[ISessionsProvidersService, { getProvider: () => f.providerWorkspace ? { currentWorkspace: () => f.providerWorkspace } : undefined } as unknown as ISessionsProvidersService],
 		[IAgentHostConnectionsService, { _serviceBrand: undefined, onDidChangeConnections: Event.None, connections: [], resolveConnection: () => undefined } as unknown as IAgentHostConnectionsService], [ISessionsManagementService, management], [ISessionsService, sessions],
 	)));
 	const views = resources.add(services.createInstance(BrowserViewWorkbenchService));
+	services.registerInstance(ISessionsEntryService, {
+		isConversationEditor: (resource, activeOnly) => f.chatPages.has(resource.toString()) && (!activeOnly || f.mode === 'chat'),
+	} as ISessionsEntryService);
 	services.registerInstance(IBrowserViewWorkbenchService, views);
 	const controller = resources.add(services.createInstance(SessionBrowserViewController));
 	resources.add(services.createInstance(SessionBrowserNetworkContribution));

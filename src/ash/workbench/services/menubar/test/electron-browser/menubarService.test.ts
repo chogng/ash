@@ -66,10 +66,17 @@ test('registered menubar service publishes the controller menu through Main and 
 		assert.throws(() => missingServices.createInstance(NativeMenubarControl, MenuId.MenubarMainMenu), /menubarService/);
 		let runs = 0;
 		const action: IAction = { id: 'save', label: 'Save', tooltip: '', enabled: true, run: async () => { runs++; } };
+		const clipboardActions: IAction[] = ['Cut', 'Copy', 'Paste'].map(label => ({
+			id: `editor.action.clipboard${label}Action`, label, tooltip: '', enabled: true,
+			run: () => { throw new Error('Native clipboard actions must use the focused responder'); },
+		}));
 		services.registerInstance(IMenuService, {
 			createMenu: id => ({
 				onDidChange: Event.None,
-				getActions: () => id === MenuId.MenubarMainMenu ? [['navigation', [new SubmenuAction('file', 'File', [action])]]] : [],
+				getActions: () => id === MenuId.MenubarMainMenu ? [['navigation', [
+					new SubmenuAction('file', 'File', [action]),
+					new SubmenuAction('edit', 'Edit', clipboardActions),
+				]]] : [],
 				dispose() { },
 				[Symbol.dispose]() { },
 			}),
@@ -80,6 +87,11 @@ test('registered menubar service publishes the controller menu through Main and 
 		assert.equal(listeners.size, 0, 'The delayed service does not subscribe before a consumer exists');
 		using control = services.createInstance(NativeMenubarControl, MenuId.MenubarMainMenu);
 		await published.p;
+		assert.deepEqual(template?.find(item => item.label === 'Edit')?.submenu, [
+			{ role: 'cut', label: 'Cut', enabled: true },
+			{ role: 'copy', label: 'Copy', enabled: true },
+			{ role: 'paste', label: 'Paste', enabled: true },
+		], 'Clipboard actions reach the native menu through the registered service and validated IPC');
 		const item = template?.find(item => item.label === 'File')?.submenu?.find(item => item.label === 'Save');
 		assert.ok(item?.click);
 		item.click(undefined, window, { altKey: false });

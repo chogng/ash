@@ -8,6 +8,9 @@ import { IBrowserViewWorkbenchService, type IBrowserViewFilterContext } from '..
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import type { AgentTreeNode, ISession } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
+import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 
 type SessionReference = { readonly kind: 'session' | 'untitled'; readonly id: string; };
 
@@ -31,6 +34,8 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 		@ISessionsService private readonly sessions: ISessionsService,
 		@IBrowserViewWorkbenchService private readonly browsers: IBrowserViewWorkbenchService,
 		@IBrowserViewService private readonly pages: IBrowserViewService,
+		@ISessionsEntryService private readonly entries: ISessionsEntryService,
+		@IContextKeyService private readonly contexts: IContextKeyService,
 	) {
 		super();
 		this._register(browsers.registerContextualFilter({
@@ -40,8 +45,11 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 		this._register(browsers.registerOpenHandler({
 			onWillCreateBrowserView: (owner, id, replaces) => {
 				if (owner.type === 'user') {
-					const reference = replaces ? this.owner(replaces) : this.reference(sessions.activeSelection);
-					if (reference) { this.ownership.set(id, reference); this.openings.add(id); }
+					if (this.isChat) this.openings.add(id);
+					else {
+						const reference = replaces ? this.owner(replaces) : this.reference(sessions.activeSelection);
+						if (reference) { this.ownership.set(id, reference); this.openings.add(id); }
+					}
 				}
 				return input => {
 					this.openings.delete(id);
@@ -65,6 +73,7 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 			this.contextChanges.fire();
 		}));
 	}
+	private get isChat(): boolean { return this.contexts.getValue(SessionsWorkspaceModeContext.key) === 'chat'; }
 
 	public async onWorkspaceRestored(): Promise<void> {
 		await this.browsers.initialize();
@@ -86,10 +95,11 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 	}
 
 	private owner(input: BrowserEditorInput): SessionReference | undefined {
+		if (this.entries.isConversationEditor(input.resource)) return undefined;
 		const pageOwner = input.model?.info.owner;
 		const resolved = pageOwner?.type === 'agent' ? this.findSession(pageOwner.sessionId) : undefined;
 		let reference = resolved ?? this.ownership.get(input.id);
-		if (!reference && pageOwner?.type === 'user') { reference = this.reference(this.sessions.activeSelection); }
+		if (!reference && pageOwner?.type === 'user' && !this.isChat) { reference = this.reference(this.sessions.activeSelection); }
 		if (reference?.kind === 'untitled') {
 			const created = this.management.materializedSessions.get().get(reference.id);
 			if (created) { reference = { kind: 'session', id: created.sessionId }; }
@@ -100,7 +110,11 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 
 	private includes(input: BrowserEditorInput, context: IBrowserViewFilterContext): boolean {
 		if (this.closing.has(input.id)) { return false; }
+		if (this.entries.isConversationEditor(input.resource)) {
+			return context.activeSessionId === undefined && this.entries.isConversationEditor(input.resource, true);
+		}
 		const owner = this.owner(input);
+		if (this.isChat && context.activeSessionId === undefined) return !owner && this.openings.has(input.id);
 		if (!owner) { return true; }
 		const active = context.activeSessionId === undefined
 			? this.reference(this.sessions.activeSelection)

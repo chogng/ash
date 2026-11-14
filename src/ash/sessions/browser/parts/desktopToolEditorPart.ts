@@ -24,6 +24,12 @@ export class DesktopToolEditorPart extends EditorPart {
 	}
 
 	public setGroupScope(contains: (id: number) => boolean): void { this.inWorkingSet = contains; }
+	/** Retained entry content shares this host without joining the active Code working set. */
+	public createRetainedGroup() {
+		const group = this.insertGroup(this.activeGroup, Direction.Right).group;
+		this.setGroupVisible(group.id, false);
+		return group;
+	}
 	protected override getFloatingBorderWidth(): number { return 0; }
 	protected override getGroupViewOptions(): IEditorGroupViewOptions {
 		return {

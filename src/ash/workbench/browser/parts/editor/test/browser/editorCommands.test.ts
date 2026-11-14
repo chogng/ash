@@ -247,6 +247,7 @@ test('Close Workspace delegates an empty window to the host and follows workspac
 	const requests: unknown[] = [];
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IHostService, {
+		focus: async () => { },
 		getWindows: async () => [], reload: async () => { throw new Error('Unexpected reload in this fixture'); }, hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, openWindow: async options => { requests.push(options); }, showToast: async () => ({ supported: false, clicked: false }), getScreenshot: async () => undefined
 	});
 	const closeMenu = () => menus.getMenuActions(MenuId.MenubarFileMenu).flatMap(([, actions]) => actions).filter(action => action.id === CloseWorkspaceAction.ID).map(action => ({ label: action.label, enabled: action.enabled }));

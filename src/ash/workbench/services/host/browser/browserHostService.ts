@@ -83,6 +83,8 @@ export class BrowserHostService extends Disposable implements IHostService {
 		}));
 	}
 
+	public async focus(targetWindow: Window): Promise<void> { targetWindow.focus(); }
+
 	public async restart(): Promise<void> {
 		return this.reload();
 	}

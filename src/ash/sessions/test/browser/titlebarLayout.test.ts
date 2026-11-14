@@ -5,6 +5,22 @@ import type { } from '../../../../../test/fixtures/browser/sessions.page.js';
 
 suite('Sessions native titlebar layout', () => {
 	const browser = useBrowserTests();
+	test('Chat reserves the editor side of the titlebar without moving conversation content across its divider', async () => {
+		const { page } = browser;
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto('/sessions.html?emptyEditorArea');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.evaluate(() => window.ashSessionsIntegration.showEmptyEditorArea!());
+		const editor = page.locator('[data-part="editor"]');
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const editorHeaders = titlebar.locator('.ash-sessions-titlebar-editor-headers');
+		const conversationTitle = titlebar.locator('.ash-sessions-titlebar-session-content');
+		await expect(editor).toBeVisible();
+		await expect(editorHeaders).toBeVisible();
+		await expect.poll(async () => (await editorHeaders.boundingBox())!.x - (await editor.boundingBox())!.x).toBeCloseTo(0, 0);
+		const title = (await conversationTitle.boundingBox())!;
+		expect(title.x + title.width).toBeLessThanOrEqual((await editor.boundingBox())!.x);
+	});
 
 	async function expectCenteredTitlebarIcon(button: Locator): Promise<void> {
 		await expect(button).toBeVisible();
@@ -79,7 +95,7 @@ suite('Sessions native titlebar layout', () => {
 		await page.reload();
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.evaluate(() => window.ashSessionsIntegration.multiHost!.showAttentionDraft());
-		await expect(page.locator('.ash-sessions-titlebar-title button')).toBeVisible();
+		await expect(page.locator('.ash-sessions-titlebar-title').getByRole('button', { name: 'Chat actions (New Chat)', exact: true })).toBeVisible();
 		await expect(attention).toHaveCount(0);
 	});
 

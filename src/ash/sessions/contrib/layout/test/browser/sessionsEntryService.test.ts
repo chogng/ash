@@ -48,6 +48,31 @@ import type { ISessionsEntry } from '../../../../services/layout/common/sessions
 import { CHAT_WORKSPACE_ENTRY_REQUEST, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
 
 suite('SessionsEntryService lifecycle and focus', () => {
+	test('Chat browser editors stay in Chat and retain a separate group across Code switches', async () => {
+		using fixture = new EntryFixture();
+		const entry = { ...chatEntry, chatSource: 'desktop-chat' };
+		await fixture.service.openEntry(entry);
+		const input = { resource: URI.parse('ash-browser:/chat-page') };
+		await fixture.service.openConversationBrowser(async target => {
+			await fixture.openEditor(input, target);
+		});
+		assert.deepEqual(fixture.service.conversationEditors, [input]);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.visible.get('sessions'), true);
+		fixture.revealActiveEditor.fire();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), entry.restoreCommand);
+		assert.equal(fixture.service.sessionEditorRestorationEnabled.get(), false);
+		assert.deepEqual(fixture.conversationKinds, []);
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(fixture.service.conversationEditors, []);
+		assert.equal(fixture.service.isConversationEditor(input.resource), true);
+		assert.equal(fixture.service.isConversationEditor(input.resource, true), false);
+		await fixture.service.openEntry(entry);
+		assert.deepEqual(fixture.service.conversationEditors, [input]);
+		assert.equal(fixture.visible.get('editor'), true);
+	});
+
 	test('Chat uses the Sessions Part without restoring Code editors, and Code returns to the grid', async () => {
 		using fixture = new EntryFixture();
 		const chatSource = 'desktop-chat';
@@ -677,6 +702,9 @@ class EntryFixture extends Disposable {
 	public readonly service: SessionsEntryService;
 	public readonly outputReveal = this._register(new Emitter<void>());
 	public readonly viewVisibility = this._register(new Emitter<{ id: string; location: ViewContainerLocation; visible: boolean; }>());
+	public async openEditor(input: IResourceEditorInput, target: import('../../../../../workbench/services/editor/common/editorService.js').EditorOpenTarget): Promise<void> {
+		await this.services.get(IEditorService).openEditor(input, { pinned: true }, target);
+	}
 	public get activeGroupId() { return this.services.get(IEditorPart).activeGroup.id; }
 	public changeActiveDocument(input: IResourceEditorInput): void {
 		this.activeInput = input;
@@ -696,7 +724,9 @@ class EntryFixture extends Disposable {
 				return true;
 			},
 		};
-		const pageGroup = { id: 'pages', inputs: [], setTitleVisible: (visible: boolean) => { this.pageTitleVisible = visible; } };
+		const pageGroup = { id: 'pages', inputs: [] as IResourceEditorInput[], setTitleVisible: (visible: boolean) => { this.pageTitleVisible = visible; } };
+		const groups = [documentGroup, pageGroup];
+		let activeGroup = documentGroup;
 		this.services.registerInstance(ISessionEditorWorkingSetService, this.services.createInstance(SessionEditorWorkingSetService));
 		this.services.registerInstance(IStorageService, this.storage);
 		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService()));
@@ -716,7 +746,12 @@ class EntryFixture extends Disposable {
 			openFiles: async () => { fixture.filesDetailsOpen = true; fixture.focused = 'files'; },
 			isGroupVisible: (id: string) => this.groupVisibility.get(id) ?? true,
 			filesPart: { isEditorVisible: false, onDidChangeDetailsVisibility: Event.None, setEditorVisible() { }, hideDetails() { fixture.filesDetailsOpen = false; }, showDetails() { fixture.filesDetailsOpen = true; }, auxiliaryBar: { focus() { fixture.focused = 'files'; } }, fileGroups: [documentGroup] },
-			pageGroupId: pageGroup.id, groups: [documentGroup, pageGroup], mainWindowGroups: [documentGroup, pageGroup], activeGroup: documentGroup,
+			createRetainedGroup: () => {
+				const group = { ...documentGroup, id: 'chat-browser', inputs: [] as IResourceEditorInput[] };
+				groups.push(group);
+				return group;
+			},
+			pageGroupId: pageGroup.id, groups, mainWindowGroups: groups, get activeGroup() { return activeGroup; },
 			onDidChangeEditors: this.editorChanged.event,
 			onDidRevealActiveEditor: this.revealActiveEditor.event,
 			get isModalEditorVisible() { return fixture.modalVisible; },
@@ -728,8 +763,14 @@ class EntryFixture extends Disposable {
 			focus: () => { this.focused = 'editor'; },
 		} as unknown as IEditorPart);
 		this.services.registerInstance(IEditorService, {
+			openEditor: async (input: IResourceEditorInput, _options: unknown, target: { groupId: string; }) => {
+				const group = groups.find(group => group.id === target.groupId)!;
+				if (!group.inputs.includes(input)) group.inputs.push(input);
+				activeGroup = group as typeof documentGroup;
+				fixture.activeInput = input;
+				fixture.revealActiveEditor.fire();
+			},
 			onDidActiveEditorChange: this.activeEditorChanged.event, onDidVisibleEditorsChange: Event.None,
-			openEditor: async (input: IResourceEditorInput) => { this.activeInput = input; },
 			get activeEditor() { return fixture.activeInput; }, visibleEditors: [],
 			focusActiveEditor: () => { this.focused = 'editor'; },
 		} as unknown as IEditorService);

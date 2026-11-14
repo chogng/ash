@@ -18,6 +18,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/common/conte
 import { IsSessionsWindowContext } from '../../../common/contextkeys.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import type { IToastOptions, IToastResult } from '../../../../platform/native/common/native.js';
+import { mainWindow } from '../../../../base/browser/window.js';
 
 export class NativeHostService extends BrowserHostService {
 	constructor(
@@ -32,6 +33,10 @@ export class NativeHostService extends BrowserHostService {
 	public override async getWindows(options: { readonly includeAuxiliaryWindows: boolean; }): Promise<readonly IWorkbenchWindowInfo[]> {
 		const windows = await this.host.listWindows();
 		return options.includeAuxiliaryWindows ? windows : windows.filter(window => window.kind !== 'auxiliary');
+	}
+
+	public override focus(targetWindow: Window): Promise<void> {
+		return this.host.focusWindow(targetWindow === mainWindow ? undefined : targetWindow.name);
 	}
 
 	public override restart(): Promise<void> { return invoke<void>(HOST_RESTART_CHANNEL); }

@@ -240,7 +240,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 				const actionWidth = this.layoutActions.element.hidden ? 0 : this.minimumHeight;
 				left = Math.max(left, controlsEnd + accountsWidth + actionWidth);
 			}
-			// A narrow Code split still needs its conversation title menu and tool overflow trigger.
+			// Keep the conversation's title and actions usable beside the editor header.
 			if (page || left - controlsEnd >= this.minimumHeight * 2 + accountsWidth) {
 				const row = this.contentDomNode;
 				const rightInset = parseFloat(row.ownerDocument.defaultView!.getComputedStyle(row).paddingRight);

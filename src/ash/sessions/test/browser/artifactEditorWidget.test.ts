@@ -1,4 +1,6 @@
 import { DocumentCommands } from '../../contrib/artifact/common/commands/documentCommands.js';
+import { IHostService } from '../../../workbench/services/host/browser/host.js';
+import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
 import { flattenArtifactCanvasShapes, type ArtifactCanvasShape } from '../../contrib/artifact/common/model/artifactCanvasDocument.js';
 import { InMemoryFileSystemProvider } from '../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { createTestFileService } from '../../../workbench/test/common/testEditorServices.js';
@@ -153,7 +155,11 @@ services.registerInstance(IFileDialogService, {
 });
 services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
 services.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: unexpected });
-services.registerInstance(ISessionsEntryService, { ...Disposable.None, setConversationVisible: unexpected, checkpointEditorLayout: unexpected, openEntry: unexpected, replaceEditorResource: unexpected, restore: unexpected });
+services.registerInstance(ISessionsEntryService, {
+	...Disposable.None, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
+	conversationEditors: [], isConversationEditor: () => false, openConversationBrowser: unexpected,
+	openEntry: unexpected, replaceEditorResource: unexpected, restore: unexpected,
+});
 const fileProvider: IFileSystemProvider = {
 	capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
 	onDidChangeCapabilities: Event.None,
@@ -1276,6 +1282,7 @@ class ArtifactFixture extends Disposable {
 		} as unknown as import('../../../workbench/browser/parts/editor/editorPart.js').IEditorPart);
 		child.registerInstance(ISessionsEntryService, {
 			...Disposable.None, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
+			conversationEditors: [], isConversationEditor: () => false, openConversationBrowser: unexpected,
 			openEntry: async (_entry, initialize) => { initialize?.(); },
 			replaceEditorResource: unexpected, restore: unexpected,
 		});
@@ -1286,6 +1293,7 @@ class ArtifactFixture extends Disposable {
 		child.registerInstance(IClipboardService, this._register(new BrowserClipboardService(undefined)));
 		child.registerInstance(IHoverService, this._register(new HoverService(configuration, child.get(IContextViewService), child.get(IContextMenuService))));
 		child.registerInstance(IQuickInputService, this._register(new TestQuickInputService({ container: root, instantiationService: child, contextKeyService: contextKeys, layoutService: layout })));
+		child.registerInstance(IHostService, new TestHostService());
 		child.registerInstance(IAuxiliaryWindowService, this._register(child.createInstance(BrowserAuxiliaryWindowService, browser.window as unknown as Window, root)));
 		child.registerInstance(IArtifactPins, this._register(child.createInstance(ArtifactPins)));
 		this.commands = this._register(new CommandService(child));
@@ -3011,6 +3019,7 @@ test('Table artifact commands open resource inputs and restore the same file wit
 	const entries: import('../../services/layout/common/sessionsEntryService.js').ISessionsEntry[] = [];
 	fixture.child.registerInstance(ISessionsEntryService, {
 		...Disposable.None, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
+		conversationEditors: [], isConversationEditor: () => false, openConversationBrowser: unexpected,
 		replaceEditorResource: unexpected, restore: unexpected,
 		openEntry: async (entry, initialize) => { entries.push(entry); initialize?.(); },
 	});

@@ -9,6 +9,7 @@ import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
+import { mainWindow } from '../../../../base/browser/window.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IBrowserViewService } from '../../../../platform/browserView/common/browserView.js';
 import { BrowserEditorInput } from '../common/browserEditorInput.js';
@@ -19,6 +20,9 @@ import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { type IBrowserViewWindowConfiguration } from '../../../../platform/browserView/common/browserView.js';
 import './media/browser.css';
+
+// Updating the viewport's active element must not return native focus to the Workbench.
+const originalHtmlElementFocus = mainWindow?.HTMLElement.prototype.focus;
 
 export const BROWSER_EDITOR_ACTIVE = ActiveEditorContext.isEqualTo(BrowserViewEditorId);
 export const CONTEXT_BROWSER_HAS_URL = new RawContextKey<boolean>('browserHasUrl', false);
@@ -211,7 +215,13 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 			this.statusChanges.fire(localize({ bundle: 'ash.workbench', key: 'browser.focusHelp' }, 'Enter a URL and press Enter. Press Alt+F1 for browser help.'));
 		}
 	}
-	public ensureBrowserFocus(): void { if (this.visible && this.model) { this.viewportDomNode.focus(); } }
+	public ensureBrowserFocus(): void {
+		if (!this.visible || !this.model) { return; }
+		const document = this.viewportDomNode.ownerDocument;
+		const focus = originalHtmlElementFocus ?? document.defaultView!.HTMLElement.prototype.focus;
+		focus.call(this.viewportDomNode);
+		document.getSelection()?.removeAllRanges();
+	}
 	public setStatus(message: string): void { this.statusChanges.fire(message); }
 	protected override disposeCore(): void {
 		this.clearInput();

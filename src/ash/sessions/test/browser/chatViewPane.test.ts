@@ -435,6 +435,18 @@ test('Chat Markdown links route resource, command, and external targets through 
 	assert.deepEqual(externalTargets, ['mailto:help@example.com', 'https://example.com/docs'].map(target => ({ target, options: { openExternal: true, fromUserGesture: true, allowContributedOpeners: true } })));
 });
 
+test('a Chat host opens web links in its own surface while mail links keep the shared opener', async () => {
+	const web: string[] = [];
+	const external: string[] = [];
+	const opener = { open: async (target: string) => { external.push(target); return true; } } as IOpenerService;
+	const openWebLink = async (resource: URI) => { web.push(resource.toString()); };
+	for (const target of ['https://example.test/docs#intro', 'http://localhost:3000/', 'mailto:help@example.test']) {
+		await openChatMarkdownLink(target, opener, undefined, undefined, undefined, openWebLink);
+	}
+	assert.deepEqual(web, ['https://example.test/docs#intro', 'http://localhost:3000/']);
+	assert.deepEqual(external, ['mailto:help@example.test']);
+});
+
 test('Chat loads an Ash remote workspace image through the file service', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	dom.window.HTMLElement.prototype.scrollTo = () => { };

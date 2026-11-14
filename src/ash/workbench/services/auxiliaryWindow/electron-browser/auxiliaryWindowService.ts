@@ -13,21 +13,21 @@ import { CONFIRM_BEFORE_CLOSE_SETTING } from '../../../../platform/window/common
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ModifierKeyEmitter } from '../../../../base/browser/dom.js';
 import { localize } from '../../../../nls.js';
+import { IHostService } from '../../host/browser/host.js';
 
 /** Uses host state for editor-window restoration while the shared browser service owns its document. */
 export class ElectronAuxiliaryWindowService extends BrowserAuxiliaryWindowService {
 	constructor(
 		opener: Window,
 		root: HTMLElement,
-		@IThemeService themes: IThemeService,
 		@IStorageService storage: IStorageService,
-		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(opener, root, themes, storage);
+		super(opener, root, storage, instantiationService);
 	}
 
 	protected override createAuxiliaryWindow(target: Window, title: string): AuxiliaryWindow {
-		return this.instantiationService.createInstance(ElectronAuxiliaryWindow, this.opener, target, this.workbenchRoot, this.themeService, title);
+		return this.instantiationService.createInstance(ElectronAuxiliaryWindow, this.opener, target, this.workbenchRoot, title);
 	}
 }
 
@@ -40,13 +40,14 @@ class ElectronAuxiliaryWindow extends AuxiliaryWindow {
 		source: Window,
 		target: Window,
 		root: HTMLElement,
-		themes: IThemeService,
 		title: string,
+		@IThemeService themes: IThemeService,
+		@IHostService hostService: IHostService,
 		@INativeHostService private readonly host: INativeHostApi,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IDialogService private readonly dialogs: IDialogService,
 	) {
-		super(source, target, root, themes, title);
+		super(source, target, root, title, themes, hostService);
 		const owner = this;
 		this.alwaysOnTop = {
 			get value() { return owner.state?.alwaysOnTop ?? false; },

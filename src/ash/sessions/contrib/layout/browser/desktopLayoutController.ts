@@ -30,6 +30,8 @@ export interface IDesktopLayoutContext {
 	readonly isDocumentContent: boolean;
 	readonly documentContent: IObservable<boolean>;
 	readonly isChangingContent: boolean;
+	isConversationEditorGroup(id: number): boolean;
+	isActiveConversationEditorGroup(id: number): boolean;
 	runOperation(operation: () => Promise<void>): Promise<void>;
 }
 
@@ -65,7 +67,8 @@ export class DesktopLayoutController extends BaseLayoutController {
 		@ISessionEditorWorkingSetService editorWorkingSets: ISessionEditorWorkingSetService,
 	) {
 		super(sessions, management, editor, editors, workspace, layout, storage, notifications, logService, lifecycle, instantiation, editorWorkingSets);
-		this._register((editor as EditorParts).setGroupScope(id => this.documentGroups.some(group => group.id === id)));
+		this._register((editor as EditorParts).setGroupScope(id => this.context.isConversationEditorGroup(id)
+			? this.context.isActiveConversationEditorGroup(id) : this.documentGroups.some(group => group.id === id)));
 		this.tabs = this._register(instantiation.createInstance(DesktopDockedTabsCoordinator, pageGroupId));
 		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator);
 		this.existingSession = instantiation.createInstance(DesktopExistingSessionStrategy);
@@ -102,7 +105,8 @@ export class DesktopLayoutController extends BaseLayoutController {
 
 	private get documentGroups(): readonly IEditorGroupView[] {
 		const otherGroups = new Set([...this.liveGroups].filter(([key]) => key !== this.currentWorkingSet).flatMap(([, ids]) => ids));
-		return (this.editor as EditorParts).mainWindowGroups.filter(group => group.id !== this.pageGroupId && !otherGroups.has(group.id));
+		return (this.editor as EditorParts).mainWindowGroups.filter(group => group.id !== this.pageGroupId
+			&& !this.context.isConversationEditorGroup(group.id) && !otherGroups.has(group.id));
 	}
 	private get documentsVisible(): boolean { return this.context.isDocumentContent && this.layout.isPartVisible('editor'); }
 	public get hasDocumentEditors(): boolean { return this.documentGroups.some(group => group.inputs.some(input => !this.tabs.isManaged(input))); }
@@ -113,7 +117,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		if (this.codeGroupsVisible === visible) return;
 		if (!visible) {
 			this.codeActiveGroup = this.editor.activeGroup.id;
-			this.codeLayout = this.editor.saveWorkingSet('code-entry');
+			this.codeLayout = this.editor.saveWorkingSet('code-entry', this.editor.groups.filter(group => this.context.isConversationEditorGroup(group.id)).map(group => group.id));
 		}
 		this.codeGroupsVisible = visible;
 		if (visible && this.codeLayout) {
@@ -121,6 +125,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 			editor.restoreWorkingSetLayout(this.codeLayout, new Map(editor.mainWindowGroups.map(group => [group.id, group.id])));
 		}
 		for (const group of (this.editor as EditorParts).mainWindowGroups) {
+			if (this.context.isConversationEditorGroup(group.id)) continue;
 			if (group.id !== this.pageGroupId && (!visible || !this.documentGroups.includes(group))) this.editor.setGroupVisible(group.id, false);
 			else if (visible && !this.codeLayout && group.id !== this.pageGroupId) this.editor.setGroupVisible(group.id, true);
 		}
@@ -199,7 +204,8 @@ export class DesktopLayoutController extends BaseLayoutController {
 			incoming = editor.mainWindowGroups.filter(group => !previous.includes(group.id)).map(group => group.id);
 			const owned = new Set([...this.liveGroups.values()].flat());
 			for (const group of editor.mainWindowGroups) {
-				if (group.id !== this.pageGroupId && previous.includes(group.id) && !owned.has(group.id) && group.inputs.length === 0) await this.editor.removeGroup(group);
+				if (group.id !== this.pageGroupId && !this.context.isConversationEditorGroup(group.id)
+					&& previous.includes(group.id) && !owned.has(group.id) && group.inputs.length === 0) await this.editor.removeGroup(group);
 			}
 		}
 		if (this.isDisposed) { return; }

@@ -119,6 +119,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	private readonly onceListeners = new Map<string, Set<() => void>>();
 	public readonly webContents = {
 		mainFrame: { name: '' },
+		focus: (): void => { this.calls.push('workbenchFocus'); },
 		getOwnerBrowserWindow: (): BrowserWindow => this as unknown as BrowserWindow,
 		isDestroyed: (): boolean => this.destroyed,
 		reload: (): void => { },
@@ -337,19 +338,19 @@ test('WindowsMainService lists, focuses, and closes only live Workbench windows'
 	]);
 	first.minimized = true;
 	service.perform(first, { kind: 'focusSelf' });
-	assert.deepEqual(first.calls, ['restore', 'focus']);
+	assert.deepEqual(first.calls, ['restore', 'focus', 'workbenchFocus']);
 	service.perform(first, { kind: 'focus', windowId: 2 });
-	assert.deepEqual(second.calls, ['restore', 'focus']);
+	assert.deepEqual(second.calls, ['restore', 'focus', 'workbenchFocus']);
 	assert.throws(() => service.perform(first, { kind: 'focus', windowId: 3 }), /Workbench window is closed/);
 	service.perform(first, { kind: 'closeOthers' });
 	assert.deepEqual({ first: first.calls, second: second.calls }, {
-		first: ['restore', 'focus'],
-		second: ['restore', 'focus', 'close'],
+		first: ['restore', 'focus', 'workbenchFocus'],
+		second: ['restore', 'focus', 'workbenchFocus', 'close'],
 	});
 	assert.deepEqual(service.perform(first, { kind: 'list' }), [{ id: 1, title: 'First', focused: true, current: true, kind: 'editor' }]);
 	assert.throws(() => service.perform(second, { kind: 'getZoom' }), /Workbench window is closed/);
 	service.perform(first, { kind: 'close' });
-	assert.deepEqual(first.calls, ['restore', 'focus', 'close']);
+	assert.deepEqual(first.calls, ['restore', 'focus', 'workbenchFocus', 'close']);
 });
 
 test('WindowsMainService owns Workbench window resources through close and app disposal', () => {
@@ -387,7 +388,7 @@ test('WindowsMainService tracks auxiliary windows and releases them with their p
 		{ id: 2, title: 'Editor', focused: false, current: false, kind: 'auxiliary' },
 	]);
 	service.perform(parent, { kind: 'focus', windowId: child.id });
-	assert.deepEqual(child.calls, ['focus']);
+	assert.deepEqual(child.calls, ['focus', 'workbenchFocus']);
 	registration.dispose();
 	assert.equal(child.isDestroyed(), true);
 	assert.deepEqual(service.perform(parent, { kind: 'list' }), [{ id: 1, title: 'Workbench', focused: false, current: true, kind: 'editor' }]);
@@ -455,7 +456,7 @@ test('focused detached editors retain their parent workspace and focus when that
 	child.emitFocus();
 	assert.equal(auxiliary.getWindowByWebContents(child.webContents as unknown as WebContents)?.parentId, first.id);
 	assert.equal(await service.openWorkspace({ id: 'first', uri: folder }, async () => assert.fail('must reuse parent workspace')), first);
-	assert.deepEqual({ parent: first.calls, child: child.calls }, { parent: [], child: ['focus'] });
+	assert.deepEqual({ parent: first.calls, child: child.calls }, { parent: [], child: ['focus', 'workbenchFocus'] });
 	child.destroy();
 	assert.deepEqual(auxiliary.getWindows(), []);
 	assert.equal(service.getLastActiveWindow(), second);
@@ -868,7 +869,7 @@ test('window operation IPC validates commands before dispatching to the window h
 	assert.deepEqual(route.validate({ kind: 'getFullscreen' }), { kind: 'getFullscreen' });
 	assert.deepEqual(route.validate({ kind: 'getZoomFactor' }), { kind: 'getZoomFactor' });
 	route.invoke(route.validate({ kind: 'focusSelf' }));
-	assert.deepEqual(window.calls, ['focus']);
+	assert.deepEqual(window.calls, ['focus', 'workbenchFocus']);
 });
 
 function registerWindow(service: WindowsMainService<TestWindow>, window: TestWindow, workspace: IAnyWorkspaceIdentifier = createEmptyWorkspaceIdentifier()): TestWindow {
@@ -983,7 +984,7 @@ test('platform window owner coalesces opens through renderer startup and focuses
 	assert.equal(await first, window);
 	assert.equal(await second, window);
 	assert.equal(await service.openWorkspace(workspace, async () => assert.fail('live workspace must not be recreated')), window);
-	assert.deepEqual(window.calls, ['focus']);
+	assert.deepEqual(window.calls, ['focus', 'workbenchFocus']);
 });
 
 test('platform window owner releases a failed opening for an explicit retry', async () => {
@@ -1005,7 +1006,7 @@ test('auxiliary close, focus and zoom operations stay in their owner and shared 
 	using registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
 	const route = windowOperationIpcRoute(service, parent);
 	route.invoke(route.validate({ kind: 'focusSelf', windowName: name }));
-	assert.deepEqual(child.calls, ['focus']);
+	assert.deepEqual(child.calls, ['focus', 'workbenchFocus']);
 	assert.deepEqual(parent.calls, []);
 	route.invoke(route.validate({ kind: 'setZoom', level: 2, windowName: name }));
 	assert.equal(route.invoke(route.validate({ kind: 'getZoom', windowName: name })), 2);

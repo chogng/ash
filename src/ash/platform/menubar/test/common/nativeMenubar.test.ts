@@ -90,3 +90,19 @@ test('native menubar validation rejects unsafe snapshots', () => {
 		/duplicate/,
 	);
 });
+
+test('native menubar accepts only the supported clipboard roles', () => {
+	for (const role of ['cut', 'copy', 'paste']) {
+		const data = {
+			revision: 1,
+			menus: [{ label: 'Edit', items: [{ type: 'action', id: 'clipboard', label: role, enabled: true, role }] }],
+		};
+		assert.deepEqual(validateNativeMenubarData(data), data);
+	}
+	for (const role of ['quit', 'reload', '', 1, null]) {
+		assert.throws(() => validateNativeMenubarData({
+			revision: 1,
+			menus: [{ label: 'Edit', items: [{ type: 'action', id: 'clipboard', label: 'Clipboard', enabled: true, role }] }],
+		}), /edit role/);
+	}
+});

@@ -158,6 +158,7 @@ export function defaultWindowState(
 }
 
 export interface IFocusableWindow {
+	readonly webContents: { focus(): void; };
 	isDestroyed(): boolean;
 	isMinimized(): boolean;
 	restore(): void;
@@ -169,6 +170,7 @@ export function focusWindow(window: IFocusableWindow): void {
 	if (window.isDestroyed()) return;
 	if (window.isMinimized()) window.restore();
 	window.focus();
+	window.webContents.focus();
 }
 
 export interface IWorkspaceContextMainChangeEvent {

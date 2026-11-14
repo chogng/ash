@@ -72,12 +72,14 @@ class TestWindow extends EventEmitter implements ICodeWindowHandle<TestWindow> {
 	public reloads = 0;
 	public readonly messages: { channel: string; token: unknown; }[] = [];
 	public readonly webContents = Object.assign(new EventEmitter(), {
+		focus: (): void => { this.workbenchFocused++; },
 		isDestroyed: (): boolean => this.destroyed,
 		getZoomLevel: (): number => 0,
 		reload: (): void => { this.reloads++; this.navigate(); },
 		send: (channel: string, token: unknown): void => { this.messages.push({ channel, token }); },
 	});
 	public destroyed = false;
+	public workbenchFocused = 0;
 	public shown = 0;
 	public minimized = false;
 	public focused = 0;
@@ -549,6 +551,7 @@ test('CodeWindow restores focus and captures normal bounds with the current wind
 	host.focus();
 	assert.equal(host.win.minimized, false);
 	assert.equal(host.win.focused, 1);
+	assert.equal(host.win.workbenchFocused, 1);
 	assert.ok(host.lastFocusTime >= previousFocus);
 	assert.equal(host.id, host.win.id);
 	assert.deepEqual(host.getBounds(), host.win.bounds);

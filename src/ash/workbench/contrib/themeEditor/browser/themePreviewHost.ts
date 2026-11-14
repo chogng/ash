@@ -162,6 +162,7 @@ console.log(describeTheme(palette));
 	};
 	const serviceCollection = new ServiceCollection([IClipboardService, clipboard], [IHostService, {
 		hasFocus: true, onDidChangeFocus: Event.None, getWindows: async () => [],
+		focus: async () => { },
 		showToast: async () => ({ supported: false, clicked: false }),
 		openWindow: async () => { }, restart: async () => { }, reload: async () => { }, getScreenshot: async () => undefined,
 	} satisfies IHostService]);

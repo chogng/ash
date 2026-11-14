@@ -1,4 +1,6 @@
 import { testWorkbenchHostServices } from '../../../../../test/common/workbenchHostTestServices.js';
+import { IHostService } from '../../../../../services/host/browser/host.js';
+import { TestHostService } from '../../../../../services/host/test/browser/testHostService.js';
 import { Orientation } from '../../../../../../base/browser/ui/sash/sash.js';
 import { LocalSelectionTransfer } from '../../../../../../platform/dnd/browser/dnd.js';
 import { DraggedEditorIdentifier } from '../../editorTabDragAndDrop.js';
@@ -5752,7 +5754,7 @@ test('BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	const missingServices = new InstantiationService();
 	assert.throws(
 		() => missingServices.createInstance(BrowserAuxiliaryWindowService, opener.window as unknown as Window, root),
-		/themeService/,
+		/storageService/,
 	);
 	missingServices.dispose();
 	const services = new InstantiationService();
@@ -5777,6 +5779,7 @@ test('BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 		flushInterval: 0,
 	});
 	services.registerInstance(IStorageService, storage);
+	services.registerInstance(IHostService, new TestHostService());
 	const service = services.createInstance(BrowserAuxiliaryWindowService, opener.window as unknown as Window, root);
 	const stateKey = 'auxiliaryEditorWindowState';
 	const auxiliary = await service.open({ title: 'Detached Editor', width: 640, height: 480, stateKey });

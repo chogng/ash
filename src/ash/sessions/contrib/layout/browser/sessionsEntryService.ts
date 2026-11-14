@@ -15,7 +15,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
-import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { IEditorService, type EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
 import { ILifecycleService, StartupKind } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
@@ -28,6 +28,7 @@ import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.c
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { CHAT_WORKSPACE_ENTRY_REQUEST, SHOW_CHAT_WORKSPACE_COMMAND } from '../../chat/common/constants.js';
+import { parseEditorWorkingSet, type EditorWorkingSet } from '../../../../workbench/services/editor/common/editorWorkingSet.js';
 
 export const documentEntry: ISessionsEntry = {
 	id: 'code', workspaceMode: 'code', activityContext: CodeConversationPageContext.key, content: 'documents',
@@ -44,6 +45,7 @@ type ActiveEntry = ISessionsEntry & { readonly chatActivityContext?: string; };
 const visibilityKey = 'sessions.layout.entryVisibility';
 const activeEntryKey = 'sessions.layout.activeEntry';
 const activeEntryModeKey = 'sessions.layout.activeEntryMode';
+const conversationEditorsKey = 'sessions.layout.conversationEditors';
 
 /** Applies feature-supplied entries without owning their resource or workspace selection. */
 export class SessionsEntryService extends Disposable implements ISessionsEntryService, IDesktopLayoutContext {
@@ -54,6 +56,8 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 	public readonly documentContent = derived(reader => !this.customViews.activeCustomView.read(reader) && this.activeEntry.read(reader)?.content === 'documents');
 	private readonly visibility = new Map<string, EntryVisibility>();
 	private readonly editorEntries = new Map<string, ISessionsEntry>();
+	private readonly conversationGroups = new Map<string, number>();
+	private readonly savedConversationEditors = new Map<string, EditorWorkingSet>();
 	private readonly activityKeys = new Map<string, IContextKey<boolean>>();
 	private readonly pageGroupId: number;
 	private navigationQueue = Promise.resolve();
@@ -65,6 +69,39 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 	});
 	public get isDocumentContent(): boolean { return this.documentContent.get(); }
 	public get newSessionCommand(): string | undefined { return this.customViews.activeCustomView.get() ? undefined : this.activeEntry.get()?.newSessionCommand; }
+	private get conversationGroup() {
+		const entry = this.activeEntry.get();
+		if (!entry?.chatSource || entry.content !== 'conversation') return undefined;
+		return this.editor.groups.find(group => group.id === this.conversationGroups.get(entry.id));
+	}
+	public get conversationEditors(): readonly IResourceEditorInput[] { return this.conversationGroup?.inputs ?? []; }
+	public isConversationEditorGroup(id: number): boolean { return [...this.conversationGroups.values()].includes(id); }
+	public isActiveConversationEditorGroup(id: number): boolean { return this.conversationGroup?.id === id; }
+	public isConversationEditor(resource: URI, activeOnly = false): boolean {
+		const groups = activeOnly ? [this.conversationGroup] : this.editor.groups.filter(group => this.isConversationEditorGroup(group.id));
+		return groups.some(group => group?.inputs.some(input => extUri.isEqual(input.resource, resource)));
+	}
+
+	public openConversationBrowser(open: (target: EditorOpenTarget) => Promise<void>): Promise<void> {
+		const source = this.activeEntry.get();
+		return this.runOperation(async () => {
+			const entry = this.activeEntry.get();
+			if (entry !== source || this.customViews.activeCustomView.get() || entry?.content !== 'conversation' || !entry.chatSource) return;
+			this.isChangingContent = true;
+			try {
+				let group = this.conversationGroup;
+				if (!group) {
+					group = (this.editor as EditorParts).createRetainedGroup('browser');
+					this.conversationGroups.set(entry.id, group.id);
+				}
+				await open({ groupId: group.id });
+				if (!this.isDisposed) {
+					this.layout.showPart('editor');
+					this.editors.focusActiveEditor();
+				}
+			} finally { this.isChangingContent = false; }
+		});
+	}
 
 	constructor(
 		@IEditorPart private readonly editor: IEditorPart,
@@ -84,6 +121,11 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 	) {
 		super();
 		this.pageGroupId = (editor as EditorParts).pageGroupId;
+		const savedEditors: unknown = JSON.parse(storage.get(conversationEditorsKey, StorageScope.WORKSPACE) ?? '{}');
+		if (!isRecord(savedEditors)) throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
+		for (const [id, state] of Object.entries(savedEditors)) {
+			this.savedConversationEditors.set(id, parseEditorWorkingSet(state as EditorWorkingSet, Math.max(...editor.groups.map(group => group.id))));
+		}
 		const raw = storage.get(visibilityKey, StorageScope.PROFILE) ?? storage.get('sessions.layout.modeState', StorageScope.PROFILE);
 		if (raw !== undefined) {
 			const value: unknown = JSON.parse(raw);
@@ -126,6 +168,10 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			if (this.customViews.activeCustomView.get()) { return; }
 			if (editor.isModalEditorVisible || this.isChangingContent || this.controller.isRestoringEditors || !editors.activeEditor) { return; }
 			if (!(editor as EditorParts).mainWindowGroups.some(group => group.id === editor.activeGroup.id)) return;
+			if (this.isConversationEditorGroup(editor.activeGroup.id)) {
+				if (this.isActiveConversationEditorGroup(editor.activeGroup.id)) this.layout.showPart('editor');
+				return;
+			}
 			if (editor.activeGroup.id === this.pageGroupId && !editor.isGroupVisible(this.pageGroupId)) { return; }
 			const entry = this.editorEntries.get(extUri.getComparisonKey(editors.activeEditor.resource)) ?? documentEntry;
 			if (entry.id !== this.activeEntry.get()?.id) {
@@ -138,6 +184,11 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		};
 		this._register((editor as EditorParts).onDidRevealActiveEditor(() => revealActiveEditor(true)));
 		this._register(editor.onDidChangeEditors(event => {
+			if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed'
+				&& this.isActiveConversationEditorGroup(event.groupId) && !this.conversationEditors.length) {
+				this.layout.hidePart('editor');
+				if (!this.isChangingContent) this.layout.focus();
+			}
 			const activeGroup = editor.activeGroup.id;
 			const activeTabChanged = event.kind === 'groupChanged' && event.groupId === activeGroup && event.event.kind === 'activeEditorChanged';
 			// Retained Code groups can change while hidden in Chat. Only an explicit reveal may navigate to a hidden group.
@@ -260,10 +311,13 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 				const sidebarVisible = this.layout.isPartRequested('sidebar');
 				const state = this.visibility.get(entry.id) ?? {
 					details: entry.showDetailsByDefault ?? entry.detailsContainerId !== undefined,
-					documents: documents && this.controller.hasDocumentEditors,
+					documents: documents ? this.controller.hasDocumentEditors : this.conversationEditors.length > 0,
 				};
 				const detailsContainerId = !documents && state.details ? entry.detailsContainerId : undefined;
 				this.controller.setDocumentGroupsVisible(documents);
+				for (const groupId of this.conversationGroups.values()) {
+					this.editor.setGroupVisible(groupId, this.isActiveConversationEditorGroup(groupId) && state.documents && this.conversationEditors.length > 0);
+				}
 				this.editor.setGroupVisible(this.pageGroupId, productEditor);
 				this.editor.groups.find(group => group.id === this.pageGroupId)!.setTitleVisible(entry.showEditorTabs !== false);
 				if (!productEditor && this.editor.activeGroup.id === this.pageGroupId) {
@@ -276,7 +330,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 					this.layout.setPartAvailable('sessions', !productEditor || entry.conversation === 'visible');
 					this.layout.setAuxiliaryBarDocked(productEditor && entry.detailsContainerId !== undefined);
 					if (productEditor) { this.layout.setPrimaryPart('editor'); }
-					this.setVisible('editor', productEditor || (documents && state.documents));
+					this.setVisible('editor', productEditor || (state.documents && (documents || this.conversationEditors.length > 0)));
 					// A saved visibility flag can outlive the view that once occupied the side bar.
 					if (!detailsContainerId || this.views.getVisibleViewContainer(ViewContainerLocation.AuxiliaryBar)?.id !== detailsContainerId) {
 						this.layout.hidePart('auxiliarybar');
@@ -371,14 +425,33 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		this.visibility.set(entry.id, {
 			// File navigation belongs to the retained editor group, independently of properties.
 			details: files?.filesDetailsOpen ?? (entry.detailsContainerId !== undefined && this.layout.isPartRequested('auxiliarybar')),
-			documents: this.isDocumentContent && this.layout.isPartRequested('editor'),
+			documents: (this.isDocumentContent || this.conversationEditors.length > 0) && this.layout.isPartRequested('editor'),
 		});
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
+		for (const [id, groupId] of this.conversationGroups) {
+			const group = this.editor.groups.find(group => group.id === groupId);
+			if (group?.inputs.length) {
+				this.savedConversationEditors.set(id, this.editor.saveWorkingSet(id, this.editor.groups.filter(group => group.id !== groupId).map(group => group.id)));
+			} else this.savedConversationEditors.delete(id);
+		}
+		this.storage.store(conversationEditorsKey, JSON.stringify(Object.fromEntries(this.savedConversationEditors)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 
 	public async restore(): Promise<void> {
 		await this.controller.whenSettled();
 		if (this.isDisposed) { return; }
+		await this.runOperation(async () => {
+			this.isChangingContent = true;
+			try {
+				for (const [id, saved] of this.savedConversationEditors) {
+					if (this.conversationGroups.has(id)) continue;
+					const group = await (this.editor as EditorParts).restoreRetainedGroup('browser', saved);
+					if (this.isDisposed) return;
+					this.conversationGroups.set(id, group.id);
+				}
+			} finally { this.isChangingContent = false; }
+		});
+		if (this.isDisposed) return;
 		const desktopNew = CommandsRegistry.hasCommand('sessions.open.new');
 		if (desktopNew && this.lifecycle.startupKind === StartupKind.NewWindow) {
 			this.customViews.hideCustomView();

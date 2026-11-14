@@ -88,6 +88,7 @@ services.registerInstance(IStorageService, resources.add(new BrowserStorageServi
 const focusChanges = resources.add(new Emitter<boolean>());
 let focused = true;
 services.registerInstance(IHostService, {
+		focus: async () => { },
 		getWindows: async () => [],
 	get hasFocus() { return focused; }, onDidChangeFocus: focusChanges.event,
 	openWindow: async () => { throw new Error('Unexpected window open'); },

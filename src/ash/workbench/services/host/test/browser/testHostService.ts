@@ -12,6 +12,8 @@ export class TestHostService implements IHostService {
 		return this.windows.filter(window => options.includeAuxiliaryWindows || window.kind !== 'auxiliary');
 	}
 	readonly hasFocus = true;
+	readonly focused: Window[] = [];
+	async focus(targetWindow: Window): Promise<void> { this.focused.push(targetWindow); }
 	readonly onDidChangeFocus = Event.None;
 	readonly opened: { readonly targets: readonly IWindowOpenable[]; readonly options: IOpenWindowOptions; }[] = [];
 

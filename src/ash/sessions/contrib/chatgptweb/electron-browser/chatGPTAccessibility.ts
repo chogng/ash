@@ -11,6 +11,7 @@ import { getChatCodeBlockCardAccessibilityHelp, getChatLinkPreviewAccessibilityH
 import { experimentalChatGPTSelected } from '../common/chatGPTNative.js';
 import { CHAT_NAVIGATION_FOCUS_CONTEXT } from '../../chat/common/constants.js';
 import { getSessionsListAttentionHelp, getSessionsListGroupingHelp } from '../../sessions/browser/views/sessionsListActions.js';
+import { getChatBrowserAccessibilityHelp } from '../../chat/browser/chatViewFactory.js';
 
 export function registerChatGPTAccessibility(focusContext: string, contentService: ServiceIdentifier<{ getAccessibleContent(showAgentReplyTimestamps: boolean): string; }>, experimental = false): void {
 	for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
@@ -49,6 +50,7 @@ export function registerChatGPTAccessibility(focusContext: string, contentServic
 					+ '\n\n' + getChatRequestAccessibilityHelp(true)
 					+ '\n\n' + getChatCodeBlockCardAccessibilityHelp()
 					+ '\n\n' + getChatTableAccessibilityHelp()
+					+ '\n\n' + getChatBrowserAccessibilityHelp()
 					+ '\n\n' + localize('sessions.chatgpt.messageVersionsHelp', 'For a message with alternate versions, use Message versions in its toolbar. Use Up or Down Arrow to select a version and Enter to open it. Escape closes the picker.')
 					+ '\n\n' + localize('sessions.chatgpt.codeModelsHelp', 'In a new Chat without attachments, the model list also includes available Ash models. Selecting one opens an Ash Chat draft with your unsent text.')
 					+ '\n\n' + localize('sessions.titlebar.chatGPTHelp', 'For a saved chat, focus its title and press Enter or Down Arrow to open the actions menu. Choose Rename or double-click the title to edit it in place. Press Enter to save or Escape to cancel. The menu also offers pin, archive, and delete actions when available. Share at the right of the title bar asks for confirmation before creating and copying a link to the entire conversation.')

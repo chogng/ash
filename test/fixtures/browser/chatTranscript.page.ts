@@ -390,7 +390,7 @@ const appServices = resources.add(services.createChild());
 if (new URLSearchParams(location.search).has('sentImageViewer')) {
 	ChatContextKeys.imagePreviewPresentation.bindTo(appServices.get(IContextKeyService)).set('popup');
 	appServices.registerInstance(IHostService, {
-		hasFocus: true, onDidChangeFocus: Event.None, getWindows: async () => [],
+		hasFocus: true, onDidChangeFocus: Event.None, getWindows: async () => [], focus: async () => { },
 		openWindow: async () => { }, restart: async () => { }, reload: async () => { }, getScreenshot: async () => undefined,
 		showToast: async () => ({ supported: false, clicked: false }),
 	});
@@ -1449,6 +1449,9 @@ window.ashChatTranscriptIntegration = {
 		document.body.append(container);
 		appChat = cowork ? resources.add(chatServices.createInstance(NativeChatWidget, container, 'app-chat', model, () => { }, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(ReplyChatInputFactory).createSessionInput(host, delegate, model, resources))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), chatServices.get(IOpenerService), undefined, undefined, undefined, {
 			messageActionSurface: new URLSearchParams(location.search).has('sessions') ? 'code' : undefined,
+			openWebLink: new URLSearchParams(location.search).has('hostWebLinks')
+				? async (resource: URI) => { openedAppLinks.push({ uri: resource.toString(), options: { inChat: true } }); }
+				: undefined,
 			virtualizeHistoryFrom: virtualizeHistory ? constObservable(48) : undefined,
 			changes: { refreshConversation: async () => { } },
 		}));

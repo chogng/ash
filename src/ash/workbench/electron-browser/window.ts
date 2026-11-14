@@ -21,6 +21,8 @@ import { INotificationService } from '../../platform/notification/common/notific
 import { ILogService } from '../../platform/log/common/log.js';
 import { localize } from '../../nls.js';
 import { NativeWindowClientArea } from '../../platform/window/electron-browser/window.js';
+import { BaseWindow } from '../browser/window.js';
+import { IHostService } from '../services/host/browser/host.js';
 
 /** The renderer owns file completion because it owns every editor group, including moved tabs. */
 export class ElectronWindow extends Disposable {
@@ -120,7 +122,7 @@ export class ElectronWindow extends Disposable {
 }
 
 /** Keeps one desktop window's zoom level in sync with its profile setting. */
-export class NativeWindow extends Disposable {
+export class NativeWindow extends BaseWindow {
 	private pendingZoomLevel: number | undefined;
 	private zoomWrite: Promise<void> = Promise.resolve();
 	private applyingConfiguredZoom = false;
@@ -129,8 +131,9 @@ export class NativeWindow extends Disposable {
 		@INativeHostService private readonly host: INativeHostApi,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IOpenerService private readonly opener: IOpenerService,
+		@IHostService hostService: IHostService,
 	) {
-		super();
+		super(mainWindow, hostService);
 		const externalLinks = this.host.onDidRequestOpenExternalUri((target, sourceWindowName) => {
 			const sourceWindowId = sourceWindowName === undefined ? getWindowId(mainWindow) : getWindows().find(entry => entry.window.name === sourceWindowName)?.id;
 			void this.opener.open(target, { openExternal: true, allowContributedOpeners: true, ...(sourceWindowId === undefined ? {} : { sourceWindowId }) }).catch(onUnexpectedError);

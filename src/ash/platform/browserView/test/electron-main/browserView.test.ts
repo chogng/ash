@@ -511,6 +511,22 @@ suite('Browser view ownership and operations', () => {
 		assert.deepEqual([page.view.getBounds(), page.getState().visible], [{ x: 4, y: 6, width: 800, height: 600 }, true]);
 	});
 
+	test('hiding a focused page returns native focus once without stealing it from another control', async () => {
+		using f = fixture();
+		await f.create();
+		await f.manager.layout(id, { x: 2, y: 3, width: 400, height: 300 });
+		await f.manager.setVisible(id, true);
+		f.pageFocused = true;
+		await f.manager.setVisible(id, false);
+		assert.equal(f.workbenchFocused, 1);
+		await f.manager.setVisible(id, false);
+		assert.equal(f.workbenchFocused, 1);
+		await f.manager.setVisible(id, true);
+		f.pageFocused = false;
+		await f.manager.setVisible(id, false);
+		assert.equal(f.workbenchFocused, 1);
+	});
+
 	test('closing releases the page once, removes listeners and aborts loading observations', async () => {
 		using f = fixture();
 		const page = await f.create();
@@ -801,7 +817,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 	const partitions = new Map<string, Electron.Session>();
 	const f = {
 		[Symbol.dispose]: () => store.dispose(), events, children, contents, partitions,
-		workspaceId: 'workspace-one', url: '', title: 'Example', loading: false, attached: false, networkReleases: 0, workbenchFocused: 0,
+		workspaceId: 'workspace-one', url: '', title: 'Example', loading: false, attached: false, networkReleases: 0, workbenchFocused: 0, pageFocused: false,
 		workbenchInput: [] as Electron.KeyboardInputEvent[],
 		commands: [] as Array<{ method: string; params: unknown; sessionId?: string; }>,
 		debugSessions: [] as string[],
@@ -899,7 +915,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 				setWebRTCIPHandlingPolicy: () => { },
 				session: browserStorage,
 				setWindowOpenHandler: () => { }, isDestroyed: () => destroyed, isLoading: () => f.loading,
-				getURL: () => f.url, getTitle: () => f.title, focus: () => { }, stop: () => { f.loading = false; }, reload: () => { }, reloadIgnoringCache: () => { },
+				getURL: () => f.url, getTitle: () => f.title, isFocused: () => f.pageFocused, focus: () => { f.pageFocused = true; }, stop: () => { f.loading = false; }, reload: () => { }, reloadIgnoringCache: () => { },
 				navigationHistory: { canGoBack: () => false, canGoForward: () => false, goBack: () => { }, goForward: () => { } },
 				loadURL: (url: string) => f.load(url), capturePage: () => f.capture(),
 				undo: () => f.editing.push('undo'), redo: () => f.editing.push('redo'),

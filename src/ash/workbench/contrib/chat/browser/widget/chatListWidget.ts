@@ -84,6 +84,7 @@ interface ChatListWidgetOptions {
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void | Promise<void>;
 	readonly onDidRequestLink?: (target: string) => void;
+	readonly openWebLink?: (resource: URI) => Promise<void>;
 	readonly imageResourceLoader?: (resource: URI) => Promise<Blob>;
 }
 
