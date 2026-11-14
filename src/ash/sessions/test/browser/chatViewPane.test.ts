@@ -4314,10 +4314,16 @@ for (const locale of ['en', 'zh-CN']) test(`Permission menu accessibility help s
 	} finally { resetNlsResolver(); }
 });
 
-for (const locale of ['en', 'zh-CN']) test(`Chat accessibility help composes shared commands once (${locale})`, async () => {
+for (const locale of ['en', 'zh-CN']) test(`Chat accessibility help follows Code and reply capabilities (${locale})`, async () => {
 	initializeTestLocalization(locale);
 	try {
 		using fixture = await sessionsInputFixture();
+		fixture.input.focus();
+		const codeInput = document.activeElement;
+		using codeHelp = focusedChatHelp(fixture.services);
+		assert.equal(codeHelp.provideContent().match(locale === 'en' ? /Chat: Configure Tools/g : /聊天：配置工具/g)?.length, 1);
+		codeHelp.dispose();
+		assert.equal(document.activeElement, codeInput);
 		using inputOwner = new DisposableStore();
 		using input = fixture.services.createInstance(ReplyChatInputFactory).createSessionInput(document.body, fixture.delegate, fixture.model, inputOwner);
 		input.render(fixture.model.inputState);
@@ -4326,7 +4332,8 @@ for (const locale of ['en', 'zh-CN']) test(`Chat accessibility help composes sha
 		const provider = focusedChatHelp(fixture.services);
 		assert.match(provider.provideContent(), locale === 'en' ? /Chat input/ : /聊天输入/);
 		assert.doesNotMatch(provider.provideContent(), /New worktree asks|新建 worktree/);
-		assert.equal(provider.provideContent().match(locale === 'en' ? /Chat: Configure Tools/g : /聊天：配置工具/g)?.length, 1);
+		assert.doesNotMatch(provider.provideContent(), /Chat: Configure Tools|聊天：配置工具/);
+		assert.match(provider.provideContent(), locale === 'en' ? /Slash-prefixed text is sent as a normal message/ : /斜杠.*普通消息/u);
 		provider.dispose();
 		assert.equal(document.activeElement, focused);
 	} finally { resetNlsResolver(); }

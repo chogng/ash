@@ -2108,6 +2108,7 @@ test('settingsLayout is the single projection from registered settings to catego
 		[
 			'appearance',
 			'layout',
+			'screenshot',
 			'debugging',
 			'settings-editor',
 			'startup',
@@ -2161,7 +2162,9 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.ok(accessibilitySettings.some(setting => setting.id.startsWith('accessibility.verbosity.')));
 	assert.ok(accessibilitySettings.some(setting => setting.id === 'accessibility.signalOptions.volume'));
 	for (const setting of accessibilitySettings) {
-		assert.equal(findSettingCategory(layout, setting.id), setting.id.startsWith('accessibility.signal') ? 'accessibilitySignals' : 'accessibility', setting.id);
+		const category = setting.id === AccessibilityVerbositySettingId.ChatScreenshot ? 'screenshot'
+			: setting.id.startsWith('accessibility.signal') ? 'accessibilitySignals' : 'accessibility';
+		assert.equal(findSettingCategory(layout, setting.id), category, setting.id);
 		assert.equal(layout.flatMap(category => category.groups.flatMap(group => group.settings)).filter(item => item.id === setting.id).length, 1, setting.id);
 	}
 	using tree = new SettingsTreeModel<ISetting | SettingsSectionReference>();
@@ -3663,14 +3666,18 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(autofetchControl);
 	const autofetchButton = autofetchControl.querySelector<HTMLButtonElement>('[role="combobox"]');
 	assert.equal(autofetchButton?.getAttribute('aria-label'), 'Auto Fetch');
+	assert.equal(autofetchButton?.getAttribute('aria-controls'), null);
+	autofetchButton?.click();
 	const autofetchListId = autofetchButton?.getAttribute('aria-controls');
 	assert.ok(autofetchListId);
-	autofetchButton?.click();
 	ownerDocument.getElementById(autofetchListId)?.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click();
 	await nextTurn();
 	assert.equal(autoFetch, true);
+	assert.equal(ownerDocument.getElementById(autofetchListId), null);
 	autofetchButton?.click();
-	ownerDocument.getElementById(autofetchListId)?.querySelectorAll<HTMLElement>('[role="option"]')[2]?.click();
+	const reopenedAutofetchListId = autofetchButton?.getAttribute('aria-controls');
+	assert.ok(reopenedAutofetchListId);
+	ownerDocument.getElementById(reopenedAutofetchListId)?.querySelectorAll<HTMLElement>('[role="option"]')[2]?.click();
 	await nextTurn();
 	assert.equal(autoFetch, 'all');
 
@@ -4512,12 +4519,16 @@ test('Local model controls share translated snapshots and keep preparation runni
 	assert.equal(status.textContent, '');
 	assert.match(controls.getAccessibleContent(), /paraformer-large-online-ec6a3c64 · 1.0 MiB · 未安装 · 普通话/u);
 	assert.equal(root.querySelector('input'), null);
-	const buttons = [...root.querySelectorAll<HTMLButtonElement>('button')];
-	const installButton = buttons.find(button => button.textContent === '安装')!;
+	const installButton = root.querySelector<HTMLButtonElement>('[data-model-id="paraformer-large-online-ec6a3c64"] .ash-local-transcription-model-action')!;
+	const actionLabel = installButton.querySelector<HTMLElement>('.ash-button-label')!;
+	assert.equal(actionLabel.textContent, '安装');
 	assert.equal(installButton.disabled, false);
 	installButton.click();
 	assert.deepEqual(installed, ['paraformer-large-online-ec6a3c64']);
-	assert.equal(installButton.disabled, true);
+	await nextTurn();
+	assert.equal(installButton.disabled, false);
+	assert.equal(installButton.getAttribute('aria-label'), '取消');
+	assert.equal(actionLabel.textContent, '正在检查模型文件…');
 	progress({ state: DictationModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 2 * 1024 * 1024 });
 	await nextTurn();
 	assert.equal(status.textContent, '正在下载…');
@@ -4530,14 +4541,16 @@ test('Local model controls share translated snapshots and keep preparation runni
 	assert.equal(root.querySelector<HTMLProgressElement>('progress')?.hasAttribute('value'), false);
 	progress({ state: DictationModelState.Downloading, file: 'decoder.onnx', downloadedBytes: 128 * 1024, packageDownloadedBytes: 512 * 1024 });
 	await nextTurn();
-	assert.equal(installButton.textContent, '正在下载 50%');
+	assert.equal(actionLabel.textContent, '正在下载 50%');
+	assert.equal(installButton.getAttribute('aria-description'), '正在下载 50%');
 	assert.equal(root.querySelector<HTMLProgressElement>('progress')?.value, 0.5);
-	const cancelButton = buttons.find(button => button.textContent === '取消')!;
-	cancelButton.click();
+	installButton.click();
 	await nextTurn();
 	assert.equal(cancellations, 1);
 	assert.equal(installButton.disabled, false);
-	assert.equal(cancelButton.hidden, true);
+	assert.equal(actionLabel.textContent, '安装');
+	assert.equal(installButton.getAttribute('aria-description'), null);
+	assert.equal(root.querySelector<HTMLProgressElement>('progress')?.hidden, true);
 });
 
 test('Models Settings separates its model, subscription and API cards and saves keys on blur', async () => {

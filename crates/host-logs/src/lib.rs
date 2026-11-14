@@ -7,7 +7,6 @@ use std::collections::BTreeSet;
 #[cfg(unix)]
 use std::collections::VecDeque;
 use std::fs;
-#[cfg(unix)]
 use std::fs::File;
 use std::fs::Metadata;
 use std::fs::OpenOptions;
@@ -302,7 +301,7 @@ impl Store {
         if !metadata.is_file() {
             return Err(Error::Invalid("Log source must be a regular file".into()));
         }
-        let generation = file_generation(&metadata);
+        let generation = file_generation(&file, &metadata)?;
         let same_file = cursor.as_ref().is_some_and(|cursor| {
             cursor.generation == generation && cursor.offset <= metadata.len()
         });
@@ -462,7 +461,7 @@ fn no_follow(options: &mut OpenOptions) {
     let _ = options;
 }
 
-fn file_generation(metadata: &fs::Metadata) -> String {
+fn file_generation(file: &File, metadata: &fs::Metadata) -> io::Result<String> {
     let created = metadata
         .created()
         .ok()
@@ -471,10 +470,20 @@ fn file_generation(metadata: &fs::Metadata) -> String {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        format!("{}:{}:{created}", metadata.dev(), metadata.ino())
+        let _ = file;
+        Ok(format!("{}:{}:{created}", metadata.dev(), metadata.ino()))
     }
-    #[cfg(not(unix))]
-    format!("{created}")
+    #[cfg(windows)]
+    {
+        // NTFS can preserve a replaced pathname's creation time (file tunneling).
+        // Inspect the read handle so a rotated file cannot reuse the old cursor.
+        let information = winapi_util::file::information(file)?;
+        Ok(format!(
+            "{}:{}:{created}",
+            information.volume_serial_number(),
+            information.file_index()
+        ))
+    }
 }
 
 /// Runs one ordered private pipe. EOF releases the host session without starting any business server.

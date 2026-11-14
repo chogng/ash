@@ -2171,6 +2171,7 @@ dependencies = [
  "sysinfo",
  "tempfile",
  "ts-rs",
+ "winapi-util",
 ]
 
 [[package]]

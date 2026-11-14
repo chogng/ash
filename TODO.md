@@ -1,9 +1,5 @@
 # 待办
 
-## Desktop · 提交前定向回归失败
-
-- [ ] **复核** · 本次剩余工作区改动的 22 个测试文件执行 862 项，5 项失败：`settings.test.ts` 的设置分类预期缺少 screenshot、Git autofetch 下拉未找到 aria-controls、本地听写模型安装按钮查询失败；`chatViewPane.test.ts` 的英文／中文帮助未找到预期的 Configure Tools 文案。失败断言及对应功能不在本次修改 hunk 中，尚未单独执行干净基线，不能认定具体根因。需核对现有产品交互与测试预期后修复并重跑这 5 项。日志：`.build/commit-all/unit.log`、`.build/commit-all/chat-help.log`；完整定向命令：`.build/commit-all/unit-command.txt`。
-
 ## 浏览器菜单 · 自动化时遮罩闪烁
 
 - [ ] **复现／验收** · 用户反馈自动化点击菜单时出现遮罩闪烁，手动点击没有。已移除 active 测试强制关闭 GPU 的参数，并改为按已知 Renderer 采集菜单截图；配置测试 4 项、原生 smoke 2 项及实窗场景通过，但尚未取得操作系统合成层逐帧证据，不能认定瞬时闪烁完全消失。下一步在同一窗口对照原生点击与自动化点击，区分窗口合成、焦点模拟和截图／录屏干预，再按复现结果修正对应 owner。原测试进程屏幕采集权限为 denied，不得为诊断触发系统授权弹窗。证据与复跑入口：`.build/menu-automation-flash/report.md`、`.build/ash-playwright-mcp/browser-menu-compositor.cjs`。
@@ -13,7 +9,6 @@
 - [ ] **TypeScript 缓存生命周期** · 四千个 TypeScript 文件、十二个标签场景中，关闭标签后语义服务器仍保留约 840 MiB，`languageServers.autoSuspend` 默认关闭。验证同等补全、诊断和跳转能力下的缓存释放、重开延迟及冷启动 CPU；覆盖后台请求、未保存文件、多窗口和重新激活，不以禁用语言能力降低占用。
 - [ ] **全量重建耗时复核** · SQL 复用后，完整重建的后端 CPU 中位数由 5.75 s 降至 1.83–2.36 s，但总耗时中位数由 11.3 s 变为 11.6–11.9 s。补充交替前后测量并拆分遍历、内容校验、语法解析和数据库写入耗时，确认波动或回退，再处理实测瓶颈；保留忽略规则、版本校验、容量限制与原子发布。证据：`.build/perf-lookups-20261114/results.json`。
 - [ ] **整机与长期稳定性** · 尚缺整机空闲 CPU 稳定降幅、多工作区和持续使用数据；十二个合成 Chat 会话不足以证明长期无增长。使用匹配构建、配置和负载，分别记录 Main、Renderer、App Server、语言服务器及扩展进程，覆盖反复打开／关闭文件、会话切换与释放后的常驻和峰值。线程池／统一调度先采集线程归属、唤醒与 CPU 调用栈，按证据决定是否调整；当前不能承诺达到整应用的低占用目标。
-- [ ] **验证阻塞** · `just verify ash-host-logs` 的库测试 `rotation_preserves_three_files_and_reports_replacement` 在 `crates/host-logs/src/store_tests.rs:74` 的 `next.gap` 断言失败，单独复核仍失败；本轮未改轮转实现。需定位该失败后补齐包级 verify，不能将本轮定向测试通过视为整包通过。
 
 按功能记录已选范围内尚未完成或缺少通过证据的工作，完成后移除。2026-10-18 以 Ash `e323c7bcb` 对照本地 VS Code `a2acc8c864a`，源码核对集中于 Terminal、Preferences、Workspace、Sessions 与 Speech／MCP App 入口的公开契约、生产调用及相关测试；其他领域按已有记录分类。上述清单审查未重跑历史验收；后续完成项以各领域的验证记录为准，不将源码存在当作行为通过。
 
@@ -22,10 +17,6 @@
 ## Chat 应用窗口截图 · macOS 实机验收
 
 - [ ] **验收** · 应用窗口截图已接入选窗、快捷键、权限 Setup 和原草稿附件管线；Snapshot 已迁为内置编辑器并移除扩展包，标注、复制、保存和代码图片继续共用一条链路。4 个真实桌面／其他应用像素场景因测试宿主缺少 macOS 屏幕录制权限跳过，尚缺真实其他应用窗口到聊天附件的整链证据。授予测试用 Ash 屏幕录制权限后，运行 `pnpm test:smoke:desktop:no-compile test/smoke/areas/chat/chat-screenshot.spec.ts test/smoke/areas/chat/chat-app-window-screenshot.spec.ts`；用例使用仅包含测试色块的窗口，检查选窗、区域捕获、取消保留草稿、编辑和附件回填，通过后移除此条。
-
-## Chat 输入框 · 布局切换验收
-
-- [ ] **验收** · 已将两个 Chat 入口默认统一为单行自适应，在设置 → 外观增加「Chat 输入框布局」单行／分层选项，切换保留草稿。配置、设置页面与 Chat 测试共 259 项通过，渲染器、自动化和测试类型检查及中文翻译检查通过。真实窗口测试入口因进程枚举触发 `spawn EPERM`，尚未完成视觉验收。在允许启动测试进程的环境运行 `pnpm test:smoke:ui test/smoke/areas/sessions/sessions-window.spec.ts --grep 'Chat input layout switches live|Sessions empty chat centers'`，检查默认单行、即时切换、长文本展开、重开保留和设置控件与背景色选项的视觉一致性；通过后删除本条。
 
 ## Artifact 工具栏 · Desktop 验收
 

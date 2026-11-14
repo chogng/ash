@@ -395,7 +395,9 @@ async function expectFloatingComposerHover(
 		return { resting, hovered };
 	});
 	await expect(card).toHaveCSS('border-top-color', colors.resting);
-	if (presentation === 'Code') {
+	const adaptive = await card.evaluate(element => element.classList.contains('ash-chat-input-adaptive'));
+	const flatResting = adaptive || presentation === 'Code';
+	if (flatResting) {
 		await expect(card).toHaveCSS('box-shadow', 'none');
 	} else {
 		await expect(card).not.toHaveCSS('box-shadow', 'none');
@@ -405,9 +407,9 @@ async function expectFloatingComposerHover(
 	await expect.poll(() => card.evaluate(element => element.getAnimations().length)).toBe(0);
 	const resting = await readComposerShadow(card);
 	const restingShadow = resting.shadow;
-	// Collab retains its two-layer elevation; Code only raises during interaction.
+	// Adaptive cards share the window's single soft shadow during interaction.
 	expect(resting.themeOpacity).toBeGreaterThan(0.05);
-	expect(resting.layerOpacities).toHaveLength(presentation === 'Code' ? 0 : 2);
+	expect(resting.layerOpacities).toHaveLength(flatResting ? 0 : 2);
 	for (const [index, opacity] of resting.layerOpacities.entries()) {
 		expect(opacity).toBeGreaterThan(0);
 		expect(opacity).toBeCloseTo(resting.themeOpacity * [0.2, 0.12][index], 2);
@@ -419,7 +421,7 @@ async function expectFloatingComposerHover(
 	await expect(card).not.toHaveCSS('box-shadow', restingShadow);
 	const raised = await readComposerShadow(card);
 	const raisedShadow = raised.shadow;
-	const raisedMix = presentation === 'Code' ? [0.3] : [0.28, 0.18];
+	const raisedMix = flatResting ? [0.3] : [0.28, 0.18];
 	expect(raised.layerOpacities).toHaveLength(raisedMix.length);
 	for (const [index, opacity] of raised.layerOpacities.entries()) {
 		expect(opacity).toBeGreaterThan(resting.layerOpacities[index] ?? 0);
@@ -1820,7 +1822,8 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	const cardBounds = await card.boundingBox();
 	expect(Math.abs(cardBounds!.x + cardBounds!.width / 2 - bounds!.x - bounds!.width / 2)).toBeLessThanOrEqual(1);
 	expect(Math.abs(cardBounds!.y + cardBounds!.height / 2 - bounds!.y - bounds!.height / 2)).toBeLessThan(80);
-	expect(cardBounds!.width).toBeLessThanOrEqual(680);
+	// Windows display scaling can introduce subpixel rounding in DOM bounds.
+	expect(cardBounds!.width).toBeLessThanOrEqual(680 + 0.001);
 	expect(cardBounds!.height).toBeLessThan(150);
 	await replaceChatInput(editor, 'Keep this draft');
 	await expect(input).toBeFocused();
