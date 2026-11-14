@@ -1,7 +1,6 @@
 import type { IEditorExtensionApi } from 'ash:editor/workbench/common/editor.js';
 import { getDocumentReviewAccessibleText } from '../../contrib/review/documentReview.js';
 import { getDocumentPageOwner } from '../../../common/model/documentSections.js';
-import { exportDocx } from '../../contrib/documentOutput/docx.js';
 import { exportDocumentPdf } from '../../contrib/documentOutput/pdf.js';
 import './richTextEditorWidget.css';
 import type { DocumentEditorControlsHost } from 'ash:editor/workbench/services/documentEditor/browser/documentEditorProfile.js';
@@ -132,6 +131,11 @@ interface RichTextEditorInput {
 export class RichTextEditorWidget extends Disposable {
 
 	private model: DocumentTextModel | undefined;
+	private readonly viewLifetime = this._register(new MutableDisposable<DisposableStore>());
+	private parent: HTMLElement | undefined;
+	private controlsHost: DocumentEditorControlsHost | undefined;
+	private visible = true;
+	private savedView: { readonly top: number; readonly left: number; readonly controls: readonly unknown[]; } | undefined;
 	private readonly modelChangeListenerSlot = this._register(new MutableDisposable<IDisposable>());
 	private readonly collaborationControllerSlot = this._register(new MutableDisposable<DocumentCollaborationController>());
 	private readonly collaborationPresenceListenerSlot = this._register(new MutableDisposable<IDisposable>());
@@ -156,7 +160,37 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	create(parent: HTMLElement, controls?: DocumentEditorControlsHost): void {
-		if (this.container) throw new ReferenceError('Document editor has already been created');
+		if (this.parent) throw new ReferenceError('Document editor has already been created');
+		this.parent = parent;
+		this.controlsHost = controls;
+		if (this.visible) this.createView();
+	}
+
+	setVisible(visible: boolean): void {
+		if (this.visible === visible) return;
+		if (!visible && this.container?.contains(this.container.ownerDocument.activeElement)) this.syncDocumentSelection();
+		this.visible = visible;
+		if (visible) this.render();
+		else this.releaseView();
+	}
+
+	/** The working copy, undo history and collaboration controller outlive the projection. */
+	private releaseView(): void {
+		if (!this.container || this.composition) return;
+		this.savedView = {
+			top: this.container.scrollTop, left: this.container.scrollLeft,
+			controls: this.formattingContributions.map(contribution => contribution.saveViewState?.()),
+		};
+		this.disposeNodeViews();
+		this.viewLifetime.clear();
+	}
+
+	private createView(): void {
+		const parent = this.parent;
+		assertDefined(parent, new ReferenceError('Document editor has not been created'));
+		const controls = this.controlsHost;
+		const lifetime = new DisposableStore();
+		this.viewLifetime.value = lifetime;
 		const controlsParent = controls?.container ?? parent;
 		for (const install of this.options.contributions ?? []) {
 			install({
@@ -168,7 +202,7 @@ export class RichTextEditorWidget extends Disposable {
 				onSetTextStyle: attrs => this.handleTextStyleAction(attrs),
 				onClearTextStyle: () => this.handleClearTextStyleAction(),
 				onRunDocumentAction: actionId => this.handleToolbarAction(actionId),
-				addFormattingContribution: value => this.formattingContributions.push(this._register(value)),
+				addFormattingContribution: value => this.formattingContributions.push(lifetime.add(value)),
 				invalidateView: () => { if (this.model && !this.isDisposed && !this.composition) this.render(); },
 				selectText: (blockId, selection) => {
 					const model = this.model;
@@ -193,9 +227,9 @@ export class RichTextEditorWidget extends Disposable {
 		const handleKeydown = (event: KeyboardEvent) => {
 			for (const contribution of this.formattingContributions) contribution.handleKeydown?.(event);
 		};
-		this._register(addDisposableListener(parent, 'keydown', handleKeydown));
-		if (controls) this._register(addDisposableListener(controlsParent, 'keydown', handleKeydown));
-		const editorDom = this._register(new EditorDom({
+		lifetime.add(addDisposableListener(parent, 'keydown', handleKeydown));
+		if (controls) lifetime.add(addDisposableListener(controlsParent, 'keydown', handleKeydown));
+		const editorDom = lifetime.add(new EditorDom({
 			rootClassName: 'ash-text-editor-widget-layout',
 			contentClassName: 'ash-text-editor-widget-pane',
 		}));
@@ -209,23 +243,28 @@ export class RichTextEditorWidget extends Disposable {
 		layoutContainer.append(container);
 		this.editorDom = editorDom;
 		this.container = container;
-		this.pageView = this._register(new DocumentPageView(container, () => this.relayoutPages()));
+		this.pageView = lifetime.add(new DocumentPageView(container, () => this.relayoutPages()));
 		this.outlineNavigator = outlineNavigator;
-		const onSelectionChange = () => this.syncDocumentSelection();
-		parent.ownerDocument.addEventListener('selectionchange', onSelectionChange);
-		this._register(toDisposable(() => {
-			parent.ownerDocument.removeEventListener('selectionchange', onSelectionChange);
+		lifetime.add(addDisposableListener(parent.ownerDocument, 'selectionchange', () => this.syncDocumentSelection()));
+		lifetime.add(toDisposable(() => {
 			outlineNavigator?.dispose();
 			for (const contribution of this.formattingContributions) contribution.element.remove();
 			this.formattingContributions.length = 0;
 			this.editorDom = undefined;
 			this.outlineNavigator = undefined;
 			this.container = undefined;
+			this.pageView = undefined;
 		}));
+		this.editorDom.layout(this.dimension);
+		this.pageView.setZoom(this.pageZoom);
+		this.savedView?.controls.forEach((state, index) => {
+			if (state !== undefined) this.formattingContributions[index]?.restoreViewState?.(state);
+		});
 	}
 
 	setModel(model: DocumentTextModel, input: RichTextEditorInput): void {
-		const container = this.requireContainer();
+		assertDefined(this.parent, new ReferenceError('Document editor has not been created'));
+		this.savedView = undefined;
 		this.composition = undefined;
 		this.collaborationPresenceListenerSlot.clear();
 		this.collaborationControllerSlot.clear();
@@ -238,7 +277,7 @@ export class RichTextEditorWidget extends Disposable {
 		);
 		this.input = input;
 		this.activeBlockId = undefined;
-		container.replaceChildren();
+		this.container?.replaceChildren();
 		for (const contribution of this.formattingContributions) contribution.element.hidden = false;
 		this.render();
 	}
@@ -252,6 +291,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	clearInput(): void {
+		this.savedView = undefined;
 		this.composition = undefined;
 		this.collaborationPresenceListenerSlot.clear();
 		this.collaborationControllerSlot.clear();
@@ -280,14 +320,26 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	focus(): void {
-		this.container?.querySelector<HTMLElement>('textarea, .stanza-document-rich-text-input')?.focus();
+		this.setVisible(true);
+		if (this.model && this.container) this.restoreModelFocus(this.model, this.model.selection);
 	}
 
-	exportArtifact(format: string, signal: AbortSignal): Promise<Uint8Array> {
+	async exportArtifact(format: string, signal: AbortSignal): Promise<Uint8Array> {
+		signal.throwIfAborted();
 		if (this.composition) return Promise.reject(new Error(localize('document.output.composing', 'Finish text composition before exporting.')));
 		const model = this.requireModel();
-		if (format === 'docx') return exportDocx(model.document, model.schema, signal);
-		if (format === 'pdf') return exportDocumentPdf(this.requireContainer(), model.document, signal);
+		const document = model.document;
+		if (format === 'docx') {
+			const { exportDocx } = await import('../../contrib/documentOutput/docx.js');
+			signal.throwIfAborted();
+			return exportDocx(document, model.schema, signal);
+		}
+		if (format === 'pdf') {
+			// PDF capture clones the projection synchronously before navigation can release it.
+			if (!this.container) this.renderDocumentView();
+			try { return exportDocumentPdf(this.requireContainer(), document, signal); }
+			finally { if (!this.visible) this.releaseView(); }
+		}
 		return Promise.reject(new TypeError('Unsupported document output'));
 	}
 
@@ -349,9 +401,18 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private render(): void {
-		const container = this.requireContainer();
 		const model = this.model;
 		if (!model || this.composition) return;
+		if (!this.visible) { this.releaseView(); return; }
+		this.renderDocumentView();
+	}
+
+	private renderDocumentView(): void {
+		const model = this.model;
+		if (!model || this.composition) return;
+		const restored = !this.container;
+		if (restored) this.createView();
+		const container = this.requireContainer();
 		const previousElements = new Map<string, HTMLElement>();
 		for (const element of container.querySelectorAll<HTMLElement>('[data-node-id]')) {
 			if (element.dataset.nodeId) previousElements.set(element.dataset.nodeId, element);
@@ -372,6 +433,11 @@ export class RichTextEditorWidget extends Disposable {
 		}
 		this.updateToolbar();
 		this.updateInlineNodeSelection();
+		if (restored && this.savedView) {
+			container.scrollTop = this.savedView.top;
+			container.scrollLeft = this.savedView.left;
+			this.savedView = undefined;
+		}
 	}
 
 	/** Reveal the focus position rather than a paragraph's bounding box spanning several pages. */
@@ -400,7 +466,7 @@ export class RichTextEditorWidget extends Disposable {
 
 	private relayoutPages(): void {
 		const container = this.container;
-		if (!container || !this.model || this.composition || this.isDisposed) return;
+		if (!container || !this.model || this.composition || this.isDisposed || !this.visible) return;
 		const active = container.contains(container.ownerDocument.activeElement);
 		const selection = active ? readDocumentTextSelection(container, true)?.selection : undefined;
 		this.pageView?.layout();
@@ -833,6 +899,7 @@ export class RichTextEditorWidget extends Disposable {
 			}
 		}
 		if (replacement.length === 0 && currentText === composition.baseText) {
+			if (!this.visible) this.releaseView();
 			this.relayoutPages();
 			return;
 		}
@@ -1252,6 +1319,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private restoreModelFocus(model: DocumentTextModel, selection: DocumentSelection | undefined): void {
+		if (!this.visible || !this.container) return;
 		let blockId: string | undefined;
 		if (selection?.kind === 'text') blockId = findTextBearingBlockId(model.document, selection.anchor.nodeId);
 		if (selection?.kind === 'node') blockId = findTextBearingBlockContainingNode(model.document, selection.nodeId);
@@ -1355,7 +1423,8 @@ export class RichTextEditorWidget extends Disposable {
 			this.updateInlineNodeSelection();
 			return;
 		}
-		const editor = findBlockEditor(this.requireContainer(), command.focus.blockId);
+		if (!this.visible || !this.container) return;
+		const editor = findBlockEditor(this.container, command.focus.blockId);
 		if (!editor) return;
 		this.focusEditorElement(editor);
 		if (editor.tagName === 'TEXTAREA') {
@@ -1491,7 +1560,7 @@ export class RichTextEditorWidget extends Disposable {
 		if (modelSelection?.kind === 'text' && findTextBearingBlockId(model.document, modelSelection.anchor.nodeId) === blockId && isDocumentTextSelectionInDocument(model.document, modelSelection)) {
 			return modelSelection;
 		}
-		const editor = findBlockEditor(this.requireContainer(), blockId);
+		const editor = this.container && findBlockEditor(this.container, blockId);
 		if (editor?.tagName === 'TEXTAREA') {
 			const selection = createTextareaDocumentTextSelection(model.document, blockId, editor as HTMLTextAreaElement);
 			return selection;
@@ -1567,6 +1636,8 @@ export class RichTextEditorWidget extends Disposable {
 
 	protected override disposeCore(): void {
 		this.clearInput();
+		this.parent = undefined;
+		this.controlsHost = undefined;
 		super.disposeCore();
 	}
 

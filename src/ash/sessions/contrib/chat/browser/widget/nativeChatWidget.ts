@@ -12,6 +12,8 @@ import { IChatWidgetService } from '../../../../../workbench/contrib/chat/browse
 import { ChatWidget, type IChatWidgetModel } from '../../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatInputDelegate } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { IChatInputPart } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { constObservable } from '../../../../../base/common/observable.js';
+import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../../common/constants.js';
 import './media/nativeChat.css';
 import './media/nativeChatList.css';
 
@@ -37,7 +39,7 @@ export class NativeChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel
 		@IConfigurationService configuration: IConfigurationService,
 	) {
 		super(container, panelId, model, createUntitledSession, contextMenus, contextViews, commands, accessibleViews, notifications,
-			undefined, undefined, undefined, createInput, { classPrefix: 'ash-native-chat', showWelcome: false, messageActionSurface: 'chat' },
+			undefined, undefined, undefined, createInput, { classPrefix: 'ash-native-chat', showWelcome: false, messageActionSurface: 'chat', virtualizeHistoryFrom: constObservable(CHAT_HISTORY_VIRTUALIZE_FROM) },
 			instantiation, dialogs, quickInput, widgets, contextKeys, voiceOnboarding, configuration);
 	}
 }

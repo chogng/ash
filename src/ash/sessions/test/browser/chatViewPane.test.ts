@@ -1,5 +1,6 @@
 import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import { ISessionContext } from '../../services/sessions/browser/sessionContext.js';
+import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
 import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
@@ -1302,14 +1303,14 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 			openModelSettings: async () => { }, resolveInteraction: async () => { },
 		};
 		const composerResources = resources.add(new DisposableStore());
-		const composer = composerResources.add(services.createInstance(SharedChatInputComposer, document.body, delegate, model, constObservable(false), undefined));
+		const composer = composerResources.add(services.createInstance(SharedChatInputComposer, document.body, delegate, model, undefined));
 		const input = composerResources.add(composer.input);
 		input.render(model.inputState);
 		return { input, model, storage, notices, identity, services, delegate, disposeInput: () => composerResources.dispose(), [Symbol.dispose]() { resources.dispose(); } };
 	} catch (error) { resources.dispose(); throw error; }
 }
 
-async function sessionsWidgetFixture(send: (text: string, signal?: AbortSignal) => Promise<void> = async () => { }, interrupt: () => Promise<void> = async () => { }) {
+async function sessionsWidgetFixture(send: (text: string, signal?: AbortSignal) => Promise<void> = async () => { }, interrupt: () => Promise<void> = async () => { }, history?: readonly ReturnType<typeof chatListItem>[]) {
 	const fixture = await sessionsInputFixture();
 	try {
 		fixture.disposeInput();
@@ -1319,12 +1320,27 @@ async function sessionsWidgetFixture(send: (text: string, signal?: AbortSignal) 
 		fixture.services.registerInstance(ILayoutService, inputResources.add(new BrowserLayoutService({ root: document.body })));
 		fixture.model.send = async (text, _mode, _skills, _contexts, options) => send(text, options?.signal);
 		fixture.model.interrupt = interrupt;
+		if (history) Object.defineProperty(fixture.model, 'items', { get: () => history });
 		const contribution = fixture.services.createInstance(SharedChatInputComposerContribution);
 		const widget = fixture.services.createInstance(NewChatWidget, document.body, { panelId: 'sessions-composer', model: fixture.model, createNewSession: () => { } });
 		widget.setVisible(true);
 		return { ...fixture, input: widget.input, widget, [Symbol.dispose]() { widget.dispose(); contribution.dispose(); fixture[Symbol.dispose](); } };
 	} catch (error) { fixture[Symbol.dispose](); throw error; }
 }
+
+test('Sessions Chat and Code both virtualize retained long history', async () => {
+	const history = Array.from({ length: 80 }, (_, index) => chatListItem({ type: 'agentMessage', itemId: `reply-${index}`, turnId: `turn-${index}`, text: `Reply ${index}` }));
+	using fixture = await sessionsWidgetFixture(undefined, undefined, history);
+	const virtualized = () => fixture.widget.element.querySelector('.ash-chat-transcript-virtualized');
+	assert.ok(virtualized());
+	const mode = SessionsWorkspaceModeContext.bindTo(fixture.services.get(IContextKeyService));
+	for (const value of ['code', 'chat'] as const) {
+		mode.set(value);
+		assert.ok(virtualized(), value);
+		assert.equal(fixture.widget.element.querySelector('[role="log"]')!.getAttribute('aria-live'), 'off');
+	}
+	mode.reset();
+});
 
 for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} receives source drops through shared snapshot and undo owners`, async () => {
 	using fixture = await sessionsInputFixture();
@@ -1337,7 +1353,7 @@ for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} rec
 	} as unknown as IFileService);
 	fixture.services.registerSingleton(IChatAttachmentResolveService, () => fixture.services.createInstance(ChatAttachmentResolveService));
 	using composer = surface === 'chat'
-		? fixture.services.createInstance(SharedChatInputComposer, document.body, fixture.delegate, fixture.model, constObservable(false), undefined)
+		? fixture.services.createInstance(SharedChatInputComposer, document.body, fixture.delegate, fixture.model, undefined)
 		: undefined;
 	using inputOwner = new DisposableStore();
 	using input = composer?.input ?? fixture.services.createInstance(ReplyChatInputFactory).createSessionInput(document.body, fixture.delegate, fixture.model, inputOwner);

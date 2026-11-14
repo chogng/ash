@@ -1,4 +1,3 @@
-import { importDocxDocument } from './contrib/documentOutput/docx.js';
 import { localize } from 'ash:editor/nls.js';
 import { bindDocumentCodec } from '../common/model/documentCodec.js';
 import { RichTextEditorWidget, type RichTextEditorOptions } from './widget/richTextEditor/richTextEditorWidget.js';
@@ -23,7 +22,12 @@ export function createEditorProfileConfiguration(schema: DocumentSchema, options
 			{ id: 'docx', extension: 'docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', canImport: true, label: localize('document.output.docx', 'Word document (DOCX)') },
 			{ id: 'pdf', extension: 'pdf', mimeType: 'application/pdf', canImport: false, label: localize('document.output.pdf', 'PDF (page images)') },
 		],
-		importBinary: (bytes, format, ownerDocument, signal) => { if (format !== 'docx') throw new TypeError('Unsupported document input'); return importDocxDocument(bytes, ownerDocument, signal); },
+		importBinary: async (bytes, format, ownerDocument, signal) => {
+			if (format !== 'docx') throw new TypeError('Unsupported document input');
+			const { importDocxDocument } = await import('./contrib/documentOutput/docx.js');
+			signal.throwIfAborted();
+			return importDocxDocument(bytes, ownerDocument, signal);
+		},
 		codec: bindDocumentCodec(schema, plugins), widget: ProfileWidget, createEmptyDocument,
 		importText: async (text, format, ownerDocument, source, readResource) => {
 			const document = await materializeDocumentImages(importDocumentText(text, format, schema, ownerDocument, source), readResource);

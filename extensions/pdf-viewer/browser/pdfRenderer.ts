@@ -1,5 +1,4 @@
-import { getDocument, GlobalWorkerOptions, TextLayer, type PDFPageProxy } from 'pdfjs-dist';
-import workerSource from 'pdfjs-dist/build/pdf.worker.min.mjs?raw';
+import type { PDFPageProxy, TextLayer } from 'pdfjs-dist';
 import { throwIfCancelled } from '../../../src/ash/base/common/cancellation.js';
 import type { IDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { addDisposableListener, h } from '../../../src/ash/base/browser/dom.js';
@@ -49,6 +48,8 @@ export interface PdfRenderRequest {
 export class PdfJsRenderer implements IPdfRenderer {
 	async render(request: PdfRenderRequest): Promise<IPdfRenderResult> {
 		throwIfCancelled(request.signal, 'PDF rendering was cancelled');
+		const { getDocument, GlobalWorkerOptions, TextLayer, workerSource } = await import('./pdfRuntime.js');
+		throwIfCancelled(request.signal, 'PDF rendering was cancelled');
 		const workerUrl = URL.createObjectURL(new Blob([workerSource], { type: 'text/javascript' }));
 		GlobalWorkerOptions.workerSrc = workerUrl;
 		const loadingTask = getDocument({ data: request.bytes.slice(), useWasm: false });
@@ -67,7 +68,7 @@ export class PdfJsRenderer implements IPdfRenderer {
 				const page = await document.getPage(pageNumber);
 				const text = await page.getTextContent();
 				throwIfCancelled(request.signal, 'PDF rendering was cancelled');
-				const view = new PdfPageView(page, request.container, request.scale);
+				const view = new PdfPageView(page, request.container, request.scale, TextLayer);
 				result.pages.push(view);
 				await view.loadText(text, request.signal);
 				await view.paint(request.signal);
@@ -93,7 +94,7 @@ class PdfPageView implements PdfRenderedPage {
 	private textLayer: TextLayer | undefined;
 	private canvas: HTMLCanvasElement;
 
-	constructor(private page: PDFPageProxy | undefined, container: HTMLElement, scale: number) {
+	constructor(private page: PDFPageProxy | undefined, container: HTMLElement, scale: number, private readonly textLayerType: typeof TextLayer) {
 		this.pageNumber = page!.pageNumber;
 		this.viewport = page!.getViewport({ scale });
 		this.element = h(container.ownerDocument, 'div');
@@ -113,7 +114,7 @@ class PdfPageView implements PdfRenderedPage {
 	get height(): number { return this.viewport.height; }
 
 	async loadText(content: Awaited<ReturnType<PDFPageProxy['getTextContent']>>, signal: AbortSignal): Promise<void> {
-		const layer = this.textLayer = new TextLayer({ textContentSource: content, container: this.textContainer, viewport: this.viewport });
+		const layer = this.textLayer = new this.textLayerType({ textContentSource: content, container: this.textContainer, viewport: this.viewport });
 		const cancellation = addDisposableListener(signal, 'abort', () => layer.cancel(), { once: true });
 		try {
 			await layer.render();

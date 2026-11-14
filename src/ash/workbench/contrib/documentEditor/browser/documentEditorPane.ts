@@ -201,6 +201,13 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		this.requireEditor().layout(this.dimension);
 	}
 
+	public override setVisible(visible: boolean): void {
+		// Capture selection before hiding removes focus; restore only after layout becomes visible.
+		if (!visible) this.editor?.setVisible?.(false);
+		super.setVisible(visible);
+		if (visible) this.editor?.setVisible?.(true);
+	}
+
 	public override focus(): void {
 		this.requireEditor().focus();
 	}

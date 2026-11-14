@@ -892,7 +892,7 @@ export class ChatListWidget extends DomWidget {
 
 	private rowId(node: Node | null): string | undefined {
 		const element = isHTMLElement(node) ? node : node?.parentElement;
-		const row = element?.closest<HTMLElement>('.ash-chat-item[data-item-id]');
+		const row = element?.closest<HTMLElement>(`.${this.classPrefix}-item[data-item-id]`);
 		return row?.parentElement === this.transcript ? row.dataset.itemId : undefined;
 	}
 

@@ -28,11 +28,14 @@ export interface DocumentFormattingState {
 	readonly checkedDocumentActionIds: ReadonlySet<string>;
 }
 
-export interface DocumentFormattingContribution extends IDisposable {
+export interface DocumentFormattingContribution<TViewState = unknown> extends IDisposable {
 	readonly element: HTMLElement;
 	setState(state: DocumentFormattingState): void;
 	getDecorations?(document: DocumentNode, selection: DocumentSelection | undefined): readonly DocumentDecoration[];
 	handleKeydown?(event: KeyboardEvent): void;
+	/** Transient control input only; document and selection remain in the model. */
+	saveViewState?(): TViewState;
+	restoreViewState?(state: TViewState): void;
 }
 
 export interface DocumentEditorContributionContext {

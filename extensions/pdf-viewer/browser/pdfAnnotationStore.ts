@@ -1,6 +1,5 @@
 import { throwIfCancelled } from '../../../src/ash/base/common/cancellation.js';
-import { basename, dirname } from '../../../src/ash/base/common/resources.js';
-import { type URI } from '../../../src/ash/base/common/uri.js';
+import { URI } from '../../../src/ash/base/common/uri.js';
 import { FileKind, type IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument, serializePdfAnnotationDocument, type PdfAnnotationDocument } from '../common/pdfAnnotations.js';
 
@@ -24,11 +23,12 @@ export class WorkspacePdfAnnotationStore implements IPdfAnnotationStore {
 	async load(resource: URI, signal: AbortSignal): Promise<PdfAnnotationSnapshot> {
 		throwIfCancelled(signal, 'PDF annotation loading was cancelled');
 		const sidecar = pdfAnnotationSidecarResource(resource);
-		const entries = await this.files.readDirectory(dirname(sidecar));
+		const entries = await this.files.readDirectory(URI.joinPath(sidecar, '..'));
 		throwIfCancelled(signal, 'PDF annotation loading was cancelled');
 		// Entries belong to this directory; match its filename rather than provider-specific
 		// URI spelling (for example, Windows drive casing in disk directory listings).
-		if (!entries.some((entry) => entry.kind === FileKind.File && entry.name === basename(sidecar))) {
+		const name = sidecar.path.slice(sidecar.path.lastIndexOf('/') + 1);
+		if (!entries.some((entry) => entry.kind === FileKind.File && entry.name === name)) {
 			return Object.freeze({ document: emptyPdfAnnotationDocument(), revision: undefined });
 		}
 		const content = await this.files.readFile(sidecar);

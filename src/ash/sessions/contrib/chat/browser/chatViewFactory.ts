@@ -1,6 +1,7 @@
+import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, derived, observableFromEvent, type IObservable, type IReader } from '../../../../base/common/observable.js';
+import { autorun, constObservable, derived, observableFromEvent, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IAccessibleViewService, type AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -170,7 +171,9 @@ class CompactChatWidgetFactory {
 						welcomeTitle: welcome.title,
 						codeBlockPresentation: 'card',
 						messageActionSurface: 'chat',
-						virtualizeHistoryFrom: scrollOptimization && derived(reader => scrollOptimization.read(reader) ? 100 : undefined),
+						virtualizeHistoryFrom: scrollOptimization
+							? derived(reader => scrollOptimization.read(reader) ? 100 : undefined)
+							: constObservable(CHAT_HISTORY_VIRTUALIZE_FROM),
 					} satisfies IChatWidgetViewOptions);
 			} catch (error) {
 				model.dispose();

@@ -819,7 +819,7 @@ declare global {
 			showAcceptedContext(text: string, cowork?: boolean): void;
 			updateAcceptedContext(text: string): void;
 			showChatApp(voice?: boolean, cowork?: boolean, withMedia?: boolean, virtualizeHistory?: boolean): void;
-			showLongCodeHistory(turns: number, virtualizeHistory: boolean, withTools?: boolean): void;
+			showLongCodeHistory(turns: number, virtualizeHistory: boolean, withTools?: boolean, native?: boolean): void;
 			voiceState(): readonly string[];
 			showVoiceIntroduction(): void;
 			toggleIntroductionFocus(): void;
@@ -1454,8 +1454,8 @@ window.ashChatTranscriptIntegration = {
 		}));
 		appChat.setVisible(true);
 	},
-	showLongCodeHistory: (turns, virtualizeHistory, withTools = false) => {
-		window.ashChatTranscriptIntegration.showChatApp(false, false, false, virtualizeHistory);
+	showLongCodeHistory: (turns, virtualizeHistory, withTools = false, native = false) => {
+		window.ashChatTranscriptIntegration.showChatApp(false, native, false, virtualizeHistory);
 		const appRows = appItems;
 		const host = appChat!.domNode.parentElement!;
 		host.style.position = 'fixed';

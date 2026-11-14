@@ -108,12 +108,14 @@ test('optional PDF rejects modified client bytes before executing the package', 
 	await expect(page.locator('canvas')).toHaveCount(0);
 });
 
-test('Chat uses the optional resource editor for immutable attachment previews and keeps actions without it', async ({ page }) => {
+test('Chat uses immutable optional resource previews and downloads unsupported attachment bytes', async ({ page }) => {
 	await page.goto('/pdfExtension.html'); await page.waitForFunction(() => !!window.pdfExtensionTest);
 	await page.evaluate(() => window.pdfExtensionTest.previewChat());
 	const attachment = page.locator('.ash-chat-media');
-	await expect(attachment.getByRole('button', { name: 'Download', exact: true })).toBeVisible();
-	await expect(attachment.getByRole('button', { name: 'Open resource', exact: true })).toBeVisible();
+	const link = attachment.getByRole('link', { name: 'Download paper.pdf', exact: true });
+	await expect(link).toHaveAttribute('download', 'paper.pdf');
+	const [download] = await Promise.all([page.waitForEvent('download'), link.click()]);
+	expect(await readFile((await download.path())!)).toEqual(Buffer.from(pdf()));
 	await expect(attachment.locator('canvas')).toHaveCount(0);
 	await page.evaluate(async () => { await window.pdfExtensionTest.enable(true); window.pdfExtensionTest.previewChat(); });
 	await expect(attachment.locator('canvas')).toHaveCount(1);

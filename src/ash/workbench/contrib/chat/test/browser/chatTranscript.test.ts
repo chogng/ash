@@ -27,17 +27,17 @@ suite('chatTranscript browser component', () => {
 		await expect(row).toBeFocused();
 	});
 
-	test('long Code history restores tool disclosures and retains focused code while scrolling', async () => {
+	for (const native of [false, true]) test(`long ${native ? 'native Chat' : 'Code'} history restores tool disclosures and retains focused code while scrolling`, async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html?locale=en');
 		const chat = page.locator('#app-chat');
 		const viewport = chat.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
 		const articles = viewport.locator('article[data-item-id]');
-		await page.evaluate(() => window.ashChatTranscriptIntegration.showLongCodeHistory(20, true));
+		await page.evaluate(native => window.ashChatTranscriptIntegration.showLongCodeHistory(20, true, false, native), native);
 		await expect(viewport.getByText('Final result 19.', { exact: true })).toBeInViewport();
 		await expect(viewport.locator('[data-item-id="code-reply-0"]')).toHaveCount(0);
 		expect(await articles.count()).toBeLessThan(40);
-		await page.evaluate(() => window.ashChatTranscriptIntegration.showLongCodeHistory(120, true));
+		await page.evaluate(native => window.ashChatTranscriptIntegration.showLongCodeHistory(120, true, false, native), native);
 		const latest = viewport.getByText('Final result 119.', { exact: true });
 		const firstTool = viewport.locator('[data-tool-call-id="code-tool-1"] > details');
 		await expect(latest).toBeInViewport();
@@ -1135,6 +1135,13 @@ suite('chatTranscript browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(values.at(-1));
 		await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(false));
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBe(0);
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().editorCount)).toBe(1);
+		for (let iteration = 0; iteration < 5; iteration++) {
+			await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(true));
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBe(1);
+			await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(false));
+			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().editorCount)).toBe(1);
+		}
 		await page.evaluate(() => window.ashChatTranscriptIntegration.stream('```typescript\nHidden update 😀', false));
 		await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(true));
 		await page.locator('.ash-chat-code-block').getByRole('button', { name: 'Copy', exact: true }).click();

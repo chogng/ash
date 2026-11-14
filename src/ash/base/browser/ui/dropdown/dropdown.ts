@@ -1,7 +1,7 @@
 import { Emitter } from '../../../common/event.js';
 import type { IAction } from '../../../common/actions.js';
 import type { Icon } from '../../../common/icon.js';
-import { Disposable, toDisposable } from '../../../common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
 import { Lxicon } from '../../../common/lxicons.js';
 import { addDisposableListener, stopEvent, h } from '../../dom.js';
 import { setAriaAttribute } from '../aria/aria.js';
@@ -42,7 +42,7 @@ export class Dropdown extends Disposable {
 	readonly button: HTMLButtonElement;
 	private readonly label: HTMLSpanElement;
 	private readonly content: DropdownContent;
-	private readonly contextView: IContextViewProvider;
+	private readonly fallbackContextView = this._register(new MutableDisposable<ContextView>());
 	private readonly _onDidChangeVisibility = this._register(
 		new Emitter<DropdownVisibilityChangeEvent>(),
 	);
@@ -82,9 +82,6 @@ export class Dropdown extends Disposable {
 		button.append(label, indicator);
 		element.append(button);
 
-		// Keep fallback popups in their theme scope and inside a modal dialog's focus boundary.
-		const popupContainer = container.closest<HTMLElement>('dialog, [data-color-scheme]') ?? ownerDocument.body;
-		this.contextView = options.contextViewProvider ?? this._register(new ContextView(popupContainer));
 		this._register(toDisposable(() => this.hide()));
 		this._register(addDisposableListener(button, 'click', () => this.toggle()));
 		this._register(addDisposableListener(button, 'keydown', (event) => {
@@ -133,7 +130,13 @@ export class Dropdown extends Disposable {
 			content.id = `ash-dropdown-content-${dropdownId}`;
 		}
 		setAriaAttribute(this.button, 'controls', content.id);
-		const shown = this.contextView.show({
+		let contextView = this.options.contextViewProvider ?? this.fallbackContextView.value;
+		if (!contextView) {
+			// Unopened triggers need no popup host. Resolve its theme/modal scope at first use.
+			const popupContainer = this.element.closest<HTMLElement>('dialog, [data-color-scheme]') ?? this.element.ownerDocument.body;
+			this.fallbackContextView.value = contextView = new ContextView(popupContainer);
+		}
+		const shown = contextView.show({
 			anchor: this.button,
 			content,
 			anchorAlignment: this.options.anchorAlignment,
@@ -152,7 +155,7 @@ export class Dropdown extends Disposable {
 
 	hide(): void {
 		if (!this._visible) return;
-		this.contextView.hide();
+		(this.options.contextViewProvider ?? this.fallbackContextView.value)?.hide();
 	}
 
 	toggle(): void {

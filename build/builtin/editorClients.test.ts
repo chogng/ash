@@ -4,10 +4,35 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 import { compileEditorClient } from './editorClients.ts';
 import { buildEditorPackage } from './editorPackages.ts';
 
 const repository = resolve(import.meta.dirname, '../..');
+
+test('closed clients initialize local lazy modules once and reject dynamic code outside the package', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-editor-client-lazy-'));
+	try {
+		await mkdir(join(directory, 'browser')); await mkdir(join(directory, 'common'));
+		const entry = join(directory, 'browser/editor.ts');
+		await writeFile(entry, 'export function getResourceEditor() { return () => import("./lazy.js"); }');
+		await writeFile(join(directory, 'browser/lazy.ts'), 'globalThis.initializations = (globalThis.initializations ?? 0) + 1; export const value = 42;');
+		const compiled = await compileEditorClient(directory);
+		const script = compiled.resources['dist/editor.js'];
+		assert.doesNotMatch(script, /import\(/u, 'Published clients have no runtime module dependencies');
+		const context = { initializations: 0 };
+		const factory = runInNewContext(`${script.replace('export function', 'function')}; createEditorModule`, context);
+		const load = factory({}).getResourceEditor();
+		assert.equal(context.initializations, 0);
+		assert.equal((await load()).value, 42);
+		assert.equal((await load()).value, 42);
+		assert.equal(context.initializations, 1);
+		for (const expression of ['import(target)', 'import("../../outside.js")', 'import("ash:editor/nls.js")', 'import(/* @vite-ignore */ "./lazy.js")']) {
+			await writeFile(entry, `export const load = target => ${expression};`);
+			await assert.rejects(compileEditorClient(directory), /closed package-local dependencies/u);
+		}
+	} finally { await rm(directory, { recursive: true, force: true }); }
+});
 
 test('Academy publishes closed client resources and platform-specific executables without modifying Ash', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-editor-package-'));

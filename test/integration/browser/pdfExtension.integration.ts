@@ -9,6 +9,8 @@ import { AccessibleViewType } from '../../../src/ash/platform/accessibility/brow
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
+import { ContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/common/contextkey.js';
 import { registerTestComponentServices, createTestFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { InMemoryFileSystemProvider } from '../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js';
@@ -31,6 +33,7 @@ import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme
 const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
 setNlsMessages(locale, locale === 'zh-CN' ? chineseCatalog.bundles : {});
 const services = new InstantiationService();
+services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 const memory = new InMemoryFileSystemProvider();
 const files = createTestFileService(memory); services.registerInstance(IFileService, files);
 registerTestComponentServices(services);

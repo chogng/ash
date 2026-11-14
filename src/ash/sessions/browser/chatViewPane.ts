@@ -47,10 +47,10 @@ import type { IAction } from '../../base/common/actions.js';
 import { ForkConversationActionId } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
 import { createTurnMultiDiffEditorInput } from './turnMultiDiffSource.js';
-import { CODE_HISTORY_VIRTUALIZE_FROM } from '../contrib/chat/common/constants.js';
+import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../contrib/chat/common/constants.js';
 
 let chatPaneInstanceId = 0;
-const codeHistoryVirtualizeFrom = constObservable(CODE_HISTORY_VIRTUALIZE_FROM);
+const chatHistoryVirtualizeFrom = constObservable(CHAT_HISTORY_VIRTUALIZE_FROM);
 
 /**
  * Retains opened conversations behind a shared tab row or list switcher.
@@ -445,7 +445,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				this.editorService,
 				(resource: URI) => readMarkdownImageResource(this.fileService, resource),
 				undefined, {
-				...options, virtualizeHistoryFrom: options?.virtualizeHistoryFrom ?? codeHistoryVirtualizeFrom, configureModelInMenu: true, openTurnChanges,
+				...options, virtualizeHistoryFrom: options?.virtualizeHistoryFrom ?? chatHistoryVirtualizeFrom, configureModelInMenu: true, openTurnChanges,
 				changes: {
 					refreshConversation: () => conversation.refreshChanges(),
 					readWorkspace: () => readWorkspaceChanges(this.commandService),

@@ -8,7 +8,7 @@ import { getDocumentParagraphStyles } from '../../../common/model/documentParagr
 import { createApplyParagraphStyleCommand, createClearParagraphOverridesCommand, createDefineParagraphStyleCommand, createDeleteParagraphStyleCommand, createSetParagraphStyleCommand } from '../../../common/commands/documentParagraphCommands.js';
 
 /** Built-in paragraph styles affect structure; direct paragraph and character formatting is retained. */
-export class ParagraphStyleContribution extends DocumentFormattingControls implements DocumentFormattingContribution {
+export class ParagraphStyleContribution extends DocumentFormattingControls implements DocumentFormattingContribution<string> {
 	private readonly style: SelectBox;
 	private readonly name: InputBox;
 	private readonly createStyle: Button;
@@ -46,6 +46,9 @@ export class ParagraphStyleContribution extends DocumentFormattingControls imple
 		this._register(this.name.onDidChange(() => { this.createStyle.enabled = this.name.enabled && this.name.value.trim().length > 0; }));
 		this.clearOverrides = this.addButton(localize('document.style.clearOverrides', 'Reset paragraph overrides'), () => context.runDocumentCommand((_schema, document, blockId, selection) => createClearParagraphOverridesCommand(document, blockId, selection)));
 	}
+
+	saveViewState(): string { return this.name.value; }
+	restoreViewState(state: string): void { this.name.value = state; }
 
 	setState(state: DocumentFormattingState): void {
 		const paragraphs = state.paragraphs ?? [];

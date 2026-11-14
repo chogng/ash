@@ -11,7 +11,7 @@ import type { IAction } from '../../../../../../base/common/actions.js';
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
 import { Event } from '../../../../../../base/common/event.js';
-import { Disposable, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import type { URI } from '../../../../../../base/common/uri.js';
 import { CodeEditorWidget } from '../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -75,6 +75,7 @@ export class CodeBlockPart extends Disposable {
 	private languageId = PLAINTEXT_LANGUAGE_ID;
 	private readonly relayout: RunOnceScheduler;
 	private editor: CodeEditorWidget | undefined;
+	private readonly editorLifetime = this._register(new MutableDisposable<DisposableStore>());
 	private layoutWidth: number | undefined;
 	private visible = true;
 	private measuredHeight = false;
@@ -231,8 +232,11 @@ export class CodeBlockPart extends Disposable {
 	public get model(): TextModel | undefined { return this.documentModel.value; }
 
 	private createEditor(): CodeEditorWidget {
+		const lifetime = new DisposableStore();
+		this.editorLifetime.value = lifetime;
+		lifetime.add(toDisposable(() => { this.editor = undefined; }));
 		// Offscreen history only needs the toolbar and reserved block height.
-		const editor = this._register(this.instantiationService.createInstance(CodeEditorWidget, {
+		const editor = lifetime.add(this.instantiationService.createInstance(CodeEditorWidget, {
 			container: this.editorContainer,
 			model: null,
 			readOnly: true,
@@ -249,21 +253,21 @@ export class CodeBlockPart extends Disposable {
 			scrollBeyondLastLine: false,
 			contributions: [],
 		}));
-		this._register(this.configuration.onDidChangeConfiguration(event => {
+		lifetime.add(this.configuration.onDidChangeConfiguration(event => {
 			const keys = [...Object.values(ChatEditorConfiguration), ...Object.values(CodeEditorConfiguration)];
 			if (keys.some(key => event.affectsConfiguration(key))) {
 				this.updateOptions(editor);
 				this.relayout.schedule();
 			}
 		}));
-		this._register(editor.onDidContentSizeChange(event => {
+		lifetime.add(editor.onDidContentSizeChange(event => {
 			if (event.contentHeightChanged) this.relayout.schedule();
 		}));
 		const resize = new ResizeObserver(([entry]) => {
 			if (this.model && Math.round(entry.contentRect.width) !== this.layoutWidth) this.relayout.schedule();
 		});
 		resize.observe(this.editorContainer);
-		this._register(toDisposable(() => resize.disconnect()));
+		lifetime.add(toDisposable(() => resize.disconnect()));
 		return editor;
 	}
 
@@ -325,7 +329,7 @@ export class CodeBlockPart extends Disposable {
 		this.layout(width);
 	}
 
-	/** Hidden transcripts retain source and selection, without a second live editor document. */
+	/** Offscreen blocks retain source, selection and geometry, with no idle editor or document. */
 	public get hasFocus(): boolean { return this.element.contains(this.element.ownerDocument.activeElement); }
 
 	public focus(): void {
@@ -342,6 +346,7 @@ export class CodeBlockPart extends Disposable {
 			this.relayout.cancel();
 			this.editor?.setModel(null);
 			this.documentModel.clear();
+			this.editorLifetime.clear();
 		} else if (this.data) {
 			this.render(this.data, this.editorContainer.clientWidth);
 			this.editor?.restoreViewState(this.viewState ?? null);

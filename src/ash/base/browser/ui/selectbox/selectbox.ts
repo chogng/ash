@@ -1,5 +1,5 @@
 import { Emitter } from '../../../common/event.js';
-import { Disposable } from '../../../common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
 import { Lxicon } from '../../../common/lxicons.js';
 import { addDisposableListener, isHTMLElement, stopEvent, h } from '../../dom.js';
 import { focusPreservingScroll } from '../../focus.js';
@@ -50,29 +50,19 @@ export interface SelectBoxSelection {
 export class SelectBox extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly dropdown: Dropdown;
-	private readonly list: HTMLDivElement;
-	private readonly optionList: List<SelectOption>;
+	private readonly popupLifetime = this._register(new MutableDisposable<DisposableStore>());
+	private optionList: List<SelectOption> | undefined;
+	private currentOptions: readonly SelectOption[] = [];
+	private currentSelection = -1;
 	private readonly _onDidSelect = this._register(new Emitter<SelectBoxSelection>());
 	readonly onDidSelect = this._onDidSelect.event;
 	private _enabled = true;
 
-	constructor(container: HTMLElement, options: SelectBoxOptions, styles?: ISelectBoxStyles) {
+	constructor(container: HTMLElement, options: SelectBoxOptions, private readonly styles?: ISelectBoxStyles) {
 		super();
-		const ownerDocument = container.ownerDocument;
-		// List owns row identity, logical focus and selection; SelectBox owns committing a value.
-		this.optionList = this._register(new List<SelectOption>(h(ownerDocument, 'div'), {
-			mouseSupport: false,
-			getId: option => option.value,
-			renderItem: (option, _index, row) => this.renderOption(option, row),
-		}));
-		const list = this.optionList.element;
-		this.list = list;
-		list.classList.add('ash-select-box-list');
-		list.tabIndex = -1;
-
 		const dropdown = this._register(new Dropdown(container, {
 			label: '',
-			content: list,
+			content: () => this.createPopup(),
 			ariaLabel: options.ariaLabel,
 			gap: 2,
 			anchorAlignment: AnchorAlignment.Right,
@@ -93,43 +83,27 @@ export class SelectBox extends Disposable {
 			for (const [property, value] of Object.entries(colors)) {
 				if (value !== undefined) {
 					this.element.style.setProperty(property, value);
-					if (property !== '--ash-select-style-select-background') list.style.setProperty(property, value);
 				}
-			}
-			const background = styles.selectListBackground;
-			if (background !== undefined) {
-				list.style.setProperty('--ash-select-style-select-list-background', background);
 			}
 		}
 		dropdown.button.classList.add('ash-select-box-button');
 		setRole(dropdown.button, 'combobox');
 		setAriaAttribute(dropdown.button, 'haspopup', 'listbox');
-		setAriaAttribute(dropdown.button, 'controls', list.id);
 		setAriaAttribute(dropdown.button, 'autocomplete', 'none');
 
 		this._register(dropdown.onDidChangeVisibility(({ visible }) => {
 			this.setActiveIndex(this.selectedIndex);
 			if (visible) {
-				list.classList.toggle('pointer-navigation', !dropdown.button.matches(':focus-visible'));
+				this.optionList?.element.classList.toggle('pointer-navigation', !dropdown.button.matches(':focus-visible'));
 				this.focusActiveOption();
+			} else {
+				// The closed trigger owns the value; detached option rows have no reuse lifetime.
+				setAriaAttribute(dropdown.button, 'controls', undefined);
+				this.popupLifetime.clear();
 			}
 		}));
-		this._register(addDisposableListener(list, 'click', (event) => {
-			const index = this.optionIndexFromTarget(event.target);
-			if (index === undefined) return;
-			this.commitSelection(index);
-		}));
-		this._register(addDisposableListener(list, 'pointermove', (event) => {
-			list.classList.add('pointer-navigation');
-			const index = this.optionIndexFromTarget(event.target);
-			if (index === undefined || this.options[index]?.disabled) return;
-			this.setActiveIndex(index);
-		}));
-		this._register(addDisposableListener(list, 'keydown', (event) => {
-			this.onListKeyDown(event);
-		}));
 		this._register(addDisposableListener(dropdown.button, 'keydown', (event) => {
-			if (!event.isComposing && !isModifierKey(event)) list.classList.remove('pointer-navigation');
+			if (!event.isComposing && !isModifierKey(event)) this.optionList?.element.classList.remove('pointer-navigation');
 			if (event.key === 'Home' || event.key === 'End') {
 				stopEvent(event);
 				dropdown.show();
@@ -144,16 +118,15 @@ export class SelectBox extends Disposable {
 	}
 
 	get options(): readonly SelectOption[] {
-		return this.optionList.items;
+		return this.currentOptions;
 	}
 
 	get selectedIndex(): number {
-		const selected = this.optionList.selection[0];
-		return selected === undefined ? -1 : this.options.indexOf(selected);
+		return this.currentSelection;
 	}
 
 	get value(): string | undefined {
-		return this.optionList.selection[0]?.value;
+		return this.options[this.currentSelection]?.value;
 	}
 
 	set value(value: string | undefined) {
@@ -185,7 +158,8 @@ export class SelectBox extends Disposable {
 	setOptions(options: readonly SelectOption[]): void {
 		validateOptions(options);
 		const previousValue = this.value;
-		this.optionList.items = options;
+		this.currentOptions = [...options];
+		if (this.optionList) this.optionList.items = this.currentOptions;
 		const preservedIndex = previousValue === undefined
 			? -1
 			: this.options.findIndex((option) =>
@@ -217,8 +191,48 @@ export class SelectBox extends Disposable {
 		this.dropdown.hide();
 	}
 
+	/** Popup rows, focus state and listeners exist only while the dropdown is open. */
+	private createPopup(): HTMLElement {
+		const lifetime = new DisposableStore();
+		this.popupLifetime.value = lifetime;
+		const optionList = lifetime.add(new List<SelectOption>(h(this.element.ownerDocument, 'div'), {
+			mouseSupport: false,
+			getId: option => option.value,
+			renderItem: (option, _index, row) => this.renderOption(option, row),
+		}));
+		this.optionList = optionList;
+		const list = optionList.element;
+		lifetime.add(toDisposable(() => { this.optionList = undefined; list.remove(); }));
+		list.classList.add('ash-select-box-list');
+		list.tabIndex = -1;
+		if (this.styles) {
+			const colors = {
+				'--ash-select-style-select-foreground': this.styles.selectForeground,
+				'--ash-select-style-select-border': this.styles.selectBorder,
+				'--ash-select-style-focus-border': this.styles.focusBorder,
+				'--ash-select-style-select-list-background': this.styles.selectListBackground,
+			};
+			for (const [property, value] of Object.entries(colors)) {
+				if (value !== undefined) list.style.setProperty(property, value);
+			}
+		}
+		lifetime.add(addDisposableListener(list, 'click', event => {
+			const index = this.optionIndexFromTarget(event.target);
+			if (index !== undefined) this.commitSelection(index);
+		}));
+		lifetime.add(addDisposableListener(list, 'pointermove', event => {
+			list.classList.add('pointer-navigation');
+			const index = this.optionIndexFromTarget(event.target);
+			if (index !== undefined && !this.options[index]?.disabled) this.setActiveIndex(index);
+		}));
+		lifetime.add(addDisposableListener(list, 'keydown', event => this.onListKeyDown(event)));
+		optionList.items = this.options;
+		this.applySelection(this.selectedIndex);
+		return list;
+	}
+
 	private renderOption(option: SelectOption, row: HTMLDivElement): HTMLElement {
-		const ownerDocument = this.list.ownerDocument;
+		const ownerDocument = row.ownerDocument;
 		row.classList.add('ash-select-box-option');
 		row.classList.toggle('ash-select-box-option-separator-before', !!option.separatorBefore);
 		row.tabIndex = -1;
@@ -247,7 +261,8 @@ export class SelectBox extends Disposable {
 	}
 
 	private applySelection(index: number): void {
-		this.optionList.setSelection(index < 0 ? [] : [index]);
+		this.currentSelection = index;
+		this.optionList?.setSelection(index < 0 ? [] : [index]);
 		this.setActiveIndex(index);
 		const option = this.options[index];
 		this.dropdown.setLabel(option?.label ?? '');
@@ -274,7 +289,7 @@ export class SelectBox extends Disposable {
 
 	private onListKeyDown(event: KeyboardEvent): void {
 		if (event.isComposing || isModifierKey(event)) return;
-		this.list.classList.remove('pointer-navigation');
+		this.optionList?.element.classList.remove('pointer-navigation');
 		switch (event.key) {
 			case 'ArrowDown':
 				stopEvent(event);
@@ -295,7 +310,7 @@ export class SelectBox extends Disposable {
 			case 'Enter':
 			case ' ':
 				stopEvent(event);
-				this.commitSelection(this.optionList.activeIndex);
+				this.commitSelection(this.optionList?.activeIndex ?? -1);
 				break;
 			case 'Tab':
 				this.dropdown.hide();
@@ -315,7 +330,7 @@ export class SelectBox extends Disposable {
 
 	private moveActiveByPrefix(prefix: string): void {
 		const normalized = prefix.toLocaleLowerCase();
-		const start = Math.max(0, this.optionList.activeIndex + 1);
+		const start = Math.max(0, (this.optionList?.activeIndex ?? -1) + 1);
 		for (let offset = 0; offset < this.options.length; offset += 1) {
 			const index = (start + offset) % this.options.length;
 			const option = this.options[index];
@@ -345,9 +360,10 @@ export class SelectBox extends Disposable {
 			step = -1;
 		} else {
 			step = direction === 'next' ? 1 : -1;
-			index = this.optionList.activeIndex < 0
+			const activeIndex = this.optionList?.activeIndex ?? -1;
+			index = activeIndex < 0
 				? (step > 0 ? 0 : this.options.length - 1)
-				: this.optionList.activeIndex + step;
+				: activeIndex + step;
 		}
 		while (index >= 0 && index < this.options.length) {
 			if (!this.options[index]?.disabled) {
@@ -360,7 +376,7 @@ export class SelectBox extends Disposable {
 	}
 
 	private setActiveIndex(index: number): void {
-		this.optionList.setActiveIndex(index, undefined, { reveal: false });
+		this.optionList?.setActiveIndex(index, undefined, { reveal: false });
 		// A collapsed ContextView detaches its options; ARIA must never reference them.
 		if (index < 0 || !this.dropdown.visible) {
 			setAriaAttribute(
@@ -372,7 +388,7 @@ export class SelectBox extends Disposable {
 			setAriaAttribute(
 				this.dropdown.button,
 				'activedescendant',
-				this.optionList.row(index)?.id,
+				this.optionList?.row(index)?.id,
 			);
 		}
 		for (const [optionIndex, element] of this.optionElements().entries()) {
@@ -384,7 +400,7 @@ export class SelectBox extends Disposable {
 	}
 
 	private focusActiveOption(): void {
-		const option = this.optionList.row(this.optionList.activeIndex);
+		const option = this.optionList?.row(this.optionList.activeIndex);
 		if (option) focusPreservingScroll(option);
 		option?.scrollIntoView({
 			block: 'nearest',
@@ -393,16 +409,16 @@ export class SelectBox extends Disposable {
 
 	private optionElements(): HTMLElement[] {
 		return Array.from(
-			this.list.querySelectorAll<HTMLElement>(
+			this.optionList?.element.querySelectorAll<HTMLElement>(
 				'.ash-select-box-option',
-			),
+			) ?? [],
 		);
 	}
 
 	private optionIndexFromTarget(target: EventTarget | null): number | undefined {
 		if (!isHTMLElement(target)) return undefined;
 		const option = target.closest<HTMLElement>('.ash-select-box-option');
-		if (!option || !this.list.contains(option)) return undefined;
+		if (!option || !this.optionList?.element.contains(option)) return undefined;
 		const index = Number.parseInt(option.dataset.index ?? '', 10);
 		return Number.isInteger(index) ? index : undefined;
 	}

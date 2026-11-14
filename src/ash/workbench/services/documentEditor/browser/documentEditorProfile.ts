@@ -16,6 +16,8 @@ export interface DocumentEditorControlsHost {
 export interface DocumentEditorWidget extends IDisposable {
 	readonly isDisposed: boolean;
 	create(parent: HTMLElement, controls?: DocumentEditorControlsHost): void;
+	/** Allows a retained document to release its projection while keeping its model and collaboration alive. */
+	setVisible?(visible: boolean): void;
 	setModel(model: DocumentTextModel, input: { readonly resource: URI; readonly readOnly?: boolean; }): void;
 	setReadOnly(readOnly: boolean): void;
 	clearInput(): void;

@@ -34,6 +34,8 @@ TS 作者入口是 [`@ash/sdk`](../sdk/typescript/README.md)，通过 `import * 
 
 Rust 作者继续使用 `sdk/rust` 的 Host RPC v1 接口。文档客户端的 `editor.client.v1` 请求、声明与边界校验已进入 `editor_client` 模块，Academy 是真实消费者。客户端通过有限的 `ash:editor/<module>.js` 命名空间导入宿主机制；编译器根据实际宿主导入生成可调用绑定清单，声明文件只提供类型。未知模块、私有值、命名空间及通配重新导出不能绕过构建边界。该入口只覆盖已准入的编辑器客户端；它不是普通 TS 扩展的 `@ash/sdk`，也不把 Workbench 私有服务暴露给扩展。
 
+客户端可通过包内字符串字面量 `import('./module.js')` 延迟初始化转换器等重型模块。编译器将其内联为同一资源文件中的惰性初始化器，不增加运行时模块依赖。计算路径、包外动态导入、宿主命名空间动态导入和跳过打包的注释均被拒绝。
+
 `pnpm extension:sdk` 可导出自包含 Rust SDK、协议、摘要构建 helper、客户端声明、编译工具及本机开发宿主，同时生成独立 Academy 项目。导出后的项目使用自身 Cargo／TypeScript 配置，构建无需访问 Ash checkout。当前为与同版宿主配套的开发 SDK；Host RPC 和客户端 API 均携带版本，破坏契约的变更须升级相应版本，不能靠包名认定兼容。
 
 开发宿主复用 `ExtensionHostSupervisor`，显式 `--allow-local-code` 授予不经 OS 隔离的本地代码执行；提供声明调用、诊断、重载、摘要匹配及进程释放。它不写入已安装扩展来源，也不授予 Renderer 权限。正式包仍须注册表签名、可信来源准入和精确执行授权。完整命令、验证范围与限制见 [独立扩展开发](../sdk/docs/development.md)。

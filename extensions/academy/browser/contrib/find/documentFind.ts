@@ -9,8 +9,16 @@ import type { DocumentFormattingContribution, DocumentFormattingState, DocumentE
 import { DocumentFormattingControls } from '../../widget/documentFormattingControls.js';
 import { createReplaceDocumentMatchesCommand, findDocumentText, getDocumentFindMatchIndex, type DocumentFindMatch } from '../../../common/commands/documentFindCommands.js';
 
+interface FindViewState {
+	readonly query: string;
+	readonly replacement: string;
+	readonly matchCase: boolean;
+	readonly wholeWord: boolean;
+	readonly open: boolean;
+}
+
 /** View-local search intent; results are always recomputed from the current immutable document. */
-export class DocumentFindContribution extends DocumentFormattingControls implements DocumentFormattingContribution {
+export class DocumentFindContribution extends DocumentFormattingControls implements DocumentFormattingContribution<FindViewState> {
 	private readonly query: InputBox;
 	private readonly replacement: InputBox;
 	private readonly panel: HTMLDivElement;
@@ -63,6 +71,18 @@ export class DocumentFindContribution extends DocumentFormattingControls impleme
 				this.close();
 			}
 		}));
+	}
+
+	saveViewState(): FindViewState {
+		return { query: this.query.value, replacement: this.replacement.value, matchCase: this.matchCase.checked, wholeWord: this.wholeWord.checked, open: !this.panel.hidden };
+	}
+
+	restoreViewState(state: FindViewState): void {
+		this.query.value = state.query;
+		this.replacement.value = state.replacement;
+		this.matchCase.checked = state.matchCase;
+		this.wholeWord.checked = state.wholeWord;
+		this.panel.hidden = !state.open;
 	}
 
 	setState(state: DocumentFormattingState): void {

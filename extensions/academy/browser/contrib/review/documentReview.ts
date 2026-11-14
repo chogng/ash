@@ -10,7 +10,9 @@ import { findDocumentNode, type DocumentNode } from '../../../common/model/docum
 import type { DocumentEditorContributionContext, DocumentFormattingContribution, DocumentFormattingState } from '../../documentContributions.js';
 import { DocumentFormattingControls } from '../../widget/documentFormattingControls.js';
 
-export class DocumentReviewContribution extends DocumentFormattingControls implements DocumentFormattingContribution {
+interface ReviewViewState { readonly author: string; readonly comment: string; }
+
+export class DocumentReviewContribution extends DocumentFormattingControls implements DocumentFormattingContribution<ReviewViewState> {
 	private readonly rows = this._register(new DisposableStore());
 	private readonly author = this.addInput(localize('document.review.author', 'Review author'));
 	private readonly comment = this.addInput(localize('document.review.comment', 'Comment text'));
@@ -30,6 +32,9 @@ export class DocumentReviewContribution extends DocumentFormattingControls imple
 		this.list.setAttribute('aria-label', localize('document.review.list', 'Comments and block revisions'));
 		this.element.append(this.list);
 	}
+	saveViewState(): ReviewViewState { return { author: this.author.value, comment: this.comment.value }; }
+	restoreViewState(state: ReviewViewState): void { this.author.value = state.author; this.comment.value = state.comment; }
+
 	setState(state: DocumentFormattingState): void {
 		this.element.hidden = !state.document;
 		this.track.enabled = this.author.enabled = this.comment.enabled = !state.readOnly;

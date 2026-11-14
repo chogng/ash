@@ -14,7 +14,7 @@ import { ICommandService } from '../../../../src/ash/platform/commands/common/co
 import { StandaloneCommandService } from '../../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { Event } from '../../../../src/ash/base/common/event.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test, suite, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { type IDimension } from '../../../../src/ash/base/browser/dom.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';
@@ -44,6 +44,8 @@ import { createDocumentPlugin, DocumentPluginKey } from '../../common/model/docu
 import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, documentFromPlainText, serializeDocument } from '../../common/model/documentSerialization.js';
 import { createDefaultDocumentSchema, DocumentSchema } from '../../common/model/documentSchema.js';
 import { h } from '../../../../src/ash/base/browser/dom.js';
+import { DocumentTransaction } from '../../common/model/documentTransaction.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../src/ash/base/test/common/utils.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
@@ -2240,4 +2242,112 @@ test('document Accessible View includes review evidence without changing the bod
 		assert.match(pane.getAccessibleContent(), /Status: Open/);
 		assert.equal(pane.exportText('text'), 'Body');
 	} finally { environment.window.close(); }
+});
+
+
+suite('Document retained view resources', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('lazy DOCX output captures its original model version and keeps a hidden view released', async () => {
+		const environment = new JSDOM('<!doctype html><body></body>');
+		try {
+			const schema = createDefaultDocumentSchema();
+			const document = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('Before export', { id: 'export-text' })] })]);
+			const resource = URI.file('/lazy-export.ash-doc');
+			using pane = new EditorPane(environment.window.document, new MemoryTextFiles(serializeDocument(document, schema)), { schema });
+			pane.create(environment.window.document.body);
+			const signal = new AbortController().signal;
+			await pane.setInput({ resource }, signal);
+			using reference = await pane.models.acquire({ resource, codec: bindDocumentCodec(schema), contentType: 'application/vnd.ash.document+json' }, signal);
+			pane.setVisible(false);
+			const output = pane.exportArtifact('docx', signal);
+			(reference.model as DocumentTextModel).dispatch(new DocumentTransaction().replaceText('export-text', 0, 13, 'After export'));
+			const imported = await generalProfile.create().importBinary!(await output, 'docx', environment.window.document, signal);
+			assert.equal(imported.document.content[0]!.content[0]!.text, 'Before export');
+			assert.equal(pane.getDocument().content[0]!.content[0]!.text, 'After export');
+			assert.equal(environment.window.document.querySelector('.ash-text-editor-widget-layout'), null);
+		} finally { environment.window.close(); }
+	});
+
+	test('hiding during composition retains preedit until commit, then releases the view', async () => {
+		const environment = new JSDOM('<!doctype html><body></body>');
+		Object.defineProperty(environment.window.Range.prototype, 'getClientRects', { value: () => [] });
+		try {
+			const schema = createDefaultDocumentSchema();
+			const document = schema.createDocument([schema.createNode('paragraph')]);
+			using pane = new EditorPane(environment.window.document, new MemoryTextFiles(serializeDocument(document, schema)), { flowingText: true });
+			const parent = environment.window.document.body;
+			pane.create(parent);
+			await pane.setInput({ resource: URI.file('/hidden-composition.ash-doc') }, new AbortController().signal);
+			const rich = parent.querySelector<HTMLDivElement>('.stanza-document-rich-text-input')!;
+			rich.focus();
+			environment.window.document.getSelection()!.setBaseAndExtent(rich, 0, rich, 0);
+			rich.dispatchEvent(new environment.window.CompositionEvent('compositionstart', { bubbles: true }));
+			rich.textContent = '中文';
+			rich.dispatchEvent(new environment.window.InputEvent('input', { bubbles: true, isComposing: true }));
+			pane.setVisible(false);
+			assert.ok(parent.contains(rich), 'composition owns its projection until commit');
+			assert.equal(pane.isDirty, false);
+			rich.dispatchEvent(new environment.window.CompositionEvent('compositionend', { bubbles: true, data: '中文' }));
+			assert.equal(parent.querySelector('.ash-text-editor-widget-layout'), null);
+			assert.equal(pane.isDirty, true);
+			pane.setVisible(true);
+			assert.equal(parent.querySelector('.stanza-document-rich-text-input')!.textContent, '中文');
+		} finally { environment.window.close(); }
+	});
+
+	test('hidden documents release their projection and restore drafts, control input, selection and undo', async () => {
+		const environment = new JSDOM('<!doctype html><body></body>');
+		try {
+			const schema = createDefaultDocumentSchema();
+			const document = schema.createDocument([schema.createNode('paragraph', { id: 'retained-paragraph', content: [schema.createText('Original', { id: 'retained-text' })] })]);
+			const resource = URI.file('/retained.ash-doc');
+			using pane = new EditorPane(environment.window.document, new MemoryTextFiles(serializeDocument(document, schema)), { schema });
+			const parent = environment.window.document.body;
+			pane.create(parent);
+			await pane.setInput({ resource }, new AbortController().signal);
+			using reference = await pane.models.acquire({ resource, codec: bindDocumentCodec(schema), contentType: 'application/vnd.ash.document+json' }, new AbortController().signal);
+			const model = reference.model as DocumentTextModel;
+			model.dispatch(new DocumentTransaction().replaceText('retained-text', 0, 8, 'Edited'));
+			model.setSelection({ kind: 'text', anchor: { nodeId: 'retained-text', offset: 2 }, head: { nodeId: 'retained-text', offset: 4 } });
+			const copy = pane.workingCopy;
+			const selection = model.selection;
+			const setInput = (label: string, value: string) => {
+				const input = parent.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+				assert.ok(input, label);
+				input.value = value;
+				input.dispatchEvent(new environment.window.Event('input', { bubbles: true }));
+			};
+			setInput('Find text', 'Edited');
+			setInput('Replace with', 'Replacement');
+			setInput('Comment text', 'Unsent comment');
+			setInput('Style name', 'Unsubmitted style');
+			const body = parent.querySelector<HTMLElement>('.ash-text-editor-widget-pane')!;
+			body.scrollTop = 123;
+			body.scrollLeft = 17;
+			for (let iteration = 0; iteration < 3; iteration++) {
+				pane.setVisible(false);
+				assert.equal(parent.querySelector('.ash-text-editor-widget-layout'), null);
+				assert.equal(parent.querySelector('.stanza-structured-format-toolbar'), null);
+				assert.equal(pane.workingCopy, copy);
+				assert.equal(pane.isDirty, true);
+				assert.deepEqual(model.selection, selection);
+				assert.equal(model.canUndoBlocks, true);
+				pane.setVisible(true);
+				assert.equal(parent.querySelector<HTMLElement>('.ash-text-editor-widget-pane')!.scrollTop, 123);
+				assert.equal(parent.querySelector<HTMLInputElement>('input[aria-label="Find text"]')!.value, 'Edited');
+				assert.equal(parent.querySelector<HTMLInputElement>('input[aria-label="Replace with"]')!.value, 'Replacement');
+				assert.equal(parent.querySelector<HTMLInputElement>('input[aria-label="Comment text"]')!.value, 'Unsent comment');
+				assert.equal(parent.querySelector<HTMLInputElement>('input[aria-label="Style name"]')!.value, 'Unsubmitted style');
+				assert.equal(pane.getDocument().content[0]!.content[0]!.text, 'Edited');
+			}
+			pane.setVisible(false);
+			model.dispatch(new DocumentTransaction().replaceText('retained-text', 0, 6, 'Background'));
+			assert.equal(parent.querySelector('.ash-text-editor-widget-layout'), null, 'background changes must not rebuild a hidden view');
+			pane.setVisible(true);
+			assert.equal(pane.getDocument().content[0]!.content[0]!.text, 'Background');
+			model.undoBlocks();
+			assert.equal(pane.getDocument().content[0]!.content[0]!.text, 'Edited');
+		} finally { environment.window.close(); }
+	});
 });

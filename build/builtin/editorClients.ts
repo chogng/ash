@@ -86,11 +86,20 @@ export async function compileEditorClient(packageRoot: string, publicApi?: Edito
 			id = assertClientSource(id);
 			if (!id.startsWith(packageRoot + '/') || !id.endsWith('.ts')) return;
 			const source = ts.createSourceFile(id, code, ts.ScriptTarget.Latest, true);
-			const rejectDynamicImports = (node: ts.Node): void => {
-				if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) throw new Error('Editor clients must use closed static dependencies');
-				ts.forEachChild(node, rejectDynamicImports);
+			const checkDynamicImports = (node: ts.Node): void => {
+				if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+					const target = node.arguments[0];
+					// Local literal imports retain lazy initialization inside the closed bundle.
+					// Host namespaces and runtime-resolved code must not bypass named bindings or admission.
+					if (node.arguments.length !== 1 || !target || !ts.isStringLiteral(target)
+						|| !target.text.startsWith('.') || !normalizePath(resolve(dirname(id), target.text)).startsWith(packageRoot + '/')
+						|| /@(vite|rollup|rolldown)-ignore/u.test(node.getText(source))) {
+						throw new Error('Editor clients must use closed package-local dependencies');
+					}
+				}
+				ts.forEachChild(node, checkDynamicImports);
 			};
-			rejectDynamicImports(source);
+			checkDynamicImports(source);
 			for (const statement of source.statements) {
 				if ((!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement)) || !statement.moduleSpecifier || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
 				const key = publicModule(statement.moduleSpecifier.text);
@@ -117,7 +126,8 @@ export async function compileEditorClient(packageRoot: string, publicApi?: Edito
 	});
 	const outputs = Array.isArray(output) ? output.flatMap(value => value.output) : 'output' in output ? output.output : [];
 	const chunks = outputs.filter(file => file.type === 'chunk');
-	if (chunks.length !== 1 || chunks[0].dynamicImports.length !== 0 || chunks[0].imports.some(id => !id.startsWith('ash-editor-host:'))) throw new Error('Editor clients must be a single closed module');
+	// Rolldown records an inlined lazy import as a reference to the containing chunk.
+	if (chunks.length !== 1 || chunks[0].dynamicImports.some(id => id !== chunks[0].fileName) || chunks[0].imports.some(id => !id.startsWith('ash-editor-host:'))) throw new Error('Editor clients must be a single closed module');
 	const script = `export function createEditorModule(host) {\n${chunks[0].code}\nreturn editorClient;\n}\n`;
 	const css = outputs.flatMap(file => file.type === 'asset' && file.fileName.endsWith('.css') ? [String(file.source)] : []).join('\n');
 	const sheet = postcss.parse(css);

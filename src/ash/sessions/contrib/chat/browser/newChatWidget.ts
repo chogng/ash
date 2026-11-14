@@ -2,7 +2,7 @@ import { SessionBackgroundActivitiesControl } from './sessionBackgroundActivitie
 import { h } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, observableFromEvent, type IObservable } from '../../../../base/common/observable.js';
+import { autorun, constObservable, observableFromEvent, type IObservable } from '../../../../base/common/observable.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -24,7 +24,7 @@ import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/brows
 import type { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { BackgroundSendAvailableContext, ComposerSessionControls } from './sharedChatInputComposer.contribution.js';
 import { SharedChatInputComposer } from './sharedChatInputComposer.js';
-import { CODE_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
+import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
 import { NewSessionPickersAvailableContext } from './newChatPickerKeybinding.js';
 import { SessionsChatResponseFileChangesProvider } from './sessionTurnChanges.js';
@@ -130,7 +130,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 			getTurnChanges: source => turnChanges.getChangesForResponse(source),
 			messagePresentation,
 			messageActionSurface: 'code',
-			virtualizeHistoryFrom: codePresentation.map(code => code ? CODE_HISTORY_VIRTUALIZE_FROM : undefined),
+			virtualizeHistoryFrom: constObservable(CHAT_HISTORY_VIRTUALIZE_FROM),
 			welcomeTitle: codePresentation.map(code => code && !model.isNestedDraft ? null : undefined),
 		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding, configuration);
 		this.composer = this._register(composer);
