@@ -117,7 +117,7 @@ export class ContextMenuHandler extends Disposable {
 		const shadowOwner = owner?.isConnected && (!anchorDocument || owner.ownerDocument === anchorDocument) ? owner : undefined;
 		const dialogAnchor = shadowOwner ?? (isNode(anchor) ? anchor : undefined);
 		const dialog = dialogAnchor && ContextView.getContainingDialog(dialogAnchor);
-		let menuContainer = dialog?.element ?? this.contextViewService.container;
+		let menuContainer = delegate.contextViewContainer ?? dialog?.element ?? this.contextViewService.container;
 		let container: HTMLElement | ShadowRoot = menuContainer;
 		if (shadowOwner) {
 			const host = h(shadowOwner.ownerDocument, 'div');
@@ -130,7 +130,7 @@ export class ContextMenuHandler extends Disposable {
 			}
 			container = root;
 		}
-		if (shadowOwner || dialog) {
+		if (shadowOwner || dialog || delegate.contextViewContainer) {
 			// A local menu can open without replacing the containing dialog.
 			const localView = disposables.add(new ContextView(container));
 			view = localView;
@@ -192,6 +192,7 @@ export class ContextMenuHandler extends Disposable {
 		}
 		if (didHide || this.activeMenu !== request) { return false; }
 
+		delegate.onDidRenderMenu?.(view instanceof ContextView ? view.element : menu.getContainer());
 		onDidShow?.();
 		if (didHide || this.activeMenu !== request) { return false; }
 		menu.focus(delegate.autoSelectFirstItem === true);

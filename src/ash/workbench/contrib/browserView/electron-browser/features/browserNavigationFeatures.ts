@@ -16,6 +16,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { BrowserElementSelectionMode, BrowserViewStorageScope } from '../../../../../platform/browserView/common/browserView.js';
 import { ContextKeyExpr, RawContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { IAction } from '../../../../../base/common/actions.js';
+import type { IContextMenuProvider } from '../../../../../base/browser/contextmenu.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
@@ -76,12 +77,15 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		@IBrowserViewWorkbenchService browsers: IBrowserViewWorkbenchService,
 	) {
 		super(editor);
+		const pageMenus: IContextMenuProvider = {
+			showContextMenu: delegate => menus.showContextMenu({ ...delegate, useNativeWindow: true }),
+		};
 		const container = this.container = h(editor.browserContainer.ownerDocument, 'div');
 		container.className = 'ash-browser-toolbar';
 		const navigation = h(container.ownerDocument, 'div');
 		navigation.className = 'ash-browser-navigation';
 		container.append(navigation);
-		this.toolbar = this._register(new WorkbenchToolBar(navigation, menus, {
+		this.toolbar = this._register(new WorkbenchToolBar(navigation, pageMenus, {
 			ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.navigationToolbar' }, 'Browser navigation'),
 			actionViewItemProvider: (action, options) => {
 				if (action.id !== 'browser.reload' || !this.editor.model || this.editor.model.state.loading) {
@@ -90,7 +94,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 				const label = localize({ bundle: 'ash.workbench', key: 'browser.reloadMenu' }, 'More Reload Actions');
 				return new DropdownWithPrimaryActionViewItem(action, {
 					id: 'browser.reloadMenu', label, tooltip: label, enabled: true, run: () => { },
-				}, () => this.getReloadActions(), menus, options);
+				}, () => this.getReloadActions(), pageMenus, options);
 			},
 		}));
 		this.search = instantiation.createInstance(BrowserSearchFeatures);
@@ -115,13 +119,13 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		this.devToolsContext = CONTEXT_BROWSER_DEVTOOLS_OPEN.bindTo(this.pageContexts);
 		this.hasUrlContext = CONTEXT_BROWSER_HAS_URL.bindTo(this.pageContexts);
 		this.hasErrorContext = CONTEXT_BROWSER_HAS_ERROR.bindTo(this.pageContexts);
-		this._register(new MenuWorkbenchToolBar(sharing, menuService, menus, MenuId.BrowserActionsToolbar, {
+		this._register(new MenuWorkbenchToolBar(sharing, menuService, pageMenus, MenuId.BrowserActionsToolbar, {
 			ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.devToolsAction' }, 'Developer Tools'),
 			contextKeyService: this.pageContexts,
 			menuOptions: { arg: editor },
 			toolbarOptions: { primaryGroup: 'tools' },
 		}));
-		this.sharingToolbar = this._register(new WorkbenchToolBar(sharing, menus, { ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.pageActions' }, 'Page actions') }));
+		this.sharingToolbar = this._register(new WorkbenchToolBar(sharing, pageMenus, { ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.pageActions' }, 'Page actions') }));
 		this._register(this.autoReload.onDidChangeState(() => this.update(this.editor.model?.state)));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('workbench.browser.searchEngine')) { this.address.refreshUrl(); }

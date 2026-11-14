@@ -59,6 +59,8 @@ import { Lazy } from '../../base/common/lazy.js';
 import { assertDefined } from '../../base/common/types.js';
 import { AshApplicationId, AshApplicationName } from '../common/application.js';
 import { ElectronContextMenu } from '../../base/parts/contextmenu/electron-main/contextmenu.js';
+import { ContextMenuWindow } from '../../base/parts/contextmenu/electron-main/contextMenuWindow.js';
+import { isContextMenuWindowName } from '../../base/parts/contextmenu/common/contextmenu.js';
 import { ElectronMainClipboardService } from '../../platform/clipboard/electron-main/electronMainClipboardService.js';
 import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
 import { AppServerConnectionRelay } from '../../platform/agentHost/electron-main/appServerConnectionRelay.js';
@@ -2070,8 +2072,11 @@ export class AshApplication extends Disposable {
 
 	private configureWindowNavigation(window: BrowserWindow, windowDisposables: DisposableStore, titleBarStyle: TitleBarStyleConfiguration, openerWindow: BrowserWindow = window): void {
 		const auxiliaryWindows = windowDisposables.add(new DisposableMap<number, IDisposable>());
+		const menuWindows = windowDisposables.add(new ContextMenuWindow(window));
 		// Apply restored popup bounds before creation; Chromium ignores its position features here.
 		window.webContents.setWindowOpenHandler(details => {
+			const menuOptions = menuWindows.getWindowOpenOptions(details);
+			if (menuOptions) return { action: 'allow', overrideBrowserWindowOptions: menuOptions };
 			if (details.url !== 'about:blank') {
 				// The owning workbench selects URL rules; auxiliary windows share that owner.
 				try {
@@ -2089,8 +2094,9 @@ export class AshApplication extends Disposable {
 				),
 			};
 		});
-		const onDidCreateWindow = (child: BrowserWindow, details: { readonly url: string; readonly options: BrowserWindowConstructorOptions; }): void => {
+		const onDidCreateWindow = (child: BrowserWindow, details: { readonly url: string; readonly frameName: string; readonly options: BrowserWindowConstructorOptions; }): void => {
 			if (details.url !== 'about:blank') return;
+			if (isContextMenuWindowName(details.frameName)) { menuWindows.registerWindow(child); return; }
 			const childResources = new DisposableStore();
 			childResources.add(this.auxiliaryWindowsMainService.registerWindow(child.webContents, window.id, details.options));
 			const auxiliaryWindow = this.auxiliaryWindowsMainService.getWindowByWebContents(child.webContents);

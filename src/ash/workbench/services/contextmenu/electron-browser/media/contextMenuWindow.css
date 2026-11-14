@@ -1,0 +1,24 @@
+html.ash-context-menu-window,
+.ash-context-menu-window body {
+	margin: 0;
+	background: transparent;
+}
+html.ash-context-menu-window .ash-context-menu-window-content {
+	background: transparent;
+	opacity: 0;
+}
+html.ash-context-menu-window .ash-context-menu-window-content.ready {
+	opacity: 1;
+}
+
+html.ash-context-menu-window .ash-context-view {
+	max-width: var(--ash-context-menu-window-max-width);
+	max-height: var(--ash-context-menu-window-max-height);
+}
+
+html.ash-context-menu-window .ash-menu {
+	max-height: calc(
+		var(--ash-context-menu-window-max-height) - 2 *
+			var(--ash-strokeThickness)
+	);
+}

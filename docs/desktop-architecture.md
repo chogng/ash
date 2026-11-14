@@ -1316,8 +1316,8 @@ Renderer 退场先取消该服务的操作，再释放使用过的 Thread 自动
 `BrowserEditor` 只拥有地址栏、导航与页面操作。`WebContentsViewHost` 借用模型，拥有 Renderer
 中的页面定位、显示和焦点交接；分栏共享同一页面的展示队列，当前宿主隐藏或释放后由剩余宿主接管。
 切换输入先移除旧展示引用，队列重新检查当前归属；定位 IPC 期间发生关闭或归属变化时，不再显示旧页面。
-`overlayManager.ts` 中的 `BrowserOverlayManager` 跟踪 Workbench 菜单、对话框和与页面重叠的
-Quick Input、Hover、通知，遮挡期间隐藏页面，消失后恢复定位和显示，不主动抢回键盘焦点。
+`overlayManager.ts` 中的 `BrowserOverlayManager` 根据当前窗口中实际重叠的 DOM 浮层及模态对话框判断遮挡。
+菜单的透明点击遮罩也属于遮挡范围，即使菜单本体位于网页旁侧。遮挡期间隐藏页面，消失后恢复定位和显示，不主动抢回键盘焦点。
 
 Main 的页面关闭通知先送达模型监听者，Workbench 再关闭旧输入的全部页签并释放模型；同 ID 的替代输入等待旧页签关闭后才打开，清理只针对旧实例。输入退场保留最后的 URL、标题和可恢复存储范围。页面发现或状态快照失败允许重试并释放失败模型的监听器，已关闭页面的输入不会因迟到快照或重试重新创建页面。
 
@@ -1400,6 +1400,26 @@ App Server 先检查当前 `network.allowedHosts`，再通过 Core 的网络审�
 `agent/capabilities/read` 的 `sandboxDiagnostics` 区分准备通过、策略不受支持和后端不可用，并报告原因。
 检查复用实际执行的 sandbox backend，针对当前授权目录执行只读进程准备，不启动子进程；网络禁用、开放和受管模式分别检查。
 它不保证具体命令或 PTY 可以启动，这些请求仍在启动前按实际策略校验。
+
+#### 菜单与原生页面
+
+浏览器工具栏通过 `IContextMenuService` 请求自绘菜单的非模态子窗口。网页继续由 Main 的 `BrowserView` 持有；菜单窗口只承载可信界面，不转移网页、Session、Group/CDP 或编辑器归属。
+
+| Owner                                                                                                                                      | 职责                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [`BrowserNavigationFeatures`](../src/ash/workbench/contrib/browserView/electron-browser/features/browserNavigationFeatures.ts)             | 为导航、刷新和页面操作菜单选择原生窗口呈现，沿用原 `IAction` 和上下文。                                                                  |
+| [`ElectronContextMenuService`](../src/ash/workbench/services/contextmenu/electron-browser/contextMenuService.ts)                           | 协调呈现方式、请求取消、关闭原因与后继菜单。Agent Window 固定使用自绘样式；IDE 保留配置选择。                                            |
+| [`ContextMenuWindow`（Renderer）](../src/ash/workbench/services/contextmenu/electron-browser/contextMenuWindow.ts)                         | 持有临时文档，镜像来源样式、语言和主题，按按钮位置、来源缩放和屏幕可用区域定位。菜单尺寸限制独立于弹窗视口，避免窗口缩小后再次裁切菜单。 |
+| [`BrowserContextMenuService`](../src/ash/platform/contextview/browser/contextMenuService.ts)、`ContextMenuHandler`、`Menu` / `ContextView` | 保留唯一的动作执行、键盘导航、菜单 DOM、ARIA 和浮层生命周期。窗口宿主仅接收挂载 root 与几何信息。                                        |
+| [`ContextMenuWindow`（Main）](../src/ash/base/parts/contextmenu/electron-main/contextMenuWindow.ts)                                        | 创建非模态、无边框的沙箱子窗口，阻止导航和派生窗口，管理父子窗口的释放。该窗口不注册为产品窗口或辅助 EditorPart。                        |
+
+原生菜单窗口不会在来源文档中形成遮挡，不因菜单服务的可见性事件而隐藏网页。普通 DOM 菜单、Quick Input、Hover、通知及模态对话框仍经过原遮挡链；CSS `z-index` 不能覆盖原生网页。
+
+菜单动作、取消、失焦和窗口关闭均释放临时窗口、样式镜像与监听器。父窗口移动、缩放、隐藏、最小化、导航或关闭也会结束菜单。Escape 先恢复来源控件的焦点，再通知调用方；调用方随后打开的菜单或指定的焦点不能被旧请求覆盖。失焦不主动回焦。关闭回调即使抛错，已显示菜单的隐藏事件仍须发出，避免残留可见性状态。
+
+页面与模型所有权、菜单动作和 `ContextView` 的职责沿用 VS Code 的边界；独立的非模态菜单窗口是 Ash 的补强，不表示所有浏览器 API 已与上游等同。当前入口是浏览器工具栏菜单，其余浮层保留各自宿主。
+
+关闭重入、焦点交接、关闭原因和异常清理由[菜单服务测试](../src/ash/workbench/services/contextmenu/test/electron-browser/contextMenuService.test.ts)覆盖；父子窗口释放由 [Main 测试](../src/ash/base/parts/contextmenu/test/electron-main/contextMenuWindow.test.ts)覆盖；DOM 菜单及点击遮罩的网页可见性由[页面宿主测试](../src/ash/workbench/contrib/browserView/test/electron-browser/webContentsViewHost.test.ts)覆盖。macOS 实窗验证覆盖网页保持可见、Electron 滚轮输入、Escape 回焦、菜单动作、四种主题与 120% 缩放。实际系统滚轮命中及 Windows/Linux 原生输入尚未验证。
 
 ### 7.2 当前限制与计划演进
 

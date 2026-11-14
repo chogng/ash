@@ -1461,6 +1461,7 @@
     "openEditors": "打开的编辑器"
   },
   "ash.workbench": {
+    "contextMenu.windowUnavailable": "无法打开菜单。",
     "chatWindow.title": "聊天窗口",
     "chatWindow.editor": "聊天",
     "chatWindow.chatMove": "请使用“返回主窗口”移动此聊天。",

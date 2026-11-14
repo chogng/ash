@@ -20,6 +20,8 @@ export interface IBrowserOverlayInfo {
 
 const overlayRoots = new Map<string, BrowserOverlayType>([
 	['.ash-context-view', BrowserOverlayType.Menu],
+	// A menu can sit outside the page while its viewport-wide dismissal shield covers it.
+	['.ash-context-view-pointer-shield', BrowserOverlayType.Menu],
 	['.ash-quick-input-host', BrowserOverlayType.QuickInput],
 	['.ash-hover', BrowserOverlayType.Hover],
 	['.ash-dialog', BrowserOverlayType.Dialog],
@@ -34,7 +36,6 @@ const overlaySelector = [...overlayRoots.keys()].join(',');
 export class BrowserOverlayManager extends Disposable {
 	private readonly changes = this._register(new Emitter<void>());
 	public readonly onDidChangeOverlayState = this.changes.event;
-	private menuVisible = false;
 
 	constructor(
 		private readonly targetWindow: Window & typeof globalThis,
@@ -42,8 +43,8 @@ export class BrowserOverlayManager extends Disposable {
 		@IDialogsModel private readonly dialogs: IDialogsModel,
 	) {
 		super();
-		this._register(menus.onDidShowContextMenu(() => { this.menuVisible = true; this.changes.fire(); }));
-		this._register(menus.onDidHideContextMenu(() => { this.menuVisible = false; this.changes.fire(); }));
+		this._register(menus.onDidShowContextMenu(() => this.changes.fire()));
+		this._register(menus.onDidHideContextMenu(() => this.changes.fire()));
 		this._register(dialogs.onWillShowDialog(() => this.changes.fire()));
 		this._register(dialogs.onDidCloseDialog(() => this.changes.fire()));
 		const observer = new targetWindow.MutationObserver(records => {
@@ -61,9 +62,8 @@ export class BrowserOverlayManager extends Disposable {
 	public getOverlappingOverlays(element: HTMLElement): IBrowserOverlayInfo[] {
 		const bounds = element.getBoundingClientRect();
 		const rect = { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height };
-		// OS menus and queued dialogs can obscure the page before their renderer DOM exists.
+		// Queued modal dialogs must obscure the page before their renderer DOM exists.
 		if (this.dialogs.dialogs.length > 0) { return [{ type: BrowserOverlayType.Dialog, rect }]; }
-		if (this.menuVisible) { return [{ type: BrowserOverlayType.Menu, rect }]; }
 		const overlays: IBrowserOverlayInfo[] = [];
 		for (const overlay of this.targetWindow.document.querySelectorAll<HTMLElement>(overlaySelector)) {
 			if (overlay.closest('[hidden]')) { continue; }

@@ -16,6 +16,22 @@ import { WebContentsViewHost } from '../../electron-browser/webContentsViewHost.
 
 suite('Browser page presentation', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	for (const detached of [true, false]) {
+		test(`${detached ? 'closing' : 'attached'} page handles a late unavailable presentation response`, async () => {
+			using f = fixture();
+			const pending = promiseWithResolvers<void>();
+			const started = promiseWithResolvers<void>();
+			f.service.setVisible = async () => { started.resolve(); await pending.promise; throw new Error('BrowserTargetUnavailable'); };
+			const host = f.host(10);
+			host.setModel(f.model('page'));
+			host.setVisible(true);
+			await started.promise;
+			if (detached) host.setModel(undefined);
+			pending.resolve();
+			await new Promise(resolve => setImmediate(resolve));
+			assert.equal(f.errors.length, detached ? 0 : 1);
+		});
+	}
 
 	test('switching the host input hides the previous page and presents the new one', async () => {
 		using f = fixture();
@@ -87,15 +103,22 @@ suite('Browser page presentation', () => {
 		assert.deepEqual([host.tryFocus(), [...f.visible], f.focused], [false, [], []]);
 	});
 
-	test('menus obscure the page and dismissal restores it without taking keyboard focus', async () => {
+	test('native menus keep the page visible while overlapping DOM menus obscure it', async () => {
 		using f = fixture();
 		const host = f.host(10);
 		host.setModel(f.model('page'));
 		host.setVisible(true);
 		await settle(() => f.visible.get('page') === true);
 		f.menuShown.fire();
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(f.visible.get('page'), true);
+		const menu = f.dom.window.document.createElement('div');
+		menu.className = 'ash-context-view';
+		menu.getBoundingClientRect = () => new f.dom.window.DOMRect(20, 20, 100, 100);
+		f.dom.window.document.body.append(menu);
 		await settle(() => f.visible.get('page') === false);
 		assert.equal(host.tryFocus(), false);
+		menu.remove();
 		f.menuHidden.fire();
 		await settle(() => f.visible.get('page') === true);
 		assert.deepEqual(f.focused, []);
@@ -121,6 +144,31 @@ suite('Browser page presentation', () => {
 		await settle(() => f.visible.get('page') === true);
 		assert.deepEqual(f.focused, []);
 	});
+
+	test('a DOM menu outside the page still obscures it through its pointer shield', async () => {
+		using f = fixture();
+		const host = f.host(10);
+		host.setModel(f.model('page'));
+		host.setVisible(true);
+		await settle(() => f.visible.get('page') === true);
+		const menu = f.dom.window.document.createElement('div');
+		menu.className = 'ash-context-view';
+		menu.getBoundingClientRect = () => new f.dom.window.DOMRect(600, 20, 100, 100);
+		f.dom.window.document.body.append(menu);
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(f.visible.get('page'), true);
+		const shield = f.dom.window.document.createElement('div');
+		shield.className = 'ash-context-view-pointer-shield';
+		shield.getBoundingClientRect = () => new f.dom.window.DOMRect(0, 0, 1000, 800);
+		menu.append(shield);
+		f.menuShown.fire();
+		await settle(() => f.visible.get('page') === false);
+		assert.equal(host.tryFocus(), false);
+		menu.remove();
+		f.menuHidden.fire();
+		await settle(() => f.visible.get('page') === true);
+		assert.deepEqual(f.focused, []);
+	});
 });
 
 function fixture(): DisposableStore & {
@@ -132,6 +180,7 @@ function fixture(): DisposableStore & {
 	visible: Map<string, boolean>;
 	bounds: Map<string, IBrowserViewBounds>;
 	focused: string[];
+	errors: unknown[];
 	model(id: string): BrowserViewModel;
 	host(left: number): WebContentsViewHost;
 } {
@@ -150,6 +199,7 @@ function fixture(): DisposableStore & {
 	const visible = new Map<string, boolean>();
 	const bounds = new Map<string, IBrowserViewBounds>();
 	const focused: string[] = [];
+	const errors: unknown[] = [];
 	const service = {
 		onDidEvent: events.event,
 		layout: async (id: string, value: IBrowserViewBounds) => { bounds.set(id, value); },
@@ -159,12 +209,14 @@ function fixture(): DisposableStore & {
 	const dialogs = store.add(new DialogsModel());
 	const instantiation = store.add(new InstantiationService(new ServiceCollection(
 		[IBrowserViewService, service],
-		[ILogService, new NullLoggerService()],
+		[ILogService, new class extends NullLoggerService {
+			override error(_category: string | Error, message?: unknown): void { errors.push(message); }
+		}()],
 		[IDialogsModel, dialogs],
 		[IContextMenuService, { onDidShowContextMenu: menuShown.event, onDidHideContextMenu: menuHidden.event, showContextMenu() { }, hideContextMenu() { } }],
 	)));
 	return Object.assign(store, {
-		dom, service, events, menuShown, menuHidden, visible, bounds, focused,
+		dom, service, events, menuShown, menuHidden, visible, bounds, focused, errors,
 		model: (id: string) => store.add(instantiation.createInstance(BrowserViewModel, {
 			id, host: { windowId: 1 }, owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace },
 			state: { targetId: id, url: 'https://example.test/', title: id, loading: false, visible: false, canGoBack: false, canGoForward: false },

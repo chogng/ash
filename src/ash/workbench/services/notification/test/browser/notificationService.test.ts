@@ -761,7 +761,7 @@ class NotificationsPresentation extends Disposable {
 		}
 		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService(registry)));
 		this.services.registerInstance(ILayoutService, this._register(new BrowserLayoutService({ root })));
-		this.menus = this._register(systemMenu ? this.services.createInstance(ElectronContextMenuService, systemMenu) : this.services.createInstance(BrowserContextMenuService));
+		this.menus = this._register(systemMenu ? this.services.createInstance(ElectronContextMenuService, systemMenu, 'configuration') : this.services.createInstance(BrowserContextMenuService));
 		this.services.registerInstance(IContextMenuService, this.menus);
 		this.center = this._register(this.services.createInstance(NotificationsCenter, root, service.model, toastContainer, runner, statusbar, undefined));
 		this.services.registerInstance(INotificationsCenter, this.center);

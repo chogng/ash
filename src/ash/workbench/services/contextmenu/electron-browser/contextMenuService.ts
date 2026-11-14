@@ -34,13 +34,14 @@ import type {
 	ContextMenuAnchor,
 	IContextMenuDelegate,
 } from '../../../../base/browser/contextmenu.js';
-import { AnchorAlignment, AnchorAxisAlignment } from '../../../../base/browser/ui/contextview/contextview.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
 import { transformContextMenuDelegate } from '../../../../platform/contextview/browser/contextMenuService.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import type {
 	IContextMenuMenuDelegate,
 	IContextMenuService,
 } from '../../../../platform/contextview/browser/contextView.js';
+import { ContextMenuWindow } from './contextMenuWindow.js';
 
 interface ISystemMenuPopup {
 	readonly delegate: IContextMenuDelegate;
@@ -312,28 +313,32 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 	private systemVisible = 0;
 	private browserVisible = 0;
 	private usesSystemMenu: boolean;
+	private readonly menuWindowLifetimes = this._register(new DisposableMap<ContextMenuWindow, DisposableStore>());
+	private menuWindow: { readonly host: ContextMenuWindow; hide(): void; } | undefined;
+	private menuRequest = 0;
 
 	readonly onDidShowContextMenu = this._onDidShowContextMenu.event;
 	readonly onDidHideContextMenu = this._onDidHideContextMenu.event;
 
 	constructor(
 		api: INativeContextMenuApi,
+		menuStyle: 'configuration' | 'custom',
 		@IConfigurationService configurationService: IConfigurationService,
 		@IMenuService menuService: IMenuService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IKeybindingService keybindingService: IKeybindingService,
-		@IContextViewService contextViewService: IContextViewService,
-		@INotificationService notificationService: INotificationService,
+		@IContextViewService private readonly contextViews: IContextViewService,
+		@INotificationService private readonly windowNotifications: INotificationService,
 	) {
 		super();
-		this.usesSystemMenu = hasSystemContextMenu(configurationService);
-		this.systemMenu = this._register(new NativeContextMenuService(api, menuService, contextKeyService, keybindingService, notificationService));
-		this.browserMenu = this._register(new BrowserContextMenuService(menuService, contextKeyService, keybindingService, contextViewService, notificationService));
+		this.usesSystemMenu = menuStyle === 'configuration' && hasSystemContextMenu(configurationService);
+		this.systemMenu = this._register(new NativeContextMenuService(api, menuService, contextKeyService, keybindingService, this.windowNotifications));
+		this.browserMenu = this._register(new BrowserContextMenuService(menuService, contextKeyService, keybindingService, this.contextViews, this.windowNotifications));
 		this._register(this.systemMenu.onDidShowContextMenu(() => this.setVisible('system', true)));
 		this._register(this.systemMenu.onDidHideContextMenu(() => this.setVisible('system', false)));
 		this._register(this.browserMenu.onDidShowContextMenu(() => this.setVisible('browser', true)));
 		this._register(this.browserMenu.onDidHideContextMenu(() => this.setVisible('browser', false)));
-		if (isMacintosh) {
+		if (isMacintosh && menuStyle === 'configuration') {
 			this._register(configurationService.onDidChangeConfiguration(event => {
 				if (!event.affectsConfiguration(MenuSettings.MenuStyle)) return;
 				const useSystemMenu = hasSystemContextMenu(configurationService);
@@ -355,6 +360,7 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 	}
 
 	showContextMenu(delegate: IContextMenuDelegate | IContextMenuMenuDelegate): void {
+		const request = ++this.menuRequest;
 		if (this.isDisposed || delegate.cancellationToken?.isCancellationRequested) {
 			delegate.onHide?.(true);
 			return;
@@ -364,6 +370,12 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 			delegate.onHide?.(true);
 			return;
 		}
+		if (delegate.useNativeWindow) {
+			this.showMenuWindow(delegate, anchor, request);
+			return;
+		}
+		this.menuWindow?.hide();
+		if (request !== this.menuRequest) { delegate.onHide?.(true); return; }
 		// Electron Menu.popup cannot align its right edge with an element on the right side of the window.
 		const rightHandTrigger = isNode(anchor) && delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal && delegate.anchorAlignment === AnchorAlignment.Left;
 		// Custom styling and icon placement need the browser menu's DOM, including on macOS.
@@ -374,8 +386,80 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 		menu.showContextMenu({ ...delegate, getAnchor: () => anchor });
 	}
 
+	private showMenuWindow(delegate: IContextMenuDelegate | IContextMenuMenuDelegate, anchor: ContextMenuAnchor, request: number): void {
+		this.hideContextMenu();
+		if (this.isDisposed || this.menuWindow || request !== this.menuRequest || delegate.cancellationToken?.isCancellationRequested) {
+			delegate.onHide?.(true);
+			return;
+		}
+		let host: ContextMenuWindow;
+		try {
+			host = new ContextMenuWindow(anchor, this.contextViews.container);
+		} catch (error) {
+			delegate.onHide?.(true);
+			this.windowNotifications.error(toErrorMessage(error));
+			return;
+		}
+		const lifetime = this.menuWindowLifetimes.set(host, new DisposableStore());
+		let closed = false;
+		let mounted = false;
+		let closingReason: ContextViewHideReason | undefined;
+		const finish = (didCancel: boolean, reason?: ContextViewHideReason): void => {
+			if (closed) return;
+			closed = true;
+			if (this.menuWindow?.host === host) this.menuWindow = undefined;
+			try {
+				this.menuWindowLifetimes.deleteAndDispose(host);
+				// Match ContextView: restore before notifying a caller that may open or focus another surface.
+				if (
+					didCancel && reason === ContextViewHideReason.Escape &&
+					request === this.menuRequest && !this.isDisposed
+				) {
+					host.restoreSourceFocus();
+				}
+			} finally {
+				delegate.onHide?.(didCancel, reason);
+			}
+		};
+		const hide = (reason = ContextViewHideReason.Programmatic): void => {
+			if (closed) return;
+			closingReason = reason;
+			if (mounted) this.browserMenu.hideContextMenu();
+			finish(true, reason);
+		};
+		this.menuWindow = { host, hide };
+		lifetime.add(toDisposable(() => finish(true, ContextViewHideReason.Programmatic)));
+		lifetime.add(host);
+		if (delegate.cancellationToken) lifetime.add(delegate.cancellationToken.onCancellationRequested(() => hide()));
+		host.onBlur(() => hide(ContextViewHideReason.WindowBlur));
+		void host.whenReady.then(() => {
+			if (closed || this.isDisposed || delegate.cancellationToken?.isCancellationRequested) return;
+			mounted = true;
+			this.browserMenu.showContextMenu({
+				...delegate,
+				getAnchor: () => ({ x: 4, y: 0, targetWindow: host.window }),
+				domForShadowRoot: undefined,
+				contextViewContainer: host.container,
+				anchorAlignment: AnchorAlignment.Left,
+				anchorAxisAlignment: AnchorAxisAlignment.Vertical,
+				anchorPosition: AnchorPosition.Below,
+				gap: 4,
+				onDidRenderMenu: root => { host.layout(root); delegate.onDidRenderMenu?.(root); },
+				onHide: (cancelled, reason) => finish(cancelled, closingReason ?? reason),
+			});
+		}).catch(error => {
+			hide();
+			if (!this.isDisposed) this.windowNotifications.error(toErrorMessage(error));
+		});
+	}
+
 	hideContextMenu(): void {
+		// Closing a host can synchronously open a successor through the caller's hide callback.
+		const request = this.menuRequest;
+		this.menuWindow?.hide();
+		if (request !== this.menuRequest) return;
 		this.systemMenu.hideContextMenu();
+		if (request !== this.menuRequest) return;
 		this.browserMenu.hideContextMenu();
 	}
 }

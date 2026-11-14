@@ -3,6 +3,12 @@ export const NATIVE_CONTEXT_MENU_POPUP_CHANNEL =
 export const NATIVE_CONTEXT_MENU_CLOSE_CHANNEL =
 	'ash:context-menu:close';
 
+export const CONTEXT_MENU_WINDOW_NAME_PREFIX = 'ash-context-menu-';
+
+export function isContextMenuWindowName(name: string): boolean {
+	return /^ash-context-menu-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(name);
+}
+
 export interface INativeContextMenuSeparator {
 	readonly type: 'separator';
 }

@@ -39,7 +39,8 @@ import { createAppServerWorkspaceTrustApi } from '../../platform/workspace/brows
 import { DEVELOPMENT_DIR_PERMISSIONS, hasDevelopmentPermissions } from '../../platform/workspace/common/workspaceTrust.js';
 import { ISessionFolderAuthorizationService } from '../common/sessionWorkspace.js';
 import { WorkspaceTrustPrompt } from '../../workbench/contrib/workspace/browser/workspace.contribution.js';
-import { BrowserContextMenuService } from '../../platform/contextview/browser/contextMenuService.js';
+import { ElectronContextMenuService } from '../../workbench/services/contextmenu/electron-browser/contextMenuService.js';
+import * as nativeContextMenu from '../../base/parts/contextmenu/electron-browser/contextmenu.js';
 import type { SessionsProfile } from '../common/sessionsProfile.js';
 import type { Workbench } from '../browser/workbench.js';
 import { createSessionsWorkbench } from '../browser/workbenchFactory.js';
@@ -458,8 +459,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				openIdeExtensions: options => invoke<void>(OPEN_IDE_EXTENSIONS_CHANNEL, options),
 				createUserDataFileSystemProvider: async () =>
 					new FileUserDataProvider(api.localFiles, api.userDataHome),
-				// Keep content menus in the window's themed DOM, independently of IDE menu preferences.
-				createContextMenuService: services => services.createInstance(BrowserContextMenuService),
+				// Keep custom styling while allowing menus to render above native page views.
+				createContextMenuService: services => services.createInstance(ElectronContextMenuService, nativeContextMenu, 'custom'),
 				createHostColorSchemeService: services => {
 					const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
 					void colors.initialize().catch(onUnexpectedError);

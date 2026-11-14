@@ -360,6 +360,8 @@
 		"--ash-color-picker-opaque",
 		"--ash-color-picker-saturation",
 		"--ash-color-picker-value",
+		"--ash-context-menu-window-max-height",
+		"--ash-context-menu-window-max-width",
 		"--ash-context-view-anchor-offset",
 		"--ash-context-view-layer",
 		"--ash-dialog-form-header-height",

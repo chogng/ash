@@ -51,8 +51,11 @@ export class BrowserContextMenuService extends Disposable
 		this.handler.showContextMenu({
 			...resolved,
 			onHide: (didCancel, reason) => {
-				resolved.onHide?.(didCancel, reason);
-				if (didShow) this._onDidHideContextMenu.fire();
+				try {
+					resolved.onHide?.(didCancel, reason);
+				} finally {
+					if (didShow) this._onDidHideContextMenu.fire();
+				}
 			},
 		}, () => {
 			didShow = true;

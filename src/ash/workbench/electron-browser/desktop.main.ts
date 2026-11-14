@@ -347,7 +347,7 @@ export class DesktopMain extends Disposable {
 				clipboardService: new ElectronRendererClipboardService(),
 				dialogHandler: new NativeDialogHandler(local.nativeHost, container),
 				userThemeService: userThemes,
-				createContextMenuService: services => services.createInstance(ElectronContextMenuService, local.nativeContextMenu),
+				createContextMenuService: services => services.createInstance(ElectronContextMenuService, local.nativeContextMenu, 'configuration'),
 				createAuxiliaryWindowService: (owner, root, services) => services.createInstance(ElectronAuxiliaryWindowService, owner, root),
 				createTitleService: (container, productName, groups, services) => services.createInstance(ElectronTitleService, container, productName, createElectronTitlebarPartFactory(), groups),
 			}));

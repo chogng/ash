@@ -10,7 +10,8 @@ import { CommandService } from '../../../commands/common/commandService.js';
 import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
 import { ElectronContextMenuService } from '../../electron-browser/contextMenuService.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { JSDOM } from 'jsdom';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -264,7 +265,7 @@ test('macOS switches context menu implementation when the menu style changes', a
 	services.registerInstance(IKeybindingService, keybindingService);
 	services.registerInstance(IContextViewService, contextView);
 	services.registerInstance(INotificationService, { error: (error: unknown) => { throw error; } } as unknown as INotificationService);
-	using service = services.createInstance(ElectronContextMenuService, api);
+	using service = services.createInstance(ElectronContextMenuService, api, 'configuration');
 	assert.equal(service.contextMenuStyle, isMacintosh ? 'system' : 'custom');
 	const events: string[] = [];
 	using shown = service.onDidShowContextMenu(() => events.push('show'));
@@ -303,12 +304,12 @@ test('Electron context menus reject missing window services without retaining re
 	using services = new InstantiationService();
 	const tracker = new DisposableTracker();
 	using tracking = installDisposableTracker(tracker);
-	assert.throws(() => services.createInstance(ElectronContextMenuService, api), /configurationService/);
+	assert.throws(() => services.createInstance(ElectronContextMenuService, api, 'configuration'), /configurationService/);
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IMenuService, {} as IMenuService);
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(IKeybindingService, {} as IKeybindingService);
-	assert.throws(() => services.createInstance(ElectronContextMenuService, api), /contextViewService/);
+	assert.throws(() => services.createInstance(ElectronContextMenuService, api, 'configuration'), /contextViewService/);
 	tracker.assertNoLeaks();
 });
 
@@ -352,7 +353,7 @@ class SystemMenuFixture extends Disposable {
 	readonly closeAcknowledged = promiseWithResolvers<void>();
 	closeRequests = 0;
 
-	constructor(options: { delayClose?: boolean; close?: () => Promise<void>; } = {}) {
+	constructor(options: { delayClose?: boolean; close?: () => Promise<void>; menuStyle?: 'configuration' | 'custom'; } = {}) {
 		super();
 		const browser = new JSDOM('<!doctype html><body><button id="origin">Origin</button></body>');
 		this._register(toDisposable(() => browser.window.close()));
@@ -393,7 +394,7 @@ class SystemMenuFixture extends Disposable {
 				return Promise.resolve();
 			},
 		};
-		this.menus = this._register(services.createInstance(ElectronContextMenuService, popupApi));
+		this.menus = this._register(services.createInstance(ElectronContextMenuService, popupApi, options.menuStyle ?? 'configuration'));
 		this._register(this.menus.onDidShowContextMenu(() => this.events.push('show')));
 		this._register(this.menus.onDidHideContextMenu(() => this.events.push('hide')));
 	}
@@ -663,4 +664,255 @@ test('system cancellation does not close a different window menu or steal its fo
 	source.cancel();
 	await old;
 	assert.deepEqual({ label: second.document.querySelector('[role="menuitem"]')?.textContent, focus: second.document.activeElement, closes: second.closeRequests }, { label: 'Second', focus, closes: 0 });
+});
+
+test('custom Desktop menus render in a separate document and release it after an action', async () => {
+	using fixture = new SystemMenuFixture({ menuStyle: 'custom' });
+	using popup = new MenuWindowFixture(fixture.document);
+	let runs = 0;
+	let hides = 0;
+	fixture.menus.showContextMenu({
+		getAnchor: () => fixture.document.getElementById('origin')!,
+		getActions: () => [{ ...menuAction('Select'), run() { runs++; } }],
+		useNativeWindow: true,
+		onHide: () => { hides++; },
+	});
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(fixture.document.querySelector('[role="menu"]'), null);
+	assert.equal(popup.document.querySelector('[role="menuitem"]')?.textContent, 'Select');
+	assert.deepEqual(fixture.events, ['show']);
+	(popup.document.querySelector('[role="menuitem"]') as HTMLElement).click();
+	await new Promise(resolve => setImmediate(resolve));
+	assert.deepEqual({ runs, hides, closed: popup.closed, events: fixture.events, systemPopups: fixture.popups.length }, { runs: 1, hides: 1, closed: true, events: ['show', 'hide'], systemPopups: 0 });
+});
+
+test('cancelling a menu window before it mounts closes it and hides the request once', async () => {
+	using fixture = new SystemMenuFixture({ menuStyle: 'custom' });
+	using popup = new MenuWindowFixture(fixture.document);
+	using source = new CancellationTokenSource();
+	let hides = 0;
+	fixture.menus.showContextMenu({
+		getAnchor: () => fixture.document.getElementById('origin')!,
+		getActions: () => [menuAction('Cancelled')],
+		useNativeWindow: true,
+		cancellationToken: source.token,
+		onHide: () => { hides++; },
+	});
+	source.cancel();
+	await new Promise(resolve => setImmediate(resolve));
+	fixture.menus.hideContextMenu();
+	assert.deepEqual({ hides, closed: popup.closed, events: fixture.events }, { hides: 1, closed: true, events: [] });
+	assert.equal(popup.document.querySelector('[role="menu"]'), null);
+});
+
+test('a menu window follows source accessibility and theme changes until it closes', async () => {
+	using fixture = new SystemMenuFixture({ menuStyle: 'custom' });
+	using popup = new MenuWindowFixture(fixture.document);
+	const source = fixture.document.documentElement;
+	source.setAttribute('lang', 'zh-CN');
+	source.setAttribute('data-color-theme', 'ash-high-contrast-dark');
+	source.classList.add('hc-black', 'ash-high-contrast');
+	fixture.menus.showContextMenu({
+		getAnchor: () => fixture.document.getElementById('origin')!,
+		getActions: () => [menuAction('Select')],
+		useNativeWindow: true,
+	});
+	await new Promise(resolve => setImmediate(resolve));
+	const root = popup.document.documentElement;
+	assert.equal(root.lang, 'zh-CN');
+	assert.equal(root.getAttribute('data-color-theme'), 'ash-high-contrast-dark');
+	assert.equal(root.classList.contains('hc-black'), true);
+	source.setAttribute('dir', 'rtl');
+	source.setAttribute('data-color-theme', 'ash-high-contrast-light');
+	source.classList.replace('hc-black', 'hc-light');
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(root.dir, 'rtl');
+	assert.equal(root.getAttribute('data-color-theme'), 'ash-high-contrast-light');
+	assert.equal(root.classList.contains('hc-black'), false);
+	assert.equal(root.classList.contains('hc-light'), true);
+	fixture.menus.hideContextMenu();
+	source.setAttribute('data-color-theme', 'ash-dark');
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(popup.closed, true);
+	assert.equal(root.getAttribute('data-color-theme'), 'ash-high-contrast-light');
+});
+
+class MenuWindowFixture extends Disposable {
+	readonly document: Document;
+	closed = false;
+
+	constructor(sourceDocument: Document) {
+		super();
+		const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>');
+		this._register(toDisposable(() => dom.window.close()));
+		this.document = dom.window.document;
+		Object.defineProperty(dom.window, 'closed', { get: () => this.closed });
+		dom.window.resizeTo = () => { };
+		dom.window.moveTo = () => { };
+		const originalClose = dom.window.close.bind(dom.window);
+		dom.window.close = () => { this.closed = true; };
+		this._register(toDisposable(originalClose));
+		const source = sourceDocument.defaultView!;
+		const open = source.open;
+		source.open = () => dom.window as unknown as Window;
+		this._register(toDisposable(() => { source.open = open; }));
+	}
+}
+
+test('a blocked menu window resets its trigger and reports a localized failure', () => {
+	using fixture = new SystemMenuFixture({ menuStyle: 'custom' });
+	const source = fixture.document.defaultView!;
+	const originalOpen = source.open;
+	source.open = () => null;
+	using restore = toDisposable(() => { source.open = originalOpen; });
+	let hides = 0;
+	fixture.menus.showContextMenu({
+		getAnchor: () => fixture.document.getElementById('origin')!,
+		getActions: () => [menuAction('Blocked')],
+		useNativeWindow: true,
+		onHide: () => { hides++; },
+	});
+	assert.equal(hides, 1);
+	assert.deepEqual(fixture.events, []);
+	assert.deepEqual(fixture.notifications.model.getNotifications().map(item => item.message), ['Unable to open menu.']);
+});
+
+test('cancelling an unmounted native menu preserves a successor opened by its hide callback', async () => {
+	using fixture = new SystemMenuFixture({ menuStyle: 'custom' });
+	using first = new MenuWindowFixture(fixture.document);
+	using second = new MenuWindowFixture(fixture.document);
+	using cancellation = new CancellationTokenSource();
+	const source = fixture.document.defaultView!;
+	const originalOpen = source.open;
+	let opens = 0;
+	source.open = () => opens++ === 0 ? first.document.defaultView : second.document.defaultView;
+	using restore = toDisposable(() => { source.open = originalOpen; });
+	fixture.menus.showContextMenu({
+		getAnchor: () => fixture.document.getElementById('origin')!,
+		getActions: () => [menuAction('Retired')],
+		useNativeWindow: true,
+		cancellationToken: cancellation.token,
+		onHide: () => fixture.menus.showContextMenu({
+			getAnchor: () => fixture.document.getElementById('origin')!,
+			getActions: () => [menuAction('Successor')],
+			useNativeWindow: true,
+		}),
+	});
+	cancellation.cancel();
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(first.closed, true);
+	assert.equal(second.closed, false);
+	assert.equal(second.document.querySelector('[role="menuitem"]')?.textContent, 'Successor');
+	fixture.menus.hideContextMenu();
+	assert.equal(second.closed, true);
+	assert.deepEqual(fixture.events, ['show', 'hide']);
+});
+
+suite('Native menu dismissal', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('Escape does not return focus over a successor opened by the hide callback', async () => {
+		using fixture = new SystemMenuFixture({ menuStyle: 'custom' });
+		using first = new MenuWindowFixture(fixture.document);
+		using second = new MenuWindowFixture(fixture.document);
+		const source = fixture.document.defaultView!;
+		let opens = 0;
+		let sourceFocuses = 0;
+		let focusAtSuccessor = 0;
+		source.open = () => opens++ === 0 ? first.document.defaultView : second.document.defaultView;
+		source.focus = () => { sourceFocuses++; };
+		const anchor = fixture.document.getElementById('origin')!;
+		fixture.menus.showContextMenu({
+			getAnchor: () => anchor,
+			getActions: () => [menuAction('Old')],
+			useNativeWindow: true,
+			onHide: () => {
+				fixture.menus.showContextMenu({
+					getAnchor: () => anchor,
+					getActions: () => [menuAction('Successor')],
+					useNativeWindow: true,
+				});
+				focusAtSuccessor = sourceFocuses;
+			},
+		});
+		await new Promise(resolve => setImmediate(resolve));
+		first.document.dispatchEvent(new first.document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(first.closed, true);
+		assert.equal(second.closed, false);
+		assert.equal(second.document.querySelector('[role="menuitem"]')?.textContent, 'Successor');
+		assert.equal(sourceFocuses, focusAtSuccessor);
+	});
+
+	test('closing a native menu preserves a DOM successor opened by its hide callback', async () => {
+		using fixture = new SystemMenuFixture({ menuStyle: 'custom' });
+		using popup = new MenuWindowFixture(fixture.document);
+		fixture.menus.showContextMenu({
+			getAnchor: () => fixture.document.getElementById('origin')!,
+			getActions: () => [menuAction('Old')],
+			useNativeWindow: true,
+			onHide: () => fixture.showBrowser('Successor'),
+		});
+		await new Promise(resolve => setImmediate(resolve));
+		fixture.menus.hideContextMenu();
+		assert.equal(popup.closed, true);
+		assert.equal(fixture.document.querySelector('[role="menuitem"]')?.textContent, 'Successor');
+		assert.deepEqual(fixture.hidden, []);
+	});
+
+	test('Escape leaves focus chosen by the dismissal callback intact', async () => {
+		using fixture = new SystemMenuFixture({ menuStyle: 'custom' });
+		using popup = new MenuWindowFixture(fixture.document);
+		fixture.document.defaultView!.focus = () => { };
+		const next = fixture.document.createElement('button');
+		fixture.document.body.append(next);
+		fixture.menus.showContextMenu({
+			getAnchor: () => fixture.document.getElementById('origin')!,
+			getActions: () => [menuAction('Old')],
+			useNativeWindow: true,
+			onHide: () => next.focus(),
+		});
+		await new Promise(resolve => setImmediate(resolve));
+		popup.document.dispatchEvent(new popup.document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		assert.equal(popup.closed, true);
+		assert.equal(fixture.document.activeElement, next);
+	});
+
+	test('losing the native window preserves the blur reason without restoring source focus', async () => {
+		using fixture = new SystemMenuFixture({ menuStyle: 'custom' });
+		using popup = new MenuWindowFixture(fixture.document);
+		let sourceFocuses = 0;
+		fixture.document.defaultView!.focus = () => { sourceFocuses++; };
+		const reasons: (ContextViewHideReason | undefined)[] = [];
+		fixture.menus.showContextMenu({
+			getAnchor: () => fixture.document.getElementById('origin')!,
+			getActions: () => [menuAction('Old')],
+			useNativeWindow: true,
+			onHide: (_cancelled, reason) => reasons.push(reason),
+		});
+		await new Promise(resolve => setImmediate(resolve));
+		popup.document.defaultView!.dispatchEvent(new popup.document.defaultView!.Event('blur'));
+		assert.equal(popup.closed, true);
+		assert.deepEqual(reasons, [ContextViewHideReason.WindowBlur]);
+		assert.equal(sourceFocuses, 0);
+		assert.deepEqual(fixture.events, ['show', 'hide']);
+	});
+
+	test('a failing dismissal callback still releases visibility and window resources', async () => {
+		using fixture = new SystemMenuFixture({ menuStyle: 'custom' });
+		using popup = new MenuWindowFixture(fixture.document);
+		fixture.menus.showContextMenu({
+			getAnchor: () => fixture.document.getElementById('origin')!,
+			getActions: () => [menuAction('Old')],
+			useNativeWindow: true,
+			onHide: () => { throw new Error('Fixture dismissal failure'); },
+		});
+		await new Promise(resolve => setImmediate(resolve));
+		assert.throws(() => fixture.menus.hideContextMenu(), /Fixture dismissal failure/);
+		assert.equal(popup.closed, true);
+		assert.deepEqual(fixture.events, ['show', 'hide']);
+		fixture.showBrowser('Next');
+		assert.equal(fixture.document.querySelector('[role="menuitem"]')?.textContent, 'Next');
+		assert.deepEqual(fixture.events, ['show', 'hide', 'show']);
+	});
 });
