@@ -1,5 +1,6 @@
 use std::fs;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 use ash_file_access::Dir;
 use tempfile::TempDir;
@@ -34,6 +35,90 @@ fn source_limited_index(directory: &TempDir) -> Codebase {
         .with_target_chunk_bytes(NonZeroUsize::new(32).unwrap())
         .with_max_chunk_bytes(NonZeroUsize::new(64).unwrap());
     Codebase::open_memory(Dir::open_local(directory.path()).unwrap(), limits).unwrap()
+}
+
+#[test]
+fn reconciliation_reuses_only_the_current_chunking_policy() {
+    let directory = dir();
+    fs::write(
+        directory.path().join("text.txt"),
+        "a line of text\n".repeat(200),
+    )
+    .unwrap();
+    let root = Dir::open_local(directory.path()).unwrap();
+    let store = Arc::new(crate::memory_store::InMemoryCodebaseIndexStore::default());
+    let old_limits = CodebaseLimits::default()
+        .with_target_chunk_bytes(NonZeroUsize::new(256).unwrap())
+        .with_max_chunk_bytes(NonZeroUsize::new(512).unwrap())
+        .with_max_chunks_per_file(NonZeroUsize::new(1).unwrap());
+    let original = Codebase::open(root.clone(), store.clone(), old_limits).unwrap();
+    assert_eq!(original.rebuild().unwrap().truncated_file_count, 1);
+    let limits = CodebaseLimits::default()
+        .with_target_chunk_bytes(NonZeroUsize::new(64).unwrap())
+        .with_max_chunk_bytes(NonZeroUsize::new(128).unwrap());
+    let reopened = Codebase::open(root.clone(), store, limits.clone()).unwrap();
+    let snapshot = reopened.reconcile().unwrap();
+    assert_eq!(snapshot.generation, 2);
+    assert_eq!(snapshot.truncated_file_count, 0);
+    assert!(snapshot.indexed_chunk_count > 1);
+    let fresh = Codebase::open_memory(root, limits).unwrap();
+    fresh.rebuild().unwrap();
+    assert_eq!(
+        reopened.manifest().unwrap().chunks,
+        fresh.manifest().unwrap().chunks
+    );
+    assert_eq!(reopened.reconcile().unwrap(), snapshot);
+    // Exact watcher updates must also honor a changed policy, including unchanged text.
+    let reset = original
+        .refresh_observed_paths(&[directory.path().join("text.txt")])
+        .unwrap();
+    let RefreshOutcome::Rebuilt(reset) = reset else {
+        panic!("policy change must reconcile");
+    };
+    assert_eq!(reset.truncated_file_count, 1);
+}
+
+#[test]
+fn reconciliation_matches_a_fresh_scan_when_limits_and_eligibility_move() {
+    let directory = dir();
+    for name in ["a.txt", "b.txt", "c.txt"] {
+        fs::write(directory.path().join(name), "a line of text\n".repeat(3)).unwrap();
+    }
+    let limits = CodebaseLimits::default()
+        .with_max_files(NonZeroUsize::new(2).unwrap())
+        .with_max_file_bytes(NonZeroUsize::new(64).unwrap())
+        .with_max_total_source_bytes(NonZeroUsize::new(80).unwrap())
+        .with_target_chunk_bytes(NonZeroUsize::new(32).unwrap())
+        .with_max_chunk_bytes(NonZeroUsize::new(64).unwrap());
+    let root = Dir::open_local(directory.path()).unwrap();
+    let index = Codebase::open_memory(root.clone(), limits.clone()).unwrap();
+    index.rebuild().unwrap();
+    for step in 0..5 {
+        match step {
+            0 => {
+                fs::remove_file(directory.path().join("a.txt")).unwrap();
+            }
+            1 => {
+                fs::write(directory.path().join("b.txt"), "short\n").unwrap();
+            }
+            2 => {
+                fs::write(directory.path().join("c.txt"), b"binary\0").unwrap();
+            }
+            3 => {
+                fs::write(directory.path().join(".gitignore"), "c.txt\n").unwrap();
+            }
+            4 => {
+                fs::write(directory.path().join("d.txt"), "new\n").unwrap();
+            }
+            _ => unreachable!(),
+        }
+        index.reconcile().unwrap();
+        let fresh = Codebase::open_memory(root.clone(), limits.clone()).unwrap();
+        fresh.rebuild().unwrap();
+        let mut actual = index.manifest().unwrap();
+        actual.snapshot.generation = 1;
+        assert_eq!(actual, fresh.manifest().unwrap(), "step={step}");
+    }
 }
 
 #[test]

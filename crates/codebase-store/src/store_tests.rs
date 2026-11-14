@@ -139,6 +139,8 @@ fn one_database_reopens_source_symbol_and_vector_generations() {
             .expect("reopened Codebase"),
     );
     assert_eq!(reopened.snapshot().expect("snapshot").generation, 1);
+    assert!(reopened.snapshot().unwrap().chunking_policy.is_some());
+    assert_eq!(reopened.reconcile().unwrap().generation, 1);
     assert_eq!(
         reopened
             .search(&CodebaseQuery::new("persisted_codebase_symbol"))

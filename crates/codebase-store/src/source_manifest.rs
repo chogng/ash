@@ -3,10 +3,16 @@ use std::path::PathBuf;
 use rusqlite::Connection;
 
 use crate::source::SourceResult;
-use ash_codebase::{
-    ChunkContentHash, ChunkKey, ChunkReference, ChunkSpan, CodebaseManifest, CodebaseSnapshot,
-    IndexRootId, IndexedChunkReference, IndexedSourceReference, SourceRevision,
-};
+use ash_codebase::ChunkContentHash;
+use ash_codebase::ChunkKey;
+use ash_codebase::ChunkReference;
+use ash_codebase::ChunkSpan;
+use ash_codebase::CodebaseManifest;
+use ash_codebase::CodebaseSnapshot;
+use ash_codebase::IndexRootId;
+use ash_codebase::IndexedChunkReference;
+use ash_codebase::IndexedSourceReference;
+use ash_codebase::SourceRevision;
 
 pub(crate) fn load_manifest(
     connection: &Connection,
@@ -82,6 +88,7 @@ fn load_snapshot(
         |row| row.get::<_, i64>(0),
     )?;
     Ok(CodebaseSnapshot {
+        chunking_policy: metadata(connection, "chunking_policy")?,
         root_id: root_id.clone(),
         generation,
         indexed_file_count: to_usize(file_count),

@@ -1,9 +1,14 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
-use crate::scanner::{DirScan, PreparedFile};
-use crate::{
-    CodebaseError, CodebaseManifest, CodebaseSnapshot, IndexRootId, SearchHit, SourceRevision,
-};
+use crate::CodebaseError;
+use crate::CodebaseManifest;
+use crate::CodebaseSnapshot;
+use crate::IndexRootId;
+use crate::SearchHit;
+use crate::SourceRevision;
+use crate::scanner::DirScan;
+use crate::scanner::PreparedFile;
 
 /// One filesystem change translated into a source-store update.
 pub enum FileUpdate {
@@ -15,6 +20,17 @@ pub enum FileUpdate {
 pub struct StoredSource {
     pub revision: SourceRevision,
     pub source_bytes: usize,
+}
+
+/// Changes from one complete policy scan, with coverage metadata committed in the same
+/// generation. Unchanged chunk payloads remain in their owning store.
+pub struct SourceReconciliation {
+    pub expected_generation: u64,
+    pub chunking_policy: String,
+    pub updates: Vec<FileUpdate>,
+    pub skipped_file_count: usize,
+    pub file_limit_hit: bool,
+    pub source_bytes_limit_hit: bool,
 }
 
 /// Persistence port used by Codebase source construction and lexical retrieval.
@@ -29,6 +45,13 @@ pub trait CodebaseIndexStore: Send + Sync {
         &self,
         root_id: &IndexRootId,
         updates: Vec<FileUpdate>,
+    ) -> Result<CodebaseSnapshot, CodebaseError>;
+
+    /// Publishes the changed subset and scan coverage if the planned generation is current.
+    fn reconcile_sources(
+        &self,
+        root_id: &IndexRootId,
+        reconciliation: SourceReconciliation,
     ) -> Result<CodebaseSnapshot, CodebaseError>;
 
     fn snapshot(&self, root_id: &IndexRootId) -> Result<CodebaseSnapshot, CodebaseError>;

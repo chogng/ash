@@ -20,7 +20,6 @@ use crate::CodebaseOverlayDocument;
 use crate::CodebaseOverlaySnapshot;
 use crate::CodebaseQuery;
 use crate::CodebaseSnapshot;
-use crate::DirScan;
 use crate::IndexRootId;
 use crate::IndexedChunkReference;
 use crate::IndexedSourceReference;
@@ -30,6 +29,7 @@ use crate::MaterializedSource;
 use crate::RefreshOutcome;
 use crate::SearchHit;
 use crate::SourceExcerptReference;
+use crate::SourceReconciliation;
 use crate::chunker::CHUNKER_VERSION;
 use crate::chunker::end_line_exclusive;
 use crate::chunker::line_at;
@@ -124,15 +124,62 @@ impl Codebase {
         &self,
         cancellation: &ash_async_utils::CancellationToken,
     ) -> Result<CodebaseSnapshot, CodebaseError> {
-        let scan =
-            crate::scanner::scan_dir_with_cancellation(&self.root, &self.limits, cancellation)?;
         cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
         let manifest = self.store.manifest(&self.root_id)?;
-        if manifest.snapshot.generation > 0 && scan_matches_manifest(&scan, &manifest) {
-            return Ok(manifest.snapshot);
+        if manifest.snapshot.generation == 0 {
+            // The empty projection has nothing to reuse. Preserve the bulk construction path.
+            let scan =
+                crate::scanner::scan_dir_with_cancellation(&self.root, &self.limits, cancellation)?;
+            cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
+            return self.store.replace_sources(&self.root_id, scan);
+        }
+        let chunking_policy = crate::chunker::chunking_policy(&self.limits);
+        let reuse_chunks = manifest.snapshot.chunking_policy.as_ref() == Some(&chunking_policy);
+        let snapshot = manifest.snapshot;
+        let mut previous: BTreeMap<_, _> = manifest
+            .sources
+            .into_iter()
+            .map(|source| (source.relative_path.clone(), source))
+            .collect();
+        // Chunk identities are already revision-bound and versioned by the owning store.
+        // Keep only source metadata while scanning, rather than all old chunk references.
+        drop(manifest.chunks);
+        let mut updates = Vec::new();
+        let summary =
+            crate::scanner::scan_sources(&self.root, &self.limits, cancellation, |file| {
+                let stored = previous.remove(&file.relative_path);
+                if reuse_chunks
+                    && stored.is_some_and(|source| {
+                        source.source_revision == file.revision
+                            && source.source_bytes == file.content.len()
+                    })
+                {
+                    return;
+                }
+                updates.push(FileUpdate::Upsert(file.prepare(&self.limits)));
+            })?;
+        updates.extend(previous.into_keys().map(FileUpdate::Remove));
+        if snapshot.generation > 0
+            && reuse_chunks
+            && updates.is_empty()
+            && snapshot.skipped_file_count == summary.skipped_file_count
+            && snapshot.file_limit_hit == summary.file_limit_hit
+            && snapshot.source_bytes_limit_hit == summary.source_bytes_limit_hit
+        {
+            return Ok(snapshot);
         }
         cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
-        self.store.replace_sources(&self.root_id, scan)
+        self.store.reconcile_sources(
+            &self.root_id,
+            SourceReconciliation {
+                expected_generation: snapshot.generation,
+                chunking_policy,
+                updates,
+                skipped_file_count: summary.skipped_file_count,
+                file_limit_hit: summary.file_limit_hit,
+                source_bytes_limit_hit: summary.source_bytes_limit_hit,
+            },
+        )
     }
 
     /// Applies coarse watcher hints, reconciling a full scan when a directory-level change
@@ -168,7 +215,12 @@ impl Codebase {
         }
 
         let snapshot = self.snapshot()?;
-        if snapshot.file_limit_hit || snapshot.source_bytes_limit_hit {
+        if snapshot.file_limit_hit
+            || snapshot.source_bytes_limit_hit
+            || snapshot.indexed_file_count > self.limits.max_files
+            || snapshot.chunking_policy.as_deref()
+                != Some(crate::chunker::chunking_policy(&self.limits).as_str())
+        {
             return self
                 .reconcile_with_cancellation(cancellation)
                 .map(RefreshOutcome::Rebuilt);
@@ -468,74 +520,6 @@ impl Codebase {
             Err(CodebaseError::StorageRootMismatch)
         }
     }
-}
-
-fn scan_matches_manifest(scan: &DirScan, manifest: &CodebaseManifest) -> bool {
-    let snapshot = &manifest.snapshot;
-    let chunk_count: usize = scan.files.iter().map(|file| file.chunks.len()).sum();
-    if snapshot.indexed_file_count != scan.files.len()
-        || manifest.sources.len() != scan.files.len()
-        || snapshot.indexed_chunk_count != chunk_count
-        || manifest.chunks.len() != chunk_count
-        || snapshot.indexed_source_bytes
-            != scan
-                .files
-                .iter()
-                .map(|file| file.source_bytes)
-                .sum::<usize>()
-        || snapshot.skipped_file_count != scan.skipped_file_count
-        || snapshot.truncated_file_count
-            != scan
-                .files
-                .iter()
-                .filter(|file| file.chunk_limit_hit)
-                .count()
-        || snapshot.file_limit_hit != scan.file_limit_hit
-        || snapshot.source_bytes_limit_hit != scan.source_bytes_limit_hit
-    {
-        return false;
-    }
-
-    // Store manifests and filesystem scans can order paths differently. Compare by
-    // source identity and byte position, including chunker output and coverage limits.
-    let sources: BTreeMap<_, _> = manifest
-        .sources
-        .iter()
-        .map(|source| (&source.relative_path, source))
-        .collect();
-    let chunks: BTreeMap<_, _> = manifest
-        .chunks
-        .iter()
-        .map(|chunk| {
-            (
-                (
-                    &chunk.reference.relative_path,
-                    chunk.reference.span.start_byte,
-                ),
-                chunk,
-            )
-        })
-        .collect();
-    scan.files.iter().all(|file| {
-        sources.get(&file.relative_path).is_some_and(|source| {
-            source.root_id == snapshot.root_id
-                && source.source_revision == file.source_revision
-                && source.language == file.language
-                && source.source_bytes == file.source_bytes
-        }) && file.chunks.iter().all(|chunk| {
-            chunks
-                .get(&(&file.relative_path, chunk.span.start_byte))
-                .is_some_and(|indexed| {
-                    let reference = &indexed.reference;
-                    reference.root_id == snapshot.root_id
-                        && reference.source_revision == file.source_revision
-                        && reference.key == chunk.key
-                        && reference.content_hash == chunk.content_hash
-                        && reference.span == chunk.span
-                        && indexed.language == file.language
-                })
-        })
-    })
 }
 
 fn validate_overlay_path(relative_path: &Path) -> Result<(), CodebaseError> {

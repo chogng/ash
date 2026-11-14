@@ -3,11 +3,20 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::RwLock;
 
-use crate::{
-    ChunkReference, CodebaseError, CodebaseIndexStore, CodebaseManifest, CodebaseSnapshot, DirScan,
-    FileUpdate, IndexRootId, IndexedChunkReference, IndexedSourceReference, PreparedFile,
-    SearchHit, StoredSource,
-};
+use crate::ChunkReference;
+use crate::CodebaseError;
+use crate::CodebaseIndexStore;
+use crate::CodebaseManifest;
+use crate::CodebaseSnapshot;
+use crate::DirScan;
+use crate::FileUpdate;
+use crate::IndexRootId;
+use crate::IndexedChunkReference;
+use crate::IndexedSourceReference;
+use crate::PreparedFile;
+use crate::SearchHit;
+use crate::SourceReconciliation;
+use crate::StoredSource;
 
 #[derive(Default)]
 pub(crate) struct InMemoryCodebaseIndexStore {
@@ -17,6 +26,7 @@ pub(crate) struct InMemoryCodebaseIndexStore {
 #[derive(Default)]
 struct State {
     generation: u64,
+    chunking_policy: Option<String>,
     files: BTreeMap<std::path::PathBuf, PreparedFile>,
     skipped_file_count: usize,
     file_limit_hit: bool,
@@ -40,6 +50,7 @@ impl CodebaseIndexStore for InMemoryCodebaseIndexStore {
             .map(|file| (file.relative_path.clone(), file))
             .collect();
         state.skipped_file_count = scan.skipped_file_count;
+        state.chunking_policy = Some(scan.chunking_policy);
         state.file_limit_hit = scan.file_limit_hit;
         state.source_bytes_limit_hit = scan.source_bytes_limit_hit;
         Ok(snapshot(root_id, &state))
@@ -54,16 +65,30 @@ impl CodebaseIndexStore for InMemoryCodebaseIndexStore {
             .state
             .write()
             .unwrap_or_else(|error| error.into_inner());
-        for update in updates {
-            match update {
-                FileUpdate::Remove(path) => {
-                    state.files.remove(&path);
-                }
-                FileUpdate::Upsert(file) => {
-                    state.files.insert(file.relative_path.clone(), file);
-                }
-            }
+        apply_updates(&mut state, updates);
+        state.generation = state.generation.saturating_add(1);
+        Ok(snapshot(root_id, &state))
+    }
+
+    fn reconcile_sources(
+        &self,
+        root_id: &IndexRootId,
+        reconciliation: SourceReconciliation,
+    ) -> Result<CodebaseSnapshot, CodebaseError> {
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(|error| error.into_inner());
+        if state.generation != reconciliation.expected_generation {
+            return Err(CodebaseError::storage(
+                "source projection changed while preparing reconciliation",
+            ));
         }
+        apply_updates(&mut state, reconciliation.updates);
+        state.chunking_policy = Some(reconciliation.chunking_policy);
+        state.skipped_file_count = reconciliation.skipped_file_count;
+        state.file_limit_hit = reconciliation.file_limit_hit;
+        state.source_bytes_limit_hit = reconciliation.source_bytes_limit_hit;
         state.generation = state.generation.saturating_add(1);
         Ok(snapshot(root_id, &state))
     }
@@ -217,8 +242,22 @@ impl CodebaseIndexStore for InMemoryCodebaseIndexStore {
     }
 }
 
+fn apply_updates(state: &mut State, updates: Vec<FileUpdate>) {
+    for update in updates {
+        match update {
+            FileUpdate::Remove(path) => {
+                state.files.remove(&path);
+            }
+            FileUpdate::Upsert(file) => {
+                state.files.insert(file.relative_path.clone(), file);
+            }
+        }
+    }
+}
+
 fn snapshot(root_id: &IndexRootId, state: &State) -> CodebaseSnapshot {
     CodebaseSnapshot {
+        chunking_policy: state.chunking_policy.clone(),
         root_id: root_id.clone(),
         generation: state.generation,
         indexed_file_count: state.files.len(),

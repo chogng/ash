@@ -2,7 +2,7 @@
 
 ## Desktop · CPU 与内存占用调查
 
-- [ ] **测量 · 源文件扫描、TypeScript 与长期 Chat** · 2026-11-14 Windows 四千个合成 TypeScript 文件、十二个标签场景中，符号索引已按文件增量写入并复用基础匹配器，增量受文件数、符号数和事实字节数限制，超限合并。一次前测、两次后测中，已有文件更新可见耗时 2559→278–289 ms，更新窗口后端 CPU 时间 1.02→0.08–0.22 s，全流程累计提交峰值 281→200–201 MiB，常驻约 159–169 MiB；65 项相关 Rust 测试通过、1 项原有忽略，真实 Desktop 已验证搜索、覆盖层和删除，运行包散列已核对。证据：`.build/perf-incremental-20261114/results.json`；前轮证据：`.build/perf-resource-20261114/local-optimization-results.json`。新增、删除文件仍分别需约 11.6–11.8 s、10.5–10.7 s，需继续定位 canonical 源文件扫描；关闭标签后 TypeScript 语义服务器仍保留约 840 MiB 分析缓存，默认未开启 `languageServers.autoSuspend`，尚需验证同等语言能力下的释放、重开和冷启动成本。十二个合成 Chat 会话完成与再次访问已测，尚无长期增长复现；仍缺整机 CPU 稳定降幅及长期运行数据。
+- [ ] **测量 · TypeScript 与长期 Chat** · 2026-11-14 Windows 四千个合成 TypeScript 文件、十二个标签场景中，关闭标签后 TypeScript 语义服务器仍保留约 840 MiB 分析缓存，默认未开启 `languageServers.autoSuspend`，尚需验证同等语言能力下的释放、重开和冷启动成本。十二个合成 Chat 会话完成与再次访问已测，尚无长期增长复现；仍缺整机 CPU 稳定降幅及长期运行数据。符号索引已按文件增量发布，源代码块也已按内容哈希和切块策略复用，保留完整扫描规则并批量删除变化文件的 FTS 行。最新两次前后对照中，新增可见耗时 11.6–11.8→2.00–2.01 s，删除 10.5–10.7→1.11–1.13 s，增删和查询窗口的后端 CPU 时间 7.67→0.83–1.06 s，全流程累计提交峰值 200–201→173–177 MiB，末尾常驻约 159–161 MiB；已有文件修改 275–362 ms，首次查询 25–28 ms。70 项领域／存储测试和 7 项 App Server 消费侧测试通过、1 项原有忽略；两次真实 Desktop 场景通过，运行包散列和进程清理已核对。证据：`.build/perf-source-reconcile-20261114/results.json`；前轮：`.build/perf-incremental-20261114/results.json`。
 - [ ] **验证阻塞** · `just verify ash-host-logs` 的库测试 `rotation_preserves_three_files_and_reports_replacement` 在 `crates/host-logs/src/store_tests.rs:74` 的 `next.gap` 断言失败，单独复核仍失败；本轮未改轮转实现。需定位该失败后补齐包级 verify，不能将本轮定向测试通过视为整包通过。
 
 按功能记录已选范围内尚未完成或缺少通过证据的工作，完成后移除。2026-10-18 以 Ash `e323c7bcb` 对照本地 VS Code `a2acc8c864a`，源码核对集中于 Terminal、Preferences、Workspace、Sessions 与 Speech／MCP App 入口的公开契约、生产调用及相关测试；其他领域按已有记录分类。上述清单审查未重跑历史验收；后续完成项以各领域的验证记录为准，不将源码存在当作行为通过。

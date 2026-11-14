@@ -15,6 +15,17 @@ use ash_language::LanguageId;
 #[doc(hidden)]
 pub const CHUNKER_VERSION: &str = "ash-codebase-v2";
 
+/// Opaque identity of every input that can change chunks for the same source revision.
+pub(crate) fn chunking_policy(limits: &CodebaseLimits) -> String {
+    format!(
+        "{CHUNKER_VERSION}:{}:{}:{}:{}",
+        limits.max_file_bytes,
+        limits.target_chunk_bytes,
+        limits.max_chunk_bytes,
+        limits.max_chunks_per_file
+    )
+}
+
 #[derive(Clone, Debug)]
 pub struct PreparedChunk {
     pub key: ChunkKey,

@@ -333,6 +333,8 @@ impl CodebaseQuery {
 /// Immutable publication summary for one indexed directory generation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodebaseSnapshot {
+    /// Opaque chunker/limits identity; absent in older rebuildable stores until reconciled.
+    pub chunking_policy: Option<String>,
     pub root_id: IndexRootId,
     pub generation: u64,
     pub indexed_file_count: usize,

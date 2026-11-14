@@ -29,6 +29,7 @@ pub struct PreparedFile {
 #[derive(Debug)]
 pub struct DirScan {
     pub files: Vec<PreparedFile>,
+    pub chunking_policy: String,
     pub skipped_file_count: usize,
     pub file_limit_hit: bool,
     pub source_bytes_limit_hit: bool,
@@ -36,7 +37,7 @@ pub struct DirScan {
 
 /// A bounded source read, before the more expensive syntax and chunk construction.
 pub(crate) struct SourceFile {
-    relative_path: PathBuf,
+    pub(crate) relative_path: PathBuf,
     pub(crate) revision: SourceRevision,
     pub(crate) content: String,
 }
@@ -69,6 +70,33 @@ pub(crate) fn scan_dir_with_cancellation(
     limits: &CodebaseLimits,
     cancellation: &ash_async_utils::CancellationToken,
 ) -> Result<DirScan, CodebaseError> {
+    let mut files = Vec::new();
+    let summary = scan_sources(root, limits, cancellation, |file| {
+        files.push(file.prepare(limits));
+    })?;
+    Ok(DirScan {
+        files,
+        chunking_policy: crate::chunker::chunking_policy(limits),
+        skipped_file_count: summary.skipped_file_count,
+        file_limit_hit: summary.file_limit_hit,
+        source_bytes_limit_hit: summary.source_bytes_limit_hit,
+    })
+}
+
+pub(crate) struct ScanSummary {
+    pub skipped_file_count: usize,
+    pub file_limit_hit: bool,
+    pub source_bytes_limit_hit: bool,
+}
+
+/// Reads and hashes the deterministic eligible subset before handing each verified source
+/// to its consumer. Reconciliation can reuse unchanged chunks without relaxing scan policy.
+pub(crate) fn scan_sources(
+    root: &Dir,
+    limits: &CodebaseLimits,
+    cancellation: &ash_async_utils::CancellationToken,
+    mut visit: impl FnMut(SourceFile),
+) -> Result<ScanSummary, CodebaseError> {
     cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
     root.directory().ensure_current()?;
     let mut builder = WalkBuilder::new(root.canonical_path());
@@ -106,7 +134,6 @@ pub(crate) fn scan_dir_with_cancellation(
         walk_error_count.saturating_add(paths.len().saturating_sub(limits.max_files));
     paths.truncate(limits.max_files);
 
-    let mut files = Vec::new();
     let mut indexed_source_bytes = 0usize;
     let mut source_bytes_limit_hit = false;
     for relative_path in paths {
@@ -143,7 +170,7 @@ pub(crate) fn scan_dir_with_cancellation(
                     continue;
                 }
                 indexed_source_bytes = indexed_source_bytes.saturating_add(file.content.len());
-                files.push(file.prepare(limits));
+                visit(file);
             }
             Ok(None) | Err(CodebaseError::Io { .. }) => {
                 skipped_file_count = skipped_file_count.saturating_add(1)
@@ -153,8 +180,7 @@ pub(crate) fn scan_dir_with_cancellation(
     }
     cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
     root.directory().ensure_current()?;
-    Ok(DirScan {
-        files,
+    Ok(ScanSummary {
         skipped_file_count,
         file_limit_hit,
         source_bytes_limit_hit,

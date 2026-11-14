@@ -2,17 +2,31 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use ash_state::{SqliteDurability, open_in_memory_database, open_sqlite_database};
+use ash_state::SqliteDurability;
+use ash_state::open_in_memory_database;
+use ash_state::open_sqlite_database;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Transaction;
 use rusqlite::params;
 
-use ash_codebase::{
-    CHUNKER_VERSION, ChunkContentHash, ChunkKey, ChunkReference, ChunkSpan, CodebaseError,
-    CodebaseIndexStore, CodebaseManifest, CodebaseSnapshot, DirScan, FileUpdate, IndexRootId,
-    PreparedFile, SearchHit, SourceRevision, StoredSource,
-};
+use ash_codebase::CHUNKER_VERSION;
+use ash_codebase::ChunkContentHash;
+use ash_codebase::ChunkKey;
+use ash_codebase::ChunkReference;
+use ash_codebase::ChunkSpan;
+use ash_codebase::CodebaseError;
+use ash_codebase::CodebaseIndexStore;
+use ash_codebase::CodebaseManifest;
+use ash_codebase::CodebaseSnapshot;
+use ash_codebase::DirScan;
+use ash_codebase::FileUpdate;
+use ash_codebase::IndexRootId;
+use ash_codebase::PreparedFile;
+use ash_codebase::SearchHit;
+use ash_codebase::SourceReconciliation;
+use ash_codebase::SourceRevision;
+use ash_codebase::StoredSource;
 
 use crate::CodebaseStoreStorage;
 use crate::source_manifest::load_manifest;
@@ -93,6 +107,7 @@ impl SqliteCodebaseIndexStore {
             insert_file(&transaction, file)?;
         }
         let generation = increment_generation(&transaction)?;
+        set_metadata(&transaction, "chunking_policy", &scan.chunking_policy)?;
         set_metadata(
             &transaction,
             "skipped_file_count",
@@ -120,15 +135,7 @@ impl SqliteCodebaseIndexStore {
     ) -> SourceResult<CodebaseSnapshot> {
         let mut connection = self.connection.lock().expect("codebase store poisoned");
         let transaction = connection.transaction()?;
-        for update in updates {
-            match update {
-                FileUpdate::Remove(path) => remove_file(&transaction, &path)?,
-                FileUpdate::Upsert(file) => {
-                    remove_file(&transaction, &file.relative_path)?;
-                    insert_file(&transaction, &file)?;
-                }
-            }
-        }
+        apply_updates(&transaction, updates)?;
         let generation = increment_generation(&transaction)?;
         let snapshot = snapshot_from_connection(&transaction, root_id, generation)?;
         transaction.commit()?;
@@ -141,6 +148,49 @@ impl SqliteCodebaseIndexStore {
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(0);
         snapshot_from_connection(&connection, root_id, generation)
+    }
+
+    fn reconcile_sources(
+        &self,
+        root_id: &IndexRootId,
+        reconciliation: SourceReconciliation,
+    ) -> SourceResult<CodebaseSnapshot> {
+        let mut connection = self.connection.lock().expect("codebase store poisoned");
+        let transaction = connection.transaction()?;
+        let generation = metadata(&transaction, "generation")?
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0);
+        if generation != reconciliation.expected_generation {
+            return Err(CodebaseError::storage(
+                "source projection changed while preparing reconciliation",
+            )
+            .into());
+        }
+        apply_updates(&transaction, reconciliation.updates)?;
+        set_metadata(
+            &transaction,
+            "chunking_policy",
+            &reconciliation.chunking_policy,
+        )?;
+        set_metadata(
+            &transaction,
+            "skipped_file_count",
+            &reconciliation.skipped_file_count.to_string(),
+        )?;
+        set_metadata(
+            &transaction,
+            "file_limit_hit",
+            flag_value(reconciliation.file_limit_hit),
+        )?;
+        set_metadata(
+            &transaction,
+            "source_bytes_limit_hit",
+            flag_value(reconciliation.source_bytes_limit_hit),
+        )?;
+        let generation = increment_generation(&transaction)?;
+        let snapshot = snapshot_from_connection(&transaction, root_id, generation)?;
+        transaction.commit()?;
+        Ok(snapshot)
     }
 
     fn manifest(&self, root_id: &IndexRootId) -> SourceResult<CodebaseManifest> {
@@ -255,6 +305,14 @@ impl SqliteCodebaseIndexStore {
 }
 
 impl CodebaseIndexStore for SqliteCodebaseIndexStore {
+    fn reconcile_sources(
+        &self,
+        root_id: &IndexRootId,
+        reconciliation: SourceReconciliation,
+    ) -> Result<CodebaseSnapshot, CodebaseError> {
+        SqliteCodebaseIndexStore::reconcile_sources(self, root_id, reconciliation)
+            .map_err(Into::into)
+    }
     fn replace_sources(
         &self,
         root_id: &IndexRootId,
@@ -391,6 +449,49 @@ fn reset_projection(connection: &mut Connection) -> rusqlite::Result<()> {
     create_schema(connection)
 }
 
+fn apply_updates(transaction: &Transaction<'_>, updates: Vec<FileUpdate>) -> rusqlite::Result<()> {
+    if updates.is_empty() {
+        return Ok(());
+    }
+    // FTS5's chunk_rowid column is unindexed. Delete all touched paths in one pass,
+    // rather than rescanning the entire virtual table for every file in a large edit.
+    transaction.execute_batch(
+        "CREATE TEMP TABLE IF NOT EXISTS codebase_changed_paths(path TEXT PRIMARY KEY); \
+        DELETE FROM codebase_changed_paths;",
+    )?;
+    {
+        let mut statement =
+            transaction.prepare_cached("INSERT INTO codebase_changed_paths(path) VALUES (?1)")?;
+        for update in &updates {
+            let path = match update {
+                FileUpdate::Remove(path) => path,
+                FileUpdate::Upsert(file) => &file.relative_path,
+            };
+            statement.execute([storage_path(path)])?;
+        }
+    }
+    transaction.execute(
+        "DELETE FROM codebase_chunks_fts WHERE chunk_rowid IN (\
+        SELECT c.rowid FROM codebase_chunks c JOIN codebase_changed_paths p ON c.path = p.path)",
+        [],
+    )?;
+    transaction.execute(
+        "DELETE FROM codebase_chunks WHERE path IN (SELECT path FROM codebase_changed_paths)",
+        [],
+    )?;
+    transaction.execute(
+        "DELETE FROM codebase_files WHERE path IN (SELECT path FROM codebase_changed_paths)",
+        [],
+    )?;
+    for update in updates {
+        if let FileUpdate::Upsert(file) = update {
+            insert_file(transaction, &file)?;
+        }
+    }
+    transaction.execute("DELETE FROM codebase_changed_paths", [])?;
+    Ok(())
+}
+
 fn insert_file(transaction: &Transaction<'_>, file: &PreparedFile) -> rusqlite::Result<()> {
     let path = storage_path(&file.relative_path);
     transaction.execute(
@@ -435,19 +536,6 @@ fn insert_file(transaction: &Transaction<'_>, file: &PreparedFile) -> rusqlite::
     Ok(())
 }
 
-fn remove_file(transaction: &Transaction<'_>, relative_path: &Path) -> rusqlite::Result<()> {
-    let path = storage_path(relative_path);
-    transaction.execute(
-        "DELETE FROM codebase_chunks_fts WHERE chunk_rowid IN (
-             SELECT rowid FROM codebase_chunks WHERE path = ?1
-         )",
-        [&path],
-    )?;
-    transaction.execute("DELETE FROM codebase_chunks WHERE path = ?1", [&path])?;
-    transaction.execute("DELETE FROM codebase_files WHERE path = ?1", [&path])?;
-    Ok(())
-}
-
 fn snapshot_from_connection(
     connection: &Connection,
     root_id: &IndexRootId,
@@ -467,6 +555,7 @@ fn snapshot_from_connection(
         |row| row.get::<_, i64>(0),
     )?;
     Ok(CodebaseSnapshot {
+        chunking_policy: metadata(connection, "chunking_policy")?,
         root_id: root_id.clone(),
         generation,
         indexed_file_count: to_usize(file_count),
@@ -529,3 +618,7 @@ fn to_i64(value: usize) -> i64 {
 fn to_usize(value: i64) -> usize {
     usize::try_from(value).unwrap_or(usize::MAX)
 }
+
+#[cfg(test)]
+#[path = "source_store_tests.rs"]
+mod tests;

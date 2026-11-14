@@ -24,7 +24,10 @@ pub use retrieval::*;
 #[doc(hidden)]
 pub use scanner::{DirScan, PreparedFile};
 pub use semantic::*;
-pub use store::{CodebaseIndexStore, FileUpdate, StoredSource};
+pub use store::CodebaseIndexStore;
+pub use store::FileUpdate;
+pub use store::SourceReconciliation;
+pub use store::StoredSource;
 pub use symbol::*;
 pub use types::ChunkContentHash;
 pub use types::ChunkKey;
