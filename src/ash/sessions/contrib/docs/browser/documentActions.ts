@@ -27,6 +27,7 @@ import { ISessionsEntryService } from '../../../services/layout/common/sessionsE
 import { artifactDetailEntry } from '../../artifact/common/artifactWorkspace.js';
 import { createArkdownDocsInput } from './docsEditorInput.js';
 import { migrateLegacyDocsInput } from './legacyDocsMigration.js';
+import { legacyDocsToMarkdown } from './docsImport.js';
 import { ArkdownDocsEditorPane } from './arkdownDocsEditorPane.js';
 
 export async function createDocsDocument(accessor: ServicesAccessor, title = localize('document.untitled', 'Untitled')): Promise<void> {
@@ -65,10 +66,16 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 				workspace: accessor.get(IWorkspaceContextService), backups: accessor.get(IWorkingCopyBackupService),
 			}));
 			const backup = await backups.resolve(resource);
+			const legacy = /\.ash-doc$/iu.test(resource.path);
+			// Convert the original recovery before allocating a new file identity. Failure
+			// leaves the structured backup available for the next restore attempt.
+			const serialized = options.initialText ?? backup?.content ?? '';
+			const content = legacy ? legacyDocsToMarkdown(serialized) : serialized;
 			const home = URI.joinPath(getArtifactDraftHome(profiles.currentProfile.location, workspace.getWorkspace().id), 'docs', generateUuid());
 			await files.createDirectory(home);
-			const target = URI.joinPath(home, basename(resource));
-			await files.writeFile({ resource: target, content: options.initialText ?? (backup?.kind === 'text' ? backup.content : '') });
+			const name = legacy ? basename(resource).replace(/\.ash-doc$/iu, '.md') : basename(resource);
+			const target = URI.joinPath(home, name);
+			await files.writeFile({ resource: target, content });
 			options = { ...options, label: options.label ?? basename(resource), initialText: undefined };
 			resource = target;
 		}
@@ -86,7 +93,10 @@ export function createDocsOpener(accessor: ServicesAccessor) {
 			remember(input.resource);
 			return entry;
 		}, { source: options.source });
-		if (draftSource) await instantiation.invokeFunction(accessor => accessor.get(IWorkingCopyBackupService)).delete(draftSource);
+		if (draftSource) {
+			await storage.flush();
+			await instantiation.invokeFunction(accessor => accessor.get(IWorkingCopyBackupService)).delete(draftSource);
+		}
 	};
 }
 

@@ -388,6 +388,13 @@
     "collabConnecting": "正在连接协作房间。",
     "collabRejected": "协作更新被拒绝，已保留本地编辑。",
     "collabForbidden": "协作访问权限已失效。离开后重新加入可继续协作。",
-    "collabSizeLimit": "此编辑超出协作大小限制，请缩小单次编辑。"
+    "collabSizeLimit": "此编辑超出协作大小限制，请缩小单次编辑。",
+    "recentRemoteChanges": "近期远端修改（{0}）",
+    "remoteChangesScope": "当前协作会话最近接收的 20 项修改，文本预览最多显示 160 个字符。连接 ID 表示会话，不代表已验证的用户身份。",
+    "remoteConnection": "连接 {0}",
+    "remoteSynchronization": "共享文档同步",
+    "removedText": "删除：{0}",
+    "insertedText": "插入：{0}",
+    "remoteChangesHelp": "展开“近期远端修改”可查看当前协作会话最近接收的 20 项修改，包括连接标签和增删内容预览。正文和源码视图使用对应颜色高亮受影响的范围。高亮表示收到更新的范围，不是永久的文字作者归属。连接 ID 不代表已验证的用户名。无障碍视图也提供该列表；离开协作后清空。"
   }
 }

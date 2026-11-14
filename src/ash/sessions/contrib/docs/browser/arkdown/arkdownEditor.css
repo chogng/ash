@@ -1,4 +1,6 @@
 .stanza-arkdown-editor {
+	display: flex;
+	flex-direction: column;
 	height: 100%;
 	min-height: 0;
 	color: var(--ash-editor-foreground);
@@ -6,6 +8,8 @@
 }
 
 .stanza-arkdown-prose {
+	flex: 1;
+	min-height: 0;
 	box-sizing: border-box;
 	height: 100%;
 	overflow: auto;
@@ -47,8 +51,96 @@
 }
 
 .stanza-arkdown-source {
-	height: 100%;
+	flex: 1;
 	min-height: 0;
+}
+
+.stanza-arkdown-remote-history {
+	flex: 0 1 auto;
+	max-height: 30%;
+	overflow: auto;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size240);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.stanza-arkdown-remote-history summary {
+	cursor: pointer;
+}
+
+.stanza-arkdown-remote-history summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}
+
+.stanza-arkdown-remote-history li {
+	margin-block: var(--ash-spacing-size80);
+	padding-inline-start: var(--ash-spacing-size80);
+	border-inline-start: var(--ash-strokeThickness) solid;
+	overflow-wrap: anywhere;
+}
+
+.stanza-arkdown-remote-history li > * {
+	display: block;
+	white-space: pre-wrap;
+}
+
+.stanza-arkdown-source .arkdown-remote-change {
+	text-decoration-line: underline;
+}
+
+.stanza-arkdown-editor .arkdown-remote-color-0 {
+	border-inline-start-color: var(--ash-charts-blue);
+	background-color: color-mix(
+		in srgb,
+		var(--ash-charts-blue) 20%,
+		transparent
+	);
+	text-decoration-color: var(--ash-charts-blue);
+}
+.stanza-arkdown-editor .arkdown-remote-color-1 {
+	border-inline-start-color: var(--ash-charts-purple);
+	background-color: color-mix(
+		in srgb,
+		var(--ash-charts-purple) 20%,
+		transparent
+	);
+	text-decoration-color: var(--ash-charts-purple);
+}
+.stanza-arkdown-editor .arkdown-remote-color-2 {
+	border-inline-start-color: var(--ash-charts-green);
+	background-color: color-mix(
+		in srgb,
+		var(--ash-charts-green) 20%,
+		transparent
+	);
+	text-decoration-color: var(--ash-charts-green);
+}
+.stanza-arkdown-editor .arkdown-remote-color-3 {
+	border-inline-start-color: var(--ash-charts-orange);
+	background-color: color-mix(
+		in srgb,
+		var(--ash-charts-orange) 20%,
+		transparent
+	);
+	text-decoration-color: var(--ash-charts-orange);
+}
+.stanza-arkdown-editor .arkdown-remote-color-4 {
+	border-inline-start-color: var(--ash-charts-red);
+	background-color: color-mix(
+		in srgb,
+		var(--ash-charts-red) 20%,
+		transparent
+	);
+	text-decoration-color: var(--ash-charts-red);
+}
+.stanza-arkdown-editor .arkdown-remote-color-5 {
+	border-inline-start-color: var(--ash-charts-yellow);
+	background-color: color-mix(
+		in srgb,
+		var(--ash-charts-yellow) 20%,
+		transparent
+	);
+	text-decoration-color: var(--ash-charts-yellow);
 }
 
 .stanza-arkdown-editor [hidden] {

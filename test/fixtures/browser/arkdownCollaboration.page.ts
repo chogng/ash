@@ -24,9 +24,15 @@ const services = lifetime.add(parent.createChild());
 services.registerSingleton(IBufferCollabService, () => services.createInstance(BufferCollabService));
 let chosenRoom = '';
 let confirmJoin = true;
+let pendingConfirmation: ((value: { confirmed: boolean; }) => void) | undefined;
+let holdConfirmation = false;
+let joining: Promise<void> | undefined;
 class FixtureDialogs extends DialogService {
 	override async input(_options: IInputDialogOptions) { return { confirmed: true, values: [chosenRoom] }; }
-	override async confirm() { return { confirmed: confirmJoin }; }
+	override async confirm() {
+		if (holdConfirmation) return new Promise<{ confirmed: boolean; }>(resolve => { pendingConfirmation = resolve; });
+		return { confirmed: confirmJoin };
+	}
 }
 services.registerInstance(IDialogService, lifetime.add(new FixtureDialogs()));
 interface RawUpdate { clientId: string; sequence: number; baseVersion: number; version: number; transaction: string; }
@@ -98,9 +104,16 @@ for (const reference of references) lifetime.add(reference);
 const code = lifetime.add(services.createInstance(CodeEditorWidget, { container: document.getElementById('code')!, model: references[0].model, ariaLabel: 'Shared source' }));
 code.layout({ width: 420, height: 600 });
 const fixture = {
+	beginJoin() { holdConfirmation = true; joining = this.connect(1, 'room-1'); },
+	get awaitingConfirmation() { return !!pendingConfirmation; },
+	async finishJoin(confirmed: boolean) { holdConfirmation = false; pendingConfirmation?.({ confirmed }); pendingConfirmation = undefined; await joining; },
 	async connect(index: number, roomId = '') { chosenRoom = roomId; await panes[index].getActions().find(action => action.id === 'arkdown.editor.collaborate')!.run(); },
 	leave(index: number) { void panes[index].getActions().find(action => action.id === 'arkdown.editor.collaborate')!.run(); },
 	text(index: number) { return references[index].model.getValue(); },
+	recentChanges(index: number) { return services.get(IBufferCollabService).get(references[index].model)?.recentChanges ?? []; },
+	source(index: number) { panes[index].setMode('markdown'); },
+	accessible(index: number) { return panes[index].getAccessibleContent(); },
+	replace(index: number, start: number, end: number, text: string) { const model = references[index].model; model.pushEditOperations(null, [{ range: { startLineNumber: model.getPositionAt(start).lineNumber, startColumn: model.getPositionAt(start).column, endLineNumber: model.getPositionAt(end).lineNumber, endColumn: model.getPositionAt(end).column }, text }], null); },
 	edit(index: number, offset: number, text: string) { const model = references[index].model; model.pushEditOperations(null, [{ range: { startLineNumber: model.getPositionAt(offset).lineNumber, startColumn: model.getPositionAt(offset).column, endLineNumber: model.getPositionAt(offset).lineNumber, endColumn: model.getPositionAt(offset).column }, text }], null); },
 	crlf(index: number) { references[index].model.pushEOL(EndOfLineSequence.CRLF); },
 	undo(index: number) { references[index].model.undo(); }, redo(index: number) { references[index].model.redo(); },

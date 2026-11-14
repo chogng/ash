@@ -7,6 +7,70 @@ suite('Arkdown collaboration rooms', () => {
 	const browser = useBrowserTests();
 	const mount = async () => { await browser.page.goto('/arkdownCollaboration.html'); await expect(browser.page.locator('body')).toHaveAttribute('data-ready', 'true'); };
 	const connect = async () => { await browser.page.evaluate(async () => { await window.arkdownCollaborationFixture.connect(0); await window.arkdownCollaborationFixture.connect(1, 'room-1'); }); };
+	for (const confirmed of [false, true]) test(`remote edits remain isolated until joining is confirmed: ${confirmed}`, async () => {
+		await mount();
+		await browser.page.evaluate(async () => { const f = window.arkdownCollaborationFixture; await f.connect(0); f.beginJoin(); });
+		await expect.poll(() => browser.page.evaluate(() => window.arkdownCollaborationFixture.awaitingConfirmation)).toBe(true);
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.edit(0, 0, 'remote '));
+		// The source has submitted while the second document still awaits a decision.
+		await expect.poll(() => browser.page.evaluate(() => window.arkdownCollaborationFixture.traffic.submitAttempts)).toBeGreaterThan(0);
+		assert.equal(await browser.page.evaluate(() => window.arkdownCollaborationFixture.text(1)), 'local draft');
+		assert.equal(await browser.page.evaluate(() => window.arkdownCollaborationFixture.dirty(1)), false);
+		await browser.page.evaluate(value => window.arkdownCollaborationFixture.finishJoin(value), confirmed);
+		if (confirmed) {
+			await expect.poll(() => browser.page.evaluate(() => window.arkdownCollaborationFixture.text(1))).toBe('remote # Shared\n\nalpha🙂');
+		} else {
+			assert.equal(await browser.page.evaluate(() => window.arkdownCollaborationFixture.text(1)), 'local draft');
+			assert.equal(await browser.page.evaluate(() => window.arkdownCollaborationFixture.listeners), 1);
+		}
+	});
+	test('a local change during the confirmation prevents replacement', async () => {
+		await mount();
+		await browser.page.evaluate(async () => { const f = window.arkdownCollaborationFixture; await f.connect(0); f.beginJoin(); });
+		await expect.poll(() => browser.page.evaluate(() => window.arkdownCollaborationFixture.awaitingConfirmation)).toBe(true);
+		await browser.page.evaluate(async () => { const f = window.arkdownCollaborationFixture; f.edit(1, 0, 'changed '); await f.finishJoin(true); });
+		assert.equal(await browser.page.evaluate(() => window.arkdownCollaborationFixture.text(1)), 'changed local draft');
+		assert.equal(await browser.page.evaluate(() => window.arkdownCollaborationFixture.active[1]), false);
+	});
+
+	for (const locale of ['en', 'zh-CN']) test(`remote changes expose source labels, inserted and removed text, and rich/source highlights: ${locale}`, async () => {
+		await browser.page.goto(`/arkdownCollaboration.html?locale=${locale}`);
+		await expect(browser.page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await connect();
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.edit(0, 12, '远端🙂'));
+		const history = browser.page.locator('#b .stanza-arkdown-remote-history');
+		await expect(history).toBeVisible();
+		const summary = history.locator('summary');
+		await expect(summary).toHaveText(locale === 'en' ? 'Recent remote changes (1)' : '近期远端修改（1）');
+		await summary.focus(); await summary.press('Enter');
+		await expect(history.locator('ins')).toHaveText(locale === 'en' ? 'Inserted: 远端🙂' : '插入：远端🙂');
+		const change = await browser.page.evaluate(() => window.arkdownCollaborationFixture.recentChanges(1)[0]);
+		await expect(history.locator('li > span')).toHaveText(`${locale === 'en' ? 'Connection ' : '连接 '}${change.clientId}`);
+		assert.deepEqual(await browser.page.evaluate(() => {
+			const registry = CSS.highlights;
+			return [...registry].filter(([name]) => name.startsWith('arkdown-')).flatMap(([, ranges]) => [...ranges].map(range => range.toString()));
+		}), ['远端🙂']);
+		// Local typing at the end of a remote range must not inherit its highlight.
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.edit(1, 16, ' local'));
+		assert.equal(await browser.page.evaluate(() => { const f = window.arkdownCollaborationFixture; const c = f.recentChanges(1)[0]; return f.text(1).slice(c.start, c.end); }), '远端🙂');
+		await browser.page.evaluate(async () => { await window.arkdownCollaborationFixture.show(1, 'original'); });
+		await expect(history).toBeVisible();
+		const group = browser.page.locator('#b');
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.replace(0, 12, 16, ''));
+		await expect.poll(() => browser.page.evaluate(() => window.arkdownCollaborationFixture.recentChanges(1)[0]?.removed)).toBe('远端🙂');
+		// Reopening a pane borrows the same session, including its recent changes.
+		await group.locator('.stanza-arkdown-remote-history summary').click();
+		await expect(history.locator('del').first()).toContainText('远端🙂');
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.edit(0, 12, 'new'));
+		await expect.poll(() => browser.page.evaluate(() => window.arkdownCollaborationFixture.recentChanges(1)[0]?.inserted)).toBe('new');
+		// The toolbar is supplied by the real pane; source and prose share this model.
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.source(1));
+		await expect(group.locator('.stanza-arkdown-source .arkdown-remote-change').first()).toHaveText('new');
+		const accessible = await browser.page.evaluate(() => window.arkdownCollaborationFixture.accessible(1));
+		assert.ok(accessible.includes('远端🙂') && accessible.includes(change.clientId!));
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.leave(1));
+		await expect(history).toBeHidden();
+	});
 	test('two file buffers converge, selective undo preserves remote text, and save uses the same model', async () => {
 		await mount(); await connect();
 		await browser.page.evaluate(() => { window.arkdownCollaborationFixture.edit(0, 12, '甲'); window.arkdownCollaborationFixture.edit(1, 12, '乙'); });
@@ -17,6 +81,17 @@ suite('Arkdown collaboration rooms', () => {
 		await expect.poll(() => browser.page.evaluate(() => window.arkdownCollaborationFixture.text(1))).toContain('甲');
 		await browser.page.evaluate(() => window.arkdownCollaborationFixture.save(0));
 		assert.equal(await browser.page.evaluate(() => window.arkdownCollaborationFixture.saved(0)), await browser.page.evaluate(() => window.arkdownCollaborationFixture.text(1)));
+	});
+	test('remote change history bounds its records and Unicode previews', async () => {
+		await mount(); await connect();
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.edit(0, 0, '文'.repeat(159) + '🙂tail'));
+		await expect.poll(() => browser.page.evaluate(() => window.arkdownCollaborationFixture.recentChanges(1)[0]?.inserted)).toBe('文'.repeat(159) + '🙂');
+		for (let index = 0; index < 21; index++) {
+			const text = String.fromCodePoint(0x4e00 + index);
+			await browser.page.evaluate(value => window.arkdownCollaborationFixture.edit(0, 0, value), text);
+			await expect.poll(() => browser.page.evaluate(() => window.arkdownCollaborationFixture.recentChanges(1)[0]?.inserted)).toBe(text);
+		}
+		assert.equal(await browser.page.evaluate(() => window.arkdownCollaborationFixture.recentChanges(1).length), 20);
 	});
 	test('offline edits reconnect and an uncertain accepted packet is retried identically', async () => {
 		await mount(); await connect();

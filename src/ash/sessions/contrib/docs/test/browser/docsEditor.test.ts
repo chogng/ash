@@ -1,4 +1,6 @@
 import { IDocsService } from '../../common/docsService.js';
+import { createDefaultDocumentSchema } from '../../../../../../../extensions/academy/common/model/documentSchema.js';
+import { serializeDocument } from '../../../../../../../extensions/academy/common/model/documentSerialization.js';
 import { createTestDocsService } from '../../../../test/common/testArtifactCatalogService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IUserDataProfileService } from '../../../../../workbench/services/userDataProfile/common/userDataProfile.js';
@@ -61,6 +63,38 @@ test('Docs resource creation always uses Markdown', () => {
 	assert.ok(newDocsResource('Document').path.endsWith('.md'));
 	assert.equal(DOCS_DEFAULT_MODE_SETTING, 'sessions.docs.editor');
 	assert.equal(DOCS_ARKDOWN_EDITOR_ID, 'sessions.editor.docs.markdown');
+});
+
+for (const failure of ['none', 'write', 'open', 'flush', 'invalid'] as const) test(`Docs restores a legacy structured draft without retiring recovery on failure: ${failure}`, async () => {
+	using lifetime = new DisposableStore();
+	const services = lifetime.add(new InstantiationService());
+	const backups = lifetime.add(new InMemoryWorkingCopyBackupService('legacy-draft'));
+	const persisted = draftPersistence(services, {}, backups);
+	const storage = lifetime.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: crypto.randomUUID(), flushInterval: 0 }));
+	services.registerInstance(IStorageService, storage);
+	const original = URI.parse('untitled:/old/Recovered.ash-doc');
+	const schema = createDefaultDocumentSchema();
+	const content = failure === 'invalid' ? '{invalid' : serializeDocument(schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('旧草稿🙂')] })]), schema);
+	await backups.store({ resource: original, kind: 'structuredDocument', content, updatedAt: 1 });
+	if (failure === 'write') services.get(IFileService).writeFile = async () => { throw new Error('write failed'); };
+	if (failure === 'flush') storage.flush = async () => { throw new Error('flush failed'); };
+	let opened = false;
+	services.registerInstance(ISessionsEntryService, {
+		openEntry: async (entry: ISessionsEntry, create: () => ISessionsEntry) => {
+			opened = true;
+			assert.ok(entry.editorInput!.resource.path.endsWith('.md'));
+			assert.equal(persisted.get(entry.editorInput!.resource.toString())?.trim(), '旧草稿🙂');
+			assert.equal((await backups.resolve(original))?.content, content);
+			if (failure === 'open') throw new Error('open failed');
+			create();
+		},
+	} as unknown as ISessionsEntryService);
+	const open = services.invokeFunction(createDocsOpener);
+	if (failure === 'none') await open(original, { source: 'restore' });
+	else await assert.rejects(open(original, { source: 'restore' }));
+	assert.equal(opened, failure !== 'write' && failure !== 'invalid');
+	assert.equal((await backups.resolve(original))?.content, failure === 'none' ? undefined : content);
+	if (failure === 'invalid') assert.equal(persisted.size, 0);
 });
 
 for (const failOpen of [false, true]) test(`Docs recovers an untitled backup and retires it only after opening succeeds: ${!failOpen}`, async () => {

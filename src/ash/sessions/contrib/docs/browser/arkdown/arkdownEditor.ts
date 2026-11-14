@@ -1,6 +1,6 @@
 import './arkdownEditor.css';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
-import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
@@ -14,6 +14,11 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { type IDimension } from '../../../../../base/browser/dom.js';
 import type { ArkdownNode, ArkdownOperation, ArkdownProjection, ArkdownRange, ArkdownRuntime } from './arkdownRuntime.js';
 import type { DocsEditorMode } from '../../common/docs.js';
+import type { BufferRemoteChange } from '../../../../../workbench/services/collab/common/bufferCollabService.js';
+import type { IEditorDecorationsCollection } from '../../../../../editor/common/editorCommon.js';
+
+let nextHighlightOwner = 1;
+const collaboratorColors = ['blue', 'purple', 'green', 'orange', 'red', 'yellow'];
 
 interface Segment { readonly text: Text; readonly offsets: readonly number[]; }
 interface RenderedRoot {
@@ -33,6 +38,12 @@ export class ArkdownEditor extends Disposable {
 	private readonly projection: ArkdownProjection;
 	private readonly prose: HTMLElement;
 	private readonly source: HTMLElement;
+	private readonly remoteHistory: HTMLDetailsElement;
+	private readonly remoteSummary: HTMLElement;
+	private readonly remoteList: HTMLElement;
+	private remoteChanges: readonly BufferRemoteChange[] = [];
+	private readonly highlightOwner = nextHighlightOwner++;
+	private sourceHighlights: IEditorDecorationsCollection | undefined;
 	private sourceEditor: CodeEditorWidget | undefined;
 	private readonly segments: Segment[] = [];
 	private readonly ranges = new WeakMap<Node, ArkdownRange>();
@@ -62,9 +73,25 @@ export class ArkdownEditor extends Disposable {
 		this.prose = h(document, 'div', { className: 'stanza-arkdown-prose', attributes: { role: 'textbox', 'aria-multiline': 'true', 'aria-label': localize({ bundle: 'ash.arkdown', key: 'documentBody' }, 'Document body'), 'data-arkdown-engine': 'wasm' } });
 		this.source = document.createElement('div');
 		this.source.className = 'stanza-arkdown-source';
+		this.remoteHistory = document.createElement('details');
+		this.remoteHistory.className = 'stanza-arkdown-remote-history';
+		this.remoteHistory.hidden = true;
+		this.remoteSummary = document.createElement('summary');
+		this.remoteList = document.createElement('ol');
+		this.remoteHistory.append(this.remoteSummary, this.remoteList);
+		this._register(addDisposableListener(this.remoteHistory, 'toggle', () => this.layout({ width: this.source.clientWidth, height: this.source.clientHeight })));
 		this.prose.tabIndex = 0;
 		ArkdownEditorFocused.bindTo(this._register(contextKeys.createScoped(this.prose))).set(true);
-		this.domNode.append(this.prose, this.source);
+		this.domNode.append(this.remoteHistory, this.prose, this.source);
+		const styles = document.createElement('style');
+		styles.textContent = collaboratorColors.map((color, slot) => `::highlight(arkdown-${this.highlightOwner}-${slot}) { background-color: color-mix(in srgb, var(--ash-charts-${color}) 20%, transparent); text-decoration: underline var(--ash-charts-${color}); }`).join('\n');
+		document.head.append(styles);
+		this._register(toDisposable(() => {
+			styles.remove();
+			const view = document.defaultView as Window & typeof globalThis;
+			for (let slot = 0; slot < collaboratorColors.length; slot++) view.CSS?.highlights?.delete(`arkdown-${this.highlightOwner}-${slot}`);
+			this.sourceHighlights?.clear();
+		}));
 		parent.append(this.domNode);
 		this._register(addDisposableListener(this.prose, 'beforeinput', event => this.beforeInput(event as InputEvent)));
 		// Native drops must not mutate the projection outside a model transaction.
@@ -117,7 +144,71 @@ export class ArkdownEditor extends Disposable {
 	getMode(): DocsEditorMode { return this.mode; }
 	focus(): void { if (this.mode === 'rich') this.prose.focus(); else this.ensureSourceEditor().focus(); this.restoreSelection(); }
 	getText(): string { return this.model.getValue(); }
-	getAccessibleText(): string { return this.mode === 'markdown' ? this.model.getValue() : this.prose.innerText; }
+	getAccessibleText(): string { return [this.mode === 'markdown' ? this.model.getValue() : this.prose.innerText, this.remoteHistory.hidden ? '' : `${this.remoteSummary.textContent}\n${this.remoteList.textContent}`].filter(Boolean).join('\n\n'); }
+	setRemoteChanges(changes: readonly BufferRemoteChange[]): void {
+		this.remoteChanges = changes;
+		this.remoteHistory.hidden = !changes.length;
+		this.remoteSummary.textContent = localize({ bundle: 'ash.arkdown', key: 'recentRemoteChanges' }, 'Recent remote changes ({0})', changes.length);
+		this.remoteHistory.setAttribute('aria-label', localize({ bundle: 'ash.arkdown', key: 'remoteChangesScope' }, 'Last 20 remote changes in this session. Text previews show up to 160 characters. Connection IDs identify sessions, not verified users.'));
+		this.remoteList.replaceChildren();
+		for (const change of changes) {
+			const item = this.domNode.ownerDocument.createElement('li');
+			item.className = `arkdown-remote-color-${this.remoteColor(change)}`;
+			const label = this.domNode.ownerDocument.createElement('span');
+			label.textContent = change.clientId
+				? localize({ bundle: 'ash.arkdown', key: 'remoteConnection' }, 'Connection {0}', change.clientId)
+				: localize({ bundle: 'ash.arkdown', key: 'remoteSynchronization' }, 'Shared document synchronization');
+			item.append(label);
+			if (change.removed) {
+				const removed = this.domNode.ownerDocument.createElement('del');
+				removed.textContent = localize({ bundle: 'ash.arkdown', key: 'removedText' }, 'Removed: {0}', change.removed);
+				item.append(removed);
+			}
+			if (change.inserted) {
+				const inserted = this.domNode.ownerDocument.createElement('ins');
+				inserted.textContent = localize({ bundle: 'ash.arkdown', key: 'insertedText' }, 'Inserted: {0}', change.inserted);
+				item.append(inserted);
+			}
+			this.remoteList.append(item);
+		}
+		this.renderRemoteHighlights();
+		this.sourceEditor?.layout({ width: this.source.clientWidth, height: this.source.clientHeight });
+	}
+	private remoteColor(change: BufferRemoteChange): number {
+		let hash = 0;
+		for (const character of change.clientId ?? '') hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+		return hash % collaboratorColors.length;
+	}
+	private renderRemoteHighlights(): void {
+		const document = this.domNode.ownerDocument;
+		const view = document.defaultView as Window & typeof globalThis;
+		for (let slot = 0; slot < collaboratorColors.length; slot++) {
+			const name = `arkdown-${this.highlightOwner}-${slot}`;
+			view.CSS?.highlights?.delete(name);
+			if (this.mode !== 'rich' || this.composition || !view.Highlight || !view.CSS?.highlights) continue;
+			const ranges: globalThis.Range[] = [];
+			for (const change of this.remoteChanges) {
+				if (this.remoteColor(change) !== slot || change.start === change.end) continue;
+				for (const segment of this.segments) {
+					const start = segment.offsets.findIndex(offset => offset >= change.start);
+					const end = segment.offsets.findIndex(offset => offset >= change.end);
+					if (start < 0 || segment.offsets[start] >= change.end) continue;
+					const range = document.createRange();
+					range.setStart(segment.text, start);
+					range.setEnd(segment.text, end < 0 ? segment.text.length : end);
+					ranges.push(range);
+				}
+			}
+			if (ranges.length) view.CSS.highlights.set(name, new view.Highlight(...ranges));
+		}
+		if (this.sourceEditor) {
+			this.sourceHighlights ??= this.sourceEditor.createDecorationsCollection();
+			this.sourceHighlights.set(this.remoteChanges.filter(change => change.start < change.end).map(change => ({
+				range: Range.fromPositions(this.model.getPositionAt(change.start), this.model.getPositionAt(change.end)),
+				options: { description: 'arkdown-remote-change', inlineClassName: `arkdown-remote-change arkdown-remote-color-${this.remoteColor(change)}` },
+			})));
+		}
+	}
 	getPlainText(): string {
 		this.renderProse();
 		// innerText depends on visibility; exports also work while source mode hides prose.
@@ -292,7 +383,7 @@ export class ArkdownEditor extends Disposable {
 		return this.sourceEditor;
 	}
 
-	layout(dimension: IDimension): void { this.sourceEditor?.layout(dimension); }
+	layout(dimension: IDimension): void { this.sourceEditor?.layout({ width: this.source.clientWidth || dimension.width, height: this.source.clientHeight || dimension.height }); }
 
 	private render(focus: boolean): void {
 		try {
@@ -305,8 +396,9 @@ export class ArkdownEditor extends Disposable {
 		const sourceWasHidden = this.source.hidden;
 		this.prose.hidden = this.mode !== 'rich';
 		this.source.hidden = this.mode !== 'markdown';
-		if (this.mode === 'markdown' && (sourceWasHidden || !this.sourceEditor)) this.ensureSourceEditor().layout({ width: this.domNode.clientWidth, height: this.domNode.clientHeight });
+		if (this.mode === 'markdown' && (sourceWasHidden || !this.sourceEditor)) this.ensureSourceEditor().layout({ width: this.source.clientWidth, height: this.source.clientHeight });
 		this.setReadOnly(this.readOnly);
+		this.renderRemoteHighlights();
 		if (focus) this.focus();
 	}
 
