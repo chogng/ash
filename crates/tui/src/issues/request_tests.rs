@@ -15,7 +15,7 @@ impl JsonRpcTransport for Transport {
         self.requests.lock().unwrap().push(request.clone());
         let result = match request["method"].as_str().unwrap() {
             "session/create" => serde_json::json!({
-                "session":{"sessionId":"root","title":"Issues","status":"active","threads":[{"threadId":"root","title":"Issues","status":"active","createdAtUnixMs":0}]},
+                "session":{"sessionId":"root","kind":"code","title":"Issues","status":"active","threads":[{"threadId":"root","title":"Issues","status":"active","createdAtUnixMs":0}]},
                 "agentTree":{"roots":[{"threadId":"root","threadSequence":1,"title":"Issues","executionStatus":"idle","usage":ash_protocol::ModelUsageSummary::default()}]}
             }),
             "session/request" => {

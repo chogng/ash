@@ -792,6 +792,12 @@ impl AgentRuntime for Runtime<'_> {
         self.threads.read_thread(thread_id).map(Into::into)
     }
 
+    fn read_voice_history(
+        &self,
+        query: &ash_protocol::VoiceHistoryQuery,
+    ) -> Result<ash_protocol::VoiceHistoryPage, CoreError> {
+        self.threads.read_voice_history(query)
+    }
     fn read_transcript_metadata(
         &self,
         thread: &ash_protocol::Thread,
@@ -813,6 +819,12 @@ impl AgentRuntime for Runtime<'_> {
     }
     fn list_sessions(&self) -> Result<Vec<ash_protocol::Session>, CoreError> {
         self.threads.list_sessions()
+    }
+    fn list_sessions_by_ids(
+        &self,
+        ids: &[SessionId],
+    ) -> Result<Vec<ash_protocol::Session>, CoreError> {
+        self.threads.list_sessions_by_ids(ids)
     }
     fn read_session_catalog(
         &self,

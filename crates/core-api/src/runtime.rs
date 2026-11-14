@@ -160,6 +160,10 @@ pub trait AgentRuntime {
 
     fn read_thread(&self, thread_id: &ThreadId) -> Result<ThreadView, CoreError>;
     /// Reads transcript metadata at the same immutable journal boundary as the Thread.
+    fn read_voice_history(
+        &self,
+        query: &ash_protocol::VoiceHistoryQuery,
+    ) -> Result<ash_protocol::VoiceHistoryPage, CoreError>;
     fn read_transcript_metadata(
         &self,
         thread: &ash_protocol::Thread,
@@ -179,6 +183,10 @@ pub trait AgentRuntime {
     fn read_started_thread(&self, command_id: &CommandId) -> Result<Option<ThreadView>, CoreError>;
     fn read_session(&self, session_id: &SessionId) -> Result<SessionView, CoreError>;
     fn list_sessions(&self) -> Result<Vec<ash_protocol::Session>, CoreError>;
+    fn list_sessions_by_ids(
+        &self,
+        ids: &[SessionId],
+    ) -> Result<Vec<ash_protocol::Session>, CoreError>;
     fn read_session_catalog(
         &self,
         session_id: &SessionId,

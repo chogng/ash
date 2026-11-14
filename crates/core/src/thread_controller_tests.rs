@@ -4135,3 +4135,94 @@ fn automatic_recap_requires_three_completed_turns_then_two_new_turns() {
     assert!(!eligible(true));
     assert!(!eligible(false));
 }
+
+#[test]
+fn voice_write_failure_keeps_the_projection_unchanged_and_retryable() {
+    let store = Arc::new(ToggleStore {
+        reject_writes: AtomicBool::new(false),
+    });
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "voice");
+    let before = threads.read_thread(&thread).unwrap();
+    let request = || crate::RecordVoiceTranscriptRequest {
+        voice_session_id: "call".into(),
+        media_epoch: 1,
+        speaker: ash_protocol::VoiceTranscriptSpeaker::User,
+        text: "retained".into(),
+        start_ms: 0,
+        end_ms: 10,
+    };
+    store.reject_writes.store(true, Ordering::SeqCst);
+    assert!(threads.record_voice_transcript(&thread, request()).is_err());
+    assert_eq!(threads.read_thread(&thread).unwrap(), before);
+    store.reject_writes.store(false, Ordering::SeqCst);
+    let receipt = threads.record_voice_transcript(&thread, request()).unwrap();
+    assert_eq!(receipt.sequence, before.sequence + 1);
+    assert_eq!(
+        threads.read_thread(&thread).unwrap().voice_transcripts,
+        [receipt.transcript]
+    );
+}
+
+#[test]
+fn observation_time_floor_survives_clock_rollback_compaction_and_recovery() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "clock");
+    // Model a history written while the host clock was ahead of today's wall clock.
+    let future = ash_history::Timestamp(4_000_000_000_000);
+    let mut events = store.load(&thread).unwrap();
+    for event in &mut events {
+        event.recorded_at = future;
+    }
+    let catalog = store
+        .list_catalog()
+        .unwrap()
+        .into_iter()
+        .find(|record| record.thread.thread_id == thread)
+        .unwrap();
+    drop(threads);
+    let store = Arc::new(InMemoryThreadStore::default());
+    store
+        .append_batch(&ThreadEventBatch {
+            history_index: None,
+            history_prefixes: Vec::new(),
+            batch_id: "clock-history".into(),
+            thread_id: thread.clone(),
+            expected_sequence: 0,
+            events,
+            catalog,
+        })
+        .unwrap();
+    let threads = ThreadController::with_store(store.clone());
+    let turn = start_turn(&threads, &thread, "after-rollback");
+    threads
+        .complete_turn(&thread, &turn, "answer".into())
+        .unwrap();
+    let snapshot = threads.read_thread(&thread).unwrap();
+    threads
+        .commit_context_checkpoint(&thread, checkpoint_request(&snapshot, snapshot.sequence))
+        .unwrap();
+    drop(threads);
+    let threads = ThreadController::with_store(store.clone());
+    threads
+        .record_voice_transcript(
+            &thread,
+            crate::RecordVoiceTranscriptRequest {
+                voice_session_id: "call".into(),
+                media_epoch: 1,
+                speaker: ash_protocol::VoiceTranscriptSpeaker::User,
+                text: "after restart".into(),
+                start_ms: 0,
+                end_ms: 10,
+            },
+        )
+        .unwrap();
+    let events = store.events();
+    assert!(events.iter().all(|event| event.recorded_at >= future));
+    assert!(
+        events
+            .windows(2)
+            .all(|pair| pair[0].recorded_at <= pair[1].recorded_at)
+    );
+}

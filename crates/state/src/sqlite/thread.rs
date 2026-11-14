@@ -38,6 +38,7 @@ impl SqliteThreadStore {
         let mut connection = open(&path).map_err(ThreadStoreError::Storage)?;
         super::thread_history::create_schema(&mut connection)?;
         crate::generated_files::migrate(&mut connection).map_err(ThreadStoreError::Storage)?;
+        super::voice_history::migrate(&mut connection)?;
         let catalog_connection = open(&path).map_err(ThreadStoreError::Storage)?;
         Ok(Self {
             path,
@@ -406,6 +407,24 @@ impl ThreadStore for SqliteThreadStore {
         })
     }
 
+    fn read_voice_events(
+        &self,
+        thread_id: &ThreadId,
+        after: u64,
+        through: Option<u64>,
+        filter: &ash_protocol::VoiceHistoryFilter,
+        limit: usize,
+    ) -> Result<ash_thread_store::ThreadEventPage, ThreadStoreError> {
+        super::voice_history::read(
+            &mut *self.connection()?,
+            thread_id,
+            after,
+            through,
+            filter,
+            limit,
+        )
+    }
+
     fn load_history_prefix(
         &self,
         prefix: &ash_protocol::HistoryPrefixRef,
@@ -496,6 +515,47 @@ impl ThreadStore for SqliteThreadStore {
                 decode_session_catalog(&connection, &session_id, &json, version, &digest)
             })
             .collect()
+    }
+
+    fn list_sessions_by_ids(&self, ids: &[SessionId]) -> Result<Vec<Session>, ThreadStoreError> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut connection = self.catalog_connection()?;
+        let transaction = connection.transaction().map_err(storage_error)?;
+        let sql = format!(
+            "SELECT session_id, record_json, record_version, record_digest FROM session_catalog WHERE session_id IN ({}) ORDER BY session_id",
+            vec!["?"; ids.len()].join(",")
+        );
+        let sessions = {
+            let mut statement = transaction.prepare(&sql).map_err(storage_error)?;
+            statement
+                .query_map(
+                    rusqlite::params_from_iter(ids.iter().map(SessionId::as_str)),
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, i64>(2)?,
+                            row.get::<_, String>(3)?,
+                        ))
+                    },
+                )
+                .map_err(storage_error)?
+                .map(|row| {
+                    let (id, json, version, digest) = row.map_err(storage_error)?;
+                    decode_session_catalog(
+                        &transaction,
+                        &SessionId::new(id).map_err(storage_error)?,
+                        &json,
+                        version,
+                        &digest,
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        transaction.commit().map_err(storage_error)?;
+        Ok(sessions)
     }
 
     fn read_session(&self, session_id: &SessionId) -> Result<Option<Session>, ThreadStoreError> {

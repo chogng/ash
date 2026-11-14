@@ -242,6 +242,8 @@ use crate::protocol::message_history::MessageHistoryPage;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::message_history::MessageHistoryReadParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionListParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::symphony::SymphonyConfigureParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::symphony::SymphonyControlParams;
@@ -302,6 +304,16 @@ use ash_protocol::SymphonySnapshot;
 use ash_protocol::SymphonyTaskStatus;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SymphonyWorkflow;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::VoiceHistoryCoverage;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::VoiceHistoryEntry;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::VoiceHistoryFilter;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::VoiceHistoryPage;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::VoiceHistoryQuery;
 #[cfg(any(test, feature = "export"))]
 use external_ext_protocol::ExtensionClientOperation;
 #[cfg(any(test, feature = "export"))]
@@ -4219,13 +4231,18 @@ client_methods! {
         response: MessageCheckpointsResult,
         serialization: SessionSharedRead,
     },
+    VoiceHistoryRead => "session/thread/voice/history" {
+        params: VoiceHistoryQuery,
+        response: VoiceHistoryPage,
+        serialization: SessionSharedRead,
+    },
     ThreadHistoryState => "session/thread/history" {
         params: MessageCheckpointsParams,
         response: ThreadHistoryState,
         serialization: SessionSharedRead,
     },
     SessionList => "session/list" {
-        params: EmptyParams,
+        params: SessionListParams,
         response: SessionListResult,
         serialization: GlobalSharedRead,
     },
@@ -6939,6 +6956,11 @@ typescript_bindings! {
     StorageWorktree,
     StorageWorktreeCleanupParams,
     VoiceStartParams,
+    VoiceHistoryQuery,
+    VoiceHistoryCoverage,
+    VoiceHistoryEntry,
+    VoiceHistoryFilter,
+    VoiceHistoryPage,
     VoiceInputControl,
     VoiceInputMode,
     VoiceInputParams,
@@ -7368,6 +7390,7 @@ typescript_bindings! {
     SessionThreadUnsubscribeParams,
     SessionResult,
     SessionListResult,
+    SessionListParams,
     SessionSubscribeResult,
     SessionThreadProjection,
     SessionThreadResult,

@@ -3,6 +3,41 @@ use crate::GitClient;
 use crate::test_support::TestBareRepository;
 use crate::test_support::TestRepository;
 use pretty_assertions::assert_eq;
+
+#[tokio::test]
+async fn remote_inventory_resolves_rewrites_and_ignores_partial_clone_filter_text() {
+    let repository = TestRepository::init();
+    repository.git(&["remote", "add", "origin", "alias:team/repo.git"]);
+    repository.git(&["config", "url.https://example.invalid/.insteadOf", "alias:"]);
+    repository.git(&[
+        "config",
+        "remote.origin.partialclonefilter",
+        "blob:none\nforged https://other.invalid/repo.git (fetch)",
+    ]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let remotes = client.remotes(&opened).await.unwrap();
+    assert_eq!(remotes.len(), 1);
+    assert_eq!(remotes[0].name(), "origin");
+    assert_eq!(
+        remotes[0].fetch_urls(),
+        &["https://example.invalid/team/repo.git"]
+    );
+}
+
+#[tokio::test]
+async fn remote_inventory_rejects_multiline_urls_without_forging_an_identity() {
+    let repository = TestRepository::init();
+    repository.git(&[
+        "config",
+        "remote.origin.url",
+        "https://example.invalid/team/repo.git\nhttps://other.invalid/team/repo.git",
+    ]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    assert!(client.remotes(&opened).await.is_err());
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn lists_remote_fetch_and_push_urls() {
     let repository = TestRepository::init();
@@ -505,4 +540,82 @@ async fn reviewed_push_binds_the_commit_and_tracking_branch() {
         String::from_utf8_lossy(&actual.stdout).trim(),
         current.object_id
     );
+}
+
+#[tokio::test]
+async fn remote_inventory_rejects_control_bearing_rewrite_rules() {
+    let repository = TestRepository::init();
+    repository.git(&["remote", "add", "origin", "alias:team/repo.git"]);
+    repository.git(&[
+        "config",
+        "url.https://example.invalid/.insteadOf",
+        "alias:\n",
+    ]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    assert!(client.remotes(&opened).await.is_err());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn remote_inventory_shares_a_deadline_across_all_remote_queries() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::Duration;
+    let source = TestRepository::init();
+    for number in 0..20 {
+        source.git(&[
+            "remote",
+            "add",
+            &format!("remote-{number:02}"),
+            "https://example.invalid/team/repo.git",
+        ]);
+    }
+    let system = GitClient::system();
+    let repository = system.open_repository(source.root()).await.unwrap();
+    let executable = source.root().join("git-fixture");
+    let native = system
+        .executable()
+        .unwrap()
+        .to_string_lossy()
+        .replace('\'', "'\\''");
+    std::fs::write(&executable, format!("#!/bin/sh\ncase \" $* \" in *' remote get-url '*) sleep 0.2 ;; esac\nexec '{native}' \"$@\"\n")).unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client = GitClient::with_executable(
+        executable,
+        crate::GitExecutionLimits::new(
+            Duration::from_millis(350),
+            Duration::from_secs(1),
+            1024 * 1024,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let result = client.remotes(&repository).await;
+    assert!(
+        matches!(result, Err(crate::GitError::TimedOut { command, .. }) if command == "git remote inventory")
+    );
+}
+
+#[tokio::test]
+async fn remote_inventory_accepts_valueless_boolean_configuration() {
+    use std::io::Write;
+    let source = TestRepository::init();
+    source.git(&["config", "remote.pushDefault", "origin"]);
+    source.git(&[
+        "remote",
+        "add",
+        "origin",
+        "https://example.invalid/team/repo.git",
+    ]);
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(source.root().join(".git/config"))
+        .unwrap()
+        .write_all(b"\n[remote \"origin\"]\n\tprune\n")
+        .unwrap();
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    let remotes = client.remotes(&repository).await.unwrap();
+    assert_eq!(remotes.len(), 1);
+    assert_eq!(remotes[0].name(), "origin");
 }

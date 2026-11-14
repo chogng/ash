@@ -3909,6 +3909,9 @@ impl AppServer {
             Some(ClientMethod::MessageCheckpoints) => {
                 self.agent_processor().message_checkpoints(&request.params)
             }
+            Some(ClientMethod::VoiceHistoryRead) => {
+                self.session_processor().voice_history_read(&request.params)
+            }
             Some(ClientMethod::ThreadHistoryState) => {
                 self.agent_processor().thread_history_state(&request.params)
             }
@@ -3918,7 +3921,9 @@ impl AppServer {
             Some(ClientMethod::AgentCapabilitiesRead) => {
                 self.agent_processor().agent_capabilities_read(connection)
             }
-            Some(ClientMethod::SessionList) => self.session_processor().session_list(connection),
+            Some(ClientMethod::SessionList) => self
+                .session_processor()
+                .session_list(connection, &request.params),
             Some(ClientMethod::SessionCatalogSubscribe) => self
                 .session_processor()
                 .session_catalog_subscribe(connection),

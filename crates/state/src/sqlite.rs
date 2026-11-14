@@ -37,3 +37,6 @@ pub use thread::SqliteThreadStore;
 #[cfg(test)]
 #[path = "sqlite/git_turn_commits_tests.rs"]
 mod git_turn_commits_tests;
+
+#[path = "sqlite/voice_history.rs"]
+mod voice_history;

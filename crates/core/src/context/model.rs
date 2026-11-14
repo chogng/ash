@@ -170,6 +170,7 @@ impl TryFrom<ash_extension_api::PromptFragment> for InstructionFragment {
 /// Complete immutable input to one context-planning operation.
 #[derive(Clone, Debug)]
 pub(crate) struct ContextInput {
+    identity: (ash_protocol::AgentId, ash_protocol::ThreadId),
     policy: ash_protocol::ContextCompactionPolicy,
     source_thread_sequence: u64,
     current_turn_id: TurnId,
@@ -206,6 +207,7 @@ impl ContextInput {
             )
         });
         Self {
+            identity: (snapshot.agent_id.clone(), snapshot.thread_id.clone()),
             policy: snapshot.context_policy(&current_turn_id),
             source_thread_sequence: snapshot.sequence,
             current_turn_id: current_turn_id.clone(),
@@ -260,6 +262,27 @@ impl ContextInput {
     pub(crate) fn with_evidence(mut self, evidence: Vec<ContextEvidence>) -> Self {
         self.evidence = evidence;
         self
+    }
+
+    pub(super) fn thread_hint(
+        &self,
+        checkpoint: Option<&ContextCheckpoint>,
+    ) -> Option<(ash_protocol::ToolCallId, String)> {
+        if !self.policy.context_window_as_tool_output() {
+            return None;
+        }
+        let window = checkpoint.map_or("initial", |checkpoint| checkpoint.checkpoint_id.as_str());
+        Some((
+            ash_protocol::ToolCallId::new(format!(
+                "ash-context-hint:{}:{window}",
+                self.current_turn_id
+            ))
+            .expect("nonempty generated hint ID"),
+            format!(
+                "Agent ID: {}\nThread ID: {}\nFirst context window ID: {}:initial\nCurrent context window ID: {}:{window}",
+                self.identity.0, self.identity.1, self.identity.1, self.identity.1
+            ),
+        ))
     }
 
     pub(crate) fn policy(&self) -> &ash_protocol::ContextCompactionPolicy {

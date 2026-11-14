@@ -3196,6 +3196,7 @@ fn context_compaction_policy_persists_and_rejects_invalid_updates_atomically() {
     let path = config_path("context-compaction");
     let store = ConfigStore::open(&path).unwrap();
     let policy = ash_protocol::ContextCompactionPolicy::Handoff {
+        context_window_as_tool_output: true,
         buffer_tokens: 16_384,
         state_tokens: 8_192,
     };
@@ -3221,6 +3222,7 @@ fn context_compaction_policy_persists_and_rejects_invalid_updates_atomically() {
                 expected_revision: saved.revision,
                 command: update(Patch::Value(
                     ash_protocol::ContextCompactionPolicy::Handoff {
+                        context_window_as_tool_output: false,
                         buffer_tokens: 4,
                         state_tokens: 8
                     }

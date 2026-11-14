@@ -96,6 +96,7 @@ impl ContextBudgetReport {
 /// Immutable, diagnostic selection result for one model invocation.
 #[derive(Clone, Debug)]
 pub(crate) struct ContextPlan {
+    thread_hint: Option<(ash_protocol::ToolCallId, String)>,
     source_thread_sequence: u64,
     current_turn_id: TurnId,
     instructions: Vec<InstructionFragment>,
@@ -110,6 +111,7 @@ pub(crate) struct ContextPlan {
 }
 
 pub(super) struct ContextPlanInput {
+    pub thread_hint: Option<(ash_protocol::ToolCallId, String)>,
     pub source_thread_sequence: u64,
     pub current_turn_id: TurnId,
     pub instructions: Vec<InstructionFragment>,
@@ -124,8 +126,13 @@ pub(super) struct ContextPlanInput {
 }
 
 impl ContextPlan {
+    pub(crate) fn thread_hint(&self) -> Option<&(ash_protocol::ToolCallId, String)> {
+        self.thread_hint.as_ref()
+    }
+
     pub(super) fn new(input: ContextPlanInput) -> Self {
         Self {
+            thread_hint: input.thread_hint,
             source_thread_sequence: input.source_thread_sequence,
             current_turn_id: input.current_turn_id,
             instructions: input.instructions,

@@ -1028,10 +1028,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Rechercher dans l’historique de saisie",
     ),
     translation(
-        "Dashboard (empty input)",
-        "ダッシュボード（空の入力）",
-        "仪表盘（空输入）",
-        "Tableau de bord (saisie vide)",
+        "Dashboard (empty or read-only input)",
+        "ダッシュボード（入力が空または読み取り専用）",
+        "仪表盘（输入为空或只读）",
+        "Tableau de bord (saisie vide ou en lecture seule)",
     ),
     translation(
         "Toggle dictation",
@@ -2607,6 +2607,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
     translation("below", "下", "下方", "en dessous"),
     translation("active", "有効", "活动", "actif"),
     translation("archived", "アーカイブ済み", "已归档", "archivé"),
+    translation(
+        "archived · restore from dashboard",
+        "アーカイブ済み · ダッシュボードから復元",
+        "已归档 · 可从仪表盘恢复",
+        "archivé · restaurer depuis le tableau de bord",
+    ),
     translation("cancelled", "キャンセル済み", "已取消", "annulé"),
     translation("collecting", "収集中", "正在收集", "collecte en cours"),
     translation("completed", "完了", "已完成", "terminé"),

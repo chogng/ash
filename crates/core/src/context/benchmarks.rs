@@ -130,6 +130,7 @@ fn tool_schema_copy_benchmark() {
                 .collect::<Vec<_>>();
             let policy = if handoff {
                 ash_protocol::ContextCompactionPolicy::Handoff {
+                    context_window_as_tool_output: false,
                     state_tokens: 512,
                     buffer_tokens: 1024,
                 }

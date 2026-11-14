@@ -236,7 +236,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 },
             };
 
-            if driver.poll_request_completions() {
+            // Exit wins over a simultaneously completed navigation. Session shutdown closes
+            // the connection and cancels its outstanding requests before joining the worker.
+            if !matches!(action, Some(super::AppCommand::Quit)) && driver.poll_request_completions()
+            {
                 redraw.request(Instant::now(), RedrawPriority::Batched);
             }
 

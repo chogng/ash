@@ -66,6 +66,8 @@ mod approval;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThreadSnapshot {
+    /// Maximum canonical observation time, replayed independently of model compaction.
+    pub(crate) recorded_at_floor: ash_history::Timestamp,
     pub(crate) user_time_contexts: BTreeMap<ItemId, ash_protocol::TimeContext>,
     pub(crate) message_times: BTreeMap<ItemId, u64>,
     pub(crate) history_sources: BTreeMap<ThreadId, ash_protocol::HistoryPrefixRef>,
@@ -486,6 +488,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 let mut event_digests = BTreeMap::new();
                 event_digests.insert(envelope.sequence, event_digest(&envelope.event)?);
                 Ok(ThreadSnapshot {
+                    recorded_at_floor: envelope.recorded_at,
                     voice_transcripts: Vec::new(),
                     user_time_contexts: Default::default(),
                     message_times: BTreeMap::new(),
@@ -2573,6 +2576,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
     snapshot
         .event_digests
         .insert(envelope.sequence, event_digest(&envelope.event)?);
+    snapshot.recorded_at_floor = snapshot.recorded_at_floor.max(envelope.recorded_at);
     snapshot.sequence = envelope.sequence;
     Ok(snapshot)
 }

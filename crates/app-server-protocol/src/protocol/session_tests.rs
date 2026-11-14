@@ -164,3 +164,29 @@ fn side_chat_and_queue_delivery_contracts_preserve_explicit_source_and_intent() 
     assert!(serde_json::from_value::<crate::protocol::queue::QueueEditAction>(json!({"type":"replaceTextWithDelivery", "text":"edited", "delivery":{"type":"steering"}})).is_err());
     assert!(serde_json::from_value::<crate::protocol::queue::QueueEditAction>(json!({"type":"replaceTextWithDelivery", "text":"edited", "delivery":{"type":"unknown"}})).is_err());
 }
+
+#[test]
+fn session_inclusion_filters_keep_null_empty_and_invalid_id_semantics() {
+    use super::SessionListParams;
+    assert_eq!(
+        serde_json::from_value::<SessionListParams>(json!({}))
+            .unwrap()
+            .included_session_ids,
+        None
+    );
+    assert_eq!(
+        serde_json::from_value::<SessionListParams>(json!({"includedSessionIds":null}))
+            .unwrap()
+            .included_session_ids,
+        None
+    );
+    assert_eq!(
+        serde_json::from_value::<SessionListParams>(json!({"includedSessionIds":[]}))
+            .unwrap()
+            .included_session_ids,
+        Some(Vec::new())
+    );
+    assert!(
+        serde_json::from_value::<SessionListParams>(json!({"includedSessionIds":[""]})).is_err()
+    );
+}

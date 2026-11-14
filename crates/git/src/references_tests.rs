@@ -771,7 +771,7 @@ async fn reference_state_shares_one_ref_and_remote_capture_with_its_catalog() {
             .iter()
             .filter(|p| matches!(p.kind, crate::GitProcessKind::Remote))
             .count(),
-        3,
-        "one remote-name query and its fetch/push URLs must serve both consumers"
+        2,
+        "fetch/push URLs must serve both consumers; names use NUL-delimited config"
     );
 }

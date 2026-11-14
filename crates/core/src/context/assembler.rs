@@ -53,6 +53,7 @@ impl ContextAssembler {
                         .checked_sub(1)
                         .and_then(|index| u32::try_from(index).ok());
                 }
+                append_thread_hint(&mut input, plan);
                 input.extend(turn_instruction_message(plan));
                 if let Some(evidence) = evidence_message(plan)? {
                     input.push(evidence);
@@ -197,6 +198,9 @@ impl ContextAssembler {
         }
         if let Some(ending) = previous_turn.as_ref().and_then(|id| plan.turn_ending(id)) {
             append_turn_ending(&mut input, *ending);
+        }
+        if !evidence_inserted {
+            append_thread_hint(&mut input, plan);
         }
         if prompt_cache_prefix_end.is_none() {
             prompt_cache_prefix_end = input
@@ -407,6 +411,29 @@ fn append_user_content(
         tool_calls: Vec::new(),
     }));
     *active_user_turn = Some(turn_id.clone());
+}
+
+/// Host-generated framing uses a pair so providers retain valid tool history. It never
+/// enters the execution journal or advertises an executable Tool.
+fn append_thread_hint(input: &mut Vec<InputItem>, plan: &ContextPlan) {
+    let Some((id, text)) = plan.thread_hint() else {
+        return;
+    };
+    let name = ash_protocol::ToolName::new("agent_thread_hint").expect("static tool name");
+    append_tool_call(
+        input,
+        ToolCall {
+            id: id.clone(),
+            name: name.clone(),
+            arguments: serde_json::json!({}),
+        },
+    );
+    input.push(InputItem::ToolResult(ToolResult {
+        call_id: id.clone(),
+        name,
+        content: vec![ContentPart::Text(text.clone())],
+        is_error: false,
+    }));
 }
 
 fn append_tool_call(input: &mut Vec<InputItem>, call: ToolCall) {

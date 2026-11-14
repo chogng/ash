@@ -895,6 +895,13 @@ impl ChatInput {
         }
     }
 
+    /// Dismisses transient search/completion state while retaining the original editor draft.
+    pub(crate) fn freeze_draft(&mut self) {
+        self.history.reset();
+        self.apply_history_effect(RecallEffect::Restore);
+        self.completion.clear();
+    }
+
     pub(super) fn reset_history_navigation(&mut self) {
         self.history.reset();
         self.history_draft = None;

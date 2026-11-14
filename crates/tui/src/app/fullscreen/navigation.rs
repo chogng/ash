@@ -171,11 +171,11 @@ pub(in crate::app) fn handle_key(
         if let Some(command) = app.handle_thread_request_key(key, now) {
             return command;
         }
-        if app.chat_panel.request_active() {
+        if app.approval_view().is_some() || app.query_view().is_some() {
             return None;
         }
     }
-    if chat_input_focused(app) && app.input_state().history_intercepts(key) {
+    if app.accepts_input() && chat_input_focused(app) && app.input_state().history_intercepts(key) {
         let outcome = app.handle_composer_key(key);
         app.fullscreen.escape.reset();
         return app.handle_chat_composer_outcome(outcome, now);
@@ -421,11 +421,7 @@ pub(in crate::app) fn handle_screen_navigation_key(
             _ => None,
         };
     }
-    if !key.modifiers.is_empty()
-        || !chat_input_focused(app)
-        || !app.input().is_empty()
-        || !app.input_state().is_empty()
-    {
+    if !key.modifiers.is_empty() || !chat_input_focused(app) {
         return None;
     }
     if bindings::DASHBOARD_OPEN.matches(key) && app.session_manager_view().is_none() {
@@ -434,6 +430,9 @@ pub(in crate::app) fn handle_screen_navigation_key(
         }
         show_manager(app);
         return Some(None);
+    }
+    if !app.input().is_empty() || !app.input_state().is_empty() {
+        return None;
     }
     if key.code == KeyCode::Right && app.session_manager_view().is_none() {
         return Some(app.fullscreen.issues.open().map(Into::into));

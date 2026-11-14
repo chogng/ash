@@ -122,10 +122,22 @@ fn window_turn(
 fn both_policies_cross_multiple_windows_in_one_turn_and_restore_without_repeating_tools() {
     for policy in [
         ash_protocol::ContextCompactionPolicy::Summary {
+            context_window_as_tool_output: false,
             summary_tokens: 200,
             recent_tokens: 900,
         },
         ash_protocol::ContextCompactionPolicy::Handoff {
+            context_window_as_tool_output: false,
+            buffer_tokens: 4_000,
+            state_tokens: 200,
+        },
+        ash_protocol::ContextCompactionPolicy::Summary {
+            context_window_as_tool_output: true,
+            summary_tokens: 200,
+            recent_tokens: 900,
+        },
+        ash_protocol::ContextCompactionPolicy::Handoff {
+            context_window_as_tool_output: true,
             buffer_tokens: 4_000,
             state_tokens: 200,
         },
@@ -157,6 +169,16 @@ fn both_policies_cross_multiple_windows_in_one_turn_and_restore_without_repeatin
             .execute(&thread, &turn, &CancellationSource::new().token())
             .unwrap();
         assert!(matches!(result, TurnExecutionOutcome::Completed(_)));
+        for request in model
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|request| !request.tools.is_empty())
+        {
+            let hints = request.input.iter().filter(|item| matches!(item, InputItem::ToolResult(result) if result.name.as_str() == "agent_thread_hint")).count();
+            assert_eq!(hints, usize::from(policy.context_window_as_tool_output()));
+        }
         let state = threads.read_thread(&thread).unwrap();
         assert!(
             state.context_checkpoints.len() >= 2,
@@ -240,6 +262,7 @@ fn both_policies_cross_multiple_windows_in_one_turn_and_restore_without_repeatin
 #[test]
 fn cancellation_after_handoff_response_keeps_source_history_without_a_checkpoint() {
     let (_, threads, thread, turn) = window_turn(ash_protocol::ContextCompactionPolicy::Handoff {
+        context_window_as_tool_output: false,
         buffer_tokens: 4_000,
         state_tokens: 200,
     });
@@ -275,6 +298,7 @@ fn cancellation_after_handoff_response_keeps_source_history_without_a_checkpoint
 #[test]
 fn oversized_measured_handoff_is_rejected_before_model_invocation_and_keeps_history() {
     let (_, threads, thread, turn) = window_turn(ash_protocol::ContextCompactionPolicy::Handoff {
+        context_window_as_tool_output: false,
         buffer_tokens: 4_000,
         state_tokens: 200,
     });

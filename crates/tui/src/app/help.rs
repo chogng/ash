@@ -131,7 +131,10 @@ impl Shortcuts {
             title: "Session",
             entries: vec![
                 (bindings::SHORTCUT_HELP.keys(), "Keyboard shortcuts"),
-                (bindings::DASHBOARD_OPEN.keys(), "Dashboard (empty input)"),
+                (
+                    bindings::DASHBOARD_OPEN.keys(),
+                    "Dashboard (empty or read-only input)",
+                ),
                 (
                     format!("{0} {0}", bindings::CLOSE.keys()),
                     "Open rewind checkpoints",

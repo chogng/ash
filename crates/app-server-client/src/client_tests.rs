@@ -309,6 +309,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
         .terminal_attach(TerminalAttachParams {
             lifetime_token: None,
             dir_id: None,
+            attach_nonce: None,
             terminal_id: created.terminal_id.clone(),
             reconnect_token: created.reconnect.unwrap().reconnect_token,
             rows: 24,

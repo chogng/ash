@@ -5,6 +5,8 @@ use crate::GitRepository;
 use crate::GitResult;
 use crate::client::validate_argument;
 use crate::error::invalid_command as invalid;
+use futures::StreamExt;
+use std::collections::BTreeSet;
 use std::ffi::OsString;
 
 /// Integration selection for a pull; Git configuration remains authoritative in configured mode.
@@ -178,22 +180,38 @@ impl GitClient {
     }
 
     pub async fn remotes(&self, repository: &GitRepository) -> GitResult<Vec<GitRemote>> {
-        let remote_names = self.remote_names(repository).await?;
-        let mut remotes = Vec::with_capacity(remote_names.len());
-        for name in remote_names {
-            let fetch_urls = self
-                .remote_urls(repository, &name, RemoteUrlKind::Fetch)
-                .await?;
-            let push_urls = self
-                .remote_urls(repository, &name, RemoteUrlKind::Push)
-                .await?;
-            remotes.push(GitRemote {
-                name,
-                fetch_urls,
-                push_urls,
-            });
-        }
-        Ok(remotes)
+        // One deadline includes discovery and all local URL resolutions. A repository with
+        // many remotes must not multiply the per-process timeout or exhaust process handles.
+        let timeout = self.limits().query_timeout();
+        tokio::time::timeout(timeout, async {
+            let names = self.remote_names(repository).await?;
+            let mut pending = futures::stream::iter(names)
+                .map(|name| async move {
+                    let fetch_urls = self
+                        .remote_urls(repository, &name, RemoteUrlKind::Fetch)
+                        .await?;
+                    let push_urls = self
+                        .remote_urls(repository, &name, RemoteUrlKind::Push)
+                        .await?;
+                    Ok::<_, GitError>(GitRemote {
+                        name,
+                        fetch_urls,
+                        push_urls,
+                    })
+                })
+                .buffer_unordered(8);
+            let mut remotes = Vec::new();
+            while let Some(remote) = pending.next().await {
+                remotes.push(remote?);
+            }
+            remotes.sort_by(|left, right| left.name.cmp(&right.name));
+            Ok(remotes)
+        })
+        .await
+        .map_err(|_| GitError::TimedOut {
+            command: "git remote inventory".into(),
+            timeout,
+        })?
     }
 
     async fn remote_urls(
@@ -614,13 +632,54 @@ mod tests;
 impl GitClient {
     pub(crate) async fn remote_names(&self, repository: &GitRepository) -> GitResult<Vec<String>> {
         let output = self
-            .run_query(repository.worktree_root(), ["remote"])
+            .run_query_unchecked(
+                repository.worktree_root(),
+                ["config", "--null", "--get-regexp", r"^(remote\.|url\.)"],
+            )
             .await?;
-        Ok(std::str::from_utf8(&output.stdout)
-            .map_err(|_| invalid("invalid remote encoding"))?
-            .lines()
-            .map(str::to_owned)
-            .collect())
+        if output.status.code() == Some(1) {
+            return Ok(Vec::new());
+        }
+        let output = output.require_success()?;
+        let mut names = BTreeSet::new();
+        for entry in output
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter(|entry| !entry.is_empty())
+        {
+            let separator = entry
+                .iter()
+                .position(|byte| *byte == b'\n')
+                .unwrap_or(entry.len());
+            let key = std::str::from_utf8(&entry[..separator])
+                .map_err(|_| invalid("invalid remote encoding"))?;
+            let value = entry.get(separator + 1..).unwrap_or_default();
+            // Native get-url applies rewrites and resets. Its output has no NUL mode,
+            // so reject control-bearing URLs and rewrite rules before parsing lines.
+            if key.starts_with("url.") {
+                if key.chars().any(char::is_control)
+                    || value.iter().any(|byte| byte.is_ascii_control())
+                {
+                    return Err(invalid("remote URL rewrite contains control characters"));
+                }
+                continue;
+            }
+            let Some((name, property)) = key
+                .strip_prefix("remote.")
+                .and_then(|key| key.rsplit_once('.'))
+            else {
+                // Global remote.pushDefault is not a remote subsection.
+                continue;
+            };
+            if matches!(property, "url" | "pushurl")
+                && value.iter().any(|byte| byte.is_ascii_control())
+            {
+                return Err(invalid("remote URL contains control characters"));
+            }
+            validate_argument(name)?;
+            names.insert(name.to_owned());
+        }
+        Ok(names.into_iter().collect())
     }
     pub(crate) async fn delete_remote_branch(
         &self,

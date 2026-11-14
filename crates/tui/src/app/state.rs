@@ -591,6 +591,9 @@ impl App {
     }
 
     pub(super) fn send_queued_message(&mut self, queue_id: QueueId) -> Option<AppCommand> {
+        if !self.viewed_thread_accepts_input() {
+            return None;
+        }
         if matches!(self.status, Status::Working) && !self.chat_panel.is_steering() {
             self.thread.update(ThreadPresentationEvent::FailureReported(
                 "wait until the active Turn can accept steering".into(),
@@ -616,6 +619,9 @@ impl App {
         key: KeyEvent,
         now: Instant,
     ) -> Option<Option<AppCommand>> {
+        if !self.viewed_thread_accepts_input() {
+            return None;
+        }
         // Escape first leaves a free-form answer editor; the request itself stays
         // attached to the turn and can then be interrupted through the app keymap.
         if self.chat_panel.request_active()
@@ -635,12 +641,18 @@ impl App {
     }
 
     pub(super) fn activate_approval(&mut self, index: usize) -> Option<AppCommand> {
+        if !self.viewed_thread_accepts_input() {
+            return None;
+        }
         self.chat_panel
             .activate_approval(index)
             .map(|response| ThreadCommand::ResolveRequest(response).into())
     }
 
     pub(super) fn activate_query_choice(&mut self, index: usize) -> Option<AppCommand> {
+        if !self.viewed_thread_accepts_input() {
+            return None;
+        }
         self.chat_panel
             .activate_query_choice(index)
             .map(|response| ThreadCommand::ResolveRequest(response).into())
@@ -1309,6 +1321,7 @@ impl App {
                 self.session_navigation().screen(),
                 Some(SessionScreen::Session(_))
             )
+            && self.viewed_thread_accepts_input()
             && self.chat_panel.request_active()
         {
             self.chat_panel.handle_request_paste(pasted);
@@ -1601,7 +1614,11 @@ impl App {
     }
 
     pub(crate) fn completion(&self) -> Option<CompletionView<'_>> {
-        if self.panels().command_active() || self.overlay().is_some() || self.queue_focused() {
+        if (!self.starts_new_session() && !self.viewed_thread_accepts_input())
+            || self.panels().command_active()
+            || self.overlay().is_some()
+            || self.queue_focused()
+        {
             return None;
         }
         self.input_state().completion()
@@ -1714,6 +1731,11 @@ impl App {
     }
 
     pub(super) fn handle_composer_key(&mut self, key: KeyEvent) -> ChatComposerOutcome {
+        // History search and completion also route through this entrypoint. Retain the
+        // complete draft while the authoritative catalog makes the Thread read-only.
+        if !self.starts_new_session() && !self.viewed_thread_accepts_input() {
+            return ChatComposerOutcome::Consumed;
+        }
         // Task interruption and effort shortcuts take precedence over editor movement,
         // including Vim Escape. Completion popups and history search retain their
         // own input until they are dismissed.
@@ -1827,7 +1849,8 @@ impl App {
     pub(crate) fn approval_view(
         &self,
     ) -> Option<crate::thread::interaction::approval::ApprovalView<'_>> {
-        (!self.fullscreen_home_visible()
+        (self.viewed_thread_accepts_input()
+            && !self.fullscreen_home_visible()
             && matches!(
                 self.session_navigation().screen(),
                 Some(SessionScreen::Session(_))
@@ -1837,7 +1860,8 @@ impl App {
     }
 
     pub(crate) fn query_view(&self) -> Option<crate::thread::interaction::query::QueryView<'_>> {
-        (!self.fullscreen_home_visible()
+        (self.viewed_thread_accepts_input()
+            && !self.fullscreen_home_visible()
             && matches!(
                 self.session_navigation().screen(),
                 Some(SessionScreen::Session(_))
@@ -2265,6 +2289,9 @@ impl App {
     }
 
     pub(super) fn focus_queue_item(&mut self, id: QueueId) -> bool {
+        if !self.viewed_thread_accepts_input() {
+            return false;
+        }
         let queue = &self.thread_presentations.active().queue;
         self.fullscreen
             .viewports
@@ -2372,8 +2399,8 @@ impl App {
 
     pub(crate) fn can_open_dashboard_from_input(&self) -> bool {
         self.chat_input_focused()
-            && self.input().is_empty()
-            && self.input_state().is_empty()
+            && (!self.viewed_thread_accepts_input()
+                || (self.input().is_empty() && self.input_state().is_empty()))
             && self.completion().is_none()
             && self.session_manager_view().is_none()
             && self.session_preview().is_none()
@@ -2540,6 +2567,26 @@ impl App {
                 self.session_navigation().screen(),
                 Some(SessionScreen::Session(_))
             )
+    }
+
+    pub(crate) fn viewed_thread_archived(&self) -> bool {
+        if self.starts_new_session() {
+            return false;
+        }
+        let Some(SessionScreen::Session(id)) = self.session_navigation().screen() else {
+            return false;
+        };
+        self.sessions
+            .catalog()
+            .iter()
+            .find(|session| &session.session_id == id)
+            .is_some_and(|session| {
+                session.status == ash_protocol::SessionStatus::Archived
+                    || session.threads.iter().any(|thread| {
+                        Some(&thread.thread_id) == self.sessions.remembered_thread(id)
+                            && thread.status == ash_protocol::ThreadStatus::Archived
+                    })
+            })
     }
 
     fn viewed_thread_accepts_input(&self) -> bool {
@@ -3527,7 +3574,13 @@ impl App {
                 .finish_details(generation, result),
             SessionEvent::PickerOpened(view) => self.show_session_picker(view),
             SessionEvent::CatalogReceived(catalog) => {
+                let writable = self.viewed_thread_accepts_input();
                 self.sessions.refresh_catalog(catalog);
+                if writable && !self.viewed_thread_accepts_input() {
+                    self.thread_presentations.active_mut().input.freeze_draft();
+                    self.fullscreen.viewports.active_mut().queue.blur();
+                    self.inline.viewports.active_mut().queue.blur();
+                }
                 self.fullscreen.sessions.reconcile(&self.sessions);
                 self.inline.sessions.reconcile(&self.sessions);
                 self.reconcile_agent_thread_switcher();
@@ -3569,7 +3622,8 @@ impl App {
                 || self.completion().is_some()
                 || self.input_state().searching_history(),
             chat_input_empty: self.input().is_empty(),
-            turn_active: !matches!(self.status, Status::Ready | Status::Error),
+            turn_active: self.viewed_thread_accepts_input()
+                && !matches!(self.status, Status::Ready | Status::Error),
             is_press,
         }
     }
@@ -4012,7 +4066,9 @@ impl App {
             self.dictation_send_after_stop = false;
             return self.toggle_dictation();
         }
-        if matches!(self.status, Status::Ready | Status::Error) {
+        if !self.viewed_thread_accepts_input()
+            || matches!(self.status, Status::Ready | Status::Error)
+        {
             return Some(AppCommand::Quit);
         }
         self.interrupt_turn()

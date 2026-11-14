@@ -328,6 +328,9 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
             bindings::CANCEL_HINTS.localized_text(app.language())
         ));
     }
+    if app.viewed_thread_archived() {
+        return BottomContent::Muted("archived · restore from dashboard");
+    }
     if app.viewed_thread_completed() {
         return BottomContent::Muted("completed · choose Main or another Subagent");
     }

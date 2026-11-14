@@ -95,6 +95,16 @@ impl ContextPlanner {
         }
         if let Some(input) = history {
             let checkpoint = input.checkpoints().last();
+            let hint = input.thread_hint(checkpoint);
+            let hint_tokens = u64::from(estimate_thread_hint(hint.as_ref()).get());
+            if hint_tokens > 0 {
+                categories[0].tokens += hint_tokens;
+                categories[0].sources.push(ModelContextSourceUsage {
+                    name: "agent_thread_hint".into(),
+                    item_count: None,
+                    tokens: hint_tokens,
+                });
+            }
             let covered = checkpoint
                 .map(|checkpoint| checkpoint.referenced_items.iter().collect::<BTreeSet<_>>())
                 .unwrap_or_default();
@@ -115,6 +125,7 @@ impl ContextPlanner {
                     .cloned()
                     .collect::<Vec<_>>();
                 if estimate_instructions(&required)
+                    .saturating_add(estimate_thread_hint(hint.as_ref()))
                     .saturating_add(estimate_tools(tools))
                     .saturating_add(estimate_environment(environment))
                     .saturating_add(estimate_items(&items))
@@ -168,7 +179,10 @@ impl ContextPlanner {
             .cloned()
             .collect::<Vec<_>>();
         sort_instructions(&mut required_instructions);
-        let required_instruction_tokens = estimate_instructions(&required_instructions);
+        let hint = input.thread_hint(input.checkpoints().last());
+        let hint_tokens = estimate_thread_hint(hint.as_ref());
+        let required_instruction_tokens =
+            estimate_instructions(&required_instructions).saturating_add(hint_tokens);
         let tool_tokens = estimate_tools(input.tools());
         let checkpoint = input.checkpoints().last().cloned();
         let checkpoint_items = checkpoint
@@ -233,7 +247,8 @@ impl ContextPlanner {
             ResolvedContextBudget::ProviderManaged => {
                 let mut instructions = input.instructions().to_vec();
                 sort_instructions(&mut instructions);
-                let instruction_tokens = estimate_instructions(&instructions);
+                let instruction_tokens =
+                    estimate_instructions(&instructions).saturating_add(hint_tokens);
                 let estimated_input = instruction_tokens
                     .saturating_add(tool_tokens)
                     .saturating_add(current_turn_tokens)
@@ -245,6 +260,7 @@ impl ContextPlanner {
                     .collect();
                 return Ok(ContextPreparation::Ready(ContextPlan::new(
                     ContextPlanInput {
+                        thread_hint: hint,
                         source_thread_sequence: input.source_thread_sequence(),
                         current_turn_id: input.current_turn_id().clone(),
                         instructions,
@@ -334,7 +350,8 @@ impl ContextPlanner {
             }
         }
         let evidence_tokens = estimate_evidence(&selected_evidence);
-        let instruction_tokens = estimate_instructions(&selected_instructions);
+        let instruction_tokens =
+            estimate_instructions(&selected_instructions).saturating_add(hint_tokens);
         let final_report = ContextBudgetReport::CoreManaged {
             context_window: budget.context_window(),
             reserved_output: budget.reserved_output(),
@@ -353,6 +370,7 @@ impl ContextPlanner {
             .collect();
         Ok(ContextPreparation::Ready(ContextPlan::new(
             ContextPlanInput {
+                thread_hint: hint,
                 source_thread_sequence: input.source_thread_sequence(),
                 current_turn_id: input.current_turn_id().clone(),
                 instructions: selected_instructions,
@@ -712,6 +730,7 @@ fn automatic_compaction(
         ash_protocol::ContextCompactionPolicy::Summary {
             summary_tokens,
             recent_tokens,
+            ..
         } => (summary_tokens, recent_tokens),
         ash_protocol::ContextCompactionPolicy::Handoff { state_tokens, .. } => (state_tokens, 0),
     };
@@ -1114,6 +1133,18 @@ fn estimate_one_evidence(evidence: &crate::ContextEvidence) -> ContextTokenCount
             + evidence.body.len(),
         TEXT_ITEM_OVERHEAD.saturating_mul(2),
     )
+}
+
+fn estimate_thread_hint(hint: Option<&(ash_protocol::ToolCallId, String)>) -> ContextTokenCount {
+    hint.map_or(ContextTokenCount::ZERO, |(id, text)| {
+        // Count JSON escaping and the two copies of the call identity. Reserve the fixed
+        // message/tool framing conservatively, without allocating the serialized payload.
+        let bytes = ash_utils_string::serialized_json_bytes(&(id, id, text)).unwrap_or(0);
+        estimate_bytes(
+            bytes.saturating_add(512),
+            TOOL_ITEM_OVERHEAD.saturating_mul(2),
+        )
+    })
 }
 
 fn estimate_tools(tools: &[ToolDefinition]) -> ContextTokenCount {

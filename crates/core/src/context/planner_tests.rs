@@ -846,6 +846,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         .map(|(index, item)| (item.item_id().clone(), index as u64 + 2))
         .collect();
     ThreadSnapshot {
+        recorded_at_floor: ash_history::Timestamp(0),
         kind: ash_protocol::SessionKind::Code,
         voice_transcripts: Vec::new(),
         execution_target: None,
@@ -1169,6 +1170,7 @@ fn handoff_uses_working_context_with_no_task_tools_and_a_bounded_output() {
     );
     let input = ContextInput::new(&state, current, Vec::new(), Vec::new(), budget).with_policy(
         ash_protocol::ContextCompactionPolicy::Handoff {
+            context_window_as_tool_output: false,
             buffer_tokens: 4_000,
             state_tokens: 200,
         },
@@ -1195,6 +1197,7 @@ fn old_read_results_are_removed_before_requesting_a_summary() {
     }
     let input = ContextInput::new(&state, current, Vec::new(), Vec::new(), budget(3_000))
         .with_policy(ash_protocol::ContextCompactionPolicy::Summary {
+            context_window_as_tool_output: false,
             summary_tokens: 200,
             recent_tokens: 1_500,
         });

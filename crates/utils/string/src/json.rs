@@ -3,6 +3,26 @@
 use serde::Serialize;
 use std::io;
 
+/// Counts encoded JSON bytes without allocating or retaining the serialized document.
+pub fn serialized_json_bytes<T: Serialize + ?Sized>(value: &T) -> serde_json::Result<usize> {
+    #[derive(Default)]
+    struct Counter(usize);
+    impl io::Write for Counter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0 = self.0.checked_add(bytes.len()).ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "JSON byte count overflow")
+            })?;
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut counter = Counter::default();
+    serde_json::to_writer(&mut counter, value)?;
+    Ok(counter.0)
+}
+
 struct AsciiFormatter;
 
 impl serde_json::ser::Formatter for AsciiFormatter {

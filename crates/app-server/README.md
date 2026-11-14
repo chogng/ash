@@ -204,3 +204,14 @@ Ash 编辑器窗口通过 `ide/request` 注册窗口标题、工作区根目录�
 `ide/request` 的 `openConversation` 验证 Session／Thread 关系、未归档状态、本机执行目标及未完成的 Turn 和队列消息。同一终端连接的目录 peer 以弱引用记录彼此身份，交接直接检查各 peer 拥有的 Turn 绑定；另一个 Session 或目录中的后台任务也会阻止关闭该连接。这份 peer 索引不复制 Core 执行状态或审批状态。已有终端发起窗口优先于上下文选择；该窗口不可用时不替换成其他窗口。通过反向 `ide/hostRequest.openConversation` 携带同一持久身份，编辑器 adapter 调用既有 `openAgentsWindow({ conversation })`。现有窗口服务等待 Agents renderer 加载并确认后才返回 `opened`；导航失败、来源断线或取消不能产生成功交接回执。普通 IDE 请求上限为 5 秒，窗口加载交接为 30 秒。
 
 TUI 的 `/desktop` 只在收到成功回执且仍选择原会话、没有新增输入或待执行操作时退出；否则保留终端。此操作不发送 Turn、不复制历史、不移动草稿、不变更权限，也不重绑运行中的工具与审批。新一轮执行仍由提交它的产品连接拥有。共享 Session、Thread、Turn 和记录以 Rust/Core 为唯一 owner，Agents 的现有 Sessions provider 读取同一身份，Project、Workspace 和执行 Environment 保持各自边界。
+
+`session/list` 支持 `includedSessionIds`、`excludedSessionIds` 和 `archived`。ID 列表各最多 100 项；
+省略或 null 的包含列表不限制结果，空数组不匹配，排除列表优先。包含查询只读取索引并保留目录顺序，
+缺失行不触发历史扫描或修复。客户端应先确认服务端 schema 支持过滤，缺失结果不能单独证明会话已删除。
+
+`session/thread/voice/history` 按提交序号读取 Thread 自身的语音事件，不依赖活动语音连接或 Turn 分页。
+每页最多 500 条，游标绑定 Session、Thread、筛选条件和固定 `snapshotSequence`；后续页可以调整页长。
+`filter` 支持 `voiceSessionId`、`eventId` 及左闭右开的 `fromRecordedAtMs`/`toRecordedAtMs`。
+`requiredSequence` 或指定快照尚未提交时返回 `pending`；已知事件被其他筛选排除时仍返回 `ready`。
+分页完成后以 `afterSequence = snapshotSequence` 开始新快照，补齐后来提交的记录。每条 entry 是语音片段的
+一次不可变修订，消费者按片段 `itemId` 合并。分支读取不包含继承的父级语音事件。

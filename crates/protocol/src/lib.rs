@@ -360,3 +360,10 @@ pub use turn_execution::TurnExecutionBinding;
 #[cfg(test)]
 #[path = "contract_tests.rs"]
 mod contract_tests;
+
+mod voice_history;
+pub use voice_history::VoiceHistoryCoverage;
+pub use voice_history::VoiceHistoryEntry;
+pub use voice_history::VoiceHistoryFilter;
+pub use voice_history::VoiceHistoryPage;
+pub use voice_history::VoiceHistoryQuery;

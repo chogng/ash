@@ -25,7 +25,7 @@ fn search_consumes_excerpts_and_cursors_without_reading_each_memory() {
         requests: requests.clone(),
         responses: VecDeque::from([json!({
             "catalogRevision": 5,
-            "matches": [{"source":"user","citation":{"memoryId":"entry","scope":{"type":"profile"},"revision":1,"startByte":0,"endByte":8},"memoryId":"entry","scope":{"type":"profile"},"revision":1,"title":"Decision","excerpt":"Use Rust","updatedAtUnixMs":0}],
+            "matches": [{"source":"user","citation":{"namespace":"code","memoryId":"entry","scope":{"type":"profile"},"revision":1,"startByte":0,"endByte":8},"memoryId":"entry","scope":{"type":"profile"},"revision":1,"title":"Decision","excerpt":"Use Rust","updatedAtUnixMs":0}],
             "nextCursor":"next"
         })]),
     });

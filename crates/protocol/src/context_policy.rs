@@ -14,6 +14,9 @@ use ts_rs::TS;
 #[schemars(deny_unknown_fields)]
 pub enum ContextCompactionPolicy {
     Summary {
+        /// Emits host context identity as a paired tool hint in model input. Disabled by default.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        context_window_as_tool_output: bool,
         #[serde(default = "default_summary_tokens")]
         #[schemars(range(min = 1, max = 1000000))]
         summary_tokens: u32,
@@ -22,6 +25,8 @@ pub enum ContextCompactionPolicy {
         recent_tokens: u32,
     },
     Handoff {
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        context_window_as_tool_output: bool,
         #[serde(default = "default_buffer_tokens")]
         #[schemars(range(min = 1, max = 1000000))]
         buffer_tokens: u32,
@@ -44,6 +49,7 @@ const fn default_buffer_tokens() -> u32 {
 impl Default for ContextCompactionPolicy {
     fn default() -> Self {
         Self::Summary {
+            context_window_as_tool_output: false,
             summary_tokens: default_summary_tokens(),
             recent_tokens: default_recent_tokens(),
         }
@@ -51,6 +57,20 @@ impl Default for ContextCompactionPolicy {
 }
 
 impl ContextCompactionPolicy {
+    /// Whether model input includes the host identity and context-window tool hint.
+    pub fn context_window_as_tool_output(&self) -> bool {
+        match self {
+            Self::Summary {
+                context_window_as_tool_output,
+                ..
+            }
+            | Self::Handoff {
+                context_window_as_tool_output,
+                ..
+            } => *context_window_as_tool_output,
+        }
+    }
+
     /// Omitting this value preserves the command encoding and digests of older journals.
     pub fn is_default(&self) -> bool {
         self == &Self::default()
@@ -62,10 +82,12 @@ impl ContextCompactionPolicy {
             Self::Summary {
                 summary_tokens,
                 recent_tokens,
+                ..
             } if valid(summary_tokens) && valid(recent_tokens) => Ok(()),
             Self::Handoff {
                 buffer_tokens,
                 state_tokens,
+                ..
             } if valid(buffer_tokens) && valid(state_tokens) && state_tokens <= buffer_tokens => {
                 Ok(())
             }
@@ -90,12 +112,16 @@ impl<'de> Deserialize<'de> for ContextCompactionPolicy {
         )]
         enum StrictPolicy {
             Summary {
+                #[serde(default)]
+                context_window_as_tool_output: bool,
                 #[serde(default = "default_summary_tokens")]
                 summary_tokens: u32,
                 #[serde(default = "default_recent_tokens")]
                 recent_tokens: u32,
             },
             Handoff {
+                #[serde(default)]
+                context_window_as_tool_output: bool,
                 #[serde(default = "default_buffer_tokens")]
                 buffer_tokens: u32,
                 #[serde(default = "default_summary_tokens")]
@@ -107,14 +133,18 @@ impl<'de> Deserialize<'de> for ContextCompactionPolicy {
             StrictPolicy::Summary {
                 summary_tokens,
                 recent_tokens,
+                context_window_as_tool_output,
             } => Self::Summary {
+                context_window_as_tool_output,
                 summary_tokens,
                 recent_tokens,
             },
             StrictPolicy::Handoff {
                 buffer_tokens,
                 state_tokens,
+                context_window_as_tool_output,
             } => Self::Handoff {
+                context_window_as_tool_output,
                 buffer_tokens,
                 state_tokens,
             },

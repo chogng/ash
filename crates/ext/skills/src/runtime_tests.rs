@@ -775,3 +775,87 @@ fn production_skill_metrics_follow_real_activation_failures_and_catalog_refreshe
     assert!(!json.contains(root.to_str().unwrap()));
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn explicit_refresh_is_retryable_and_serializes_source_capture_with_publication() {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    struct Config {
+        calls: AtomicUsize,
+        entered: mpsc::SyncSender<()>,
+        release: Mutex<mpsc::Receiver<()>>,
+        fail: std::sync::atomic::AtomicBool,
+    }
+    impl SkillConfigSnapshotProvider for Config {
+        fn snapshot(&self) -> Result<SkillsConfig, String> {
+            if self.fail.swap(false, Ordering::SeqCst) {
+                return Err("transient discovery failure".into());
+            }
+            let call = self.calls.fetch_add(1, Ordering::SeqCst);
+            if call == 1 {
+                self.entered.send(()).unwrap();
+                self.release.lock().unwrap().recv().unwrap();
+            }
+            let mut config = SkillsConfig::default();
+            if call >= 2 {
+                let id = built_in_skill_id("refresh-test");
+                config
+                    .enablement
+                    .entry(id.source)
+                    .or_default()
+                    .insert(id.name, SkillEnablement::Disabled);
+            }
+            Ok(config)
+        }
+    }
+    let root = test_directory("serialized-refresh");
+    write_skill(&root, "refresh-test", "Refresh test");
+    let (entered_tx, entered) = mpsc::sync_channel(1);
+    let (release, release_rx) = mpsc::sync_channel(1);
+    let config = Arc::new(Config {
+        calls: AtomicUsize::new(0),
+        entered: entered_tx,
+        release: Mutex::new(release_rx),
+        fail: false.into(),
+    });
+    let runtime = SkillRuntime::new(
+        BuiltInSkillSource::Root(root.clone()),
+        config.clone(),
+        Arc::new(NoSkillRuntimeEvents),
+    )
+    .unwrap();
+    let first = {
+        let runtime = runtime.clone();
+        std::thread::spawn(move || runtime.list(SkillCatalogReload::Refresh).unwrap())
+    };
+    entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    let (started_tx, started) = mpsc::sync_channel(1);
+    let (done_tx, done) = mpsc::sync_channel(1);
+    let second = {
+        let runtime = runtime.clone();
+        std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            let snapshot = runtime.list(SkillCatalogReload::Refresh).unwrap();
+            done_tx.send(()).unwrap();
+            snapshot
+        })
+    };
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    let waited = done.recv_timeout(Duration::from_millis(200)).is_err();
+    release.send(()).unwrap();
+    let first = first.join().unwrap();
+    let second = second.join().unwrap();
+    assert!(
+        waited,
+        "a refresh must not publish around a pending source capture"
+    );
+    assert!(second.generation > first.generation);
+    assert_eq!(second.entries[0].enablement, SkillEnablement::Disabled);
+    config.fail.store(true, Ordering::SeqCst);
+    assert!(runtime.list(SkillCatalogReload::Refresh).is_err());
+    let retry = runtime.list(SkillCatalogReload::Refresh).unwrap();
+    assert_eq!(retry, second);
+    fs::remove_dir_all(root).unwrap();
+}

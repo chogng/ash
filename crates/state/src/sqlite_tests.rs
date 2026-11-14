@@ -2810,3 +2810,6 @@ fn history_window_cache_encoding_upgrade_preserves_canonical_events() {
         .unwrap();
     assert_eq!(version, 2);
 }
+
+#[path = "sqlite/voice_history_tests.rs"]
+mod voice_history_tests;

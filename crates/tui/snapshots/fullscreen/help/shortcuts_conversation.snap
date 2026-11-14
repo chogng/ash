@@ -16,7 +16,7 @@ expression: "text(&render(&app, area))"
   │                                                                          │
   │  Session                                                                 │
   │  ?          Keyboard shortcuts                                           │
-  │  ←          Dashboard (empty input)                                      │
+  │  ←          Dashboard (empty or read-only input)                         │
   │  Esc Esc    Open rewind checkpoints                                      │
   │  esc        Interrupt task                                               │
   │  shift+tab  Cycle task mode                                              │

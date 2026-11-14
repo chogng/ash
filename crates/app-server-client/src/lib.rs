@@ -851,6 +851,20 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::SessionTraceGraphRead, params)
     }
 
+    pub fn read_voice_history(
+        &mut self,
+        query: ash_protocol::VoiceHistoryQuery,
+    ) -> Result<ash_protocol::VoiceHistoryPage, ClientError> {
+        self.call(ClientMethod::VoiceHistoryRead, query)
+    }
+
+    pub fn list_sessions_filtered(
+        &mut self,
+        params: ash_app_server_protocol::protocol::session::SessionListParams,
+    ) -> Result<SessionListResult, ClientError> {
+        self.call(ClientMethod::SessionList, params)
+    }
+
     pub fn list_sessions(&mut self) -> Result<SessionListResult, ClientError> {
         self.call(ClientMethod::SessionList, EmptyParams {})
     }

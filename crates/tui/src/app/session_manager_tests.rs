@@ -1147,3 +1147,158 @@ fn dashboard_uses_the_page_and_updates_the_right_column_with_selection() {
         crate::tui_assert_snapshot!(app = &app; "dashboard_narrow_single_column", narrow);
     }
 }
+
+#[test]
+fn archived_conversation_preserves_draft_and_disables_submission_until_external_restore() {
+    let mut frames = Vec::new();
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = active_session_app();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        settings.set_language(crate::nls::Language::Chinese);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.insert_text("cached transcript");
+        assert!(app.handle_key(key(KeyCode::Enter)).is_some());
+        app.update(ThreadEvent::TurnCompleted);
+        app.insert_text("保留草稿");
+        let draft = app.input().to_owned();
+        let mut archived = session();
+        archived.status = SessionStatus::Archived;
+        archived.threads[0].status = ThreadStatus::Archived;
+        app.update(SessionEvent::CatalogReceived(vec![archived]));
+        assert!(!app.accepts_input());
+        assert!(app.viewed_thread_archived());
+        for key in [KeyCode::Enter, KeyCode::Char('x'), KeyCode::Up] {
+            assert!(app.handle_key(self::key(key)).is_none());
+        }
+        assert_eq!(app.input(), draft);
+        let frame = render(&app);
+        assert!(frame.contains("cached transcript"));
+        assert!(
+            frame.replace(' ', "").contains("已归档")
+                && frame.replace(' ', "").contains("仪表盘恢复"),
+            "{frame}"
+        );
+        frames.push(format!("{mode:?}\n{frame}"));
+        assert!(app.can_open_dashboard_from_input());
+        assert!(app.handle_key(key(KeyCode::Left)).is_none());
+        assert!(app.session_manager_focused());
+        assert!(app.handle_key(key(KeyCode::Esc)).is_none());
+        assert_eq!(app.input(), draft);
+        app.update(SessionEvent::CatalogReceived(vec![session()]));
+        assert!(app.accepts_input());
+        assert!(!app.viewed_thread_archived());
+        assert_eq!(app.input(), draft);
+        assert!(app.handle_key(key(KeyCode::Enter)).is_some());
+    }
+    crate::tui_assert_snapshot!("archived_conversation_preserves_draft", frames.join("\n\n"));
+}
+
+#[test]
+fn archive_clears_queue_focus_and_blocks_edit_delete_and_reorder() {
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = active_session_app();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.update(ThreadEvent::TurnActivityChanged(
+            crate::thread::TurnActivity::Working,
+        ));
+        app.insert_text("queued draft");
+        let message =
+            crate::test_support::queued_message(app.handle_key(key(KeyCode::Enter)).unwrap());
+        app.update(ThreadEvent::QueueReceived {
+            messages: vec![message],
+            restore: None,
+        });
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+        assert!(app.queue_focused());
+        let queue_id = app.queue_view().items[0].id;
+        let mut archived = session();
+        archived.status = SessionStatus::Archived;
+        archived.threads[0].status = ThreadStatus::Archived;
+        app.update(SessionEvent::CatalogReceived(vec![archived]));
+        assert!(!app.queue_focused());
+        assert!(!app.focus_queue_item(queue_id));
+        for key in [
+            self::key(KeyCode::Enter),
+            self::key(KeyCode::Delete),
+            KeyEvent::new(KeyCode::Up, KeyModifiers::CONTROL),
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL),
+        ] {
+            assert!(app.handle_key(key).is_none());
+        }
+        assert_eq!(app.queue_view().items[0].text, "queued draft");
+        assert!(app.can_open_dashboard_from_input());
+    }
+}
+
+#[test]
+fn archive_freezes_question_answers_and_queue_actions_without_blocking_exit() {
+    use crate::thread::composer::ChatInputItem;
+    use crate::thread::composer::ChatSubmission;
+    use crate::thread::composer::QueuedChatInput;
+    use crate::thread::interaction::query::Query;
+    use crate::thread::interaction::query::QueryCustomAnswer;
+    use crate::thread::interaction::query::QueryQuestion;
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = active_session_app();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.update(ThreadEvent::QueryRequested(
+            Query::new(vec![QueryQuestion {
+                id: "answer".into(),
+                required: true,
+                header: "Question".into(),
+                prompt: "Next step?".into(),
+                choices: Vec::new(),
+                custom_answer: QueryCustomAnswer::Allowed,
+            }])
+            .unwrap(),
+        ));
+        app.handle_key(key(KeyCode::Enter));
+        app.handle_paste("retained answer".into());
+        assert_eq!(
+            app.query_view().unwrap().custom_answer,
+            Some("retained answer")
+        );
+        let queue =
+            app.thread_presentations
+                .active_mut()
+                .queue
+                .push(QueuedChatInput::from_submission(ChatSubmission {
+                    mode: Default::default(),
+                    command_id: ash_protocol::CommandId::new("queued").unwrap(),
+                    display_text: "queued message".into(),
+                    input: vec![ChatInputItem::Text("queued message".into())],
+                }));
+        let mut archived = session();
+        archived.status = SessionStatus::Archived;
+        archived.threads[0].status = ThreadStatus::Archived;
+        app.update(SessionEvent::CatalogReceived(vec![archived]));
+        assert!(app.query_view().is_none());
+        assert!(app.handle_key(key(KeyCode::Enter)).is_none());
+        assert!(app.activate_query_choice(0).is_none());
+        assert!(app.send_queued_message(queue).is_none());
+        app.handle_paste("discarded while read-only".into());
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+            Some(AppCommand::Quit)
+        );
+        app.update(SessionEvent::CatalogReceived(vec![session()]));
+        assert_eq!(
+            app.query_view().unwrap().custom_answer,
+            Some("retained answer")
+        );
+    }
+}

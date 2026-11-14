@@ -10934,3 +10934,6 @@ fn browser_tcp_revokes_existing_streams_without_revoking_other_hosts() {
     assert_eq!(replacement.read(&mut [0]).unwrap(), 0);
     assert_eq!(peers[3].read(&mut [0]).unwrap(), 0);
 }
+
+#[path = "alignment_tests.rs"]
+mod alignment_tests;

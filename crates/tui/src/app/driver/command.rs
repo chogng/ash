@@ -435,7 +435,10 @@ impl AppDriver {
                 self.execute_thread_command(request_key, command, origin)
             }
             AppCommand::OpenWorkspace { path } => return CommandEffect::OpenWorkspace(path),
-            AppCommand::Quit => return CommandEffect::Quit,
+            AppCommand::Quit => {
+                self.queued_commands.clear();
+                return CommandEffect::Quit;
+            }
             AppCommand::Suspend => {
                 let resource_id = self.app.prepare_suspend();
                 let start_queued = self.queued_commands.iter().any(|scheduled| {

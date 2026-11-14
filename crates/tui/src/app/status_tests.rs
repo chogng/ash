@@ -894,6 +894,7 @@ fn exercise_handoff_panel(mode: ScreenMode) -> String {
     app.insert_text("继续当前任务");
     let mut context = inspection(12_345, Some(79_000));
     context.compaction_policy = ash_protocol::ContextCompactionPolicy::Handoff {
+        context_window_as_tool_output: false,
         buffer_tokens: 16_000,
         state_tokens: 8_000,
     };

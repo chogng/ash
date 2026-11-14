@@ -791,6 +791,17 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         })
     }
 
+    pub(super) fn voice_history_read(&self, params: &Value) -> Result<Value, RpcError> {
+        let query: ash_protocol::VoiceHistoryQuery = decode(params)?;
+        result(
+            &self
+                .context
+                .agent_runtime()
+                .read_voice_history(&query)
+                .map_err(core_error)?,
+        )
+    }
+
     pub(super) fn session_catalog_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: SessionReadParams = decode(params)?;
         result(&SessionCatalogReadResult {
@@ -798,8 +809,42 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         })
     }
 
-    pub(super) fn session_list(&self, connection: &ConnectionState) -> Result<Value, RpcError> {
-        let mut sessions = self.context.session_views()?;
+    pub(super) fn session_list(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::session::SessionListParams = decode(params)?;
+        if params
+            .included_session_ids
+            .as_ref()
+            .is_some_and(|ids| ids.len() > 100)
+            || params
+                .excluded_session_ids
+                .as_ref()
+                .is_some_and(|ids| ids.len() > 100)
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let mut sessions = match &params.included_session_ids {
+            Some(ids) => self
+                .context
+                .agent_runtime()
+                .list_sessions_by_ids(ids)
+                .map_err(core_error)?,
+            None => self.context.session_views()?,
+        };
+        let excluded = params
+            .excluded_session_ids
+            .unwrap_or_default()
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>();
+        sessions.retain(|session| {
+            !excluded.contains(&session.session_id)
+                && params.archived.is_none_or(|archived| {
+                    (session.status == ash_protocol::SessionStatus::Archived) == archived
+                })
+        });
         if connection.code_sessions_only() {
             sessions.retain(|session| session.kind == ash_protocol::SessionKind::Code);
         }
@@ -811,7 +856,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         connection: &ConnectionState,
     ) -> Result<Value, RpcError> {
         self.updates.subscribe_catalog(connection.connection_id);
-        self.session_list(connection)
+        self.session_list(connection, &serde_json::json!({}))
     }
 
     pub(super) fn session_catalog_unsubscribe(

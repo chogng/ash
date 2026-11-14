@@ -1192,3 +1192,32 @@ fn ide_desktop_handoff_exits_only_after_acknowledgement_and_preserves_new_termin
         }
     }
 }
+
+#[test]
+fn quit_precedes_runnable_and_waiting_navigation_commands() {
+    let mut app = App::new();
+    let mut requests = RequestTasks::default();
+    let (release, wait) = std::sync::mpsc::sync_channel(0);
+    requests.spawn(
+        Some(RequestKey::Sessions),
+        "ash-tui-quit-navigation",
+        move || {
+            wait.recv().unwrap();
+            Completion::Presentation(Err("abandoned".into()))
+        },
+        &mut app,
+        origin(),
+    );
+    let mut queued = VecDeque::from([
+        scheduled(AppCommand::Sessions(crate::sessions::Command::Resume {
+            session_id: "next".into(),
+            preferred_thread_id: None,
+        })),
+        scheduled(AppCommand::Host(HostCommand::CopyLastResponse)),
+    ]);
+    assert_eq!(
+        schedule_command(Some(AppCommand::Quit), &requests, &mut queued),
+        Some(AppCommand::Quit)
+    );
+    release.send(()).unwrap();
+}

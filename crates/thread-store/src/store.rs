@@ -327,6 +327,20 @@ pub trait ThreadStore: agent_graph_store::AgentGraphStore {
     /// Reads the durable Session list without decoding every Thread record.
     fn list_sessions(&self) -> Result<Vec<Session>, ThreadStoreError>;
 
+    /// Looks up saved identities through the catalog only. Missing index rows never trigger repair.
+    fn list_sessions_by_ids(&self, ids: &[SessionId]) -> Result<Vec<Session>, ThreadStoreError> {
+        let mut sessions = ids
+            .iter()
+            .map(|id| self.read_session(id))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        sessions.sort_by(|left, right| left.session_id.cmp(&right.session_id));
+        sessions.dedup_by(|left, right| left.session_id == right.session_id);
+        Ok(sessions)
+    }
+
     /// Reads one Session list entry by identity.
     fn read_session(&self, session_id: &SessionId) -> Result<Option<Session>, ThreadStoreError>;
 
@@ -373,6 +387,32 @@ pub trait ThreadStore: agent_graph_store::AgentGraphStore {
             events: events
                 .into_iter()
                 .filter(|event| event.sequence > after)
+                .take(limit)
+                .collect(),
+            current_sequence,
+        })
+    }
+
+    /// Reads only this Thread's canonical voice observations within a fixed commit boundary.
+    /// The returned tail and events must belong to one storage snapshot.
+    fn read_voice_events(
+        &self,
+        thread_id: &ThreadId,
+        after: u64,
+        through: Option<u64>,
+        filter: &ash_protocol::VoiceHistoryFilter,
+        limit: usize,
+    ) -> Result<ThreadEventPage, ThreadStoreError> {
+        let events = self.load(thread_id)?;
+        let current_sequence = events.last().map_or(0, |event| event.sequence);
+        Ok(ThreadEventPage {
+            events: events
+                .into_iter()
+                .filter(|event| {
+                    event.sequence > after
+                        && event.sequence <= through.unwrap_or(current_sequence)
+                        && voice_event_matches(event, filter)
+                })
                 .take(limit)
                 .collect(),
             current_sequence,
@@ -581,3 +621,24 @@ pub fn validate_binding_source(
 #[cfg(test)]
 #[path = "store_tests.rs"]
 mod tests;
+
+/// Applies voice filters to canonical records; inherited history is never enumerated here.
+pub fn voice_event_matches(event: &StoredEvent, filter: &ash_protocol::VoiceHistoryFilter) -> bool {
+    let ash_protocol::ThreadEvent::VoiceTranscriptRecorded { transcript, .. } = &event.event else {
+        return false;
+    };
+    filter
+        .voice_session_id
+        .as_ref()
+        .is_none_or(|id| id == &transcript.voice_session_id)
+        && filter
+            .event_id
+            .as_ref()
+            .is_none_or(|id| id == &event.event_id.0)
+        && filter
+            .from_recorded_at_ms
+            .is_none_or(|from| event.recorded_at.0 >= u128::from(from))
+        && filter
+            .to_recorded_at_ms
+            .is_none_or(|to| event.recorded_at.0 < u128::from(to))
+}

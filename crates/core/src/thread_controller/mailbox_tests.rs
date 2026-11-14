@@ -336,6 +336,7 @@ fn install(loaded_threads: &LoadedThreads, snapshot: ThreadSnapshot) {
 
 fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
     ThreadSnapshot {
+        recorded_at_floor: ash_history::Timestamp(0),
         kind: ash_protocol::SessionKind::Code,
         voice_transcripts: Vec::new(),
         execution_target: None,

@@ -825,8 +825,8 @@ pub(super) fn schedule_command(
             _ => false,
         };
         if !duplicate {
-            if matches!(command.command, AppCommand::Suspend) {
-                // Do not start queued capture on the way to suspending the UI.
+            if matches!(command.command, AppCommand::Quit | AppCommand::Suspend) {
+                // Exit and suspend take precedence over queued capture or navigation.
                 queued.push_front(command);
             } else {
                 queued.push_back(command);

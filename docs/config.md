@@ -184,6 +184,11 @@ stateTokens = 8192
 
 策略取舍、边界和失败语义见[上下文系统](core-context.md#两种自动压缩方式)。
 
+`[agent.context]` 可设置 `contextWindowAsToolOutput = true`，默认关闭。启用后，Core 在当前 Turn
+输入前以 `agent_thread_hint` 工具调用与结果对提供 Agent、Thread 和上下文窗口身份。该提示只用于
+模型输入，不执行工具，不写入任务历史，不改变模型窗口、摘要或输出预算的默认值。策略随 Turn
+冻结，分支与恢复沿用已有策略；提示使用当前分支身份。
+
 ## 目录配置
 
 `DirConfigStore` 严格读取一个目录中的 `.ash/config.toml`。Host 在文档之外提供 `DirId` 与内容

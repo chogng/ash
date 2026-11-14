@@ -113,6 +113,9 @@ pub struct SkillRuntimeSnapshot {
 }
 
 pub struct SkillRuntime {
+    /// Source capture and publication share one lane with execution snapshot capture.
+    /// An older, slower refresh must never overwrite a newer catalog.
+    preparation: Mutex<()>,
     built_in_source: BuiltInSkillSource,
     dynamic_sources: Mutex<Option<Arc<dyn DynamicSkillSourceProvider>>>,
     session_sources: Mutex<Option<Arc<dyn SessionSkillSourceProvider>>>,
@@ -226,6 +229,7 @@ impl SkillRuntime {
             composition.diagnostics,
         ));
         Ok(Arc::new(Self {
+            preparation: Mutex::new(()),
             built_in_source,
             dynamic_sources: Mutex::new(dynamic_sources),
             session_sources: Mutex::new(None),
@@ -526,6 +530,10 @@ impl SkillRuntime {
         session_id: &SessionId,
         purpose: SessionCatalogUse,
     ) -> Result<(SkillCatalog, Arc<SkillRuntimeSnapshot>), String> {
+        let _preparation = self
+            .preparation
+            .lock()
+            .map_err(|_| "Skill preparation lock poisoned".to_string())?;
         let provider = self
             .session_sources
             .lock()
@@ -648,6 +656,10 @@ impl SkillRuntime {
     }
 
     fn reconcile(&self, reload: SkillCatalogReload) -> Result<Arc<SkillRuntimeSnapshot>, String> {
+        let preparation = self
+            .preparation
+            .lock()
+            .map_err(|_| "Skill preparation lock poisoned".to_string())?;
         let skills_config = self.config.snapshot()?;
         let dir_root = self
             .dir_root
@@ -696,6 +708,7 @@ impl SkillRuntime {
         state.snapshot = Arc::new(next);
         let snapshot = Arc::clone(&state.snapshot);
         drop(state);
+        drop(preparation);
         self.events.skills_changed(snapshot.generation);
         Ok(snapshot)
     }

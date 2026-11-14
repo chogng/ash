@@ -571,6 +571,24 @@ pub struct SessionResult {
     pub agent_tree: AgentTreeProjection,
 }
 
+/// Omitted or null inclusions are unrestricted; an empty list matches nothing.
+/// Results retain catalog order. Exclusions win over inclusions.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SessionListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(length(max = 100))]
+    #[ts(optional = nullable)]
+    pub included_session_ids: Option<Vec<SessionId>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(length(max = 100))]
+    #[ts(optional = nullable)]
+    pub excluded_session_ids: Option<Vec<SessionId>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub archived: Option<bool>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionListResult {

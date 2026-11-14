@@ -15,7 +15,7 @@ expression: "text(&render(&app, narrow))"
 
   会话
   ?          键盘快捷键
-  ←          仪表盘（空输入）
+  ←          仪表盘（输入为空或只读）
   Esc Esc    打开回退检查点
   esc        中断任务
 

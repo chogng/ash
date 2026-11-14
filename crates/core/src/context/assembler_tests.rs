@@ -657,6 +657,7 @@ fn test_environment(additional_root: PathBuf) -> AgentEnvironmentSnapshot {
 
 fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
     ThreadSnapshot {
+        recorded_at_floor: ash_history::Timestamp(0),
         kind: ash_protocol::SessionKind::Code,
         voice_transcripts: Vec::new(),
         execution_target: None,
@@ -763,4 +764,65 @@ impl_test_id!(ItemId, SessionId, ThreadId, ToolCallId, TurnId);
 
 fn id<T: TestId>(value: &str) -> T {
     T::from_test(value)
+}
+
+#[test]
+fn optional_thread_hint_is_paired_and_follows_inherited_parent_history() {
+    let turn = id::<TurnId>("child-turn");
+    let parent = id::<TurnId>("parent-turn");
+    let snapshot = snapshot(
+        turn.clone(),
+        vec![
+            ThreadItem::UserMessage {
+                client_id: None,
+                item_id: id("parent-input"),
+                turn_id: parent,
+                text: "inherited parent context".into(),
+            },
+            ThreadItem::UserMessage {
+                client_id: None,
+                item_id: id("child-input"),
+                turn_id: turn.clone(),
+                text: "child request".into(),
+            },
+        ],
+    );
+    let durable = snapshot.items.clone();
+    for enabled in [false, true] {
+        let policy = ash_protocol::ContextCompactionPolicy::Summary {
+            context_window_as_tool_output: enabled,
+            summary_tokens: 8192,
+            recent_tokens: 16384,
+        };
+        let input = ContextInput::new(
+            &snapshot,
+            turn.clone(),
+            Vec::new(),
+            Vec::new(),
+            ContextBudget::provider_managed(),
+        )
+        .with_policy(policy);
+        let ContextPreparation::Ready(plan) = ContextPlanner::prepare(&input).unwrap() else {
+            panic!("ready");
+        };
+        let request = ContextAssembler::assemble(&plan).unwrap();
+        let hint = request.input.iter().position(|item| matches!(item, InputItem::ToolResult(result) if result.name.as_str() == "agent_thread_hint"));
+        assert_eq!(hint.is_some(), enabled);
+        if let Some(index) = hint {
+            let InputItem::ToolResult(result) = &request.input[index] else {
+                unreachable!()
+            };
+            let InputItem::Message(call) = &request.input[index - 1] else {
+                panic!("paired call");
+            };
+            assert_eq!(call.tool_calls[0].id, result.call_id);
+            assert!(
+                matches!(&result.content[0], ContentPart::Text(text) if text.contains(snapshot.agent_id.as_str()) && text.contains(snapshot.thread_id.as_str()) && text.contains("initial"))
+            );
+            let inherited = request.input.iter().position(|item| matches!(item, InputItem::Message(message) if message.content == [ContentPart::Text("inherited parent context".into())])).unwrap();
+            let child = request.input.iter().position(|item| matches!(item, InputItem::Message(message) if message.content == [ContentPart::Text("child request".into())])).unwrap();
+            assert!(inherited < index && index < child);
+        }
+        assert_eq!(snapshot.items, durable);
+    }
 }

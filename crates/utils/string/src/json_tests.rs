@@ -1,9 +1,36 @@
+use super::serialized_json_bytes;
 use super::to_ascii_json_string;
 use super::to_json_string_bounded;
 use serde::Serialize;
 use serde::ser::SerializeSeq;
 use serde_json::json;
 use std::cell::Cell;
+
+#[test]
+fn byte_count_matches_serialization_and_propagates_errors() {
+    for value in [
+        json!(null),
+        json!({"中文": ["🚀", "\n\"\\", 42]}),
+        json!([]),
+    ] {
+        assert_eq!(
+            serialized_json_bytes(&value).unwrap(),
+            serde_json::to_vec(&value).unwrap().len()
+        );
+    }
+    struct Failure;
+    impl Serialize for Failure {
+        fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+            Err(serde::ser::Error::custom("serialization failed"))
+        }
+    }
+    assert!(
+        serialized_json_bytes(&Failure)
+            .unwrap_err()
+            .to_string()
+            .contains("serialization failed")
+    );
+}
 
 #[test]
 fn ascii_json_preserves_keys_values_controls_and_surrogate_pairs() {

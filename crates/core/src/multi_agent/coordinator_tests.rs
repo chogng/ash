@@ -53,6 +53,7 @@ use ash_protocol::UserInput;
 use std::sync::Arc;
 
 struct Fixture {
+    store: Arc<InMemoryThreadStore>,
     threads: Arc<ThreadController>,
     coordinator: MultiAgentCoordinator,
     session_id: SessionId,
@@ -1231,9 +1232,8 @@ fn fixture_with_profile(
     agent: Option<ash_protocol::AgentConfiguration>,
     tool_profile: Option<ash_protocol::ToolProfileSnapshot>,
 ) -> Fixture {
-    let threads = Arc::new(ThreadController::with_store(Arc::new(
-        InMemoryThreadStore::default(),
-    )));
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = Arc::new(ThreadController::with_store(store.clone()));
     let parent = threads
         .start_thread(
             &crate::NoThreadWorktreeBinder,
@@ -1274,6 +1274,7 @@ fn fixture_with_profile(
         )
         .unwrap();
     Fixture {
+        store,
         coordinator: MultiAgentCoordinator::new(Arc::clone(&threads), AgentTreeLimits::default()),
         threads,
         session_id: parent.session_id,
@@ -1606,4 +1607,56 @@ fn positive_tool_scope_constrains_direct_child_creation_and_further_delegation()
             permits_spawn
         );
     }
+}
+
+#[test]
+fn message_delivery_metadata_survives_compaction_and_replay_without_another_delivery() {
+    let fixture = fixture();
+    let child = fixture.coordinator.spawn(spawn_request(&fixture)).unwrap();
+    let delivered = fixture
+        .coordinator
+        .send_message(message_request(&fixture, &child.child_thread_id))
+        .unwrap();
+    let before = fixture.threads.read_thread(&child.child_thread_id).unwrap();
+    fixture
+        .threads
+        .commit_context_checkpoint(
+            &child.child_thread_id,
+            crate::thread_controller::CommitContextCheckpointRequest {
+                source_thread_sequence: before.sequence,
+                covered: ash_protocol::ContextSourceRange {
+                    start_sequence: 1,
+                    end_sequence: before.sequence,
+                },
+                referenced_items: before
+                    .items
+                    .iter()
+                    .map(|item| item.item_id().clone())
+                    .collect(),
+                summary: "Retain the parent's cancellation review request.".into(),
+                schema_revision: "context-checkpoint-v1".into(),
+                prompt_revision: "compaction-v2".into(),
+                context_policy_revision: "context-policy-v1".into(),
+                generator_model: None,
+            },
+        )
+        .unwrap();
+    let events = fixture.store.events();
+    let received = events.iter().find(|event| matches!(&event.event, ash_protocol::ThreadEvent::AgentMessageReceived { message, .. } if message.message_id == delivered.message.message_id)).unwrap().clone();
+    let restored = ThreadController::with_store(fixture.store.clone());
+    let state = restored.read_thread(&child.child_thread_id).unwrap();
+    assert_eq!(
+        state.received_agent_messages,
+        before.received_agent_messages
+    );
+    assert_eq!(state.context_checkpoints.len(), 1);
+    restored
+        .record_agent_message_received(&child.child_thread_id, delivered.message)
+        .unwrap();
+    let after = fixture.store.events();
+    assert_eq!(after.len(), events.len());
+    assert!(
+        after.contains(&received),
+        "the original message identity, timestamp and provenance must survive"
+    );
 }

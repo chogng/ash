@@ -121,3 +121,38 @@ fn search_accepts_text_without_queueing_or_steering_it() {
         crate::thread::composer::ChatComposerOutcome::Queued(_)
     ));
 }
+
+#[test]
+fn freezing_history_search_restores_the_original_draft_and_dismisses_completion() {
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(
+        state::SqliteMessageHistory::open(&root.path().join("state.sqlite3"), Retention::default())
+            .unwrap(),
+    );
+    let (notify, wake) = mpsc::channel();
+    let history = MessageHistory::with_waker(store, move || {
+        let _ = notify.send(());
+    })
+    .unwrap();
+    let mut input = ChatInput::new();
+    input.connect_history(history, "thread".into());
+    input.insert_text("older submitted input");
+    assert!(matches!(
+        input.submit_current(),
+        ChatInputOutcome::Submit(_)
+    ));
+    wake.recv_timeout(Duration::from_secs(5)).unwrap();
+    input.insert_text("/h");
+    input.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    input.handle_key(key(KeyCode::Backspace));
+    input.handle_key(key(KeyCode::Backspace));
+    input.handle_key(key(KeyCode::Char('o')));
+    wait_for(&mut input, &wake, |input| {
+        input.text() == "older submitted input"
+    });
+    assert!(input.searching_history());
+    input.freeze_draft();
+    assert_eq!(input.text(), "/h");
+    assert!(!input.searching_history());
+    assert!(input.completion().is_none());
+}

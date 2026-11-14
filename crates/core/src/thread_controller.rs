@@ -100,6 +100,7 @@ mod mode;
 mod restore;
 mod steering;
 mod user_input;
+mod voice_history;
 pub(crate) use user_input::chat_reference_source;
 
 pub use agent::CreateAgentThreadRequest;
@@ -3043,6 +3044,11 @@ impl ThreadController {
         }
     }
 
+    /// Resolves saved Session identities using the index, without replay or catalog repair.
+    pub fn list_sessions_by_ids(&self, ids: &[SessionId]) -> Result<Vec<Session>, CoreError> {
+        self.store.list_sessions_by_ids(ids).map_err(Into::into)
+    }
+
     pub fn read_session_catalog(
         &self,
         session_id: &SessionId,
@@ -3760,6 +3766,11 @@ impl ThreadController {
                 }
                 *workspace_checkpoint = Some(captures[0].workspace().clone());
             }
+            let recorded_at = self.timestamp()?.max(
+                projection
+                    .as_ref()
+                    .map_or(Timestamp(0), |snapshot| snapshot.recorded_at_floor),
+            );
             let envelope = StoredEvent {
                 thread_created_kind_encoding: Default::default(),
                 time_context: if matches!(
@@ -3777,7 +3788,7 @@ impl ThreadController {
                 event_id: EventId(event_id),
                 sequence: expected_sequence + index as u64 + 1,
                 thread_id: thread_id.clone(),
-                recorded_at: self.timestamp()?,
+                recorded_at,
                 command: match (&command, index) {
                     (BatchCommand::AtEvent { index, receipt }, event_index)
                         if index == &event_index =>

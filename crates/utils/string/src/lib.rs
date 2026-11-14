@@ -5,6 +5,7 @@ mod location;
 mod metric;
 mod truncate;
 
+pub use json::serialized_json_bytes;
 pub use json::to_ascii_json_string;
 pub use json::to_json_string_bounded;
 pub use location::normalize_markdown_hash_location_suffix;
