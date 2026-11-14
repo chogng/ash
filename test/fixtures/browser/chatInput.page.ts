@@ -158,6 +158,8 @@ import { EventType, Gesture } from '../../../src/ash/base/browser/touch.js';
 import { addDisposableListener, stopEvent } from '../../../src/ash/base/browser/dom.js';
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
+import '../../../src/ash/sessions/browser/media/style.css';
 import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
@@ -227,12 +229,16 @@ const themes = { dark: darkColorTheme, light: lightColorTheme, hcDark: highContr
 const themeName = new URLSearchParams(location.search).get('theme') as keyof typeof themes | null;
 const theme = resources.add(new TestThemeService(themes[themeName ?? 'dark']));
 resources.add(bindTestColorTheme(theme, document.body));
+const services = resources.add(new InstantiationService());
+const agentScreenshot = new URLSearchParams(location.search).has('agentScreenshot');
+const screenshotContainer = document.querySelector('main')!;
+if (agentScreenshot) screenshotContainer.classList.add('ash-sessions-window');
+services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: screenshotContainer })));
 if (new URLSearchParams(location.search).has('gestureAncestor')) {
 	const main = document.querySelector('main')!;
 	resources.add(Gesture.addTarget(main));
 	resources.add(addDisposableListener(main, EventType.Tap, event => { stopEvent(event); document.querySelector('output')!.textContent = 'Ancestor tap'; }));
 }
-const services = resources.add(new InstantiationService());
 services.registerInstance(IFileDialogService, { showSaveDialog: async () => undefined } as unknown as IFileDialogService);
 services.registerSingleton(IWebviewService, () => services.createInstance(WebviewService));
 services.registerInstance(IAppServerRemoteAgentService, {
@@ -332,13 +338,14 @@ const footerStatus = new URLSearchParams(location.search).has('footerStatus')
 		when: ContextKeyExpr.has('test.chat.status.visible'), group: 'status',
 	})) : undefined;
 const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='), character => character.charCodeAt(0));
+let screenshotClipboard: Uint8Array | undefined;
 services.registerInstance(IClipboardService, {
 	triggerPaste: () => undefined,
 	read: async () => [],
 	readFindText: async () => '',
 	writeFindText: async () => { },
 	readImage: async () => new URLSearchParams(location.search).has('emptyClipboard') ? new Uint8Array() : png,
-	writeImage: async () => { },
+	writeImage: async image => { screenshotClipboard = await image; },
 	readText: async () => '', writeText: async () => { }, readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 });
 let screenshotCalls = 0;
@@ -1396,6 +1403,7 @@ declare global {
 	interface Window {
 		ashScreenshotIntegration: {
 			state(): { calls: number; overlays: number[]; pending: boolean; };
+			clipboard(): Uint8Array | undefined;
 			release(): void;
 			stopImageEditor(): Promise<void> | undefined;
 			draft(): Promise<string | undefined>;
@@ -1405,6 +1413,7 @@ declare global {
 }
 window.ashScreenshotIntegration = {
 	state: () => ({ calls: screenshotCalls, overlays: screenshotVisibleOverlays, pending: part.attachmentModel.hasPendingContext }),
+	clipboard: () => screenshotClipboard,
 	release: () => { releaseScreenshot?.(); releaseScreenshot = undefined; },
 	stopImageEditor: () => imageEditorFixture?.stop(),
 	draft: async () => (await part.captureDraft())?.draft.text,

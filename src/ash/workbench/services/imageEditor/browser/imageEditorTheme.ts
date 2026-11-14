@@ -7,19 +7,22 @@ import { sizeValueToCss } from '../../../../platform/theme/common/sizeUtils.js';
 registerColor('screenshot.maskBackground', { dark: '#00000088', light: '#00000088', hcDark: '#000000', hcLight: '#ffffff' }, { description: localize('imageEditor.maskDescription', 'Mask outside the image selection.'), owner: 'workbench.imageEditor' });
 
 /** The Workbench resolves appearance once; isolated views receive semantic values, not host CSS names. */
-export function readImageEditorTheme(document: Document) {
-	const root = document.querySelector('.ash-workbench') ?? document.body ?? document.documentElement;
+export function readImageEditorTheme(document: Document, root = document.querySelector('.ash-workbench') ?? document.body ?? document.documentElement) {
 	const computed = document.defaultView!.getComputedStyle(root);
 	const value = (name: string) => computed.getPropertyValue(`--ash-${name.replaceAll('.', '-')}`);
 	return imageEditorTheme(value, value, value('shadow-lg'));
 }
 
 export function defaultImageEditorTheme(scheme: unknown) {
-	const theme = scheme === 'light' ? lightColorTheme : scheme === 'hcDark' ? highContrastDarkColorTheme : scheme === 'hcLight' ? highContrastLightColorTheme : darkColorTheme;
+	const theme = getDefaultImageEditorColorTheme(scheme);
 	return imageEditorTheme(id => theme.getColorCss(id) ?? 'transparent', id => {
 		const value = theme.getSize(id);
 		return value ? sizeValueToCss(value) : '0px';
 	}, 'none');
+}
+
+export function getDefaultImageEditorColorTheme(scheme: unknown) {
+	return scheme === 'light' ? lightColorTheme : scheme === 'hcDark' ? highContrastDarkColorTheme : scheme === 'hcLight' ? highContrastLightColorTheme : darkColorTheme;
 }
 
 function imageEditorTheme(color: (id: string) => string, size: (id: string) => string, shadow: string) {

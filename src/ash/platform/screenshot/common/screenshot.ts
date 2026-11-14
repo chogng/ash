@@ -1,6 +1,7 @@
 import { isRecord } from '../../../base/common/types.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
 import { validatePngImage } from '../../imageResize/common/imageData.js';
+import type { IRectangle } from '../../window/common/window.js';
 
 export const SCREENSHOT_OPEN_CHANNEL = 'ash:screenshot:open';
 export const SCREENSHOT_CANCEL_CHANNEL = 'ash:screenshot:cancel';
@@ -21,8 +22,11 @@ export interface ScreenshotPinRequest {
 }
 export interface ScreenshotInitialization extends ScreenshotPinRequest {
 	readonly kind: 'capture' | 'pinned';
+	readonly agentWindow: boolean;
 	readonly locale: string;
 	readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>;
+	/** Visible window rectangles in the frozen display image's pixels, frontmost first. */
+	readonly windowBounds?: readonly IRectangle[];
 }
 export type ScreenshotCompletion =
 	{ readonly kind: 'cancel' | 'retake'; } | { readonly kind: 'error'; readonly message: string; }
@@ -63,9 +67,22 @@ export function validateScreenshotCompletion(value: unknown): ScreenshotCompleti
 	return value as unknown as ScreenshotCompletion;
 }
 export function validateScreenshotInitialization(value: unknown): ScreenshotInitialization {
-	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'bundles,image,input,kind,locale'
-		|| !['capture', 'pinned'].includes(value.kind as string) || typeof value.locale !== 'string' || !/^[a-zA-Z0-9-]{1,40}$/u.test(value.locale) || !isRecord(value.bundles)) { throw new TypeError('Invalid screenshot initialization'); }
-	validatePngImage(value.image);
+	if (!isRecord(value) || Object.keys(value).some(key => !['agentWindow', 'bundles', 'image', 'input', 'kind', 'locale', 'windowBounds'].includes(key))
+		|| typeof value.agentWindow !== 'boolean' || !['capture', 'pinned'].includes(value.kind as string) || typeof value.locale !== 'string' || !/^[a-zA-Z0-9-]{1,40}$/u.test(value.locale) || !isRecord(value.bundles)) { throw new TypeError('Invalid screenshot initialization'); }
+	const image = validatePngImage(value.image);
+	if ('windowBounds' in value) {
+		const png = new DataView(image.buffer, image.byteOffset, image.byteLength);
+		const width = png.getUint32(16);
+		const height = png.getUint32(20);
+		if (value.kind !== 'capture' || !Array.isArray(value.windowBounds) || value.windowBounds.length > 10_000
+			|| !value.windowBounds.every(rect => isRecord(rect) && Object.keys(rect).sort().join(',') === 'height,width,x,y'
+				&& typeof rect.x === 'number' && typeof rect.y === 'number' && typeof rect.width === 'number' && typeof rect.height === 'number'
+				&& [rect.x, rect.y, rect.width, rect.height].every(Number.isSafeInteger)
+				&& rect.x >= 0 && rect.y >= 0 && rect.width > 0 && rect.height > 0
+				&& rect.x + rect.width <= width && rect.y + rect.height <= height)) {
+			throw new TypeError('Invalid screenshot window bounds');
+		}
+	}
 	validateInput(value.input);
 	for (const bundle of Object.values(value.bundles)) {
 		if (!isRecord(bundle) || Object.values(bundle).some(message => typeof message !== 'string' || message.length > 100000)) { throw new TypeError('Invalid screenshot localization'); }

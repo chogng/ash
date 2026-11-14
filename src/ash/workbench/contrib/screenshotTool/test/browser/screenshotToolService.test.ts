@@ -34,6 +34,138 @@ suite('chatScreenshot browser component', () => {
 		expect(await page.evaluate(() => window.ashScreenshotIntegration.draft())).toBe('Shortcut draft');
 	});
 
+	test('Agent Window uses the download, cancel and clipboard actions in Chinese', async function () {
+		const { page } = browserTests;
+		await openFixture(page, '/chatInput.html?screenshotFixture=1&agentScreenshot=1&locale=zh-CN&theme=light');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const overlay = page.getByRole('dialog', { name: '屏幕截图', exact: true });
+		const toolbar = overlay.getByRole('toolbar', { name: '截图工具', exact: true });
+		const surface = overlay.getByRole('group', { name: '冻结的屏幕与区域选择' });
+		const selectEntire = () => overlay.getByRole('button', { name: '整个屏幕', exact: true }).click();
+		const download = toolbar.getByRole('button', { name: '下载截图', exact: true });
+		const cancel = toolbar.getByRole('button', { name: '取消', exact: true });
+		const confirm = toolbar.getByRole('button', { name: '复制到剪贴板', exact: true });
+		await openScreenshot(page, true);
+		await selectEntire();
+		await expect(overlay.getByRole('button', { name: '截图帮助', exact: true })).toHaveCount(0);
+		await expect(toolbar.locator('.ash-icon-copy, .ash-icon-save')).toHaveCount(0);
+		await expect(download.locator('.ash-icon-download')).toBeVisible();
+		await expect(cancel.locator('.ash-icon-close')).toBeVisible();
+		await expect(confirm.locator('.ash-icon-check')).toHaveCSS('font-family', '"Ash UI Variable"');
+		await expect(confirm.locator('.ash-icon-check')).toHaveCSS('font-size', '18px');
+		await expect(confirm).toHaveCSS('width', '28px');
+		await expect(confirm).toHaveCSS('color', 'rgb(16, 124, 16)');
+		await expect(cancel).toHaveCSS('color', 'rgb(161, 38, 13)');
+		for (const button of [cancel, confirm]) await expect(button).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(toolbar.getByRole('button').nth(-2)).toHaveAccessibleName('取消');
+		await expect(toolbar.getByRole('button').last()).toHaveAccessibleName('复制到剪贴板');
+		await surface.press('Alt+F1');
+		await expect(page.getByRole('dialog', { name: '截图帮助', exact: true }).getByRole('textbox')).toHaveValue(/按 Enter 也可复制并关闭/);
+		await page.keyboard.press('Escape');
+		await download.click();
+		await expect(download).toBeEnabled();
+		await cancel.press('ArrowRight');
+		await expect(confirm).toBeFocused();
+		await cancel.click();
+		await expect(overlay).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashScreenshotIntegration.clipboard())).toBeUndefined();
+
+		for (const action of ['click', 'enter'] as const) {
+			await openScreenshot(page, true);
+			await selectEntire();
+			if (action === 'click') await confirm.click();
+			else await surface.press('Enter');
+			await expect(overlay).toHaveCount(0);
+			const dimensions = await page.evaluate(async () => {
+				const png = window.ashScreenshotIntegration.clipboard()!;
+				const bitmap = await createImageBitmap(new Blob([new Uint8Array(png)], { type: 'image/png' }));
+				try { return [bitmap.width, bitmap.height]; }
+				finally { bitmap.close(); }
+			});
+			expect(dimensions).toEqual([800, 480]);
+			expect(await page.evaluate(() => window.ashScreenshotIntegration.state().pending)).toBe(false);
+		}
+	});
+
+	test('Agent Window annotates with a secondary toolbar and restores selection when a tool is toggled off', async function () {
+		const { page } = browserTests;
+		await openFixture(page, '/chatInput.html?screenshotFixture=1&agentScreenshot=1&locale=zh-CN&theme=light');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		await openScreenshot(page, true);
+		const overlay = page.getByRole('dialog', { name: '屏幕截图', exact: true });
+		await overlay.getByRole('button', { name: '整个屏幕', exact: true }).click();
+		const toolbar = overlay.getByRole('toolbar', { name: '截图工具' });
+		const options = overlay.getByRole('group', { name: '标注选项' });
+		const canvas = overlay.locator('canvas');
+		const shape = toolbar.getByRole('button', { name: '图形' });
+		const width = options.getByRole('slider', { name: '线宽' });
+		const colors = options.getByRole('group', { name: '标注颜色' });
+		const handles = overlay.locator('.ash-screenshot-handle');
+		const pixel = (x: number, y: number) => canvas.evaluate((element, [x, y]) => {
+			return [...(element as HTMLCanvasElement).getContext('2d')!.getImageData(x, y, 1, 1).data];
+		}, [x, y]);
+		const drag = async (x1: number, y1: number, x2: number, y2: number) => {
+			const { x, y, width, height } = (await canvas.boundingBox())!;
+			await page.mouse.move(x + x1 * width / 800, y + y1 * height / 480);
+			await page.mouse.down();
+			await page.mouse.move(x + x2 * width / 800, y + y2 * height / 480, { steps: 4 });
+			await page.mouse.up();
+		};
+
+		await expect(toolbar.locator('.ash-icon-cursor')).toHaveCount(0);
+		await expect(options).toBeHidden();
+		await expect(handles.first()).toBeVisible();
+		await shape.click();
+		await expect(shape).toHaveAttribute('aria-expanded', 'true');
+		expect((await options.boundingBox())!.y).toBeGreaterThanOrEqual((await toolbar.boundingBox())!.y + (await toolbar.boundingBox())!.height);
+		await shape.press('ArrowDown');
+		await expect(options.getByRole('button', { name: '矩形' })).toBeFocused();
+		await options.getByRole('button', { name: '填充' }).click();
+		await colors.getByRole('button', { name: '蓝色' }).click();
+		await drag(80, 60, 180, 140);
+		expect(await pixel(130, 100)).toEqual([59, 130, 246, 255]);
+		await options.getByRole('button', { name: '椭圆' }).click();
+		await drag(210, 60, 310, 140);
+		expect(await pixel(260, 100)).toEqual([59, 130, 246, 255]);
+		expect(await pixel(211, 61)).not.toEqual([59, 130, 246, 255]);
+		await options.getByRole('button', { name: '直线' }).click();
+		await expect(options.getByRole('button', { name: '填充' })).toBeDisabled();
+		await width.fill('10');
+		await expect(width).toHaveAttribute('aria-valuetext', '10 像素');
+		await drag(340, 100, 450, 100);
+		expect(await pixel(390, 103)).toEqual([59, 130, 246, 255]);
+		const custom = colors.getByRole('button', { name: '自定义颜色' });
+		await custom.click();
+		const picker = page.getByRole('dialog', { name: '自定义颜色', exact: true });
+		const value = picker.getByRole('textbox', { name: '颜色值' });
+		await value.fill('#c026d3');
+		await value.press('Enter');
+		await page.keyboard.press('Escape');
+		await expect(custom).toBeFocused();
+		await expect(custom).toHaveAttribute('aria-pressed', 'true');
+		await toolbar.getByRole('button', { name: '箭头' }).click();
+		await expect(toolbar.locator('.ash-icon-arrow-up-right')).toBeVisible();
+		await expect(width).toHaveValue('10');
+		await expect(options.getByRole('button', { name: '直线' })).toBeHidden();
+		await drag(80, 180, 180, 180);
+		expect(await pixel(130, 180)).toEqual([192, 38, 211, 255]);
+		await toolbar.getByRole('button', { name: '画笔' }).click();
+		await expect(toolbar.locator('.ash-icon-edit-line')).toBeVisible();
+		await expect(colors).toBeVisible();
+		await toolbar.getByRole('button', { name: '文字' }).click();
+		await expect(colors).toBeHidden();
+		await options.getByRole('slider', { name: '字号' }).fill('32');
+		await expect(options.getByRole('slider')).toHaveAttribute('aria-valuetext', '32 像素');
+		const mosaic = toolbar.getByRole('button', { name: '马赛克' });
+		await mosaic.click();
+		await expect(mosaic.locator('.ash-icon-mosaic')).toBeVisible();
+		await expect(options).toBeHidden();
+		await expect(handles.first()).toBeHidden();
+		await mosaic.click();
+		await expect(mosaic).toHaveAttribute('aria-pressed', 'false');
+		await expect(handles.first()).toBeVisible();
+	});
+
 	test('the built-in screenshot command creates a code image from unsaved selected text without capturing the screen', async function () {
 		const { page } = browserTests;
 		await openFixture(page, '/chatInput.html?screenshotFixture=1&inlineCode=1');

@@ -1,24 +1,54 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import './media/screenshotAnnotation.css';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import iconManifest from './media/icons.json' with { type: 'json' };
 import type { ScreenshotToolCompletion as ScreenshotCompletion } from './screenshotTool.js';
-const SCREENSHOT_MAX_PIXELS = 16_777_216;
-const iconGlyphs = new Map(iconManifest.glyphs.map(icon => [icon.id, String.fromCodePoint(parseInt(icon.unicode, 16))]));
-type ScreenshotIcon = ScreenshotTool | 'undo' | 'coordinates' | 'help' | 'retake' | 'cancel' | 'save' | 'copy' | 'attach' | 'entire';
+import { ScreenshotAnnotationControls } from './screenshotAnnotationControls.js';
 import { clampScreenshotRectangle, screenshotRectangle, type IScreenshotRect as IRectangle } from './screenshotSelection.js';
+
+const SCREENSHOT_MAX_PIXELS = 16_777_216;
+const WINDOW_CLICK_DRAG_THRESHOLD = 4;
+const iconGlyphs = new Map(iconManifest.glyphs.map(icon => [icon.id, String.fromCodePoint(parseInt(icon.unicode, 16))]));
+const screenshotIcons = {
+	select: Lxicon.cursor,
+	rectangle: Lxicon.square,
+	arrow: Lxicon.arrowRight,
+	pen: Lxicon.pen,
+	text: Lxicon.text2,
+	mosaic: Lxicon.layout,
+	undo: Lxicon.discard,
+	coordinates: Lxicon.frame,
+	help: Lxicon.question,
+	retake: Lxicon.refresh,
+	cancel: Lxicon.close,
+	save: Lxicon.save,
+	copy: Lxicon.copy,
+	attach: Lxicon.chat,
+	entire: Lxicon.screenFull,
+	download: Lxicon.download,
+	check: Lxicon.check,
+	shape: Lxicon.shape,
+	'arrow-up-right': Lxicon.arrowUpRight,
+	'edit-line': Lxicon.editLine,
+	pixelate: Lxicon.mosaic,
+};
+type ScreenshotIcon = keyof typeof screenshotIcons;
 
 interface ScreenshotPoint {
 	readonly x: number;
 	readonly y: number;
 }
-type ScreenshotTool = 'select' | 'rectangle' | 'arrow' | 'pen' | 'text' | 'mosaic';
+type ScreenshotTool = 'select' | 'rectangle' | 'shape' | 'arrow' | 'pen' | 'text' | 'mosaic';
 interface ScreenshotAnnotation {
-	readonly tool: Exclude<ScreenshotTool, 'select'>;
+	readonly tool: Exclude<ScreenshotTool, 'select' | 'shape'> | 'ellipse' | 'line';
 	readonly points: readonly ScreenshotPoint[];
 	readonly color: string;
 	readonly width: number;
+	readonly filled?: boolean;
+	readonly fontSize?: number;
 	readonly text?: string;
 }
 
@@ -43,10 +73,20 @@ function paintScreenshotAnnotation(context: CanvasRenderingContext2D, annotation
 			.drawImage(context.canvas, rect.x, rect.y, rect.width, rect.height, 0, 0, patch.width, patch.height);
 		context.imageSmoothingEnabled = false;
 		context.drawImage(patch, 0, 0, patch.width, patch.height, rect.x, rect.y, rect.width, rect.height);
-	} else if (annotation.tool === 'rectangle') {
-		context.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
+	} else if (annotation.tool === 'rectangle' || annotation.tool === 'ellipse') {
+		const rect = screenshotRectangle(start, end);
+		context.beginPath();
+		if (annotation.tool === 'rectangle') {
+			context.rect(rect.x, rect.y, rect.width, rect.height);
+		} else {
+			const rx = rect.width / 2;
+			const ry = rect.height / 2;
+			context.ellipse(rect.x + rx, rect.y + ry, rx, ry, 0, 0, 2 * Math.PI);
+		}
+		if (annotation.filled) context.fill();
+		else context.stroke();
 	} else if (annotation.tool === 'text') {
-		context.font = `${Math.max(18, annotation.width * 6)}px sans-serif`;
+		context.font = `${annotation.fontSize ?? Math.max(18, annotation.width * 6)}px sans-serif`;
 		context.textBaseline = 'top';
 		context.fillText(annotation.text ?? '', start.x, start.y);
 	} else {
@@ -76,6 +116,11 @@ function paintScreenshotAnnotation(context: CanvasRenderingContext2D, annotation
 
 
 interface ScreenshotAnnotationEditorOptions {
+	readonly agentWindow?: boolean;
+	readonly container: HTMLElement;
+	readonly appearance: Readonly<Record<string, string>>;
+	readonly colorScheme: string;
+	readonly windowBounds?: readonly IRectangle[];
 	readonly defaultAction: 'copy' | 'attach';
 	readonly canRetake: boolean;
 	readonly canPin?: boolean;
@@ -92,6 +137,7 @@ type Drag = {
 	readonly start: ScreenshotPoint;
 	readonly rect: IRectangle | undefined;
 	readonly handle: string;
+	windowClick?: { readonly bounds: IRectangle; readonly clientX: number; readonly clientY: number; };
 	points: ScreenshotPoint[];
 };
 
@@ -103,6 +149,8 @@ export class ScreenshotAnnotationEditor extends Disposable {
 	private readonly selection: HTMLElement;
 	private readonly dimensions: HTMLElement;
 	private readonly toolbar: HTMLElement;
+	private readonly toolbarStack: HTMLElement;
+	private readonly annotationControls?: ScreenshotAnnotationControls;
 	private readonly fields: HTMLElement;
 	private readonly inputs = new Map<keyof IRectangle, HTMLInputElement>();
 	private readonly toolButtons = new Map<ScreenshotTool, HTMLButtonElement>();
@@ -119,6 +167,7 @@ export class ScreenshotAnnotationEditor extends Disposable {
 	private readonly document: Document;
 	private readonly context: CanvasRenderingContext2D;
 	private region: IRectangle | undefined;
+	private hoveredWindow: IRectangle | undefined;
 	private annotations: ScreenshotAnnotation[] = [];
 	private tool: ScreenshotTool = 'select';
 	private drag: Drag | undefined;
@@ -141,6 +190,9 @@ export class ScreenshotAnnotationEditor extends Disposable {
 			return element;
 		};
 		this.element = node('dialog', 'ash-screenshot-overlay');
+		this.element.classList.toggle('ash-screenshot-neutral', options.agentWindow === true);
+		this.element.dataset.colorScheme = options.colorScheme;
+		for (const [key, value] of Object.entries(options.appearance)) this.element.style.setProperty(`--snapshot-${key}`, value);
 		this.element.setAttribute('aria-label', localize('screenshot.title', 'Screen Capture'));
 		this.imageArea = node('div', 'ash-screenshot-surface');
 		this.imageArea.tabIndex = 0;
@@ -169,10 +221,32 @@ export class ScreenshotAnnotationEditor extends Disposable {
 		this.dimensions = node('div', 'ash-screenshot-dimensions');
 		this.dimensions.hidden = true;
 		this.toolbar = node('div', 'ash-screenshot-toolbar');
-		this.toolbar.setAttribute('role', 'group');
+		this.toolbar.setAttribute('role', options.agentWindow ? 'toolbar' : 'group');
 		this.toolbar.setAttribute('aria-label', localize('screenshot.tools', 'Screenshot tools'));
 		this.toolbar.hidden = true;
+		this.toolbarStack = this.toolbar;
+		if (options.agentWindow) {
+			this.annotationControls = this._register(new ScreenshotAnnotationControls(document));
+			this.toolbarStack = node('div', 'ash-screenshot-toolbar-stack');
+			this.toolbarStack.append(this.toolbar, this.annotationControls.element);
+		}
 		const button = (parent: HTMLElement, label: string, icon: ScreenshotIcon | undefined, run: () => void, primary = false): HTMLButtonElement => {
+			if (options.agentWindow) {
+				const control = this._register(new Button(parent, {
+					label: icon ? '' : label,
+					ariaLabel: label,
+					icon: icon && screenshotIcons[icon],
+					iconOnly: !!icon,
+					presentation: primary ? 'primary' : 'quiet',
+					onClick: run,
+				})).domNode;
+				// The editor sits in the dialog top layer, above Workbench's managed hover container.
+				control.title = label;
+				control.classList.add('ash-screenshot-icon-button');
+				if (!icon) control.classList.add('ash-screenshot-text-button');
+				this.controls.push(control);
+				return control;
+			}
 			const element = node('button', 'ash-screenshot-icon-button');
 			element.type = 'button';
 			element.setAttribute('aria-label', label);
@@ -197,16 +271,21 @@ export class ScreenshotAnnotationEditor extends Disposable {
 		const toolNames: Record<ScreenshotTool, string> = {
 			select: localize('screenshot.select', 'Select'),
 			rectangle: localize('screenshot.rectangle', 'Rectangle'),
+			shape: localize('screenshot.shape', 'Shape'),
 			arrow: localize('screenshot.arrow', 'Arrow'),
 			pen: localize('screenshot.pen', 'Pen'),
 			text: localize('screenshot.text', 'Text'),
 			mosaic: localize('screenshot.mosaic', 'Mosaic')
 		};
-		for (const tool of Object.keys(toolNames) as ScreenshotTool[]) {
-			this.toolButtons.set(
-				tool,
-				button(tools, toolNames[tool], tool, () => this.selectTool(tool))
-			);
+		const annotationTools = options.agentWindow
+			? [['shape', 'shape'], ['arrow', 'arrow-up-right'], ['pen', 'edit-line'], ['text', 'text'], ['mosaic', 'pixelate']] as const
+			: [['select', 'select'], ['rectangle', 'rectangle'], ['arrow', 'arrow'], ['pen', 'pen'], ['text', 'text'], ['mosaic', 'mosaic']] as const;
+		for (const [tool, icon] of annotationTools) {
+			const control = button(tools, toolNames[tool], icon, () => {
+				this.selectTool(options.agentWindow && this.tool === tool ? 'select' : tool, !options.agentWindow);
+			});
+			if (this.annotationControls && tool !== 'mosaic') control.setAttribute('aria-controls', this.annotationControls.element.id);
+			this.toolButtons.set(tool, control);
 		}
 		this.color = node('input');
 		this.color.type = 'color';
@@ -223,7 +302,7 @@ export class ScreenshotAnnotationEditor extends Disposable {
 			this.lineWidth.append(option);
 		}
 		this.lineWidth.value = '4';
-		tools.append(this.color, this.lineWidth);
+		if (!options.agentWindow) tools.append(this.color, this.lineWidth);
 		button(tools, localize('screenshot.undo', 'Undo'), 'undo', () => {
 			this.annotations.pop();
 			this.paint();
@@ -235,23 +314,28 @@ export class ScreenshotAnnotationEditor extends Disposable {
 			this.positionToolbar();
 			if (!this.fields.hidden) this.inputs.get('x')!.focus();
 		});
-		button(actions, localize('screenshot.helpTitle', 'Screenshot Help'), 'help', () => this.showAccessibleContent(false));
+		const cancel = () => { void this.complete({ kind: 'cancel' }); };
+		if (!options.agentWindow) {
+			button(actions, localize('screenshot.helpTitle', 'Screenshot Help'), 'help', () => this.showAccessibleContent(false));
+		}
 		button(actions, options.canRetake ? localize('screenshot.retake', 'Retake') : localize('screenshot.reset', 'Reset annotations'), 'retake', () => {
 			if (options.canRetake) void this.complete({ kind: 'retake' });
 			else this.resetAnnotations();
 		});
-		button(actions, localize('screenshot.cancel', 'Cancel'), 'cancel', () => {
-			void this.complete({ kind: 'cancel' });
-		});
+		if (!options.agentWindow) {
+			button(actions, localize('screenshot.cancel', 'Cancel'), 'cancel', cancel);
+		}
 		if (options.canPin) {
 			button(actions, localize('screenshot.pin', 'Pin'), undefined, () => { void this.export('pin'); });
 		}
-		button(actions, localize('screenshot.save', 'Save'), 'save', () => {
-			void this.export('save');
-		}).title = localize('screenshot.saveTitle', 'Save screenshot');
-		button(actions, localize('screenshot.copy', 'Copy'), 'copy', () => {
-			void this.export('copy');
-		}, options.defaultAction === 'copy');
+		const save = () => { void this.export('save'); };
+		const copy = () => { void this.export('copy'); };
+		if (options.agentWindow) {
+			button(actions, localize('screenshot.download', 'Download Screenshot'), 'download', save);
+		} else {
+			button(actions, localize('screenshot.save', 'Save'), 'save', save).title = localize('screenshot.saveTitle', 'Save screenshot');
+			button(actions, localize('screenshot.copy', 'Copy'), 'copy', copy, options.defaultAction === 'copy');
+		}
 		button(
 			actions,
 			localize('chat.screenshot.attach', 'Add to Chat'),
@@ -259,8 +343,14 @@ export class ScreenshotAnnotationEditor extends Disposable {
 			() => {
 				void this.export('attach');
 			},
-			options.defaultAction === 'attach'
+			!options.agentWindow && options.defaultAction === 'attach'
 		);
+		if (options.agentWindow) {
+			const completion = node('div', 'ash-screenshot-tool-row ash-screenshot-completion');
+			button(completion, localize('screenshot.cancel', 'Cancel'), 'cancel', cancel).classList.add('ash-screenshot-cancel');
+			button(completion, localize('screenshot.copyToClipboard', 'Copy to Clipboard'), 'check', copy).classList.add('ash-screenshot-confirm');
+			actions.append(completion);
+		}
 		this.fields = node('div', 'ash-screenshot-fields');
 		this.fields.hidden = true;
 		const labels: Record<keyof IRectangle, string> = {
@@ -289,13 +379,34 @@ export class ScreenshotAnnotationEditor extends Disposable {
 			);
 		}
 		this.toolbar.append(tools, actions, this.fields);
+		if (options.agentWindow) {
+			this._register(addDisposableListener(this.toolbar, 'keydown', event => {
+				if (event.key === 'ArrowDown' && this.annotationControls && !this.annotationControls.element.hidden && this.toolButtons.get(this.tool) === event.target) {
+					event.preventDefault();
+					event.stopPropagation();
+					this.annotationControls.focus();
+					return;
+				}
+				if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+				const buttons = Array.from(this.toolbar.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+				const index = buttons.findIndex(button => button === event.target);
+				if (index < 0) return;
+				event.preventDefault();
+				event.stopPropagation();
+				const forward = event.key === 'ArrowRight';
+				const rtl = this.document.defaultView!.getComputedStyle(this.toolbar).direction === 'rtl';
+				buttons[(index + (forward !== rtl ? 1 : -1) + buttons.length) % buttons.length].focus();
+			}));
+		}
 		const hint = node('div', 'ash-screenshot-instructions');
-		hint.textContent = localize('screenshot.instructions', 'Drag to capture a region · Esc to cancel');
+		hint.textContent = options.windowBounds?.length
+			? localize('screenshot.windowInstructions', 'Click a window or drag to select a region · Esc to cancel')
+			: localize('screenshot.instructions', 'Drag to capture a region · Esc to cancel');
 		button(hint, localize('screenshot.entire', 'Entire screen'), 'entire', () => this.selectEntire());
-		button(hint, localize('screenshot.helpTitle', 'Screenshot Help'), 'help', () => this.showAccessibleContent(false));
-		button(hint, localize('screenshot.cancel', 'Cancel'), 'cancel', () => {
-			void this.complete({ kind: 'cancel' });
-		});
+		if (!options.agentWindow) {
+			button(hint, localize('screenshot.helpTitle', 'Screenshot Help'), 'help', () => this.showAccessibleContent(false));
+		}
+		button(hint, localize('screenshot.cancel', 'Cancel'), 'cancel', cancel);
 		this.textInput = node('input', 'ash-screenshot-text');
 		this.textInput.type = 'text';
 		this.textInput.maxLength = 2000;
@@ -310,12 +421,12 @@ export class ScreenshotAnnotationEditor extends Disposable {
 			this.imageArea,
 			hint,
 			this.dimensions,
-			this.toolbar,
+			this.toolbarStack,
 			this.textInput,
 			this.status,
 			this.help
 		);
-		document.body.append(this.element);
+		options.container.append(this.element);
 		this._register(
 			toDisposable(() => {
 				this.bitmap.close();
@@ -332,9 +443,13 @@ export class ScreenshotAnnotationEditor extends Disposable {
 		this._register(addDisposableListener(this.imageArea, 'pointerdown', (event) => this.pointerDown(event)));
 		this._register(addDisposableListener(this.imageArea, 'pointermove', (event) => this.pointerMove(event)));
 		this._register(addDisposableListener(this.imageArea, 'pointerup', (event) => this.pointerUp(event)));
+		this._register(addDisposableListener(this.imageArea, 'pointerleave', () => {
+			if (!this.drag) this.previewWindow(undefined);
+		}));
 		for (const event of ['pointercancel', 'lostpointercapture'] as const) {
 			this._register(
 				addDisposableListener(this.imageArea, event, () => {
+					if (this.drag?.windowClick) this.previewWindow(undefined);
 					this.drag = undefined;
 					this.pendingAnnotation = undefined;
 					this.element.classList.remove('dragging');
@@ -366,11 +481,14 @@ export class ScreenshotAnnotationEditor extends Disposable {
 		this.element.showModal();
 		this.imageArea.focus();
 		this.render();
-		if (options.accessibilityHints)
-			this.status.textContent = localize(
-				'screenshot.hint',
-				'Screen capture. Drag to select a region, or choose Entire screen. Press Alt+F1 for help.'
-			);
+		if (options.accessibilityHints) {
+			this.status.textContent = options.windowBounds?.length
+				? localize('screenshot.windowHint', 'Screen capture. Use Up or Down Arrow to preview a window. Press Enter to select, or Alt+F1 for help.')
+				: localize(
+					'screenshot.hint',
+					'Screen capture. Drag to select a region, or choose Entire screen. Press Alt+F1 for help.'
+				);
+		}
 	}
 
 	static async create(
@@ -391,15 +509,18 @@ export class ScreenshotAnnotationEditor extends Disposable {
 		}
 	}
 
-	private selectTool(tool: ScreenshotTool): void {
+	private selectTool(tool: ScreenshotTool, focusSelection = true): void {
 		this.commitText();
 		this.tool = tool;
 		this.element.dataset.tool = tool;
 		for (const [candidate, button] of this.toolButtons) {
 			button.setAttribute('aria-pressed', String(candidate === tool));
 			button.classList.toggle('selected', candidate === tool);
+			if (button.hasAttribute('aria-controls')) button.setAttribute('aria-expanded', String(candidate === tool));
 		}
-		this.imageArea.focus();
+		this.annotationControls?.show(tool);
+		this.positionToolbar();
+		if (focusSelection) this.imageArea.focus();
 	}
 
 	private resetAnnotations(): void {
@@ -450,8 +571,11 @@ export class ScreenshotAnnotationEditor extends Disposable {
 				left: `${event.clientX}px`,
 				top: `${event.clientY}px`,
 				maxWidth: `${Math.max(100, bounds.right - event.clientX)}px`,
-				color: this.color.value
+				color: this.annotationControls?.color ?? this.color.value,
 			});
+			if (this.annotationControls) {
+				this.textInput.style.fontSize = `${this.annotationControls.textSize * bounds.width / this.bitmap.width}px`;
+			}
 			this.textInput.value = '';
 			this.textInput.hidden = false;
 			this.textInput.focus();
@@ -459,13 +583,15 @@ export class ScreenshotAnnotationEditor extends Disposable {
 		}
 		const handle =
 			(event.target as HTMLElement).dataset.handle ?? (inside && this.tool === 'select' ? 'move' : 'new');
-		this.drag = { id: event.pointerId, start, rect: this.region, handle, points: [start] };
+		const window = !this.region ? this.windowAt(event, start) : undefined;
+		const windowClick = window ? { bounds: window, clientX: event.clientX, clientY: event.clientY } : undefined;
+		this.drag = { id: event.pointerId, start, rect: this.region, handle, windowClick, points: [start] };
 		if (this.tool === 'select' || !inside) {
 			if (handle === 'new') {
 				this.annotations = [];
-				this.tool = 'select';
 				this.selectTool('select');
-				this.setRegion(screenshotRectangle(start, start));
+				if (windowClick) this.previewWindow(windowClick.bounds);
+				else this.setRegion(screenshotRectangle(start, start));
 			}
 		} else this.pendingAnnotation = this.annotation([start, start]);
 		this.element.classList.add('dragging');
@@ -475,7 +601,15 @@ export class ScreenshotAnnotationEditor extends Disposable {
 
 	private pointerMove(event: PointerEvent): void {
 		const drag = this.drag;
-		if (!drag || drag.id !== event.pointerId) return;
+		if (!drag) {
+			if (!this.region && this.options.windowBounds?.length) this.previewWindow(this.windowAt(event));
+			return;
+		}
+		if (drag.id !== event.pointerId) return;
+		if (drag.windowClick) {
+			if (Math.hypot(event.clientX - drag.windowClick.clientX, event.clientY - drag.windowClick.clientY) < WINDOW_CLICK_DRAG_THRESHOLD) return;
+			drag.windowClick = undefined;
+		}
 		const point = this.point(event);
 		if (this.pendingAnnotation) {
 			const rect = this.region!;
@@ -512,6 +646,7 @@ export class ScreenshotAnnotationEditor extends Disposable {
 	private pointerUp(event: PointerEvent): void {
 		if (this.drag?.id !== event.pointerId) return;
 		this.pointerMove(event);
+		if (this.drag.windowClick) this.setRegion(this.drag.windowClick.bounds);
 		if (this.pendingAnnotation) this.annotations.push(this.pendingAnnotation);
 		this.pendingAnnotation = undefined;
 		this.drag = undefined;
@@ -522,11 +657,27 @@ export class ScreenshotAnnotationEditor extends Disposable {
 		this.announce();
 	}
 
+	private windowAt(event: PointerEvent, point = this.point(event)): IRectangle | undefined {
+		if (event.target !== this.canvas && event.target !== this.imageArea) return undefined;
+		return this.options.windowBounds?.find(bounds => point.x >= bounds.x && point.x < bounds.x + bounds.width
+			&& point.y >= bounds.y && point.y < bounds.y + bounds.height);
+	}
+
+	private previewWindow(window: IRectangle | undefined): void {
+		if (this.hoveredWindow === window) return;
+		this.hoveredWindow = window;
+		this.render();
+	}
+
 	private annotation(points: readonly ScreenshotPoint[], text?: string): ScreenshotAnnotation {
+		const controls = this.annotationControls;
+		const tool = this.tool as Exclude<ScreenshotTool, 'select'>;
 		return {
-			tool: this.tool as Exclude<ScreenshotTool, 'select'>,
-			color: this.color.value,
-			width: Number(this.lineWidth.value),
+			tool: tool === 'shape' ? controls!.drawingShape : tool,
+			filled: tool === 'shape' && controls!.fillShape,
+			color: controls?.color ?? this.color.value,
+			width: controls?.width ?? Number(this.lineWidth.value),
+			fontSize: controls?.textSize,
 			points,
 			...(text ? { text } : {})
 		};
@@ -550,7 +701,7 @@ export class ScreenshotAnnotationEditor extends Disposable {
 	}
 
 	private keyDown(event: KeyboardEvent): void {
-		if (this.help.open) return;
+		if (this.help.open || this.annotationControls?.colorPickerOpen) return;
 		if (event.altKey && (event.key === 'F1' || event.key === 'F2')) {
 			event.preventDefault();
 			event.stopImmediatePropagation();
@@ -579,6 +730,23 @@ export class ScreenshotAnnotationEditor extends Disposable {
 			this.selectEntire();
 			return;
 		}
+		const windows = this.options.windowBounds;
+		if (!this.region && windows?.length && ['ArrowUp', 'ArrowDown', 'Enter'].includes(event.key)) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			if (event.key === 'Enter') {
+				this.setRegion(this.hoveredWindow ?? windows[0]);
+				this.announce();
+			} else {
+				const index = this.hoveredWindow ? windows.indexOf(this.hoveredWindow) : -1;
+				const next = index === -1 ? 0 : (index + (event.key === 'ArrowDown' ? 1 : -1) + windows.length) % windows.length;
+				const bounds = windows[next];
+				this.previewWindow(bounds);
+				this.status.textContent = localize('screenshot.windowPreview', 'Window {0} of {1}. X {2}, Y {3}, width {4}, height {5} pixels. Press Enter to select.',
+					next + 1, windows.length, bounds.x, bounds.y, bounds.width, bounds.height);
+			}
+			return;
+		}
 		if (event.key === 'Enter' && this.region) {
 			event.preventDefault();
 			event.stopImmediatePropagation();
@@ -597,6 +765,7 @@ export class ScreenshotAnnotationEditor extends Disposable {
 	}
 
 	private setRegion(rect: IRectangle): void {
+		this.hoveredWindow = undefined;
 		this.region = clampScreenshotRectangle(rect, this.bitmap.width, this.bitmap.height);
 		this.render();
 	}
@@ -609,13 +778,15 @@ export class ScreenshotAnnotationEditor extends Disposable {
 	}
 
 	private render(): void {
-		this.selection.hidden = !this.region;
-		this.dimensions.hidden = !this.region;
+		const rect = this.region ?? this.hoveredWindow;
+		this.selection.hidden = !rect;
+		this.dimensions.hidden = !rect;
 		this.toolbar.hidden = !this.region;
+		this.toolbarStack.hidden = !this.region;
 		this.element.classList.toggle('has-selection', !!this.region);
+		this.element.classList.toggle('previewing-window', !this.region && !!rect);
 		const viewport = this.document.defaultView!;
 		const image = this.canvas.getBoundingClientRect();
-		const rect = this.region;
 		const left = rect ? image.left + (rect.x * image.width) / this.bitmap.width : 0;
 		const top = rect ? image.top + (rect.y * image.height) / this.bitmap.height : 0;
 		const right = rect ? left + (rect.width * image.width) / this.bitmap.width : 0;
@@ -637,10 +808,10 @@ export class ScreenshotAnnotationEditor extends Disposable {
 			const [x, y, width, height] = masks[index];
 			Object.assign(shade.style, { left: `${x}px`, top: `${y}px`, width: `${width}px`, height: `${height}px` });
 		}
-		if (!this.region) return;
+		if (!rect) return;
 		const scaleX = image.width / this.bitmap.width;
 		const scaleY = image.height / this.bitmap.height;
-		const { x, y, width, height } = this.region;
+		const { x, y, width, height } = rect;
 		Object.assign(this.selection.style, {
 			left: `${image.left + x * scaleX}px`,
 			top: `${image.top + y * scaleY}px`,
@@ -652,8 +823,9 @@ export class ScreenshotAnnotationEditor extends Disposable {
 			left: `${image.left + x * scaleX}px`,
 			top: `${Math.max(8, image.top + y * scaleY - 32)}px`
 		});
+		if (!this.region) return;
 		for (const [key, input] of this.inputs) {
-			input.value = String(this.region[key]);
+			input.value = String(rect[key]);
 			input.min = key === 'x' || key === 'y' ? '0' : '1';
 			input.max = String(
 				key === 'x'
@@ -672,22 +844,23 @@ export class ScreenshotAnnotationEditor extends Disposable {
 		if (!this.region) return;
 		const bounds = this.selection.getBoundingClientRect();
 		const { innerWidth, innerHeight } = this.document.defaultView!;
+		const { offsetWidth, offsetHeight } = this.toolbarStack;
 		const left = Math.max(
 			8,
-			Math.min(innerWidth - this.toolbar.offsetWidth - 8, bounds.right - this.toolbar.offsetWidth)
+			Math.min(innerWidth - offsetWidth - 8, bounds.right - offsetWidth)
 		);
 		const below = bounds.bottom + 12;
 		const top =
-			below + this.toolbar.offsetHeight <= innerHeight - 8
+			below + offsetHeight <= innerHeight - 8
 				? below
 				: Math.max(
 					8,
 					Math.min(
-						innerHeight - this.toolbar.offsetHeight - 8,
-						bounds.top - this.toolbar.offsetHeight - 12
+						innerHeight - offsetHeight - 8,
+						bounds.top - offsetHeight - 12
 					)
 				);
-		Object.assign(this.toolbar.style, { left: `${left}px`, top: `${top}px` });
+		Object.assign(this.toolbarStack.style, { left: `${left}px`, top: `${top}px` });
 	}
 
 	private describe(): string {

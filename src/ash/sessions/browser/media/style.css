@@ -37,6 +37,7 @@
 	--ash-action-widget-icon-size: var(--ash-lxiconFontSize-large);
 	--ash-icon-font-family: "Ash UI Variable";
 	--ash-icon-font-weight: 550;
+	--snapshot-presentation: neutral;
 }
 
 .ash-sessions-window[data-interface-font="system"] {

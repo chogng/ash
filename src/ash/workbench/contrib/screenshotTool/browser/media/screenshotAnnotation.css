@@ -5,6 +5,10 @@
 }
 
 .ash-screenshot-overlay {
+	--snapshot-control-size: 24px;
+	--snapshot-control-radius: var(--snapshot-small-radius);
+	--snapshot-surface-radius: var(--snapshot-large-radius);
+
 	position: fixed;
 	inset: 0;
 	box-sizing: border-box;
@@ -19,6 +23,21 @@
 	background: var(--snapshot-background);
 	font: var(--snapshot-font-size) sans-serif;
 	overflow: hidden;
+}
+.ash-screenshot-overlay.ash-screenshot-neutral {
+	--snapshot-control-size: var(--ash-spacing-size280);
+	--snapshot-control-radius: var(--ash-button-border-radius);
+	--snapshot-surface-radius: var(--ash-cornerRadius-xLarge);
+
+	font-family: var(--ash-font-family, system-ui);
+}
+.ash-screenshot-neutral[data-color-scheme="dark"],
+.ash-screenshot-neutral[data-color-scheme="hcDark"] {
+	color-scheme: dark;
+}
+.ash-screenshot-neutral[data-color-scheme="light"],
+.ash-screenshot-neutral[data-color-scheme="hcLight"] {
+	color-scheme: light;
 }
 .ash-screenshot-overlay::backdrop {
 	background: var(--snapshot-background);
@@ -97,13 +116,16 @@
 	top: calc(50% - 4px);
 	cursor: ew-resize;
 }
-.ash-screenshot-overlay:not([data-tool="select"]) .ash-screenshot-selection {
+.ash-screenshot-overlay:is(.previewing-window, :not([data-tool="select"]))
+	.ash-screenshot-selection {
 	pointer-events: none;
 }
-.ash-screenshot-overlay:not([data-tool="select"]) .ash-screenshot-handle {
+.ash-screenshot-overlay:is(.previewing-window, :not([data-tool="select"]))
+	.ash-screenshot-handle {
 	display: none;
 }
 .ash-screenshot-toolbar,
+.ash-screenshot-options,
 .ash-screenshot-instructions,
 .ash-screenshot-dimensions {
 	position: fixed;
@@ -112,7 +134,7 @@
 	color: var(--snapshot-foreground);
 	background: var(--snapshot-panel-background);
 	border: var(--snapshot-border-width) solid var(--snapshot-border);
-	border-radius: var(--snapshot-large-radius);
+	border-radius: var(--snapshot-surface-radius);
 	box-shadow: var(--snapshot-shadow);
 }
 .ash-screenshot-instructions {
@@ -146,6 +168,80 @@
 	overflow-y: auto;
 	padding: var(--snapshot-spacing-2);
 }
+.ash-screenshot-toolbar-stack {
+	position: fixed;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: var(--ash-spacing-size40);
+	width: max-content;
+	max-width: calc(100vw - var(--ash-spacing-size160));
+}
+.ash-screenshot-toolbar-stack .ash-screenshot-toolbar,
+.ash-screenshot-options {
+	position: static;
+	flex-shrink: 0;
+}
+.ash-screenshot-options {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+	max-width: 100%;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+}
+@media (max-height: 240px) {
+	.ash-screenshot-toolbar-stack {
+		max-height: calc(100vh - var(--ash-spacing-size160));
+		overflow-y: auto;
+	}
+}
+.ash-screenshot-option-group {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+}
+.ash-screenshot-option-group:not([hidden]) ~ .ash-screenshot-option-group {
+	padding-inline-start: var(--ash-spacing-size40);
+	border-inline-start: var(--snapshot-border-width) solid var(--ash-border);
+}
+.ash-screenshot-options .ash-screenshot-option-group[aria-label] {
+	flex-wrap: wrap;
+}
+.ash-screenshot-size-slider {
+	inline-size: calc(2 * var(--ash-spacing-size400));
+	accent-color: var(--snapshot-foreground);
+	cursor: pointer;
+}
+.ash-screenshot-size-slider:disabled {
+	cursor: default;
+}
+.ash-screenshot-size-value {
+	min-inline-size: 5ch;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+.ash-screenshot-color-swatch {
+	inline-size: var(--ash-spacing-size160);
+	block-size: var(--ash-spacing-size160);
+	border: var(--snapshot-border-width) solid var(--snapshot-border);
+	border-radius: var(--ash-cornerRadius-circle);
+}
+.ash-screenshot-color-dialog {
+	max-inline-size: calc(100vw - var(--ash-spacing-size160));
+	max-block-size: calc(100vh - var(--ash-spacing-size160));
+	padding: 0;
+	color: var(--snapshot-foreground);
+	background: var(--snapshot-panel-background);
+	border: var(--snapshot-border-width) solid var(--snapshot-border);
+	border-radius: var(--snapshot-surface-radius);
+	box-shadow: var(--snapshot-shadow);
+}
+.ash-screenshot-color-dialog::backdrop {
+	background: var(--ash-dialog-backdropBackground);
+}
 .ash-screenshot-tool-row {
 	display: flex;
 	align-items: center;
@@ -153,10 +249,23 @@
 	flex-wrap: wrap;
 	gap: var(--snapshot-spacing-1);
 }
-.ash-screenshot-overlay button {
+.ash-screenshot-completion {
+	flex-wrap: nowrap;
+	margin-inline-start: var(--snapshot-spacing-1);
+}
+.ash-screenshot-neutral .ash-screenshot-toolbar {
+	justify-content: flex-end;
+}
+.ash-screenshot-neutral .ash-button {
+	--ash-foreground: var(--snapshot-foreground);
+	--ash-editor-background: var(--snapshot-background);
+	--ash-focusBorder: var(--snapshot-focus-border);
+	--ash-contrastBorder: var(--snapshot-contrast-border);
+}
+.ash-screenshot-overlay button:not(.ash-button) {
 	padding: var(--snapshot-spacing-1) var(--snapshot-spacing-2);
 	border: var(--snapshot-border-width) solid transparent;
-	border-radius: var(--snapshot-small-radius);
+	border-radius: var(--snapshot-control-radius);
 	color: inherit;
 	background: transparent;
 	font: inherit;
@@ -167,9 +276,9 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	flex: 0 0 24px;
-	width: 24px;
-	height: 24px;
+	flex: 0 0 var(--snapshot-control-size);
+	width: var(--snapshot-control-size);
+	height: var(--snapshot-control-size);
 	padding: 0;
 }
 .ash-screenshot-icon {
@@ -182,12 +291,22 @@
 .ash-screenshot-icon::before {
 	content: attr(data-glyph);
 }
-.ash-screenshot-overlay button:hover {
+.ash-screenshot-overlay button:not(.ash-button):hover {
 	background: var(--snapshot-hover-background);
 }
-.ash-screenshot-overlay button.selected {
+.ash-screenshot-overlay button.selected:not(.ash-button) {
 	color: var(--snapshot-button-foreground);
 	background: var(--snapshot-button-background);
+}
+.ash-screenshot-neutral .ash-button:is(.selected, .checked) {
+	background: var(--ash-actionBar-toggledBackground);
+	border-color: var(--snapshot-contrast-border, transparent);
+}
+.ash-screenshot-neutral .ash-button.ash-screenshot-cancel {
+	color: var(--ash-error-foreground);
+}
+.ash-screenshot-neutral .ash-button.ash-screenshot-confirm {
+	color: var(--ash-success-foreground);
 }
 .ash-screenshot-overlay button.primary {
 	color: var(--snapshot-button-foreground);
@@ -206,11 +325,11 @@
 }
 .ash-screenshot-tool-row input[type="color"] {
 	box-sizing: border-box;
-	width: 24px;
-	height: 24px;
+	width: var(--snapshot-control-size);
+	height: var(--snapshot-control-size);
 	padding: 0;
 	border: var(--snapshot-border-width) solid var(--snapshot-input-border);
-	border-radius: var(--snapshot-small-radius);
+	border-radius: var(--snapshot-control-radius);
 	background: var(--snapshot-input-background);
 }
 .ash-screenshot-overlay select,
@@ -222,11 +341,11 @@
 	color: var(--snapshot-input-foreground);
 	background: var(--snapshot-input-background);
 	border: var(--snapshot-border-width) solid var(--snapshot-input-border);
-	border-radius: var(--snapshot-small-radius);
+	border-radius: var(--snapshot-control-radius);
 	font: inherit;
 }
 .ash-screenshot-tool-row select {
-	height: 24px;
+	height: var(--snapshot-control-size);
 	padding-block: 0;
 }
 .ash-screenshot-fields {
@@ -272,7 +391,7 @@
 	width: min(720px, calc(100vw - 32px));
 	padding: var(--snapshot-spacing-4);
 	border: var(--snapshot-border-width) solid var(--snapshot-border);
-	border-radius: var(--snapshot-large-radius);
+	border-radius: var(--snapshot-surface-radius);
 	color: var(--snapshot-foreground);
 	background: var(--snapshot-panel-background);
 }
@@ -292,11 +411,14 @@
 	font: inherit;
 	line-height: 1.5;
 }
-.ash-screenshot-overlay.dragging .ash-screenshot-toolbar {
+.ash-screenshot-overlay.dragging
+	:is(.ash-screenshot-toolbar, .ash-screenshot-toolbar-stack) {
 	visibility: hidden;
 }
 [data-color-scheme="hcDark"] .ash-screenshot-toolbar,
 [data-color-scheme="hcLight"] .ash-screenshot-toolbar,
+[data-color-scheme="hcDark"] .ash-screenshot-options,
+[data-color-scheme="hcLight"] .ash-screenshot-options,
 [data-color-scheme="hcDark"] .ash-screenshot-instructions,
 [data-color-scheme="hcLight"] .ash-screenshot-instructions {
 	box-shadow: none;

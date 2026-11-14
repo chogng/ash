@@ -10,6 +10,7 @@ import { IHostService } from '../../../services/host/browser/host.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -31,9 +32,10 @@ export class NativeScreenshotToolService extends ScreenshotToolService {
 		@IClipboardService clipboard: IClipboardService,
 		@IFileDialogService dialogs: IFileDialogService,
 		@IFileService files: IFileService,
+		@ILayoutService layout: ILayoutService,
 		@INativeHostService private readonly native: INativeHostApi,
 		@IScreenCaptureSetupService private readonly setup: IScreenCaptureSetupService,
-	) { super(images, configuration, host, clipboard, dialogs, files); }
+	) { super(images, configuration, host, clipboard, dialogs, files, layout); }
 	protected override get canPin(): boolean { return true; }
 	protected override async pin(image: Uint8Array, input: ScreenshotToolInput): Promise<void> {
 		await invoke(SCREENSHOT_PIN_CHANNEL, { image, input: { theme: input.theme, colorScheme: input.colorScheme, accessibilityHints: input.state?.accessibilityHints !== false } });

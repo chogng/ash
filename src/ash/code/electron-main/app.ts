@@ -1941,7 +1941,7 @@ export class AshApplication extends Disposable {
 			});
 	}
 
-	private windowScreenshotRoutes(window: BrowserWindow, lifetime: DisposableStore): readonly IpcRoute<unknown, unknown>[] {
+	private windowScreenshotRoutes(window: BrowserWindow, lifetime: DisposableStore, agentThemeScope?: () => string): readonly IpcRoute<unknown, unknown>[] {
 		let screenshotWindow: Promise<ScreenshotMainService | undefined> | undefined;
 		const loadScreenshotWindow = () => {
 			if (screenshotWindow) return screenshotWindow;
@@ -1959,6 +1959,7 @@ export class AshApplication extends Disposable {
 				contents.off('did-start-navigation', navigating);
 				contents.off('render-process-gone', invalidate);
 				return lifetime.add(new ScreenshotMainService(window, {
+					agentWindow: agentThemeScope !== undefined,
 					entry: this.resolveRendererEntry('screenshot'), webPreferences: this.createSandboxWebPreferences(),
 					router: this.trustedIpcRouter, localization: () => this.activeLanguagePack,
 				}));
@@ -1993,8 +1994,10 @@ export class AshApplication extends Disposable {
 			...this.globalKeybindings.createWindowRoutes(window, lifetime, (id, commandId) => {
 				if (id !== ScreenshotShortcutId || commandId !== ScreenshotCommandId) return false;
 				if (process.platform === 'darwin' && systemPreferences.getMediaAccessStatus('screen') !== 'granted') return false;
-				const colorScheme = nativeTheme.shouldUseHighContrastColors
-					? (nativeTheme.shouldUseDarkColors ? 'hcDark' : 'hcLight') : (nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
+				const colorScheme = agentThemeScope
+					? this.themeMainService.getWindowSplash(agentThemeScope()).baseTheme
+					: nativeTheme.shouldUseHighContrastColors
+						? (nativeTheme.shouldUseDarkColors ? 'hcDark' : 'hcLight') : (nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
 				const hints = this.persistentServices?.configuration.getValue<boolean>('accessibility.verbosity.chatScreenshot') !== false;
 				void loadScreenshotWindow().then(service => service?.captureDesktop(colorScheme, hints)).then(image => {
 					if (!image || window.isDestroyed() || window.webContents.isDestroyed()) return;
@@ -2346,6 +2349,7 @@ export class AshApplication extends Disposable {
 						host: electronRemoteWindowMainHost(window, this.dialogs),
 						prepareForRuntimeReplacement: () => this.windowsMainService.getWindowById(window.id)?.send('ash:terminal:prepareReplacement'),
 					}));
+					const themeScope = () => `sessions:${session.workspaceContext.getWorkspace().id}`;
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window, () => getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()) ? undefined : sessionsRelay),
 						applicationBadgeIpcRoute(setApplicationBadge),
@@ -2354,11 +2358,11 @@ export class AshApplication extends Disposable {
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
 						...rendererSystemHostRoutes(window, this.auxiliaryWindowsMainService, this.opener),
-						...this.windowScreenshotRoutes(window, windowDisposables),
+						...this.windowScreenshotRoutes(window, windowDisposables, themeScope),
 						userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 						...remoteWindowContext.ipcRoutes,
 						windowOperationIpcRoute(this.windowsMainService, window),
-						...windowSplashIpcRoutes(this.themeMainService, () => `sessions:${session.workspaceContext.getWorkspace().id}`, color => window.setBackgroundColor(color)),
+						...windowSplashIpcRoutes(this.themeMainService, themeScope, color => window.setBackgroundColor(color)),
 						...nativeHostIpcRoutes({
 							getTitleBarStyle: () => titleBarStyle,
 							...this.windowHostOperations(window, windowDisposables),

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { localize2 } from '../../../nls.js';
 import { SCREEN_CAPTURE_PERMISSION_REQUIRED } from '../../native/common/native.js';
 import { getDesktopScreenshots } from '../../native/electron-main/nativeHostMainService.js';
+import type { IRectangle } from '../../window/common/window.js';
 import {
 	BrowserWindow,
 	clipboard,
@@ -28,6 +29,7 @@ import {
 } from '../common/screenshot.js';
 
 interface ScreenshotWindowOptions {
+	readonly agentWindow: boolean;
 	readonly entry: { readonly file: string; readonly url: string; readonly useDevelopmentUrl: boolean; };
 	readonly webPreferences: WebPreferences;
 	readonly router: TrustedIpcRouter;
@@ -35,6 +37,24 @@ interface ScreenshotWindowOptions {
 		readonly locale: string;
 		readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>;
 	};
+}
+
+function getWindowRegions(windows: readonly IRectangle[], display: IRectangle, image: Uint8Array): IRectangle[] {
+	const png = new DataView(image.buffer, image.byteOffset, image.byteLength);
+	const scaleX = png.getUint32(16) / display.width;
+	const scaleY = png.getUint32(20) / display.height;
+	const regions: IRectangle[] = [];
+	for (const bounds of windows) {
+		// Both displays and Core Graphics windows use screen points on macOS. Clip before converting to image pixels.
+		const left = Math.round(Math.max(0, bounds.x - display.x) * scaleX);
+		const top = Math.round(Math.max(0, bounds.y - display.y) * scaleY);
+		const right = Math.round(Math.min(display.width, bounds.x + bounds.width - display.x) * scaleX);
+		const bottom = Math.round(Math.min(display.height, bounds.y + bounds.height - display.y) * scaleY);
+		if (right > left && bottom > top) {
+			regions.push({ x: left, y: top, width: right - left, height: bottom - top });
+		}
+	}
+	return regions;
 }
 
 interface Capture {
@@ -147,7 +167,12 @@ export class ScreenshotMainService extends Disposable {
 			throw new Error(SCREEN_CAPTURE_PERMISSION_REQUIRED);
 		}
 		// Permission setup belongs to the requesting Workbench entry, before acquisition starts.
-		const frames = await getDesktopScreenshots().catch(async (error) => {
+		const [frames, windows] = await Promise.all([
+			getDesktopScreenshots(),
+			process.platform === 'darwin'
+				? import('../../native/electron-main/macScreenWindows.js').then(module => module.getMacOnscreenWindowBounds()).catch(() => [])
+				: [],
+		]).catch((error) => {
 			if (this.needsScreenPermission()) {
 				throw new Error(SCREEN_CAPTURE_PERMISSION_REQUIRED);
 			}
@@ -162,8 +187,11 @@ export class ScreenshotMainService extends Disposable {
 		const loaded: Promise<void>[] = [];
 		for (const frame of frames) {
 			const image = frame.image.buffer;
+			const windowBounds = getWindowRegions(windows, frame.bounds, image);
 			const view = new BrowserWindow({
 				...frame.bounds,
+				// A macOS panel can receive keyboard input without activating Ash.
+				type: process.platform === 'darwin' ? 'panel' : undefined,
 				frame: false,
 				roundedCorners: false,
 				transparent: false,
@@ -188,7 +216,10 @@ export class ScreenshotMainService extends Disposable {
 			});
 			capture.views.push(view);
 			view.setAlwaysOnTop(true, 'screen-saver');
-			if (process.platform === 'darwin') view.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+			if (process.platform === 'darwin') {
+				// Changing Ash's process activation policy would affect every Workbench window.
+				view.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+			}
 			view.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
 			view.webContents.session.setPermissionCheckHandler(() => false);
 			view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -211,6 +242,8 @@ export class ScreenshotMainService extends Disposable {
 							invoke: () => ({
 								image: new Uint8Array(image),
 								kind: 'capture',
+								windowBounds,
+								agentWindow: this.options.agentWindow,
 								input: capture.request.input,
 								locale: this.options.localization().locale,
 								bundles: this.options.localization().bundles
@@ -310,9 +343,9 @@ export class ScreenshotMainService extends Disposable {
 					})
 				]);
 			} else if (completion.kind === 'save') {
-				for (const view of capture.views) if (!view.isDestroyed()) view.hide();
+				for (const view of capture.views) if (view !== sender && !view.isDestroyed()) view.hide();
 				const messages = this.options.localization().bundles.ash;
-				const destination = await dialog.showSaveDialog(this.owner, {
+				const destination = await dialog.showSaveDialog(sender, {
 					title: messages?.['imageEditor.saveTitle'] ?? localize2('imageEditor.saveTitle', 'Save image').original,
 					defaultPath: 'Image.png',
 					filters: [{ name: 'PNG', extensions: ['png'] }]
@@ -346,7 +379,6 @@ export class ScreenshotMainService extends Disposable {
 		capture.closing = true;
 		capture.windows.dispose();
 		capture.lifetime.dispose();
-		if (capture.request.input.defaultAction !== 'copy' && !this.owner.isDestroyed() && !this.isDisposed) this.owner.focus();
 		if (error) capture.reject(error);
 		else capture.resolve(image);
 	}
@@ -428,6 +460,7 @@ async function openPinnedImage(
 				invoke: () => ({
 					image: new Uint8Array(image),
 					kind: 'pinned',
+					agentWindow: options.agentWindow,
 					input,
 					locale: options.localization().locale,
 					bundles: options.localization().bundles
@@ -476,7 +509,8 @@ async function openPinnedImage(
 			resources.dispose();
 			return;
 		}
-		view.show();
+		if (process.platform === 'darwin') view.showInactive();
+		else view.show();
 	} catch (error) {
 		resources.dispose();
 		throw error;

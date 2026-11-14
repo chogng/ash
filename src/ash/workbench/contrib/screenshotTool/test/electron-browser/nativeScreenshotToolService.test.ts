@@ -1,5 +1,6 @@
 import { IHostService } from '../../../../services/host/browser/host.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import assert from 'node:assert/strict';
@@ -35,6 +36,7 @@ suite('Desktop screenshot permission entry', () => {
 		services.registerInstance(IClipboardService, {} as IClipboardService);
 		services.registerInstance(IFileDialogService, {} as IFileDialogService);
 		services.registerInstance(IFileService, {} as IFileService);
+		services.registerInstance(ILayoutService, {} as ILayoutService);
 		services.registerInstance(IScreenCaptureSetupService, { show: async (options, signal) => { setups.push({ title: options.title, signal }); } });
 		class Acquisition extends NativeScreenshotToolService {
 			protected override capture(_options: unknown, signal: AbortSignal): Promise<VSBuffer | undefined> { return images.capture!(signal); }
@@ -87,6 +89,7 @@ suite('Desktop screenshot permission entry', () => {
 		services.registerInstance(IClipboardService, {} as IClipboardService);
 		services.registerInstance(IFileDialogService, {} as IFileDialogService);
 		services.registerInstance(IFileService, {} as IFileService);
+		services.registerInstance(ILayoutService, {} as ILayoutService);
 		assert.throws(() => services.createInstance(NativeScreenshotToolService), /screenCaptureSetupService/);
 	});
 	test('denied desktop capture opens setup and completes without acquiring an image', async function () {

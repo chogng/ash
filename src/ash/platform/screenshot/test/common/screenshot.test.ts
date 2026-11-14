@@ -28,10 +28,20 @@ test('pin and native output require bounded PNG pixels without accepting destina
 	assert.throws(() => validateScreenshotPinRequest({ ...request, html: '<p>provider</p>' }));
 });
 test('native initialization cannot switch to external HTML or mix capture and pin state', () => {
-	const initial = { kind: 'capture', image: image(), input: {}, locale: 'zh-CN', bundles: { ash: { title: '截图' } } };
+	const initial = { kind: 'capture', agentWindow: true, image: image(), input: {}, locale: 'zh-CN', bundles: { ash: { title: '截图' } } };
 	assert.equal(validateScreenshotInitialization(initial), initial);
 	assert.equal(validateScreenshotInitialization({ ...initial, kind: 'pinned' }).kind, 'pinned');
-	for (const invalid of [{ ...initial, image: new Uint8Array() }, { ...initial, kind: 'provider' }, { ...initial, html: 'editor' }, { ...initial, locale: '../invalid' }, { ...initial, bundles: { ash: { title: 3 } } }]) {
+	for (const invalid of [{ ...initial, image: new Uint8Array() }, { ...initial, agentWindow: 'true' }, { ...initial, kind: 'provider' }, { ...initial, html: 'editor' }, { ...initial, locale: '../invalid' }, { ...initial, bundles: { ash: { title: 3 } } }]) {
 		assert.throws(() => validateScreenshotInitialization(invalid));
+	}
+});
+
+test('desktop window previews must fit inside the frozen image', () => {
+	const bounds = { x: 10, y: 20, width: 700, height: 580 };
+	const initial = { kind: 'capture', agentWindow: true, image: image(), input: {}, locale: 'en', bundles: {}, windowBounds: [bounds] };
+	assert.equal(validateScreenshotInitialization(initial), initial);
+	assert.throws(() => validateScreenshotInitialization({ ...initial, kind: 'pinned' }));
+	for (const rect of [{ ...bounds, x: -1 }, { ...bounds, x: 0.5 }, { ...bounds, width: 0 }, { ...bounds, height: 581 }, { ...bounds, title: 'Window' }]) {
+		assert.throws(() => validateScreenshotInitialization({ ...initial, windowBounds: [rect] }), /Invalid screenshot window bounds/);
 	}
 });

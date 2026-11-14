@@ -1,9 +1,15 @@
-import { addDisposableListener } from '../../../../base/browser/dom.js';
-import type { ScreenshotToolCompletion as ImageEditorCompletion } from './screenshotTool.js';
 import type { CodeImageSnapshot } from '../../../services/imageEditor/common/imageEditorService.js';
 import type { readImageEditorTheme } from '../../../services/imageEditor/browser/imageEditorTheme.js';
+import { renderCodeImage } from './codeImage.js';
+import { ScreenshotAnnotationEditor } from './screenshotAnnotation.js';
+import type { ScreenshotToolCompletion } from './screenshotTool.js';
+import type { IScreenshotRect } from './screenshotSelection.js';
+import { localize } from '../../../../nls.js';
+
 export interface ScreenshotToolInput {
+	readonly agentWindow?: boolean;
 	readonly image?: Uint8Array;
+	readonly windowBounds?: readonly IScreenshotRect[];
 	readonly code?: CodeImageSnapshot;
 	readonly defaultAction: 'copy' | 'attach';
 	readonly canRetake: boolean;
@@ -12,12 +18,11 @@ export interface ScreenshotToolInput {
 	readonly colorScheme: string;
 	readonly state?: { readonly help: string; readonly accessibilityHints?: boolean; readonly code?: Parameters<typeof renderCodeImage>[2]; };
 }
-import { ScreenshotAnnotationEditor } from './screenshotAnnotation.js';
-import { renderCodeImage } from './codeImage.js';
 
 /** Mounts the product component directly; extension HTML keeps its separate sandbox. */
-export async function mountScreenshotTool(document: Document, input: ScreenshotToolInput, complete: (result: ImageEditorCompletion) => Promise<boolean>, signal: AbortSignal) {
+export async function mountScreenshotTool(document: Document, input: ScreenshotToolInput, complete: (result: ScreenshotToolCompletion) => Promise<boolean>, signal: AbortSignal, container = document.body) {
 	const state = input.state;
+	const help = state?.help ?? '';
 	signal.throwIfAborted();
 	const { colors, metrics } = input.theme;
 	const appearance = {
@@ -41,21 +46,29 @@ export async function mountScreenshotTool(document: Document, input: ScreenshotT
 		'small-radius': metrics.smallRadius,
 		'large-radius': metrics.largeRadius,
 		shadow: input.theme.shadow,
+		'spacing-1': metrics.spacing[0],
+		'spacing-2': metrics.spacing[1],
+		'spacing-3': metrics.spacing[2],
+		'spacing-4': metrics.spacing[3],
 	};
 	const image = input.code ? await renderCodeImage(document, input.code, state!.code!) : input.image!;
 	const editor = await ScreenshotAnnotationEditor.create(document, image, {
-		defaultAction: input.defaultAction,
+		agentWindow: input.agentWindow,
+		container,
+		windowBounds: input.windowBounds,
+		appearance,
+		colorScheme: input.colorScheme,
+		defaultAction: input.agentWindow ? 'copy' : input.defaultAction,
 		canRetake: input.canRetake,
 		canPin: input.canPin,
 		accessibilityHints: state?.accessibilityHints !== false,
-		help: state?.help ?? '',
+		help: input.windowBounds?.length
+			? help + '\n' + localize('screenshot.windowHelp', 'Point to a window to preview its bounds. Click to select it, or drag to make a custom selection. With the selection surface focused, Up and Down Arrow cycle through windows before a region is selected. Enter selects the previewed window. The window selection captures the pixels visible on this display.')
+			: help,
 		selectEntire: !!input.code,
 		description: input.code ? input.code.lines.map(line => line.map(token => token.text).join('')).join('\n') : undefined,
 		complete,
 	});
 	if (signal.aborted) { editor.dispose(); signal.throwIfAborted(); }
-	for (const [key, value] of Object.entries(appearance)) editor.element.style.setProperty(`--snapshot-${key}`, value);
-	for (const [index, value] of metrics.spacing.entries()) editor.element.style.setProperty(`--snapshot-spacing-${index + 1}`, value);
-	editor.element.dataset.colorScheme = input.colorScheme;
 	return editor;
 }
