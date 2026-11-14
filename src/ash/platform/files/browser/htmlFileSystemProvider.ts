@@ -324,127 +324,151 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 	}
 
 	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
-		const { parent, name } = await this.parent(resource);
-		let handle: FileSystemFileHandle;
-		let created = false;
-		try {
-			handle = await parent.getFileHandle(name);
-			if (!options.overwrite) throw createFileSystemProviderError(localize({ bundle: 'ash', key: 'workbench.browserFolderFileExists' }, 'File already exists'), FileSystemProviderErrorCode.FileExists);
-		} catch (error) {
-			if (!isMissing(error) || !options.create || options.expectedRevision !== undefined) throw fileError(error, resource);
-			handle = await parent.getFileHandle(name, { create: true });
-			created = true;
-		}
-		if (options.expectedRevision !== undefined) {
-			const current = new Uint8Array(await (await handle.getFile()).arrayBuffer());
-			if (await revision(current) !== options.expectedRevision) throw new FileRevisionConflictError(resource);
-		}
-		let writable: FileSystemWritableFileStream | undefined;
-		try {
-			writable = await handle.createWritable();
-			await writable.write(Uint8Array.from(bytes));
-			await writable.close();
-		} catch (error) {
-			await writable?.abort().catch(() => undefined);
-			if (created) await parent.removeEntry(name);
-			throw error;
-		}
-		this.changes.fire({ resources: [resource] });
-		return { stat: await this.stat(resource), revision: await revision(bytes) };
+		return this.withMutationLock(resource, async () => {
+			const { parent, name } = await this.parent(resource);
+			let handle: FileSystemFileHandle;
+			let created = false;
+			try {
+				handle = await parent.getFileHandle(name);
+				if (!options.overwrite) throw createFileSystemProviderError(localize({ bundle: 'ash', key: 'workbench.browserFolderFileExists' }, 'File already exists'), FileSystemProviderErrorCode.FileExists);
+			} catch (error) {
+				if (!isMissing(error) || !options.create || options.expectedRevision !== undefined) throw fileError(error, resource);
+				handle = await parent.getFileHandle(name, { create: true });
+				created = true;
+			}
+			if (options.expectedRevision !== undefined) {
+				const current = new Uint8Array(await (await handle.getFile()).arrayBuffer());
+				if (await revision(current) !== options.expectedRevision) throw new FileRevisionConflictError(resource);
+			}
+			let writable: FileSystemWritableFileStream | undefined;
+			try {
+				writable = await handle.createWritable();
+				await writable.write(Uint8Array.from(bytes));
+				await writable.close();
+			} catch (error) {
+				await writable?.abort().catch(() => undefined);
+				if (created) await parent.removeEntry(name).catch(() => undefined);
+				throw error;
+			}
+			this.changes.fire({ resources: [resource] });
+			return { stat: await this.stat(resource), revision: await revision(bytes) };
+		});
 	}
 
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
-		const { parent, name } = await this.parent(resource);
-		let found = true;
-		try { await parent.getFileHandle(name); }
-		catch (error) { if (!isMissing(error)) throw fileError(error, resource); found = false; }
-		if (found && existing === 'error') throw createFileSystemProviderError(localize({ bundle: 'ash', key: 'workbench.browserFolderFileExists' }, 'File already exists'), FileSystemProviderErrorCode.FileExists);
-		if (!found || existing === 'overwrite') {
-			const handle = await parent.getFileHandle(name, { create: true });
-			if (found) {
-				const writable = await handle.createWritable();
-				await writable.close();
+		return this.withMutationLock(resource, async () => {
+			const { parent, name } = await this.parent(resource);
+			let found = true;
+			try { await parent.getFileHandle(name); }
+			catch (error) { if (!isMissing(error)) throw fileError(error, resource); found = false; }
+			if (found && existing === 'error') throw createFileSystemProviderError(localize({ bundle: 'ash', key: 'workbench.browserFolderFileExists' }, 'File already exists'), FileSystemProviderErrorCode.FileExists);
+			if (!found || existing === 'overwrite') {
+				const handle = await parent.getFileHandle(name, { create: true });
+				if (found) {
+					const writable = await handle.createWritable();
+					await writable.close();
+				}
+				this.changes.fire({ resources: [resource] });
 			}
-			this.changes.fire({ resources: [resource] });
-		}
-		return this.stat(resource);
+			return this.stat(resource);
+		});
 	}
 
 	public async createDirectory(resource: URI): Promise<IFileStat> {
-		const { parent, name } = await this.parent(resource);
-		await parent.getDirectoryHandle(name, { create: true });
-		this.changes.fire({ resources: [resource] });
-		return this.stat(resource);
+		return this.withMutationLock(resource, async () => {
+			const { parent, name } = await this.parent(resource);
+			await parent.getDirectoryHandle(name, { create: true });
+			this.changes.fire({ resources: [resource] });
+			return this.stat(resource);
+		});
 	}
 
 	public async copy(source: URI, target: URI): Promise<void> {
-		const sourceParts = partsOf(source);
-		const targetParts = partsOf(target);
-		if (sourceParts.parts.length === 0 || targetParts.parts.length === 0 ||
-			(sourceParts.id === targetParts.id && target.path.startsWith(`${source.path}/`))) {
-			throw new FileOperationNotSupportedError(source, 'copy');
-		}
-		const sourceHandle = await this.handle(source);
-		const { parent, name } = await this.parent(target);
-		try { await this.handle(target); throw createFileSystemProviderError('Copy target already exists', FileSystemProviderErrorCode.FileExists); }
-		catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
-		const copyEntry = async (from: FileSystemHandle, toParent: FileSystemDirectoryHandle, toName: string): Promise<void> => {
-			if (WebFileSystemAccess.isFileSystemDirectoryHandle(from)) {
-				const to = await toParent.getDirectoryHandle(toName, { create: true });
-				for await (const [childName, child] of from.entries()) await copyEntry(child, to, childName);
-			} else if (WebFileSystemAccess.isFileSystemFileHandle(from)) {
-				const file = await toParent.getFileHandle(toName, { create: true });
-				const writable = await file.createWritable();
-				try {
-					await writable.write(await from.getFile());
-					await writable.close();
-				}
-				catch (error) {
-					await writable.abort();
-					throw error;
-				}
+		return this.withMutationLock(target, async () => {
+			const sourceParts = partsOf(source);
+			const targetParts = partsOf(target);
+			if (sourceParts.parts.length === 0 || targetParts.parts.length === 0 ||
+				(sourceParts.id === targetParts.id && target.path.startsWith(`${source.path}/`))) {
+				throw new FileOperationNotSupportedError(source, 'copy');
 			}
-		};
-		try { await copyEntry(sourceHandle, parent, name); }
-		catch (error) { await parent.removeEntry(name, { recursive: true }); throw error; }
-		this.changes.fire({ resources: [target] });
+			const sourceHandle = await this.handle(source);
+			const { parent, name } = await this.parent(target);
+			try { await this.handle(target); throw createFileSystemProviderError('Copy target already exists', FileSystemProviderErrorCode.FileExists); }
+			catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
+			const copyEntry = async (from: FileSystemHandle, toParent: FileSystemDirectoryHandle, toName: string): Promise<void> => {
+				if (WebFileSystemAccess.isFileSystemDirectoryHandle(from)) {
+					const to = await toParent.getDirectoryHandle(toName, { create: true });
+					for await (const [childName, child] of from.entries()) await copyEntry(child, to, childName);
+				} else if (WebFileSystemAccess.isFileSystemFileHandle(from)) {
+					const file = await toParent.getFileHandle(toName, { create: true });
+					const writable = await file.createWritable();
+					try {
+						await writable.write(await from.getFile());
+						await writable.close();
+					}
+					catch (error) {
+						await writable.abort();
+						throw error;
+					}
+				}
+			};
+			try { await copyEntry(sourceHandle, parent, name); }
+			catch (error) { await parent.removeEntry(name, { recursive: true }); throw error; }
+			this.changes.fire({ resources: [target] });
+		});
 	}
 
 	public async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
-		const sourceParts = partsOf(source);
-		const targetParts = partsOf(target);
-		if (sourceParts.id !== targetParts.id || sourceParts.parts.length === 0 || targetParts.parts.length === 0) {
-			throw new FileOperationNotSupportedError(source, 'rename');
-		}
-		if (source.toString() === target.toString()) return;
-		const handle = await this.handle(source);
-		if (!WebFileSystemAccess.isFileSystemFileHandle(handle)) throw new FileOperationNotSupportedError(source, 'renameDirectory');
-		try {
-			await this.stat(target);
-			if (existing === 'ignore') return;
-			if (existing === 'error') throw createFileSystemProviderError(localize({ bundle: 'ash', key: 'workbench.browserFolderTargetExists' }, 'Target file already exists'), FileSystemProviderErrorCode.FileExists);
-		} catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
-		const bytes = new Uint8Array(await (await handle.getFile()).arrayBuffer());
-		const { parent, name } = await this.parent(target);
-		const targetHandle = await parent.getFileHandle(name, { create: true });
-		const writable = await targetHandle.createWritable();
-		try {
-			await writable.write(bytes);
-			await writable.close();
-		} catch (error) {
-			await writable.abort();
-			throw error;
-		}
-		const sourceParent = await this.parent(source);
-		await sourceParent.parent.removeEntry(sourceParent.name);
-		this.changes.fire({ resources: [source, target] });
+		return this.withMutationLock(target, async () => {
+			const sourceParts = partsOf(source);
+			const targetParts = partsOf(target);
+			if (sourceParts.id !== targetParts.id || sourceParts.parts.length === 0 || targetParts.parts.length === 0) {
+				throw new FileOperationNotSupportedError(source, 'rename');
+			}
+			if (source.toString() === target.toString()) return;
+			const handle = await this.handle(source);
+			if (!WebFileSystemAccess.isFileSystemFileHandle(handle)) throw new FileOperationNotSupportedError(source, 'renameDirectory');
+			try {
+				await this.stat(target);
+				if (existing === 'ignore') return;
+				if (existing === 'error') throw createFileSystemProviderError(localize({ bundle: 'ash', key: 'workbench.browserFolderTargetExists' }, 'Target file already exists'), FileSystemProviderErrorCode.FileExists);
+			} catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
+			const bytes = new Uint8Array(await (await handle.getFile()).arrayBuffer());
+			const { parent, name } = await this.parent(target);
+			const targetHandle = await parent.getFileHandle(name, { create: true });
+			const writable = await targetHandle.createWritable();
+			try {
+				await writable.write(bytes);
+				await writable.close();
+			} catch (error) {
+				await writable.abort();
+				throw error;
+			}
+			const sourceParent = await this.parent(source);
+			await sourceParent.parent.removeEntry(sourceParent.name);
+			this.changes.fire({ resources: [source, target] });
+		});
 	}
 
 	public async delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void> {
-		const { parent, name } = await this.parent(resource);
-		try { await parent.removeEntry(name, { recursive: mode === 'recursive' }); }
-		catch (error) { if (missing !== 'ignore' || !isMissing(error)) throw fileError(error, resource); }
-		this.changes.fire({ resources: [resource] });
+		return this.withMutationLock(resource, async () => {
+			const { parent, name } = await this.parent(resource);
+			try { await parent.removeEntry(name, { recursive: mode === 'recursive' }); }
+			catch (error) { if (missing !== 'ignore' || !isMissing(error)) throw fileError(error, resource); }
+			this.changes.fire({ resources: [resource] });
+		});
+	}
+
+	private async withMutationLock<T>(resource: URI, operation: () => Promise<T>): Promise<T> {
+		// Picker handles can alias through different registered roots, nested folders and
+		// case-insensitive paths. One origin-wide lock covers checks, commit and rollback
+		// across provider instances and windows without relying on URI identity.
+		const locks = this.ownerWindow.navigator.locks;
+		if (!locks) { throw new FileOperationNotSupportedError(resource, 'lockedMutation'); }
+		return locks.request('ash-browser-folders:mutation', async () => {
+			this.assertNotDisposed();
+			return operation();
+		});
 	}
 
 	private async file(resource: URI): Promise<File> {

@@ -1,4 +1,5 @@
 import { throwIfCancelled } from '../../../src/ash/base/common/cancellation.js';
+import { basename, dirname } from '../../../src/ash/base/common/resources.js';
 import { type URI } from '../../../src/ash/base/common/uri.js';
 import { FileKind, type IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument, serializePdfAnnotationDocument, type PdfAnnotationDocument } from '../common/pdfAnnotations.js';
@@ -23,9 +24,11 @@ export class WorkspacePdfAnnotationStore implements IPdfAnnotationStore {
 	async load(resource: URI, signal: AbortSignal): Promise<PdfAnnotationSnapshot> {
 		throwIfCancelled(signal, 'PDF annotation loading was cancelled');
 		const sidecar = pdfAnnotationSidecarResource(resource);
-		const entries = await this.files.readDirectory(pdfAnnotationDirectory(resource));
+		const entries = await this.files.readDirectory(dirname(sidecar));
 		throwIfCancelled(signal, 'PDF annotation loading was cancelled');
-		if (!entries.some((entry) => entry.kind === FileKind.File && entry.resource.toString() === sidecar.toString())) {
+		// Entries belong to this directory; match its filename rather than provider-specific
+		// URI spelling (for example, Windows drive casing in disk directory listings).
+		if (!entries.some((entry) => entry.kind === FileKind.File && entry.name === basename(sidecar))) {
 			return Object.freeze({ document: emptyPdfAnnotationDocument(), revision: undefined });
 		}
 		const content = await this.files.readFile(sidecar);
@@ -45,10 +48,4 @@ export class WorkspacePdfAnnotationStore implements IPdfAnnotationStore {
 /** Returns the visible, versioned companion resource used to persist PDF annotations. */
 export function pdfAnnotationSidecarResource(resource: URI): URI {
 	return resource.withEncodedPath(`${resource.toEncodedComponents().path}.ash-annotations.json`).with({ query: null, fragment: null });
-}
-
-function pdfAnnotationDirectory(resource: URI): URI {
-	const path = resource.toEncodedComponents().path;
-	const separator = path.lastIndexOf('/');
-	return resource.withEncodedPath(separator <= 0 ? '/' : path.slice(0, separator + 1)).with({ query: null, fragment: null });
 }
