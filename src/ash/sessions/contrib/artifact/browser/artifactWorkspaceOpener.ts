@@ -21,10 +21,19 @@ export async function openArtifacts(accessor: ServicesAccessor, select?: (page: 
 		},
 	};
 	let page: ArtifactEditorView | undefined;
+	let destination: ArtifactWorkspaceRequest | undefined;
+	let initialized = false;
 	await accessor.get(ISessionsEntryService).openEntry(entry, () => {
 		page = (editor.activePane as ArtifactEditorPane).page;
-		select?.(page);
-		const workspaceId = page.activeWorkspaceId;
+		if (initialized) {
+			if (destination) page.openWorkspace(destination);
+			else page.showHome();
+		} else {
+			select?.(page);
+			destination = page.activeWorkspaceRequest;
+			initialized = true;
+		}
+		const workspaceId = destination?.entryId;
 		if (workspaceId === undefined) return entry;
 		return {
 			...entry,

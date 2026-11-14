@@ -90,6 +90,7 @@ test('Sessions layout commands update menu state from their owners and release w
 		activateSelection() { },
 		closeVisibleSelection() { },
 		async reopenLastClosedItem() { },
+		recordEntryNavigation() { },
 		async openPreviousSession() { historyIndex = 0; changed.fire(); },
 		async openNextSession() { historyIndex = 1; changed.fire(); },
 	};

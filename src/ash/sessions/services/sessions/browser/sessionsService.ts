@@ -31,6 +31,8 @@ export interface ISessionsService {
 	readonly activeSelection: SessionsViewSelection | undefined;
 	/** Changes for explicit conversation and covering Custom View navigation. */
 	readonly navigationRevision: number;
+	/** Entry composition supplies replay operations; this service remains the sole history owner. */
+	recordEntryNavigation(id: string, open: () => Promise<void>, conversation: boolean): void;
 	readonly canNavigateBack: boolean;
 	readonly canNavigateForward: boolean;
 	readonly recentSessions: readonly SessionRecencyEntry[];
@@ -58,7 +60,7 @@ type SessionPlacement = SessionSlotPlacement | 'focus';
 
 export const ISessionsService = createServiceIdentifier<ISessionsService>('sessionsService');
 
-type NavigationEntry = SessionsViewReference | { readonly kind: 'customView'; readonly id: string; readonly state?: string; };
+type NavigationEntry = (SessionsViewReference | { readonly kind: 'customView'; readonly id: string; readonly state?: string; } | { readonly kind: 'entry'; readonly id: string; readonly open: () => Promise<void>; }) & { readonly reveal?: () => Promise<void>; };
 
 /** Dedicated Sessions-window view state layered over the canonical Session model service. */
 export class SessionsService extends Disposable implements ISessionsService {
@@ -70,11 +72,13 @@ export class SessionsService extends Disposable implements ISessionsService {
 	private readonly closedItems = new ClosedItemHistory();
 	private readonly navigation = new SessionsNavigation<NavigationEntry>(
 		navigationKey,
-		entry => entry.kind === 'customView' || this.resolve(entry) !== undefined,
+		entry => entry.kind === 'customView' || entry.kind === 'entry' || this.resolve(entry) !== undefined,
 		entry => this.openHistoryEntry(entry),
 		() => this._onDidChange.fire(),
 	);
 	private _navigationRevision = 0;
+	private entryNavigation: { id: string; open: () => Promise<void>; } | undefined;
+	private conversationNavigation: (() => Promise<void>) | undefined;
 	private initialized = false;
 	private readonly storedState: ISessionGridState | undefined;
 	private readonly compactSelection = observableValue<StoredChatSelection | undefined>(this, undefined);
@@ -116,7 +120,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			if (!opening) return;
 			// A custom-view open supersedes an in-flight Thread open without changing the covered selection.
 			this._navigationRevision++;
-			const entry = { kind: 'customView', id: opening.descriptor.id, state: opening.state } as const;
+			const entry = { kind: 'customView', id: opening.descriptor.id, state: opening.state, reveal: this.entryNavigation?.open } as const;
 			if (opening.source === 'explicit') this.recency.markOpened(entry);
 			if (opening.source !== 'history' && (opening.source !== 'restore' || this.initialized)) this.navigation.recordOpened(entry);
 			this._onDidChange.fire();
@@ -352,8 +356,23 @@ export class SessionsService extends Disposable implements ISessionsService {
 		this.closedItems.clear(item);
 	}
 
-	async openPreviousSession(): Promise<void> { this.navigation.goBack(); }
-	async openNextSession(): Promise<void> { this.navigation.goForward(); }
+	recordEntryNavigation(id: string, open: () => Promise<void>, conversation: boolean): void {
+		const initial = !this.entryNavigation;
+		const changed = this.entryNavigation?.id !== id || this.navigation.current?.kind === 'customView';
+		this.entryNavigation = { id, open };
+		if (conversation) this.conversationNavigation = open;
+		if (!changed) return;
+		this._navigationRevision++;
+		const entry = { kind: 'entry', id, open } as const;
+		// The first shell composition describes the startup selection rather than a second visit to it.
+		const replaced = initial && conversation && this.navigation.replaceCurrent(entry, current =>
+			current.kind !== 'entry' && current.kind !== 'customView' && referenceKey(current) === selectionKey(this.activeSelection));
+		if (!replaced) this.navigation.recordOpened(entry);
+		this._onDidChange.fire();
+	}
+
+	async openPreviousSession(): Promise<void> { await this.navigation.goBack(); }
+	async openNextSession(): Promise<void> { await this.navigation.goForward(); }
 
 	private syncFromSessionService(): void {
 		const chat = this.chatSelection.get();
@@ -363,7 +382,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			this.storage.store(WELCOME_COMPLETE_KEY, true, StorageScope.PROFILE, StorageTarget.USER);
 		}
 		// Catalog changes refresh identities without changing the foreground selection.
-		this.navigation.updateEntries(reference => reference.kind === 'customView' ? reference : this.materializedReference(reference));
+		this.navigation.updateEntries(reference => reference.kind === 'customView' || reference.kind === 'entry' ? reference : { ...this.materializedReference(reference), reveal: reference.reveal });
 		const before = this.activeSelection;
 		this.slots.refresh(reference => this.materializedReference(reference), this.catalogUnavailable);
 		const after = this.activeSelection;
@@ -410,7 +429,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			}
 		});
 		if (intent === 'explicit' || !(covered && intent === 'automatic') && (covered || selectionKey(previous) !== selectionKey(selection))) {
-			this.navigation.recordOpened(reference);
+			this.navigation.recordOpened({ ...reference, reveal: this.conversationNavigation });
 		}
 		if (intent === 'explicit' && reference.kind === 'session') {
 			this.recency.markOpened({ sessionId: reference.sessionId, threadId: reference.threadId });
@@ -423,7 +442,12 @@ export class SessionsService extends Disposable implements ISessionsService {
 		return this.sessionService.state === 'loading' || this.sessionService.state === 'error';
 	}
 
-	private openHistoryEntry(entry: NavigationEntry): boolean {
+	private async openHistoryEntry(entry: NavigationEntry): Promise<boolean> {
+		if (entry.kind === 'entry') {
+			await entry.open();
+			return true;
+		}
+		await entry.reveal?.();
 		if (entry.kind !== 'customView') {
 			this.activate(entry, 'open', 'history');
 			return true;
@@ -481,5 +505,6 @@ function selectionKey(selection: SessionsViewSelection | undefined): string | un
 }
 
 function navigationKey(entry: NavigationEntry | undefined): string | undefined {
+	if (entry?.kind === 'entry') return `entry:${entry.id}`;
 	return entry?.kind === 'customView' ? `customView:${JSON.stringify([entry.id, entry.state])}` : referenceKey(entry);
 }

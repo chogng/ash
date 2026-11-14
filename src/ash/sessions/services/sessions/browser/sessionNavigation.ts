@@ -7,10 +7,11 @@ export class SessionsNavigation<T> {
 	constructor(
 		private readonly key: (entry: T) => string | undefined,
 		private readonly canOpen: (entry: T) => boolean,
-		private readonly open: (entry: T) => boolean,
+		private readonly open: (entry: T) => boolean | Promise<boolean>,
 		private readonly onNavigate: () => void,
 	) { }
 
+	get current(): T | undefined { return this.entries[this.index]; }
 	get canGoBack(): boolean { return this.find(-1) !== undefined; }
 	get canGoForward(): boolean { return this.find(1) !== undefined; }
 
@@ -22,6 +23,13 @@ export class SessionsNavigation<T> {
 		this.entries = this.entries.filter(candidate => this.key(candidate) !== key);
 		this.entries.push(entry);
 		this.index = this.entries.length - 1;
+	}
+
+	replaceCurrent(entry: T, matches: (current: T) => boolean): boolean {
+		const current = this.entries[this.index];
+		if (this.navigating || current === undefined || !matches(current)) return false;
+		this.entries[this.index] = entry;
+		return true;
 	}
 
 	restorePreviousVisits(entries: readonly T[], current: T): boolean {
@@ -54,10 +62,11 @@ export class SessionsNavigation<T> {
 		this.index = this.entries.findIndex(entry => this.key(entry) === currentKey);
 	}
 
-	goBack(): void { this.navigate(-1); }
-	goForward(): void { this.navigate(1); }
+	goBack(): Promise<void> { return this.navigate(-1); }
+	goForward(): Promise<void> { return this.navigate(1); }
 
-	private navigate(direction: -1 | 1): void {
+	private async navigate(direction: -1 | 1): Promise<void> {
+		if (this.navigating) return;
 		let target = this.find(direction);
 		if (target === undefined) {
 			return;
@@ -67,7 +76,7 @@ export class SessionsNavigation<T> {
 		try {
 			while (target !== undefined) {
 				this.index = target;
-				if (this.open(this.entries[target]!)) {
+				if (await this.open(this.entries[target]!)) {
 					return;
 				}
 				// A destination can disappear between recording the visit and reopening it.

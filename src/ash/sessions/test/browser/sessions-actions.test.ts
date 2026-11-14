@@ -101,6 +101,7 @@ test('Sessions owns its New Session command and routes explicit provider choices
 		activateSelection() { },
 		closeVisibleSelection() { },
 		async reopenLastClosedItem() { },
+		recordEntryNavigation() { },
 		async openPreviousSession() { },
 		async openNextSession() { },
 	};

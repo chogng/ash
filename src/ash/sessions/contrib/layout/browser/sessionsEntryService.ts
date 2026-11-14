@@ -26,6 +26,7 @@ import { CodeConversationPageContext, NewSessionDraftVisibleContext, SessionsEnt
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { CHAT_WORKSPACE_ENTRY_REQUEST, SHOW_CHAT_WORKSPACE_COMMAND } from '../../chat/common/constants.js';
 
 export const documentEntry: ISessionsEntry = {
@@ -79,6 +80,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		@IInstantiationService instantiation: IInstantiationService,
 		@ISessionsConversationService private readonly conversation: ISessionsConversationService,
 		@ICustomViewService private readonly customViews: ICustomViewService,
+		@ISessionsService private readonly sessions: ISessionsService,
 	) {
 		super();
 		this.pageGroupId = (editor as EditorParts).pageGroupId;
@@ -303,6 +305,15 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 				this.storage.store(activeEntryModeKey, sharedWorkspace ? entry.workspaceMode : undefined, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				// Reveal the first composition before handing focus to any of its Parts.
 				this.layout.mainContainer.classList.remove('restoring-entry');
+				// Retain the feature's initializer so history restores its selected workspace as well as its host.
+				const destination = sharedWorkspace ? { ...editorEntry, workspaceMode: entry.workspaceMode } : editorEntry;
+				const selection = this.sessions.activeSelection;
+				const navigationId = entry.editorInput
+					? JSON.stringify([entry.id, entry.workspaceMode, extUri.getComparisonKey(entry.editorInput.resource)]) : entry.id;
+				if (!this.customViews.activeCustomView.get()) this.sessions.recordEntryNavigation(navigationId, async () => {
+					if (destination.content !== 'editor' && !destination.chatSource && selection) this.sessions.activateSelection(selection);
+					await this.openEntry(destination, initialize);
+				}, entry.content !== 'editor');
 				if (this.customViews.activeCustomView.get()) { return; }
 				if ((options?.focus ?? entry.focus) === 'conversation') { this.layout.focus(); }
 				else if (entry.focus === 'editor') { documents ? this.controller.focus() : this.editors.focusActiveEditor(); }

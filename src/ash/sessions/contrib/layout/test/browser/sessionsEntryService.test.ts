@@ -62,6 +62,46 @@ suite('SessionsEntryService lifecycle and focus', () => {
 		assert.equal(fixture.service.sessionEditorRestorationEnabled.get(), true);
 	});
 
+	test('entry visits replay feature selection, layout and focus without losing their initializer', async () => {
+		using fixture = new EntryFixture();
+		let workspace = 'home';
+		const artifact: ISessionsEntry = {
+			id: 'artifacts.home', content: 'editor', activityContext: 'sessions.activity.artifactsSelected',
+			restoreCommand: 'sessions.restore.artifacts', focus: 'editor',
+		};
+		await fixture.service.openEntry(chatEntry);
+		await fixture.service.openEntry(artifact, () => { workspace = 'docs'; return { ...artifact, id: 'artifacts.docs' }; });
+		const docs = fixture.visits.at(-1)!;
+		await fixture.service.openEntry(artifact, () => { workspace = 'sheet'; return { ...artifact, id: 'artifacts.sheet' }; });
+		await docs.open();
+		assert.equal(workspace, 'docs');
+		assert.equal(fixture.visits.at(-1)?.id, 'artifacts.docs');
+		assert.equal(fixture.focused, 'editor');
+		await fixture.visits[0]!.open();
+		assert.equal(fixture.contextKeys.getValue('sessions.activity.artifactsSelected'), false);
+		assert.equal(fixture.focused, 'conversation');
+	});
+
+	test('history restores the workspace mode captured by a shared page', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(documentEntry);
+		await fixture.service.openEntry({ ...chatEntry, id: 'customize', content: 'editor', workspaceMode: 'current' });
+		const customize = fixture.visits.at(-1)!;
+		await fixture.service.openEntry({ ...chatEntry, workspaceMode: 'chat' });
+		await customize.open();
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'code');
+	});
+
+	test('different resources in one entry have distinct history destinations', async () => {
+		using fixture = new EntryFixture();
+		const entry: ISessionsEntry = { ...chatEntry, id: 'docs', content: 'editor', focus: 'editor' };
+		await fixture.service.openEntry({ ...entry, editorInput: { resource: URI.parse('file:///first.md') } });
+		await fixture.service.openEntry({ ...entry, editorInput: { resource: URI.parse('file:///second.md') } });
+		assert.notEqual(fixture.visits[0]!.id, fixture.visits[1]!.id);
+		await fixture.visits[0]!.open();
+		assert.equal(fixture.activeInput?.resource.toString(), 'file:///first.md');
+	});
+
 	test('Artifacts borrows the ordinary Chat entry from Code and on restore', async () => {
 		const chat: ISessionsEntry = { ...chatEntry, chatSource: 'desktop-chat' };
 		const artifact: ISessionsEntry = {
@@ -627,6 +667,7 @@ class EntryFixture extends Disposable {
 	public readonly errors: string[] = [];
 	public focused: string | undefined;
 	public conversationGate: Promise<void> | undefined;
+	public readonly visits: { id: string; open: () => Promise<void>; }[] = [];
 	public navigationGate: Promise<void> | undefined;
 	public readonly conversationStarted = new DeferredPromise<void>();
 	public readonly navigationStarted = new DeferredPromise<void>();
@@ -688,10 +729,11 @@ class EntryFixture extends Disposable {
 		} as unknown as IEditorPart);
 		this.services.registerInstance(IEditorService, {
 			onDidActiveEditorChange: this.activeEditorChanged.event, onDidVisibleEditorsChange: Event.None,
+			openEditor: async (input: IResourceEditorInput) => { this.activeInput = input; },
 			get activeEditor() { return fixture.activeInput; }, visibleEditors: [],
 			focusActiveEditor: () => { this.focused = 'editor'; },
 		} as unknown as IEditorService);
-		this.services.registerInstance(ISessionsService, { onDidChange: Event.None, activeSelection: undefined, getSelection: () => ({ activeSelection: undefined, visibleSelections: [] }) } as unknown as ISessionsService);
+		this.services.registerInstance(ISessionsService, { onDidChange: Event.None, recordEntryNavigation: (id: string, open: () => Promise<void>) => { this.visits.push({ id, open }); }, activeSelection: undefined, getSelection: () => ({ activeSelection: undefined, visibleSelections: [] }) } as unknown as ISessionsService);
 		this.services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, materializedSessions: observableValue('materialized', new Map()), state: 'loading' } as unknown as ISessionsManagementService);
 		this.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 		this.services.registerInstance(INotificationService, { error: (message: string) => { this.errors.push(message); } } as unknown as INotificationService);

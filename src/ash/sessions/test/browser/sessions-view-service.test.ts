@@ -48,6 +48,43 @@ function createView(sessions: ISessionsManagementService, storage: IStorageServi
 	return services.createInstance(SessionsService);
 }
 
+test('page entries share Back and Forward with Custom Views and await replay without recording a new visit', async () => {
+	using sessions = new FakeSessionService([session('first', 'root')]);
+	using storage = createTestStorage();
+	using custom = new CustomViewService(new NullLoggerService(), storage);
+	using registration = custom.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+	using view = createView(sessions, storage, custom);
+	await view.initialize();
+	let page = 'chat';
+	const visit = (id: string) => {
+		page = id;
+		custom.hideCustomView();
+		view.recordEntryNavigation(id, async () => { await Promise.resolve(); visit(id); }, id === 'chat');
+	};
+	visit('chat');
+	assert.equal(view.canNavigateBack, false, 'Startup composition is not a second conversation visit');
+	visit('artifacts.home');
+	visit('artifacts.docs');
+	custom.showCustomView('automations');
+	await view.openPreviousSession();
+	assert.equal(page, 'artifacts.docs');
+	assert.equal(custom.activeCustomView.get(), undefined);
+	await view.openPreviousSession();
+	assert.equal(page, 'artifacts.home');
+	await view.openPreviousSession();
+	assert.equal(page, 'chat');
+	await view.openNextSession();
+	assert.equal(page, 'artifacts.home');
+	await view.openNextSession();
+	assert.equal(page, 'artifacts.docs');
+	await view.openNextSession();
+	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+	assert.equal(view.canNavigateForward, false);
+	visit('artifacts.docs');
+	await view.openPreviousSession();
+	assert.equal(custom.activeCustomView.get()?.id, 'automations', 'Explicitly returning to the covered page is a visit');
+});
+
 test('the compact Sessions slot restores a legacy Ash draft and persists its promoted Thread without moving Code', async () => {
 	const model = { provider: 'fixture', model: 'saved' };
 	const compact = { ...session('compact', 'root'), kind: 'chat' } as const;

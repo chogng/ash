@@ -275,6 +275,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 		activateSelection() { },
 		closeVisibleSelection() { },
 		async reopenLastClosedItem() { },
+		recordEntryNavigation() { },
 		async openPreviousSession() { },
 		async openNextSession() { },
 	};
