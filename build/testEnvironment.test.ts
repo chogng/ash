@@ -46,3 +46,14 @@ test('Electron tests default to memory credentials without preparing a system or
 		await assert.rejects(stat(join(root, 'Library', 'Keychains')), { code: 'ENOENT' });
 	} finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('active Electron tests preserve product compositing while background tests retain software rendering', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-compositor-fixture-'));
+	try {
+		for (const windowMode of ['hidden', 'inactive', 'active'] as const) {
+			const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory: root, windowMode });
+			assert.equal(configuration.args.includes('--disable-gpu'), windowMode !== 'active');
+			assert.equal(configuration.args.includes('--in-process-gpu'), windowMode !== 'active');
+		}
+	} finally { await rm(root, { recursive: true, force: true }); }
+});

@@ -192,10 +192,22 @@ export class ContextMenuHandler extends Disposable {
 		}
 		if (didHide || this.activeMenu !== request) { return false; }
 
-		delegate.onDidRenderMenu?.(view instanceof ContextView ? view.element : menu.getContainer());
+		const rendered = delegate.onDidRenderMenu?.(view instanceof ContextView ? view.element : menu.getContainer());
+		const focus = (): void => {
+			if (!didHide && this.activeMenu === request) menu.focus(delegate.autoSelectFirstItem === true);
+		};
+		if (rendered) {
+			// A native host must finish its initial resize/show before focus. Resizing
+			// a hidden window can clear DOM focus and otherwise dismiss the menu.
+			void rendered.then(focus, error => {
+				if (didHide) return;
+				request.hide();
+				if (!this.isDisposed) this.notificationService.error(toErrorMessage(error));
+			});
+		}
 		onDidShow?.();
 		if (didHide || this.activeMenu !== request) { return false; }
-		menu.focus(delegate.autoSelectFirstItem === true);
+		if (!rendered) focus();
 		return true;
 	}
 

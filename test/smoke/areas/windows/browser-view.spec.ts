@@ -992,6 +992,160 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 const browserInputTest = test.extend({ electronWindowMode: 'active' });
+
+test.describe('Browser menu activation', () => {
+	test.use({ electronWindowMode: 'active', electronUserSettings: { 'workbench.locale': 'en' } });
+	test('a pending browser menu cannot take focus after switching windows', { tag: ['@electron-ui'] }, async ({ application, workbench }) => {
+		const electron = application as ElectronApplication;
+		const page = workbench.page;
+		await installMainChannelTestClient(page);
+		await page.evaluate(async () => {
+			await globalThis.ashTestMainProcess.call('browserView', 'getOrCreateBrowserView', ['browser_target_' + crypto.randomUUID(), {
+				initialUrl: 'about:blank', owner: { type: 'user' }, session: { scope: 'global' },
+			}]);
+		});
+		const pending = await electron.evaluateHandle(({ BrowserWindow }) => {
+			const require = process.getBuiltinModule('module')!.createRequire(process.cwd() + '/package.json');
+			const { ContextMenuWindow } = require(process.cwd() + '/.build/desktop/main/src/ash/base/parts/contextmenu/electron-main/contextMenuWindow.js') as {
+				ContextMenuWindow: { prototype: { present(request: unknown): unknown; }; };
+			};
+			const prototype = ContextMenuWindow.prototype;
+			const present = prototype.present;
+			let release: (() => void) | undefined;
+			// Hold the actual IPC presentation so a window switch deterministically wins the race.
+			prototype.present = function (request) {
+				return new Promise(resolve => { release = () => resolve(present.call(this, request)); });
+			};
+			const other = new BrowserWindow({ show: false, width: 300, height: 200, webPreferences: { sandbox: true } });
+			return {
+				other,
+				get waiting() { return !!release; },
+				release: () => release?.(),
+				dispose: () => {
+					prototype.present = present;
+					release?.();
+					if (!other.isDestroyed()) other.close();
+				},
+			};
+		});
+		try {
+			const owner = await electron.browserWindow(page);
+			try {
+				await electron.evaluate(({ app }) => { app.show(); app.focus({ steal: true }); });
+				await owner.evaluate(window => { window.show(); window.focus(); });
+				const more = page.locator('.ash-browser-page-actions').getByRole('button', { name: 'More Actions', exact: true });
+				await more.click();
+				await expect.poll(() => pending.evaluate(state => state.waiting)).toBe(true);
+				await pending.evaluate(state => { state.other.show(); state.other.focus(); });
+				await expect.poll(() => pending.evaluate(state => state.other.isFocused())).toBe(true);
+				await pending.evaluate(state => state.release());
+				await expect.poll(() => electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter(window => window.webContents.mainFrame.name.startsWith('ash-context-menu-')).length)).toBe(0);
+				expect(await pending.evaluate(state => state.other.isFocused())).toBe(true);
+				await expect(more).toHaveAttribute('aria-expanded', 'false');
+			} finally { await owner.dispose(); }
+		} finally {
+			await pending.evaluate(state => { state.dispose(); });
+			await pending.dispose();
+		}
+	});
+
+	test('browser menus preserve the macOS main window while receiving keyboard input', { tag: ['@electron-ui'] }, async ({ application, workbench }) => {
+		test.skip(process.platform !== 'darwin', 'AppKit main/key window roles are macOS-specific');
+		const electron = application as ElectronApplication;
+		const page = workbench.page;
+		await installMainChannelTestClient(page);
+		await page.evaluate(async () => {
+			await globalThis.ashTestMainProcess.call('browserView', 'getOrCreateBrowserView', ['browser_target_' + crypto.randomUUID(), {
+				initialUrl: 'about:blank', owner: { type: 'user' }, session: { scope: 'global' },
+			}]);
+		});
+		const owner = await electron.browserWindow(page);
+		const frames = await electron.evaluateHandle(({ app }, ownerId) => {
+			const entries: { id: number; event: 'created' | 'show'; visible: boolean; bounds: Electron.Rectangle; }[] = [];
+			const created = (_event: Electron.Event, window: Electron.BrowserWindow) => {
+				if (window.getParentWindow()?.id !== ownerId || !window.webContents.mainFrame.name.startsWith('ash-context-menu-')) return;
+				const record = (event: 'created' | 'show') => entries.push({ id: window.id, event, visible: window.isVisible(), bounds: window.getBounds() });
+				record('created');
+				window.once('show', () => record('show'));
+			};
+			app.on('browser-window-created', created);
+			return { entries, dispose: () => app.off('browser-window-created', created) };
+		}, await owner.evaluate(window => window.id));
+		try {
+			const ownerId = await owner.evaluate(window => window.id);
+			// Native AppKit state is independent of Chromium's focus emulation and DOM selection.
+			const nativeState = () => electron.evaluate(({ BrowserWindow }, id) => {
+				const require = process.getBuiltinModule('module')!.createRequire(process.cwd() + '/package.json');
+				const koffi = require('koffi') as typeof import('koffi');
+				const library = koffi.load('/usr/lib/libobjc.A.dylib');
+				const selector = library.func('void *sel_registerName(const char *)');
+				const object = library.func('void *objc_msgSend(void *, void *)');
+				const boolean = library.func('bool objc_msgSend(void *, void *)');
+				const windows = BrowserWindow.getAllWindows();
+				const parent = windows.find(window => window.id === id)!;
+				const menu = windows.find(window => window.getParentWindow()?.id === id && window.webContents.mainFrame.name.startsWith('ash-context-menu-'));
+				const native = (window: Electron.BrowserWindow) => object(window.getNativeWindowHandle().readBigUInt64LE(), selector('window'));
+				return {
+					parentMain: boolean(native(parent), selector('isMainWindow')),
+					parentKey: boolean(native(parent), selector('isKeyWindow')),
+					menuMain: menu ? boolean(native(menu), selector('isMainWindow')) : null,
+					menuKey: menu ? boolean(native(menu), selector('isKeyWindow')) : null,
+				};
+			}, ownerId);
+			await electron.evaluate(({ app }) => { app.show(); app.focus({ steal: true }); });
+			await owner.evaluate(window => { window.show(); window.focus(); });
+			await expect.poll(nativeState, { timeout: 30_000 }).toEqual({ parentMain: true, parentKey: true, menuMain: null, menuKey: null });
+			const sourceBounds = await owner.evaluate(window => window.getBounds());
+			const more = page.locator('.ash-browser-page-actions').getByRole('button', { name: 'More Actions', exact: true });
+			for (const dismissal of ['Escape', 'blur']) {
+				const ready = electron.waitForEvent('window', {
+					predicate: candidate => candidate.evaluate(() => window.name.startsWith('ash-context-menu-')),
+				});
+				await more.click();
+				const menu = await ready;
+				const nativeMenu = await electron.browserWindow(menu);
+				try {
+					await expect.poll(() => nativeMenu.evaluate(window => window.isVisible())).toBe(true);
+					await expect(menu.getByRole('menu')).toBeVisible();
+					// Wait for both presentation and native activation before removing
+					// the driver's synthetic focus and asserting real keyboard input.
+					await expect(menu.getByRole('menu')).toBeFocused();
+					await expect.poll(nativeState).toEqual({ parentMain: true, parentKey: false, menuMain: false, menuKey: true });
+					const session = await menu.context().newCDPSession(menu);
+					await session.send('Emulation.setFocusEmulationEnabled', { enabled: false });
+					await expect(menu.getByRole('menu')).toBeVisible();
+					await expect(menu.locator('.ash-context-menu-window-content')).toHaveCSS('opacity', '1');
+					expect(await owner.evaluate(window => window.getBounds())).toEqual(sourceBounds);
+					await expect(page.locator('.ash-context-view-pointer-shield:visible')).toHaveCount(0);
+					const menuId = await nativeMenu.evaluate(window => window.id);
+					const recorded = await frames.evaluate((frames, id) => frames.entries.filter(entry => entry.id === id), menuId);
+					expect(recorded.map(({ event, visible }) => ({ event, visible }))).toEqual([
+						{ event: 'created', visible: false }, { event: 'show', visible: true },
+					]);
+					expect(recorded[1].bounds).toEqual(await nativeMenu.evaluate(window => window.getBounds()));
+					await expect.poll(nativeState).toEqual({ parentMain: true, parentKey: false, menuMain: false, menuKey: true });
+					await nativeMenu.evaluate(window => window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Down' }));
+					await expect(menu.locator('.ash-action-view-item.focused')).toHaveCount(1);
+					await expect.poll(nativeState).toEqual({ parentMain: true, parentKey: false, menuMain: false, menuKey: true });
+					if (dismissal === 'Escape') {
+						await nativeMenu.evaluate(window => window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' }));
+					} else {
+						await owner.evaluate(window => { window.focus(); window.webContents.focus(); });
+					}
+					await expect.poll(() => menu.isClosed()).toBe(true);
+				} finally { await nativeMenu.dispose(); }
+				await expect.poll(nativeState).toEqual({ parentMain: true, parentKey: true, menuMain: null, menuKey: null });
+				await expect(more).toHaveAttribute('aria-expanded', 'false');
+				if (dismissal === 'Escape') await expect(more).toBeFocused();
+			}
+		} finally {
+			await frames.evaluate(frames => { frames.dispose(); });
+			await frames.dispose();
+			await owner.dispose();
+		}
+	});
+});
+
 for (const locale of ['en', 'zh-CN'] as const) {
 	browserInputTest(`browser preload preserves page keys and connects frame selection, comments and area attachments in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application: initialApplication, workbench: initialWorkbench, restartWorkbench }, testInfo) => {
 		let application = initialApplication;

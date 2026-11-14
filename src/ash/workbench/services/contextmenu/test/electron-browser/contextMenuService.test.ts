@@ -18,7 +18,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { Event } from '../../../../../base/common/event.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../../base/common/lifecycle.js';
 import { AnchorAlignment, AnchorAxisAlignment, ContextViewHideReason, type ContextViewOptions } from '../../../../../base/browser/ui/contextview/contextview.js';
-import type { INativeContextMenuApi, INativeContextMenuRequest, INativeContextMenuResult } from '../../../../../base/parts/contextmenu/common/contextmenu.js';
+import type { IContextMenuWindowPresentation, INativeContextMenuApi, INativeContextMenuRequest, INativeContextMenuResult } from '../../../../../base/parts/contextmenu/common/contextmenu.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -58,6 +58,7 @@ test('system menus retain scoped shortcut hints, chord labels and delegate overr
 	const requests: INativeContextMenuRequest[] = [];
 	const closed = promiseWithResolvers<void>();
 	const api: INativeContextMenuApi = {
+		async presentWindow() { return true; },
 		async popup(request) { requests.push(request); return {}; },
 		async close() { },
 	};
@@ -100,6 +101,7 @@ test('Electron context menus run the selected action with its delegate context',
 		'../../electron-browser/contextMenuService.js'
 	);
 	const api: INativeContextMenuApi = {
+		async presentWindow() { return true; },
 		async popup() {
 			return { selectedId: 'action-1' };
 		},
@@ -165,6 +167,7 @@ test('Electron context menus position element and point anchors in CSS pixels', 
 	const { NativeContextMenuService } = await import('../../electron-browser/contextMenuService.js');
 	const requests: INativeContextMenuRequest[] = [];
 	const api: INativeContextMenuApi = {
+		async presentWindow() { return true; },
 		async popup(request) { requests.push(request); return {}; },
 		async close() { },
 	};
@@ -223,6 +226,7 @@ test('macOS switches context menu implementation when the menu style changes', a
 	const { ElectronContextMenuService } = await import('../../electron-browser/contextMenuService.js');
 	let finishPopup!: (result: INativeContextMenuResult) => void;
 	const api: INativeContextMenuApi = {
+		async presentWindow() { return true; },
 		popup: () => new Promise(resolve => { finishPopup = resolve; }),
 		async close() { },
 	};
@@ -296,6 +300,7 @@ test('macOS switches context menu implementation when the menu style changes', a
 test('Electron context menus reject missing window services without retaining resources', async () => {
 	const { ElectronContextMenuService } = await import('../../electron-browser/contextMenuService.js');
 	const api: INativeContextMenuApi = {
+		async presentWindow() { return true; },
 		async popup() { return {}; },
 		async close() { },
 	};
@@ -345,6 +350,7 @@ for (const anchor of ['point', 'element'] as const) {
 
 class SystemMenuFixture extends Disposable {
 	readonly document: Document;
+	readonly presentations: IContextMenuWindowPresentation[] = [];
 	readonly menus: ElectronContextMenuService;
 	readonly notifications: TestNotificationService;
 	readonly popups: { request: INativeContextMenuRequest; finish(result: INativeContextMenuResult): void; }[] = [];
@@ -353,7 +359,7 @@ class SystemMenuFixture extends Disposable {
 	readonly closeAcknowledged = promiseWithResolvers<void>();
 	closeRequests = 0;
 
-	constructor(options: { delayClose?: boolean; close?: () => Promise<void>; menuStyle?: 'configuration' | 'custom'; } = {}) {
+	constructor(options: { delayClose?: boolean; close?: () => Promise<void>; menuStyle?: 'configuration' | 'custom'; presentWindow?: INativeContextMenuApi['presentWindow']; } = {}) {
 		super();
 		const browser = new JSDOM('<!doctype html><body><button id="origin">Origin</button></body>');
 		this._register(toDisposable(() => browser.window.close()));
@@ -381,6 +387,7 @@ class SystemMenuFixture extends Disposable {
 			resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
 		});
 		const popupApi: INativeContextMenuApi = {
+			presentWindow: request => { this.presentations.push(request); return options.presentWindow?.(request) ?? Promise.resolve(true); },
 			popup: request => {
 				const pending = promiseWithResolvers<INativeContextMenuResult>();
 				this.popups.push({ request, finish: pending.resolve });
@@ -680,6 +687,8 @@ test('custom Desktop menus render in a separate document and release it after an
 	await new Promise(resolve => setImmediate(resolve));
 	assert.equal(fixture.document.querySelector('[role="menu"]'), null);
 	assert.equal(popup.document.querySelector('[role="menuitem"]')?.textContent, 'Select');
+	assert.equal(fixture.presentations.length, 1);
+	assert.match(fixture.presentations[0].windowName, /^ash-context-menu-/);
 	assert.deepEqual(fixture.events, ['show']);
 	(popup.document.querySelector('[role="menuitem"]') as HTMLElement).click();
 	await new Promise(resolve => setImmediate(resolve));
@@ -810,6 +819,62 @@ test('cancelling an unmounted native menu preserves a successor opened by its hi
 
 suite('Native menu dismissal', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('a menu takes focus only after its native host has been presented', async () => {
+		const pending = promiseWithResolvers<boolean>();
+		using fixture = new SystemMenuFixture({ menuStyle: 'custom', presentWindow: () => pending.promise });
+		using popup = new MenuWindowFixture(fixture.document);
+		fixture.menus.showContextMenu({
+			getAnchor: () => fixture.document.getElementById('origin')!,
+			getActions: () => [menuAction('Open')],
+			useNativeWindow: true,
+			autoSelectFirstItem: true,
+		});
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(fixture.presentations.length, 1);
+		assert.equal(popup.document.activeElement, popup.document.body);
+		pending.resolve(true);
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(popup.document.activeElement, popup.document.querySelector('[role="menuitem"]'));
+		assert.equal(popup.closed, false);
+	});
+
+	test('a failed native presentation closes the rendered menu and reports once', async () => {
+		using fixture = new SystemMenuFixture({ menuStyle: 'custom', presentWindow: async () => { throw new Error('Presentation failed'); } });
+		using popup = new MenuWindowFixture(fixture.document);
+		let hides = 0;
+		fixture.menus.showContextMenu({ getAnchor: () => fixture.document.getElementById('origin')!, getActions: () => [menuAction('Open')], useNativeWindow: true, onHide: () => { hides++; } });
+		await new Promise(resolve => setImmediate(resolve));
+		assert.deepEqual({ closed: popup.closed, hides, events: fixture.events }, { closed: true, hides: 1, events: ['show', 'hide'] });
+		assert.deepEqual(fixture.notifications.model.getNotifications().map(item => item.message), ['Presentation failed']);
+	});
+
+	for (const outcome of ['success', 'failure']) {
+		test(`a cancelled menu ignores a late native presentation ${outcome}`, async () => {
+			const pending = promiseWithResolvers<boolean>();
+			using fixture = new SystemMenuFixture({ menuStyle: 'custom', presentWindow: () => pending.promise });
+			using popup = new MenuWindowFixture(fixture.document);
+			using cancellation = new CancellationTokenSource();
+			let rendered = 0;
+			fixture.menus.showContextMenu({
+				getAnchor: () => fixture.document.getElementById('origin')!,
+				getActions: () => [menuAction('Open')],
+				useNativeWindow: true,
+				cancellationToken: cancellation.token,
+				onDidRenderMenu: () => { rendered++; },
+			});
+			await new Promise(resolve => setImmediate(resolve));
+			cancellation.cancel();
+			if (outcome === 'success') pending.resolve(true);
+			else pending.reject(new Error('Window was released'));
+			await new Promise(resolve => setImmediate(resolve));
+			assert.equal(popup.closed, true);
+			assert.equal(rendered, 0);
+			assert.equal(popup.document.activeElement, popup.document.body);
+			assert.deepEqual(fixture.notifications.model.getNotifications(), []);
+			assert.deepEqual(fixture.events, ['show', 'hide']);
+		});
+	}
 
 	test('Escape does not return focus over a successor opened by the hide callback', async () => {
 		using fixture = new SystemMenuFixture({ menuStyle: 'custom' });

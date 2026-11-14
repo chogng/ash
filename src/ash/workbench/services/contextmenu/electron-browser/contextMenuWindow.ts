@@ -4,7 +4,7 @@ import { cloneDocumentStyles } from '../../../../base/browser/domStylesheets.js'
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import type { CodeWindow } from '../../../../base/browser/window.js';
-import { CONTEXT_MENU_WINDOW_NAME_PREFIX } from '../../../../base/parts/contextmenu/common/contextmenu.js';
+import { CONTEXT_MENU_WINDOW_NAME_PREFIX, type INativeContextMenuApi } from '../../../../base/parts/contextmenu/common/contextmenu.js';
 import { localize } from '../../../../nls.js';
 import './media/contextMenuWindow.css';
 
@@ -17,15 +17,21 @@ export class ContextMenuWindow extends Disposable {
 	private readonly sourceFocus: HTMLElement | undefined;
 	private readonly anchorBounds: DOMRect;
 	private readonly zoom: number;
+	private readonly windowName: string;
 
-	constructor(anchor: ContextMenuAnchor, sourceContainer: HTMLElement) {
+	constructor(
+		anchor: ContextMenuAnchor,
+		sourceContainer: HTMLElement,
+		private readonly present: INativeContextMenuApi['presentWindow'],
+	) {
 		super();
 		const sourceDocument = isNode(anchor) ? anchor.ownerDocument! : (anchor.targetWindow?.document ?? sourceContainer.ownerDocument);
 		this.source = sourceDocument.defaultView! as CodeWindow;
 		this.sourceFocus = anchor instanceof this.source.HTMLElement ? anchor :
 			sourceDocument.activeElement instanceof this.source.HTMLElement ? sourceDocument.activeElement : undefined;
 		this.anchorBounds = isNode(anchor) ? (anchor as Element).getBoundingClientRect() : new this.source.DOMRect(anchor.x, anchor.y, 0, 0);
-		const target = this.source.open('about:blank', CONTEXT_MENU_WINDOW_NAME_PREFIX + generateUuid(), `popup=yes,x=${Math.round(this.source.screenX)},y=${Math.round(this.source.screenY)},width=480,height=720`);
+		this.windowName = CONTEXT_MENU_WINDOW_NAME_PREFIX + generateUuid();
+		const target = this.source.open('about:blank', this.windowName, 'popup=yes');
 		if (!target) throw new Error(localize({ bundle: 'ash.workbench', key: 'contextMenu.windowUnavailable' }, 'Unable to open menu.'));
 		this.window = target;
 		this.zoom = this.source.devicePixelRatio / target.devicePixelRatio;
@@ -74,7 +80,7 @@ export class ContextMenuWindow extends Disposable {
 		return { x: this.source.screenX + this.anchorBounds.left * this.zoom, y: this.source.screenY + topInset + this.anchorBounds.bottom * this.zoom };
 	}
 
-	layout(menu: HTMLElement): void {
+	async layout(menu: HTMLElement): Promise<void> {
 		if (this.isDisposed || this.window.closed) return;
 		const rect = menu.getBoundingClientRect();
 		const width = Math.ceil(rect.width + 8 * this.zoom);
@@ -87,9 +93,14 @@ export class ContextMenuWindow extends Disposable {
 		const areaTop = 'availTop' in screen && typeof screen.availTop === 'number' ? screen.availTop : 0;
 		const left = Math.max(areaLeft, Math.min(alignRight ? right - width : origin.x, areaLeft + screen.availWidth - width));
 		const top = Math.max(areaTop, Math.min(origin.y, areaTop + screen.availHeight - height));
-		this.window.resizeTo(width, height);
-		this.window.moveTo(Math.round(left), Math.round(top));
-		this.container.classList.add('ready');
+		// Main owns visibility and applies these measured bounds before the first show.
+		const shown = await this.present({
+			windowName: this.windowName,
+			bounds: { x: Math.round(left), y: Math.round(top), width, height },
+		});
+		if (!shown && !this.isDisposed && !this.window.closed) {
+			throw new Error(localize({ bundle: 'ash.workbench', key: 'contextMenu.windowUnavailable' }, 'Unable to open menu.'));
+		}
 	}
 
 	onBlur(listener: () => void): void {

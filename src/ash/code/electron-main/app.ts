@@ -60,6 +60,7 @@ import { assertDefined } from '../../base/common/types.js';
 import { AshApplicationId, AshApplicationName } from '../common/application.js';
 import { ElectronContextMenu } from '../../base/parts/contextmenu/electron-main/contextmenu.js';
 import { ContextMenuWindow } from '../../base/parts/contextmenu/electron-main/contextMenuWindow.js';
+import { restoreMacMainWindow } from '../../base/parts/contextmenu/electron-main/macContextMenuWindow.js';
 import { isContextMenuWindowName } from '../../base/parts/contextmenu/common/contextmenu.js';
 import { ElectronMainClipboardService } from '../../platform/clipboard/electron-main/electronMainClipboardService.js';
 import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
@@ -93,7 +94,16 @@ import { IMeteredConnectionService } from '../../platform/meteredConnection/comm
 import { METERED_CONNECTION_CHANNEL } from '../../platform/meteredConnection/common/meteredConnectionIpc.js';
 import { MeteredConnectionMainService } from '../../platform/meteredConnection/electron-main/meteredConnectionMainService.js';
 import { MeteredConnectionChannel } from '../../platform/meteredConnection/electron-main/meteredConnectionChannel.js';
-import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, validateNativeContextMenuClose, validateNativeContextMenuRequest, type INativeContextMenuRequest } from '../../base/parts/contextmenu/common/contextmenu.js';
+import {
+	NATIVE_CONTEXT_MENU_CLOSE_CHANNEL,
+	NATIVE_CONTEXT_MENU_POPUP_CHANNEL,
+	NATIVE_CONTEXT_MENU_PRESENT_WINDOW_CHANNEL,
+	validateContextMenuWindowPresentation,
+	validateNativeContextMenuClose,
+	validateNativeContextMenuRequest,
+	type IContextMenuWindowPresentation,
+	type INativeContextMenuRequest,
+} from '../../base/parts/contextmenu/common/contextmenu.js';
 import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
 import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
 import { ElectronOpenerService } from '../../platform/opener/electron-main/electronOpenerService.js';
@@ -1340,9 +1350,14 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private contextMenuIpcRoutes(contextMenu: ElectronContextMenu): readonly IpcRoute<unknown, unknown>[] {
+	private contextMenuIpcRoutes(contextMenu: ElectronContextMenu, menuWindows: ContextMenuWindow): readonly IpcRoute<unknown, unknown>[] {
 		// Sender trust and window-scoped registration belong to the desktop host.
 		return [
+			{
+				channel: NATIVE_CONTEXT_MENU_PRESENT_WINDOW_CHANNEL,
+				validate: validateContextMenuWindowPresentation,
+				invoke: request => menuWindows.present(request as IContextMenuWindowPresentation),
+			},
 			{
 				channel: NATIVE_CONTEXT_MENU_POPUP_CHANNEL,
 				validate: validateNativeContextMenuRequest,
@@ -1720,7 +1735,7 @@ export class AshApplication extends Disposable {
 		const rendererEntry = this.resolveRendererEntry('workbench');
 
 		const windowDisposables = resources;
-		this.configureWindowNavigation(window, windowDisposables, titleBarStyle);
+		const menuWindows = this.configureWindowNavigation(window, windowDisposables, titleBarStyle);
 		const workspaceHost = windowDisposables.add(new RendererWorkspaceHost(window.webContents));
 		windowDisposables.add(record.windowStateTracking);
 		const remotePortForwardingService = this.createSshPortForwardingService(() => workspaceContext.getWorkspace());
@@ -1905,7 +1920,7 @@ export class AshApplication extends Disposable {
 			{ channel: WORKSPACE_CONFIGURATION_CHANNEL, validate: validateWorkspaceConfigurationRequest, invoke: (request: unknown) => workspaceEditing.configuration(request as ReturnType<typeof validateWorkspaceConfigurationRequest>) },
 			workspaceRecoveryIpcRoute(identifiers => this.windowsMainService.restoreWorkspaces(identifiers, async identifier => (await this.openWorkspace(identifier, workspaces))?.window)),
 		];
-		ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu));
+		ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu, menuWindows));
 		if (this.nativeMenubar) {
 			windowDisposables.add(this.nativeMenubar.registerWindow(window));
 			ipcRoutes.push(...nativeMenubarIpcRoutes(this.nativeMenubar, window));
@@ -2070,9 +2085,9 @@ export class AshApplication extends Disposable {
 		};
 	}
 
-	private configureWindowNavigation(window: BrowserWindow, windowDisposables: DisposableStore, titleBarStyle: TitleBarStyleConfiguration, openerWindow: BrowserWindow = window): void {
+	private configureWindowNavigation(window: BrowserWindow, windowDisposables: DisposableStore, titleBarStyle: TitleBarStyleConfiguration, openerWindow: BrowserWindow = window): ContextMenuWindow {
 		const auxiliaryWindows = windowDisposables.add(new DisposableMap<number, IDisposable>());
-		const menuWindows = windowDisposables.add(new ContextMenuWindow(window));
+		const menuWindows = windowDisposables.add(new ContextMenuWindow(window, restoreMacMainWindow));
 		// Apply restored popup bounds before creation; Chromium ignores its position features here.
 		window.webContents.setWindowOpenHandler(details => {
 			const menuOptions = menuWindows.getWindowOpenOptions(details);
@@ -2119,7 +2134,7 @@ export class AshApplication extends Disposable {
 		windowDisposables.add(toDisposable(() => webContents.off('will-navigate', preventNavigation)));
 		webContents.on('did-create-window', onDidCreateWindow);
 		windowDisposables.add(toDisposable(() => webContents.off('did-create-window', onDidCreateWindow)));
-
+		return menuWindows;
 	}
 
 	private getBrowserHostChannel(context: string): IServerChannel<string> {
@@ -2291,7 +2306,7 @@ export class AshApplication extends Disposable {
 				state: this.windowsMainService.getNewWindowState(sessionsWindowState, this.windowConfigurationValues(), this.lifecycleMainService.wasRestarted),
 				webPreferences: this.createSandboxWebPreferences(),
 				initialize: async (window, windowDisposables) => {
-					this.configureWindowNavigation(window, windowDisposables, titleBarStyle);
+					const menuWindows = this.configureWindowNavigation(window, windowDisposables, titleBarStyle);
 					const tracking = windowDisposables.add(sessionsWindowState.trackWindow(window));
 					session.windowState = { window, workspaceId: session.workspaceId, handler: sessionsWindowState, tracking };
 					windowDisposables.add(toDisposable(() => this.globalKeybindings.removeWindow(window.id)));
@@ -2467,7 +2482,7 @@ export class AshApplication extends Disposable {
 						},
 						windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 					];
-					ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu));
+					ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu, menuWindows));
 					if (this.nativeMenubar) {
 						windowDisposables.add(this.nativeMenubar.registerWindow(window));
 						ipcRoutes.push(...nativeMenubarIpcRoutes(this.nativeMenubar, window));

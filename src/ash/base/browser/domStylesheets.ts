@@ -140,6 +140,7 @@ export function cloneDocumentStyles(
 		const styles = [...sourceDocument.head.querySelectorAll<HTMLStyleElement | HTMLLinkElement>('style, link[rel="stylesheet"]')];
 		const live = new Set(styles);
 		for (const source of clones.keys()) if (!live.has(source)) removeClone(source);
+		const initialStyles = clones.size === 0 ? targetDocument.createDocumentFragment() : undefined;
 		for (const source of styles) {
 			let clone = clones.get(source);
 			if (!clone) {
@@ -164,12 +165,15 @@ export function cloneDocumentStyles(
 				if (source.tagName === 'STYLE' && clone.textContent !== source.textContent) clone.textContent = source.textContent;
 			}
 		}
-		let next: Node = anchor;
+		// Attach a new document's complete cascade together; later updates retain loaded links.
+		const parent = initialStyles ?? targetDocument.head;
+		let next: Node | null = initialStyles ? null : anchor;
 		for (let index = styles.length - 1; index >= 0; index--) {
 			const clone = clones.get(styles[index]!)!;
-			if (clone.nextSibling !== next) targetDocument.head.insertBefore(clone, next);
+			if (initialStyles || clone.nextSibling !== next) parent.insertBefore(clone, next);
 			next = clone;
 		}
+		if (initialStyles) targetDocument.head.insertBefore(initialStyles, anchor);
 	};
 	synchronize();
 	store.add(observeMutations(

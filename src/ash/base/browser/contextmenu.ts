@@ -32,8 +32,8 @@ export interface IContextMenuDelegate {
 	getActions(): readonly IAction[];
 	/** Desktop can place a non-modal menu above an embedded native view. */
 	readonly useNativeWindow?: boolean;
-	/** Host may measure the mounted presentation root to size its native surface. */
-	readonly onDidRenderMenu?: (root: HTMLElement) => void;
+	/** Host may measure and present its native surface before the menu takes focus. */
+	readonly onDidRenderMenu?: (root: HTMLElement) => void | Promise<void>;
 	/** Runtime-owned mount for the menu and its submenus in a separate document. */
 	readonly contextViewContainer?: HTMLElement;
 	/** Element that should own the browser menu's isolated DOM and styles. */
