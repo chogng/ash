@@ -668,7 +668,9 @@ export class SessionsPreferences extends Disposable {
 				{ id: 'models', title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },
 				{ id: 'github', title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [], content: githubContent },
 				{
-					id: 'browser', title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.global, settings: [],
+					id: 'browser', title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.global,
+					settings: defaults.all.filter(setting => setting.id === 'workbench.browser.autoReloadOnFileChange'
+						|| setting.id === 'workbench.browser.autoReloadLocalhostOnFileChange'),
 					settingGroups: [{ id: 'trusted-domains', title: trustedDomains.title, description: '', settings: [trustedDomains] }],
 				},
 				{ id: 'tab', title: localize('sessions.settings.tab', 'Tab'), icon: Lxicon.keyboardTab, settings: [], content: management.get('tab') },

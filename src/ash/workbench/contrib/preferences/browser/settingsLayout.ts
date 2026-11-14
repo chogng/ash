@@ -213,6 +213,7 @@ export const SettingsNavigation = [
 							'workbench.browser.searchEngine',
 							'workbench.browser.pageZoom',
 							'workbench.browser.autoReloadOnFileChange',
+							'workbench.browser.autoReloadLocalhostOnFileChange',
 							'workbench.browser.dataStorage',
 							'workbench.browser.savePasswords',
 							'workbench.browser.autofillPasswords',

@@ -30,7 +30,14 @@ export class BrowserEditorErrorFeatures extends BrowserEditorContribution {
 	}
 	protected override onModelAttached(model: IBrowserViewModel, store: DisposableStore): void {
 		this.render(model.state);
-		store.add(model.onDidChangeState(state => this.render(state)));
+		let previous = model.state;
+		store.add(model.onDidChangeState(state => {
+			// Picker and DevTools updates must not overwrite selection announcements.
+			if (state.url !== previous.url || state.title !== previous.title || state.loading !== previous.loading || state.errorDescription !== previous.errorDescription) {
+				this.render(state);
+			}
+			previous = state;
+		}));
 		store.add(model.onDidEvent(event => this.accept(event)));
 	}
 	override onModelDetached(): void {

@@ -34,7 +34,6 @@ import { ICommandService } from '../../../../../../../platform/commands/common/c
 import { IEditorPart } from '../../../../../../browser/parts/editor/editorPart.js';
 import { IBrowserViewWorkbenchService } from '../../../../common/browserView.js';
 import { BrowserZoomService, IBrowserZoomService } from '../../../../common/browserZoomService.js';
-import { IBrowserAutoReloadService } from '../../../../electron-browser/features/browserAutoReloadFeatures.js';
 
 import { ChatContextPickService } from '../../../../../../contrib/chat/browser/attachments/chatContextPickService.js';
 import { productLanguagePackCatalogs } from '../../../../../../services/localization/common/localizationCatalogs.js';
@@ -116,14 +115,6 @@ services.registerInstance(IBrowserViewWorkbenchService, {
 	replaceBrowserView: async input => input,
 	getOrCreateLazy: () => { throw new Error('This fixture owns one browser input'); },
 	createBrowserView: async () => { throw new Error('This fixture owns one browser input'); },
-});
-const autoReloadChanged = resources.add(new Emitter<void>());
-let autoReloadEnabled = false;
-services.registerInstance(IBrowserAutoReloadService, {
-	onDidChangeState: autoReloadChanged.event,
-	isEnabled: () => autoReloadEnabled,
-	canReload: () => true,
-	toggle: () => { autoReloadEnabled = !autoReloadEnabled; calls.push('autoReload'); autoReloadChanged.fire(); },
 });
 const info: IBrowserViewInfo = {
 	id: 'browser_target_00000000-0000-0000-0000-000000000000', host: { windowId: 1 }, owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace },

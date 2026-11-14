@@ -21,6 +21,9 @@ export enum BrowserViewCommandId {
 	HardReload = 'workbench.action.browser.hardReload',
 	FocusUrlInput = 'workbench.action.browser.focusUrlInput',
 	AddConsoleLogsToChat = 'workbench.action.browser.addConsoleLogsToChat',
+	AddElementToChat = 'workbench.action.browser.addElementToChat',
+	AddElementCommentToChat = 'workbench.action.browser.addElementCommentToChat',
+	AddAreaScreenshotToChat = 'workbench.action.browser.addAreaScreenshotToChat',
 	AddScreenshotToChat = 'workbench.action.browser.addScreenshotToChat',
 	AddFullPageScreenshotToChat = 'workbench.action.browser.addFullPageScreenshotToChat',
 	ManagePermissions = 'workbench.action.browser.managePermissions',
@@ -150,6 +153,8 @@ export interface IBrowserViewNavigateRequest
 /** Serializable host-authoritative state for one embedded browser. */
 export interface IBrowserViewState {
 	readonly isDevToolsOpen: boolean;
+	/** Main owns picker state; omitted snapshots represent an inactive picker. */
+	readonly elementSelectionState?: { readonly active: boolean; readonly options: IBrowserElementSelectionOptions; };
 	readonly permissions?: ISerializedBrowserPermissionsSnapshot;
 	readonly browserZoomIndex?: number;
 	readonly deviceEmulation?: IBrowserDeviceProfile;

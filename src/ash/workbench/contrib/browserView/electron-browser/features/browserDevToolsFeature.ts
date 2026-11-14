@@ -1,6 +1,5 @@
-import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { localize2 } from '../../../../../nls.js';
-import { Action2, MenuId } from '../../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { BrowserViewCommandId } from '../../../../../platform/browserView/common/browserView.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
@@ -12,13 +11,13 @@ import { Lxicon } from '../../../../../base/common/lxicons.js';
 
 export const CONTEXT_BROWSER_DEVTOOLS_OPEN = new RawContextKey<boolean>('browserDevToolsOpen', false);
 
-registerEditorToolAction(class ToggleDevToolsAction extends Action2 {
+registerAction2(class ToggleDevToolsAction extends Action2 {
 	constructor() {
 		super({
 			id: BrowserViewCommandId.ToggleDevTools,
 			title: localize2({ bundle: 'ash.workbench', key: 'browser.devToolsAction' }, 'Developer Tools'),
 			category: BrowserActionCategory,
-			icon: Lxicon.inspect,
+			icon: Lxicon.symbolProperty,
 			f1: true,
 			precondition: ContextKeyExpr.and(BROWSER_EDITOR_ACTIVE, CONTEXT_BROWSER_HAS_URL.isEqualTo(true), CONTEXT_BROWSER_HAS_ERROR.isEqualTo(false)),
 			toggled: CONTEXT_BROWSER_DEVTOOLS_OPEN.isEqualTo(true),

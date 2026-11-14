@@ -34,20 +34,32 @@
 	--ash-sash-feedback-cross-offset: calc(var(--ash-strokeThickness) / -2);
 }
 
-.ash-sessions-editor-frame-divider,
+.ash-sessions-conversation-frame-divider,
 .ash-sessions-titlebar-frame-divider {
 	position: relative;
 }
 
-.ash-sessions-editor-frame-divider::after,
+.ash-sessions-conversation-frame-divider::after,
 .ash-sessions-titlebar-frame-divider::after {
 	position: absolute;
 	z-index: 4;
-	inset: 0 auto 0 var(--ash-sessions-editor-divider-offset, 0px);
 	border-left: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, var(--ash-border));
 	content: "";
 	pointer-events: none;
+}
+
+.ash-sessions-conversation-frame-divider::after {
+	/* Paint inside Chat: native browser pages composite above Workbench borders. */
+	inset: 0 0 0 auto;
+}
+
+.ash-sessions-titlebar-frame-divider::after {
+	inset: 0 auto 0
+		calc(
+			var(--ash-sessions-editor-divider-offset) -
+				var(--ash-strokeThickness)
+		);
 }
 
 .ash-sessions-auxiliarybar-frame {

@@ -483,15 +483,18 @@ suite('Browser view ownership and operations', () => {
 		const element = { elementId: 'frame-one:element', outerHTML: '<button>Pick</button>', computedStyle: '', innerText: 'Pick', bounds: { x: 0, y: 0, width: 40, height: 20 } };
 		post('elementPicked', element);
 		await f.manager.toggleElementSelection(id, true);
+		assert.deepEqual((await f.manager.getState(id)).elementSelectionState, { active: true, options: {} });
 		post('elementPicked', { ...element, bounds: { ...element.bounds, width: NaN } });
 		post('elementPicked', element);
 		assert.deepEqual(f.events.filter(event => event.type === 'elementPicked'), [{ type: 'elementPicked', targetId: id, data: { ...element, url: frame.url } }]);
 		assert.ok(sent.some(message => (message as { command: string; }).command === 'startElementPicker'));
 		await f.manager.toggleAreaSelection(id, true);
+		assert.equal((await f.manager.getState(id)).elementSelectionState?.active, false);
 		post('areaPicked', { x: 1000, y: 0, width: 40, height: 20 });
 		post('areaPicked', { x: 0, y: 0, width: 40, height: 20 });
 		assert.equal(f.events.filter(event => event.type === 'areaPicked').length, 1);
 		post('selectionStopped');
+		assert.equal((await f.manager.getState(id)).elementSelectionState?.active, false);
 		post('elementPicked', { ...element, comment: 'Unaccepted marker' });
 		assert.equal(f.events.filter(event => event.type === 'elementPicked').length, 1);
 		await f.manager.setElementComments(id, { comments: [{ elementId: element.elementId, body: 'Original comment' }] });

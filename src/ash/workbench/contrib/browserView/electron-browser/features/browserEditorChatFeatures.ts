@@ -7,10 +7,10 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { encodeBase64 } from '../../../../../base/common/buffer.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
-import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 
 import type { IBrowserViewModel } from '../../common/browserView.js';
-import { BrowserEditor, BrowserEditorContribution } from '../browserEditor.js';
+import { BROWSER_EDITOR_ACTIVE, BrowserActionCategory, BrowserEditor, BrowserEditorContribution, CONTEXT_BROWSER_HAS_ERROR, CONTEXT_BROWSER_HAS_URL } from '../browserEditor.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { IElementData } from '../../../../../platform/browserView/common/browserView.js';
@@ -173,12 +173,97 @@ class BrowserPageSelections extends Disposable {
 	}
 }
 
-import { Action2 } from '../../../../../platform/actions/common/actions.js';
-import { BrowserViewCommandId } from '../../../../../platform/browserView/common/browserView.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { BrowserElementSelectionMode, BrowserViewCommandId } from '../../../../../platform/browserView/common/browserView.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { BrowserViewEditorId } from '../../common/browserView.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { localize2 } from '../../../../../nls.js';
+import { ContextKeyExpr, RawContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
+import { ChatContextKeys } from '../../../chat/common/actions/chatContextKeys.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { Keybinding, logicalKey } from '../../../../../base/common/keybindings.js';
+import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
+
+export const CONTEXT_BROWSER_ELEMENT_SELECTION_MODE = new RawContextKey<BrowserElementSelectionMode | undefined>('browserElementSelectionMode', undefined);
+
+const chatSelectionAvailable = ContextKeyExpr.and(
+	BROWSER_EDITOR_ACTIVE,
+	CONTEXT_BROWSER_HAS_URL.isEqualTo(true),
+	CONTEXT_BROWSER_HAS_ERROR.isEqualTo(false),
+	ChatContextKeys.enabled.isEqualTo(true),
+);
+for (const command of [
+	{
+		id: BrowserViewCommandId.AddElementToChat,
+		title: localize2({ bundle: 'ash.workbench', key: 'browser.selectElement' }, 'Select Element for Chat'),
+		mode: BrowserElementSelectionMode.Select,
+		icon: Lxicon.inspect,
+		order: 1,
+	},
+	{
+		id: BrowserViewCommandId.AddElementCommentToChat,
+		title: localize2({ bundle: 'ash.workbench', key: 'browser.commentElement' }, 'Comment on Elements'),
+		mode: BrowserElementSelectionMode.Comment,
+		icon: Lxicon.comment,
+		order: 2,
+	},
+	{
+		id: BrowserViewCommandId.AddAreaScreenshotToChat,
+		title: localize2({ bundle: 'ash.workbench', key: 'browser.selectArea' }, 'Select Area for Chat'),
+		mode: undefined,
+		icon: Lxicon.screenFull,
+		order: 3,
+	},
+]) {
+	registerAction2(class BrowserSelectionAction extends Action2 {
+		constructor() {
+			super({
+				id: command.id,
+				title: command.title,
+				category: BrowserActionCategory,
+				icon: command.icon,
+				f1: true,
+				precondition: chatSelectionAvailable,
+				toggled: command.mode ? CONTEXT_BROWSER_ELEMENT_SELECTION_MODE.isEqualTo(command.mode) : undefined,
+				menu: { id: MenuId.BrowserChatActionsMenu, group: 'selection', order: command.order },
+				keybinding: command.mode === BrowserElementSelectionMode.Select ? {
+					primary: Keybinding.single(logicalKey('c', { primaryKey: true, shiftKey: true })),
+					weight: KeybindingWeight.WorkbenchContrib + 50,
+				} : undefined,
+			});
+		}
+		override async run(
+			accessor: ServicesAccessor,
+			target: unknown = accessor.get(IEditorService).activeEditorPane,
+		): Promise<void> {
+			if (!(target instanceof BrowserEditor) || !target.model) { return; }
+			target.ensureBrowserFocus();
+			if (!command.mode) {
+				await target.model.toggleAreaSelection();
+				return;
+			}
+			const selection = target.model.state.elementSelectionState;
+			const active = selection?.active && (selection.options.mode ?? BrowserElementSelectionMode.Select) === command.mode;
+			await target.model.toggleElementSelection(!active, {
+				mode: command.mode,
+				continuous: command.mode === BrowserElementSelectionMode.Comment,
+				highlightFocusedElement: true,
+			});
+		}
+	});
+}
+
+MenusRegistry.appendMenuItem(MenuId.BrowserActionsToolbar, {
+	submenu: MenuId.BrowserChatActionsMenu,
+	title: localize2({ bundle: 'ash.workbench', key: 'browser.chatActionsSubmenu' }, 'Add to Chat'),
+	icon: Lxicon.inspect,
+	group: 'tools',
+	order: 1,
+	when: ChatContextKeys.enabled.isEqualTo(true),
+	isSplitButton: true,
+});
+
 for (const command of [
 	{ id: BrowserViewCommandId.AddConsoleLogsToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.consoleCommand' }, 'Browser: Capture Console Logs for Chat'), run: (pane: BrowserEditor) => pane.getContribution(BrowserEditorChatIntegration)?.addConsoleLogsToChat() },
 	{ id: BrowserViewCommandId.AddScreenshotToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.pageCommand' }, 'Browser: Capture Screenshot for Chat'), run: (pane: BrowserEditor) => pane.getContribution(BrowserEditorChatIntegration)?.addScreenshotToChat(false) },

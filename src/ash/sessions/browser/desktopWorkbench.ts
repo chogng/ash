@@ -1083,7 +1083,7 @@ export class DesktopWorkbenchLayout
 
 		// The desktop Grid places the editor immediately after the conversation when both are visible.
 		const split = this.isPartVisible('sessions') && this.isPartVisible('editor');
-		this.view('editor').frame.classList.toggle('ash-sessions-editor-frame-divider', split);
+		this.view('sessions').frame.classList.toggle('ash-sessions-conversation-frame-divider', split);
 		const titlebarFrame = this.view('titlebar').frame;
 		titlebarFrame.classList.toggle('ash-sessions-titlebar-frame-divider', split);
 		titlebarFrame.style.setProperty(

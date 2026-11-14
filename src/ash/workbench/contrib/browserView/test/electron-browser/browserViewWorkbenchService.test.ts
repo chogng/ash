@@ -7,7 +7,7 @@ import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { IBrowserViewService, BrowserViewStorageScope, type BrowserViewEvent, type IBrowserViewInfo } from '../../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewService, BrowserElementSelectionMode, BrowserViewCommandId, BrowserViewStorageScope, type BrowserViewEvent, type IBrowserViewInfo } from '../../../../../platform/browserView/common/browserView.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
@@ -27,14 +27,18 @@ import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../
 import { BrowserViewEditorId, IBrowserViewWorkbenchService } from '../../common/browserView.js';
 import '../../electron-browser/features/browserTabManagementFeatures.js';
 import '../../electron-browser/features/browserDevToolsFeature.js';
-import { ActiveEditorContext } from '../../../../common/contextkeys.js';
-import { MenuId } from '../../../../../platform/actions/common/actions.js';
+import { ActiveEditorContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, EditorGroupEditorsCountContext, EditorsVisibleContext, IsSessionsWindowContext, SessionsCodeEditorContext } from '../../../../common/contextkeys.js';
+import { MenuId, SubmenuItemAction } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { BrowserEditor, CONTEXT_BROWSER_HAS_ERROR, CONTEXT_BROWSER_HAS_URL } from '../../electron-browser/browserEditor.js';
 import { CONTEXT_BROWSER_DEVTOOLS_OPEN } from '../../electron-browser/features/browserDevToolsFeature.js';
+import { ChatContextKeys } from '../../../chat/common/actions/chatContextKeys.js';
 import { DialogResult } from '../../../../../platform/dialogs/common/dialogs.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
+import { IEditorGroupsService, type IEditorGroup } from '../../../../services/editor/common/editorGroupsService.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { URI } from '../../../../../base/common/uri.js';
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const info: IBrowserViewInfo = {
@@ -134,6 +138,8 @@ suite('Browser Workbench page lifecycle', () => {
 
 	test('registered navigation commands call the current page owner and hard reload preserves cache bypass', async () => {
 		using f = fixture(); await f.views.initialize();
+		IsSessionsWindowContext.bindTo(f.services.get(IContextKeyService)).set(true);
+		SessionsCodeEditorContext.bindTo(f.services.get(IContextKeyService)).set(false);
 		f.active = f.views.getKnownBrowserViews().get(id);
 		const calls: string[] = [];
 		f.service.goBack = async () => { calls.push('back'); };
@@ -148,6 +154,54 @@ suite('Browser Workbench page lifecycle', () => {
 			await f.services.invokeFunction(CommandsRegistry.getCommand('workbench.action.browser.' + command)!);
 		}
 		assert.deepEqual(calls, ['back', 'forward', 'reload', 'hard']);
+	});
+
+	test('browser tab menus omit file commands and retain the clicked page across tab moves', async () => {
+		using f = fixture();
+		await f.views.initialize();
+		const clicked = f.views.getKnownBrowserViews().get(id)!;
+		await clicked.resolve();
+		const other = f.views.getOrCreateLazy({ id: 'browser_target_223e4567-e89b-12d3-a456-426614174000', url: 'https://other.test/', title: 'Other', session: info.session });
+		const inputs: IResourceEditorInput[] = [clicked];
+		const closed: IResourceEditorInput[] = [];
+		const group = {
+			id: 1, inputs, selectedInputs: [], activeInput: other,
+			isSticky: () => false,
+			closeEditor: async (input: IResourceEditorInput) => { closed.push(input); inputs.splice(inputs.indexOf(input), 1); return true; },
+		} as unknown as IEditorGroup;
+		f.services.registerInstance(IEditorGroupsService, { getGroup: groupId => groupId === 1 ? group : undefined } as IEditorGroupsService);
+		let copied = '';
+		f.services.registerInstance(IClipboardService, { writeText: async value => { copied = value; } } as IClipboardService);
+		using contexts = new ContextKeyService();
+		EditorsVisibleContext.bindTo(contexts).set(true);
+		EditorGroupEditorsCountContext.bindTo(contexts).set(1);
+		ActiveEditorFirstInGroupContext.bindTo(contexts).set(true);
+		ActiveEditorLastInGroupContext.bindTo(contexts).set(true);
+		using commands = new CommandService(f.services);
+		const menus = new MenuService(commands, contexts);
+		const argument = { groupId: 1, editorIndex: 0, editor: clicked };
+		const actions = () => menus.getMenuActions(MenuId.BrowserTabContext, { arg: argument }).flatMap(([, actions]) => actions);
+		const ids = actions().map(action => action.id);
+		assert.ok(ids.includes('workbench.action.browser.tab.copyUrl'));
+		assert.ok(!ids.includes('workbench.action.browser.tab.closeOthers'));
+		assert.ok(!ids.includes('workbench.action.browser.tab.closeLeft'));
+		assert.ok(!ids.includes('workbench.action.browser.tab.closeRight'));
+		assert.ok(!ids.includes('workbench.action.reopenWithEditor'));
+		assert.ok(!ids.includes('workbench.action.closeUnmodifiedEditors'));
+		await actions().find(action => action.id === 'workbench.action.browser.tab.copyUrl')!.run();
+		assert.equal(copied, info.state.url);
+		const reloaded: unknown[] = [];
+		f.service.reload = async (target, hard) => { reloaded.push([target, hard]); };
+		inputs.unshift({ resource: URI.file('/workspace/file.txt') });
+		inputs.push(other);
+		await actions().find(action => action.id === 'workbench.action.browser.tab.hardReload')!.run();
+		assert.deepEqual(reloaded, [[id, true]]);
+		await commands.executeCommand('workbench.action.browser.tab.closeRight', argument);
+		assert.deepEqual(closed, [other]);
+		assert.equal(inputs[0]!.resource.scheme, 'file');
+		inputs.splice(inputs.indexOf(clicked), 1);
+		await commands.executeCommand('workbench.action.browser.tab.reload', argument);
+		assert.equal(reloaded.length, 1);
 	});
 
 	test('browser developer tools are offered only for a browser editor and toggle its page', async () => {
@@ -175,6 +229,10 @@ suite('Browser Workbench page lifecycle', () => {
 		f.service.toggleDevTools = async targetId => { toggled.push(targetId); };
 		const action = developerTools();
 		assert.ok(action?.enabled);
+		// A webpage beside Chat owns DevTools independently of Code's document tools.
+		IsSessionsWindowContext.bindTo(contexts).set(true);
+		SessionsCodeEditorContext.bindTo(contexts).set(false);
+		assert.ok(developerTools()?.enabled);
 		const pane = Object.create(BrowserEditor.prototype, { model: { value: await f.views.getKnownBrowserViews().get(id)!.resolve() } });
 		const toolbarAction = () => menus.getMenuActions(MenuId.BrowserActionsToolbar, { arg: pane })
 			.flatMap(([, actions]) => actions)
@@ -189,6 +247,38 @@ suite('Browser Workbench page lifecycle', () => {
 		activeEditor.set('workbench.editor.theme');
 		f.active = undefined;
 		assert.equal(developerTools(), undefined);
+	});
+
+	test('browser Chat selection and DevTools remain separate toolbar actions', async () => {
+		using f = fixture();
+		await f.views.initialize();
+		using contexts = new ContextKeyService();
+		ActiveEditorContext.bindTo(contexts).set(BrowserViewEditorId);
+		CONTEXT_BROWSER_HAS_URL.bindTo(contexts).set(true);
+		ChatContextKeys.enabled.bindTo(contexts).set(true);
+		IsSessionsWindowContext.bindTo(contexts).set(true);
+		SessionsCodeEditorContext.bindTo(contexts).set(false);
+		using commands = new CommandService(f.services);
+		const menus = new MenuService(commands, contexts);
+		const model = await f.views.getKnownBrowserViews().get(id)!.resolve();
+		const pane = Object.create(BrowserEditor.prototype, {
+			model: { value: model },
+			ensureBrowserFocus: { value: () => { } },
+		});
+		const actions = menus.getMenuActions(MenuId.BrowserActionsToolbar, { arg: pane }).flatMap(([, actions]) => actions);
+		const chat = actions.find(action => action instanceof SubmenuItemAction && action.item.submenu === MenuId.BrowserChatActionsMenu) as SubmenuItemAction;
+		assert.ok(chat);
+		assert.equal(chat.item.icon?.id, 'inspect');
+		assert.equal(chat.item.isSplitButton, true);
+		assert.deepEqual(chat.actions.map(action => action.id), [BrowserViewCommandId.AddElementToChat, BrowserViewCommandId.AddElementCommentToChat, BrowserViewCommandId.AddAreaScreenshotToChat]);
+		assert.ok(actions.find(action => action.id === BrowserViewCommandId.ToggleDevTools)?.enabled);
+		const selections: unknown[] = [];
+		f.service.toggleElementSelection = async (target, active, options) => { selections.push({ target, active, options }); };
+		await chat.actions[0]!.run();
+		assert.deepEqual(selections, [{ target: id, active: true, options: { mode: BrowserElementSelectionMode.Select, continuous: false, highlightFocusedElement: true } }]);
+		f.events.fire({ type: 'stateChanged', state: { ...info.state, elementSelectionState: { active: true, options: { mode: BrowserElementSelectionMode.Select } } } });
+		await chat.actions[0]!.run();
+		assert.equal((selections[1] as { active: boolean; }).active, false);
 	});
 
 	test('the browser tab command lists contextual pages and rechecks ownership before opening a stale selection', async () => {

@@ -19,6 +19,8 @@ import { URI } from '../../../../base/common/uri.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
+import { EditorInput } from '../../../common/editor/editorInput.js';
+import { EditorInputSerializers } from '../../editor/common/editorInputSerializer.js';
 
 interface HistoryEntry {
 	readonly editorId: string;
@@ -34,7 +36,7 @@ interface HistoryTimeline {
 /** Owns editor and location history and its command availability. */
 export class HistoryService extends Disposable implements IHistoryService {
 	private readonly recentlyOpened = new Map<string, IResourceEditorInput>();
-	private readonly recentlyClosed: Array<{ readonly input: IResourceEditorInput; readonly preferredEditorId: string; readonly index: number; }> = [];
+	private readonly recentlyClosed: Array<{ readonly resource: URI; readonly editorId: string | undefined; readonly restore: () => IResourceEditorInput; readonly preferredEditorId: string; readonly index: number; }> = [];
 	private readonly reopenQueue = new TaskQueue();
 	private readonly timelines = new Map<GoFilter, HistoryTimeline>([
 		[GoFilter.NONE, { entries: [], index: -1 }],
@@ -118,13 +120,14 @@ export class HistoryService extends Disposable implements IHistoryService {
 	private async reopenClosedEntry(): Promise<void> {
 		while (!this.isDisposed && this.recentlyClosed.length > 0) {
 			const closed = this.recentlyClosed.shift()!;
-			if (this.editorPart.activeGroup.inputs.some(input => input.editorId === closed.input.editorId && extUri.isEqual(input.resource, closed.input.resource))) {
+			if (this.editorPart.activeGroup.inputs.some(input => input.editorId === closed.editorId && extUri.isEqual(input.resource, closed.resource))) {
 				continue;
 			}
-			const choices = this.editorPart.getEditorPaneChoices(closed.input);
-			const preferredEditorId = choices.find(choice => choice.id === closed.preferredEditorId)?.id;
 			try {
-				const pane = await this.editorPart.openEditor(closed.input, { preferredEditorId, pinned: true, index: closed.index, ignoreError: true });
+				const input = closed.restore();
+				const choices = this.editorPart.getEditorPaneChoices(input);
+				const preferredEditorId = choices.find(choice => choice.id === closed.preferredEditorId)?.id;
+				const pane = await this.editorPart.openEditor(input, { preferredEditorId, pinned: true, index: closed.index, ignoreError: true });
 				if (!this.isDisposed) {
 					pane.focus();
 				}
@@ -145,11 +148,25 @@ export class HistoryService extends Disposable implements IHistoryService {
 		if (input.resource.scheme === Schemas.untitled) {
 			return;
 		}
-		const duplicate = this.recentlyClosed.findIndex(closed => closed.preferredEditorId === paneId && closed.input.editorId === input.editorId && extUri.isEqual(closed.input.resource, input.resource));
+		let restore: () => IResourceEditorInput;
+		try {
+			if (input instanceof EditorInput) {
+				// Live inputs can be disposed after the close event. Retain their restoration data instead.
+				const snapshot = EditorInputSerializers.serialize(input);
+				restore = () => EditorInputSerializers.deserialize(snapshot);
+			} else {
+				const resourceInput = input.toUntyped?.() ?? input;
+				restore = () => resourceInput;
+			}
+		} catch {
+			// An editor without restorable data must not interrupt its close.
+			return;
+		}
+		const duplicate = this.recentlyClosed.findIndex(closed => closed.preferredEditorId === paneId && closed.editorId === input.editorId && extUri.isEqual(closed.resource, input.resource));
 		if (duplicate >= 0) {
 			this.recentlyClosed.splice(duplicate, 1);
 		}
-		this.recentlyClosed.unshift({ input, preferredEditorId: paneId, index });
+		this.recentlyClosed.unshift({ resource: input.resource, editorId: input.editorId, restore, preferredEditorId: paneId, index });
 		if (this.recentlyClosed.length > 20) {
 			this.recentlyClosed.length = 20;
 		}

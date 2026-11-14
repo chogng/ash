@@ -43,6 +43,12 @@
 	--ash-actionBar-gap: var(--ash-spacing-size40);
 }
 
+.ash-sessions-tool-editor[data-editor-tool="browser"]
+	:is(.ash-tab-list-sizing-fit, .ash-tab-list-sizing-shrink)
+	.ash-tab {
+	max-width: 240px;
+}
+
 .ash-sessions-window[data-layout-style="flat"]
 	.ash-sessions-tool-editor
 	.ash-editor-group-header {
