@@ -254,6 +254,7 @@
 }
 
 .ash-chat-input-container {
+	cursor: text;
 	position: relative;
 	display: flex;
 	box-sizing: border-box;
@@ -266,6 +267,10 @@
 		var(--ash-chat-input-border, var(--ash-input-border));
 	border-radius: var(--ash-chat-input-radius, var(--ash-cornerRadius-large));
 	background: var(--ash-input-background);
+}
+
+.ash-chat-input-container > :is(.ash-toolbar, .ash-chat-staged-files) {
+	cursor: default;
 }
 
 .ash-chat-input-container > .ash-chat-drop-overlay {

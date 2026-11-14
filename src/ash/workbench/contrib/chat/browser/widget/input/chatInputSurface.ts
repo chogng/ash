@@ -40,6 +40,13 @@ export class ChatInputSurface<T extends IChatInputEditor> extends Disposable {
 		container.append(this.form);
 		this.form.append(editorHost);
 		this.editor = this._register(options.createEditor(editorHost));
+		this._register(addDisposableListener(this.form, 'mousedown', event => {
+			// Padding belongs to the input; descendants retain their own selection and action handling.
+			if (event.button !== 0 || event.defaultPrevented
+				|| (event.target !== this.form && event.target !== editorHost)) return;
+			event.preventDefault();
+			this.editor.focus();
+		}));
 		const actionViewItemProvider: ActionViewItemProvider = (action, presentation) =>
 			options.actionViewItemProvider(action, presentation)
 			?? (action instanceof ChatInputAction ? new ChatInputButtonViewItem(action) : undefined);
