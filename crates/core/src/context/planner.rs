@@ -1149,7 +1149,7 @@ fn estimate_thread_hint(hint: Option<&(ash_protocol::ToolCallId, String)>) -> Co
 
 fn estimate_tools(tools: &[ToolDefinition]) -> ContextTokenCount {
     tools.iter().fold(ContextTokenCount::ZERO, |total, tool| {
-        let bytes = serde_json::to_vec(tool).map_or(0, |encoded| encoded.len());
+        let bytes = ash_utils_string::serialized_json_bytes(tool).unwrap_or(0);
         total.saturating_add(estimate_bytes(bytes, TOOL_ITEM_OVERHEAD))
     })
 }
