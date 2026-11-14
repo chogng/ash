@@ -337,6 +337,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "comment-session",
+      "file": "comment-session.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "comment-session-filled",
+      "file": "comment-session-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "connectors",
       "file": "connectors.svg",
       "rendering": "symbolic"
@@ -399,6 +409,11 @@
     {
       "id": "dashboard",
       "file": "dashboard.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "data",
+      "file": "data.svg",
       "rendering": "symbolic"
     },
     {
@@ -499,6 +514,11 @@
     {
       "id": "discard-alt",
       "file": "discard-alt.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "docs",
+      "file": "docs.svg",
       "rendering": "symbolic"
     },
     {
@@ -1412,6 +1432,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "sheets",
+      "file": "sheets.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "sign-out",
       "file": "sign-out.svg",
       "rendering": "symbolic"
@@ -1419,6 +1444,11 @@
     {
       "id": "skill",
       "file": "skill.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "slides",
+      "file": "slides.svg",
       "rendering": "symbolic"
     },
     {
@@ -1674,6 +1704,11 @@
     {
       "id": "website",
       "file": "website.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "whiteboard",
+      "file": "whiteboard.svg",
       "rendering": "symbolic"
     },
     {
