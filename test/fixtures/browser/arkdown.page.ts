@@ -58,6 +58,10 @@ const fixture = {
 	get errors() { return [...errors]; },
 	mode(value: DocsEditorMode) { editor!.setMode(value); },
 	readOnly(value: boolean) { editor!.setReadOnly(value); },
+	insertBlock(value: string) { editor!.insertBlock(value); },
+	setHeading(level: number) { editor!.setHeading(level); },
+	setListKind(value: 'bullet' | 'ordered' | 'task') { editor!.setListKind(value); },
+	get formatting() { return editor!.getSelectionFormatting(); },
 	external(source: string) { model!.setValue(source); },
 };
 declare global { interface Window { arkdownFixture: typeof fixture; } }

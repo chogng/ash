@@ -42,6 +42,26 @@
 .stanza-arkdown-prose code {
 	font-family: var(--ash-font-family-monospace, monospace);
 }
+
+.stanza-arkdown-prose img {
+	max-width: 100%;
+	height: auto;
+}
+
+.stanza-arkdown-prose select[data-arkdown-dropdown] {
+	max-width: 100%;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-medium);
+	font: inherit;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+}
+
+.stanza-arkdown-prose select[data-arkdown-dropdown]:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
 .stanza-arkdown-prose a {
 	color: var(--ash-link-foreground);
 }

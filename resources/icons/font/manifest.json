@@ -386,7 +386,10 @@
     "docs": "E180",
     "sheets": "E181",
     "slides": "E182",
-    "whiteboard": "E183"
+    "whiteboard": "E183",
+    "checklist": "E184",
+    "dropdown": "E185",
+    "font": "E186"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -500,6 +503,7 @@
     "download-file": "fa78427e688f2c0b2213a09a75e3722289d56cc9a0f3a2148867c74ea4b3eb39",
     "download-tray": "81f81882e761c8ce97e04a7649fd936168d9362922b250744d886a5dbccaaeda",
     "download": "e3d4c6089ae8bb89ae289ebcddcdde2707d375cf6c7c3de8935b2ce41b648a2e",
+    "dropdown": "6ed3eafdc9adb91f9df267dcdc27725412b83bd9b4ae55ac208459e364fe4817",
     "edit-1": "53d355593fdb068c158a8cee481c653b4b3a1b199d070d181d3417da642fc684",
     "edit-2": "67de1d32fc1e81cf5139dd7d82aacc301406e0f73aa06bbf9b5be3ab1c805f08",
     "edit-line": "337591e661a0d15d64477ed01bd00077af025fe0e9fc5138a4790665d5be68ed",
@@ -531,6 +535,7 @@
     "folder": "c29a6aeac2d4e24d412dd8d8036ee9823ab902502c93c8963b7db8537fae9215",
     "folders": "ef8273eb5a0767f6f0732ecf7039a72a29c771045e93174e0be84b988d744aa8",
     "follow": "e404f0abbbc9219e03bb08c08f6bb1eb6c9bc352ada0f41b563790e8f63bcd70",
+    "font": "2a8b9899c28214080d351700fc3ed3f1e22bcc388e9c1b19109315d80020f7b1",
     "fork": "549f20def24fd380b0eea4af2e59af666c72d331150e4bbd79bcbd7f2f453566",
     "frame": "8bca307ca4fd327ea57bd6ea7ab47e60179a69dbfb269f7dc8a9d59f0366da97",
     "gear": "17973f7afcfa59fe1592288effdbeff2b7e3535d54efac1673e9ab2f5c148f17",
@@ -699,7 +704,6 @@
     "symbol-method": "4fbca508c88670a1b6be27b0d68deae2e79c1f5faf05403cd8bce4417e7a6a1b",
     "symbol-property": "d846752e135d0e3f3938a75b5d775a4927c0bb04df468f159a086c509bba1287",
     "sync": "065ab7b26a18d2f783f91d9fdd47be8644bb6b48bd11fd879f4d891f38c124ca",
-    "table": "6cbc10fe07eb4fb06921296350f50e08e0a4d9773e45549402ff86cdf4fe1f94",
     "tag": "e21f4607138f78c8f5bdf391713e1945e4c460f61b9009c811fa88346a2267e9",
     "target": "b6536dccead7936840c2f82e5c3112855ee5e2a0c735a7baad1125aeb99b1651",
     "terminal-cmd": "5bd7f052cb71dbebb67b1c5794c419399630d06751b978c8b6b242ffc274ea08",

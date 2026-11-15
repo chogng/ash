@@ -98,6 +98,7 @@ export class ArkdownEditorPane extends EditorPane {
 			this.copy = copy;
 			this.input = input;
 			lifetime.add(widget.onDidChangeMode(() => this.updateTitleArea()));
+			lifetime.add(widget.onDidChangeSelection(() => this.updateTitleArea()));
 			this.updateReadOnly();
 		} catch (error) { lifetime.dispose(); reference.dispose(); throw error; }
 	}
@@ -132,23 +133,33 @@ export class ArkdownEditorPane extends EditorPane {
 	getAccessibilityHelp(): readonly string[] { return [localize({ bundle: 'ash.arkdown', key: 'arkdownHelp' }, 'Edit the document directly. Use Control or Command+B for bold, Control or Command+I for italic, and Control or Command+Z to undo. Use Control or Command+Alt+0 through 6 for a paragraph or heading. Use Control or Command+Shift+7, 8, or 9 for numbered, bulleted, or task lists. In a table, Tab and Shift+Tab move between cells; Tab in the last cell adds a row. Show Markdown source opens the code editor on the same document; Show document returns to the formatted document. Changes save automatically. Export creates a separate copy. Read-only files cannot be edited. Collaborate creates or joins a room. Copy room ID shares its identifier; remote rooms also require an access token. Undo during collaboration affects local edits and preserves remote edits. Disconnected edits are retried after reconnection. Leave collaboration stops synchronization and keeps the current local document. Saving still writes the local file. Collaboration stays active when switching tabs or views; leave the room to stop it. Collaboration undo history is checkpointed after 256 operations or 16 MiB.'), localize({ bundle: 'ash.arkdown', key: 'remoteChangesHelp' }, 'Recent remote changes expands a session-local list of the last 20 received changes with connection labels and insertion or deletion previews. The affected ranges are highlighted in matching colors in the document and source views. These ranges describe received updates, not permanent text authorship. Connection IDs are not verified user names. The list is available in the accessible view and clears when leaving collaboration.')]; }
 
 	override getActions(): readonly IAction[] {
+		const roomId = this.collaborationSession?.roomId;
+		const collaborationLabel = roomId ? localize({ bundle: 'ash.arkdown', key: 'leaveCollaboration' }, 'Leave collaboration') : localize({ bundle: 'ash.arkdown', key: 'collaborate' }, 'Collaborate');
+		return [
+			{ id: 'arkdown.editor.collaborate', label: collaborationLabel, tooltip: roomId ? `${localize({ bundle: 'ash.arkdown', key: 'collaborationRoom' }, 'Room {0}', roomId)} · ${this.collaborationStatus(this.collaborationSession!.state)}` : collaborationLabel, icon: Lxicon.link, enabled: !!this.model && !this.connecting && (!this.readOnly || !!roomId), run: () => roomId ? this.stopCollaboration() : this.startCollaboration() },
+			...(roomId ? [{ id: 'arkdown.editor.copyRoom', label: localize({ bundle: 'ash.arkdown', key: 'copyRoom' }, 'Copy room ID'), tooltip: localize({ bundle: 'ash.arkdown', key: 'copyRoom' }, 'Copy room ID'), icon: Lxicon.copy, enabled: true, run: () => this.clipboard.writeText(roomId) }] : []),
+			...this.getEditingActions(),
+		];
+	}
+
+	/** The same editor-owned actions feed the docked toolbar and the document context menu. */
+	getEditingActions(): readonly IAction[] {
 		const source = this.getMode() === 'markdown';
 		const bold = localize({ bundle: 'ash.arkdown', key: 'bold' }, 'Bold');
 		const italic = localize({ bundle: 'ash.arkdown', key: 'italic' }, 'Italic');
 		const mode = source
 			? localize({ bundle: 'ash.arkdown', key: 'showDocument' }, 'Show document')
 			: localize({ bundle: 'ash.arkdown', key: 'showSource' }, 'Show Markdown source');
-		const roomId = this.collaborationSession?.roomId;
-		const collaborationLabel = roomId ? localize({ bundle: 'ash.arkdown', key: 'leaveCollaboration' }, 'Leave collaboration') : localize({ bundle: 'ash.arkdown', key: 'collaborate' }, 'Collaborate');
+		const formatting = this.widget?.getSelectionFormatting();
 		return [
-			{ id: 'arkdown.editor.collaborate', label: collaborationLabel, tooltip: roomId ? `${localize({ bundle: 'ash.arkdown', key: 'collaborationRoom' }, 'Room {0}', roomId)} · ${this.collaborationStatus(this.collaborationSession!.state)}` : collaborationLabel, icon: Lxicon.link, enabled: !!this.model && !this.connecting && (!this.readOnly || !!roomId), run: () => roomId ? this.stopCollaboration() : this.startCollaboration() },
-			...(roomId ? [{ id: 'arkdown.editor.copyRoom', label: localize({ bundle: 'ash.arkdown', key: 'copyRoom' }, 'Copy room ID'), tooltip: localize({ bundle: 'ash.arkdown', key: 'copyRoom' }, 'Copy room ID'), icon: Lxicon.copy, enabled: true, run: () => this.clipboard.writeText(roomId) }] : []),
 			{
 				id: 'arkdown.editor.bold', label: bold, tooltip: bold, icon: Lxicon.bold,
+				checked: formatting?.bold ?? false,
 				enabled: !!this.widget && !this.readOnly, run: () => this.widget?.format('**'),
 			},
 			{
 				id: 'arkdown.editor.italic', label: italic, tooltip: italic, icon: Lxicon.italic,
+				checked: formatting?.italic ?? false,
 				enabled: !!this.widget && !this.readOnly, run: () => this.widget?.format('_'),
 			},
 			{

@@ -12,3 +12,34 @@
 	min-width: 0;
 	min-height: 0;
 }
+
+/* Docs uses compact editing controls; canvas workspaces keep their larger tool targets. */
+.ash-docs-workspace > .ash-artifact-toolbar {
+	--ash-toolbar-actionSize: 28px;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-docs-workspace > .ash-artifact-toolbar .ash-artifact-toolbar-group .ash-button {
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+}
+
+.ash-docs-workspace > .ash-artifact-toolbar .ash-artifact-toolbar-group .ash-button:not(.icon-only) {
+	width: auto;
+	padding-inline: var(--ash-spacing-size120);
+}
+
+.ash-docs-workspace > .ash-artifact-toolbar .ash-button-secondary {
+	--ash-button-secondaryBackground: color-mix(in srgb, var(--ash-artifact-toolbar-foreground) 6%, var(--ash-artifact-toolbar-background));
+	--ash-widget-border: transparent;
+}
+
+[data-color-scheme="hcDark"] .ash-docs-workspace > .ash-artifact-toolbar .ash-button-secondary,
+[data-color-scheme="hcLight"] .ash-docs-workspace > .ash-artifact-toolbar .ash-button-secondary {
+	--ash-button-secondaryBackground: var(--ash-artifact-toolbar-background);
+	--ash-widget-border: var(--ash-contrastBorder);
+}
+
+.ash-docs-workspace > .ash-artifact-toolbar .ash-icon {
+	font-size: var(--ash-lxiconFontSize-large);
+}

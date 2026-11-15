@@ -42,7 +42,9 @@ Sites 尚未提供网站布局重排、路由文档和发布，完整领域约�
 
 Design 的标题和窗口操作使用共用的 Artifact 标题栏，编辑工具位于画布工具栏。保存副本和导出 SVG 可从标题栏的「导出」菜单打开，也可使用画布右键菜单。添加画板和导入图片可使用快捷键或右键菜单；自动保存失败时，右键菜单提供重试保存。点击左侧 Artifacts 导航返回创作主页。
 
-画布工作区共用底部居中的浮动工具栏 `ArtifactToolbar`。工具栏拥有外壳、动作视图与菜单生命周期；编辑器提供当前工具与编辑模式的动作，各贡献持有业务状态和自有导航控件。各工作区在各自的 `.contribution.ts` 中向 `ArtifactToolbar` 注册命令，菜单通过工作区实例的上下文键确定显示和启用状态。Slides 和 Sites 的页码导航由各自的页面导航组件挂载到工具栏。
+画布工作区和 Docs 共用底部居中的 `ArtifactToolbar`，右键菜单使用 `ArtifactContextMenu`。基座拥有呈现、动作视图与菜单生命周期，编辑器拥有选区、命令和业务状态。画布显式选择黑色外观，Docs 跟随窗口主题。Slides 和 Sites 的页码导航由各自的页面导航组件挂载到工具栏。
+
+贡献在 `.contribution.ts` 中通过 `Action2.menu` 注册到 `Menus.ArtifactToolbar` 或 `Menus.ArtifactContext`，使用 `ArtifactKindContext` 和编辑器作用域的上下文键控制显示与启用。两个入口均将来源编辑器作为动作参数传入；同一命令可注册到两个菜单。实例动作通过 `createActionGroup().setActions()` 和右键菜单的 `getActions()` 接入，状态仍由原编辑器维护。宿主负责停靠位置、右键前的命中选择和键盘菜单入口；隐藏或切换内容时关闭所属菜单。
 
 2026-11-14，Windows x64 当前源码构建（`a1e661125e`）通过 Desktop／App Server 自托管三步验收：Design 工具栏水平中心误差小于 2 CSS px，Motion 时间线与工具栏间隔 16 CSS px，切换 Code、Draw、Design 后只保留一条工具栏并隐藏时间线。语言包上限已修复，完整 Desktop 构建通过。复跑脚本为 `.build/ash-playwright-mcp/artifact-toolbar.cjs`，证据为 `.build/ash-playwright-mcp/evidence/artifact-toolbar-2026-11-14T13-22-03-039Z/report.html`；原始双窗口录像与 trace 保留在同目录。缺少 ffmpeg／ffprobe，未生成字幕视频。本轮未重跑完整单测编译。
 

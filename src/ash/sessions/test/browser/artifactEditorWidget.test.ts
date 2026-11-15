@@ -146,6 +146,12 @@ services.registerInstance(IContextMenuService, {
 	showContextMenu: delegate => {
 		contextMenu?.onHide?.(true);
 		contextMenu = delegate as IContextMenuDelegate;
+		delegate.cancellationToken?.onCancellationRequested(() => {
+			if (contextMenu === delegate) {
+				contextMenu = undefined;
+				delegate.onHide?.(true);
+			}
+		});
 	},
 	hideContextMenu: () => { contextMenu?.onHide?.(true); contextMenu = undefined; },
 });

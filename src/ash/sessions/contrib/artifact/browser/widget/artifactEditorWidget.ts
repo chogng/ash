@@ -12,7 +12,6 @@ import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.j
 import { Emitter } from '../../../../../base/common/event.js';
 import { localize } from '../../../../../nls.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { ArtifactCanvasMode, ArtifactCanvasTool } from '../../common/config/artifactCanvasEditorConfiguration.js';
 import type { ArtifactCanvasShape } from '../../common/model/artifactCanvasDocument.js';
 import { getArtifactCanvasShapeEntries, hitTestArtifactCanvasShapes } from '../../common/model/hitTest.js';
@@ -28,6 +27,7 @@ import { ArtifactCanvasMediaPreview } from '../rendering/artifactCanvasMedia.js'
 import { CanvasViewport } from '../../../canvas/common/canvasViewport.js';
 import { ArtifactCanvasInputController } from '../controller/artifactCanvasInputController.js';
 import { ArtifactToolbar } from './artifactToolbar.js';
+import { ArtifactContextMenu } from './artifactContextMenu.js';
 import type { WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { ArtifactEditorActions } from '../artifactEditorActions.js';
 import type { ArtifactCanvasEditorContributionFactory, IArtifactCanvasView, IArtifactCanvasDrawingContribution, IArtifactCanvasMotionContribution, IArtifactCanvasPropertiesContribution, IArtifactCanvasCodeContribution, IArtifactCanvasPrototypeContribution } from '../artifactCanvasEditorBrowser.js';
@@ -48,7 +48,7 @@ export class ArtifactEditorWidget extends Disposable {
 	private readonly properties: IArtifactCanvasPropertiesContribution;
 	private readonly contentDomNode: HTMLElement;
 	private readonly messageDomNode: HTMLElement;
-	private contextMenuVisible = false;
+	private readonly contextMenu: ArtifactContextMenu;
 	private vectorSelectionStatus: string | undefined;
 	private readonly toolbar: ArtifactToolbar;
 	private readonly toolActions: WorkbenchToolBar;
@@ -69,7 +69,6 @@ export class ArtifactEditorWidget extends Disposable {
 		public readonly documentController: ArtifactCanvasDocumentController,
 		contributionsFactory: ArtifactCanvasEditorContributionFactory,
 		@IContextKeyService contextKeys: IContextKeyService,
-		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@ICommandService commandService: ICommandService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -81,12 +80,16 @@ export class ArtifactEditorWidget extends Disposable {
 		this._register(toDisposable(() => {
 			this.cancelGesture();
 			focusedViews.delete(this.domNode);
-			if (this.contextMenuVisible) { this.contextMenus.hideContextMenu(); }
 		}));
 		this.canvas = this._register(contributionsFactory.createCanvasView(ownerDocument));
 		this.canvas.setTool(this.tool);
 		const stage = h(ownerDocument, 'div', { className: 'ash-sessions-design-stage' });
-		this.toolbar = this._register(instantiationService.createInstance(ArtifactToolbar, ownerDocument));
+		this.toolbar = this._register(instantiationService.createInstance(ArtifactToolbar, ownerDocument, { appearance: 'canvas' }));
+		this.contextMenu = this._register(instantiationService.createInstance(ArtifactContextMenu, {
+			getActions: () => this.getContextMenuActions(),
+			getActionsContext: () => this,
+			menuClassName: 'ash-canvas-editor-menu',
+		}));
 		this.toolActions = this.toolbar.createActionGroup(localize('sessions.artifacts.canvasTools', 'Canvas tools'));
 		this.modeActions = this.toolbar.createActionGroup(localize('sessions.artifacts.canvasEditorModes', 'Editor modes'));
 		this.editorActions = new ArtifactEditorActions(
@@ -197,7 +200,7 @@ export class ArtifactEditorWidget extends Disposable {
 			this.toolbar.hideMenu();
 			this.cancelGesture();
 			this.properties.cancel();
-			if (this.contextMenuVisible) this.contextMenus.hideContextMenu();
+			this.contextMenu.hide();
 		}
 		this.motion.setActive(visible && this.mode === ArtifactCanvasMode.Motion);
 	}
@@ -418,13 +421,7 @@ export class ArtifactEditorWidget extends Disposable {
 	public showContextMenu(anchor: ContextMenuAnchor, restoreFocus: () => void = () => this.focus()): void {
 		this.cancelGesture();
 		this.focus();
-		this.contextMenus.showContextMenu({
-			getAnchor: () => anchor,
-			getActions: () => this.getContextMenuActions(),
-			getMenuClassName: () => 'ash-canvas-editor-menu',
-			onHide: () => { this.contextMenuVisible = false; restoreFocus(); },
-		});
-		this.contextMenuVisible = true;
+		this.contextMenu.show(anchor, restoreFocus);
 	}
 
 	private getContextMenuActions(): readonly IAction[] {

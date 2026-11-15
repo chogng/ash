@@ -6,6 +6,26 @@ import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 suite('Canvas editor toolbar reuses shared action views', () => {
 	const browser = useBrowserTests();
 	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		test(`document toolbar follows the window surface in ${theme}`, async () => {
+			const { page } = browser;
+			await page.goto(`/artifactEditorToolbar.html?theme=${theme}&document`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			const appearance = await page.locator('.ash-artifact-toolbar').evaluate(element => {
+				const styles = getComputedStyle(element);
+				const reference = element.ownerDocument.createElement('div');
+				reference.style.backgroundColor = 'var(--ash-menu-background)';
+				reference.style.color = 'var(--ash-foreground)';
+				element.parentElement!.append(reference);
+				const expected = getComputedStyle(reference);
+				const result = { background: styles.backgroundColor, foreground: styles.color, expectedBackground: expected.backgroundColor, expectedForeground: expected.color, shadow: styles.boxShadow };
+				reference.remove();
+				return result;
+			});
+			assert.equal(appearance.background, appearance.expectedBackground);
+			assert.equal(appearance.foreground, appearance.expectedForeground);
+			if (theme.startsWith('hc')) assert.equal(appearance.shadow, 'none');
+		});
+
 		test(`preserves grouped choices, geometry and keyboard focus in ${theme}`, async () => {
 			const { page } = browser;
 			await page.goto(`/artifactEditorToolbar.html?theme=${theme}`);
@@ -64,5 +84,36 @@ suite('Canvas editor toolbar reuses shared action views', () => {
 		await expect(tools.getByRole('button', { name: '选区（V）', exact: true })).toBeVisible();
 		await tools.getByRole('button', { name: '选择工具', exact: true }).click();
 		await expect(page.getByRole('menuitemradio', { name: '移动画布（H）', exact: true })).toBeVisible();
+	});
+
+	test('registered actions share originating context, visibility and menu lifecycle', async () => {
+		const { page } = browser;
+		await page.goto('/artifactEditorToolbar.html?contributions');
+		const inspect = page.getByRole('button', { name: 'Inspect artifact', exact: true });
+		await inspect.click();
+		await expect(page.locator('output')).toHaveText('originating-artifact');
+		const surface = page.getByText('Artifact surface', { exact: true });
+		await surface.focus();
+		await surface.press('Shift+F10');
+		const item = page.getByRole('menuitem', { name: 'Inspect artifact', exact: true });
+		await expect(item).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(surface).toBeFocused();
+		await surface.click({ button: 'right' });
+		await item.click();
+		await expect(page.locator('output')).toHaveText('originating-artifact');
+		await page.evaluate(() => window.ashArtifactEditorToolbarFixture.setKind('docs'));
+		await expect(inspect).toHaveCount(0);
+		await surface.click({ button: 'right' });
+		await expect(page.getByRole('menu')).toHaveCount(0);
+		await page.evaluate(() => window.ashArtifactEditorToolbarFixture.setKind('design'));
+		await surface.press('Shift+F10');
+		await expect(item).toBeVisible();
+		await page.evaluate(() => window.ashArtifactEditorToolbarFixture.hideMenu());
+		await expect(page.getByRole('menu')).toHaveCount(0);
+		await surface.press('Shift+F10');
+		await expect(item).toBeVisible();
+		await page.evaluate(() => window.ashArtifactEditorToolbarFixture.dispose());
+		await expect(page.getByRole('menu')).toHaveCount(0);
 	});
 });

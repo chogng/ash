@@ -3,7 +3,7 @@ import { ArkdownEditorPane } from './arkdown/arkdownEditorPane.js';
 import type { ArkdownEditor } from './arkdown/arkdownEditor.js';
 import { MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { IArtifactAutoSaveService } from '../../../services/artifactAutoSave/common/artifactAutoSaveService.js';
-import { h, type IDimension } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Action } from '../../../../base/common/actions.js';
 import { isNative } from '../../../../base/common/platform.js';
 import { basename, extUri } from '../../../../base/common/resources.js';
@@ -12,6 +12,8 @@ import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
@@ -25,6 +27,10 @@ import { DOCS_DEFAULT_MODE_SETTING, DOCS_ARKDOWN_EDITOR_ID, type DocsEditorMode 
 import type { ISessionsEditorPage } from '../../../browser/parts/editorPart.js';
 import { ArtifactTitleBarWidget } from '../../artifact/browser/artifactTitleBarWidget.js';
 import { ArtifactTitleActions } from '../../artifact/browser/artifactTitleActions.js';
+import { ArtifactToolbar } from '../../artifact/browser/widget/artifactToolbar.js';
+import { ArtifactContextMenu } from '../../artifact/browser/widget/artifactContextMenu.js';
+import { ArtifactKindContext } from '../../../common/contextkeys.js';
+import { DocsToolbar } from './docsToolbar.js';
 
 /** Docs presentation over Arkdown and the shared file-backed text working copy. */
 export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditorPage {
@@ -36,6 +42,9 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 	private documentInput: IResourceEditorInput | undefined;
 	private readonly autoSaveScope = this._register(new MutableDisposable());
 	private exportAction!: Action;
+	private toolbar!: ArtifactToolbar;
+	private docsToolbar!: DocsToolbar;
+	private contextMenu!: ArtifactContextMenu;
 	public get titlebarContent(): HTMLElement { return this.titlebar.domNode; }
 	public get workingCopy(): EditorWorkingCopy | undefined { return this.editor.workingCopy; }
 
@@ -48,6 +57,7 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 		@IArtifactAutoSaveService private readonly autoSave: IArtifactAutoSaveService,
 		@IFileTextModelService private readonly models: IFileTextModelService,
 		@IWorkingCopyBackupService private readonly backups: IWorkingCopyBackupService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
 		super(DOCS_ARKDOWN_EDITOR_ID, theme, storage);
 		this.editor = this._register(instantiation.createInstance(ArkdownEditorPane, { id: DOCS_ARKDOWN_EDITOR_ID, onSave }));
@@ -62,9 +72,33 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 		this._register(titleActions.onDidChangeHandoffAvailability(() => { this.titlebar.closeTitleMenu(); this.titlebar.refreshTitleActions(); }));
 		this.titlebar.setTitleActions(() => this.documentInput ? titleActions.getActions({ title: this.documentInput.label ?? basename(this.documentInput.resource), getCodeAttachment: () => ({ name: resourceFileName(basename(this.documentInput!.resource), 'text/markdown'), content: this.editor.getControl()?.getText() ?? '' }) }) : []);
 		this.body = h(document, 'div', { className: 'ash-docs-workspace-body' });
-		this.root.append(this.body);
+		const context = this._register(this.contextKeys.createScoped(this.root));
+		ArtifactKindContext.bindTo(context).set('docs');
+		const scopedInstantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, context])));
+		this.toolbar = this._register(scopedInstantiation.createInstance(ArtifactToolbar, document, {}));
+		this.docsToolbar = this._register(scopedInstantiation.createInstance(DocsToolbar, this.editor, this.toolbar, () => this.documentInput?.label ?? (this.documentInput ? basename(this.documentInput.resource) : '')));
+		this.toolbar.setWorkspaceContext(this);
+		this.contextMenu = this._register(scopedInstantiation.createInstance(ArtifactContextMenu, {
+			getActions: () => this.docsToolbar.getContextActions(),
+			getActionsContext: () => this,
+		}));
+		this.root.append(this.body, this.toolbar.domNode);
 		parent.append(this.root);
 		this.editor.create(this.body);
+		// The source editor retains its own text-editing menu; the rich document uses Artifact actions.
+		const isDocumentTarget = (target: EventTarget | null): boolean => !!target && this.editor.getControl()?.getMode() === 'rich' && this.body.contains(target as Node);
+		this._register(addDisposableListener(this.body, 'contextmenu', event => {
+			if (event.defaultPrevented || !isDocumentTarget(event.target)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.contextMenu.show({ x: event.clientX, y: event.clientY, targetWindow: document.defaultView! }, () => this.editor.focus());
+		}));
+		this._register(addDisposableListener(this.body, 'keydown', event => {
+			if (event.defaultPrevented || !isDocumentTarget(event.target) || !(event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.contextMenu.show(this.editor.getControl()!.domNode, () => this.editor.focus());
+		}));
 		super.create(this.root);
 		this.exportAction = this._register(new Action('sessions.docs.export.markdown', localize({ bundle: 'ash.docs', key: 'exportMarkdown' }, 'Markdown file (.md)'), '', true, () => this.exportMarkdown()));
 		this.refreshActions();
@@ -72,6 +106,7 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 
 	override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.titlebar.closeTitleMenu();
+		this.hideMenus();
 		// Existing shared models already own live edits. New models can recover a migrated draft.
 		const backup = this.models.getModel(input.resource) ? undefined : await this.backups.resolve(input.resource);
 		signal.throwIfAborted();
@@ -85,18 +120,24 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 		this.refreshActions();
 	}
 
-	override clearInput(): void { this.titlebar?.closeTitleMenu(); this.autoSaveScope.clear(); this.documentInput = undefined; this.editor.clearInput(); }
-	override layout(dimension: IDimension): void { this.root.style.width = `${dimension.width}px`; this.root.style.height = `${dimension.height}px`; this.editor.layout(dimension); }
+	override clearInput(): void { this.titlebar?.closeTitleMenu(); this.hideMenus(); this.autoSaveScope.clear(); this.documentInput = undefined; this.editor.clearInput(); }
+	override layout(dimension: IDimension): void {
+		this.root.style.width = `${dimension.width}px`;
+		this.root.style.height = `${dimension.height}px`;
+		this.editor.layout({ width: this.body.clientWidth, height: this.body.clientHeight });
+	}
 	override focus(): void { this.editor.focus(); }
-	override setVisible(visible: boolean): void { super.setVisible(visible); this.editor.setVisible(visible); if (!visible) this.titlebar?.closeTitleMenu(); }
+	override setVisible(visible: boolean): void { super.setVisible(visible); this.editor.setVisible(visible); if (!visible) { this.titlebar?.closeTitleMenu(); this.hideMenus(); } }
 	override getControl(): ArkdownEditor | undefined { return this.editor.getControl(); }
 	get isDirty(): boolean { return this.editor.isDirty; }
 	get hasExternalChange(): boolean { return this.editor.hasExternalChange; }
 	async save(options?: ISaveOptions): Promise<void> { await this.editor.save(options); }
 	async saveAs(resource: URI): Promise<void> { await this.editor.saveAs(resource); }
-	containsAccessibilityFocus(target: HTMLElement): boolean { return this.editor.containsAccessibilityFocus(target); }
+	containsAccessibilityFocus(target: HTMLElement): boolean { return this.toolbar.domNode.contains(target) || this.editor.containsAccessibilityFocus(target); }
 	getAccessibleContent(): string { return this.editor.getAccessibleContent(); }
-	getAccessibilityHelp(): readonly string[] { return this.editor.getAccessibilityHelp(); }
+	getAccessibilityHelp(): readonly string[] {
+		return [...this.editor.getAccessibilityHelp(), localize({ bundle: 'ash.docs', key: 'editingToolsHelp' }, 'The bottom toolbar provides Font, Table, Image, Checklist, Dropdown, More, Discuss document and Ask Ash. Use Tab to reach it and arrow keys to choose an action. Font opens formatting and heading choices. More contains lists, code blocks, dividers, dates and Markdown source. Dropdown inserts a labeled choice block; its selection saves with the document and supports undo. Discuss document opens the conversation. Ask Ash adds the selection or document to the chat draft without sending. Right-click the document or press Shift+F10 to open its context menu. Escape closes the menu and returns to the document.')];
+	}
 	exportText(format: DocumentTextFormat): string { return (format === 'markdown' ? this.editor.getControl()?.getText() : this.editor.getControl()?.getPlainText()) ?? ''; }
 	getArtifactFormats() { return [{ id: 'markdown', label: localize({ bundle: 'ash.docs', key: 'exportMarkdown' }, 'Markdown file (.md)'), extension: 'md', mimeType: 'text/markdown', canImport: false }]; }
 	async exportArtifact(format: string, signal: AbortSignal): Promise<Uint8Array> {
@@ -107,9 +148,13 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 
 	private refreshActions(): void {
 		if (!this.exportAction) return;
-		this.titlebar.setActions([
-			...this.editor.getActions(),
-		], [this.exportAction]);
+		const editing = this.editor.getEditingActions();
+		this.docsToolbar.update();
+		this.titlebar.setActions(this.editor.getActions().filter(action => !editing.some(edit => edit.id === action.id)), [this.exportAction]);
+	}
+	private hideMenus(): void {
+		this.toolbar?.hideMenu();
+		this.contextMenu?.hide();
 	}
 	private async exportMarkdown(): Promise<void> {
 		const input = this.documentInput;

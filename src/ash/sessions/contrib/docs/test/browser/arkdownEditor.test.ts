@@ -11,6 +11,45 @@ suite('Arkdown document editing', () => {
 		await expect(browser.page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await browser.page.evaluate(({ source, mode }) => window.arkdownFixture.mount(source, mode), { source, mode });
 	};
+
+	test('toolbar inserts whole blocks and structural edits share document undo', async () => {
+		await mount('alpha beta');
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await body.locator('p').click();
+		await browser.page.evaluate(() => window.arkdownFixture.insertBlock('| A | B |\n| --- | --- |\n|  |  |'));
+		await expect(body.locator('table')).toBeVisible();
+		assert.ok((await browser.page.evaluate(() => window.arkdownFixture.source)).startsWith('alpha beta\n\n| A | B |'));
+		await body.press('ControlOrMeta+z');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), 'alpha beta');
+		await body.locator('p').click();
+		await browser.page.evaluate(() => window.arkdownFixture.setHeading(2));
+		await expect(body.locator('h2')).toHaveText('alpha beta');
+		await body.press('ControlOrMeta+z');
+		await browser.page.evaluate(() => window.arkdownFixture.setListKind('task'));
+		await expect(body.getByRole('img', { name: 'Incomplete task' })).toBeVisible();
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.formatting.list), 'task');
+	});
+
+	test('dropdown selection persists in source, supports undo and remains safe and read-only', async () => {
+		const source = '```ash-dropdown\n{"label":"Status","options":["Todo","<script>Done</script>"],"selected":0}\n```\n\n';
+		await mount(source);
+		const select = browser.page.getByRole('combobox', { name: 'Status', exact: true });
+		await expect(select).toHaveValue('Todo');
+		await select.selectOption({ label: '<script>Done</script>' });
+		await expect(select).toHaveValue('<script>Done</script>');
+		assert.ok((await browser.page.evaluate(() => window.arkdownFixture.source)).includes('"selected":1'));
+		assert.equal(await browser.page.locator('.stanza-arkdown-prose script').count(), 0);
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.plainText), 'Status: <script>Done</script>');
+		await browser.page.getByRole('textbox', { name: 'Document body', exact: true }).press('ControlOrMeta+z');
+		await expect(select).toHaveValue('Todo');
+		await browser.page.evaluate(() => window.arkdownFixture.readOnly(true));
+		await expect(select).toBeDisabled();
+		await browser.page.evaluate(() => window.arkdownFixture.readOnly(false));
+		await expect(select).toBeEnabled();
+		await mount('```ash-dropdown\n{"selected":99}\n```');
+		await expect(browser.page.getByRole('combobox')).toHaveCount(0);
+		await expect(browser.page.locator('pre')).toContainText('selected');
+	});
 	test('retained collaboration highlights stay isolated after reloading editors', async () => {
 		await mount('Foreground content');
 		const initialRules = await browser.page.evaluate(() => [...document.styleSheets].flatMap(sheet => [...sheet.cssRules]).filter(rule => rule.cssText.includes('::highlight(arkdown-')).length);

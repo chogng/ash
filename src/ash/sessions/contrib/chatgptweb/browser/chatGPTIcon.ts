@@ -281,7 +281,7 @@ const ashIconsByWebName = new Map<string, Icon>(([
 	[Lxicon.square, ['square-table-legend']],
 	[Lxicon.stopCircle, ['stop-outline']],
 	[Lxicon.sync, ['loop-legacy']],
-	[Lxicon.table, ['file-spreadsheet', 'table-filled']],
+	[Lxicon.sheets, ['file-spreadsheet', 'table-filled']],
 	[Lxicon.terminal, ['square-code']],
 	[Lxicon.text, ['select-text']],
 	[Lxicon.thumbsdown, ['thumb-down']],

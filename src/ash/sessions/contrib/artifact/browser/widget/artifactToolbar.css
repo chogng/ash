@@ -1,17 +1,19 @@
 .ash-artifact-toolbar {
 	--ash-toolbar-actionSize: 32px;
-	--ash-button-foreground: var(--ash-sessions-design-chromeForeground);
+	--ash-artifact-toolbar-background: var(--ash-menu-background);
+	--ash-artifact-toolbar-foreground: var(--ash-foreground);
+	--ash-button-foreground: var(--ash-artifact-toolbar-foreground);
 	--ash-actionBar-toggledBackground: color-mix(
 		in srgb,
-		var(--ash-sessions-design-chromeForeground) 20%,
-		var(--ash-sessions-design-chromeBackground)
+		var(--ash-artifact-toolbar-foreground) 20%,
+		var(--ash-artifact-toolbar-background)
 	);
 	--ash-button-hoverBackground: var(--ash-actionBar-toggledBackground);
 	--ash-toolbar-hoverBackground: var(--ash-actionBar-toggledBackground);
 	--ash-button-activeBackground: color-mix(
 		in srgb,
-		var(--ash-sessions-design-chromeForeground) 30%,
-		var(--ash-sessions-design-chromeBackground)
+		var(--ash-artifact-toolbar-foreground) 30%,
+		var(--ash-artifact-toolbar-background)
 	);
 
 	display: flex;
@@ -25,11 +27,16 @@
 	padding: var(--ash-spacing-size60);
 	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	border-radius: var(--ash-cornerRadius-xLarge);
-	background: var(--ash-sessions-design-chromeBackground);
-	color: var(--ash-sessions-design-chromeForeground);
+	background: var(--ash-artifact-toolbar-background);
+	color: var(--ash-artifact-toolbar-foreground);
 	box-shadow: 0 4px 16px var(--ash-widget-shadow);
 	overflow-x: auto;
 	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-artifact-toolbar.canvas {
+	--ash-artifact-toolbar-background: var(--ash-sessions-design-chromeBackground);
+	--ash-artifact-toolbar-foreground: var(--ash-sessions-design-chromeForeground);
 }
 
 .ash-artifact-toolbar-group .ash-button.ash-button-standard {
@@ -41,6 +48,10 @@
 .ash-artifact-toolbar-group .ash-dropdown-with-primary-dropdown > .ash-button {
 	width: 20px;
 	min-width: 0;
+}
+
+.ash-artifact-toolbar-group .ash-button.icon-only > .ash-dropdown-menu-indicator {
+	display: none;
 }
 
 /* Menus live in the context-view host, outside the canvas DOM. */

@@ -1,6 +1,8 @@
 import './artifactToolbar.css';
 import { h } from '../../../../../base/browser/dom.js';
-import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { DropdownMenuActionViewItem } from '../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
+import { AnchorPosition } from '../../../../../base/browser/ui/contextview/contextview.js';
 import type { IContextMenuProvider } from '../../../../../base/browser/contextmenu.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -17,6 +19,9 @@ registerColor('sessions.design.chromeBackground', { light: '#181818', dark: '#18
 registerColor('sessions.design.chromeForeground', { light: '#f0f0f0', dark: '#f0f0f0', hcDark: '#ffffff', hcLight: '#000000' }, { owner: 'sessions.design', description: localize('color.sessions.design.chromeForeground', 'Foreground of the canvas editor toolbar and menus.') });
 
 export interface ArtifactToolbarAction extends IAction {
+	readonly menu?: readonly IAction[];
+	readonly iconOnly?: boolean;
+	readonly presentation?: ActionViewItemOptions['buttonPresentation'];
 	readonly dropdown?: { readonly label: string; readonly actions: readonly IAction[]; };
 }
 
@@ -36,19 +41,23 @@ export class ArtifactToolbar extends Disposable {
 
 	constructor(
 		ownerDocument: Document,
+		options: { readonly appearance?: 'canvas' },
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IMenuService menuService: IMenuService,
 		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
 		this.domNode = h(ownerDocument, 'div', { className: 'ash-artifact-toolbar' });
+		this.domNode.classList.toggle('canvas', options.appearance === 'canvas');
 		this.menuProvider = {
 			showContextMenu: delegate => {
 				contextMenus.showContextMenu({
 					...delegate,
-					getMenuClassName: () => 'ash-canvas-editor-menu',
-					iconPlacement: 'leading-with-trailing-check',
-					getCheckedActionsRepresentation: () => 'radio',
+					anchorPosition: AnchorPosition.Above,
+					gap: delegate.gap ?? 8,
+					getMenuClassName: () => options.appearance === 'canvas' ? 'ash-canvas-editor-menu' : '',
+					iconPlacement: options.appearance === 'canvas' ? 'leading-with-trailing-check' : 'trailing',
+					getCheckedActionsRepresentation: options.appearance === 'canvas' ? () => 'radio' : delegate.getCheckedActionsRepresentation,
 					onHide: cancelled => {
 						this.menuVisible = false;
 						delegate.onHide?.(cancelled);
@@ -65,6 +74,7 @@ export class ArtifactToolbar extends Disposable {
 			ariaLabel: localize('sessions.artifacts.workspaceActions', 'Workspace actions'),
 			contextKeyService: contextKeys,
 			menuOptions: { shouldForwardArgs: true },
+			highlightToggledItems: true,
 		}));
 		this.workspaceToolbar.element.classList.add('ash-artifact-toolbar-workspace');
 	}
@@ -77,8 +87,9 @@ export class ArtifactToolbar extends Disposable {
 			ariaLabel,
 			highlightToggledItems: true,
 			actionViewItemProvider: (action, options) => {
-				const { dropdown } = action as ArtifactToolbarAction;
-				if (!dropdown) return new ButtonActionViewItem(action, { ...options, iconOnly: true });
+				const { dropdown, menu, iconOnly = true, presentation } = action as ArtifactToolbarAction;
+				if (menu) return new DropdownMenuActionViewItem(action, menu, this.menuProvider, { ...options, iconOnly });
+				if (!dropdown) return new ButtonActionViewItem(action, { ...options, iconOnly, buttonPresentation: presentation ?? options.buttonPresentation });
 				const trigger: IAction = { id: `${action.id}.menu`, label: dropdown.label, tooltip: dropdown.label, enabled: action.enabled, run: () => undefined };
 				return new DropdownWithPrimaryActionViewItem(action, trigger, () => dropdown.actions, this.menuProvider, { ...options, iconOnly: true });
 			},

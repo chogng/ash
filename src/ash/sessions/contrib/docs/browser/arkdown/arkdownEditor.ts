@@ -16,6 +16,7 @@ import type { ArkdownNode, ArkdownOperation, ArkdownProjection, ArkdownRange, Ar
 import type { DocsEditorMode } from '../../common/docs.js';
 import type { BufferRemoteChange } from '../../../../../workbench/services/collab/common/bufferCollabService.js';
 import type { IEditorDecorationsCollection } from '../../../../../editor/common/editorCommon.js';
+import { readDocsDropdown, writeDocsDropdown } from '../../common/docsDropdown.js';
 
 const collaboratorColors = ['blue', 'purple', 'green', 'orange', 'red', 'yellow'];
 
@@ -57,6 +58,8 @@ export class ArkdownEditor extends Disposable {
 	private terminal: HTMLElement | undefined;
 	private readonly modeChanged = this._register(new Emitter<DocsEditorMode>());
 	readonly onDidChangeMode = this.modeChanged.event;
+	private readonly selectionChanged = this._register(new Emitter<void>());
+	readonly onDidChangeSelection = this.selectionChanged.event;
 
 	constructor(parent: HTMLElement, private readonly model: TextModel, private readonly runtime: ArkdownRuntime, mode: DocsEditorMode,
 		private readonly onError: (error: unknown) => void, private readonly openLink: (url: string) => void,
@@ -108,7 +111,25 @@ export class ArkdownEditor extends Disposable {
 			const link = (event.target as Element).closest?.('a[data-href]');
 			if (link && (event.ctrlKey || event.metaKey)) { event.preventDefault(); this.openLink(link.getAttribute('data-href')!); }
 		}));
-		this._register(addDisposableListener(document, 'selectionchange', () => { if (!this.composition && this.hasFocus() && this.containsSelection()) this.selection = this.readSelection(); }));
+		this._register(addDisposableListener(document, 'selectionchange', () => {
+			if (this.composition || !this.hasFocus() || !this.containsSelection()) return;
+			const next = this.readSelection();
+			if (next.start === this.selection.start && next.end === this.selection.end) return;
+			this.selection = next;
+			this.selectionChanged.fire();
+		}));
+		this._register(addDisposableListener(this.prose, 'change', event => {
+			const select = (event.target as Element).closest<HTMLSelectElement>('select[data-arkdown-dropdown]');
+			const range = select && this.ranges.get(select);
+			if (!select || !range || this.readOnly) return;
+			const value = readDocsDropdown(this.model.getValue().slice(range.start, range.end));
+			if (!value) return;
+			const source = writeDocsDropdown({ ...value, selected: select.selectedIndex });
+			this.replace(range, source + (this.model.getValue().slice(range.start, range.end).endsWith('\n') ? '\n' : ''), false);
+			for (const next of this.prose.querySelectorAll<HTMLSelectElement>('select[data-arkdown-dropdown]')) {
+				if (this.ranges.get(next)?.start === range.start) { next.focus(); break; }
+			}
+		}));
 		// Capture before a toolbar pointer press changes focus and collapses the DOM selection.
 		this._register(addDisposableListener(document, 'pointerdown', event => { if (this.hasFocus() && !this.domNode.contains(event.target as Node)) this.selection = this.readSelection(); }, true));
 		this._register(addDisposableListener(this.prose, 'keydown', event => this.keydown(event)));
@@ -133,12 +154,18 @@ export class ArkdownEditor extends Disposable {
 		this.render(false);
 	}
 
-	setReadOnly(value: boolean): void { this.readOnly = value; this.prose.contentEditable = String(!value); this.prose.setAttribute('aria-readonly', String(value)); this.sourceEditor?.updateOptions({ readOnly: value }); }
+	setReadOnly(value: boolean): void {
+		this.readOnly = value;
+		this.prose.contentEditable = String(!value);
+		this.prose.setAttribute('aria-readonly', String(value));
+		this.sourceEditor?.updateOptions({ readOnly: value });
+		for (const select of this.prose.querySelectorAll<HTMLSelectElement>('select[data-arkdown-dropdown]')) select.disabled = value;
+	}
 	setMode(mode: DocsEditorMode): void { this.selection = this.readSelection(); this.mode = mode; this.render(false); this.modeChanged.fire(this.mode); this.focus(); }
 	getMode(): DocsEditorMode { return this.mode; }
 	focus(): void { if (this.mode === 'rich') this.prose.focus(); else this.ensureSourceEditor().focus(); this.restoreSelection(); }
 	getText(): string { return this.model.getValue(); }
-	getAccessibleText(): string { return [this.mode === 'markdown' ? this.model.getValue() : this.prose.innerText, this.remoteHistory.hidden ? '' : `${this.remoteSummary.textContent}\n${this.remoteList.textContent}`].filter(Boolean).join('\n\n'); }
+	getAccessibleText(): string { return [this.mode === 'markdown' ? this.model.getValue() : this.getPlainText(), this.remoteHistory.hidden ? '' : `${this.remoteSummary.textContent}\n${this.remoteList.textContent}`].filter(Boolean).join('\n\n'); }
 	setRemoteChanges(changes: readonly BufferRemoteChange[]): void {
 		this.remoteChanges = changes;
 		this.remoteHistory.hidden = !changes.length;
@@ -223,6 +250,11 @@ export class ArkdownEditor extends Disposable {
 		// innerText depends on visibility; exports also work while source mode hides prose.
 		const read = (node: Node): string => {
 			if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
+			if (node.nodeName === 'IMG') return (node as HTMLImageElement).alt;
+			if (node.nodeName === 'SELECT') {
+				const select = node as HTMLSelectElement;
+				return `${select.getAttribute('aria-label')}: ${select.selectedOptions[0]?.textContent ?? ''}`;
+			}
 			const text = Array.from(node.childNodes, read).join('');
 			const tag = node.nodeName;
 			if (/^(?:P|H[1-6]|PRE|BLOCKQUOTE|UL|OL|ASIDE)$/u.test(tag)) return text + '\n\n';
@@ -235,6 +267,38 @@ export class ArkdownEditor extends Disposable {
 	selectAll(): void { this.selection = { start: 0, end: this.model.getValueLength() }; this.restoreSelection(); }
 	undo(): void { if (!this.readOnly && !this.composition) this.model.undo(); }
 	redo(): void { if (!this.readOnly && !this.composition) this.model.redo(); }
+	getSelectedText(): string { const range = this.readSelection(); return this.model.getValue().slice(range.start, range.end); }
+	getSelectionFormatting(): { readonly bold: boolean; readonly italic: boolean; readonly heading: number; readonly list?: 'bullet' | 'ordered' | 'task'; } {
+		const range = this.readSelection();
+		let bold = false, italic = false, heading = 0;
+		let list: 'bullet' | 'ordered' | 'task' | undefined;
+		const visit = (nodes: readonly ArkdownNode[]): void => {
+			for (const node of nodes) {
+				if (node.range.start > range.start || node.range.end < range.end) continue;
+				if (node.kind === 'strong') bold = true;
+				if (node.kind === 'emphasis') italic = true;
+				if (node.kind === 'heading') heading = node.level ?? 0;
+				if (node.kind === 'list') list = node.start === undefined ? 'bullet' : 'ordered';
+				if (node.kind === 'item' && node.children.some(child => child.kind === 'task_list_marker' || child.children.some(marker => marker.kind === 'task_list_marker'))) list = 'task';
+				visit(node.children);
+			}
+		};
+		if (this.mode === 'rich') visit(this.syntax);
+		return { bold, italic, heading, list };
+	}
+	setHeading(level: number): void { this.structure({ kind: 'set_heading', offset: this.readSelection().start, level }); }
+	setListKind(list: 'bullet' | 'ordered' | 'task'): void { this.structure({ kind: 'set_list_kind', offset: this.readSelection().start, list }); }
+	/** Inserts a complete block after the current top-level block without splitting its Markdown syntax. */
+	insertBlock(markdown: string): void {
+		if (this.readOnly || this.composition) return;
+		const source = this.model.getValue();
+		const range = this.readSelection();
+		const nodes = this.projection.parse(source);
+		const offset = nodes.find(node => node.range.start <= range.end && node.range.end >= range.end)?.range.end ?? range.end;
+		const before = source.slice(0, offset);
+		const prefix = !before || /(?:\r?\n){2}$/u.test(before) ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+		this.replace({ start: offset, end: offset }, prefix + markdown + '\n\n', true);
+	}
 
 	format(mark: '**' | '_'): void {
 		if (this.readOnly) return;
@@ -409,6 +473,7 @@ export class ArkdownEditor extends Disposable {
 		this.setReadOnly(this.readOnly);
 		this.renderRemoteHighlights();
 		if (focus) this.focus();
+		this.selectionChanged.fire();
 	}
 
 	private renderProse(): void {
@@ -471,6 +536,28 @@ export class ArkdownEditor extends Disposable {
 	}
 
 	private renderNode(parent: HTMLElement, node: ArkdownNode, source: string): void {
+		if (node.kind === 'code_block') {
+			const dropdown = readDocsDropdown(source.slice(node.range.start, node.range.end));
+			if (dropdown) {
+				const block = h(parent.ownerDocument, 'p', { attributes: { contenteditable: 'false' } });
+				const select = h(parent.ownerDocument, 'select', { attributes: { 'data-arkdown-dropdown': '', 'aria-label': dropdown.label } });
+				for (const value of dropdown.options) {
+					const option = h(parent.ownerDocument, 'option', {}, value);
+					select.append(option);
+				}
+				select.selectedIndex = dropdown.selected;
+				this.ranges.set(select, node.range);
+				block.append(select);
+				parent.append(block);
+				return;
+			}
+		}
+		if (node.kind === 'image' && node.destination && /^https?:\/\//iu.test(node.destination)) {
+			const image = h(parent.ownerDocument, 'img', { attributes: { src: node.destination, alt: node.children.map(child => child.text ?? '').join(''), contenteditable: 'false', loading: 'lazy', referrerpolicy: 'no-referrer' } });
+			this.ranges.set(image, node.range);
+			parent.append(image);
+			return;
+		}
 		if (node.text !== undefined) {
 			if (node.kind === 'code') {
 				const code = h(parent.ownerDocument, 'code'); parent.append(code);

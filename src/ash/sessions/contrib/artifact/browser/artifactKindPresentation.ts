@@ -10,7 +10,7 @@ const artifactIllustrations: Record<ArtifactKind, string | Icon> = {
 	docs: 'M38 8H17a5 5 0 0 0-5 5v38a5 5 0 0 0 5 5h30a5 5 0 0 0 5-5V22L38 8Zm0 0v14h14',
 	slides: 'M7 10h50M10 10v31a5 5 0 0 0 5 5h34a5 5 0 0 0 5-5V10M32 46v10m0-10L22 58m10-12 10 12',
 	design: 'M33 9C18 9 7 19 7 33s11 23 24 23h5a6 6 0 0 0 5-9l-2-3c-2-3 0-6 4-6h4c8 0 12-5 10-12C55 15 44 9 33 9ZM20 26a2 2 0 1 0 0 .1m12-8a2 2 0 1 0 0 .1m12 6a2 2 0 1 0 0 .1M17 38a2 2 0 1 0 0 .1',
-	sheet: Lxicon.table,
+	sheet: Lxicon.sheets,
 	whiteboard: Lxicon.pen,
 	data: Lxicon.database,
 	motion: Lxicon.motion,

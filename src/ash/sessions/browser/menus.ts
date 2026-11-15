@@ -18,6 +18,7 @@ export const Menus = {
 	SessionsViewFilter: new MenuId('SessionsViewPaneFilterSubMenu'),
 	NewSessionChatInputToolbar: new MenuId('NewSessionChatInputToolbar'),
 	ArtifactToolbar: new MenuId('ArtifactToolbar'),
+	ArtifactContext: new MenuId('ArtifactContext'),
 	ArtifactTitleBar: new MenuId('ArtifactTitleBar'),
 	MenubarMainMenu: new MenuId('SessionsMenubarMainMenu'),
 	MenubarFileMenu: new MenuId('SessionsMenubarFileMenu'),

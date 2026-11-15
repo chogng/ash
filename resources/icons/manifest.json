@@ -557,6 +557,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "dropdown",
+      "file": "dropdown.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "edit",
       "file": "edit.svg",
       "rendering": "symbolic"
@@ -709,6 +714,11 @@
     {
       "id": "follow",
       "file": "follow.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "font",
+      "file": "font.svg",
       "rendering": "symbolic"
     },
     {
@@ -1549,11 +1559,6 @@
     {
       "id": "sync",
       "file": "sync.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "table",
-      "file": "table.svg",
       "rendering": "symbolic"
     },
     {

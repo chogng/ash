@@ -1,4 +1,8 @@
 import { RawContextKey } from '../../platform/contextkey/common/contextkey.js';
+import type { ArtifactKind } from './artifactKind.js';
+
+/** The artifact owning a toolbar or context menu, scoped to its editor rather than global focus. */
+export const ArtifactKindContext = new RawContextKey<ArtifactKind | undefined>('sessions.artifacts.kind', undefined);
 
 // Navigation history belongs to the Sessions service; these keys only expose it to action conditions.
 export const CanGoBackContext = new RawContextKey<boolean>('sessionsCanGoBack', false);

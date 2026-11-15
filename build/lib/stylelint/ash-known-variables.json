@@ -305,6 +305,8 @@
 		"--ash-action-widget-pointer-focus-outline-color",
 		"--ash-action-widget-summary-font-size",
 		"--ash-activity-bar-icon-size",
+		"--ash-artifact-toolbar-background",
+		"--ash-artifact-toolbar-foreground",
 		"--ash-badge-style-badge-background",
 		"--ash-badge-style-badge-border",
 		"--ash-badge-style-badge-foreground",

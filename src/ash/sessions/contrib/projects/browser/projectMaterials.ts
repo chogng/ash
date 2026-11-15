@@ -627,7 +627,7 @@ export class ProjectMaterials extends Disposable {
 	private installDropTarget(target: HTMLElement, content: DisposableStore, add: (transfer: DataTransfer) => Promise<void>): void {
 		const document = target.ownerDocument;
 		const icons = h(document, 'div', { className: 'ash-projects-drop-icons' });
-		for (const icon of [Lxicon.image, Lxicon.file, Lxicon.table]) appendIcon(icon, icons);
+		for (const icon of [Lxicon.image, Lxicon.file, Lxicon.sheets]) appendIcon(icon, icons);
 		const overlay = h(document, 'div', {
 			className: 'ash-projects-drop-overlay', properties: { hidden: true }, attributes: { 'aria-hidden': 'true' },
 		}, icons, h(document, 'span', {}, localize('projects.dropFiles', 'Drop files here to add to project context')));

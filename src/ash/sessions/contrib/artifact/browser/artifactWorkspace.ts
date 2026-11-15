@@ -11,6 +11,8 @@ import { IInstantiationService, type ServicesAccessor } from '../../../../platfo
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { localize2, type ILocalizedString } from '../../../../nls.js';
 import { Menus } from '../../../browser/menus.js';
+import { ArtifactKindContext } from '../../../common/contextkeys.js';
+import { isArtifactKind } from '../../../common/artifactKind.js';
 
 import { ArtifactCanvasEditorHost } from './artifactCanvasEditorHost.js';
 import { DocumentCommands } from '../common/commands/documentCommands.js';
@@ -151,6 +153,7 @@ export class ArtifactWorkspace extends Disposable implements IArtifactWorkspace 
 		const scopedInstantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, scope])));
 		this.editorHost = this._register(scopedInstantiation.createInstance(ArtifactCanvasEditorHost, this.mode));
 		this.editorHost.create(this.contentDomNode, document);
+		ArtifactKindContext.bindTo(scope).set(this.document.artifactKind ?? (isArtifactKind(this.mode) ? this.mode : undefined));
 		const exportSvg = this._register(new Action('sessions.artifacts.canvas.exportSvg', localize2('sessions.design.export', 'Export SVG').value,
 			'', true, () => this.document.exportDocument()));
 		this.exportActions = this.mode === ArtifactWorkspaceId.Design || this.document.artifactKind !== undefined
