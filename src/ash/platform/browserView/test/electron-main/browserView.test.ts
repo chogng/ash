@@ -549,6 +549,14 @@ suite('Browser view ownership and operations', () => {
 		assert.equal(f.manager.tryGetBrowserView(id), undefined);
 	});
 
+	test('capturing a hidden page does not request a visible capture surface', async () => {
+		using f = fixture();
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Ephemeral } });
+		assert.equal((await f.manager.captureScreenshot(id)).toString(), 'png');
+		assert.deepEqual(f.captureOptions, [{ stayHidden: true }]);
+		assert.equal(f.manager.tryGetBrowserView(id)!.getInfo().state.visible, false);
+	});
+
 	test('cancelling a queued operation leaves the next page operation usable', async () => {
 		using f = fixture();
 		const page = await f.create();
@@ -824,6 +832,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 		workbenchInput: [] as Electron.KeyboardInputEvent[],
 		commands: [] as Array<{ method: string; params: unknown; sessionId?: string; }>,
 		debugSessions: [] as string[],
+		captureOptions: [] as unknown[],
 		observations: [] as string[], cancelled: [] as string[], retired: [] as string[],
 		observe: async (pageId: string): Promise<IBrowserViewObservation> => ({ targetId: pageId, url: f.url, title: f.title, loading: f.loading }),
 		command: async (_method: string, _params?: unknown): Promise<unknown> => ({}),
@@ -920,7 +929,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 				setWindowOpenHandler: () => { }, isDestroyed: () => destroyed, isLoading: () => f.loading,
 				getURL: () => f.url, getTitle: () => f.title, isFocused: () => f.pageFocused, focus: () => { f.pageFocused = true; }, stop: () => { f.loading = false; }, reload: () => { }, reloadIgnoringCache: () => { },
 				navigationHistory: { canGoBack: () => false, canGoForward: () => false, goBack: () => { }, goForward: () => { } },
-				loadURL: (url: string) => f.load(url), capturePage: () => f.capture(),
+				loadURL: (url: string) => f.load(url), capturePage: (_rect?: unknown, options?: unknown) => { f.captureOptions.push(options); return f.capture(); },
 				undo: () => f.editing.push('undo'), redo: () => f.editing.push('redo'),
 				cut: () => f.editing.push('cut'), copy: () => f.editing.push('copy'),
 				paste: () => f.editing.push('paste'), pasteAndMatchStyle: () => f.editing.push('pastePlain'), selectAll: () => f.editing.push('selectAll'),

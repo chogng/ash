@@ -373,7 +373,13 @@ test('downloads report completion and cancellation and closing a page releases t
 		expect(await readFile(filename, 'utf8')).toBe('downloaded content');
 		await start('/pending', join(testWorkspace.directory, 'pending.txt'));
 		await expect(progress).toContainText('downloading');
-		await workbench.menus.select(application, () => editor.getByRole('button', { name: 'More Actions', exact: true }).click(), ['Cancel downloads']);
+		// Browser actions use a dedicated native menu window, even with system menus enabled.
+		const menuReady = electron.waitForEvent('window', {
+			predicate: candidate => candidate.evaluate(() => window.name.startsWith('ash-context-menu-')),
+		});
+		await editor.getByRole('button', { name: 'More Actions', exact: true }).click();
+		const menu = await menuReady;
+		await menu.getByRole('menuitem', { name: 'Cancel downloads', exact: true }).click();
 		await expect(progress).toContainText('cancelled');
 		await start('/pending', join(testWorkspace.directory, 'closed.txt'));
 		await expect(progress).toContainText('downloading');
@@ -1304,6 +1310,8 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await location.fill(url); await location.press('Enter');
 		await expect(editor.getByRole('status')).toHaveText('First page');
 		await expect(page.getByRole('tab', { name: 'First page' })).toBeVisible();
+		// The disconnected UI fixture can report unavailable backend capabilities over the page.
+		await workbench.quickaccess.runCommand('notifications.clearAll');
 		const views = () => electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(view => 'webContents' in view).map(view => ({ bounds: view.getBounds(), visible: view.getVisible(), url: (view as Electron.WebContentsView).webContents.getURL() })));
 		await expect.poll(async () => (await views()).filter(view => view.url === url && view.visible).length).toBe(1);
 		await editor.locator('.ash-browser-viewport').focus();
@@ -1361,6 +1369,14 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 			const view = (await views()).find(view => view.url === `${url}second`);
 			return bounds && view ? Math.abs(view.bounds.width - bounds.width) : 1000;
 		}).toBeLessThan(2);
+		for (const zoom of [1.2, 1]) {
+			await electron.evaluate(({ BrowserWindow }, zoom) => BrowserWindow.getAllWindows()[0]!.webContents.setZoomFactor(zoom), zoom);
+			await expect.poll(async () => {
+				const bounds = await editor.locator('.ash-browser-viewport').boundingBox();
+				const view = (await views()).find(view => view.url === `${url}second` && view.visible);
+				return bounds && view ? Math.abs(view.bounds.x - Math.round(bounds.x * zoom)) + Math.abs(view.bounds.width - Math.round(bounds.width * zoom)) : 1000;
+			}).toBeLessThan(3);
+		}
 		await location.focus(); await location.press('Alt+F1');
 		const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
 		await expect(help.getByRole('textbox')).toHaveValue(/Webpages use the browser’s accessibility tree/u);

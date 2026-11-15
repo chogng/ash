@@ -2,12 +2,11 @@ import { Emitter } from '../../../../base/common/event.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from '../../../../base/common/types.js';
-import { disposableWindowInterval } from '../../../../base/browser/scheduler.js';
 import type { IChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import { StorageScope, StorageTarget, WillSaveStateReason, type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, type StorageValue } from '../../../../platform/storage/common/storage.js';
 import { validateStorageEntries, validateStorageSnapshot, type IStorageIdentity, type IStorageEntry, type IStorageSnapshot } from '../../../../platform/storage/common/storageIpc.js';
-import { migrateBrowserStorage } from '../browser/storageService.js';
+import { migrateBrowserStorage, StorageFlushScheduler } from '../browser/storageService.js';
 
 interface StorageOptions {
 	readonly workspaceId: string;
@@ -38,7 +37,7 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 		super();
 		this.workspaceId = options.workspaceId;
 		this.channel = mainProcessService.getChannel('storage');
-		this._register(disposableWindowInterval(options.ownerWindow, () => { void this.flush().catch(onUnexpectedError); }, 5_000));
+		this._register(new StorageFlushScheduler(options.ownerWindow, 5_000, () => this.flush(), onUnexpectedError));
 	}
 
 	public async initialize(): Promise<void> {

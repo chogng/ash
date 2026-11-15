@@ -1,8 +1,8 @@
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
-import { disposableWindowInterval } from '../../../../base/browser/scheduler.js';
+import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from '../../../../platform/storage/common/storage.js';
 
 interface StoredEntry {
@@ -46,6 +46,61 @@ export interface BrowserStorageServiceOptions {
 	readonly backend?: Storage;
 	readonly flushInterval?: number;
 	readonly onError?: (error: unknown) => void;
+}
+
+/** Periodic UI-state saves pause while hidden; mutations still persist through their storage owner. */
+export class StorageFlushScheduler extends Disposable {
+	private readonly timer = this._register(new MutableDisposable<IDisposable>());
+	private running = false;
+	private pending = false;
+
+	constructor(
+		private readonly ownerWindow: Window,
+		private readonly interval: number,
+		private readonly flush: () => Promise<void>,
+		private readonly onError: (error: unknown) => void,
+	) {
+		super();
+		this._register(addDisposableListener(ownerWindow.document, 'visibilitychange', () => {
+			this.timer.clear();
+			// Save before suspension, and catch up before restarting the foreground timer.
+			this.save();
+		}));
+		this._register(addDisposableListener(ownerWindow, 'pagehide', () => this.save()));
+		this.schedule();
+	}
+
+	private schedule(retry = false): void {
+		if (!this.isDisposed && (retry || !this.ownerWindow.document.hidden)) {
+			this.timer.value = disposableWindowTimeout(this.ownerWindow, () => {
+				this.timer.clear();
+				this.save();
+			}, this.interval);
+		}
+	}
+
+	private save(): void {
+		this.timer.clear();
+		this.pending = true;
+		if (this.running) return;
+		this.running = true;
+		void (async () => {
+			let retry = false;
+			try {
+				while (this.pending && !this.isDisposed) {
+					this.pending = false;
+					await this.flush();
+				}
+			} catch (error) {
+				// Failed writes still need retries while hidden; only successful idle work stops.
+				retry = true;
+				this.onError(error);
+			} finally {
+				this.running = false;
+				this.schedule(retry);
+			}
+		})();
+	}
 }
 
 /**
@@ -93,9 +148,7 @@ export class BrowserStorageService extends Disposable implements IStorageService
 		this._register(addDisposableListener(this.ownerWindow, 'storage', (event: StorageEvent) => this.handleStorageEvent(event)));
 
 		if (flushInterval > 0) {
-			this._register(disposableWindowInterval(this.ownerWindow, () => {
-				void this.flush(WillSaveStateReason.PERIODIC);
-			}, flushInterval));
+			this._register(new StorageFlushScheduler(this.ownerWindow, flushInterval, () => this.flush(WillSaveStateReason.PERIODIC), this.onError));
 		}
 		this._register(toDisposable(() => {
 			void this.flush(WillSaveStateReason.SHUTDOWN);

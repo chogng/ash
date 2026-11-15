@@ -1,6 +1,7 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import type { IBrowserViewBounds } from '../../../../platform/browserView/common/browserView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import type { IBrowserViewModel } from '../common/browserView.js';
@@ -21,6 +22,9 @@ interface PagePresentation {
 	queued: boolean;
 	closed: boolean;
 	revision: number;
+	// Last successful presentation commands, not a second copy of page state.
+	layout?: { bounds: IBrowserViewBounds; windowName: string | undefined; pixelRatio: number; };
+	visible?: boolean;
 }
 
 // Splits borrow one model and one compositor page. Serialize their presentation commands together.
@@ -35,6 +39,7 @@ export class WebContentsViewHost extends Disposable {
 	private focusRequested = false;
 	private readonly modelListeners = this._register(new DisposableStore());
 	private readonly overlays: BrowserOverlayManager;
+	private readonly overlayListener = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(
 		targetWindow: Window & typeof globalThis,
@@ -43,7 +48,6 @@ export class WebContentsViewHost extends Disposable {
 	) {
 		super();
 		this.overlays = this._register(instantiation.createInstance(BrowserOverlayManager, targetWindow));
-		this._register(this.overlays.onDidChangeOverlayState(() => this.layout()));
 	}
 
 	public onContainerCreated(container: HTMLElement): void {
@@ -75,18 +79,24 @@ export class WebContentsViewHost extends Disposable {
 				presentations.set(model, presentation);
 			}
 			presentation.hosts.add(this);
+			this.modelListeners.add(model.onDidChangeState(state => {
+				// Main can independently hide a page during a host reload.
+				if (presentation.visible !== state.visible) presentation.visible = undefined;
+			}));
 			this.modelListeners.add(model.onDidClose(() => {
 				presentation.closed = true;
 				this.setModel(undefined);
 			}));
 			this.schedule(model);
 		}
+		this.updateOverlayListener();
 	}
 
 	public setVisible(visible: boolean, showPage = visible): void {
 		this.visible = visible;
 		this.showPage = showPage;
 		if (visible && this.model) { this.claim(this.model); }
+		this.updateOverlayListener();
 		this.layout();
 	}
 
@@ -114,6 +124,14 @@ export class WebContentsViewHost extends Disposable {
 		super.disposeCore();
 	}
 
+	private updateOverlayListener(): void {
+		if (this.model && this.visible && this.showPage) {
+			this.overlayListener.value ??= this.overlays.onDidChangeOverlayState(() => this.layout());
+		} else {
+			this.overlayListener.clear();
+		}
+	}
+
 	private claim(model: IBrowserViewModel): void {
 		const hosts = presentations.get(model)!.hosts;
 		hosts.delete(this);
@@ -137,16 +155,30 @@ export class WebContentsViewHost extends Disposable {
 			if (canLayout) {
 				const targetWindow = container.ownerDocument.defaultView;
 				const windowName = targetWindow && targetWindow !== mainWindow ? targetWindow.name || undefined : undefined;
-				await model.layout({ x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.round(bounds.width), height: Math.round(bounds.height) }, windowName);
+				const nextBounds = { x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.round(bounds.width), height: Math.round(bounds.height) };
+				// DPR also changes with Workbench zoom when a fixed-size viewport keeps its CSS bounds.
+				const pixelRatio = targetWindow?.devicePixelRatio ?? 1;
+				const previous = presentation.layout;
+				if (!previous || previous.windowName !== windowName || previous.pixelRatio !== pixelRatio
+					|| previous.bounds.x !== nextBounds.x || previous.bounds.y !== nextBounds.y
+					|| previous.bounds.width !== nextBounds.width || previous.bounds.height !== nextBounds.height) {
+					await model.layout(nextBounds, windowName);
+					presentation.layout = { bounds: nextBounds, windowName, pixelRatio };
+				}
 			}
 			if (presentation.closed || revision !== presentation.revision) { return; }
-			await model.setVisible(visible);
+			if (presentation.visible !== visible) {
+				await model.setVisible(visible);
+				presentation.visible = visible;
+			}
 			// IPC can finish after the pane switches input or an overlay takes keyboard focus.
 			if (visible && host?.focusRequested && host.model === model && host.visible && container?.ownerDocument.activeElement === container && host.overlays.getOverlappingOverlays(container).length === 0) {
 				host.focusRequested = false;
 				await model.focus();
 			}
 		}).catch(error => {
+			presentation.layout = undefined;
+			presentation.visible = undefined;
 			// Closing the final tab detaches its host before Main publishes the page's close event.
 			const detachedClose = presentation.hosts.size === 0 && error instanceof Error && error.message === 'BrowserTargetUnavailable';
 			if (!presentation.closed && !detachedClose) { this.logService.error('browserView', 'Failed to present browser page', error); }

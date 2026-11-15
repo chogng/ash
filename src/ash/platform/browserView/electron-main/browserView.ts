@@ -482,6 +482,8 @@ export class BrowserView extends Disposable {
 							height: Math.round(bounds.height * scale),
 						}
 						: undefined,
+					// Capturing a hidden tab must not change its visibility policy.
+					{ stayHidden: true },
 				);
 				const bytes = options.format === 'jpeg' ? image.toJPEG(options.quality ?? 90) : image.toPNG();
 				if (bytes.byteLength > 16 * 1024 * 1024) {

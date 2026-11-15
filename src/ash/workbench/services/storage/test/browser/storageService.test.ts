@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { StorageScope, StorageTarget, WillSaveStateReason } from '../../../../../platform/storage/common/storage.js';
 import { Memento } from '../../../../../workbench/common/memento.js';
-import { BrowserStorageService, migrateBrowserStorage } from '../../../../../workbench/services/storage/browser/storageService.js';
+import { BrowserStorageService, StorageFlushScheduler, migrateBrowserStorage } from '../../../../../workbench/services/storage/browser/storageService.js';
 
 test('storage startup retires the Code namespace, restores all scopes and archives conflicting values', () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
@@ -283,4 +283,82 @@ test('Browser storage reports malformed persisted documents and falls back', () 
 
 	storage.dispose();
 	dom.window.close();
+});
+
+test('periodic storage saves stop while hidden and persist boundary state and background writes', async () => {
+	const dom = new JSDOM('', { url: 'https://ash.test', pretendToBeVisual: true });
+	const timers = new Map<number, () => void>();
+	let sequence = 0;
+	dom.window.setTimeout = ((callback: () => void) => { timers.set(++sequence, callback); return sequence; }) as typeof dom.window.setTimeout;
+	dom.window.clearTimeout = id => { if (id !== undefined) timers.delete(id); };
+	let hidden = false;
+	Object.defineProperty(dom.window.document, 'hidden', { get: () => hidden });
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'background' });
+		let saves = 0;
+		using listener = storage.onWillSaveState(() => { storage.store('layout', String(++saves), StorageScope.WORKSPACE, StorageTarget.MACHINE); });
+		assert.equal(timers.size, 1);
+		const fire = [...timers.values()][0]!;
+		timers.clear();
+		fire();
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(saves, 1);
+		assert.equal(timers.size, 1);
+		hidden = true;
+		dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
+		await new Promise(resolve => setImmediate(resolve));
+		assert.deepEqual([saves, timers.size], [2, 0]);
+		storage.store('background-task', 'saved', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		using restored = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'background', flushInterval: 0 });
+		assert.deepEqual([restored.get('layout', StorageScope.WORKSPACE), restored.get('background-task', StorageScope.WORKSPACE)], ['2', 'saved']);
+		hidden = false;
+		dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
+		await new Promise(resolve => setImmediate(resolve));
+		assert.deepEqual([saves, timers.size], [3, 1]);
+		storage.dispose();
+		assert.equal(timers.size, 0);
+	} finally { dom.window.close(); }
+});
+
+
+test('hidden storage saves drain a pending boundary without overlapping and retry failures', async () => {
+	const dom = new JSDOM('', { url: 'https://ash.test', pretendToBeVisual: true });
+	const timers = new Map<number, () => void>();
+	let sequence = 0;
+	dom.window.setTimeout = ((callback: () => void) => { timers.set(++sequence, callback); return sequence; }) as typeof dom.window.setTimeout;
+	dom.window.clearTimeout = id => { if (id !== undefined) timers.delete(id); };
+	let hidden = false;
+	Object.defineProperty(dom.window.document, 'hidden', { get: () => hidden });
+	let finish: (() => void) | undefined;
+	let saves = 0;
+	let fail = false;
+	const failure = new Error('storage fixture failure');
+	const errors: unknown[] = [];
+	try {
+		using scheduler = new StorageFlushScheduler(dom.window as unknown as Window, 5000, async () => {
+			saves++;
+			if (saves === 1) await new Promise<void>(resolve => { finish = resolve; });
+			if (fail) throw failure;
+		}, error => errors.push(error));
+		const fire = [...timers.values()][0]!;
+		timers.clear();
+		fire();
+		hidden = true;
+		dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
+		assert.deepEqual([saves, timers.size], [1, 0], 'A pending save is not duplicated concurrently');
+		finish!();
+		await new Promise(resolve => setImmediate(resolve));
+		assert.deepEqual([saves, timers.size], [2, 0], 'The final boundary save drains before suspension');
+		fail = true;
+		dom.window.dispatchEvent(new dom.window.Event('pagehide'));
+		await new Promise(resolve => setImmediate(resolve));
+		assert.deepEqual(errors, [failure]);
+		assert.equal(timers.size, 1, 'Persistence failures retain a retry even while hidden');
+		fail = false;
+		const retry = [...timers.values()][0]!;
+		timers.clear();
+		retry();
+		await new Promise(resolve => setImmediate(resolve));
+		assert.deepEqual([saves, timers.size], [4, 0]);
+	} finally { dom.window.close(); }
 });

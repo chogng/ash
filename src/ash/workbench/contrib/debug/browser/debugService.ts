@@ -1,3 +1,4 @@
+import { IHostService } from '../../../services/host/browser/host.js';
 import { ITextModelService } from '../../../../editor/common/services/resolverService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { Position } from '../../../../editor/common/core/position.js';
@@ -9,7 +10,7 @@ import { IExtensionService } from '../../../services/extensions/common/extension
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
 import { getUriFromSource } from '../common/debugSource.js';
 import { CancellationTokenSource, throwIfCancelled } from '../../../../base/common/cancellation.js';
-import { raceCancellationError } from '../../../../base/common/async.js';
+import { RunOnceScheduler, raceCancellationError } from '../../../../base/common/async.js';
 import { ViewModel } from '../common/debugViewModel.js';
 import { ReplModel } from '../common/replModel.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -122,6 +123,7 @@ export class DebugService extends Disposable implements IDebugService {
 		@ITextModelService private readonly textModels: ITextModelService,
 		@INotificationService private readonly notifications: INotificationService,
 		@ITextFileService textFiles: ITextFileService,
+		@IHostService host: IHostService,
 	) {
 		super();
 		this.debugger = instantiationService.createInstance(Debugger);
@@ -136,6 +138,25 @@ export class DebugService extends Disposable implements IDebugService {
 		this._register(toDisposable(() => debugState.reset()));
 		try { this.debugStorage = this._register(instantiationService.createInstance(DebugStorage)); } catch (error) { this.dispose(); throw error; }
 		this.restoreState(this.debugStorage.state);
+		// Cross-window definitions only need polling while this Workbench is in use.
+		// Schedule after completion so slow backend reads cannot accumulate.
+		if (processes) {
+			let reading = false;
+			const poll = this._register(new RunOnceScheduler(() => {
+				if (!host.hasFocus || reading || this.isDisposed) return;
+				reading = true;
+				void this.debugStorage.reload().catch(error => this.reportError(error)).finally(() => {
+					reading = false;
+					if (!this.isDisposed && host.hasFocus) poll.schedule();
+				});
+			}, 1000));
+			this._register(host.onDidChangeFocus(focused => {
+				poll.cancel();
+				if (focused && !reading) poll.schedule(0);
+			}));
+			if (host.hasFocus) poll.schedule();
+		}
+
 		this._register(textFiles.onDidSave(event => {
 			if (this.breakpointsToSendOnResourceSaved.delete(event.resource.toString())) this.syncSessionBreakpoints();
 		}));
