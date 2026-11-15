@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { suite, test } from 'mocha';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { errorHandler, setUnexpectedErrorHandler } from '../../../../../base/common/errors.js';
 import { JSDOM } from 'jsdom';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -12,9 +13,129 @@ import { StorageScope, StorageTarget } from '../../../../../platform/storage/com
 import { StorageMainService } from '../../../../../platform/storage/electron-main/storageMainService.js';
 import { StorageDatabaseChannel } from '../../../../../platform/storage/electron-main/storageIpc.js';
 import { NativeWorkbenchStorageService } from '../../electron-browser/storageService.js';
+import { TestConfigurationService } from '../../../configuration/test/common/testServices.js';
+import { TerminalCommandHistory } from '../../../../contrib/terminalContrib/history/common/history.js';
 
 suite('Desktop window storage', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('hidden command history retries failed background writes until durable and visible to another window', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'ash-store-hidden-retry-'));
+		const browser = new JSDOM('', { url: 'https://ash.test', pretendToBeVisual: true });
+		const timers = new Map<number, () => void>();
+		let sequence = 0;
+		browser.window.setTimeout = ((callback: () => void, delay: number) => {
+			assert.equal(delay, 5_000);
+			timers.set(++sequence, callback);
+			return sequence;
+		}) as typeof browser.window.setTimeout;
+		browser.window.clearTimeout = id => { if (id !== undefined) timers.delete(id); };
+		let hidden = false;
+		Object.defineProperty(browser.window.document, 'hidden', { get: () => hidden });
+		const previousHandler = errorHandler.getUnexpectedErrorHandler();
+		const errors: unknown[] = [];
+		setUnexpectedErrorHandler(error => errors.push(error));
+		try {
+			const path = join(directory, 'state.json');
+			using owner = new StorageMainService(path);
+			await owner.initialize();
+			const channel = new StorageDatabaseChannel(owner);
+			let unavailable = false;
+			let attempts = 0;
+			let flushed = new DeferredPromise<void>();
+			const failure = new Error('Injected hidden storage failure');
+			using services = new InstantiationService();
+			services.registerInstance(IMainProcessService, {
+				_serviceBrand: undefined,
+				getChannel: () => ({
+					call: async <T>(command: string, arg?: unknown): Promise<T> => {
+						if (command === 'updateItems') {
+							attempts++;
+							if (unavailable) throw failure;
+						}
+						const result = await channel.call<T>('window:1', command, arg);
+						if (command === 'flush') void flushed.complete();
+						return result;
+					},
+					listen: (event, arg) => channel.listen('window:1', event, arg),
+				}),
+				registerChannel: () => { throw new Error('Unexpected channel registration'); },
+			});
+			const options = { ownerWindow: browser.window as unknown as Window, workspaceId: 'background' };
+			using storage = services.createInstance(NativeWorkbenchStorageService, options);
+			using reader = services.createInstance(NativeWorkbenchStorageService, options);
+			await Promise.all([storage.initialize(), reader.initialize()]);
+			using configuration = new TestConfigurationService();
+			const history = new TerminalCommandHistory(configuration, storage);
+			const otherHistory = new TerminalCommandHistory(configuration, reader);
+			hidden = true;
+			browser.window.document.dispatchEvent(new browser.window.Event('visibilitychange'));
+			await flushed.p;
+			await new Promise(resolve => setImmediate(resolve));
+			assert.equal(timers.size, 0, 'The hidden boundary save finishes before the command completes');
+
+			unavailable = true;
+			history.record('bash', 'succeeded', 'echo first', true, false);
+			history.record('bash', 'succeeded', 'echo latest', true, false);
+			await new Promise(resolve => setImmediate(resolve));
+			assert.deepEqual(errors, [failure, failure]);
+			assert.equal(attempts, 2);
+			assert.equal(timers.size, 1, 'Background failures share one retry timer');
+			assert.deepEqual(otherHistory.getCommands('bash'), []);
+			const retry = [...timers.values()][0]!;
+			timers.clear();
+			retry();
+			await new Promise(resolve => setImmediate(resolve));
+			assert.equal(attempts, 3);
+			assert.deepEqual(errors, [failure, failure, failure]);
+			assert.equal(timers.size, 1, 'A failed retry waits for the next interval');
+
+			unavailable = false;
+			flushed = new DeferredPromise<void>();
+			const recover = [...timers.values()][0]!;
+			timers.clear();
+			recover();
+			await flushed.p;
+			await new Promise(resolve => setImmediate(resolve));
+			assert.equal(attempts, 4);
+			assert.equal(timers.size, 0, 'Successful hidden saves return to idle');
+			const expected = [{ shellId: 'bash', command: 'echo latest' }, { shellId: 'bash', command: 'echo first' }];
+			assert.deepEqual(otherHistory.getCommands('bash'), expected);
+			using reopenedOwner = new StorageMainService(path);
+			await reopenedOwner.initialize();
+			const durable = await reopenedOwner.getItems({ scope: StorageScope.APPLICATION, id: 'application' });
+			assert.deepEqual(JSON.parse(durable.entries['terminal.shellIntegration.commandHistory.v1']!.value).entries, [...expected].reverse());
+
+			unavailable = true;
+			history.clear();
+			await new Promise(resolve => setImmediate(resolve));
+			assert.equal(timers.size, 1);
+			assert.deepEqual(otherHistory.getCommands('bash'), expected, 'A failed removal has not reached the other window');
+			unavailable = false;
+			flushed = new DeferredPromise<void>();
+			const removeRetry = [...timers.values()][0]!;
+			timers.clear();
+			removeRetry();
+			await flushed.p;
+			await new Promise(resolve => setImmediate(resolve));
+			assert.deepEqual(otherHistory.getCommands('bash'), []);
+			assert.equal(timers.size, 0);
+			using afterRemoval = new StorageMainService(path);
+			await afterRemoval.initialize();
+			assert.equal((await afterRemoval.getItems({ scope: StorageScope.APPLICATION, id: 'application' })).entries['terminal.shellIntegration.commandHistory.v1'], undefined);
+
+			unavailable = true;
+			history.record('bash', 'succeeded', 'echo disposed', true, false);
+			await new Promise(resolve => setImmediate(resolve));
+			assert.equal(timers.size, 1);
+			storage.dispose();
+			assert.equal(timers.size, 0, 'Disposal cancels pending retries');
+		} finally {
+			setUnexpectedErrorHandler(previousHandler);
+			browser.window.close();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
 	test('retries failed mutations, preserving the latest value and removals without poisoning future flushes', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-store-retry-'));
 		const browser = new JSDOM('', { url: 'https://ash.test' });

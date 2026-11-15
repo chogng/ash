@@ -53,6 +53,7 @@ export class StorageFlushScheduler extends Disposable {
 	private readonly timer = this._register(new MutableDisposable<IDisposable>());
 	private running = false;
 	private pending = false;
+	private retryRequested = false;
 
 	constructor(
 		private readonly ownerWindow: Window,
@@ -70,8 +71,16 @@ export class StorageFlushScheduler extends Disposable {
 		this.schedule();
 	}
 
+	/** Keeps failed background mutations eligible for saving after periodic saves pause. */
+	scheduleRetry(): void {
+		// A mutation can fail after a running flush drained its queue but before
+		// Main acknowledges it. Retain the retry request until that save finishes.
+		this.retryRequested = true;
+		if (!this.running) this.schedule(true);
+	}
+
 	private schedule(retry = false): void {
-		if (!this.isDisposed && (retry || !this.ownerWindow.document.hidden)) {
+		if (!this.isDisposed && !this.timer.value && (retry || !this.ownerWindow.document.hidden)) {
 			this.timer.value = disposableWindowTimeout(this.ownerWindow, () => {
 				this.timer.clear();
 				this.save();
@@ -84,6 +93,7 @@ export class StorageFlushScheduler extends Disposable {
 		this.pending = true;
 		if (this.running) return;
 		this.running = true;
+		this.retryRequested = false;
 		void (async () => {
 			let retry = false;
 			try {
@@ -97,7 +107,7 @@ export class StorageFlushScheduler extends Disposable {
 				this.onError(error);
 			} finally {
 				this.running = false;
-				this.schedule(retry);
+				this.schedule(retry || this.retryRequested);
 			}
 		})();
 	}

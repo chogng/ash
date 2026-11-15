@@ -330,6 +330,7 @@ test('hidden storage saves drain a pending boundary without overlapping and retr
 	let hidden = false;
 	Object.defineProperty(dom.window.document, 'hidden', { get: () => hidden });
 	let finish: (() => void) | undefined;
+	let holdNext = false;
 	let saves = 0;
 	let fail = false;
 	const failure = new Error('storage fixture failure');
@@ -337,7 +338,10 @@ test('hidden storage saves drain a pending boundary without overlapping and retr
 	try {
 		using scheduler = new StorageFlushScheduler(dom.window as unknown as Window, 5000, async () => {
 			saves++;
-			if (saves === 1) await new Promise<void>(resolve => { finish = resolve; });
+			if (saves === 1 || holdNext) {
+				holdNext = false;
+				await new Promise<void>(resolve => { finish = resolve; });
+			}
 			if (fail) throw failure;
 		}, error => errors.push(error));
 		const fire = [...timers.values()][0]!;
@@ -360,5 +364,18 @@ test('hidden storage saves drain a pending boundary without overlapping and retr
 		retry();
 		await new Promise(resolve => setImmediate(resolve));
 		assert.deepEqual([saves, timers.size], [4, 0]);
+		holdNext = true;
+		dom.window.dispatchEvent(new dom.window.Event('pagehide'));
+		scheduler.scheduleRetry();
+		scheduler.scheduleRetry();
+		assert.deepEqual([saves, timers.size], [5, 0], 'Retry requests do not overlap a running save');
+		finish!();
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(timers.size, 1, 'Failures arriving during a save retain a deferred retry');
+		const deferredRetry = [...timers.values()][0]!;
+		timers.clear();
+		deferredRetry();
+		await new Promise(resolve => setImmediate(resolve));
+		assert.deepEqual([saves, timers.size], [6, 0]);
 	} finally { dom.window.close(); }
 });

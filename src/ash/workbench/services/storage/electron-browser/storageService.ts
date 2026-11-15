@@ -32,12 +32,13 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 	private writes: Promise<void> = Promise.resolve();
 	private readonly channel: IChannel;
 	private workspaceId: string;
+	private readonly flushScheduler: StorageFlushScheduler;
 
 	constructor(private readonly options: StorageOptions, @IMainProcessService mainProcessService: IMainProcessService) {
 		super();
 		this.workspaceId = options.workspaceId;
 		this.channel = mainProcessService.getChannel('storage');
-		this._register(new StorageFlushScheduler(options.ownerWindow, 5_000, () => this.flush(), onUnexpectedError));
+		this.flushScheduler = this._register(new StorageFlushScheduler(options.ownerWindow, 5_000, () => this.flush(), onUnexpectedError));
 	}
 
 	public async initialize(): Promise<void> {
@@ -139,7 +140,10 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 		this.pendingEntries.set(pendingKey, pending);
 		this.changes.fire({ key, scope, target: entry?.target, external: false });
 		// Send before navigation can disconnect the port; Main serializes mutations, not window replies.
-		void this.writeEntry(pending).catch(onUnexpectedError);
+		void this.writeEntry(pending).catch(error => {
+			this.flushScheduler.scheduleRetry();
+			onUnexpectedError(error);
+		});
 	}
 	private writeEntry(pending: PendingEntry): Promise<void> {
 		const { key, scope, entry } = pending;
