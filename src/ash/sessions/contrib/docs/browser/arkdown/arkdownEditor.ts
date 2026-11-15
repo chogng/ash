@@ -17,7 +17,6 @@ import type { DocsEditorMode } from '../../common/docs.js';
 import type { BufferRemoteChange } from '../../../../../workbench/services/collab/common/bufferCollabService.js';
 import type { IEditorDecorationsCollection } from '../../../../../editor/common/editorCommon.js';
 
-let nextHighlightOwner = 1;
 const collaboratorColors = ['blue', 'purple', 'green', 'orange', 'red', 'yellow'];
 
 interface Segment { readonly text: Text; readonly offsets: readonly number[]; }
@@ -42,7 +41,7 @@ export class ArkdownEditor extends Disposable {
 	private readonly remoteSummary: HTMLElement;
 	private readonly remoteList: HTMLElement;
 	private remoteChanges: readonly BufferRemoteChange[] = [];
-	private readonly highlightOwner = nextHighlightOwner++;
+	private readonly remoteHighlights = new Map<string, { readonly highlight: Highlight; readonly ranges: readonly globalThis.Range[]; }>();
 	private sourceHighlights: IEditorDecorationsCollection | undefined;
 	private sourceEditor: CodeEditorWidget | undefined;
 	private readonly segments: Segment[] = [];
@@ -83,13 +82,8 @@ export class ArkdownEditor extends Disposable {
 		this.prose.tabIndex = 0;
 		ArkdownEditorFocused.bindTo(this._register(contextKeys.createScoped(this.prose))).set(true);
 		this.domNode.append(this.remoteHistory, this.prose, this.source);
-		const styles = document.createElement('style');
-		styles.textContent = collaboratorColors.map((color, slot) => `::highlight(arkdown-${this.highlightOwner}-${slot}) { background-color: color-mix(in srgb, var(--ash-charts-${color}) 20%, transparent); text-decoration: underline var(--ash-charts-${color}); }`).join('\n');
-		document.head.append(styles);
 		this._register(toDisposable(() => {
-			styles.remove();
-			const view = document.defaultView as Window & typeof globalThis;
-			for (let slot = 0; slot < collaboratorColors.length; slot++) view.CSS?.highlights?.delete(`arkdown-${this.highlightOwner}-${slot}`);
+			this.clearRemoteHighlights();
 			this.sourceHighlights?.clear();
 		}));
 		parent.append(this.domNode);
@@ -179,12 +173,20 @@ export class ArkdownEditor extends Disposable {
 		for (const character of change.clientId ?? '') hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
 		return hash % collaboratorColors.length;
 	}
+	private clearRemoteHighlights(): void {
+		const registry = (this.domNode.ownerDocument.defaultView as Window & typeof globalThis).CSS?.highlights;
+		for (const [name, { highlight, ranges }] of this.remoteHighlights) {
+			for (const range of ranges) highlight.delete(range);
+			if (!highlight.size && registry?.get(name) === highlight) registry.delete(name);
+		}
+		this.remoteHighlights.clear();
+	}
 	private renderRemoteHighlights(): void {
 		const document = this.domNode.ownerDocument;
 		const view = document.defaultView as Window & typeof globalThis;
+		this.clearRemoteHighlights();
 		for (let slot = 0; slot < collaboratorColors.length; slot++) {
-			const name = `arkdown-${this.highlightOwner}-${slot}`;
-			view.CSS?.highlights?.delete(name);
+			const name = `arkdown-remote-${collaboratorColors[slot]}`;
 			if (this.mode !== 'rich' || this.composition || !view.Highlight || !view.CSS?.highlights) continue;
 			const ranges: globalThis.Range[] = [];
 			for (const change of this.remoteChanges) {
@@ -199,7 +201,14 @@ export class ArkdownEditor extends Disposable {
 					ranges.push(range);
 				}
 			}
-			if (ranges.length) view.CSS.highlights.set(name, new view.Highlight(...ranges));
+			if (ranges.length) {
+				// The document shares six highlight types; each editor owns only its
+				// ranges so refreshing or closing it preserves other editors' marks.
+				const highlight = view.CSS.highlights.get(name) ?? new view.Highlight();
+				for (const range of ranges) highlight.add(range);
+				view.CSS.highlights.set(name, highlight);
+				this.remoteHighlights.set(name, { highlight, ranges });
+			}
 		}
 		if (this.sourceEditor) {
 			this.sourceHighlights ??= this.sourceEditor.createDecorationsCollection();

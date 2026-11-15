@@ -7,6 +7,37 @@ suite('Arkdown collaboration rooms', () => {
 	const browser = useBrowserTests();
 	const mount = async () => { await browser.page.goto('/arkdownCollaboration.html'); await expect(browser.page.locator('body')).toHaveAttribute('data-ready', 'true'); };
 	const connect = async () => { await browser.page.evaluate(async () => { await window.arkdownCollaborationFixture.connect(0); await window.arkdownCollaborationFixture.connect(1, 'room-1'); }); };
+	test('collaboration highlight ranges stay local and are released when unused', async () => {
+		await mount();
+		const activeHighlightCount = () => browser.page.evaluate(() => [...CSS.highlights.keys()].filter(name => name.startsWith('arkdown-')).length);
+		assert.equal(await activeHighlightCount(), 0);
+		await connect();
+		assert.equal(await activeHighlightCount(), 0);
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.edit(0, 12, 'remote'));
+		await expect.poll(() => browser.page.evaluate(() => [...CSS.highlights.keys()].filter(name => name.startsWith('arkdown-')).length)).toBe(1);
+		const colors = await browser.page.evaluate(() => {
+			for (const color of ['blue', 'purple', 'green', 'orange', 'red', 'yellow']) document.documentElement.style.setProperty(`--ash-charts-${color}`, '#0080ff');
+			const name = [...CSS.highlights.keys()].find(name => name.startsWith('arkdown-'))!;
+			const own = document.querySelector('#b .stanza-arkdown-prose p')!;
+			const outside = document.createElement('p');
+			document.body.append(outside);
+			try {
+				return [own, outside].map(element => getComputedStyle(element, `::highlight(${name})`).backgroundColor);
+			} finally { outside.remove(); }
+		});
+		assert.notEqual(colors[0], 'rgba(0, 0, 0, 0)');
+		assert.deepEqual(colors.slice(1), ['rgba(0, 0, 0, 0)']);
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.source(1));
+		assert.equal(await activeHighlightCount(), 0);
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.show(1, 'original'));
+		await expect.poll(activeHighlightCount).toBe(1);
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.show(1, 'other'));
+		assert.equal(await activeHighlightCount(), 0);
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.show(1, 'original'));
+		await expect.poll(activeHighlightCount).toBe(1);
+		await browser.page.evaluate(() => window.arkdownCollaborationFixture.leave(1));
+		assert.equal(await activeHighlightCount(), 0);
+	});
 	for (const confirmed of [false, true]) test(`remote edits remain isolated until joining is confirmed: ${confirmed}`, async () => {
 		await mount();
 		await browser.page.evaluate(async () => { const f = window.arkdownCollaborationFixture; await f.connect(0); f.beginJoin(); });

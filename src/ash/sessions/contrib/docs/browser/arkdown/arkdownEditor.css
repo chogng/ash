@@ -146,3 +146,60 @@
 .stanza-arkdown-editor [hidden] {
 	display: none;
 }
+
+/* Keep highlight inheritance inside document prose and the palette bounded
+   regardless of how many editor tabs remain open. */
+.stanza-arkdown-prose::highlight(arkdown-remote-blue),
+.stanza-arkdown-prose ::highlight(arkdown-remote-blue) {
+	background-color: color-mix(
+		in srgb,
+		var(--ash-charts-blue) 20%,
+		transparent
+	);
+	text-decoration: underline var(--ash-charts-blue);
+}
+.stanza-arkdown-prose::highlight(arkdown-remote-purple),
+.stanza-arkdown-prose ::highlight(arkdown-remote-purple) {
+	background-color: color-mix(
+		in srgb,
+		var(--ash-charts-purple) 20%,
+		transparent
+	);
+	text-decoration: underline var(--ash-charts-purple);
+}
+.stanza-arkdown-prose::highlight(arkdown-remote-green),
+.stanza-arkdown-prose ::highlight(arkdown-remote-green) {
+	background-color: color-mix(
+		in srgb,
+		var(--ash-charts-green) 20%,
+		transparent
+	);
+	text-decoration: underline var(--ash-charts-green);
+}
+.stanza-arkdown-prose::highlight(arkdown-remote-orange),
+.stanza-arkdown-prose ::highlight(arkdown-remote-orange) {
+	background-color: color-mix(
+		in srgb,
+		var(--ash-charts-orange) 20%,
+		transparent
+	);
+	text-decoration: underline var(--ash-charts-orange);
+}
+.stanza-arkdown-prose::highlight(arkdown-remote-red),
+.stanza-arkdown-prose ::highlight(arkdown-remote-red) {
+	background-color: color-mix(
+		in srgb,
+		var(--ash-charts-red) 20%,
+		transparent
+	);
+	text-decoration: underline var(--ash-charts-red);
+}
+.stanza-arkdown-prose::highlight(arkdown-remote-yellow),
+.stanza-arkdown-prose ::highlight(arkdown-remote-yellow) {
+	background-color: color-mix(
+		in srgb,
+		var(--ash-charts-yellow) 20%,
+		transparent
+	);
+	text-decoration: underline var(--ash-charts-yellow);
+}

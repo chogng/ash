@@ -388,6 +388,35 @@ test('native scroll acknowledgements skip remeasurement while independent scroll
 	} finally { window.close(); }
 });
 
+test('scrollbar frames update changing ARIA values without rewriting stable presentation', () => {
+	const { window } = new JSDOM('<!doctype html><body></body>');
+	try {
+		using scrollbar = new ScrollableElement(window.document.body, { direction: 'vertical' });
+		let scrollHeight = 400;
+		installMetrics(scrollbar.scrollableElement, { width: 200, height: 100, scrollWidth: 200, get scrollHeight() { return scrollHeight; } });
+		scrollbar.layout();
+		scrollbar.scrollTo(0, 40);
+		const track = requireElement(scrollbar.element, '.ash-scrollbar-track-vertical');
+		const observer = new window.MutationObserver(() => { });
+		observer.observe(track, { attributes: true });
+		try {
+			scrollbar.layout();
+			assert.equal(observer.takeRecords().length, 0);
+			scrollbar.scrollTo(0, 80);
+			assert.deepEqual(observer.takeRecords().map(record => record.attributeName), ['aria-valuenow']);
+			assert.equal(track.getAttribute('aria-valuenow'), '80');
+			scrollHeight = 600;
+			scrollbar.layout();
+			assert.equal(track.getAttribute('aria-valuemax'), '500');
+			scrollHeight = 100;
+			scrollbar.layout();
+			assert.equal(track.hidden, true);
+			assert.equal(track.getAttribute('aria-disabled'), 'true');
+			assert.equal(track.getAttribute('aria-valuenow'), '0');
+		} finally { observer.disconnect(); }
+	} finally { window.close(); }
+});
+
 test('Scrollbar normalizes wheel input and propagates at boundaries', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const positions: Array<{ readonly left: number; readonly top: number; }> = [];

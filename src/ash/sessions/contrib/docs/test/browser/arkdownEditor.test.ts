@@ -11,6 +11,40 @@ suite('Arkdown document editing', () => {
 		await expect(browser.page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await browser.page.evaluate(({ source, mode }) => window.arkdownFixture.mount(source, mode), { source, mode });
 	};
+	test('retained collaboration highlights stay isolated after reloading editors', async () => {
+		await mount('Foreground content');
+		const initialRules = await browser.page.evaluate(() => [...document.styleSheets].flatMap(sheet => [...sheet.cssRules]).filter(rule => rule.cssText.includes('::highlight(arkdown-')).length);
+		for (let round = 0; round < 2; round++) {
+			await browser.page.evaluate(() => window.arkdownFixture.backgroundHighlights(56));
+			const state = await browser.page.evaluate(() => {
+				const names = [...CSS.highlights.keys()].filter(name => name.startsWith('arkdown-'));
+				const foreground = document.querySelector('#root .stanza-arkdown-prose')!;
+				for (const color of ['blue', 'purple', 'green', 'orange', 'red', 'yellow']) document.documentElement.style.setProperty(`--ash-charts-${color}`, '#0080ff');
+				const highlighted = [...CSS.highlights.get(names[0])!][0].startContainer.parentElement!;
+				return {
+					active: names.length,
+					ranges: names.reduce((total, name) => total + CSS.highlights.get(name)!.size, 0),
+					foregroundRanges: names.flatMap(name => [...CSS.highlights.get(name)!]).filter(range => foreground.contains(range.startContainer)).length,
+					rules: [...document.styleSheets].flatMap(sheet => [...sheet.cssRules]).filter(rule => rule.cssText.includes('::highlight(arkdown-')).length,
+					outsideColors: [...new Set(names.map(name => getComputedStyle(document.body, `::highlight(${name})`).backgroundColor))],
+					insideColor: getComputedStyle(highlighted, `::highlight(${names[0]})`).backgroundColor,
+				};
+			});
+			assert.equal(state.active, 6);
+			assert.equal(state.ranges, 336);
+			assert.equal(state.foregroundRanges, 0);
+			assert.equal(state.rules, initialRules);
+			assert.deepEqual(state.outsideColors, ['rgba(0, 0, 0, 0)']);
+			assert.notEqual(state.insideColor, 'rgba(0, 0, 0, 0)');
+			await browser.page.evaluate(() => window.arkdownFixture.closeBackgroundEditor());
+			assert.deepEqual(await browser.page.evaluate(() => {
+				const highlights = [...CSS.highlights].filter(([name]) => name.startsWith('arkdown-'));
+				return { colors: highlights.length, ranges: highlights.reduce((total, [, highlight]) => total + highlight.size, 0) };
+			}), { colors: 6, ranges: 330 });
+		}
+		await browser.page.evaluate(() => window.arkdownFixture.backgroundHighlights(0));
+		assert.equal(await browser.page.evaluate(() => [...CSS.highlights.keys()].filter(name => name.startsWith('arkdown-')).length), 0);
+	});
 
 	test('document input and selection use the owning browsing context', async () => {
 		await browser.page.goto('/arkdown.html');

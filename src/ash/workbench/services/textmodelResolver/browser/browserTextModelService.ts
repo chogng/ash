@@ -36,7 +36,6 @@ interface TextModelEntry {
 	readonly externalChangeEmitter: Emitter<void>;
 	readonly modelChangeListener: IDisposable;
 	readonly languageChangeListener: IDisposable;
-	readonly fileChangeListener: IDisposable;
 	savedText: string;
 	revision: string | undefined;
 	encoding: TextResourceContent['encoding'];
@@ -192,6 +191,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		if (!resourceStore || typeof resourceStore.resolve !== 'function' || typeof resourceStore.save !== 'function' || typeof resourceStore.onDidChange !== 'function') {
 			throw new TypeError('Text model service requires a text resource store');
 		}
+		this._register(resourceStore.onDidChange(event => this.acceptFileChange(event)));
 	}
 
 	async acquire(input: TextModelInput, signal: AbortSignal, options?: TextModelAcquireOptions): Promise<TextModelReference> {
@@ -273,7 +273,6 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 				}
 			}),
 			languageChangeListener: model.onDidChangeLanguage(event => this.modelLanguageChanged.fire({ model, oldLanguageId: event.oldLanguage })),
-			fileChangeListener: this.resourceStore.onDidChange(event => this.acceptFileChange(entry, event)),
 			savedText: untitled && !isBaselineChange ? '' : model.getText(),
 			revision: content.revision,
 			encoding: content.encoding,
@@ -528,10 +527,17 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		entry.dirtyEmitter.fire();
 	}
 
-	private acceptFileChange(entry: TextModelEntry, event: TextResourceChangeEvent): void {
-		if (entry.disposed || (event.resources && !event.resources.some(resource => this.uriIdentity.extUri.isEqual(resource, entry.resource)))) return;
-		// Watcher events are invalidations, including workspace rescans and our own writes.
-		void this.refreshEntry(entry, 'fileChange').catch(error => console.error('Could not refresh open file', error));
+	private acceptFileChange(event: TextResourceChangeEvent): void {
+		if (!this.entries.size) return;
+		// Resolve provider identity once per changed path, rather than repeating
+		// the whole batch for every open document. Rebuild for each event because
+		// filesystem case rules can change while models remain open.
+		const resources = event.resources && new Set(event.resources.map(resource => this.uriIdentity.extUri.getComparisonKey(resource)));
+		for (const entry of this.entries.values()) {
+			if (entry.disposed || (resources && !resources.has(this.uriIdentity.extUri.getComparisonKey(entry.resource)))) continue;
+			// Watcher events are invalidations, including workspace rescans and our own writes.
+			void this.refreshEntry(entry, 'fileChange').catch(error => console.error('Could not refresh open file', error));
+		}
 	}
 
 	/** Rechecks an open file when its window regains focus and watcher events may have been missed. */
@@ -644,7 +650,6 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		entry.identityLifetime.dispose();
 		entry.modelChangeListener.dispose();
 		entry.languageChangeListener.dispose();
-		entry.fileChangeListener.dispose();
 		entry.dirtyEmitter.dispose();
 		entry.externalChangeEmitter.dispose();
 		// Removal observers need the final snapshot after the registry drops its
