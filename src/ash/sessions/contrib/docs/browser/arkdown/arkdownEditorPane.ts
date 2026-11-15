@@ -164,7 +164,7 @@ export class ArkdownEditorPane extends EditorPane {
 			},
 			{
 				id: 'arkdown.editor.toggleMode', label: mode, tooltip: mode,
-				icon: source ? Lxicon.fileText : Lxicon.code, enabled: !!this.widget,
+				icon: source ? Lxicon.fileText : Lxicon.bracket, enabled: !!this.widget,
 				run: () => this.setMode(source ? 'rich' : 'markdown'),
 			},
 		];

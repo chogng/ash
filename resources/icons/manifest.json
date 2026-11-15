@@ -137,6 +137,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "bracket",
+      "file": "bracket.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "brain",
       "file": "brain.svg",
       "rendering": "symbolic"
@@ -154,6 +159,11 @@
     {
       "id": "browser-explore",
       "file": "browser-explore.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "browser-link",
+      "file": "browser-link.svg",
       "rendering": "symbolic"
     },
     {
@@ -567,16 +577,6 @@
       "rendering": "symbolic"
     },
     {
-      "id": "edit-1",
-      "file": "edit-1.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "edit-2",
-      "file": "edit-2.svg",
-      "rendering": "symbolic"
-    },
-    {
       "id": "edit-line",
       "file": "edit-line.svg",
       "rendering": "symbolic"
@@ -822,33 +822,23 @@
       "rendering": "symbolic"
     },
     {
-      "id": "h1",
-      "file": "h1.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "h2",
-      "file": "h2.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "h3",
-      "file": "h3.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "h4",
-      "file": "h4.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "h5",
-      "file": "h5.svg",
-      "rendering": "symbolic"
-    },
-    {
       "id": "hand",
       "file": "hand.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "heading-1",
+      "file": "heading-1.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "heading-2",
+      "file": "heading-2.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "heading-3",
+      "file": "heading-3.svg",
       "rendering": "symbolic"
     },
     {
@@ -877,8 +867,13 @@
       "rendering": "symbolic"
     },
     {
-      "id": "image-session",
-      "file": "image-session.svg",
+      "id": "image-simple",
+      "file": "image-simple.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "images",
+      "file": "images.svg",
       "rendering": "symbolic"
     },
     {
@@ -1049,6 +1044,11 @@
     {
       "id": "list-filter",
       "file": "list-filter.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "list-ordered",
+      "file": "list-ordered.svg",
       "rendering": "symbolic"
     },
     {
@@ -1532,6 +1532,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "strikethrough",
+      "file": "strikethrough.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "summary",
       "file": "summary.svg",
       "rendering": "symbolic"
@@ -1604,11 +1609,6 @@
     {
       "id": "text",
       "file": "text.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "text-2",
-      "file": "text-2.svg",
       "rendering": "symbolic"
     },
     {

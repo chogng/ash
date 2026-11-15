@@ -17,7 +17,7 @@ const screenshotIcons = {
 	rectangle: Lxicon.square,
 	arrow: Lxicon.arrowRight,
 	pen: Lxicon.pen,
-	text: Lxicon.text2,
+	text: Lxicon.text,
 	mosaic: Lxicon.layout,
 	undo: Lxicon.discard,
 	coordinates: Lxicon.frame,

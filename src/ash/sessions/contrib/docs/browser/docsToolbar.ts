@@ -66,14 +66,14 @@ export class DocsToolbar extends Disposable {
 		const paragraph = localize({ bundle: 'ash.docs', key: 'paragraph' }, 'Paragraph');
 		const fontMenu = [
 			...this.editor.getEditingActions().slice(0, 2), new Separator(),
-			action('paragraph', paragraph, Lxicon.text2, () => widget?.setHeading(0), editable, formatting?.heading === 0),
-			...[1, 2, 3].map(level => action(`heading${level}`, localize({ bundle: 'ash.docs', key: 'heading' }, 'Heading {0}', level), [Lxicon.h1, Lxicon.h2, Lxicon.h3][level - 1], () => widget?.setHeading(level), editable, formatting?.heading === level)),
+			action('paragraph', paragraph, Lxicon.text, () => widget?.setHeading(0), editable, formatting?.heading === 0),
+			...[1, 2, 3].map(level => action(`heading${level}`, localize({ bundle: 'ash.docs', key: 'heading' }, 'Heading {0}', level), [Lxicon.heading1, Lxicon.heading2, Lxicon.heading3][level - 1], () => widget?.setHeading(level), editable, formatting?.heading === level)),
 		];
 		const more = [
 			action('bulletedList', localize({ bundle: 'ash.docs', key: 'bulletedList' }, 'Bulleted list'), Lxicon.listUnordered, () => widget?.setListKind('bullet'), editable, formatting?.list === 'bullet'),
-			action('numberedList', localize({ bundle: 'ash.docs', key: 'numberedList' }, 'Numbered list'), Lxicon.listUnordered, () => widget?.setListKind('ordered'), editable, formatting?.list === 'ordered'),
+			action('numberedList', localize({ bundle: 'ash.docs', key: 'numberedList' }, 'Numbered list'), Lxicon.listOrdered, () => widget?.setListKind('ordered'), editable, formatting?.list === 'ordered'),
 			new Separator(),
-			action('codeBlock', localize({ bundle: 'ash.docs', key: 'codeBlock' }, 'Code block'), Lxicon.code, () => widget?.insertBlock('```\n\n```')),
+			action('codeBlock', localize({ bundle: 'ash.docs', key: 'codeBlock' }, 'Code block'), Lxicon.bracket, () => widget?.insertBlock('```\n\n```')),
 			action('divider', localize({ bundle: 'ash.docs', key: 'divider' }, 'Divider'), Lxicon.remove, () => widget?.insertBlock('---')),
 			new Separator(),
 			action('date', localize({ bundle: 'ash.docs', key: 'date' }, 'Date'), Lxicon.calendar, () => widget?.insertBlock(new Date().toLocaleDateString())),
@@ -87,7 +87,7 @@ export class DocsToolbar extends Disposable {
 				const columns = [1, 2, 3].map(index => localize({ bundle: 'ash.docs', key: 'column' }, 'Column {0}', index));
 				widget?.insertBlock(`| ${columns.join(' | ')} |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |`);
 			}),
-			action('image', localize({ bundle: 'ash.docs', key: 'insertImage' }, 'Insert image'), Lxicon.image, () => this.insertImage()),
+			action('image', localize({ bundle: 'ash.docs', key: 'insertImage' }, 'Insert image'), Lxicon.imageSimple, () => this.insertImage()),
 			action('checklist', localize({ bundle: 'ash.docs', key: 'checklist' }, 'Checklist'), checklistIcon, () => widget?.setListKind('task'), editable, formatting?.list === 'task'),
 			action('dropdown', localize({ bundle: 'ash.docs', key: 'insertDropdown' }, 'Insert dropdown'), Lxicon.dropdown, () => this.insertDropdown()),
 			{ ...action('more', localize({ bundle: 'ash.docs', key: 'more' }, 'More'), Lxicon.ellipsis, () => undefined, !!widget), menu: more },

@@ -10,7 +10,7 @@ export const artifactToolActions = [
 	[ArtifactCanvasTool.Rectangle, () => localize2('sessions.design.rectangle', 'Rectangle'), Lxicon.square],
 	[ArtifactCanvasTool.Ellipse, () => localize2('sessions.design.ellipse', 'Ellipse'), Lxicon.circleLarge],
 	[ArtifactCanvasTool.Pen, () => localize2('sessions.design.penTool', 'Pen (P)'), Lxicon.pen],
-	[ArtifactCanvasTool.Text, () => localize2('sessions.design.textTool', 'Text (T)'), Lxicon.text2],
+	[ArtifactCanvasTool.Text, () => localize2('sessions.design.textTool', 'Text (T)'), Lxicon.text],
 ] as const;
 
 export const artifactModeActions = [
