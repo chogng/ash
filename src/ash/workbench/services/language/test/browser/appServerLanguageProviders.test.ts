@@ -76,7 +76,7 @@ suite('Rust configuration catalog forwarding', () => {
 function notifyFeatures(events: FakeServerEvents, features: readonly LanguageServerFeatureDto[], dirId?: string): void {
 	events.fire({
 		method: 'language/serverCapabilities', params: {
-			...(dirId ? { dirId } : {}), server: 'fixture', languageIds: ['rust'], features: [...features],
+			...(dirId ? { dirId } : {}), server: 'rust', languageIds: ['rust'], features: [...features],
 			completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: features.includes('onTypeFormatting') ? [';'] : [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
 		}
 	});
@@ -394,7 +394,7 @@ test('App Server hover and completion providers keep revision, resource, and ins
 	const events = new FakeServerEvents();
 	using providers = createProviders(languages, api, workspace, { events });
 	await tick();
-	events.fire({ method: 'language/serverCapabilities', params: { server: 'fixture', languageIds: ['rust'], features: [...baselineFeatures], completionTriggerCharacters: ['.'], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: ['('], signatureHelpRetriggerCharacters: [','] } });
+	events.fire({ method: 'language/serverCapabilities', params: { server: 'rust', languageIds: ['rust'], features: [...baselineFeatures], completionTriggerCharacters: ['.'], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: ['('], signatureHelpRetriggerCharacters: [','] } });
 	await tick();
 	const resource = URI.file('C:/project/main.rs');
 	using model = new TextModel('pri', { languageId: 'rust', resource });
@@ -479,7 +479,7 @@ test('App Server rename and code actions preserve ordered workspace file operati
 function notifyCodeActions(events: FakeServerEvents, language: string, codeActions: boolean, codeActionResolve: boolean, dirId?: string): void {
 	events.fire({
 		method: 'language/serverCapabilities', params: {
-			...(dirId ? { dirId } : {}), server: 'fixture', languageIds: [language], features: [...baselineFeatures, ...(codeActions ? ['codeActions' as const] : []), ...(codeActionResolve ? ['codeActionResolve' as const] : [])],
+			...(dirId ? { dirId } : {}), server: language, languageIds: [language], features: [...baselineFeatures, ...(codeActions ? ['codeActions' as const] : []), ...(codeActionResolve ? ['codeActionResolve' as const] : [])],
 			completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
 		}
 	});
@@ -527,7 +527,7 @@ test('code actions and resolve follow negotiated capabilities and directory life
 	assert.equal(api.codeActionRequests.length, 1);
 	notifyCodeActions(events, 'typescript', true, true, 'one');
 	await tick();
-	events.fire({ method: 'language/serverState', params: { dirId: 'one', server: 'fixture', state: { type: 'starting' } } });
+	events.fire({ method: 'language/serverState', params: { dirId: 'one', server: 'typescript', state: { type: 'starting' } } });
 	await tick();
 	assert.equal(languages.codeActionProvider.has(first), false);
 });
@@ -582,7 +582,7 @@ test('App Server formatting providers preserve snapshot, options, range, and edi
 function notifyOnTypeFormatting(events: FakeServerEvents, characters: string[], dirId?: string): void {
 	events.fire({
 		method: 'language/serverCapabilities', params: {
-			...(dirId ? { dirId } : {}), server: 'fixture', languageIds: ['typescript'], features: characters.length ? ['onTypeFormatting'] : [],
+			...(dirId ? { dirId } : {}), server: 'typescript', languageIds: ['typescript'], features: characters.length ? ['onTypeFormatting'] : [],
 			completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: characters, signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
 		}
 	});
@@ -791,6 +791,46 @@ test('unrelated profile changes preserve language provider registrations', async
 	assert.ok(hover);
 	assert.equal(api.hoverRequests.length, 1, 'the retained provider still executes semantic requests');
 });
+
+test('extension directory changes retain negotiated providers for unchanged language servers', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	const api = new FakeLanguageApi();
+	const events = new FakeServerEvents();
+	using providers = createProviders(languages, api, workspace, { events });
+	using model = new TextModel('value', { languageId: 'rust', resource: URI.file('/project/main.rs') });
+	await tick();
+	const provider = languages.definitionProvider.ordered(model)[0]!;
+	api.negotiateCapabilities = false;
+	for (let generation = 2; generation <= 4; generation++) {
+		events.fire({ method: 'extensions/changed', params: { instanceId: 'catalog', generation } });
+		await tick();
+		assert.strictEqual(languages.definitionProvider.ordered(model)[0], provider);
+	}
+	assert.equal((await definition(languages, model, model.uri, new Position(1, 2))).length, 1);
+	assert.equal(api.locationRequests.length, 1, 'a running server needs no second capability handshake');
+});
+
+for (const change of ['removed', 'replaced'] as const) {
+	test(`extension directory changes retire a ${change} server and its retained adapters`, async () => {
+		using languages = new LanguageFeaturesService();
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+		const api = new FakeLanguageApi();
+		const events = new FakeServerEvents();
+		using providers = createProviders(languages, api, workspace, { events });
+		using model = new TextModel('value', { languageId: 'rust', resource: URI.file('/project/main.rs') });
+		await tick();
+		const provider = languages.hoverProvider.ordered(model)[0]!;
+		api.negotiateCapabilities = false;
+		api.availableServers = change === 'removed' ? [] : [{ id: 'replacement', languageIds: ['rust'] }];
+		events.fire({ method: 'extensions/changed', params: { instanceId: 'catalog', generation: 2 } });
+		await tick();
+		assert.equal(languages.definitionProvider.has(model), false);
+		const signal = new AbortController().signal;
+		assert.equal(await provider.provideHover({ ...createLanguageFeatureRequest(model, 'rust', signal), resource: model.uri, position: new Position(1, 2) }, signal), undefined);
+		assert.equal(api.hoverRequests.length, 0);
+	});
+}
 
 test('a restarted server replaces its providers even when its capabilities are unchanged', async () => {
 	using languages = new LanguageFeaturesService();
@@ -1040,7 +1080,7 @@ test('negotiated triggers replace registrations and dynamic removal drops obsole
 	using providers = createProviders(languages, new FakeLanguageApi(), workspace, { events });
 	await tick();
 	const notify = (completionTriggerCharacters: string[], signatureHelpTriggerCharacters: string[], signatureHelpRetriggerCharacters: string[]) => events.fire({
-		method: 'language/serverCapabilities', params: { server: 'fixture', languageIds: ['rust'], features: [...baselineFeatures], completionTriggerCharacters, onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters, signatureHelpRetriggerCharacters },
+		method: 'language/serverCapabilities', params: { server: 'rust', languageIds: ['rust'], features: [...baselineFeatures], completionTriggerCharacters, onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters, signatureHelpRetriggerCharacters },
 	});
 	notify(['\\', '='], ['['], [']']);
 	await tick();
@@ -1056,7 +1096,7 @@ test('negotiated triggers replace registrations and dynamic removal drops obsole
 	await tick();
 	assert.deepEqual(languages.completionProvider.getProvider('ash.appServer.completions')!.triggerCharacters, ['=']);
 	assert.deepEqual(languages.signatureHelpProvider.ordered(model)[0]!.signatureHelpTriggerCharacters, []);
-	events.fire({ method: 'language/serverState', params: { server: 'fixture', state: { type: 'backingOff', attempt: 1, retryAfterMillis: 10 } } });
+	events.fire({ method: 'language/serverState', params: { server: 'rust', state: { type: 'backingOff', attempt: 1, retryAfterMillis: 10 } } });
 	await tick();
 	assert.deepEqual(languages.completionProvider.getProvider('ash.appServer.completions')!.triggerCharacters, []);
 });
@@ -1079,7 +1119,7 @@ test('document colors require negotiated support in the exact directory and reti
 	const request = (model: TextModel) => ({ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), resource: model.uri });
 	const notify = (dirId: string, documentColors: boolean) => events.fire({
 		method: 'language/serverCapabilities', params: {
-			dirId, server: 'fixture', languageIds: ['rust'], features: documentColors ? ['documentColors'] : [],
+			dirId, server: 'rust', languageIds: ['rust'], features: documentColors ? ['documentColors'] : [],
 			completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
 		}
 	});
@@ -1106,10 +1146,10 @@ test('document colors require negotiated support in the exact directory and reti
 	assert.equal(languages.colorProvider.has(first), false);
 	notify('first', true);
 	await tick();
-	events.fire({ method: 'language/serverState', params: { dirId: 'first', server: 'fixture', state: { type: 'backingOff', attempt: 1, retryAfterMillis: 10 } } });
+	events.fire({ method: 'language/serverState', params: { dirId: 'first', server: 'rust', state: { type: 'backingOff', attempt: 1, retryAfterMillis: 10 } } });
 	await tick();
 	assert.equal(languages.colorProvider.has(first), false);
-	events.fire({ method: 'language/serverState', params: { dirId: 'first', server: 'fixture', state: { type: 'ready' } } });
+	events.fire({ method: 'language/serverState', params: { dirId: 'first', server: 'rust', state: { type: 'ready' } } });
 	await tick();
 	assert.equal(languages.colorProvider.has(first), false, 'restart needs a fresh capability snapshot');
 	notify('first', true);
@@ -1128,7 +1168,7 @@ test('a negotiated color provider preserves real language request errors', async
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	using providers = createProviders(languages, api, workspace, { events });
-	events.fire({ method: 'language/serverCapabilities', params: { server: 'fixture', languageIds: ['rust'], features: ['documentColors'], completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [] } });
+	events.fire({ method: 'language/serverCapabilities', params: { server: 'rust', languageIds: ['rust'], features: ['documentColors'], completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [] } });
 	await tick();
 	using model = new TextModel('paint', { languageId: 'rust', resource: URI.file('/project/main.rs') });
 	const signal = new AbortController().signal;

@@ -38,6 +38,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 	private readonly requestedResources = new Map<string, URI>();
 	private generation = 0;
 	private pending: Promise<ExtensionRecommendationsSnapshot> | undefined;
+	private collectionQueue: Promise<unknown> = Promise.resolve();
 
 	constructor(
 		public readonly target: ExtensionUiTarget,
@@ -91,7 +92,17 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 
 	public getRecommendations(): Promise<ExtensionRecommendationsSnapshot> {
 		this.assertNotDisposed();
-		return this.pending ??= this.collect(this.generation);
+		if (!this.pending) {
+			const generation = this.generation;
+			// Editor and provider events can invalidate a slow discovery repeatedly.
+			// Drain its I/O before collecting again, skipping superseded queued generations.
+			this.pending = this.collectionQueue.catch(() => undefined).then(() => {
+				if (this.isDisposed || generation !== this.generation) { throw new CancellationError(); }
+				return this.collect(generation);
+			});
+			this.collectionQueue = this.pending;
+		}
+		return this.pending;
 	}
 
 	private async collect(generation: number): Promise<ExtensionRecommendationsSnapshot> {

@@ -6,9 +6,8 @@
 
 ## Desktop · CPU 与内存占用调查
 
-- [ ] **TypeScript 缓存生命周期** · 四千个 TypeScript 文件、十二个标签场景中，关闭标签后语义服务器仍保留约 840 MiB，`languageServers.autoSuspend` 默认关闭。验证同等补全、诊断和跳转能力下的缓存释放、重开延迟及冷启动 CPU；覆盖后台请求、未保存文件、多窗口和重新激活，不以禁用语言能力降低占用。
 - [ ] **全量重建耗时复核** · SQL 复用后，完整重建的后端 CPU 中位数由 5.75 s 降至 1.83–2.36 s，但总耗时中位数由 11.3 s 变为 11.6–11.9 s。补充交替前后测量并拆分遍历、内容校验、语法解析和数据库写入耗时，确认波动或回退，再处理实测瓶颈；保留忽略规则、版本校验、容量限制与原子发布。证据：`.build/perf-lookups-20261114/results.json`。
-- [ ] **整组进程与长期稳定性** · macOS 当前开发构建、真实 App Server 和 160 个合成 TypeScript 文件的匹配场景，在确认信任、工作区恢复与 Explorer 文件列表就绪后，整组后台 CPU 从 2.76% 单核降至 2.30%；文件监听从 0.45% 降至 0.10%，队列线程从约 0.18% 降至 0.085%。此前停在信任确认的启动样本不作为完整工作区结论。证据：`.build/cpu-idle/comparison-ready.json`、`.build/cpu-idle/report.json`。内嵌浏览器动画页隐藏 16 秒零动画帧，HTTP 心跳继续；恢复后同一页面的编辑草稿、选区和动画正常，未冻结或回收普通页面。证据：`.build/cpu-idle/browser.json`。16 项文件监听测试、11 项队列测试及前后两份构建通过。此前已处理失焦调试轮询、隐藏窗口定期保存及 browser 重复布局／无关 DOM 检查；内部验证页完成请求后冻结，按需恢复，普通页面无固定空闲回收，浏览器导航、分屏、缩放、下载和 agent 操作的定向验证通过。证据：`.build/background-idle-round2/presentation.json`、`.build/background-idle-round3/runtime-result-final.json`、`.build/background-idle-round4/overlay-results.json`。仍缺多工作区、活跃语言服务器、扩展负载和持续真实使用的匹配数据；十二个合成 Chat 会话不足以证明长期无增长。线程池／统一调度按线程归属、唤醒与 CPU 调用栈的实测结果决定。
+- [ ] **整组进程与长期稳定性** · macOS 当前开发构建、真实 App Server 和 160 个合成 TypeScript 文件的匹配场景，在确认信任、工作区恢复与 Explorer 文件列表就绪后，整组后台 CPU 从 2.76% 单核降至 2.30%；文件监听从 0.45% 降至 0.10%，队列线程从约 0.18% 降至 0.085%。此前停在信任确认的启动样本不作为完整工作区结论。证据：`.build/cpu-idle/comparison-ready.json`、`.build/cpu-idle/report.json`。内嵌浏览器动画页隐藏 16 秒零动画帧，HTTP 心跳继续；恢复后同一页面的编辑草稿、选区和动画正常，未冻结或回收普通页面。证据：`.build/cpu-idle/browser.json`。16 项文件监听测试、11 项队列测试及前后两份构建通过。此前已处理失焦调试轮询、隐藏窗口定期保存及 browser 重复布局／无关 DOM 检查；内部验证页完成请求后冻结，按需恢复，普通页面无固定空闲回收，浏览器导航、分屏、缩放、下载和 agent 操作的定向验证通过。证据：`.build/background-idle-round2/presentation.json`、`.build/background-idle-round3/runtime-result-final.json`、`.build/background-idle-round4/overlay-results.json`。2026-11-15 已补真实双工作区、活跃 TypeScript 服务器、24 个初始标签、未保存草稿、隐藏恢复和窗口释放的约五分钟样本，16 次语义检查通过，见 `.build/local-acceptance-next/report.md`。仍缺用户真实扩展组合和多小时持续使用数据，不能据短时合成场景证明长期无增长。线程池／统一调度按线程归属、唤醒与 CPU 调用栈的实测结果决定。
 
 按功能记录已选范围内尚未完成或缺少通过证据的工作，完成后移除。2026-10-18 以 Ash `e323c7bcb` 对照本地 VS Code `a2acc8c864a`，源码核对集中于 Terminal、Preferences、Workspace、Sessions 与 Speech／MCP App 入口的公开契约、生产调用及相关测试；其他领域按已有记录分类。上述清单审查未重跑历史验收；后续完成项以各领域的验证记录为准，不将源码存在当作行为通过。
 
@@ -16,15 +15,11 @@
 
 ## Chat 应用窗口截图 · macOS 实机验收
 
-- [ ] **验收** · 应用窗口截图已接入选窗、快捷键、权限 Setup 和原草稿附件管线；Snapshot 已迁为内置编辑器并移除扩展包，标注、复制、保存和代码图片继续共用一条链路。4 个真实桌面／其他应用像素场景因测试宿主缺少 macOS 屏幕录制权限跳过，尚缺真实其他应用窗口到聊天附件的整链证据。授予测试用 Ash 屏幕录制权限后，运行 `pnpm test:smoke:desktop:no-compile test/smoke/areas/chat/chat-screenshot.spec.ts test/smoke/areas/chat/chat-app-window-screenshot.spec.ts`；用例使用仅包含测试色块的窗口，检查选窗、区域捕获、取消保留草稿、编辑和附件回填，通过后移除此条。
+- [ ] **验收** · 应用窗口截图已接入选窗、快捷键、权限 Setup 和原草稿附件管线；Snapshot 已迁为内置编辑器并移除扩展包，标注、复制、保存和代码图片继续共用一条链路。2026-11-15 当前 macOS 构建复跑 20 项：14 项通过、2 项失败、4 项因测试宿主缺少屏幕录制权限跳过。代码图片 Copy 首轮未读到 PNG，单独复跑通过；Chat／Code 的 Copy 超时已定位为 smoke 仍查询旧按钮名称，按现有 Agent Window 的 “Copy to Clipboard” 修正后，两条用例各重复 3 轮、6/6 通过，保留原 PNG 首败证据，不据此认定其根因已解决。首败与复跑证据见 `.build/todo-local-acceptance-20261115/{screenshots.log,round2/}`。尚缺真实其他应用窗口到聊天附件的整链证据。授予测试用 Ash 屏幕录制权限后，运行 `pnpm test:smoke:desktop:no-compile test/smoke/areas/chat/chat-screenshot.spec.ts test/smoke/areas/chat/chat-app-window-screenshot.spec.ts`；用例使用仅包含测试色块的窗口，检查选窗、区域捕获、取消保留草稿、编辑和附件回填，通过后移除此条。
 
 ## Docs · 空段落首次输入修复集成
 
 - [ ] **集成** · Mac Studio 已修复空白富文本段落首次输入的模型同步、选区恢复与输入法组合提交；新增工作副本备份／恢复回归及真实 Electron 输入、保存重开场景。定向编辑器测试 51 项通过，新增备份跟踪器回归 3 项通过，Electron UI 与连接 App Server 场景各 1 项通过。当前 checkout 的 `main` 基线为 `f06080352e`，远端 `origin/main` 为 `b98e8522fe`，另有 105 个既有修改／未跟踪文件；原内容已核对保留。按提交规范不能自动 stash 或切换工作区以 rebase，故本次只准备本地任务提交。由现有修改的 owner 收尾后，fetch 最新 main，仅 rebase 本任务未发布提交，复验受影响场景并通过 `just commit-check origin/main`，再串行非强制推送并核验远端；完成后删除本条。备份覆盖使用生产工作副本跟踪器与内存存储，Sessions 窗口当前未接入自动备份跟踪器，未验证其整窗崩溃恢复。
-
-## 终端恢复 · macOS 验收
-
-- [ ] **验收 · 断线期间退出的 PTY** · Linux 已验证重连后能读到末尾输出和退出码 `7`。Windows 上针对 macOS 的交叉检查在构建 `libsqlite3-sys` 时因缺少目标 C 编译器中止。在装有 Xcode Command Line Tools 的 macOS 上运行 `just verify ash-exec-server --lib --filter attach_replays_final_output_and_status_after_disconnected_child_exits`，通过后移除此条。
 
 ## Agents Window · 真实 SSH 主机验收
 
@@ -114,6 +109,7 @@
 - [ ] **复核 · 浏览器集成中的 scrollbar 点击偶发失败** · 2026-10-08 完整集成 840 项通过、1 项失败，未修改的基线重复 10 次出现 5 次相同失败。调查时保留现有断言。见 [main 集成交接记录](docs/archive/ash-main-handoff-2026-10-08.md#本次实际验证)。
       2026-11-06 在 Windows 11 23H2 x64、`bd00f5e926` 使用 Chromium 复跑编辑器滚动条的显示尺寸、滚轮和轨道点击、箭头点击和长按三条用例各 10 轮，30/30 通过。历史 macOS 记录没有具体用例名，仍待复核原失败。日志位于 `.build/todo-local-acceptance-20261106/scrollbar-retry.log`。
       2026-11-14 Windows 当前源码构建以原断言复跑 `textModel.integration.spec.ts` 的轨道点击与箭头交互两项各 10 次，20/20 通过；仍不能对应未注明名称的历史 macOS 失败。日志：`.build/todo-local-scrollbar.log`。
+      2026-11-15 在当前 macOS arm64、Chromium 上按同一三条用例各复跑 10 轮，30/30 通过，未修改断言；原始失败用例名仍缺失，本轮不消项。证据：`.build/todo-local-acceptance-20261115/round2/scrollbar.log`。
 
 ## Rust 函数级增量编译
 
@@ -127,9 +123,9 @@
 
 ## Desktop 窗口收尾弹窗 · TODO
 
-- [ ] **复核 · macOS 启动后立即退出**：2026-10-08 Sessions 尚在启动时退出曾记录两条 `IPC connection closed`；未修改的 storage owner 在同基线亦复现。2026-10-21 本机 `9402110a6` 正常重建后，真实 App Server 的自动恢复变体通过迁移、原文归档和布局恢复；窗口日志确认退出请求早于 `Agents restored` 6 ms，本轮未出现旧 IPC 错误。同批单窗口变体却在第二次启动后的退出超过 10 秒，Renderer 已回完成、载体已 stopped；定向复跑通过，首败仍保留，尚不能归因到旧存储 RPC。下一步取得该停留阶段的实际 pending／关闭诊断并修复，不增加等待或过滤错误消项。命令、日志和范围见 [macOS 补验](docs/desktop-startup.md#2026-10-21-macos-sessions-启动退出补验)；证据 `.build/local-todo-retirement/{first,retry}-test-results/`。2026-10-29 两个变体各 5 轮、合计 10/10 通过；自动恢复变体的退出请求均晚于 Agents 恢复 4–11 ms，没有重现启动中退出或旧停留，继续保留待定位项。此项不阻塞已验收的存储队列修复退场。
+- [ ] **复核 · macOS 退出停留** · 2026-10-21 单窗口变体第二次启动后的退出曾超过 10 秒，Renderer 已发完成回执，Main 载体也已 stopped；仍缺该停留阶段的 Main pending／关闭诊断，不能据后续成功复测归因或消项。2026-11-15 的 `storage/flush` 断链与载体退出遗留操作锁已分别补入取消和 OS 锁回收修复，trace 与默认日志配置各 10 轮实窗通过，证据见 `.build/shutdown-ipc-fix/result.json`；该历史 Main 停留继续按独立问题复现。原始现场与范围见 [macOS 补验](docs/desktop-startup.md#2026-10-21-macos-sessions-启动退出补验)。
 
-- [ ] **现场复核 · 开发重载时的原生无响应提示** · 后端发布漏通知与重启期间备份失败已修复，macOS 协议／备份及发布监听 81 项通过，双窗口重连和重载恢复未保存文件各 5 轮通过，已完成部分见 [后端发布与重载复核](docs/desktop-startup.md#2026-10-21-后端发布与页面重载重叠)。剩余是用户原先的“等待／重新打开”：本轮捕获的是主动保存失败，旧日志三次原生无响应前的 `initialize` 超时尚未关联到同一个原因；需用已有 token／reason、pending 标签及原生事件来源日志取得实际故障链，不能据新修复宣称所有无响应已解决。
+- [ ] **现场复核 · 开发重载时的原生无响应提示** · 后端发布漏通知与重启期间备份失败已修复，macOS 协议／备份及发布监听 81 项通过，双窗口重连和重载恢复未保存文件各 5 轮通过，已完成部分见 [后端发布与重载复核](docs/desktop-startup.md#2026-10-21-后端发布与页面重载重叠)。剩余是用户原先的“等待／重新打开”：本轮捕获的是主动保存失败，旧日志三次原生无响应前的 `initialize` 超时尚未关联到同一个原因；需用已有 token／reason、pending 标签及原生事件来源日志取得实际故障链，不能据新修复宣称所有无响应已解决。2026-11-15 已补本机双窗口发布重连、发布与页面重载重叠恢复未保存文件的复验，修正测试就绪门槛并处理 DebugStorage 正常连接退役误报，证据：`.build/local-acceptance-next/report.md`。
 
 ## Desktop 跨机器验收 · TODO
 

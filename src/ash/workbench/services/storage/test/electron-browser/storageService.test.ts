@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setImmediate } from 'node:timers/promises';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { errorHandler, setUnexpectedErrorHandler } from '../../../../../base/common/errors.js';
+import { CancellationError, errorHandler, setUnexpectedErrorHandler } from '../../../../../base/common/errors.js';
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { JSDOM } from 'jsdom';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IMainProcessService } from '../../../../../platform/ipc/common/mainProcessService.js';
@@ -70,13 +73,13 @@ suite('Desktop window storage', () => {
 			hidden = true;
 			browser.window.document.dispatchEvent(new browser.window.Event('visibilitychange'));
 			await flushed.p;
-			await new Promise(resolve => setImmediate(resolve));
+			await setImmediate();
 			assert.equal(timers.size, 0, 'The hidden boundary save finishes before the command completes');
 
 			unavailable = true;
 			history.record('bash', 'succeeded', 'echo first', true, false);
 			history.record('bash', 'succeeded', 'echo latest', true, false);
-			await new Promise(resolve => setImmediate(resolve));
+			await setImmediate();
 			assert.deepEqual(errors, [failure, failure]);
 			assert.equal(attempts, 2);
 			assert.equal(timers.size, 1, 'Background failures share one retry timer');
@@ -84,7 +87,7 @@ suite('Desktop window storage', () => {
 			const retry = [...timers.values()][0]!;
 			timers.clear();
 			retry();
-			await new Promise(resolve => setImmediate(resolve));
+			await setImmediate();
 			assert.equal(attempts, 3);
 			assert.deepEqual(errors, [failure, failure, failure]);
 			assert.equal(timers.size, 1, 'A failed retry waits for the next interval');
@@ -95,7 +98,7 @@ suite('Desktop window storage', () => {
 			timers.clear();
 			recover();
 			await flushed.p;
-			await new Promise(resolve => setImmediate(resolve));
+			await setImmediate();
 			assert.equal(attempts, 4);
 			assert.equal(timers.size, 0, 'Successful hidden saves return to idle');
 			const expected = [{ shellId: 'bash', command: 'echo latest' }, { shellId: 'bash', command: 'echo first' }];
@@ -107,7 +110,7 @@ suite('Desktop window storage', () => {
 
 			unavailable = true;
 			history.clear();
-			await new Promise(resolve => setImmediate(resolve));
+			await setImmediate();
 			assert.equal(timers.size, 1);
 			assert.deepEqual(otherHistory.getCommands('bash'), expected, 'A failed removal has not reached the other window');
 			unavailable = false;
@@ -116,7 +119,7 @@ suite('Desktop window storage', () => {
 			timers.clear();
 			removeRetry();
 			await flushed.p;
-			await new Promise(resolve => setImmediate(resolve));
+			await setImmediate();
 			assert.deepEqual(otherHistory.getCommands('bash'), []);
 			assert.equal(timers.size, 0);
 			using afterRemoval = new StorageMainService(path);
@@ -125,7 +128,7 @@ suite('Desktop window storage', () => {
 
 			unavailable = true;
 			history.record('bash', 'succeeded', 'echo disposed', true, false);
-			await new Promise(resolve => setImmediate(resolve));
+			await setImmediate();
 			assert.equal(timers.size, 1);
 			storage.dispose();
 			assert.equal(timers.size, 0, 'Disposal cancels pending retries');
@@ -136,6 +139,53 @@ suite('Desktop window storage', () => {
 		}
 	});
 
+	for (const started of [false, true]) {
+		test(`disposal cancels automatic flush ${started ? 'in flight' : 'before dispatch'} without suppressing explicit flush errors`, async () => {
+			const directory = await mkdtemp(join(tmpdir(), 'ash-store-close-'));
+			const browser = new JSDOM('', { url: 'https://ash.test' });
+			const previousHandler = errorHandler.getUnexpectedErrorHandler();
+			const errors: unknown[] = [];
+			setUnexpectedErrorHandler(error => errors.push(error));
+			try {
+				using owner = new StorageMainService(join(directory, 'state.json'));
+				await owner.initialize();
+				const channel = new StorageDatabaseChannel(owner);
+				using subscriptions = new DisposableStore();
+				let flushes = 0;
+				let cancelled = 0;
+				const failure = new Error('Injected explicit flush failure');
+				using services = new InstantiationService();
+				services.registerInstance(IMainProcessService, {
+					_serviceBrand: undefined,
+					getChannel: () => ({
+						call: <T>(command: string, arg: unknown, token?: CancellationToken): Promise<T> => {
+							if (command !== 'flush') { return channel.call('window:1', command, arg); }
+							flushes++;
+							if (!token || token === CancellationToken.None) { return Promise.reject(failure); }
+							return new Promise<T>((_resolve, reject) => {
+								subscriptions.add(token.onCancellationRequested(() => { cancelled++; reject(new CancellationError()); }));
+							});
+						},
+						listen: (event, arg) => channel.listen('window:1', event, arg),
+					}),
+					registerChannel: () => { throw new Error('Unexpected channel registration'); },
+				});
+				using storage = services.createInstance(NativeWorkbenchStorageService, { ownerWindow: browser.window as unknown as Window, workspaceId: 'closing' });
+				await storage.initialize();
+				await assert.rejects(storage.flush(), error => error === failure);
+				flushes = 0;
+				browser.window.dispatchEvent(new browser.window.Event('pagehide'));
+				if (started) { await setImmediate(); }
+				storage.dispose();
+				await setImmediate();
+				assert.deepEqual({ flushes, cancelled, errors }, { flushes: started ? 1 : 0, cancelled: started ? 1 : 0, errors: [] });
+			} finally {
+				setUnexpectedErrorHandler(previousHandler);
+				browser.window.close();
+				await rm(directory, { recursive: true, force: true });
+			}
+		});
+	}
 	test('retries failed mutations, preserving the latest value and removals without poisoning future flushes', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-store-retry-'));
 		const browser = new JSDOM('', { url: 'https://ash.test' });

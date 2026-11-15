@@ -56,8 +56,13 @@ export class AppServerLanguageSupport {
 		});
 	}
 
-	supports(dirId: string, languageId: string): boolean {
-		return this.directories.get(dirId)?.some(server => server.languageIds.includes(languageId)) ?? false;
+	hasSameServers(other: AppServerLanguageSupport, dirId: string, languageId: string): boolean {
+		const servers = (support: AppServerLanguageSupport) => support.directories.get(dirId)?.filter(server => server.languageIds.includes(languageId)).map(server => server.id) ?? [];
+		return equals(servers(this), servers(other));
+	}
+
+	supports(dirId: string, languageId: string, serverId?: string): boolean {
+		return this.directories.get(dirId)?.some(server => (serverId === undefined || server.id === serverId) && server.languageIds.includes(languageId)) ?? false;
 	}
 
 	workspaceLanguageIds(dirId: string): readonly string[] {

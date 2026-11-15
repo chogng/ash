@@ -714,7 +714,7 @@ test('Agents screenshot command and shortcut work in Chat and Code modes', { tag
 			await page.keyboard.press(screenshotShortcut);
 			const overlay = await screenOverlay(desktop);
 			await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
-			await overlay.getByRole('button', { name: 'Copy', exact: true }).click().catch(error => { if (!overlay.isClosed()) { throw error; } });
+			await overlay.getByRole('button', { name: 'Copy to Clipboard', exact: true }).click().catch(error => { if (!overlay.isClosed()) { throw error; } });
 			await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
 			expect(await desktop.evaluate(async ({ clipboard }) => (await clipboard.read()).some(item => item.types.includes('image/png')))).toBe(true);
 			await expect(modes.getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-pressed', 'true');

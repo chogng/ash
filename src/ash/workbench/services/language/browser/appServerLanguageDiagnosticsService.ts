@@ -119,12 +119,11 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 					if (key.startsWith(`${dirId}:`) && capabilities.server === event.params.server) this.updatePullCapabilities(key, undefined);
 				}
 			}
-			if (event.method === 'extensions/changed') this.clearPullCapabilities();
-			if (event.method === 'extensions/changed' || event.method === 'config/changed') this.queuePermissionRefresh();
+			if (event.method === 'extensions/changed' || event.method === 'config/changed') this.queuePermissionRefresh('catalog');
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration('rust-analyzer')) this.queuePermissionRefresh();
+			if (event.affectsConfiguration('rust-analyzer')) this.queuePermissionRefresh('catalog');
 		}));
 		if (checkWorkspaceTrust) {
 			this._register(workspaceTrust.onDidChangeTrustedFolders(() => this.queuePermissionRefresh()));
@@ -441,14 +440,17 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		for (const resource of changed) this.changeEmitter.fire(resource);
 	}
 
-	private queuePermissionRefresh(): void {
+	private queuePermissionRefresh(reason: 'access' | 'catalog' = 'access'): void {
 		if (!this.alive || !this.started) return;
 		this.permissionRefreshGeneration += 1;
-		this.languageAllowed = false;
 		this.workspaceDiagnosticsRequest?.abort();
 		for (const entry of this.entries.values()) entry.pullRequest?.abort();
-		this.support = new AppServerLanguageSupport();
-		this.clearServerDiagnostics();
+		if (reason === 'access') {
+			this.languageAllowed = false;
+			// Hide cached results until the current folder's authority is revalidated.
+			// A grant change for another window must not discard these snapshots.
+			for (const snapshot of [...this.serverSnapshots.values()]) this.changeEmitter.fire(snapshot.resource);
+		}
 		if (this.permissionRefreshQueued) return;
 		this.permissionRefreshQueued = true;
 		queueMicrotask(() => {
@@ -464,9 +466,27 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
 		const support = access.allowed ? await AppServerLanguageSupport.read(this.api, this.workspace, this.configuration) : new AppServerLanguageSupport();
 		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
+		const previous = this.support;
+		const wasAllowed = this.languageAllowed;
 		this.support = support;
 		this.languageAllowed = access.allowed;
-		this.clearServerDiagnostics();
+		// Unchanged servers may return unchanged pull reports or send no new push.
+		// Retire results by their document's routes, not another language's catalog changes.
+		for (const [key, snapshot] of this.serverSnapshots) {
+			const entry = this.entries.get(key);
+			const unchanged = entry ? support.hasSameServers(previous, entry.dirId, entry.languageId) : support.equals(previous);
+			if (!access.allowed || !unchanged) {
+				this.serverSnapshots.delete(key);
+				this.workspaceServerKeys.delete(key);
+				this.changeEmitter.fire(snapshot.resource);
+			} else if (!wasAllowed) {
+				this.changeEmitter.fire(snapshot.resource);
+			}
+		}
+		for (const [key, capabilities] of this.pullCapabilities) {
+			const folder = this.workspace.getWorkspace().folders.find(folder => key.startsWith(`${folder.id}:`));
+			if (!folder || !support.supports(folder.id, key.slice(folder.id.length + 1), capabilities.server)) this.updatePullCapabilities(key, undefined);
+		}
 		if (!access.allowed) {
 			for (const entry of this.entries.values()) {
 				if (entry.timer !== undefined) clearTimeout(entry.timer);
@@ -536,7 +556,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	private mergeDiagnostics(resource: URI): LanguageDiagnosticSnapshot | undefined {
 		const key = resource.toString();
 		const candidates = [...this.publishedDiagnostics.values()].filter(candidate => candidate.resource.toString() === key).map(candidate => candidate.snapshot);
-		const server = this.serverSnapshots.get(key);
+		const server = this.languageAllowed ? this.serverSnapshots.get(key) : undefined;
 		if (server) candidates.push(server);
 		if (candidates.length === 0) return undefined;
 		const revision = Math.max(...candidates.map(candidate => candidate.revision));

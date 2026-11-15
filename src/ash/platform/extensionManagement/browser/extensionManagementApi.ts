@@ -3,6 +3,7 @@ import { appServerRequest, voidResult } from '../../agentHost/browser/appServerR
 import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import type { IExtensionManagementApi } from '../common/extensionManagementApi.js';
 import { localize } from '../../../nls.js';
+import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 
 export function createDisconnectedExtensionsApi(unavailable: UnavailableOperation): IExtensionManagementApi {
 	return { updates: () => unavailable('extensions.updates'), setUpdatePolicy: () => unavailable('extensions.setUpdatePolicy'), checkForUpdates: () => unavailable('extensions.checkForUpdates'), recommendationEnvironment: () => unavailable('extensionManagement.recommendationEnvironment'), searchPage: () => unavailable('extensionManagement.searchPage'), builtInProviders: () => unavailable('extensions.builtInProviders'), setBuiltInProviderEnablement: () => unavailable('extensions.setBuiltInProviderEnablement'), sources: () => unavailable('extensions.sources'), addSource: () => unavailable('extensions.addSource'), setSourceEnabled: () => unavailable('extensions.setSourceEnabled'), search: () => unavailable('extensionManagement.search'), get: () => unavailable('extensionManagement.get'), download: () => unavailable('extensionManagement.download'), install: () => unavailable('extensionManagement.install'), update: () => unavailable('extensionManagement.update'), uninstall: () => unavailable('extensionManagement.uninstall'), listInstalled: () => unavailable('extensionManagement.listInstalled'), editorExtensions: () => unavailable('extensionManagement.editorExtensions'), setEditorExtensionPolicy: () => unavailable('extensionManagement.setEditorExtensionPolicy'), acquireCapability: () => unavailable('extensionManagement.acquireCapability'), releaseCapability: () => unavailable('extensionManagement.releaseCapability'), openResource: () => unavailable('extensionManagement.openResource') };
@@ -25,7 +26,7 @@ export function createAppServerExtensionManagementApi(connection: AppServerProto
 			if (connection.capabilities?.contracts.extensionsPaging?.version !== 1) {
 				return Promise.reject(new Error(localize({ bundle: 'ash.extensions', key: 'marketplacePagingUnsupported' }, 'This App Server does not support paged extension catalogs. Update the App Server.')));
 			}
-			return appServerRequest(connection, 'extensions/searchPage', params);
+			return connection.request(APP_SERVER_METHODS['extensions/searchPage'], params, { timeoutBehavior: 'rejectRequest' });
 		},
 		builtInProviders: () => appServerRequest(connection, 'extensions/builtInProviders', {}),
 		setBuiltInProviderEnablement: params => appServerRequest(connection, 'extensions/setBuiltInProviderEnablement', params),
@@ -36,9 +37,11 @@ export function createAppServerExtensionManagementApi(connection: AppServerProto
 			if ((params.capabilityKind || params.languageId) && connection.capabilities?.contracts.extensionsSearch?.version !== 1) {
 				throw new Error('This App Server does not support Extensions capability and language filters. Update the App Server to search with these filters.');
 			}
-			return appServerRequest(connection, 'extensions/search', params);
+			return connection.request(APP_SERVER_METHODS['extensions/search'], params, { timeoutBehavior: 'rejectRequest' });
 		},
-		get: params => appServerRequest(connection, 'extensions/get', params),
+		// Optional catalog reads can wait on external sources. Report their deadline
+		// without reconnecting the editor and replaying every open document.
+		get: params => connection.request(APP_SERVER_METHODS['extensions/get'], params, { timeoutBehavior: 'rejectRequest' }),
 		download: params => appServerRequest(connection, 'extensions/download', params),
 		install: params => appServerRequest(connection, 'extensions/install', params),
 		update: params => appServerRequest(connection, 'extensions/update', params),

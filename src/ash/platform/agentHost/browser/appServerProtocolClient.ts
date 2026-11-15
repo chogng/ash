@@ -44,6 +44,13 @@ export interface AppServerRequestContext {
 	readonly signal: AbortSignal;
 }
 
+interface AppServerRequestOptions {
+	readonly timeoutMs?: number;
+	readonly signal?: AbortSignal;
+	/** Read-only callers may fail independently; remote work still owns its bounded routing slot. */
+	readonly timeoutBehavior?: 'rejectRequest' | 'failConnection';
+}
+
 interface PendingRequest {
 	readonly method: AppServerMethod;
 	resolve: ((value: unknown) => void) | undefined;
@@ -239,8 +246,8 @@ export class AppServerProtocolClient {
 	/** The signal retires result payloads; settlement still tracks remote completion.
 	 * Callers own method-specific remote cancellation and must preserve write outcomes.
 	 */
-	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, options?: { readonly timeoutMs?: number; readonly signal?: AbortSignal; }): Promise<MethodResult<M>>;
-	request(definition: AppServerMethodDefinition<AppServerMethod>, params: MethodParams<AppServerMethod>, options?: { readonly timeoutMs?: number; readonly signal?: AbortSignal; }): Promise<MethodResult<AppServerMethod>> {
+	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, options?: AppServerRequestOptions): Promise<MethodResult<M>>;
+	request(definition: AppServerMethodDefinition<AppServerMethod>, params: MethodParams<AppServerMethod>, options?: AppServerRequestOptions): Promise<MethodResult<AppServerMethod>> {
 		// Abort listeners can reenter before the final state event is published.
 		if (options?.signal?.aborted) return Promise.reject(canceled());
 		if (this.restartDrain) return Promise.reject(new AppServerConnectionStoppedError('App Server connection replaced'));
@@ -250,7 +257,7 @@ export class AppServerProtocolClient {
 		const timeout = options ? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, 'timeoutMs') : this.options.requestTimeoutMs;
 		// A later read must stay behind any intervening request that can change configuration.
 		this.pendingConfigRead = undefined;
-		return this.requestRaw(definition, params, timeout, options?.signal, shareConfigRead);
+		return this.requestRaw(definition, params, timeout, options?.signal, shareConfigRead, options?.timeoutBehavior);
 	}
 
 	onStateChange(listener: (state: AppServerConnectionState, error?: Error) => void): IDisposable {
@@ -288,7 +295,7 @@ export class AppServerProtocolClient {
 		}
 	}
 
-	private requestRaw<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, timeoutMs: number, signal?: AbortSignal, shareConfigRead = false): Promise<MethodResult<M>> {
+	private requestRaw<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, timeoutMs: number, signal?: AbortSignal, shareConfigRead = false, timeoutBehavior: AppServerRequestOptions['timeoutBehavior'] = 'failConnection'): Promise<MethodResult<M>> {
 		if (this.pending.size >= 128) {
 			return Promise.reject(new Error('App Server request limit reached'));
 		}
@@ -297,7 +304,18 @@ export class AppServerProtocolClient {
 			const timeout = setTimeout(() => {
 				const pending = this.pending.get(id);
 				if (!pending) return;
-				this.fail(new Error(`App Server request timed out: ${definition.method}`));
+				const error = new Error(`App Server request timed out: ${definition.method}`);
+				if (timeoutBehavior === 'rejectRequest') {
+					// Slow catalog I/O does not imply a dead connection. Keep its ID in
+					// the existing bounded map until the reply or connection teardown;
+					// rejecting a local read does not cancel the backend operation.
+					pending.resolve = undefined;
+					pending.abortListener?.dispose();
+					pending.abortListener = undefined;
+					pending.reject(error);
+				} else {
+					this.fail(error);
+				}
 			}, timeoutMs);
 			const pending: PendingRequest = {
 				method: definition.method,

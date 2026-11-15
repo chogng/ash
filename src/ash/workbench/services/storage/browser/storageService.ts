@@ -3,6 +3,8 @@ import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '.
 import { isRecord } from '../../../../base/common/types.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
+import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from '../../../../platform/storage/common/storage.js';
 
 interface StoredEntry {
@@ -51,6 +53,7 @@ export interface BrowserStorageServiceOptions {
 /** Periodic UI-state saves pause while hidden; mutations still persist through their storage owner. */
 export class StorageFlushScheduler extends Disposable {
 	private readonly timer = this._register(new MutableDisposable<IDisposable>());
+	private readonly cancellation = new CancellationTokenSource();
 	private running = false;
 	private pending = false;
 	private retryRequested = false;
@@ -58,10 +61,11 @@ export class StorageFlushScheduler extends Disposable {
 	constructor(
 		private readonly ownerWindow: Window,
 		private readonly interval: number,
-		private readonly flush: () => Promise<void>,
+		private readonly flush: (token: CancellationToken) => Promise<void>,
 		private readonly onError: (error: unknown) => void,
 	) {
 		super();
+		this._register(toDisposable(() => this.cancellation.dispose(true)));
 		this._register(addDisposableListener(ownerWindow.document, 'visibilitychange', () => {
 			this.timer.clear();
 			// Save before suspension, and catch up before restarting the foreground timer.
@@ -99,9 +103,10 @@ export class StorageFlushScheduler extends Disposable {
 			try {
 				while (this.pending && !this.isDisposed) {
 					this.pending = false;
-					await this.flush();
+					await this.flush(this.cancellation.token);
 				}
 			} catch (error) {
+				if (this.cancellation.token.isCancellationRequested && isCancellationError(error)) { return; }
 				// Failed writes still need retries while hidden; only successful idle work stops.
 				retry = true;
 				this.onError(error);

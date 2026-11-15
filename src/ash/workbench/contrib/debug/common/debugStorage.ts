@@ -1,5 +1,6 @@
 import { ILifecycleService } from '../../../services/lifecycle/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
+import { AppServerConnectionStoppedError } from '../../../../platform/agentHost/common/appServerError.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -121,9 +122,9 @@ export class DebugStorage extends Disposable {
 		try {
 			result = await this.backend.readWorkspaceState(current.id);
 		} catch (error) {
-			// Closing a connection retires its reads. The next ready event reloads
-			// the snapshot; writes remain queued separately and are never replayed.
-			if (this.isDisposed || generation !== this.connectionGeneration) { return; }
+			// Restart draining can reject reads before the state notification arrives.
+			// The next ready event reloads the snapshot; writes are never replayed.
+			if (this.isDisposed || generation !== this.connectionGeneration || error instanceof AppServerConnectionStoppedError) { return; }
 			throw error;
 		}
 		if (this.isDisposed || this.current !== current || queue !== current.queue || generation !== this.connectionGeneration || (current.snapshot !== undefined && result.snapshot.revision <= current.snapshot.revision)) { return; }

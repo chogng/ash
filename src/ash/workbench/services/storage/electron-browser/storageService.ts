@@ -1,4 +1,5 @@
 import { Emitter } from '../../../../base/common/event.js';
+import { CancellationToken, throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from '../../../../base/common/types.js';
@@ -38,7 +39,7 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 		super();
 		this.workspaceId = options.workspaceId;
 		this.channel = mainProcessService.getChannel('storage');
-		this.flushScheduler = this._register(new StorageFlushScheduler(options.ownerWindow, 5_000, () => this.flush(), onUnexpectedError));
+		this.flushScheduler = this._register(new StorageFlushScheduler(options.ownerWindow, 5_000, token => this.flushPending(WillSaveStateReason.PERIODIC, token), onUnexpectedError));
 	}
 
 	public async initialize(): Promise<void> {
@@ -91,15 +92,22 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 	public keys(scope: StorageScope, target: StorageTarget): readonly string[] { return Object.keys(this.snapshot(scope).entries).filter(key => this.snapshot(scope).entries[key]!.target === target).sort(); }
 	public isNew(scope: StorageScope): boolean { return this.snapshot(scope).isNew; }
 	public async flush(reason = WillSaveStateReason.PERIODIC): Promise<void> {
+		await this.flushPending(reason, CancellationToken.None);
+	}
+	private async flushPending(reason: WillSaveStateReason, token: CancellationToken): Promise<void> {
+		throwIfCancelled(token);
 		this.saves.fire({ reason });
 		await this.writes;
+		throwIfCancelled(token);
 		// Failed requests leave their latest value pending. Retry it rather than
 		// retaining a rejected promise that permanently poisons every later flush.
 		while (this.pendingEntries.size > 0) {
 			await Promise.all([...this.pendingEntries.values()].map(pending => this.writeEntry(pending)));
 			await this.writes;
+			throwIfCancelled(token);
 		}
-		await this.channel.call('flush');
+		// Only scheduled saves are cancelled on disposal; shutdown's explicit flush must settle.
+		await this.channel.call('flush', undefined, token);
 	}
 	public async compareAndSwapApplicationSharedValue(key: string, expectedValue: string | undefined, newValue: string | undefined): Promise<boolean> {
 		await this.flush();

@@ -427,6 +427,44 @@ suite('Workspace extension recommendations', () => {
 		assert.equal((await f.recommendations.getRecommendations()).recommendations.length, 1);
 	});
 
+	test('editor changes drain one discovery and collect only the latest queued context', async () => {
+		const f = fixture(); using lifetime = f.lifetime;
+		const held = new DeferredPromise<readonly ExtensionsPackageSummary[]>();
+		const started = new DeferredPromise<void>();
+		f.setSearch(async () => { started.complete(); return held.p; });
+		f.setVisibleResources([URI.file('/project/first.py')]);
+		const retired = [assert.rejects(f.recommendations.getRecommendations(), CancellationError)];
+		await started.p;
+		let latest: ReturnType<ExtensionRecommendationsService['getRecommendations']> | undefined;
+		for (let index = 0; index < 25; index++) {
+			f.setVisibleResources([URI.file(`/project/latest-${index}.rs`)]);
+			latest = f.recommendations.getRecommendations();
+			if (index < 24) { retired.push(assert.rejects(latest, CancellationError)); }
+		}
+		assert.equal(f.queries.length, 1, 'no overlapping discovery while the first search is held');
+		f.setSearch(async () => [{ id: 'support.rust@ash', version: '1', packageType: 'language', displayName: 'Rust', description: '', uiTargets: [ExtensionUiTarget.IDE] }]);
+		await held.complete([]);
+		await Promise.all(retired);
+		assert.deepEqual((await latest!).recommendations.map(item => item.extensionId), ['support.rust@ash']);
+		assert.equal(f.queries.length, 2, 'only the latest context performs a follow-up search');
+	});
+
+	test('disposing recommendations retires queued discovery before it performs more I/O', async () => {
+		const f = fixture(); using lifetime = f.lifetime;
+		const held = new DeferredPromise<readonly ExtensionsPackageSummary[]>();
+		const started = new DeferredPromise<void>();
+		f.setSearch(async () => { started.complete(); return held.p; });
+		f.setVisibleResources([URI.file('/project/first.py')]);
+		const first = assert.rejects(f.recommendations.getRecommendations(), CancellationError);
+		await started.p;
+		f.setVisibleResources([URI.file('/project/latest.rs')]);
+		const queued = assert.rejects(f.recommendations.getRecommendations(), CancellationError);
+		f.recommendations.dispose();
+		await held.complete([]);
+		await Promise.all([first, queued]);
+		assert.equal(f.queries.length, 1);
+	});
+
 	test('rejects stale discovery after a language change and retries offline catalogs on refresh', async () => {
 		const f = fixture(); using lifetime = f.lifetime;
 		const held = new DeferredPromise<readonly ExtensionsPackageSummary[]>();

@@ -19,6 +19,8 @@ Identify each owned Main, Renderer, GPU/utility, App Server, extension, worker, 
 
 Match build mode, workspace, open views, enabled features, profile state, and instrumentation. Development builds and video/trace capture can change the baseline; do not present those absolute values as packaged-product idle usage. Capture functional evidence separately when recording would distort the footprint being measured.
 
+For native background measurements, verify OS focus/visibility/minimization and the renderer's actual `document.visibilityState` before sampling. Playwright enables focus emulation on its page session; disabling it through another CDP session alone can leave the page foregrounded. Use a connection that omits those overrides, such as `chromium.connectOverCDP(endpoint, { noDefaults: true })`, while retaining the repository's isolated launch configuration and process/resource owner. Keep a run with mismatched native and renderer states as failed readiness evidence, not a valid background CPU comparison.
+
 Follow the measured allocation owner. Check eager process startup, unused background work, duplicate data, caches and resource pools for avoidable retention. A bounded cache can still be too large for the workload; evaluate its memory cost and reuse latency. Verify first use, reuse, background activity, unsaved state and release after making resources lazy or evictable. Do not lower the result by skipping required work or hiding failed providers.
 
 ## Run an Ash scenario

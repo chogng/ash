@@ -4,6 +4,7 @@ import { createTestPathService } from '../../../../test/common/workbenchHostTest
 import { testWorkbenchHostServices, registerTestWorkbenchHostServices } from '../../../../test/common/workbenchHostTestServices.js';
 import { installTestElementHeights } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
+import { AppServerConnectionStoppedError } from '../../../../../platform/agentHost/common/appServerError.js';
 import { DebugStorage } from '../../common/debugStorage.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { AbstractLifecycleService } from '../../../../services/lifecycle/common/lifecycleService.js';
@@ -2620,6 +2621,26 @@ test('Debug storage pauses reads until reconnection and resumes from the saved s
 	const failure = new Error('Backend read failed while ready');
 	processes.readWorkspaceState = async () => { throw failure; };
 	await assert.rejects(client.reload(), error => error === failure);
+});
+
+test('Debug storage retires a restart-drained read before its state notification arrives', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	using processes = new FakeDebugAdapterProcessService();
+	const { client } = debugStorageFixture(resources, processes, storage, workspaceService(URI.file('/workspace')));
+	await client.whenReady();
+	const read = processes.readWorkspaceState.bind(processes);
+	processes.readWorkspaceState = async () => { throw new AppServerConnectionStoppedError('App Server connection replaced'); };
+	await client.reload();
+	assert.deepEqual(client.state.watchExpressions, []);
+
+	await processes.editWorkspaceState('workspace', 0, [{ kind: 'addWatch', expression: 'new backend snapshot' }]);
+	processes.readWorkspaceState = read;
+	const restored = new DeferredPromise<void>();
+	resources.add(Event.once(client.onDidChangeState)(() => { void restored.complete(undefined); }));
+	processes.setConnectionState('ready');
+	await restored.p;
+	assert.deepEqual(client.state.watchExpressions, ['new backend snapshot']);
 });
 
 for (const outcome of ['failure', 'snapshot'] as const) {

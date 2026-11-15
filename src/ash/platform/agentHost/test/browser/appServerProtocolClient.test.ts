@@ -21,6 +21,7 @@ import { createTestInitializeResult, createTestModel } from '../common/testAppSe
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../../remote/common/remote.js';
 import { AppServerFrameDecoder } from '../../browser/appServerFrameDecoder.js';
 import { createAppServerExtensionHostApi } from '../../../extensions/browser/extensionHostApi.js';
+import { createAppServerExtensionManagementApi } from '../../../extensionManagement/browser/extensionManagementApi.js';
 import { createAppServerFileApi } from '../../../files/browser/fileApi.js';
 import type { FileInvalidation } from '../../../files/common/fileApi.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -340,6 +341,92 @@ test('readiness has a bounded deadline without failing or starting the connectio
 		assert.deepEqual(transport.frames, []);
 		await client.connect();
 		await client.whenReady();
+		assert.equal(client.state, 'ready');
+	} finally { mock.timers.reset(); }
+});
+
+for (const method of ['get', 'search', 'searchPage'] as const) {
+	test(`a slow catalog ${method} times out without retiring unrelated editor requests or reconnecting`, async () => {
+		mock.timers.enable({ apis: ['setTimeout'] });
+		try {
+			const initialize = createTestInitializeResult();
+			initialize.capabilities.contracts.extensionsPaging = { version: 1 };
+			const transport = new ProtocolTransport(() => initialize);
+			let disconnects = 0;
+			transport.onDisconnect = () => { disconnects++; };
+			const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 100 });
+			using cleanup = toDisposable(() => client.dispose());
+			await client.connect();
+			const generation = client.generation;
+			const catalog = createAppServerExtensionManagementApi(client);
+			const request = method === 'get' ? catalog.get({ packageId: 'main:ash.test', version: null })
+				: method === 'search' ? catalog.search({ query: '', packageType: null, limit: 5, capabilityKind: null, languageId: null })
+					: catalog.searchPage({ sourceId: 'main', query: '', packageType: null, capabilityKind: null, languageId: null, pageSize: 5, cursor: null });
+			const slow = assert.rejects(request, new RegExp(`request timed out: extensions/${method}`));
+			const catalogId = transport.frames.at(-1)!.id;
+			const editor = client.request(APP_SERVER_METHODS['language/synchronize'], { document: { path: 'probe.ts', languageId: 'typescript', revision: 1, text: 'const value = 1;' } }, { timeoutMs: 1000 }).then(result => ({ result }), error => ({ error }));
+			const editorId = transport.frames.at(-1)!.id;
+			mock.timers.tick(100);
+			await slow;
+			assert.equal(client.state, 'ready');
+			assert.equal(client.generation, generation);
+			assert.equal(disconnects, 0);
+			transport.frame({ id: editorId, result: null });
+			assert.deepEqual(await editor, { result: null });
+			// A late response still retires its original routing slot, without another request.
+			transport.frame({ id: catalogId, error: { code: -32000, message: 'catalog unavailable', data: { kind: 'InternalError' } } });
+			assert.equal(client.state, 'ready');
+			assert.equal(transport.frames.filter(frame => frame.method === `extensions/${method}`).length, 1);
+		} finally { mock.timers.reset(); }
+	});
+}
+
+test('timed out catalog reads retain the request bound until late responses or disconnect', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 100 });
+		using cleanup = toDisposable(() => client.dispose());
+		await client.connect();
+		const catalog = createAppServerExtensionManagementApi(client);
+		const waiting = Array.from({ length: 128 }, () => assert.rejects(catalog.get({ packageId: 'main:ash.test', version: null }), /timed out/));
+		const ids = transport.frames.filter(frame => frame.method === 'extensions/get').map(frame => frame.id);
+		mock.timers.tick(100);
+		await Promise.all(waiting);
+		assert.equal(client.state, 'ready');
+		await assert.rejects(catalog.get({ packageId: 'main:ash.test', version: null }), /request limit/);
+		transport.frame({ id: ids[0], error: { code: -32000, message: 'catalog unavailable', data: { kind: 'InternalError' } } });
+		const next = assert.rejects(catalog.get({ packageId: 'main:ash.test', version: null }), /connection replaced/);
+		assert.equal(transport.frames.filter(frame => frame.method === 'extensions/get').length, 129);
+		client.disconnect();
+		await next;
+		await client.connect();
+		transport.frame({ id: ids[1], result: {} });
+		const read = appServerRequest(client, 'session/list', {});
+		transport.frame({ id: transport.frames.at(-1)!.id, result: { sessions: [] } });
+		assert.deepEqual(await read, { sessions: [] });
+		assert.equal(client.state, 'ready');
+	} finally { mock.timers.reset(); }
+});
+
+test('a locally timed out catalog read still drains its remote lifetime before restart', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 100 });
+		using cleanup = toDisposable(() => client.dispose());
+		await client.connect();
+		const read = assert.rejects(createAppServerExtensionManagementApi(client).get({ packageId: 'main:ash.test', version: null }), /timed out/);
+		const id = transport.frames.at(-1)!.id;
+		mock.timers.tick(100);
+		await read;
+		let drained = false;
+		const drain = client.drainForRestart().then(() => { drained = true; });
+		await flushHandlers();
+		assert.equal(drained, false);
+		transport.frame({ id, error: { code: -32000, message: 'catalog unavailable', data: { kind: 'InternalError' } } });
+		await drain;
+		assert.equal(drained, true);
 		assert.equal(client.state, 'ready');
 	} finally { mock.timers.reset(); }
 });

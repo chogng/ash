@@ -12,7 +12,6 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
@@ -33,6 +32,7 @@ use sha2::Sha256;
 
 const ENDPOINT_CONTRACT_VERSION: u32 = 2;
 const HEARTBEAT_FILE_NAME: &str = "heartbeat";
+const GUARDED_HEARTBEAT_PREFIX: &str = "guard-v1\n";
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(1);
 const LOCK_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const LOCK_TIMEOUT: Duration = Duration::from_secs(75);
@@ -73,9 +73,21 @@ impl EndpointPaths {
 
     pub(crate) fn acquire_operation_lock(&self) -> Result<OperationLock, String> {
         let deadline = Instant::now() + LOCK_TIMEOUT;
+        // Keep this inode stable: the OS releases its lock even when a carrier is killed.
+        // The directory/heartbeat remains the exclusion boundary for older binaries.
+        let guard = open_operation_guard(&self.operation_lock.with_extension("guard"))?;
+        loop {
+            match guard.try_lock() {
+                Ok(()) => break,
+                Err(fs::TryLockError::WouldBlock) if Instant::now() < deadline => {
+                    thread::sleep(LOCK_POLL_INTERVAL);
+                }
+                Err(error) => return Err(format!("Local App Server operation guard: {error}")),
+            }
+        }
         loop {
             match create_private_directory(&self.operation_lock) {
-                Ok(()) => return OperationLock::start(self.operation_lock.clone()),
+                Ok(()) => return OperationLock::start(self.operation_lock.clone(), guard),
                 Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                     let metadata = fs::symlink_metadata(&self.operation_lock).map_err(io_error)?;
                     if metadata.file_type().is_symlink() || !metadata.is_dir() {
@@ -84,18 +96,19 @@ impl EndpointPaths {
                         );
                     }
                     let heartbeat = self.operation_lock.join(HEARTBEAT_FILE_NAME);
-                    let stale = fs::symlink_metadata(&heartbeat)
-                        .or_else(|error| {
-                            if error.kind() == io::ErrorKind::NotFound {
-                                Ok(metadata)
-                            } else {
-                                Err(error)
-                            }
-                        })
-                        .and_then(|metadata| metadata.modified())
-                        .ok()
-                        .and_then(|modified| modified.elapsed().ok())
-                        .is_some_and(|age| age >= STALE_OPERATION_LOCK_AGE);
+                    let stale = guarded_heartbeat(&heartbeat)?
+                        || fs::symlink_metadata(&heartbeat)
+                            .or_else(|error| {
+                                if error.kind() == io::ErrorKind::NotFound {
+                                    Ok(metadata)
+                                } else {
+                                    Err(error)
+                                }
+                            })
+                            .and_then(|metadata| metadata.modified())
+                            .ok()
+                            .and_then(|modified| modified.elapsed().ok())
+                            .is_some_and(|age| age >= STALE_OPERATION_LOCK_AGE);
                     if stale {
                         match fs::remove_file(&heartbeat) {
                             Ok(()) => {}
@@ -147,6 +160,7 @@ impl EndpointPaths {
 }
 
 pub(crate) struct OperationLock {
+    _guard: File,
     directory: PathBuf,
     heartbeat: PathBuf,
     stop: Option<mpsc::Sender<()>>,
@@ -154,9 +168,9 @@ pub(crate) struct OperationLock {
 }
 
 impl OperationLock {
-    fn start(directory: PathBuf) -> Result<Self, String> {
+    fn start(directory: PathBuf, guard: File) -> Result<Self, String> {
         let heartbeat = directory.join(HEARTBEAT_FILE_NAME);
-        write_heartbeat(&heartbeat)?;
+        fs::write(&heartbeat, GUARDED_HEARTBEAT_PREFIX).map_err(io_error)?;
         let (stop, receiver) = mpsc::channel();
         let worker_heartbeat = heartbeat.clone();
         let worker = match thread::Builder::new()
@@ -166,7 +180,11 @@ impl OperationLock {
                     match receiver.recv_timeout(HEARTBEAT_INTERVAL) {
                         Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                         Err(mpsc::RecvTimeoutError::Timeout) => {
-                            let _ = write_heartbeat(&worker_heartbeat);
+                            // Keep the ownership marker intact if the process dies mid-heartbeat.
+                            let _ = OpenOptions::new()
+                                .write(true)
+                                .open(&worker_heartbeat)
+                                .and_then(|file| file.set_modified(SystemTime::now()));
                         }
                     }
                 }
@@ -179,6 +197,7 @@ impl OperationLock {
             }
         };
         Ok(Self {
+            _guard: guard,
             directory,
             heartbeat,
             stop: Some(stop),
@@ -279,12 +298,37 @@ fn create_private_directory(path: &Path) -> io::Result<()> {
     SocketDirectory::create(path).map(drop)
 }
 
-fn write_heartbeat(path: &Path) -> Result<(), String> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| error.to_string())?
-        .as_nanos();
-    fs::write(path, now.to_string()).map_err(io_error)
+fn open_operation_guard(path: &Path) -> Result<File, String> {
+    let mut options = OpenOptions::new();
+    options.create(true).read(true).write(true).truncate(false);
+    #[cfg(unix)]
+    options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+    let file = options.open(path).map_err(io_error)?;
+    let metadata = file.metadata().map_err(io_error)?;
+    if !metadata.is_file() {
+        return Err("Local App Server operation guard is not a regular file".into());
+    }
+    #[cfg(unix)]
+    if metadata.uid() != rustix::process::geteuid().as_raw()
+        || metadata.permissions().mode() & 0o077 != 0
+    {
+        return Err("Local App Server operation guard is not private".into());
+    }
+    Ok(file)
+}
+
+fn guarded_heartbeat(path: &Path) -> Result<bool, String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_file() => {
+            let mut prefix = [0; GUARDED_HEARTBEAT_PREFIX.len()];
+            let mut file = File::open(path).map_err(io_error)?;
+            Ok(file.read_exact(&mut prefix).is_ok()
+                && prefix == GUARDED_HEARTBEAT_PREFIX.as_bytes())
+        }
+        Ok(_) => Err("Local App Server operation heartbeat is not a regular file".into()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(io_error(error)),
+    }
 }
 
 #[cfg(unix)]

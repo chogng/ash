@@ -184,6 +184,11 @@ fn profile_operation_lock_serializes_mutating_lifecycle_commands() {
     let profile = tempfile::tempdir().unwrap();
     let endpoint = EndpointPaths::prepare(profile.path()).unwrap();
     let first = endpoint.acquire_operation_lock().unwrap();
+    // An expired heartbeat must not evict a live holder of the OS guard.
+    std::fs::File::open(endpoint.operation_lock.join("heartbeat"))
+        .unwrap()
+        .set_modified(std::time::UNIX_EPOCH)
+        .unwrap();
     let contender = endpoint.clone();
     let (acquired, receive) = mpsc::channel();
     let worker = std::thread::spawn(move || {
@@ -209,5 +214,43 @@ fn abandoned_operation_lock_is_recovered_after_its_heartbeat_expires() {
     let recovered = endpoint.acquire_operation_lock().unwrap();
 
     drop(recovered);
+    assert!(!endpoint.operation_lock.exists());
+}
+
+#[test]
+fn operation_lock_recovers_a_crashed_carrier_without_waiting_for_heartbeat_expiry() {
+    const PROFILE_ENV: &str = "ASH_TEST_CRASHED_OPERATION_LOCK_PROFILE";
+    if let Some(profile) = std::env::var_os(PROFILE_ENV) {
+        let endpoint = EndpointPaths::prepare(std::path::Path::new(&profile)).unwrap();
+        let _lock = endpoint.acquire_operation_lock().unwrap();
+        // Bypass Drop, as a carrier terminated by its host does.
+        std::process::exit(0);
+    }
+    let profile = tempfile::tempdir().unwrap();
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "endpoint::tests::operation_lock_recovers_a_crashed_carrier_without_waiting_for_heartbeat_expiry"])
+        .env(PROFILE_ENV, profile.path())
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let endpoint = EndpointPaths::prepare(profile.path()).unwrap();
+    let heartbeat = std::fs::File::open(endpoint.operation_lock.join("heartbeat")).unwrap();
+    // Age-based recovery cannot succeed, even on a slow test host.
+    heartbeat
+        .set_modified(std::time::SystemTime::now() + Duration::from_secs(3600))
+        .unwrap();
+    let contender = endpoint.clone();
+    let (send, receive) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let lock = contender.acquire_operation_lock().unwrap();
+        send.send(()).unwrap();
+        drop(lock);
+    });
+    let recovered = receive.recv_timeout(Duration::from_secs(2));
+    if recovered.is_err() {
+        heartbeat.set_modified(std::time::UNIX_EPOCH).unwrap();
+    }
+    worker.join().unwrap();
+    recovered.unwrap();
     assert!(!endpoint.operation_lock.exists());
 }

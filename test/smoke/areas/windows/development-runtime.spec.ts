@@ -235,7 +235,7 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		const second = await publish(source, directory, 'second');
 		await expect.poll(async () => (await connection(workbench)).generation).toBe(beforeWorkbench.generation + 1);
 		await expect.poll(async () => (await connection(agents)).generation).toBe(beforeAgents.generation + 1);
-		await expect.poll(() => processOutput.split('\n').some(line => line.includes('Development runtime restart completed') && line.includes(second))).toBe(true);
+		await expect.poll(() => processOutput.split('\n').some(line => line.includes('Development runtime restart completed') && line.includes(`"runtime":"${second}"`)), { timeout: 45_000 }).toBe(true);
 		await expect.poll(() => workbench.evaluate(() => (globalThis as CatalogProbeGlobal).catalogSubscriptions)).toBe(1);
 		await expect.poll(() => agents.evaluate(() => (globalThis as CatalogProbeGlobal).catalogSubscriptions)).toBe(2);
 		await editor.waitForEditorContents(text => text === 'Keep the Agents draft across backend replacement');
@@ -264,7 +264,7 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		await expect.poll(() => desktop!.application.windows().length).toBe(1);
 		expect(await publish(source, directory, 'first')).toBe(first);
 		await expect.poll(async () => (await connection(workbench)).generation).toBe(beforeWorkbench.generation + 2);
-		await expect.poll(() => processOutput.split('\n').some(line => line.includes('Development runtime restart completed') && line.includes(first))).toBe(true);
+		await expect.poll(() => processOutput.split('\n').some(line => line.includes('Development runtime restart completed') && line.includes(`"runtime":"${first}"`)), { timeout: 45_000 }).toBe(true);
 		await expect.poll(() => workbench.evaluate(() => (globalThis as CatalogProbeGlobal).catalogSubscriptions)).toBe(2);
 	} finally {
 		try {
@@ -304,9 +304,12 @@ test('Rust publication overlapping a Workbench reload preserves its unsaved file
 		if (await showSidebar.isVisible()) await showSidebar.click();
 		await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' }).dblclick();
 		const editor = new Editor(desktop.driver.workbench.editors.groupAt(0).content);
+		await editor.waitForEditorContents(text => text === 'const value = 1;\n');
+		await desktop.driver.workbench.waitForUiIdle();
 		const unsavedText = 'unsaved content across Rust publication and reload';
 		await editor.waitForEditorFocus();
 		await editor.waitForTypeInEditor(unsavedText);
+		await expect(desktop.driver.workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', /unsaved changes/);
 		const daemon = join(source, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`);
 		const before = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { pid: number; };
 		const modulePath = resolve(desktopDirectory, '.build/desktop/main/src/ash/platform/agentHost/electron-main/appServerConnectionRelay.js');
@@ -322,12 +325,13 @@ test('Rust publication overlapping a Workbench reload preserves its unsaved file
 			const showMessageBox = dialog.showMessageBox;
 			let allowStop!: () => void;
 			const barrier = new Promise<void>(resolve => { allowStop = resolve; });
-			const state = { stopping: false, armed: true, requests: [] as number[], prompts: [] as string[] };
+			const state = { stopping: false, armed: true, drainForRestart: false, requests: [] as number[], prompts: [] as string[] };
 			let relay: { readonly state: string; readonly options: { readonly processLauncher: { readonly environment: Readonly<Record<string, string>>; }; }; } | undefined;
-			prototype.stop = function (): Promise<void> {
-				const completion = stop.call(this) as Promise<void>;
+			prototype.stop = function (options?: { readonly drainForRestart: boolean; }): Promise<void> {
+				const completion = stop.call(this, options) as Promise<void>;
 				if (!state.armed || this.renderer?.id !== window.webContents.id) return completion;
 				state.armed = false;
+				state.drainForRestart = options?.drainForRestart === true;
 				relay = this;
 				return completion.then(() => { state.stopping = true; return barrier; });
 			};
@@ -351,6 +355,7 @@ test('Rust publication overlapping a Workbench reload preserves its unsaved file
 		try {
 			const second = await publish(source, directory, 'second');
 			await expect.poll(() => fixture.evaluate(value => value.state.stopping)).toBe(true);
+			expect(await fixture.evaluate(value => value.state.drainForRestart)).toBe(true);
 			const reload = page.reload();
 			// Observe the real shutdown token while the daemon replacement is still gated.
 			await expect.poll(() => fixture.evaluate(value => value.state.requests.length)).toBe(1);

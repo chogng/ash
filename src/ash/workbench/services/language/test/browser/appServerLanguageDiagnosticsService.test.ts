@@ -509,6 +509,72 @@ class FakeWorkspaceTrustService extends TestWorkspaceTrustManagementService {
 	notify() { this.change.fire(); }
 }
 
+for (const origin of ['push', 'pull'] as const) test(`unrelated catalog updates preserve ${origin} diagnostics when the server reports no change`, async () => {
+	const api = new FakeLanguageApi();
+	api.pullSupported = origin === 'pull';
+	const diagnostic = { range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } }, severity: 'error' as const, message: 'current diagnostic', code: null, source: 'rust' };
+	let first = true;
+	api.documentDiagnostics = async ({ document }) => {
+		const full = first;
+		first = false;
+		return { revision: document.revision, kind: full ? 'full' : 'unchanged', diagnostics: full ? [diagnostic] : [] };
+	};
+	const events = new FakeServerEvents();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	using service = createDiagnosticsService(api, events, workspace);
+	const resource = URI.file('/project/main.rs');
+	using model = new TextModel('value', { resource, languageId: 'rust' });
+	using acquisition = service.acquire(resource, 'rust', model);
+	await tick();
+	if (origin === 'push') events.fire({ method: 'language/diagnostics', params: { path: 'main.rs', revision: 1, diagnostics: [diagnostic] } });
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, 'current diagnostic');
+	api.negotiateCapabilities = false;
+	for (const event of [
+		{ method: 'extensions/changed' as const, params: { instanceId: 'catalog', generation: 2 } },
+		{ method: 'config/changed' as const, params: { revision: 1, generation: 1 } },
+	]) {
+		events.fire(event);
+		assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, 'current diagnostic');
+		await tick();
+		assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, 'current diagnostic');
+	}
+	api.availableServers.push({ id: 'python', languageIds: ['python'] });
+	events.fire({ method: 'extensions/changed', params: { instanceId: 'catalog', generation: 3 } });
+	await tick();
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, 'current diagnostic', 'another language route cannot invalidate this file');
+	api.availableServers = [{ id: 'replacement', languageIds: ['rust'] }];
+	events.fire({ method: 'extensions/changed', params: { instanceId: 'catalog', generation: 3 } });
+	await tick();
+	assert.equal(service.getDiagnostics(resource), undefined, 'a different server cannot inherit the previous diagnostic snapshot');
+});
+
+test('trust updates hide diagnostics during validation and restore unchanged authorized folders', async () => {
+	const api = new FakeLanguageApi();
+	api.pullSupported = false;
+	const events = new FakeServerEvents();
+	using trust = new FakeWorkspaceTrustService(['executeCommands', 'useLanguageServices']);
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	using service = createDiagnosticsService(api, events, workspace, undefined, trust);
+	const resource = URI.file('/project/main.rs');
+	using model = new TextModel('value', { resource, languageId: 'rust' });
+	using acquisition = service.acquire(resource, 'rust', model);
+	await tick();
+	const diagnostic = { range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } }, severity: 'error' as const, message: 'still authorized', code: null, source: 'rust' };
+	events.fire({ method: 'language/diagnostics', params: { path: 'main.rs', revision: 1, diagnostics: [diagnostic] } });
+	api.negotiateCapabilities = false;
+	trust.notify();
+	assert.equal(service.getDiagnostics(resource), undefined);
+	assert.deepEqual(service.getAllDiagnostics(), []);
+	await tick();
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, 'still authorized');
+	trust.value = [];
+	trust.notify();
+	assert.equal(service.getDiagnostics(resource), undefined);
+	await tick();
+	events.fire({ method: 'language/diagnostics', params: { path: 'main.rs', revision: 1, diagnostics: [diagnostic] } });
+	assert.deepEqual(service.getAllDiagnostics(), []);
+});
+
 test('installing a language server synchronizes an already open document and uninstall stops it', async () => {
 	const api = new FakeLanguageApi();
 	api.availableServers = [];

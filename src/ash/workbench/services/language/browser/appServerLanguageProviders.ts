@@ -88,7 +88,6 @@ export class AppServerLanguageProviders extends Disposable {
 			}
 			// State transitions retire metadata only for sessions that actually stopped. A profile
 			// update may concern another feature and leave these negotiated capabilities intact.
-			if (event.method === 'extensions/changed') this.clearCapabilities();
 			if (event.method === 'extensions/changed' || event.method === 'config/changed') this.queueRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
@@ -201,6 +200,15 @@ export class AppServerLanguageProviders extends Disposable {
 		if (access.allowed) {
 			const support = await AppServerLanguageSupport.read(this.api, this.workspace, this.configuration);
 			if (!this.alive || generation !== this.refreshGeneration) return;
+			// A catalog change can leave the negotiated server running. Retire only
+			// routes that disappeared or changed owner; lifecycle events retire restarts.
+			for (const [key, capabilities] of this.capabilities) {
+				const folder = this.workspace.getWorkspace().folders.find(folder => key.startsWith(`${folder.id}:`));
+				if (folder && support.supports(folder.id, key.slice(folder.id.length + 1), capabilities.server)) continue;
+				capabilities.lifetime.abort();
+				this.capabilities.delete(key);
+				this.nextCapabilityGeneration++;
+			}
 			// Registry changes restart editor feature work, including semantic tokens and hints.
 			// Discovery can reflect an unrelated profile edit; keep the negotiated providers then.
 			if (this.installed?.capabilityGeneration === this.nextCapabilityGeneration && support.equals(this.installed.support)) return;
