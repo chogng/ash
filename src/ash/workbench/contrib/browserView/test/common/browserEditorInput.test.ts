@@ -42,6 +42,7 @@ suite('Browser editor page model and restoration', () => {
 		const [first, second] = await Promise.all([input.resolve(), input.resolve()]);
 		f.events.fire({ type: 'stateChanged', state: { ...first.state, title: 'Updated title', url: 'https://example.test/next' } });
 		assert.deepEqual([first === second, f.creations, input.label, input.serialize().url], [true, 1, 'Updated title', 'https://example.test/next']);
+		assert.equal(input.getTitle(), 'Updated title\nhttps://example.test/next');
 	});
 
 	test('developer tools use the page owner and mirror real state changes without optimistic toggles', async () => {

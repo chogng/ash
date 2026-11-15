@@ -25,6 +25,8 @@ Docs 的唯一编辑器为 `ArkdownDocsEditorPane`，借用 [ArkdownEditorPane](
 
 Docs 与源码视图共用 Markdown 工作副本备份，使用 Profile 范围的 `sessions-docs` 存储范围，Desktop 经 `ash-sessions` 备份客户端写入现有 State SQLite，Browser 使用现有 IndexedDB 实现。备份跟踪与保存排空复用 Workbench，恢复的孤立草稿进入 Artifacts。
 
+协作的“近期远端修改”显示当前会话最近接收的 20 项更新、连接 ID 和最多 160 个字符的增删预览，正文与源码使用对应颜色标记受影响范围。范围来自同步更新，可能包含中间未变化的文字，不代表永久作者归属；快照同步不推断作者。列表随 buffer 会话保留，离开协作后清空。连接 ID 不代表已验证的用户身份。
+
 迁移记录属于 Profile 范围的机器状态，存入 `IStorageService`，记录源内容和恢复内容的摘要。目标与记录持久化后清理旧备份，后续读取 Markdown，保留其中的新编辑。旧文件改动会报告冲突。工作台在创建窗格前异步解析迁移后的输入，工作区恢复保存目标身份。Academy 论文与频道笔记继续由各自结构化模型持有。
 
 ## 本机源码核对
@@ -65,6 +67,10 @@ Docs 与源码视图共用 Markdown 工作副本备份，使用 Profile 范围�
 | 增量解析   | `Compiler.apply_edit` 对中文段落、粗体标记、段落拆成列表、列表项、表格单元格、代码块正文及约 30 KB 段落均返回 `full_reparse:false` | 删除闭合代码围栏、修改引用定义和整篇替换返回 `true`；11 个场景的源码、IR 和 HTML 均与新建 Compiler 完整解析一致，未还原内部算法 |
 | 增量呈现   | UI 消费半开区间 `changed_start..changed_end`，替换对应顶层 DOM 区块并移动后续源码区间                                              | 当前路径仍先生成完整 HTML，再选择替换变更区块；不能称为仅生成局部 HTML                                                          |
 | 协作与历史 | 两个编辑器从同一编码更新建立副本，同位置并发插入后互换更新收敛；重复更新幂等；本地撤销保留远端文字，撤销和重做再次同步后仍收敛     | 验证的是 WASM 引擎的离线副本行为，未验证 Claude 在线房间、权限、重连或页面入口                                                  |
+
+2026-11-14 对本机 Claude Desktop `5.11492.5` 补充核对：所查编辑器 UI、绑定和 WASM 与上述版本的资源字节一致。离线执行 `with_author(clientId, name, agent?)` 后，`authored_chunks()` 返回带 `client_id`、`kind`、`name`、`text` 的作者分段，并在副本合并后保留；`lookup_author(clientId)` 按客户端 ID 查询身份。样本分别观察到 `human` 和 `agent:claude`，名称不等同房间认证身份。
+
+UI 存在插入、删除、标记和评论锚点装饰，以及带源码范围的 `ckd-span-hover` / `ckd-span-click` 事件；通用范围高亮使用 CSS Highlight。对安装包全部 4792 个 JavaScript 成员的有界字面检索中，作者查询接口只在绑定文件出现，未确认生产 UI 消费、真人姓名光标、完整评论线程或修订接受／拒绝流程。补充探针、结果和 REA Evidence `ev_e754b76970085c744b9fde9677e815b0b1f9c6d2e0aedaf03a291f28907b3fae` 保存在本地 `.build/arkdown/clarkdown-confirm/`。
 
 增量报告的区间使用新树的顶层区块索引，并非源码字节。五区块中编辑第三块的样本返回 `1..4`，包含相邻块，不能把它理解成只解析单个段落。Clarkdown 的 `splice` 坐标为 UTF-8 字节；Arkdown 对宿主使用 UTF-16，两者需要各自的边界适配。
 

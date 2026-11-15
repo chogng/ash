@@ -92,6 +92,7 @@ registerWorkbenchContribution('workbench.contrib.browserView.restore', Workbench
 import '../browser/browserView.contribution.js';
 import { CONTEXT_BROWSER_DEVTOOLS_OPEN } from './features/browserDevToolsFeature.js';
 import './features/browserDataStorageFeatures.js';
+import './features/browserAutoReloadFeatures.js';
 
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 

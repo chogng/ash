@@ -263,12 +263,13 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			const icon = editor.input.getIcon?.();
 			const resource = EditorResourceAccessor.getOriginalUri(editor.input, { supportSideBySide: SideBySideEditor.BOTH });
 			const extraClasses = editor.input.getLabelExtraClasses?.();
-			const signature = JSON.stringify([resource, label.name, label.description, icon, extraClasses]);
+			const title = editor.input.getTitle?.();
+			const signature = JSON.stringify([resource, label.name, label.description, icon, extraClasses, title]);
 			// Resource labels recreate their text when updated; selection must retain the click target.
 			if (rendered.signature !== signature) {
 				rendered.signature = signature;
 				const ariaLabel = label.description ? `${label.name}, ${label.description}` : label.name;
-				rendered.label.setResource({ resource, name: label.name, description: label.description }, { ariaLabel, forceLabel: true, icon, extraClasses, fileDecorations: { colors: true, badges: true } });
+				rendered.label.setResource({ resource, name: label.name, description: label.description }, { ariaLabel, title, forceLabel: true, icon, extraClasses, fileDecorations: { colors: true, badges: true } });
 			}
 			this.updateTabAriaLabel(editor, rendered.label);
 		}

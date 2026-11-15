@@ -70,6 +70,10 @@ export class BrowserEditorInput extends EditorInput {
 	}
 
 	public getIcon(): typeof Lxicon.global { return Lxicon.global; }
+	public getTitle(): string {
+		const url = this.model?.state.url ?? this.data.url;
+		return `${this.getName()}\n${url}`;
+	}
 
 	public resolve(): Promise<IBrowserViewModel> {
 		this.assertNotDisposed();

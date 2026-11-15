@@ -6,6 +6,8 @@ import { extUri } from '../../../../base/common/resources.js';
 
 export interface IEditorCommandsContext {
 	readonly groupId: number;
+	/** A clicked tab retains its identity if another tab moves while its menu is open. */
+	readonly editor?: IResourceEditorInput;
 	readonly editorIndex?: number;
 	readonly preserveFocus?: boolean;
 }
@@ -66,7 +68,12 @@ function resolveTarget(argument: unknown, editorGroups: IEditorGroupsService): {
 	if (!group) {
 		return undefined;
 	}
-	const editor = argument.editorIndex === undefined ? group.activeInput : group.editors[argument.editorIndex]?.input;
+	let editor: IResourceEditorInput | undefined;
+	if (argument.editor !== undefined) {
+		editor = group.inputs.find(input => input === argument.editor);
+	} else {
+		editor = argument.editorIndex === undefined ? group.activeInput : group.editors[argument.editorIndex]?.input;
+	}
 	if (!editor && (group.inputs.length > 0 || argument.editorIndex !== undefined)) return undefined;
 	return { group, editor, preserveFocus: argument.preserveFocus === true };
 }
@@ -77,6 +84,7 @@ function isEditorCommandsContext(value: unknown): value is IEditorCommandsContex
 	}
 	const context = value as Partial<IEditorCommandsContext>;
 	return typeof context.groupId === 'number' && Number.isSafeInteger(context.groupId) && context.groupId >= 0
+		&& (context.editor === undefined || typeof context.editor === 'object' && context.editor !== null && URI.isUri(context.editor.resource))
 		&& (context.editorIndex === undefined || Number.isInteger(context.editorIndex) && context.editorIndex >= 0)
 		&& (context.preserveFocus === undefined || typeof context.preserveFocus === 'boolean');
 }

@@ -112,20 +112,24 @@ export abstract class AbstractScrollbar extends Disposable {
 		this.visibility.setIsNeeded(rendered);
 		const tabIndex = rendered && metrics.maximumPosition > 0 ? 0 : -1;
 		if (this.track.tabIndex !== tabIndex) this.track.tabIndex = tabIndex;
-		this.track.setAttribute(
+		this.updateAriaAttribute(
 			'aria-valuemax',
 			String(Math.round(metrics.maximumPosition)),
 		);
-		this.track.setAttribute(
+		this.updateAriaAttribute(
 			'aria-valuenow',
 			String(Math.round(metrics.position)),
 		);
-		this.track.setAttribute(
+		this.updateAriaAttribute(
 			'aria-disabled',
 			String(metrics.maximumPosition === 0),
 		);
 		this.trackNode.toggleClassName('disabled', metrics.maximumPosition === 0);
 		this.applyThumbMetrics(metrics);
+	}
+
+	private updateAriaAttribute(name: string, value: string): void {
+		if (this.track.getAttribute(name) !== value) this.track.setAttribute(name, value);
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {

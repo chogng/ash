@@ -1954,6 +1954,39 @@ test('a hidden cleared composer does not overwrite the active renderer draft dur
 });
 suite('chatInput browser component', () => {
 	const browserTests = useBrowserTests();
+	for (const compact of [false, true]) for (const rich of [false, true]) {
+		test(`Composer padding focuses the editor without changing selection (${compact ? 'compact' : 'regular'}, ${rich ? 'rich' : 'textarea'})`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?locale=zh-CN${compact ? '&compact' : ''}${rich ? '&inlineCode' : ''}`);
+			const composer = page.locator('.ash-chat-input-container');
+			const input = composer.getByRole('textbox');
+			await input.focus();
+			await page.keyboard.insertText('Retained draft');
+			await input.press('Shift+ArrowLeft');
+			const selection = () => rich ? page.evaluate(() => window.ashChatInputIntegration.inputSelection())
+				: input.evaluate((element: HTMLTextAreaElement) => ({ anchor: element.selectionStart, active: element.selectionEnd }));
+			const originalSelection = await selection();
+			const bounds = await composer.boundingBox();
+			expect(bounds).not.toBeNull();
+			for (const y of [bounds!.y + 2, bounds!.y + bounds!.height - 2]) {
+				await input.blur();
+				await page.mouse.move(bounds!.x + bounds!.width / 2, y);
+				expect(await page.evaluate(() => {
+					const hovered = document.querySelectorAll(':hover');
+					return getComputedStyle(hovered[hovered.length - 1]).cursor;
+				})).toBe('text');
+				await page.mouse.down();
+				await page.mouse.up();
+				await expect(input).toBeFocused();
+				expect(await selection()).toEqual(originalSelection);
+			}
+			const attach = (compact ? composer : page).getByRole('button', { name: '添加上下文', exact: true });
+			await expect(attach).toHaveCSS('cursor', 'pointer');
+			await attach.click();
+			await expect(page.getByRole('menu')).toBeVisible();
+			await expect(input).not.toBeFocused();
+		});
+	}
 	test('Compact chat input uses the available line width with a proportional font', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatInput.html?inlineCode&compact');

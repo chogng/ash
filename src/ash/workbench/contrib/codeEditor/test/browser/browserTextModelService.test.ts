@@ -22,9 +22,34 @@ import { LanguageService } from '../../../../../editor/common/services/languageS
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import type { LanguageTokenResult } from '../../../../../editor/common/tokens/languageTokens.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
+
+test('file change batches normalize paths once across retained documents', async () => {
+	using services = new TestUriIdentityServices();
+	using changes = new Emitter<TextResourceChangeEvent>();
+	let reads = 0;
+	using models = services.createInstance(BrowserTextModelService, {
+		onDidChange: changes.event,
+		resolve: async (request: TextResourceResolveRequest) => { reads++; return { resource: request.resource, text: 'saved', revision: '1' }; },
+		save: async () => ({ revision: '1' }),
+	}, {});
+	using references = new DisposableStore();
+	for (let index = 0; index < 32; index++) references.add(await models.acquire({ resource: URI.file(`/workspace/open-${index}.txt`) }, new AbortController().signal));
+	const resources = Array.from({ length: 256 }, (_, index) => URI.file(`/workspace/other-${index}.txt`));
+	const identity = services.get(IUriIdentityService).extUri;
+	const original = identity.getComparisonKey;
+	let normalizations = 0;
+	identity.getComparisonKey = function (resource) { normalizations++; return original.call(this, resource); };
+	try {
+		changes.fire({ resources });
+		assert.ok(normalizations <= resources.length + 32, `Unexpected repeated path normalization: ${normalizations}`);
+		assert.equal(reads, 32);
+	} finally { identity.getComparisonKey = original; }
+});
 
 test('Stanza text model service shares one model and preserves edits across panes', async () => {
 	const textFiles = new TestTextFileService('from disk');

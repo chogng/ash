@@ -1,4 +1,4 @@
-import { IBufferCollabService, BufferCollabState } from '../../../../../workbench/services/collab/common/bufferCollabService.js';
+import { IBufferCollabService, BufferCollabState, type BufferCollabSession } from '../../../../../workbench/services/collab/common/bufferCollabService.js';
 import type { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
@@ -38,6 +38,8 @@ export class ArkdownEditorPane extends EditorPane {
 	private readOnly = false;
 	private model: TextModel | undefined;
 	private connecting = false;
+	private readonly collaborationPresentation = this._register(new MutableDisposable());
+	private observedSession: BufferCollabSession | undefined;
 	private get collaborationSession() { return this.model ? this.bufferCollab.get(this.model) : undefined; }
 
 	private collaborationAbort: AbortController | undefined;
@@ -90,6 +92,7 @@ export class ArkdownEditorPane extends EditorPane {
 			signal.throwIfAborted();
 			this.collaborationAbort?.abort(); this.collaborationAbort = undefined; this.connecting = false;
 			this.inputLifetime.value = lifetime;
+			this.collaborationPresentation.clear(); this.observedSession = undefined;
 			this.model = reference.model;
 			this.widget = widget;
 			this.copy = copy;
@@ -118,7 +121,7 @@ export class ArkdownEditorPane extends EditorPane {
 	override getControl(): ArkdownEditor | undefined { return this.widget; }
 	override focus(): void { this.widget?.focus(); }
 	override layout(dimension: IDimension): void { this.widget?.layout({ width: this.root.clientWidth || dimension.width, height: this.root.clientHeight || dimension.height }); }
-	override clearInput(): void { this.collaborationAbort?.abort(); this.collaborationAbort = undefined; this.connecting = false; this.model = undefined; this.widget = undefined; this.copy = undefined; this.input = undefined; this.inputLifetime.clear(); }
+	override clearInput(): void { this.collaborationAbort?.abort(); this.collaborationAbort = undefined; this.connecting = false; this.collaborationPresentation.clear(); this.observedSession = undefined; this.model = undefined; this.widget = undefined; this.copy = undefined; this.input = undefined; this.inputLifetime.clear(); }
 	async save(options?: ISaveOptions): Promise<void> {
 		try { await this.copy?.save(new AbortController().signal, options); }
 		catch (error) { if (isCancellationError(error)) throw error; if (!await this.saveErrors.onSaveError(error, this.copy?.resource)) throw new CancellationError(undefined, error); }
@@ -126,7 +129,7 @@ export class ArkdownEditorPane extends EditorPane {
 	async saveAs(resource: URI): Promise<void> { await this.copy?.saveAs(resource, new AbortController().signal); }
 	containsAccessibilityFocus(target: HTMLElement): boolean { return this.getMode() === 'rich' && this.root.contains(target); }
 	getAccessibleContent(): string { return this.widget?.getAccessibleText() ?? ''; }
-	getAccessibilityHelp(): readonly string[] { return [localize({ bundle: 'ash.arkdown', key: 'arkdownHelp' }, 'Edit the document directly. Use Control or Command+B for bold, Control or Command+I for italic, and Control or Command+Z to undo. Use Control or Command+Alt+0 through 6 for a paragraph or heading. Use Control or Command+Shift+7, 8, or 9 for numbered, bulleted, or task lists. In a table, Tab and Shift+Tab move between cells; Tab in the last cell adds a row. Show Markdown source opens the code editor on the same document; Show document returns to the formatted document. Changes save automatically. Export creates a separate copy. Read-only files cannot be edited. Collaborate creates or joins a room. Copy room ID shares its identifier; remote rooms also require an access token. Undo during collaboration affects local edits and preserves remote edits. Disconnected edits are retried after reconnection. Leave collaboration stops synchronization and keeps the current local document. Saving still writes the local file. Collaboration stays active when switching tabs or views; leave the room to stop it. Collaboration undo history is checkpointed after 256 operations or 16 MiB.')]; }
+	getAccessibilityHelp(): readonly string[] { return [localize({ bundle: 'ash.arkdown', key: 'arkdownHelp' }, 'Edit the document directly. Use Control or Command+B for bold, Control or Command+I for italic, and Control or Command+Z to undo. Use Control or Command+Alt+0 through 6 for a paragraph or heading. Use Control or Command+Shift+7, 8, or 9 for numbered, bulleted, or task lists. In a table, Tab and Shift+Tab move between cells; Tab in the last cell adds a row. Show Markdown source opens the code editor on the same document; Show document returns to the formatted document. Changes save automatically. Export creates a separate copy. Read-only files cannot be edited. Collaborate creates or joins a room. Copy room ID shares its identifier; remote rooms also require an access token. Undo during collaboration affects local edits and preserves remote edits. Disconnected edits are retried after reconnection. Leave collaboration stops synchronization and keeps the current local document. Saving still writes the local file. Collaboration stays active when switching tabs or views; leave the room to stop it. Collaboration undo history is checkpointed after 256 operations or 16 MiB.'), localize({ bundle: 'ash.arkdown', key: 'remoteChangesHelp' }, 'Recent remote changes expands a session-local list of the last 20 received changes with connection labels and insertion or deletion previews. The affected ranges are highlighted in matching colors in the document and source views. These ranges describe received updates, not permanent text authorship. Connection IDs are not verified user names. The list is available in the accessible view and clears when leaving collaboration.')]; }
 
 	override getActions(): readonly IAction[] {
 		const source = this.getMode() === 'markdown';
@@ -185,6 +188,13 @@ export class ArkdownEditorPane extends EditorPane {
 
 	private updateReadOnly(): void {
 		if (!this.input) return;
+		const session = this.collaborationSession;
+		if (session !== this.observedSession) {
+			this.collaborationPresentation.clear();
+			this.observedSession = session;
+			if (session) this.collaborationPresentation.value = session.onDidChangeRemoteChanges(() => this.widget?.setRemoteChanges(session.recentChanges));
+		}
+		this.widget?.setRemoteChanges(session?.recentChanges ?? []);
 		this.readOnly = this.connecting || this.collaborationSession?.state === BufferCollabState.Connecting || this.input.readOnly === true || !!this.filesConfiguration.isReadonly(this.input.resource) || (!!this.collaborationSession?.roomId && !this.collaborationSession.canEdit);
 		this.widget?.setReadOnly(this.readOnly);
 		this.updateTitleArea();

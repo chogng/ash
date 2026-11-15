@@ -1,3 +1,5 @@
+import { IHostService } from '../../../../services/host/browser/host.js';
+import { TestHostService } from '../../../../services/host/test/browser/testHostService.js';
 import { createTestPathService } from '../../../../test/common/workbenchHostTestServices.js';
 import { testWorkbenchHostServices, registerTestWorkbenchHostServices } from '../../../../test/common/workbenchHostTestServices.js';
 import { installTestElementHeights } from '../../../../../editor/test/browser/editorTestGlobals.js';
@@ -607,7 +609,7 @@ async function resolveTerminalProfile(selection: import('../../../../../platform
 	};
 }
 
-function createDebugService(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: AdapterManager, contextKeys = owner.add(new ContextKeyService()), quickInput?: IQuickInputService, extensions?: TestExtensionService, options?: { editor?: IEditorService; configuration?: IConfigurationService; executionOS?: OperatingSystem; textFiles?: ITextFileService; log?: ILogService; }): DebugService {
+function createDebugService(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: AdapterManager, contextKeys = owner.add(new ContextKeyService()), quickInput?: IQuickInputService, extensions?: TestExtensionService, options?: { host?: IHostService; editor?: IEditorService; configuration?: IConfigurationService; executionOS?: OperatingSystem; textFiles?: ITextFileService; log?: ILogService; }): DebugService {
 	const baseHost = createDisconnectedRendererApi();
 	const host = { ...baseHost, appServer: { ...baseHost.appServer, operatingSystem: options?.executionOS ?? OperatingSystem.Linux, isAvailable: true } };
 	const parentServices = workbenchInstantiationService(owner, storage);
@@ -633,6 +635,7 @@ function createDebugService(owner: DisposableStore, files: IFileSystemProvider, 
 	services.registerInstance(IEditorService, options?.editor ?? { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
 	services.registerInstance(ITextFileService, options?.textFiles ?? owner.add(createTestTextFileService(services.get(IFileService), services.get(IConfigurationService))));
+	if (options?.host) services.registerInstance(IHostService, options.host);
 	registerTerminalProfiles(services);
 	const service = createDebugServiceInstance(services);
 	services.registerInstance(IDebugService, service);
@@ -2580,6 +2583,7 @@ test('Debug workspace migration preserves conflicting legacy data and reports th
 
 class DebugTestLifecycle extends AbstractLifecycleService { }
 function createDebugServiceInstance(services: InstantiationService): DebugService {
+	if (!services.has(IHostService)) services.registerInstance(IHostService, new TestHostService());
 	if (!services.has(ILifecycleService)) services.registerSingleton(ILifecycleService, () => services.createInstance(DebugTestLifecycle, undefined));
 	if (!services.has(ITextFileService)) services.registerSingleton(ITextFileService, () => createTestTextFileService(services.get(IFileService), services.get(IConfigurationService)));
 	return services.createInstance(DebugService);
@@ -3034,3 +3038,37 @@ for (const change of ['continued', 'explicit selection', 'session switch', 'work
 		assert.deepEqual(opened.map(input => input.resource.toString()), change === 'explicit selection' ? [URI.joinPath(root, 'current.ts').toString()] : []);
 	});
 }
+
+
+test('Debug workspace polling stops in background and catches up on focus', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	using processes = new FakeDebugAdapterProcessService();
+	using tasks = new FakeTaskService();
+	using adapters = new AdapterManager();
+	const focus = resources.add(new Emitter<boolean>());
+	let focused = true;
+	const host: IHostService = Object.assign(new TestHostService(), {
+		onDidChangeFocus: focus.event,
+	});
+	Object.defineProperty(host, 'hasFocus', { get: () => focused });
+	let reads = 0;
+	const read = processes.readWorkspaceState.bind(processes);
+	processes.readWorkspaceState = async (...args) => { reads++; return read(...args); };
+	const root = URI.file('/workspace');
+	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters, undefined, undefined, undefined, { host });
+	await service.refresh();
+	focused = false;
+	focus.fire(false);
+	const baseline = reads;
+	await new Promise(resolve => setTimeout(resolve, 1200));
+	assert.equal(reads, baseline, 'No snapshot polling while the window is inactive');
+	await processes.editWorkspaceState('workspace', 0, [{ kind: 'addWatch', expression: 'other window' }]);
+	focused = true;
+	focus.fire(true);
+	const deadline = Date.now() + 2000;
+	while (service.watchExpressions.length === 0 && Date.now() < deadline) {
+		await new Promise(resolve => setTimeout(resolve, 10));
+	}
+	assert.deepEqual(service.watchExpressions, ['other window']);
+});

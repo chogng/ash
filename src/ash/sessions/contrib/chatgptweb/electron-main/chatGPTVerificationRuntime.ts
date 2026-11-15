@@ -55,7 +55,7 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 			this.session.webRequest.onBeforeSendHeaders(null);
 			this.session.webRequest.onCompleted(null);
 			this.session.webRequest.onErrorOccurred(null);
-			if (this.view && !this.view.webContents.isDestroyed()) { this.view.webContents.close(); }
+			this.closePage();
 			void this.session.clearStorageData().catch(() => { });
 			void this.session.clearCache().catch(() => { });
 		}));
@@ -64,6 +64,26 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 	private finishRequest(id: number, outcome: VerificationRequest['outcome']): void {
 		const request = this.requests.get(id);
 		if (request?.outcome === 'pending') this.requests.set(id, { route: request.route, outcome });
+	}
+
+	private closePage(): void {
+		const view = this.view;
+		this.view = undefined;
+		this.ready = undefined;
+		if (view && !view.webContents.isDestroyed()) { view.webContents.close(); }
+	}
+
+	private async suspendPage(): Promise<void> {
+		const contents = this.view?.webContents;
+		if (!contents || contents.isDestroyed()) return;
+		try {
+			contents.setBackgroundThrottling(true);
+			await contents.debugger.sendCommand('Page.setWebLifecycleState', { state: 'frozen' });
+		} catch {
+			// If Chromium cannot suspend, release the internal page without discarding
+			// the valid proof or Session transport. The next request can recreate it.
+			this.closePage();
+		}
 	}
 
 	prepareHeaders(script: string, signal: AbortSignal, sidebar = false): Promise<unknown> {
@@ -75,27 +95,42 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 			signal.addEventListener('abort', close, { once: true });
 			using removeAbortListener = toDisposable(() => signal.removeEventListener('abort', close));
 			this.requests.clear();
-			this.ready ??= this.initialize(script);
-			await this.ready;
-			signal.throwIfAborted();
-			this.phase = 'proof';
-			const value: unknown = await this.view!.webContents.executeJavaScript(`globalThis.__ashPrepareChatGPTHeaders(${sidebar})`);
-			signal.throwIfAborted();
-			this.phase = undefined;
-			return value;
+			try {
+				this.ready ??= this.initialize(script);
+				await this.ready;
+				signal.throwIfAborted();
+				const contents = this.view!.webContents;
+				await contents.debugger.sendCommand('Page.setWebLifecycleState', { state: 'active' });
+				contents.setBackgroundThrottling(false);
+				signal.throwIfAborted();
+				this.phase = 'proof';
+				const value: unknown = await this.view!.webContents.executeJavaScript(`globalThis.__ashPrepareChatGPTHeaders(${sidebar})`);
+				signal.throwIfAborted();
+				// This internal page has no user-owned background work. Preserve its
+				// installed verification state while stopping timers and animation frames.
+				await this.suspendPage();
+				signal.throwIfAborted();
+				return value;
+			} catch (error) {
+				this.closePage();
+				throw error;
+			} finally {
+				this.phase = undefined;
+			}
 		});
 	}
 
 	private async initialize(script: string): Promise<void> {
 		this.phase = 'navigation';
-		this.view = new WebContentsView({ webPreferences: { session: this.session, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+		this.view = new WebContentsView({ webPreferences: { session: this.session, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: true } });
+		this.view.setVisible(false);
 		this.view.setBounds({ x: 0, y: 0, width: 800, height: 600 });
 		const contents = this.view.webContents;
+		contents.debugger.attach('1.3');
 		contents.setWindowOpenHandler(() => ({ action: 'deny' }));
 		const navigation = (event: Electron.Event, target: string): void => { if (target !== 'https://chatgpt.com/') { event.preventDefault(); } };
 		contents.on('will-navigate', navigation);
 		contents.on('will-redirect', navigation);
-		this._register(toDisposable(() => { contents.removeListener('will-navigate', navigation); contents.removeListener('will-redirect', navigation); }));
 		await contents.loadURL('https://chatgpt.com/');
 		if (this.isDisposed) { throw new Error('ChatGPT verification is closed'); }
 		this.phase = 'install';

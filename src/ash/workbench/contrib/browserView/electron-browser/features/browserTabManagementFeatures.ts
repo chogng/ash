@@ -123,3 +123,59 @@ registerEditorToolAction(class OpenBrowserSettingsAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.OpenSettings, title: localize2({ bundle: 'ash.workbench', key: 'browser.settingsCommand' }, 'Browser: Open Settings'), f1: true }); }
 	override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand(OpenSettingsCommandId, 'Browser'); }
 });
+
+import { MenuId, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
+import { resolveCommandsContext } from '../../../../browser/parts/editor/editorCommandsContext.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext } from '../../../../common/contextkeys.js';
+import { CLOSE_EDITOR_COMMAND_ID, PIN_EDITOR_COMMAND_ID, UNPIN_EDITOR_COMMAND_ID } from '../../../../browser/parts/editor/editorCommands.js';
+import { ReopenClosedEditorCommandId } from '../../../../browser/parts/editor/editorActions.js';
+
+for (const [operation, title, group, order, when] of [
+	['reload', localize2({ bundle: 'ash.workbench', key: 'browser.reload' }, 'Reload'), '1_page', 1, undefined],
+	['hardReload', localize2({ bundle: 'ash.workbench', key: 'browser.tab.hardReload' }, 'Reload Without Cache'), '1_page', 2, undefined],
+	['copyUrl', localize2({ bundle: 'ash.workbench', key: 'browser.tab.copyUrl' }, 'Copy URL'), '1_page', 3, undefined],
+	['openExternal', localize2({ bundle: 'ash.workbench', key: 'browser.tab.openExternal' }, 'Open in System Browser'), '1_page', 4, undefined],
+	['closeOthers', localize2({ bundle: 'ash', key: 'workbench.closeOtherEditors' }, 'Close Others'), '2_close', 2, ContextKeyExpr.greater(EditorGroupEditorsCountContext.key, 1)],
+	['closeLeft', localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheLeft' }, 'Close to the Left'), '2_close', 3, ActiveEditorFirstInGroupContext.isEqualTo(false)],
+	['closeRight', localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheRight' }, 'Close to the Right'), '2_close', 4, ActiveEditorLastInGroupContext.isEqualTo(false)],
+] as const) {
+	registerAction2(class BrowserTabAction extends Action2 {
+		constructor() {
+			super({ id: `workbench.action.browser.tab.${operation}`, title, menu: { id: MenuId.BrowserTabContext, group, order, when } });
+		}
+		override async run(accessor: ServicesAccessor, argument: unknown): Promise<void> {
+			const resolved = resolveCommandsContext([argument], accessor.get(IEditorGroupsService)).groupedEditors[0];
+			const clicked = typeof argument === 'object' && argument !== null && 'editor' in argument ? argument.editor : resolved?.editors[0];
+			if (!resolved || !(clicked instanceof BrowserEditorInput) || !resolved.group.inputs.includes(clicked)) { return; }
+			const { group } = resolved;
+			const url = clicked.model?.state.url ?? clicked.serialize().url;
+			switch (operation) {
+				case 'reload': await clicked.model?.reload(); break;
+				case 'hardReload': await clicked.model?.reload(true); break;
+				case 'copyUrl': await accessor.get(IClipboardService).writeText(url); break;
+				case 'openExternal':
+					if (/^https?:/u.test(url)) {
+						await accessor.get(IOpenerService).open(URI.parse(url), { openExternal: true, allowContributedOpeners: false, allowCommands: false });
+					}
+					break;
+				default: {
+					const index = group.inputs.indexOf(clicked);
+					const targets = [...group.inputs].filter((input, candidate) => input instanceof BrowserEditorInput && input !== clicked
+						&& !group.isSticky(input) && (operation === 'closeOthers' || operation === 'closeLeft' && candidate < index || operation === 'closeRight' && candidate > index));
+					for (const input of targets) { if (!await group.closeEditor(input)) { break; } }
+				}
+			}
+		}
+	});
+}
+for (const [id, title, group, order, when] of [
+	[CLOSE_EDITOR_COMMAND_ID, localize2({ bundle: 'ash', key: 'workbench.closeEditor' }, 'Close'), '2_close', 1, undefined],
+	[PIN_EDITOR_COMMAND_ID, localize2({ bundle: 'ash', key: 'workbench.pinEditor' }, 'Pin'), '3_pin', 1, ActiveEditorStickyContext.isEqualTo(false)],
+	[UNPIN_EDITOR_COMMAND_ID, localize2({ bundle: 'ash', key: 'workbench.unpinEditor' }, 'Unpin'), '3_pin', 1, ActiveEditorStickyContext.isEqualTo(true)],
+	[ReopenClosedEditorCommandId, localize2({ bundle: 'ash', key: 'workbench.reopenClosedEditor' }, 'Reopen Closed Tab'), '4_history', 1, undefined],
+] as const) {
+	MenusRegistry.appendMenuItem(MenuId.BrowserTabContext, { command: { id, title }, group, order, when });
+}

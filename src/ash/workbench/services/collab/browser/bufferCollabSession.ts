@@ -6,7 +6,7 @@ import type { TextModelChange } from '../../../../editor/common/core/textChange.
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { localize } from '../../../../nls.js';
 import { ICollabService, CollabError, CollabFailure, type RejoinableRoom, type RoomSnapshot, type RemoteRoomEnvelope } from '../common/collabService.js';
-import { BufferCollabState as State, type CollabBuffer, type BufferEdit, type BufferCollabProfile } from '../common/bufferCollabService.js';
+import { BufferCollabState as State, type CollabBuffer, type BufferEdit, type BufferCollabProfile, type BufferRemoteChange } from '../common/bufferCollabService.js';
 
 type Room = RejoinableRoom<Uint8Array, Uint8Array>;
 interface Pending { readonly sequence: number; readonly baseVersion: number; readonly epoch: string | undefined; readonly transaction: Uint8Array; readonly document: Uint8Array; readonly generation: number; }
@@ -30,6 +30,13 @@ export class BufferCollabSession extends Disposable {
 	private refreshNeeded = false;
 	private retry = 500;
 	private lastChange: TextModelChange | undefined;
+	private joined = false;
+	private joinFailure: Error | undefined;
+	private changes: readonly BufferRemoteChange[] = [];
+	private nextChangeId = 1;
+	private readonly remoteChanged = this._register(new Emitter<void>());
+	readonly onDidChangeRemoteChanges = this.remoteChanged.event;
+	get recentChanges(): readonly BufferRemoteChange[] { return this.changes; }
 	private readonly abort = new AbortController();
 	private readonly stateEmitter = this._register(new Emitter<State>());
 	readonly onDidChangeState = this.stateEmitter.event;
@@ -54,9 +61,24 @@ export class BufferCollabSession extends Disposable {
 	private attach(room: Room): void {
 		const lifetime = new DisposableStore(); lifetime.add(room);
 		this.connection.value = lifetime; this.room = room;
-		lifetime.add(room.onDidReceiveUpdate(update => { try { this.receive(update); } catch { this.refreshNeeded = true; this.schedule(0); } }));
-		lifetime.add(room.onDidReceiveSnapshot(snapshot => { try { this.snapshot(snapshot); } catch { this.setState(State.Rejected); } }));
-		lifetime.add(room.onDidFail(error => this.failure(error)));
+		lifetime.add(room.onDidReceiveUpdate(update => {
+			try { this.receive(update); }
+			catch (error) {
+				if (!this.joined) this.joinFailure = error instanceof Error ? error : new Error(String(error));
+				else { this.refreshNeeded = true; this.schedule(0); }
+			}
+		}));
+		lifetime.add(room.onDidReceiveSnapshot(snapshot => {
+			try { this.snapshot(snapshot); }
+			catch (error) {
+				if (!this.joined) this.joinFailure = error instanceof Error ? error : new Error(String(error));
+				else this.setState(State.Rejected);
+			}
+		}));
+		lifetime.add(room.onDidFail(error => {
+			if (!this.joined) { this.joinFailure = error; return; }
+			this.failure(error);
+		}));
 	}
 	async connect(signal: AbortSignal): Promise<boolean> {
 		const initialVersion = this.model.getVersionId();
@@ -71,6 +93,7 @@ export class BufferCollabSession extends Disposable {
 			if (!confirmation.confirmed || this.isDisposed || signal.aborted) return false;
 		}
 		if (this.model.getVersionId() !== initialVersion) throw new Error(localize({ bundle: 'ash.collab', key: 'joinChanged' }, 'The document changed while joining. Try again.'));
+		if (this.joinFailure) throw this.joinFailure;
 		this._register(this.model.registerEditParticipant({
 			beforeEdit: edits => {
 				if (this.applying) return;
@@ -82,8 +105,30 @@ export class BufferCollabSession extends Disposable {
 			canUndo: () => this.canEdit && this.engine.canUndo, canRedo: () => this.canEdit && this.engine.canRedo,
 			undo: () => this.history('undo'), redo: () => this.history('redo'),
 		}));
+		this.joined = true;
 		if (this.model.getValue() !== this.engine.source) { this.applying = true; try { this.model.setValue(this.engine.source); } finally { this.applying = false; } }
-		this._register(this.model.onDidChangeContent(change => { this.lastChange = change; }));
+		this._register(this.model.onDidChangeContent(change => {
+			this.lastChange = change;
+			if (!this.changes.length) return;
+			const edits = [...change.changes].sort((a, b) => a.rangeOffset - b.rangeOffset);
+			const map = (offset: number, afterInsertion: boolean): number => {
+				let delta = 0;
+				for (const edit of edits) {
+					if (offset < edit.rangeOffset) break;
+					if (offset === edit.rangeOffset && edit.rangeLength === 0 && !afterInsertion) return offset + delta;
+					if (offset <= edit.rangeOffset + edit.rangeLength) return edit.rangeOffset + delta + edit.text.length;
+					delta += edit.text.length - edit.rangeLength;
+				}
+				return offset + delta;
+			};
+			this.changes = this.changes.map(item => {
+				// Replaced or locally extended spans no longer have unambiguous authorship.
+				const touched = edits.some(edit => edit.rangeOffset < item.end && edit.rangeOffset + edit.rangeLength > item.start || edit.rangeLength === 0 && edit.rangeOffset > item.start && edit.rangeOffset < item.end);
+				const start = map(item.start, true);
+				return { ...item, start, end: touched ? start : Math.max(start, map(item.end, false)) };
+			});
+			this.remoteChanged.fire();
+		}));
 		this.setState(State.Connected); this.schedule(0);
 		return true;
 	}
@@ -94,7 +139,9 @@ export class BufferCollabSession extends Disposable {
 		this.commit(edits); this.generation++; this.schedule(0); return this.lastChange;
 	}
 	private commit(edits: readonly BufferEdit[]): void {
-		if (!edits.length) return;
+		// Incoming updates may advance the isolated replica while the join dialog is open.
+		// Only an accepted join may project that replica into the user's working copy.
+		if (!this.joined || !edits.length) return;
 		this.applying = true;
 		try {
 			if (this.engine.source.includes('\n') && this.model.getEOL() !== (this.engine.source.includes('\r\n') ? '\r\n' : '\n')) { this.model.setValue(this.engine.source); return; }
@@ -105,7 +152,7 @@ export class BufferCollabSession extends Disposable {
 		if (this.isDisposed) return;
 		if (update.epoch && this.epoch && update.epoch !== this.epoch) { this.refreshNeeded = true; this.schedule(0); return; }
 		if (update.version <= this.version) return;
-		this.authority.applyUpdate(update.transaction); this.commit(this.engine.applyUpdate(update.transaction));
+		this.authority.applyUpdate(update.transaction); this.applyRemote(this.engine.applyUpdate(update.transaction), update.clientId);
 		if (update.version === this.version + 1) this.version = update.version;
 		else { this.refreshNeeded = true; this.schedule(0); }
 	}
@@ -118,12 +165,31 @@ export class BufferCollabSession extends Disposable {
 			this.pending = undefined; this.version = snapshot.version; this.generation++;
 		}
 		this.epoch = snapshot.epoch ?? this.epoch;
-		this.authority.applyUpdate(snapshot.document); this.commit(this.engine.applyUpdate(snapshot.document));
+		this.authority.applyUpdate(snapshot.document); this.applyRemote(this.engine.applyUpdate(snapshot.document));
 		this.version = Math.max(this.version, snapshot.version);
+	}
+	private applyRemote(edits: readonly BufferEdit[], clientId?: string): void {
+		if (!this.joined || !edits.length) return;
+		const source = this.model.getValue();
+		// These are received update ranges, which may cover unchanged intervening text.
+		// Keep previews bounded without retaining whole documents or splitting surrogate pairs.
+		const preview = (value: string): string => Array.from(value.slice(0, 320)).slice(0, 160).join('');
+		let delta = 0;
+		const changes = [...edits].sort((a, b) => a.range.start - b.range.start).map(edit => {
+			const start = edit.range.start + delta;
+			delta += edit.text.length - (edit.range.end - edit.range.start);
+			return {
+				id: this.nextChangeId++, clientId, start, end: start + edit.text.length,
+				inserted: preview(edit.text), removed: preview(source.slice(edit.range.start, edit.range.end))
+			};
+		});
+		this.commit(edits);
+		this.changes = [...changes.reverse(), ...this.changes].slice(0, 20);
+		this.remoteChanged.fire();
 	}
 	private setState(state: State): void { if (this._state !== state) { this._state = state; this.stateEmitter.fire(state); } }
 	private schedule(delay: number): void {
-		if (this.isDisposed) return;
+		if (this.isDisposed || !this.joined) return;
 		if (this.running) { this.queued = true; return; }
 		if (this.timer !== undefined) clearTimeout(this.timer);
 		this.timer = setTimeout(() => { this.timer = undefined; void this.synchronize(); }, delay);

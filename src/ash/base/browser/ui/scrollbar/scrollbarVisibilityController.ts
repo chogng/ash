@@ -38,8 +38,12 @@ export class ScrollbarVisibilityController extends AbstractDisposable {
 		if (!this.domNode) return;
 		const hidden = !this.needed || this.visibility === ScrollbarVisibility.Hidden;
 		const visible = !hidden && (this.visibility === ScrollbarVisibility.Visible || this.shouldBeVisible);
-		this.domNode.domNode.hidden = hidden;
-		this.domNode.domNode.dataset.visibility = visible ? 'visible' : 'auto';
+		const node = this.domNode.domNode;
+		const visibility = visible ? 'visible' : 'auto';
+		// Repeated scroll frames must not invalidate visibility selectors when
+		// interaction intent and axis availability have not changed.
+		if (node.hidden !== hidden) node.hidden = hidden;
+		if (node.dataset.visibility !== visibility) node.dataset.visibility = visibility;
 		this.domNode.toggleClassName(this.visibleClassName, visible);
 		this.domNode.toggleClassName(this.invisibleClassName, !visible);
 	}

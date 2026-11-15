@@ -1,7 +1,7 @@
 import { ILifecycleService } from '../../../services/lifecycle/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IDebugAdapterProcessService, type DebugWorkspaceState, type DebugWorkspaceSnapshot, type DebugWorkspaceEdit } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
@@ -74,10 +74,6 @@ export class DebugStorage extends Disposable {
 		this._register(lifecycle.onWillShutdown(event => {
 			if ([...this.contexts].some(context => context.pending > 0)) event.join(() => this.flush(), localize('debug.workspaceSave', 'Save debug workspace definitions'), () => [...this.contexts].every(context => context.pending === 0));
 		}));
-		if (backend) {
-			const poll = setInterval(() => { void this.reload().catch(error => this.report(error)); }, 1000);
-			this._register(toDisposable(() => clearInterval(poll)));
-		}
 	}
 
 	get state(): PersistedDebugState { return this.current.state; }

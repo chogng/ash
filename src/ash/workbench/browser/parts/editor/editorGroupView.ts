@@ -359,7 +359,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		const entry = this.requireEntry(input);
 		const editorIndex = this.model.indexOf(entry.input);
-		const context = { groupId: this.id, editorIndex };
+		const context = { groupId: this.id, editorIndex, editor: input };
+		const menu = entry.paneInstance.pane.tabContextMenu;
 		const anchor = event.type === 'contextmenu'
 			? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: tab.ownerDocument.defaultView ?? undefined }
 			: tab;
@@ -379,8 +380,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			menuContext.setContext(EditorGroupEditorsCountContext.key, this.inputs.length);
 		});
 		actions.contextMenuProvider.showContextMenu({
+			useNativeWindow: menu?.useNativeWindow,
 			getAnchor: () => anchor,
-			getActions: () => getFlatContextMenuActions(actions.menuService.getMenuActions(MenuId.EditorTitleContext, { arg: context }, menuContext)),
+			getActions: () => getFlatContextMenuActions(actions.menuService.getMenuActions(menu?.menuId ?? MenuId.EditorTitleContext, { arg: context }, menuContext)),
 			getActionsContext: () => context,
 			onHide: didCancel => {
 				menuContext?.dispose();

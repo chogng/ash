@@ -10,6 +10,7 @@ import type Severity from '../../base/common/severity.js';
 import { URI } from '../../base/common/uri.js';
 import type { IDisposable } from '../../base/common/lifecycle.js';
 import type { ISize } from '../../base/common/layout.js';
+import type { MenuId } from '../../platform/actions/common/actions.js';
 import type { IComposite, ICompositeControl } from './composite.js';
 import type { IWorkingCopy } from '../services/workingCopy/common/workingCopyService.js';
 import type { IEditorCloseHandler } from './editor/editorInput.js';
@@ -29,6 +30,8 @@ export interface IEditorExtensionApi {
 /** One retained editor implementation; its host owns creation, visibility and disposal. */
 export interface IEditorPane extends IComposite, IDisposable {
 	readonly id: string;
+	/** A pane can supply tab actions and a native surface when DOM menus would cover its content. */
+	readonly tabContextMenu?: { readonly menuId: MenuId; readonly useNativeWindow: boolean; };
 	readonly group?: IEditorGroup;
 	/** Tools with their own document controls can omit the group header when they are its only editor. */
 	readonly prefersEditorTitleHidden?: boolean;
@@ -135,6 +138,8 @@ export interface IResourceEditorInput {
 	readonly contentType?: string;
 	readonly languageId?: string;
 	readonly label?: string;
+	/** Full tab hover content when a virtual resource path is not a useful title. */
+	getTitle?(): string;
 	/** Also signals a change to the editor's custom icon. */
 	readonly onDidChangeLabel?: Event<void>;
 	getIcon?(): ThemeIcon | URI | undefined;

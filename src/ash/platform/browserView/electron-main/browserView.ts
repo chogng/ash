@@ -396,6 +396,7 @@ export class BrowserView extends Disposable {
 		} else {
 			this.emit({ type: 'selectionStopped', targetId: this.id });
 		}
+		this.emitState();
 	}
 	public toggleAreaSelection(enabled = this.selectionMode !== 'area'): void {
 		this.broadcastPreload('stop');
@@ -407,6 +408,7 @@ export class BrowserView extends Disposable {
 		} else {
 			this.emit({ type: 'selectionStopped', targetId: this.id });
 		}
+		this.emitState();
 	}
 	public setElementComments(update: IBrowserElementCommentsUpdate): void {
 		if (update.comments) {
@@ -480,6 +482,8 @@ export class BrowserView extends Disposable {
 							height: Math.round(bounds.height * scale),
 						}
 						: undefined,
+					// Capturing a hidden tab must not change its visibility policy.
+					{ stayHidden: true },
 				);
 				const bytes = options.format === 'jpeg' ? image.toJPEG(options.quality ?? 90) : image.toPNG();
 				if (bytes.byteLength > 16 * 1024 * 1024) {
@@ -637,6 +641,7 @@ export class BrowserView extends Disposable {
 			this.selectionMode = undefined;
 			this.broadcastPreload('stop');
 			this.emit({ type: 'selectionStopped', targetId: this.id });
+			this.emitState();
 		}
 	}
 
@@ -823,6 +828,7 @@ export class BrowserView extends Disposable {
 				this.selectionMode = undefined; this.preloadFrames.clear();
 				this.commentIds.clear();
 				this.emit({ type: 'selectionStopped', targetId: this.id });
+				this.emitState();
 			}
 		});
 		this.on(contents, 'did-start-loading', () => this.emitState());
@@ -994,6 +1000,7 @@ export class BrowserView extends Disposable {
 		return {
 			targetId: this.id,
 			isDevToolsOpen: contents.isDevToolsOpened(),
+			elementSelectionState: { active: this.selectionMode === 'element', options: this.selectionOptions },
 			permissions: this.session.permissions.snapshot(contents),
 			browserZoomIndex: browserZoomFactors.reduce<number>((best, factor, index) => Math.abs(factor - contents.getZoomFactor()) < Math.abs(browserZoomFactors[best]! - contents.getZoomFactor()) ? index : best, browserZoomDefaultIndex),
 			deviceEmulation: this.deviceEmulation,

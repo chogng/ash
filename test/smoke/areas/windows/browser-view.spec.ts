@@ -373,7 +373,13 @@ test('downloads report completion and cancellation and closing a page releases t
 		expect(await readFile(filename, 'utf8')).toBe('downloaded content');
 		await start('/pending', join(testWorkspace.directory, 'pending.txt'));
 		await expect(progress).toContainText('downloading');
-		await workbench.menus.select(application, () => editor.getByRole('button', { name: 'More Actions', exact: true }).click(), ['Cancel downloads']);
+		// Browser actions use a dedicated native menu window, even with system menus enabled.
+		const menuReady = electron.waitForEvent('window', {
+			predicate: candidate => candidate.evaluate(() => window.name.startsWith('ash-context-menu-')),
+		});
+		await editor.getByRole('button', { name: 'More Actions', exact: true }).click();
+		const menu = await menuReady;
+		await menu.getByRole('menuitem', { name: 'Cancel downloads', exact: true }).click();
 		await expect(progress).toContainText('cancelled');
 		await start('/pending', join(testWorkspace.directory, 'closed.txt'));
 		await expect(progress).toContainText('downloading');
@@ -784,10 +790,10 @@ for (const locale of ['en', 'zh-CN']) {
 		}
 		const labels = locale === 'zh-CN' ? {
 			toolbar: '浏览器导航', address: '浏览器地址', webpage: '网页。按 F6 返回地址栏。', back: '后退', forward: '前进', reload: '重新加载', stop: '停止', go: '转到', help: '帮助',
-			loading: '正在加载网页…', failure: '无法加载页面：', helpTitle: '浏览器无障碍帮助', accessibleViewTitle: '无障碍帮助', helpText: '网页使用浏览器的无障碍树。', pageActions: ['分享给 Agent', '重置所有网站权限', '取消下载'],
+			loading: '正在加载网页…', failure: '无法加载页面：', accessibleViewTitle: '无障碍帮助', helpText: '网页使用浏览器的无障碍树。', pageActions: ['分享给 Agent', '重置所有网站权限', '取消下载'],
 		} : {
 			toolbar: 'Browser navigation', address: 'Browser address', webpage: 'Webpage. Press F6 to return to the address field.', back: 'Back', forward: 'Forward', reload: 'Reload', stop: 'Stop', go: 'Go', help: 'Help',
-			loading: 'Loading page…', failure: 'Unable to load page:', helpTitle: 'Browser accessibility help', accessibleViewTitle: 'Accessibility Help', helpText: 'Webpages use the browser’s accessibility tree.', pageActions: ['Share with Agent', 'Reset all website permissions', 'Cancel downloads'],
+			loading: 'Loading page…', failure: 'Unable to load page:', accessibleViewTitle: 'Accessibility Help', helpText: 'Webpages use the browser’s accessibility tree.', pageActions: ['Share with Agent', 'Reset all website permissions', 'Cancel downloads'],
 		};
 		let finishSlowLoad: (() => void) | undefined;
 		const server = createServer((request, response) => {
@@ -813,8 +819,11 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(editor.getByRole('toolbar', { name: labels.toolbar, exact: true })).toBeVisible();
 			await expect(editor.locator('.ash-browser-viewport')).toHaveAttribute('aria-label', labels.webpage);
 			const addressField = editor.getByRole('textbox', { name: labels.address, exact: true });
-			for (const name of [labels.back, labels.forward, labels.reload, labels.go, labels.help]) {
+			for (const name of [labels.back, labels.forward, labels.reload]) {
 				await expect(editor.getByRole('button', { name, exact: true })).toBeVisible();
+			}
+			for (const name of [labels.go, labels.help]) {
+				await expect(editor.getByRole('button', { name, exact: true })).toHaveCount(0);
 			}
 			await workbench.quickaccess.open('>workbench.action.browser.goBack');
 			await expect(workbench.quickaccess.items.filter({ hasText: 'workbench.action.browser.goBack' })).toHaveCount(0);
@@ -896,8 +905,6 @@ for (const locale of ['en', 'zh-CN']) {
 			await addressField.fill(`${url}failed`);
 			await addressField.press('Enter');
 			await expect(editor.getByRole('status')).toContainText(labels.failure);
-			const helpMessage = await workbench.dialogs.expectMessage(application, labels.helpTitle, () => editor.getByRole('button', { name: labels.help, exact: true }).click());
-			expect(helpMessage.message).toContain(labels.helpText);
 			await addressField.focus();
 			await addressField.press('Alt+F1');
 			const helpDialog = page.getByRole('dialog', { name: labels.accessibleViewTitle, exact: true });
@@ -1209,7 +1216,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await key('P', [...command, 'shift']);
 				await expect(workbench.quickaccess.element).toBeVisible();
 				await page.keyboard.press('Escape');
-				const select = async (label: string) => workbench.menus.select(application, () => editor.getByRole('button', { name: labels.more, exact: true }).click(), [label]);
+				const select = async (label: string) => {
+					if (label === labels.element) {
+						await editor.getByRole('button', { name: label, exact: true }).click();
+					} else {
+						await workbench.menus.select(application, () => editor.locator('.ash-browser-page-actions .ash-split-action-dropdown button').click(), [label]);
+					}
+				};
 				const pick = async () => view.evaluate(async view => {
 					const point = await view.webContents.executeJavaScript(`(() => { const rect=document.querySelector('#pick').getBoundingClientRect(); return {x:Math.round(rect.x+rect.width/2),y:Math.round(rect.y+rect.height/2)}; })()`);
 					view.webContents.sendInputEvent({ type: 'mouseMove', ...point });
@@ -1297,6 +1310,8 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await location.fill(url); await location.press('Enter');
 		await expect(editor.getByRole('status')).toHaveText('First page');
 		await expect(page.getByRole('tab', { name: 'First page' })).toBeVisible();
+		// The disconnected UI fixture can report unavailable backend capabilities over the page.
+		await workbench.quickaccess.runCommand('notifications.clearAll');
 		const views = () => electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(view => 'webContents' in view).map(view => ({ bounds: view.getBounds(), visible: view.getVisible(), url: (view as Electron.WebContentsView).webContents.getURL() })));
 		await expect.poll(async () => (await views()).filter(view => view.url === url && view.visible).length).toBe(1);
 		await editor.locator('.ash-browser-viewport').focus();
@@ -1354,6 +1369,14 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 			const view = (await views()).find(view => view.url === `${url}second`);
 			return bounds && view ? Math.abs(view.bounds.width - bounds.width) : 1000;
 		}).toBeLessThan(2);
+		for (const zoom of [1.2, 1]) {
+			await electron.evaluate(({ BrowserWindow }, zoom) => BrowserWindow.getAllWindows()[0]!.webContents.setZoomFactor(zoom), zoom);
+			await expect.poll(async () => {
+				const bounds = await editor.locator('.ash-browser-viewport').boundingBox();
+				const view = (await views()).find(view => view.url === `${url}second` && view.visible);
+				return bounds && view ? Math.abs(view.bounds.x - Math.round(bounds.x * zoom)) + Math.abs(view.bounds.width - Math.round(bounds.width * zoom)) : 1000;
+			}).toBeLessThan(3);
+		}
 		await location.focus(); await location.press('Alt+F1');
 		const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
 		await expect(help.getByRole('textbox')).toHaveValue(/Webpages use the browser’s accessibility tree/u);

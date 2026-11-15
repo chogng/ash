@@ -407,19 +407,16 @@ impl QueueStore {
     }
 
     pub fn revision(&self) -> Result<i64, QueueError> {
-        Ok(self.lock()?.query_row(
-            "SELECT revision FROM queue_metadata WHERE id=1",
-            [],
-            |row| row.get(0),
-        )?)
+        Ok(self
+            .lock()?
+            .prepare_cached("SELECT revision FROM queue_metadata WHERE id=1")?
+            .query_row([], |row| row.get(0))?)
     }
 
     pub fn needs_host(&self) -> Result<bool, QueueError> {
-        Ok(self.lock()?.query_row(
+        Ok(self.lock()?.prepare_cached(
             "SELECT EXISTS(SELECT 1 FROM queued_messages WHERE status IN ('pending','delivering'))",
-            [],
-            |row| row.get(0),
-        )?)
+        )?.query_row([], |row| row.get(0))?)
     }
 
     pub fn cancel(
@@ -455,7 +452,9 @@ impl QueueStore {
 
     pub(crate) fn candidates(&self, now: i64) -> Result<Vec<QueuedMessage>, QueueError> {
         let connection = self.lock()?;
-        let mut statement = connection.prepare("SELECT id FROM queued_messages q WHERE
+        // The scheduler repeats this query even when the queue is empty. Reuse its
+        // compiled statement; every execution still reads the current durable rows.
+        let mut statement = connection.prepare_cached("SELECT id FROM queued_messages q WHERE
             ((status='pending' AND ready_at<=?1) OR (status='delivering' AND lease_until<=?1))
             AND NOT EXISTS (SELECT 1 FROM queued_messages older WHERE older.thread_id=q.thread_id AND older.sort_key<q.sort_key AND older.status IN ('pending','paused','delivering'))
             ORDER BY sort_key LIMIT 128")?;

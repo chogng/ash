@@ -24,11 +24,22 @@ export interface BufferCollabProfile {
 	validateSizes(sizes: { readonly snapshot_bytes: number; readonly update_bytes: number; }): void;
 }
 export enum BufferCollabState { Connecting = 'connecting', Connected = 'connected', Offline = 'offline', Rejected = 'rejected', Forbidden = 'forbidden' }
+/** Bounded, session-local observations, not a persistent revision or authenticated user history. */
+export interface BufferRemoteChange {
+	readonly id: number;
+	readonly clientId: string | undefined;
+	readonly start: number;
+	readonly end: number;
+	readonly inserted: string;
+	readonly removed: string;
+}
 export interface BufferCollabSession extends IDisposable {
 	readonly roomId: string | undefined;
 	readonly state: BufferCollabState;
 	readonly canEdit: boolean;
 	readonly onDidChangeState: Event<BufferCollabState>;
+	readonly recentChanges: readonly BufferRemoteChange[];
+	readonly onDidChangeRemoteChanges: Event<void>;
 }
 /** One retained working copy and session per model; panes only observe and invoke. */
 export interface IBufferCollabService {

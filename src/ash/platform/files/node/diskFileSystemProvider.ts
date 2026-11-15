@@ -1,7 +1,7 @@
 import { isLinux } from '../../../base/common/platform.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { copyFile, link, lstat, mkdir, open, readdir, realpath, rm, rmdir, writeFile, type FileHandle } from 'node:fs/promises';
-import { constants, watch } from 'node:fs';
+import { constants, watch, watchFile, unwatchFile } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { ResourceQueue } from '../../../base/common/async.js';
@@ -183,21 +183,14 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 			};
 			const startMissingEntryPoll = (): void => {
 				if (missingEntryPoll.value || resources.isDisposed) return;
-				// Directory hints can be delayed or lost. Recheck only the absent entry,
-				// with one outstanding read; stop as soon as its native watch is bound.
-				let stopped = false;
-				let timer: ReturnType<typeof setTimeout>;
-				const schedule = (): void => {
-					timer = setTimeout(() => {
-						if (stopped || resources.isDisposed) return;
-						void bindEntry().then(() => {
-							if (!stopped && !resources.isDisposed) schedule();
-						}, fail);
-					}, 500);
-					if (!this.nativeWatchOptions.persistent) timer.unref();
+				// Native stat polling only calls JavaScript when the entry changes. It
+				// also shares one StatWatcher for duplicate paths, unlike per-watch timers.
+				// bindEntry still checks the granted root before attaching a native watch.
+				const changed = (): void => {
+					if (!resources.isDisposed) void bindEntry().catch(fail);
 				};
-				missingEntryPoll.value = toDisposable(() => { stopped = true; clearTimeout(timer); });
-				schedule();
+				watchFile(path, { persistent: this.nativeWatchOptions.persistent, interval: 500 }, changed);
+				missingEntryPoll.value = toDisposable(() => unwatchFile(path, changed));
 			};
 			if (resources.isDisposed) return;
 			// A provider write can create a previously absent settings file before the

@@ -136,6 +136,53 @@ suite('Disk provider byte publication and watch disposal', () => {
 		}
 	});
 
+	test('missing files stay idle and bind after a duplicate subscription is disposed without creation hints', async () => {
+		const directory = await realpath(await mkdtemp(join(tmpdir(), 'ash-idle-watch-')));
+		const path = join(directory, 'settings.json');
+		const parentReady = new DeferredPromise<void>();
+		const fileReady = new DeferredPromise<void>();
+		const handles: Array<EventEmitter & { closed: boolean; close(): void; }> = [];
+		let pathChecks = 0;
+		const originalStat = fs.promises.lstat;
+		const stat = mock.method(fs.promises, 'lstat', (async (...args: Parameters<typeof originalStat>) => {
+			if (String(args[0]).startsWith(directory)) pathChecks++;
+			return originalStat(...args);
+		}) as typeof originalStat);
+		const nativeWatch = mock.method(fs, 'watch', ((watchedPath) => {
+			const handle = Object.assign(new EventEmitter(), { closed: false, close() { this.closed = true; } });
+			handles.push(handle);
+			if (String(watchedPath) === directory && handles.length === 2) void parentReady.complete();
+			if (String(watchedPath) === path) void fileReady.complete();
+			// Control OS hints only: deliberately never report the file's creation.
+			return handle as unknown as FSWatcher;
+		}) as typeof fs.watch);
+		syncBuiltinESMExports();
+		try {
+			using files = new DiskFileSystemProvider([URI.file(directory)]);
+			using removedWatcher = files.watch(URI.file(path), { recursive: false, excludes: [] });
+			using watcher = files.watch(URI.file(path), { recursive: false, excludes: [] });
+			await parentReady.p;
+			// The remaining subscription must retain its shared native stat watcher.
+			removedWatcher.dispose();
+			// Warm registration, then sample over multiple fallback polling periods.
+			await new Promise(resolve => setTimeout(resolve, 200));
+			const baseline = pathChecks;
+			assert.ok(baseline > 0, 'The filesystem boundary instrumentation must observe registration');
+			await new Promise(resolve => setTimeout(resolve, 1200));
+			assert.equal(pathChecks, baseline, 'An unchanged absent entry must not repeatedly re-enter path validation');
+			await writeFile(path, 'externally created');
+			await fileReady.p;
+			assert.equal(new TextDecoder().decode((await files.readFile(URI.file(path))).bytes), 'externally created');
+			watcher.dispose();
+			assert.ok(handles.every(handle => handle.closed && handle.listenerCount('error') === 0));
+		} finally {
+			stat.mock.restore();
+			nativeWatch.mock.restore();
+			syncBuiltinESMExports();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
 	test('file watches bind newly created files, survive atomic replacement and preserve the granted path spelling', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-file-watch-'));
 		try {

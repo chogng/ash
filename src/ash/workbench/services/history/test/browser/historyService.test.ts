@@ -17,6 +17,8 @@ import { createTestEditorServices, registerTestComponentServices } from '../../.
 import { CommandService } from '../../../commands/common/commandService.js';
 import { HistoryService } from '../../browser/historyService.js';
 import { IHistoryService } from '../../common/history.js';
+import { EditorInput } from '../../../../common/editor/editorInput.js';
+import { EditorInputSerializers } from '../../../editor/common/editorInputSerializer.js';
 
 class HistoryFixture extends Disposable {
 	readonly services = this._register(registerTestComponentServices(createTestEditorServices(undefined, undefined, browserEnvironment.window.document)));
@@ -260,4 +262,37 @@ test('disposing history drops queued reopens and later commands without opening 
 test('HistoryService requires the registered editor owner at its injection boundary', () => {
 	using services = createTestEditorServices(undefined, undefined, browserEnvironment.window.document);
 	assert.throws(() => services.createInstance(HistoryService), /editorPart/i);
+});
+
+
+test('reopen recreates a disposed live input from its close-time snapshot', async () => {
+	using fixture = new HistoryFixture();
+	class LiveInput extends EditorInput {
+		readonly typeId = 'ash.test.history.live';
+		readonly resource = URI.parse('test-live:/page');
+		readonly onDidChangeLabel = undefined;
+		title = 'Initial page';
+		getName(): string { this.assertNotDisposed(); return this.title; }
+	}
+	using serializer = EditorInputSerializers.register({
+		typeId: 'ash.test.history.live',
+		canSerialize: input => input instanceof LiveInput,
+		serialize: input => ({ title: (input as LiveInput).getName() }),
+		deserialize: snapshot => {
+			const restored = new LiveInput();
+			restored.title = (snapshot as { title: string; }).title;
+			return restored;
+		},
+	});
+	using input = new LiveInput();
+	await fixture.editor.openEditor(input, { pinned: true });
+	input.title = 'Navigated page';
+	await fixture.close(input);
+	input.dispose();
+	await fixture.history.reopenLastClosedEditor();
+	const restored = fixture.editor.activeInput;
+	assert.ok(restored instanceof LiveInput);
+	assert.notEqual(restored, input);
+	assert.equal(restored.getName(), 'Navigated page');
+	restored.dispose();
 });
