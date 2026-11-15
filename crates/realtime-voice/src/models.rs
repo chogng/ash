@@ -110,13 +110,18 @@ impl DictationModelManager {
         if root.exists() {
             for entry in std::fs::read_dir(root).map_err(|error| error.to_string())? {
                 let entry = entry.map_err(|error| error.to_string())?;
+                let id = entry.file_name().to_string_lossy().into_owned();
+                // Staging can contain a complete manifest while inference validates it.
+                // Only the subsequent atomic rename makes that package discoverable.
+                if id.starts_with('.') {
+                    continue;
+                }
                 if entry
                     .file_type()
                     .map_err(|error| error.to_string())?
                     .is_dir()
                     && entry.path().join("dictation-model.json").is_file()
                 {
-                    let id = entry.file_name().to_string_lossy().into_owned();
                     ModelPackage::validate_id(&id)?;
                     models.insert(id);
                 }

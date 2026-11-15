@@ -243,6 +243,10 @@ ZIP 的 `manifest.json` 格式为 2，记录目标、来源、正文索引、录
 
 2026-11-02 在 macOS 验证本轮输入调用链：补全、输入编辑器及命令删除的 3 文件 108 项和完整 composer 323 项通过，包含 en／zh-CN、真实浏览器键盘、只读、焦点、撤销与重做。正常 Desktop 构建通过；Workbench 和 Agents Window 的 host 补全、文件捕获并发送，以及命令补全即时删除的 3 个 Electron＋App Server 场景通过，之前的模型配置与翻译构建阻塞未再复现。Renderer、automation、翻译及触及格式检查通过，记录在 `.build/chat-input-editor-finish/`。此前直接运行本地 VS Code 源码 helper 的 795 组触发词结果相同。随后已通过隔离合成 provider 补上命令和图片鼠标预览的四主题参照，范围见下文；该参照不等同于本地 1.146.0 源码的完整 API／UI 验收。
 
+图片预览的外部打开负责读取系统关联、展示应用并按用户选择拉起。系统默认应用由用户决定和更改，操作系统的关联设置流程不属于 Ash 的验收范围。
+
+2026-11-14，Windows 图片预览通过图标加载、键盘／鼠标选择、勾选同步和重开恢复系统默认项；「照片」和「截图工具」均经 Ash 打开完整的 160×96 合成图片。31 个 Renderer 帧中的图标槽尺寸稳定，未出现通用图标。证据：`.build/ash-playwright-mcp/evidence/windows-image-external-2026-11-14T13-43-22-341Z/report.html`。
+
 2026-11-02 完成现有输入职责迁移后的验证：输入编辑器、完整 composer、附件、host 补全和图片 hover 五个文件共 475 项通过；命令删除的中英文 8 项单独复验通过，合计 483 项。完整运行最初有 5 项命令用例错误地接受了首个 `/new` 候选，改为显式选择目标 `/review` 后该文件 8 项全过，生产逻辑未因测试选择问题放宽。三个 Electron＋App Server 场景通过附件选择／键盘移除、Workbench 与 Sessions Code 图片预览，以及命令补全删除／撤销／重做。Renderer、automation、翻译、样式、格式及 diff 检查通过，证据在 `.build/chat-input-final-ownership/`。下层 Editor hover 在本次迁移中未再修改，此前 10 项 hover 回归与 495 项完整浏览器集成记录仍见 `.build/chat-input-image-hover/`。
 
 本机 VS Code 1.144.0 已通过隔离合成 participant／model provider 完成四主题参照，不需要真实账号：从裸 `/` 与已输入部分命令两种入口接受候选，核对 Backspace、输入焦点、Undo／Redo；同一张 320 × 180 捕获图片通过鼠标预览，预览保留原提示文本。这个对照发现并修正了 Ash 对部分命令补全也执行整词删除的差异。参照运行使用 `defaultChatParticipant` 与 `chatReferenceBinaryData` 测试能力，不发起真实模型请求。图片键盘预览仍由 Ash 本地中英文／四主题用例验证，未把参照中未出现的键盘图片 hover 记为通过。参照版本与本地只读 1.146.0 源码不同，也不代表上表缺失功能或全部上游类型签名兼容。

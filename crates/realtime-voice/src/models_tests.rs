@@ -3,6 +3,31 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 #[test]
+fn inventory_excludes_staged_packages_until_atomic_publication() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = DictationModelManager::default();
+    let before = manager.list(root.path()).unwrap();
+    let staging = root.path().join(".incoming.installing");
+    std::fs::create_dir(&staging).unwrap();
+    for name in [
+        "dictation-model.json",
+        "encoder.onnx",
+        "decoder.onnx",
+        "tokens.txt",
+    ] {
+        std::fs::write(staging.join(name), "fixture").unwrap();
+    }
+
+    // The manifest exists while inference validates the package, before publication.
+    assert_eq!(manager.list(root.path()).unwrap(), before);
+    std::fs::rename(staging, root.path().join("incoming")).unwrap();
+    let mut after = before;
+    after.push("incoming".into());
+    after.sort();
+    assert_eq!(manager.list(root.path()).unwrap(), after);
+}
+
+#[test]
 fn warming_an_uninstalled_model_leaves_the_inventory_and_capture_untouched() {
     let root = tempfile::tempdir().unwrap();
     let dictation = DictationManager::default();

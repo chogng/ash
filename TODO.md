@@ -18,10 +18,6 @@
 
 - [ ] **验收** · 应用窗口截图已接入选窗、快捷键、权限 Setup 和原草稿附件管线；Snapshot 已迁为内置编辑器并移除扩展包，标注、复制、保存和代码图片继续共用一条链路。4 个真实桌面／其他应用像素场景因测试宿主缺少 macOS 屏幕录制权限跳过，尚缺真实其他应用窗口到聊天附件的整链证据。授予测试用 Ash 屏幕录制权限后，运行 `pnpm test:smoke:desktop:no-compile test/smoke/areas/chat/chat-screenshot.spec.ts test/smoke/areas/chat/chat-app-window-screenshot.spec.ts`；用例使用仅包含测试色块的窗口，检查选窗、区域捕获、取消保留草稿、编辑和附件回填，通过后移除此条。
 
-## Artifact 工具栏 · Desktop 验收
-
-- [ ] **验收** · `ArtifactToolbar` 已统一浮动外壳、动作分组和菜单生命周期，画布默认底部居中；103 项定向单测运行、2 项浏览器集成测试、渲染器与分层类型检查通过。Desktop 启动被语言包校验阻断：内置 `ash` bundle 有 10,003 条消息，`parseLanguagePackCatalog` 上限为 10,000，报 `Invalid display language resource`。修复该边界后运行 `node test/scenario/out/runScenario.js .build/ash-playwright-mcp/artifact-toolbar.cjs`，复核居中、Motion 时间线避让和模式切换，通过后删除本条。最终完整单测编译另被 `src/ash/sessions/test/common/sessions-configuration.test.ts:30` 的 `IConfigurationSettingSchema.options` 类型错误阻断；本轮定向运行使用已核对包含最新工具栏实现的编译产物。
-
 ## Docs · 空段落首次输入修复集成
 
 - [ ] **集成** · Mac Studio 已修复空白富文本段落首次输入的模型同步、选区恢复与输入法组合提交；新增工作副本备份／恢复回归及真实 Electron 输入、保存重开场景。定向编辑器测试 51 项通过，新增备份跟踪器回归 3 项通过，Electron UI 与连接 App Server 场景各 1 项通过。当前 checkout 的 `main` 基线为 `f06080352e`，远端 `origin/main` 为 `b98e8522fe`，另有 105 个既有修改／未跟踪文件；原内容已核对保留。按提交规范不能自动 stash 或切换工作区以 rebase，故本次只准备本地任务提交。由现有修改的 owner 收尾后，fetch 最新 main，仅 rebase 本任务未发布提交，复验受影响场景并通过 `just commit-check origin/main`，再串行非强制推送并核验远端；完成后删除本条。备份覆盖使用生产工作副本跟踪器与内存存储，Sessions 窗口当前未接入自动备份跟踪器，未验证其整窗崩溃恢复。
@@ -33,12 +29,6 @@
 ## Agents Window · 真实 SSH 主机验收
 
 - [ ] **验收 · SSH 工作区信任** · 已通过本地桌面场景和远程路径的定向自动化测试。真实远程主机验收缺少可连接的 SSH 地址及允许创建临时目录的路径。取得这两项后，在隔离目录验证 SSH 工作区启动恢复、已有受限授权时重新提示并在确认后挂载，以及取消后目录未挂载。用远端目录绑定状态核对结果。
-
-## Agents Window · Windows 图片预览
-
-- [ ] **验收 · Windows 默认应用图标和应用选择** · 已接入 Windows Shell 的文件关联查询、应用图标和按应用打开。当前会话缺少可用的 Windows 桌面。用包含改动的 Windows Ash 安装包，在 Agents Window 的 Code 输入框粘贴 PNG 并打开预览。
-  1. 让「照片」作为 PNG 默认应用，确认「打开」显示正确的图标，加载时图标位置稳定，没有通用图标闪现。点击主按钮，确认图片在默认应用中打开。换一个默认应用后重开预览，确认图标随系统关联更新。
-  2. 用鼠标和键盘打开下拉，确认默认应用排首并勾选。选择另一款兼容应用，确认主按钮图标和勾选同步，再点击「打开」并确认图片由选中的应用打开。重新打开预览，确认仍按系统默认应用初始化。两项通过后移除此条。
 
 ## ChatGPT Web · 历史读取实测
 
@@ -123,6 +113,7 @@
 - [ ] **并行开发** · `/team develop` 已有持久化和冻结工作树绑定，仍缺专用运行时、调度、review/check 执行、RPC/UI 和 SCM 落地。实现前该入口返回不可用。范围见 [Workflows](crates/ext/workflows/README.md)。
 - [ ] **复核 · 浏览器集成中的 scrollbar 点击偶发失败** · 2026-10-08 完整集成 840 项通过、1 项失败，未修改的基线重复 10 次出现 5 次相同失败。调查时保留现有断言。见 [main 集成交接记录](docs/archive/ash-main-handoff-2026-10-08.md#本次实际验证)。
       2026-11-06 在 Windows 11 23H2 x64、`bd00f5e926` 使用 Chromium 复跑编辑器滚动条的显示尺寸、滚轮和轨道点击、箭头点击和长按三条用例各 10 轮，30/30 通过。历史 macOS 记录没有具体用例名，仍待复核原失败。日志位于 `.build/todo-local-acceptance-20261106/scrollbar-retry.log`。
+      2026-11-14 Windows 当前源码构建以原断言复跑 `textModel.integration.spec.ts` 的轨道点击与箭头交互两项各 10 次，20/20 通过；仍不能对应未注明名称的历史 macOS 失败。日志：`.build/todo-local-scrollbar.log`。
 
 ## Rust 函数级增量编译
 
@@ -179,8 +170,6 @@
 - [ ] **Chat widget 剩余对齐** · 对照本地 VS Code 的 `chat/browser/widget`，仍有 74 个 TypeScript／CSS 同路径差异。回复的 Turn 文件可行内预览或打开完整变更，Markdown Git diff 可逐文件切换。问题和权限确认、计划列表、进行中状态、推理标题、检查点按钮与工具调用摘要已有独立部件。MCP 输出重挂载会恢复尺寸。此前已接入 Code Review 引用、模型选择控制器和 Sessions 共享工具目录，并归位排队重排、归档只读提示、工具结果、MCP 登录、代码出处、工作区文件变更、输入介绍和编辑器显示配置。模型选择器已复用供应商图标、速度选项和推理档位逻辑，扩展安装审批可跳转到 Extensions 搜索。会话输入区可展开当前检查点的文件变更并审查单个文件，聊天文件链接支持编辑器关联。MCP 启动提示需先由服务暴露可观察的启动状态。
 
 - [ ] **Ash 产品 · 补齐聊天行内文件图标** · 下载链接已经由 Ash 的共享聊天渲染器处理。Word、Excel、CSV 和 PDF 已用彩色图标，TXT、压缩包和源代码文件仍显示通用文件图标。在 Ash 复用现有的文本、归档和代码图标，按文件名后缀匹配并保留通用回退。数据源继续提供文件名和可读取的引用。用同一条聊天回复验证各类文件图标、链接的可访问名称和键盘下载。
-
-- [ ] **验收 · 听写模型最终版桌面安装** · 已撤掉开发态的一次性迁移。25 项 Rust 测试通过，空缓存已实测 Paraformer 下载、校验、加载和复用。当前 `pnpm prepare:backend` 卡在 `crates/automation/src/store.rs:101`，该处仍引用已不存在的 `AutomationSession::NewChat`。待 Automation 修复后重新构建 Ash，在空模型缓存的隔离桌面 profile 中从「设置 → 语音」安装 Paraformer，核对下载进度、安装完成后显示已就绪，以及重开设置后仍能选用该模型。通过后移除此条。
 
 - [ ] **共享宿主前置 · widgetHosts 窗口归位** · 上游独立 Chat 窗口沿 `chatMoveActions.ts` 进入公共 `browser/parts/editor/auxiliaryEditorPart.ts` 与 titlebar，Quick Chat 外框由 Quick Input 承担。迁移本地 `widgetHosts/chatAuxiliaryWindow.ts` 及其样式前，先闭合非编辑器 Chat／Cowork 组件在公共窗口中的挂载、焦点、置顶、关闭归还和释放契约；现有 `ITitleService.createAuxiliaryTitlebarPart` 要求编辑器分组，不能用虚构分组或转调壳承接。`widgetHosts/media/chatQuick.css` 的外框迁移也先补公共 QuickWidget 外框 owner，保留 Chat 自身的标题与内容布局。随后迁移真实调用方并验证同一组件／草稿与关闭归还。
 

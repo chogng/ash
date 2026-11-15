@@ -6,6 +6,12 @@
 
 Electron 的转写服务、对应型号、麦克风和语言在 Voice input 设置中管理；API 凭据仍由 Models 中的连接配置唯一持有。每个云端 API 服务目前只支持当前实现指定的单一型号，不提供任意模型 ID 输入。
 
+## 本地模型安装
+
+模型包在隐藏暂存目录中完成下载、校验和推理加载，通过后原子发布。磁盘库存跳过隐藏目录，暂存包即使已有清单也不会作为已安装模型读取；发布后的目录继续校验模型 ID。
+
+2026-11-14，Windows x64 源码构建通过空缓存 Desktop 安装、模型校验／加载与重开设置三个场景。新增库存回归在修复前复现 `Invalid local dictation model ID`，修复后 `just verify ash-realtime-voice --lib` 通过检查、26 项测试和警告检查，3 项真实音频／设备用例按原配置忽略。复跑入口为 `.build/ash-playwright-mcp/dictation-install.cjs`，通过证据为 `.build/ash-playwright-mcp/evidence/dictation-install-2026-11-14T14-07-00-747Z/report.html`。此前解码器连接失败与修复前库存失败的报告继续保留；本次未调整 HTTP 策略，不将网络问题认定为已修复。
+
 ## Codex 订阅听写
 
 在 Voice input 中选择“ChatGPT”（`dictation.backend = "codex"`），复用 Models 中的 Codex 登录。聊天、编辑器和终端沿用各自的文字插入行为。录音期间显示临时文字，停止后等待最终文本，通知和停止响应交错到达时只插入一次。
