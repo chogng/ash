@@ -1037,6 +1037,110 @@ test('Explorer read-only policy blocks rename and makes deletion override explic
 	}
 });
 
+for (const route of [
+	{ name: 'same root', sourceRoot: '/project', roots: ['/project'], isCrossRoot: false },
+	{ name: 'different roots', sourceRoot: '/other', roots: ['/project', '/other'], isCrossRoot: true },
+	{ name: 'nested roots', sourceRoot: '/project/nested', roots: ['/project', '/project/nested'], isCrossRoot: true },
+	{ name: 'outside the destination workspace', sourceRoot: '/outside', roots: ['/project'], isCrossRoot: true },
+]) {
+	for (const policy of ['before cut', 'after cut', 'during target lookup', 'during copy', 'copy', 'writable exception', 'protection removed']) {
+		if (policy === 'during copy' && !route.isCrossRoot) {
+			continue;
+		}
+		test(`Explorer paste read-only policy: ${route.name}, ${policy}`, async () => {
+			await import('../../browser/fileActions.contribution.js');
+			initializeTestLocalization('zh-CN');
+			try {
+				const source = URI.file(`${route.sourceRoot}/locked.ts`);
+				const destination = URI.file('/project/destination');
+				const target = destination.joinPathSegment('locked.ts');
+				let selected = new ExplorerItem(source, 'locked.ts', FileKind.File);
+				using workspace = new TestWorkspaceService({
+					id: 'project',
+					folders: route.roots.map((path, index) => ({ id: `root-${index}`, uri: URI.file(path), name: `root-${index}`, index })),
+				});
+				using explorer = createExplorerService(workspace);
+				using view = explorer.registerView({ refresh: async () => { }, getContext: () => [selected], getAccessibleContent: () => '', selectResource: async () => { }, focus() { }, hasFocus: () => false });
+				using services = createFileActionServices();
+				services.registerInstance(IWorkspaceContextService, workspace);
+				services.registerInstance(IExplorerService, explorer);
+				const configuration = services.get(IConfigurationService);
+				// Instantiate the policy owner before changing settings to exercise live updates.
+				assert.equal(services.get(IFilesConfigurationService).isReadonly(source), false);
+				if (['before cut', 'copy', 'writable exception', 'protection removed'].includes(policy)) {
+					await configuration.updateValue('files.readonlyInclude', { '**/locked.ts': true });
+				}
+				if (policy === 'writable exception') {
+					await configuration.updateValue('files.readonlyExclude', { '**/locked.ts': true });
+				}
+				let clipboard: IClipboardResources = { resources: [], operation: 'copy' };
+				services.registerInstance(IClipboardService, {
+					readResources: async () => clipboard,
+					writeResources: async (resources, operation) => { clipboard = { resources, operation }; },
+				} as IClipboardService);
+				const operations: string[] = [];
+				const existing = new Set([source.path]);
+				services.registerInstance(IFileService, {
+					stat: async (resource: URI) => {
+						if (existing.has(resource.path)) {
+							return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
+						}
+						if (policy === 'during target lookup') {
+							await configuration.updateValue('files.readonlyInclude', { '**/locked.ts': true });
+						}
+						throw new FileNotFoundError(resource);
+					},
+					copy: async () => {
+						operations.push('copy');
+						existing.add(target.path);
+						if (policy === 'during copy') {
+							await configuration.updateValue('files.readonlyInclude', { '**/locked.ts': true });
+						}
+					},
+					rename: async () => { operations.push('rename'); existing.delete(source.path); existing.add(target.path); },
+					delete: async () => { operations.push('delete'); existing.delete(source.path); },
+				} as unknown as FileServiceContract);
+				using commands = new CommandService(services);
+				await commands.executeCommand(policy === 'copy' ? COPY_FILE_COMMAND_ID : CUT_FILE_COMMAND_ID);
+				if (policy === 'after cut') {
+					await configuration.updateValue('files.readonlyInclude', { '**/locked.ts': true });
+				}
+				if (policy === 'protection removed') {
+					await configuration.updateValue('files.readonlyInclude', {});
+				}
+				if (route.name === 'outside the destination workspace') {
+					// A destination window has the shared clipboard but no source Explorer snapshot.
+					explorer.setToCopy([], false);
+				}
+				selected = new ExplorerItem(destination, 'destination', FileKind.Directory);
+				if (['before cut', 'after cut', 'during target lookup', 'during copy'].includes(policy)) {
+					await assert.rejects(commands.executeCommand(PASTE_FILE_COMMAND_ID), { message: '无法移动 locked.ts，因为它已配置为只读。' });
+					assert.deepEqual(operations, policy === 'during copy' ? ['copy'] : []);
+					assert.ok(existing.has(source.path), 'A protected source must remain in place');
+					assert.equal(existing.has(target.path), policy === 'during copy');
+					assert.deepEqual(clipboard, { resources: [source], operation: 'move' });
+					assert.equal(explorer.getToCopy().cut, route.name !== 'outside the destination workspace');
+				} else {
+					await commands.executeCommand(PASTE_FILE_COMMAND_ID);
+					let expectedOperations = ['copy'];
+					if (policy !== 'copy') {
+						expectedOperations = route.isCrossRoot ? ['copy', 'delete'] : ['rename'];
+					}
+					assert.deepEqual(operations, expectedOperations);
+					assert.equal(existing.has(source.path), policy === 'copy');
+					assert.ok(existing.has(target.path));
+					if (policy !== 'copy') {
+						assert.deepEqual(clipboard, { resources: [], operation: 'copy' });
+						assert.equal(explorer.getToCopy().cut, false);
+					}
+				}
+			} finally {
+				resetNlsResolver();
+			}
+		});
+	}
+}
+
 function createExplorerService(workspace: TestWorkspaceService): ExplorerService {
 	return new ExplorerService(workspace, configurations.add(new FileService()), configurations.add(new InMemoryConfigurationService()));
 }
@@ -1333,12 +1437,13 @@ suite('fileMenus browser component', () => {
 		const viewMenu = page.getByRole('menu').last();
 		for (const [actionId, checked, iconSelector] of [
 			['fixture.checked', 'true', '.ash-menu-leading-check > .ash-icon'],
-			['fixture.unchecked', 'false', '.ash-menu-leading-check > .ash-icon-label-icon > .ash-icon'],
+			['fixture.unchecked', 'false', '.ash-menu-leading-check > .ash-menu-action-icon > .ash-icon'],
 		] as const) {
 			const item = viewMenu.locator(`[data-action-id="${actionId}"] button`);
 			await expect(item).toHaveAttribute('aria-checked', checked);
 			const slot = item.locator('.ash-menu-leading-slot');
 			const icon = item.locator(iconSelector);
+			await expect(icon).toBeVisible();
 			const label = item.locator('.ash-button-label');
 			const [slotBounds, iconBounds, labelBounds] = await Promise.all([
 				slot.boundingBox(), icon.boundingBox(), label.boundingBox(),

@@ -92,6 +92,7 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 	const localClipboard = explorer.getToCopy();
 	const cut = nativeFiles.length === 0 && (operation === 'move' || move);
 	const files = accessor.get(IFileService);
+	const filesConfiguration = accessor.get(IFilesConfigurationService);
 	const paths = accessor.get(IPathService);
 	if (!resources.length && await accessor.get(ISystemFileTransferService).pasteSystemFiles(directory, move)) {
 		explorer.setToCopy([], false);
@@ -121,12 +122,24 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 		if (cut && extUriBiasedIgnorePathCase.isEqual(desired, resource)) continue;
 		const target = await availablePasteTarget(files, directory, name);
 		if (workspaceContext.getWorkspace().id !== workspaceId) return;
+		const assertWritable = (): void => {
+			if (filesConfiguration.isReadonly(resource)) {
+				throw new Error(localize('files.moveReadonly', 'Cannot move {0} because it is configured as read-only.', name));
+			}
+		};
+		if (cut) {
+			assertWritable();
+		}
 		const sourceFolder = workspaceContext.getWorkspaceFolder(resource);
 		if (cut && sourceFolder && sourceFolder.id === workspaceContext.getWorkspaceFolder(target)?.id) {
 			await files.rename(resource, target, 'error');
 		} else {
 			await files.copy(resource, target);
-			if (cut) await files.delete(resource, 'error', 'recursive');
+			if (cut) {
+				// Copying can outlive a policy change; recheck before removing the source.
+				assertWritable();
+				await files.delete(resource, 'error', 'recursive');
+			}
 		}
 	}
 	if (cut) {

@@ -220,6 +220,7 @@
     "files.invalidName": "请输入目标文件系统允许的名称。",
     "files.rename": "重命名",
     "files.renameReadonly": "无法重命名 {0}，因为它已配置为只读。",
+    "files.moveReadonly": "无法移动 {0}，因为它已配置为只读。",
     "files.deleteReadonlyDetail": "选中的文件或文件夹已配置为只读。删除它们将覆盖只读保护。",
     "files.deletePermanently": "永久删除",
     "files.deleteConfirm": "永久删除 {0}？",
