@@ -317,7 +317,7 @@ export async function scanFixture(
 	try {
 		await bounded(async () => {
 			await page.goto(`/componentFixture.html?fixture=${encodeURIComponent(id)}`);
-			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
 			await page.mouse.move(0, 0);
 			await prepare?.(page);
 		});
@@ -496,7 +496,9 @@ export class Renderer {
 
 	async start(run: ProcessRun, environment: NodeJS.ProcessEnv): Promise<void> {
 		const baseURL = await explorerURL(run, environment, this.configPath);
-		this.browserServer = await chromium.launchServer({ headless: true });
+		// Use the lockfile's full Chromium in headless mode. The separate headless
+		// shell varies rounded-border pixels across otherwise identical processes.
+		this.browserServer = await chromium.launchServer({ headless: true, channel: 'chromium' });
 		await run.own(this.browserServer.process());
 		this.browser = await chromium.connect(this.browserServer.wsEndpoint());
 		this.context = await this.browser.newContext({ baseURL, viewport: { width: 1100, height: 900 }, reducedMotion: 'reduce' });
@@ -507,7 +509,7 @@ export class Renderer {
 		const page = await this.context!.newPage();
 		try {
 			await page.goto('/componentExplorer.html');
-			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
 			const catalog = await page.evaluate(() => window.componentExplorer.catalog);
 			const fixtures = catalog.filter(entry => new RegExp(pattern).test(entry.id));
 			if (!fixtures.length) throw new Error(`No component fixtures matched ${pattern}`);
@@ -570,7 +572,7 @@ export class Renderer {
 						page = await this.context!.newPage();
 						page.setDefaultTimeout(Math.max(1, deadline - Date.now()));
 						await page.goto(`/componentFixture.html?fixture=${encodeURIComponent(fixture.id)}`);
-						await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+						await expect(page.locator('body')).toHaveAttribute('data-ready', 'true', { timeout: Math.max(1, deadline - Date.now()) });
 						await page.mouse.move(0, 0);
 						const selectors = await page.evaluate(() => window.componentFixture.selectors);
 						const image = async (): Promise<Buffer> => {
@@ -597,7 +599,7 @@ export class Renderer {
 				} finally { await page?.close(); }
 			}
 		}));
-		const manifest: ScreenshotManifest = { environment: { platform: process.platform, browserVersion: this.browser!.version() }, fixtures: results };
+		const manifest: ScreenshotManifest = { environment: { platform: process.platform, browserVersion: this.browser!.version(), channel: 'chromium' }, fixtures: results };
 		await writeFile(resolve(this.outputDirectory, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 		return manifest;
 	}

@@ -14,6 +14,6 @@ export default defineConfig({
 		baseURL: process.env.ASH_EDITOR_BROWSER_BASE_URL,
 		viewport: { width: 1100, height: 900 }, contextOptions: { reducedMotion: 'reduce' }, trace: 'retain-on-failure',
 	},
-	projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+	projects: [{ name: 'chromium', use: { browserName: 'chromium', channel: 'chromium' } }],
 	reporter: [['list'], ['html', { outputFolder: resolve(runDirectory, 'report'), open: 'never' }]],
 });

@@ -26,7 +26,7 @@ async function imageRecorder(testInfo: TestInfo, id: string) {
 
 test('component explorer discovers themed fixtures and exposes real CSS source order', async ({ page }) => {
 	await page.goto('/componentExplorer.html');
-	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
 	const catalog = await page.evaluate(() => window.componentExplorer.catalog);
 	expect(catalog.length).toBeGreaterThanOrEqual(12);
 	expect(new Set(catalog.map(entry => entry.id)).size).toBe(catalog.length);

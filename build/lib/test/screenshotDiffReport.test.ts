@@ -16,6 +16,7 @@ test('manifest comparison accounts for changed, added, removed and errored fixtu
 	assert.deepEqual(result.summary, { unchanged: 1, changed: 1, added: 1, removed: 1, error: 1 });
 	assert.equal(result.entries.find(entry => entry.fixtureId === 'error')?.current?.error, 'Deliberate render error');
 	assert.throws(() => compareScreenshotManifests(baseline, { ...current, environment: { ...environment, platform: 'linux' } }), /same platform/);
+	assert.throws(() => compareScreenshotManifests(baseline, { ...current, environment: { ...environment, channel: 'chromium' } }), /same platform/);
 });
 
 test('manifest boundary rejects missing images, duplicate IDs, escaped paths and corrupt hashes', async () => {
@@ -26,6 +27,8 @@ test('manifest boundary rejects missing images, duplicate IDs, escaped paths and
 		const hash = createHash('sha256').update(png).digest('hex');
 		await mkdir(resolve(directory, 'images'));
 		await writeFile(resolve(directory, 'images', `${hash}.png`), png);
+		await writeFile(path, JSON.stringify({ environment: { ...environment, channel: 'unknown' }, fixtures: [fixture('valid', hash)] }));
+		await assert.rejects(readScreenshotManifest(path), /Invalid screenshot manifest/);
 		await writeFile(path, JSON.stringify({ environment, fixtures: [fixture('repeat', hash), fixture('repeat', hash)] }));
 		await assert.rejects(readScreenshotManifest(path), /unique/);
 		await writeFile(path, JSON.stringify({ environment, fixtures: [fixture('missing')] }));

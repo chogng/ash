@@ -13,14 +13,14 @@ export interface ScreenshotFixture {
 }
 
 export interface ScreenshotManifest {
-	readonly environment: { readonly platform: string; readonly browserVersion: string; };
+	readonly environment: { readonly platform: string; readonly browserVersion: string; readonly channel?: 'chromium'; };
 	readonly fixtures: readonly ScreenshotFixture[];
 }
 
 /** Manifest files are an external boundary, including their references to image files. */
 export async function readScreenshotManifest(path: string): Promise<ScreenshotManifest> {
 	const value = JSON.parse(await readFile(path, 'utf8')) as Partial<ScreenshotManifest> | null;
-	if (!value?.environment || typeof value.environment.platform !== 'string' || typeof value.environment.browserVersion !== 'string' || !Array.isArray(value.fixtures)) {
+	if (!value?.environment || typeof value.environment.platform !== 'string' || typeof value.environment.browserVersion !== 'string' || (value.environment.channel !== undefined && value.environment.channel !== 'chromium') || !Array.isArray(value.fixtures)) {
 		throw new Error(`Invalid screenshot manifest: ${path}`);
 	}
 	const seen = new Set<string>();
@@ -42,7 +42,7 @@ export async function readScreenshotManifest(path: string): Promise<ScreenshotMa
 }
 
 export function compareScreenshotManifests(baseline: ScreenshotManifest, current: ScreenshotManifest) {
-	if (baseline.environment.platform !== current.environment.platform || baseline.environment.browserVersion !== current.environment.browserVersion) throw new Error('Screenshot comparison requires the same platform and browser version');
+	if (baseline.environment.platform !== current.environment.platform || baseline.environment.browserVersion !== current.environment.browserVersion || baseline.environment.channel !== current.environment.channel) throw new Error('Screenshot comparison requires the same platform, browser version and channel');
 	const before = new Map(baseline.fixtures.map(fixture => [fixture.fixtureId, fixture]));
 	const after = new Map(current.fixtures.map(fixture => [fixture.fixtureId, fixture]));
 	const entries = [...new Set([...before.keys(), ...after.keys()])].sort().map(fixtureId => {
