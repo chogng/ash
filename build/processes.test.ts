@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
-import { copyFile, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
@@ -245,3 +245,29 @@ async function isAlive(pid: number): Promise<boolean> {
 	try { const { stdout } = await promisify(execFile)('ps', ['-p', String(pid), '-o', 'stat=']); return !stdout.trim().startsWith('Z'); }
 	catch (error) { if (error.code === 1) return false; throw error; }
 }
+
+
+test('owned command groups run and clean up without permission to execute ps', { skip: process.platform === 'win32' }, async t => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-process-preflight-'));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	const denied = join(directory, 'ps');
+	await writeFile(denied, '#!/bin/sh\nexit 0\n');
+	await chmod(denied, 0o600);
+	const marker = join(directory, 'started');
+	const source = `
+import { ProcessRun } from ${JSON.stringify(pathToFileURL(join(repository, 'build/processes.ts')).href)};
+const run = new ProcessRun(process.cwd());
+try {
+  const result = await run.command(process.execPath, ['-e', ${JSON.stringify("require('node:fs').writeFileSync(process.argv[1], 'started')")}, ${JSON.stringify(marker)}], process.env);
+  if (result.code !== 0) throw new Error('Command failed');
+} finally {
+  await run.close();
+}
+console.log('owned-group-without-ps');
+`;
+	const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', source], {
+		cwd: repository, env: { ...process.env, PATH: directory }, timeout: 10_000,
+	});
+	assert.match(stdout, /owned-group-without-ps/u);
+	assert.equal(await readFile(marker, 'utf8'), 'started');
+});

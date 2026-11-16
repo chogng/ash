@@ -124,12 +124,12 @@ export class ContextView
 
 	private canHandleEscape(target: EventTarget | null): boolean {
 		if (isTopmostContextView(this)) return true;
-		if (this.options?.presentation !== 'dialog' || !isNode(target) || !this.element.contains(target)) return false;
+		if ((this.options?.presentation !== 'dialog' && this.options?.presentation !== 'menu') || !isNode(target) || !this.element.contains(target)) return false;
 		const stack = visibleContextViews.get(this.element.ownerDocument);
 		const hover = stack?.at(-1);
 		if (stack?.at(-2) !== this || hover?.options?.presentation !== 'hover' ||
-			!anchorContains(hover.options.anchor, target) || hover.contains(target)) return false;
-		// A tooltip above the focused control should close with its dialog. A
+			!isElementAnchor(hover.options.anchor) || (!this.contains(hover.options.anchor) && !anchorContains(this.options.anchor, hover.options.anchor)) || hover.contains(target)) return false;
+		// A tooltip for this popup or its trigger should close with it. A
 		// hover that has taken focus still handles its own Escape first.
 		hover.hide(ContextViewHideReason.Escape);
 		return isTopmostContextView(this);

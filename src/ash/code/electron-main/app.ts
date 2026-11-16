@@ -1,3 +1,6 @@
+import { browserDownloadsChannel } from '../../platform/browserView/electron-main/browserDownloadIpc.js';
+import { BrowserDownloadMainService } from '../../platform/browserView/electron-main/browserDownloadMainService.js';
+import { IBrowserDownloadService, BrowserDownloadsChannel } from '../../platform/browserView/common/browserDownloads.js';
 import { SCREEN_CAPTURE_PERMISSION_REQUIRED } from '../../platform/native/common/native.js';
 import { GLOBAL_KEYBINDING_TRIGGER_CHANNEL } from '../../platform/globalKeybindings/common/globalKeybindings.js';
 import { TerminalWindowRecovery } from './terminalWindowRecovery.js';
@@ -48,7 +51,7 @@ import { IBrowserPasswordMainService, BrowserPasswordMainService, browserPasswor
 import { EncryptionMainService } from '../../platform/encryption/electron-main/encryptionMainService.js';
 
 import { basename, dirname, isAbsolute, join, parse } from 'node:path';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { CancellationToken, CancellationTokenSource, throwIfCancelled } from '../../base/common/cancellation.js';
@@ -60,7 +63,7 @@ import { assertDefined } from '../../base/common/types.js';
 import { AshApplicationId, AshApplicationName } from '../common/application.js';
 import { ElectronContextMenu } from '../../base/parts/contextmenu/electron-main/contextmenu.js';
 import { ContextMenuWindow } from '../../base/parts/contextmenu/electron-main/contextMenuWindow.js';
-import { restoreMacMainWindow } from '../../base/parts/contextmenu/electron-main/macContextMenuWindow.js';
+import { scheduleMacMainWindowRestore } from '../../base/parts/contextmenu/electron-main/macContextMenuWindow.js';
 import { isContextMenuWindowName } from '../../base/parts/contextmenu/common/contextmenu.js';
 import { ElectronMainClipboardService } from '../../platform/clipboard/electron-main/electronMainClipboardService.js';
 import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
@@ -705,6 +708,9 @@ export class AshApplication extends Disposable {
 		this.windowServices.registerInstance(IBrowserPasswordMainService, browserPasswords);
 		this.mainProcessIpcServer.registerChannel('browserPasswords', browserPasswordChannel(browserPasswords));
 		this.windowServices.registerInstance(ILogService, this.logService);
+		const browserDownloads = this._register(this.windowServices.createInstance(BrowserDownloadMainService, app.getPath('downloads')));
+		this.windowServices.registerInstance(IBrowserDownloadService, browserDownloads);
+		this.mainProcessIpcServer.registerChannel(BrowserDownloadsChannel, browserDownloadsChannel(browserDownloads));
 		this.mainProcessIpcServer.registerChannel('storage', new StorageDatabaseChannel(storage));
 		this.mainProcessIpcServer.registerChannel(desktopStorageChannelName, new DesktopStorageChannel(app.getPath('userData'), this.profileRoot));
 		const launchServices = this._register(new InstantiationService());
@@ -2087,7 +2093,7 @@ export class AshApplication extends Disposable {
 
 	private configureWindowNavigation(window: BrowserWindow, windowDisposables: DisposableStore, titleBarStyle: TitleBarStyleConfiguration, openerWindow: BrowserWindow = window): ContextMenuWindow {
 		const auxiliaryWindows = windowDisposables.add(new DisposableMap<number, IDisposable>());
-		const menuWindows = windowDisposables.add(new ContextMenuWindow(window, restoreMacMainWindow));
+		const menuWindows = windowDisposables.add(new ContextMenuWindow(window, scheduleMacMainWindowRestore));
 		// Apply restored popup bounds before creation; Chromium ignores its position features here.
 		window.webContents.setWindowOpenHandler(details => {
 			const menuOptions = menuWindows.getWindowOpenOptions(details);
@@ -2194,6 +2200,16 @@ export class AshApplication extends Disposable {
 				authority: network.authority,
 				tunnels: new BrowserNetworkProxy(this.mainProcessIpcServer.getChannel('browserNetwork', client => client.ctx === context), network),
 			}),
+			getPersistentSessionIds: async () => {
+				try {
+					const partitions = await readdir(join(app.getPath('sessionData'), 'Partitions'), { withFileTypes: true });
+					return partitions.filter(entry => entry.isDirectory() && /^ash-browser-[a-f0-9]{64}$/u.test(entry.name))
+						.map(entry => entry.name.slice('ash-browser-'.length));
+				} catch (error) {
+					if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+					throw error;
+				}
+			},
 			createSession: (partition: string) => {
 				const session = electronSession.fromPartition(partition);
 				return session;

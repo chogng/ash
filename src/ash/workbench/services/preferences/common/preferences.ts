@@ -51,7 +51,7 @@ export type SettingsSectionField = { readonly description?: string; } & (
 	}
 	| { readonly id: string; readonly kind: 'select'; readonly label: string; readonly value: string | undefined; readonly options: readonly { readonly value: string; readonly label: string; readonly separatorBefore?: boolean; }[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
 	| { readonly id: string; readonly kind: 'menu'; readonly label: string; readonly value: string; readonly valueLabel: string; readonly valueDescription?: string; readonly options: readonly SettingsMenuOption[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
-	| { readonly id: string; readonly kind: 'action'; readonly label: string; readonly enabled: boolean; readonly run: () => Promise<void>; });
+	| { readonly id: string; readonly kind: 'action'; readonly label: string; readonly actionLabel?: string; readonly enabled: boolean; readonly presentation?: 'setting'; readonly run: () => Promise<void>; });
 
 export type SettingValueType = 'boolean' | 'number' | 'numberWithOptions' | 'select' | 'text' | 'array' | 'stringMap' | 'complex';
 export type SettingsPresentation = 'editor' | 'general';

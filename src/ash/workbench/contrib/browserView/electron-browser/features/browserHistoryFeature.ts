@@ -29,12 +29,13 @@ export class BrowserHistoryFeature extends Disposable {
 			return [...snapshot.items].reverse().filter(entry => (entry.title + ' ' + entry.url).toLowerCase().includes(text.toLowerCase())).slice(0, 50).map(entry => ({ id: 'history:' + entry.id, label: entry.title || entry.url, description: entry.url, apply: input => input.model?.loadURL(entry.url) }));
 		},
 	}];
-	public async show(): Promise<void> {
+	public async show(onDidHide?: () => void): Promise<void> {
 		const model = this.model;
-		if (!model) { return; }
+		if (!model) { onDidHide?.(); return; }
 		const snapshot = await this.pageService.getBrowserHistory(model.id);
-		if (this.isDisposed || this.model !== model) { return; }
+		if (this.isDisposed || this.model !== model) { onDidHide?.(); return; }
 		const resources = new DisposableStore();
+		if (onDidHide) resources.add(toDisposable(onDidHide));
 		this.historyPicker.value = resources;
 		const picker = resources.add(this.quickInput.createQuickPick<IQuickPickItem & { url?: string; }>());
 		resources.add(toDisposable(() => picker.hide()));
@@ -72,4 +73,26 @@ registerEditorToolAction(class BrowserFeatureAction extends Action2 {
 		const pane = accessor.get(IEditorPart).activePane;
 		if (pane?.id === BrowserViewEditorId) { await (pane as BrowserEditor).getContribution(BrowserNavigationFeatures)?.history.show(); }
 	}
+});
+
+import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+
+// Settings can manage visits without an active browser editor, including in Chat.
+CommandsRegistry.register('workbench.action.browser.manageHistory', async accessor => {
+	const browsers = accessor.get(IBrowserViewWorkbenchService);
+	const instantiation = accessor.get(IInstantiationService);
+	const notifications = accessor.get(INotificationService);
+	const editors = accessor.get(IEditorService);
+	await browsers.initialize();
+	const input = [...browsers.getContextualBrowserViews().values()].find(input => input.model?.info.owner.type === 'user'
+		&& ['global', 'workspace'].includes(input.model.info.session.scope))
+		?? await browsers.createBrowserView({ initialUrl: 'about:blank', owner: { type: 'user' } });
+	await editors.openEditor(input, { pinned: true });
+	using history = instantiation.createInstance(BrowserHistoryFeature, (error: unknown) => notifications.error(error instanceof Error ? error : String(error)));
+	history.setModel(await input.resolve());
+	await new Promise<void>((resolve, reject) => { void history.show(resolve).catch(reject); });
 });

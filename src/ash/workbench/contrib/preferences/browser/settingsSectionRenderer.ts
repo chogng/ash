@@ -41,6 +41,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 	private readonly controls = new Map<string, Button | DropdownMenuActionViewItem | InputBox | SelectBox | Switch | HTMLElement>();
 	private readonly actionsDomNode: HTMLElement;
 	private readonly fields = new Map<string, SettingsSectionField>();
+	private readonly descriptions = new Map<string, HTMLElement>();
 	private isVisible = false;
 	private pendingFocus: HTMLElement | undefined;
 	private readonly generalRows: boolean;
@@ -142,7 +143,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 		const content = this.model.fields.map(field => {
 			switch (field.kind) {
 				case 'status': return field.text;
-				case 'action': return field.label;
+				case 'action': return [field.label, field.description, field.actionLabel].filter(Boolean).join(': ');
 				case 'text': return `${field.label}: ${field.value}`;
 				case 'select': return `${field.label}: ${field.options.find(option => option.value === field.value)?.label ?? ''}`;
 				case 'menu': return this.menuValueLabel(field);
@@ -163,12 +164,14 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 			let control = this.controls.get(field.id);
 			if (!control) {
 				const standalone = this.model.groupId === null;
-				const generalRow = this.generalRows && standalone;
+				const settingAction = field.kind === 'action' && field.presentation === 'setting';
+				const generalRow = settingAction || this.generalRows && standalone;
 				let container = this.fieldsDomNode;
 				let copy = container;
-				if (standalone && field.kind !== 'status' && field.kind !== 'action') {
+				if (settingAction || standalone && field.kind !== 'status' && field.kind !== 'action') {
 					container = h(this.domNode.ownerDocument, 'div');
 					container.className = generalRow ? 'ash-configuration-setting' : 'ash-settings-field-row';
+					if (settingAction) container.classList.add('ash-settings-action-row');
 					if (generalRow && field.kind === 'boolean') container.classList.add('ash-configuration-toggle-setting');
 					copy = h(this.domNode.ownerDocument, 'div');
 					copy.className = generalRow ? 'ash-configuration-setting-copy' : 'ash-settings-field-copy';
@@ -181,6 +184,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 						description.textContent = field.description;
 						description.id = `settingsFieldDescription-${generateUuid()}`;
 						copy.append(description);
+						this.descriptions.set(field.id, description);
 						container.setAttribute('aria-describedby', description.id);
 					}
 				}
@@ -262,12 +266,18 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 						this._register(select.onDidSelect(({ value }) => { const current = this.fields.get(field.id); if (current?.kind === 'select') { current.setValue(value); } })); control = select;
 					}
 				} else {
-					if (!this.actionsDomNode.isConnected) { this.fieldsDomNode.append(this.actionsDomNode); }
-					const button = this._register(new Button(this.actionsDomNode, {
+					if (settingAction) {
+						const label = h(this.domNode.ownerDocument, 'span'); label.textContent = field.label; copy.prepend(label);
+					} else if (!this.actionsDomNode.isConnected) { this.fieldsDomNode.append(this.actionsDomNode); }
+					const button = this._register(new Button(settingAction ? container : this.actionsDomNode, {
 						...defaultButtonStyles,
-						label: field.label,
+						label: field.actionLabel ?? field.label,
 						presentation: 'secondary',
 					}));
+					if (settingAction) {
+						const descriptionId = container.getAttribute('aria-describedby');
+						if (descriptionId) button.domNode.setAttribute('aria-describedby', descriptionId);
+					}
 					this._register(button.onDidClick(() => { const current = this.fields.get(field.id); if (current?.kind === 'action' && current.enabled) { void current.run(); } })); control = button;
 				}
 				if (copy !== container && copy.firstElementChild) {
@@ -291,7 +301,9 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 				control.setLabel(field.valueLabel, this.menuValueLabel(field), field.valueDescription);
 				control.action.enabled = field.enabled;
 			}
-			else if (field.kind === 'action' && control instanceof Button) { control.label = field.label; control.enabled = field.enabled; }
+			else if (field.kind === 'action' && control instanceof Button) { control.label = field.actionLabel ?? field.label; control.enabled = field.enabled; }
+			const description = this.descriptions.get(field.id);
+			if (description) description.textContent = field.description ?? '';
 		}
 	}
 

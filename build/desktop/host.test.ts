@@ -94,6 +94,7 @@ for (const mode of ['build', 'watch'] as const) {
 			await copyFile(join(import.meta.dirname, file), join(root, 'build/desktop', file));
 		}
 		await copyFile(join(import.meta.dirname, '../processes.ts'), join(root, 'build/processes.ts'));
+		await copyFile(join(import.meta.dirname, '../processGroup.ts'), join(root, 'build/processGroup.ts'));
 		// Isolate compiler/watch behavior from Rust compilation; the native builder
 		// has its own generation-publication tests and real build validation.
 		await writeFile(join(root, 'build/python.ts'), 'export let preparations = 0; export async function runPython() { preparations++; }');

@@ -1,3 +1,4 @@
+import { IBrowserDownloadService, BrowserDownloadsChannel } from '../../platform/browserView/common/browserDownloads.js';
 import '../../workbench/services/imageResize/electron-browser/imageResizeService.js';
 import { CancellationError, isCancellationError } from '../../base/common/errors.js';
 import type { IWorkspaceTrustApi } from '../../platform/workspace/common/workspaceTrust.js';
@@ -163,6 +164,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		serviceCollection.set(IWorkbenchEnvironmentService, environment);
 		serviceCollection.set(IPolicyService, sessions.add(new PolicyChannelClient(mainProcessService.getChannel('policy'))));
 		serviceCollection.set(IPlaywrightService, playwrightService);
+		serviceCollection.set(IBrowserDownloadService, ProxyChannel.toService<IBrowserDownloadService>(mainProcessService.getChannel(BrowserDownloadsChannel)));
 		serviceCollection.set(IBrowserPasswordService, ProxyChannel.toService<IBrowserPasswordService>(mainProcessService.getChannel('browserPasswords')));
 		serviceCollection.set(IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)));
 		logger = sessions.add(profileServices.createInstance(NativeLogService, 'agents'));
@@ -389,6 +391,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.url',
 					'workbench.contrib.externalUriOpener',
 					'workbench.contrib.browserView',
+					'workbench.contrib.browserDownloads',
 					'workbench.contrib.canvases',
 					'sessions.contrib.canvases',
 					'sessions.contrib.remoteCanvases',

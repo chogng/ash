@@ -199,6 +199,8 @@ export class ChatWorkspaceContribution extends Disposable {
 		const entry: ISessionsEntry = {
 			id: chatSource, workspaceMode: 'chat', activityContext: ASH_CHAT_SELECTED_CONTEXT,
 			content: 'conversation', sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
+			browserContext: view.chatSelection.map(selection => selection?.kind === 'thread'
+				? JSON.stringify([selection.sessionId, selection.threadId]) : selection?.id ?? 'draft'),
 			restoreCommand: SHOW_ASH_CHAT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
 		};
 		const openAshChat = async (source?: unknown): Promise<void> => {

@@ -304,6 +304,8 @@ export interface IBrowserViewService {
 	setBrowserZoomIndex(id: string, zoomIndex: number): Promise<void>;
 	setDeviceEmulation(id: string, device: IBrowserDeviceProfile | undefined): Promise<void>;
 	clearStorage(id: string): Promise<void>;
+	/** Clears all embedded-browser partitions, history and saved website credentials. */
+	clearAllData(): Promise<void>;
 	updateWindowConfiguration(windowId: number, configuration: IBrowserViewWindowConfiguration): Promise<void>;
 	getConsoleLogs(id: string): Promise<string>;
 	getSelectedText(id: string): Promise<string>;
@@ -382,6 +384,7 @@ export interface IBrowserUploadFile { readonly name: string; readonly dataBase64
 
 export const BrowserChatToolsSettingId = 'workbench.browser.enableChatTools';
 export const BrowserCDPSettingId = 'workbench.browser.enableCDP';
+export const BrowserOpenLinksSettingId = 'workbench.browser.openLinks';
 export const BrowserOpenLocalhostLinksSettingId = 'workbench.browser.openLocalhostLinks';
 
 const MAX_URL_LENGTH = 8192;

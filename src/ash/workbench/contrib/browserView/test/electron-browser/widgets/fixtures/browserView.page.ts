@@ -1,3 +1,8 @@
+import { IBrowserDownloadService, type BrowserDownload } from '../../../../../../../platform/browserView/common/browserDownloads.js';
+import { IHoverService, HoverService } from '../../../../../../../platform/hover/browser/hoverService.js';
+import { IAccessibleViewService } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
+import { IClipboardService } from '../../../../../../../platform/clipboard/common/clipboardService.js';
+import { IBrowserDownloadsView, BrowserDownloadsView } from '../../../../electron-browser/features/browserDownloadsFeature.js';
 import { IChatContextPickService } from '../../../../../chat/browser/attachments/chatContextPickService.js';
 import '../../../../electron-browser/browserView.contribution.js';
 import { Emitter, Event } from '../../../../../../../base/common/event.js';
@@ -138,6 +143,26 @@ services.registerInstance(IBrowserViewService, {
 	updateWindowConfiguration: async () => { }, focus: async () => { },
 	clearPermissions: async () => { calls.push('permissions'); }, cancelDownloads: async () => { calls.push('downloads'); },
 } as unknown as IBrowserViewService);
+
+const downloadChanges = resources.add(new Emitter<void>());
+let downloadItems: BrowserDownload[] = [
+	{ id: '00000000-0000-0000-0000-000000000001', filename: 'report.pdf', url: 'https://example.test/report.pdf', path: '/tmp/report.pdf', time: 2, receivedBytes: 1024, totalBytes: 1024, state: 'completed' },
+	{ id: '00000000-0000-0000-0000-000000000002', filename: 'archive.zip', url: 'https://example.test/archive.zip', path: '/tmp/archive.zip', time: 1, receivedBytes: 200, totalBytes: 1000, state: 'progressing' },
+];
+services.registerInstance(IBrowserDownloadService, {
+	onDidChange: downloadChanges.event, getState: async () => ({ directory: '/tmp', items: downloadItems }),
+	configure: async () => { }, chooseDirectory: async () => '/tmp',
+	perform: async (id, action) => {
+		calls.push('download:' + action);
+		if (action === 'remove') downloadItems = downloadItems.filter(entry => entry.id !== id);
+		if (action === 'deleteFile') downloadItems = downloadItems.map(entry => entry.id === id ? { ...entry, state: 'deleted' } : entry);
+		downloadChanges.fire();
+	},
+});
+services.registerInstance(IClipboardService, { writeText: async (value: string) => { calls.push(value); } } as unknown as IClipboardService);
+services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+services.registerInstance(IHoverService, resources.add(new HoverService(services.get(IConfigurationService), services.get(IContextViewService), services.get(IContextMenuService))));
+services.registerInstance(IBrowserDownloadsView, resources.add(services.createInstance(BrowserDownloadsView)));
 const editor = resources.add(services.createInstance(BrowserEditor));
 const input = resources.add(services.createInstance(BrowserEditorInput, { id: info.id, url: info.state.url, title: info.state.title, session: info.session }));
 editor.create(document.querySelector<HTMLElement>('#browser')!);

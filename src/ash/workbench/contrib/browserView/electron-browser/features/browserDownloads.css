@@ -1,0 +1,56 @@
+.ash-browser-downloads {
+	width: min(420px, calc(100vw - 32px));
+	padding: var(--ash-spacing-size80);
+	color: var(--ash-foreground);
+	background: var(--ash-menu-background);
+}
+.ash-browser-download-list {
+	max-height: min(480px, 60vh);
+	overflow: auto;
+	margin-top: var(--ash-spacing-size80);
+}
+.ash-browser-download-row {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-medium);
+}
+.ash-browser-download-row:hover,
+.ash-browser-download-row:focus-within {
+	background: var(--ash-list-hoverBackground);
+}
+.ash-browser-download-row:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+.ash-browser-download-copy {
+	flex: 1;
+	min-width: 0;
+}
+.ash-browser-download-name,
+.ash-browser-download-detail {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.ash-browser-download-detail {
+	font-size: var(--ash-fontSize-body2);
+	color: var(--ash-description-foreground);
+}
+.ash-browser-download-actions {
+	display: flex;
+	flex: none;
+	visibility: hidden;
+}
+.ash-browser-download-row:hover .ash-browser-download-actions,
+.ash-browser-download-row:focus-within .ash-browser-download-actions {
+	visibility: visible;
+}
+.ash-browser-downloads .ash-browser-download-actions .ash-button {
+	width: var(--ash-spacing-size240);
+	height: var(--ash-spacing-size240);
+	min-height: var(--ash-spacing-size240);
+	min-width: var(--ash-spacing-size240);
+	padding: 0;
+}

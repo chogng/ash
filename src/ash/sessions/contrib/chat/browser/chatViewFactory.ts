@@ -1,3 +1,4 @@
+import { isAllInterfacesAuthority, isLocalhostAuthority } from '../../../../platform/url/common/trustedDomains.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, constObservable, derived, observableFromEvent, type IObservable, type IReader } from '../../../../base/common/observable.js';
@@ -26,7 +27,7 @@ import type { IChatListItem } from '../../../../workbench/contrib/chat/common/mo
 import { ReplyChatInputFactory, type ReplyChatDraftPicker } from './replyChatInput.js';
 import { ChatInputArtifactPill, getChatCreationHelp, type ChatCreationModel } from './chatInputArtifactPill.js';
 import { ChatView, NewChatView } from './chatView.js';
-import { normalizeBrowserViewUrl } from '../../../../platform/browserView/common/browserView.js';
+import { normalizeBrowserViewUrl, BrowserOpenLinksSettingId, BrowserOpenLocalhostLinksSettingId } from '../../../../platform/browserView/common/browserView.js';
 import { IBrowserViewWorkbenchService } from '../../../../workbench/contrib/browserView/common/browserView.js';
 import { BrowserEditorInput } from '../../../../workbench/contrib/browserView/common/browserEditorInput.js';
 import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
@@ -35,7 +36,7 @@ import { localize } from '../../../../nls.js';
 import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
 
 export function getChatBrowserAccessibilityHelp(): string {
-	return localize({ bundle: 'ash', key: 'sessions.chat.browserHelp' }, 'Press Enter on a web link to open it in the browser beside Chat. Browser tabs stay with Chat when switching to Code. Close the last browser tab to return to the full conversation. The browser toolbar also offers Open in External Browser.');
+	return localize({ bundle: 'ash', key: 'sessions.chat.browserHelp' }, 'Press Enter on a web link to open it in the browser beside Chat. Browser tabs stay with Chat when switching to Code. Close the last browser tab to return to the full conversation. The browser toolbar also offers Open in External Browser. In Settings > Browser, turn on Browser follows session to keep separate tabs for each conversation.');
 }
 
 export interface ICompactChatModel extends IChatWidgetModel, ChatCreationModel {
@@ -121,6 +122,14 @@ class CompactChatWidgetFactory {
 
 	private async openWebLink(resource: URI): Promise<void> {
 		const url = normalizeBrowserViewUrl(resource.toString());
+		const { host } = new URL(url);
+		const local = isLocalhostAuthority(host) || isAllInterfacesAuthority(host);
+		const internal = local ? this.configuration.getValue<boolean>(BrowserOpenLocalhostLinksSettingId)
+			: this.configuration.getValue<string>(BrowserOpenLinksSettingId) === 'ash';
+		if (!internal) {
+			await this.opener.open(resource, { openExternal: true, allowContributedOpeners: false, allowCommands: false });
+			return;
+		}
 		await this.entries.openConversationBrowser(async target => {
 			const existing = this.entries.conversationEditors.find((input): input is BrowserEditorInput =>
 				input instanceof BrowserEditorInput && input.model?.state.url === url);

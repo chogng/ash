@@ -28,3 +28,22 @@ registry.registerConfiguration<ChatLayoutMode>({
 		}
 	},
 });
+
+export const BROWSER_FOLLOWS_SESSION_SETTING = 'sessions.browser.followSession';
+
+registry.registerConfiguration<boolean>({
+	key: BROWSER_FOLLOWS_SESSION_SETTING,
+	defaultValue: false,
+	scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'boolean' },
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('Browser follow session must be a boolean');
+		return value;
+	},
+	setting: {
+		included: false,
+		valueType: 'boolean',
+		get title() { return localize({ bundle: 'ash', key: 'sessions.browser.followSession' }, 'Browser follows session'); },
+		get description() { return localize({ bundle: 'ash', key: 'sessions.browser.followSession.description' }, 'Keep separate browser tabs for each conversation in Chat.'); },
+	},
+});

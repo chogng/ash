@@ -1,3 +1,4 @@
+import { IBrowserDownloadsView } from './browserDownloadsFeature.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { h } from '../../../../../base/browser/dom.js';
@@ -73,6 +74,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		@IMenuService menuService: IMenuService,
 		@IContextKeyService contexts: IContextKeyService,
 		@IBrowserViewWorkbenchService browsers: IBrowserViewWorkbenchService,
+		@IBrowserDownloadsView private readonly downloads: IBrowserDownloadsView,
 	) {
 		super(editor);
 		const pageMenus: IContextMenuProvider = {
@@ -221,7 +223,11 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 	private setPageActions(): void {
 		if (!this.sharingToolbar) { return; }
 		this.actionsUrl = this.editor.model?.state.url;
-		this.sharingToolbar.setActions([], [
+		this.sharingToolbar.setActions([{
+			id: 'browser.downloads', label: localize({ bundle: 'ash', key: 'downloads.title' }, 'Downloads'),
+			tooltip: localize({ bundle: 'ash', key: 'downloads.title' }, 'Downloads'), icon: Lxicon.download, enabled: true,
+			run: () => this.downloads.show(this.sharingToolbar.element).catch(this.report),
+		}], [
 			...this.favorites.getActions(),
 			{ id: 'browser.zoom', label: localize({ bundle: 'ash.workbench', key: 'browser.zoom' }, 'Page zoom'), enabled: !!this.editor.model && this.editor.model.state.url !== 'about:blank', tooltip: '', run: () => this.zoom.show().catch(error => this.report(error)) },
 			{ id: 'browser.emulation', label: localize({ bundle: 'ash.workbench', key: 'browser.emulation' }, 'Device emulation'), enabled: !!this.editor.model, tooltip: '', run: () => this.emulation.show().catch(error => this.report(error)) },

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import type { BrowserWindow, HandlerDetails } from 'electron';
 import { test } from 'mocha';
+import { Disposable, toDisposable } from '../../../../common/lifecycle.js';
 import { ContextMenuWindow } from '../../electron-main/contextMenuWindow.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../test/common/utils.js';
 
@@ -35,7 +36,7 @@ class TestWindow extends EventEmitter {
 
 test('menu windows admit only their empty document and enforce a non-modal sandbox', () => {
 	const parent = new TestWindow();
-	using windows = new ContextMenuWindow(parent.native, () => { });
+	using windows = new ContextMenuWindow(parent.native, () => Disposable.None);
 	const request = { url: 'about:blank', frameName: 'ash-context-menu-11111111-1111-4111-8111-111111111111', features: 'x=120,y=180,width=9999,height=9999,nodeIntegration=yes' } as HandlerDetails;
 	const options = windows.getWindowOpenOptions(request)!;
 	assert.equal(options.parent, parent.native);
@@ -50,7 +51,7 @@ test('menu windows admit only their empty document and enforce a non-modal sandb
 test('navigation is blocked and parent changes release every menu window', () => {
 	const parent = new TestWindow();
 	const child = new TestWindow();
-	const windows = new ContextMenuWindow(parent.native, () => { });
+	const windows = new ContextMenuWindow(parent.native, () => Disposable.None);
 	windows.registerWindow(child.native);
 	assert.equal(child.menu, null);
 	assert.deepEqual(child.openHandler?.(), { action: 'deny' });
@@ -68,24 +69,28 @@ test('navigation is blocked and parent changes release every menu window', () =>
 	assert.equal(parent.webContents.listenerCount('did-start-navigation'), 0);
 });
 
-test('menu key focus preserves parent activation without refocusing either window', () => {
+test('menu activation is scheduled and cancelled when focus or ownership changes', () => {
 	const parent = new TestWindow();
-	const child = new TestWindow();
-	const restored: BrowserWindow[] = [];
-	using windows = new ContextMenuWindow(parent.native, window => restored.push(window));
+	const child = new TestWindow(parent);
+	const scheduled: BrowserWindow[] = [];
+	let cancelled = 0;
+	using windows = new ContextMenuWindow(parent.native, target => {
+		scheduled.push(target);
+		return toDisposable(() => { cancelled++; });
+	});
 	windows.registerWindow(child.native);
-	assert.deepEqual(restored, []);
-	child.focused = false;
+	child.show();
+	assert.deepEqual(scheduled, [parent.native]);
+	assert.equal(child.isFocused(), true);
+	child.emit('blur');
+	assert.equal(cancelled, 1);
 	child.emit('focus');
-	assert.equal(restored.length, 0);
-	child.focused = true;
+	parent.emit('close');
+	assert.equal(cancelled, 2);
 	child.emit('focus');
-	assert.deepEqual(restored, [parent.native]);
-	parent.close();
-	assert.equal(child.closes, 1);
-	assert.equal(child.listenerCount('focus'), 0);
-	child.emit('focus');
-	assert.equal(restored.length, 1);
+	child.close();
+	assert.equal(cancelled, 3);
+	assert.equal(parent.listenerCount('close'), 0);
 });
 
 test('a hidden menu first appears at its final bounds and a cancelled request never reopens it', () => {
@@ -94,17 +99,14 @@ test('a hidden menu first appears at its final bounds and a cancelled request ne
 	child.webContents.mainFrame.name = 'ash-context-menu-11111111-1111-4111-8111-111111111111';
 	const shown: typeof child.bounds[] = [];
 	child.on('show', () => shown.push({ ...child.bounds }));
-	const restored: BrowserWindow[] = [];
-	using windows = new ContextMenuWindow(parent.native, window => restored.push(window));
+	using windows = new ContextMenuWindow(parent.native, () => Disposable.None);
 	windows.registerWindow(child.native);
 	assert.deepEqual(shown, []);
 	const request = { windowName: child.webContents.mainFrame.name, bounds: { x: 1200, y: 100, width: 200, height: 400 } };
 	assert.equal(windows.present(request), true);
 	assert.deepEqual(shown, [request.bounds]);
-	assert.deepEqual(restored, [parent.native]);
 	assert.equal(windows.present(request), true);
 	assert.equal(shown.length, 1);
-	assert.deepEqual(restored, [parent.native]);
 	child.close();
 	assert.equal(windows.present(request), false);
 	assert.equal(shown.length, 1);
@@ -112,7 +114,7 @@ test('a hidden menu first appears at its final bounds and a cancelled request ne
 
 test('owner blur cancels pending presentation but preserves a menu taking key focus', () => {
 	const parent = new TestWindow();
-	using windows = new ContextMenuWindow(parent.native, () => { });
+	using windows = new ContextMenuWindow(parent.native, () => Disposable.None);
 	const pending = new TestWindow(parent);
 	pending.webContents.mainFrame.name = 'ash-context-menu-11111111-1111-4111-8111-111111111111';
 	windows.registerWindow(pending.native);
@@ -138,10 +140,10 @@ test('presentation is scoped to the owning window tree, including auxiliary work
 	const auxiliary = new TestWindow(parent);
 	const menu = new TestWindow(auxiliary);
 	menu.webContents.mainFrame.name = 'ash-context-menu-11111111-1111-4111-8111-111111111111';
-	using windows = new ContextMenuWindow(parent.native, () => { });
+	using windows = new ContextMenuWindow(parent.native, () => Disposable.None);
 	const request = { windowName: menu.webContents.mainFrame.name, bounds: menu.bounds };
 	assert.equal(windows.present(request), true);
 	const other = new TestWindow();
-	using foreign = new ContextMenuWindow(other.native, () => { });
+	using foreign = new ContextMenuWindow(other.native, () => Disposable.None);
 	assert.equal(foreign.present(request), false);
 });

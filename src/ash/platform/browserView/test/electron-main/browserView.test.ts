@@ -1,3 +1,4 @@
+import { IBrowserDownloadService } from '../../common/browserDownloads.js';
 import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { BrowserPasswordMainService, IBrowserPasswordMainService } from '../../electron-main/browserPasswordMainService.js';
 import { browserPasswordChannel } from '../../electron-main/browserPasswordMainService.js';
@@ -839,7 +840,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 		load: async (url: string): Promise<void> => { f.url = url; },
 		capture: async () => ({ toPNG: () => Buffer.from('png') }),
 		readPublicFavicon: async (_url: URL): Promise<string | undefined> => undefined,
-		remote: false, networks: new Set<string>(), networkRequests: [] as string[], encryptionAvailable: true, authCacheClears: 0,
+		remote: false, networks: new Set<string>(), networkRequests: [] as string[], encryptionAvailable: true, authCacheClears: 0, dataClears: 0, cacheClears: 0,
 		menuRequests: [] as INativeContextMenuRequest[],
 		popupMenu: async (_request: INativeContextMenuRequest): Promise<INativeContextMenuResult> => ({}),
 		menuCloses: 0,
@@ -889,57 +890,62 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 		},
 	} as Electron.SafeStorage, 'win32');
 	if (provideEncryption) { instantiation.registerInstance(IEncryptionMainService, encryption); }
+	instantiation.registerInstance(IBrowserDownloadService, { track: () => { } } as unknown as import('../../electron-main/browserDownloadMainService.js').BrowserDownloadMainService);
 	instantiation.registerInstance(ILogService, new NullLoggerService());
 	instantiation.registerInstance(IClipboardService, { writeText: async (text: string) => { f.clipboardWrites.push(text); } } as unknown as IClipboardService);
 	const passwordConfiguration = store.add(new InMemoryConfigurationService());
 	instantiation.registerInstance(IConfigurationService, passwordConfiguration);
 	// Construct the vault only when encryption is registered, preserving the missing-registration test.
 	if (provideEncryption) { instantiation.registerInstance(IBrowserPasswordMainService, store.add(instantiation.createInstance(BrowserPasswordMainService, useInMemorySecretStorage))); }
-	const manager = store.add(instantiation.createInstance(BrowserViewMainService, {
-		window, getWorkspaceId: () => f.workspaceId,
-		contextMenu: {
-			popup: (request: INativeContextMenuRequest) => { f.menuRequests.push(request); return f.popupMenu(request); },
-			close: () => { f.menuCloses++; },
-		} as unknown as ElectronContextMenu,
-		getNlsMessages: () => f.messages,
-		readPublicFavicon: (url: URL) => f.readPublicFavicon(url),
-		getWindowNetwork: () => f.remote ? { authority: 'ssh-remote+test' } : undefined,
-		getRemoteNetwork(network: { authority: string; }) { const authority = network.authority; f.networkRequests.push(authority); return (f.remote && authority === 'ssh-remote+test') || f.networks.has(authority) ? { authority, tunnels: { openProxy: () => f.proxy() } } : undefined; }, createSession: (partition: string) => {
-			let session = partitions.get(partition);
-			if (!session) {
-				session = Object.assign(new EventEmitter(), { protocol: { handle: () => { }, unhandle: () => { } }, webRequest: { onBeforeRequest: () => { } }, setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { }, clearAuthCache: async () => { f.authCacheClears++; }, clearStorageData: async () => { }, clearCache: async () => { } }) as unknown as Electron.Session;
-				partitions.set(partition, session);
-			}
-			return session;
-		}, createView: (browserStorage: Electron.Session) => {
-			const chromiumId = 'chromium-target-' + children.size;
-			const pageContents = children.size === 0 ? contents : new EventEmitter();
-			let destroyed = false;
-			let zoomFactor = 1;
-			let devToolsOpen = false;
-			let bounds = { x: 0, y: 0, width: 0, height: 0 };
-			Object.assign(pageContents, {
-				isDevToolsOpened: () => devToolsOpen,
-				openDevTools: () => { devToolsOpen = true; pageContents.emit('devtools-opened'); },
-				closeDevTools: () => { devToolsOpen = false; pageContents.emit('devtools-closed'); },
-				getZoomFactor: () => zoomFactor, setZoomFactor: (value: number) => { zoomFactor = value; },
-				id: children.size + 1,
-				setWebRTCIPHandlingPolicy: () => { },
-				session: browserStorage,
-				setWindowOpenHandler: () => { }, isDestroyed: () => destroyed, isLoading: () => f.loading,
-				getURL: () => f.url, getTitle: () => f.title, isFocused: () => f.pageFocused, focus: () => { f.pageFocused = true; }, stop: () => { f.loading = false; }, reload: () => { }, reloadIgnoringCache: () => { },
-				navigationHistory: { canGoBack: () => false, canGoForward: () => false, goBack: () => { }, goForward: () => { } },
-				loadURL: (url: string) => f.load(url), capturePage: (_rect?: unknown, options?: unknown) => { f.captureOptions.push(options); return f.capture(); },
-				undo: () => f.editing.push('undo'), redo: () => f.editing.push('redo'),
-				cut: () => f.editing.push('cut'), copy: () => f.editing.push('copy'),
-				paste: () => f.editing.push('paste'), pasteAndMatchStyle: () => f.editing.push('pastePlain'), selectAll: () => f.editing.push('selectAll'),
-				copyImageAt: (x: number, y: number) => { f.imageCopies.push({ x, y }); }, downloadURL: (url: string) => { f.downloads.push(url); },
-				close: () => { destroyed = true; pageContents.emit('destroyed'); },
-				debugger: Object.assign(new EventEmitter(), { isAttached: () => f.attached, attach: () => { f.attached = true; }, detach: () => { f.attached = false; }, sendCommand: (method: string, params?: unknown, sessionId?: string) => { f.commands.push({ method, params, ...(sessionId ? { sessionId } : {}) }); if (method === 'Target.attachToTarget') { const sessionId = 'session-' + f.debugSessions.length; f.debugSessions.push(sessionId); return Promise.resolve({ sessionId }); } return method === 'Target.getTargetInfo' ? Promise.resolve({ targetInfo: { targetId: chromiumId } }) : f.command(method, params); } }),
-			});
-			return { webContents: pageContents, setVisible: () => { }, setBounds: (value: typeof bounds) => { bounds = value; }, getBounds: () => bounds } as unknown as WebContentsView;
-		},
-	}));
+	let manager: BrowserViewMainService;
+	try {
+		manager = store.add(instantiation.createInstance(BrowserViewMainService, {
+			window, getWorkspaceId: () => f.workspaceId,
+			contextMenu: {
+				popup: (request: INativeContextMenuRequest) => { f.menuRequests.push(request); return f.popupMenu(request); },
+				close: () => { f.menuCloses++; },
+			} as unknown as ElectronContextMenu,
+			getNlsMessages: () => f.messages,
+			readPublicFavicon: (url: URL) => f.readPublicFavicon(url),
+			getWindowNetwork: () => f.remote ? { authority: 'ssh-remote+test' } : undefined,
+			getPersistentSessionIds: async () => [],
+			getRemoteNetwork(network: { authority: string; }) { const authority = network.authority; f.networkRequests.push(authority); return (f.remote && authority === 'ssh-remote+test') || f.networks.has(authority) ? { authority, tunnels: { openProxy: () => f.proxy() } } : undefined; }, createSession: (partition: string) => {
+				let session = partitions.get(partition);
+				if (!session) {
+					session = Object.assign(new EventEmitter(), { protocol: { handle: () => { }, unhandle: () => { } }, webRequest: { onBeforeRequest: () => { } }, setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { }, clearAuthCache: async () => { f.authCacheClears++; }, clearStorageData: async () => { f.dataClears++; }, clearCache: async () => { f.cacheClears++; } }) as unknown as Electron.Session;
+					partitions.set(partition, session);
+				}
+				return session;
+			}, createView: (browserStorage: Electron.Session) => {
+				const chromiumId = 'chromium-target-' + children.size;
+				const pageContents = children.size === 0 ? contents : new EventEmitter();
+				let destroyed = false;
+				let zoomFactor = 1;
+				let devToolsOpen = false;
+				let bounds = { x: 0, y: 0, width: 0, height: 0 };
+				Object.assign(pageContents, {
+					isDevToolsOpened: () => devToolsOpen,
+					openDevTools: () => { devToolsOpen = true; pageContents.emit('devtools-opened'); },
+					closeDevTools: () => { devToolsOpen = false; pageContents.emit('devtools-closed'); },
+					getZoomFactor: () => zoomFactor, setZoomFactor: (value: number) => { zoomFactor = value; },
+					id: children.size + 1,
+					setWebRTCIPHandlingPolicy: () => { },
+					session: browserStorage,
+					setWindowOpenHandler: () => { }, isDestroyed: () => destroyed, isLoading: () => f.loading,
+					getURL: () => f.url, getTitle: () => f.title, isFocused: () => f.pageFocused, focus: () => { f.pageFocused = true; }, stop: () => { f.loading = false; }, reload: () => { }, reloadIgnoringCache: () => { },
+					navigationHistory: { canGoBack: () => false, canGoForward: () => false, goBack: () => { }, goForward: () => { } },
+					loadURL: (url: string) => f.load(url), capturePage: (_rect?: unknown, options?: unknown) => { f.captureOptions.push(options); return f.capture(); },
+					undo: () => f.editing.push('undo'), redo: () => f.editing.push('redo'),
+					cut: () => f.editing.push('cut'), copy: () => f.editing.push('copy'),
+					paste: () => f.editing.push('paste'), pasteAndMatchStyle: () => f.editing.push('pastePlain'), selectAll: () => f.editing.push('selectAll'),
+					copyImageAt: (x: number, y: number) => { f.imageCopies.push({ x, y }); }, downloadURL: (url: string) => { f.downloads.push(url); },
+					close: () => { destroyed = true; pageContents.emit('destroyed'); },
+					debugger: Object.assign(new EventEmitter(), { isAttached: () => f.attached, attach: () => { f.attached = true; }, detach: () => { f.attached = false; }, sendCommand: (method: string, params?: unknown, sessionId?: string) => { f.commands.push({ method, params, ...(sessionId ? { sessionId } : {}) }); if (method === 'Target.attachToTarget') { const sessionId = 'session-' + f.debugSessions.length; f.debugSessions.push(sessionId); return Promise.resolve({ sessionId }); } return method === 'Target.getTargetInfo' ? Promise.resolve({ targetInfo: { targetId: chromiumId } }) : f.command(method, params); } }),
+				});
+				return { webContents: pageContents, setVisible: () => { }, setBounds: (value: typeof bounds) => { bounds = value; }, getBounds: () => bounds } as unknown as WebContentsView;
+			},
+		}));
+	} catch (error) { store.dispose(); throw error; }
 	instantiation.registerInstance(IBrowserViewMainService, manager);
 	instantiation.registerInstance(IPlaywrightService, {
 		getObservation: async (_operationId, _sessionId, pageId) => { f.observations.push(pageId); return f.observe(pageId); },
@@ -980,9 +986,8 @@ suite('Browser authentication', () => {
 	};
 	const response = (f: ReturnType<typeof fixture>, requestId: string, value: typeof credentials | null) => browserViewChannel(f.manager, { call: async <T>() => null as T, listen: () => Event.None }).call('window:1', 'respondToAuthentication', [id, requestId, value]);
 
-	test('production page construction requires the Main encryption registration', async () => {
-		using f = fixture(undefined, false);
-		await assert.rejects(create(f), /Unknown service: encryptionMainService/);
+	test('production browser construction requires the Main password capability', () => {
+		assert.throws(() => fixture(undefined, false), /Unknown service: browserPasswordMainService/);
 	});
 
 	test('memory mode authenticates without native encryption and leaves saved HTTP credentials untouched', async () => {
@@ -1023,6 +1028,24 @@ suite('Browser authentication', () => {
 		assert.deepEqual(calls, [[credentials.username, credentials.password]]);
 		assert.equal(f.events.some(event => event.type === 'authenticationStorageFailed'), true);
 		assert.doesNotMatch(JSON.stringify(f.events), /OS error|private-password/);
+	});
+
+	test('clearing all browser data removes credentials and history after the last tab closes', async () => {
+		using f = fixture(); await create(f);
+		const vault = f.instantiation.get(IBrowserPasswordMainService);
+		f.contents.emit('did-navigate', {}, 'https://example.test/');
+		challenge(f);
+		await response(f, (await prompt(f)).requestId, credentials);
+		assert.equal(Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')), true);
+		await f.manager.destroyBrowserView(id);
+		await f.manager.clearAllData();
+		assert.equal(f.dataClears, 1);
+		assert.equal(f.cacheClears, 1);
+		assert.deepEqual((await vault.readState()).entries, []);
+		assert.equal(Object.keys((await f.storage.getItems(application)).entries).some(key =>
+			key.startsWith('browser.credentials.') || key.startsWith('browser.history.')), false);
+		await create(f);
+		assert.deepEqual(await f.manager.getBrowserHistory(id), { items: [] });
 	});
 
 	test('clearing a partition cancels an in-flight encrypted save before a late result can restore the credential', async () => {

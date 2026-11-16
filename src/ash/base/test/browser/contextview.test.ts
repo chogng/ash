@@ -403,6 +403,27 @@ test('ContextView Escape closes an interactive hover before its preview dialog a
 	assert.equal(document.activeElement, fixture.anchor);
 });
 
+for (const [presentation, target] of [['dialog', 'row'], ['menu', 'row'], ['menu', 'trigger']] as const) {
+	test(`ContextView Escape closes a ${presentation} and its ${target} tooltip while search has focus`, () => {
+		using fixture = createFocusFixture();
+		const document = environment.window.document;
+		const row = h(document, 'div', undefined, 'Download filename');
+		const search = h(document, 'input');
+		fixture.content.append(search, row);
+		fixture.anchor.focus();
+		fixture.contextView.show({ anchor: fixture.anchor, content: fixture.content, presentation, focusRestore: ContextViewFocusRestore.Previous });
+		search.focus();
+		using hoverView = new ContextView(fixture.host);
+		using hover = new Hover({ target: target === 'row' ? row : fixture.anchor, content: 'Full filename', contextViewProvider: hoverView });
+		hover.show();
+		assert.equal(document.activeElement, search);
+		search.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		assert.equal(hover.visible, false);
+		assert.equal(fixture.contextView.visible, false);
+		assert.equal(document.activeElement, fixture.anchor);
+	});
+}
+
 test('ContextView does not reclaim focus owned by a child hosted inside its content', () => {
 	using fixture = createFocusFixture();
 	fixture.show();

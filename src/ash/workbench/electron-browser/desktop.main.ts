@@ -1,3 +1,4 @@
+import { IBrowserDownloadService, BrowserDownloadsChannel } from '../../platform/browserView/common/browserDownloads.js';
 import { createDirectoryPermissionRequestService, WorkspaceTrustPrompt } from '../contrib/workspace/browser/workspace.contribution.js';
 import { registerBrowserNetworkHost } from '../../platform/browserView/electron-browser/browserNetworkHost.js';
 import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
@@ -282,6 +283,7 @@ export class DesktopMain extends Disposable {
 					[IWorkspaceEditingService, new SyncDescriptor(WorkspaceEditingService, [local.workspace])],
 					[ILoggerService, logger],
 					[IPolicyService, this._register(new PolicyChannelClient(mainProcessService.getChannel('policy')))],
+					[IBrowserDownloadService, ProxyChannel.toService<IBrowserDownloadService>(mainProcessService.getChannel(BrowserDownloadsChannel))],
 					[IBrowserPasswordService, ProxyChannel.toService<IBrowserPasswordService>(mainProcessService.getChannel('browserPasswords'))],
 					[IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName))],
 					[IMainProcessService, mainProcessService],

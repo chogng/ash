@@ -1,3 +1,4 @@
+import { OwnedProcessGroup, type ProcessOutput } from './processGroup.ts';
 import { execFile, spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
@@ -63,6 +64,8 @@ export class ProcessRun {
 	// Retain completed roots too: helpers may keep their process group alive.
 	private readonly children = new Map<ChildProcess, Promise<void>>();
 	private closing: Promise<void> | undefined;
+	private preparation: Promise<void> | undefined;
+	private commandGroup: OwnedProcessGroup | undefined;
 	private finishGrace: (() => void) | undefined;
 	private readonly owned = new Map<number, ProcessIdentity>();
 	private readonly windowsProcessTable = process.platform === 'win32' ? new WindowsProcessTable() : undefined;
@@ -74,14 +77,27 @@ export class ProcessRun {
 	private readonly graceMs: number;
 	constructor(cwd: string, directory?: string, graceMs = 45_000) { this.cwd = cwd; this.directory = directory; this.graceMs = graceMs; }
 
-	public async command(command: string, args: readonly string[], env: NodeJS.ProcessEnv, capture = false): Promise<{ code: number; output: string; }> {
+	/** Prepare platform ownership; POSIX commands acquire a live group leader on first use. */
+	public prepare(): Promise<void> {
+		return this.preparation ??= process.platform === 'win32' ? this.rememberTree().then(() => undefined) : Promise.resolve();
+	}
+
+	public async command(command: string, args: readonly string[], env: NodeJS.ProcessEnv, capture = false, stdin: 'ignore' | 'inherit' = 'inherit', onOutput?: ProcessOutput): Promise<{ code: number; output: string; }> {
 		if (this.stopped) throw new Error('Process run was stopped; refusing to start another command.');
-		const child = spawn(command, args, { cwd: this.cwd, env, stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit', detached: detachedProcess(env), windowsHide: true });
+		await this.prepare();
+		if (this.stopped) throw new Error('Process run was stopped; refusing to start another command.');
+		if (process.platform !== 'win32') {
+			return (this.commandGroup ??= new OwnedProcessGroup()).command(command, args, this.cwd, env, capture, stdin, onOutput);
+		}
+		const child = spawn(command, args, { cwd: this.cwd, env, stdio: [capture ? 'ignore' : stdin, capture || onOutput ? 'pipe' : 'inherit', onOutput ? 'pipe' : 'inherit'], detached: detachedProcess(env), windowsHide: true });
 		let output = '';
-		child.stdout?.on('data', (data: Buffer) => { output += data.toString(); });
+		child.stdout?.setEncoding('utf8');
+		child.stderr?.setEncoding('utf8');
+		child.stdout?.on('data', (data: string) => { if (capture) output += data; onOutput?.('stdout', data); });
+		child.stderr?.on('data', (data: string) => onOutput?.('stderr', data));
 		const result = new Promise<{ code: number; output: string; }>((resolveExit, reject) => {
 			child.once('error', reject);
-			child.once(capture ? 'close' : 'exit', (code, signal) => resolveExit({ code: signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : code ?? 1, output }));
+			child.once(capture || onOutput ? 'close' : 'exit', (code, signal) => resolveExit({ code: signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : code ?? 1, output }));
 		});
 		this.children.set(child, result.then(() => undefined, () => undefined));
 		// Retain every command for cleanup even if metadata collection fails or
@@ -112,12 +128,15 @@ export class ProcessRun {
 	}
 
 	public stop(signal: NodeJS.Signals): Promise<void> {
-		if (this.closing) { this.finishGrace?.(); return this.closing; }
+		if (this.closing) { this.finishGrace?.(); void this.commandGroup?.close().catch(() => { /* The active close reports termination failures. */ }); return this.closing; }
 		this.stopped = true;
 		const interruptedAgain = new Promise<void>(resolveGrace => { this.finishGrace = resolveGrace; });
 		return this.closing = (async () => {
 			const errors: unknown[] = [];
-			try { await this.rememberTree(); } catch (error) { errors.push(error); }
+			if (this.commandGroup) {
+				try { await this.commandGroup.stop(signal, this.graceMs); } catch (error) { errors.push(error); }
+			}
+			try { if (this.children.size || this.owned.size) await this.rememberTree(); } catch (error) { errors.push(error); }
 			// Playwright first stops scheduling and runs fixture teardown. Electron
 			// and managed daemons have separate process groups, so a group signal alone
 			// cannot clean the run. Retain their identities before the worker exits.
@@ -129,7 +148,7 @@ export class ProcessRun {
 				timeout = setTimeout(() => this.finishGrace?.(), this.graceMs);
 				await Promise.race([Promise.all(this.children.values()), interruptedAgain]);
 			} finally { clearTimeout(timeout); this.finishGrace = undefined; }
-			try { await this.rememberTree(); } catch (error) { errors.push(error); }
+			try { if (this.children.size || this.owned.size) await this.rememberTree(); } catch (error) { errors.push(error); }
 			try { await this.cleanup(); } catch (error) { errors.push(error); }
 			if (errors.length) throw new AggregateError(errors, 'Process cancellation failed');
 		})();
@@ -189,11 +208,23 @@ export class ProcessRun {
 	}
 
 	private async cleanup(): Promise<void> {
-		try { await this.cleanupResources(); }
+		try {
+			await this.commandGroup?.close();
+			await this.cleanupResources();
+		}
 		finally { await this.windowsProcessTable?.close(); }
 	}
 
 	private async cleanupResources(): Promise<void> {
+		// A failed preflight owns no processes. Do not mask its diagnostic with another process-table query.
+		if (!this.children.size && !this.owned.size && (await this.resources()).length === 0) return;
+		const registered = await this.resources();
+		if (!this.children.size && !this.owned.size && !registered.some(resource => resource.process)) {
+			await Promise.all(registered.filter(resource => resource.daemon).map(resource => execute(resource.daemon!.executable, ['stop'], {
+				env: { ...process.env, ASH_HOME: resource.daemon!.profile }, windowsHide: true, timeout: 30_000,
+			})));
+			return;
+		}
 		const errors: unknown[] = [];
 		let current: Map<number, ProcessIdentity> | undefined;
 		try { current = await this.rememberTree(); } catch (error) { errors.push(error); }
@@ -268,7 +299,13 @@ async function processes(windowsProcessTable?: WindowsProcessTable): Promise<Map
 		}
 		return entries;
 	}
-	const { stdout } = await execute('ps', ['-axo', 'pid=,ppid=,pgid=,stat=,lstart='], { timeout: 5_000, maxBuffer: 8 * 1024 * 1024 });
+	let stdout: string;
+	try {
+		({ stdout } = await execute('ps', ['-axo', 'pid=,ppid=,pgid=,stat=,lstart='], { timeout: 5_000, maxBuffer: 8 * 1024 * 1024 }));
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== 'EPERM' && (error as NodeJS.ErrnoException).code !== 'EACCES') throw error;
+		throw new Error('Process supervision cannot run ps: the execution environment denied access to the process table. Run this command in an environment that permits process queries.', { cause: error });
+	}
 	const entries = new Map<number, ProcessIdentity>();
 	for (const line of stdout.split('\n')) {
 		const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/u);
@@ -516,6 +553,7 @@ export async function withProcessRun(cwd: string, action: (run: ProcessRun, envi
 	let actionFailure: unknown;
 	try {
 		await mkdir(temporaryDirectory, { recursive: true });
+		await run.prepare();
 		// Killed workers and native helpers cannot run their own temporary-file
 		// destructors. Their supervisor removes this tree after all processes exit.
 		await action(run, {

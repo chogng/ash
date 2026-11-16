@@ -1,3 +1,5 @@
+import { BrowserDownloadDirectorySetting, BrowserDownloadAskSetting } from '../../../../platform/browserView/common/browserDownloads.js';
+import { BrowserOpenLinksSettingId, BrowserOpenLocalhostLinksSettingId } from '../../../../platform/browserView/common/browserView.js';
 import { defaultButtonStyles, defaultDialogStyles, defaultInputBoxStyles, defaultCheckboxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { LspSettingsModel } from './lspSettingsModel.js';
@@ -58,11 +60,11 @@ import { SettingsLayout } from '../../../../workbench/contrib/preferences/browse
 import { SettingsTreeModel, type SettingsSectionReference, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
-import { IPreferencesService, validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting, type ISettingsGroup } from '../../../../workbench/services/preferences/common/preferences.js';
+import { IPreferencesService, validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting, type ISelectSetting, type ISettingsGroup } from '../../../../workbench/services/preferences/common/preferences.js';
 import { SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP, SESSIONS_GENERAL_SETTINGS_TAG, SESSIONS_TERMINAL_CONFIG_SECTION, SessionsConfiguration } from '../../../common/configuration.js';
 import { SESSIONS_LAYOUT_SCOPE_SETTING } from '../../../common/chatLayout.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
-import '../../../common/sessionConfig.js';
+import { BROWSER_FOLLOWS_SESSION_SETTING } from '../../../common/sessionConfig.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { SessionsCustomizeContent } from './sessionsCustomizeContent.js';
 import { SessionsAgentsContent } from './sessionsAgentsContent.js';
@@ -147,7 +149,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.settings.help', 'Settings has categories on the left and settings on the right. In Appearance, use Interface font, Message body font, and Code block font to choose typography for each part of the window. Use the arrow keys to browse font choices and Enter to select one. In Appearance, Automatically follow new replies controls whether chat follows replies at the bottom. General has Interface language, which takes effect after restarting Ash or refreshing the page. Voice contains settings for dictation and two-way voice conversations. On desktop, Open on startup chooses whether the next launch opens the IDE, Agent window, or the windows from last time. Models contains chat models and API connections. In Your Ash, use Manage under Code conversation defaults to edit and save your personal or workspace defaults. Run Developer: Show Agent Tool Catalog to inspect a grouped read-only tool snapshot. Git & PRs contains GitHub account selection, repository access checks, and official Codex PR cloud review management links. Agents contains the Advisor model, conversation title and recap settings, Agent definitions, and Teams. Teams manages fixed members, roles, tasks and discussion. Select a model to enable Advisor or Disable to turn it off. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings and Hooks tabs. Use Customize to manage plugins, skills, connections and the optional Academy paper editor. IDE extensions open in the standalone IDE. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use Up and Down, Home or End to navigate categories. Keyboard Shortcuts opens the Agent Window shortcut list. Customize Settings opens all Workbench settings or settings.json. Browser lets you manage trusted domains. Tab opens its Workbench settings. In Code Intelligence, edit Codebase settings and control language servers with Enable LSPs and Enable LSPs for Worktrees. Environment contains execution, permissions, and Agent Window terminal settings. Use search to filter settings and Down to focus the first result. Right-click a configuration setting, or focus its control and press Shift+F10 to open the setting menu. Choose Copy Setting as JSON to copy the key and current value without saving settings. Local dictation settings list available and installed models. Use the Dictation models selector to switch between installed models. Use Tab to reach Install, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation and Voice Mode use API connections in Models. ChatGPT dictation uses the Codex login in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.maturityHelp' }, 'Settings can be marked Experimental or Preview; these labels describe maturity and do not change enablement. Use @tag:experimental or @tag:preview to filter them, or @stable to exclude both. Combine these filters with text, @id: and @modified.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.languageHelp' }, 'Language queries such as @lang:plaintext open language-specific settings in the shared Workbench editor. Workspace and folder settings use that editor too.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.') + ' ' + localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.') + ' ' + localize('sessions.settings.chatGPTBackendHelp', 'In the desktop General category, Default ChatGPT entry selects which entry opens when you start a new chat.') + (isNative ? ' ' + localize('sessions.settings.projectFilesHelp', 'In General, Project files shows the local save folder. Activate Change to choose a different folder.') : '') + ' ' + localize('sessions.settings.layoutScopeHelp', 'Appearance has Layout scope. Session keeps documents per session. Chat with shared visibility keeps documents per chat and shares Editor and Details visibility. Chat keeps documents and visibility per chat.') + (isNative ? ' ' + localize({ bundle: 'ash.sessions', key: 'sessions.storage.help' }, 'Storage shows estimated usage for the local profile and worktrees. Use Tab to refresh, manage worktrees, restore an archived session, or review sessions for permanent deletion. Expand Manage worktrees and use Space to select worktrees to clean up.') : '') + '\n\n'
+					() => localize('sessions.settings.help', 'Settings has categories on the left and settings on the right. In Appearance, use Interface font, Message body font, and Code block font to choose typography for each part of the window. Use the arrow keys to browse font choices and Enter to select one. In Appearance, Automatically follow new replies controls whether chat follows replies at the bottom. General has Interface language, which takes effect after restarting Ash or refreshing the page. Voice contains settings for dictation and two-way voice conversations. On desktop, Open on startup chooses whether the next launch opens the IDE, Agent window, or the windows from last time. Models contains chat models and API connections. In Your Ash, use Manage under Code conversation defaults to edit and save your personal or workspace defaults. Run Developer: Show Agent Tool Catalog to inspect a grouped read-only tool snapshot. Git & PRs contains GitHub account selection, repository access checks, and official Codex PR cloud review management links. Agents contains the Advisor model, conversation title and recap settings, Agent definitions, and Teams. Teams manages fixed members, roles, tasks and discussion. Select a model to enable Advisor or Disable to turn it off. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings and Hooks tabs. Use Customize to manage plugins, skills, connections and the optional Academy paper editor. IDE extensions open in the standalone IDE. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use Up and Down, Home or End to navigate categories. Keyboard Shortcuts opens the Agent Window shortcut list. Customize Settings opens all Workbench settings or settings.json. Browser has the Browser follows session switch, separate opening locations for web links and local development sites, trusted domains and Clear data. Clear data asks for confirmation before removing history, saved passwords, cookies and other built-in browser data. Browser settings are grouped into Browser, Downloads and Trusted domains. Browsing history and Download history have separate Manage buttons. In Downloads, Change chooses the save folder and the switch asks where to save each file. Tab opens its Workbench settings. In Code Intelligence, edit Codebase settings and control language servers with Enable LSPs and Enable LSPs for Worktrees. Environment contains execution, permissions, and Agent Window terminal settings. Use search to filter settings and Down to focus the first result. Right-click a configuration setting, or focus its control and press Shift+F10 to open the setting menu. Choose Copy Setting as JSON to copy the key and current value without saving settings. Local dictation settings list available and installed models. Use the Dictation models selector to switch between installed models. Use Tab to reach Install, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation and Voice Mode use API connections in Models. ChatGPT dictation uses the Codex login in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.maturityHelp' }, 'Settings can be marked Experimental or Preview; these labels describe maturity and do not change enablement. Use @tag:experimental or @tag:preview to filter them, or @stable to exclude both. Combine these filters with text, @id: and @modified.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.languageHelp' }, 'Language queries such as @lang:plaintext open language-specific settings in the shared Workbench editor. Workspace and folder settings use that editor too.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.') + ' ' + localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.') + ' ' + localize('sessions.settings.chatGPTBackendHelp', 'In the desktop General category, Default ChatGPT entry selects which entry opens when you start a new chat.') + (isNative ? ' ' + localize('sessions.settings.projectFilesHelp', 'In General, Project files shows the local save folder. Activate Change to choose a different folder.') : '') + ' ' + localize('sessions.settings.layoutScopeHelp', 'Appearance has Layout scope. Session keeps documents per session. Chat with shared visibility keeps documents per chat and shares Editor and Details visibility. Chat keeps documents and visibility per chat.') + (isNative ? ' ' + localize({ bundle: 'ash.sessions', key: 'sessions.storage.help' }, 'Storage shows estimated usage for the local profile and worktrees. Use Tab to refresh, manage worktrees, restore an archived session, or review sessions for permanent deletion. Expand Manage worktrees and use Space to select worktrees to clean up.') : '') + '\n\n'
 						+ localize('sessions.backgroundColor.help', 'In Appearance, Background color switches the light conversation and editor area between Warm and Cool. Cool uses pure white.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
@@ -301,9 +303,9 @@ export class SessionsPreferences extends Disposable {
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
 			return handoff(() => preferences.openUserSettings({ jsonEditor: true, ...(key ? { revealSetting: { key, edit: true } } : {}) }));
 		};
-		const managementContent = (id: string, title: string, description: string, fields: readonly SettingsSectionField[]): SettingsPageRenderer =>
+		const managementContent = (id: string, title: string, description: string, fields: readonly SettingsSectionField[], help = description): SettingsPageRenderer =>
 			resources.add(contentServices.createInstance(SettingsSectionRenderer, list, {
-				categoryId: id, title, description, help: description, fields, hideInnerTitle: true,
+				categoryId: id, title, description, help, fields, hideInnerTitle: true,
 			}, AccessibleViewProviderId.SessionsSettings, AccessibilityVerbositySettingId.SessionsSettings));
 		const settingOptions: SettingWidgetOptions = {
 			actionsOnContextMenuOnly: true,
@@ -367,7 +369,49 @@ export class SessionsPreferences extends Disposable {
 					section.accessibleViewProviderId, section.accessibilityVerbositySettingId)),
 			};
 		});
-		const commands = this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService));
+		const runCommand = (id: string) => this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(id));
+		if (isNative) {
+			const clearData = localize({ bundle: 'ash', key: 'sessions.browser.clearData' }, 'Clear data');
+			const description = localize({ bundle: 'ash', key: 'sessions.browser.clearData.description' }, 'Clear history, passwords, cookies and other data in the built-in browser.');
+			const manage = localize({ bundle: 'ash', key: 'sessions.browser.manage' }, 'Manage');
+			const configuration = this.configurationService;
+			management.set('downloads', resources.add(contentServices.createInstance(SettingsSectionRenderer,
+				{ container: list, rowPresentation: 'general' }, {
+				categoryId: 'browser-downloads', groupId: null,
+				title: localize({ bundle: 'ash', key: 'downloads.title' }, 'Downloads'), description: '',
+				help: localize({ bundle: 'ash', key: 'downloads.settingsHelp' }, 'Use Change to choose the download folder. The switch asks where to save each file. Manage opens searchable download history. Escape closes the list and returns focus to Manage.'),
+				onDidChange: (listener: () => void) => configuration.onDidChangeConfiguration(event => {
+					if (event.affectsConfiguration(BrowserDownloadDirectorySetting) || event.affectsConfiguration(BrowserDownloadAskSetting)) listener();
+				}),
+				get fields(): readonly SettingsSectionField[] {
+					return [{
+						id: 'download-folder', kind: 'action', presentation: 'setting', enabled: true,
+						label: localize({ bundle: 'ash', key: 'downloads.location' }, 'Download location'),
+						description: configuration.getValue<string>(BrowserDownloadDirectorySetting) || localize({ bundle: 'ash', key: 'downloads.defaultLocation' }, 'System Downloads folder'),
+						actionLabel: localize({ bundle: 'ash', key: 'sessions.browser.change' }, 'Change'),
+						run: async () => { await runCommand('workbench.action.browser.chooseDownloadDirectory'); },
+					}, {
+						id: 'download-ask', kind: 'boolean', enabled: true,
+						label: localize({ bundle: 'ash', key: 'downloads.ask' }, 'Ask where to save each file before downloading'),
+						description: localize({ bundle: 'ash', key: 'downloads.ask.description' }, 'Choose a save location for each download.'),
+						value: configuration.getValue<boolean>(BrowserDownloadAskSetting),
+						setValue: value => { void configuration.updateValue(BrowserDownloadAskSetting, value, ConfigurationTarget.USER).catch(error => notifications.error(error)); },
+					}, {
+						id: 'download-history', kind: 'action', presentation: 'setting', enabled: true,
+						label: localize({ bundle: 'ash', key: 'downloads.history' }, 'Download history'), actionLabel: manage,
+						run: async () => { await runCommand('workbench.action.browser.showDownloads'); },
+					}];
+				},
+			}, AccessibleViewProviderId.SessionsSettings, AccessibilityVerbositySettingId.SessionsSettings)));
+			management.set('browser', managementContent('browser-data', localize('sessions.settings.browser', 'Browser'), '', [{
+				id: 'browsing-history', kind: 'action', label: localize({ bundle: 'ash', key: 'sessions.browser.history' }, 'Browsing history'),
+				actionLabel: manage, enabled: true, presentation: 'setting',
+				run: () => handoff(async () => { await runCommand('workbench.action.browser.manageHistory'); }, false),
+			}, {
+				id: 'clear-browser-data', kind: 'action', label: clearData, description, enabled: true, presentation: 'setting',
+				run: async () => { await runCommand('workbench.action.browser.clearAllData'); },
+			}], localize({ bundle: 'ash', key: 'sessions.browser.historyHelp' }, 'Use Manage beside Browsing history to search and clear visits in the current browser storage session. Clear data asks for confirmation before removing built-in browser data. Download history is managed separately in Downloads.')));
+		}
 		const contextKeys = this.contextKeys;
 		const profileAvailability = new Set([AppServerAvailableContext.key]);
 		const selectDefaultProfile = localize('terminal.title.selectDefaultProfile', 'Select Default Profile');
@@ -381,13 +425,13 @@ export class SessionsPreferences extends Disposable {
 				return [{
 					id: 'default-profile', kind: 'action', label: selectDefaultProfile,
 					enabled: contextKeys.getValue(AppServerAvailableContext.key) === true,
-					run: async () => { await commands.executeCommand(TerminalCommandId.SelectDefaultProfile); },
+					run: async () => { await runCommand(TerminalCommandId.SelectDefaultProfile); },
 				}];
 			},
 		}, AccessibleViewProviderId.SessionsSettings, AccessibilityVerbositySettingId.SessionsSettings));
 		if (isNative) {
 			storageContent = resources.add(contentServices.createInstance(SessionsStorageContent, list,
-				(action: 'restore' | 'delete') => handoff(async () => { await commands.executeCommand(action === 'restore' ? 'agentSession.restore' : 'agentSession.delete'); }, false)));
+				(action: 'restore' | 'delete') => handoff(async () => { await runCommand(action === 'restore' ? 'agentSession.restore' : 'agentSession.delete'); }, false)));
 			management.set('storage', storageContent);
 		}
 		memoryContent = resources.add(contentServices.createInstance(MemorySettingsRenderer, list,
@@ -398,7 +442,7 @@ export class SessionsPreferences extends Disposable {
 		management.set('agents', resources.add(contentServices.createInstance(SessionsAgentsContent, list,
 			async () => { if (await closeDialog()) await this.showEditor(); },
 			(run: TeamRun) => handoff(async () => {
-				await commands.executeCommand('sessions.open.code');
+				await runCommand('sessions.open.code');
 				await sessions.openThread(run.sessionId, run.coordinatorThreadId);
 			}, false),
 			(error: unknown) => notifications.error(localize({ bundle: 'ash.settings', key: 'roles.openFailed' }, 'Could not open Agent definition: {0}', String(error))),
@@ -407,7 +451,8 @@ export class SessionsPreferences extends Disposable {
 		const categories = sections.flatMap(section => section.categories);
 		const categoryContents = (category: SettingsCategory): readonly SettingsPageRenderer[] => {
 			const pages = contributed.filter(section => section.categoryId === category.id).map(section => section.content);
-			const content = category.content ? [category.content] : [];
+			const downloadActions = category.id === 'browser' ? management.get('downloads') : undefined;
+			const content = [...category.content ? [category.content] : [], ...downloadActions ? [downloadActions] : []];
 			return [
 				...category.id === 'environment' ? [terminalProfileContent, executionContent] : [],
 				...category.id === 'agents' || category.id === 'code-intelligence' ? [...pages, ...content] : [...content, ...pages],
@@ -474,7 +519,6 @@ export class SessionsPreferences extends Disposable {
 				element: { kind: 'group', id: `sessions.category.${category.id}`, title: category.title, description: '' },
 				children: [
 					...category.settings.map(setting => ({ element: { kind: 'item' as const, id: setting.id, title: setting.title, description: setting.description, keywords: [setting.id, ...setting.keywords ?? []], tags: setting.tags, value: setting } })),
-					...category.settingGroups ? new SettingsLayout(`sessions.category.${category.id}`, category.settingGroups).nodes : [],
 					...categoryContents(category).flatMap(content => content.getNodes(query).flatMap(node => {
 						const group = node.element;
 						// The category heading already labels these rows, including in search results.
@@ -482,6 +526,7 @@ export class SessionsPreferences extends Disposable {
 							? node.children ?? []
 							: [node];
 					})),
+					...category.settingGroups ? new SettingsLayout(`sessions.category.${category.id}`, category.settingGroups).nodes : [],
 				],
 			}));
 			treeModel.setChildren(nodes);
@@ -648,6 +693,21 @@ export class SessionsPreferences extends Disposable {
 			.filter(configuration => configuration.setting && configuration.key.startsWith(`${SESSIONS_TERMINAL_CONFIG_SECTION}.`))
 			.map(configuration => defaults.get(configuration.key));
 		const trustedDomains = trustedDomainsSetting(this.trustedDomains);
+		const localLinks = defaults.get(BrowserOpenLocalhostLinksSettingId);
+		if (localLinks.valueType !== 'boolean') throw new TypeError('Local link configuration must be boolean');
+		// Keep the existing routing preference; only the Agent Window presents it as a destination selector.
+		const localDestination: ISelectSetting = {
+			id: localLinks.id,
+			configuration: localLinks.configuration as ISelectSetting['configuration'],
+			valueType: 'select',
+			title: localize({ bundle: 'ash', key: 'sessions.browser.localDestination' }, 'Local URL opening location'),
+			description: localize({ bundle: 'ash', key: 'sessions.browser.localDestination.description' }, 'Choose where local development sites open, including localhost, loopback addresses and all-interfaces addresses.'),
+			options: [
+				{ value: true, label: 'Ash' },
+				{ value: false, label: localize({ bundle: 'ash', key: 'sessions.browser.systemDestination' }, 'Default browser') },
+			],
+		};
+
 		return [{
 			title: localize('sessions.settings.section.basics', 'Basics'),
 			categories: [
@@ -669,8 +729,12 @@ export class SessionsPreferences extends Disposable {
 				{ id: 'github', title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [], content: githubContent },
 				{
 					id: 'browser', title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.global,
-					settings: defaults.all.filter(setting => setting.id === 'workbench.browser.autoReloadOnFileChange'
-						|| setting.id === 'workbench.browser.autoReloadLocalhostOnFileChange'),
+					settings: [
+						defaults.get(BROWSER_FOLLOWS_SESSION_SETTING),
+						defaults.get(BrowserOpenLinksSettingId), localDestination,
+						...defaults.all.filter(setting => setting.id === 'workbench.browser.autoReloadOnFileChange'
+							|| setting.id === 'workbench.browser.autoReloadLocalhostOnFileChange')],
+					content: management.get('browser'),
 					settingGroups: [{ id: 'trusted-domains', title: trustedDomains.title, description: '', settings: [trustedDomains] }],
 				},
 				{ id: 'tab', title: localize('sessions.settings.tab', 'Tab'), icon: Lxicon.keyboardTab, settings: [], content: management.get('tab') },

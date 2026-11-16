@@ -117,3 +117,5 @@ The retired browser working set is attached to the Browser EditorPart before its
 - Desktop controller transitions: `contrib/layout/test/browser/desktopLayoutController.test.ts`
 - Desktop lifecycle strategies: `contrib/layout/test/browser/desktopStrategies.test.ts`
 - Mobile rules: `contrib/layout/test/browser/mobileSessionLayoutController.test.ts`
+
+Compact Chat browser groups are owned by SessionsEntryService, separately from Code document working sets. By default each Chat source shares one retained group. The profile preference `sessions.browser.followSession` scopes those groups to the source-provided `ISessionsEntry.browserContext` identity. Providers supply stable local conversation identities, including account scope where applicable; the layout service consumes opaque keys and never reads provider state. Selection changes run through the existing entry navigation queue and hide outgoing groups without closing their pages. Browser working sets persist in the existing conversation editor state. Switching the preference adopts the visible group when the destination has no group, preserving all other retained groups.

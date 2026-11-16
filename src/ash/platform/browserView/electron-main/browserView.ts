@@ -1,3 +1,5 @@
+import { IBrowserDownloadService } from '../common/browserDownloads.js';
+import type { BrowserDownloadMainService } from './browserDownloadMainService.js';
 import type { BrowserWindow, WebContentsView, WebContents, WebFrameMain, IpcMainEvent, ContextMenuParams, Event as ElectronEvent } from 'electron/main';
 import { addAbortListener, type EventEmitter } from 'node:events';
 import { Disposable, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -649,6 +651,7 @@ export class BrowserView extends Disposable {
 		@IEncryptionMainService private readonly encryption: IEncryptionMainService,
 		@IApplicationStorageMainService private readonly storage: IApplicationStorageMainService,
 		@IBrowserPasswordMainService private readonly passwords: BrowserPasswordMainService,
+		@IBrowserDownloadService private readonly downloads: BrowserDownloadMainService,
 	) {
 		super();
 		this.id = options.id;
@@ -682,7 +685,7 @@ export class BrowserView extends Disposable {
 		this.window.contentView.addChildView(this.view);
 		this.configureSecurity();
 		if (this.creation.owner.type === 'user') { this._register(this.session.attachFileReader(this.id, url => this.readFile(url))); }
-		this._register(this.session.permissions.attach(this.id, this.webContents, event => this.emit(event), () => this.emitState()));
+		this._register(this.session.permissions.attach(this.id, this.webContents, event => this.emit(event), () => this.emitState(), item => this.downloads.track(item)));
 		this._register(this.session.attachNetwork(this.id, this.webContents, this.creation.owner, () => this.networkToken, event => this.emit(event)));
 		this.listen();
 		this.emit({ type: 'created', info: this.getInfo() });

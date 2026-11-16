@@ -371,6 +371,14 @@ test('downloads report completion and cancellation and closing a page releases t
 		const progress = editor.getByRole('status', { name: 'Downloads', exact: true });
 		await expect(progress).toHaveText(/bytes \(completed\)$/);
 		expect(await readFile(filename, 'utf8')).toBe('downloaded content');
+		const downloads = editor.getByRole('button', { name: 'Downloads', exact: true });
+		await downloads.click();
+		const history = page.getByRole('dialog', { name: 'Downloads', exact: true });
+		await expect(history).toBeVisible();
+		await expect(history).toContainText('completed.txt');
+		await history.getByRole('textbox', { name: 'Search downloads', exact: true }).press('Escape');
+		await expect(history).toBeHidden();
+		await expect(downloads).toBeFocused();
 		await start('/pending', join(testWorkspace.directory, 'pending.txt'));
 		await expect(progress).toContainText('downloading');
 		// Browser actions use a dedicated native menu window, even with system menus enabled.

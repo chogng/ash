@@ -1,5 +1,5 @@
 import type { BrowserWindow, BrowserWindowConstructorOptions, HandlerDetails } from 'electron';
-import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../common/lifecycle.js';
 import { isContextMenuWindowName, type IContextMenuWindowPresentation } from '../common/contextmenu.js';
 
 /** Owns non-modal menu windows without registering them as product/editor windows. */
@@ -8,7 +8,8 @@ export class ContextMenuWindow extends Disposable {
 
 	constructor(
 		private readonly parent: BrowserWindow,
-		private readonly restoreParentActivation: (parent: BrowserWindow) => void,
+		/** Enqueues native activation after the focus callback and returns its cancellation handle. */
+		private readonly scheduleParentActivation: (parent: BrowserWindow) => IDisposable,
 	) {
 		super();
 		const close = (): void => this.windows.clearAndDisposeAll();
@@ -100,11 +101,20 @@ export class ContextMenuWindow extends Disposable {
 		window.once('closed', closed);
 		lifetime.add(toDisposable(() => window.off('closed', closed)));
 		const webContents = window.webContents;
-		const restoreParentActivation = (): void => {
-			if (!window.isDestroyed() && !this.parent.isDestroyed() && window.isFocused()) this.restoreParentActivation(this.parent);
+		const pendingActivation = lifetime.add(new MutableDisposable<IDisposable>());
+		const cancelActivation = (): void => pendingActivation.clear();
+		const scheduleActivation = (): void => {
+			pendingActivation.clear();
+			if (!window.isDestroyed() && !this.parent.isDestroyed() && window.isFocused()) pendingActivation.value = this.scheduleParentActivation(this.parent);
 		};
-		window.on('focus', restoreParentActivation);
-		lifetime.add(toDisposable(() => window.off('focus', restoreParentActivation)));
+		window.on('focus', scheduleActivation);
+		window.on('blur', cancelActivation);
+		this.parent.on('close', cancelActivation);
+		lifetime.add(toDisposable(() => {
+			window.off('focus', scheduleActivation);
+			window.off('blur', cancelActivation);
+			this.parent.off('close', cancelActivation);
+		}));
 		const preventNavigation = (event: Electron.Event): void => event.preventDefault();
 		webContents.on('will-navigate', preventNavigation);
 		lifetime.add(toDisposable(() => webContents.off('will-navigate', preventNavigation)));

@@ -1,3 +1,4 @@
+import { BROWSER_FOLLOWS_SESSION_SETTING } from '../../../../common/sessionConfig.js';
 import { ISessionEditorWorkingSetService, SessionEditorWorkingSetService } from '../../common/sessionEditorWorkingSet.js';
 import { IOutputService } from '../../../../../workbench/services/output/common/output.js';
 import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId } from '../../../../../workbench/common/views.js';
@@ -71,6 +72,39 @@ suite('SessionsEntryService lifecycle and focus', () => {
 		await fixture.service.openEntry(entry);
 		assert.deepEqual(fixture.service.conversationEditors, [input]);
 		assert.equal(fixture.visible.get('editor'), true);
+	});
+
+	test('browser follow adopts current tabs and restores each conversation independently', async () => {
+		using fixture = new EntryFixture();
+		const browserContext = observableValue('conversation', 'one');
+		const entry = { ...chatEntry, chatSource: 'desktop-chat', browserContext };
+		await fixture.service.openEntry(entry);
+		const first = { resource: URI.parse('ash-browser:/one') };
+		await fixture.service.openConversationBrowser(target => fixture.openEditor(first, target));
+		await fixture.configuration.updateValue(BROWSER_FOLLOWS_SESSION_SETTING, true);
+		await fixture.service.runOperation(async () => { });
+		assert.deepEqual(fixture.service.conversationEditors, [first]);
+		browserContext.set('two', undefined);
+		await fixture.service.runOperation(async () => { });
+		assert.deepEqual(fixture.service.conversationEditors, []);
+		assert.equal(fixture.visible.get('editor'), false);
+		const second = { resource: URI.parse('ash-browser:/two') };
+		await fixture.service.openConversationBrowser(target => fixture.openEditor(second, target));
+		browserContext.set('one', undefined);
+		await fixture.service.runOperation(async () => { });
+		assert.deepEqual(fixture.service.conversationEditors, [first]);
+		assert.equal(fixture.visible.get('editor'), true);
+		browserContext.set('two', undefined);
+		await fixture.service.runOperation(async () => { });
+		assert.deepEqual(fixture.service.conversationEditors, [second]);
+		await fixture.configuration.updateValue(BROWSER_FOLLOWS_SESSION_SETTING, false);
+		await fixture.service.runOperation(async () => { });
+		const shared = { resource: URI.parse('ash-browser:/shared') };
+		await fixture.service.openConversationBrowser(target => fixture.openEditor(shared, target));
+		browserContext.set('one', undefined);
+		await fixture.service.runOperation(async () => { });
+		assert.deepEqual(fixture.service.conversationEditors, [second, shared]);
+		assert.deepEqual(fixture.errors, []);
 	});
 
 	test('Chat uses the Sessions Part without restoring Code editors, and Code returns to the grid', async () => {
@@ -667,6 +701,7 @@ class TestCustomView extends AbstractCustomView {
 
 class EntryFixture extends Disposable {
 	public readonly conversationDraft = observableValue('conversation draft', false);
+	public readonly configuration = this._register(new InMemoryConfigurationService());
 	public readonly conversationKinds: Parameters<ISessionsConversationService['setConversationKind']>[0][] = [];
 	public readonly chatSource: Parameters<ISessionsConversationService['setChatSource']>[0][] = [];
 	private readonly dom = new JSDOM('', { url: 'https://entry-layout.test' });
@@ -729,7 +764,7 @@ class EntryFixture extends Disposable {
 		let activeGroup = documentGroup;
 		this.services.registerInstance(ISessionEditorWorkingSetService, this.services.createInstance(SessionEditorWorkingSetService));
 		this.services.registerInstance(IStorageService, this.storage);
-		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService()));
+		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(ICustomViewService, this.customViews);
 		this.services.registerInstance(ILifecycleService, this.lifecycle);
 		this.services.registerInstance(IContextKeyService, this.contextKeys);
@@ -747,7 +782,7 @@ class EntryFixture extends Disposable {
 			isGroupVisible: (id: string) => this.groupVisibility.get(id) ?? true,
 			filesPart: { isEditorVisible: false, onDidChangeDetailsVisibility: Event.None, setEditorVisible() { }, hideDetails() { fixture.filesDetailsOpen = false; }, showDetails() { fixture.filesDetailsOpen = true; }, auxiliaryBar: { focus() { fixture.focused = 'files'; } }, fileGroups: [documentGroup] },
 			createRetainedGroup: () => {
-				const group = { ...documentGroup, id: 'chat-browser', inputs: [] as IResourceEditorInput[] };
+				const group = { ...documentGroup, id: 'chat-browser-' + groups.length, inputs: [] as IResourceEditorInput[] };
 				groups.push(group);
 				return group;
 			},

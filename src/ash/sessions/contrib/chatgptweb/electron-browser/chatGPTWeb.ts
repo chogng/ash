@@ -159,6 +159,7 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 		const entry: ISessionsEntry = {
 			id: chatSource, activityContext: chatGPTSelectedContext, content: 'conversation',
 			sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
+			browserContext: chat.state.map(state => JSON.stringify([state.catalogScope, state.localConversationId])),
 			restoreCommand: SHOW_CHATGPT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
 		};
 		const showChat = async (source?: unknown, create?: unknown) => {
@@ -228,6 +229,7 @@ export class ChatGPTExperimentalContribution extends Disposable implements IWork
 		const entry: ISessionsEntry = {
 			id: chatSource, activityContext: experimentalChatGPTSelected, content: 'conversation',
 			sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
+			browserContext: chat.state.map(state => JSON.stringify([state.catalogScope, state.localConversationId])),
 			restoreCommand: SHOW_EXPERIMENTAL_CHATGPT, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
 		};
 		const connect = async (notifyLogin = true): Promise<boolean> => {

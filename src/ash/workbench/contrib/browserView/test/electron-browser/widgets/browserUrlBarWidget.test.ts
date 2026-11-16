@@ -313,3 +313,38 @@ suite('browserView browser component', () => {
 		}
 	}
 });
+
+suite('Browser downloads panel', () => {
+	const browser = useBrowserTests();
+	test('search, file deletion and record removal stay distinct and actions use 24px targets', async () => {
+		const { page } = browser;
+		await page.goto('/browserView.html');
+		await page.waitForFunction(() => !!window.ashBrowserViewIntegration);
+		const trigger = page.getByRole('button', { name: 'Downloads', exact: true });
+		await trigger.click();
+		const panel = page.getByRole('dialog', { name: 'Downloads', exact: true });
+		const search = panel.getByRole('textbox', { name: 'Search downloads', exact: true });
+		await expect(search).toBeFocused();
+		await search.fill('report');
+		await expect(panel.getByRole('listitem')).toHaveCount(1);
+		const row = panel.getByRole('listitem');
+		await row.hover();
+		const removeFile = row.getByRole('button', { name: 'Delete file: report.pdf', exact: true });
+		await expect(removeFile).toBeVisible();
+		const bounds = (await removeFile.boundingBox())!;
+		expect(bounds.width).toBe(24); expect(bounds.height).toBe(24);
+		await row.click({ button: 'right' });
+		await expect(page.getByRole('menuitem', { name: 'Open file', exact: true })).toBeVisible();
+		await page.getByRole('menuitem', { name: 'Copy download link', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashBrowserViewIntegration.calls.includes('https://example.test/report.pdf'))).toBe(true);
+		await row.hover(); await removeFile.click();
+		await expect(row).toContainText('File deleted');
+		await row.focus(); await row.press('Shift+F10');
+		await page.getByRole('menuitem', { name: 'Remove from list', exact: true }).click();
+		await expect(panel.getByRole('listitem')).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashBrowserViewIntegration.calls.filter(call => call.startsWith('download:')))).toEqual(['download:deleteFile', 'download:remove']);
+		await search.press('Escape');
+		await expect(panel).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+	});
+});

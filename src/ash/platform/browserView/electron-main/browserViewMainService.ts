@@ -1,3 +1,6 @@
+import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
+import { StorageScope } from '../../storage/common/storage.js';
+import { IBrowserPasswordMainService, type BrowserPasswordMainService } from './browserPasswordMainService.js';
 import type { IPermissionCategoryState } from '../common/browserPermissions.js';
 import type { BrowserWindow, WebContentsView, Session, ContextMenuParams } from 'electron/main';
 import { addAbortListener } from 'node:events';
@@ -45,6 +48,7 @@ export interface BrowserViewMainServiceOptions {
 	readonly findAuxiliaryWindow?: (name: string) => BrowserWindow | undefined;
 	readonly getWorkspaceId: () => string;
 	readonly createSession: (partition: string) => Session;
+	readonly getPersistentSessionIds: () => Promise<readonly string[]>;
 	readonly createView: (session: Session) => WebContentsView;
 	readonly readPublicFavicon: (url: URL, signal: AbortSignal) => Promise<string | undefined>;
 	readonly getWindowNetwork: () => IBrowserViewNetwork | undefined;
@@ -89,7 +93,9 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	constructor(private readonly options: BrowserViewMainServiceOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IClipboardService private readonly clipboard: IClipboardService,
-		@ILogService private readonly log: ILogService) {
+		@ILogService private readonly log: ILogService,
+		@IBrowserPasswordMainService private readonly passwords: BrowserPasswordMainService,
+		@IApplicationStorageMainService private readonly storage: IApplicationStorageMainService) {
 		super();
 		this._register(toDisposable(() => this.cancellation.abort(new Error('BrowserCapabilityUnavailable'))));
 	}
@@ -362,6 +368,42 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		await session.electronSession.clearStorageData();
 		await session.electronSession.clearCache();
 		session.permissions.clear();
+	}
+	public async clearAllData(): Promise<void> {
+		await Promise.all(this.creations.values());
+		const sessions = new Set(this.histories.keys());
+		// Persisted partitions include pages that have no live tab in this window.
+		const application = { scope: StorageScope.APPLICATION, id: 'application' };
+		const snapshot = await this.storage.getItems(application);
+		const persistent = new Set(await this.options.getPersistentSessionIds());
+		for (const key of Object.keys(snapshot.entries)) {
+			const match = /^browser\.history\.(?:entries|favicons)\.([a-f0-9]{64})$/u.exec(key);
+			if (match) persistent.add(match[1]!);
+		}
+		for (const id of persistent) {
+			if (!/^[a-f0-9]{64}$/u.test(id)) throw new TypeError('Invalid browser storage identity');
+			sessions.add(BrowserSession.getOrCreate(id, BrowserViewStorageScope.Workspace,
+				this.options.createSession('persist:ash-browser-' + id)));
+		}
+		for (const session of sessions) session.cancelAuthentication();
+		for (const [, view] of this.targets) await view.clearAuthentication();
+		await this.passwords.clear();
+		if (!this.passwords.useInMemoryStorage) {
+			const credentials = await this.storage.getItems(application);
+			for (const key of Object.keys(credentials.entries)) {
+				if (key.startsWith('browser.credentials.')) await this.storage.updateItems(application, key, null);
+			}
+		}
+		for (const session of sessions) {
+			await session.electronSession.clearAuthCache();
+			await session.electronSession.closeAllConnections();
+			await session.electronSession.clearStorageData();
+			await session.electronSession.clearCache();
+			session.permissions.clear();
+			const lease = await session.acquireHistory(() => this.instantiationService.createInstance(BrowserSessionHistory, session));
+			try { await lease.history.delete(); }
+			finally { lease.dispose(); }
+		}
 	}
 	public async getBrowserHistory(id: string): Promise<ISerializedBrowserHistoryEntriesSnapshot> {
 		return this.histories.get(this.target(id).session)!.entries.serialize();

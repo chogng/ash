@@ -57,7 +57,8 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
 	// The direct build owns generated inputs after its addon preparation hook.
 	scripts.build = 'node build/prepare.ts && node record.ts desktop-build';
 	scripts['protocol:generate'] = 'node recordProtocol.ts';
-	await writeFile(join(directory, 'package.json'), JSON.stringify({ private: true, type: 'module', scripts }));
+	// Nested pnpm calls use the repository version rather than Corepack's host default.
+	await writeFile(join(directory, 'package.json'), JSON.stringify({ private: true, type: 'module', packageManager: manifest.packageManager, scripts }));
 	await writeFile(join(directory, 'record.ts'), `
     import { appendFileSync } from 'node:fs';
     appendFileSync('operations.jsonl', JSON.stringify(process.argv[2]) + '\\n');
@@ -83,6 +84,7 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
 	}
 	for (const name of ['mocha', 'coverage']) await copyFile(join(root, `test/unit/${name}.ts`), join(directory, `test/unit/${name}.ts`));
 	await copyFile(join(root, 'build/processes.ts'), join(directory, 'build/processes.ts'));
+	await copyFile(join(root, 'build/processGroup.ts'), join(directory, 'build/processGroup.ts'));
 	await copyFile(join(root, '.nvmrc'), join(directory, '.nvmrc'));
 	await writeFile(join(directory, 'test/unit/impactWorker.ts'), `
 		export function planAffectedTests(root, base) {

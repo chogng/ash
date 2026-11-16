@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { detachedProcess, ProcessRun } from './processes.ts';
+import { ProcessRun } from './processes.ts';
 
 export interface PythonHost {
 	readonly platform: NodeJS.Platform;
@@ -35,22 +35,10 @@ export async function runPython(arguments_: string[], options: { cwd: string; en
 	const abort = (): void => { void run.stop('SIGTERM').catch(() => { /* The finally block awaits and reports cleanup errors. */ }); };
 	signal?.addEventListener('abort', abort, { once: true });
 	try {
-		const { command, args } = pythonCommand(arguments_);
-		// An inherited active stdin pipe can stall the Windows Python launcher.
-		// A dedicated group is safe only while the caller owns its cancellation;
-		// ordinary CLI preparation still receives the terminal's group signals.
-		const child = spawn(command, args, { cwd: options.cwd, env: options.environment ?? process.env, stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true, detached: signal !== undefined && detachedProcess(options.environment) });
-		const exited = new Promise<void>((resolvePromise, reject) => {
-			child.once('error', reject);
-			child.once('close', (code, termination) => {
-				if (code === 0) resolvePromise();
-				else reject(new Error(termination ? `${options.operation} stopped by ${termination}` : `${options.operation} exited with status ${code ?? 'unknown'}`));
-			});
-		});
-		// Ownership discovery can yield while a failed spawn already rejects.
-		void exited.catch(() => { });
-		await run.own(child);
-		await exited;
+		const environment = options.environment ?? process.env;
+		const { command, args } = pythonCommand(arguments_, { ...currentHost, environment });
+		const result = await run.command(command, args, environment, false, 'ignore');
+		if (result.code !== 0) throw new Error(`${options.operation} exited with status ${result.code}`);
 		signal?.throwIfAborted();
 	} finally {
 		signal?.removeEventListener('abort', abort);

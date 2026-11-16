@@ -8,6 +8,7 @@ interface Page {
 	readonly id: string;
 	readonly contents: WebContents;
 	readonly changed?: () => void;
+	readonly download?: (item: DownloadItem) => boolean;
 	readonly emit: (event: BrowserViewEvent) => void;
 }
 
@@ -77,7 +78,7 @@ export class BrowserSessionPermissions {
 			const page = this.pages.get(contents);
 			if (!page) { item.cancel(); return; }
 			const requestId = randomUUID();
-			// Electron owns the save-location dialog; this host never selects a destination for the user.
+			if (page.download?.(item) === false) return;
 			const updated = (_event: Electron.Event, state: 'progressing' | 'interrupted'): void => this.progress(page, item, state);
 			const done = (_event: Electron.Event, state: 'completed' | 'cancelled' | 'interrupted'): void => { this.downloads.delete(requestId); cleanup(); this.progress(page, item, state); };
 			const cleanup = (): void => { item.removeListener('updated', updated); item.removeListener('done', done); };
@@ -88,8 +89,8 @@ export class BrowserSessionPermissions {
 		});
 	}
 
-	public attach(id: string, contents: WebContents, emit: Page['emit'], changed?: () => void): IDisposable {
-		const page = { id, contents, emit, changed };
+	public attach(id: string, contents: WebContents, emit: Page['emit'], changed?: () => void, download?: (item: DownloadItem) => boolean): IDisposable {
+		const page = { id, contents, emit, changed, download };
 		this.pages.set(contents, page);
 		return toDisposable(() => {
 			this.pages.delete(contents);

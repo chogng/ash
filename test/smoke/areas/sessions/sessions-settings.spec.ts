@@ -8,6 +8,69 @@ import { EditorGroup } from '../../../automation/editors.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import type { Locator } from '@playwright/test';
 
+test('Agent Window download history opens inside Settings and returns keyboard focus', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.keyboard.press('ControlOrMeta+,');
+	const settings = page.locator('.ash-sessions-settings-dialog');
+	await expect(settings).toBeVisible();
+	const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
+	await expect(navigation.getByRole('button', { name: 'Downloads', exact: true })).toHaveCount(0);
+	await navigation.getByRole('button', { name: 'Browser', exact: true }).click();
+	const clear = settings.getByRole('group', { name: 'Clear data', exact: true });
+	await expect(clear).toContainText('Clear history, passwords, cookies and other data in the built-in browser.');
+	const clearButton = clear.getByRole('button', { name: 'Clear data', exact: true });
+	await expect(clearButton).toBeVisible();
+	const copy = await clear.locator('.ash-configuration-setting-copy').boundingBox();
+	const button = await clearButton.boundingBox();
+	expect(button!.x).toBeGreaterThan(copy!.x + copy!.width);
+	expect(button!.width).toBeLessThan(150);
+	await expect(settings.getByRole('heading', { name: 'Downloads', exact: true })).toBeVisible();
+	await expect(settings.getByRole('group', { name: 'Download location', exact: true }).getByRole('button', { name: 'Change', exact: true })).toBeVisible();
+	await expect(settings.getByRole('group', { name: 'Browsing history', exact: true }).getByRole('button', { name: 'Manage', exact: true })).toBeVisible();
+	await expect(settings.getByRole('switch', { name: 'Ask where to save each file before downloading', exact: true })).toBeVisible();
+	const history = settings.getByRole('group', { name: 'Download history', exact: true }).getByRole('button', { name: 'Manage', exact: true });
+	await history.focus();
+	await history.press('Enter');
+	const panel = page.getByRole('dialog', { name: 'Downloads', exact: true });
+	await expect(panel).toBeVisible();
+	const search = panel.getByRole('textbox', { name: 'Search downloads', exact: true });
+	await expect(search).toBeFocused();
+	await search.fill('missing synthetic download');
+	await expect(panel).toContainText('No downloads');
+	await search.press('Escape');
+	await expect(panel).toBeHidden();
+	await expect(settings).toBeVisible();
+	await expect(history).toBeFocused();
+	await settings.getByRole('group', { name: 'Browsing history', exact: true }).getByRole('button', { name: 'Manage', exact: true }).click();
+	await expect(settings).toBeHidden();
+	await expect(page.getByRole('combobox', { name: 'History', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+});
+
+test.describe('Browser settings in Simplified Chinese', () => {
+	test.use({ electronUserSettings: { 'workbench.locale': 'zh-CN' } });
+	test('Browser settings separate browsing records and downloads with compact actions', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.keyboard.press('ControlOrMeta+,');
+		const settings = page.getByRole('dialog', { name: '设置', exact: true });
+		await settings.locator('[data-settings-category-id="browser"]').click();
+		await expect(settings.getByRole('heading', { name: '下载', exact: true })).toBeVisible();
+		await expect(settings.getByRole('heading', { name: '可信域名', exact: true })).toBeVisible();
+		await expect(settings.getByRole('group', { name: '下载位置', exact: true }).getByRole('button', { name: '更改', exact: true })).toBeVisible();
+		await expect(settings.getByRole('group', { name: '浏览记录', exact: true }).getByRole('button', { name: '管理', exact: true })).toBeVisible();
+		const clear = settings.getByRole('group', { name: '清除数据', exact: true });
+		await expect(clear).toContainText('清除内置浏览器中的历史记录、密码、Cookies 等数据。');
+		const button = await clear.getByRole('button', { name: '清除数据', exact: true }).boundingBox();
+		expect(button!.width).toBeLessThan(150);
+		const history = settings.getByRole('group', { name: '下载记录', exact: true }).getByRole('button', { name: '管理', exact: true });
+		await history.click();
+		const popup = page.getByRole('dialog', { name: '下载', exact: true });
+		await expect(popup.getByRole('textbox', { name: '搜索下载记录', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(history).toBeFocused();
+	});
+});
+
 test('Sessions Memory guards unsaved changes at every Settings close control', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();

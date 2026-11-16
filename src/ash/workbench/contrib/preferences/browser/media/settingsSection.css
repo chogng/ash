@@ -75,3 +75,28 @@
 	line-height: 1.5;
 	overflow-wrap: anywhere;
 }
+
+.ash-settings-section > p:empty {
+	display: none;
+}
+
+.ash-settings-section:has(> .ash-settings-action-row) {
+	gap: 0;
+}
+
+.ash-settings-section
+	> .ash-settings-action-row
+	+ .ash-settings-action-row::before {
+	position: absolute;
+	top: 0;
+	inset-inline: 0;
+	height: var(--ash-strokeThickness);
+	background: var(--ash-settings-itemSeparator);
+	content: "";
+	pointer-events: none;
+}
+
+.ash-settings-action-row > .ash-button {
+	justify-self: end;
+	max-width: 100%;
+}

@@ -5,8 +5,9 @@ import { cp, lstat, mkdir, readFile, readdir, realpath, symlink, unlink, writeFi
 import { pathToFileURL } from 'node:url';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline';
+import { PassThrough } from 'node:stream';
 import ts from 'typescript';
-import { detachedProcess, ProcessRun } from '../processes.ts';
+import { ProcessRun } from '../processes.ts';
 import { desktopBuildPath } from './paths.ts';
 import { prepareIncrementalOutput } from '../lib/incrementalOutput.ts';
 import { runPython } from '../python.ts';
@@ -316,20 +317,19 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		console.log('[host] Starting incremental compilation...');
 		const run = new ProcessRun(sourceRoot, undefined, 5_000);
 		compilerRun = run;
-		const child = spawn(process.execPath, [compiler, '--build', ...projects, '--pretty', 'false', ...(force ? ['--force'] : [])], {
-			cwd: sourceRoot, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: detachedProcess(),
-		});
-		const stdout = createInterface({ input: child.stdout });
-		const stderr = createInterface({ input: child.stderr });
+		const streams = { stdout: new PassThrough(), stderr: new PassThrough() };
+		const stdout = createInterface({ input: streams.stdout });
+		const stderr = createInterface({ input: streams.stderr });
 		stdout.on('line', line => console.log(`[host] ${line}`));
 		stderr.on('line', line => console.error(`[host] ${line}`));
-		const result = new Promise<boolean>((done, reject) => {
-			child.once('error', reject);
-			child.once('close', code => { stdout.close(); stderr.close(); done(code === 0); });
-		});
 		let succeeded: boolean;
-		try { await run.own(child); succeeded = await result; }
-		finally { await run.close(); compilerRun = undefined; }
+		try {
+			const result = await run.command(process.execPath, [compiler, '--build', ...projects, '--pretty', 'false', ...(force ? ['--force'] : [])], process.env, false, 'ignore', (stream, data) => streams[stream].write(data));
+			succeeded = result.code === 0;
+		} finally {
+			streams.stdout.end(); streams.stderr.end();
+			try { await run.close(); } finally { compilerRun = undefined; }
+		}
 		if (closing) return;
 		buildFailed = !succeeded;
 		const previousRevision = revision;

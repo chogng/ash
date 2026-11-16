@@ -29,12 +29,12 @@
 	pointer-events: none;
 }
 
-.ash-sessions-titlebar-code:not(
+.ash-sessions-titlebar:not(
 		.has-page-content,
 		.has-editor-page-header,
 		.is-new-session
 	)::before {
-	/* The Code title bar spans the conversation and tools below it. */
+	/* One separator spans the conversation and tools in both Chat and Code. */
 	content: "";
 	position: absolute;
 	right: 0;

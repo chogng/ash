@@ -1,11 +1,30 @@
 import { registerEditorToolAction } from '../../../../browser/actions/editorToolActions.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IBrowserViewService, BrowserViewStorageScope } from '../../../../../platform/browserView/common/browserView.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { BrowserEditorInput } from '../../common/browserEditorInput.js';
+
+registerAction2(class ClearAllBrowserDataAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.browser.clearAllData',
+			title: localize2({ bundle: 'ash', key: 'sessions.browser.clearData' }, 'Clear data'), f1: true
+		});
+	}
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const pages = accessor.get(IBrowserViewService);
+		const dialogs = accessor.get(IDialogService);
+		const answer = await dialogs.confirm({
+			message: localize({ bundle: 'ash', key: 'sessions.browser.clearData.confirm' }, 'Clear all built-in browser data?'),
+			detail: localize({ bundle: 'ash', key: 'sessions.browser.clearData.detail' }, 'This removes browsing history, saved passwords, cookies, website storage, cache and website permissions. Websites may require signing in again.'),
+			primaryButton: localize({ bundle: 'ash', key: 'sessions.browser.clearData' }, 'Clear data'),
+		});
+		if (answer.confirmed) await pages.clearAllData();
+	}
+});
 
 for (const scope of Object.values(BrowserViewStorageScope)) {
 	const scopeLabel = {

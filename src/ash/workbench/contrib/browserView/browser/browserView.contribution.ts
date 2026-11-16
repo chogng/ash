@@ -1,8 +1,11 @@
+import { BrowserDownloadDirectorySetting, BrowserDownloadAskSetting } from '../../../../platform/browserView/common/browserDownloads.js';
+import { posix, win32 } from '../../../../base/common/path.js';
+import { isWindows } from '../../../../base/common/platform.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { localize } from '../../../../nls.js';
 import { BROWSER_SEARCH_NONE, BrowserSearchEngineId, BrowserSearchEngineSettingId } from '../common/browserSearch.js';
-import { BrowserCDPSettingId, BrowserChatToolsSettingId, BrowserOpenLocalhostLinksSettingId } from '../../../../platform/browserView/common/browserView.js';
+import { BrowserCDPSettingId, BrowserChatToolsSettingId, BrowserOpenLocalhostLinksSettingId, BrowserOpenLinksSettingId } from '../../../../platform/browserView/common/browserView.js';
 import { BrowserNewTabPlacementSettingId, type BrowserNewTabPlacement } from '../common/browserView.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -64,5 +67,45 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			{ value: 'sideGroup', get label() { return localize({ bundle: 'ash.workbench', key: 'browser.tabPlacementSide' }, 'Browser Group to the Side'); } },
 			{ value: 'window', get label() { return localize({ bundle: 'ash.workbench', key: 'browser.tabPlacementWindow' }, 'Separate Browser Window'); } },
 		],
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<'ash' | 'system'>({
+	key: BrowserOpenLinksSettingId, defaultValue: 'system', agentsWindow: { default: 'ash' }, scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'string', enum: ['ash', 'system'] },
+	parse: value => {
+		if (value === 'ash' || value === 'system') return value;
+		throw new TypeError('Invalid web link destination');
+	},
+	setting: {
+		valueType: 'select',
+		get title() { return localize({ bundle: 'ash', key: 'sessions.browser.webDestination' }, 'Web URL and link opening location'); },
+		get description() { return localize({ bundle: 'ash', key: 'sessions.browser.webDestination.description' }, 'Choose where web URLs and links open. Local development sites use their own setting.'); },
+		options: [
+			{ value: 'ash', label: 'Ash' },
+			{ value: 'system', get label() { return localize({ bundle: 'ash', key: 'sessions.browser.systemDestination' }, 'Default browser'); } },
+		],
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<string>({
+	key: BrowserDownloadDirectorySetting, defaultValue: '', scope: ConfigurationScope.APPLICATION,
+	parse: value => {
+		if (typeof value !== 'string' || value.includes('\0') || value && !(isWindows ? win32 : posix).isAbsolute(value)) throw new TypeError('Invalid browser download directory');
+		return value;
+	},
+	setting: {
+		valueType: 'text', placeholder: '',
+		get title() { return localize({ bundle: 'ash', key: 'downloads.location' }, 'Download location'); },
+		get description() { return localize({ bundle: 'ash', key: 'downloads.location.description' }, 'Save downloaded files in this folder. Leave empty to use the system Downloads folder.'); },
+	},
+});
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<boolean>({
+	key: BrowserDownloadAskSetting, defaultValue: true, scope: ConfigurationScope.APPLICATION,
+	parse: value => { if (typeof value !== 'boolean') throw new TypeError('Invalid browser download prompt preference'); return value; },
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize({ bundle: 'ash', key: 'downloads.ask' }, 'Ask where to save each file before downloading'); },
+		get description() { return localize({ bundle: 'ash', key: 'downloads.ask.description' }, 'Choose a save location for each download.'); },
 	},
 });

@@ -41,6 +41,10 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 	]);
 	return {
 		call: async <T>(_context: string, command: string, arg: unknown): Promise<T> => {
+			if (command === 'clearAllData') {
+				if (!Array.isArray(arg) || arg.length !== 0) throw new TypeError('Invalid browser data clearing arguments');
+				return await service.clearAllData() as T;
+			}
 			if (command === 'respondToPasswordSave' || command === 'respondToPasswordFill') {
 				if (!Array.isArray(arg) || arg.length !== 3 || typeof arg[1] !== 'string' || !/^[a-f0-9-]{36}$/u.test(arg[1])) { throw new TypeError('Invalid password response'); }
 				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });
