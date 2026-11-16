@@ -39,7 +39,7 @@ async fn stalled_native_update_restores_old_and_new_scopes_and_future_edits() {
         state: Arc::new(RwLock::new(WatchState::default())),
         watch_parents: true,
     });
-    watcher.spawn_event_loop(raw_rx);
+    watcher.spawn_event_loop(raw_rx, Vec::new());
     let (subscriber, mut receiver) = watcher.add_subscriber();
     let _first = subscriber
         .register_paths(vec![WatchPath {

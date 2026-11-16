@@ -23,6 +23,18 @@ pub fn background_command(program: impl AsRef<OsStr>) -> Command {
     Command::new(program)
 }
 
+/// Isolates a Unix helper's descriptors, retaining only its configured standard streams.
+#[cfg(all(feature = "process-tree", unix))]
+pub fn configure_command_descriptor_isolation(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+
+    // SAFETY: cleanup uses the child's private descriptor table and preserves the
+    // CLOEXEC spawn-error channel until exec. No parent descriptors are modified.
+    unsafe {
+        command.pre_exec(|| descriptors::close_inherited_fds_except(&[]));
+    }
+}
+
 #[cfg(feature = "process-tree")]
 mod owned_child;
 #[cfg(feature = "process-tree")]

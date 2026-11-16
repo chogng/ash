@@ -19,6 +19,57 @@ fn child_command(mode: &str) -> Command {
 }
 
 #[test]
+fn watcher_does_not_retain_unrelated_pipe_writers() {
+    let (events, _receiver) = crate::ingress::event_channel();
+    if std::env::var_os("ASH_WATCHER_PIPE_HOST").is_some() {
+        let mut child = Command::new("/bin/sh");
+        child.args([
+            "-c",
+            "if [ /dev/fd/9 -ef \"$ASH_WATCHER_PIPE\" ]; then exit 42; fi; exec \"$@\"",
+            "watcher-descriptor-check",
+        ]);
+        child.arg(std::env::current_exe().unwrap()).args([
+            "--exact",
+            "native::tests::process_helper",
+            "--ignored",
+            "--nocapture",
+        ]);
+        child.env("ASH_WATCHER_TEST_CHILD", "healthy");
+        let _watcher = NativeWatcher::spawn(child, events, Duration::from_secs(2)).unwrap();
+        return;
+    }
+
+    // A shell deliberately leaves an inheritable FIFO writer in the host. The
+    // long-lived watcher must not acquire it when the host starts its helper.
+    let root = tempfile::tempdir().unwrap();
+    let pipe = root.path().join("unrelated-pipe");
+    assert!(
+        Command::new("mkfifo")
+            .arg(&pipe)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let status = Command::new("/bin/sh")
+        .args([
+            "-c",
+            "exec 9<>\"$ASH_WATCHER_PIPE\"; exec \"$@\"",
+            "watcher-host",
+        ])
+        .arg(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "native::tests::watcher_does_not_retain_unrelated_pipe_writers",
+            "--nocapture",
+        ])
+        .env("ASH_WATCHER_PIPE_HOST", "1")
+        .env("ASH_WATCHER_PIPE", pipe)
+        .status()
+        .unwrap();
+    assert!(status.success(), "watcher retained the unrelated pipe");
+}
+
+#[test]
 #[ignore = "private subprocess fixture, launched by the tests below"]
 fn process_helper() {
     let mode = std::env::var("ASH_WATCHER_TEST_CHILD").expect("child fixture mode");

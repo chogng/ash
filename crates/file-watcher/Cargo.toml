@@ -16,6 +16,7 @@ notify = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+ash-utils-process = { workspace = true, features = ["process-tree"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

@@ -200,6 +200,9 @@ impl NativeWatcher {
             .set_write_timeout(Some(timeout))
             .map_err(|error| error.to_string())?;
         let input: std::os::fd::OwnedFd = child_socket.into();
+        // A watcher outlives individual searches. Retaining another child's pipe
+        // writer would prevent EOF and block search retirement and directory setup.
+        ash_utils_process::configure_command_descriptor_isolation(&mut command);
         let child = command
             .stdin(Stdio::from(input))
             .stdout(Stdio::null())

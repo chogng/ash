@@ -1844,6 +1844,7 @@ dependencies = [
 name = "ash-file-watcher"
 version = "0.1.0"
 dependencies = [
+ "ash-utils-process",
  "log",
  "notify",
  "pretty_assertions",
