@@ -48,11 +48,13 @@ export interface ISessionsEntryOpenOptions {
 export interface ISessionsEntryService extends IDisposable {
 	/** The committed browser working-set identity; undefined outside a supported Chat entry. */
 	readonly conversationBrowserContext: IObservable<string | undefined>;
-	/** Editors retained beside the active compact Chat entry, independently of Code working sets. */
+	/** Browser tabs retained beside the active compact Chat entry. */
 	readonly conversationEditors: readonly IResourceEditorInput[];
 	isConversationEditor(resource: URI, activeOnly?: boolean): boolean;
 	/** Keeps browser creation and editor opening inside the active Chat composition transaction. */
 	openConversationBrowser(open: (target: EditorOpenTarget) => Promise<void>): Promise<void>;
+	/** Opens a project document beside Chat and returns focus to its sidebar row on close. */
+	openConversationFile(input: IResourceEditorInput, restoreFocus: () => void, signal: AbortSignal): Promise<void>;
 	/** Closes one tab in the current conversation through its owning editor group. */
 	closeConversationEditor(input: IResourceEditorInput): Promise<void>;
 	/** Saves the restored editor layout after startup attaches retained tool editors. */

@@ -232,10 +232,8 @@ export class EditorParts extends WorkbenchEditorParts {
 	}
 
 	public get pageGroupId(): number { return this.filesPart.pageGroupId; }
-	public createRetainedGroup(tool: DesktopEditorTool): IEditorGroupView {
-		const host = this.hosts.get(tool)!;
-		if (!(host instanceof DesktopToolEditorPart)) throw new Error('Retained conversation editors require a tool host');
-		return host.createRetainedGroup();
+	public createRetainedGroup(tool: 'browser' | 'files'): IEditorGroupView {
+		return tool === 'files' ? this.filesPart.createRetainedGroup() : (this.hosts.get('browser') as DesktopToolEditorPart).createRetainedGroup();
 	}
 	public async restoreRetainedGroup(tool: DesktopEditorTool, saved: EditorWorkingSet): Promise<IEditorGroupView> {
 		if (saved.groups.length !== 1 || saved.groups[0]!.editors.some(editor => serializedTool(editor) !== tool)) {

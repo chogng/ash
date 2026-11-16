@@ -350,7 +350,7 @@ services.registerInstance(IAccessibilityService, resources.add(new Accessibility
 resources.add(services.createInstance(ChatCopyActionRendering));
 const attachmentFolder = URI.file('/fixture-folder');
 const attachmentFile = URI.joinPath(attachmentFolder, 'notes.txt');
-if (parameters.has('folderPicker')) {
+if (parameters.has('folderPicker') || parameters.has('sidebarProjectFiles')) {
 	await services.get(IFileService).writeFileBytes(attachmentFile, new TextEncoder().encode('fixture notes'));
 }
 services.registerInstance(IFileDialogService, {
@@ -438,6 +438,11 @@ let ashProject: Project = {
 	icon: 'chat', color: 'terminal.ansiBlue',
 };
 const mixedProjectArchive = parameters.has('mixedProjectArchive');
+const sidebarProjectFiles = parameters.has('sidebarProjectFiles');
+if (sidebarProjectFiles) ashProject = {
+	...ashProject, materials: [{ kind: 'file', name: 'notes.txt', resource: attachmentFile, sizeBytes: 13 }],
+};
+const hasAshProject = parameters.has('ashProjectPicker') || mixedProjectArchive || sidebarProjectFiles;
 const withArchiveMembers = (project: Project): Project => {
 	if (!mixedProjectArchive) return project;
 	const externalConversationIds = ['first', 'older'].map(id => chatGPTProjectConversationId(chatGPTCacheScope, id)!);
@@ -445,9 +450,9 @@ const withArchiveMembers = (project: Project): Project => {
 };
 const projectChanged = resources.add(new Emitter<void>());
 services.registerInstance(IProjectService, {
-	list: async () => parameters.has('ashProjectPicker') || mixedProjectArchive ? [withArchiveMembers(ashProject)] : [],
+	list: async () => hasAshProject ? [withArchiveMembers(ashProject)] : [],
 	read: async (id: string) => {
-		if ((parameters.has('ashProjectPicker') || mixedProjectArchive) && id === ashProject.id) return withArchiveMembers(ashProject);
+		if (hasAshProject && id === ashProject.id) return withArchiveMembers(ashProject);
 		throw new Error('Unknown fixture project');
 	},
 	archive: async (project: Project) => {

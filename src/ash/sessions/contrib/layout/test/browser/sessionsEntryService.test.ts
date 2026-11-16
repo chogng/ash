@@ -155,6 +155,26 @@ suite('SessionsEntryService lifecycle and focus', () => {
 		await fixture.service.openEntry(documentEntry);
 	});
 
+	test('Closing a project file restores sidebar focus while Chat browser tabs stay open', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry({ ...chatEntry, chatSource: 'desktop-chat' });
+		const browser = { resource: URI.parse('ash-browser:/reference') };
+		await fixture.service.openConversationBrowser(target => fixture.openEditor(browser, target));
+		const browserGroup = fixture.activeGroupId;
+		const pdf = { resource: URI.file('/report.pdf'), readOnly: true };
+		let focusRestored = false;
+		await fixture.service.openConversationFile(pdf, () => { focusRestored = true; }, new AbortController().signal);
+		const fileGroup = fixture.activeGroupId;
+		assert.notEqual(fileGroup, browserGroup);
+		assert.equal(fixture.service.isConversationEditor(pdf.resource, true), true);
+		await fixture.closeRetainedEditor(pdf);
+		assert.equal(focusRestored, true);
+		assert.ok(fixture.groupChanges.includes(fileGroup + ':false'));
+		assert.deepEqual(fixture.service.conversationEditors, [browser]);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.visible.get('sessions'), true);
+	});
+
 	test('Chat uses the Sessions Part without restoring Code editors, and Code returns to the grid', async () => {
 		using fixture = new EntryFixture();
 		const chatSource = 'desktop-chat';
@@ -789,6 +809,18 @@ class EntryFixture extends Disposable {
 		await this.services.get(IEditorService).openEditor(input, { pinned: true }, target);
 	}
 	public get activeGroupId() { return this.services.get(IEditorPart).activeGroup.id; }
+	public async closeRetainedEditor(input: IResourceEditorInput): Promise<void> {
+		const group = this.services.get(IEditorPart).activeGroup;
+		assert.equal(await group.closeEditor(input), true);
+		this.editorChanged.fire({
+			kind: 'groupChanged', groupId: group.id, event: {
+				kind: 'editorClosed', reason: 'close', editor: {
+					groupId: group.id, instanceId: 'fixture-editor', paneId: 'fixture-pane', input, index: 0,
+					isActive: true, isPreview: false, isSticky: false, isDirty: false, canRevert: false, hasExternalChange: false,
+				},
+			},
+		});
+	}
 	public changeActiveDocument(input: IResourceEditorInput): void {
 		this.activeInput = input;
 		this.editorChanged.fire({ kind: 'groupChanged', groupId: this.activeGroupId, event: { kind: 'activeEditorChanged', editor: undefined } });

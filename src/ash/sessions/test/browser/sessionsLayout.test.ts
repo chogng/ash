@@ -1994,41 +1994,39 @@ suite('sessions browser component', () => {
 		}
 	});
 
-	test('Chat sidebar filters projects by type and remembers the selection', async function () {
-		const { page, info: testInfo } = browserTests;
-		await page.goto('/sessions.html?catalog&search&projectCreation&projectType&locale=zh-CN');
+	test('A sidebar project PDF opens beside Chat and returns focus to its file on close', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?catalog&projectCreation&projectPdfPreview&locale=en');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-		const list = page.locator('.ash-sessions-list[data-mode="chat"]:visible');
-		const chatProject = list.locator('[data-project-id="g-p-research"]');
-		const fileProject = list.locator('[data-project-id="search-project"]');
-		const more = list.getByRole('button', { name: '更多会话操作', exact: true });
-		const typeMenu = (value: string) => page.getByRole('menuitem', { name: `类型 ${value}`, exact: true });
-		const selectType = async (current: string, next: string) => {
-			await more.press('Enter');
-			await typeMenu(current).press('ArrowRight');
-			await expect(page.getByRole('menuitemradio', { name: current, exact: true, checked: true })).toBeVisible();
-			await page.getByRole('menuitemradio', { name: next, exact: true }).press('Enter');
-			await expect(more).toBeFocused();
-		};
-		await expect(chatProject).toBeVisible();
-		await expect(fileProject).toBeVisible();
-		await selectType('全部', '聊天');
-		await expect(chatProject).toBeVisible();
-		await expect(fileProject).toHaveCount(0);
-		await selectType('聊天', '文件');
-		await expect(chatProject).toHaveCount(0);
-		await expect(fileProject).toBeVisible();
-		await page.reload();
-		await expect(fileProject).toBeVisible();
-		await expect(chatProject).toHaveCount(0);
-		await more.press('Enter');
-		await typeMenu('文件').press('ArrowRight');
-		await page.screenshot({ path: testInfo.outputPath('sidebar-project-type-zh-CN.png') });
-		await page.keyboard.press('Escape');
-		await page.keyboard.press('Escape');
-		await selectType('文件', '全部');
-		await expect(chatProject).toBeVisible();
-		await expect(fileProject).toBeVisible();
+		const list = page.locator('.ash-chat-navigation-list');
+		const project = list.getByRole('button', { name: 'PDF project', exact: true });
+		const file = list.getByRole('button', { name: 'report.pdf', exact: true });
+		const conversation = page.locator('[data-part="sessions"]');
+		const editor = page.locator('[data-part="editor"]');
+		const controls = editor.getByRole('group', { name: 'PDF controls', exact: true });
+		const tab = page.getByRole('tab', { name: 'report.pdf', exact: true });
+		await project.press('ArrowRight');
+		await expect(file).toBeVisible();
+		for (const fromProjects of [false, true]) {
+			if (fromProjects) {
+				await page.locator('.ash-sessions-navigation').getByRole('button', { name: 'Projects', exact: true }).click();
+				await expect(page.locator('.ash-projects')).toBeVisible();
+			}
+			if (fromProjects) await file.click();
+			else await file.press('Enter');
+			await expect(controls).toBeVisible();
+			await expect(editor.getByText('Page 1 of 1', { exact: true })).toBeVisible();
+			await expect(conversation).toBeVisible();
+			const chatBounds = (await conversation.boundingBox())!;
+			const editorBounds = (await editor.boundingBox())!;
+			expect(chatBounds.x + chatBounds.width).toBeLessThanOrEqual(editorBounds.x + 1);
+			await tab.hover();
+			await page.getByRole('button', { name: 'Close report.pdf', exact: true }).click();
+			await expect(controls).toHaveCount(0);
+			await expect(editor).toBeHidden();
+			await expect(file).toBeFocused();
+			await expect(conversation).toBeVisible();
+		}
 	});
 
 	for (const locale of ['en', 'zh-CN']) test(`Code creates a project from local source folders (${locale})`, async function () {

@@ -165,7 +165,7 @@ services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onD
 services.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: unexpected });
 services.registerInstance(ISessionsEntryService, {
 	...Disposable.None, conversationBrowserContext: constObservable(undefined), closeConversationEditor: unexpected, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
-	conversationEditors: [], isConversationEditor: () => false, openConversationBrowser: unexpected,
+	conversationEditors: [], isConversationEditor: () => false, openConversationBrowser: unexpected, openConversationFile: unexpected,
 	openEntry: unexpected, replaceEditorResource: unexpected, restore: unexpected,
 });
 const fileProvider: IFileSystemProvider = {
@@ -1291,7 +1291,7 @@ class ArtifactFixture extends Disposable {
 		} as unknown as import('../../../workbench/browser/parts/editor/editorPart.js').IEditorPart);
 		child.registerInstance(ISessionsEntryService, {
 			...Disposable.None, conversationBrowserContext: constObservable(undefined), closeConversationEditor: unexpected, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
-			conversationEditors: [], isConversationEditor: () => false, openConversationBrowser: unexpected,
+			conversationEditors: [], isConversationEditor: () => false, openConversationBrowser: unexpected, openConversationFile: unexpected,
 			openEntry: async (_entry, initialize) => { initialize?.(); },
 			replaceEditorResource: unexpected, restore: unexpected,
 		});
@@ -3058,7 +3058,7 @@ test('Table artifact commands open resource inputs and restore the same file wit
 	const entries: import('../../services/layout/common/sessionsEntryService.js').ISessionsEntry[] = [];
 	fixture.child.registerInstance(ISessionsEntryService, {
 		...Disposable.None, conversationBrowserContext: constObservable(undefined), closeConversationEditor: unexpected, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
-		conversationEditors: [], isConversationEditor: () => false, openConversationBrowser: unexpected,
+		conversationEditors: [], isConversationEditor: () => false, openConversationBrowser: unexpected, openConversationFile: unexpected,
 		replaceEditorResource: unexpected, restore: unexpected,
 		openEntry: async (entry, initialize) => { entries.push(entry); initialize?.(); },
 	});

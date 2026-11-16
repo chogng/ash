@@ -49,6 +49,7 @@ const visibilityKey = 'sessions.layout.entryVisibility';
 const activeEntryKey = 'sessions.layout.activeEntry';
 const activeEntryModeKey = 'sessions.layout.activeEntryMode';
 const conversationEditorsKey = 'sessions.layout.conversationEditors';
+const conversationFilesPrefix = 'files:';
 
 /** Applies feature-supplied entries without owning their resource or workspace selection. */
 export class SessionsEntryService extends Disposable implements ISessionsEntryService, IDesktopLayoutContext {
@@ -65,6 +66,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		return entry?.content === 'conversation' && entry.chatSource ? this.activeBrowserKey.read(reader) ?? entry.id : undefined;
 	});
 	private readonly conversationGroups = new Map<string, number>();
+	private readonly fileReturnFocus = new WeakMap<IResourceEditorInput, () => void>();
 	private readonly savedConversationEditors = new Map<string, EditorWorkingSet>();
 	private readonly activityKeys = new Map<string, IContextKey<boolean>>();
 	private readonly pageGroupId: number;
@@ -77,33 +79,61 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 	});
 	public get isDocumentContent(): boolean { return this.documentContent.get(); }
 	public get newSessionCommand(): string | undefined { return this.customViews.activeCustomView.get() ? undefined : this.activeEntry.get()?.newSessionCommand; }
-	private get conversationGroup() {
+	private conversationGroupKey(tool: 'browser' | 'files'): string | undefined {
 		const entry = this.activeEntry.get();
-		if (!entry?.chatSource || entry.content !== 'conversation') return undefined;
-		return this.editor.groups.find(group => group.id === this.conversationGroups.get(this.activeBrowserKey.get() ?? entry.id));
+		if (entry?.content !== 'conversation' || (tool === 'browser' ? !entry.chatSource : entry.workspaceMode === 'code')) return undefined;
+		return tool === 'files' ? conversationFilesPrefix + entry.id : this.activeBrowserKey.get() ?? entry.id;
 	}
-	public get conversationEditors(): readonly IResourceEditorInput[] { return this.conversationGroup?.inputs ?? []; }
+	private getConversationGroup(tool: 'browser' | 'files') {
+		const key = this.conversationGroupKey(tool);
+		return this.editor.groups.find(group => key !== undefined && group.id === this.conversationGroups.get(key));
+	}
+	private get hasConversationEditors(): boolean {
+		return this.conversationEditors.length > 0 || !!this.getConversationGroup('files')?.inputs.length;
+	}
+	public get conversationEditors(): readonly IResourceEditorInput[] { return this.getConversationGroup('browser')?.inputs ?? []; }
 	public isConversationEditorGroup(id: number): boolean { return [...this.conversationGroups.values()].includes(id); }
-	public isActiveConversationEditorGroup(id: number): boolean { return this.conversationGroup?.id === id; }
+	public isActiveConversationEditorGroup(id: number): boolean {
+		return this.getConversationGroup('browser')?.id === id || this.getConversationGroup('files')?.id === id;
+	}
 	public isConversationEditor(resource: URI, activeOnly = false): boolean {
-		const groups = activeOnly ? [this.conversationGroup] : this.editor.groups.filter(group => this.isConversationEditorGroup(group.id));
-		return groups.some(group => group?.inputs.some(input => extUri.isEqual(input.resource, resource)));
+		const groups = this.editor.groups.filter(group => activeOnly ? this.isActiveConversationEditorGroup(group.id) : this.isConversationEditorGroup(group.id));
+		return groups.some(group => group.inputs.some(input => extUri.isEqual(input.resource, resource)));
 	}
 
 	public openConversationBrowser(open: (target: EditorOpenTarget) => Promise<void>): Promise<void> {
+		return this.openConversationEditor('browser', open);
+	}
+
+	public async openConversationFile(input: IResourceEditorInput, restoreFocus: () => void, signal: AbortSignal): Promise<void> {
+		const entry = this.activeEntry.get();
+		if (signal.aborted || !entry || entry.workspaceMode === 'code') return;
+		if (entry.content !== 'conversation' || this.customViews.activeCustomView.get()) {
+			const command = CommandsRegistry.hasCommand(SHOW_CHAT_WORKSPACE_COMMAND) ? SHOW_CHAT_WORKSPACE_COMMAND : 'sessions.open.chat';
+			await this.commands.executeCommand(command);
+		}
+		await this.openConversationEditor('files', async target => {
+			await this.editors.openEditor(input, { pinned: true }, target);
+			const opened = this.getConversationGroup('files')?.inputs.find(candidate => extUri.isEqual(candidate.resource, input.resource));
+			if (opened) this.fileReturnFocus.set(opened, restoreFocus);
+		}, signal);
+	}
+
+	private openConversationEditor(tool: 'browser' | 'files', open: (target: EditorOpenTarget) => Promise<void>, signal?: AbortSignal): Promise<void> {
 		const source = this.activeEntry.get();
 		return this.runOperation(async () => {
-			const entry = this.activeEntry.get();
-			if (entry !== source || this.customViews.activeCustomView.get() || entry?.content !== 'conversation' || !entry.chatSource) return;
+			const key = this.conversationGroupKey(tool);
+			if (!key || signal?.aborted || this.activeEntry.get() !== source || this.customViews.activeCustomView.get()) return;
 			this.isChangingContent = true;
 			try {
-				let group = this.conversationGroup;
+				let group = this.getConversationGroup(tool);
 				if (!group) {
-					group = (this.editor as EditorParts).createRetainedGroup('browser');
-					this.conversationGroups.set(this.activeBrowserKey.get() ?? entry.id, group.id);
+					group = (this.editor as EditorParts).createRetainedGroup(tool);
+					this.conversationGroups.set(key, group.id);
 				}
 				await open({ groupId: group.id });
-				if (!this.isDisposed) {
+				if (!this.isDisposed && (tool === 'browser' || group.inputs.length)) {
+					if (tool === 'files') this.layout.setPartAvailable('sessions', true);
 					this.layout.showPart('editor');
 					this.editors.focusActiveEditor();
 				}
@@ -201,11 +231,27 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 					}
 				}
 			}
-			if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed'
-				&& this.isActiveConversationEditorGroup(event.groupId) && !this.conversationEditors.length) {
-				this.layout.setPartAvailable('sessions', true);
-				this.layout.hidePart('editor');
-				if (!this.isChangingContent) this.layout.focus();
+			if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed') {
+				const { input, isActive } = event.event.editor;
+				const restore = this.fileReturnFocus.get(input);
+				this.fileReturnFocus.delete(input);
+				if (this.isActiveConversationEditorGroup(event.groupId)) {
+					if (editor.isGroupVisible(event.groupId) && !editor.groups.find(group => group.id === event.groupId)?.inputs.length) {
+						editor.setGroupVisible(event.groupId, false);
+					}
+					if (!this.hasConversationEditors) {
+						this.layout.setPartAvailable('sessions', true);
+						this.layout.hidePart('editor');
+						if (!this.isChangingContent) this.layout.focus();
+					}
+					if (restore && isActive && event.event.reason === 'close') {
+						const entry = this.activeEntry.get();
+						// The group may focus its next tab while completing the close event.
+						queueMicrotask(() => {
+							if (!this.isDisposed && this.activeEntry.get() === entry && !this.customViews.activeCustomView.get()) restore();
+						});
+					}
+				}
 			}
 			const activeGroup = editor.activeGroup.id;
 			const activeTabChanged = event.kind === 'groupChanged' && event.groupId === activeGroup && event.event.kind === 'activeEditorChanged';
@@ -360,12 +406,13 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 				const sidebarVisible = this.layout.isPartRequested('sidebar');
 				const state = (browserKey !== entry.id ? undefined : this.visibility.get(entry.id)) ?? {
 					details: entry.showDetailsByDefault ?? entry.detailsContainerId !== undefined,
-					documents: documents ? this.controller.hasDocumentEditors : this.conversationEditors.length > 0,
+					documents: documents ? this.controller.hasDocumentEditors : this.hasConversationEditors,
 				};
 				const detailsContainerId = !documents && state.details ? entry.detailsContainerId : undefined;
 				this.controller.setDocumentGroupsVisible(documents);
 				for (const groupId of this.conversationGroups.values()) {
-					this.editor.setGroupVisible(groupId, this.isActiveConversationEditorGroup(groupId) && state.documents && this.conversationEditors.length > 0);
+					const group = this.editor.groups.find(candidate => candidate.id === groupId);
+					if (group) this.editor.setGroupVisible(groupId, this.isActiveConversationEditorGroup(groupId) && state.documents && group.inputs.length > 0);
 				}
 				this.editor.setGroupVisible(this.pageGroupId, productEditor);
 				this.editor.groups.find(group => group.id === this.pageGroupId)!.setTitleVisible(entry.showEditorTabs !== false);
@@ -379,7 +426,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 					this.layout.setPartAvailable('sessions', !productEditor || entry.conversation === 'visible');
 					this.layout.setAuxiliaryBarDocked(productEditor && entry.detailsContainerId !== undefined);
 					if (productEditor) { this.layout.setPrimaryPart('editor'); }
-					this.setVisible('editor', productEditor || (state.documents && (documents || this.conversationEditors.length > 0)));
+					this.setVisible('editor', productEditor || (state.documents && (documents || this.hasConversationEditors)));
 					// A saved visibility flag can outlive the view that once occupied the side bar.
 					if (!detailsContainerId || this.views.getVisibleViewContainer(ViewContainerLocation.AuxiliaryBar)?.id !== detailsContainerId) {
 						this.layout.hidePart('auxiliarybar');
@@ -453,9 +500,9 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 	}
 
 	public closeConversationEditor(input: IResourceEditorInput): Promise<void> {
-		const group = this.conversationGroup;
+		const group = this.getConversationGroup('browser');
 		return this.runOperation(async () => {
-			if (!group || group !== this.conversationGroup || !group.inputs.includes(input)) return;
+			if (!group || group !== this.getConversationGroup('browser') || !group.inputs.includes(input)) return;
 			this.isChangingContent = true;
 			try { await group.closeEditor(input); }
 			finally { this.isChangingContent = false; }
@@ -464,7 +511,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 
 	public setConversationVisible(visible: boolean, options?: { readonly preserveFocus?: boolean; }): Promise<void> {
 		return this.runOperation(async () => {
-			if (!this.activeEntry.get()?.conversation && !this.conversationGroup?.inputs.length) { throw new Error('The active entry does not support a conversation beside its editor.'); }
+			if (!this.activeEntry.get()?.conversation && !this.hasConversationEditors) { throw new Error('The active entry does not support a conversation beside its editor.'); }
 			this.layout.updateParts(() => this.layout.setPartAvailable('sessions', visible));
 			if (options?.preserveFocus) return;
 			if (visible) { this.layout.focus(); }
@@ -484,7 +531,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		this.visibility.set(entry.id, {
 			// File navigation belongs to the retained editor group, independently of properties.
 			details: files?.filesDetailsOpen ?? (entry.detailsContainerId !== undefined && this.layout.isPartRequested('auxiliarybar')),
-			documents: (this.isDocumentContent || this.conversationEditors.length > 0) && this.layout.isPartRequested('editor'),
+			documents: (this.isDocumentContent || this.hasConversationEditors) && this.layout.isPartRequested('editor'),
 		});
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 		for (const [id, groupId] of this.conversationGroups) {
@@ -504,7 +551,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			try {
 				for (const [id, saved] of this.savedConversationEditors) {
 					if (this.conversationGroups.has(id)) continue;
-					const group = await (this.editor as EditorParts).restoreRetainedGroup('browser', saved);
+					const group = await (this.editor as EditorParts).restoreRetainedGroup(id.startsWith(conversationFilesPrefix) ? 'files' : 'browser', saved);
 					if (this.isDisposed) return;
 					this.conversationGroups.set(id, group.id);
 				}

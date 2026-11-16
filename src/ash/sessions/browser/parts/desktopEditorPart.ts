@@ -257,6 +257,12 @@ export class DesktopMainEditorPart extends EditorPart {
 			?? this.insertGroup(this.activeGroup, Direction.Right).group;
 	}
 
+	public createRetainedGroup(): IEditorGroupView {
+		const group = this.insertGroup(this.activeGroup, Direction.Right).group;
+		this.setGroupVisible(group.id, false);
+		return group;
+	}
+
 	public override async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
 		if (target === undefined || target === 'sideGroup') {
 			target = { groupId: this.resolveDefaultGroup(input).id };

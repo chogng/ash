@@ -38,7 +38,7 @@ import { IEditorService } from '../../../../workbench/services/editor/common/edi
 import { IWorkbenchEnvironmentService } from '../../../../workbench/services/environment/common/environmentService.js';
 import type { CatalogProjectDetails, ProjectMaterialRow } from '../../chat/browser/chatListModel.js';
 import { IProjectDialogService } from './projectDialogService.js';
-import { ProjectMaterialFiles } from './projectMaterialFiles.js';
+import { isPreviewableProjectFile, openProjectFile, projectMaterialId, ProjectMaterialFiles, resolveProjectFileReference } from './projectMaterialFiles.js';
 import { IProjectsService } from './projectsService.js';
 import './media/projectMaterials.css';
 
@@ -66,17 +66,6 @@ type CatalogMaterialUpload = NonNullable<CatalogProjectDetails['upload']>;
 const thumbnailFileLimit = 8 * 1024 * 1024;
 const textThumbnailLength = 512;
 const previewCopyLimit = 64 * 1024 * 1024;
-
-function isPreviewableFile(name: string): boolean {
-	return extname(name).toLowerCase() === '.pdf' || getMediaOrTextMime(name)?.startsWith('image/') === true;
-}
-
-function materialId(material: ProjectMaterial): string {
-	if (material.kind === 'text') return `text:${material.id}`;
-	const resource = material.resource.toString();
-	// Include the import size to distinguish previews from legacy path-only copies.
-	return material.kind === 'file' ? JSON.stringify([resource, material.sizeBytes]) : resource;
-}
 
 /** Presents project references and delegates their storage and file access to the owning services. */
 export class ProjectMaterials extends Disposable {
@@ -154,7 +143,7 @@ export class ProjectMaterials extends Disposable {
 				open: resolveFile ? async () => {
 					if (!isCurrent()) return;
 					const resource = await resolveFile();
-					if (isCurrent()) await this.openFile(resource, true);
+					if (isCurrent()) await openProjectFile(this.editors, resource, true);
 				} : undefined,
 			};
 		});
@@ -208,10 +197,10 @@ export class ProjectMaterials extends Disposable {
 		const removeMaterials = async (ids: ReadonlySet<string>) => {
 			const { selected, busy } = this.projects.state.get();
 			if (busy || !isCurrent() || selected?.id !== project.id) throw new CancellationError();
-			const removed = selected.materials.filter(material => ids.has(materialId(material)));
+			const removed = selected.materials.filter(material => ids.has(projectMaterialId(material)));
 			if (!removed.length) return;
 			const saved = await this.projects.update(selected, selected.name, selected.description,
-				selected.materials.filter(material => !ids.has(materialId(material))));
+				selected.materials.filter(material => !ids.has(projectMaterialId(material))));
 			if (!saved) throw new Error(this.projects.state.get().message ?? localize('projects.removeFilesFailed', 'Could not remove the selected files. Try again.'));
 			for (const material of removed) {
 				if (material.kind === 'file') this.selectedFiles.delete(previewKey(material.resource));
@@ -226,11 +215,11 @@ export class ProjectMaterials extends Disposable {
 				const sizeBytes = file?.size ?? (sourceStat?.kind === FileKind.File ? sourceStat.sizeBytes : undefined);
 				if (sizeBytes === undefined) throw new Error(localize('projects.pickFailed', 'Could not add these materials. Try again.'));
 				const material = { resource, name, kind, sizeBytes } as const;
-				if (localFiles && file && sizeBytes <= previewCopyLimit && isPreviewableFile(file.name)) {
+				if (localFiles && file && sizeBytes <= previewCopyLimit && isPreviewableProjectFile(file.name)) {
 					const stat = await this.fileService.stat(resource).catch(() => undefined);
 					if (stat?.kind !== FileKind.File && isCurrent()) {
 						// A picker grants access to these bytes, without authorizing the containing directory.
-						await localFiles.ensure({ id: materialId(material), name }, async () => file);
+						await localFiles.ensure({ id: projectMaterialId(material), name }, async () => file);
 					}
 				}
 				return { material, file };
@@ -286,15 +275,10 @@ export class ProjectMaterials extends Disposable {
 				await addFiles([...transfer.files]);
 			},
 			rows: project.materials.map(material => {
-				const id = materialId(material);
+				const id = projectMaterialId(material);
 				const sizeBytes = material.kind === 'file' ? material.sizeBytes : undefined;
-				const resolveFile = material.kind === 'file' ? async () => {
-					if (!localFiles || !isPreviewableFile(material.name)) return material.resource;
-					const stat = await this.fileService.stat(material.resource).catch(() => undefined);
-					if (stat?.kind === FileKind.File) return material.resource;
-					if (!isCurrent()) throw new CancellationError();
-					return localFiles.ensure({ id, name: material.name }, undefined);
-				} : undefined;
+				const resolveFile = material.kind === 'file'
+					? () => resolveProjectFileReference(this.fileService, localFiles, material, isCurrent) : undefined;
 				return {
 					id, name: material.name, kind: material.kind === 'text' ? 'file' : material.kind,
 					tooltip: material.kind === 'text' ? undefined : material.resource.fsPath,
@@ -559,7 +543,7 @@ export class ProjectMaterials extends Disposable {
 			? this.action(content, row, material.id, { label: '', ariaLabel: name, title: material.tooltip ?? name }, run).domNode
 			: row.appendChild(h(document, 'div', { properties: { title: name } }));
 		card.classList.add('ash-projects-material-card-open');
-		if (readText || resolveFile && isPreviewableFile(name)) card.setAttribute('aria-haspopup', 'dialog');
+		if (readText || resolveFile && isPreviewableProjectFile(name)) card.setAttribute('aria-haspopup', 'dialog');
 		const mime = getMediaOrTextMime(name);
 		const isImage = mime?.startsWith('image/') === true;
 		const isText = readText !== undefined || mime?.startsWith('text/') === true || mime === 'application/json' || mime === 'application/xml';
@@ -726,7 +710,7 @@ export class ProjectMaterials extends Disposable {
 					)?.[0]
 					: await resolveFile?.() ?? material.resource;
 			if (resource && !this.isDisposed) {
-				await this.openFile(resource, resource.scheme === projectMaterialFilesScheme);
+				await openProjectFile(this.editors, resource, resource.scheme === projectMaterialFilesScheme);
 			}
 		} catch (error) {
 			if (isCancellationError(error)) return;
@@ -737,12 +721,5 @@ export class ProjectMaterials extends Disposable {
 				),
 			);
 		}
-	}
-
-	private openFile(resource: URI, readOnly: boolean): Promise<void> {
-		if (isPreviewableFile(resource.path)) {
-			return this.editors.openEditor({ resource, readOnly: true, showBreadcrumbs: false }, {}, 'modalGroup');
-		}
-		return this.editors.openEditor({ resource, ...(readOnly && { readOnly, showBreadcrumbs: false }) });
 	}
 }

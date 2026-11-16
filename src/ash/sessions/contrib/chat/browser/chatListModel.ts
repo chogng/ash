@@ -1,5 +1,5 @@
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { onUnexpectedError } from '../../../../base/common/errors.js';
+import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { createSessionWorkspaceActions } from '../../../browser/agentSessionsModel.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
@@ -11,11 +11,15 @@ import { ISessionsSearchService } from '../../search/browser/searchService.js';
 import type { SearchResult } from '../../search/browser/searchModel.js';
 import type { Event } from '../../../../base/common/event.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
+import { extname } from '../../../../base/common/path.js';
+import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { getChatSessionArchiveActionPresentation, getChatSessionArchiveActionWording } from '../../../../platform/chat/common/sessionArchiveActions.js';
-import { IProjectService, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
+import { IProjectService, type Project, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
+import { projectMaterialFilesLocation, projectMaterialFilesRoot, projectMaterialFilesScheme } from '../../../../platform/projects/common/projectMaterialFiles.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
 import type { CatalogProjectCreator, CatalogProjectMemoryMode, ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
@@ -24,7 +28,7 @@ import { CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import { Disposable, isDisposable, type IDisposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { derived, observableFromEvent, observableSignalFromEvent, observableValue, type IObservable } from '../../../../base/common/observable.js';
+import { derived, observableFromEvent, observableSignalFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import type { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
@@ -36,7 +40,10 @@ import { sessionProjectOrganization, type SessionListOrganization, type SessionL
 import { NativeConversationShare } from './nativeConversationShare.js';
 import { ChatListForks } from './chatListForks.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
-import type { URI } from '../../../../base/common/uri.js';
+import { URI } from '../../../../base/common/uri.js';
+import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { IWorkbenchEnvironmentService } from '../../../../workbench/services/environment/common/environmentService.js';
+import { openProjectFile, projectMaterialId, ProjectMaterialFiles, resolveProjectFileReference } from '../../projects/browser/projectMaterialFiles.js';
 
 export interface ChatListForkReference {
 	readonly id: string;
@@ -447,8 +454,8 @@ export function groupChatList(snapshots: readonly ChatListSnapshot[], mode: 'cha
 
 interface ProjectMembership {
 	readonly revision: number;
-	sessionIds?: readonly string[];
-	externalConversationIds?: readonly string[];
+	project: Project | undefined;
+	readonly read: Promise<Project>;
 	failed?: boolean;
 }
 
@@ -468,6 +475,10 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		@ICommandService private readonly commands: ICommandService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@ISessionsListModelService private readonly list: ISessionsListModelService,
+		@IFileService private readonly files: IFileService,
+		@IEditorService private readonly editors: IEditorService,
+		@IWorkbenchEnvironmentService private readonly environment: IWorkbenchEnvironmentService,
+		@ISessionsEntryService private readonly entries: ISessionsEntryService,
 	) {
 		super();
 		this.migrateCollapseState(storage);
@@ -488,9 +499,9 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			const entries = snapshots.flatMap(snapshot => snapshot.entries);
 			const projectEntryIds = new Set<string>();
 			for (const project of projects) {
-				const membership = this.readMembership(project.id, project.revision, project.sessionCount);
+				const saved = project.sessionCount ? this.readProject(project).project : undefined;
 				const existing = projectGroups.get(project.id);
-				const rows = getProjectSessionRows(entries, membership?.sessionIds ?? [], membership?.externalConversationIds);
+				const rows = getProjectSessionRows(entries, saved?.sessionIds ?? [], saved?.externalConversationIds);
 				for (const row of rows) projectEntryIds.add(row.id);
 				projectGroups.set(project.id, { key: project.id, title: project.name, rows: [...rows, ...(existing?.rows ?? [])], project: existing?.project });
 			}
@@ -523,7 +534,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 					const rows = group.rows.filter(entry => key !== 'recent' || !projectEntryIds.has(entry.id) && !grouped.has(entry.id))
 						.map(entry => this.toRow(entry, projects));
 					const projectGroups = key === 'pinned' ? pinnedProjects : key === 'projects' ? otherProjects : [];
-					return { key, rows, projects: projectGroups.map(project => this.toProject(project, projects, localProjects.get(project.key))) };
+					return { key, rows, projects: projectGroups.map(project => this.toProject(project, projects, localProjects.get(project.key), reader)) };
 				}),
 			} satisfies SessionsCatalogSnapshot;
 		});
@@ -562,36 +573,29 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		}
 	}
 
-	private readMembership(id: string, revision: number, sessionCount: number): ProjectMembership | undefined {
-		if (!sessionCount) {
-			this.membership.delete(id);
-			return undefined;
-		}
+	private readProject({ id, revision }: ProjectSummary): ProjectMembership {
 		const current = this.membership.get(id);
 		if (current?.revision === revision) return current;
 
 		// Keep the last known membership until the new project revision is read.
-		const request: ProjectMembership = { revision, sessionIds: current?.sessionIds, externalConversationIds: current?.externalConversationIds };
+		const request: ProjectMembership = { revision, project: current?.project, read: this.projectService.read(id, 'chat') };
 		this.membership.set(id, request);
-		const finish = (project?: { readonly sessionIds: readonly string[]; readonly externalConversationIds?: readonly string[]; }): void => {
+		const finish = (project?: Project): void => {
 			if (this.isDisposed || this.membership.get(id) !== request) return;
 			request.failed = project === undefined;
-			if (project) {
-				request.sessionIds = project.sessionIds;
-				request.externalConversationIds = project.externalConversationIds;
-			}
+			if (project) request.project = project;
 			this.membershipVersion.set(this.membershipVersion.get() + 1);
 		};
-		void this.projectService.read(id, 'chat').then(finish, () => finish());
+		void request.read.then(finish, () => finish());
 		return request;
 	}
 
-	private toProject(project: ChatListGroup, destinations: readonly ProjectSummary[], localProject: ProjectSummary | undefined): SessionsCatalogProject {
+	private toProject(project: ChatListGroup, destinations: readonly ProjectSummary[], localProject: ProjectSummary | undefined, reader: IReader): SessionsCatalogProject {
 		const rows = project.rows.map(entry => this.toRow(entry, destinations, project.key));
 		const current = this.membership.get(project.key);
 		const history = project.project?.history;
-		const loading = history?.state === 'loading' || (current !== undefined && current.failed === undefined);
-		const retry = current?.failed ? () => {
+		const loading = history?.state === 'loading' || (!!localProject?.sessionCount && current !== undefined && current.failed === undefined);
+		const retry = localProject?.sessionCount && current?.failed ? () => {
 			this.membership.delete(project.key);
 			this.membershipVersion.set(this.membershipVersion.get() + 1);
 		} : undefined;
@@ -613,7 +617,64 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 					: undefined,
 			onExpand: history?.state === 'idle' ? history.load : undefined,
 			loadMore: history?.state === 'more' && !history.manual ? history.load : undefined,
+			files: this.projectFiles(localProject, project.project?.details, reader),
 		};
+	}
+
+	private projectFiles(local: ProjectSummary | undefined, details: CatalogProjectDetails | undefined, reader: IReader): SessionsCatalogProject['files'] {
+		if (local) {
+			const current = this.membership.get(local.id);
+			return {
+				key: JSON.stringify(['local', local.id, local.revision]),
+				rows: current?.project?.materials.flatMap(material => material.kind === 'file' ? [{
+					id: projectMaterialId(material), name: material.name,
+					open: async (signal, restoreFocus) => {
+						using copies = this.projectFileCopies(`local:${local.id}`);
+						const resource = await resolveProjectFileReference(this.files, copies, material, () => !signal.aborted);
+						signal.throwIfAborted();
+						await this.openSidebarFile(resource, resource.scheme === projectMaterialFilesScheme, signal, restoreFocus);
+					},
+				}] : []),
+				load: current?.revision === local.revision && current.failed === false ? undefined : async signal => {
+					if (this.membership.get(local.id)?.failed) this.membership.delete(local.id);
+					await this.readProject(local).read;
+					signal.throwIfAborted();
+				},
+			};
+		}
+		if (!details) return undefined;
+		return {
+			key: details.key,
+			rows: details.data.read(reader)?.materials?.filter(material => material.kind === 'file').map(material => ({
+				id: material.id, name: material.name,
+				open: material.open ?? ((signal, restoreFocus) => this.openCatalogFile(details.key, material, signal, restoreFocus)),
+			})),
+			load: details.load,
+		};
+	}
+
+	private projectFileCopies(key: string): ProjectMaterialFiles | undefined {
+		const profile = this.environment.userRoamingDataHome;
+		if (!profile || !this.files.hasProvider(URI.from({ scheme: projectMaterialFilesScheme }))) return undefined;
+		const root = projectMaterialFilesRoot(profile, this.configuration.getValue<string>(projectMaterialFilesLocation));
+		return new ProjectMaterialFiles(this.files, root, key);
+	}
+
+	private async openCatalogFile(key: string, file: ProjectMaterialRow, signal: AbortSignal, restoreFocus: () => void): Promise<void> {
+		using copies = this.projectFileCopies(key);
+		if (!copies) throw new Error(localize('projects.localFileOffline', 'This project file is unavailable offline.'));
+		const download = file.read;
+		const resource = await copies.ensure(file, download && (request => download(AbortSignal.any([signal, request]))));
+		signal.throwIfAborted();
+		if (!this.catalog.sources.some(source => source.snapshot.get().projects?.some(project => project.details?.key === key))) throw new CancellationError();
+		await this.openSidebarFile(resource, true, signal, restoreFocus);
+	}
+
+	private openSidebarFile(resource: URI, readOnly: boolean, signal: AbortSignal, restoreFocus: () => void): Promise<void> {
+		if (extname(resource.path).toLowerCase() === '.pdf') {
+			return this.entries.openConversationFile({ resource, readOnly: true, showBreadcrumbs: false }, restoreFocus, signal);
+		}
+		return openProjectFile(this.editors, resource, readOnly);
 	}
 
 	private openConversation(open: (signal: AbortSignal) => Promise<void>): void {
@@ -624,17 +685,18 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		});
 	}
 
-	private toRow(entry: ChatListEntry, destinations: readonly { readonly id: string; readonly name: string; }[], parentProject?: string): SessionsCatalogRow {
+	private toRow(entry: ChatListEntry, destinations: readonly ProjectSummary[], parentProject?: string): SessionsCatalogRow {
 		const sessionId = entry.sessionId;
 		const forkSource = entry.forkSource;
 		const openSource = forkSource?.open;
 		const iconKey = sessionId ? `session:${sessionId}` : entry.preferenceKey;
 		const iconScope = sessionId ? undefined : 'catalog';
 		const project = () => {
-			const memberships = destinations.filter(({ id }) => {
-				const membership = this.membership.get(id);
-				return sessionId ? membership?.sessionIds?.includes(sessionId)
-					: entry.externalConversationId && membership?.externalConversationIds?.includes(entry.externalConversationId);
+			const memberships = destinations.filter(({ id, sessionCount }) => {
+				if (!sessionCount) return false;
+				const project = this.membership.get(id)?.project;
+				return sessionId ? project?.sessionIds.includes(sessionId)
+					: entry.externalConversationId && project?.externalConversationIds?.includes(entry.externalConversationId);
 			});
 			const current = (sessionId ? parentProject : memberships.find(item => item.id === parentProject)?.id)
 				?? (memberships.length === 1 && (!parentProject || parentProject !== entry.projectId) ? memberships[0]!.id : undefined);

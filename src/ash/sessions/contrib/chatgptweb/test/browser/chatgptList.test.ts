@@ -12,6 +12,71 @@ const rateLimitNotice = 'ChatGPT 暂时限制了历史请求，请稍后重试�
 suite('ChatGPT catalog in the Ash chat list', () => {
 	const browserTests = useBrowserTests();
 
+	test('Project content filter keeps projects visible and shows their own chats and files', async () => {
+		const { page, info } = browserTests;
+		await mockChatGPTRequests(page);
+		const id = 'g-p-research';
+		let detailsReads = 0;
+		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+			json: { items: [{ gizmo: { id, display: { name: 'Research' } } }], cursor: null },
+		}));
+		await page.route(`**/service/backend-api/gizmos/${id}/conversations?*`, route => route.fulfill({
+			json: { items: [{ id: 'fixture-chat', title: 'Research chat' }], cursor: null },
+		}));
+		await page.route(`**/service/backend-api/gizmos/${id}*`, route => {
+			if (!new URL(route.request().url()).pathname.endsWith(id)) return route.fallback();
+			if (++detailsReads === 1) return route.fulfill({ status: 500 });
+			return route.fulfill({ json: { gizmo: { id, display: { name: 'Research' } }, files: [{ file_id: 'file-report', name: 'report.txt' }] } });
+		});
+		await page.route('**/service/.resource?*', route => route.fulfill({ contentType: 'text/plain', body: 'Research report' }));
+		await page.goto('/chatgptNavigation.html?sidebarProjectFiles&projectMaterials&locale=zh-CN&theme=light');
+		const list = page.locator('.ash-chat-navigation-list');
+		const local = list.getByRole('button', { name: 'Local Ash project', exact: true });
+		const remote = list.getByRole('button', { name: 'Research', exact: true });
+		const files = list.locator('[data-parent-project-id="g-p-research"]').getByRole('button', { name: 'report.txt', exact: true });
+		const chat = list.locator('[data-parent-project-id="g-p-research"]').getByRole('button', { name: 'Research chat', exact: true });
+		const notes = list.locator('[data-parent-project-id="ash-project-fixture"]').getByRole('button', { name: 'notes.txt', exact: true });
+		const more = list.getByRole('button', { name: '更多会话操作', exact: true });
+		const select = async (current: string, next: string): Promise<void> => {
+			await more.press('Enter');
+			await page.getByRole('menuitem', { name: `类型 ${current}`, exact: true }).press('ArrowRight');
+			await expect(page.getByRole('menuitemradio', { name: current, exact: true, checked: true })).toBeVisible();
+			await page.getByRole('menuitemradio', { name: next, exact: true }).press('Enter');
+			await expect(more).toBeFocused();
+			await expect(local).toBeVisible();
+			await expect(remote).toBeVisible();
+		};
+		await expect(remote).toBeVisible();
+		expect(detailsReads).toBe(0);
+		await remote.press('ArrowRight');
+		await list.getByRole('button', { name: '无法加载项目文件。重试', exact: true }).press('Enter');
+		await expect(files).toBeVisible();
+		await expect(chat).toBeVisible();
+		await local.press('ArrowRight');
+		await expect(notes).toBeVisible();
+		await select('全部', '聊天');
+		await expect(chat).toBeVisible();
+		await expect(files).toHaveCount(0);
+		await expect(notes).toHaveCount(0);
+		await select('聊天', '文件');
+		await expect(chat).toHaveCount(0);
+		await expect(notes).toBeVisible();
+		await files.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.openedMaterial())).toBe('Research report');
+		await notes.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.openedMaterial())).toBe('fixture notes');
+		await page.reload();
+		await expect(files).toBeVisible();
+		await expect(chat).toHaveCount(0);
+		await select('文件', '全部');
+		await expect(files).toBeVisible();
+		await expect(chat).toBeVisible();
+		const fileTitle = (await files.locator('.ash-sessions-list-label').boundingBox())!;
+		const chatTitle = (await chat.locator('.ash-sessions-list-label').boundingBox())!;
+		expect(fileTitle.x).toBeCloseTo(chatTitle.x);
+		await page.screenshot({ path: info.outputPath('sidebar-project-contents-zh-CN.png') });
+	});
+
 	test('local project archive includes native and older ChatGPT members and retries partial failure', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
@@ -1308,6 +1373,11 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				},
 			}));
 			const updatedAt = '2026-10-25T18:00:00.000Z';
+			for (const [id, name] of [['g-p-one', 'Research'], ['g-p-two', 'Writing']]) {
+				await page.route(`**/service/backend-api/gizmos/${id}?include_file_limits=true`, route => route.fulfill({
+					json: { gizmo: { id, display: { name } }, files: [] },
+				}));
+			}
 			const pinned = { id: 'pinned', title: 'Pinned project chat', gizmo_id: 'g-p-one', update_time: updatedAt };
 			const firstPage = [pinned, { id: 'one', title: 'First research chat' },
 				...Array.from({ length: 18 }, (_, index) => ({ id: `project-chat-${index}`, title: `Research chat ${index + 2}` }))];

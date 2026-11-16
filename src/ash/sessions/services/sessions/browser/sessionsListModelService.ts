@@ -20,7 +20,7 @@ export type SessionsListMode = typeof listModes[number];
 export interface ISessionsListTreeNode {
 	readonly id: string;
 	readonly label: string;
-	readonly kind: 'section' | 'session' | 'chat' | 'draft' | 'project';
+	readonly kind: 'section' | 'session' | 'chat' | 'draft' | 'project' | 'file';
 	readonly collapsed?: boolean;
 	readonly sessionId?: string;
 	readonly threadId?: string;

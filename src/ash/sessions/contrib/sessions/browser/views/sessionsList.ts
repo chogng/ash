@@ -60,7 +60,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
-import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
+import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProject, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
 import { cancelOnDispose, CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
@@ -256,6 +256,11 @@ export class SessionsList extends DomWidget {
 	private readonly catalogMenu = this._register(new MutableDisposable());
 	private readonly inlineRename = this._register(new MutableDisposable<DisposableStore>());
 	private readonly catalogProjects = new Map<string, { readonly load?: () => void; readonly anchor?: HTMLElement; }>();
+	private readonly catalogFileSources = new Map<string, NonNullable<SessionsCatalogProject['files']>>();
+	private readonly catalogFileLoads = this._register(new DisposableMap<string, IDisposable & {
+		readonly source: string; pending: boolean; failed: boolean;
+	}>());
+	private readonly openingCatalogFile = this._register(new MutableDisposable());
 	private readonly catalogPaging = this._register(new RunOnceScheduler(() => {
 		if (!this.domNode.isConnected || !this.domNode.clientHeight) return;
 		const viewport = this.catalogViewport;
@@ -268,6 +273,7 @@ export class SessionsList extends DomWidget {
 			const anchor = project.anchor ? SessionsListTree.id(project.anchor) : id;
 			if (project.load && this.tree.isCollapsed(id) === false && this.tree.getRelativeTop(anchor) !== null) project.load();
 		}
+		this.loadExpandedProjectFiles();
 	}, 0));
 
 	public get element(): HTMLElement { return this.domNode; }
@@ -358,6 +364,10 @@ export class SessionsList extends DomWidget {
 		this._register(this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
 			const key = element.dataset.section;
 			if (!collapsed && key && this.catalogProjects.has(key)) this.catalogPaging.schedule();
+			if (key && this.catalogFileSources.has(key)) {
+				if (collapsed) this.catalogFileLoads.deleteAndDispose(key);
+				else this.catalogPaging.schedule();
+			}
 			if (key === undefined || this.search.hasQuery) return;
 			this.storage.store(this.collapseKey(key), collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
 		}));
@@ -516,6 +526,40 @@ export class SessionsList extends DomWidget {
 					automation === 'afterReply', () => model.setAutomationSessionsMode(automation === 'afterReply' ? 'never' : 'afterReply')),
 			]),
 		], [...contributed]);
+	}
+
+	private loadExpandedProjectFiles(): void {
+		if (this.search.hasQuery) return;
+		for (const [key, source] of this.catalogFileSources) {
+			const id = `section:${key}`;
+			if (!source.load || this.catalogFileLoads.has(key) || this.tree.isCollapsed(id) !== false || this.tree.getRelativeTop(id) === null) continue;
+			const controller = new AbortController();
+			const request = Object.assign(toDisposable(() => controller.abort()), { source: source.key, pending: true, failed: false });
+			this.catalogFileLoads.set(key, request);
+			const finish = (failed: boolean): void => {
+				if (controller.signal.aborted) return;
+				request.pending = false;
+				request.failed = failed;
+				this.render();
+			};
+			void source.load(controller.signal).then(() => finish(false), () => finish(true));
+		}
+	}
+
+	private openProjectFile(key: string, open: (signal: AbortSignal, restoreFocus: () => void) => Promise<void>): void {
+		const controller = new AbortController();
+		const operation = this.openingCatalogFile.value = toDisposable(() => controller.abort());
+		void open(controller.signal, () => {
+			const row = this.items.get(key)?.domNode;
+			if (row && this.domNode.getClientRects().length) {
+				this.tree.reveal(key);
+				this.tree.focusRow(row, true);
+			}
+		}).catch(error => {
+			if (!controller.signal.aborted && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
+		}).finally(() => {
+			if (this.openingCatalogFile.value === operation) this.openingCatalogFile.clear();
+		});
 	}
 
 	focus(): void {
@@ -1144,26 +1188,27 @@ export class SessionsList extends DomWidget {
 		};
 		this.catalogRows.clear();
 		this.catalogProjects.clear();
+		this.catalogFileSources.clear();
 		const activeSelection = this.catalog || this.customViews.activeCustomView.get() || this.entry && !this.contextKeys?.getValue(this.entry.activeContext)
 			|| !this.entry && this.mode === 'code' && this.contextKeys?.getValue(CodeConversationPageContext.key) === false
 			? undefined : this.viewService.activeSelection;
 		const restingIcon = this.mode === 'code' ? quietSessionIcon : undefined;
 		const statusIcons = this.mode === 'code' ? codeManagementIcons : managementIcons;
-		const itemFor = (key: string, kind: 'conversation' | 'draft' | 'project', icon = restingIcon, forkReference = false): SessionListItem => {
+		const itemFor = (key: string, kind: 'conversation' | 'draft' | 'project' | 'file', icon = restingIcon, forkReference = false): SessionListItem => {
 			present.add(key);
 			let item = this.items.get(key);
 			if (!item) {
 				const entry = this.catalogRows.get(key);
 				const setIcon = entry ? entry.setIcon && ((icon: Icon | undefined) => this.catalogRows.get(key)?.setIcon?.(icon))
 					: (icon: Icon | undefined) => this.listModel.setRowIcon(key, icon?.id);
-				const leading = kind === 'conversation' && this.instantiation
-					? this.instantiation.createInstance(SessionLeadingIcon, ownerDocument, '', forkReference ? undefined : setIcon)
+				const leading = (kind === 'conversation' || kind === 'file') && this.instantiation
+					? this.instantiation.createInstance(SessionLeadingIcon, ownerDocument, '', forkReference || kind === 'file' ? undefined : setIcon)
 					: undefined;
 				item = this.items.set(key, new SessionListItem(ownerDocument, this.contextMenus, statusIcons, kind, icon, leading));
 			}
 			item.domNode.dataset.item = key;
 			if (item.leadingIcon && !forkReference && !this.catalogRows.has(key)) {
-				const customId = this.listModel.getRowIcon(key);
+				const customId = kind === 'file' ? undefined : this.listModel.getRowIcon(key);
 				item.leadingIcon.setRestingIcon((customId ? getRegisteredIcon(customId, ownerDocument) : undefined) ?? icon);
 			}
 			return item;
@@ -1275,6 +1320,7 @@ export class SessionsList extends DomWidget {
 					flatRecentIds.add(row.id);
 				}
 				if (!alert) {
+					if (project && !flat && projectType === 'file') continue;
 					const node = externalRow(row, flat ? undefined : project?.key);
 					if (!project && sectionKey === 'recent' && groupRecents) contributedRecent.push([node, row.groupingContext]);
 					children.push(node);
@@ -1299,20 +1345,40 @@ export class SessionsList extends DomWidget {
 					recent.push(...catalogRowsFor(project.rows, 'recent', project));
 					continue;
 				}
-				if (projectType !== 'all' && projectType !== (project.localProject ? 'file' : 'chat')) continue;
 				const children = catalogRowsFor(project.rows, section.key, project);
-				if (!children.length && !this.search.matches(project.title)) continue;
 				const key = `catalog-project:${project.key}`;
-				if (project.onExpand) this.catalogProjects.set(key, { load: project.onExpand });
-				else if (project.loadMore) this.catalogProjects.set(key, { load: project.loadMore, anchor: children.at(-1) });
+				const showChats = projectType !== 'file';
+				const files = projectType !== 'chat' ? project.files : undefined;
+				const chatAnchor = children.at(-1);
+				for (const file of files?.rows ?? []) {
+					if (!this.search.matches(file.name, project.title)) continue;
+					const fileKey = JSON.stringify(['file', project.key, file.id]);
+					const item = itemFor(fileKey, 'file', Lxicon.file);
+					item.update(file.name, false, () => this.openProjectFile(fileKey, file.open));
+					children.push(item.domNode);
+				}
+				if (!children.length && !this.search.matches(project.title)) continue;
+				if (files) this.catalogFileSources.set(key, files);
+				if (showChats && project.onExpand) this.catalogProjects.set(key, { load: project.onExpand });
+				else if (showChats && project.loadMore) this.catalogProjects.set(key, { load: project.loadMore, anchor: chatAnchor });
 				// Keep the project expandable while its first page is in flight.
-				else if (project.loading) this.catalogProjects.set(key, {});
-				const action = project.history ?? (project.loadMore && {
+				else if (showChats && project.loading) this.catalogProjects.set(key, {});
+				const action = showChats && (project.history ?? (project.loadMore && {
 					label: localize({ bundle: 'ash.sessions', key: 'sessions.list.moreProjectConversations' }, 'Load more conversations'), action: project.loadMore,
-				});
+				}));
 				if (action) {
 					const item = itemFor(`${key}:history`, 'project');
 					item.update(action.label, false, action.action);
+					children.push(item.domNode);
+				}
+				const fileLoad = this.catalogFileLoads.get(key);
+				if (files?.load && fileLoad?.source === files.key && fileLoad.failed) {
+					const item = itemFor(`${key}:files-error`, 'project');
+					item.update(localize('sessions.list.retryProjectFiles', 'Could not load project files. Retry'), false, () => {
+						this.sections.get(key)?.button.focus();
+						this.catalogFileLoads.deleteAndDispose(key);
+						this.render();
+					});
 					children.push(item.domNode);
 				}
 				const node = sectionFor(key, project.title, children, 'project', {
@@ -1326,7 +1392,9 @@ export class SessionsList extends DomWidget {
 				node.dataset.projectId = project.key;
 				node.dataset.item = `project:${project.key}`;
 				node.classList.add('ash-chat-navigation-project');
-				this.sections.get(key)!.setLoading(project.loading);
+				const loadingFiles = files?.load && files.rows === undefined && !this.storage.getBoolean(this.collapseKey(key), StorageScope.PROFILE, true)
+					&& (fileLoad?.source !== files.key || fileLoad.pending);
+				this.sections.get(key)!.setLoading(showChats && project.loading || !!loadingFiles);
 				(section.key === 'pinned' ? pinned : projectRows).push(node);
 			}
 		}
@@ -1518,7 +1586,9 @@ export class SessionsList extends DomWidget {
 			const rowChildren = childrenByRow.get(element) ?? [];
 			const projectSection = key === 'projects' || (flat && key === 'recent') || element.dataset.projectId !== undefined;
 			const forkToggle = element.querySelector<HTMLButtonElement>('[data-action-id="sessions.list.forkTree"] button');
-			const collapsible = !!forkToggle || key !== undefined && (!projectSection || rowChildren.length > 0 || this.catalogProjects.has(key));
+			const files = key === undefined ? undefined : this.catalogFileSources.get(key);
+			const needsFiles = files?.load !== undefined && files.rows === undefined;
+			const collapsible = !!forkToggle || key !== undefined && (!projectSection || rowChildren.length > 0 || this.catalogProjects.has(key) || needsFiles);
 			let collapsed: ObjectTreeElementCollapseState | undefined;
 			if (forkToggle) {
 				collapsed = forkToggle.getAttribute('aria-expanded') === 'true' ? ObjectTreeElementCollapseState.Expanded : ObjectTreeElementCollapseState.Collapsed;
@@ -1544,6 +1614,10 @@ export class SessionsList extends DomWidget {
 			return branch;
 		};
 		this.tree.setChildren(ordered.map(element => project(element)));
+		for (const [key, request] of this.catalogFileLoads) {
+			const files = this.catalogFileSources.get(key);
+			if (!files?.load || files.key !== request.source) this.catalogFileLoads.deleteAndDispose(key);
+		}
 		if (this.catalog) this.catalogPaging.schedule();
 		if (this.mode === 'code' || this.catalog) this.syncTreeSelection();
 		if (focused?.isConnected && !focused.closest('[hidden]') && ownerDocument.activeElement !== focused) focused.focus({ preventScroll: true });
@@ -1655,7 +1729,7 @@ class SessionListItem extends AbstractDisposable {
 	describe(children: readonly ISessionsListTreeNode[]): ISessionsListTreeNode {
 		const id = this.domNode.dataset.item!;
 		const kind = id.startsWith('session:') ? 'session' : id.startsWith('chat:') || this.domNode.classList.contains('ash-chat-navigation-row')
-			? 'chat' : id.startsWith('project:') ? 'project' : 'draft';
+			? 'chat' : this.kind === 'file' ? 'file' : id.startsWith('project:') ? 'project' : 'draft';
 		return {
 			id, kind, label: this.row.title, ...this.target,
 			...(children.length ? { children } : {})
@@ -1663,7 +1737,7 @@ class SessionListItem extends AbstractDisposable {
 	}
 
 	constructor(ownerDocument: Document, contextMenus: IContextMenuService, private readonly statusIcons: typeof managementIcons,
-		kind: 'conversation' | 'draft' | 'project', icon?: ThemeIcon, readonly leadingIcon?: SessionLeadingIcon,
+		private readonly kind: 'conversation' | 'draft' | 'project' | 'file', icon?: ThemeIcon, readonly leadingIcon?: SessionLeadingIcon,
 	) {
 		super();
 		this.row = new SessionListRowRenderer(ownerDocument, leadingIcon?.element);

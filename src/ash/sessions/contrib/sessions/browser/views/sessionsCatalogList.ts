@@ -52,6 +52,16 @@ export interface SessionsCatalogProject {
 	readonly history?: { readonly label: string; readonly action: () => void; };
 	readonly onExpand?: () => void;
 	readonly loadMore?: () => void;
+	readonly files?: {
+		/** Changes when the file source or the saved local project revision changes. */
+		readonly key: string;
+		readonly rows: readonly {
+			readonly id: string;
+			readonly name: string;
+			open(signal: AbortSignal, restoreFocus: () => void): Promise<void>;
+		}[] | undefined;
+		readonly load?: (signal: AbortSignal) => Promise<void>;
+	};
 }
 
 export type CatalogProjectMemoryMode = 'default' | 'projectOnly';
