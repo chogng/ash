@@ -6,10 +6,23 @@ import { join, resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { startWeb } from './web.ts';
+import { ProcessRun } from '../processes.ts';
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../.build/protocol/typescript/protocol.ts';
 
 for (const [succeeds, reuse] of [[true, false], [false, false], [true, true]]) {
 	test(`Web launch ${reuse ? 'reuses explicitly prepared inputs without compiling in the fixture' : succeeds ? 'selects the newly prepared package before spawning the backend' : 'stops on preparation failure before reading or launching an old package'}`, async t => {
+		// These package-selection tests use in-memory children. OS descendant
+		// ownership is exercised by the real listener test below.
+		t.mock.method(ProcessRun.prototype, 'command', async (command: string, args: readonly string[], environment: NodeJS.ProcessEnv) => {
+			const child = childProcess.spawn(command, [...args], { env: environment });
+			return new Promise<{ code: number; output: string; }>((resolveExit, reject) => {
+				child.once('error', reject);
+				child.once('close', code => resolveExit({ code: code ?? 1, output: '' }));
+			});
+		});
+		t.mock.method(ProcessRun.prototype, 'own', async () => { });
+		t.mock.method(ProcessRun.prototype, 'stop', async () => { });
+		t.mock.method(ProcessRun.prototype, 'close', async () => { });
 		const events: string[] = [];
 		let prepared = reuse;
 		let packageRoot = '';
@@ -111,7 +124,7 @@ setInterval(() => {}, 1000);
 		for (const pid of pids) try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
 		await rm(directory, { recursive: true, force: true });
 	});
-	const launch = await startWeb({ port: 0, environment: { ASH_APP_SERVER_PATH: executable } });
+	const launch = await startWeb({ port: 0, environment: { ASH_APP_SERVER_PATH: executable }, preparedBackend: true });
 	pids = JSON.parse(await readFile(marker, 'utf8'));
 	await launch.close();
 	for (const pid of pids) {

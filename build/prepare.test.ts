@@ -11,6 +11,7 @@ test('the preparation owner runs each stage once and stops before consumers on f
 	for (const directory of ['build/protocol', 'build/resources/icons', 'build/builtin', 'node_modules']) { await mkdir(join(root, directory), { recursive: true }); }
 	await writeFile(join(root, 'build/treeSitterRegistry.ts'), `import { record } from '../record.ts'; export async function generateTreeSitterRegistry() { record('registry'); }`);
 	await writeFile(join(root, 'build/languageRegistry.ts'), `import { record } from '../record.ts'; export async function generateLanguageRegistry() { record('languages'); }`);
+	await writeFile(join(root, 'build/arkdown.ts'), `import { record } from '../record.ts'; export async function prepareArkdown() { record('arkdown'); }`);
 	await copyFile(join(import.meta.dirname, 'prepare.ts'), join(root, 'build/prepare.ts'));
 	await symlink(resolve(import.meta.dirname, '../node_modules/bun'), join(root, 'node_modules/bun'), process.platform === 'win32' ? 'junction' : 'dir');
 	await writeFile(join(root, 'package.json'), '{"type":"module"}');
@@ -23,14 +24,14 @@ test('the preparation owner runs each stage once and stops before consumers on f
 	]) { await writeFile(join(root, 'build', file), `import { record } from '../../record.ts'; export async function ${symbol}() { record('${stage}'); }`); }
 	await writeFile(join(root, 'build/resources/icons/generate.ts'), `import { record } from '../../../record.ts'; record('icons');`);
 	await writeFile(join(root, 'tsconfig.common.json'), JSON.stringify({ compilerOptions: { strict: true, noEmit: true, types: [], lib: ['ES2022'] }, files: ['common.ts'] }));
-	for (const failure of ['languages', 'registry', 'protocol', 'localization', 'common', 'grammars', 'extensions', 'icons', '']) {
+	for (const failure of ['arkdown', 'languages', 'registry', 'protocol', 'localization', 'common', 'grammars', 'extensions', 'icons', '']) {
 		await writeFile(join(root, 'operations.log'), '');
 		await writeFile(join(root, 'common.ts'), `export const value: number = ${failure === 'common' ? "'wrong'" : '1'};`);
 		const result = spawnSync(process.execPath, [join(root, 'build/prepare.ts')], { cwd: tmpdir(), encoding: 'utf8', windowsHide: true, timeout: 10_000, env: { ...process.env, FAIL_PREP_STAGE: failure } });
 		assert.ifError(result.error);
 		assert.equal(result.status, failure ? 1 : 0, result.stdout + result.stderr);
-		const stages = ['languages', 'registry', 'protocol', 'localization', 'grammars', 'extensions', 'icons'];
-		const expected = failure === 'common' ? stages.slice(0, 4) : failure ? stages.slice(0, stages.indexOf(failure) + 1) : stages;
+		const stages = ['arkdown', 'languages', 'registry', 'protocol', 'localization', 'grammars', 'extensions', 'icons'];
+		const expected = failure === 'common' ? stages.slice(0, 5) : failure ? stages.slice(0, stages.indexOf(failure) + 1) : stages;
 		assert.deepEqual((await readFile(join(root, 'operations.log'), 'utf8')).trim().split('\n'), expected);
 		if (failure === 'common') { assert.match(result.stdout + result.stderr, /TS2322/); }
 	}

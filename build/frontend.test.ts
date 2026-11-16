@@ -45,7 +45,7 @@ test('Frontend acceptance waits for shared contracts and unit tests', () => {
 });
 
 test('Frontend CI collects GPU regressions and schedules Windows process ownership', { timeout: collectionTimeout + 5_000 }, async () => {
-	assert.match(workflow, /playwright install --with-deps chromium chrome/u);
+	assert.match(workflow, /uses: \.\/\.github\/actions\/setup-playwright\n\s+with:\n\s+install-args: --with-deps chromium chrome/u);
 	assert.match(workflow, /test:browser:integration:prepared --project=chromium --project=chrome-gpu/u);
 	assert.match(workflow, /name: Test Windows process ownership\n\s+if: runner.os == 'Windows'\n\s+run: pnpm exec node --test build\/processes.test.ts/u);
 	const { stdout } = await execute(process.execPath, ['test/integration/browser/run.ts', '--project=chrome-gpu', '--list'], { cwd: repositoryRoot, timeout: collectionTimeout });

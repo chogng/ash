@@ -87,6 +87,7 @@ test('frontend Node tools and backend package builders have separate language ow
 		const files = walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.ts');
 		const sharedTooling = new Set([
 			join(import.meta.dirname, 'lib/generatedTypeScript.ts'),
+			join(import.meta.dirname, 'lib/screenshotPixels.ts'),
 			join(import.meta.dirname, 'lib/test/layersChecker.test.ts'),
 			join(import.meta.dirname, 'lib/stylelint/validateVariableNames.ts'),
 			join(import.meta.dirname, 'lib/stylelint/validateHasSelectors.ts'),

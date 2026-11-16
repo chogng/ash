@@ -82,7 +82,7 @@ test('real Ash development services exit after worker death or launcher loss wit
 	}
 });
 
-const launchSources = ['build/source-layout.json', 'build/processes.ts', 'build/desktop/launch/electron.ts', 'build/desktop/launch/supervisor.ts', 'build/desktop/electron.ts', 'src/ash/code/common/application.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/runtimeStore.ts', 'build/desktop/appServer.ts', 'build/desktop/liveBuild.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/lib/incrementalOutput.ts', 'build/lib/watchNativeFile.ts'];
+const launchSources = ['build/source-layout.json', 'build/processes.ts', 'build/processGroup.ts', 'build/desktop/launch/electron.ts', 'build/desktop/launch/supervisor.ts', 'build/desktop/electron.ts', 'src/ash/code/common/application.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/runtimeStore.ts', 'build/desktop/appServer.ts', 'build/desktop/liveBuild.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/lib/incrementalOutput.ts', 'build/lib/watchNativeFile.ts'];
 
 interface ObservedProcess { readonly pid: number; readonly recordedAt: number; }
 
@@ -119,7 +119,7 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
 			await rename(join(desktop, 'command.tmp'), join(desktop, 'command'));
 		}
 		for (const directory of [
-			'build/desktop/launch', 'crates/host-logs', 'crates/host-integrity',
+			'build/desktop/launch', 'crates/host-logs', 'crates/host-integrity', 'crates/image-opener',
 			'node_modules/@ash/typescript-compiler/bin', 'node_modules/electron', '.build/protocol/typescript', '.build/desktop/localization',
 		]) {
 			await mkdir(join(root, directory), { recursive: true });
@@ -341,7 +341,7 @@ time.sleep(300)
 	child.stdout.on('data', chunk => { output += chunk; });
 	child.stderr.on('data', chunk => { output += chunk; });
 	const run = new ProcessRun(root, undefined, 100);
-	t.after(async () => { await run.stop('SIGTERM'); await rm(root, { recursive: true, force: true }); });
+	t.after(async () => { await run.stop('SIGTERM'); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); });
 	await run.own(child);
 	let preparation: { parent: number; compiler: number; } | undefined;
 	const deadline = Date.now() + (process.platform === 'win32' ? 45_000 : 15_000);

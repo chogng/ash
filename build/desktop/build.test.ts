@@ -11,7 +11,7 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
 	for (const directory of ['build/protocol', 'build/resources', 'build/desktop', 'build/lib', 'build/node_modules/vite/bin', 'node_modules/@ash/typescript-compiler/bin']) {
 		await mkdir(join(root, directory), { recursive: true });
 	}
-	for (const file of ['build/processes.ts', 'build/desktop/build.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/lib/incrementalOutput.ts']) {
+	for (const file of ['build/processes.ts', 'build/processGroup.ts', 'build/python.ts', 'build/desktop/build.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/lib/incrementalOutput.ts']) {
 		await copyFile(resolve(import.meta.dirname, '../..', file), join(root, file));
 	}
 	await symlink(resolve(import.meta.dirname, '../../node_modules/bun'), join(root, 'node_modules/bun'), process.platform === 'win32' ? 'junction' : 'dir');
@@ -19,9 +19,11 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
 	for (const project of ['main', 'preload']) {
 		await writeFile(join(root, `tsconfig.${project}.json`), JSON.stringify({ compilerOptions: { incremental: true, outDir: `.build/desktop/${project}`, tsBuildInfoFile: `.build/desktop/${project}.tsbuildinfo` }, files: ['renderer.ts'] }));
 	}
+	await writeFile(join(root, 'build/python.ts'), `import { appendFile } from 'node:fs/promises'; export async function runPython() { await appendFile(new URL('../operations.log', import.meta.url), 'host-logs\\n'); if (process.env.FAILURE === 'host-logs') throw new Error('native binding build failed'); }`);
 	await writeFile(join(root, 'build/prepare.ts'), `import { generateProtocol } from './protocol/generate.ts'; import { generateLocalization } from './resources/localization.ts'; export async function prepareGenerated() { await generateProtocol(); await generateLocalization(); }`);
 	await writeFile(join(root, 'tsconfig.renderer.json'), JSON.stringify({ compilerOptions: { strict: true, noEmit: true, types: [], lib: ['ES2022'] }, files: ['renderer.ts'] }));
 	await writeFile(join(root, 'build/protocol/generate.ts'), `import { appendFile } from 'node:fs/promises'; export async function generateProtocol() { await appendFile(new URL('../../operations.log', import.meta.url), 'protocol\\n'); if (process.env.FAILURE === 'protocol') throw new Error('export failed'); }`);
+	await writeFile(join(root, 'build/prepare.ts'), `import { generateProtocol } from './protocol/generate.ts'; import { generateLocalization } from './resources/localization.ts'; export async function prepareGenerated() { await generateProtocol(); await generateLocalization(); }`);
 	await writeFile(join(root, 'build/resources/localization.ts'), `import { appendFile } from 'node:fs/promises'; export async function generateLocalization() { await appendFile(new URL('../../operations.log', import.meta.url), 'localization\\n'); }`);
 	await writeFile(join(root, 'package.json'), '{"type":"module"}');
 	await writeFile(join(root, 'node_modules/@ash/typescript-compiler/bin/tsc'), `
@@ -43,10 +45,11 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
 	await writeFile(join(root, 'build/node_modules/vite/bin/vite.js'), "require('node:fs').appendFileSync('operations.log', (process.argv.includes('web') ? 'bundle-web' : 'bundle') + '\\n');");
 	for (const [failure, expected] of [
 		['protocol', ['protocol']],
-		['tsconfig.main.json', ['protocol', 'localization', 'tsconfig.main.json']],
-		['preload-import', ['protocol', 'localization', 'tsconfig.main.json', 'tsconfig.preload.json']],
-		['tsconfig.renderer.json', ['protocol', 'localization', 'tsconfig.main.json', 'tsconfig.preload.json']],
-		['', ['protocol', 'localization', 'tsconfig.main.json', 'tsconfig.preload.json', 'bundle']],
+		['host-logs', ['protocol', 'localization', 'host-logs']],
+		['tsconfig.main.json', ['protocol', 'localization', 'host-logs', 'tsconfig.main.json']],
+		['preload-import', ['protocol', 'localization', 'host-logs', 'tsconfig.main.json', 'tsconfig.preload.json']],
+		['tsconfig.renderer.json', ['protocol', 'localization', 'host-logs', 'tsconfig.main.json', 'tsconfig.preload.json']],
+		['', ['protocol', 'localization', 'host-logs', 'tsconfig.main.json', 'tsconfig.preload.json', 'bundle']],
 	] as const) {
 		await writeFile(join(root, 'operations.log'), '');
 		await writeFile(join(root, 'renderer.ts'), `export const value: number = ${failure === 'tsconfig.renderer.json' ? "'invalid'" : '1'};`);
@@ -57,14 +60,14 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
 		assert.equal(result.status, failure ? 1 : 0, result.stdout + result.stderr);
 		if (failure === 'tsconfig.renderer.json') assert.match(result.stdout + result.stderr, /TS2322/);
 		if (!failure) assert.match(result.stdout + result.stderr, /No type errors in/);
-		assert.deepEqual((await readFile(join(root, 'operations.log'), 'utf8')).trim().split('\n'), expected);
-		if (failure !== 'protocol') assert.equal(JSON.parse(await readFile(join(root, '.build/desktop/package.json'), 'utf8')).type, 'module');
+		assert.deepEqual((await readFile(join(root, 'operations.log'), 'utf8')).trim().split('\n'), expected, result.stdout + result.stderr);
+		if (failure !== 'protocol' && failure !== 'host-logs') assert.equal(JSON.parse(await readFile(join(root, '.build/desktop/package.json'), 'utf8')).type, 'module');
 	}
 	for (const [command, expected] of [
-		['host', ['protocol', 'localization', 'tsconfig.main.json', 'tsconfig.preload.json']],
+		['host', ['protocol', 'localization', 'host-logs', 'tsconfig.main.json', 'tsconfig.preload.json']],
 		['renderer', ['protocol', 'localization', 'bundle']],
 		['web', ['protocol', 'localization', 'bundle-web']],
-		['prepare', []],
+		['prepare', ['host-logs']],
 	] as const) {
 		await writeFile(join(root, 'operations.log'), '');
 		const result = spawnSync(process.execPath, [join(root, 'build/desktop/build.ts'), command], {
@@ -76,9 +79,9 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
 	// A prepared build retains host compilation and preload validation while
 	// reusing the generation and no-emit checks owned by its caller.
 	for (const [failure, expected] of [
-		['', ['tsconfig.main.json', 'tsconfig.preload.json', 'bundle']],
-		['tsconfig.main.json', ['tsconfig.main.json']],
-		['preload-import', ['tsconfig.main.json', 'tsconfig.preload.json']],
+		['', ['host-logs', 'tsconfig.main.json', 'tsconfig.preload.json', 'bundle']],
+		['tsconfig.main.json', ['host-logs', 'tsconfig.main.json']],
+		['preload-import', ['host-logs', 'tsconfig.main.json', 'tsconfig.preload.json']],
 	] as const) {
 		await writeFile(join(root, 'operations.log'), '');
 		const result = spawnSync(process.execPath, [join(root, 'build/desktop/build.ts'), 'all', '--prepared'], {
@@ -86,7 +89,7 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
 		});
 		assert.equal(result.status, failure ? 1 : 0, result.stdout + result.stderr);
 		assert.doesNotMatch(result.stdout + result.stderr, /No type errors in/);
-		assert.deepEqual((await readFile(join(root, 'operations.log'), 'utf8')).trim().split('\n'), expected);
+		assert.deepEqual((await readFile(join(root, 'operations.log'), 'utf8')).trim().split('\n'), expected, result.stdout + result.stderr);
 	}
 	for (const args of [['all', '--unknown'], ['all', '--prepared', '--prepared'], ['prepare', '--prepared']]) {
 		await writeFile(join(root, 'operations.log'), '');

@@ -5,13 +5,29 @@ import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { join, resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
-import test, { type TestContext } from 'node:test';
+import test, { afterEach, beforeEach, mock, type TestContext } from 'node:test';
 
 import { prepareAppServer, relativeWatchedDirectory, shouldRebuildAppServer, shouldRebuildWorkspaceManifest, watchAppServer } from './appServer.ts';
 import { pythonCommand } from '../python.ts';
+import { ProcessRun } from '../processes.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const protocolDirectories = ['app-server-protocol', 'protocol', 'queue-contract'].map(name => join(repositoryRoot, 'crates', name));
+
+beforeEach(() => {
+	// These tests provide in-memory ChildProcesses for build outcomes. Exercise
+	// command selection without starting an OS supervisor around those fake children;
+	// real descendant ownership is covered by the process runner's integration tests.
+	mock.method(ProcessRun.prototype, 'command', async (command: string, args: readonly string[], environment: NodeJS.ProcessEnv, _capture = false, stdin: 'ignore' | 'inherit' = 'inherit') => {
+		const child = childProcess.spawn(command, [...args], { cwd: repositoryRoot, env: environment, stdio: [stdin, 'inherit', 'inherit'], windowsHide: true });
+		return new Promise<{ code: number; output: string; }>((resolveExit, reject) => {
+			child.once('error', reject);
+			child.once('close', (code: number | null) => resolveExit({ code: code ?? 1, output: '' }));
+		});
+	});
+	mock.method(ProcessRun.prototype, 'close', async () => { });
+});
+afterEach(() => mock.restoreAll());
 
 test('a source batch logs one build ID and passes its relative trigger paths to the publisher', async t => {
 	const completed = Promise.withResolvers<void>();

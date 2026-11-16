@@ -56,7 +56,7 @@
     "src/ash/workbench/contrib/multiDiffEditor/**/*.ts",
     "src/ash/workbench/contrib/documentEditor/**/*.ts",
     "src/ash/workbench/contrib/chat/**/*.ts",
-    "src/ash/workbench/services/documentCollaboration/**/*.ts",
+    "src/ash/workbench/services/collab/**/*.ts",
     "src/ash/workbench/services/documentEditor/**/*.ts",
     "src/ash/platform/app-server-daemon/node/appServerDaemonPackage.ts",
     "src/ash/platform/agentHost/node/**/*.ts",

@@ -28,7 +28,7 @@ test('Desktop trace marks each restored region and waits for asynchronous view c
 	const file = resolve(desktopRoot, 'src/ash/workbench/browser/workbench.ts');
 	const output = readFileSync(file, 'utf8');
 	const start = output.indexOf('let isStartupRestoration = true;');
-	const end = output.indexOf('const paneRestoration =', start);
+	const end = output.indexOf('const shellReady =', start);
 	const restoration = ts.transpileModule(output.slice(start, end), { compilerOptions: { target: ts.ScriptTarget.ES2024 } }).outputText;
 	const locations = { Sidebar: 0, Panel: 1, AuxiliaryBar: 2, AgentSidebar: 3 };
 	const marks: string[] = [];
@@ -36,16 +36,17 @@ test('Desktop trace marks each restored region and waits for asynchronous view c
 	let finish: () => void = () => assert.fail('view creation was not requested');
 	const pending = new Promise<void>(resolvePromise => { finish = resolvePromise; });
 	const context: { restoreActiveViewContainers?: () => Promise<void>; } = {};
-	const install = new Function('paneParts', 'layout', 'panes', 'viewDescriptors', 'requiredViewContainerToRestore', 'views', 'ViewContainerLocation', 'performance', restoration);
+	const install = new Function('paneParts', 'layout', 'panes', 'viewDescriptors', 'requiredViewContainerToRestore', 'views', 'ViewContainerLocation', 'performance', 'deferredPaneLocations', restoration);
 	install.call(context,
 		new Map(Object.values(locations).map(location => [location, { getCompositeIdToRestore: () => `view-${location}` }])),
-		{ isPartVisible: (part: string) => part !== 'agentSidebar', isAuxiliaryBarMaximized: () => false },
-		{ getPartId: (location: number) => `part-${location}` },
+		{ isPartVisible: (part: string) => part !== 'part-3', isAuxiliaryBarMaximized: () => false },
+		{ getPartId: (location: number) => `part-${location}`, getActivePaneComposite: () => undefined },
 		{ getViewContainers: (location: number) => [{ id: `view-${location}` }] },
 		(_service: unknown, _location: number, id: string) => ({ id }),
 		{ openViewContainer: (id: string) => { opened.push(id); return pending; }, closeViewContainer: () => assert.fail('all restored regions are visible') },
 		locations,
 		{ mark: (name: string) => marks.push(name) },
+		new Map(),
 	);
 	const restored = context.restoreActiveViewContainers!();
 	assert.deepEqual({ opened, marks }, {
@@ -83,9 +84,9 @@ test('Workbench completion mark waits for services, editor restoration, and back
 		restoreEditorParts: () => { events.push('editors'); return editors; },
 		restoreWorkingCopyBackups: () => { events.push('backups'); return backups; },
 		lifecycleService: { phase: 2 },
-		logService: { info: () => events.push('logged') },
+		logService: { trace: () => events.push('logged') },
 	});
-	const restored = context.completeStartupRestoration([services], {}, {}, {}, { advance: () => events.push('phase') }, () => events.push('fonts'));
+	const restored = context.completeStartupRestoration([services], Promise.resolve(), {}, {}, {}, Promise.resolve(), { complete() { } }, { advance: () => events.push('phase') }, () => events.push('fonts'), { beforeEditors: async () => { }, waitForOpen: async () => { } }, new Set());
 	assert.deepEqual({ marks, events }, { marks: [], events: [] });
 	finishServices();
 	await new Promise<void>(resolvePromise => setImmediate(resolvePromise));
@@ -96,7 +97,7 @@ test('Workbench completion mark waits for services, editor restoration, and back
 	finishBackups();
 	await restored;
 	assert.deepEqual({ marks, events, phase: context.lifecycleService.phase }, {
-		marks: ['ash.workbench.restored'],
+		marks: ['ash.workbench.editor-ready', 'ash.workbench.restored'],
 		events: ['editors', 'backups', 'fonts', 'phase', 'logged'],
 		phase: 3,
 	});

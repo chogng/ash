@@ -110,7 +110,7 @@ test('all resource plugins remove subscriptions and cancel pending generation on
 });
 
 test('Vite middleware server closes the icon watcher through the plugin lifecycle', async t => {
-	const fixture = await iconFixture(t);
+	const fixture = await iconFixture(t, true);
 	const { root } = fixture;
 	await writeFile(join(root, 'package.json'), '{"type":"module"}');
 	const server = await createServer({
