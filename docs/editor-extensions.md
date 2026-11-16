@@ -149,9 +149,11 @@ Academy 使用中立 `editor` 市场包，`editor/` 的标准扩展 manifest 和
 
 ### 可选文献管理与 PDF 资源编辑器
 
-PDF 查看器由独立的 [`ash.pdf-viewer`](../extensions/pdf-viewer/README.md) 包提供，仅服务 Agent Window 的文件阅读和聊天附件预览，相关设置也只在 Agent Window 中展示。IDE 的窗口组合从扩展目录投影中排除该包，不能因同一 profile 已安装、启用或授权插件而注册 PDF 编辑器、预览或设置；共享宿主只执行窗口传入的筛选，不拥有 PDF 产品策略。Agent Window 随产品提供按需加载的只读 PDF 预览，用于 Files 打开的 PDF。安装并授权 PDF Viewer 后，资源路由优先使用扩展。只读预览不注册批注、全文搜索或聊天附件预览能力。Academy 负责写作与文档编辑事务，文献检索由包含工具与 Skills 的 Plugin 提供，独立 [`ash.reference-manager`](../extensions/reference-manager/README.md) 已支持 RIS 导入、去重、文献库管理和稳定 ID 关联的引用插入／更新；BibTeX 和 CSL 样式不在首版范围。文献管理通过 Academy 的版本绑定 `academy.citations.v1` 提交一次可撤销文档事务，不能另存一份正文状态。Academy 的 PDF 导出不依赖 PDF 查看器。
+aspdf 是 Agent Window 内置的 PDF 阅读与批注产品，代码与领域接口保留 `Pdf*`、`pdf/*` 命名。Files 与只读 Chat 附件使用同一资源 pane，不要求安装扩展。Rust PDF 领域通过独立 helper 使用原生 PDFium，提供文字、字符位置、页面图像和结构化批注；批注支持高亮、便签、更新、删除及标准 PDF 保存。TypeScript 工作副本拥有草稿、撤销历史、恢复数据和文件版本，native session 是可释放的派生快照。保存通过既有文件服务检查原文件版本。Agent 的 `pdf_read`、`pdf_annotate` 工具读取或修改已保存文件，不读取未保存草稿；修改须提供原文摘要，并通过既有文件授权、写入审批与版本检查。
 
-PDF 包使用已安装第一方客户端的相同签名、精确授权与资源校验链，经 `editor.resource.v1` 注册二进制资源 pane。`describe` 的 `version: 1`、`clientModule`、`clientDigest` 与 `editors` 字段沿用客户端声明；每个 editor 含 `editorId`、`displayName`、`selectors` 和 `contentType`，不含文本 `documentType`。声明必须匹配包 manifest 的 custom editor。模块通过 `getResourceEditor(editorId, createInstance)` 提供构造器，宿主经 DI 构造并传入 Provider 的终止信号。`createInstance` 是随 Provider 终止失效的窄构造回调，不提供服务查找、注册或容器访问；资源 pane 用它构造自己拥有的工作副本。资源 pane 负责观察信号、取消 I/O 和冻结已有视图；宿主负责撤销路由及按 pane 生命周期释放样式。Chat 附件通过通用 `resourceEditor` 能力提供只读预览，不依赖具体 PDF 类型。
+独立 [`ash.pdf-viewer`](../extensions/pdf-viewer/README.md) 包已标记 deprecated，保留原有安装、授权、批注 sidecar 和手动选择入口。IDE 继续从扩展目录投影中排除该包，也不加载 aspdf 的窗口贡献。共享宿主只执行窗口传入的筛选，不拥有 PDF 产品策略。Academy 负责写作与文档编辑事务，文献检索由包含工具与 Skills 的 Plugin 提供，独立 [`ash.reference-manager`](../extensions/reference-manager/README.md) 已支持 RIS 导入、去重、文献库管理和稳定 ID 关联的引用插入／更新；BibTeX 和 CSL 样式不在首版范围。文献管理通过 Academy 的版本绑定 `academy.citations.v1` 提交一次可撤销文档事务，不能另存一份正文状态。Academy 的 PDF 导出不依赖 PDF 查看器。
+
+旧 PDF 包使用已安装第一方客户端的相同签名、精确授权与资源校验链，经 `editor.resource.v1` 注册二进制资源 pane。`describe` 的 `version: 1`、`clientModule`、`clientDigest` 与 `editors` 字段沿用客户端声明；每个 editor 含 `editorId`、`displayName`、`selectors` 和 `contentType`，不含文本 `documentType`。声明必须匹配包 manifest 的 custom editor。模块通过 `getResourceEditor(editorId, createInstance)` 提供构造器，宿主经 DI 构造并传入 Provider 的终止信号。`createInstance` 是随 Provider 终止失效的窄构造回调，不提供服务查找、注册或容器访问；资源 pane 用它构造自己拥有的工作副本。资源 pane 负责观察信号、取消 I/O 和冻结已有视图；宿主负责撤销路由及按 pane 生命周期释放样式。Chat 附件通过通用 `resourceEditor` 能力提供只读预览，不依赖具体 PDF 类型。
 
 PDF.js 和 Worker 随扩展客户端打包，JS／CSS 摘要覆盖其字节。打包器仅接受声明的 npm 依赖及限定的宿主机制，不允许依赖越出根目录或导入私有服务容器。原 PDF 文件不变，批注仍使用既有配套 JSON 格式；禁用时保留当前只读页面和未保存草稿，保存后的批注可在重新打开时恢复。具体安装、构建、键盘与验证范围见扩展 README。
 
@@ -485,7 +487,7 @@ flowchart TD
 
 Ash JS API 提供已有命令、文档事件与快照、诊断集合、语言 Provider、Tasks/Debug 和 workspace/configuration 能力。`workspace.fs.readFile/stat/readDirectory` 对应 typed `readResourceFile/statResource/readResourceDirectory`，Rust SDK 提供同一组操作；Workbench 文件服务拥有资源 provider，App Server 验证调用窗口、工作区授权与身份。`stat.ctime` 当前无来源而为 0，写入与完整文件系统 API 仍不支持。打开的 dirty model 始终先于磁盘，改动保留版本、原文前置条件和已有撤销 owner。
 
-可选安装的 `ash.academy` 经声明式 `customEditors` 和 `editor.client.v1` 选择包内 Stanza Academy profile。扩展启用及精确授权决定新 editor 注册；停用后已打开 tab 保留模型、撤销与未保存内容并冻结编辑。schema、引用视图、分页和 DOCX／PDF 输出均由包拥有；共享宿主提供文档与生命周期机制，不向任意第三方开放内部 DOM/model API。PDF 阅读另由可选 `ash.pdf-viewer` 的资源 pane 提供，详见上面的独立能力边界。
+可选安装的 `ash.academy` 经声明式 `customEditors` 和 `editor.client.v1` 选择包内 Stanza Academy profile。扩展启用及精确授权决定新 editor 注册；停用后已打开 tab 保留模型、撤销与未保存内容并冻结编辑。schema、引用视图、分页和 DOCX／PDF 输出均由包拥有；共享宿主提供文档与生命周期机制，不向任意第三方开放内部 DOM/model API。PDF 阅读与批注由 Agent Window 内置 aspdf 提供；旧 `ash.pdf-viewer` 包保留兼容入口。
 
 文本自定义编辑器通过 `customTextEditor` 注册，包声明决定 viewType、显示名称和 selector；provider 的标准 `resolveCustomTextEditor` 经统一 invocation 返回 HTML。Workbench 保留模型、readonly、撤销和消息路由。可信 Worker 的库资产沿有界对象 URL 传递，窗口在停用和关闭时回收；该路径只提供已实现的文本自定义编辑器能力。
 

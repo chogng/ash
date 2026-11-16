@@ -62,6 +62,8 @@ use std::time::Duration;
 const MAX_EDITOR_FILE_BYTES: usize = 50 * 1024 * 1024;
 // Matches the text model resolver's limit, without a separate broad editor stat.
 const MAX_DOCUMENT_FILE_BYTES: usize = 32 * 1024 * 1024;
+// Binary editors support large PDFs without changing text-document limits.
+const MAX_BINARY_EDITOR_FILE_BYTES: usize = 64 * 1024 * 1024;
 const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
 
 /// Coordinates the existing owners needed by the filesystem adapter.
@@ -264,7 +266,7 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
                 params.session_directory.as_ref(),
                 Permission::ReadFiles,
             )?
-            .read_file_with_revision(&params.path, MAX_EDITOR_FILE_BYTES)
+            .read_file_with_revision(&params.path, MAX_BINARY_EDITOR_FILE_BYTES)
             .map_err(file_system_error)?;
         let metadata = self
             .resources
@@ -275,7 +277,7 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
                 "application/octet-stream".into(),
                 content.bytes,
                 BINARY_PREVIEW_RESOURCE_TTL,
-                MAX_EDITOR_FILE_BYTES,
+                MAX_BINARY_EDITOR_FILE_BYTES,
             )
             .map_err(resource_rpc_error)?;
         result(&FsReadBinaryFileResult {
@@ -402,7 +404,7 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: FsWriteBinaryFileParams = decode(params)?;
-        if params.data_base64.len() > (MAX_EDITOR_FILE_BYTES * 4 / 3 + 4) {
+        if params.data_base64.len() > (MAX_BINARY_EDITOR_FILE_BYTES * 4 / 3 + 4) {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
         let bytes = base64::engine::general_purpose::STANDARD
@@ -419,7 +421,12 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
                 params.session_directory.as_ref(),
                 Permission::WriteFiles,
             )?
-            .write_file_with_condition(&params.path, &bytes, MAX_EDITOR_FILE_BYTES, &condition)
+            .write_file_with_condition(
+                &params.path,
+                &bytes,
+                MAX_BINARY_EDITOR_FILE_BYTES,
+                &condition,
+            )
             .map_err(file_system_error)?;
         result(&FsWriteFileResult {
             metadata: metadata_result(metadata),

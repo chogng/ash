@@ -15,6 +15,7 @@ import { AppServerSymphonyService } from '../../platform/symphony/browser/appSer
 import { createAppServerInstructionService } from '../../platform/instructions/browser/appServerInstructionService.js';
 import { createAppServerFileSearchApi } from '../../platform/search/browser/fileSearchApi.js';
 import { AppServerAssetService } from '../../platform/assets/browser/appServerAssetService.js';
+import { AppServerPdfService } from '../../platform/pdf/browser/appServerPdfService.js';
 import { AppServerIssueReporterService } from '../../platform/issue/browser/appServerIssueReporterService.js';
 import { AppServerGitHubService } from '../../platform/github/browser/appServerGitHubService.js';
 import { AppServerLocalGitService } from '../../platform/git/browser/appServerLocalGitService.js';
@@ -145,6 +146,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 			contentSearchConfiguration: createAppServerContentSearchConfigurationApi(connection),
 			terminal: new AppServerTerminalProcessService(connection, appServer),
 			assets: new AppServerAssetService(connection),
+			pdf: new AppServerPdfService(connection),
 			projects: new AppServerProjectService(connection),
 			artifactCatalog: connection.capabilities?.contracts.artifactCatalog?.version === 1 ? new AppServerArtifactCatalog(connection) : undefined,
 			testing: new AppServerTestExecutionService(connection),

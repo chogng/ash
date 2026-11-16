@@ -30,6 +30,8 @@ filegroup(
     srcs = [
         "package-layout.json",
         "package.py",
+        "pdfium.py",
+        "//third_party/pdfium:runtime-lock.json",
         "tree.py",
         "livekit.py",
         "//livekit-server:runtime.json",

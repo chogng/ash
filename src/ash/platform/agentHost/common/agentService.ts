@@ -13,6 +13,7 @@ import type { ISymphonyBackend } from '../../symphony/common/symphonyService.js'
 import type { IInstructionService } from '../../instructions/common/instructionService.js';
 import type { IFileSearchService } from '../../search/common/fileSearch.js';
 import type { IAssetService } from '../../assets/common/assetService.js';
+import type { IPdfService } from '../../pdf/common/pdfService.js';
 import type { IIssueReporterService } from '../../issue/common/issue.js';
 import type { IGitHubService } from '../../github/common/githubService.js';
 import type { ILocalGitService } from '../../git/common/localGitService.js';
@@ -68,6 +69,7 @@ export interface IAgentConnection {
 	/** Profile-local catalogue support is supplied by the owning product host. */
 	readonly artifactCatalog?: IArtifactCatalog;
 	readonly assets: IAssetService;
+	readonly pdf?: IPdfService;
 	readonly projects: IProjectService;
 	readonly testing: ITestExecutionService;
 	readonly calls?: ICallService;

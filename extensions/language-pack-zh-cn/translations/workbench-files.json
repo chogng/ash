@@ -454,7 +454,10 @@
     "workspaceTrust.stateRestricted": "受限模式",
     "workspaceTrust.restrictedDescription": "可编辑和保存文件，命令和工作区集成已禁用。",
     "workspaceTrust.confirmRestricted": "在受限模式下打开 {0}？",
-    "workspaceTrust.confirmRestrictedDetail": "这将允许编辑和保存 {0} 中的文件。命令和工作区集成将被禁用。"
+    "workspaceTrust.confirmRestrictedDetail": "这将允许编辑和保存 {0} 中的文件。命令和工作区集成将被禁用。",
+    "pdf.unavailable": "请连接支持第 1 版接口的 aspdf 服务。",
+    "pdf.invalidResponse": "PDF 服务返回的内容不一致。",
+    "pdf.closed": "此 PDF 文档已关闭。"
   },
   "ash.views": {
     "search": "搜索",

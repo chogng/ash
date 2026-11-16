@@ -20,6 +20,7 @@ path = "src/bin/generate_protocol.rs"
 required-features = ["export"]
 
 [dependencies]
+ash-pdf-contract.workspace = true
 ash-host-logs = { workspace = true }
 ash-debug-contract.workspace = true
 external-ext-protocol = { workspace = true }

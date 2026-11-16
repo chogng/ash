@@ -124,6 +124,7 @@ import { ExtensionUiTarget } from '../../platform/extensionManagement/common/ext
 import { IExtensionRecommendationsService } from '../../workbench/services/extensionRecommendations/common/extensionRecommendations.js';
 import { ExtensionRecommendationsService } from '../../workbench/contrib/extensions/browser/extensionRecommendationsService.js';
 import { IAssetService } from '../../platform/assets/common/assetService.js';
+import { IPdfService } from '../../platform/pdf/common/pdfService.js';
 import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IAgentHostInputCompletionService, IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../platform/models/common/agentModels.js';
@@ -630,6 +631,9 @@ export abstract class Workbench extends Disposable {
 		ownerWindow: Window,
 	): WorkbenchThemeService {
 		services.registerInstance(IAssetService, options.api.assets);
+		services.registerInstance(IPdfService, options.api.pdf ?? {
+			open: async () => { throw new Error(localize('sessions.pdfPreview.unavailable', 'Connect to Ash to open PDFs with aspdf.')); },
+		});
 		services.registerInstance(IProjectService, options.api.projects);
 		services.registerInstance(INetworkDiagnosticsService, options.api.networkDiagnostics);
 		services.registerInstance(IContentSearchConfigurationService, options.api.contentSearchConfiguration);

@@ -3,6 +3,8 @@ exclude = [
     "third_party/wezterm/portable-pty",
 ]
 members = [
+    "crates/pdf",
+    "crates/pdf-contract",
     "crates/exec-server",
     "crates/exec-server-protocol",
     "crates/ext/sleep",
@@ -255,6 +257,9 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+ash-pdf = { path = "crates/pdf" }
+ash-pdf-contract = { path = "crates/pdf-contract" }
+pdfium-render = { version = "=0.9.5", default-features = false, features = ["pdfium_8125", "image_025"] }
 katex-rs = "=0.3.0"
 ash-utils-markdown-math = { path = "crates/utils/markdown-math" }
 trash = { version = "5.2.9", default-features = false, features = ["coinit_multithreaded", "chrono"] }

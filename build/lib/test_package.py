@@ -66,6 +66,9 @@ class PackageTests(unittest.TestCase):
         cls.package_sources = create_package_sources(Path(temporary.name))
 
     def setUp(self) -> None:
+        boundary = patch("build.lib.pdfium.copy_pdfium")
+        boundary.start()
+        self.addCleanup(boundary.stop)
         boundary = patch(
             "build.lib.js_debug.copy_runtime", side_effect=copy_debug_runtime_fixture
         )

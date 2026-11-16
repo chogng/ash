@@ -1,5 +1,7 @@
 # PDF Viewer
 
+> Deprecated: Agent Window PDF reading and review are moving to the built-in **aspdf** product. This legacy extension and its companion AI package remain unchanged; existing installations and annotation sidecars are retained.
+
 PDF Viewer (`ash.pdf-viewer`) is an optional, independently installed editor extension for the Agents Window. Its window ownership is defined in the [extension architecture](../../docs/editor-extensions.md#可选文献管理与-pdf-资源编辑器). Ash ships a separate read-only preview for PDF files in the Agents Window. This extension takes precedence once admitted and supplies search and annotations. Its executable and client are distributed independently. Academy can export PDF without installing this reader. Literature retrieval and reference-library management (including RIS import) belong to separate optional capabilities; neither is a dependency of this package.
 
 The extension owns PDF rendering, extracted text, highlight/ink/note annotations and their undo history. It keeps the source PDF immutable and saves annotations in `<file>.pdf.ash-annotations.json` through the window's authorized file service. Existing `ash.workbench.pdfViewer` editor identities and version-1 annotation files remain supported. Saved annotations reload when the file is reopened; unsaved annotations are pane-local and must be saved before closing. This is not an embedded-PDF annotation exporter, reference manager, or OCR engine.

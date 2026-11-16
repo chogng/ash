@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from build.lib.grammars import resolve_grammars_cargo_env
+from build.lib.pdfium import prepare_pdfium
 from build.lib.sherpa import resolve_sherpa_cargo_env
 from build.lib.targets import TargetSpec
 from build.lib.v8 import DEFAULT_CACHE as DEFAULT_V8_CACHE
@@ -27,6 +28,10 @@ def cargo_environment(
     the owning entrypoint; this function only prepares external link inputs.
     """
     environment = dict(os.environ if environ is None else environ)
+    if "ash-pdf" in packages:
+        library = prepare_pdfium(Path(__file__).resolve().parents[2], spec.target)
+        if library is not None:
+            environment["ASH_PDFIUM_LIBRARY_DIR"] = str(library.parent)
     if "ash-grammars" in packages:
         environment.update(resolve_grammars_cargo_env(spec.target))
     if "v8" in packages:

@@ -32,6 +32,7 @@
     ]
   },
   "private": true,
+  "deprecated": "Use the Agent Window's built-in aspdf reader. This legacy extension remains available for compatibility.",
   "ashRuntime": {
     "kind": "rust",
     "entrypoint": "ash-pdf-viewer",

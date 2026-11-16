@@ -45,6 +45,7 @@ pub mod memory_diagnostics;
 pub mod message_history;
 pub mod model;
 pub mod notification;
+pub mod pdf;
 pub mod plugins;
 pub mod projects;
 pub mod provider;

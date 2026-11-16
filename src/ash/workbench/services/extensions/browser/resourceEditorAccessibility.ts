@@ -22,7 +22,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 });
 
-/** The host owns help presentation and focus; each admitted package supplies its own text. */
+/** The host owns help presentation and focus; the resource editor supplies its own text. */
 export function registerResourceEditorAccessibility(container: HTMLElement, configuration: IConfigurationService, content: () => string, help: () => string): DisposableStore {
 	const lifetime = new DisposableStore();
 	const name = `resource-editor-${createUuid()}`;

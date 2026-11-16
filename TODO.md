@@ -5,6 +5,10 @@
 - [ ] **直接 PSEC 路径验收** · 当前 Windows 缺少 `api-win-appmodel-processmodel~securityenvironment`，3 项直接 PSEC PTY 验收均在准备阶段失败，没有执行工作负载。ConPTY 本身的创建、控制、关闭及 JS 锁定启动实机测试通过，但不能替代 PSEC 组合验收。支持 PSEC 的主机须运行 `scripts/test-psec.ps1 -Capability required`，覆盖直接 PTY 和执行服务 RPC；SDK 的 `processcontainer_pty_preserves_input_resize_and_exit_output` 已接入自身后端验收和测试包发现检查。macOS 验收沿用下文条目；完成后删除本条。
 - [ ] **依赖安全检查** · `just dependencies`、依赖来源与许可证检查通过；完整 `just dependency-security` 仍被既有 `yrs 0.26.0 → smallstr 0.3.1` 的 `RUSTSEC-2026-0215` 停止维护告警阻塞，当前无安全升级版本。需在协作文档依赖中处理该传递依赖，再重跑检查；不能将本次来源校验通过记为完整安全门禁通过。
 
+## aspdf · App Server 与整窗验收
+
+- [ ] aspdf 已完成 1,000 份独立 PDF、1,000 页连续浏览、42 MiB 批注保存重开及有界 helper 压测，数据见 `.build/aspdf-perf/report.md`。合并上游后已通过 `just verify ash-pdf`、`just verify ash-arg0`、依赖检查和 App Server 编译，日志为 `.build/aspdf-perf/rebase-app-server.log`；旧 SDK 编译阻塞已解除。仍需运行 `just verify ash-app-server-runtime`，再用本次构建的 Agent Window 验证 Files、Chat 附件、二进制文件服务的 64 MiB 边界及 `pdf_read`／`pdf_annotate` 的生产调用、授权和取消；不能用旧 backend 或 fixture 替代。完成后删除本条。
+
 ## 沙箱 · macOS 与真实 Docker 验收
 
 - [ ] **macOS 实机验收** · 当前环境没有可连接的 macOS 主机。使用本次 checkout 运行 `just verify ash-mxc-sandbox`、`just verify ash-exec-server`，并按 [适配器验证入口](crates/mxc-sandbox/README.md#验证) 执行 macOS 文件、PTY、私有 IPC、敏感 socket 及网络矩阵；网络矩阵须有普通进程可达的 TCP／UDP DNS 对照。核对实际用例数量、退出码和后代回收，缺环境或跳过不计通过；完成后删除本条。

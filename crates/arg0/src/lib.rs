@@ -8,6 +8,12 @@ use std::ffi::OsString;
 pub fn dispatch(arguments: impl IntoIterator<Item = OsString>) -> Option<Result<(), String>> {
     let mut arguments = arguments.into_iter();
     let role = arguments.next();
+    if role.as_deref() == Some(std::ffi::OsStr::new(ash_pdf::WORKER_ARGUMENT)) {
+        if arguments.next().is_some() {
+            return Some(Err("PDF worker accepts no arguments".into()));
+        }
+        return Some(ash_pdf::run_worker());
+    }
     #[cfg(unix)]
     {
         if role.as_deref()

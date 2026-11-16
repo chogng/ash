@@ -318,6 +318,9 @@ def assemble_package(staging: Path, inputs: dict) -> None:
     binary_dir.mkdir(parents=True)
     (staging / LAYOUT["pathDir"]).mkdir(parents=True)
     copy_builtin_skills(source_root, resources / "skills")
+    from build.lib.pdfium import copy_pdfium
+
+    copy_pdfium(source_root, target, resources)
     _copy_builtin_extensions(source_root, resources / "extensions")
     if "javascriptDebugExtension" in inputs["executables"]:
         from build.lib.js_debug import copy_runtime

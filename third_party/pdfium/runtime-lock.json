@@ -1,0 +1,12 @@
+{
+  "release": "chromium/8152",
+  "repository": "https://github.com/bblanchon/pdfium-binaries",
+  "artifacts": {
+    "aarch64-apple-darwin": { "name": "pdfium-mac-arm64.tgz", "size": 3636751, "sha256": "30b0c3f55448840f0947b54bedbe35185bbaccbadd35b8cd960270d6fa6caf80", "library": "lib/libpdfium.dylib" },
+    "x86_64-apple-darwin": { "name": "pdfium-mac-x64.tgz", "size": 3867150, "sha256": "acb975e637ffa1f41430205c62baacac70e34b60811e22fc0e0274dfcd601fcc", "library": "lib/libpdfium.dylib" },
+    "aarch64-unknown-linux-gnu": { "name": "pdfium-linux-arm64.tgz", "size": 3812923, "sha256": "c6ed1a91234aede0cfafdc09c401b83bd44ac69deafc4599fda75d511c36403e", "library": "lib/libpdfium.so" },
+    "x86_64-unknown-linux-gnu": { "name": "pdfium-linux-x64.tgz", "size": 3948043, "sha256": "384ab5c51882408a143a21f9c14dcd2caf1f75280ae41c554d0489b46c3dba9f", "library": "lib/libpdfium.so" },
+    "aarch64-pc-windows-msvc": { "name": "pdfium-win-arm64.tgz", "size": 3732675, "sha256": "8614b10c6a780acc3ae9fdd425d6b61f9d22ae84301b19e1ac82f573930c217c", "library": "bin/pdfium.dll" },
+    "x86_64-pc-windows-msvc": { "name": "pdfium-win-x64.tgz", "size": 4037307, "sha256": "cee2b0e9990bc67c0721774932961b9dbf2766046c10eec925acd4cfba6fdfe3", "library": "bin/pdfium.dll" }
+  }
+}

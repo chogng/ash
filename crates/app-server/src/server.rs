@@ -93,6 +93,8 @@ mod browser_workspace;
 #[path = "server/request_processors/documents.rs"]
 mod documents_processor;
 mod host_credentials;
+#[path = "server/request_processors/pdf.rs"]
+mod pdf_operations;
 pub(crate) use browser_workspace::WebWorkspaceRollback;
 
 mod call_adapters;
@@ -341,6 +343,7 @@ pub struct AppServer {
     browser_favicons: Arc<std::sync::OnceLock<Option<crate::browser_favicons::BrowserFavicons>>>,
     pub(super) resources: Arc<Mutex<ResourceStore>>,
     asset_processor: asset_operations::AssetsRequestProcessor,
+    pdf: ash_pdf::PdfService,
     memory_diagnostics_processor: memory_diagnostics_processor::MemoryDiagnosticsRequestProcessor,
     memories: Option<Arc<memories::Memories>>,
     approval_environment: Option<Arc<guardian_environment::Environment>>,
@@ -1461,6 +1464,9 @@ impl AppServer {
                 )),
             resources,
             asset_processor: asset_operations::AssetsRequestProcessor::default(),
+            pdf: ash_pdf::PdfService::new(
+                std::env::current_exe().expect("App Server executable has a path"),
+            ),
             backup_processor: backup_processor::BackupRequestProcessor::default(),
             artifact_catalog_processor:
                 artifact_catalog_processor::ArtifactCatalogRequestProcessor::default(),
@@ -2055,6 +2061,7 @@ impl AppServer {
         }
         self.asset_processor
             .connection_closed(connection.connection_id);
+        self.pdf.close_owner(connection.connection_id);
         self.testing.close_owner(connection.connection_id);
         self.debug_sessions.close_owner(connection.connection_id);
         for debug_adapters in self.configured_debug_adapter_services() {
@@ -4633,6 +4640,11 @@ impl AppServer {
                 .asset_import_cancel(connection, &request.params),
             Some(ClientMethod::AssetVersion) => self.asset_processor.asset_version(&request.params),
             Some(ClientMethod::AssetRead) => self.asset_processor.asset_read(&request.params),
+            Some(ClientMethod::PdfOpen) => self.pdf_open(connection, &request.params),
+            Some(ClientMethod::PdfAppend) => self.pdf_append(connection, &request.params),
+            Some(ClientMethod::PdfPage) => self.pdf_page(connection, &request.params),
+            Some(ClientMethod::PdfRead) => self.pdf_read(connection, &request.params),
+            Some(ClientMethod::PdfClose) => self.pdf_close(connection, &request.params),
             Some(ClientMethod::ResourceMetadata) => self
                 .resources_processor()
                 .resource_metadata(connection, &request.params),

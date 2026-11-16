@@ -1905,6 +1905,18 @@ static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|
             ExecPolicyEffect::Continue,
         ),
         local_rule(
+            "local-pdf-read",
+            "pdf_read",
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::Continue,
+        ),
+        local_rule(
+            "local-pdf-annotate",
+            "pdf_annotate",
+            ExecPolicyActionKind::FileSystemMutation,
+            ExecPolicyEffect::Continue,
+        ),
+        local_rule(
             "local-grep",
             "grep",
             ExecPolicyActionKind::SystemOperation,

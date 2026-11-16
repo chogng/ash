@@ -242,6 +242,20 @@ use crate::protocol::message_history::MessageHistoryPage;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::message_history::MessageHistoryReadParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfAppendParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfAppendResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfCloseParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfOpenParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfPageParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfReadResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::symphony::SymphonyConfigureParams;
@@ -288,6 +302,16 @@ use ash_debug_contract::DebugSessionAction;
 use ash_debug_contract::DebugSessionAdmission;
 #[cfg(any(test, feature = "export"))]
 use ash_debug_contract::DebugSessionRelation;
+#[cfg(any(test, feature = "export"))]
+use ash_pdf_contract::PdfAnnotation;
+#[cfg(any(test, feature = "export"))]
+use ash_pdf_contract::PdfAnnotationEdit;
+#[cfg(any(test, feature = "export"))]
+use ash_pdf_contract::PdfCharacter;
+#[cfg(any(test, feature = "export"))]
+use ash_pdf_contract::PdfPage;
+#[cfg(any(test, feature = "export"))]
+use ash_pdf_contract::PdfRect;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SymphonyControl;
 #[cfg(any(test, feature = "export"))]
@@ -5050,6 +5074,21 @@ client_methods! {
     AssetCatalog => "asset/catalog" {
         params: AssetCatalogParams, response: AssetCatalogResult, serialization: GlobalExclusive,
     },
+    PdfOpen => "pdf/open" {
+        params: PdfOpenParams, response: (), serialization: ResourceExclusive("documentId"),
+    },
+    PdfAppend => "pdf/append" {
+        params: PdfAppendParams, response: PdfAppendResult, serialization: ResourceExclusive("documentId"),
+    },
+    PdfPage => "pdf/page" {
+        params: PdfPageParams, response: PdfPage, serialization: ResourceExclusive("documentId"),
+    },
+    PdfRead => "pdf/read" {
+        params: PdfReadParams, response: PdfReadResult, serialization: ResourceExclusive("documentId"),
+    },
+    PdfClose => "pdf/close" {
+        params: PdfCloseParams, response: (), serialization: None,
+    },
     AssetCatalogUpdate => "asset/catalog/update" {
         params: AssetCatalogUpdateParams, response: (), serialization: GlobalExclusive,
     },
@@ -7842,6 +7881,18 @@ typescript_bindings! {
     AssetVersionParams,
     AssetVersionResult,
     AssetImageType,
+    PdfOpenParams,
+    PdfAppendParams,
+    PdfAppendResult,
+    PdfPageParams,
+    PdfReadParams,
+    PdfReadResult,
+    PdfCloseParams,
+    PdfPage,
+    PdfRect,
+    PdfCharacter,
+    PdfAnnotation,
+    PdfAnnotationEdit,
     AssetReadParams,
     AssetReadResult,
     ResourceMetadataParams,

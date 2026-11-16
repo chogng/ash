@@ -5,6 +5,12 @@ use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 pub enum AppServerErrorName {
+    PdfInvalid,
+    PdfNotFound,
+    PdfConflict,
+    PdfCapacity,
+    PdfCancelled,
+    PdfOperationFailed,
     SymphonyUnavailable,
     SymphonyNotFound,
     SymphonyConflict,
