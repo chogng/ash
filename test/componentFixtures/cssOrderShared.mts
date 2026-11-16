@@ -496,8 +496,7 @@ export class Renderer {
 
 	async start(run: ProcessRun, environment: NodeJS.ProcessEnv): Promise<void> {
 		const baseURL = await explorerURL(run, environment, this.configPath);
-		// Use the lockfile's full Chromium in headless mode. The separate headless
-		// shell varies rounded-border pixels across otherwise identical processes.
+		// Match the fixture test project's lockfile-pinned full Chromium mode.
 		this.browserServer = await chromium.launchServer({ headless: true, channel: 'chromium' });
 		await run.own(this.browserServer.process());
 		this.browser = await chromium.connect(this.browserServer.wsEndpoint());
