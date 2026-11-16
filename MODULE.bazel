@@ -9,6 +9,7 @@ bazel_dep(name = "rules_python", version = "1.9.2")
 bazel_dep(name = "apple_support", version = "2.1.0")
 bazel_dep(name = "llvm", version = "0.8.11")
 bazel_dep(name = "aws-lc", version = "5.1.0.bcr.1")
+bazel_dep(name = "openssl", version = "3.5.9.bcr.1")
 
 # V8's Chromium libc++ must supply both headers and runtime objects throughout
 # its source closure, including ICU/Abseil and the host snapshot generators.
@@ -313,6 +314,22 @@ crate.annotation(
 )
 
 inject_repo(crate, "aws-lc")
+
+# The hermetic compiler cannot mix /usr/include with its own libc headers.
+# Keep OpenSSL headers and static libraries in the same declared target output;
+# Cargo's vendored feature selection remains owned by its existing manifests.
+crate.annotation(
+    crate = "openssl-sys",
+    build_script_data = ["@openssl//:gen_dir"],
+    build_script_env = {
+        "OPENSSL_DIR": "$(execpath @openssl//:gen_dir)",
+        "OPENSSL_NO_VENDOR": "1",
+        "OPENSSL_STATIC": "1",
+    },
+    repositories = ["crates"],
+)
+
+inject_repo(crate, "openssl")
 
 # The V8 crate build script consumes checksum-pinned sandbox-enabled archives and bindings.
 # They are build inputs only: the resulting executables link V8 statically.

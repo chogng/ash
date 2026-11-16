@@ -85,7 +85,7 @@ pub fn run() {
             shutdown_streams
                 .lock()
                 .unwrap()
-                .insert(id, connection.writer.try_clone().unwrap());
+                .insert(id, connection.writer.shutdown_handle());
             let streams = shutdown_streams.clone();
             let server = server.clone();
             workers.push(thread::spawn(move || {
@@ -100,7 +100,7 @@ pub fn run() {
     }
     // Close and join every connection before dropping the application and endpoint authorities.
     for stream in shutdown_streams.lock().unwrap().values() {
-        let _ = stream.shutdown(std::net::Shutdown::Both);
+        stream.close();
     }
     for worker in workers {
         let _ = worker.join().unwrap();

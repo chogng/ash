@@ -95,6 +95,22 @@ class CodeModeHostTests(unittest.TestCase):
             self.assertEqual(run.call_args.kwargs["env"]["ASH_RG_PATH"], "/custom/rg")
         self.ripgrep.assert_not_called()
 
+    @patch.dict("scripts.cargo.os.environ", {}, clear=True)
+    @patch(
+        "scripts.cargo.cargo_command_packages", return_value={"ash-app-server-runtime"}
+    )
+    @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/program")
+    @patch("scripts.cargo.subprocess.run")
+    def test_backend_library_tests_receive_the_locked_search_program(
+        self, run, prepare, packages
+    ):
+        run.return_value = subprocess.CompletedProcess([], 0)
+        self.assertEqual(main(["test", "-p", "ash-app-server-runtime", "--lib"]), 0)
+        self.assertEqual(
+            run.call_args.kwargs["env"]["ASH_RG_PATH"], str(Path("/runtime/rg"))
+        )
+        self.ripgrep.assert_called_once()
+
     @patch("scripts.cargo.cargo_command_packages", return_value=set())
     @patch("scripts.cargo.subprocess.run")
     def test_shared_profile_respects_explicit_settings_and_program_arguments(

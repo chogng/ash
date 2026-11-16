@@ -332,11 +332,11 @@ def main(arguments: list[str] | None = None) -> int:
         )
     if (
         cargo_arguments[0] in {"test", "run"}
-        and "ash-cli" in packages
+        and bool({"ash-cli", "ash-app-server-runtime"}.intersection(packages))
         and "ASH_RG_PATH" not in environment
     ):
-        # The raw CLI test binary launches a sibling backend without a package's
-        # ash-path resources. Supply the same pinned search tool as packaged runs.
+        # Raw backend tests and CLI-launched backends have no package ash-path
+        # resources. Supply the same pinned search tool as packaged runs.
         from build.lib.ripgrep import resolve_ripgrep
 
         executable = resolve_ripgrep(

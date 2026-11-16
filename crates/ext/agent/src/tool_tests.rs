@@ -11,6 +11,7 @@ use core_api::StartThreadRequest;
 use protocol::AgentCapabilityScope;
 use protocol::AgentRoleSnapshot;
 use protocol::CommandId;
+use protocol::SessionKind;
 use protocol::ToolCallId;
 use protocol::UserInput;
 
@@ -215,7 +216,7 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
             .start_thread(
                 &ash_core::NoThreadWorktreeBinder,
                 StartThreadRequest {
-                    kind: ash_protocol::SessionKind::Code,
+                    kind: SessionKind::Code,
                     execution_target: None,
                     branch_name: None,
                     worktree_start: None,
@@ -428,7 +429,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             StartThreadRequest {
-                kind: ash_protocol::SessionKind::Code,
+                kind: SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

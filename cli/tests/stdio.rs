@@ -282,6 +282,7 @@ fn remote_runtime_preserves_a_terminal_between_real_connections() {
             dir_id: None,
             terminal_id: created.terminal_id.clone(),
             reconnect_token: first_lease.reconnect_token.clone(),
+            attach_nonce: None,
             rows: 30,
             cols: 100,
         })

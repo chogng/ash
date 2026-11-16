@@ -428,6 +428,7 @@ fn shared_backend_preserves_a_reconnectable_terminal_between_stdio_clients() {
             dir_id: None,
             terminal_id: created.terminal_id.clone(),
             reconnect_token: lease.reconnect_token.clone(),
+            attach_nonce: None,
             rows: 30,
             cols: 100,
         }) {
