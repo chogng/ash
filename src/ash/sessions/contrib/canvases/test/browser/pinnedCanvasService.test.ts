@@ -1,10 +1,12 @@
 import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue, constObservable } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -109,6 +111,124 @@ suite('Pinned Canvas ownership', () => {
 		assert.equal(restored.pins.isShown(pin.reference.get()!), true);
 	});
 
+	test('selecting a restored pin opens its instance once and waits for publication', async () => {
+		using original = fixture();
+		original.pins.pin(original.reference(0));
+		using f = fixture(original.storage.get('sessions.pinnedCanvases', StorageScope.PROFILE), null);
+		f.sessions.push({ sessionId: 'session', kind: 'code', status: 'active', chats: [] } as unknown as ISession);
+		f.catalog.fire();
+		const started = new DeferredPromise<void>();
+		const opened = new DeferredPromise<void>();
+		f.definitionProvider.openCanvas = async (_definition, instanceId) => {
+			f.opened.push(instanceId);
+			started.complete();
+			await opened.p;
+		};
+		const pin = f.pins.entries.get()[0]!;
+		const first = f.pins.show(pin);
+		await started.p;
+		const second = f.pins.show(pin);
+		f.sessions[0] = { ...f.sessions[0]!, title: 'Updated snapshot' };
+		f.catalog.fire();
+		assert.deepEqual(f.opened, ['instance-0']);
+		assert.equal(pin.reconnecting.get(), true);
+		opened.complete();
+		await opened.p;
+		assert.equal(pin.reference.get(), undefined);
+		f.membership.set([{ ...original.membership.get()![0]!, resource: URI.parse('agent-host-canvas:/restored') }]);
+		await Promise.all([first, second]);
+		assert.equal(pin.reference.get()?.canvas.path, '/restored');
+		assert.equal(pin.state.get(), PinnedCanvasState.Live);
+		assert.equal(pin.reconnecting.get(), false);
+	});
+
+	test('unpinning abandons discovery before it can reopen a Canvas', async () => {
+		using f = fixture();
+		f.pins.pin(f.reference(0));
+		const pin = f.pins.entries.get()[0]!;
+		const started = new DeferredPromise<void>();
+		const definitions = new DeferredPromise<{ extensionId: string; canvasId: string; }[]>();
+		f.definitionProvider.listCanvases = () => { started.complete(); return definitions.p; };
+		const reconnecting = f.pins.reconnect(pin);
+		await started.p;
+		f.pins.unpin(pin);
+		await reconnecting;
+		definitions.complete([{ extensionId: 'fixture', canvasId: 'board' }]);
+		await definitions.p;
+		assert.deepEqual([f.opened, f.errors], [[], []]);
+	});
+
+	test('replacing a selected provider retries through the new owner and ignores a late failure', async () => {
+		using original = fixture();
+		original.pins.pin(original.reference(0));
+		using f = fixture(original.storage.get('sessions.pinnedCanvases', StorageScope.PROFILE), null);
+		const owner = { sessionId: 'session', kind: 'code', status: 'active', chats: [] } as unknown as ISession;
+		f.sessions.push(owner);
+		f.catalog.fire();
+		const started = new DeferredPromise<void>();
+		const retired = new DeferredPromise<void>();
+		const rebound = new DeferredPromise<void>();
+		f.definitionProvider.openCanvas = async (_definition, instanceId) => {
+			f.opened.push(instanceId);
+			if (f.opened.length === 1) { started.complete(); await retired.p; }
+			else { f.membership.set([original.membership.get()![0]!]); rebound.complete(); }
+		};
+		const pin = f.pins.entries.get()[0]!;
+		const showing = f.pins.show(pin);
+		await started.p;
+		f.replaceProvider();
+		await rebound.p;
+		await showing;
+		retired.error(new Error('retired owner'));
+		await retired.p.catch(() => { });
+		assert.deepEqual(f.opened, ['instance-0', 'instance-0']);
+		assert.equal(pin.state.get(), PinnedCanvasState.Live);
+		assert.deepEqual(f.errors, []);
+	});
+
+	test('a reopen deadline releases its operation and permits retry without accepting a late failure', async () => {
+		using original = fixture();
+		original.pins.pin(original.reference(0));
+		using f = fixture(original.storage.get('sessions.pinnedCanvases', StorageScope.PROFILE), null);
+		const pin = f.pins.entries.get()[0]!;
+		const started = new DeferredPromise<void>();
+		const retired = new DeferredPromise<void>();
+		f.definitionProvider.openCanvas = async () => { started.complete(); await retired.p; };
+		mock.timers.enable({ apis: ['setTimeout'] });
+		try {
+			const reconnecting = f.pins.reconnect(pin);
+			await started.p;
+			mock.timers.tick(15_000);
+			await reconnecting;
+			assert.equal(pin.reconnecting.get(), false);
+			assert.equal(String(f.errors[0]), 'Error: The Canvas did not reopen in time.');
+			f.catalog.fire();
+			assert.equal(pin.state.get(), PinnedCanvasState.Unavailable);
+			assert.equal(pin.reconnecting.get(), false);
+			f.definitionProvider.openCanvas = async () => { f.membership.set([original.membership.get()![0]!]); };
+			await f.pins.reconnect(pin);
+			retired.error(new Error('late timeout result'));
+			await retired.p.catch(() => { });
+			assert.equal(pin.state.get(), PinnedCanvasState.Live);
+			assert.equal(f.errors.length, 1);
+		} finally { mock.timers.reset(); }
+	});
+
+	test('unavailable definitions report a translated failure and allow another attempt', async () => {
+		try {
+			setNlsMessages('zh-CN', chineseCatalog.bundles);
+			using f = fixture();
+			f.pins.pin(f.reference(0));
+			const pin = f.pins.entries.get()[0]!;
+			f.definitionProvider.listCanvases = async () => [];
+			await f.pins.reconnect(pin);
+			assert.equal(String(f.errors[0]), 'Error: 此 Canvas 不可用。');
+			f.definitionProvider.listCanvases = async () => [{ extensionId: 'fixture', canvasId: 'board' }];
+			await f.pins.reconnect(pin);
+			assert.deepEqual(f.opened, ['instance-0']);
+		} finally { resetNlsResolver(); }
+	});
+
 	test('disable preserves pins, reconnect uses the provider, and close ends only the selected Canvas', async () => {
 		using f = fixture();
 		f.pins.pin(f.reference(0));
@@ -176,19 +296,25 @@ function fixture(saved?: string, initial: readonly ICanvas[] | null = Array.from
 	const membership = observableValue<readonly ICanvas[] | undefined>('test', initial ?? undefined);
 	const closed: string[] = [], opened: string[] = [], warnings: string[] = [], errors: string[] = [];
 	const owner: ICanvasOwner = { providerId: 'local-agent-host', session: URI.parse('ash-session:/session'), chat: URI.parse('ash-thread:/thread') };
+	const definitionProvider = {
+		listCanvases: async () => [{ extensionId: 'fixture', canvasId: 'board' }],
+		openCanvas: async (_definition: unknown, instanceId: string) => { opened.push(instanceId); },
+	};
+	let provider = { connectionStatus: connection };
 	const collection = {
 		createContext: () => ({
 			owner, canvases: membership,
-			definitionProvider: { listCanvases: async () => [{ extensionId: 'fixture', canvasId: 'board' }], openCanvas: async (_definition: unknown, instanceId: string) => { opened.push(instanceId); } },
+			definitionProvider,
 			closeCanvas: async (canvas: ICanvas) => { closed.push(canvas.instanceId!); membership.set(membership.get()!.filter(candidate => candidate !== canvas)); },
 		})
 	} as unknown as IAgentHostCanvasCollection;
 	const pins = lifetime.add(new PinnedCanvasService(collection, { onDidChange: catalog.event, state: 'ready', get sessions() { return sessions; } } as unknown as ISessionsManagementService, { openThread: async () => { views.hideCustomView(); } } as unknown as ISessionsService,
-		{ onDidChangeProviders: Event.None, getProvider: () => ({ connectionStatus: connection }) } as unknown as ISessionsProvidersService, views, { onDidChangeConfiguration: configurationChanges.event, getValue: (key: string) => key === CanvasesEnabledSettingId ? enabled : false } as unknown as IConfigurationService,
+		{ onDidChangeProviders: Event.None, getProvider: () => provider } as unknown as ISessionsProvidersService, views, { onDidChangeConfiguration: configurationChanges.event, getValue: (key: string) => key === CanvasesEnabledSettingId ? enabled : false } as unknown as IConfigurationService,
 		storage, { warn: (message: string) => warnings.push(message), error: (message: string) => errors.push(message) } as unknown as INotificationService));
 	lifetime.add(views.registerCustomView({ id: PINNED_CANVAS_PAGE_ID, ctor: new SyncDescriptor(Page), acceptsState: id => pins.entries.get().some(pin => pin.id === id) }, { restore: false }));
 	return Object.assign(lifetime, {
-		pins, storage, views, membership, sessions, catalog, connection, closed, opened, warnings, errors,
+		pins, storage, views, membership, sessions, catalog, connection, definitionProvider, closed, opened, warnings, errors,
+		replaceProvider: () => { provider = { connectionStatus: connection }; catalog.fire(); },
 		reference: (index: number): ICanvasReference => ({ ...owner, canvas: URI.parse('agent-host-canvas:/target-' + index) }),
 		setEnabled: (value: boolean) => { enabled = value; configurationChanges.fire({}); },
 	});

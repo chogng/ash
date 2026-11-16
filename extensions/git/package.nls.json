@@ -746,6 +746,7 @@
   "git.rewrittenPull.once": "Pull",
   "git.syncCancellation": "Syncing. Cancelling may cause serious damage to the repository.",
   "git.tagConflict": "Unable to pull because local and remote tags conflict: {0}. Replace the conflicting local tags?",
+  "git.tagConflict.more": "{0} and {1} more",
   "git.tagConflict.replace": "Replace Local Tags",
   "git.tagConflict.always": "Always Replace Local Tags",
   "git.status.syncIdle": "Synchronize Changes",

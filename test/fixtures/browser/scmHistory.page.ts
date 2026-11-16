@@ -35,6 +35,7 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
 import type { IEditorOptions } from '../../../src/ash/platform/editor/common/editor.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/testEditorService.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { IProgressService } from '../../../src/ash/platform/progress/common/progress.js';
@@ -81,9 +82,9 @@ services.registerInstance(IAccessibleViewService, resources.add(services.createI
 services.registerInstance(IClipboardService, new BrowserClipboardService(navigator.clipboard));
 // Editor transport is covered by smoke; this fixture owns only row and hover rendering.
 const opened: { resource: string; options: IEditorOptions | undefined; group: unknown; }[] = [];
-services.registerInstance(IEditorService, { openEditor: async (input: IResourceEditorInput, options?: IEditorOptions, group?: unknown) => { opened.push({ resource: input.resource.toString(), options, group }); } } as unknown as IEditorService);
+services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async (input: IResourceEditorInput, options?: IEditorOptions, group?: unknown) => { opened.push({ resource: input.resource.toString(), options, group }); } } as unknown as IEditorService);
 const scm = resources.add(new SCMService());
-const view = resources.add(new SCMViewService(scm));
+const view = resources.add(new SCMViewService(scm, services.get(IEditorService)));
 services.registerInstance(ISCMService, scm);
 services.registerInstance(ISCMViewService, view);
 const hash = 'a'.repeat(40);

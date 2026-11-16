@@ -451,18 +451,16 @@ impl GitClient {
                     .0
                 }
             };
-            let mut fetch = vec!["fetch".to_owned(), "--force".into(), "--".into(), remote];
-            if tags.len() > 5000 {
-                return Err(invalid("too many conflicting tags"));
-            }
-            for tag in &tags {
-                let reference = format!("refs/tags/{tag}");
-                self.validate_ref(repository, &reference).await?;
-                fetch.push(format!("{reference}:{reference}"));
-            }
-            self.run_mutation(repository.worktree_root(), fetch)
-                .await?
-                .require_success()?;
+            // Refspecs travel over stdin so long tag inventories cannot exceed the
+            // host's command-line limit. Admit the entire list before mutating refs.
+            let refspecs = conflicting_tag_refspecs(&tags)?;
+            self.run_mutation_with_stdin(
+                repository.worktree_root(),
+                ["fetch", "--force", "--stdin", "--", &remote],
+                refspecs,
+            )
+            .await?
+            .require_success()?;
             let retried = self
                 .run_mutation(repository.worktree_root(), arguments)
                 .await?;
@@ -767,6 +765,33 @@ impl GitClient {
             .split(|byte| *byte == b'\n')
             .any(|line| line.starts_with(b"=")))
     }
+}
+
+fn conflicting_tag_refspecs(tags: &[String]) -> GitResult<Vec<u8>> {
+    if tags.len() > 5000 {
+        return Err(invalid("too many conflicting tags"));
+    }
+    let mut input = Vec::new();
+    for tag in tags {
+        // Full refs follow check-ref-format's grammar, without its optional
+        // normalization, one-level names or branch shorthand. This also excludes
+        // newlines and refspec operators before process output reaches fetch.
+        if tag.is_empty()
+            || tag.ends_with('.')
+            || tag.contains("..")
+            || tag.contains("@{")
+            || tag
+                .bytes()
+                .any(|byte| byte <= b' ' || byte == 127 || b"~^:?*[\\".contains(&byte))
+            || tag
+                .split('/')
+                .any(|part| part.is_empty() || part.starts_with('.') || part.ends_with(".lock"))
+        {
+            return Err(invalid("invalid conflicting tag reference"));
+        }
+        input.extend_from_slice(format!("refs/tags/{tag}:refs/tags/{tag}\n").as_bytes());
+    }
+    Ok(input)
 }
 
 // Git emits these records under the runner's fixed C locale. Parse them here,

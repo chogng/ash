@@ -32,7 +32,7 @@ export class PinnedCanvasPage extends AbstractCustomView {
 		this.view = this._register(this.instantiation.createInstance(CanvasView, container, container.ownerDocument.defaultView!, {
 			logPrefix: '[PinnedCanvasPage]',
 			notPresentableMessage: constObservable(localize('pinnedCanvasPage.unavailable', 'This Canvas is unavailable. Return to its conversation or try reconnecting.')),
-			getHelpContent: () => localize('pinnedCanvasPage.help', 'This Canvas is pinned to the sidebar and stays owned by its conversation. It stays live while you work in other conversations. Tab moves through page controls. Use <keybinding:workbench.action.focusNextPart> to leave the page. The page header offers Go to Chat, Reconnect Canvas, Remove from Sidebar and Close Canvas. Removing a pin keeps the page open in its conversation. Close Canvas ends the page. Escape closes the accessible view and returns focus to the Canvas.'),
+			getHelpContent: () => localize('pinnedCanvasPage.help', 'This Canvas is pinned to the sidebar and stays owned by its conversation. It stays live while you work in other conversations. Selecting an unavailable Canvas tries to reopen its saved instance. Tab moves through page controls. Use <keybinding:workbench.action.focusNextPart> to leave the page. The page header offers Go to Chat, Reconnect Canvas, Remove from Sidebar and Close Canvas. Removing a pin keeps the page open in its conversation. Close Canvas ends the page. Escape closes the accessible view and returns focus to the Canvas.'),
 		}));
 		const message = h(container.ownerDocument, 'p', { className: 'ash-pinned-canvas-message', attributes: { role: 'status' } });
 		container.append(message);

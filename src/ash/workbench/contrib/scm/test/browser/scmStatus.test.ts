@@ -1,3 +1,4 @@
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -53,7 +54,7 @@ function createFixture() {
 	const resources = new DisposableStore();
 	const changed = resources.add(new Emitter<void>());
 	const scmService = resources.add(new SCMService());
-	const viewService = resources.add(new SCMViewService(scmService));
+	const viewService = resources.add(new SCMViewService(scmService, emptyEditorServiceState));
 	const statusbar = resources.add(new StatusbarService());
 	const provider: ISCMProvider & { statusBarCommands: ISCMStatusBarCommand[]; } = {
 		id: 'test', providerId: 'test', label: 'Test', groups: [], onDidChangeResources: changed.event,

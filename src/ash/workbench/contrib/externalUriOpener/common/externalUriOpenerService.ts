@@ -1,4 +1,5 @@
 import { CancellationToken } from '../../../../base/common/cancellation.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { LinkedList } from '../../../../base/common/linkedList.js';
 import { Schemas } from '../../../../base/common/network.js';
@@ -115,7 +116,7 @@ export class ExternalUriOpenerService extends Disposable implements IExternalUri
 					candidates.set(opener.id, opener);
 				}
 			} catch (error) {
-				this.logService.error('externalUriOpener', error);
+				if (!isCancellationError(error)) this.logService.error('externalUriOpener', error);
 			}
 		}
 		if (token.isCancellationRequested || this.isDisposed) {
@@ -156,7 +157,7 @@ export class ExternalUriOpenerService extends Disposable implements IExternalUri
 					choices.set(opener, priority);
 				}
 			} catch (error) {
-				this.logService.error('externalUriOpener', error);
+				if (!isCancellationError(error)) this.logService.error('externalUriOpener', error);
 			}
 		}
 		return includeOptions || [...choices.values()].includes(ExternalUriOpenerPriority.Default)

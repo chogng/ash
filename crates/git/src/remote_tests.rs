@@ -5,6 +5,68 @@ use crate::test_support::TestRepository;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
+async fn conflicting_tag_admission_matches_git_and_excludes_refspec_injection() {
+    let repository = TestRepository::init();
+    let client = GitClient::system();
+    for tag in [
+        "release",
+        "nested/release",
+        "版本",
+        "-release",
+        "a@b",
+        "a.locked",
+        "",
+        ".hidden",
+        "nested/.hidden",
+        "a.lock",
+        "nested/a.lock",
+        "a..b",
+        "a@{b",
+        "a.",
+        "/a",
+        "a/",
+        "a//b",
+        "a b",
+        "a\t",
+        "a\n",
+        "a\r",
+        "a\0",
+        "a\u{7f}",
+        "a~b",
+        "a^b",
+        "a:b",
+        "a?b",
+        "a*b",
+        "a[b",
+        "a\\b",
+    ] {
+        let admitted = super::conflicting_tag_refspecs(&[tag.to_owned()]);
+        let git = client
+            .run_query(
+                repository.root(),
+                ["check-ref-format", &format!("refs/tags/{tag}")],
+            )
+            .await;
+        assert_eq!(admitted.is_ok(), git.is_ok(), "tag: {tag:?}");
+    }
+}
+
+#[test]
+fn conflicting_tags_use_stdin_without_a_command_length_limit() {
+    let tags: Vec<_> = (0..300)
+        .map(|index| format!("{index}-{}", "x".repeat(200)))
+        .collect();
+    let input = super::conflicting_tag_refspecs(&tags).unwrap();
+    assert!(input.len() > 100_000);
+    let expected = tags
+        .iter()
+        .map(|tag| format!("refs/tags/{tag}:refs/tags/{tag}\n"))
+        .collect::<String>();
+    assert_eq!(input, expected.as_bytes());
+    assert!(super::conflicting_tag_refspecs(&vec!["tag".into(); 5001]).is_err());
+}
+
+#[tokio::test]
 async fn remote_inventory_resolves_rewrites_and_ignores_partial_clone_filter_text() {
     let repository = TestRepository::init();
     repository.git(&["remote", "add", "origin", "alias:team/repo.git"]);
@@ -294,9 +356,29 @@ async fn force_push_with_lease_rejects_unseen_remote_commits() {
 async fn pull_replaces_only_conflicting_tags_when_requested() {
     let remote = TestBareRepository::init();
     let producer = TestRepository::init();
+    let client = GitClient::system();
     producer.write("base.txt", "base\n");
     producer.commit_all("base");
     producer.git(&["tag", "release"]);
+    let tags: Vec<_> = (0..300)
+        .map(|index| format!("{index}-{}", "x".repeat(80)))
+        .collect();
+    let updates = |object: &str| {
+        tags.iter()
+            .map(|tag| format!("update refs/tags/{tag} {object}\n"))
+            .collect::<String>()
+            .into_bytes()
+    };
+    client
+        .run_mutation_with_stdin(
+            producer.root(),
+            ["update-ref", "--stdin"],
+            updates(&producer.git(&["rev-parse", "HEAD"])),
+        )
+        .await
+        .unwrap()
+        .require_success()
+        .unwrap();
     producer.git(&["remote", "add", "origin", remote.root().to_str().unwrap()]);
     producer.git(&["push", "-u", "origin", "main", "--tags"]);
     let source = TestRepository::clone_from(remote.root());
@@ -305,8 +387,18 @@ async fn pull_replaces_only_conflicting_tags_when_requested() {
     producer.write("update.txt", "upstream\n");
     producer.commit_all("update");
     producer.git(&["tag", "--force", "release"]);
+    let updated = producer.git(&["rev-parse", "HEAD"]);
+    client
+        .run_mutation_with_stdin(
+            producer.root(),
+            ["update-ref", "--stdin"],
+            updates(&updated),
+        )
+        .await
+        .unwrap()
+        .require_success()
+        .unwrap();
     producer.git(&["push", "origin", "main", "--force", "--tags"]);
-    let client = GitClient::system();
     let repository = client.open_repository(source.root()).await.unwrap();
     let mut options = super::GitTransportOptions {
         tag_policy: super::GitTagPolicy::Include,
@@ -316,7 +408,9 @@ async fn pull_replaces_only_conflicting_tags_when_requested() {
         .pull_with_options(&repository, super::GitPullMode::Configured, options)
         .await
         .unwrap_err();
-    assert!(matches!(error, crate::GitError::TagConflict { tags } if tags == ["release"]));
+    assert!(
+        matches!(error, crate::GitError::TagConflict { tags } if tags.len() == 301 && tags.iter().any(|tag| tag == "release"))
+    );
     assert_eq!(source.git(&["rev-parse", "HEAD"]), before);
     assert_eq!(source.git(&["rev-parse", "release"]), before);
     options.replace_tags = true;
@@ -330,6 +424,18 @@ async fn pull_replaces_only_conflicting_tags_when_requested() {
         producer.git(&["rev-parse", "release"])
     );
     assert_eq!(source.git(&["rev-parse", "local-only"]), before);
+    let references = source.git(&[
+        "for-each-ref",
+        "--format=%(refname) %(objectname)",
+        "refs/tags",
+    ]);
+    for tag in &tags {
+        assert!(
+            references
+                .lines()
+                .any(|line| line == format!("refs/tags/{tag} {updated}"))
+        );
+    }
 }
 
 #[tokio::test(flavor = "current_thread")]

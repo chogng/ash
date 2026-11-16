@@ -22,6 +22,7 @@ import { createEmptyTestLanguagePacks } from '../../../localization/test/common/
 import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacks.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { IEditorService } from '../../../editor/common/editorService.js';
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IWorkingCopyService } from '../../../workingCopy/common/workingCopyService.js';
 import { IViewsService } from '../../../views/common/viewsService.js';
@@ -1213,7 +1214,7 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerInstance(ITerminalProfileResolverService, {} as ITerminalProfileResolverService);
 	services.registerInstance(IExtensionHostApi, api);
 	// These registrations exercise host callbacks without opening editor UI.
-	services.registerInstance(IEditorService, { openEditor: async () => assert.fail('Unexpected editor open') } as unknown as IEditorService);
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => assert.fail('Unexpected editor open') });
 	services.registerInstance(IEditorPart, { groups: [], activeGroup: undefined, onDidChangeEditors: Event.None } as unknown as IEditorPart);
 	services.registerInstance(IFileDialogService, { pickFolderAndOpen: async () => assert.fail('Unexpected folder open'), pickWorkspaceAndOpen: async () => assert.fail('Unexpected workspace open'), pickFileToSave: async () => undefined, showOpenDialog: async () => assert.fail('Unexpected folder picker'), showSaveDialog: async () => undefined, showSaveConfirm: async () => 2 });
 	services.registerInstance(IWorkingCopyService, { get: () => assert.fail('Unexpected working copy request') } as unknown as IWorkingCopyService);

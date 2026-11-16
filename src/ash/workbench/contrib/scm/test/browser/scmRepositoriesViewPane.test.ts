@@ -1,3 +1,4 @@
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import type { JSDOM } from 'jsdom';
 import assert from 'node:assert/strict';
@@ -31,7 +32,7 @@ function fixture(): DisposableStore & { scm: SCMService; views: SCMViewService; 
 	const resources = new DisposableStore();
 	const browser = browserEnvironment;
 	const scm = resources.add(new SCMService());
-	const views = resources.add(new SCMViewService(scm));
+	const views = resources.add(new SCMViewService(scm, emptyEditorServiceState));
 	const services = resources.add(new InstantiationService());
 	const configuration = resources.add(new InMemoryConfigurationService());
 	const container = browser.window.document.createElement('div');

@@ -9,6 +9,8 @@ export const emptyEditorServiceState = Object.freeze({
 	activeEditorPane: undefined,
 	visibleEditors: Object.freeze([]),
 	visibleEditorPanes: Object.freeze([]),
+	openEditor: async () => undefined,
+	focusActiveEditor: () => { },
 	save: async () => ({ success: true, editors: [] }),
 	saveAll: async () => ({ success: true, editors: [] }),
-}) satisfies Pick<IEditorService, 'onDidActiveEditorChange' | 'onDidVisibleEditorsChange' | 'activeEditor' | 'activeEditorPane' | 'visibleEditors' | 'visibleEditorPanes' | 'save' | 'saveAll'>;
+}) satisfies IEditorService;

@@ -1,3 +1,4 @@
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import '../../browser/scm.contribution.js';
 import assert from 'node:assert/strict';
@@ -18,7 +19,7 @@ test('SCM working sets save and restore editor state across branch changes', asy
 	await configuration.updateValue('scm.workingSets.default', 'empty');
 	using provider = new TestSCMProvider('main');
 	using scmService = new SCMService();
-	using viewService = new SCMViewService(scmService);
+	using viewService = new SCMViewService(scmService, emptyEditorServiceState);
 	using repository = scmService.registerSCMProvider(provider);
 	const storage = new TestStorageService();
 	const saved: string[] = [];

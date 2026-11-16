@@ -6,6 +6,7 @@ import { StandaloneCommandService } from '../../../../../editor/standalone/brows
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { CancellationError } from '../../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -259,6 +260,26 @@ suite('External URI opener production routing', () => {
 		fixture.register({ ...fixture.handler('broken'), canOpen: async () => { throw new Error('probe failed'); } }, fixture.handler('viewer'));
 		await fixture.opener.open(destination, { allowContributedOpeners: true });
 		assert.deepEqual([fixture.logs.map(entry => (entry.error as Error).message), fixture.contributedOpened], [['enumeration failed', 'probe failed'], [`viewer:${destination.toString()}`]]);
+	});
+
+	test('cancelled capability probes settle without logging or probing another handler', async () => {
+		using fixture = new Fixture();
+		using cancellation = new CancellationTokenSource();
+		fixture.register({
+			...fixture.handler('cancelled'),
+			canOpen: async () => { cancellation.cancel(); throw new CancellationError(); },
+		}, fixture.handler('next'));
+		assert.equal(await fixture.external.getOpener(destination, { sourceUri: destination }, cancellation.token), undefined);
+		assert.deepEqual([fixture.logs, fixture.probed, fixture.contributedOpened, fixture.hostOpened], [[], [], [], []]);
+	});
+
+	test('a provider cancelled independently does not log or hide another provider', async () => {
+		using fixture = new Fixture();
+		using cancelled = fixture.external.registerExternalOpenerProvider({ async *getOpeners() { throw new CancellationError(); } });
+		const viewer = fixture.handler('viewer');
+		fixture.register(viewer);
+		assert.equal(await fixture.external.getOpener(destination, { sourceUri: destination }, CancellationToken.None), viewer);
+		assert.deepEqual(fixture.logs, []);
 	});
 
 	for (const [choice, expected] of [[0, 'first'], [2, 'default'], [3, 'configure'], [undefined, 'cancel']] as const) {

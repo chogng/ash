@@ -93,6 +93,7 @@ test('SCM history services assemble through their production registrations', asy
 	}
 	assert.ok(services.has(ISCMService));
 	assert.ok(services.has(ISCMViewService));
+	services.registerInstance(IEditorService, emptyEditorServiceState);
 	const scmService = services.get(ISCMService);
 	const viewService = services.get(ISCMViewService);
 	using repository = scmService.registerSCMProvider(testSCMProvider('repo', 'repo', {} as ISCMHistoryProvider));
@@ -189,7 +190,7 @@ test('SCM history title operations keep refresh and busy state with their starti
 		using services = new InstantiationService();
 		const menus = new MenuService(new CommandService(services), context);
 		using scm = new SCMService();
-		using view = new SCMViewService(scm);
+		using view = new SCMViewService(scm, emptyEditorServiceState);
 		const refreshed: string[] = [];
 		const loaded: string[] = [];
 		const provider = (id: string): ISCMHistoryProvider => ({
@@ -285,7 +286,7 @@ for (const revisionSource of ['query', 'snapshot', 'id', 'current'] as const) {
 			using services = new InstantiationService();
 			const menus = new MenuService(new CommandService(services), context);
 			using scm = new SCMService();
-			using view = new SCMViewService(scm);
+			using view = new SCMViewService(scm, emptyEditorServiceState);
 			using changed = new Emitter<void>();
 			const head = { id: 'refs/heads/main', name: 'main', revision: 'local', category: 'localBranch' };
 			// Providers can publish an upstream identity before its revision is available.
@@ -428,7 +429,7 @@ test('SCM history reference changes apply immediately and survive dismissal, inc
 		using services = new InstantiationService();
 		const menus = new MenuService(new CommandService(services), context);
 		using scm = new SCMService();
-		using view = new SCMViewService(scm);
+		using view = new SCMViewService(scm, emptyEditorServiceState);
 		const references = ['main', 'topic/one', 'topic/two'].map((name, index) => ({ id: `refs/heads/${name}`, name, revision: String(index + 1).repeat(40), category: 'localBranch' }));
 		const commits = references.map(ref => ({ id: ref.revision, parentIds: [], subject: ref.name, message: '' }));
 		const requests: Parameters<ISCMHistoryProvider['provideHistoryItems']>[0][] = [];
@@ -544,7 +545,7 @@ test('SCM history details expose copy and remote actions without extension menu 
 		const menus = new MenuService(new CommandService(services), context);
 		using scm = new SCMService();
 		services.registerInstance(ISCMService, scm);
-		using view = new SCMViewService(scm);
+		using view = new SCMViewService(scm, emptyEditorServiceState);
 		const id = 'abcdef0123456789';
 		const uri = URI.parse(`https://github.com/test/history/commit/${id}`);
 		const openedEditors: Parameters<typeof testEditorService>[0] = [];
@@ -655,7 +656,7 @@ test('SCM history restores a late HEAD and moves its marker without reloading or
 		using services = new InstantiationService();
 		const menus = new MenuService(new CommandService(services), context);
 		using scm = new SCMService();
-		using view = new SCMViewService(scm);
+		using view = new SCMViewService(scm, emptyEditorServiceState);
 		const head = observableValue<ISCMHistoryItemRef | undefined>('lateHead', undefined);
 		let queries = 0;
 		const provider: ISCMHistoryProvider = {
@@ -878,7 +879,7 @@ test('SCM history refresh retains loaded identities and folder focus and bounds 
 		using context = new ContextKeyService();
 		using services = new InstantiationService();
 		using scm = new SCMService();
-		using view = new SCMViewService(scm);
+		using view = new SCMViewService(scm, emptyEditorServiceState);
 		using changed = new Emitter<void>();
 		const makeItem = (id: string) => ({ id, parentIds: [], subject: id, message: id });
 		let items = Array.from({ length: 30 }, (_, index) => makeItem(`original-${index}`));
@@ -1532,7 +1533,7 @@ async function createResourceGroupMenuFixture(renderContextMenu = false, groupLa
 		const services = resources.add(dependencies.createChild());
 		services.registerInstance(ILayoutService, { mainContainer: browser.window.document.body } as unknown as ILayoutService);
 		const scm = resources.add(new SCMService());
-		const views = resources.add(new SCMViewService(scm));
+		const views = resources.add(new SCMViewService(scm, emptyEditorServiceState));
 		const changes = resources.add(new Emitter<void>());
 		const resourceCalls: ResourceGroupMenuFixture['resourceCalls'] = [];
 		let isBusy = false;
@@ -2133,7 +2134,7 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		using services = dependencies.createChild();
 		using configuration = new InMemoryConfigurationService();
 		using scm = new SCMService();
-		using views = new SCMViewService(scm);
+		using views = new SCMViewService(scm, emptyEditorServiceState);
 		using repository = scm.registerSCMProvider(provider);
 		services.registerInstance(ISCMService, scm);
 		services.registerInstance(ISCMViewService, views);
@@ -2274,9 +2275,10 @@ test('SCM input keeps repository drafts, updates help verbosity and releases its
 		using configuration = new InMemoryConfigurationService();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IEditorService, emptyEditorServiceState);
 		registerCodeEditorServices(services);
 		using scm = new SCMService();
-		using view = new SCMViewService(scm);
+		using view = new SCMViewService(scm, emptyEditorServiceState);
 		if (!services.has(ISCMViewService)) services.registerInstance(ISCMViewService, view);
 		using input = services.createInstance(SCMInputWidget, browser.window.document.body);
 		const first = { ...testSCMProvider('first', 'First').input, enabled: true, value: 'First draft' };
@@ -2457,7 +2459,7 @@ function historyProviderFixture(overrides: Partial<ISCMHistoryProvider> = {}): I
 function createHistoryViewFixture(data: HistoryFixtureData) {
 	const resources = new DisposableStore();
 	const scmService = resources.add(new SCMService());
-	const viewService = resources.add(new SCMViewService(scmService));
+	const viewService = resources.add(new SCMViewService(scmService, emptyEditorServiceState));
 	const head = observableValue<ISCMHistoryItemRef | undefined>('test.head', undefined);
 	let references: ISCMHistoryItemRef[] = [];
 	const cursors = new Map<number, string>();
@@ -2496,7 +2498,7 @@ test('SCM publishes its count through view activity and retires it with the cont
 	using descriptors = new TestViewDescriptorService({ registry }, contexts);
 	using activity = new ActivityService(descriptors);
 	using scm = new SCMService();
-	using views = new SCMViewService(scm);
+	using views = new SCMViewService(scm, emptyEditorServiceState);
 	using changes = new Emitter<void>();
 	let count = 3;
 	using repository = scm.registerSCMProvider({

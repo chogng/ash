@@ -1267,7 +1267,15 @@ impl GitRuntime {
                 token,
             )?;
             if let TransportOutcome::TagConflict { tags } = &pulled.outcome {
-                let message = self.api.text("git.tagConflict", &[&tags.join(", ")]);
+                let names = if tags.len() > 5 {
+                    self.api.text(
+                        "git.tagConflict.more",
+                        &[&tags[..5].join(", "), &(tags.len() - 5).to_string()],
+                    )
+                } else {
+                    tags.join(", ")
+                };
+                let message = self.api.text("git.tagConflict", &[&names]);
                 if config.boolean("replaceTagsWhenPull", false) {
                     return Err(invalid(&message));
                 }

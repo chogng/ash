@@ -799,6 +799,7 @@
   "git.rewrittenPull.once": "拉取",
   "git.syncCancellation": "正在同步。取消可能对仓库造成严重损坏。",
   "git.tagConflict": "本地与远程标签冲突，无法拉取：{0}。是否替换冲突的本地标签？",
+  "git.tagConflict.more": "{0}，以及另外 {1} 项",
   "git.tagConflict.replace": "替换本地标签",
   "git.tagConflict.always": "始终替换本地标签",
   "git.status.syncIdle": "同步更改",

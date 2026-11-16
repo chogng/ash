@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { emptyEditorServiceState } from '../../../test/common/testEditorService.js';
 import { test } from 'mocha';
 import { mock } from 'node:test';
 import { readFile } from 'node:fs/promises';
@@ -33,7 +34,7 @@ function fleet(providers: JsonValue[] = [provider()]): ExtensionHostFleetSnapsho
 }
 function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[], reconcile?: IExtensionHostApi['reconcile'], workspaceFolders: readonly string[] = [], recovery?: IAppServerConnectionRecovery) {
 	const lifetime = new DisposableStore();
-	const scm = lifetime.add(new SCMService()); const view = lifetime.add(new SCMViewService(scm));
+	const scm = lifetime.add(new SCMService()); const view = lifetime.add(new SCMViewService(scm, emptyEditorServiceState));
 	const quickDiff = lifetime.add(new QuickDiffService()); const resolvers = lifetime.add(new MultiDiffSourceResolverService());
 	const decorationProviders = new Set<IDecorationsProvider>(); const errors: unknown[] = [];
 	const decorations = { registerDecorationsProvider(value: IDecorationsProvider) { decorationProviders.add(value); return { dispose: () => decorationProviders.delete(value) }; } } as unknown as IDecorationsService;

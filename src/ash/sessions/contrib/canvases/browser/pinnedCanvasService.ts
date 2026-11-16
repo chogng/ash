@@ -1,9 +1,12 @@
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 import { Event } from '../../../../base/common/event.js';
+import { disposableTimeout, raceCancellationError } from '../../../../base/common/async.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, observableFromEvent, observableValue, transaction, type IReader } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -34,6 +37,7 @@ class Pin implements IPinnedCanvas {
 	readonly reconnecting = observableValue(this, false);
 	wasLive = false;
 	wasInCatalog = false;
+	reopenFailed = false;
 
 	constructor(readonly identity: IPinnedCanvasIdentity, title: string) {
 		const hash = new StringSHA1();
@@ -46,15 +50,21 @@ class Pin implements IPinnedCanvas {
 /** Owns profile-local pin identities. Membership and page state remain with the host collection. */
 export class PinnedCanvasService extends Disposable implements IPinnedCanvasService {
 	private readonly pins = observableValue<readonly Pin[]>(this, []);
+	private readonly recoveries = new Map<Pin, {
+		readonly ownerPresent: boolean;
+		readonly provider: ReturnType<ISessionsProvidersService['getProvider']>;
+		readonly cancellation: CancellationTokenSource;
+		readonly promise: Promise<void>;
+	}>();
 	readonly enabled;
 	readonly entries;
 	readonly selected;
 
 	constructor(
 		@IAgentHostCanvasCollection private readonly collection: IAgentHostCanvasCollection,
-		@ISessionsManagementService management: ISessionsManagementService,
+		@ISessionsManagementService private readonly management: ISessionsManagementService,
 		@ISessionsService private readonly sessions: ISessionsService,
-		@ISessionsProvidersService providers: ISessionsProvidersService,
+		@ISessionsProvidersService private readonly providers: ISessionsProvidersService,
 		@ICustomViewService private readonly views: ICustomViewService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IStorageService private readonly storage: IStorageService,
@@ -84,11 +94,14 @@ export class PinnedCanvasService extends Disposable implements IPinnedCanvasServ
 				const session = sessions.find(session => session.sessionId === pin.identity.session.path.slice(1) && (session.providerId ?? 'local-agent-host') === pin.identity.providerId);
 				const provider = providers.getProvider(pin.identity.providerId);
 				const connected = !!provider && (provider.connectionStatus?.read(reader) ?? 'connected') === 'connected';
-				if (!connected) { pin.wasLive = false; }
+				const recovery = this.recoveries.get(pin);
+				if (recovery && (recovery.ownerPresent !== !!session || recovery.provider !== provider || !enabled || !connected)) this.cancelRecovery(pin);
+				if (!connected) { pin.wasLive = false; pin.reopenFailed = false; }
 				const deleted = pin.wasInCatalog && !session && management.state === 'ready' && connected;
 				if (session) { pin.wasInCatalog = true; }
 				const chat = session?.chats.find(chat => chat.threadId === pin.identity.chat.path.slice(1));
 				if (deleted || session?.status === 'archived' || chat?.status === 'archived' || session?.agentTree !== undefined && !chat) {
+					this.cancelRecovery(pin);
 					removed.add(pin);
 					continue;
 				}
@@ -96,12 +109,17 @@ export class PinnedCanvasService extends Disposable implements IPinnedCanvasServ
 				const canvases = enabled && connected ? collection.createContext(pin.identity).canvases.read(reader) : undefined;
 				const canvas = canvases?.find(canvas => canvas.instanceId === pin.identity.instanceId
 					&& canvas.extensionId === pin.identity.extensionId && canvas.canvasId === pin.identity.canvasId);
-				if (enabled && pin.wasLive && canvases !== undefined && !canvas) { removed.add(pin); continue; }
+				if (enabled && pin.wasLive && canvases !== undefined && !canvas) {
+					this.cancelRecovery(pin);
+					removed.add(pin);
+					continue;
+				}
 				transaction(tx => {
 					pin.canvas.set(canvas, tx);
-					pin.state.set(!enabled || canvases === undefined ? PinnedCanvasState.Pending : canvas ? PinnedCanvasState.Live : PinnedCanvasState.Unavailable, tx);
-					pin.reconnecting.set(enabled && canvases === undefined, tx);
-					if (canvas) { pin.title.set(canvas.title, tx); pin.wasLive = true; }
+					const pending = !enabled || this.recoveries.has(pin) || canvases === undefined && !pin.reopenFailed;
+					pin.state.set(canvas ? PinnedCanvasState.Live : pending ? PinnedCanvasState.Pending : PinnedCanvasState.Unavailable, tx);
+					pin.reconnecting.set(this.recoveries.has(pin) || enabled && canvases === undefined && !pin.reopenFailed, tx);
+					if (canvas) { pin.title.set(canvas.title, tx); pin.wasLive = true; pin.reopenFailed = false; }
 				});
 			}
 			if (removed.size) {
@@ -110,6 +128,29 @@ export class PinnedCanvasService extends Disposable implements IPinnedCanvasServ
 				if (selected && removed.has(selected as Pin)) { views.hideCustomView(); }
 			}
 			this.save();
+		}));
+		const selectedOwner = derived(reader => {
+			const pin = this.selected.read(reader);
+			return !!pin && catalog.read(reader).some(session => session.sessionId === pin.identity.session.path.slice(1)
+				&& (session.providerId ?? 'local-agent-host') === pin.identity.providerId);
+		});
+		const selectedProvider = derived(reader => {
+			catalog.read(reader);
+			const pin = this.selected.read(reader);
+			return pin && providers.getProvider(pin.identity.providerId);
+		});
+		// Catalog entries are snapshots. Only owner availability and the provider's
+		// lifetime can retire recovery; replacing a snapshot must not restart work.
+		this._register(autorun(reader => {
+			const pin = this.selected.read(reader) as Pin | undefined;
+			const owner = selectedOwner.read(reader);
+			const provider = selectedProvider.read(reader);
+			if (pin && owner && provider && (provider.connectionStatus?.read(reader) ?? 'connected') === 'connected' && !pin.canvas.get()) {
+				void this.reconnect(pin);
+			}
+		}));
+		this._register(toDisposable(() => {
+			for (const pin of this.recoveries.keys()) this.cancelRecovery(pin);
 		}));
 	}
 
@@ -172,22 +213,85 @@ export class PinnedCanvasService extends Disposable implements IPinnedCanvasServ
 	unpin(target: PinnedCanvasTarget): void {
 		const pin = this.getEntry(target);
 		if (!pin) { return; }
+		this.cancelRecovery(pin as Pin);
 		if (this.selected.get() === pin) { this.views.hideCustomView(); }
 		this.pins.set(this.pins.get().filter(candidate => candidate !== pin));
 		status(localize('pinnedCanvas.removed', 'Removed Canvas {0} from the sidebar.', pin.title.get()));
 	}
 	async show(target: PinnedCanvasTarget): Promise<void> {
 		const pin = this.getEntry(target);
-		if (pin) { this.views.showCustomView(PINNED_CANVAS_PAGE_ID, { state: pin.id }); }
+		if (pin) {
+			this.views.showCustomView(PINNED_CANVAS_PAGE_ID, { state: pin.id });
+			if (!pin.canvas.get() && this.hasOwner(pin)) await this.reconnect(pin);
+		}
 	}
 	async reconnect(target: PinnedCanvasTarget): Promise<void> {
-		const pin = this.getEntry(target);
+		const pin = this.getEntry(target) as Pin | undefined;
 		if (!pin) { return; }
-		const provider = this.collection.createContext(pin.identity).definitionProvider;
-		const definitions = await provider?.listCanvases();
-		if (this.getEntry(pin) !== pin) { return; }
-		const definition = definitions?.find(definition => definition.extensionId === pin.identity.extensionId && definition.canvasId === pin.identity.canvasId);
-		if (definition) { await provider!.openCanvas(definition, pin.identity.instanceId); }
+		const existing = this.recoveries.get(pin);
+		if (existing) return existing.promise;
+		const ownerPresent = this.hasOwner(pin);
+		const providerOwner = this.providers.getProvider(pin.identity.providerId);
+		const cancellation = new CancellationTokenSource();
+		const current = () => !cancellation.token.isCancellationRequested
+			&& this.getEntry(pin) === pin && this.hasOwner(pin) === ownerPresent
+			&& this.providers.getProvider(pin.identity.providerId) === providerOwner;
+		const promise = Promise.resolve().then(async () => {
+			using resources = new DisposableStore();
+			const deadline = new Promise<never>((_, reject) => {
+				resources.add(disposableTimeout(() => {
+					reject(new Error(localize('pinnedCanvas.reopenTimeout', 'The Canvas did not reopen in time.')));
+				}, 15_000));
+			});
+			const open = async () => {
+				if (!current()) return;
+				const provider = this.collection.createContext(pin.identity).definitionProvider;
+				const definitions = await raceCancellationError(Promise.resolve(provider?.listCanvases()), cancellation.token);
+				if (!current()) return;
+				const definition = definitions?.find(definition => definition.extensionId === pin.identity.extensionId
+					&& definition.canvasId === pin.identity.canvasId);
+				if (!definition) throw new Error(localize('pinnedCanvas.unavailable', 'This Canvas is unavailable.'));
+				await raceCancellationError(provider!.openCanvas(definition, pin.identity.instanceId), cancellation.token);
+				if (!current()) return;
+				await raceCancellationError(new Promise<void>(resolve => {
+					resources.add(autorun(reader => { if (pin.canvas.read(reader)) resolve(); }));
+				}), cancellation.token);
+			};
+			try {
+				await raceCancellationError(Promise.race([open(), deadline]), cancellation.token);
+			} catch (error) {
+				if (current()) {
+					if (!pin.canvas.get()) {
+						pin.reopenFailed = true;
+						pin.state.set(PinnedCanvasState.Unavailable);
+					}
+					if (!isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
+				}
+			} finally {
+				cancellation.dispose(true);
+				if (this.recoveries.get(pin)?.promise === promise) {
+					this.recoveries.delete(pin);
+					if (pin.reopenFailed && !pin.canvas.get()) pin.state.set(PinnedCanvasState.Unavailable);
+					pin.reconnecting.set(false);
+				}
+			}
+		});
+		this.recoveries.set(pin, { ownerPresent, provider: providerOwner, cancellation, promise });
+		pin.reopenFailed = false;
+		if (!pin.canvas.get()) pin.state.set(PinnedCanvasState.Pending);
+		pin.reconnecting.set(true);
+		return promise;
+	}
+
+	private hasOwner(pin: IPinnedCanvas): boolean {
+		return this.management.sessions.some(session => session.sessionId === pin.identity.session.path.slice(1)
+			&& (session.providerId ?? 'local-agent-host') === pin.identity.providerId);
+	}
+
+	private cancelRecovery(pin: Pin): void {
+		const recovery = this.recoveries.get(pin);
+		this.recoveries.delete(pin);
+		recovery?.cancellation.cancel();
 	}
 	async goToChat(target: PinnedCanvasTarget): Promise<void> {
 		const pin = this.getEntry(target);

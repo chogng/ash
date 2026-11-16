@@ -1390,14 +1390,16 @@
     "pinnedCanvas.remove": "从侧栏移除",
     "pinnedCanvas.reconnect": "重新连接 Canvas",
     "pinnedCanvas.invalidStorage": "无法恢复已固定的 Canvas：{0}",
+    "pinnedCanvas.reopenTimeout": "Canvas 未能及时重新打开。",
+    "pinnedCanvas.unavailable": "此 Canvas 不可用。",
     "pinnedCanvas.requiresIdentity": "只有已注册的扩展 Canvas 才能固定到侧栏。",
     "pinnedCanvas.limit": "最多可将 {0} 个 Canvas 固定到侧栏。",
     "pinnedCanvas.added": "已将 Canvas“{0}”添加到侧栏。",
     "pinnedCanvas.removed": "已将 Canvas“{0}”从侧栏移除。",
     "pinnedCanvasPage.unavailable": "此 Canvas 不可用。请返回其对话或尝试重新连接。",
     "pinnedCanvasPage.reconnecting": "正在等待 Canvas 宿主重新连接…",
-    "pinnedCanvasPage.help": "此 Canvas 已固定到侧栏，仍由其对话拥有。在其他对话中工作时，它仍保持活动状态。使用 Tab 浏览页面控件。使用 <keybinding:workbench.action.focusNextPart> 离开页面。页面标题栏提供“转到聊天”“重新连接 Canvas”“从侧栏移除”和“关闭 Canvas”。移除固定项会在其对话中保留页面。“关闭 Canvas”会结束页面。按 Escape 关闭无障碍视图并将焦点返回 Canvas。",
-    "pinnedCanvas.activityHelp": "在 Canvas 标签页菜单或命令面板中使用“将 Canvas 添加到侧栏”，可将已注册的 Canvas 保留在导航中。选择其侧栏项可打开全页，无需切换对话。页面标题栏和侧栏上下文菜单提供“转到聊天”“重新连接 Canvas”“从侧栏移除”和“关闭 Canvas”。移除固定项会在其对话中保留页面。最多可固定五个 Canvas。"
+    "pinnedCanvasPage.help": "此 Canvas 已固定到侧栏，仍由其对话拥有。在其他对话中工作时，它仍保持活动状态。选择不可用的 Canvas 时，会尝试重新打开已保存的实例。使用 Tab 浏览页面控件。使用 <keybinding:workbench.action.focusNextPart> 离开页面。页面标题栏提供“转到聊天”“重新连接 Canvas”“从侧栏移除”和“关闭 Canvas”。移除固定项会在其对话中保留页面。“关闭 Canvas”会结束页面。按 Escape 关闭无障碍视图并将焦点返回 Canvas。",
+    "pinnedCanvas.activityHelp": "在 Canvas 标签页菜单或命令面板中使用“将 Canvas 添加到侧栏”，可将已注册的 Canvas 保留在导航中。选择其侧栏项可打开全页，无需切换对话。选择不可用的 Canvas 时，会尝试重新打开已保存的实例。页面标题栏和侧栏上下文菜单提供“转到聊天”“重新连接 Canvas”“从侧栏移除”和“关闭 Canvas”。移除固定项会在其对话中保留页面。最多可固定五个 Canvas。"
   },
   "ash.menu": {
     "file": "文件",
