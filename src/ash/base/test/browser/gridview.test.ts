@@ -1,6 +1,8 @@
 import { Orientation } from '../../browser/ui/sash/sash.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { expect } from '@playwright/test';
+import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 import { JSDOM } from 'jsdom';
 import type { IPositionedRectangle } from '../../browser/geometry.js';
 import { h } from '../../browser/dom.js';
@@ -24,6 +26,26 @@ for (const [name, value] of Object.entries({
 }
 
 const { GridView } = await import('../../browser/ui/grid/gridview.js');
+
+suite('GridView rendered scrolling', () => {
+	const browser = useBrowserTests();
+	test('focusing overflowing controls keeps the grid fixed while pane content can scroll', async () => {
+		const { page } = browser;
+		await page.goto('/gridview.html');
+		const grid = page.locator('.ash-grid');
+		const pane = page.locator('.scroller');
+		await expect(pane).toBeVisible();
+		const before = await pane.boundingBox();
+		await page.getByRole('button', { name: 'Edge control', exact: true }).focus();
+		await expect(page.getByRole('button', { name: 'Edge control', exact: true })).toBeFocused();
+		expect(await grid.evaluate(element => [element.scrollLeft, element.scrollTop])).toEqual([0, 0]);
+		expect(await pane.boundingBox()).toEqual(before);
+		await pane.hover();
+		await page.mouse.wheel(0, 200);
+		await expect.poll(() => pane.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		expect(await grid.evaluate(element => [element.scrollLeft, element.scrollTop])).toEqual([0, 0]);
+	});
+});
 
 test('GridView delivers physical boundary sashes through nested axes and clears detached leaves', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');

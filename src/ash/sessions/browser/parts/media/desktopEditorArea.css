@@ -208,7 +208,8 @@
 	.ash-workbench-part-frame
 	> .ash-workbench-part {
 	position: relative;
-	overflow: hidden;
+	/* Tool content owns scrolling; focus reveal must not scroll its host. */
+	overflow: clip;
 	background: var(--ash-editor-background);
 }
 

@@ -2,7 +2,8 @@
 	position: relative;
 	min-width: 0;
 	min-height: 0;
-	overflow: hidden;
+	/* Grid owns coordinates; focus reveal must only scroll a view's content. */
+	overflow: clip;
 }
 
 .ash-grid > .ash-split-view {

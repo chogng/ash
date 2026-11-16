@@ -728,6 +728,34 @@ test('Sessions navigation collapses with the sidebar without reserving an icon r
 	}
 });
 
+test('Sessions viewport constraints preserve requested navigation and conversation widths', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1440, 900) });
+	try {
+		layout.hidePart('auxiliarybar');
+		layout.updateParts(() => { layout.setPrimaryPart('editor'); layout.showPart('editor'); });
+		layout.resizePart('sidebar', new Dimension(300, 900));
+		layout.resizePart('sessions', new Dimension(420, 900));
+		const widths = () => ['sidebar', 'sessions', 'editor'].map(id => layout.getPartSize(id).width);
+		const before = widths();
+		assert.deepEqual(before, [300, 420, 720]);
+		for (const width of [900, 760, 1440, 900, 1440]) {
+			layout.layout(new Dimension(width, 900));
+			assert.equal(layout.state.sidebar.width, 300, 'Temporary constraints must not replace the requested width');
+			if (width === 1440) assert.deepEqual(widths(), before);
+		}
+		layout.resizePart('sidebar', new Dimension(320, 900));
+		layout.resizePart('sessions', new Dimension(380, 900));
+		layout.layout(new Dimension(760, 900));
+		layout.layout(new Dimension(1440, 900));
+		assert.deepEqual(widths(), [320, 380, 740], 'Explicit resizes replace the requested widths');
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
 test('Sessions layout validates its complete Part set', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const container = h(dom.window.document, 'main');
@@ -1123,7 +1151,7 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	services.registerInstance(ILayoutService, {} as import('../../browser/workbench.js').IAgentWorkbenchLayoutService);
 	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
-	using controller = services.createInstance(Controller, editor.pageGroupId, { isSessionContent: true, sessionEditorRestorationEnabled: observableValue('restoreEditors', true), isDocumentContent: true, documentContent: observableValue('Code', true), isChangingContent: false, runOperation: (operation: () => Promise<void>) => operation() });
+	using controller = services.createInstance(Controller, editor.pageGroupId, { isSessionContent: true, sessionEditorRestorationEnabled: observableValue('restoreEditors', true), isDocumentContent: true, documentContent: observableValue('Code', true), isChangingContent: false, isConversationEditorGroup: () => false, runOperation: (operation: () => Promise<void>) => operation() });
 	const file = { resource: URI.file('/fixture/a.txt') };
 	await editor.openEditor(file, { pinned: true });
 	const first = editor.activeGroup, firstPane = first.activePane;

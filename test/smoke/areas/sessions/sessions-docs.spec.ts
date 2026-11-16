@@ -4,6 +4,44 @@ import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
+test('Docs comment focus keeps the outer window layout fixed', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await new QuickAccess(page).runCommand('workbench.action.document.new');
+	const docs = page.locator('.ash-docs-workspace:visible');
+	const body = docs.getByRole('textbox', { name: 'Document body', exact: true });
+	await body.click();
+	await page.keyboard.insertText('Layout reference');
+	await body.press('ControlOrMeta+a');
+	const before = await docs.boundingBox();
+	await page.evaluate(() => {
+		const shifts: number[][] = [];
+		(window as unknown as { layoutScrollShifts: number[][]; }).layoutScrollShifts = shifts;
+		document.addEventListener('scroll', event => {
+			const target = event.target;
+			if (target instanceof HTMLElement && target.matches('.ash-grid, .ash-workbench-editor') && (target.scrollLeft || target.scrollTop))
+				shifts.push([target.scrollLeft, target.scrollTop]);
+		}, true);
+	});
+	await docs.getByRole('toolbar', { name: 'Selection formatting', exact: true }).getByRole('button', { name: 'Add comment', exact: true }).click();
+	const comments = docs.getByRole('complementary', { name: 'Comments', exact: true });
+	const input = comments.getByRole('textbox', { name: 'Comment text', exact: true });
+	await input.fill('Review layout');
+	await input.press('Enter');
+	await expect(comments.locator('.ash-docs-comment-body')).toHaveText('Review layout');
+	await input.fill('Unsent reply');
+	await input.press('Escape');
+	await expect(comments).toBeHidden();
+	await docs.locator(':scope > .ash-artifact-toolbar').getByRole('button', { name: 'Comments', exact: true }).click();
+	await expect(input).toHaveValue('Unsent reply');
+	await comments.getByRole('button', { name: 'Resolve thread', exact: true }).click();
+	await expect(comments.getByRole('button', { name: 'New comment', exact: true })).toBeFocused();
+	expect(await docs.boundingBox()).toEqual(before);
+	expect(await page.locator('.ash-grid, .ash-workbench-editor').evaluateAll(elements =>
+		elements.filter(element => element.scrollLeft || element.scrollTop).map(element => [element.className, element.scrollLeft, element.scrollTop]),
+	)).toEqual([]);
+	expect(await page.evaluate(() => (window as unknown as { layoutScrollShifts: number[][]; }).layoutScrollShifts)).toEqual([]);
+});
+
 for (const locale of ['en', 'zh-CN'] as const) {
 	test(`Artifacts Docs opens the built-in editor and keeps Markdown drafts (${locale})`, { tag: locale === 'en' ? ['@electron-ui', '@browser-ui', '@electron-app-server'] : ['@electron-ui'] }, async ({ target, workbench, application, testWorkspace, restartWorkbench }, testInfo) => {
 		if (locale === 'zh-CN') {
