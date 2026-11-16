@@ -321,6 +321,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'sessions.artifactAutoSave',
 					'sessions.docs.resourceOpener',
 					'sessions.docs.backup',
+					'sessions.pdfPreview.backup',
 					'sessions.projectMaterialFiles',
 					'sessions.chat.copyActionRendering',
 					'chat.queuePickerRendering',

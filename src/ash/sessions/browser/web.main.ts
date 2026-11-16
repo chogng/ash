@@ -88,6 +88,7 @@ export class SessionsBrowserMain extends Disposable {
 					'sessions.artifactAutoSave',
 					'sessions.docs.resourceOpener',
 					'sessions.docs.backup',
+					'sessions.pdfPreview.backup',
 					'sessions.chat.copyActionRendering',
 					'chat.queuePickerRendering',
 					'workbench.contrib.btwSlashCommand',
