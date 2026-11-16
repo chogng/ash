@@ -1172,6 +1172,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "note",
+      "file": "note.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "open-in-product",
       "file": "open-in-product.svg",
       "rendering": "symbolic"

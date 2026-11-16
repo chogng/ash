@@ -238,6 +238,7 @@ export const lxiconsLibrary = {
 	newChatSession: registerLxicon("new-chat-session", 0xe171),
 	newFile: registerLxicon("new-file", 0xe0bf),
 	newFolder: registerLxicon("new-folder", 0xe0c0),
+	note: registerLxicon("note", 0xe192),
 	openInProduct: registerLxicon("open-in-product", 0xe147),
 	openInWindow: registerLxicon("open-in-window", 0xe169),
 	openPreview: registerLxicon("open-preview", 0xe0c1),
