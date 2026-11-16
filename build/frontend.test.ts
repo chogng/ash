@@ -31,6 +31,8 @@ test('Frontend acceptance waits for shared contracts and unit tests', () => {
 		assert.match(definition, /^    needs: contracts$/m);
 	}
 	const contracts = workflow.split('\n  contracts:\n')[1].split(/\n  [a-z-]+:\n/u)[0];
+	assert.ok(contracts.indexOf('python -B build/desktop/host_logs.py') > 0);
+	assert.ok(contracts.indexOf('python -B build/desktop/host_logs.py') < contracts.indexOf('pnpm run valid-layers-check'), 'Native host bindings must exist before main-process typechecking');
 	assert.match(contracts, /\.\/node_modules\/\.bin\/bun check -p tsconfig.renderer.json --all/u);
 	assert.match(contracts, /pnpm --dir test\/scenario compile/u);
 	assert.match(contracts, /pnpm --dir build run test:prepared/u);

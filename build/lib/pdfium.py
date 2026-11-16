@@ -18,12 +18,16 @@ class PdfiumArchive:
 
 
 def prepare_pdfium(root: Path, target: str) -> Path | None:
-    document = json.loads((root / "third_party/pdfium/runtime-lock.json").read_text())
+    document = json.loads(
+        (root / "third_party/pdfium/runtime-lock.json").read_text(encoding="utf-8")
+    )
     entry = document["artifacts"].get(target)
     # musl Remote/TUI distributions have no PDFium build. They must not load a glibc library.
     if entry is None:
         return None
     cache = root / "third_party/.cache/pdfium" / document["release"] / target
+    # Create the lock's parent before opening it, including on cold CI hosts.
+    cache.mkdir(parents=True, exist_ok=True)
     archive = cache / entry["name"]
     locked = PdfiumArchive(
         f"{document['repository']}/releases/download/{document['release']}/{entry['name']}",

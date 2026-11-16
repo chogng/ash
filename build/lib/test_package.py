@@ -66,9 +66,6 @@ class PackageTests(unittest.TestCase):
         cls.package_sources = create_package_sources(Path(temporary.name))
 
     def setUp(self) -> None:
-        boundary = patch("build.lib.pdfium.copy_pdfium")
-        boundary.start()
-        self.addCleanup(boundary.stop)
         boundary = patch(
             "build.lib.js_debug.copy_runtime", side_effect=copy_debug_runtime_fixture
         )
@@ -265,6 +262,15 @@ class PackageTests(unittest.TestCase):
                     (output / "bin" / spec.js_extension_host_name).exists()
                 )
                 self.assertTrue((output / "bin" / spec.code_mode_host_name).is_file())
+                libraries = list((output / "ash-resources/pdfium").iterdir())
+                self.assertEqual(len(libraries), 1)
+                self.assertEqual(libraries[0].read_bytes(), b"PDFium fixture library")
+                self.assertEqual(
+                    (
+                        output / "ash-resources/licenses/pdfium/PDFium-LICENSE"
+                    ).read_bytes(),
+                    b"PDFium fixture license",
+                )
                 for name in ("node.mjs", "ash.mjs", "host.mjs", "scm.js"):
                     self.assertTrue(
                         (output / "ash-resources/extension-host" / name).is_file()
@@ -386,7 +392,6 @@ class PackageTests(unittest.TestCase):
         "ruby",
         "rust",
         "shellscript",
-        "snapshot",
         "sql",
         "swift",
         "theme-defaults",

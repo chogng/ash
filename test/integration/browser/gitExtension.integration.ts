@@ -51,6 +51,7 @@ import { TestWorkspaceService } from '../../../src/ash/workbench/services/config
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { MainThreadSCM } from '../../../src/ash/workbench/api/browser/mainThreadSCM.js';
 import type { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
+import type { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import type { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { MainThreadExtensionBackend } from '../../../src/ash/workbench/api/browser/mainThreadExtensionBackend.js';
 import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmService.js';
@@ -296,7 +297,7 @@ services.registerInstance(ILifecycleService, lifecycle);
 const genericHost = lifetime.add(services.createInstance(BrowserExtensionHostApi, workerCatalog, createDisconnectedExtensionHostApi(unavailable)));
 const host = lifetime.add(new RustGitHostFixture(catalog, genericHost, () => createExtensionHostInitialization(workspace, configuration)));
 const scm = lifetime.add(new SCMService());
-const view = lifetime.add(new SCMViewService(scm));
+const view = lifetime.add(new SCMViewService(scm, { activeEditor: undefined, onDidActiveEditorChange: Event.None } as IEditorService));
 const quickDiff = lifetime.add(new QuickDiffService());
 const resolvers = lifetime.add(new MultiDiffSourceResolverService());
 const commands = { executeCommand: async (id: string, ...args: unknown[]) => invoke(id, args) } as unknown as ICommandService;

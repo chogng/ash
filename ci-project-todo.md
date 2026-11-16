@@ -63,6 +63,14 @@ Windows x64 本地 `just dependency-security` 退出 0，输出 `advisories ok, 
 
 ## 接手顺序
 
+2026-11-16 后续复核 [修复发布后的 CI](https://github.com/chogng/ash/actions/runs/43847772443)：门禁已通过，Rust／TUI 的跨平台失败来自 PDFium 冷缓存未建目录便打开 `prepare.lock`；tooling 来自 PDFium 打包 fixture 缺失、已删除 snapshot 扩展的旧预期，以及 Windows Python 3.11 平台识别被 subprocess mock 干扰。Bazel 缺 artifact-catalog／documents 的 BUILD 声明；frontend 类型检查前未生成 Desktop host 绑定。
+
+本轮修正准备入口、fixture、目标平台隔离、Bazel 声明及 frontend 的 host 绑定准备步骤。新增冷缓存与复用回归，打包测试走真实 PDFium 复制和校验并断言库及许可证内容。Windows `just test-python build scripts code` 通过：321／231／28 项，分别跳过 6／7／1 项；原生 host helper 构建和 frontend 工作流契约测试通过。证据位于 `.build/ci-followup-20261116/`。两个新增 Bazel package query 通过；完整依赖 query 被 Windows 解包 macOS SDK 失败阻塞，不代表 Linux TUI 已运行。远端实际场景仍按下列项目验收。
+
+补齐协议产物后，七个环境的分层类型检查及 `just check ash-pdf --locked` 通过。Windows setup 诊断产物还显示 SCM fixture 漏传新增的 editor service；修正后真实 Chromium 的英文／中文 SCM commit message 场景 2 项通过。组件诊断显示 SelectBox 与 List 的行内边距、圆角存在 CSS 顺序冲突，现通过 List 既有变量声明 SelectBox 几何；截图稳定性测试分别检查全部 fixture 的渲染成功、`blocks-ci` 子集数量及两次完整 manifest 一致性。未降低截图错误或稳定性断言。全量 stylelint 检查 439 个 CSS 文件，零错误。
+
+组件测试首跑 8 项通过、1 项截图稳定性失败：多选菜单入场动画保留的 transform 层使圆角 16 个像素出现 1/255 差异。fixture 现等待动画完成并释放动画对象，保留严格 PNG 和完整 manifest 一致性检查。相关 CSS 二分及全新浏览器截图 2 项复验通过，日志为 `fixture-retest.log`；首跑记录保留在 `fixture-tests.log`。
+
 - [ ] 按本轮发布后的新 main SHA 核对完整 CI 矩阵。
 - [ ] 补 Desktop runtime acceptance 的 macOS hosted MCP 进程回归通过证据。已有 [macOS 本机补验](agenthost-todo.md#2026-10-29-macos-进程补验)。
 - [ ] 在 Linux CI 真正执行 `//cli:tui-real-scenarios`，不能以本机 query 代替。

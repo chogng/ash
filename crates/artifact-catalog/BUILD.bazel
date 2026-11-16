@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "artifact-catalog",
+    crate_name = "ash_artifact_catalog",
+    data = glob(["migrations/*.sql"]),
+)

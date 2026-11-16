@@ -11,6 +11,13 @@ from build.code import debug
 
 
 class NativeDebugPreparationTests(unittest.TestCase):
+    def setUp(self):
+        target = patch.object(
+            debug, "default_target", return_value="x86_64-pc-windows-msvc"
+        )
+        target.start()
+        self.addCleanup(target.stop)
+
     def test_success_publishes_literal_tool_paths_after_a_symbol_build(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -44,6 +44,9 @@ class SourceRunnerTests(unittest.TestCase):
             with (
                 patch.object(build, "current_package", return_value=package),
                 patch.object(
+                    build, "default_target", return_value="x86_64-pc-windows-msvc"
+                ),
+                patch.object(
                     build.subprocess,
                     "run",
                     return_value=build.subprocess.CompletedProcess([], 0),

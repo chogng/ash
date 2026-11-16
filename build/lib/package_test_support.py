@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import shutil
+import tarfile
 from pathlib import Path
 
 from build.lib.targets import target_spec
@@ -78,6 +80,35 @@ def create_package_sources(root: Path) -> Path:
     """Own package resources and a prepared protocol without workspace cache state."""
     root.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(REPOSITORY_ROOT / "Cargo.toml", root / "Cargo.toml")
+    # Exercise real PDFium packaging with tiny checksum-locked native resources.
+    # Keep production target/library names and the unsupported-musl boundary.
+    pdfium = json.loads(
+        (REPOSITORY_ROOT / "third_party/pdfium/runtime-lock.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    for target, entry in pdfium["artifacts"].items():
+        archive = (
+            root
+            / "third_party/.cache/pdfium"
+            / pdfium["release"]
+            / target
+            / entry["name"]
+        )
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(archive, "w:gz") as output:
+            for name, data in (
+                (entry["library"], b"PDFium fixture library"),
+                ("LICENSE", b"PDFium fixture license"),
+            ):
+                member = tarfile.TarInfo(name)
+                member.size = len(data)
+                output.addfile(member, io.BytesIO(data))
+        entry["size"] = archive.stat().st_size
+        entry["sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
+    pdfium_lock = root / "third_party/pdfium/runtime-lock.json"
+    pdfium_lock.parent.mkdir(parents=True)
+    pdfium_lock.write_text(json.dumps(pdfium), encoding="utf-8")
     for source in (
         "livekit-server/runtime.json",
         "crates/livekit-client/src/protocol.rs",

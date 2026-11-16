@@ -16,7 +16,7 @@ const sections: readonly IMultiSelectDropdownSection[] = [
 
 function fixture(searchable: boolean): ReturnType<typeof defineComponentFixture> {
 	return defineComponentFixture({
-		render: ({ container, disposableStore }) => {
+		render: async ({ container, disposableStore }) => {
 			container.style.width = '340px';
 			container.style.height = '360px';
 			const services = disposableStore.add(new InstantiationService());
@@ -37,6 +37,11 @@ function fixture(searchable: boolean): ReturnType<typeof defineComponentFixture>
 			const open = (): void => dropdown.show({ anchor: button.domNode, ariaLabel: 'Days', sections, selectedIds, searchable });
 			disposableStore.add(button.onDidClick(open));
 			open();
+			// Capture the settled popup without the entrance animation's retained
+			// transform layer, whose rounded edges can rasterize differently per browser.
+			const animations = container.getAnimations({ subtree: true });
+			await Promise.all(animations.map(animation => animation.finished));
+			for (const animation of animations) animation.cancel();
 			return [container];
 		},
 	});

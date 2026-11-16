@@ -15,6 +15,9 @@
 
 /* Popup geometry must win over List's shared reset regardless of import order. */
 .ash-select-box-list.ash-list {
+	--ash-list-row-padding-start: var(--ash-spacing-size60);
+	--ash-list-row-padding-end: var(--ash-spacing-size60);
+	--ash-list-row-radius: var(--ash-cornerRadius-small);
 	--ash-list-style-list-hover-background: var(--ash-list-hoverBackground);
 	--ash-list-style-list-inactive-selection-background: transparent;
 	width: max-content;

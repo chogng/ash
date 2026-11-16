@@ -13,6 +13,53 @@ from build.lib.pdfium import copy_pdfium, prepare_pdfium
 
 
 class PdfiumTests(unittest.TestCase):
+    def test_cold_cache_downloads_only_after_creating_the_lock_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "pdfium.tgz"
+            with tarfile.open(archive, "w:gz") as output:
+                member = tarfile.TarInfo("lib/libpdfium.so")
+                member.size = len(b"cold PDFium")
+                output.addfile(member, io.BytesIO(b"cold PDFium"))
+            lock = root / "third_party/pdfium/runtime-lock.json"
+            lock.parent.mkdir(parents=True)
+            lock.write_text(
+                json.dumps(
+                    {
+                        "release": "fixture",
+                        "repository": "https://example.com/pdfium",
+                        "artifacts": {
+                            "test": {
+                                "name": archive.name,
+                                "size": archive.stat().st_size,
+                                "sha256": hashlib.sha256(
+                                    archive.read_bytes()
+                                ).hexdigest(),
+                                "library": "lib/libpdfium.so",
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cache = root / "third_party/.cache/pdfium/fixture/test"
+            self.assertFalse(cache.exists())
+
+            def download(_locked, destination):
+                self.assertTrue((cache / "prepare.lock").is_file())
+                destination.write_bytes(archive.read_bytes())
+
+            with patch(
+                "build.lib.pdfium.download_and_verify", side_effect=download
+            ) as fetch:
+                self.assertEqual(
+                    prepare_pdfium(root, "test").read_bytes(), b"cold PDFium"
+                )
+                self.assertEqual(
+                    prepare_pdfium(root, "test").read_bytes(), b"cold PDFium"
+                )
+                fetch.assert_called_once()
+
     def test_prepares_verified_library_and_retains_notices(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
