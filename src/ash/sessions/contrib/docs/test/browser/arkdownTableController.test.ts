@@ -83,6 +83,40 @@ suite('Arkdown table interactions', () => {
 		assert.equal(await source(), original);
 	});
 
+	test('native navigation skips the table scroll container and keeps the caret on text', async () => {
+		await mount('## Schedule\n\n| Task | Owner |\n| --- | --- |\n| Alpha | Ada |\n\nAfter table');
+		const table = (await body().getByRole('table').boundingBox())!;
+		await browser.page.mouse.click(table.x - 1, table.y + 1);
+		await expect.poll(() => browser.page.evaluate(() => getSelection()?.focusNode?.parentElement?.closest('th')?.textContent)).toBe('Task');
+		const heading = body().locator('h2');
+		await heading.evaluate(element => element.ownerDocument.getSelection()!.setBaseAndExtent(element.firstChild!, 8, element.firstChild!, 8));
+		await browser.page.keyboard.press('ArrowRight');
+		await expect.poll(() => browser.page.evaluate(() => {
+			const node = getSelection()?.focusNode;
+			return node?.parentElement?.closest('th')?.textContent;
+		})).toBe('Task');
+		const caret = await cell(0, 0).evaluate(element => {
+			const selection = element.ownerDocument.getSelection()!;
+			const text = element.ownerDocument.createRange(); text.selectNodeContents(element);
+			return { caret: selection.getRangeAt(0).getBoundingClientRect().toJSON(), text: text.getBoundingClientRect().toJSON() };
+		});
+		assert.ok(caret.caret.height > 0);
+		assert.ok(Math.abs(caret.caret.height - caret.text.height) < 1);
+		assert.ok(Math.abs(caret.caret.x - caret.text.x) < 1);
+		assert.ok(Math.abs(caret.caret.y - caret.text.y) < 1);
+		await browser.page.keyboard.press('ArrowLeft');
+		await expect.poll(() => heading.evaluate(element => element.contains(element.ownerDocument.getSelection()?.focusNode ?? null))).toBe(true);
+		await browser.page.keyboard.insertText('!');
+		await expect(heading).toHaveText('Schedule!');
+		await expect(cell(0, 0)).toHaveText('Task');
+		await undo();
+		await cell(1, 1).evaluate(element => element.ownerDocument.getSelection()!.setBaseAndExtent(element.firstChild!, 3, element.firstChild!, 3));
+		await browser.page.keyboard.press('ArrowRight');
+		await expect.poll(() => body().getByText('After table', { exact: true }).evaluate(element => element.contains(element.ownerDocument.getSelection()?.focusNode ?? null))).toBe(true);
+		await browser.page.keyboard.press('ArrowLeft');
+		await expect.poll(() => browser.page.evaluate(() => getSelection()?.focusNode?.parentElement?.closest('td')?.textContent)).toBe('Ada');
+	});
+
 	test('cells create headings, lists and checked tasks through the shared source and undo history', async () => {
 		for (const content of ['中文 **内容**🙂', '']) {
 			const initial = `| A | B |\r\n| --- | --- |\r\n| ${content} | Neighbor |`;

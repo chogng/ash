@@ -23,11 +23,32 @@ import { checklistIcon, tableIcon } from './docsIcons.js';
 import { parseDocsDropdown, writeDocsDropdown } from '../common/docsDropdown.js';
 import type { ArkdownEditorPane } from './arkdown/arkdownEditorPane.js';
 import type { ArkdownEditor } from './arkdown/arkdownEditor.js';
+import { DocsFontFamily } from '../common/docsTypography.js';
+import { ActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { MenuActionViewItem, type MenuActionViewItemOptions } from '../../../../base/browser/ui/menu/menu.js';
 
 export interface DocsSelectionAction extends ArtifactToolbarAction {
 	readonly section?: boolean;
 	readonly keybinding?: ResolvedKeybinding;
 	readonly ariaDescription?: string;
+}
+
+class DocsMenuSectionView extends ActionViewItem {
+	constructor(action: IAction) { super(action); }
+	render(container: HTMLElement): void {
+		container.classList.add('ash-docs-menu-section');
+		container.setAttribute('role', 'presentation');
+		container.textContent = this.action.label;
+	}
+	setTabbable(): void { }
+}
+
+/** The document and selection menus share section labels and accessible group descriptions. */
+export function getDocsMenuActionViewItem(action: IAction, options: MenuActionViewItemOptions): ActionViewItem | undefined {
+	const item = action as DocsSelectionAction;
+	if (item.section) return new DocsMenuSectionView(action);
+	if (item.ariaDescription) return new MenuActionViewItem(action, { ...options, ariaDescription: item.ariaDescription });
+	return undefined;
 }
 
 /** Docs contributes editing actions to the shared toolbar; Arkdown owns every document transaction. */
@@ -56,7 +77,7 @@ export class DocsToolbar extends Disposable {
 
 	update(): void {
 		const widget = this.editor.getControl();
-		const state = JSON.stringify([this.editor.isReadonly, widget?.getMode(), widget?.isPageWide, widget?.hasTableSelection, !!widget?.selectedImage, widget?.getSelectionFormatting(), this.configuration.getValue<boolean>(ChatAIDisabledSettingId)]);
+		const state = JSON.stringify([this.editor.isReadonly, widget?.getMode(), widget?.isPageWide, widget?.hasTableSelection, !!widget?.selectedImage, widget?.getSelectionFormatting(), widget?.getTypography(), this.configuration.getValue<boolean>(ChatAIDisabledSettingId)]);
 		// Caret movement within one format must not recreate the toolbar's buttons or menus.
 		if (this.renderedEditor === widget && this.renderedState === state) return;
 		this.renderedEditor = widget;
@@ -66,7 +87,7 @@ export class DocsToolbar extends Disposable {
 
 	getContextActions(): readonly IAction[] {
 		return [...this.editor.getEditingActions().slice(0, 2), new Separator(),
-		...this.getActions().slice(1).map(action => action.menu ? new SubmenuAction(action.id, action.label, action.menu, action.icon) : action),
+		...this.getActions().map(action => action.menu ? new SubmenuAction(action.id, action.label, action.menu, action.icon) : action),
 		new Separator(), ...this.getDocumentActions()];
 	}
 
@@ -94,7 +115,13 @@ export class DocsToolbar extends Disposable {
 				catch (error) { if (!isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error)); }
 			},
 		});
-		const textStyles = tableSelection ? [] : [actions[0], new Separator()];
+		const textStyles = tableSelection ? [] : [{
+			...format('font', localize({ bundle: 'ash.docs', key: 'textStyle' }, 'Text style'), Lxicon.font, () => undefined),
+			menu: [
+				format('paragraph', localize({ bundle: 'ash.docs', key: 'paragraph' }, 'Paragraph'), Lxicon.text, () => widget?.setHeading(0), formatting?.heading === 0),
+				...[1, 2, 3].map(level => format(`heading${level}`, localize({ bundle: 'ash.docs', key: 'heading' }, 'Heading {0}', level), [Lxicon.heading1, Lxicon.heading2, Lxicon.heading3][level - 1], () => widget?.setHeading(level), formatting?.heading === level)),
+			],
+		}, new Separator()];
 		const lists = actions.find(action => action.id === 'sessions.docs.more')!.menu!.slice(0, 2);
 		const section = (id: string, label: string): DocsSelectionAction => ({ id, label, tooltip: label, enabled: false, section: true, run: () => undefined });
 		const palette: readonly DocsSelectionAction[] = [
@@ -167,11 +194,17 @@ export class DocsToolbar extends Disposable {
 				catch (error) { if (!isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error)); }
 			},
 		});
-		const paragraph = localize({ bundle: 'ash.docs', key: 'paragraph' }, 'Paragraph');
-		const fontMenu = [
-			action('paragraph', paragraph, Lxicon.text, () => widget?.setHeading(0), editable, formatting?.heading === 0),
-			...[1, 2, 3].map(level => action(`heading${level}`, localize({ bundle: 'ash.docs', key: 'heading' }, 'Heading {0}', level), [Lxicon.heading1, Lxicon.heading2, Lxicon.heading3][level - 1], () => widget?.setHeading(level), editable, formatting?.heading === level)),
-		];
+		const typography = widget?.getTypography();
+		const canStyle = !!widget && !this.editor.isReadonly && widget.getMode() === 'rich';
+		const typographyMenu: DocsSelectionAction[] = [];
+		for (const part of ['headings', 'text'] as const) {
+			const label = part === 'headings' ? localize({ bundle: 'ash.docs', key: 'headings' }, 'Headings') : localize({ bundle: 'ash.docs', key: 'typographyText' }, 'Text');
+			if (typographyMenu.length) typographyMenu.push(new Separator());
+			typographyMenu.push({ ...action(`typography.${part}`, label, undefined, () => undefined, false), section: true });
+			for (const family of [DocsFontFamily.Serif, DocsFontFamily.Sans]) {
+				typographyMenu.push({ ...action(`typography.${part}.${family}`, family === DocsFontFamily.Serif ? localize({ bundle: 'ash.docs', key: 'serif' }, 'Serif') : localize({ bundle: 'ash.docs', key: 'sans' }, 'Sans'), undefined, () => widget?.setTypography(part, family), canStyle, typography?.[part] === family), ariaDescription: label });
+			}
+		}
 		const more = [
 			action('bulletedList', localize({ bundle: 'ash.docs', key: 'bulletedList' }, 'Bulleted list'), Lxicon.listUnordered, () => widget?.setListKind('bullet'), editable, formatting?.list === 'bullet'),
 			action('numberedList', localize({ bundle: 'ash.docs', key: 'numberedList' }, 'Numbered list'), Lxicon.listOrdered, () => widget?.setListKind('ordered'), editable, formatting?.list === 'ordered'),
@@ -187,7 +220,7 @@ export class DocsToolbar extends Disposable {
 		];
 		const canAsk = !!widget && !widget.selectedImage && this.configuration.getValue<boolean>(ChatAIDisabledSettingId) !== true;
 		return [
-			{ ...action('font', localize({ bundle: 'ash.docs', key: 'font' }, 'Font'), Lxicon.font, () => undefined), menu: fontMenu },
+			{ ...action('typography', localize({ bundle: 'ash.docs', key: 'typography' }, 'Typography'), Lxicon.font, () => undefined, canStyle), menu: typographyMenu },
 			action('table', localize({ bundle: 'ash.docs', key: 'insertTable' }, 'Insert table'), tableIcon, () => {
 				const columns = [1, 2, 3].map(index => localize({ bundle: 'ash.docs', key: 'column' }, 'Column {0}', index));
 				widget?.insertBlock(`| ${columns.join(' | ')} |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |`);

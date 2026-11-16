@@ -17,7 +17,7 @@ import { UntitledTextEditorInput } from '../../../../workbench/services/untitled
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { DocumentEditorPane } from '../../../../workbench/contrib/documentEditor/browser/documentEditorPane.js';
 import { saveResourceAs } from '../../../../workbench/services/files/browser/resourceSave.js';
-import type { ArkdownDocsEditorPane } from './arkdownDocsEditorPane.js';
+import type { DocsEditorPane } from './docsEditorPane.js';
 import { createDocsOpener, newDocsResource } from './documentActions.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { isNative } from '../../../../base/common/platform.js';
@@ -30,6 +30,7 @@ import { raceCancellationError } from '../../../../base/common/async.js';
 import { decodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
 import { createImagePdf } from '../../../../base/common/pdf.js';
 import { readDocsCommentEvent } from '../common/docsComments.js';
+import { defaultDocsTypography, DocsFontFamily, readDocsTypography, type DocsTypography } from '../common/docsTypography.js';
 import { readDocsDropdown } from '../common/docsDropdown.js';
 import { checkDocsImageSize, isArkdownImageSource, readArkdownImage, readArkdownImageLayout, writeArkdownImage, type ArkdownImageSource } from './arkdown/arkdownImages.js';
 import type { ArkdownNode } from './arkdown/arkdownRuntime.js';
@@ -202,9 +203,10 @@ export async function exportDocsDocument(source: string, format: string, owner: 
 	signal.throwIfAborted();
 	if (format === 'markdown') return new TextEncoder().encode(source);
 	if (format !== 'docx' && format !== 'pdf') throw new Error(localize('document.output.unavailable', 'This document provider does not support the selected output.'));
-	const content = await createDocsExportContent(source, owner, signal);
+	const typography = readDocsTypography(source)?.value ?? defaultDocsTypography;
+	const content = await createDocsExportContent(source, typography, owner, signal);
 	if (format === 'docx') {
-		return exportDocsDocx(content, signal);
+		return exportDocsDocx(content, typography, signal);
 	}
 	return exportDocsPdf(content, signal);
 }
@@ -232,7 +234,7 @@ export async function exportDocsFile(accessor: ServicesAccessor, source: string,
 	});
 }
 
-function isDocumentPane(pane: IEditorPane | undefined): pane is DocumentEditorPane | ArkdownDocsEditorPane {
+function isDocumentPane(pane: IEditorPane | undefined): pane is DocumentEditorPane | DocsEditorPane {
 	return pane instanceof DocumentEditorPane || pane?.id === DOCS_ARKDOWN_EDITOR_ID;
 }
 
@@ -396,8 +398,11 @@ const escapeDocxXml = (text: string) => text.replace(/[\u0000-\u0008\u000b\u000c
 const encodeDocxXml = (text: string) => new TextEncoder().encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' + text);
 
 /** Standard OOXML paragraphs, runs, numbering, tables and drawings; no private snapshot. */
-function exportDocsDocx(content: HTMLElement, signal: AbortSignal): Uint8Array {
+function exportDocsDocx(content: HTMLElement, typography: DocsTypography, signal: AbortSignal): Uint8Array {
 	const files = new Map<string, Uint8Array>();
+	const fonts = (family: DocsFontFamily): string => family === DocsFontFamily.Serif
+		? '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>'
+		: '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Microsoft YaHei"/>';
 	const relationships: string[] = [], numbering: string[] = [], imageTypes = new Set<string>();
 	let nextRelation = 1, nextList = 1, nextImage = 1;
 	const relation = (type: string, target: string, external = false) => {
@@ -485,7 +490,7 @@ function exportDocsDocx(content: HTMLElement, signal: AbortSignal): Uint8Array {
 	relation('styles', 'styles.xml');
 	if (numbering.length) { relation('numbering', 'numbering.xml'); files.set('word/numbering.xml', encodeDocxXml(`<w:numbering xmlns:w="${word}">${numbering.join('')}</w:numbering>`)); }
 	files.set('word/document.xml', encodeDocxXml(`<w:document xmlns:w="${word}" xmlns:r="${office}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="960" w:bottom="960" w:left="960" w:right="960"/></w:sectPr></w:body></w:document>`));
-	files.set('word/styles.xml', encodeDocxXml(`<w:styles xmlns:w="${word}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>${Array.from({ length: 6 }, (_, index) => `<w:style w:type="paragraph" w:styleId="Heading${index + 1}"><w:name w:val="heading ${index + 1}"/><w:pPr><w:keepNext/><w:outlineLvl w:val="${index}"/></w:pPr><w:rPr><w:b/><w:sz w:val="${40 - index * 3}"/></w:rPr></w:style>`).join('')}</w:styles>`));
+	files.set('word/styles.xml', encodeDocxXml(`<w:styles xmlns:w="${word}"><w:docDefaults><w:rPrDefault><w:rPr>${fonts(typography.text)}<w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>${Array.from({ length: 6 }, (_, index) => `<w:style w:type="paragraph" w:styleId="Heading${index + 1}"><w:name w:val="heading ${index + 1}"/><w:pPr><w:keepNext/><w:outlineLvl w:val="${index}"/></w:pPr><w:rPr>${fonts(typography.headings)}<w:b/><w:sz w:val="${40 - index * 3}"/></w:rPr></w:style>`).join('')}</w:styles>`));
 	files.set('_rels/.rels', encodeDocxXml(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="main" Type="${office}/officeDocument" Target="word/document.xml"/></Relationships>`));
 	files.set('word/_rels/document.xml.rels', encodeDocxXml(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationships.join('')}</Relationships>`));
 	files.set('[Content_Types].xml', encodeDocxXml(`<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${[...imageTypes].map(type => `<Default Extension="${type}" ContentType="image/${type}"/>`).join('')}<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>${numbering.length ? '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' : ''}</Types>`));
@@ -493,7 +498,7 @@ function exportDocsDocx(content: HTMLElement, signal: AbortSignal): Uint8Array {
 }
 
 /** A detached, presentation-only snapshot shared by the two binary codecs. */
-async function createDocsExportContent(source: string, owner: Document, signal: AbortSignal): Promise<HTMLElement> {
+async function createDocsExportContent(source: string, typography: DocsTypography, owner: Document, signal: AbortSignal): Promise<HTMLElement> {
 	const { loadArkdown } = await import('./arkdown/arkdownRuntime.js');
 	const runtime = await loadArkdown();
 	signal.throwIfAborted();
@@ -501,6 +506,7 @@ async function createDocsExportContent(source: string, owner: Document, signal: 
 	const nodes = projection.parse(source);
 	const root = owner.createElement('article');
 	root.style.cssText = 'font:16px/1.6 sans-serif;color:#171717;background:white;overflow-wrap:anywhere;';
+	root.style.fontFamily = typography.text === DocsFontFamily.Serif ? 'serif' : 'sans-serif';
 	const tags: Readonly<Record<string, string>> = {
 		paragraph: 'p', block_quote: 'blockquote', strong: 'strong', emphasis: 'em', strikethrough: 's', underline: 'u', highlight: 'mark',
 		superscript: 'sup', subscript: 'sub', code: 'code', code_block: 'pre', item: 'li', link: 'a', rule: 'hr',
@@ -510,7 +516,7 @@ async function createDocsExportContent(source: string, owner: Document, signal: 
 	const text = (node: ArkdownNode): string => node.text ?? node.children.map(text).join('');
 	const append = (parent: HTMLElement, node: ArkdownNode): void => {
 		const raw = source.slice(node.range.start, node.range.end);
-		if (node.kind === 'metadata_block' || node.kind === 'code_block' && readDocsCommentEvent(raw)) return;
+		if (node.kind === 'metadata_block' || node.kind === 'code_block' && (readDocsCommentEvent(raw) || node.range.start === 0 && readDocsTypography(source))) return;
 		if (node.kind === 'text') { parent.append(owner.createTextNode(node.text ?? '')); return; }
 		if (node.kind === 'soft_break') { parent.append(owner.createTextNode('\n')); return; }
 		if (node.kind === 'hard_break') { parent.append(owner.createElement('br')); return; }
@@ -553,6 +559,7 @@ async function createDocsExportContent(source: string, owner: Document, signal: 
 		}
 		const tag = node.kind === 'heading' ? `h${node.level}` : node.kind === 'list' ? node.start === undefined ? 'ul' : 'ol' : tags[node.kind] ?? 'span';
 		const element = owner.createElement(tag);
+		if (node.kind === 'heading') element.style.fontFamily = typography.headings === DocsFontFamily.Serif ? 'serif' : 'sans-serif';
 		if (tag === 'p') element.style.cssText = 'margin:0 0 12px;';
 		if (tag === 'pre') element.style.cssText = 'white-space:pre-wrap;font:13px/1.5 monospace;background:#f4f4f4;padding:12px;';
 		if (tag === 'blockquote') element.style.cssText = 'margin:12px 0;padding-left:16px;border-left:3px solid #aaa;';

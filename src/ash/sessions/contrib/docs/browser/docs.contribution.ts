@@ -34,7 +34,7 @@ import { DOCS_DEFAULT_MODE_SETTING, DOCS_ARKDOWN_EDITOR_ID, type DocsEditorMode 
 import { createDocsOpener, createDocsDocument, restoredDocsResource } from './documentActions.js';
 import { convertActiveTextToDocument, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact, openWritingDraft } from './docsImportExport.js';
 import { createArkdownDocsInput } from './docsEditorInput.js';
-import { ArkdownDocsEditorPane } from './arkdownDocsEditorPane.js';
+import { DocsEditorPane } from './docsEditorPane.js';
 import { createDocsBackupContribution } from './docsBackupContribution.js';
 
 registerSingleton(IDocsService, DocsService, InstantiationType.Delayed);
@@ -78,7 +78,7 @@ registerEditorPane({
 	createInput: createArkdownDocsInput,
 	create(options) {
 		if (!options.instantiationService) throw new Error('Docs requires the Workbench instantiation service');
-		return options.instantiationService.createInstance(ArkdownDocsEditorPane, options.onSave);
+		return options.instantiationService.createInstance(DocsEditorPane, options.onSave);
 	},
 });
 

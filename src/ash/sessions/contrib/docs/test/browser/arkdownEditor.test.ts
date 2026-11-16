@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { expect } from '@playwright/test';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
+import { defaultDocsTypography, DocsFontFamily, writeDocsTypography } from '../../common/docsTypography.js';
 
 suite('Arkdown document editing', () => {
 	const browser = useBrowserTests();
@@ -72,6 +73,44 @@ suite('Arkdown document editing', () => {
 		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), 'A paragraph with a constrained reading width.');
 		await browser.page.evaluate(() => window.arkdownFixture.togglePageWidth());
 		assert.equal((await paragraph.boundingBox())!.width, narrow);
+	});
+
+	test('document typography saves with Markdown, preserves selection and supports undo and reopening', async () => {
+		for (const eol of ['\n', '\r\n']) {
+			const original = ['# 标题', '', 'Body **text** and `code`', '', '## 第二级'].join(eol);
+			await mount(original);
+			const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+			const sans = await body.locator('h1').evaluate(element => getComputedStyle(element).fontFamily);
+			await body.locator('strong').evaluate(element => element.ownerDocument.getSelection()!.setBaseAndExtent(element.firstChild!, 0, element.firstChild!, 4));
+			await browser.page.evaluate(() => window.arkdownFixture.setTypography('headings', DocsFontFamily.Serif));
+			await expect(body.locator('h1')).toHaveCSS('font-family', 'serif');
+			await expect(body.locator('h2')).toHaveCSS('font-family', 'serif');
+			assert.equal(await browser.page.evaluate(() => getSelection()?.toString()), 'text');
+			await expect(body.locator('pre')).toHaveCount(0);
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), writeDocsTypography({ headings: DocsFontFamily.Serif, text: DocsFontFamily.Sans }).replace(/\n/gu, eol) + eol + eol + original);
+			await browser.page.evaluate(() => window.arkdownFixture.setTypography('text', DocsFontFamily.Serif));
+			await expect(body.locator('p')).toHaveCSS('font-family', 'serif');
+			const saved = await browser.page.evaluate(() => window.arkdownFixture.source);
+			await browser.page.evaluate(() => { window.arkdownFixture.mode('markdown'); window.arkdownFixture.mode('rich'); });
+			await expect(body.locator('p')).toHaveCSS('font-family', 'serif');
+			await browser.page.evaluate(() => window.arkdownFixture.undo());
+			await browser.page.evaluate(() => window.arkdownFixture.undo());
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), original);
+			await expect(body.locator('h1')).toHaveCSS('font-family', sans);
+			await mount(saved);
+			assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.typography), { headings: DocsFontFamily.Serif, text: DocsFontFamily.Serif });
+			await body.press('ControlOrMeta+a'); await browser.page.keyboard.insertText('Replacement');
+			assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.typography), { headings: DocsFontFamily.Serif, text: DocsFontFamily.Serif });
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.plainText), 'Replacement');
+			await body.press('ControlOrMeta+a'); await body.press('Backspace'); await body.press('Backspace');
+			assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.typography), { headings: DocsFontFamily.Serif, text: DocsFontFamily.Serif });
+			await mount(saved);
+			await browser.page.evaluate(() => { window.arkdownFixture.readOnly(true); window.arkdownFixture.setTypography('text', DocsFontFamily.Sans); });
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), saved);
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.plainText), '标题\n\nBody text and code\n\n第二级');
+			await mount('Unstyled separate document');
+			assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.typography), defaultDocsTypography);
+		}
 	});
 
 	test('inline colors, underline and highlight preserve nested marks, partial clearing and undo', async () => {
@@ -584,6 +623,65 @@ suite('Arkdown document editing', () => {
 		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
 		await body.press(documentEnd); await body.press('Enter'); await body.pressSequentially('second');
 		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), 'first\n\nsecond');
+	});
+
+	test('a final table has a clickable paragraph that types outside the grid and supports undo', async () => {
+		for (const eol of ['\n', '\r\n']) {
+			const table = ['## 日程', '', '| 里程碑 | 目标日期 |', '| --- | --- |', '| 公开发布 | 下周一 |'].join(eol);
+			for (const ending of ['', eol, eol + eol]) {
+				const source = table + ending;
+				await mount(source);
+				const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+				const paragraph = body.locator(':scope > p:last-child');
+				await expect(paragraph).toBeVisible();
+				await paragraph.click({ position: { x: 2, y: 8 } });
+				assert.equal(await paragraph.evaluate(element => {
+					const selection = element.ownerDocument.getSelection()!;
+					return selection.isCollapsed && element.contains(selection.focusNode) && element.parentElement === element.ownerDocument.activeElement;
+				}), true);
+				assert.ok(await paragraph.locator('br').evaluate(element => element.getBoundingClientRect().height > 0), 'The empty paragraph must have a native line box');
+				assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), source, 'Focusing the projected paragraph must not change source');
+				await browser.page.keyboard.insertText('发布完成🙂');
+				await expect(body.locator(':scope > p')).toHaveText('发布完成🙂');
+				await expect(body.locator('td')).toHaveText(['公开发布', '下周一']);
+				assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), table + eol + eol + '发布完成🙂');
+				await body.press('ControlOrMeta+z');
+				assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), source);
+				await body.press(documentEnd);
+				assert.equal(await paragraph.evaluate(element => element.contains(element.ownerDocument.getSelection()?.focusNode ?? null)), true);
+				await browser.page.keyboard.insertText('键盘输入');
+				await expect(body.locator(':scope > p')).toHaveText('键盘输入');
+				assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+			}
+		}
+	});
+
+	test('pasting and committing IME text after a table create one undoable paragraph', async () => {
+		const source = '| A | B |\n| --- | --- |\n| C | D |';
+		for (const input of ['paste', 'composition']) {
+			await mount(source);
+			const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+			await body.locator(':scope > p:last-child').click();
+			await body.evaluate((element, input) => {
+				if (input === 'paste') {
+					const data = new DataTransfer(); data.setData('text/plain', '中文🙂');
+					element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
+				} else {
+					element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+					element.lastElementChild!.textContent = '中文🙂';
+					element.dispatchEvent(new CompositionEvent('compositionend', { data: '中文🙂', bubbles: true }));
+				}
+			}, input);
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), source + '\n\n中文🙂');
+			await expect(body.locator(':scope > p')).toHaveText('中文🙂');
+			await body.press('Enter');
+			await browser.page.keyboard.insertText('下一段');
+			await expect(body.locator(':scope > p')).toHaveText(['中文🙂', '下一段']);
+			await body.press('ControlOrMeta+z');
+			await body.press('ControlOrMeta+z');
+			await body.press('ControlOrMeta+z');
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), source);
+		}
 	});
 
 	test('source editing handles emoji replacement and preserves CRLF', async () => {

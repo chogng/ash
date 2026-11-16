@@ -1,26 +1,15 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { ActionViewItem, ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Separator } from '../../../../base/common/actions.js';
-import { MenuActionViewItem } from '../../../../base/browser/ui/menu/menu.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { localize } from '../../../../nls.js';
 import type { ArtifactToolbarAction } from '../../artifact/browser/widget/artifactToolbar.js';
 import type { ArkdownEditor } from './arkdown/arkdownEditor.js';
-import type { DocsSelectionAction } from './docsToolbar.js';
-
-class DocsMenuSectionView extends ActionViewItem {
-	constructor(action: DocsSelectionAction) { super(action); }
-	render(container: HTMLElement): void {
-		container.classList.add('ash-docs-menu-section');
-		container.setAttribute('role', 'presentation');
-		container.textContent = this.action.label;
-	}
-	setTabbable(): void { }
-}
+import { getDocsMenuActionViewItem, type DocsSelectionAction } from './docsToolbar.js';
 
 class SelectionActionBar extends WorkbenchToolBar {
 	public override setActions(actions: readonly ArtifactToolbarAction[]): void {
@@ -60,10 +49,7 @@ export class DocsSelectionToolbar extends Disposable {
 						? 'ash-docs-format-menu ash-docs-palette-menu' : 'ash-docs-format-menu',
 					iconPlacement: 'leading-with-trailing-check',
 					getActionViewItem: (action, options) => {
-						const item = action as DocsSelectionAction;
-						if (item.section) return new DocsMenuSectionView(item);
-						if (item.ariaDescription) return new MenuActionViewItem(action, { ...options, ariaDescription: item.ariaDescription });
-						return delegate.getActionViewItem?.(action, options);
+						return getDocsMenuActionViewItem(action, options) ?? delegate.getActionViewItem?.(action, options);
 					},
 					getKeyBinding: action => (action as DocsSelectionAction).keybinding ?? delegate.getKeyBinding?.(action),
 					anchorPosition: AnchorPosition.Below,

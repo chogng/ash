@@ -43,6 +43,7 @@ const code = lifetime.add(services.createInstance(CodeEditorWidget, { container:
 code.layout({ width: 500, height: 600 });
 
 const fixture = {
+	get sourceSelection() { const selection = code.getSelection(); return selection ? peer.model.getValueInRange(selection) : ''; },
 	get help() { return pane.getAccessibilityHelp(); },
 	get text() { return peer.model.getValue(); },
 	get saved() { return store.text(resource); },

@@ -1,4 +1,4 @@
-import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
+import type { ContextMenuAnchor, IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
 import { ContextViewHideReason } from '../../../../../base/browser/ui/contextview/contextview.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -11,6 +11,7 @@ interface ArtifactContextMenuOptions {
 	getActions(): readonly IAction[];
 	getActionsContext(): unknown;
 	readonly menuClassName?: string;
+	readonly getMenuActionViewItem?: IContextMenuDelegate['getActionViewItem'];
 }
 
 /** Shares menu contributions and presentation lifetime, leaving selection and commands with the editor. */
@@ -38,6 +39,7 @@ export class ArtifactContextMenu extends Disposable {
 			getActions: () => this.options.getActions(),
 			getActionsContext: () => context,
 			getMenuClassName: () => this.options.menuClassName ?? '',
+			getActionViewItem: this.options.getMenuActionViewItem,
 			iconPlacement: this.options.menuClassName ? 'leading-with-trailing-check' : 'trailing',
 			cancellationToken: source.token,
 			onHide: (_didCancel, reason) => {

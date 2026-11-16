@@ -21,6 +21,7 @@ import { formatArkdownInline, formatArkdownTableCells, type ArkdownInlineFormat,
 import { ArkdownComments, type DocsCommentDraft } from './arkdownComments.js';
 import { DocsCommentState } from '../../common/docsComments.js';
 import type { DocsEditorMode } from '../../common/docs.js';
+import { defaultDocsTypography, DocsFontFamily, readDocsTypography, writeDocsTypography, type DocsTypography } from '../../common/docsTypography.js';
 import type { BufferRemoteChange } from '../../../../../workbench/services/collab/common/bufferCollabService.js';
 import type { IEditorDecorationsCollection } from '../../../../../editor/common/editorCommon.js';
 import { readDocsDropdown, writeDocsDropdown } from '../../common/docsDropdown.js';
@@ -182,8 +183,9 @@ export class ArkdownEditor extends Disposable {
 		}));
 		this._register(addDisposableListener(document, 'selectionchange', () => {
 			if (this.composition || !this.hasFocus() || !this.containsSelection()) return;
+			const normalized = this.normalizeTableCaret();
 			const next = this.readSelection();
-			if (next.start === this.selection.start && next.end === this.selection.end) return;
+			if (!normalized && next.start === this.selection.start && next.end === this.selection.end) return;
 			this.selection = next;
 			this.selectionChanged.fire();
 		}));
@@ -236,6 +238,21 @@ export class ArkdownEditor extends Disposable {
 	}
 	setMode(mode: DocsEditorMode): void { this.tables.close(); this.selection = this.readSelection(); this.mode = mode; this.render(false); this.modeChanged.fire(this.mode); this.focus(); }
 	getMode(): DocsEditorMode { return this.mode; }
+	getTypography(): DocsTypography { return readDocsTypography(this.model.getValue())?.value ?? defaultDocsTypography; }
+	setTypography(part: keyof DocsTypography, family: DocsFontFamily): void {
+		if (this.readOnly || this.composition || this.mode !== 'rich') return;
+		const source = this.model.getValue();
+		const metadata = readDocsTypography(source);
+		const current = metadata?.value ?? defaultDocsTypography;
+		if (current[part] === family) return;
+		const eol = this.model.getEOL();
+		const end = metadata?.end ?? 0;
+		const suffix = metadata ? (source.slice(0, end).endsWith('\n') ? eol : '') : eol + eol;
+		const text = writeDocsTypography({ ...current, [part]: family }).replace(/\n/gu, eol) + suffix;
+		const selection = this.readSelection();
+		const shift = (offset: number): number => Math.max(text.length, offset + text.length - end);
+		this.replace({ start: 0, end }, text, false, { start: shift(selection.start), end: shift(selection.end) });
+	}
 	get selectedImage(): ArkdownImage | undefined {
 		const frame = this.prose.querySelector<HTMLElement>('.ash-arkdown-image.selected');
 		const range = frame && this.ranges.get(frame);
@@ -352,7 +369,15 @@ export class ArkdownEditor extends Disposable {
 	selectAll(): void {
 		this.tables.close();
 		if (this.mode === 'rich') this.prose.focus({ preventScroll: true });
-		this.selection = { start: 0, end: this.model.getValueLength() }; this.restoreSelection();
+		this.selection = { start: this.mode === 'rich' ? this.contentStart() : 0, end: this.model.getValueLength() }; this.restoreSelection();
+	}
+	private contentStart(): number {
+		const source = this.model.getValue();
+		const metadata = readDocsTypography(source);
+		if (!metadata) return 0;
+		let offset = metadata.end;
+		while (source[offset] === '\r' || source[offset] === '\n') offset++;
+		return offset;
 	}
 	undo(): void { if (!this.readOnly && !this.composition) { this.tables.close(); this.model.undo(); } }
 	redo(): void { if (!this.readOnly && !this.composition) { this.tables.close(); this.model.redo(); } }
@@ -586,12 +611,14 @@ export class ArkdownEditor extends Disposable {
 	private beforeInput(event: InputEvent): void {
 		if (this.readOnly) { event.preventDefault(); return; }
 		if (this.composition || event.isComposing) return;
+		this.normalizeTableCaret();
 		event.preventDefault();
 		if (this.skipCompositionInput !== undefined && (event.inputType === 'insertFromComposition' || event.inputType === 'insertText') && event.data === this.skipCompositionInput) {
 			this.skipCompositionInput = undefined; return;
 		}
 		this.skipCompositionInput = undefined;
 		let range = this.readSelection();
+		const contentStart = this.contentStart();
 		const cell = this.activeTableCell();
 		let cellSegments = cell ? this.segments.filter(segment => cell.element.contains(segment.text)) : [];
 		if (cell && range.start === range.end) {
@@ -609,13 +636,13 @@ export class ArkdownEditor extends Disposable {
 				if (range.start === range.end) {
 					if (cell?.node.tableCellMissing) break;
 					range = event.inputType === 'deleteContentBackward'
-						? { start: Math.max(start ?? 0, this.runtime.grapheme(this.model.getValue(), range.start, 'previous')), end: range.end }
+						? { start: Math.max(start ?? contentStart, this.runtime.grapheme(this.model.getValue(), range.start, 'previous')), end: range.end }
 						: { start: range.start, end: Math.min(end ?? this.model.getValueLength(), this.runtime.grapheme(this.model.getValue(), range.end, 'next')) };
 				}
 				this.replace(range, '', true); break;
 			case 'deleteWordBackward': case 'deleteWordForward': case 'deleteSoftLineBackward': case 'deleteSoftLineForward': case 'deleteHardLineBackward': case 'deleteHardLineForward': {
 				const target = event.getTargetRanges()[0];
-				if (target) this.replace({ start: Math.max(start ?? 0, this.point(target.startContainer, target.startOffset)), end: Math.min(end ?? this.model.getValueLength(), this.point(target.endContainer, target.endOffset)) }, '', true);
+				if (target) this.replace({ start: Math.max(start ?? contentStart, this.point(target.startContainer, target.startOffset)), end: Math.min(end ?? this.model.getValueLength(), this.point(target.endContainer, target.endOffset)) }, '', true);
 				break;
 			}
 			case 'deleteByCut': case 'deleteContent': this.replace(range, '', true); break;
@@ -1053,6 +1080,15 @@ export class ArkdownEditor extends Disposable {
 	private replace(range: ArkdownRange, text: string, focus: boolean, caret?: number | ArkdownRange): void {
 		if (this.readOnly) return;
 		text = text.replace(/\r\n?|\n/gu, this.model.getEOL());
+		const source = this.model.getValue();
+		if (text && this.terminal && range.start === source.length && range.end === range.start && source && !/(?:\r?\n){2}$/u.test(source)) {
+			// The trailing paragraph is a projection until the first edit. Create
+			// its Markdown boundary in the same undo transaction as the input.
+			const separator = this.model.getEOL().repeat(source.endsWith('\n') ? 1 : 2);
+			text = separator + text;
+			if (typeof caret === 'number') caret += separator.length;
+			else if (caret) caret = { start: caret.start + separator.length, end: caret.end + separator.length };
+		}
 		const cursor = typeof caret === 'object' ? caret : { start: caret ?? range.start + text.length, end: caret ?? range.start + text.length };
 		try {
 			const before = this.readSelection();
@@ -1107,6 +1143,9 @@ export class ArkdownEditor extends Disposable {
 	private renderProse(): void {
 		if (this.renderedVersion === this.model.getVersionId()) return;
 		const source = this.model.getValue();
+		const typography = this.getTypography();
+		this.prose.classList.toggle('ash-docs-headings-serif', typography.headings === DocsFontFamily.Serif);
+		this.prose.classList.toggle('ash-docs-text-serif', typography.text === DocsFontFamily.Serif);
 		// Parse before discarding the previous projection; source remains available on failure.
 		const nodes = this.parseSyntax();
 		if (this.resetProjection) {
@@ -1169,12 +1208,14 @@ export class ArkdownEditor extends Disposable {
 		for (const root of next) for (const segment of root.segments) this.segments.push(segment);
 		// Keep an editable caret target after atomic blocks and terminal empty paragraphs.
 		const metadata = this.comments.snapshot.trailingMetadataStart;
-		if (!this.segments.some(segment => segment.kind === 'text') || /(?:\r?\n){2}$/u.test(source) || metadata !== undefined) {
+		if (nodes.at(-1)?.kind === 'table' || !this.segments.some(segment => segment.kind === 'text') || /(?:\r?\n){2}$/u.test(source) || metadata !== undefined) {
 			this.terminal = h(this.domNode.ownerDocument, 'p');
 			const offset = metadata !== undefined ? Math.max(0, metadata - this.model.getEOL().length) : source.length;
 			const data = metadata === undefined ? null : [...this.prose.querySelectorAll('.ash-arkdown-comments-data')].find(node => this.ranges.get(node)?.start === metadata) ?? null;
 			this.prose.insertBefore(this.terminal, data);
 			this.leaf(this.terminal, '', { start: offset, end: offset }, source);
+			// A textless paragraph needs a native line box to paint a blinking caret.
+			this.terminal.append(this.domNode.ownerDocument.createElement('br'));
 		}
 		this.renderedVersion = this.model.getVersionId();
 	}
@@ -1198,6 +1239,12 @@ export class ArkdownEditor extends Disposable {
 			return;
 		}
 		if (node.kind === 'code_block') {
+			if (node.range.start === 0 && readDocsTypography(source)) {
+				const metadata = h(parent.ownerDocument, 'span', { attributes: { hidden: '', contenteditable: 'false' } });
+				this.ranges.set(metadata, node.range);
+				parent.append(metadata);
+				return;
+			}
 			if (this.comments.snapshot.metadataRanges.some(range => range.start === node.range.start)) {
 				const metadata = h(parent.ownerDocument, 'span', { className: 'ash-arkdown-comments-data', attributes: { hidden: '', contenteditable: 'false' } });
 				this.ranges.set(metadata, node.range);
@@ -1419,6 +1466,32 @@ export class ArkdownEditor extends Disposable {
 	}
 
 	private containsSelection(): boolean { const selection = this.prose.ownerDocument.defaultView?.getSelection(); return !!selection?.anchorNode && this.prose.contains(selection.anchorNode) && !!selection.focusNode && this.prose.contains(selection.focusNode); }
+	private normalizeTableCaret(): boolean {
+		const native = this.prose.ownerDocument.getSelection();
+		if (!native?.isCollapsed || native.focusNode?.nodeType !== Node.ELEMENT_NODE || this.tables.hasCellSelection) return false;
+		const element = native.focusNode as Element;
+		const lane = element.closest('.ash-arkdown-table');
+		if (!lane || !this.prose.contains(lane) || element.closest('td, th')) return false;
+		const visible = this.segments.filter(segment => !segment.text.parentElement?.closest('[hidden]'));
+		const first = visible.findIndex(segment => lane.contains(segment.text));
+		if (first < 0) return false;
+		let last = first;
+		while (last + 1 < visible.length && lane.contains(visible[last + 1].text)) last++;
+		// Chromium exposes the scroll container as an extra caret stop around
+		// its table. Enter on cell text; leave for the adjacent document block.
+		const after = native.focusOffset === element.childNodes.length;
+		const inside = this.selection.start >= visible[first].offsets[0] && this.selection.end <= visible[last].offsets.at(-1)!;
+		let target = visible[after ? last : first];
+		let end = after;
+		if (inside) {
+			const adjacent = visible[after ? last + 1 : first - 1];
+			if (adjacent) { target = adjacent; end = !after; }
+		}
+		const offset = end ? target.offsets.at(-1)! : target.offsets[0];
+		this.selection = { start: offset, end: offset };
+		this.restoreSelection();
+		return true;
+	}
 	private readSelection(): ArkdownRange {
 		if (this.mode === 'markdown') {
 			const selection = this.sourceEditor?.getSelection();
@@ -1455,10 +1528,11 @@ export class ArkdownEditor extends Disposable {
 			this.ensureSourceEditor().setSelection(Selection.fromPositions(this.model.getPositionAt(this.selection.start), this.model.getPositionAt(this.selection.end)));
 			return;
 		}
-		if (length > 0 && this.selection.start === 0 && this.selection.end === length) {
+		if (this.selection.start < length && this.selection.start === this.contentStart() && this.selection.end === length) {
 			// A document selection includes hidden Markdown delimiters and atomic
 			// blocks; text-leaf endpoints would silently narrow that source range.
-			this.prose.ownerDocument.defaultView?.getSelection()?.setBaseAndExtent(this.prose, 0, this.prose, this.prose.childNodes.length);
+			const first = this.selection.start === 0 ? 0 : this.renderedRoots[0].dom.length;
+			this.prose.ownerDocument.defaultView?.getSelection()?.setBaseAndExtent(this.prose, first, this.prose, this.prose.childNodes.length);
 			return;
 		}
 		const locate = (offset: number): [Node, number] => {

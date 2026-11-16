@@ -25,6 +25,18 @@ suite('Docs file export', () => {
 		assert.match(new TextDecoder().decode(blank.get('word/document.xml')), /<w:body><w:p\/>/u);
 	});
 
+	test('DOCX preserves independent heading and body font families without printing typography metadata', async () => {
+		for (const [headings, text] of [['serif', 'sans'], ['sans', 'serif']] as const) {
+			const source = '```ash-typography\n' + JSON.stringify({ headings, text }) + '\n```\n\n# 标题\n\nBody 正文';
+			await mount(source);
+			const parts = await unzipFiles(new Uint8Array(await browser.page.evaluate(() => window.arkdownFixture.exportFile('docx'))), new AbortController().signal);
+			const styles = new TextDecoder().decode(parts.get('word/styles.xml'));
+			assert.match(styles, new RegExp('<w:docDefaults>.*?w:ascii="' + (text === 'serif' ? 'Times New Roman' : 'Arial') + '"'));
+			assert.match(styles, new RegExp('w:styleId="Heading1".*?w:ascii="' + (headings === 'serif' ? 'Times New Roman' : 'Arial') + '"'));
+			assert.doesNotMatch(new TextDecoder().decode(parts.get('word/document.xml')), /ash-typography|headings|serif/u);
+		}
+	});
+
 	test('localizes the three export formats in Chinese', async () => {
 		await browser.page.goto('/arkdown.html?locale=zh-CN');
 		await expect(browser.page.locator('body')).toHaveAttribute('data-ready', 'true');

@@ -12,10 +12,12 @@ import type { ISessionsEntryService } from '../../../../services/layout/common/s
 import type { ArtifactToolbar, ArtifactToolbarAction } from '../../../artifact/browser/widget/artifactToolbar.js';
 import type { ArkdownEditorPane } from '../../browser/arkdown/arkdownEditorPane.js';
 import { DocsToolbar } from '../../browser/docsToolbar.js';
+import { defaultDocsTypography, DocsFontFamily, type DocsTypography } from '../../common/docsTypography.js';
 
 function fixture(options: { readonly readOnly?: boolean; readonly tableSelection?: boolean; readonly fileDialogs?: IFileDialogService; } = {}): { toolbar: DocsToolbar; actions: () => readonly ArtifactToolbarAction[]; } {
 	let actions: readonly ArtifactToolbarAction[] = [];
 	let wide = false;
+	let typography = defaultDocsTypography;
 	const edits: IAction[] = [
 		{ id: 'arkdown.editor.bold', label: 'Bold', tooltip: 'Bold', enabled: true, run: () => { } },
 		{ id: 'arkdown.editor.italic', label: 'Italic', tooltip: 'Italic', enabled: true, run: () => { } },
@@ -25,6 +27,7 @@ function fixture(options: { readonly readOnly?: boolean; readonly tableSelection
 		hasTableSelection: options.tableSelection === true,
 		get isPageWide() { return wide; }, togglePageWidth: () => { wide = !wide; },
 		getMode: () => 'rich', getSelectionFormatting: () => ({ list: 'task', heading: 0 }), canIndentList: () => true,
+		getTypography: () => typography, setTypography: (part: keyof DocsTypography, family: DocsFontFamily) => { typography = { ...typography, [part]: family }; },
 		insertImages: (read: () => Promise<unknown>) => read(),
 	};
 	const editor = { isReadonly: options.readOnly === true, getEditingActions: () => edits, getControl: () => widget } as unknown as ArkdownEditorPane;
@@ -69,10 +72,26 @@ test('cell selections expose inline formatting and disable block and link action
 		assert.equal(selection.some(action => action.id === 'sessions.docs.font'), false);
 		assert.equal(selection.find(action => action.id === 'sessions.docs.link')!.enabled, false);
 		assert.equal(selection.find(action => action.id === 'sessions.docs.underline')!.enabled, true);
-		for (const id of ['font', 'table', 'image', 'checklist', 'dropdown']) {
+		assert.equal(value.actions().find(action => action.id === 'sessions.docs.typography')!.enabled, true);
+		for (const id of ['table', 'image', 'checklist', 'dropdown']) {
 			assert.equal(value.actions().find(action => action.id === `sessions.docs.${id}`)!.enabled, false);
 		}
 	} finally { value.toolbar.dispose(); }
+});
+
+test('document typography changes headings and body independently of selection formatting', async () => {
+	const value = fixture();
+	try {
+		const menu = () => value.actions().find(action => action.id === 'sessions.docs.typography')!.menu!;
+		assert.deepEqual(menu().map(action => action instanceof Separator ? '|' : action.id.slice('sessions.docs.typography.'.length)), ['headings', 'headings.serif', 'headings.sans', '|', 'text', 'text.serif', 'text.sans']);
+		await menu().find(action => action.id.endsWith('headings.serif'))!.run(); value.toolbar.update();
+		assert.equal(menu().find(action => action.id.endsWith('headings.serif'))!.checked, true);
+		assert.equal(menu().find(action => action.id.endsWith('text.sans'))!.checked, true);
+		assert.deepEqual(value.toolbar.getSelectionActions().find(action => action.id === 'sessions.docs.font')!.menu!.map(action => action.id), ['sessions.docs.paragraph', 'sessions.docs.heading1', 'sessions.docs.heading2', 'sessions.docs.heading3']);
+	} finally { value.toolbar.dispose(); }
+	const readOnly = fixture({ readOnly: true });
+	try { assert.equal(readOnly.actions().find(action => action.id === 'sessions.docs.typography')!.enabled, false); }
+	finally { readOnly.toolbar.dispose(); }
 });
 
 test('context More uses the standard submenu action consumed by the shared Menu', () => {

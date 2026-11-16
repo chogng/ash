@@ -37,6 +37,12 @@ suite('Arkdown editor pane', () => {
 		await expect(body).toContainText('original中文🙂 code');
 		await source.press('ControlOrMeta+z');
 		assert.equal(await browser.page.evaluate(() => window.arkdownPaneFixture.text), '# Shared\n\noriginal中文🙂');
+		await source.press('ControlOrMeta+Shift+z');
+		assert.equal(await browser.page.evaluate(() => window.arkdownPaneFixture.text), '# Shared\n\noriginal中文🙂 code');
+		await source.press('ControlOrMeta+a');
+		assert.equal(await browser.page.evaluate(() => window.arkdownPaneFixture.sourceSelection), '# Shared\n\noriginal中文🙂 code');
+		await source.press('ControlOrMeta+z');
+		assert.equal(await browser.page.evaluate(() => window.arkdownPaneFixture.text), '# Shared\n\noriginal中文🙂');
 		assert.equal(await browser.page.evaluate(() => window.arkdownPaneFixture.dirty), true);
 		await browser.page.evaluate(() => window.arkdownPaneFixture.reopen());
 		await expect(body).toContainText('original中文🙂');

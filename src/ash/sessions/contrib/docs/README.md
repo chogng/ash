@@ -5,7 +5,7 @@ Docs 持有 Sessions 的文档创建、打开、默认视图选择、HTML 写作
 | 文件                                                           | 职责                                                        |
 | -------------------------------------------------------------- | ----------------------------------------------------------- |
 | [docs.contribution.ts](browser/docs.contribution.ts)           | 编辑器、配置、命令及生成文档打开入口                        |
-| [arkdownDocsEditorPane.ts](browser/arkdownDocsEditorPane.ts)   | Docs 标题栏、作品操作和默认模式，借用 Arkdown 文档宿主      |
+| [docsEditorPane.ts](browser/docsEditorPane.ts)                 | Docs 标题栏、作品操作和默认模式，借用 Arkdown 文档宿主      |
 | [docsToolbar.ts](browser/docsToolbar.ts)                       | 向 Artifact 工具栏贡献字体、插入、更多、讨论和 Ask Ash 操作 |
 | [docsDropdown.ts](common/docsDropdown.ts)                      | 文档下拉选择块的 Markdown 编码与持久化边界校验              |
 | [docsImportExport.ts](browser/docsImportExport.ts)             | 导入导出、DOCX/PDF 转换、格式选择和文件保存                 |
@@ -24,7 +24,7 @@ Arkdown 的 Markdown 入口接续文档导出命令：Markdown 导出保留源�
 
 下拉选择块使用 `ash-dropdown` 围栏代码块保存 JSON 名称、选项与选值。正文仅把通过边界校验的块投影为选择控件；无效内容保留为代码，标签按纯文本呈现。修改选值通过同一个 `TextModel` 提交，参与保存、撤销和协作。通用 Markdown 查看器将其显示为代码块；源码视图可直接修改选项。
 
-Docs 的唯一编辑器为 `ArkdownDocsEditorPane`，借用 [ArkdownEditorPane](browser/arkdown/arkdownEditorPane.ts)，支持排版正文与共用 CodeEditor 的 Markdown 源码视图。Docs 入口进入 Chat 模式，IDE 和 Agent Window Code 使用 Markdown 扩展。Markdown 原文由 `TextModel` 持有，`EditorWorkingCopy` 接入保存、dirty、外部变更与备份，Rust 提供增量解析、结构编辑与协作操作日志。
+Docs 的唯一编辑器为 `DocsEditorPane`，借用 [ArkdownEditorPane](browser/arkdown/arkdownEditorPane.ts)，支持排版正文与共用 CodeEditor 的 Markdown 源码视图。Docs 入口进入 Chat 模式，IDE 和 Agent Window Code 使用 Markdown 扩展。Markdown 原文由 `TextModel` 持有，`EditorWorkingCopy` 接入保存、dirty、外部变更与备份，Rust 提供增量解析、结构编辑与协作操作日志。
 
 Docs 仅接收 Markdown，不注册旧 `.ash-doc` 编辑器或迁移入口。HTML 通过基础层转换器生成 Markdown；Markdown 导入按 Arkdown 源码区间内嵌本地图片，复用编辑器的图片校验和写入规则，其余源码保持原样；DOCX 由 Docs 读取标准 OOXML，转换正文、标题、列表、链接、图片和普通表格。不支持的正文结构拒绝导入，源文件保留。
 

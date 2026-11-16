@@ -6,13 +6,15 @@ import { ArkdownEditor, ArkdownEditorFocused } from './arkdownEditor.js';
 
 // The global keybinding service dispatches in capture phase. Route shared edit
 // commands before its Code editor fallback reaches another visible editor.
+// Check document focus before resolving the Workbench host; embedded Code
+// editors can share these commands without providing an IEditorPart.
 for (const [command, operation] of [[SelectAllCommand, 'selectAll'], [UndoCommand, 'undo'], [RedoCommand, 'redo']] as const) {
 	command.addImplementation(120, 'arkdown-editor', accessor => {
 		const control = accessor.get(IEditorPart).activePane?.getControl();
 		if (!(control instanceof ArkdownEditor) || !control.hasFocus()) return false;
 		control[operation]();
 		return true;
-	});
+	}, ArkdownEditorFocused.isEqualTo(true));
 }
 for (const key of [KeyCode.KeyB, KeyCode.KeyI, KeyCode.KeyU]) {
 	KeybindingsRegistry.registerKeybindingPassThrough({

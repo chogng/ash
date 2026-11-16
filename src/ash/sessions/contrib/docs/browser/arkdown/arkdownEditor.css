@@ -50,6 +50,18 @@
 	min-height: 1em;
 }
 
+.stanza-arkdown-prose.ash-docs-text-serif {
+	font-family: serif;
+}
+
+.stanza-arkdown-prose :is(h1, h2, h3, h4, h5, h6) {
+	font-family: var(--ash-font-family, system-ui, sans-serif);
+}
+
+.stanza-arkdown-prose.ash-docs-headings-serif :is(h1, h2, h3, h4, h5, h6) {
+	font-family: serif;
+}
+
 .stanza-arkdown-prose .ash-arkdown-task-list {
 	padding-inline-start: 0;
 	margin-block: var(--ash-spacing-size80);

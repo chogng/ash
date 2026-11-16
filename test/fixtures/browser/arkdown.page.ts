@@ -11,6 +11,7 @@ import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { loadArkdown } from '../../../src/ash/sessions/contrib/docs/browser/arkdown/arkdownRuntime.js';
 import { ArkdownEditor } from '../../../src/ash/sessions/contrib/docs/browser/arkdown/arkdownEditor.js';
 import type { DocsEditorMode } from '../../../src/ash/sessions/contrib/docs/common/docs.js';
+import type { DocsTypography, DocsFontFamily } from '../../../src/ash/sessions/contrib/docs/common/docsTypography.js';
 import type { ArkdownTextColor } from '../../../src/ash/sessions/contrib/docs/browser/arkdown/arkdownRuntime.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { DocsCommentsWidget } from '../../../src/ash/sessions/contrib/docs/browser/docsCommentsWidget.js';
@@ -122,6 +123,8 @@ const fixture = {
 	get selectionBounds() { return editor!.getSelectionBounds()?.toJSON(); },
 	togglePageWidth() { editor!.togglePageWidth(); },
 	get isPageWide() { return editor!.isPageWide; },
+	get typography() { return editor!.getTypography(); },
+	setTypography(part: keyof DocsTypography, family: DocsFontFamily) { editor!.setTypography(part, family); },
 	get commentState() { const state = editor!.comments.snapshot; return { ...state, anchors: [...state.anchors] }; },
 	captureComment() { return editor!.captureCommentSelection(); },
 	createComment(body: string, draft?: DocsCommentDraft) { return editor!.comments.create(body, '11111111-1111-4111-8111-111111111111', draft); },

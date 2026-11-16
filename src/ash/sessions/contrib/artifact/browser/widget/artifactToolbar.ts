@@ -41,7 +41,7 @@ export class ArtifactToolbar extends Disposable {
 
 	constructor(
 		ownerDocument: Document,
-		options: { readonly appearance?: 'canvas'; readonly menuClassName?: string; readonly menuIconPlacement?: IContextMenuDelegate['iconPlacement']; },
+		options: { readonly appearance?: 'canvas'; readonly menuClassName?: string; readonly menuIconPlacement?: IContextMenuDelegate['iconPlacement']; readonly getMenuActionViewItem?: IContextMenuDelegate['getActionViewItem']; },
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IMenuService menuService: IMenuService,
 		@IContextKeyService contextKeys: IContextKeyService,
@@ -57,6 +57,7 @@ export class ArtifactToolbar extends Disposable {
 					gap: delegate.gap ?? 8,
 					getMenuClassName: () => options.menuClassName ?? (options.appearance === 'canvas' ? 'ash-canvas-editor-menu' : ''),
 					iconPlacement: options.menuIconPlacement ?? (options.appearance === 'canvas' ? 'leading-with-trailing-check' : 'trailing'),
+					getActionViewItem: (action, viewOptions) => options.getMenuActionViewItem?.(action, viewOptions) ?? delegate.getActionViewItem?.(action, viewOptions),
 					getCheckedActionsRepresentation: options.appearance === 'canvas' ? () => 'radio' : delegate.getCheckedActionsRepresentation,
 					onHide: cancelled => {
 						this.menuVisible = false;
