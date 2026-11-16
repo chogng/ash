@@ -1,273 +1,162 @@
 """Locked media server resolution without a network dependency."""
 
 import hashlib
+import io
 import json
 import os
-import subprocess
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from build.lib.livekit import resolve_livekit
+from build.lib.livekit import ROOT, resolve_livekit
+from build.lib.targets import TARGETS
+
+
+def write_fixture(root, target):
+    name = "livekit-server.exe" if "windows" in target else "livekit-server"
+    archive = root / "third_party/.cache/livekit/1.0.0/server.zip"
+    archive.parent.mkdir(parents=True)
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr(name, b"verified server")
+        output.writestr("unrelated.txt", b"unrelated")
+    key = target.removesuffix("-musl") + "-gnu" if target.endswith("-musl") else target
+    lock = {
+        "schemaVersion": 1,
+        "runtime": "livekit",
+        "version": "1.0.0",
+        "artifacts": {
+            key: {
+                "url": "https://example.test/server.zip",
+                "archive": archive.name,
+                "size": archive.stat().st_size,
+                "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+            }
+        },
+    }
+    path = root / "third_party/livekit/runtime-lock.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(lock), encoding="utf-8")
+    return archive, path, lock
 
 
 class LivekitTests(unittest.TestCase):
-    def test_locked_macos_binary_does_not_require_a_macos_build_host_or_go(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            archive = root / "third_party/.cache/livekit/1.0/server.zip"
-            archive.parent.mkdir(parents=True)
-            with zipfile.ZipFile(archive, "w") as output:
-                output.writestr("livekit-server", b"verified macOS server")
-            lock = root / "third_party/livekit/runtime-lock.json"
-            lock.parent.mkdir(parents=True)
-            lock.write_text(
-                json.dumps(
-                    {
-                        "version": "1.0",
-                        "artifacts": {
-                            "aarch64-apple-darwin": {
-                                "url": "https://example.com/server.zip",
-                                "archive": archive.name,
-                                "sha256": hashlib.sha256(
-                                    archive.read_bytes()
-                                ).hexdigest(),
-                            }
-                        },
-                    }
-                ),
-                encoding="utf-8",
-            )
+    def test_every_product_target_uses_a_locked_binary_without_a_build_host(self):
+        for target in TARGETS:
             with (
-                patch("build.lib.livekit.sys.platform", "win32"),
-                patch(
-                    "build.lib.livekit.shutil.which",
-                    side_effect=AssertionError("Go must not be queried"),
-                ),
-                patch(
-                    "build.lib.livekit.subprocess.run",
-                    side_effect=AssertionError("No source build is needed"),
-                ),
-                patch(
+                self.subTest(target=target),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                write_fixture(root, target)
+                with patch(
                     "build.lib.livekit.download_and_verify",
                     side_effect=AssertionError("Archive is already verified"),
-                ),
-            ):
-                self.assertEqual(
-                    resolve_livekit("aarch64-apple-darwin", root=root).read_bytes(),
-                    b"verified macOS server",
-                )
+                ):
+                    binary = resolve_livekit(target, root=root)
+                    self.assertEqual(binary.read_bytes(), b"verified server")
+                    self.assertFalse((binary.parent / "unrelated.txt").exists())
+                    os.utime(binary, ns=(1_000_000_000, 1_000_000_000))
+                    previous = binary.stat()
+                    resolve_livekit(target, root=root)
+                    self.assertEqual(binary.stat().st_mtime_ns, previous.st_mtime_ns)
+                    binary.write_bytes(b"damaged executable")
+                    resolve_livekit(target, root=root)
+                    self.assertEqual(binary.read_bytes(), b"verified server")
 
-    def test_macos_requires_go_before_downloading_source(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            lock_path = root / "third_party/livekit/runtime-lock.json"
-            lock_path.parent.mkdir(parents=True)
-            lock_path.write_text(
-                json.dumps(
-                    {
-                        "version": "1.0",
-                        "artifacts": {},
-                        "source": {
-                            "url": "https://example.invalid/source.tar.gz",
-                            "sha256": "0" * 64,
-                        },
-                    }
-                )
-            )
+    def test_missing_or_corrupt_archive_is_downloaded_with_the_locked_size(self):
+        for damage in ("missing", "size", "digest"):
             with (
-                patch("build.lib.livekit.sys.platform", "darwin"),
-                patch("build.lib.livekit.shutil.which", return_value=None),
-                patch(
-                    "build.lib.livekit.download_and_verify",
-                    side_effect=AssertionError("unexpected download"),
-                ),
+                self.subTest(damage=damage),
+                tempfile.TemporaryDirectory() as temporary,
             ):
-                with self.assertRaisesRegex(RuntimeError, "requires Go 1.26"):
-                    resolve_livekit("aarch64-apple-darwin", root=root)
-
-    def test_source_build_preserves_identical_output_and_publishes_changes(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            cache = root / "third_party/.cache/livekit/1.0"
-            cache.mkdir(parents=True)
-            archive = cache / "source.tar.gz"
-            archive.write_bytes(b"source archive")
-            lock = root / "third_party/livekit/runtime-lock.json"
-            lock.parent.mkdir(parents=True, exist_ok=True)
-            lock.write_text(
-                json.dumps(
-                    {
-                        "version": "1.0",
-                        "artifacts": {},
-                        "source": {
-                            "url": "https://example.test/source.tar.gz",
-                            "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
-                        },
-                    }
-                )
-            )
-            commands = []
-            seeded_outputs = []
-            built_bytes = b"compact server"
-            fail_build = False
-
-            def run(command, **kwargs):
-                commands.append(command)
-                if command[0] == "tar":
-                    (Path(command[-1]) / "livekit-1.0").mkdir()
+                root = Path(temporary)
+                target = "x86_64-pc-windows-msvc"
+                archive, _, _ = write_fixture(root, target)
+                verified = archive.read_bytes()
+                if damage == "missing":
+                    archive.unlink()
+                elif damage == "size":
+                    archive.write_bytes(verified + b"tampered")
                 else:
-                    self.assertIn("-ldflags=-s -w", command)
-                    output = Path(command[command.index("-o") + 1])
-                    seeded_outputs.append(
-                        output.read_bytes() if output.exists() else None
-                    )
-                    output.write_bytes(built_bytes)
-                    if fail_build:
-                        raise subprocess.CalledProcessError(1, command)
+                    archive.write_bytes(b"x" * len(verified))
+                with patch(
+                    "build.download.artifacts.urlopen",
+                    return_value=io.BytesIO(verified),
+                ) as download:
+                    binary = resolve_livekit(target, root=root)
+                self.assertEqual(binary.read_bytes(), b"verified server")
+                self.assertEqual(archive.read_bytes(), verified)
+                download.assert_called_once()
 
-            with (
-                patch("build.lib.livekit.sys.platform", "darwin"),
-                patch("build.lib.livekit.shutil.which", return_value="go"),
-                patch("build.lib.livekit.subprocess.run", side_effect=run),
-            ):
-                binary = resolve_livekit("aarch64-apple-darwin", root=root)
-                self.assertEqual(built_bytes, binary.read_bytes())
-                self.assertEqual(2, len(commands))
-                os.utime(binary, ns=(1_000_000_000, 1_000_000_000))
-                previous = binary.stat()
-
-                resolve_livekit("aarch64-apple-darwin", root=root)
-                self.assertEqual(previous.st_mtime_ns, binary.stat().st_mtime_ns)
-                self.assertEqual(previous.st_ino, binary.stat().st_ino)
-                self.assertEqual(4, len(commands))
-                self.assertEqual([None, built_bytes], seeded_outputs)
-
-                built_bytes = b"updated server"
-                resolve_livekit("aarch64-apple-darwin", root=root)
-                self.assertEqual(built_bytes, binary.read_bytes())
-                # Windows exposes only the read-only attribute through chmod/stat.
-                self.assertEqual(
-                    0o666 if os.name == "nt" else 0o755, binary.stat().st_mode & 0o777
-                )
-                self.assertEqual(b"compact server", seeded_outputs[-1])
-
-                binary.write_bytes(b"damaged server")
-                resolve_livekit("aarch64-apple-darwin", root=root)
-                self.assertEqual(built_bytes, binary.read_bytes())
-                self.assertIsNone(seeded_outputs[-1])
-
-                receipt = binary.with_suffix(".sha256")
-                for damaged_receipt in (b"invalid", b"\xff"):
-                    receipt.write_bytes(damaged_receipt)
-                    resolve_livekit("aarch64-apple-darwin", root=root)
-                    self.assertIsNone(seeded_outputs[-1])
-                receipt.unlink()
-                resolve_livekit("aarch64-apple-darwin", root=root)
-                self.assertIsNone(seeded_outputs[-1])
-
-                previous_receipt = receipt.read_bytes()
-                fail_build = True
-                built_bytes = b"incomplete server"
-                with self.assertRaises(subprocess.CalledProcessError):
-                    resolve_livekit("aarch64-apple-darwin", root=root)
-                self.assertEqual(b"updated server", binary.read_bytes())
-                self.assertEqual(previous_receipt, receipt.read_bytes())
-
-                fail_build = False
-                built_bytes = b"recovered server"
-                binary.unlink()
-                resolve_livekit("aarch64-apple-darwin", root=root)
-                self.assertIsNone(seeded_outputs[-1])
-                self.assertEqual(built_bytes, binary.read_bytes())
-
-    def test_development_reuses_only_a_verified_locked_server(self):
+    def test_wrong_size_cannot_reuse_or_download_an_archive_with_the_right_hash(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            archive = root / "third_party/.cache/livekit/1.0/source.tar.gz"
-            archive.parent.mkdir(parents=True)
-            archive.write_bytes(b"source")
-            lock = root / "third_party/livekit/runtime-lock.json"
-            lock.parent.mkdir(parents=True)
-            source = {
-                "url": "https://example.test/first",
-                "sha256": hashlib.sha256(b"source").hexdigest(),
-            }
-
-            def write_lock():
-                lock.write_text(
-                    json.dumps({"version": "1.0", "artifacts": {}, "source": source})
-                )
-
-            def run(command, **kwargs):
-                if command[0] == "tar":
-                    (Path(command[-1]) / "livekit-1.0").mkdir()
-                else:
-                    Path(command[command.index("-o") + 1]).write_bytes(b"server")
-
-            write_lock()
-            with (
-                patch("build.lib.livekit.sys.platform", "darwin"),
-                patch("build.lib.livekit.shutil.which", return_value="go") as tool,
-                patch("build.lib.livekit.subprocess.run", side_effect=run) as commands,
-            ):
-
-                def resolve():
-                    return resolve_livekit(
-                        "aarch64-apple-darwin", root=root, reuse_development=True
-                    )
-
-                binary = resolve()
-                self.assertEqual(binary, resolve())
-                self.assertEqual(2, commands.call_count)
-                tool.assert_called_once()
-                binary.write_bytes(b"damaged")
-                self.assertEqual(b"server", resolve().read_bytes())
-                self.assertEqual(4, commands.call_count)
-                source["url"] = "https://example.test/relocked"
-                write_lock()
-                resolve()
-                self.assertEqual(6, commands.call_count)
-
-    def test_verified_archive_extracts_only_the_server(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            cache = root / "third_party/.cache/livekit/1.0"
-            cache.mkdir(parents=True)
-            archive = cache / "server.zip"
-            with zipfile.ZipFile(archive, "w") as output:
-                output.writestr("livekit-server.exe", b"server")
-                output.writestr("unrelated.txt", b"unrelated")
-            lock = {
-                "version": "1.0",
-                "artifacts": {
-                    "x86_64-pc-windows-msvc": {
-                        "url": "https://example.com/server.zip",
-                        "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
-                        "archive": archive.name,
-                    },
-                },
-            }
-            lock_path = root / "third_party/livekit/runtime-lock.json"
-            lock_path.parent.mkdir(parents=True)
-            lock_path.write_text(json.dumps(lock))
+            target = "aarch64-apple-darwin"
+            archive, path, lock = write_fixture(root, target)
+            lock["artifacts"][target]["size"] += 1
+            path.write_text(json.dumps(lock))
             with patch(
-                "build.lib.livekit.download_and_verify",
-                side_effect=AssertionError("unexpected download"),
+                "build.download.artifacts.urlopen",
+                return_value=io.BytesIO(archive.read_bytes()),
             ):
-                executable = resolve_livekit("x86_64-pc-windows-msvc", root=root)
-            self.assertEqual(b"server", executable.read_bytes())
-            self.assertFalse((executable.parent / "unrelated.txt").exists())
+                with self.assertRaisesRegex(RuntimeError, "locked size or SHA-256"):
+                    resolve_livekit(target, root=root)
+            self.assertFalse((archive.parent / target / "livekit-server").exists())
 
-    def test_unlocked_target_is_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            lock = root / "third_party/livekit/runtime-lock.json"
-            lock.parent.mkdir(parents=True)
-            lock.write_text(json.dumps({"version": "1.0", "artifacts": {}}))
-            with self.assertRaisesRegex(RuntimeError, "No media server build"):
-                resolve_livekit("unsupported", root=root)
+    def test_missing_artifacts_never_fall_back_to_source_builds(self):
+        for target in ("aarch64-apple-darwin", "x86_64-apple-darwin", "unsupported"):
+            with (
+                self.subTest(target=target),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                _, path, lock = write_fixture(root, "aarch64-apple-darwin")
+                lock["artifacts"] = {}
+                lock["source"] = {"url": "https://example.test/source.tar.gz"}
+                path.write_text(json.dumps(lock))
+                with patch(
+                    "build.download.artifacts.urlopen",
+                    side_effect=AssertionError(
+                        "Missing artifacts must fail before I/O"
+                    ),
+                ):
+                    with self.assertRaisesRegex(
+                        RuntimeError, "No media server artifact"
+                    ):
+                        resolve_livekit(target, root=root)
+
+    def test_invalid_artifact_metadata_is_rejected_before_io(self):
+        for field, value in (
+            ("size", None),
+            ("size", True),
+            ("size", 0),
+            ("size", 128 * 1024 * 1024 + 1),
+            ("sha256", "invalid"),
+            ("archive", "../server.zip"),
+            ("url", "http://example.test/server.zip"),
+            ("url", "https://user:secret@example.test/server.zip"),
+        ):
+            with (
+                self.subTest(field=field, value=value),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                target = "aarch64-apple-darwin"
+                _, path, lock = write_fixture(root, target)
+                lock["artifacts"][target][field] = value
+                path.write_text(json.dumps(lock))
+                with self.assertRaises(RuntimeError):
+                    resolve_livekit(target, root=root)
+
+    def test_repository_lock_covers_every_product_target(self):
+        lock = json.loads((ROOT / "third_party/livekit/runtime-lock.json").read_text())
+        for target in TARGETS:
+            key = (
+                target.removesuffix("-musl") + "-gnu"
+                if target.endswith("-musl")
+                else target
+            )
+            with self.subTest(target=target):
+                self.assertIn(key, lock["artifacts"])

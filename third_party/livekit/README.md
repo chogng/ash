@@ -12,9 +12,9 @@ executables are built from the locked upstream source with the pinned Go toolcha
 in the dependency repository. Normal Ash development, CI and packaging consume
 these binaries without installing Go or rebuilding LiveKit.
 
-`build/lib/livekit.py` validates cached/downloaded archives before extracting the
-server. Its source-build path remains available for explicit source locks without
-a precompiled macOS entry; it is not used by the default six-target lock.
+`build/lib/livekit.py` validates the size and SHA-256 of cached/downloaded archives
+before extracting the server. Missing locked binaries fail without falling back
+to source compilation. Source builds belong to the dependency repository.
 
 The hosting capability is separate from media clients and is installed only for
 explicit local call hosting. Its product binding and installation remain owned by

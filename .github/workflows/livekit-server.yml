@@ -7,12 +7,14 @@ on:
       - "third_party/livekit/**"
       - "build/lib/livekit.py"
       - "build/lib/test_livekit.py"
-      - "build/lib/media.py"
+      - "build/lib/media_package.py"
       - "build/release/capabilities.py"
-      - "build/lib/capability*.py"
+      - "build/lib/package*"
       - "build/download/**"
       - "build/lib/file_lock.py"
       - "build/lib/targets.py"
+      - "build/lib/version.py"
+      - "Cargo.toml"
       - ".github/workflows/livekit-server.yml"
   push:
     branches: [main]

@@ -72,7 +72,7 @@ Renderer 中，`Part`、`ViewPane`、`Widget` 的普通方法和 getter/setter �
 
 `pnpm dev` 先准备后端，再启动 Renderer 和 Rust watcher，最后打开 Electron。Main 的 source map 单独变化时，开发启动器保留当前 Electron 进程。Rust 发布后，Desktop 先用临时 profile 执行 `ensure-selected` 和完整初始化检查。预检失败时旧后端继续服务，Main 日志记录失败代次与原因。预检成功后，窗口最多等待两秒接收旧连接上已发请求的结果，再断开并切换真实 profile。等待期间依赖连接就绪的调用可以等新连接，已发请求不会自动重放。真实 profile 就绪后立即重连窗口，临时后端继续清理。清理结束后才处理下一次切换。如果新代次在真实 profile 上启动失败，Desktop 用保留的租约恢复上一代，再重连窗口。后续发布会自动重新尝试切换。窗口暂时没有连接时，下一次连接会先检查当前发布代次。
 
-开发后端把 Remote Server 放在独立的 Cargo 构建组。已有可验证产物时，Ash 本体保存只在 Remote Server 或其 Cargo 输入变化时重新构建它。开发包准备会复用与锁定源码匹配、内容校验通过的 LiveKit Server。首次准备、锁定输入更新或产物损坏时才重新生成。本地语音客户端和宿主仍由 Ash 构建。
+开发后端把 Remote Server 放在独立的 Cargo 构建组。已有可验证产物时，Ash 本体保存只在 Remote Server 或其 Cargo 输入变化时重新构建它。开发包准备会复用大小和内容校验通过的锁定 LiveKit Server 预编译产物。首次准备、锁定输入更新或产物损坏时重新下载并校验，不编译 Go Server。本地语音客户端和宿主仍由 Ash 构建。
 
 `pnpm dev:subsecond` 在 Apple Silicon macOS 上使用 `dx 0.7.10`，从 PATH 读取，也可用 `ASH_SUBSECOND_DX` 指定绝对路径。官方 macOS 预编译包需要 OpenSSL 3；自备动态库时可用 `ASH_SUBSECOND_LIBRARY_PATH` 指定库目录。启动器用独立的 profile、窗口数据目录和 App Server 发布指针，首次编译会建立独立 Cargo 缓存。同一 checkout 同时运行一个 Subsecond driver，默认回环端口为 39139，可用 `ASH_SUBSECOND_PORT` 改端口。
 

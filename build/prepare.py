@@ -402,7 +402,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
         )
     from build.lib.media_package import assemble_capability_package
 
-    livekit_binary = resolve_livekit(target, root=root, reuse_development=True)
+    livekit_binary = resolve_livekit(target, root=root)
     livekit_root = root / ".build/livekit-capability"
     # Content-address the development companion so a running generation is never replaced.
     livekit_root = (

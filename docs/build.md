@@ -23,7 +23,7 @@ macOS 架构支持范围见 [Getting started](../README.md#getting-started)。
 
 安装 Rust、Just、仓库要求的 uv 和 Python 3.11 及以上版本。首次初始化使用 PATH 中的 `python3`；确认 `python3 -c 'import tomllib'` 成功。macOS 自带 Python 可能不满足要求，可用 `uv run --python 3.12 just install` 初始化；Apple Silicon 上的 Homebrew Python 3.12 也可将 `/opt/homebrew/opt/python@3.12/libexec/bin` 放在 PATH 前部。初始化后，Just 和前端构建入口优先复用 `scripts/.venv`，日常启动无需再包装 `uv run`。
 
-准备完整后端包时，macOS 还需要 Go 1.26 和系统 C/C++ 工具链来构建 LiveKit Server，见 [LiveKit Server](../third_party/livekit/README.md)。Linux 的完整后端构建需要 ALSA 开发库；沙箱构建需要 C 编译器和 libcap，见 [共享包构建](../build/README.md)。
+完整后端包使用锁定的 [LiveKit Server 预编译产物](../third_party/livekit/README.md)，无需安装 Go。Linux 的完整后端构建需要 ALSA 开发库；沙箱构建需要 C 编译器和 libcap，见 [共享包构建](../build/README.md)。
 
 源码 Desktop 默认使用 `.build/desktop/dev/profile` 和独立的 `.build/desktop/dev/user-data`；开发 Web 默认使用 `.build/desktop/dev/web-profile`。开发凭据存放在对应 profile 的 `development-secrets/values/` 私有文件中，Unix 目录权限为 `0700`、文件为 `0600`，Windows 使用仅当前账户可访问的 DACL。文件未加密，同一账户运行的应用可以读取。开发后端不自动生成签名证书，也不为默认凭据存储访问系统钥匙串；可在 Models 设置中显式切换加密存储以测试钥匙串集成。
 
@@ -661,7 +661,9 @@ App Server runtime 原先直接依赖 `ash-build-identity`，因此只有 Git co
 
 #### 2026-10-29：macOS 开发包避免相同 LiveKit 产物使缓存失效
 
-macOS 源码构建 LiveKit 后，原先无条件替换缓存程序；连续三次产物 SHA-256 相同，但 mtime 每次变化，导致开发包的第二层输入摘要失效。现在通过既有内容校验发布函数保留相同产物，继续执行 Go 构建、锁定源码校验及最终二进制比较；新产物或损坏的缓存仍会替换。
+以下测量针对迁移前的 macOS 源码构建路径。当前开发包消费独立仓库发布的锁定预编译产物，不再执行 Go 构建。
+
+当时源码构建 LiveKit 后无条件替换缓存程序；连续三次产物 SHA-256 相同，但 mtime 每次变化，导致开发包的第二层输入摘要失效。修复通过既有内容校验发布函数保留相同产物，继续执行 Go 构建、锁定源码校验及最终二进制比较；新产物或损坏的缓存仍会替换。
 
 在 macOS arm64、Rust 1.99.1、Go 1.27.1、`dev-small` 和已有编译缓存下，每轮只触碰 `third_party/livekit/README.md` 的时间戳，再执行 `scripts/.venv/bin/python -B build/prepare.py`，令源码摘要失效但不改变包内资源。修改前耗时为 10.87／8.38／8.21 秒，修改后为 4.58／6.00／5.56 秒，中位数 8.38 → 5.56 秒，减少约 34%。六轮均无 Rust 编译，修改前三轮重新组装开发包，修改后三轮均复用同一包且 LiveKit mtime 不变。此结果只覆盖源码扫描失效而实际打包输入未变的准备阶段，不代表真实 Rust 功能编辑、冷编译或完整窗口启动提速；其他平台未测。日志与测量脚本位于 `.build/build-health/startup-20261029/`。
 

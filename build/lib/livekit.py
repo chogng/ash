@@ -1,151 +1,77 @@
 """Resolve the locked media server for development and release packages."""
 
-import hashlib
 import json
-import os
-import shutil
-import subprocess
+import re
 import sys
-import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.download.artifacts import (
+    archive_is_valid,
     download_and_verify,
     extract_member,
-    publish,
-    sha256,
-    temporary_file,
 )
-from build.lib.file_lock import exclusive_lock
+from build.lib.targets import TARGETS
 
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def resolve_livekit(
-    target: str, *, root: Path = ROOT, reuse_development: bool = False
-) -> Path:
+def resolve_livekit(target: str, *, root: Path = ROOT) -> Path:
     lock = json.loads(
         (root / "third_party/livekit/runtime-lock.json").read_text(encoding="utf-8")
     )
+    if (
+        lock.get("schemaVersion") != 1
+        or lock.get("runtime") != "livekit"
+        or not isinstance(lock.get("version"), str)
+        or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", lock["version"])
+        or not isinstance(lock.get("artifacts"), dict)
+    ):
+        raise RuntimeError("Invalid LiveKit Server runtime lock")
     artifact = lock["artifacts"].get(
         target.removesuffix("-musl") + "-gnu" if target.endswith("-musl") else target
     )
-    mac = target in ("aarch64-apple-darwin", "x86_64-apple-darwin")
-    if artifact is None and not mac:
-        raise RuntimeError(f"No media server build is defined for {target}")
-    if artifact is None and mac and sys.platform != "darwin":
-        raise RuntimeError("The macOS media server must be built on macOS.")
+    # Dependency production belongs to ash-livekit-server. An incomplete lock
+    # must fail here rather than silently turning a product build into a Go build.
+    if target not in TARGETS or not isinstance(artifact, dict):
+        raise RuntimeError(f"No media server artifact is locked for {target}")
+    if (
+        not isinstance(artifact.get("archive"), str)
+        or not re.fullmatch(r"[A-Za-z0-9_.-]+\.(?:tar\.gz|zip)", artifact["archive"])
+        or not isinstance(artifact.get("sha256"), str)
+        or not re.fullmatch(r"[0-9a-f]{64}", artifact["sha256"])
+        or type(artifact.get("size")) is not int
+        or not 0 < artifact["size"] <= 128 * 1024 * 1024
+        or not isinstance(artifact.get("url"), str)
+    ):
+        raise RuntimeError(f"Invalid locked media server artifact for {target}")
+    endpoint = urlsplit(artifact["url"])
+    if (
+        endpoint.scheme != "https"
+        or not endpoint.hostname
+        or endpoint.username
+        or endpoint.password
+        or endpoint.query
+        or endpoint.fragment
+    ):
+        raise RuntimeError("LiveKit Server archives require credential-free HTTPS URLs")
     cache = root / "third_party/.cache/livekit" / lock["version"]
-    cache.mkdir(parents=True, exist_ok=True)
-    name = "livekit-server.exe" if "windows" in target else "livekit-server"
+    name = "livekit-server.exe" if TARGETS[target].is_windows else "livekit-server"
     executable = cache / target / name
-    if artifact is not None:
-        archive = cache / artifact["archive"]
-        locked = SimpleNamespace(
-            url=artifact["url"], sha256=artifact["sha256"], size=None
-        )
-        if not archive.is_file() or sha256(archive) != locked.sha256:
-            download_and_verify(locked, archive, max_bytes=128 * 1024 * 1024)
-        extract_member(
-            archive, "zip" if archive.suffix == ".zip" else "tar.gz", name, executable
-        )
-        executable.chmod(0o755)
-        return executable
-
-    source = lock["source"]
-    archive = cache / "source.tar.gz"
-    locked = SimpleNamespace(url=source["url"], sha256=source["sha256"], size=None)
-    executable.parent.mkdir(parents=True, exist_ok=True)
-    receipt = executable.with_suffix(".sha256")
-    development_receipt = executable.with_suffix(".development.json")
-    development_key = hashlib.sha256(
-        json.dumps([target, lock["version"], source], sort_keys=True).encode()
-        + Path(__file__).read_bytes()
-    ).hexdigest()
-    with exclusive_lock(executable.parent / ".build.lock", create=True):
-        if reuse_development and executable.is_file():
-            try:
-                saved = json.loads(development_receipt.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                saved = None
-            if isinstance(saved, dict) and saved.get("key") == development_key:
-                if saved.get("sha256") == sha256(executable):
-                    return executable
-        go = shutil.which("go")
-        if go is None:
-            raise RuntimeError(
-                "Building LiveKit Server for macOS requires Go 1.26 or newer on PATH"
-            )
-        if not archive.is_file() or sha256(archive) != locked.sha256:
-            download_and_verify(locked, archive, max_bytes=10 * 1024 * 1024)
-        with tempfile.TemporaryDirectory(prefix=f"{target}-", dir=cache) as temporary:
-            directory = Path(temporary)
-            subprocess.run(
-                ["tar", "-xzf", str(archive), "-C", str(directory)], check=True
-            )
-            output = directory / name
-            try:
-                previous_digest = receipt.read_text(encoding="ascii").strip()
-            except (FileNotFoundError, UnicodeError):
-                previous_digest = None
-            # Go reuses a linked executable only when its output already exists.
-            # Seed a private copy after checking its full contents: Go's build ID
-            # check alone would not detect damage elsewhere in the binary. Go still
-            # owns source, target, toolchain and build-option invalidation.
-            if (
-                previous_digest is not None
-                and executable.is_file()
-                and sha256(executable) == previous_digest
-            ):
-                shutil.copyfile(executable, output)
-            environment = {
-                **os.environ,
-                "GOTOOLCHAIN": "local",
-                "GOWORK": "off",
-                "GOFLAGS": "",
-                "CGO_ENABLED": "1",
-                "GOOS": "darwin",
-                "GOARCH": "arm64" if target.startswith("aarch64") else "amd64",
-            }
-            subprocess.run(
-                [
-                    go,
-                    "build",
-                    "-trimpath",
-                    "-buildvcs=false",
-                    "-mod=readonly",
-                    "-ldflags=-s -w",
-                    "-o",
-                    str(output),
-                    "./cmd/server",
-                ],
-                cwd=directory / f"livekit-{lock['version']}",
-                env=environment,
-                check=True,
-            )
-            # Package receipts include mtime: replacing identical Go output would
-            # invalidate a reusable development package on every source scan miss.
-            digest = sha256(output)
-            publish(output, executable, digest)
-            executable.chmod(0o755)
-            # Publish after the executable under the same lock. An interrupted
-            # publication leaves a mismatch and therefore takes the full build path.
-            with temporary_file(receipt) as temporary_receipt:
-                temporary_receipt.write_text(digest + "\n", encoding="ascii")
-                publish(temporary_receipt, receipt, sha256(temporary_receipt))
-        if reuse_development:
-            with temporary_file(development_receipt) as temporary_receipt:
-                temporary_receipt.write_text(
-                    json.dumps({"key": development_key, "sha256": digest}),
-                    encoding="utf-8",
-                )
-                publish(
-                    temporary_receipt, development_receipt, sha256(temporary_receipt)
-                )
+    archive = cache / artifact["archive"]
+    locked = SimpleNamespace(
+        url=artifact["url"], sha256=artifact["sha256"], size=artifact["size"]
+    )
+    if not archive_is_valid(archive, locked):
+        download_and_verify(locked, archive)
+    extract_member(
+        archive, "zip" if archive.suffix == ".zip" else "tar.gz", name, executable
+    )
+    executable.chmod(0o755)
     return executable
 
 

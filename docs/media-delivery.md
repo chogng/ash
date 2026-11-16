@@ -15,8 +15,8 @@ Desktop 随包提供这些本机程序；独立本机宿主首次使用时安装
 LiveKit Server 继续独立分发，只在创建本机主持的通话时安装。
 
 LiveKit 上游版本、校验和及版权记录保留在 [`third_party/livekit`](../third_party/livekit/README.md)，
-上游程序和 Go 编译缓存位于忽略的 `third_party/.cache/livekit`。macOS 源码构建使用 `-ldflags="-s -w"`；
-其他目标使用锁定并校验的上游产物。Go 工具链不随产品分发。
+六平台程序由[独立依赖仓库](https://github.com/chogng/ash-livekit-server)构建或导入，主仓库按大小和 SHA-256 校验后缓存到
+`third_party/.cache/livekit`。日常开发与打包不安装 Go，也不回退到源码编译。
 
 ## 构建独立包
 
