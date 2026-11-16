@@ -216,6 +216,48 @@ fn psec_tcp_loopback_distinguishes_allowed_and_denied_network() {
 
 #[test]
 #[ignore = "requires PSEC support for the complete filesystem and process policy"]
+fn psec_host_read_reaches_nested_files_without_granting_writes() {
+    let temp = tempfile::tempdir().unwrap();
+    let work_path = temp.path().join("work");
+    let reference = temp.path().join("reference/deep");
+    std::fs::create_dir(&work_path).unwrap();
+    std::fs::create_dir_all(&reference).unwrap();
+    let input = reference.join("input");
+    std::fs::write(&input, "host-read-canary").unwrap();
+    let work = Dir::open_local(&work_path).unwrap();
+    let output = work.canonical_path().join("output");
+    let script = format!(
+        "$ErrorActionPreference='Stop'; \
+         if ([IO.File]::ReadAllText({input}) -ne 'host-read-canary') {{ exit 10 }}; \
+         $denied=$false; \
+         try {{ [IO.File]::WriteAllText({input},'modified') }} catch {{ $denied=$true }}; \
+         if (!$denied) {{ exit 11 }}; \
+         [IO.File]::WriteAllText({output},'workspace-write'); \
+         Write-Output 'host-read-ok'",
+        input = literal(&input),
+        output = literal(&output),
+    );
+    let result = executor(&work, Duration::from_secs(30))
+        .execute(
+            powershell(script),
+            CommandExecutionAuthority::Sandboxed(sandbox_policy(
+                FileSystemAccess::DirectoryWrite,
+                NetworkAccess::Denied,
+            )),
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(result) = result else {
+        panic!("{result:?}")
+    };
+    assert_eq!(result.exit_code, Some(0), "{result:?}");
+    assert!(result.stdout.contains("host-read-ok"), "{result:?}");
+    assert_eq!(std::fs::read_to_string(input).unwrap(), "host-read-canary");
+    assert_eq!(std::fs::read_to_string(output).unwrap(), "workspace-write");
+}
+
+#[test]
+#[ignore = "requires PSEC support for the complete filesystem and process policy"]
 fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
     let temp = tempfile::tempdir().unwrap();
     for name in ["work", "reference", "other-agent"] {

@@ -89,11 +89,16 @@ fn terminal_handoff_preserves_explicit_environment_and_filesystem_identity() {
     let encoded = serde_json::to_string(&prepared).unwrap();
     drop(dir);
     let decoded: Request = serde_json::from_str(&encoded).unwrap();
-    assert_eq!(decoded.environment, Some(vec!["ASH_TEST=a=b 中文".into()]));
     assert_eq!(
-        crate::policy::sdk_request(&decoded)
-            .unwrap()
-            .inherit_default_environment,
+        decoded.environment,
+        Some(vec![("ASH_TEST".into(), "a=b 中文".into())])
+    );
+    assert_eq!(
+        crate::policy::sdk_request(&decoded).environment,
+        decoded.environment
+    );
+    assert_eq!(
+        crate::policy::sdk_request(&decoded).inherit_default_environment,
         Some(false)
     );
     assert_eq!(decoded.command_line, prepared.command_line);
@@ -117,9 +122,7 @@ fn explicit_empty_environment_stays_empty_after_terminal_handoff() {
         serde_json::from_str(&serde_json::to_string(&prepared).unwrap()).unwrap();
     assert_eq!(decoded.environment, Some(Vec::new()));
     assert_eq!(
-        crate::policy::sdk_request(&decoded)
-            .unwrap()
-            .inherit_default_environment,
+        crate::policy::sdk_request(&decoded).inherit_default_environment,
         Some(false)
     );
 }
@@ -134,22 +137,20 @@ fn chunked_terminal_handoff_keeps_large_environment_and_prepared_file_authority(
         .set_env(&[("WORKLOAD_VALUE".into(), value.clone())])
         .unwrap();
     let mut helper_environment = std::collections::HashMap::new();
-    crate::pty_transport::encode(
+    crate::windows_transport::encode(
         &serde_json::to_string(&prepared).unwrap(),
         &mut helper_environment,
     )
     .unwrap();
     let decoded: Request =
-        serde_json::from_str(&crate::pty_transport::decode(helper_environment.iter()).unwrap())
+        serde_json::from_str(&crate::windows_transport::decode(helper_environment.iter()).unwrap())
             .unwrap();
     assert_eq!(
         decoded.environment,
-        Some(vec![format!("WORKLOAD_VALUE={value}")])
+        Some(vec![("WORKLOAD_VALUE".into(), value.clone())])
     );
     assert_eq!(
-        crate::policy::sdk_request(&decoded)
-            .unwrap()
-            .inherit_default_environment,
+        crate::policy::sdk_request(&decoded).inherit_default_environment,
         Some(false)
     );
     assert_eq!(decoded.command_line, prepared.command_line);
@@ -174,7 +175,8 @@ fn backend_launch_failure_reaches_the_caller_with_the_sdk_diagnosis() {
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
     let mut prepared = request(&dir);
-    prepared.set_bubblewrap_executable(&temp.path().join("missing-bwrap"));
+    let executable = temp.path().join("missing-bwrap");
+    prepared.set_bubblewrap_executable(&executable);
     let error = match prepared
         .prepare()
         .unwrap()
@@ -193,7 +195,8 @@ fn backend_launch_failure_reaches_the_caller_with_the_sdk_diagnosis() {
     );
     assert!(message.starts_with("backend_error: "), "{message}");
     assert!(message.contains("Bubblewrap"), "{message}");
-    assert!(message.contains("not installed"), "{message}");
+    assert!(message.contains("availability probe"), "{message}");
+    assert!(message.contains(executable.to_str().unwrap()), "{message}");
 }
 
 #[cfg(unix)]
@@ -218,7 +221,7 @@ fn terminal_handoff_keeps_managed_proxy_and_network_restrictions() {
         decoded.network,
         super::Network::Managed(3128.try_into().unwrap())
     );
-    let sdk = crate::policy::sdk_request(&decoded).unwrap();
+    let sdk = crate::policy::sdk_request(&decoded);
     let network = sdk.network.unwrap();
     assert_eq!(
         network.runtime_config.unwrap().network_proxy.as_deref(),
@@ -250,10 +253,7 @@ fn terminal_handoff_retains_both_network_directions() {
         let decoded: Request =
             serde_json::from_str(&serde_json::to_string(&prepared).unwrap()).unwrap();
         assert_eq!(decoded.network, prepared.network);
-        let sdk = crate::policy::sdk_request(&decoded)
-            .unwrap()
-            .network
-            .unwrap();
+        let sdk = crate::policy::sdk_request(&decoded).network.unwrap();
         let action = match network {
             NetworkAccess::Allowed => mxc_sdk::v1::NetworkAction::Allow,
             NetworkAccess::Denied => mxc_sdk::v1::NetworkAction::Deny,

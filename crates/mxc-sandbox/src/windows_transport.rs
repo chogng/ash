@@ -107,5 +107,5 @@ fn is_key(key: &OsStr) -> bool {
 }
 
 #[cfg(test)]
-#[path = "pty_transport_tests.rs"]
+#[path = "windows_transport_tests.rs"]
 mod tests;

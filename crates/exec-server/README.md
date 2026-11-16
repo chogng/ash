@@ -71,7 +71,7 @@ Rust 宿主也可以通过 `AppServerOptions::with_execution_environments` 装�
 活动命令阻止宿主按空闲期限退出。一个宿主最多保留 64 个执行环境，每个客户端最多同时使用
 32 条连接；单次 SSH 读取等待最多 15 秒，写入最多 5 秒。失败连接被释放，不自动重发请求。
 
-这条执行能力可供本地 Agent 使用。旧历史已有 [一次性移交入口](../remote-server/README.md#history-ownership-transfer)，
+这条执行能力可供本地 Agent 使用。旧历史已有 [一次性移交入口](../../remote-server/runtime.md#history-ownership-transfer)，
 移交后远端只启动执行服务；Desktop Remote 默认入口及自动迁移尚未切换。
 
 App Server 每次观察最多等待 500 毫秒，输出变化或进程结束时提前返回。读取连接失败后，
@@ -131,10 +131,6 @@ file-system 实施；编辑器的未保存内容和外部变更冲突仍由前�
 逐项显式运行；缺能力模式另验证实际服务在执行前拒绝。报告记录测试程序和产品可执行文件的
 SHA-256，只有实际运行成功才移除对应未覆盖范围。交叉编译不能代替这些运行结果；App Server
 产品调用链仍需独立验收。
-
-2026-10-07 在 Windows 11 25H2 ARM64 上实际通过上述 4 项 PSEC RPC 用例；Server 2022/2025
-x64 分别通过缺能力时的产品拒绝用例；三个 PSEC 任务全部通过。先前失败、修复与通过范围见
-[终端与 RPC 验收](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-07-psec-终端与执行服务-rpc-验收)。
 
 ```sh
 just test ash-exec-server

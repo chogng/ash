@@ -41,7 +41,7 @@ Core / action-policy → tool-executor → exec-server → sandboxing
 
 App Server 的固定沙箱配置允许策略范围内的宿主 ACL 改动，命令参数不能更改此要求。
 适配器不配置账户或持久网络规则。
-Windows 账户候选的 ACL 恢复由独立后端维护；异常退出仍需实机验收。
+Windows 账户候选的 ACL 日志和恢复归 [账户后端](../windows-sandbox/README.md)。
 子进程退出码不再经过私有运行器重映射。输出中的权限错误只产生“可能已有副作用”的诊断，不能证明进程未启动或授权重跑。
 启动失败保留 SDK 错误类别、说明与扩展系统错误；PTY helper 传回实际启动和等待错误。所有启动失败均关闭本次执行，不重新选择后端。
 Linux 网络提供进程退出时，SDK 监控终止工作负载并报告网络丢失；监控与退出观察均不提前回收进程，进程树关闭后才释放 PID。Bubblewrap 在命令启动前安装禁止 `AF_VSOCK` 的 seccomp 过滤器，防止 WSL 可执行文件互操作绕过 Linux 文件与网络限制；这一约束由工作负载后代继承，适用于禁止和受管网络。
@@ -56,7 +56,7 @@ SDK 的 Seatbelt 策略固定可写根以及只读、拒绝路径的祖先目录
 
 同一目标另直接运行 `/usr/bin/python3`、`/usr/bin/git` 和 `/usr/bin/xcrun`，验证关闭的标准输入、Python 输入数据、退出码和预期输出，不提前替换启动器路径。宿主对照和每个受限执行均保留 5 秒预算及进程树清理；`getconf DARWIN_USER_CACHE_DIR` 另检查启动器依赖的系统目录查询。
 
-Seatbelt 基础策略允许查询 `com.apple.bsd.dirhelper`。缺少此服务时，`confstr(DARWIN_USER_CACHE_DIR)` 失败，Xcode 回退到重复初始化运行时，Intel runner 的真实启动超过 5 秒；仅扩大 LaunchServices 查询不能解决这个问题。该修复允许系统目录发现，文件写入和 IPC 路径仍由现有策略限制，执行专属 `TMPDIR` 的生命周期归 `exec-server`。
+Seatbelt 基础策略允许查询 `com.apple.bsd.dirhelper`，供 `confstr(DARWIN_USER_CACHE_DIR)` 和 Xcode 启动器发现系统缓存目录。文件写入和 IPC 仍受原有策略限制，执行专属 `TMPDIR` 归 `exec-server`。
 
 ```sh
 just test ash-mxc-sandbox --test macos --locked -- --test-threads=1 --nocapture
@@ -71,14 +71,14 @@ just test ash-mxc-sandbox --test macos --locked -- --test-threads=1 --nocapture
 ## PTY 启动
 
 - Unix 使用 SDK 的 `RestrictedLaunch::spawn_with_pty`，由 SDK 分配终端并启动 Bubblewrap 或 Seatbelt。Ash 接入终端输入、合并输出、resize、前台作业中断及进程树关闭。
-- Windows 的 Rust SDK 仍不支持 ProcessContainer 分配 PTY，因此宿主通过 `with_pty_helper` 提供启动器。`utils-pty` 启动该程序的 `--ash-mxc-pty` 角色，产品入口先调用 `arg0::dispatch`。
-- Windows 交接格式归 Ash，包含具体命令、显式环境、文件和网络策略、准备阶段的文件身份。内部角色从同一份 Ash 执行规格生成 typed SDK 请求，不反序列化 SDK 内部执行模型。新增宿主 ACL 授权字段会被拒绝。
+- [Windows 接入](src/windows.rs) 负责 PSEC 的宿主卷授权和 ConPTY helper。Rust SDK 仍不支持 ProcessContainer 分配 PTY，宿主通过 `with_pty_helper` 提供启动器；`utils-pty` 启动该程序的 `--ash-mxc-pty` 角色，产品入口先调用 `arg0::dispatch`。
+- Windows 交接格式归 Ash，包含具体命令、显式环境、文件和网络策略、准备阶段的文件身份。环境始终保存为键值对，直接转换为 typed SDK 请求；内部角色不反序列化 SDK 内部执行模型，新增宿主 ACL 授权字段会被拒绝。
 - Windows 交接请求最多 1 MiB UTF-8，按字符边界拆成不超过 8 KiB 的环境项；帮助进程检查块数、总字节数、缺块、重复键及多余字段。工作负载环境与启动器环境分开，传输变量不注入工作负载，显式空环境保持为空。PSEC 所需的 `SYSTEMROOT` 和 `LOCALAPPDATA` 由执行器提供。
 - `tests/pty.rs` 在 Unix 实际验证输入、resize、环境、只读拒绝、退出、前台作业中断和回收；Windows 普通回归验证帮助进程入口，[PSEC 终端用例](tests/pty/windows.rs) 另检查真实终端输入、尺寸、大环境、传输变量隔离、只读拒写、退出码及后代回收。[执行服务验收](../exec-server/README.md#pty-边界) 通过产品可执行文件和 RPC 检查帮助进程装配、重连与退出输出。这些用例须在支持 PSEC 的系统显式执行，已接入 `scripts/test-psec.ps1`；交叉编译不代表对应系统已通过运行验收。
 
 ## SDK 依赖
 
-使用官方 `mxc-sdk = "=1.0.1"` 声明；当前发布包尚不能保持全部已验证的沙箱行为，根清单通过 `[patch.crates-io]` 固定兼容 fork。它基于官方 1.0.1 的 Microsoft `fda29ac63bc306b7f97f3b86b4b63d44f7f40cf2`，保留上游结构。实际来源由 Cargo.lock 记录，Cargo 与 Bazel 使用同一外部源码。必要补丁、已移除的维护差异及退出条件见 [SDK 依赖说明](../../third_party/mxc/README.md)。
+使用官方 `mxc-sdk = "=1.1.0"` 声明；兼容 fork 基于官方 `c6620183`。根清单和 `Cargo.lock` 固定实际来源，Cargo 与 Bazel 使用同一外部源码。仍需保留的严格启动、前台中断和账户 ACL 接口见 [SDK 依赖说明](../../third_party/mxc/README.md)。
 
 适配器通过 SDK `v1::prepare_restricted` 固定 PSEC、禁止宿主 ACL 改动并传入受信 Bubblewrap 路径及 Seatbelt 追加拒绝规则。SDK 拥有运行器选择、基础 profile 和资源清理；Ash 保存唯一的执行规格，准备和启动时临时生成 SDK 请求。管道、PTY 和 Windows helper 分别取得标准 SDK 句柄。
 
@@ -93,7 +93,7 @@ just verify ash-mxc-sandbox
 just verify ash-exec-server
 ```
 
-平台能力必须通过实际执行验证；交叉编译不能证明隔离生效。各测试先检查普通进程可达性，再验证受限行为、退出码和进程树回收。剩余平台与外部端点验收见 [MXC TODO](../../MXC-TODO.md)。
+平台能力必须通过实际执行验证；交叉编译不能证明隔离生效。各测试先检查普通进程可达性，再验证受限行为、退出码和进程树回收。
 
 ### Linux 网络
 
@@ -136,24 +136,6 @@ docker run --rm --name ash-sandbox-linux --privileged --cpus 3 \
 
 独立 Linux 可在具备上述依赖的 checkout 直接运行脚本。Docker Desktop 的 LinuxKit 内核和 arm64 容器结果不等于独立发行版或物理 x64 宿主验收。x64 C 交叉工具链由镜像中的 `gcc-x86-64-linux-gnu` 和 `libc6-dev-amd64-cross` 提供；Rust 目标仍须 `rustup target add x86_64-unknown-linux-gnu`，交叉编译结果不能算 x64 运行结果。
 
-### 2026-10-18 Linux 验证记录
-
-本机 Docker Desktop 的 Debian 12 arm64 容器（LinuxKit 7.0.12、Rust 1.98.0、Bubblewrap 0.8.0、slirp4netns 1.2.0）在当前 checkout 运行上述脚本通过：`ash-sandboxing` 26 项、MXC 21 项单元与 6 项 PTY、执行服务 83 项单元与 18 项 RPC／PTY 集成测试，以及各包 check／全目标 warnings 均通过。另显式运行被默认忽略的 Linux Managed 代理、真实 Docker／GPG socket 四项和网络矩阵；socket 测试先通过 daemon `/_ping` 或 GPG `GETINFO version` 普通进程对照，再确认受限连接失败。GPG 分别覆盖旧变量、无旧变量及仅在最终 workload 环境提供 agent home。临时 agent 已清理，Docker socket 权限保持原值。
-
-2026-10-19 在仓库 Dev Container 的 Debian 12 Linux ARM64 环境与原 checkout 复跑 SDK pin `f1e8694b`：`ASH_BWRAP_PATH=/usr/bin/bwrap just test ash-mxc-sandbox --lib --test pty` 通过 21 项适配器测试和 6 项真实 PTY 测试，覆盖输入、resize、环境、退出、前台中断及回收。日志为 `.build/todo-linux-mxc-adapter-current.log`；该结果不替代独立 Linux／x64 或公网 IPv6 验收。
-
-该真实对照发现旧实现仅配置 `GPG_AGENT_INFO` 时才能阻止 GPG agent；取消该变量后，受限命令仍能访问真实 agent。宿主适配修复后四项 socket 测试通过，未改 SDK fork。原始失败记录为 `.build/mxc-linux-gpg-baseline.log`，最终完整记录为 `.build/mxc-linux-docker-acceptance-final.log`；macOS 的 `just verify ash-mxc-sandbox` 和 `just verify ash-sandboxing` 也通过。
-
-容器内安装 x64 Rust 目标后，以下全部测试目标编译检查通过，包含真实目标 C 工具链调用；记录为 `.build/mxc-linux-x64-check.log`。它没有执行 x64 测试程序，也没有编译完整 workspace。
-
-```sh
-rustup target add x86_64-unknown-linux-gnu
-CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
-  just check ash-mxc-sandbox -p ash-exec-server --target x86_64-unknown-linux-gnu --all-targets --locked
-```
-
-`just dependencies` 通过，未新增依赖版本；`just test-python scripts` 运行 197 项（1 项按环境跳过）通过。全仓安全门禁仍因既有 zbus 生态停止维护公告失败，未添加例外。独立 Linux／物理 x64、Windows／WSL2、另一台 LAN 设备及公网 IPv6 仍在 [MXC TODO](../../MXC-TODO.md)。
-
 `ASH_WINDOWS_NETWORK_ENDPOINT` 和 `ASH_WINDOWS_DNS_ENDPOINT` 可增加 Windows 接收端，格式为逗号分隔的 socket 地址；链路本地 IPv6 的 scope ID 使用 Linux 接口编号。自建接收端可用 `ASH_WINDOWS_NETWORK_COUNTER` 提供原子发布的累计请求数；受限执行后计数增加即失败。共享接收端的测试须串行运行。
 
 ### WSL2
@@ -168,10 +150,6 @@ TMPDIR=/tmp just test ash-mxc-sandbox --test wsl --locked -- --ignored --test-th
 
 第二轮将 `TMPDIR` 设为 Windows 挂载上预先创建的测试目录，用相同命令重跑。
 
-2026-11-05 使用当前 SDK pin，在 Windows 11 23H2 x64 的 `AshBuild`（Ubuntu 24.04.5、WSL2 内核 `6.18.54.1-microsoft-standard-WSL2`、Bubblewrap 0.9.0）复测。Linux `/tmp` 与 Windows 挂载目录各通过 3 项，覆盖文件与元数据、退出／超时／取消回收，以及普通进程可运行 Windows `cmd.exe` 而 Denied／Managed 沙箱拒绝互操作。
-
-`just verify ash-sandboxing`、`just verify ash-mxc-sandbox`（含 6 项 PTY）和 `just verify ash-exec-server` 均通过。Linux 受管网络用例及 DNS／IPv6／宿主路由矩阵各通过 1 项，使用隔离解包的 `slirp4netns` 1.2.1 和 `iptables`／`ip6tables` 1.8.10。证据见 `.build/todo-local-acceptance-20261105/` 下的 `wsl-mxc-mounts-with-tools.log` 和 `wsl-mxc-matrix-final.log`。
-
 ### macOS 局域网与 Unix socket
 
 接收端由测试创建，`ASH_SANDBOX_LAN_IP` 使用本机可达的私有 IPv4 地址。测试覆盖直连拒绝、代理批准／拒绝、私有 IPC 目录内创建与连接、目录外 socket 及 SSH agent socket 拒绝。私有 IPC 目录必须与命令目录分开授权。
@@ -184,4 +162,4 @@ ASH_SANDBOX_LAN_IP="$(/usr/sbin/ipconfig getifaddr en0)" just test ash-mxc-sandb
 
 ### Windows
 
-PSEC 能力、管理员账户、ConPTY 和执行服务 RPC 的环境准备及命令见 [Windows 验收手册](../../docs/windows-sandbox-acceptance-runbook.md)。
+PSEC 只读卷根直接递归授权；可写卷根展开直接子项。卷根已有显式写授权时，保留其子项的宿主读授权，避免同路径只读规则覆盖写授权。显式只读和拒绝规则仍按原有优先级实施。PSEC 能力、管理员账户、ConPTY 和执行服务 RPC 的环境准备及命令见 [Windows 验收手册](../../docs/windows-sandbox-acceptance-runbook.md)。

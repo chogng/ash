@@ -1,35 +1,26 @@
 # Microsoft MXC SDK
 
-Ash 声明官方 `mxc-sdk = "=1.0.1"`，通过根 `Cargo.toml` 的 `[patch.crates-io]` 固定兼容 fork。实际来源和提交由 `Cargo.lock` 记录，Cargo 与 Bazel 消费同一份外部源码。本目录只保存许可证和补丁审查依据，不保存 SDK 源码、复制的测试 fixture、二进制构建依赖或独立 lockfile。
+Ash 声明官方 `mxc-sdk = "=1.1.0"`，通过根清单的 `[patch.crates-io]` 固定兼容 fork。Cargo 与 Bazel 使用同一外部源码，实际来源由 `Cargo.lock` 记录。本目录只保存许可证和补丁审查依据。
 
-官方 [1.0.1](https://github.com/microsoft/mxc/releases/tag/v1.0.1) 的源码基线是 `fda29ac63bc306b7f97f3b86b4b63d44f7f40cf2`，稳定 schema 仍为 `1.0.0`。兼容 fork 直接基于该 tag，固定为 `f1e8694b75dea05ebb3dc8050039d04fe304236f`；完整修正见 [固定差异](https://github.com/chogng/mxc/compare/fda29ac63bc306b7f97f3b86b4b63d44f7f40cf2...f1e8694b75dea05ebb3dc8050039d04fe304236f)。
+源码基线为官方 `c6620183`，SDK 版本为 `1.1.0`，V1 typed API 的稳定 schema 仍为 `1.0.0`。兼容分支为 `codex/ash-sdk-compat-1.1.0`，提交由根清单固定，见 [兼容差异](https://github.com/chogng/mxc/compare/c66201839d63cae2239db5e92f1f1d6076cf5181...6448a05eb5ef43507102e7acb690e96059566875)。
 
-2026-10-18 逐项复核后，下表修正仍需保留：官方尚未提供 `prepare_restricted`、宿主执行路径／追加限制、前台中断及账户后端使用的 ACL helper。此次迁移保留官方的 macOS PTY 死锁修正、Seatbelt `spawn-open` 移除、Bubblewrap DNS／loopback 修正和 PSEC 1.0 回环实现；不带回旧的 PSEC 回环 workaround。严格 PSEC 准备使用新版的版本选择及 capture trace-source 语义，Managed 网络的既有拒绝保持不变。SDK 测试同步断言代理绕过变量为空，避免恢复客户端的默认绕过规则。
-
-上游提交的独立问题拆分、贡献要求与本地 PR 准备状态见 [上游补丁审查](upstream-review.md)。
+1.1.0 升级采用官方 Bubblewrap 挂载规划、地址族过滤、受限路径探测、Seatbelt profile 准备及进程标记清理。官方仍缺少严格准备、宿主执行路径、追加限制和前台中断接口，并移除了账户后端使用的 ACL helper；兼容分支保留这些能力，不恢复已删除的降级运行器。Windows Managed 网络仍拒绝缺少完整入站隔离的 PSEC 组合。Ash 按新版 `FilesystemPolicyError::message` 读取委派检查错误。
 
 ## 必须保留的修正
 
 | 修正                                                  | 保留原因与验证依据                                                                                                                                                                                                                                                                      |
 | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Seatbelt 文件、元数据、目录移动和 `fcntl` 边界        | 保持隐藏目录内的授权例外，固定可写根与受保护对象的祖先，拒绝通过只读描述符修改文件。由适配器库测试、`tests/macos.rs` 和 SDK profile 测试覆盖。                                                                                                                                          |
-| Seatbelt Unix socket、环境、系统目录查询和回收        | 私有 IPC 仅开放指定目录；持续路径规则仍由 Ash 编译。保留完整环境、Xcode 启动器所需的 `dirhelper` 查询及后代关闭。由网络、系统启动器和 PTY 回归覆盖。                                                                                                                                    |
-| Bubblewrap 挂载、受信执行路径、网络监控与 WSL seccomp | 根挂载与隐藏父目录不能覆盖已授权例外；网络提供进程退出时关闭工作负载；禁止 `AF_VSOCK` 的跨系统启动绕过。Linux/WSL 执行与进程生命周期测试仍是运行验收门槛。                                                                                                                              |
-| Unix 退出观察与 PTY 前台中断                          | `waitid(WNOWAIT)` 保留 PID 到最终回收，避免网络监控提前消费退出状态；交互中断作用于终端当前前台作业。SDK 退出观察测试与 Ash 真实 PTY 场景覆盖。                                                                                                                                         |
+| Seatbelt Unix socket、环境与系统目录查询 | 私有 IPC 仅开放指定目录；持续路径规则仍由 Ash 编译。保留完整环境和 `dirhelper` 查询，后代清理由上游进程标记机制承担。 |
+| Bubblewrap 执行路径、会话和网络监控 | probe 与 spawn 使用同一宿主指定路径；PTY 保留前台作业控制；退出观察在进程组清理和网络监控结束前保留 PID。挂载规划和地址族过滤采用上游实现；根目录授权后重建私有 `/dev`、`/proc`，随后仍应用更深路径限制。 |
+| Unix 退出观察与 PTY 前台中断 | Bubblewrap 使用 `waitid(WNOWAIT)` 保留 PID 到最终回收；交互中断作用于终端当前前台作业。Seatbelt 使用新版上游进程标记清理。 |
 | PSEC 的完整请求准备与错误类别                         | 在启动前确认本次策略可实施；缺能力允许 Ash 评估其他候选，系统 API 故障不能授权重选。严格 Managed 组合继续拒绝，启动失败不重跑。由 Windows 准备、执行服务和 PSEC 验收覆盖。                                                                                                              |
 | Windows ACL 日志、授权范围和恢复                      | 账户后端仍使用 SDK ACL 实现；必须保持独立日志、严格恢复、遍历范围与原有继承标记。`ash-windows-sandbox` 的恢复测试和实机验收继续覆盖这一依赖。                                                                                                                                           |
 | SOCKS 环境与 Windows 命令解释语义                     | 保持代理协议和空绕过变量；`cmd.exe /C` 的完整命令不能被普通参数转义破坏。由代理环境、Windows 命令与执行回归覆盖。                                                                                                                                                                       |
-| Windows 资源 UTF-8 与 Unix `rustix` 依赖              | 资源编译器必须识别 UTF-8；`rustix` 提供退出观察。保留必要构建改动，不展开或重写其余上游清单。                                                                                                                                                                                           |
-| SDK 的严格准备接口与句柄                              | `v1::prepare_restricted` 接受 typed 请求和宿主控制，禁止宿主 ACL 改动、锁定 Windows PSEC、选择受信 Bubblewrap，并组合 Seatbelt 拒绝规则。标准 SDK 句柄承接管道、PTY 和继承控制台；公开前台中断、命令行及文件身份 helper。Ash 无需导入平台 runner、解析内部请求或生成 SDK 基础 profile。 |
+| Windows 资源 UTF-8、Unix 退出观察与工具链兼容 | 资源编译保留 UTF-8；`rustix` 提供非回收式退出观察；原子取消状态使用兼容上游最低 Rust 版本的 CAS 循环，避免 Ash 工具链弃用警告。 |
+| SDK 的严格准备接口与句柄                              | `v1::prepare_restricted` 接受 typed 请求和宿主控制，禁止宿主 ACL 改动、锁定 Windows PSEC、选择受信 Bubblewrap，并组合 Seatbelt 拒绝规则。管道、PTY 和继承控制台直接委托官方引擎；兼容层不再重复选择后端或转换启动错误。公开前台中断、命令行及文件身份 helper。Ash 无需导入平台 runner、解析内部请求或生成 SDK 基础 profile。 |
 
 以上修正保留当前行为，不扩大产品支持范围。Windows 账户后端的 ACL helper 仍通过 SDK 的兼容导出接入；它是剩余的实现耦合，不能仅为取消依赖而复制一套恢复机制。
-
-## 已移除的维护差异
-
-- `mod.rs` 重命名、模块路径重写和无关格式改动。
-- SDK 清单的 workspace 展开、独立 SDK workspace/lockfile、外部 fixture 的重复复制。
-- Ash 请求中的 SDK 内部模型、网络策略反向还原、运行时标记修补以及各平台 runner 装配。
-- 对 vendored 大文件的豁免和按文件块顺序比较补丁的校验脚本。来源由固定 Git 提交与 Cargo/Bazel lockfile 校验。
 
 ## 退出兼容 fork
 
@@ -45,4 +36,4 @@ just dependencies
 just dependency-security
 ```
 
-SDK 自身测试在该固定 fork 的完整 checkout 中执行，例如 `just test mxc-sdk --manifest-path /path/to/mxc/src/Cargo.toml --lib profile_builder --profile test --locked`。Ash 根 workspace 不运行外部 dependency 的 dev-dependencies。真实 Windows/WSL 隔离仍须使用对应平台的验收入口，交叉编译不代表运行通过。既有平台证据见 [适配器](../../crates/mxc-sandbox/README.md) 和 [Windows 验收手册](../../docs/windows-sandbox-acceptance-runbook.md)。
+SDK 自身测试在该固定 fork 的完整 checkout 中执行，例如 `just test mxc-sdk --manifest-path /path/to/mxc/src/Cargo.toml --lib profile_builder --profile test --locked`。Ash 根 workspace 不运行外部 dependency 的 dev-dependencies。真实 Windows/WSL 隔离使用 [适配器验证入口](../../crates/mxc-sandbox/README.md#验证) 和 [Windows 验收手册](../../docs/windows-sandbox-acceptance-runbook.md)，交叉编译不代表运行通过。

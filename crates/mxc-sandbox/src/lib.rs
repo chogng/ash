@@ -2,17 +2,17 @@
 #![forbid(unsafe_code)]
 mod policy;
 mod process;
-#[cfg(windows)]
-mod pty;
-#[cfg(any(windows, test))]
-mod pty_transport;
 mod request;
 #[cfg(target_os = "macos")]
 mod seatbelt;
 #[cfg(windows)]
-pub use pty::PTY_HELPER_ARGUMENT;
+mod windows;
+#[cfg(any(windows, test))]
+mod windows_transport;
 #[cfg(windows)]
-pub use pty::run_pty_helper;
+pub use windows::PTY_HELPER_ARGUMENT;
+#[cfg(windows)]
+pub use windows::run_pty_helper;
 
 use ash_file_access::Dir;
 use ash_install_context::InstallContext;
@@ -114,7 +114,7 @@ impl SandboxBackend for MxcSandbox {
                 .pty_helper
                 .as_ref()
                 .ok_or_else(|| unavailable("PTY helper is not configured by this host"))?;
-            return pty::prepare(command, request, scope, size, executable.clone());
+            return windows::prepare(command, request, scope, size, executable.clone());
         }
         Ok(PreparedCommand::sandboxed(
             command,

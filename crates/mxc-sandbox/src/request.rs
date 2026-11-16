@@ -16,7 +16,7 @@ use std::path::PathBuf;
 pub(super) struct Request {
     pub command_line: String,
     pub cwd: String,
-    pub environment: Option<Vec<String>>,
+    pub environment: Option<Vec<(String, String)>>,
     pub readwrite_paths: Vec<String>,
     pub readonly_paths: Vec<String>,
     pub denied_paths: Vec<String>,
@@ -114,12 +114,7 @@ impl Request {
             self.denied_paths.sort();
             self.denied_paths.dedup();
         }
-        self.environment = Some(
-            environment
-                .iter()
-                .map(|(key, value)| format!("{key}={value}"))
-                .collect(),
-        );
+        self.environment = Some(environment.to_vec());
         Ok(())
     }
 
@@ -148,7 +143,7 @@ impl Request {
         {
             options.seatbelt_denials = self.seatbelt_rules.clone();
         }
-        mxc_sdk::v1::prepare_restricted(crate::policy::sdk_request(self)?, options).map_err(
+        mxc_sdk::v1::prepare_restricted(crate::policy::sdk_request(self), options).map_err(
             |error| {
                 if error.code == mxc_sdk::v1::ErrorCode::UnsupportedContainment {
                     SandboxError::UnsupportedPolicy(error.to_string())
@@ -187,57 +182,3 @@ fn snapshot_path(path: PathBuf) -> std::io::Result<PathBuf> {
 #[cfg(test)]
 #[path = "request_tests.rs"]
 mod tests;
-
-/// Materialize host visibility as ordinary PSEC grants, without authorizing ACL changes.
-#[cfg(windows)]
-pub(super) fn host_paths(cwd: &Path) -> Result<Vec<String>, SandboxError> {
-    let mut roots = (0..26)
-        .map(|index| PathBuf::from(format!("{}:\\", char::from(b'A' + index))))
-        .collect::<Vec<_>>();
-    if let Some(root) = cwd.ancestors().last() {
-        roots.push(root.to_owned());
-    }
-    roots.sort();
-    roots.dedup();
-    let mut paths = Vec::new();
-    for root in roots {
-        match std::fs::read_dir(&root) {
-            Ok(entries) => {
-                paths.push(root);
-                for entry in entries {
-                    let path = entry
-                        .map_err(|error| unavailable(error.to_string()))?
-                        .path();
-                    // Generated visibility does not authorize inaccessible objects.
-                    // Explicit grants were captured separately and always fail closed.
-                    use mxc_sdk::v1::{
-                        ExistingObjectComparison, compare_existing_filesystem_objects,
-                    };
-                    if compare_existing_filesystem_objects(&path, &path)
-                        != ExistingObjectComparison::Same
-                    {
-                        continue;
-                    }
-                    paths.push(path);
-                    if paths.len() > 4096 {
-                        return Err(unavailable("host filesystem expansion exceeds 4096 paths"));
-                    }
-                }
-            }
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound
-                ) || matches!(error.raw_os_error(), Some(21 | 53 | 1201 | 1167)) => {}
-            Err(error) => return Err(unavailable(error.to_string())),
-        }
-    }
-    paths
-        .into_iter()
-        .map(|path| {
-            path.into_os_string()
-                .into_string()
-                .map_err(|_| unavailable("MXC requires Unicode filesystem paths"))
-        })
-        .collect()
-}

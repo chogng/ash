@@ -201,7 +201,7 @@ impl Filesystem {
         // Check delegation before any ACL change. An elevated setup process is
         // never used to reinterpret a caller's filesystem grants.
         mxc_sdk::mxc_common::filesystem_access::check_delegation(&request.files)
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| error.message().to_owned())?;
         let report = mxc_sdk::mxc_common::filesystem_dacl::recover_orphaned_state_in(journal)
             .map_err(|error| error.to_string())?;
         if !report.errors.is_empty() {

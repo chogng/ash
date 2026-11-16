@@ -1,5 +1,10 @@
 # 待办
 
+## 沙箱 · macOS 与真实 Docker 验收
+
+- [ ] **macOS 实机验收** · 当前环境没有可连接的 macOS 主机。使用本次 checkout 运行 `just verify ash-mxc-sandbox`、`just verify ash-exec-server`，并按 [适配器验证入口](crates/mxc-sandbox/README.md#验证) 执行 macOS 文件、PTY、私有 IPC、敏感 socket 及网络矩阵；网络矩阵须有普通进程可达的 TCP／UDP DNS 对照。核对实际用例数量、退出码和后代回收，缺环境或跳过不计通过；完成后删除本条。
+- [ ] **真实 Docker 隔离验收** · 当前 WSL 没有 Docker daemon。到具备真实 `/var/run/docker.sock` 的 Linux 设备，先确认普通进程能读取 daemon 的 `/_ping`，再运行 `ASH_BWRAP_PATH=/usr/bin/bwrap just test ash-mxc-sandbox --test sensitive_sockets docker_daemon_is_reachable_only_outside_the_sandbox --locked -- --ignored --exact --nocapture`，确认沙箱不能连接该 socket。完整 Linux 网络矩阵按 [Linux 验证脚本](scripts/test-linux-sandbox.sh) 执行，提供可达的 `ASH_DNS_SERVER`；完成后删除本条。当前 Windows PSEC／ConPTY／RPC、WSL 两种文件系统、GPG 和 Linux 受管代理已验收，不重复列为待办。
+
 ## 浏览器菜单 · 自动化时遮罩闪烁
 
 - [ ] **复现／验收** · 用户反馈自动化点击菜单时出现遮罩闪烁，手动点击没有。已移除 active 测试强制关闭 GPU 的参数，并改为按已知 Renderer 采集菜单截图；配置测试 4 项、原生 smoke 2 项及实窗场景通过，但尚未取得操作系统合成层逐帧证据，不能认定瞬时闪烁完全消失。下一步在同一窗口对照原生点击与自动化点击，区分窗口合成、焦点模拟和截图／录屏干预，再按复现结果修正对应 owner。原测试进程屏幕采集权限为 denied，不得为诊断触发系统授权弹窗。证据与复跑入口：`.build/menu-automation-flash/report.md`、`.build/ash-playwright-mcp/browser-menu-compositor.cjs`。

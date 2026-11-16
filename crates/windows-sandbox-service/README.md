@@ -30,4 +30,4 @@ $setupPlan = .\ash-windows-sandbox.exe plan setup --slots 1 | ConvertFrom-Json
 
 初始化在提交状态前中断时，删除清单只允许处理初始锁和加密暂存文件，此时尚未创建账户或网络对象。已提交的安装则按状态记录删除；不能把读取或解密失败当作可以直接删除的依据。
 
-普通测试覆盖真实本地管道、连续连接、延迟读取、禁止客户端创建服务端实例、调用者身份、拒绝低权限及受限令牌、请求大小和线程身份恢复，不注册 SCM 服务或创建账户。完整管理员验收使用已获授权的 [`scripts/test-windows-sandbox.ps1`](../../scripts/test-windows-sandbox.ps1)。2026-10-02 在 Windows 11 23H2 x64 的提升权限令牌下，服务安装、账户执行、运行器更新、服务程序替换与重启、账户和 WFP 对象保留，以及卸载清理均通过；具体用例、源码和证据见 [本轮验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-服务及账户管理员验收)。
+普通测试覆盖真实本地管道、连续连接、延迟读取、禁止客户端创建服务端实例、调用者身份、拒绝低权限及受限令牌、请求大小和线程身份恢复，不注册 SCM 服务或创建账户。完整管理员验收使用已获授权的 [`scripts/test-windows-sandbox.ps1`](../../scripts/test-windows-sandbox.ps1)。

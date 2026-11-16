@@ -1,598 +1,73 @@
-# Windows 沙箱验收手册
+# Windows 沙箱验收
 
-本手册分别验证 MXC PSEC 路径和独立 Windows 账户实现，保留各轮实机证据。2026-10-02 的 Windows 11 23H2 x64 管理员验收已通过当前服务安装、更新、账户执行和清理；随后完成 WSL2 回归与 DNS/IPv6 网络矩阵。PSEC 在 Windows 11 25H2 ARM64 CI 上取得成功路径证据，本机 23H2 仍缺少能力。WSLC SDK 部分通过，一次性容器清理仍报错；Ash 尚未接入它。具体范围见 [补充验收](#2026-10-02-psecwslc-与网络补充验收)。
-账户 CI 的 ACL 标记差异已修复，本机与 ARM64/Server CI 复测通过；公网 IPv6 的临时出口矩阵在 Windows 与 WSL 两种模式均通过，见 [ACL 与 IPv6 复测](#2026-10-02-acl-恢复与公网-ipv6-复测)。
-实现契约见 [mxc-sandbox](../crates/mxc-sandbox/README.md) 与 [windows-sandbox](../crates/windows-sandbox/README.md)。历史账户原型的结果不能作为当前候选的通过证据。
+SDK 来源及兼容补丁见 [MXC 依赖](../third_party/mxc/README.md)，隔离契约见 [沙箱](sandboxing.md)。验收必须使用当前 checkout 构建的程序，并检查实际测试数量、退出码及进程回收；交叉编译和能力查询不能代替运行。
 
-## 当前入口
+## PSEC
 
-当前依赖为 `mxc-sdk 1.0.1`，兼容 fork 固定为 `f1e8694b75dea05ebb3dc8050039d04fe304236f`。当前 pin 的运行证据见 [发布候选 CI](#2026-11-04-windows-发布候选-ci) 和 [23H2 账户后备复验](#2026-11-04-windows-11-23h2-账户后备复验)。
-
-当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。独立实现使用 `ash-windows-sandbox`，安装与验收需要明确授权；通过依据是下述当前源码的实机记录，不能沿用旧原型的结论。
-
-2026-10-02 新增独立 `ash-windows-sandbox-service` 后，账户验收脚本先安装 SCM 服务，再通过认证管道安装账户、执行用例、替换运行器并复测，然后替换服务程序、重启并验证执行，最后删除账户和服务。本机已完成这条管理员实机路径，证据见 [本轮验收记录](#2026-10-02-服务及账户管理员验收)。当前安装约束和操作入口见 [服务说明](../crates/windows-sandbox-service/README.md)。
+先区分 Windows 宿主、Windows 虚拟机和 WSL 中的 Linux 环境。外层宿主缺少 PSEC API，不代表现有 Windows 来宾不可验收。启动前检查已有虚拟机；来宾必须自行确认本次请求所需的能力。
 
 ```powershell
-just test ash-sandboxing --lib
-just test ash-tool-executor --lib
-just test ash-mxc-sandbox --lib --test windows
-# 先探测实际 Ash 策略，再逐项运行 PSEC 成功路径；缺能力返回失败：
-./scripts/test-psec.ps1
+just verify ash-mxc-sandbox
+just verify ash-exec-server
+./scripts/test-psec.ps1 -Capability required
 ```
 
-23H2 本机不能作为 PSEC 完整执行的通过证据。缺少能力时应在准备阶段拒绝，不转入旧账户原型或普通进程。
-当前 PSEC 成功路径覆盖工作目录写入、参考目录只读、隐藏目录、元数据、真实退出码、执行身份隔离、取消与后代回收。Windows Managed 目前在准备阶段拒绝，测试覆盖代理策略存在和缺失时均不启动命令；不再保留与此实现相反的代理成功断言。
+PSEC 入口不安装账户或修改宿主 ACL。它先准备实际策略，再验证文件授权与拒绝、命令与退出码、IPv4／IPv6 TCP 回环、ConPTY、取消、后代回收及独立执行服务 RPC。缺少能力的宿主使用：
+
+```powershell
+./scripts/test-psec.ps1 -Capability absent
+```
+
+`absent` 只在准备阶段返回 `UnsupportedPolicy` 且产品服务未启动工作负载时通过；其他系统故障仍失败。启动失败不能通过重跑或降低隔离要求变为成功。
+
+虚拟机验收使用与宿主同批构建的程序，通过只读介质或已认证连接传入，在来宾逐个校验摘要后以未提权账户执行。不能复用旧候选的通过结果。测试结束后关闭本轮启动的来宾及辅助进程。
 
 ### GitHub Actions
 
-[Windows sandbox acceptance](../.github/workflows/psec.yml) 在 main 或 `codex/psec-*` 分支相关文件更新时，使用 `windows-2022`、`windows-2025`（x64）和 `windows-11-arm`（ARM64）。每种系统独立运行 PSEC 检查与账户执行测试，任一失败不取消其他任务。Run workflow 的 `hosted` 运行全部托管机器，也可单独选择一种。
+[Windows sandbox acceptance](../.github/workflows/psec.yml) 分别运行 PSEC 与账户任务。下表是固定 CI 镜像的预期，产品不按 Windows 版本选择后端；镜像能力变化时须复核失败原因。
 
-| 运行器                  | PSEC 验收预期            | 账户验收             |
-| ----------------------- | ------------------------ | -------------------- |
-| Windows Server 2022 x64 | 启动前明确返回能力不支持 | 实际执行、权限与清理 |
-| Windows Server 2025 x64 | 启动前明确返回能力不支持 | 实际执行、权限与清理 |
-| Windows 11 ARM64        | PSEC 准备及执行成功      | 实际执行、权限与清理 |
+| 运行器                                   | PSEC 预期                  |
+| ---------------------------------------- | -------------------------- |
+| Windows Server 2022 x64、Server 2025 x64 | 在执行前明确报告能力不支持 |
+| Windows 11 ARM64                         | 策略准备及实际执行成功     |
 
-这是固定测试环境的预期，不是产品按版本分流的代码。产品仍按本次请求准备结果选择 MXC 或账户后端，严格策略不降低要求，启动错误不重跑。三种运行器的 PSEC 预期均已有 CI 结果，见 [补充验收](#2026-10-02-psecwslc-与网络补充验收)。镜像能力改变时测试应失败并要求复核，不能自动把失败变为通过。Windows 11 x64 和具体旧版客户端仍需对应运行器，不由 Server 或 ARM64 结果替代。
+手动 `self-hosted` 仅运行 PSEC，需要 `self-hosted`、`Windows`、`psec` 标签及 PowerShell 7、Python 3.11+、Rustup、MSVC。`probe-psec-network.py` 只查询 PSEC 版本与 `NetworkIngress`，不能单独证明 Managed 策略可实施。
 
-PSEC 检查不安装账户、不改变系统权限。`test-psec.ps1 -Capability absent` 只在适配器明确返回 `UnsupportedPolicy` 且独立执行服务拒绝启动工作负载时通过；其他准备故障仍失败。默认 `required` 则必须先成功创建 PSEC 环境，再逐项运行命令、文件和生命周期测试，汇总全部失败。不存在的测试名不能计为通过。
+## 账户沙箱
 
-账户任务在独立的临时托管机器上运行 `test-windows-sandbox.ps1`，按已有安装计划创建账户，执行测试，并在 finally 中移除安装；同时运行后端选择与禁止重跑测试。手动 `self-hosted` 只运行 PSEC 成功路径，要求 `self-hosted`、`Windows`、`psec` 标签，以及 PowerShell 7、Python 3.11+、Rustup 和 MSVC 工具链。
+[账户后端](../crates/windows-sandbox/README.md) 和 [管理服务](../crates/windows-sandbox-service/README.md) 独立于 PSEC。普通单元测试不注册服务或创建账户：
 
-PSEC 报告包含系统版本、架构、工具链、MXC pin、测试及产品程序的 SHA-256、各项退出码和输出。ARM64 另通过 `probe-psec-network.py` 保存系统报告的 PSEC 版本与 `NetworkIngress` 标志；这项只读查询不创建环境、不启动命令，也不宣布 Managed 支持。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。ConPTY、[独立执行服务 RPC](../crates/exec-server/README.md#pty-边界) 和 Allowed/Denied TCP 回环用例只有实际通过后才在报告中标记覆盖。外部网络矩阵、App Server PSEC 产品链路及 WSL 尚未纳入此任务。
+```powershell
+just verify ash-windows-sandbox
+just verify ash-windows-sandbox-service
+```
 
-账户 CI 为受限子进程测试启用 `ASH_WINDOWS_SANDBOX_DIAGNOSTICS`：超过原有 10 秒期限时，在终止 Job 前保存 CPU 时间、线程栈及模块转储，再继续原有失败和清理。诊断只针对受控测试子进程，不包含堆内存，随账户 artifact 保存；正常完成的子进程记录执行时间。
+完整入口需要已授权的管理员验收环境：
 
-## 2026-11-04 Windows 发布候选 CI
+```powershell
+./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc
+```
 
-提交 `e5e9389e976d30621da4281856b0bb22bfefc2c1` 的 [GitHub Actions 验收](https://github.com/chogng/ash/actions/runs/41837412425) 使用当前 MXC pin，六个作业全部通过。已核对三个 PSEC 报告的提交、SDK 来源、二进制摘要和逐项日志。
+脚本生成并批准安装计划，验证账户执行、运行器更新、服务替换及重启，最后恢复 ACL、移除账户、WFP 对象和服务。已有安装不会被自动接管或删除。执行过程使用未提权调用者；安装权限不能扩大命令的文件授权。
 
-| 托管系统                                          | PSEC 结果                                                                                                     |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Windows 11 Enterprise 25H2 ARM64，`26200.9711`    | 139 项通过，含能力探测、实际文件隔离、退出码与后代回收、ConPTY、执行服务 RPC 及 IPv4／IPv6 TCP 回环允许和拒绝 |
-| Windows Server 2022 Datacenter x64，`20348.5761`  | 125 项通过，含适配器和执行服务两项缺能力时的启动前拒绝                                                        |
-| Windows Server 2025 Datacenter x64，`26100.33674` | 125 项通过，范围同 Server 2022                                                                                |
+## 隔离边界
 
-三个系统的账户作业均通过 9 项服务、43 项账户库测试，以及运行器更新前后各 11 项执行和 3 项终端用例。服务更新后重新执行文件隔离用例并完成卸载。更新计划与日志记录了账户及 WFP 对象保留，以及账户、WFP 与服务清理。
+PSEC 的完整请求准备与 WindowsAccount 的有界 ACL 审计是不同保证。WindowsAccount 不能满足 `Strict`；普通 AppContainer 或 LPAC 令牌也不能作为已经实现 Strict 的依据。具体决策及令牌约束归 [沙箱契约](sandboxing.md#windows-候选评估)。
 
-ARM64 镜像 `20261026.197.1` 报告 PSEC 1.1 和 `NetworkIngress=true`。网络用例使用同一宿主监听器验证可达性及拒绝，外部流量和 Managed 代理成功路径仍未验收。
+Windows Managed 在准备阶段拒绝不具备完整入站隔离的 PSEC 组合；不能通过放宽入口或仅设置代理变量宣布支持。
 
-首轮 [CI](https://github.com/chogng/ash/actions/runs/41836321955) 的三个 PSEC 作业已通过并归档，随后结束该提交上重复的账户作业，账户验收使用最终候选。原始报告、日志和校验过摘要的 ZIP 位于 `.build/acceptance/windows-fallback-verify-e848c38281e948069ed007b9332e6532/github-41837412425/`。
+## WSL2 与 WSLC
 
-### Windows 11 26H2 客户端 x64
+Windows 受限进程调用 `wsl.exe`、WSL2 中的 Linux Ash、MXC WSLC 容器是三个独立边界。Ash 的 Linux 后端使用 Bubblewrap，尚未接入 WSLC。
 
-在本机 WSL2 的独立 QEMU/KVM 虚拟机安装微软 Windows 11 Enterprise Evaluation 26H2 x64（`26300.9457`）。来宾系统报告 PSEC 1.0、能力标志 `0x3`、`NetworkIngress=false`。通过一次性自托管 Runner 派发 [GitHub Actions 作业](https://github.com/chogng/ash/actions/runs/41857302480)，用只读介质提供从候选 `e5e9389e97` 构建的六个 x64 程序，来宾逐个校验摘要后执行。工作流提交为 `b9ad582de7`。
+Linux 验收使用 [适配器入口](../crates/mxc-sandbox/README.md#验证)，另须分别验证 Linux 文件系统与 `/mnt/c` 的文件授权、元数据、别名和生命周期。普通进程先确认 Windows 可执行文件可用，再验证沙箱不能通过互操作绕过限制；不能通过关闭宿主互操作使拒绝测试通过。
 
-20 组命令共 139 项通过，包括文件隔离、IPv4／IPv6 TCP 回环允许与拒绝、ConPTY、执行服务 RPC 和后代回收。早期作业分别遇到 RPC 夹具目录权限和 PowerShell 退出码采集问题。最终作业与上传均成功，Runner 已注销，虚拟机已关闭。
+账户验收可通过 `-WslDistribution` 指定当前调用者已能使用的发行版。NAT 与 mirrored 网络、WSL1 与 WSL2 的结果不能互相替代；缺少所需内核或网络能力时明确拒绝启动。
 
-下载的原始 ZIP 含上一轮残留的 `suite/summary.json`，本轮有效报告是 `suite/psec-candidate-report/summary.json`。证据与核验索引位于 `.build/acceptance/psec-client-x64-20261104/`。
+## 网络
 
-### PSEC 外部网络与 App Server
+TCP 回环验收不证明外部网络隔离。外部 HTTP、DNS、IPv4、IPv6 及代理矩阵须先有普通进程可达性对照，再检查 Denied／Managed／Allowed、后代继承和接收端计数。DNS 端点必须同时支持 TCP 与 UDP，IPv6 地址使用 `[address]:port`。
 
-外部网络验收使用运行在 Windows 来宾之外的独立 IPv4、IPv6 HTTP 和 DNS 端点。先用普通进程验证可达，再验证 PSEC `Denied` 及其子进程无法建立 TCP 连接或发送 DNS 请求，最后验证 PSEC `Allowed` 可达。DNS 分别走 UDP 和 TCP，发送 A 和 AAAA 查询。26H2 x64 的端点日志与来宾结果吻合，每类请求只收到普通进程和 `Allowed` 各一次。PSEC 1.0 仍能绑定监听端口，本轮验证出站流量。入站和 Managed 单独验收。
+账户入口通过 `-NetworkDnsServer` 启用网络矩阵，`-NetworkPublicIpv6Http` 增加公网 IPv6 HTTP。Linux 与 macOS 使用 [网络矩阵入口](../crates/mxc-sandbox/README.md#linux-网络)。代理或临时隧道出口只能证明该链路，不能代替独立出口验收。
 
-App Server 用例通过实际 RPC 创建会话、线程和 shell turn，设置 `RequireSandbox`，并在账户沙箱服务未安装的 Windows 来宾以非提权进程运行。它检查工作目录、执行次数、退出码、受保护的 `.env` 和 `.git/config`、工作区外写入以及 ACL 恢复。首次走到真实命令执行时复现了 PSEC 对 `cmd.exe /c` 内层引号的错误转义。两种 Windows 后端现在共用单一脚本参数的处理，MXC 原先接受分开的参数时保留原有编码。带嵌套引号和实际退出码的 Windows 回归已通过。
-
-修复候选 `38d36eac14` 在 26H2 x64（`26300.9457`）上通过 22 组、141 项。全量首跑有三项超时，分别是后代取消、跨执行文件所有权和 App Server shell turn。三项均用同一组二进制和原有超时单独重跑通过。首跑、重跑和逐类收包证据保存在 `.build/acceptance/psec-client-x64-20261104/followup/` 的 `26h2-full-attempt1` 和 `26h2-full-retry`。
-
-另用同一候选把 IPv4 DNS 端点换成公网 `1.1.1.1:53`，普通进程与 PSEC `Allowed` 都收到 UDP、TCP 的 A／AAAA 响应，`Denied` 和后代均失败。受控 IPv4／IPv6 HTTP 和 IPv6 DNS 继续用独立来宾外端点。报告位于同目录的 `26h2-public-dns`。
-
-### Windows 11 25H2 客户端 x64
-
-复用同一 WSL2/QEMU 环境，在独立虚拟盘安装 Windows 11 Pro 25H2 x64。基础构建 `26200.6584` 缺少 `processmodel.dll`。应用 KB5127648 后，`26200.9711` 报告 PSEC 1.1、标志 `0xf` 和 `NetworkIngress=true`。 [Microsoft KB5127648](https://support.microsoft.com/en-us/servicing/os/windows-11/2026/10/kb5127648-windows-11-24h2-25h2-26h2-security-update)
-
-通过一次性自托管 Runner 执行候选 `38d36eac14` 的 [GitHub Actions 作业](https://github.com/chogng/ash/actions/runs/41877853927/job/126742161421)，首次执行 22 组共 141 项全部通过，包括独立端点的 IPv4／IPv6 出站矩阵和 App Server shell RPC。核对了产物 `13347712451` 的 SHA-256、Windows 构建、候选清单与端点收包。原始产物和验证索引保存在 `followup/github-25h2-41877853927/`。Runner 完成一次作业后注销。
-
-### 2026-11-05 公网 IPv6 出站补测
-
-验收 WSL2 实际为 NAT 模式。访问 `2606:4700:4700::1111` 时，Windows 宿主通过 Mihomo 路由完成 HTTPS 往返，WSL2 没有公网 IPv6 路由。补测只在验收 WSL2 为该目标加临时 `/128`，将 HTTP 和 TCP／UDP DNS 请求通过 Windows 原生 IPv6 套接字转发到该地址。Windows 与 WSL2 的普通进程先取得 HTTP 响应和 A／AAAA 查询结果。
-
-25H2 和 26H2 x64 来宾都使用候选 `38d36eac14` 的同一网络用例。每台来宾都通过普通进程、PSEC `Allowed`、`Denied` 和后代继承检查。转发日志中，HTTP 和四种 DNS 查询各有两次有效响应，分别对应普通进程和 `Allowed`。本次公网对照走 Mihomo 出口。日志位于 `followup/public-ipv6/`，测试完成后撤销临时出口并关停两台来宾。
-
-## 2026-11-04 Windows 11 23H2 账户后备复验
-
-本机为 Windows 11 专业版 23H2 x64（`22631.6199`），MXC 为 `mxc-sdk 1.0.1`，兼容 fork 固定为 `f1e8694b75dea05ebb3dc8050039d04fe304236f`。管理员安装临时服务、账户与 WFP 规则。以下执行测试均由未提权的桌面进程发起。
-
-首轮安装后的状态为 `ready`，但执行在 `CreateWindowStationW` 返回访问拒绝后终止。交互式入口现使用 `WinSta0` 下每次执行独有的受限桌面，可信登录进程继承默认桌面。修复后使用同一次构建的 Desktop 后端及账户运行器复验。
-
-- 真实 App Server RPC 通过 1 项，验证账户 SID、工作区写入、敏感文件与工作区外写入拒绝、退出码及 ACL 恢复。Ash Desktop 的会话总变更冒烟通过 1 项。
-- 账户文件与网络通过 8 项，管道、ConPTY 与后代回收通过 3 项。MXC 与执行服务各通过 1 项缺少 PSEC 的拒绝用例，`Strict` 未启动命令。
-- 更新运行器与服务后，账户和 WFP 对象保持一致，重新执行 1 项 App Server RPC 与 3 项终端用例均通过。更新以 PE overlay 改变同一构建的摘要，覆盖替换与服务重启流程。
-- 卸载按安装计划完成，回读确认 WFP 对象均已移除，另行确认服务、安装目录及 3 个测试账户均已移除。
-
-实机日志、程序摘要及安装、更新与卸载计划位于 `.build/acceptance/windows-fallback-verify-e848c38281e948069ed007b9332e6532/`。PSEC 成功路径及其他 Windows 版本和架构仍需对应目标机复验。
-
-## 2026-10-07 SDK 升级后的 Windows 复验
-
-本机为 Windows 11 专业版 23H2、build 22631、x64。`scripts/test-psec.ps1 -Capability absent` 实际通过：13 项适配器单元测试、2 项普通回归、1 项明确缺能力拒绝。状态为 `passed-unsupported-capability`，证明缺能力时在执行前拒绝，不证明 PSEC 成功执行。证据保存在 `.build/acceptance/mxc-upgrade-windows-20261007/psec/`。
-
-账户程序、服务、终端探针及网络探针已完成正常 Cargo 构建。新 SDK 的 ACL、继承恢复、账户文件策略与适配器测试已通过，详见 [适配器验证](../crates/mxc-sandbox/README.md#验证)。执行服务首轮 34 项通过，1 项把带与不带 Windows 扩展路径前缀的同一目录判为不同目录；改为比较规范化后的实际目录，失败项复跑通过，warning 门禁通过。Windows 服务 9 项测试通过，覆盖真实认证管道、连续连接、延迟读取、受限客户端及安装权限；这轮测试不注册 SCM 服务或创建账户。
-
-管理员入口已准备在 `.build/acceptance/mxc-upgrade-windows-20261007/run-admin-acceptance.ps1`。首次提权启动返回“操作已被用户取消”，本次尚未创建测试账户、安装服务或改动 WFP。新版账户的本机真实执行、PTY、安装更新及清理仍等待管理员验收；新 pin 的 PSEC 成功路径已取得下述 ARM64 CI 证据，不能扩写为本机 23H2 支持。待验收范围与 Linux/macOS 交接见根目录 [MXC-TODO.md](../MXC-TODO.md)。
-
-普通权限下，账户库完整测试实际为 38 项通过、2 项需安装账户的用例忽略，包含真实受限令牌 PowerShell、ConPTY 和输出排空；账户库与服务的 warning 门禁通过。这些结果不代替独立账户登录、SCM 安装更新和完整执行链的管理员验收。
-
-## 2026-10-07 PSEC 终端与执行服务 RPC 验收
-
-提交 `90386325263a5f36854fc38249f9c5829b9fab41` 的 [首轮 CI](https://github.com/chogng/ash/actions/runs/37644631016) 在 Windows 11 Enterprise 25H2 ARM64、build `26200.9457`、镜像 `20260924.168.1` 上实际通过 3 项 PSEC ConPTY 和 4 项产品执行服务 RPC 用例。RPC 启动实际 `ash-exec-server.exe`，验证帮助进程装配、输入与尺寸、重连去重、只读拒写、取消及后代回收、管道标准输出与错误输出、真实退出码及退出输出排空。三台 Windows 各通过适配器 17 项和执行服务 43 项单元测试，包括非 Unicode 环境变量与实际终端发现回归。
-
-Server 2022/2025 x64 的两个 PSEC 任务通过，分别显式执行适配器缺能力拒绝和产品 RPC 拒绝用例。ARM64 的目录别名用例在 `mklink /J` 创建 fixture 时失败，尚未进入隔离断言，因此首轮 PSEC 整体验收仍失败。其余 6 项适配器执行用例及能力探测通过。已保存全部 PSEC artifact 后取消仍运行的账户任务，让修复轮开始；取消的账户任务不计作完整账户验收通过。
-
-提交 `929d6fba652bf20ea29fec71706b97b273c8156b` 的 [第二轮 CI](https://github.com/chogng/ash/actions/runs/37646486478) 改用相对名称调用 `mklink`，仍在创建 junction 时失败，错误由路径语法变为无法创建目录或文件。两个 Server PSEC 任务、ARM64 的 4 项 RPC 和 3 项 ConPTY 再次通过；保存 PSEC 证据后取消已被替代的账户任务。
-
-当前 fixture 通过现有 PowerShell 文件系统 provider 创建 junction，使用普通绝对路径，并先核对它确实解析到受保护目录；文件策略和拒绝断言保持原有要求。提交 `cf36d2cee976488907da60e5574dbe5b36227b15` 的 [第三轮 CI](https://github.com/chogng/ash/actions/runs/37648037730) 三个 PSEC 任务全部通过，无失败重跑。
-
-| 运行器                                         | 本轮 PSEC 任务结果                                                                                                                                 |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Windows 11 Enterprise 25H2 ARM64，`26200.9457` | 78 项通过：17 项适配器单测、43 项执行服务单测、3 项普通回归、1 项能力探测、7 项适配器执行、3 项 ConPTY 和 4 项产品 RPC；包括目录别名只读与拒绝断言 |
-| Windows Server 2022 x64                        | 65 项通过：相同的 63 项单测与普通回归，加适配器及产品 RPC 各 1 项缺能力拒绝；不代表 PSEC 成功执行                                                  |
-| Windows Server 2025 x64                        | 同样 65 项通过，范围为缺能力时的启动前拒绝                                                                                                         |
-
-逐项验收日志均核对为恰好 1 项通过、0 失败、0 忽略；正常忽略列表没有计入运行通过数。最终报告为 ARM64 `passed-listed-scope` 和两个 Server 的 `passed-unsupported-capability`。并行账户任务仍在运行，不计入这项 PSEC 结论。
-
-证据保存在 `.build/acceptance/psec-rpc-20261007/`，包含精确源码与 CI 提交核对、原始失败、逐项测试日志、系统及 MXC pin、6 个测试及产品程序的 SHA-256；`verification.json` 核对三台机器报告、实际用例数、未覆盖范围和本地代码与 CI 提交一致。本轮使用 MXC `c45e7d5a485036d88f469aa363efaa3c651564bc`。ARM64 网络只读查询仍为 PSEC `1.0`、`NetworkIngress=false`；严格 Managed、完整网络矩阵、App Server PSEC 产品链路和其他 Windows 客户端系统仍不在本轮通过范围。
-
-## 2026-10-02 服务及账户管理员验收
-
-Windows 11 专业版 23H2、build `22631.6199`、`x86_64-pc-windows-msvc`，使用提升权限的管理员令牌。最终完整入口运行于北京时间 07:21:11–07:22:26，结果为 `passed`；基线提交为 `30b68cfd25df87512d41e7af9a0170ffb0de7083`，实际运行还包含证据目录中 `source.diff` 保存的未提交修复。
-
-| 验证                                                                                       | 本机结果                                                                                                |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| helper、服务和网络探针构建                                                                 | 全部通过                                                                                                |
-| SCM 安装、认证管道配置账户、状态查询                                                       | 通过；账户仍存在时拒绝服务卸载                                                                          |
-| 服务真实管道与安装权限测试                                                                 | 9 项通过、0 忽略                                                                                        |
-| 账户库测试，含真实登录与 ACL 恢复                                                          | 34 项通过、0 忽略                                                                                       |
-| 文件与元数据、真实退出码、IPv4 代理、IPv6 断网、双账户并发、跨执行文件写入、取消及后代回收 | 10 项执行用例通过、0 忽略                                                                               |
-| 运行器程序更新                                                                             | SHA-256 改变，账户及 WFP 对象不变；10 项执行用例再次全部通过                                            |
-| 服务程序更新                                                                               | SHA-256 改变，SCM 停止、替换和重启成功，账户及 WFP 对象不变；文件、元数据与退出码执行用例再次通过       |
-| 卸载清理                                                                                   | WFP 删除逐项查询确认；独立检查服务不存在、安装目录不存在、没有新增账户残留                              |
-| 同机 PSEC 能力检查                                                                         | `test-psec.ps1 -Capability absent` 通过，结果为 `passed-unsupported-capability`；只证明准备阶段正确拒绝 |
-
-更新验收通过在临时程序副本末尾添加一个 PE overlay 字节改变程序摘要，不改变协议或测试执行逻辑；它验证实际替换和重启流程，不是两个不同发布版本之间的兼容性证明。
-
-实机验收发现并修复了三个产品问题：服务断开会丢弃客户端尚未读完的响应；复用管道实例会沿用上一连接缓存的 EOF；ACL 已恢复后留下的空日志目录被误判为未完成执行，阻止运行器更新。协议现为版本 2，响应增加限时收讫确认，每次连接使用新实例；管道客户端不能创建额外服务端实例。另将网络测试的端点文件改为写完后原子发布，消除读取未完成文件的共享冲突。对应回归与完整入口均通过。
-
-本机证据位于 `.build/acceptance/windows-sandbox-service/run-20261002-072108/`：`result.json` 保存最终状态与清理断言，`verification.json` 保存程序摘要、对象保留核对及再次检查的清理结果，`acceptance.log` 保存完整命令输出，`source.diff` 保存实际修复，`plans/` 保存安装、两次更新与删除清单，`psec/` 保存能力报告和测试日志。这些文件是本机证据，不随源码提交。原始完整入口为 [`scripts/test-windows-sandbox.ps1`](../scripts/test-windows-sandbox.ps1)。
-
-该结果限于本机 WindowsAccount 请求及以上用例。其他 Windows build、ARM64、PSEC 成功执行、完整崩溃恢复、App Server 产品链路和 WSL 未在本轮验收；WindowsAccount 仍不承诺整个宿主只读，`Strict` 请求在启动前拒绝。
-
-## WSL 验收边界
-
-Windows、WSL 2 中的 Linux 进程和 MXC 的 WSL Container（WSLC）是不同的执行路径，验收结果不能互相替代。
-
-| 场景                                  | 验收要求                                                | 当前范围                                                                                 |
-| ------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Windows 版 Ash 执行 Windows 命令      | 按所选后端分别验证账户模型与 PSEC                       | WindowsAccount 的本机 23H2 服务路径已通过；同机 PSEC 能力不足，未执行成功路径            |
-| Windows 受限命令调用 `wsl.exe`        | 检查能否跨入 WSL 后越权访问文件、直连网络或留下存活进程 | 本机调用者发行版和 `--system` 入口在禁止/允许网络下均被拒绝；其他入口未穷尽              |
-| WSL 2 内运行 Linux 版 Ash             | 在 WSL 2 内执行 Linux 沙箱验收，并检查跨系统边界        | Ubuntu x64 的文件、生命周期、互操作，以及下述 NAT/mirrored DNS/IPv6 矩阵通过；PTY 未验证 |
-| Windows 通过 MXC WSLC 启动 Linux 容器 | 验证 WSLC 的文件、网络、输入输出及完整容器生命周期      | SDK 已实际验证，一次性清理报错；Ash 未接入，不能计为产品执行链通过                       |
-| WSL 1 内运行 Linux 版 Ash             | 独立验证其系统能力，不能沿用 WSL 2 结果                 | 本轮不作支持或验收通过声明                                                               |
-
-当前 Ash 直接使用 Windows PSEC、Linux Bubblewrap、macOS Seatbelt 运行器，没有接入 WSLC。
-当前固定上游版本将 WSLC 列为 v0.9 后端，不要求运行时实验开关；Rust 构建仍需启用 `wslc` feature、携带独立的 `wslcsdk.dll`，并具备 WSL 2.9.9+。本机 WSL 3.0.1 满足版本要求，其他组件须由 WSLC SDK 实际探测。可以单独验证 SDK，但 Ash 尚无 WSLC 执行链，SDK 通过不能计为 Ash 接入通过，见 [固定版本的 WSLC 说明](https://github.com/microsoft/mxc/blob/46ce71d0da7b97bb531a33e175bf4166ffa730c0/docs/wsl/wsl-container-getting-started.md)。
-
-WSL 2 的 Linux 验收复用 [Linux 测试入口](../crates/mxc-sandbox/README.md#验证)，另外必须覆盖：
-
-- Linux 文件系统工作目录与 `/mnt/c` 工作目录分别验证目录授权、只读元数据、隐藏目录和路径别名。
-- 检查通过 Windows 可执行文件及 WSL 互操作入口，能否越过文件和网络限制；取消后检查两侧进程和延迟写入。
-- 对承诺支持的 NAT、mirrored 网络模式分别验证代理、Windows 宿主地址、回环、DNS、IPv4 和 IPv6。
-- 缺少用户命名空间、Bubblewrap 或网络隔离依赖时明确拒绝启动，不把未执行计为通过。
-
-WSL 2 使用 Linux 内核，但提供跨系统文件与命令互操作；mirrored 模式还改变宿主回环的可达性。
-因此普通 Linux CI 通过不足以证明上述边界通过，见 [WSL 版本区别](https://learn.microsoft.com/en-us/windows/wsl/compare-versions)、[文件与命令互操作](https://learn.microsoft.com/en-us/windows/wsl/filesystems)、[网络模式](https://learn.microsoft.com/en-us/windows/wsl/networking)。
-
-## 2026-10-02 WSL2 实机验收
-
-在同一台 Windows 11 23H2 / `22631.6199` x64 上安装 WSL `3.0.1.0`，Linux 内核 `6.18.40.1-microsoft-standard-WSL2`，导入 Ubuntu `24.04.5 LTS` 为 `AshAcceptance`。Linux 验收使用普通用户 `ashcheck`（UID 1000）、Rust `1.98.0`、Bubblewrap `0.9.0`、slirp4netns `1.2.1` 和 Just `1.58.0`；没有用 root 执行 Linux 用例。安装器提示重启，但本轮实际 Linux 命令与隔离测试均已成功执行，未重启 Windows。
-
-源码基线为 `1bd1217ef490b2e6787c6a14edd10e33d5c09369`，另包含本轮互操作修复与新增回归；MXC pin 仍为 `46ce71d0da7b97bb531a33e175bf4166ffa730c0`。Windows 完整入口运行于北京时间 07:48:54–07:50:44。mirrored 阶段为 08:19:59–08:21:42，实际 `wslinfo --networking-mode` 返回 `mirrored`；结束后撤销本轮临时 `.wslconfig`，再次读取结果为原来的 `nat`。
-
-| 验证                             | 实际结果                                                                                                                                     |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Windows 服务与账户完整入口       | 9 项服务、34 项账户、10 项执行用例通过；运行器更新后重跑 10 项，服务程序更新后文件用例通过                                                   |
-| Windows → WSL 账户边界           | 1 项回归通过：调用者发行版/系统发行版 × 禁止/允许网络共 4 次受限执行均未进入 Linux；同一入口的普通调用者对照先成功                           |
-| WSL2 Linux 文件系统及 `/mnt/c`   | 每种网络模式和文件系统组合的 3 项回归均通过：目录写入、参考目录只读、隐藏兄弟路径与符号链接、`.git` 保护、退出码 125、进程树关闭、互操作拒绝 |
-| Linux 退出、超时和取消           | 每种文件系统分别验证三个结束方式；先证明工作负载已启动，再确认后代延迟写入没有发生                                                           |
-| Linux → Windows 可执行文件互操作 | 可读 Windows `cmd.exe` 在禁止和受管网络下均不能启动；每轮先证明未受限 Linux 进程能正常调用它，未关闭宿主互操作                               |
-| NAT/mirrored 受管网络            | 两种模式分别通过同一实机探针：获批 HTTP/SOCKS 请求成功，未获批请求拒绝，IPv4 回环及代理网关直连被阻止，UDP 未到达宿主接收端                  |
-| SDK 及适配器                     | 正常 Cargo 构建、check、warning 门禁通过；SDK 运行器 39 项测试通过，Linux ARM64 测试目标交叉检查通过；补丁与固定上游源码复核通过             |
-| 清理                             | 服务和安装目录不存在，没有新增账户残留；WFP 删除按对象查询确认；临时网络模式配置已撤销                                                       |
-
-**发现并修复的互操作越界：** 首轮 Linux 测试中，在 Windows 系统目录获只读授权后，`cmd.exe` 仍能启动，产生 `windows-interop-started`，测试以 101 失败。WSL 的 binfmt 解释器持有内核保存的 `/init` 引用，隐藏路径不能消除这条通道。Bubblewrap 现在在工作负载启动前安装禁止 `AF_VSOCK` 的 seccomp 过滤器，由后代继承；过滤器不限制 IP/Unix socket，传入的描述符在执行前关闭。修复后互操作回归与两种网络模式的代理测试均通过。解释器引用和互操作机制见 [Linux binfmt 文档](https://www.kernel.org/doc/html/latest/admin-guide/binfmt-misc.html) 与 [WSL 互操作说明](https://github.com/microsoft/WSL/blob/master/doc/docs/technical-documentation/interop.md)。
-
-SDK 复测还发现一个旧用例让外部代理携带 MXC 主机列表，却期望通过校验。当前 SDK 不把该列表传给外部代理，已有相应用例检查拒绝；本轮将成功用例改为 SDK 自带测试代理，保留其应通过策略校验并到达环境检查的断言。
-
-本机证据目录为 `.build/acceptance/wsl/run-20261002-073047/`。`wsl-result.json` 汇总各阶段与未覆盖项，`result.json` 和 `acceptance.log` 保存 Windows 完整入口及清理；`linux-wsl-nat.log` 保留原始越界失败，`linux-wsl-nat-rerun.log`、`linux-network-nat-after-fix.log`、`linux-wsl-mirrored.log` 保存修复后的实机结果；`linux-sdk.log` 保留旧用例失败，`linux-sdk-rerun.log` 保存修正后的结果。`sources/`、`source-final.diff` 和 `source-manifest.json` 保存最终源码及摘要，`plans/` 保存 Windows 安装、更新与移除清单。这些本机证据不随 Git 提交。复跑入口见 [Windows 后端](../crates/windows-sandbox/README.md) 和 [MXC 适配器](../crates/mxc-sandbox/README.md#验证)。
-
-WSL、发行版和构建工具保留在本机用于复测。上述早轮结果只覆盖这些用例；DNS/IPv6、Windows 宿主地址、WSLC SDK 和 PSEC CI 证据由下轮补充，不能沿用早轮结论。WSL1、ARM64 Linux 实机、Linux PTY、完整崩溃恢复与 App Server 产品链路仍未验证。Bubblewrap 也未通过 Ash `Allowed` 执行路径，其要求的全部入站权限由 SDK 拒绝；没有降低该请求。PSEC 成功资格不受 WSL 结果影响。
-
-## 2026-10-02 PSEC、WSLC 与网络补充验收
-
-本轮证据位于 `.build/acceptance/sandbox-followup/run-20261002-083938/`。新增网络回归走 CommandExecutor 与真实平台后端，先在沙箱外逐个确认目标可达，再执行沙箱与后代进程；接收端计数检查实际 TCP/DNS 事务没有外泄。不是只检查代理环境变量或连接错误。
-
-| 环境与请求                                           | 结果及范围                                                                                                                                                                                                  |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| WindowsAccount，23H2 x64，Denied / Managed / Allowed | `tests/network_matrix.rs` 通过，包含 IPv4/IPv6 TCP、HTTP/CONNECT/SOCKS 的地址与域名授权、未获批域名及 IPv6 目标拒绝、TCP/UDP DNS 的 A/AAAA、IPv6 端口 53、后代继承与监听拒绝；Allowed 的直连与 DNS 对照成功 |
-| WSL2 Ubuntu x64，NAT，Denied / Managed               | 同一矩阵通过；Windows 宿主 IPv4 网关及 IPv6 链路本地地址先证明可达，受限命令及后代不能直连或发送 DNS；Windows IPv6 DNS 接收端实际监听端口 53                                                                |
-| WSL2 Ubuntu x64，mirrored，Denied / Managed          | 同一矩阵通过，Windows IPv4 回环服务及 DNS 对照成功；Linux IPv6 目标与代理授权成功，直连及原始 DNS 被阻止                                                                                                    |
-| 依赖与构建                                           | 两个平台的代理库 8 项测试通过；三个受影响包的 check 与 warning 门禁、Windows 探针与账户 helper、Linux 适配器的正常构建通过；vendor 与固定上游复核通过                                                       |
-
-镜像模式的 Windows IPv6 回环 `::1` 在沙箱外即不可达，不计为隔离通过；Windows 物理接口 IPv6 地址的对照也未连通。微软文档明确 mirrored 的宿主回环仅支持 `127.0.0.1`，见 [WSL 网络说明](https://learn.microsoft.com/en-us/windows/wsl/networking#mirrored-mode-networking)。本机没有公网 IPv6 地址和默认 IPv6 路由，因此没有公网 IPv6 成功路径证据。NAT 的 Windows IPv6 链路本地目标、两种模式的 Linux IPv6 目标和域名代理已验证；这些边界仍需区分。Bubblewrap `Allowed`、PTY、App Server 产品链路不在本轮通过范围。
-
-复跑 Windows 矩阵时，向既有入口显式提供一个在宿主可达、同时支持 TCP/UDP DNS 的端点：`./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -NetworkDnsServer '<resolver-ip>:53'`。多个端点使用逗号分隔，IPv6 使用 `[address]:53`。Linux 入口与可选 Windows 宿主目标见 [适配器验证](../crates/mxc-sandbox/README.md#验证)。本轮专用接收端共享计数，相关实机测试必须串行执行。
-
-**PSEC CI：** 已读取并归档 [run 36941123878](https://github.com/chogng/ash/actions/runs/36941123878/job/110632598456) 的日志和原始 ZIP。Windows 11 Enterprise 25H2 ARM64，build `26200.9457`，Rust `1.98.0`，MXC pin `46ce71d0da7b97bb531a33e175bf4166ffa730c0`。适配器库 12 项、普通回归 2 项通过；随后 7 项指定验收各自实际执行且通过：PSEC 准备、cmd/PowerShell 输出与退出码、文件作用域和元数据、取消/超时及后代回收、跨执行写入隔离、正常退出后代回收。ZIP SHA-256 为 `d59bf71b427265351805fe9cb7e14e8eff2e75796b4852db6546affe049aef5c`，原始报告为 `passed-listed-scope`。
-
-该 CI 提交为 `1bd1217ef490b2e6787c6a14edd10e33d5c09369`；与本轮源码核对，PSEC 生产代码、请求契约、Cargo 清单/锁文件及 PSEC 脚本未变。本轮新增 Linux 过滤器与网络测试不属于该 CI 的覆盖。Server 2022/2025 只通过能力不足时拒绝的用例。PSEC ConPTY、Allowed/Denied 网络流量矩阵和产品链路仍未验证，也不能用 ARM64 结果声明 Windows 11 x64 成功。
-
-整个 CI run 不是全绿：账户任务的文件作用域用例因恢复后多出 DACL `AI` 标记而失败（ARM64 日志中 ACE 和所有者相同，继承控制标记不同）。该失败保留在本轮证据中；本机账户路径通过不能替代其他系统上的恢复验证。
-
-**WSLC SDK：** 在同一台 23H2 主机，使用固定上游源码独立构建 `wxc-exec --features wslc` 和 `wxc-wslc-daemon`，未改 Ash 后端选择。SDK NuGet `Microsoft.WSL.Containers 2.9.9` 与固定 SHA-256 核对后加载，`WslcGetMissingComponents` 返回 0；实际拉取 `alpine:3.22`，镜像 ID 为 `c83674e1999044d33d751661371b873539f47e5b5c5ca3320c7e0377acca6238`。
-
-一次性容器的输出/退出码 42、只读/读写目录及隐藏兄弟目录、断网、超时与正常退出后代回收共 5 项行为通过；延迟写入未发生。但每次退出都报告 `WslcStopContainer` 清理失败，HRESULT `0x80010108`。源码同时启用 `AUTO_REMOVE` 并在退出后手动 stop/delete；这是错误报告的排查线索，尚不能据此宣布清理已经合格。持久容器的 provision → start → 写入 → 后续命令读取同一状态 → 退出码 7 → stop → deprovision 7 步通过，daemon 随后按本轮短空闲期限退出。
-
-WSLC 状态为**部分通过**。SDK 的 cooperative 外部代理只设置代理环境，不保证任意客户端流量均经代理，不能据此满足 Ash Managed；Ash 仍没有 WSLC 执行链。PTY、输入、完整取消/崩溃矩阵未验证。上游 executor 构建另有硬编码 PowerShell 7 安装路径的测试前置 warning；本机使用另一位置的 pwsh，该 warning 不影响已执行的 Alpine 用例，但不计为该上游全部 E2E 测试通过。
-
-`network-windows.log`、`network-nat-host.log`、`network-mirrored-host.log` 保存最终网络结果；原始测试配置错误、共享接收端并发造成的无效轮次和运行器源文件被重建导致的身份拒绝另存日志，不计为通过。本轮把执行 helper 复制到独立验收目录后安装，避免 Cargo 重建改变已批准摘要。`.wslconfig` 已恢复为原来的不存在状态，实际网络模式再次为 NAT；服务、账户、WFP 与临时接收端已清理。WSL 发行版和隔离于证据目录内的 SDK、镜像缓存保留以便复测。
-
-## 2026-10-02 ACL 恢复与公网 IPv6 复测
-
-证据目录为 `.build/acceptance/sandbox-acl-fix/run-20261002-095459/`，包含原始失败、最终日志、构建检查及清理结果。此前 CI 因撤销权限后多出 DACL `AI` 标记失败；本轮保存传播前旧格式对象的路径，在授权、撤销与日志恢复时保留原始控制标记。受保护根还可能保留启用保护前的继承权限项，直接传播写回会清掉这些项的继承标记；现改为单独写根，再由未保护子项重新取得父目录授权并向下传播。恢复操作使用当前 DACL，保留其他执行的 SID 权限项。完整 SDDL 比较继续保留，账户文件用例在每台验收主机显式运行有无 `AI` 两种基线。
-
-| 本机复测                 | 结果                                                                                                                                     |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| SDK ACL                  | 最终源码的 37 项全部通过，包含旧格式恢复、混合继承、保留历史继承项的受保护根、受保护子树、子项及孙级授权、重叠授权和传播中断后的日志恢复 |
-| Windows 11 23H2 x64 账户 | 36 项库测试、10 项完整执行用例通过；文件权限、元数据、退出码与完整 ACL 恢复均通过                                                        |
-| Windows 公网 IPv6        | 网络矩阵 1 项通过，包含 Denied / Managed / Allowed、HTTP/CONNECT/SOCKS 目标拒绝、直接 TCP、TCP/UDP DNS 的 A/AAAA 与后代继承              |
-| WSL2 Ubuntu 24.04.5 x64  | NAT 与 mirrored 各 1 项公网 IPv6 矩阵和 1 项既有受管网络回归通过；实测前普通进程先完成目标往返                                           |
-| 构建                     | SDK、账户与代理 warning 门禁通过；Windows helper/服务与两平台探针正常构建通过；账户 ARM64 测试目标编译通过，固定上游 vendor 复核通过     |
-
-公网目标为 `[2606:4700:4700::1111]:80` 与 `:53`。测试通过独立 TUN 网卡和现有代理中支持 IPv6 的节点提供临时出口，增加两个公网地址的 `/128` 路由；沙箱外另验证了证书校验成功的 HTTPS 响应及 TCP/UDP A/AAAA 解析。初始节点无法进行 IPv6 数据往返的轮次保留为失败，TCP 握手单独成功不计为通过。实际覆盖范围是这个隧道出口；物理网络仍没有公网 IPv6 地址与默认路由。
-
-NAT 用临时 IPv6 地址及接口转发连接 Linux 与测试出口，完成后删除地址、路由并恢复转发状态。mirrored 自动取得测试接口的 IPv6 路由，完成后恢复为 NAT 和原先不存在的 `.wslconfig`。测试网卡、进程、账户、服务与临时凭据配置均已清理；用户现有代理选择和配置未改动。镜像模式的 Windows IPv6 回环限制仍按上一轮范围记录。
-
-Windows 的两个旧网络用例还暴露出 TCP 临时端口落入 Hyper-V UDP 保留范围的测试配置错误；UDP 改为独立分配端口，探针与 Linux 调用方同步更新。共享 DNS fixture 同样分别分配 TCP/UDP 端口，保持所有事务与接收计数断言。
-
-复跑时显式提供可达出口，例如 `./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -NetworkDnsServer '[2606:4700:4700::1111]:53' -NetworkPublicIpv6Http '[2606:4700:4700::1111]:80'`。Linux 使用 `ASH_PUBLIC_IPV6_HTTP_ENDPOINT` 与包含公网 IPv6 的 `ASH_DNS_SERVER`。公开目标必须完成 HTTP 或 DNS 数据往返的正向对照；缺少出口即失败。脚本不自动配置隧道或修改用户的网络设置。
-
-新源码已提交到 `codex/psec-acl-recovery-20261002-111128`。提交 `9cbe51cf47049f1f92bc3d5b82bf766aa56279fe` 的 [首轮 CI](https://github.com/chogng/ash/actions/runs/36959078405) 为 5/6 通过；三种系统的 ACL 用例都通过，Server 2025 在运行器更新后的代理用例收到上游 `502`。本机通过分片请求复现：测试接收端在请求头尚未完整到达时回复并关闭连接。已将接收后的 HTTP/DNS 测试连接显式设为阻塞模式，并增加完整请求头回归；代理原用例和共享 DNS/IPv6 矩阵复测通过。Windows 的接收连接继承监听端属性，见 [Microsoft accept 说明](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept)。
-
-提交 `22915fa12cbfd04ea37972e8e6a32ddcdefbaa29` 的 [第二轮 CI](https://github.com/chogng/ash/actions/runs/36961919347) 最终 6/6 通过。其第一次尝试中 ARM64 账户与三项 PSEC 通过，两项 Server 账户任务均在受限 PowerShell 初始化的 10 秒测试期限处失败，标准输出和错误输出为空，退出后的清理通过。同一用例在上一轮通过；本次只重跑这两个失败任务，保留原有期限、退出码与输出断言，两项均通过。这个结果包含一次重跑，不表示首次尝试全部通过。
-
-| 系统                             | build         | 账户执行与清理 | PSEC                       |
-| -------------------------------- | ------------- | -------------- | -------------------------- |
-| Windows 11 Enterprise 25H2 ARM64 | `26200.9457`  | 通过           | 7 项指定成功路径通过       |
-| Windows Server 2022 x64          | `20348.5622`  | 通过           | 能力不足时的启动前拒绝通过 |
-| Windows Server 2025 x64          | `26100.33438` | 通过           | 能力不足时的启动前拒绝通过 |
-
-每种系统均有 9 项服务测试、36 项账户库测试，运行器更新前后各通过 10 项完整账户执行用例与 1 项分片 HTTP 接收端回归，全部未忽略。服务程序更新后，文件授权、完整 SDDL 恢复、元数据与退出码用例再次通过；两种程序更新均保留账户及 WFP 对象身份，最后移除账户运行时与服务。托管系统 build 仅限定这些机器的结果，不能扩大为同版本全部环境。
-
-首轮原始日志、安装更新计划和接收端修复的本机证据保存在 `.build/acceptance/sandbox-ci/run-20261002-111128/`；第二轮及重跑证据保存在 `.build/acceptance/sandbox-ci/run-20261002-115023/`，其中 `attempt-1/` 保留首次尝试失败，`verification.json` 核对提交、用例数量、程序摘要、账户/WFP 身份及清理计划。下载的 GitHub 原始任务日志包含测试输出；账户 artifact 的 `account.log` 仅包含 PowerShell 宿主信息，不能单独证明测试通过。原始 artifact ZIP 摘要均与 GitHub 返回的 SHA-256 一致。
-
-本次 CI 未执行公网 DNS/IPv6 矩阵、WSL、PSEC ConPTY 或 App Server 产品链路；公网与 WSL 结果仍引用上述本机证据。WSLC 一次性清理失败不属于本轮修复范围。
-
-## 2026-10-02 Server 与 PSEC 契约复核
-
-提交 `69e5c45d87f1fad4ecce72dacb129a445168431d` 的 [诊断 CI](https://github.com/chogng/ash/actions/runs/36972719869) 为 5/6 通过。Server 2022 再次在 `powershell_initializes_and_runs_a_pipeline_with_the_restricted_token` 的原有 10 秒期限失败，标准输出与错误为空；finally 删除了账户与服务。ARM64 和 Server 2025 的完整账户入口通过，其中 Server 2025 的同一 PowerShell 用例耗时 5.917 秒。
-
-Server 2022 的 `child-3560.dmp` 在终止前成功取得，配套 CPU 时间为 kernel 343 ms、user 1515 ms。微软调试器符号解析显示，主线程等待异步管道，执行线程位于 `ForEachObjectCommand.ProcessRecord` → `CommandDiscovery.TryModuleAutoDiscovery` → `AutoloadSpecifiedModule` → `ImportModuleCommand` → `ModuleIntrinsics.ExportModuleMembers`；已加载 `PSWindowsUpdate` 和 Visual Studio Setup 模块。由此定位为第一条输出命令的模块发现/导入，进程已越过 CLR 与受限令牌初始化。这份转储没有建立死锁或某个网络请求的因果证明。
-
-兼容性用例现在明确调用 `Microsoft.PowerShell.Utility\Write-Output`，并检查 `Write-Output` 的实际模块归属。10 秒期限、真实管道、私有桌面、受限令牌、输出与退出码断言保留。完整账户执行用例继续使用常规 PowerShell 命令，覆盖用户执行时的模块发现。本机修改后的用例耗时 247 ms，warning 门禁和正常 helper 构建通过。
-
-提交 `8465278af22b61c91a18b04fc3bd1e85a27d705c` 的 [修复 CI](https://github.com/chogng/ash/actions/runs/36975190704) 首次尝试 6/6 通过，没有重跑失败任务。三台机器各通过 9 项服务测试、36 项账户库测试、更新前后各 11 项执行用例，以及服务更新后的文件作用域用例。程序摘要发生改变，账户和 WFP 对象身份保持相同；最后删除账户运行时和服务。三个 PSEC 任务分别通过 ARM64 的指定成功路径或 Server 的能力不足拒绝用例。
-
-| 运行器                  | 受限 PowerShell 用例耗时 | 账户安装、更新与清理 |
-| ----------------------- | ------------------------ | -------------------- |
-| Windows 11 25H2 ARM64   | 3.598 秒                 | 通过                 |
-| Windows Server 2022 x64 | 3.859 秒                 | 通过                 |
-| Windows Server 2025 x64 | 2.213 秒                 | 通过                 |
-
-PSEC 的版本查询在 ARM64 `26200.9457` 上返回 `S_OK`、available=true、minor=0，即 PSEC `1.0`。修复 CI 的支持查询同样返回 `S_OK`、flags=`0x3`、`NetworkIngress=false`。独立入口表要求 `1.1`；现有官方代理模式又要求双向私网能力，因此当前机器不能完成严格 Managed 验收。适配器继续在执行前拒绝，并保留真实 Executor → adapter → SDK 拒绝用例：代理已启动但命令未启动、没有目标授权调用。代理身份完成或基础 PSEC 文件/进程测试通过，均不能替代这项契约。
-
-诊断与修复证据分别位于 `.build/acceptance/sandbox-strict/run-20261002-141600/` 和 `run-20261002-144600/`，包含精确 CI 源码摘要、原始日志、artifact 摘要、版本报告、超时转储及 `server2022-symbol-stacks.log`。修复目录的 `verification.json` 核对 CI 提交与当前源码、用例数量、程序更新、账户/WFP 身份及清理计划；下载 ZIP 的摘要均与 GitHub 返回值一致。初期的网络形式探索代码只归档在诊断证据中；当前仓库脚本只查询能力，不保留未经实机执行的策略组合。
-
-## 2026-10-02 AppContainer 与 LPAC 可行性验证
-
-用户要求在 Ash 内验证旧版 Windows 的严格隔离方案，不向 MXC 提交 PR。本轮在 Windows 11 23H2 x64 `22631.6199` 上使用系统 AppContainer API，未修改 MXC 或产品后端。第一阶段要求文件限制和命令兼容性同时成立；本轮未通过，因此没有实施后续 WFP 网络方案。
-
-每个模式使用独立的临时 profile。命令在暂停状态下加入 kill-on-close Job，检查实际 AppContainer SID、低完整性令牌，以及系统 `AccessCheck` 对 All Application Packages 的读取结果后才恢复执行。LPAC 的普通组列表不包含这项隐式授权，不能用 `TokenGroups` 判断是否成功退出该组的访问权限。普通 LPAC 和组合令牌仅增加 `registryRead`、`lpacInstrumentation` 能力，不授予网络能力。
-
-六类测试目录均由本轮创建，显式设置低完整性标签和受保护 DACL；所有目录的调用者写入对照均通过。除授权目录外，分别测试 Everyone、All Application Packages、All Restricted Application Packages、Everyone 与 All Restricted Application Packages 同时授权，以及仅调用者可写的目录。低完整性标签避免把完整性级别阻断误认为文件策略成功。
-
-| 模式                              | 真实文件 I/O 与命令结果                                                                                                                                                                                                                               | 第一阶段结论                                        |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| AppContainer                      | 授权内写入成功；授权外 All Application Packages、All Restricted Application Packages，以及 Everyone 与 All Restricted Application Packages 同时授权的目录均可写。cmd 的重定向与实际令牌的文件打开结果一致。系统 PowerShell 管道输出 `1/2/3`，退出码 0 | 命令可运行，文件限制不满足 Strict                   |
-| LPAC                              | 授权内写入成功；Everyone 和 All Application Packages 目录不可写，但授权外 All Restricted Application Packages 及其与 Everyone 同时授权的目录仍可写。cmd 与实际令牌 I/O 结果一致。PowerShell 在原定 10 秒内未完成管道                                  | 文件限制与命令兼容性均未通过                        |
-| LPAC 加每次执行独有的写入限制 SID | 实际令牌文件打开测试中，授权内可写，五类授权外目录均拒绝；检查确认最终令牌保留了唯一限制 SID。cmd 和 PowerShell 均在初始化阶段退出 `0xC0000142`，未产生脚本输出                                                                                       | 这组文件测试通过，命令兼容性未通过；不能接入 Strict |
-
-组合令牌的启动失败尚未建立具体对象权限或 CLR 调用的因果证明，不能沿用旧账户实验的原因解释。本轮只否定这些已测试组合的交付资格，不证明其他旧 Windows 实现不可能。目录联接、重命名、完整 IPC 与网络矩阵没有继续执行；有限目录测试也不能独立证明整个宿主不可写。
-
-最终证据位于 `.build/acceptance/appcontainer/run-final/`，包含实际执行的 `probe.py`、源码 SHA-256、原始标准流、完整令牌与目录权限报告，以及 `verification.json`。独立核验确认六次最终执行的 Job 活跃进程数均为零；实验工具开发及最终运行累计创建的 24 个 profile，其目录、包目录和注册表映射均已不存在。递归删除测试目录被工具策略拒绝后，改为保留反例文件作证据；逐项撤销测试授权并恢复中完整性标签，再独立读取全部 236 个文件和目录的安全描述符，确认只剩调用者权限。结果记录在 `.build/acceptance/appcontainer/fixture-cleanup.json`。没有安装账户、服务或 WFP 对象，也没有修改测试目录之外的宿主 ACL。
-
-## 2026-10-02 Codex 账户模型与交互终端验收
-
-本轮按用户确认，以 Codex 的 Windows 账户沙箱作为产品完成标准。WindowsAccount 不扩大为整个宿主只读；PSEC Strict、WSLC 和 AppContainer/LPAC 的未完成能力不计入这条账户路径的交付要求。
-
-核对既有原始证据发现，普通用户 App Server RPC 产品链在 `.build/acceptance/sandbox-product/run-20261002-125636/app-server-test-final.log` 已经通过，不能继续把这项列为未验收。本轮又通过同一真实 RPC 用例：创建 Session 与 Shell Turn、要求受限执行、登记账户身份、真实 cmd → PowerShell、请求目录、`.env` 禁读、授权外文件与 Git 配置拒写、退出码 125、执行一次及 ACL 恢复。
-
-专用账户终端用例复现 `DuplicateHandle(pseudoconsole)` 错误 6。`HPCON` 属于创建进程，改为由账户运行器创建和持有 ConPTY，以私有管道传递输入、输出、尺寸和中断。运行器持续存在时显式保护其进程、令牌及所有初始化线程，并固定后续线程的默认 ACL；账户所有者隐含权限也被抑制。实测同时发现后台启动器的忽略 Ctrl+C 标志会被命令继承，终端运行器在创建命令前恢复正常信号策略；规则见 [微软说明](https://learn.microsoft.com/windows/console/setconsolectrlhandler)。Windows 换行转换复用现有 `utils/pty` 实现。
-
-| 本机 Windows 11 23H2 x64，普通调用者                                  | 结果                                                                   |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| 管道持续输入及不同调用者拒绝访问会话                                  | 通过                                                                   |
-| 受限 PowerShell 终端、LF 输入、尺寸 40×100、授权外拒写、真实退出码 23 | 通过                                                                   |
-| 运行器进程读取/改写、复制句柄、注入线程、终止及修改权限               | 全部拒绝                                                               |
-| 运行器线程上下文、挂起、终止、模拟身份及修改权限                      | 全部拒绝                                                               |
-| 正常退出、Ctrl+C、取消、主动终止、释放执行器、超时                    | 六种方式均观察到终态及输出关闭，并独立确认命令、运行器与后台后代已退出 |
-| 普通用户真实 App Server RPC 产品链                                    | 再次通过                                                               |
-
-`tests/terminal.rs` 三项实机用例均通过，六种结束方式由第三项逐项执行。最终统一回归的 36 项账户库用例和 11 项完整执行用例全部通过；普通用户 RPC 用例再次通过。`just check ash-windows-sandbox`、`just rust-warnings ash-windows-sandbox`、`just dependencies` 和包内格式检查均通过。临时服务使用既有已验收版本，运行器按本轮程序摘要更新。
-
-独立验收提交 `7d0f74bffe86c0867c06414753d650af5b7a731f` 的 [CI 36990431604](https://github.com/chogng/ash/actions/runs/36990431604) 首次尝试六项作业全部成功。各账户作业均通过 9 项服务、36 项账户库，以及运行器更新前后各 11 项执行和 3 项终端用例；服务更新后的真实执行也通过，最后完成账户与服务删除。PSEC 作业仍按原有平台能力契约检查，不能把它们的成功扩写为 Strict Managed 已通过。
-
-| 远端平台                | 账户、终端、两种程序更新与清理 |
-| ----------------------- | ------------------------------ |
-| Windows 11 ARM64        | 通过                           |
-| Windows Server 2022 x64 | 通过                           |
-| Windows Server 2025 x64 | 通过                           |
-
-证据位于 `.build/acceptance/codex-account/run-20261002-terminal/`，包含修复前日志、各轮权限与信号日志、最终 `terminal-signal.log`、`app-server.log`、完整账户回归、三台远端原始日志及安装、更新和清理清单。最终 `verification.json` 核对沙箱代码与 CI 提交、验收使用的运行器摘要、全部测试结果、日志摘要及本机清理结果；当前账户沙箱的实现、验收与临时对象清理均已完成。本轮不扩大为所有 Windows 版本、完整崩溃组合或所有产品界面均已验收。
-
-用户再次确认清理后，本机管理员 UAC 成功，按本轮安装归属删除临时服务、三个账户及安装目录。随后逐项查询确认 13 个 WFP 过滤器、一个 provider 和一个 sublayer 均不存在；普通权限下再次核查服务、目录、三个账户、账户配置文件和相关进程均不存在，其余七个本机账户的名称与 SID 未变。结果见 `cleanup-verification.json`、`cleanup-independent.json` 和 `wfp-cleanup.json`；此前两次 UAC 取消的待清理快照作为历史证据保留。
-
-## 已退出账户原型的受管网络记录
-
-账户原型曾以 WFP 按账户拒绝 IPv4/IPv6 连接、监听及接收，仅给 Managed 槽位开放一个固定 TCP 回环端口。
-执行期间独占该端口并转发至本次 Core 代理，其他槽位不能使用这个端口。
-SDK 原有 runtime proxy 身份模式仍保留原校验，账户实现不通过放宽它来获得启动。
-
-真实验收必须确认限制令牌仍命中 WFP 的账户条件；还须检查 IPv6、DNS、跨槽位代理、端口占用、账户并发和宿主崩溃恢复。
-不能用进程启动、HTTP_PROXY 存在或单个 TCP 拒绝作为全部网络边界通过的证据。
-
-## 证据与发布状态
-
-保存完整命令、退出码、标准流、SDK 诊断、文件和 ACL 差异、存活进程检查。
-下列历史记录保留当时失败、修复和清理的边界；当前服务路径的本机结果见 [2026-10-02 验收](#2026-10-02-服务及账户管理员验收)，不能扩写为所有平台或完整生产隔离资格。
-Microsoft 对当时固定预览版的限制见 [上游说明](https://github.com/microsoft/mxc/tree/6cd3d58f05d3447e67109cfb75e042803b843ca4)。
-
-### 2026-09-10 首次实机记录
-
-- 源码：`11496080773c6598b99a7539148c50b59b20d676`，MXC revision 为 `6cd3d58f05d3447e67109cfb75e042803b843ca4`。
-- 系统：Windows 11 专业版 23H2，build `22631.6199`，`x86_64-pc-windows-msvc`；Rust `1.98.0`。
-- 执行环境：未提升权限，PowerShell `LocalMachine=RemoteSigned`，其他执行策略范围均为 `Undefined`。
-- 本机完整构建和测试输出：`.build/acceptance/mxc-windows-20260910/check.log`、`windows.log`；这些是本机证据文件，不随 Git 提交。
-
-| 命令                                                                             | 退出码 | 结果                                                           |
-| -------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------- |
-| `just check ash-mxc-sandbox --tests`                                             | 0      | 通过，未报告编译 warning                                       |
-| `just test ash-mxc-sandbox --test windows -- --include-ignored --test-threads=1` | 1      | 1 项通过、2 项失败、0 项忽略；测试构建完成，未报告编译 warning |
-| `wsl --status`                                                                   | 50     | 无可用状态输出                                                 |
-| `wsl --list --verbose`                                                           | 1      | 返回帮助文本，未取得可执行的发行版信息；WSL 测试未执行         |
-
-通过的是严格受管网络拒绝测试：拒绝请求，且命令写入标记和代理回调均未出现。
-这只证明拒绝行为，不表示 Windows 已支持严格受管网络。
-
-两个失败均发生在 SDK 启动阶段：SDK 报告 BaseContainer 不可用，对文件策略中的不存在路径检查 `WRITE_DAC` 时返回 `os error 2`。
-多根目录测试失败于 `work/.agents`；进程树测试失败于 `.git`，尚未进入超时和取消断言。
-当时适配器把全部保护目录名加入只读策略，SDK 对这些路径使用 `OPEN_EXISTING` 检查访问权；当次错误是路径不存在，不能仅根据外层错误文案判断为用户缺少 ACL 权限。
-
-文件隔离、退出码、进程树终止、ACL 正常与异常恢复、网络绕过和 WSL 跨系统边界均仍待验收。
-
-### 2026-09-10 修复与复测
-
-适配器按元数据契约检查路径是否存在：已存在的文件、目录及链接仍进入只读策略，确认不存在的路径不提交给 ACL 实现，也不创建空目录。
-检查遇到其他错误时拒绝请求；工作目录授权、隐藏存储和网络要求继续保留。
-新增回归覆盖空工作目录，以及同时存在元数据文件、目录和缺失路径的多根目录策略。
-
-`platform-checks.yml` 已改为 `--include-ignored`，Windows CI 同时执行严格网络拒绝和实机用例。
-进程树测试名称及忽略说明改为描述 MXC 能力要求，移除已退场的自建运行器前置条件。
-
-复测时，两个实机用例均已越过缺失元数据检查，但 SDK 报告 BaseContainer 不可用，且当前账户不能对 `C:\` 执行 `WRITE_DAC`，因此仍在启动阶段失败。
-这是宿主只读基线所需权限未满足，不能删去磁盘根目录要求、改为普通进程或将失败改成跳过。
-继续验收需要具备相应系统隔离能力、且能完整满足文件策略的执行环境；本次没有更改宿主 ACL 或系统功能配置。
-
-| 修复后命令                                                                       | 退出码 | 结果                                                          |
-| -------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------- |
-| `just test ash-mxc-sandbox --lib`                                                | 0      | 4 项通过，含 2 项新增文件策略回归                             |
-| `just check ash-mxc-sandbox --tests`                                             | 0      | 通过                                                          |
-| `python -B scripts/cargo.py build -p ash-mxc-sandbox`                            | 0      | 正常构建通过                                                  |
-| `just test ash-mxc-sandbox --test windows -- --include-ignored --test-threads=1` | 1      | 1 项通过、2 项失败、0 项忽略；失败原因均为上述 `C:\` 权限限制 |
-
-本轮编译未报告 warning。对应本机日志位于同一证据目录的 `fix-lib.log`、`fix-check.log`、`fix-build.log`、`fix-windows-final.log`。
-
-### 2026-09-10 VMware 普通用户与管理员结果
-
-用户在虚拟机内分别运行验收光盘中的 `START.cmd` 和提升权限后的 `ADMIN.cmd`，并返回两份结果包。
-测试程序的 SHA-256 与分发包一致：`5436fd082ad160ba6dfa0bf4d38a78fa408a712ff936b9ee18d3dc1b5c3c3218`。
-构建来源为 `3275ffc3019cf5e05c628cf455d362bfb2e68c71`；执行命令为 `windows.exe --include-ignored --test-threads=1 --nocapture`。
-
-虚拟机系统为 Windows 11 专业版 23H2，build `22631.2861`，64 位。
-日志中的实际管理员标志分别为 `false` 和 `true`，已确认两次权限不同。
-
-| 执行身份 | 结果                         | 测试程序退出码 | 失败位置                                                   |
-| -------- | ---------------------------- | -------------- | ---------------------------------------------------------- |
-| 普通用户 | 1 项通过、2 项失败、0 项忽略 | 101            | `C:\` 的 `WRITE_DAC` 检查被拒绝                            |
-| 管理员   | 1 项通过、2 项失败、0 项忽略 | 101            | `C:\DumpStack.log.tmp` 打开失败，`os error 32`（共享冲突） |
-
-两次均未触发验收脚本的 150 秒超时；失败来自测试本身。
-唯一通过项是严格受管网络请求被拒绝。多根目录、元数据和退出码用例，以及超时和取消用例，均在 SDK 启动检查阶段失败，尚未执行对应的隔离断言。
-
-管理员结果说明，当前问题不能仅归结为未提升权限：Ash 的 `mxc_engine` 补丁将宿主磁盘根目录及所有直接子项展开成文件授权，所选 DACL 实现随后逐项检查访问权。
-管理员可以越过 `C:\` 检查，但系统占用文件仍会使该请求失败。当前宿主文件基线与所选实现的匹配问题尚未解决，不能通过删除系统文件、关闭分页或放宽隔离要求取得通过。
-
-ACL 证据的边界：
-
-- 两份日志各采样 17 个路径；普通用户成功读取 11 个，管理员成功读取 14 个，其余路径有读取错误。
-- 独立重算执行前后样本差异，成功读取的 ACL 没有变化，读取错误也相同，与 `acl-changes.json` 的空数组一致。
-- 这不代表全盘 ACL 清理或异常恢复通过；本次启动检查失败，没有验证正常沙箱执行后的清理，也没有执行崩溃恢复测试。
-
-原始结果包及独立核对摘要保存在本机 `.build/acceptance/mxc-windows-20260910/vm-results/`：`results-current.zip`、`results-elevated.zip`、`summary.json`。
-原始归档 SHA-256 分别为 `5ce4b734091491df1927efa3d2f10fed60e076cd591b77d556b67afae7475f08` 和 `4725dfc3b0ddf23d22290e73df1d5b484fedebb3eb4a12f249d5f4e1df161b61`。
-本轮结论是该 Windows 11 23H2 环境未通过验收；其他 Windows build、完整网络绕过、WSL 和异常恢复仍未验收。
-
-### 2026-09-11 新账户实现的本机准备检查
-
-准备检查时，系统为上述 23H2 本机，执行令牌未提升；当时尚未配置账户运行时，也未创建本机账户或 WFP 规则。
-
-| 验证                                          | 结果                                                                               |
-| --------------------------------------------- | ---------------------------------------------------------------------------------- |
-| SDK 独立 ACL 授权测试                         | 4 项通过                                                                           |
-| SDK 请求与精确代理测试                        | 2 项通过                                                                           |
-| MXC 账户实现测试                              | 7 项通过；其中 2 项直接调用本机 Windows 的限制令牌、文件 ACL、独立桌面和子进程 API |
-| Ash 适配器 lib / Windows 非忽略测试           | 4 + 1 项通过；5 项完整执行测试待配置后运行                                         |
-| `just check ash-mxc-sandbox --tests --locked` | 通过                                                                               |
-| Cargo 正常构建 `mxc-user` / 网络 probe        | 通过                                                                               |
-| Bazel `//crates/vendor/mxc:mxc-user`          | 通过                                                                               |
-| 打包与签名流程单测                            | 42 项中 38 项通过，4 项既有平台条件跳过；没有进行正式代码签名                      |
-| 未配置运行时与缺少授权参数的 setup            | 均拒绝，运行时目录未创建                                                           |
-| vendor 差异与固定上游复核                     | 已重新生成；源文件对照通过                                                         |
-
-本机真实文件测试发现并修正了错误的限制 SID 类型；当前使用每次执行随机生成的 SID。
-测试复用实际运行器的令牌创建方法，确认工作目录写入、元数据只读和后续执行不能借用旧文件所有权。
-独立桌面测试确认受限子进程经实际标准流退出并保留 `125`；这些仍不代表专用账户登录和 WFP 网络限制已通过。
-
-适配器 Bazel 目标另外遇到上游 `plm` build script 的 Windows 版本资源编译工具缺失（`program not found`）。
-账户 helper 的 Bazel 目标已单独通过；不能把该结果写成整个适配器 Bazel 构建通过。
-完整账户、网络、并发、崩溃恢复和 WSL 验收继续待完成。
-
-### 2026-09-11 清理补强
-
-- 移除原先保留 helper 和锁文件的行为；加入账户、账户配置目录与 WFP 对象删除后的重新查询。
-- 正在获取账户槽位的执行与配置/删除互斥，避免清理开始后仍启动新命令。
-- 3 项新增临时目录清理回归通过：已知产物清理、未知文件/未完成执行保留恢复记录、被替换的 helper 拒绝删除。账户模块共 10 项测试通过。
-- 本轮没有配置或删除真实本机账户与网络规则；这些系统对象的清理仍需在获得明确授权后的完整验收中验证。
-- 测试报告和构建产物继续保存在工作区；Windows 自身的审计记录不属于测试清理目标。
-
-### 2026-09-11 授权后的本机账户验收
-
-宿主仍为 Windows 11 23H2 / 22631，正式测试进程的 `elevated=false`。用户明确授权配置、测试和清理后，执行 5 轮配置与清理；每轮只有 6 个账户和其 26 个过滤器，前一轮清理成功后才创建下一轮。
-
-发现并修复：
-
-- 新账户加入本地 Users 组，名称通过固定 SID 解析，不依赖系统语言。
-- 运行器复制后单独设置文件 ACL，修复目录 ACL 没有应用到已有子文件的问题。
-- 运行时移至本次独占的 ProgramData 目录，使系统登录服务能够读取运行器；凭据文件不继承账户的读取权限。
-- 配置阶段需要的 Shell32 API 改为从 System32 按需加载，避免登录工作进程尚未执行就因界面 DLL 初始化而失败。
-- 可信启动进程退出后、用户命令恢复执行前应用 Job 的界面限制；用户命令仍在相同文件、网络与限制令牌要求下执行。
-- Windows 接受的套接字显式改为阻塞模式，避免代理转发收到 `WSAEWOULDBLOCK` 后提前关闭连接。
-- 增补启动进程的错误和退出码诊断；ACL 采样使用系统 .NET 文件接口，避免测试依赖 PowerShell 模块自动加载。
-
-| 实际运行                                                                                                                                 | 结果                                                                                                              |
-| ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `just test appcontainer_common --manifest-path crates/vendor/mxc/Cargo.toml --lib user:: --locked -- --include-ignored --test-threads=1` | 12 项通过，包括真实账户登录、运行器/凭据访问边界、限制令牌、文件写权限和独立桌面                                  |
-| `tests/local.ps1 -Phase Test -Output .build/acceptance/mxc-local/round5`                                                                 | 2 项通过、4 项失败、0 项忽略；测试程序退出码 101                                                                  |
-| 受管网络                                                                                                                                 | 获批 HTTP 与 SOCKS 请求成功，未获批目标返回拒绝；直接 TCP、其他端口、监听和后代绕过被阻止，UDP 没有到达宿主接收端 |
-| PowerShell 文件与退出用例                                                                                                                | 超时，没有进入预期断言；不能记作文件范围与退出码验收通过                                                          |
-| PowerShell 后代终止用例                                                                                                                  | 没有生成预期子进程 PID；取消、超时与正常退出后的后代终止仍未通过完整调用链验收                                    |
-| 每轮 Remove                                                                                                                              | 均成功，删除后按记录重新查询账户与 WFP 对象，并移除运行时文件                                                     |
-
-PowerShell 未完成初始化的根因仍需定位。没有放宽文件、网络、界面或宿主 ACL 要求来取得通过。此次结果只覆盖本机及上述探针；IPv6、跨执行并发、完整崩溃恢复和 WSL 仍未验收。
-
-最终清理核验记录在 `.build/acceptance/mxc-local/round5/cleanup-verification.json`：
-
-- 最后一轮 6 个账户已不存在，对应用户配置目录为 0。
-- 查询测试使用的 powershell / mxc-user / probe / cmd 进程，没有属于这些账户的进程。
-- 每个记录的 WFP filter、sublayer 和 provider 删除后均查询为不存在。
-- ProgramData 运行时目录和前几轮 LocalAppData 运行时目录均不存在。
-- 工作区中的测试日志、源码和构建产物保留；不删除 Windows 审计记录。
-
-完整日志位于 `.build/acceptance/mxc-local/round1` 至 `round5`；最初一次测试另保存为 `test-1.log`。最后一轮 helper SHA-256 为 `e2637448c13ad504afc3592ceb2e60e8f5c900942ef506f77bb2f77c419f14d6`。
-
-最终 helper 的 Bazel 构建通过。一次重复 Cargo 构建在等待其他任务的 `ash-app-server` 构建锁时被取消；没有把这次取消记为通过。此前本轮 MSVC 正常 helper 构建、12 项账户测试和完整调用链测试均已实际完成。
-
-额外按 SID 查询可读取的进程，未发现测试 SID；有 140 个进程的所有者信息不可读取，完整输出在 `process-owner-audit.json`。该结果不能扩大为对所有受保护系统进程的证明。共享 MXC ACL 恢复目录内没有剩余恢复文件。
-
-### 2026-09-11 统一契约与原型退出
-
-- Ash `sandboxing` 增加执行前候选选择；仅 `UnsupportedPolicy` 允许考虑下一个候选，运行故障和启动错误均不自动换实现。
-- 被选后端与该进程绑定，Executor 使用实际进程的后端解释拒绝，覆盖并发准备后反序启动的情况。
-- App Server 的两个本地执行入口通过同一注册方式装配。目前只有 MXC 实际注册；Codex Windows 候选没有被伪装成已接入。
-- 删除原型账户运行器、构建目标、打包/签名入口及 CI 配置。15 份原型源码及摘要、原 vendor 补丁和打包补丁保存在 `.build/acceptance/mxc-local/prototype-source`。
-- Windows 的 MXC 请求要求完整 PSEC 能力；原先的账户选择和 AppContainer/DACL 转入路径不再用于 Ash 的请求。23H2 没有被宣布支持。
-- 保留独立 ACL 授权、对象身份检查、跨平台测试和 MXC 许可证；App 包也保留许可证，且不包含退场运行器。
-
-| 本轮验证                                                       | 结果                                                                                         |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `just test ash-sandboxing --lib`                               | 10 项通过，含 6 项新增选择/生命周期回归                                                      |
-| `just test ash-tool-executor --lib`                            | 4 项通过，含真实子进程结果由选中后端判定的调用链回归                                         |
-| `just test ash-mxc-sandbox --lib --test windows`               | 4 + 1 项通过；5 项 PSEC 端到端用例保留但本机未执行                                           |
-| SDK `host_changes::tests` / `request::tests`                   | 4 + 2 项通过                                                                                 |
-| `just check ash-app-server --lib`                              | 通过                                                                                         |
-| `python -B scripts/cargo.py build -p ash-mxc-sandbox --locked` | 通过                                                                                         |
-| `bazel build //crates/sandboxing:sandboxing`                   | 通过；保留仓库既有 GTK 依赖注解提示                                                          |
-| Windows 打包与签名相关检查                                     | 9 项通过，含退场运行器排除和许可证保留                                                       |
-| 完整相关 Python 套件                                           | 38 项中 1 项失败、4 项跳过：现有协议主版本断言为 2，当前工作区生成为 3；未修改并行的协议工作 |
-
-这次没有重新安装测试账户或网络规则。候选 Windows 实现仍需要解决安装身份、宿主修改授权与完整策略兼容性，并通过独立验收；本轮接口和构建结果不能替代这项资格。
-
-### 2026-09-11 协议生成同步复核
-
-- 当前 Rust 协议主版本已为 4；提交的 TypeScript fixture 与前端生成产物仍为 3。此前的 Python 打包主版本断言已改为读取生成元数据，因此单独运行 Python 测试没有暴露这次漂移。
-- `just test ash-app-server-protocol --lib --locked` 实际结果为 42 项通过、1 项失败，失败项为 `tests::schema_fixtures_match_the_generators`。
-- 执行 `just generate-protocol`，同步 fixture、解码器及前端生成产物。除主版本和 schema hash 外，同步了现有源码中的消息检查点及历史类型；没有修改这些领域接口的源码。
-- 仅复跑失败项：`just test ash-app-server-protocol --lib tests::schema_fixtures_match_the_generators --locked -- --exact` 通过。生成命令也完成了普通构建；本轮编译没有报告 warning。
-- `python -B scripts/test-python.py release`：55 项中 50 项通过、5 项平台条件跳过。打包回归现在比较完整协议元数据，并验证显式生成元数据在装包与签名记录更新后保留。
-- Platform checks 增加上述 Rust fixture 一致性检查，避免 Python 打包测试通过却携带过期协议。
-
-本次 Windows 工作是 Codex 源码核对，具体接入差异见 [Windows 候选评估](sandboxing.md#windows-候选评估)。没有注册第二后端、安装账户或修改宿主 ACL、网络规则；Windows 23H2 的执行兼容问题仍未解决。
-
-### 2026-09-11 独立候选接入与 CLR 边界定位
-
-后续按用户“去补”的指令实现独立 `ash-windows-sandbox`，接入 App Server、冻结的安装上下文、产品 helper、签名摘要和许可证清单。普通执行不安装账户或修复宿主权限；每次执行使用独立租约、文件 SID、代理归属和 ACL 日志。
-
-用户先授权每轮 3 个测试账户、13 条 WFP 规则、3 个设备 SID 授权和专用 ProgramData 目录；随后单独授权两个 BaseNamedObjects 目录的非继承权限。按此范围执行 3 轮安装与清理，未将实验中的 Everyone 限制 SID 带入产品。
-
-| 实机证据                                                   | 结果与边界                                                                                                        |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| CNG、KsecDD、Null 设备授权                                 | PowerShell 越过 bcrypt 初始化失败，随后 CLR 返回 `HRESULT 80070005`                                               |
-| BaseNamedObjects 目录授权                                  | 越过全局共享内存的目录权限拒绝，未解决 CLR 初始化                                                                 |
-| 完整系统调用追踪                                           | `NtCreatePrivateNamespace` 返回 `STATUS_ACCESS_DENIED`；边界名称为 `Cor_CLR_IPCBlock_<pid>`，边界 SID 为 Everyone |
-| 仅加入账户 SID 的诊断对照                                  | CLR 仍失败                                                                                                        |
-| 加入 Everyone 的诊断对照                                   | PowerShell 管道成功，但令牌不再满足宿主只读要求，未采用                                                           |
-| 私有桌面、标准流与退出码单测                               | `cmd.exe` 经实际受限创建路径成功退出 `125`                                                                        |
-| 普通 lib 测试                                              | 14 项通过，3 项需要安装的用例忽略；另新增 Everyone 可写宿主文件仍须拒绝写入的回归并通过                           |
-| `just check ash-windows-sandbox --tests --locked`          | 通过                                                                                                              |
-| `just rust-warnings ash-windows-sandbox --locked`          | 通过，未报告编译 warning                                                                                          |
-| `bazel build //crates/windows-sandbox:ash-windows-sandbox` | 通过；修正别名误带入测试依赖造成的循环                                                                            |
-
-私有命名空间的调用者必须满足边界描述符，见 [Microsoft CreatePrivateNamespace 文档](https://learn.microsoft.com/en-us/windows/win32/api/namespaceapi/nf-namespaceapi-createprivatenamespacew)。目录 ACL 与该边界检查是两项不同要求。额外目录授权已从候选的安装清单移除；诊断用 syscall 跟踪和 AppContainer 实验代码已移出产品源码。
-
-三轮清理均返回成功，并在普通权限下独立复查：9 个记录的账户、39 个过滤器、3 个 provider、3 个 sublayer 均不存在；3 个设备上的两代测试 SID 条目均已撤销；两个命名对象目录上的测试 SID 条目已撤销；ProgramData 运行时目录不存在。没有把删除 API 返回成功当作唯一证据。
-
-本机证据位于 `.build/acceptance/windows-sandbox/round-1` 至 `round-3`；最终独立核验为 `cleanup-verification.json`。第三轮完整追踪保存为 `round-3/private-namespace.log`，诊断源码归档为同证据目录的 `trace.rs`。这些本机日志不随 Git 提交。
-
-系统 Windows PowerShell 和依赖它的完整执行用例仍未通过，IPv6、完整并发/崩溃恢复及 WSL 也未取得资格。后续必须确定兼容平台和隔离机制，不能继续靠扩大宿主 ACL 或限制 SID 取得表面通过。
-
-### 2026-09-11 WindowsAccount 模型验收
-
-用户明确选择采用 Codex 的 Windows 账户与 ACL 模型，接受其与严格宿主只读模型的区别。`SandboxPolicy` 增加显式隔离要求：默认 `Strict`；Windows 本地工具选择 `WindowsAccount`。账户后端在准备阶段拒绝 Strict，其他平台保持原有要求。
-
-本轮完成：
-
-- 保留文件 SID、登录 SID 和 Everyone，恢复 CLR 私有命名空间兼容性。
-- 可信登录工作进程使用默认登录桌面；用户命令在独立桌面创建，验证身份和 Job 后才启动。登录工作进程先退出，用户命令不能借用其不受限令牌。
-- 工作目录和已有元数据分别授权；隐藏存储的必要祖先允许查询属性，但不允许枚举其内容，其他隐藏对象继续拒绝访问。
-- 增加有预算限制的 Everyone 可写路径审计。审计外的宿主整体只读不属于此模型的保证；发现未授权的可写路径时报告并拒绝启动。
-- ACL 日志按独占账户分开保存，避免并发执行恢复其他执行的权限。
-- 移除设备与命名对象目录配置和诊断代码。安装仅创建独立账户、WFP 对象及专用运行时目录。
-
-用户另行批准了 `C:\Users\lanxi`、`AppData`、`AppData\Local` 和 `AppData\Local\Temp` 的临时属性查询与遍历 ACE（0xa0、无继承）。只有缺少相关权限的必要祖先才调整，并由每次执行的日志恢复。
-
-| 验证                                       | 实际结果                                 |
-| ------------------------------------------ | ---------------------------------------- |
-| Windows lib 全部用例，包含真实登录         | 21 项通过、0 忽略                        |
-| 原有完整执行用例                           | 7 项通过、0 忽略                         |
-| IPv6 TCP、UDP、监听拒绝                    | 新增实机用例通过                         |
-| 双账户并发、独立 ACL 生命周期              | 新增实机用例通过                         |
-| 祖先权限不允许枚举、不继承到子项、恢复标记 | 回归通过；包含与父目录不同的历史继承 ACE |
-| 沙箱选择与作用域契约                       | 10 项通过                                |
-| Python release 套件                        | 55 项：50 通过、5 平台条件跳过           |
-| Node 开发包套件                            | 15 项通过                                |
-
-本机六轮安装的 18 个账户、78 个过滤器及对应 provider/sublayer 已逐项查询确认不存在，运行时目录已删除；早期设备及命名对象目录授权也已撤销。最终清理结果见本机 `.build/acceptance/windows-sandbox/cleanup-verification.json`。当前四个祖先目录的 SDDL 与执行前快照逐字相同，见 `traversal-restored.json`。
-
-**第五轮继承重算副作用：** 旧 SDK 在添加非继承 ACE 时仍调用 `SetNamedSecurityInfoW`，触发用户目录子树的继承重算。测试进程已停止，按日志恢复并清理安装；四个有快照目录已按对象恢复原始 DACL 与继承标记。未采样子目录没有完整执行前快照，不能保证逐项原样恢复，不能将最终清理结果扩写为整个用户目录从未发生权限变化。差异记录为本机 `inheritance-recalculation.json`。
-
-已修正 SDK 的非继承写入和恢复路径：只更新当前对象，并保留继承控制标记；回归确认不会重算子文件的历史继承 ACE。第六轮目录、网络、进程用例及新增 IPv6、并发用例均在此实现上通过。
-
-Windows CI 改为执行当前产品选择的账户模型，通过 `scripts/test-windows-sandbox.ps1` 完成构建、清单安装、全部实机用例和 finally 清理。MXC 库测试与 PSEC 专用用例保留；PSEC 完整执行须在具备相应能力的主机单独运行。没有把当前账户模型当作 PSEC 的通过证明，也没有验证 WSL 或其他 Windows 系统。
+测试输出留在 `.build/acceptance/` 或 CI artifact。报告须绑定系统、架构、SDK 来源、源码及程序摘要、实际命令与退出码；缺能力拒绝、未执行和成功执行分别报告。

@@ -67,7 +67,11 @@ pub(super) fn request(
     )?;
     if resolved_filesystem.host_read() == HostReadScope::Host {
         #[cfg(windows)]
-        let roots = crate::request::host_paths(command.working_directory())?;
+        let roots = crate::windows::host_paths(
+            command.working_directory(),
+            policy.file_system(),
+            &request.readwrite_paths,
+        )?;
         #[cfg(not(windows))]
         let roots = vec!["/".to_owned()];
         for root in roots {
@@ -241,9 +245,7 @@ fn with_sensitive_ipc_paths(filesystem: FilesystemPolicy, _: &Path) -> Filesyste
 #[path = "policy_tests.rs"]
 mod tests;
 
-pub(super) fn sdk_request(
-    request: &crate::request::Request,
-) -> Result<mxc_sdk::v1::ContainerRequest, SandboxError> {
+pub(super) fn sdk_request(request: &crate::request::Request) -> mxc_sdk::v1::ContainerRequest {
     use mxc_sdk::v1::ContainerRequest;
     use mxc_sdk::v1::NetworkAction;
     use mxc_sdk::v1::NetworkEgressPolicy;
@@ -258,21 +260,7 @@ pub(super) fn sdk_request(
     };
     let mut sdk = ContainerRequest::new(request.command_line.clone());
     sdk.working_directory = Some(request.cwd.clone());
-    sdk.environment = request
-        .environment
-        .as_ref()
-        .map(|entries| {
-            entries
-                .iter()
-                .map(|entry| {
-                    entry
-                        .split_once('=')
-                        .map(|(key, value)| (key.to_owned(), value.to_owned()))
-                        .ok_or_else(|| unavailable("invalid workload environment entry"))
-                })
-                .collect::<Result<Vec<_>, _>>()
-        })
-        .transpose()?;
+    sdk.environment = request.environment.clone();
     sdk.inherit_default_environment = Some(false);
     sdk.timeout_ms = Some(0);
     sdk.filesystem = Some(FilesystemPolicy {
@@ -309,7 +297,7 @@ pub(super) fn sdk_request(
         ui.disable = false;
         sdk.ui = Some(ui);
     }
-    Ok(sdk)
+    sdk
 }
 
 #[cfg(windows)]

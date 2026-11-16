@@ -90,6 +90,7 @@ try {
         'psec_cmd_preserves_output_and_exit_code',
         'psec_powershell_preserves_output_and_exit_code',
         'psec_tcp_loopback_distinguishes_allowed_and_denied_network',
+        'psec_host_read_reaches_nested_files_without_granting_writes',
         'scoped_execution_preserves_grants_metadata_and_exit_code_authenticity',
         'psec_filesystem_aliases_keep_read_only_and_denied_overrides',
         'timeout_and_cancellation_terminate_descendants',

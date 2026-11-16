@@ -130,7 +130,7 @@ fn windows_policy_allows_required_desktop_resources_but_keeps_sensitive_ui_block
         &SandboxScope::single(dir),
     )
     .unwrap();
-    let sdk = super::sdk_request(&request).unwrap();
+    let sdk = super::sdk_request(&request);
     let ui = sdk.ui.unwrap();
     assert!(!ui.disable);
     assert_eq!(ui.clipboard, mxc_sdk::v1::ClipboardPolicy::None);
