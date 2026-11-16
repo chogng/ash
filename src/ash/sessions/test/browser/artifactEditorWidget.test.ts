@@ -2702,6 +2702,32 @@ test('Slides opens packages and rejects standalone JSON', async () => {
 	assert.deepEqual(opened.model.value, source.model.value);
 });
 
+test('Design opens and resaves a legacy Make package', async () => {
+	using fixture = new AutoSaveFixture();
+	const document = fixture.createDocument();
+	await document.ready;
+	const original = documentFromShapes([
+		{ id: generateUuid(), kind: 'rectangle', x: 10, y: 20, width: 100, height: 80, rotation: 0, fill: '#004488' },
+	], { ...document.model.value, title: 'Saved in Make' });
+	const legacy = JSON.parse(serializeArtifactCanvasDocument(original));
+	legacy.artifacts[original.artifactId].mode = 'make';
+	const content = JSON.stringify(legacy);
+	const manifest = fixture.copyResource.joinPathSegment('manifest.json');
+	await fixture.files.createDirectory(fixture.copyResource);
+	await fixture.files.writeFile({ resource: manifest, content });
+
+	await document.openDocument();
+	assert.deepEqual(document.model.value, original);
+	assert.equal((await fixture.files.readFile(manifest)).content, content);
+	assert.equal(await document.saveDocument(), true);
+	const saved = (await fixture.files.readFile(manifest)).content;
+	assert.equal(JSON.parse(saved).artifacts[original.artifactId].mode, undefined);
+	assert.deepEqual(parseArtifactCanvasDocument(saved), original);
+	const reopened = fixture.createDocument();
+	await reopened.ready;
+	assert.deepEqual(reopened.model.value, original);
+});
+
 test('Artifacts migrates a legacy Design draft pointer without relocating the saved package', async () => {
 	using fixture = new AutoSaveFixture();
 	const first = fixture.createDocument();

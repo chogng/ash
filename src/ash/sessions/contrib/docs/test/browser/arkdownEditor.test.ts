@@ -267,6 +267,70 @@ suite('Arkdown document editing', () => {
 		await expect(browser.page.getByRole('textbox', { name: 'Document body', exact: true }).locator('h1')).toHaveText('Recovered');
 	});
 
+	for (const { name, prefix, suffix, selector } of [
+		{ name: 'inline code', prefix: 'Before `', suffix: '` after', selector: 'code' },
+		{ name: 'fenced code', prefix: '```js\n', suffix: '\n```\n', selector: 'pre' },
+		{ name: 'indented code', prefix: '    ', suffix: '\n', selector: 'pre' },
+	]) {
+		test(`typing, pasting and composing in ${name} preserve literal code`, async () => {
+			await mount(prefix + 'ab' + suffix);
+			const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+			const code = body.locator(selector);
+			await body.focus();
+			await code.evaluate(element => element.ownerDocument.getSelection()!.collapse(element.firstChild!, 1));
+			await browser.page.keyboard.insertText('_');
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), prefix + 'a_b' + suffix);
+			const pasted = '[x]\\\\';
+			await body.evaluate((element, text) => {
+				const clipboardData = new DataTransfer();
+				clipboardData.setData('text/plain', text);
+				element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+			}, pasted);
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), prefix + `a_${pasted}b` + suffix);
+			await body.evaluate(element => {
+				const data = '中文*';
+				element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+				element.dispatchEvent(new CompositionEvent('compositionend', { data, bubbles: true }));
+				element.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertFromComposition', data, bubbles: true, cancelable: true }));
+			});
+			const expected = `a_${pasted}中文*b`;
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), prefix + expected + suffix);
+			await expect(code).toHaveText(expected);
+			assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+		});
+	}
+
+	test('typing a backtick at the end of inline code preserves the code span and caret', async () => {
+		await mount('Before `x` after');
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		const code = body.locator('code');
+		await body.focus();
+		await code.evaluate(element => element.ownerDocument.getSelection()!.collapse(element.firstChild!, 1));
+		await browser.page.keyboard.insertText('`');
+		await expect(code).toHaveText('x`');
+		await browser.page.keyboard.insertText('_');
+		await expect(code).toHaveText('x`_');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), 'Before `` x`_ `` after');
+	});
+
+	test('pasting a fence into code preserves the block and the following prose', async () => {
+		const original = '```js\nalpha\n\nomega\n```\n\nAfter';
+		await mount(original);
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await body.focus();
+		await body.locator('pre').evaluate(element => element.ownerDocument.getSelection()!.collapse(element.firstChild!, 'alpha\n'.length));
+		await body.evaluate(element => {
+			const clipboardData = new DataTransfer();
+			clipboardData.setData('text/plain', '```');
+			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+		});
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '````js\nalpha\n```\nomega\n````\n\nAfter');
+		await expect(body.locator('pre')).toHaveText('alpha\n```\nomega\n', { useInnerText: true });
+		await expect(body.locator('p')).toHaveText('After');
+		await body.press('ControlOrMeta+z');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), original);
+	});
+
 	test('composition commits once, while an external update cancels a stale composition', async () => {
 		await mount('old');
 		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });

@@ -97,7 +97,9 @@ export class ArkdownEditor extends Disposable {
 		this._register(addDisposableListener(this.prose, 'compositionend', event => this.finishComposition((event as CompositionEvent).data)));
 		this._register(addDisposableListener(this.prose, 'paste', event => {
 			event.preventDefault();
-			if (!this.readOnly) this.replace(this.readSelection(), this.inlineText((event as ClipboardEvent).clipboardData?.getData('text/plain') ?? ''), true);
+			if (!this.readOnly) {
+				this.insertText(this.readSelection(), (event as ClipboardEvent).clipboardData?.getData('text/plain') ?? '');
+			}
 		}));
 		this._register(addDisposableListener(this.prose, 'cut', event => {
 			if (this.readOnly) return;
@@ -326,7 +328,7 @@ export class ArkdownEditor extends Disposable {
 		this.skipCompositionInput = undefined;
 		let range = this.readSelection();
 		switch (event.inputType) {
-			case 'insertText': case 'insertReplacementText': this.replace(range, this.inlineText(event.data ?? ''), true); break;
+			case 'insertText': case 'insertReplacementText': this.insertText(range, event.data ?? ''); break;
 			case 'insertParagraph': this.replace(range, '\n\n', true); break;
 			case 'insertLineBreak': this.replace(range, '  \n', true); break;
 			case 'deleteContentBackward': case 'deleteContentForward':
@@ -422,10 +424,91 @@ export class ArkdownEditor extends Disposable {
 		if (!composition) return;
 		if (composition.version !== this.model.getVersionId() || this.readOnly || !text) { this.render(this.hasFocus()); return; }
 		this.skipCompositionInput = text;
-		this.replace(composition.range, this.inlineText(text), true);
+		this.insertText(composition.range, text);
 	}
 
-	private inlineText(text: string): string { return text.replace(/[\\`*_\[\]<>]/gu, '\\$&').replace(/\r\n?/gu, '\n'); }
+	private insertText(range: ArkdownRange, text: string): void {
+		const code = this.findCodeAt(range);
+		if (code?.kind === 'code') {
+			const source = this.model.getValue();
+			const { start, end, fenceLength } = inlineCodeContent(code.range, source);
+			if (start <= range.start && range.end <= end) {
+				if (!text.includes('`')) {
+					this.replace(range, text, true);
+					return;
+				}
+				const before = source.slice(start, range.start);
+				const inserted = text.replace(/\r\n?|\n/gu, this.model.getEOL());
+				const content = before + inserted + source.slice(range.end, end);
+				let length = fenceLength;
+				for (const run of content.matchAll(/`+/gu)) {
+					length = Math.max(length, run[0].length + 1);
+				}
+				// Backticks cannot be escaped inside a code span. Use a longer delimiter and
+				// pad boundary backticks so they cannot join the delimiter.
+				const fence = '`'.repeat(length);
+				const padding = /^`|`$|^ .* $/su.test(content) ? ' ' : '';
+				const opening = fence + padding;
+				this.replace(code.range, opening + content + padding + fence, true, code.range.start + opening.length + before.length + inserted.length);
+				return;
+			}
+		}
+		if (code?.kind === 'code_block') {
+			const first = code.children[0];
+			const last = code.children.at(-1);
+			if (first && last && first.range.start <= range.start && range.end <= last.range.end) {
+				this.insertCodeBlockText(code.range, { start: first.range.start, end: last.range.end }, range, text);
+				return;
+			}
+		}
+		this.replace(range, text.replace(/[\\`*_\[\]<>]/gu, '\\$&'), true);
+	}
+
+	private insertCodeBlockText(block: ArkdownRange, body: ArkdownRange, range: ArkdownRange, text: string): void {
+		const source = this.model.getValue();
+		const opening = /^(`{3,}|~{3,})/u.exec(source.slice(block.start, body.start))?.[0];
+		if (!opening) {
+			this.replace(range, text, true);
+			return;
+		}
+		const eol = this.model.getEOL();
+		const inserted = text.replace(/\r\n?|\n/gu, eol);
+		const tail = source.slice(body.end, block.end);
+		const closing = /(`{3,}|~{3,})[ \t]*$/u.exec(tail);
+		// The trailing newline may be selected. Keep the closing fence on its own line.
+		const separator = closing && range.end === body.end && !(inserted || source[range.start - 1]).endsWith('\n') ? eol : '';
+		const lineStart = Math.max(body.start, source.lastIndexOf('\n', range.start - 1) + 1);
+		const newline = source.indexOf('\n', range.end);
+		const lineEnd = newline < 0 ? body.end : Math.min(newline, body.end);
+		const changedLines = source.slice(lineStart, range.start) + inserted + source.slice(range.end, lineEnd);
+		let length = opening.length;
+		for (const [, run] of changedLines.matchAll(/^[ \t>]*(`{3,}|~{3,})[ \t]*\r?$/gmu)) {
+			if (run[0] === opening[0]) {
+				length = Math.max(length, run.length + 1);
+			}
+		}
+		if (length === opening.length) {
+			this.replace(range, inserted + separator, true, range.start + inserted.length);
+			return;
+		}
+		const fence = opening[0].repeat(length);
+		const before = fence + source.slice(block.start + opening.length, range.start);
+		const closingText = closing ? tail.replace(closing[1], opening[0].repeat(Math.max(length, closing[1].length))) : tail;
+		this.replace(block, before + inserted + separator + source.slice(range.end, body.end) + closingText, true, block.start + before.length + inserted.length);
+	}
+
+	private findCodeAt(range: ArkdownRange): ArkdownNode | undefined {
+		let nodes = this.syntax;
+		while (nodes.length) {
+			const node = nodes.find(node => node.range.start <= range.start && range.end <= node.range.end);
+			if (!node || node.kind === 'code' || node.kind === 'code_block') {
+				return node;
+			}
+			nodes = node.children;
+		}
+		return undefined;
+	}
+
 	private replace(range: ArkdownRange, text: string, focus: boolean, caret?: number | ArkdownRange): void {
 		if (this.readOnly) return;
 		text = text.replace(/\r\n?|\n/gu, this.model.getEOL());
@@ -561,12 +644,10 @@ export class ArkdownEditor extends Disposable {
 		if (node.text !== undefined) {
 			if (node.kind === 'code') {
 				const code = h(parent.ownerDocument, 'code'); parent.append(code);
-				const raw = source.slice(node.range.start, node.range.end);
-				const fence = raw.match(/^`+/u)?.[0].length ?? 0;
-				let start = node.range.start + fence, end = node.range.end - fence;
-				if (source[start] === ' ' && source[end - 1] === ' ' && source.slice(start, end).trim()) { start++; end--; }
-				this.leaf(code, node.text, { start, end }, source);
-			} else this.leaf(parent, node.text, node.range, source);
+				this.leaf(code, node.text, inlineCodeContent(node.range, source), source, { literal: true });
+			} else {
+				this.leaf(parent, node.text, node.range, source, { literal: parent.localName === 'pre' });
+			}
 			return;
 		}
 		const tags: Record<string, string> = { paragraph: 'p', strong: 'strong', emphasis: 'em', strikethrough: 's', block_quote: 'blockquote', code_block: 'pre', list: node.start === undefined ? 'ul' : 'ol', item: 'li', table: 'table', table_head: 'thead', table_row: 'tr', table_cell: 'td', link: 'a', rule: 'hr', footnote_definition: 'aside' };
@@ -596,14 +677,14 @@ export class ArkdownEditor extends Disposable {
 		}
 	}
 
-	private leaf(parent: HTMLElement, text: string, range: ArkdownRange, source: string): void {
+	private leaf(parent: HTMLElement, text: string, range: ArkdownRange, source: string, options?: { readonly literal: boolean; }): void {
 		const raw = source.slice(range.start, range.end);
 		const offsets: number[] = [range.start];
 		let cursor = 0;
 		const entity = raw !== text && /^&[^\s;]+;$/u.test(raw);
 		for (let index = 0; index < text.length; index++) {
 			if (entity) { offsets.push(index === text.length - 1 ? range.end : range.start); continue; }
-			if (raw[cursor] === '\\' && raw[cursor + 1] === text[index]) cursor++;
+			if (!options?.literal && raw[cursor] === '\\' && raw[cursor + 1] === text[index]) cursor++;
 			if (raw[cursor] === '\r' && raw[cursor + 1] === '\n' && (text[index] === '\n' || text[index] === ' ')) cursor += 2;
 			else { if (raw[cursor] !== text[index]) { const found = raw.indexOf(text[index], cursor); if (found >= 0) cursor = found; } cursor++; }
 			offsets.push(Math.min(range.start + cursor, range.end));
@@ -654,4 +735,15 @@ export class ArkdownEditor extends Disposable {
 	}
 	hasFocus(): boolean { return this.mode === 'rich' && this.prose.contains(this.prose.ownerDocument.activeElement); }
 	override dispose(): void { this.domNode.remove(); super.dispose(); }
+}
+
+function inlineCodeContent(range: ArkdownRange, source: string): ArkdownRange & { readonly fenceLength: number; } {
+	const fenceLength = source.slice(range.start, range.end).match(/^`+/u)?.[0].length ?? 0;
+	let start = range.start + fenceLength;
+	let end = range.end - fenceLength;
+	if (source[start] === ' ' && source[end - 1] === ' ' && source.slice(start, end).trim()) {
+		start++;
+		end--;
+	}
+	return { start, end, fenceLength };
 }
