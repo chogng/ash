@@ -221,6 +221,8 @@ export const lxiconsLibrary = {
 	mapFilled: registerLxicon("map-filled", 0xe0b2),
 	mapVertical: registerLxicon("map-vertical", 0xe0b4),
 	mapVerticalFilled: registerLxicon("map-vertical-filled", 0xe0b3),
+	markdown: registerLxicon("markdown", 0xe191),
+	markdownFilled: registerLxicon("markdown-filled", 0xe190),
 	maximize: registerLxicon("maximize", 0xe17c),
 	menu: registerLxicon("menu", 0xe0b7),
 	menuSubmenu: registerLxicon("menu-submenu", 0xe0b6),

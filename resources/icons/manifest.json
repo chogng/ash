@@ -1087,6 +1087,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "markdown",
+      "file": "markdown.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "markdown-filled",
+      "file": "markdown-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "maximize",
       "file": "maximize.svg",
       "rendering": "symbolic"

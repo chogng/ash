@@ -398,7 +398,9 @@
     "image-simple": "E18C",
     "images": "E18D",
     "list-ordered": "E18E",
-    "strikethrough": "E18F"
+    "strikethrough": "E18F",
+    "markdown-filled": "E190",
+    "markdown": "E191"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -618,6 +620,8 @@
     "map-vertical-filled": "24898610e3670149efb8243b5b5d2197b55a54fb2c8dc46183485856e56fe126",
     "map-vertical": "22f9f1a63b79584ae093cb18fdc5a2faa09ec41f075870a8689682d3a4b8a794",
     "map": "22d151b44704a0ce537d9e1f8584360a1950e7f5b1fefed9ba13c0f140ef2683",
+    "markdown-filled": "262ea1d1511a6faf00ab79316f2615bc0389cef214dc6a2bb68b03ce5201215e",
+    "markdown": "e39e37f18225fba9f1e3cdfd443519d907646cc67df0b1abd647bbb2cdf861f8",
     "maximize": "07706eeb88ccc4e59a3fdc52b20e28df8314026ee9f72558b0b205578d1b12b5",
     "menu-submenu": "e7304914b38d7ce0430d543c10c54e02ccb89e8294953acb811c29ab714eb219",
     "menu": "eebc20d53f19823847abbbdd2d935cfd37ddd951695b95801fbbbe7de0d31e8b",
