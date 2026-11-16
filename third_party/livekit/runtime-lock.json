@@ -9,25 +9,41 @@
     "sha256": "b42f34b095dff22639a40256c3f98fd563fdbce5d497e449ceb06ee010de88c5"
   },
   "artifacts": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/chogng/ash-livekit-server/releases/download/livekit-v1.13.7-ash.1/livekit_1.13.7_aarch64-apple-darwin.tar.gz",
+      "archive": "livekit_1.13.7_aarch64-apple-darwin.tar.gz",
+      "sha256": "fd371f24e45bb040866a382554eb8d30e1ddf19cd06499372d78d8c3263b23f6",
+      "size": 16779200
+    },
+    "x86_64-apple-darwin": {
+      "url": "https://github.com/chogng/ash-livekit-server/releases/download/livekit-v1.13.7-ash.1/livekit_1.13.7_x86_64-apple-darwin.tar.gz",
+      "archive": "livekit_1.13.7_x86_64-apple-darwin.tar.gz",
+      "sha256": "16f3ff5e56f0f2de78b24682c7cee3264cc606dcfe1de84c4ad3efb7154789b7",
+      "size": 18197621
+    },
     "x86_64-unknown-linux-gnu": {
-      "url": "https://github.com/livekit/livekit/releases/download/v1.13.7/livekit_1.13.7_linux_amd64.tar.gz",
-      "sha256": "6634aeeb2fb1366b6723708ae4320b9d5408106a4c63457c5e845ae3979c90e2",
-      "archive": "livekit_1.13.7_linux_amd64.tar.gz"
+      "url": "https://github.com/chogng/ash-livekit-server/releases/download/livekit-v1.13.7-ash.1/livekit_1.13.7_x86_64-unknown-linux-gnu.tar.gz",
+      "archive": "livekit_1.13.7_x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "f5c3dcd7b7bfbddb10b4b93a1002514d3e13634d81fc1cfdd962e9a2cdb3c259",
+      "size": 18275560
     },
     "aarch64-unknown-linux-gnu": {
-      "url": "https://github.com/livekit/livekit/releases/download/v1.13.7/livekit_1.13.7_linux_arm64.tar.gz",
-      "sha256": "5d167fdf52cf43c0c72972f25325364479f41f854bfef651056eab2504da5de9",
-      "archive": "livekit_1.13.7_linux_arm64.tar.gz"
+      "url": "https://github.com/chogng/ash-livekit-server/releases/download/livekit-v1.13.7-ash.1/livekit_1.13.7_aarch64-unknown-linux-gnu.tar.gz",
+      "archive": "livekit_1.13.7_aarch64-unknown-linux-gnu.tar.gz",
+      "sha256": "104dce16d4a32a5579510bb7ecae8bab43f2427b72738fa5db2efd31137f9b4a",
+      "size": 16434085
     },
     "x86_64-pc-windows-msvc": {
-      "url": "https://github.com/livekit/livekit/releases/download/v1.13.7/livekit_1.13.7_windows_amd64.zip",
-      "sha256": "e539e7d2f75807b9c9202cd2a0bf2cb3d52fc4c52978a6953e0f47bc339fe77f",
-      "archive": "livekit_1.13.7_windows_amd64.zip"
+      "url": "https://github.com/chogng/ash-livekit-server/releases/download/livekit-v1.13.7-ash.1/livekit_1.13.7_x86_64-pc-windows-msvc.tar.gz",
+      "archive": "livekit_1.13.7_x86_64-pc-windows-msvc.tar.gz",
+      "sha256": "f037d64ad877963871a3a772e16917bd6700059421bfe7ea69619b510617153f",
+      "size": 18410576
     },
     "aarch64-pc-windows-msvc": {
-      "url": "https://github.com/livekit/livekit/releases/download/v1.13.7/livekit_1.13.7_windows_arm64.zip",
-      "sha256": "8379c89b9973dc52577710b293f6190644bd6fad0c415df4279a24ea54df2363",
-      "archive": "livekit_1.13.7_windows_arm64.zip"
+      "url": "https://github.com/chogng/ash-livekit-server/releases/download/livekit-v1.13.7-ash.1/livekit_1.13.7_aarch64-pc-windows-msvc.tar.gz",
+      "archive": "livekit_1.13.7_aarch64-pc-windows-msvc.tar.gz",
+      "sha256": "c0e738bb33fca8ab1e86e4e4d93b9d3a5b155a628179d0fcf5786ae11a311caa",
+      "size": 16310151
     }
   }
 }

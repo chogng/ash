@@ -4,6 +4,12 @@ This root directory owns Ash's independently installed local call-hosting server
 declaration, [`runtime.json`](runtime.json). It is not an editor extension.
 Joining external rooms and dictation do not install or launch this server.
 
+The native binaries are produced and verified in the
+[independent dependency repository](https://github.com/chogng/ash-livekit-server).
+Ash consumes its six-target checksum lock; normal product builds do not compile
+the Go server. The command below packages that locked binary as an Ash hosting
+capability, rather than publishing a new upstream server build.
+
 The locked upstream source, versions and notices remain in
 [`third_party/livekit`](../third_party/livekit/README.md). Shared call coordination
 stays in `crates/call`; local audio, video and screen clients stay in their existing

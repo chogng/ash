@@ -1,0 +1,77 @@
+name: LiveKit locked distribution checks
+
+on:
+  pull_request:
+    paths: &distribution-paths
+      - "livekit-server/**"
+      - "third_party/livekit/**"
+      - "build/lib/livekit.py"
+      - "build/lib/test_livekit.py"
+      - "build/lib/media.py"
+      - "build/release/capabilities.py"
+      - "build/lib/capability*.py"
+      - "build/download/**"
+      - "build/lib/file_lock.py"
+      - "build/lib/targets.py"
+      - ".github/workflows/livekit-server.yml"
+  push:
+    branches: [main]
+    paths: *distribution-paths
+  schedule:
+    - cron: "41 3 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: livekit-server-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  server-build:
+    name: LiveKit ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+      - name: Prepare and run the server
+        shell: bash
+        run: |
+          python -B build/lib/livekit.py "${{ matrix.target }}" > "$RUNNER_TEMP/livekit.json"
+          server=$(node -p 'require(process.argv[1]).executable' "$RUNNER_TEMP/livekit.json")
+          version=$(node -p 'require("./third_party/livekit/runtime-lock.json").version')
+          test "$("$server" --version)" = "livekit-server version $version"
+      - name: Assemble the independent hosting capability
+        shell: bash
+        run: >-
+          python -B build/release/capabilities.py build --kind livekit
+          --target "${{ matrix.target }}" --package-dir .build/livekit-distribution/package
+          --archive-dir .build/livekit-distribution/archives
+          --descriptor-file .build/livekit-distribution/livekit.json
+      - name: Retain verified distribution inputs without publishing a release
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: livekit-distribution-${{ matrix.target }}
+          path: .build/livekit-distribution/
+          retention-days: 14
+          if-no-files-found: error

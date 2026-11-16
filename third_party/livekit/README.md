@@ -1,10 +1,27 @@
-# LiveKit Server
+# LiveKit Server inputs
 
-- Rust 接入使用 Cargo 管理的 `livekit` 和 `livekit-api` SDK。
-- 此目录仅记录独立服务器的固定版本、来源、SHA-256 与版权声明，不保存 Go 源码或程序。
-- `build/lib/livekit.py` 为本地开发及发布准备服务器；Linux、Windows 下载上游程序，Linux GNU 与 musl 使用同一静态程序。
-- macOS 在 macOS 构建机上下载并校验源码，在缓存中编译；需要 Go 1.26 工具链与系统 C/C++ 工具链。重复准备会校验并复制上一成功产物供 Go 判断是否需要重新链接；每个目标串行发布，构建失败保留上一版本。
-- 下载及构建产物保存在忽略的 `third_party/.cache/livekit/`；Go 工具链不随产品分发。
-- 更新时同步锁文件、上游 LICENSE、NOTICE、pkg/sfu/NOTICE 以及通话部署版本检查，并验证媒体测试和各平台服务器准备流程。
+`runtime-lock.json` pins six native server archives from the
+[independent LiveKit distribution repository](https://github.com/chogng/ash-livekit-server).
+The current release is `livekit-v1.13.7-ash.1`. Every archive has a fixed URL,
+size and SHA-256. The producer verifies the actual server version on each native
+runner, retains upstream/build-harness provenance, and generates the complete
+consumer lock only after all six targets pass.
 
-Ash 的本机主持能力声明位于 [`livekit-server/runtime.json`](../../livekit-server/runtime.json)，独立打包、发布及按需安装入口见[媒体与本机通话交付](../../docs/media-delivery.md)。
+Windows/Linux executables retain the upstream official release inputs. macOS
+executables are built from the locked upstream source with the pinned Go toolchain
+in the dependency repository. Normal Ash development, CI and packaging consume
+these binaries without installing Go or rebuilding LiveKit.
+
+`build/lib/livekit.py` validates cached/downloaded archives before extracting the
+server. Its source-build path remains available for explicit source locks without
+a precompiled macOS entry; it is not used by the default six-target lock.
+
+The hosting capability is separate from media clients and is installed only for
+explicit local call hosting. Its product binding and installation remain owned by
+the existing [LiveKit distribution declaration](../../livekit-server/README.md).
+Room/client compatibility tests remain in Ash's `media.yml`; locked distribution
+checks run independently in `livekit-server.yml`.
+
+Upstream source remains [livekit/livekit](https://github.com/livekit/livekit).
+The Apache-2.0 license and notices are retained in `LICENSE` and `NOTICE`, and
+inside the independently published archives.

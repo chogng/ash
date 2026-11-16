@@ -13,6 +13,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+import zipfile
 from unittest.mock import patch
 
 import ci_workflows
@@ -223,66 +224,88 @@ class CiWorkflowTests(unittest.TestCase):
             with self.subTest(workflow=name):
                 self.assertTrue(selected[name])
 
-    def test_main_uses_the_last_successful_ancestor_instead_of_the_previous_push(
-        self,
-    ) -> None:
-        base = "1" * 40
-        response = io.BytesIO(
-            json.dumps({"workflow_runs": [{"head_sha": base}]}).encode()
-        )
+    def baseline_record(self):
+        selection = ci_workflows.select([], self.policy, force_all=True)
+        return {
+            "schemaVersion": 1,
+            "sha": "1" * 40,
+            "runId": 123,
+            "selection": selection,
+            "results": {name: {"result": "success"} for name in self.policy},
+        }
+
+    def read_baseline(self, record, *, ancestor=0, expired=False):
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as output:
+            output.writestr("ci-results.json", json.dumps(record))
         with (
-            patch("ci_workflows.urlopen", return_value=response) as request,
+            patch(
+                "ci_workflows.urlopen",
+                side_effect=[
+                    io.BytesIO(
+                        json.dumps(
+                            {"workflow_runs": [{"head_sha": "1" * 40, "id": 123}]}
+                        ).encode()
+                    ),
+                    io.BytesIO(
+                        json.dumps(
+                            {
+                                "artifacts": [
+                                    {
+                                        "id": 456,
+                                        "name": "ci-results-123",
+                                        "expired": expired,
+                                    }
+                                ]
+                            }
+                        ).encode()
+                    ),
+                ],
+            ) as request,
+            patch("ci_workflows.build_opener") as opener,
             patch(
                 "ci_workflows.subprocess.run",
-                return_value=subprocess.CompletedProcess([], 0),
-            ) as git,
+                return_value=subprocess.CompletedProcess([], ancestor),
+            ),
         ):
-            self.assertEqual(
-                ci_workflows.successful_main_base(
-                    ROOT, "HEAD", "chogng/ash", "test-token"
-                ),
-                base,
+            opener.return_value.open.return_value = io.BytesIO(archive.getvalue())
+            result = ci_workflows.main_baseline(
+                ROOT, "HEAD", "chogng/ash", "test-token", self.policy
             )
-        self.assertIn("status=success", request.call_args.args[0].full_url)
-        git.assert_called_once_with(
-            ["git", "merge-base", "--is-ancestor", base, "HEAD"], cwd=ROOT, check=False
-        )
+            self.assertIn(
+                "status=completed", request.call_args_list[0].args[0].full_url
+            )
+            return result
 
-    def test_main_without_a_successful_ancestor_requires_every_check(self) -> None:
-        for runs, status in (([], 0), ([{"head_sha": "1" * 40}], 1)):
-            with (
-                self.subTest(runs=runs),
-                patch(
-                    "ci_workflows.urlopen",
-                    return_value=io.BytesIO(
-                        json.dumps({"workflow_runs": runs}).encode()
-                    ),
-                ),
-                patch(
-                    "ci_workflows.subprocess.run",
-                    return_value=subprocess.CompletedProcess([], status),
-                ),
-            ):
-                self.assertIsNone(
-                    ci_workflows.successful_main_base(
-                        ROOT, "HEAD", "chogng/ash", "test-token"
-                    )
-                )
+    def test_completed_main_retries_only_failed_selected_domains(self):
+        record = self.baseline_record()
+        record["results"]["media"]["result"] = "failure"
+        record["results"]["frontend"]["result"] = "skipped"
+        record["selection"]["bazel"] = False
+        record["results"]["bazel"]["result"] = "skipped"
+        self.assertEqual(self.read_baseline(record), ("1" * 40, {"media", "frontend"}))
 
-    def test_main_rejects_invalid_api_commit_data(self) -> None:
-        with patch(
-            "ci_workflows.urlopen",
-            return_value=io.BytesIO(b'{"workflow_runs":[{"head_sha":"--all"}]}'),
+    def test_expired_or_replaced_history_cannot_establish_coverage(self):
+        self.assertIsNone(self.read_baseline(self.baseline_record(), expired=True))
+        self.assertIsNone(self.read_baseline(self.baseline_record(), ancestor=1))
+
+    def test_mismatched_artifact_identity_and_policy_are_rejected(self):
+        for key, value in (
+            ("sha", "2" * 40),
+            ("runId", 124),
+            ("schemaVersion", 2),
+            ("selection", {}),
         ):
-            with self.assertRaises(ValueError):
-                ci_workflows.successful_main_base(
-                    ROOT, "HEAD", "chogng/ash", "test-token"
-                )
+            with self.subTest(key=key):
+                record = self.baseline_record()
+                record[key] = value
+                with self.assertRaises(ValueError):
+                    self.read_baseline(record)
 
-    def test_no_main_baseline_forces_all_workflows_even_for_a_narrow_diff(self) -> None:
+    def test_no_main_evidence_requires_every_check(self):
         output = io.StringIO()
         with (
-            patch("ci_workflows.successful_main_base", return_value=None),
+            patch("ci_workflows.main_baseline", return_value=None),
             patch("ci_workflows.changed_paths", return_value=["docs/example.md"]),
             patch.dict(
                 os.environ,
@@ -290,10 +313,75 @@ class CiWorkflowTests(unittest.TestCase):
             ),
             redirect_stdout(output),
         ):
-            self.assertEqual(
-                ci_workflows.main(["select", "--since-successful-main"]), 0
-            )
+            self.assertEqual(ci_workflows.main(["select", "--since-completed-main"]), 0)
         self.assertTrue(all(json.loads(output.getvalue()).values()))
+
+    def test_main_covers_pending_commits_and_retries_failed_domains(self):
+        output = io.StringIO()
+        with (
+            patch("ci_workflows.main_baseline", return_value=("1" * 40, {"media"})),
+            patch(
+                "ci_workflows.changed_paths", return_value=["src/ash/editor/view.ts"]
+            ) as diff,
+            patch.dict(
+                os.environ,
+                {"GITHUB_REPOSITORY": "chogng/ash", "GITHUB_TOKEN": "test-token"},
+            ),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(
+                ci_workflows.main(
+                    ["select", "--since-completed-main", "--head", "2" * 40]
+                ),
+                0,
+            )
+        diff.assert_called_once_with(ROOT, "1" * 40, "2" * 40, include_deleted=True)
+        selection = json.loads(output.getvalue())
+        self.assertTrue(selection["frontend"])
+        self.assertTrue(selection["media"])
+        self.assertFalse(selection["v8-security"])
+
+    def test_baseline_network_failure_falls_back_to_full_validation(self):
+        output = io.StringIO()
+        with (
+            patch("ci_workflows.main_baseline", side_effect=OSError("network")),
+            patch("ci_workflows.changed_paths", return_value=[]),
+            patch.dict(
+                os.environ,
+                {"GITHUB_REPOSITORY": "chogng/ash", "GITHUB_TOKEN": "test-token"},
+            ),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(ci_workflows.main(["select", "--since-completed-main"]), 0)
+        self.assertTrue(all(json.loads(output.getvalue()).values()))
+
+    def test_record_retains_failures_without_turning_them_into_success(self):
+        selection = ci_workflows.select([], self.policy, force_all=True)
+        needs = self.results(selection)
+        needs["media"]["result"] = "failure"
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "ci-results.json"
+            ci_workflows.record_results(
+                path, needs, selection, self.policy, "1" * 40, "123"
+            )
+            self.assertEqual(
+                json.loads(path.read_text())["results"]["media"]["result"], "failure"
+            )
+            needs["select"]["result"] = "failure"
+            with self.assertRaises(ValueError):
+                ci_workflows.record_results(
+                    path, needs, selection, self.policy, "1" * 40, "123"
+                )
+
+    def test_artifact_redirect_does_not_forward_repository_credentials(self):
+        request = ci_workflows.Request(
+            "https://api.github.com/repos/chogng/ash/actions/artifacts/1/zip",
+            headers={"Authorization": "Bearer test-token"},
+        )
+        redirected = ci_workflows.ArtifactRedirect().redirect_request(
+            request, None, 302, "Found", {}, "https://artifact.example/file.zip"
+        )
+        self.assertIsNone(redirected.get_header("Authorization"))
 
     def test_windows_desktop_release_prepares_the_locked_python_environment(
         self,
@@ -358,7 +446,54 @@ class CiWorkflowTests(unittest.TestCase):
             [],
         )
 
-    def test_v8_backport_changes_require_source_builds_even_without_a_version_bump(
+    def test_media_selection_does_not_rebuild_unrelated_native_dependencies(self):
+        self.assertFalse(
+            ci_workflows.select(["build/lib/pdfium.py"], self.policy)["media"]
+        )
+        self.assertTrue(
+            ci_workflows.select(["build/lib/livekit.py"], self.policy)["media"]
+        )
+        self.assertTrue(
+            ci_workflows.select(["crates/call/src/lib.rs"], self.policy)["media"]
+        )
+        media = (ROOT / ".github/workflows/media.yml").read_text()
+        self.assertNotIn("  server-build:", media)
+        self.assertIn("--include-ignored --test-threads=1", media)
+        distribution = (ROOT / ".github/workflows/livekit-server.yml").read_text()
+        self.assertNotIn("workflow_call:", distribution)
+        self.assertNotIn("setup-go@", distribution)
+        self.assertIn("--kind livekit", distribution)
+
+    def test_backend_tests_execute_without_frontend_gating(self):
+        workflow = (ROOT / ".github/workflows/app-server.yml").read_text()
+        tests = workflow.split("\n  tests:\n", 1)[1].split("\n  stdio-lifecycle:\n", 1)[
+            0
+        ]
+        self.assertIn("runner: [ubuntu-24.04, macos-15, windows-latest]", tests)
+        self.assertIn("just test ash-app-server-runtime", tests)
+        self.assertIn("just test-processes ash-app-server", tests)
+        self.assertNotIn("--no-run", tests)
+        self.assertNotIn("--list", tests)
+        blocking = (ROOT / ".github/workflows/blocking-ci.yml").read_text()
+        backend = blocking.split("\n  app-server:\n", 1)[1].split("\n  bazel:\n", 1)[0]
+        self.assertNotIn("frontend", backend)
+
+    def test_dependency_tags_do_not_start_product_release_jobs(self):
+        for file in ["bazel.yml", "extensions-capabilities.yml", "platform-checks.yml"]:
+            with self.subTest(file=file):
+                workflow = (ROOT / ".github/workflows" / file).read_text()
+                self.assertIn(
+                    "startsWith(github.event.release.tag_name, 'v')", workflow
+                )
+
+    def test_checkpoint_is_retained_even_after_domain_failure(self):
+        workflow = (ROOT / ".github/workflows/blocking-ci.yml").read_text()
+        self.assertIn("--since-completed-main", workflow)
+        self.assertIn("ci_workflows.py record", workflow)
+        self.assertIn("name: ci-results-${{ github.run_id }}", workflow)
+        self.assertIn("always() && needs.select.result == 'success'", workflow)
+
+    def test_v8_backport_changes_require_consumer_checks_without_a_version_bump(
         self,
     ) -> None:
         for path in (
@@ -383,31 +518,16 @@ class CiWorkflowTests(unittest.TestCase):
             ci_workflows.select(["crates/tui/src/app.rs"], self.policy)["v8-security"]
         )
 
-    def test_v8_security_executes_new_source_pairs_without_publishing(self) -> None:
+    def test_v8_security_checks_consumers_without_rebuilding_the_engine(self):
         workflow = (ROOT / ".github/workflows/v8-security.yml").read_text()
-        consumers, sources = workflow.split("\n  sources:\n", 1)
-        self.assertIn("runner: [ubuntu-24.04, windows-latest, macos-15]", consumers)
-        self.assertIn("just verify ash-v8-runtime", consumers)
-        self.assertIn("just verify ash-v8-poc --features sandbox", consumers)
-        self.assertIn("target: x86_64-unknown-linux-gnu", sources)
-        self.assertIn("target: x86_64-pc-windows-msvc", sources)
-        self.assertIn("build/v8/release.py bazel-stage", sources)
-        self.assertIn("build/v8/release.py upstream-toolchain", sources)
-        self.assertIn("git -C upstream-rusty-v8/v8 apply -p3", sources)
-        self.assertIn('V8_FROM_SOURCE: "1"', sources)
-        self.assertIn("--features v8_enable_sandbox", sources)
-        self.assertIn("RUSTY_V8_ARCHIVE: ${{ steps.stage.outputs.archive }}", sources)
-        self.assertIn(
-            'just test ash-v8-poc --locked --target "$TARGET" --features sandbox',
-            sources,
-        )
-        self.assertIn('just test ash-v8-runtime --locked --target "$TARGET"', sources)
-        self.assertIn("build/v8/smoke.py bazel", sources)
+        self.assertIn("runner: [ubuntu-24.04, windows-latest, macos-15]", workflow)
+        self.assertIn("just verify ash-v8-runtime", workflow)
+        self.assertIn("just verify ash-v8-poc --features sandbox", workflow)
+        self.assertNotIn("  sources:", workflow)
+        self.assertNotIn("V8_FROM_SOURCE", workflow)
         self.assertNotIn("continue-on-error", workflow)
-        self.assertNotIn("--no-run", workflow)
-        self.assertNotIn("--skip", workflow)
-        self.assertNotIn("contents: write", workflow)
         self.assertNotIn("gh release", workflow)
+        self.assertFalse((ROOT / ".github/workflows/rusty-v8-release.yml").exists())
 
     def test_owned_sources_select_their_real_checks(self) -> None:
         cases = {
@@ -616,23 +736,19 @@ class CiWorkflowTests(unittest.TestCase):
         )
         self.assertIn("just test-processes ash-external-js-ext --test host", optional)
 
-    def test_unix_lifecycle_runs_in_the_required_rust_workflow(self) -> None:
+    def test_unix_lifecycle_runs_in_the_required_backend_workflow(self) -> None:
         for path in (
             "cli/tests/stdio.rs",
             "cli/tests/support/ssh.rs",
             "crates/app-server-client/src/session_stdio.rs",
             "crates/app-server-client-tests/src/session_tests.rs",
             "crates/remote-connections/src/ssh.rs",
-            ".github/workflows/rust-warnings.yml",
+            ".github/workflows/app-server.yml",
         ):
             with self.subTest(path=path):
-                self.assertTrue(
-                    ci_workflows.select([path], self.policy)["rust-warnings"]
-                )
-        workflow = (ROOT / ".github/workflows/rust-warnings.yml").read_text()
-        lifecycle = workflow.split("\n  stdio-lifecycle:\n", 1)[1].split(
-            "\n  tui:\n", 1
-        )[0]
+                self.assertTrue(ci_workflows.select([path], self.policy)["app-server"])
+        workflow = (ROOT / ".github/workflows/app-server.yml").read_text()
+        lifecycle = workflow.split("\n  stdio-lifecycle:\n", 1)[1]
         self.assertIn("runner: [ubuntu-24.04, macos-15]", lifecycle)
         self.assertNotRegex(lifecycle, r"(?m)^    if:")
         self.assertNotIn("continue-on-error", lifecycle)

@@ -43,10 +43,15 @@ jobs:
           if [ "$FORCE_ALL" = true ]; then
             python3 -B scripts/ci_workflows.py select --base "$BASE_SHA" --head "$HEAD_SHA" --all
           elif [ "$MAIN_PUSH" = true ]; then
-            python3 -B scripts/ci_workflows.py select --head "$HEAD_SHA" --since-successful-main
+            python3 -B scripts/ci_workflows.py select --head "$HEAD_SHA" --since-completed-main
           else
             python3 -B scripts/ci_workflows.py select --base "$BASE_SHA" --head "$HEAD_SHA"
           fi
+
+  app-server:
+    needs: [select, blob-size-policy, cargo-deny, codespell, format]
+    if: fromJSON(needs.select.outputs.selection).app-server
+    uses: ./.github/workflows/app-server.yml
 
   bazel:
     needs: [select, blob-size-policy, cargo-deny, codespell, format]
@@ -115,6 +120,7 @@ jobs:
     if: ${{ always() }}
     needs:
       - select
+      - app-server
       - bazel
       - blob-size-policy
       - cargo-deny
@@ -138,3 +144,17 @@ jobs:
           NEEDS_JSON: ${{ toJSON(needs) }}
           CI_SELECTION_JSON: ${{ needs.select.outputs.selection }}
         run: python3 -B scripts/ci_workflows.py require
+      - name: Record domain results even when an unrelated domain failed
+        if: ${{ always() && needs.select.result == 'success' }}
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          CI_SELECTION_JSON: ${{ needs.select.outputs.selection }}
+        run: python3 -B scripts/ci_workflows.py record --output .build/ci-results.json
+      - name: Retain the completed main coverage checkpoint
+        if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.select.result == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-results-${{ github.run_id }}
+          path: .build/ci-results.json
+          if-no-files-found: error
+          retention-days: 30

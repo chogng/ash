@@ -6,7 +6,7 @@
 
 ## 构建和打包行为
 
-`runtime-lock.json` 为每个 Ash 发布目标锁定一份启用 V8 沙箱的静态库压缩包和对应 Rust binding，并记录 SHA-256。当前配对来自 Ash 的 `rusty-v8-v152.2.0` release。
+`runtime-lock.json` 为每个 Ash 发布目标锁定一份启用 V8 沙箱的静态库压缩包和对应 Rust binding，并记录 SHA-256。当前配对来自 [独立 V8 依赖仓库](https://github.com/chogng/ash-rusty-v8/releases/tag/rusty-v8-v152.2.0) 的 `rusty-v8-v152.2.0` release。迁移保留全部 archive、binding 摘要和原构建来源；Ash 主仓库的旧 release 继续供旧 checkout 使用。
 
 | 场景             | 下载位置                                                              | 最终产品里有什么                                                      |
 | ---------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -155,7 +155,7 @@ Chromium libc++、指针压缩和 sandbox。bindgen 从 archive 的 C++ binding
 | Python               | workflow 使用 3.12，V8 模板依赖补丁使用 3.11 | workflow、Bazel 解释器与模板依赖统一为精确 3.12                                       |
 | 沙箱探针             | 调用所链接库的 `v8__V8__IsSandboxEnabled()`  | 已使用相同检查，验证静态库配置与 Rust feature 一致                                    |
 
-`.github/workflows/rusty-v8-release.yml` 覆盖锁定文件中的全部 8 个沙箱目标。
+独立仓库的 [`rusty-v8-release.yml`](https://github.com/chogng/ash-rusty-v8/blob/main/.github/workflows/rusty-v8-release.yml) 覆盖锁定文件中的全部 8 个沙箱目标。其 `build-inputs.json` 锁定构建 harness 和消费回归所在的 Ash 提交，`upstream-source-lock.json` 与 harness 的引擎输入必须一致；不跟随 Ash 的移动分支。
 Linux/macOS 使用 `build/v8/release.py bazel-stage` 构建原始配对目标，先构建，
 再以同一平台与 CPU 配置查询输出，避免把上一次配置留下的文件误当新产物。
 宿主与目标 CPU 相同时复用 `v8-source` 本地配置；交叉构建显式选择目标 CPU，
@@ -166,15 +166,15 @@ Windows 从 `source-lock.json` 固定的 `denoland/rusty_v8` commit 递归检出
 校验子模块、Rust、源码补丁和 Chromium 编译器 pin 后使用 Cargo/GN 构建，
 从同一 GN 输出取 archive 和生成的 binding，保持 MSVC ABI。
 
-手动运行 workflow 只构建和验证。推送 `rusty-v8-v<crate-version>` tag
+在独立依赖仓库手动运行 workflow 只构建和验证。向该仓库推送 `rusty-v8-v<crate-version>` tag
 会触发验证和独立 prerelease 的发布流程。已有 release 保留原样。
 若八组配对已经上传，可通过 `staged_run_id` 复用同一分支的已结束运行。
 工作流检查两次运行的源码一致性，再用下载的配对执行完整验证。
-源码发布 workflow 不由 PR 或其他 workflow 自动触发；本地反馈不需要
-等待八目标云端矩阵。必需 CI 的 `v8-security` 检查单独覆盖 Linux x64
-Bazel 与 Windows x64 Cargo/GN 源码生产，复用上述 pin、补丁、产物装配与
-消费检查。安全补丁、源码输入或防护/探针变更会触发该检查，失败会阻止
-`CI required` 通过，不生成 release。
+源码发布 workflow 不由 Ash 的日常 CI 自动触发。独立依赖仓库的源码验证
+工作流在配方改动、PR、每周和手动运行时覆盖 Linux x64 Bazel 与 Windows
+x64 Cargo/GN；发布前仍验证全部目标。Ash 必需 CI 的 `v8-security` 执行
+锁定配对的元数据、三个平台消费探针和运行时防护检查，不重建引擎源码。
+消费验证失败仍阻止 `CI required` 通过。
 
 `ash-v8-poc` 的 sort 回归在不加载产品防护开关的独立进程中测试实际引擎：
 强制 TurboFan 和可用的 Maglev 优化，覆盖比较器修改数组、混合对象/整数、

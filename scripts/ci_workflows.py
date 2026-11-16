@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
-from urllib.request import Request, urlopen
+from urllib.error import URLError
+from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+import zipfile
 
 from check_blob_size import changed_paths
 
@@ -77,38 +81,139 @@ def select(paths: list[str], policy: dict, force_all: bool = False) -> dict[str,
     }
 
 
-def successful_main_base(
-    root: Path, head: str, repository: str, token: str
-) -> str | None:
-    """Include commits whose queued runs were replaced or whose checks failed."""
+class ArtifactRedirect(HTTPRedirectHandler):
+    """Never forward the repository credential to artifact storage."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if urlsplit(newurl).scheme != "https":
+            raise ValueError("Artifact redirects require HTTPS")
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None and urlsplit(newurl).netloc != "api.github.com":
+            redirected.remove_header("Authorization")
+        return redirected
+
+
+def main_baseline(root: Path, head: str, repository: str, token: str, policy: dict):
+    """Cover dropped pending commits and retry failures without rerunning successful domains.
+
+    The last completed push supplies both the diff base and the selected domain
+    results. Missing, expired or incompatible evidence falls back to a full run.
+    """
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) or not token:
         raise ValueError("main CI selection requires a repository and GitHub token")
-    request = Request(
-        f"https://api.github.com/repos/{repository}/actions/workflows/blocking-ci.yml/runs"
-        "?branch=main&event=push&status=success&per_page=1",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
-    )
-    with urlopen(request, timeout=30) as response:
-        runs = json.loads(response.read(2 * 1024 * 1024))["workflow_runs"]
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    api = f"https://api.github.com/repos/{repository}"
+
+    def get(path):
+        with urlopen(Request(api + path, headers=headers), timeout=30) as response:
+            return json.loads(response.read(2 * 1024 * 1024))
+
+    runs = get(
+        "/actions/workflows/blocking-ci.yml/runs?branch=main&event=push&status=completed&per_page=1"
+    )["workflow_runs"]
     if not isinstance(runs, list):
         raise ValueError("GitHub workflow runs must be a list")
     if not runs:
         return None
     if not isinstance(runs[0], dict):
-        raise ValueError("successful CI run must be an object")
+        raise ValueError("completed CI run must be an object")
     base = runs[0].get("head_sha")
     if not isinstance(base, str) or not re.fullmatch(r"[0-9a-f]{40}", base):
-        raise ValueError("successful CI run has an invalid commit SHA")
-    # A force push can replace main's history. A success on its old history
-    # cannot establish coverage for the replacement; check every workflow.
+        raise ValueError("completed CI run has an invalid commit SHA")
+    # A replaced history cannot establish coverage for the current branch.
     ancestor = subprocess.run(
         ["git", "merge-base", "--is-ancestor", base, head], cwd=root, check=False
     )
-    return base if ancestor.returncode == 0 else None
+    if ancestor.returncode != 0:
+        return None
+    run_id = runs[0].get("id")
+    if type(run_id) is not int or run_id <= 0:
+        raise ValueError("completed CI run has an invalid run ID")
+    artifacts = get(f"/actions/runs/{run_id}/artifacts?per_page=100")["artifacts"]
+    if not isinstance(artifacts, list) or not all(
+        isinstance(a, dict) for a in artifacts
+    ):
+        raise ValueError("Invalid CI artifact listing")
+    matching = [
+        a
+        for a in artifacts
+        if a.get("name") == f"ci-results-{run_id}" and not a.get("expired")
+    ]
+    if len(matching) != 1:
+        return None
+    artifact_id = matching[0].get("id")
+    if type(artifact_id) is not int or artifact_id <= 0:
+        raise ValueError("invalid CI evidence artifact ID")
+    opener = build_opener(ArtifactRedirect())
+    with opener.open(
+        Request(f"{api}/actions/artifacts/{artifact_id}/zip", headers=headers),
+        timeout=30,
+    ) as response:
+        archive = response.read(2 * 1024 * 1024 + 1)
+    if len(archive) > 2 * 1024 * 1024:
+        raise ValueError("CI evidence archive is too large")
+    with zipfile.ZipFile(io.BytesIO(archive)) as source:
+        member = source.getinfo("ci-results.json")
+        if member.file_size > 1024 * 1024:
+            raise ValueError("CI evidence document is too large")
+        record = json.loads(source.read(member))
+    if not isinstance(record, dict):
+        raise ValueError("CI evidence must be an object")
+    if (
+        record.get("schemaVersion") != 1
+        or record.get("sha") != base
+        or record.get("runId") != run_id
+    ):
+        raise ValueError("CI evidence does not match the completed run")
+    selection, results = record.get("selection"), record.get("results")
+    if (
+        not isinstance(results, dict)
+        or set(results) != set(policy)
+        or any(
+            not isinstance(value, dict)
+            or value.get("result") not in {"success", "failure", "cancelled", "skipped"}
+            for value in results.values()
+        )
+    ):
+        raise ValueError("invalid domain results in CI evidence")
+    # Reuse the required gate's boundary contract, including exact workflow keys.
+    require_results({"select": {"result": "success"}, **results}, selection, policy)
+    retry = {
+        name
+        for name in policy
+        if selection[name] and results[name].get("result") != "success"
+    }
+    return base, retry
+
+
+def record_results(
+    path: Path, needs: dict, selection: dict, policy: dict, sha: str, run_id: str
+):
+    # Failure conclusions are legitimate evidence; malformed/incomplete selection is not.
+    require_results(needs, selection, policy)
+    if needs["select"].get("result") != "success":
+        raise ValueError("cannot record results after selection failed")
+    if not re.fullmatch(r"[0-9a-f]{40}", sha) or not re.fullmatch(
+        r"[1-9][0-9]*", run_id
+    ):
+        raise ValueError("invalid CI evidence identity")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "sha": sha,
+                "runId": int(run_id),
+                "selection": selection,
+                "results": {name: needs[name] for name in policy},
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def require_results(needs: dict, selection: dict, policy: dict) -> list[str]:
@@ -142,29 +247,60 @@ def main(arguments: list[str] | None = None) -> int:
     selection_parser.add_argument("--base")
     selection_parser.add_argument("--head", default="HEAD")
     selection_parser.add_argument("--all", action="store_true")
-    selection_parser.add_argument("--since-successful-main", action="store_true")
+    selection_parser.add_argument("--since-completed-main", action="store_true")
     subparsers.add_parser("require")
+    record_parser = subparsers.add_parser("record")
+    record_parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(arguments)
     try:
         policy = load_policy(args.policy)
         if args.operation == "select":
             base = args.base
             force_all = args.all
-            if args.since_successful_main and not force_all:
-                base = successful_main_base(
-                    ROOT,
-                    args.head,
-                    os.environ["GITHUB_REPOSITORY"],
-                    os.environ["GITHUB_TOKEN"],
-                )
-                force_all = base is None
-            paths = changed_paths(ROOT, base, args.head)
+            retry = set()
+            if args.since_completed_main and not force_all:
+                try:
+                    evidence = main_baseline(
+                        ROOT,
+                        args.head,
+                        os.environ["GITHUB_REPOSITORY"],
+                        os.environ["GITHUB_TOKEN"],
+                        policy,
+                    )
+                except (
+                    OSError,
+                    ValueError,
+                    KeyError,
+                    TypeError,
+                    zipfile.BadZipFile,
+                    URLError,
+                ) as error:
+                    print(
+                        f"CI baseline unavailable; selecting every check: {type(error).__name__}",
+                        file=sys.stderr,
+                    )
+                    evidence = None
+                force_all = evidence is None
+                if evidence is not None:
+                    base, retry = evidence
+            paths = changed_paths(ROOT, base, args.head, include_deleted=True)
             selection = select(paths, policy, force_all)
+            for name in retry:
+                selection[name] = True
             serialized = json.dumps(selection, separators=(",", ":"))
             print(serialized)
             if output := os.environ.get("GITHUB_OUTPUT"):
                 with open(output, "a", encoding="utf-8") as stream:
                     stream.write(f"selection={serialized}\n")
+        elif args.operation == "record":
+            record_results(
+                args.output,
+                json.loads(os.environ["NEEDS_JSON"]),
+                json.loads(os.environ["CI_SELECTION_JSON"]),
+                policy,
+                os.environ["GITHUB_SHA"],
+                os.environ["GITHUB_RUN_ID"],
+            )
         else:
             failures = require_results(
                 json.loads(os.environ["NEEDS_JSON"]),

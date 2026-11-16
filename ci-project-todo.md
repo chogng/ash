@@ -63,6 +63,12 @@ Windows x64 本地 `just dependency-security` 退出 0，输出 `advisories ok, 
 
 ## 接手顺序
 
+2026-11-16 CI 分层与依赖迁移：V8 源码验证／发布移至 [ash-rusty-v8](https://github.com/chogng/ash-rusty-v8)，原八组配对按原发布提交的完整 provenance 重新校验后迁入 `rusty-v8-v152.2.0`，archive／binding 摘要不变。LiveKit 的 [独立发布](https://github.com/chogng/ash-livekit-server/actions/runs/43859873497) 六个平台原生版本检查、汇总和发布全部通过，产物为 `livekit-v1.13.7-ash.1`。主仓库锁定上述产物；macOS 默认不再编译 Go Server。旧 release 保留供旧 checkout 使用。
+
+App Server 领域／host 库测试和真实进程测试有独立必需入口，原 stdio／SSH 用例完整迁入。日常媒体集成保留，六平台分发检查独立运行。main 按最近完成的运行累计改动并重试失败领域；证据缺失、过期或不匹配时全量回退，选中的失败／跳过仍阻止通过。实际规则见 [CI 职责](.github/workflows/README.md)。
+
+Windows 本地 build 322 项／6 跳过、scripts 239 项／7 跳过通过；CI 选择器专项 34 项通过。V8 runtime 和 sandbox probe 的 `just verify` 均通过，LiveKit 新产物实际执行输出 `livekit-server version 1.13.7`；`just dependencies`、Bazel lockfile 严格检查和全工作流 actionlint 通过。日志位于 `.build/ci-followup-20261116/`。App Server 新矩阵及整窗场景仍须按新提交的远端结果验收。
+
 2026-11-16 后续复核 [修复发布后的 CI](https://github.com/chogng/ash/actions/runs/43847772443)：门禁已通过，Rust／TUI 的跨平台失败来自 PDFium 冷缓存未建目录便打开 `prepare.lock`；tooling 来自 PDFium 打包 fixture 缺失、已删除 snapshot 扩展的旧预期，以及 Windows Python 3.11 平台识别被 subprocess mock 干扰。Bazel 缺 artifact-catalog／documents 的 BUILD 声明；frontend 类型检查前未生成 Desktop host 绑定。
 
 本轮修正准备入口、fixture、目标平台隔离、Bazel 声明及 frontend 的 host 绑定准备步骤。新增冷缓存与复用回归，打包测试走真实 PDFium 复制和校验并断言库及许可证内容。Windows `just test-python build scripts code` 通过：321／231／28 项，分别跳过 6／7／1 项；原生 host helper 构建和 frontend 工作流契约测试通过。证据位于 `.build/ci-followup-20261116/`。两个新增 Bazel package query 通过；完整依赖 query 被 Windows 解包 macOS SDK 失败阻塞，不代表 Linux TUI 已运行。远端实际场景仍按下列项目验收。

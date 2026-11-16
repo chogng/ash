@@ -14,6 +14,52 @@ from build.lib.livekit import resolve_livekit
 
 
 class LivekitTests(unittest.TestCase):
+    def test_locked_macos_binary_does_not_require_a_macos_build_host_or_go(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "third_party/.cache/livekit/1.0/server.zip"
+            archive.parent.mkdir(parents=True)
+            with zipfile.ZipFile(archive, "w") as output:
+                output.writestr("livekit-server", b"verified macOS server")
+            lock = root / "third_party/livekit/runtime-lock.json"
+            lock.parent.mkdir(parents=True)
+            lock.write_text(
+                json.dumps(
+                    {
+                        "version": "1.0",
+                        "artifacts": {
+                            "aarch64-apple-darwin": {
+                                "url": "https://example.com/server.zip",
+                                "archive": archive.name,
+                                "sha256": hashlib.sha256(
+                                    archive.read_bytes()
+                                ).hexdigest(),
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch("build.lib.livekit.sys.platform", "win32"),
+                patch(
+                    "build.lib.livekit.shutil.which",
+                    side_effect=AssertionError("Go must not be queried"),
+                ),
+                patch(
+                    "build.lib.livekit.subprocess.run",
+                    side_effect=AssertionError("No source build is needed"),
+                ),
+                patch(
+                    "build.lib.livekit.download_and_verify",
+                    side_effect=AssertionError("Archive is already verified"),
+                ),
+            ):
+                self.assertEqual(
+                    resolve_livekit("aarch64-apple-darwin", root=root).read_bytes(),
+                    b"verified macOS server",
+                )
+
     def test_macos_requires_go_before_downloading_source(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -521,7 +521,7 @@ stdio 的两项 Windows 错误 32 也已修复。进程探针确认旧实现只�
 
 Linux WSL 的独立源码快照验证已通过：`scripts/cargo.py --deny-warnings --process-tests test -p ash-cli --test stdio --profile ci-test --locked` 全部 8 项通过；`scripts/cargo.py --deny-warnings test -p ash-app-server-client -p ash-remote-connections --lib --profile ci-test --locked` 分别 45/45 和 35/35 项通过，均无跳过。关闭前确认服务端持有 SQLite 文件并记录后代 PID，关闭后要求 CLI、实际服务端、SSH 传输及所记录的后代退出，`lsof` 没有目录文件占用，再立即删除夹具目录。真实 OpenSSH 回环覆盖 shutdown 和 Drop，独立后台跨连接保留后通过正式 stop 关闭；已移除两个 500ms 等待及终端 attach 重试。Linux 的四个正常可执行产物构建以及 CLI、客户端、远程连接库的全部目标 warning 检查通过；结束后的进程清点没有 Ash 运行时或夹具 sshd 遗留。Windows 客户端 45 项回归及同一组包的全部目标 warning 检查通过；并行夹具的时间戳目录冲突由唯一序号修复。macOS 本机不可用，新增 `stdio-lifecycle (macos-15)` 作业尚未触发，不能报告 macOS 运行通过。
 
-TLS 最低版本、撤回的 chacha20 更新、citationberg 的 quick-xml 修复和 Liquid 上游固定提交继续保留；它们不依赖本地 Rust 源码副本。停止维护告警的逐项例外不能代替消费者正常构建、行为测试和 warning 检查。Linux/macOS 运行及 Android loader 编译仍需在所属平台验证；V8 源码生产仍由 [rusty-v8-release.yml](../.github/workflows/rusty-v8-release.yml) 和 [V8 构建说明](../third_party/v8/README.md) 负责，本轮不声称完整 C++ 源码构建通过。
+TLS 最低版本、撤回的 chacha20 更新、citationberg 的 quick-xml 修复和 Liquid 上游固定提交继续保留；它们不依赖本地 Rust 源码副本。停止维护告警的逐项例外不能代替消费者正常构建、行为测试和 warning 检查。Linux/macOS 运行及 Android loader 编译仍需在所属平台验证；V8 源码生产仍由 [独立 V8 发布流程](https://github.com/chogng/ash-rusty-v8/blob/main/.github/workflows/rusty-v8-release.yml) 和 [V8 构建说明](../third_party/v8/README.md) 负责，本轮不声称完整 C++ 源码构建通过。
 
 ### 构建测量
 

@@ -65,8 +65,8 @@ jobs:
       - name: Reject warnings in media packages and tests
         run: python -B scripts/cargo.py --deny-warnings check --locked -p ash-livekit-client -p ash-screen-capture -p ash-call -p ash-voice-agent -p ash-voice-host -p ash-realtime-voice --features ash-call/runtime,ash-voice-host/host,ash-livekit-client/host,ash-realtime-voice/host --all-targets
 
-  server-build:
-    name: LiveKit ${{ matrix.target }}
+  screen-capture-platforms:
+    name: Screen capture (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -86,23 +86,6 @@ jobs:
           - runner: windows-11-arm
             target: aarch64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Set up Go for the macOS media server build
-        if: runner.os == 'macOS'
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: "1.26"
-          cache: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version-file: .nvmrc
-      - name: Prepare and run the server
-        shell: bash
-        run: |
-          python -B build/lib/livekit.py "${{ matrix.target }}" > "$RUNNER_TEMP/livekit.json"
-          server=$(node -p 'require(process.argv[1]).executable' "$RUNNER_TEMP/livekit.json")
-          version=$(node -p 'require("./third_party/livekit/runtime-lock.json").version')
-          test "$("$server" --version)" = "livekit-server version $version"
-
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Check screen capture platform and test targets
         run: python -B scripts/cargo.py --deny-warnings check --locked -p ash-screen-capture --all-targets

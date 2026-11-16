@@ -1,0 +1,157 @@
+name: App Server
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-server-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  tests:
+    name: Backend tests (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-15, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-just
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          workspaces: ". -> .build/cargo"
+          shared-key: app-server-tests-${{ matrix.runner }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+      - uses: ./.github/actions/setup-ubuntu-apt
+        if: runner.os == 'Linux'
+      - name: Install Linux backend build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends build-essential bubblewrap libcap-dev libdbus-1-dev libgtk-3-dev libssl-dev libwayland-dev libxkbcommon-dev pkg-config
+      - name: Fetch the locked backend graph
+        run: cargo fetch --locked
+      - name: Test backend domain and host libraries
+        run: just test ash-app-server-runtime -p ash-app-server -p ash-app-server-daemon --lib --profile ci-test --locked
+      - name: Test real App Server transports and restart boundaries
+        run: just test-processes ash-app-server --test stdio --test websocket --test managed_initialize --test managed_lifecycle --test mcp_restart --test protocol_schema --test session_worktree --profile ci-test --locked
+
+  stdio-lifecycle:
+    name: stdio and SSH lifecycle (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: ". -> .build/cargo"
+          shared-key: stdio-lifecycle-${{ matrix.runner }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+          cache-directories: third_party/.cache/v8
+
+      - name: Restore complete V8 build inputs
+        shell: bash
+        run: |
+          # rust-cache prunes gn_out but retains V8's build-script fingerprint.
+          cargo clean --package v8 --profile ci-test
+          cargo fetch --locked
+
+      - uses: ./.github/actions/setup-ubuntu-apt
+        if: runner.os == 'Linux'
+      - name: Install Linux process and build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential clang libclang-dev cmake bubblewrap \
+            libcap-dev libdbus-1-dev libgtk-3-dev libssl-dev \
+            libwayland-dev libxkbcommon-dev pkg-config \
+            lsof openssh-client openssh-server
+          sudo install -d -m 0755 /run/sshd
+
+      - name: Require Unix lifecycle inspection and OpenSSH
+        run: |
+          test -x /usr/sbin/sshd
+          test -x /usr/bin/ssh
+          command -v ssh-keygen
+          command -v lsof
+
+      - name: Prepare locked ripgrep for lifecycle tests
+        run: |
+          python3 -B - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+          from build.lib.ripgrep import resolve_ripgrep
+          from build.lib.targets import TARGETS, default_target
+
+          root = Path.cwd()
+          ripgrep = resolve_ripgrep(
+              TARGETS[default_target()],
+              root / "third_party/ripgrep/runtime-lock.json",
+              root / "third_party/.cache/ripgrep",
+          ).executable
+          subprocess.run([ripgrep, "--version"], check=True)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              output.write(f"ASH_RG_PATH={ripgrep}\n")
+          PY
+
+      - name: Build matching CLI, server and remote runtime
+        run: >-
+          python3 -B scripts/cargo.py --deny-warnings build
+          -p ash-cli --bin ash
+          -p ash-app-server --bin ash-app-server
+          -p ash-app-server-daemon --bin ash-app-server-daemon
+          -p ash-remote-server --bin ash-remote-server
+          --profile ci-test --locked
+
+      - name: Compile CLI and connection library tests
+        run: |
+          python3 -B scripts/cargo.py --deny-warnings --process-tests test \
+            -p ash-cli --test stdio --test commands --profile ci-test --locked -- --list
+          python3 -B scripts/cargo.py --deny-warnings test \
+            -p ash-app-server-client -p ash-remote-connections \
+            --lib --profile ci-test --locked --no-run
+
+      - name: Test real stdio, reconnect and OpenSSH process cleanup
+        timeout-minutes: 10
+        run: >-
+          python3 -B scripts/cargo.py --deny-warnings --process-tests test
+          -p ash-cli --test stdio --profile ci-test --locked
+
+      - name: Test CLI daemon composition and backend selection
+        timeout-minutes: 10
+        run: >-
+          python3 -B scripts/cargo.py --deny-warnings --process-tests test
+          -p ash-cli --test commands daemon --profile ci-test --locked
+
+      - name: Test client EOF cleanup and SSH compatibility rejection
+        timeout-minutes: 15
+        run: >-
+          python3 -B scripts/cargo.py --deny-warnings test
+          -p ash-app-server-client -p ash-remote-connections
+          --lib --profile ci-test --locked
+
+      - name: Test embedded App Server client contracts
+        timeout-minutes: 15
+        run: >-
+          python3 -B scripts/cargo.py --deny-warnings test
+          -p ash-app-server-client-tests --lib --profile ci-test --locked

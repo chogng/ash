@@ -17,7 +17,9 @@ def git(root: Path, *arguments: str) -> bytes:
     return subprocess.check_output(["git", *arguments], cwd=root)
 
 
-def changed_paths(root: Path, base: str | None, head: str) -> list[str]:
+def changed_paths(
+    root: Path, base: str | None, head: str, *, include_deleted: bool = False
+) -> list[str]:
     # A new branch has no before revision. Inspect its whole tree, not just its tip.
     if not base or set(base) == {"0"}:
         arguments = ("ls-tree", "-r", "--name-only", "-z", head)
@@ -27,7 +29,7 @@ def changed_paths(root: Path, base: str | None, head: str) -> list[str]:
             "diff",
             "--name-only",
             "--no-renames",
-            "--diff-filter=AMDT",
+            *([] if include_deleted else ["--diff-filter=AMDT"]),
             "-z",
             base,
             head,

@@ -4,7 +4,7 @@
   "version": "152.2.0",
   "profile": "ptrcomp_sandbox_release",
   "source": {
-    "repository": "https://github.com/chogng/ash",
+    "repository": "https://github.com/chogng/ash-rusty-v8",
     "release": "rusty-v8-v152.2.0"
   },
   "artifacts": {

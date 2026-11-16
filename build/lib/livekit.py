@@ -37,7 +37,7 @@ def resolve_livekit(
     mac = target in ("aarch64-apple-darwin", "x86_64-apple-darwin")
     if artifact is None and not mac:
         raise RuntimeError(f"No media server build is defined for {target}")
-    if mac and sys.platform != "darwin":
+    if artifact is None and mac and sys.platform != "darwin":
         raise RuntimeError("The macOS media server must be built on macOS.")
     cache = root / "third_party/.cache/livekit" / lock["version"]
     cache.mkdir(parents=True, exist_ok=True)
