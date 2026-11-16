@@ -26,6 +26,14 @@ if (inlinePreloadIndex >= 0) process.argv.splice(inlinePreloadIndex, 1);
 const mode = process.env.ASH_TEST_WINDOW_MODE;
 if (mode !== 'hidden' && mode !== 'inactive') throw new Error(`Invalid test window mode: ${mode}`);
 
+// Windows known-folder lookup can fail under an isolated test home. Keep
+// downloads inside the owned profile, independent of the real user directory.
+if (process.platform === 'win32') {
+	const downloads = require('node:path').join(app.getPath('userData'), 'Downloads');
+	require('node:fs').mkdirSync(downloads, { recursive: true });
+	app.setPath('downloads', downloads);
+}
+
 // macOS activates regular applications on launch even when all their windows stay hidden.
 if (process.platform === 'darwin') app.setActivationPolicy('accessory');
 

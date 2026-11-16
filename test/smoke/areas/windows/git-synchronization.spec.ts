@@ -168,3 +168,38 @@ test('External Git refs refresh two Workbench windows sharing the backend', { ta
 		await close();
 	}
 });
+
+
+test('SCM follows restored editor ownership and preserves manual repository selection', { tag: '@electron-app-server' }, async ({ testWorkspace, workbench, reloadWorkbench }) => {
+	const cwd = testWorkspace.directory;
+	await run('git', ['init', '-b', 'main'], { cwd });
+	const nested = join(cwd, 'editor-owner');
+	await mkdir(nested);
+	await run('git', ['init', '-b', 'nested'], { cwd: nested });
+	await writeFile(join(nested, 'owner-one.txt'), 'First synthetic document');
+	await writeFile(join(nested, 'owner-two.txt'), 'Second synthetic document');
+	const open = async (name: string) => {
+		await workbench.quickaccess.open(name);
+		await workbench.quickaccess.select(name);
+		await expect(workbench.quickaccess.element).toBeHidden();
+		await expect(workbench.page.getByRole('tab').filter({ hasText: name }).first()).toHaveAttribute('aria-selected', 'true');
+	};
+	await open('owner-one.txt');
+	await workbench.page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+	const branch = () => workbench.page.locator('[data-statusbar-item-id="ash.status.git.branch"]');
+	const list = () => workbench.page.getByRole('listbox', { name: 'Source control repositories', exact: true });
+	await expect(list().getByRole('option')).toHaveCount(2);
+	await expect(branch()).toContainText('nested');
+	await list().getByRole('option', { name: /, main,/u }).click();
+	await expect(branch()).toContainText('main');
+	await workbench.page.getByRole('tab').filter({ hasText: 'owner-one.txt' }).first().click();
+	await expect(branch()).toContainText('main');
+	await workbench.page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+	await workbench.page.getByRole('treeitem', { name: /^owner-two.txt(?:,|$)/u }).dblclick();
+	await expect(workbench.page.getByRole('tab').filter({ hasText: 'owner-two.txt' }).first()).toHaveAttribute('aria-selected', 'true');
+	await expect(branch()).toContainText('nested');
+	({ workbench } = await reloadWorkbench());
+	await expect(workbench.page.getByRole('tab').filter({ hasText: 'owner-two.txt' }).first()).toBeVisible();
+	await expect(branch()).toContainText('nested');
+	await test.info().attach('scm-restored-editor-owner', { body: await workbench.page.screenshot(), contentType: 'image/png' });
+});

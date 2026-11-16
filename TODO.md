@@ -1,9 +1,5 @@
 # 待办
 
-## 会话恢复与 Git 传输 · Desktop 验收
-
-- [ ] **Ash 自托管验收** · Git stdin refspec、标签摘要、取消日志、Canvas 恢复和 SCM 跟随已实现。Windows 的 `just verify ash-git`（171 项测试）和 `just verify ash-git-extension`（23 项测试）通过；协议生成和本地化检查通过。尚未完成真实 Desktop 场景：使用当前 checkout 的 Ash 和合成工作区验证多仓库恢复、手动选择、Canvas 重启／断线／超时重试和中文 tag 提示，完成后删除本节。
-
 ## 沙箱 · macOS 与真实 Docker 验收
 
 - [ ] **macOS 实机验收** · 当前环境没有可连接的 macOS 主机。使用本次 checkout 运行 `just verify ash-mxc-sandbox`、`just verify ash-exec-server`，并按 [适配器验证入口](crates/mxc-sandbox/README.md#验证) 执行 macOS 文件、PTY、私有 IPC、敏感 socket 及网络矩阵；网络矩阵须有普通进程可达的 TCP／UDP DNS 对照。核对实际用例数量、退出码和后代回收，缺环境或跳过不计通过；完成后删除本条。
