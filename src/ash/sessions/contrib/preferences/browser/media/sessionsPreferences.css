@@ -175,6 +175,7 @@
 }
 
 .ash-sessions-settings-page .ash-settings-tree-group-title .ash-button {
+	font-size: var(--ash-fontSize-body1);
 	font-weight: var(--ash-fontWeight-regular);
 }
 
@@ -597,10 +598,9 @@
 	}
 }
 
-.ash-sessions-customize {
-	min-width: 0;
-}
-
-.ash-sessions-customize > .ash-tab-list {
-	margin-bottom: var(--ash-spacing-size160);
+.ash-sessions-settings-page
+	[data-settings-item-id^="sessions.account."]
+	.ash-settings-section-status {
+	white-space: pre-line;
+	overflow-wrap: anywhere;
 }

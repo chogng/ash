@@ -45,7 +45,7 @@ import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/comm
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
 import { ITraceSettingsService } from '../../../platform/trace/common/traceSettingsService.js';
 import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import { IAccountService } from '../../../platform/accounts/common/accountService.js';
+import { IAccountService, type AccountState, type AccountLoginCompletion, type AccountLoginChallenge, type AccountLoginMethod } from '../../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../../platform/github/common/githubService.js';
 import { IAccountPolicyService } from '../../../workbench/services/policies/common/accountPolicyService.js';
 import { IManagedSettingsUpdateService } from '../../../workbench/services/policies/common/managedSettingsUpdate.js';
@@ -160,7 +160,12 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		listCustomModelProviders: async () => [],
 		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
-		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', access: 'apiKey', active: true, configured: true, ready: false, apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
+		listModelProviders: async () => [
+			{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', access: 'apiKey', active: true, configured: true, ready: false, apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 },
+			{ connection: 'chatgpt-subscription', provider: 'openai', displayName: 'ChatGPT Subscription', access: 'subscription', active: true, configured: true, ready: true, apiKeyPolicy: 'unsupported', apiKeyConfigured: false },
+			{ connection: 'kimi-subscription', provider: 'kimi', displayName: 'Kimi Subscription', access: 'subscription', active: true, configured: true, ready: true, apiKeyPolicy: 'unsupported', apiKeyConfigured: false },
+			{ connection: 'kimi-desktop', provider: 'kimi-desktop', displayName: 'Kimi Desktop', access: 'subscription', active: true, configured: true, ready: true, apiKeyPolicy: 'unsupported', apiKeyConfigured: false },
+		],
 		isModelVisible: () => visible,
 		setModelProviderApiKey: async (_connection: string, key: string) => { savedKeys.push(key); },
 		removeModelProviderApiKey: async (connection: string) => { removedKeys.push(connection); },
@@ -395,21 +400,40 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		setModelMemoryEnabled: unusedMemoryOperation,
 		readReference: unusedMemoryOperation,
 	});
+	using accountsChanged = new Emitter<AccountState>();
+	using loginCompleted = new Emitter<AccountLoginCompletion>();
+	const loginStarts: AccountLoginMethod[] = [];
+	const logouts: { provider: string; accountId?: string; }[] = [];
+	const cancelledLogins: string[] = [];
+	let beginLogin: () => Promise<AccountLoginChallenge> = async () => ({ type: 'deviceCode', loginId: 'pending-login', verificationUrl: 'https://example.invalid/auth', userCode: 'TEST' });
+	let finishLogout: () => Promise<void> = async () => { };
+	let finishCancellation: () => Promise<void> = async () => { };
+	let accountState: AccountState = {
+		revision: 1n, accounts: [
+			{ provider: 'chatgpt-subscription', accountId: 'test', email: 'test@example.invalid', status: 'ready', credentialRevision: 1n },
+			{ provider: 'kimi-subscription', accountId: 'kimi-test', displayName: 'Kimi test account', status: 'ready', credentialRevision: 1n },
+		]
+	};
 	services.registerInstance(IAccountService, {
 		readRateLimits: async (provider, accountId) => ({
 			provider, accountId, plan: 'Plus', credits: null, xai: null,
 			limits: [{
 				id: 'codex', name: 'Codex', model: null, allowed: true, limitReached: false,
-				primary: { usedPercent: 37, windowSeconds: 18000, resetsAt: 1800000000 },
+				primary: { usedPercent: provider === 'kimi-subscription' ? 60 : 37, windowSeconds: 18000, resetsAt: 1800000000 },
 				secondary: { usedPercent: 20, windowSeconds: 604800, resetsAt: 1800200000 },
 			}],
 		}),
-		onDidChangeAccounts: Event.None,
-		onDidCompleteLogin: Event.None,
-		read: async () => ({ revision: 1n, accounts: [{ provider: 'chatgpt-subscription', accountId: 'test', status: 'ready', credentialRevision: 1n }] }),
-		startLogin: async () => { throw new Error('Not used'); },
-		cancelLogin: async () => { },
-		logout: async () => { },
+		onDidChangeAccounts: accountsChanged.event,
+		onDidCompleteLogin: loginCompleted.event,
+		read: async () => accountState,
+		startLogin: async method => { loginStarts.push(method); return beginLogin(); },
+		cancelLogin: async id => { cancelledLogins.push(id); await finishCancellation(); },
+		logout: async (provider, accountId) => {
+			logouts.push({ provider, accountId });
+			await finishLogout();
+			accountState = { revision: accountState.revision + 1n, accounts: accountState.accounts.filter(account => account.provider !== provider || account.accountId !== accountId) };
+			accountsChanged.fire(accountState);
+		},
 	});
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
 	services.registerInstance(IAccountPolicyService, { state: { phase: 'idle' }, onDidChangeState: Event.None, refresh: async () => { } });
@@ -435,8 +459,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	});
 	const opened = preferences.open();
 	await Promise.race([opened, Promise.resolve()]);
-	await preferences.open({ query: 'Preferences: Open User Settings (JSON)' });
-	assert.ok(window.document.querySelector('.ash-sessions-customize'), 'global search discovers lazily created Settings actions');
+	await preferences.open({ query: 'subscription' });
+	assert.equal(window.document.querySelector('.ash-sessions-customize'), null);
 	await preferences.open({ section: 'general' });
 	const languageControl = window.document.querySelector<HTMLElement>('[data-configuration-key="workbench.locale"] [role="combobox"]');
 	assert.ok(languageControl);
@@ -468,7 +492,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(categoryButton('projects'), null);
 	assert.equal(categoryButton('keyboard-shortcuts'), null);
 	assert.equal(categoryButton('storage'), null);
-	for (const id of ['execution-trace', 'appearance', 'browser', 'tab', 'code-intelligence', 'environment', 'desktop-app', 'account', 'design', 'customize', 'dictation', 'general']) {
+	for (const id of ['execution-trace', 'appearance', 'browser', 'tab', 'code-intelligence', 'environment', 'desktop-app', 'account', 'design', 'dictation', 'general']) {
 		await preferences.open({ section: id });
 		assert.equal(categoryButton(id).getAttribute('aria-current'), 'page', `reopening navigates to ${id}`);
 		assert.equal(categoryButton(id).getAttribute('aria-controls'), 'ash-sessions-settings-content');
@@ -501,7 +525,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await preferences.open({ section: 'unavailable' });
 	assert.equal(categoryButton('general').getAttribute('aria-current'), 'page');
 	await preferences.open({ section: 'hooks' });
-	assert.equal(window.document.querySelector('[role="tab"][aria-selected="true"]')?.textContent, 'Hooks');
+	assert.equal(categoryButton('agents').getAttribute('aria-current'), 'page');
+	assert.ok([...window.document.querySelectorAll('button')].some(button => button.textContent === 'Manage Hooks'));
 	const settingsSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input')!;
 	settingsSearch.value = 'compact';
 	settingsSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -546,14 +571,108 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(window.document.activeElement, cancelledMenu.control);
 	assert.equal([...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].some(button => button.textContent === 'Tools'), false);
 	await preferences.open({ section: 'chat-usage' });
-	const usageButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Usage');
-	assert.ok(usageButton?.querySelector('.ash-icon-dashboard'));
+	assert.equal(categoryButton('account').getAttribute('aria-current'), 'page', 'old Usage links open Account');
+	assert.equal([...window.document.querySelectorAll('.ash-sessions-settings-navigation-item')].some(button => button.textContent === 'Usage' || button.textContent === 'Customize'), false);
 	await new Promise<void>(resolve => setImmediate(resolve));
-	const subscription = window.document.querySelector('[data-settings-item-id="chat.subscriptionUsage"]');
+	const subscription = window.document.querySelector('[data-settings-item-id^="sessions.account."]');
+	assert.match(subscription?.textContent ?? '', /test/u);
 	assert.match(subscription?.textContent ?? '', /5-hour window · 63% remaining \(37% used\) · Resets:/u);
 	assert.match(subscription?.textContent ?? '', /7-day window · 80% remaining \(20% used\) · Resets:/u);
-	assert.ok(window.document.querySelector('[data-settings-item-id="chat.usage"]'));
-	assert.match(window.document.querySelector('[data-settings-item-id="chat.usage"]')!.textContent!, /Open a chat/u);
+	assert.equal(window.document.querySelector('[data-settings-item-id="chat.usage"]'), null);
+	const accountRows = window.document.querySelectorAll('[data-settings-item-id^="sessions.account."]');
+	assert.equal(accountRows.length, 4);
+	assert.equal(window.document.querySelectorAll('[data-settings-tree-group-id^="sessions.account."]').length, 4);
+	assert.match(subscription?.closest('section')?.textContent ?? '', /ChatGPT Subscription/u);
+	assert.match(accountRows[2].closest('section')?.textContent ?? '', /Kimi Desktop/u);
+	assert.match(accountRows[2].textContent ?? '', /Subscription quota · Not reported/u);
+	assert.match(accountRows[0].textContent ?? '', /test@example.invalid/u);
+	assert.match(accountRows[1].textContent ?? '', /Kimi test account/u);
+	assert.doesNotMatch(window.document.querySelector('.ash-sessions-settings-page-content')?.textContent ?? '', /Account connected|Not connected|Sign in again|Unavailable/u);
+	assert.match(accountRows[1].textContent ?? '', /40% remaining \(60% used\)/u);
+	assert.doesNotMatch(accountRows[0].textContent ?? '', /40% remaining/u);
+	assert.equal(window.document.querySelector('[data-settings-item-id="sessions.accounts"]'), null, 'connected accounts have no top-level action block');
+	const connectionButton = (provider: string): HTMLButtonElement => window.document.querySelector<HTMLButtonElement>(`[data-settings-tree-group-id="sessions.account.${provider}.group"] button`)!;
+	assert.equal(connectionButton('kimi-desktop'), null, 'external client accounts remain read-only');
+	const connectedState = accountState;
+	const disconnectDone = new DeferredPromise<void>();
+	finishLogout = () => disconnectDone.p;
+	const chatGPTAction = connectionButton('chatgpt-subscription');
+	chatGPTAction.focus();
+	chatGPTAction.click();
+	assert.equal(chatGPTAction.textContent, 'Disconnecting…');
+	assert.equal(chatGPTAction.disabled, true);
+	chatGPTAction.click();
+	assert.deepEqual(logouts, [{ provider: 'chatgpt-subscription', accountId: 'test' }]);
+	await disconnectDone.complete();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(connectionButton('chatgpt-subscription'), chatGPTAction, 'the provider retains its button across sign-out');
+	assert.equal(chatGPTAction.textContent, 'Connect');
+	assert.equal(chatGPTAction.disabled, false);
+	assert.equal(window.document.activeElement, chatGPTAction);
+	assert.doesNotMatch(window.document.querySelector('[data-settings-item-id="sessions.account.chatgpt-subscription"]')?.textContent ?? '', /63% remaining/u);
+	assert.match(window.document.querySelector('[data-settings-item-id="sessions.account.kimi-subscription"]')?.textContent ?? '', /40% remaining/u);
+	const loginStarted = new DeferredPromise<AccountLoginChallenge>();
+	beginLogin = () => loginStarted.p;
+	chatGPTAction.click();
+	assert.equal(chatGPTAction.textContent, 'Connecting…');
+	assert.equal(chatGPTAction.disabled, true);
+	accountState = connectedState;
+	loginCompleted.fire({ loginId: 'early-login', status: { type: 'succeeded' }, account: accountState });
+	await loginStarted.complete({ type: 'browser', loginId: 'early-login', authorizationUrl: 'https://example.invalid/auth' });
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(loginStarts, [{ type: 'openAiChatGptBrowser' }]);
+	assert.equal(chatGPTAction.textContent, 'Disconnect', 'completion before the browser handoff response restores the connected action');
+	assert.equal(chatGPTAction.disabled, false);
+	beginLogin = async () => ({ type: 'deviceCode', loginId: 'cancel-login', verificationUrl: 'https://example.invalid/auth', userCode: 'TEST' });
+	const githubAction = connectionButton('github');
+	githubAction.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(githubAction.textContent, 'Cancel');
+	githubAction.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(cancelledLogins, ['cancel-login']);
+	assert.equal(githubAction.textContent, 'Connect');
+	beginLogin = async () => ({ type: 'browser', loginId: 'cancel-race', authorizationUrl: 'https://example.invalid/auth' });
+	githubAction.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	const cancelled = new DeferredPromise<void>();
+	finishCancellation = () => cancelled.p;
+	githubAction.click();
+	assert.equal(githubAction.textContent, 'Cancelling…');
+	loginCompleted.fire({ loginId: 'cancel-race', status: { type: 'failed', failure: { code: 'cancelled', message: 'cancelled' } }, account: accountState });
+	await new Promise<void>(resolve => setImmediate(resolve));
+	beginLogin = async () => ({ type: 'browser', loginId: 'new-login', authorizationUrl: 'https://example.invalid/auth' });
+	githubAction.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	await cancelled.complete();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(githubAction.textContent, 'Cancel', 'a retired cancellation response cannot clear a newer sign-in');
+	finishCancellation = async () => { };
+	githubAction.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	beginLogin = async () => { throw new Error('sign-in unavailable'); };
+	githubAction.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(githubAction.textContent, 'Connect');
+	assert.equal(githubAction.disabled, false);
+	assert.ok(notifications.model.getNotifications().some(item => item.message.includes('Could not connect GitHub')));
+
+	const initialAccounts = accountState;
+	accountState = { revision: 2n, accounts: [accountState.accounts[0]] };
+	accountsChanged.fire(accountState);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(window.document.querySelectorAll('[data-settings-tree-group-id^="sessions.account."]').length, 4, 'disconnected providers retain a Connect entry');
+	assert.equal(window.document.querySelector('[data-settings-item-id="sessions.account.kimi-subscription"]')?.textContent, '', 'disconnected providers have no status copy');
+	assert.doesNotMatch(window.document.querySelector('[data-settings-item-id="sessions.account.kimi-subscription"]')?.textContent ?? '', /40% remaining/u);
+	assert.equal(window.document.querySelector('[data-settings-tree-group-id="sessions.account.kimi-subscription.group"] button')?.textContent, 'Connect');
+	accountState = initialAccounts;
+	accountsChanged.fire(accountState);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	await preferences.open({ query: 'usage' });
+	assert.equal(window.document.querySelectorAll('[data-settings-item-id^="sessions.account."]').length, 4, 'usage search discovers each account’s quota');
+	await preferences.open({ section: 'models' });
+	assert.equal(window.document.querySelector('.ash-models-settings-subscription-row'), null);
+	assert.equal(window.document.querySelector('[data-settings-group-id="models.subscriptions"]'), null);
 	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');
 	assert.ok(designButton);
 	designButton.click();
@@ -885,8 +1004,13 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		assert.equal(manage.getAttribute('aria-expanded'), 'true');
 		const manager = window.document.getElementById(manage.getAttribute('aria-controls')!)!;
 		assert.match(manager.textContent ?? '', /主题.*选择记忆范围/u);
-		await preferences.open({ section: 'customize' });
-		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '打开工作台设置'));
+		await preferences.open({ section: 'account' });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(categoryButton('account').textContent, '账号');
+		assert.match(window.document.querySelector('[data-settings-item-id^="sessions.account."]')?.textContent ?? '', /剩余 63%.*已用 37%/u);
+		assert.ok([...window.document.querySelectorAll('button')].some(button => button.textContent === '断开连接'));
+		assert.doesNotMatch(window.document.querySelector('.ash-sessions-settings-page-content')?.textContent ?? '', /账号已连接|未连接/u);
+		assert.equal([...window.document.querySelectorAll('button')].some(button => button.textContent === '管理账户' || button.textContent === '刷新'), false);
 
 		window.document.querySelector<HTMLDialogElement>('dialog')?.close();
 		await reopened;
@@ -931,9 +1055,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await openRestoreAction();
 	assert.equal(editorReveals, revealsBeforeRestore, 'the restore picker preserves the underlying entry and document working set');
 	assert.equal(restoreOpened, 1);
-	await openCategoryAction('customize', 'Preferences: Open User Settings (JSON)');
+	await preferences.open({ jsonEditor: true });
 	assert.deepEqual(preferenceOpens, [{ user: { jsonEditor: true } }]);
-	await openCategoryAction('customize', 'Open Workbench Settings');
 	await openCategoryAction('tab', 'Open Tab settings');
 	const terminalSettings = preferences.open({ section: 'environment', query: '@id:sessions.terminal.*' });
 	assert.ok(window.document.querySelector('dialog[open] [data-settings-item-id="sessions.terminal.fontSize"]'));
@@ -957,18 +1080,10 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
 	await environmentSettings;
 	assert.deepEqual(editorOpens.map(open => ({ section: new URL(open.resource).searchParams.get('target'), target: open.target })), [
-		{ section: null, target: 'modalGroup' },
 		{ section: 'editor-opening', target: 'modalGroup' },
 	]);
 	assert.equal(editorReveals, 1);
-	let accountOpens = 0;
-	using manageAccounts = commandRegistry.register('workbench.action.manageAccounts', () => {
-		assert.equal(window.document.querySelector('dialog[open]'), null);
-		accountOpens++;
-	});
-	await openCategoryAction('account', 'Manage Accounts');
-	assert.equal(accountOpens, 1, 'Account delegates to the existing account command');
-	assert.equal(editorReveals, 1, 'account management preserves the current Sessions entry');
+
 	const editSettingOpen = preferences.open({ section: 'appearance' });
 	const editSettingMenu = openCopyMenu();
 	const editSetting = [...editSettingMenu.menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === 'Edit in settings.json');
@@ -994,6 +1109,24 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.ok(window.document.querySelector('dialog[open]'), 'explicit UI remains available with a JSON default');
 	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
 	await explicitUI;
+	beginLogin = async () => ({ type: 'browser', loginId: 'closed-login', authorizationUrl: 'https://example.invalid/auth' });
+	const pendingAccountOpen = preferences.open({ section: 'account' });
+	await new Promise<void>(resolve => setImmediate(resolve));
+	connectionButton('github').click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
+	await pendingAccountOpen;
+	assert.ok(cancelledLogins.includes('closed-login'), 'closing Settings cancels its pending login');
+	const lateStart = new DeferredPromise<AccountLoginChallenge>();
+	beginLogin = () => lateStart.p;
+	const lateAccountOpen = preferences.open({ section: 'account' });
+	await new Promise<void>(resolve => setImmediate(resolve));
+	connectionButton('github').click();
+	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
+	await lateAccountOpen;
+	await lateStart.complete({ type: 'browser', loginId: 'late-login', authorizationUrl: 'https://example.invalid/auth' });
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.ok(cancelledLogins.includes('late-login'), 'a late start response cannot leave a login owned by a closed dialog');
 	await preferences.open({ target: 5, query: '@lang:plaintext @id:editor.fontSize' });
 	assert.deepEqual(preferenceOpens.at(-1), { user: { target: 5, query: '@lang:plaintext @id:editor.fontSize', jsonEditor: false } });
 	assert.equal(window.document.querySelector('dialog[open]'), null, 'scoped settings use the shared Workbench pane');

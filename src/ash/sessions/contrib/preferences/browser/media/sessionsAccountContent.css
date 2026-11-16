@@ -1,0 +1,32 @@
+.ash-sessions-account-heading {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-sessions-account-heading > span {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-sessions-account-heading > .ash-button {
+	flex-shrink: 0;
+}
+
+/* The list separates adjacent account sections, without rules inside an account. */
+.ash-sessions-settings-page
+	.ash-sessions-settings-list
+	> [data-settings-tree-group-id^="sessions.account."]
+	+ [data-settings-tree-group-id^="sessions.account."] {
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-settings-itemSeparator);
+	padding-block-start: var(--ash-spacing-size200);
+}
+
+/* Retain empty section nodes for Settings navigation without showing blank space. */
+.ash-sessions-settings-page
+	[data-settings-item-id^="sessions.account."]:not(:has(> p:not(:empty))) {
+	display: none;
+}
