@@ -1719,8 +1719,8 @@ export class Workbench extends Disposable {
 			const restoreLayout = this.workspaceContext.getWorkbenchState() === WorkbenchState.EMPTY;
 			// Entering/saving a workspace from this live window changes its storage
 			// identity, while open editors and unsaved buffers belong to the user.
-			await this.workingCopyBackupTracker.shutdown();
 			try {
+				await this.workingCopyBackupTracker.shutdown();
 				await this.workingCopyBackups.moveBackups?.({ id: workspace.id, folders: workspace.folders.map(folder => folder.uri), configuration: workspace.configuration, remoteAuthority: workspace.remoteAuthority });
 				await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 				using editorStatePause = this.editor.pauseStatePersistence();

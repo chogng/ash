@@ -319,6 +319,84 @@ test('application menu opens real commands and updates Go when an editor opens',
 	}
 });
 
+test('Browser workspace save resumes backups and text saves after a failed backup drain', { tag: ['@browser-ui'] }, async ({ workbench }) => {
+	const page = workbench.page;
+	const fixture = await page.evaluate(async () => {
+		const name = `ash-backup-retry-${crypto.randomUUID()}`;
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name, { create: true });
+		await folder.getFileHandle('draft.txt', { create: true });
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		return name;
+	});
+	await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+	const file = page.locator('.ash-explorer').getByText('draft.txt', { exact: true });
+	await expect(file).toBeVisible();
+	const sourceUrl = page.url();
+	await file.dblclick();
+	const editor = workbench.editors.groupAt(0).editor;
+	const readBackup = async () => page.evaluate(async () => {
+		const database = await new Promise<IDBDatabase>((resolve, reject) => {
+			const opening = indexedDB.open('ash-working-copy-backups', 1);
+			opening.onsuccess = () => resolve(opening.result);
+			opening.onerror = () => reject(opening.error);
+		});
+		try {
+			return await new Promise<string | undefined>((resolve, reject) => {
+				const reading = database.transaction('backups').objectStore('backups').getAll();
+				reading.onsuccess = () => resolve(reading.result.find(record => record.resource.endsWith('/draft.txt'))?.content);
+				reading.onerror = () => reject(reading.error);
+			});
+		} finally {
+			database.close();
+		}
+	});
+	await editor.waitForEditorFocus();
+	const draft = 'draft before workspace save';
+	await editor.waitForTypeInEditor(draft);
+	await expect.poll(readBackup).toBe(draft);
+
+	const saveWorkspace = async () => {
+		await workbench.quickaccess.runCommand('workbench.action.saveWorkspaceAs');
+		const dialog = page.getByRole('dialog', { name: 'Save Workspace As...' });
+		await dialog.getByRole('textbox').fill('retry.ash-workspace');
+		await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+	};
+	await page.evaluate(draft => {
+		const put = IDBObjectStore.prototype.put;
+		IDBObjectStore.prototype.put = function (value, key) {
+			const request = put.call(this, value, key);
+			if (this.transaction.db.name === 'ash-working-copy-backups' && value.content === draft) {
+				// The first draft is already durable, so this write belongs to the switch drain.
+				IDBObjectStore.prototype.put = put;
+				request.addEventListener('success', () => this.transaction.abort(), { once: true });
+			}
+			return request;
+		};
+	}, draft);
+	await saveWorkspace();
+	const failure = page.getByRole('dialog', { name: 'Error', exact: true });
+	await expect(failure.getByText('Failed to drain working-copy backups', { exact: true })).toBeVisible();
+	await failure.getByRole('button', { name: 'OK', exact: true }).click();
+	await expect(page).toHaveURL(sourceUrl);
+	await expect(editor.lines).toHaveText([draft]);
+
+	const addition = ' and after recovery';
+	await editor.waitForEditorFocus();
+	await editor.input.press('End');
+	await editor.waitForTypeInEditor(addition);
+	await expect.poll(readBackup).toBe(draft + addition);
+	await workbench.quickaccess.runCommand('workbench.action.files.save');
+	await expect.poll(() => page.evaluate(async fixture => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(fixture);
+		return (await (await folder.getFileHandle('draft.txt')).getFile()).text();
+	}, fixture)).toBe(draft + addition);
+	await expect.poll(readBackup).toBeUndefined();
+
+	await saveWorkspace();
+	await expect(page).toHaveURL(/workspace=file.*retry\.ash-workspace/);
+	await expect(editor.lines).toHaveText([draft + addition]);
+});
+
 test('Browser workspace files persist multiple authorized handles across save, close, reopen and reload', { tag: ['@browser-ui'] }, async ({ workbench }, testInfo) => {
 	const page = workbench.page;
 	const fixture = await page.evaluate(async () => {
