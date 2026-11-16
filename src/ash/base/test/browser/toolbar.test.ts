@@ -376,6 +376,26 @@ function managedHover(): IManagedHover {
 
 suite('ToolBar browser foundation', () => {
 	const browser = useBrowserTests();
+	test('standard action items mix a visible icon-and-text caption with icon-only actions in one toolbar', async () => {
+		const { page } = browser;
+		await page.goto('/button.html');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const toolbar = page.locator('#labelled-toolbar').getByRole('toolbar', { name: 'Layout actions' });
+		const showChat = toolbar.getByRole('button', { name: 'Show Chat', exact: true });
+		const close = toolbar.getByRole('button', { name: 'Close', exact: true });
+		await expect(showChat.locator('.ash-button-label')).toBeVisible();
+		await expect(close.locator('.ash-button-label')).toBeHidden();
+		await expect(showChat.locator('[data-ash-icon-id="minimize"]')).toBeVisible();
+		await showChat.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(close).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(page.locator('output')).toHaveText('close');
+		await page.keyboard.press('ArrowLeft');
+		await expect(showChat).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(page.locator('output')).toHaveText('showChat');
+	});
 	for (const [locale, theme] of [['en', 'hcLight'], ['zh-CN', 'dark']] as const) {
 		test(`resizes with keyboard focus and preserves an open menu and its execution context (${locale}, ${theme})`, async () => {
 			const { page } = browser;

@@ -107,6 +107,54 @@ suite('SessionsEntryService lifecycle and focus', () => {
 		assert.deepEqual(fixture.errors, []);
 	});
 
+	test('Chat browser can hide and restore the conversation without closing its tabs', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry({ ...chatEntry, chatSource: 'desktop-chat' });
+		const input = { resource: URI.parse('ash-browser:/retained-page') };
+		await fixture.service.openConversationBrowser(target => fixture.openEditor(input, target));
+		await fixture.service.setConversationVisible(false, { preserveFocus: true });
+		assert.equal(fixture.visible.get('sessions'), false);
+		assert.deepEqual(fixture.service.conversationEditors, [input]);
+		await fixture.service.setConversationVisible(true);
+		assert.equal(fixture.visible.get('sessions'), true);
+		assert.deepEqual(fixture.service.conversationEditors, [input]);
+	});
+
+	test('browser tab operations stay in the committed Chat working set', async () => {
+		using fixture = new EntryFixture();
+		await fixture.configuration.updateValue(BROWSER_FOLLOWS_SESSION_SETTING, true);
+		const context = observableValue('browser context', 'one');
+		await fixture.service.openEntry({ ...chatEntry, chatSource: 'desktop-chat', browserContext: context });
+		const firstContext = fixture.service.conversationBrowserContext.get();
+		const first = { resource: URI.parse('ash-browser:/first') };
+		const second = { resource: URI.parse('ash-browser:/second') };
+		await fixture.service.openConversationBrowser(target => fixture.openEditor(first, target));
+		await fixture.service.openConversationBrowser(target => fixture.openEditor(second, target));
+		await fixture.service.closeConversationEditor(first);
+		assert.deepEqual(fixture.service.conversationEditors, [second]);
+		context.set('two', undefined);
+		await fixture.service.runOperation(async () => { });
+		assert.notEqual(fixture.service.conversationBrowserContext.get(), firstContext);
+		await fixture.service.closeConversationEditor(second);
+		context.set('one', undefined);
+		await fixture.service.runOperation(async () => { });
+		assert.deepEqual(fixture.service.conversationEditors, [second], 'A stale close cannot remove a tab from an inactive conversation');
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(fixture.service.conversationBrowserContext.get(), undefined);
+	});
+
+	test('removing an empty browser group retires its working-set identity', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry({ ...chatEntry, chatSource: 'desktop-chat' });
+		const input = { resource: URI.parse('ash-browser:/last') };
+		await fixture.service.openConversationBrowser(target => fixture.openEditor(input, target));
+		const groupId = fixture.activeGroupId;
+		await fixture.service.closeConversationEditor(input);
+		fixture.editorChanged.fire({ kind: 'groupRemoved', groupId });
+		assert.equal(fixture.service.isConversationEditorGroup(groupId), false);
+		await fixture.service.openEntry(documentEntry);
+	});
+
 	test('Chat uses the Sessions Part without restoring Code editors, and Code returns to the grid', async () => {
 		using fixture = new EntryFixture();
 		const chatSource = 'desktop-chat';
@@ -782,7 +830,13 @@ class EntryFixture extends Disposable {
 			isGroupVisible: (id: string) => this.groupVisibility.get(id) ?? true,
 			filesPart: { isEditorVisible: false, onDidChangeDetailsVisibility: Event.None, setEditorVisible() { }, hideDetails() { fixture.filesDetailsOpen = false; }, showDetails() { fixture.filesDetailsOpen = true; }, auxiliaryBar: { focus() { fixture.focused = 'files'; } }, fileGroups: [documentGroup] },
 			createRetainedGroup: () => {
-				const group = { ...documentGroup, id: 'chat-browser-' + groups.length, inputs: [] as IResourceEditorInput[] };
+				const inputs: IResourceEditorInput[] = [];
+				const group = {
+					...documentGroup, id: 'chat-browser-' + groups.length, inputs, closeEditor: async (input: IResourceEditorInput) => {
+						inputs.splice(inputs.indexOf(input), 1);
+						return true;
+					}
+				};
 				groups.push(group);
 				return group;
 			},

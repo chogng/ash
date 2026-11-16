@@ -128,6 +128,7 @@ async function installService(application: ElectronApplication, holdInitializati
 			},
 		};
 		const installed = new WeakSet<Electron.Session>();
+		const browserFavicon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" rx="3" fill="#4279ff"/><circle cx="8" cy="8" r="4" fill="white"/></svg>';
 		const install = (storage: Electron.Session) => {
 			if (installed.has(storage)) { return; } installed.add(storage);
 			// protocol.handle replaces Chromium I/O, including its webRequest callbacks.
@@ -148,6 +149,13 @@ async function installService(application: ElectronApplication, holdInitializati
 			}
 			storage.protocol.handle('https', request => {
 				const url = new URL(request.url);
+				if (url.hostname === 'example.com' && url.pathname === '/fixture-favicon.svg') {
+					return new Response(browserFavicon, { headers: { 'Content-Type': 'image/svg+xml' } });
+				}
+				if (url.hostname === 'example.com' && url.pathname.startsWith('/browser-')) {
+					const title = url.pathname.endsWith('one') ? 'First browser tab' : 'Second browser tab';
+					return new Response(`<!doctype html><title>${title}</title><link rel="icon" href="/fixture-favicon.svg"><p>${title}</p>`, { headers: { 'Content-Type': 'text/html' } });
+				}
 				if (url.hostname !== 'chatgpt.com') { return new Response(null, { status: 404 }); }
 				if (url.pathname === '/pending-resource.svg') {
 					return new Response(new ReadableStream<Uint8Array>({
@@ -202,6 +210,9 @@ async function installService(application: ElectronApplication, holdInitializati
 			});
 			storage.fetch = async (input, init) => {
 				const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+				if (url.origin === 'https://example.com' && url.pathname === '/fixture-favicon.svg') {
+					return new Response(browserFavicon, { headers: { 'Content-Type': 'image/svg+xml' } });
+				}
 				if (url.origin === 'https://fixture.oaiusercontent.com' && init?.method === 'PUT') {
 					uploadedFiles[decodeURIComponent(url.pathname.slice(1))] = Buffer.from(init.body as Uint8Array).toString('utf8');
 					return new Response(null, { status: 204 });
@@ -334,7 +345,7 @@ async function installService(application: ElectronApplication, holdInitializati
 				if (url.pathname === '/backend-api/conversations/history-one') {
 					return Response.json({
 						title: 'First native history', current_node: 'native-answer',
-						messages: [message('native-answer', 'assistant', 'Experimental history answer')],
+						messages: [message('native-answer', 'assistant', 'Experimental history answer' + historyReply.suffix)],
 						page_info: { has_previous_page: true, start_cursor: 'fixture-before' },
 					});
 				}
@@ -571,6 +582,171 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 		await expect.poll(() => (application as ElectronApplication).evaluate(() => ashNativeFixture.verificationFinalizations)).toBe(2);
 		expect(await (application as ElectronApplication).evaluate(() => ashNativeFixture.conversationPreparations)).toBe(1);
 	});
+	for (const locale of ['en', 'zh-CN']) {
+		test(`Chat browser tab menu previews retained tabs and routes close, maximize and new tab (${locale})`, { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+			await installService(application as ElectronApplication, false, '\n\n[First browser tab](https://example.com/browser-one)\n\n[Second browser tab](https://example.com/browser-two)');
+			const settings = await readUserSettings(workbench.page);
+			await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(settings.content), 'workbench.locale': locale }), settings.revision);
+			const page = await workbench.openAgentsWindow(target.kind);
+			await page.getByRole('button', { name: 'First native history', exact: true }).click();
+			const browser = page.locator('.ash-sessions-titlebar-session-content [data-action-id="sessions.browser.showTabs"] button');
+			const popup = page.getByRole('menu', { name: locale === 'en' ? 'Browser tabs' : '浏览器标签页', exact: true });
+			const editor = page.locator('[data-part="editor"]');
+			const newTab = locale === 'en' ? 'New tab' : '新标签页';
+			const closeTab = locale === 'en' ? 'Close tab' : '关闭标签页';
+			const maximizeTab = locale === 'en' ? 'Maximize tab' : '最大化标签页';
+			await expect(browser).not.toHaveAttribute('aria-pressed', /.*/);
+			await browser.click();
+			await expect(popup.getByRole('menuitem')).toHaveCount(1);
+			await expect(popup.getByRole('menuitem', { name: newTab, exact: true })).toBeVisible();
+			await expect(popup).not.toHaveClass(/ash-menu-icons-trailing/);
+			await expect(popup.getByRole('textbox')).toHaveCount(0);
+			const geometry = await popup.evaluate(element => {
+				const menu = getComputedStyle(element);
+				const shell = getComputedStyle(element.closest('.ash-context-view-menu')!);
+				const item = getComputedStyle(element.querySelector('.ash-action-view-item > .ash-button')!);
+				return { padding: menu.padding, radius: shell.borderRadius, height: item.height, inset: item.paddingInlineStart, highlight: item.borderRadius };
+			});
+			expect(geometry).toEqual({ padding: '6px', radius: '16px', height: '28px', inset: '12px', highlight: '8px' });
+			await expect(editor).toBeHidden();
+			await page.keyboard.press('Escape');
+			await expect(browser).toBeFocused();
+			await browser.click();
+			await expect(popup).toBeVisible();
+			// A shared menu consumes the dismissal click on its background pointer shield.
+			const triggerBounds = (await browser.boundingBox())!;
+			await page.mouse.click(triggerBounds.x + triggerBounds.width / 2, triggerBounds.y + triggerBounds.height / 2);
+			await expect(popup).toBeHidden();
+			await expect(browser).toHaveAttribute('aria-expanded', 'false');
+			await page.getByRole('link', { name: 'First browser tab', exact: true }).click();
+			await page.getByRole('link', { name: 'Second browser tab', exact: true }).click();
+			await expect(browser).not.toHaveClass(/checked/);
+			await page.locator('[data-action-id="sessions.closeEditorPart"] button:visible').click();
+			await expect(browser).not.toHaveAttribute('aria-pressed', /.*/);
+			await browser.click();
+			const first = popup.locator(':scope > .ash-action-view-item:not(.ash-action-view-item-separator)').filter({ hasText: 'https://example.com/browser-one' });
+			const second = popup.locator(':scope > .ash-action-view-item:not(.ash-action-view-item-separator)').filter({ hasText: 'https://example.com/browser-two' });
+			await expect(first).toBeVisible();
+			await expect(second).toBeVisible();
+			await expect(editor).toBeHidden();
+			await expect(first.getByRole('menuitem')).not.toHaveAttribute('aria-checked', /.*/);
+			await expect(second.getByRole('menuitem')).not.toHaveAttribute('aria-checked', /.*/);
+			await expect(popup.getByRole('menuitemradio')).toHaveCount(0);
+			await page.keyboard.press('Home');
+			await page.keyboard.press('ArrowDown');
+			await expect(second.getByRole('menuitem')).toBeFocused();
+			await page.keyboard.press('ArrowUp');
+			await expect(first.getByRole('menuitem')).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(first.getByRole('button', { name: closeTab, exact: true })).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(first.getByRole('button', { name: maximizeTab, exact: true })).toBeFocused();
+			const favicon = first.locator('.ash-menu-leading-slot img');
+			await expect(favicon).toHaveAttribute('src', /^data:image\//);
+			await expect.poll(() => favicon.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+			await expect(favicon).toHaveCSS('width', '18px');
+			await expect(favicon).toHaveCSS('height', '18px');
+			await first.getByRole('menuitem').hover();
+			await expect(page.getByRole('tooltip').filter({ hasText: 'https://example.com/browser-one' }).last()).toBeVisible();
+			await popup.getByRole('menuitem', { name: newTab, exact: true }).hover();
+			await expect(first.locator('.ash-menu-row-actions')).toHaveCSS('opacity', '0');
+			await first.hover();
+			await expect(first.getByRole('button', { name: closeTab, exact: true })).toBeVisible();
+			await expect(first.getByRole('button', { name: maximizeTab, exact: true })).toBeVisible();
+			expect(await popup.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+			const menuBounds = (await popup.boundingBox())!;
+			const actionsBounds = (await first.locator('.ash-menu-row-actions').boundingBox())!;
+			expect(actionsBounds.x).toBeGreaterThan(menuBounds.x);
+			expect(actionsBounds.x + actionsBounds.width).toBeLessThan(menuBounds.x + menuBounds.width);
+			const rowActionsGeometry = await first.evaluate(element => {
+				const row = element.getBoundingClientRect();
+				const buttons = [...element.querySelectorAll<HTMLButtonElement>('.ash-menu-row-actions button')];
+				return buttons.map(button => {
+					const bounds = button.getBoundingClientRect();
+					return {
+						width: bounds.width, height: bounds.height, top: bounds.top - row.top, bottom: row.bottom - bounds.bottom,
+						right: row.right - bounds.right, radius: getComputedStyle(button).borderRadius,
+						icon: getComputedStyle(button.querySelector('.ash-icon')!).fontSize,
+					};
+				});
+			});
+			for (const geometry of rowActionsGeometry) {
+				expect(geometry).toMatchObject({ width: 24, height: 24, top: 2, bottom: 2, radius: '6px', icon: '18px' });
+			}
+			expect(rowActionsGeometry.at(-1)?.right).toBe(2);
+			await expect(first.locator('.ash-menu-row-actions')).toHaveCSS('opacity', '1');
+			await page.keyboard.press('ArrowRight');
+			await expect(page.getByRole('tooltip')).toHaveCount(0);
+			await testInfo.attach(`chat-browser-tab-menu-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
+			if (locale === 'en') {
+				for (const [label, id] of [['Ash Dark', 'ash-dark'], ['Ash High Contrast Dark', 'ash-high-contrast-dark'], ['Ash High Contrast Light', 'ash-high-contrast-light'], ['Ash Light', 'ash-light']] as const) {
+					await page.keyboard.press('Escape');
+					await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+					await workbench.page.locator('.ash-quick-pick').getByRole('combobox').fill(label);
+					await workbench.quickaccess.select(label);
+					await expect(page.locator('#app')).toHaveAttribute('data-color-theme', id);
+					await browser.click();
+					await first.hover();
+					await expect(first.locator('.ash-menu-row-actions')).toHaveCSS('opacity', '1');
+					await expect(popup).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+					expect(await popup.evaluate(element => getComputedStyle(element.closest('.ash-context-view-menu')!).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+					await expect(first.locator('.ash-icon-label-description')).toHaveCSS('color', await first.getByRole('menuitem').evaluate(element => getComputedStyle(element).color));
+					await page.keyboard.press('ArrowRight');
+					await expect(page.getByRole('tooltip')).toHaveCount(0);
+					await testInfo.attach(`chat-browser-tab-menu-${id}`, { body: await page.screenshot(), contentType: 'image/png' });
+				}
+				await page.keyboard.press('Escape');
+				await page.setViewportSize({ width: 760, height: 600 });
+				await browser.click();
+				await first.hover();
+				expect(await popup.evaluate(element => {
+					const bounds = element.getBoundingClientRect();
+					return bounds.left >= 0 && bounds.right <= window.innerWidth && element.scrollWidth <= element.clientWidth;
+				})).toBe(true);
+				await testInfo.attach('chat-browser-tab-menu-narrow', { body: await page.screenshot(), contentType: 'image/png' });
+			}
+			const iconSource = (await favicon.getAttribute('src'))!;
+			await first.getByRole('menuitem').click();
+			await expect(editor).toBeVisible();
+			const horizontalTab = page.getByRole('tab', { name: 'First browser tab', exact: true });
+			await expect(horizontalTab).toHaveAttribute('aria-selected', 'true');
+			await expect(horizontalTab.locator('img')).toHaveAttribute('src', iconSource);
+			await page.locator('[data-action-id="sessions.closeEditorPart"] button:visible').click();
+			await browser.click();
+			await first.hover();
+			await first.getByRole('button', { name: closeTab, exact: true }).click();
+			await expect(first).toHaveCount(0);
+			await expect(second).toBeVisible();
+			await expect(editor).toBeHidden();
+			await second.hover();
+			await second.getByRole('button', { name: maximizeTab, exact: true }).focus();
+			await page.keyboard.press('Enter');
+			await expect(editor).toBeVisible();
+			await expect(page.locator('[data-part="sessions"]')).toBeHidden();
+			await page.locator('[data-action-id="sessions.toggleSessionPart"] button:visible').click();
+			await expect(browser).not.toHaveClass(/checked/);
+			await page.locator('[data-action-id="sessions.closeEditorPart"] button:visible').click();
+			await browser.click();
+			await popup.getByRole('menuitem', { name: newTab, exact: true }).click();
+			await expect(editor).toBeVisible();
+			await browser.click();
+			await expect(popup.locator(':scope > .ash-action-view-item:not(.ash-action-view-item-separator)').filter({ hasText: 'about:blank' })).toBeVisible();
+			for (const url of ['https://example.com/browser-two', 'about:blank']) {
+				const row = popup.locator(':scope > .ash-action-view-item:not(.ash-action-view-item-separator)').filter({ hasText: url });
+				await row.hover();
+				await row.getByRole('button', { name: closeTab, exact: true }).click();
+				await expect(row).toHaveCount(0);
+			}
+			await expect(popup.getByRole('menuitem')).toHaveCount(1);
+			await expect(popup.getByRole('menuitem', { name: newTab, exact: true })).toBeVisible();
+			await expect(editor).toBeHidden();
+			await page.keyboard.press('Escape');
+			await expect(browser).toBeFocused();
+			await expect(browser).not.toHaveAttribute('aria-pressed', /.*/);
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: locale === 'en' ? 'Code' : '代码', exact: true }).click();
+			await expect(browser).toHaveCount(0);
+		});
+	}
 
 	test('opens native history, pages on demand, streams a reply, and switches the default entry in Settings', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
 		await installService(application as ElectronApplication);

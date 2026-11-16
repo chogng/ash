@@ -815,6 +815,7 @@ export class BrowserView extends Disposable {
 		this.on(contents, 'did-start-navigation', (_event: ElectronEvent, _url: string, inPlace: boolean, mainFrame: boolean) => {
 			if (mainFrame && !inPlace) {
 				this.faviconRevision++;
+				this.favicon = undefined;
 				this.cancelPasswordChoice();
 				if (this.passwordSave) {
 					this.emit({ type: 'passwordRequestClosed', targetId: this.id, requestId: this.passwordSave.id });
@@ -950,8 +951,8 @@ export class BrowserView extends Disposable {
 	private async updateFavicon(candidates: readonly string[]): Promise<void> {
 		const revision = ++this.faviconRevision;
 		const pageOrigin = URL.parse(this.url)?.origin;
-		// Store fetched icons for local user history. Inline icons need no network request.
-		const canFetch = this.creation.owner.type === 'user' && !this.remoteAuthority && !!this.history.storageKeys.history;
+		// Live tab icons do not depend on whether the session persists browsing history.
+		const canFetch = this.creation.owner.type === 'user' && !this.remoteAuthority;
 		for (const candidate of candidates.slice(0, 8)) {
 			let image: string | undefined;
 			if (candidate.startsWith('data:image/') && candidate.length <= 64 * 1024) {
@@ -969,6 +970,7 @@ export class BrowserView extends Disposable {
 			if (image) {
 				this.favicon = image;
 				this.historyItem?.update({ favicon: image });
+				this.emitState();
 				return;
 			}
 		}
@@ -1009,6 +1011,7 @@ export class BrowserView extends Disposable {
 			deviceEmulation: this.deviceEmulation,
 			url: contents.getURL() || this.url,
 			title: contents.getTitle(),
+			favicon: this.favicon,
 			loading: contents.isLoading(),
 			canGoBack: history.canGoBack(),
 			canGoForward: history.canGoForward(),

@@ -9,7 +9,8 @@ import { Lxicon } from '../../../common/lxicons.js';
 import { localize, setNlsMessages } from '../../../../nls.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../platform/actions/common/menuService.js';
-import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { ButtonActionViewItem } from '../../../browser/ui/actionbar/actionViewItems.js';
+import { WorkbenchToolBar, MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
@@ -98,6 +99,18 @@ const quietToolbar = resources.add(new ToolBar(document.querySelector('#quiet-to
 quietToolbar.setActions([
 	{ id: 'run', label: 'Run', tooltip: '', icon: Lxicon.play, enabled: true, run: () => { } },
 	{ id: 'pin', label: 'Pin', tooltip: '', icon: Lxicon.pin, enabled: true, run: () => { } },
+]);
+const labelledToolbar = resources.add(new WorkbenchToolBar(document.querySelector('#labelled-toolbar')!, menus, {
+	ariaLabel: 'Layout actions',
+	actionViewItemProvider: (action, options) => new ButtonActionViewItem(action, {
+		...options, iconOnly: action.id !== 'showChat',
+	}),
+}));
+labelledToolbar.setActions([
+	{ id: 'showChat', label: 'Show Chat', tooltip: 'Show Chat', icon: Lxicon.minimize, enabled: true,
+		run: () => { document.querySelector('output')!.textContent = 'showChat'; } },
+	{ id: 'close', label: 'Close', tooltip: 'Close', icon: Lxicon.close, enabled: true,
+		run: () => { document.querySelector('output')!.textContent = 'close'; } },
 ]);
 const services = resources.add(new InstantiationService());
 const keys = resources.add(new ContextKeyService());

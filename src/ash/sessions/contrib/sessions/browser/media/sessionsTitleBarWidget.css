@@ -17,9 +17,12 @@
 	flex: 1;
 }
 
-.ash-sessions-titlebar-share {
-	flex-shrink: 0;
+.ash-sessions-titlebar-conversation-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
 	margin-inline-start: auto;
+	-webkit-app-region: no-drag;
 }
 
 .ash-sessions-titlebar-widget .ash-button.ash-sessions-titlebar-menu {

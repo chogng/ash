@@ -22,6 +22,35 @@ suite('Sessions native titlebar layout', () => {
 		expect(title.x + title.width).toBeLessThanOrEqual((await editor.boundingBox())!.x);
 	});
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`maximized Chat editor hides conversation actions and keeps both pane controls inside the titlebar in ${locale}`, async () => {
+			const { page } = browser;
+			await page.setViewportSize({ width: 1440, height: 900 });
+			await page.goto(`/sessions.html?emptyEditorArea&locale=${locale}`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await page.evaluate(() => window.ashSessionsIntegration.showEmptyEditorArea!(false));
+			const titlebar = page.locator('[data-part="titlebar"]');
+			const conversation = titlebar.locator('.ash-sessions-titlebar-session-content');
+			const controls = titlebar.locator('.ash-sessions-editor-layout-actions');
+			await expect(conversation).toBeHidden();
+			await expect(controls.locator('button')).toHaveCount(2);
+			await expect(controls.locator('[data-action-id="sessions.toggleSessionPart"] .ash-button-label')).toBeVisible();
+			for (const width of [1440, 900, 640]) {
+				await page.setViewportSize({ width, height: 900 });
+				for (const button of await controls.locator('button').all()) {
+					await expect(button).toBeInViewport({ ratio: 1 });
+				}
+				await expect.poll(async () => {
+					const bounds = (await controls.boundingBox())!;
+					const row = (await titlebar.boundingBox())!;
+					return bounds.x + bounds.width <= row.x + row.width;
+				}).toBe(true);
+			}
+			await page.evaluate(() => window.ashSessionsIntegration.showEmptyEditorArea!(true));
+			await expect(conversation).toBeVisible();
+		});
+	}
+
 	async function expectCenteredTitlebarIcon(button: Locator): Promise<void> {
 		await expect(button).toBeVisible();
 		const bounds = (await button.boundingBox())!;

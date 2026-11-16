@@ -326,6 +326,8 @@ suite('Browser view ownership and operations', () => {
 			f.contents.emit('page-favicon-updated', {}, ['https://example.test/missing.ico', 'https://example.test/brand.png']);
 			await new Promise<void>(resolve => setImmediate(resolve));
 			assert.equal(await channel.call('window:1', 'getWebsiteFavicon', ['https://example.test']), image);
+			assert.equal((await f.manager.getState(id)).favicon, image);
+			assert.equal(f.events.some(event => event.type === 'stateChanged' && event.state.favicon === image), true);
 			assert.deepEqual(requests, ['https://example.test/missing.ico', 'https://example.test/brand.png']);
 			assert.equal(read.mock.callCount(), 0);
 			f.contents.emit('page-favicon-updated', {}, ['https://cdn.example.test/brand.png']);
@@ -337,10 +339,35 @@ suite('Browser view ownership and operations', () => {
 			late.resolve(new Response(bytes));
 			await new Promise<void>(resolve => setImmediate(resolve));
 			assert.equal((await f.manager.getBrowserHistory(id)).items.at(-1)?.icon, undefined);
+			assert.equal((await f.manager.getState(id)).favicon, undefined);
 			assert.equal(await channel.call('window:1', 'getWebsiteFavicon', ['https://unvisited.test']), undefined);
 			assert.equal(read.mock.calls.at(-1)?.arguments[0].href, 'https://unvisited.test/favicon.ico');
 		} finally { read.mock.restore(); }
 	});
+
+	for (const scope of [BrowserViewStorageScope.Workspace, BrowserViewStorageScope.Ephemeral] as const) {
+		test(`URL SVG favicons update live tabs independently of history persistence (${scope})`, async () => {
+			using f = fixture();
+			await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: { type: 'user' }, session: { scope } });
+			f.contents.emit('did-navigate', {}, 'https://example.test/');
+			const svg = '<?xml version="1.0"?>\n<!-- website icon -->\n<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="M0 0h32v32H0Z"/></svg>';
+			let requests = 0;
+			Object.assign(f.manager.tryGetBrowserView(id)!.session.electronSession, {
+				fetch: async (url: string) => {
+					assert.equal(url, 'https://example.test/logo.svg');
+					requests++;
+					return new Response(svg, { headers: { 'Content-Type': 'image/svg+xml; charset=utf-8' } });
+				}
+			});
+			f.contents.emit('page-favicon-updated', {}, ['https://example.test/logo.svg']);
+			await new Promise<void>(resolve => setImmediate(resolve));
+			const icon = 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
+			assert.equal((await f.manager.getState(id)).favicon, icon);
+			assert.equal(requests, 1);
+			if (scope === BrowserViewStorageScope.Ephemeral) assert.deepEqual(await f.manager.getBrowserHistory(id), { items: [] });
+			else assert.equal(await f.manager.getWebsiteFavicon('https://example.test'), icon);
+		});
+	}
 
 	test('the favicon channel accepts only origins and sends the canonical icon URL', async () => {
 		using f = fixture();

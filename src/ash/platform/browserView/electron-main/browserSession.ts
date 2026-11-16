@@ -203,7 +203,8 @@ async function readFaviconImage(response: Response): Promise<string | undefined>
 		chunks.push(chunk);
 	}
 	const data = Buffer.concat(chunks, size);
-	const type = iconMediaType(data);
+	const type = iconMediaType(data) ?? (response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() === 'image/svg+xml'
+		&& /^(?:\uFEFF)?\s*(?:<\?xml[^?]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg(?:\s|>)/u.test(data.toString('utf8')) ? 'svg+xml' : undefined);
 	return type ? `data:image/${type};base64,${data.toString('base64')}` : undefined;
 }
 

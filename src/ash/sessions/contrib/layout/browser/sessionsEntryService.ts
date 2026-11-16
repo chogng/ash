@@ -59,7 +59,11 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 	public readonly documentContent = derived(reader => !this.customViews.activeCustomView.read(reader) && this.activeEntry.read(reader)?.content === 'documents');
 	private readonly visibility = new Map<string, EntryVisibility>();
 	private readonly editorEntries = new Map<string, ISessionsEntry>();
-	private activeBrowserKey: string | undefined;
+	private readonly activeBrowserKey = observableValue<string | undefined>(this, undefined);
+	public readonly conversationBrowserContext = derived(reader => {
+		const entry = this.activeEntry.read(reader);
+		return entry?.content === 'conversation' && entry.chatSource ? this.activeBrowserKey.read(reader) ?? entry.id : undefined;
+	});
 	private readonly conversationGroups = new Map<string, number>();
 	private readonly savedConversationEditors = new Map<string, EditorWorkingSet>();
 	private readonly activityKeys = new Map<string, IContextKey<boolean>>();
@@ -76,7 +80,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 	private get conversationGroup() {
 		const entry = this.activeEntry.get();
 		if (!entry?.chatSource || entry.content !== 'conversation') return undefined;
-		return this.editor.groups.find(group => group.id === this.conversationGroups.get(this.activeBrowserKey ?? entry.id));
+		return this.editor.groups.find(group => group.id === this.conversationGroups.get(this.activeBrowserKey.get() ?? entry.id));
 	}
 	public get conversationEditors(): readonly IResourceEditorInput[] { return this.conversationGroup?.inputs ?? []; }
 	public isConversationEditorGroup(id: number): boolean { return [...this.conversationGroups.values()].includes(id); }
@@ -96,7 +100,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 				let group = this.conversationGroup;
 				if (!group) {
 					group = (this.editor as EditorParts).createRetainedGroup('browser');
-					this.conversationGroups.set(this.activeBrowserKey ?? entry.id, group.id);
+					this.conversationGroups.set(this.activeBrowserKey.get() ?? entry.id, group.id);
 				}
 				await open({ groupId: group.id });
 				if (!this.isDisposed) {
@@ -189,6 +193,14 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		};
 		this._register((editor as EditorParts).onDidRevealActiveEditor(() => revealActiveEditor(true)));
 		this._register(editor.onDidChangeEditors(event => {
+			if (event.kind === 'groupRemoved') {
+				for (const [key, id] of this.conversationGroups) {
+					if (id === event.groupId) {
+						this.conversationGroups.delete(key);
+						this.savedConversationEditors.delete(key);
+					}
+				}
+			}
 			if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed'
 				&& this.isActiveConversationEditorGroup(event.groupId) && !this.conversationEditors.length) {
 				this.layout.setPartAvailable('sessions', true);
@@ -229,7 +241,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			const context = entry?.browserContext?.read(reader);
 			const follow = followBrowser.read(reader);
 			const key = entry && follow && context ? JSON.stringify([entry.id, context]) : entry?.id;
-			if (entry?.chatSource && key !== this.activeBrowserKey) {
+			if (entry?.chatSource && key !== this.activeBrowserKey.get()) {
 				void this.applyEntry(entry, undefined, { source: 'restore' }, true).catch(error => { if (!this.isDisposed) this.notifications.error(String(error)); });
 			}
 		}));
@@ -329,7 +341,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 				const browserKey = this.configuration.getValue<boolean>(BROWSER_FOLLOWS_SESSION_SETTING) && context
 					? JSON.stringify([entry.id, context]) : entry.id;
 				// Changing the preference adopts the visible tabs; switching conversations keeps their groups separate.
-				const previousKey = this.activeBrowserKey;
+				const previousKey = this.activeBrowserKey.get();
 				const changingScope = previousEntry?.id === entry.id && previousKey !== browserKey
 					&& (previousKey === entry.id || browserKey === entry.id);
 				if (changingScope && previousKey && !this.conversationGroups.has(browserKey)) {
@@ -340,7 +352,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 						this.conversationGroups.set(browserKey, group);
 					}
 				}
-				this.activeBrowserKey = browserKey;
+				this.activeBrowserKey.set(browserKey, undefined);
 				this.activeEntry.set(chatActivityContext ? { ...entry, chatActivityContext } : entry, undefined);
 				const productEditor = entry.content === 'editor';
 				const documents = entry.content === 'documents';
@@ -440,9 +452,19 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		entry.onEditorInputReplaced?.(input, replacement);
 	}
 
+	public closeConversationEditor(input: IResourceEditorInput): Promise<void> {
+		const group = this.conversationGroup;
+		return this.runOperation(async () => {
+			if (!group || group !== this.conversationGroup || !group.inputs.includes(input)) return;
+			this.isChangingContent = true;
+			try { await group.closeEditor(input); }
+			finally { this.isChangingContent = false; }
+		});
+	}
+
 	public setConversationVisible(visible: boolean, options?: { readonly preserveFocus?: boolean; }): Promise<void> {
 		return this.runOperation(async () => {
-			if (!this.activeEntry.get()?.conversation) { throw new Error('The active entry does not support a conversation beside its editor.'); }
+			if (!this.activeEntry.get()?.conversation && !this.conversationGroup?.inputs.length) { throw new Error('The active entry does not support a conversation beside its editor.'); }
 			this.layout.updateParts(() => this.layout.setPartAvailable('sessions', visible));
 			if (options?.preserveFocus) return;
 			if (visible) { this.layout.focus(); }

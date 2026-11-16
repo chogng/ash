@@ -1,5 +1,10 @@
+import { Menus } from '../../../browser/menus.js';
+import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
+import { IMenuService } from '../../../../platform/actions/common/actions.js';
+import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import './media/sessionsTitleBarWidget.css';
-import { getActiveElement, h } from '../../../../base/browser/dom.js';
+import { getActiveElement, getWindowId, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
 import { Action, Separator, type IAction } from '../../../../base/common/actions.js';
@@ -86,6 +91,8 @@ export class SessionsTitleBarWidget extends Disposable {
 		@IChatListCatalog catalog: IChatListCatalog,
 		@ISessionsConversationService conversation: ISessionsConversationService,
 		@IConfigurationService configuration: IConfigurationService,
+		@IMenuService menus: IMenuService,
+		@IActionViewItemService presentations: IActionViewItemService,
 	) {
 		super();
 		const fixes = instantiation.createInstance(BlockedSessionsCIFixModel);
@@ -328,14 +335,25 @@ export class SessionsTitleBarWidget extends Disposable {
 		menuButton.domNode.classList.add('ash-titlebar-interactive-region', 'ash-sessions-titlebar-menu');
 		menuButton.domNode.setAttribute('aria-haspopup', 'menu');
 		menuButton.domNode.setAttribute('aria-expanded', 'false');
+		const actionsHost = h(element.ownerDocument, 'div', { className: 'ash-sessions-titlebar-conversation-actions' });
+		element.append(actionsHost);
+		const toolbar = this._register(new MenuWorkbenchToolBar(actionsHost, menus, contextMenus, Menus.SessionTitleBar, {
+			ariaLabel: localize('sessions.titlebar.actions', 'Conversation actions'),
+			contextKeyService: contextKeys,
+			menuOptions: { shouldForwardArgs: true },
+			highlightToggledItems: true,
+			actionViewItemProvider: (action, options) => presentations.lookUp(Menus.SessionTitleBar, action.id)?.(action, options, instantiation, getWindowId(element.ownerDocument.defaultView!) ?? 0),
+		}));
+		this._register(presentations.onDidChange(menu => { if (menu === Menus.SessionTitleBar) toolbar.refresh(); }));
+
 		const sharing = observableValue('sessionTitleSharing', false);
-		const shareButton = this._register(new Button(element, {
-			...defaultButtonStyles,
-			presentation: 'primary',
-			size: 'small',
-			icon: Lxicon.share,
+		const shareAction: IAction = {
+			id: 'sessions.shareConversation',
 			label: localize('sessions.titlebar.share', 'Share'),
-			onClick: async () => {
+			tooltip: localize('sessions.titlebar.share', 'Share'),
+			icon: Lxicon.share,
+			enabled: true,
+			run: async () => {
 				const entry = activeChat.get();
 				if (!entry?.share || !canAct(entry) || sharing.get()) return;
 				sharing.set(true, undefined);
@@ -347,8 +365,15 @@ export class SessionsTitleBarWidget extends Disposable {
 					sharing.set(false, undefined);
 				}
 			},
+		};
+		const disabledShareAction = { ...shareAction, enabled: false };
+		const shareActions = this._register(new WorkbenchToolBar(actionsHost, contextMenus, {
+			ariaLabel: shareAction.label,
+			actionViewItemProvider: (action, options) => new ButtonActionViewItem(action, {
+				...options, buttonPresentation: 'primary', iconOnly: false,
+			}),
 		}));
-		shareButton.domNode.classList.add('ash-titlebar-interactive-region', 'ash-sessions-titlebar-share');
+		shareActions.element.classList.add('ash-titlebar-interactive-region', 'ash-sessions-titlebar-share');
 		const folders = observableFromEvent(this, workspace.onDidChangeWorkspaceFolders, () => workspace.getWorkspace().folders);
 		let displayedKey: string | undefined;
 		this._register(autorun(reader => {
@@ -380,11 +405,10 @@ export class SessionsTitleBarWidget extends Disposable {
 			updateTitleVisibility();
 			if (!combinedMenu || element.hidden || !titleAction.enabled || key !== displayedKey) titleMenu.hide();
 			displayedKey = key;
-			shareButton.hidden = !entry?.share;
-			// Keep the trigger focusable while the share dialog is open so it can restore focus.
-			shareButton.enabled = sharePending || !!entry && canAct(entry);
-			if (sharePending) shareButton.domNode.setAttribute('aria-disabled', 'true');
-			else shareButton.domNode.removeAttribute('aria-disabled');
+			// Keep the trigger's identity and focus while its confirmation dialog is open.
+			shareActions.setActions(entry?.share ? [sharePending || canAct(entry) ? shareAction : disabledShareAction] : []);
+			if (sharePending) shareActions.element.setAttribute('aria-disabled', 'true');
+			else shareActions.element.removeAttribute('aria-disabled');
 			if (activeMenu && (element.hidden || key !== activeMenu.key || menuButton.hidden)) {
 				activeMenu.cancellation.cancel();
 			}

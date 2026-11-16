@@ -207,3 +207,37 @@
 	--ash-titlebar-controls-leftInset: 0px;
 	--ash-titlebar-controls-rightInset: 0px;
 }
+
+.ash-sessions-editor-layout-actions:not([hidden]) {
+	display: flex;
+	flex: none;
+	align-items: center;
+	-webkit-app-region: no-drag;
+}
+
+.ash-artifact-title-actions {
+	display: flex;
+	align-items: center;
+}
+
+.ash-sessions-titlebar.has-editor-layout-actions
+	.ash-sessions-tool-header-slot {
+	max-width: 100%;
+}
+
+/* Conversation actions follow their Part, including while an editor is maximized. */
+.ash-sessions-titlebar.conversation-hidden
+	.ash-sessions-titlebar-session-content {
+	display: none;
+}
+
+/* Keep the trailing controls inside the window when captions or navigation grow. */
+.ash-sessions-titlebar.has-editor-layout-actions
+	.ash-sessions-titlebar-editor-headers {
+	flex-shrink: 1;
+}
+
+.ash-sessions-titlebar.has-editor-layout-actions.conversation-hidden
+	.ash-sessions-titlebar-editor-headers {
+	flex: 1 1 0;
+}

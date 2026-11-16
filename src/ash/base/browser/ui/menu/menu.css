@@ -171,6 +171,12 @@
 	display: inline-flex;
 }
 
+.ash-menu-action-icon > img {
+	width: var(--ash-menu-trailing-icon-size, var(--ash-lxiconFontSize));
+	height: var(--ash-menu-trailing-icon-size, var(--ash-lxiconFontSize));
+	object-fit: contain;
+}
+
 :is(.ash-menu-icons-trailing, .ash-menu-indicators-trailing)
 	> .ash-action-view-item
 	> .ash-button
@@ -261,7 +267,11 @@
 	padding-left: 24px;
 	color: var(--ash-muted-foreground);
 }
-/* Selected rows need their own foreground to keep the shortcut readable. */
+/* Selected rows use their foreground for metadata as well, including high contrast. */
+.ash-menu
+	.ash-action-view-item.focused
+	> .ash-button
+	.ash-icon-label-description,
 .ash-menu .ash-action-view-item.focused > .ash-button .ash-menu-keybinding {
 	color: var(
 		--ash-menu-style-selection-foreground-color,
@@ -291,4 +301,79 @@
 .ash-menu .ash-menu-badge + .ash-menu-keybinding {
 	margin-left: 8px;
 	padding-left: 0;
+}
+
+/* Auxiliary operations share the row highlight and leave its full label geometry stable. */
+.ash-menu > .ash-action-view-item.has-inline-actions {
+	position: relative;
+}
+
+.ash-menu .ash-menu-row-actions {
+	position: absolute;
+	inset-block: 0;
+	inset-inline-end: var(
+		--ash-menu-item-padding-inline,
+		var(--ash-spacing-size80)
+	);
+	gap: 0;
+	align-items: center;
+	opacity: 0;
+	pointer-events: none;
+	color: var(
+		--ash-menu-style-selection-foreground-color,
+		var(--ash-menu-selectionForeground)
+	);
+	background: var(
+		--ash-menu-style-selection-background-color,
+		var(--ash-menu-selectionBackground)
+	);
+}
+
+.ash-menu .ash-menu-row-actions::before {
+	content: "";
+	position: absolute;
+	inset-block: 0;
+	inset-inline-end: 100%;
+	width: var(--ash-spacing-size320);
+	background: linear-gradient(
+		to right,
+		transparent,
+		var(
+			--ash-menu-style-selection-background-color,
+			var(--ash-menu-selectionBackground)
+		)
+	);
+	pointer-events: none;
+}
+
+.ash-menu .ash-menu-row-actions:dir(rtl)::before {
+	transform: scaleX(-1);
+}
+
+.ash-menu > .has-inline-actions:hover > .ash-menu-row-actions,
+.ash-menu:not(.pointer-navigation)
+	> .has-inline-actions:is(.focused, :focus-within)
+	> .ash-menu-row-actions {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.ash-menu .ash-menu-row-actions .ash-button {
+	width: var(--ash-list-rowHeight);
+	min-width: var(--ash-list-rowHeight);
+	padding: 0;
+	justify-content: center;
+}
+
+.ash-menu .ash-menu-row-actions .ash-button:hover {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+:where([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-menu
+	.ash-menu-row-actions::before {
+	background: var(
+		--ash-menu-style-selection-background-color,
+		var(--ash-menu-selectionBackground)
+	);
 }

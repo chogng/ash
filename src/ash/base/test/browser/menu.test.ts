@@ -658,3 +658,69 @@ test('Menu activates unique mnemonics and cycles duplicates at each submenu leve
 		assert.deepEqual(runs, ['child']);
 	} finally { dom.window.close(); }
 });
+
+test('Menu row operations keep parent selection separate and support Tab navigation', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using globals = installEditorTestDom(dom, ['Node']);
+	const { Menu, unthemedMenuStyles } = await import('../../browser/ui/menu/menu.js');
+	let selected = 0;
+	let closed = 0;
+	const row: IAction = { id: 'tab', label: 'Browser tab', tooltip: '', enabled: true, run: () => { selected++; } };
+	using menu = new Menu(dom.window.document.body, [row], {
+		iconPlacement: 'trailing',
+		getInlineActions: () => [
+			{ id: 'close', label: 'Close tab', tooltip: '', enabled: true, run: () => { closed++; } },
+			{ id: 'maximize', label: 'Maximize tab', tooltip: '', enabled: true, run: () => { } },
+		],
+	}, unthemedMenuStyles);
+	try {
+		menu.focus();
+		const primary = menu.getContainer().querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+		const close = menu.getContainer().querySelector<HTMLButtonElement>('[data-action-id="close"] button')!;
+		const maximize = menu.getContainer().querySelector<HTMLButtonElement>('[data-action-id="maximize"] button')!;
+		primary.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+		assert.equal(dom.window.document.activeElement, close);
+		const enter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+		close.dispatchEvent(enter);
+		assert.equal(enter.defaultPrevented, false, 'The independent native button retains Enter activation');
+		close.click();
+		await Promise.resolve();
+		assert.equal(closed, 1);
+		assert.equal(selected, 0);
+		close.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+		assert.equal(dom.window.document.activeElement, maximize);
+		maximize.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+		assert.equal(dom.window.document.activeElement, close);
+		primary.click();
+		await Promise.resolve();
+		assert.equal(selected, 1);
+	} finally {
+		menu.dispose();
+		dom.window.close();
+	}
+});
+
+test('Menu retains an action while its leading icon follows a shared live model', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using globals = installEditorTestDom(dom, ['Node']);
+	const [{ Menu, unthemedMenuStyles }, { URI }, { Lxicon }] = await Promise.all([
+		import('../../browser/ui/menu/menu.js'), import('../../common/uri.js'), import('../../common/lxicons.js'),
+	]);
+	let icon: import('../../common/icon.js').Icon | import('../../common/uri.js').URI = Lxicon.global;
+	using menu = new Menu(dom.window.document.body, [{ id: 'page', label: 'Page', tooltip: '', enabled: true, run: () => { } }], {
+		iconPlacement: 'leading', getIcon: () => icon,
+	}, unthemedMenuStyles);
+	try {
+		menu.focus();
+		const button = menu.getContainer().querySelector('[role="menuitem"]')!;
+		icon = URI.parse('data:image/png;base64,fixture');
+		menu.update();
+		assert.equal(dom.window.document.activeElement, button);
+		assert.equal(button.querySelector('.ash-menu-leading-slot img')?.getAttribute('src'), icon.toString());
+		assert.equal(button.hasAttribute('aria-checked'), false);
+		icon = Lxicon.global;
+		menu.update();
+		assert.equal(button.querySelector('img'), null);
+		assert.ok(button.querySelector('.ash-icon-global'));
+	} finally { menu.dispose(); dom.window.close(); }
+});

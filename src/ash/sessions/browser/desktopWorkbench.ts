@@ -551,9 +551,10 @@ export class DesktopWorkbenchLayout
 			const editorVisible = this.isPartVisible('editor');
 			const pageHeader = editorVisible && editor.hasProductPage ? mainEditor?.pageTitlebarContent : undefined;
 			// An empty editor area still owns its side of the split titlebar.
-			const dockTools = editorVisible && !editor.hasProductPage && this.isPartVisible('sessions');
+			const browser = this.contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code' && this.primaryPart === 'sessions' && editorVisible && !editor.hasProductPage;
+			const dockTools = editorVisible && !editor.hasProductPage && (this.isPartVisible('sessions') || browser);
 			const left = pageHeader || dockTools ? editor.domNode.getBoundingClientRect().left : undefined;
-			titlebar.layoutEditorHeaders(left, pageHeader, setHost);
+			titlebar.layoutEditorHeaders(left, pageHeader, setHost, browser, this.isPartVisible('sessions'));
 		}));
 		this._register(this.onDidLayoutMainContainer(() => update.schedule()));
 		this._register(this.onDidChangePartVisibility(() => update.schedule()));

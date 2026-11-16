@@ -42,7 +42,7 @@ await import('../../../src/ash/sessions/sessions.web.main.js');
 if (new URL(location.href).searchParams.has('artifactExamples')) {
 	await import('../../../src/ash/sessions/test/browser/fixtures/artifactExamples.contribution.js');
 }
-let showEmptyEditorArea: (() => void) | undefined;
+let showEmptyEditorArea: ((conversationVisible?: boolean) => void) | undefined;
 if (new URL(location.href).searchParams.has('emptyEditorArea')) {
 	registerWorkbenchServiceContribution({
 		service: createServiceIdentifier('test.emptyEditorArea'),
@@ -50,7 +50,8 @@ if (new URL(location.href).searchParams.has('emptyEditorArea')) {
 		install: ({ container }) => {
 			const layout = container.get(ILayoutService) as IAgentWorkbenchLayoutService;
 			const editor = container.get(IEditorPart);
-			return showEmptyEditorArea = () => {
+			return showEmptyEditorArea = (conversationVisible?: boolean) => {
+				if (conversationVisible !== undefined) layout.setPartAvailable('sessions', conversationVisible);
 				for (const group of editor.groups) editor.setGroupVisible(group.id, false);
 				layout.showPart('editor');
 			};
@@ -457,7 +458,7 @@ declare global {
 			disposeAndCheckErrorHandler(): Promise<boolean>;
 			remountAfterDirectDispose(): Promise<void>;
 			openChat(): Promise<void>;
-			showEmptyEditorArea?(): void;
+			showEmptyEditorArea?(conversationVisible?: boolean): void;
 			setTheme(id: string): Promise<void>;
 			updateConfiguration(key: string, value: unknown): Promise<void>;
 			setUpdateState(value: UpdateState): void;

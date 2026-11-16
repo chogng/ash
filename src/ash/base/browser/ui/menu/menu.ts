@@ -18,6 +18,8 @@ import { Scrollable } from '../../../common/scrollable.js';
 import { observeResize } from '../../observer.js';
 import { scheduleAtNextAnimationFrame } from '../../scheduler.js';
 import { Lxicon } from '../../../common/lxicons.js';
+import type { Icon } from '../../../common/icon.js';
+import { URI } from '../../../common/uri.js';
 import { ActionBar } from '../actionbar/actionbar.js';
 import { ActionViewItem, SeparatorActionViewItem, type ActionViewItemOptions } from '../actionbar/actionViewItems.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, ContextViewHideReason } from '../contextview/contextview.js';
@@ -25,6 +27,9 @@ import { appendIcon } from '../lxicons/lxicon.js';
 import { KeybindingLabel } from '../keybindinglabel/keybindinglabel.js';
 
 export interface MenuActionViewItemOptions extends ActionViewItemOptions {
+	/** Independent row operations; they execute without selecting the parent menu item. */
+	readonly inlineActions?: readonly IAction[];
+	readonly getIcon?: (action: IAction) => Icon | URI | undefined;
 	readonly menuStyles?: IMenuStyles;
 	readonly submenuOptions?: IMenuOptions;
 	readonly enableMnemonics?: boolean;
@@ -56,7 +61,7 @@ abstract class MenuButtonActionViewItem extends ActionViewItem {
 	private renderedLabel: string | undefined;
 	private renderedLabelDescription: string | undefined;
 	private renderedClass: string | undefined;
-	private renderedIcon: IAction['icon'];
+	private renderedIcon: Icon | URI | undefined;
 	private actionIcon: HTMLElement | undefined;
 	protected readonly iconPlacement: NonNullable<IMenuOptions['iconPlacement']>;
 	protected iconSlot: HTMLElement | undefined;
@@ -141,16 +146,22 @@ abstract class MenuButtonActionViewItem extends ActionViewItem {
 		}
 		if (this.mnemonic) this.button.domNode.setAttribute('aria-keyshortcuts', this.mnemonic);
 		else this.button.domNode.removeAttribute('aria-keyshortcuts');
-		if (this.renderedIcon !== action.icon) {
+		const iconSource = this.menuOptions.getIcon?.(action) ?? action.icon;
+		if (this.renderedIcon !== iconSource) {
 			this.actionIcon?.remove();
 			this.actionIcon = undefined;
 			// A submenu with trailing icons reserves its only slot for the arrow.
-			if (this.iconSlot && action.icon) {
+			if (this.iconSlot && iconSource) {
 				const icon = this.actionIcon = h(this.button.domNode.ownerDocument, 'span', { className: 'ash-menu-action-icon' });
-				appendIcon(action.icon, icon);
+				if (URI.isUri(iconSource)) {
+					const image = h(icon.ownerDocument, 'img');
+					image.alt = '';
+					image.src = iconSource.toString();
+					icon.append(image);
+				} else appendIcon(iconSource, icon);
 				this.iconSlot.prepend(icon);
 			}
-			this.renderedIcon = action.icon;
+			this.renderedIcon = iconSource;
 		}
 		if (this.actionIcon) this.actionIcon.style.color = action.iconColor ?? '';
 		if (this.renderedClass !== action.class) {
@@ -182,12 +193,39 @@ export class MenuActionViewItem extends MenuButtonActionViewItem {
 	private checkSlot: HTMLElement | undefined;
 	private checkIcon: HTMLElement | undefined;
 	private badge: HTMLElement | undefined;
+	private rowActions: ActionBar | undefined;
+
+	override setActionContext(context: unknown): void {
+		super.setActionContext(context);
+		if (this.rowActions) this.rowActions.context = context;
+	}
+
+	override setTabbable(tabbable: boolean): void {
+		super.setTabbable(tabbable);
+		this.rowActions?.setFocusable(tabbable);
+	}
 
 	override render(container: HTMLElement): void {
 		super.render(container);
 		this.iconSlot = this.createIconSlot(this.iconPlacement === 'trailing' ? 'trailing' : 'leading');
 		this.checkSlot = this.iconPlacement === 'leading-with-trailing-check' ? this.createIconSlot('trailing') : this.iconSlot;
 		if (this.menuOptions.ariaDescription) this.button.domNode.setAttribute('aria-description', this.menuOptions.ariaDescription);
+		if (this.menuOptions.inlineActions?.length) {
+			container.classList.add('has-inline-actions');
+			const actions = this.rowActions = this._register(new ActionBar(container, {
+				actions: this.menuOptions.inlineActions,
+				ariaLabel: this.action.label,
+				actionRunner: this.actionRunner,
+				tabNavigation: 'each-action',
+				actionViewItemOptions: { buttonStyles: this.menuOptions.buttonStyles, iconOnly: true },
+			}));
+			actions.context = this.actionContext;
+			actions.domNode.classList.add('ash-menu-row-actions');
+			// Keep native button activation inside the row toolbar; selecting the parent dismisses the menu.
+			this._register(addDisposableListener(actions.domNode, 'keydown', event => {
+				if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+			}));
+		}
 		this.update();
 	}
 
@@ -557,6 +595,8 @@ export interface IMenuOptions {
 	readonly keybindingLabelStyles?: IKeybindingLabelStyles;
 	readonly getAriaDescription?: (action: IAction) => string | undefined;
 	readonly getTooltip?: (action: IAction) => string | undefined;
+	readonly getInlineActions?: (action: IAction) => readonly IAction[] | undefined;
+	readonly getIcon?: (action: IAction) => Icon | URI | undefined;
 	readonly enableMnemonics?: boolean;
 	readonly useEventAsContext?: boolean;
 	/** Applies only to submenu actions in this menu, not nested menus they create. */
@@ -668,6 +708,7 @@ export class Menu extends ActionBar {
 			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
 			// Showing a menu under a resting pointer must not select an action.
 			if (!moved) return;
+			element.classList.add('pointer-navigation');
 			const entry = this.findEntry(event.target);
 			this.setFocusedEntry(entry?.action.enabled ? entry : undefined, true);
 			// Only this parent's still-visible submenu keeps a cascade continuous.
@@ -693,14 +734,23 @@ export class Menu extends ActionBar {
 		const element = this.domNode;
 		const ownerDocument = element.ownerDocument;
 		if (event.isComposing || event.defaultPrevented) return;
+		element.classList.remove('pointer-navigation');
 		let handled = true;
 		switch (event.key) {
-			case 'Tab':
+			case 'Tab': {
+				const entry = this.findEntry(event.target);
+				if (entry?.container.classList.contains('has-inline-actions')) {
+					const controls = [...entry.container.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+					const current = controls.indexOf(getActiveElement(ownerDocument) as HTMLButtonElement);
+					controls[(current + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus();
+					break;
+				}
 				if (this.options.tabLeavesSubmenu) {
 					this.closeSubmenus();
 					return;
 				}
 				break;
+			}
 			case 'Escape':
 				if (event.key === 'Escape') this.cancel();
 				break;
@@ -832,6 +882,8 @@ export class Menu extends ActionBar {
 			keybindingLabelStyles: this.options.keybindingLabelStyles,
 			ariaDescription: this.options.getAriaDescription?.(action),
 			tooltip: this.options.getTooltip?.(action),
+			inlineActions: this.options.getInlineActions?.(action),
+			getIcon: this.options.getIcon,
 			onDidSelect: this.options.onDidSelect,
 			openSubmenusImmediatelyOnHover: this.options.openSubmenusImmediatelyOnHover,
 			submenuLayer: (this.options.layer ?? 20) + 1,
@@ -882,14 +934,7 @@ export class Menu extends ActionBar {
 
 	private findEntry(target: EventTarget | null): MenuEntry | undefined {
 		if (!isNode(target)) return undefined;
-		const targetElement = target.nodeType === 1
-			? target as Element
-			: target.parentElement;
-		const container = targetElement?.closest<HTMLElement>(
-			'.ash-action-view-item',
-		);
-		if (container?.parentElement !== this.domNode) return undefined;
-		return this.entries.find((entry) => entry.container === container);
+		return this.entries.find(entry => entry.container.contains(target));
 	}
 
 	private setFocusedEntry(entry: MenuEntry | undefined, focus = false): void {

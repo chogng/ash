@@ -161,6 +161,8 @@ export interface IBrowserViewState {
 	readonly targetId: BrowserViewTargetId;
 	readonly url: string;
 	readonly title: string;
+	/** Page-discovered image data shared by every tab presentation. */
+	readonly favicon?: string;
 	readonly loading: boolean;
 	readonly canGoBack: boolean;
 	readonly canGoForward: boolean;

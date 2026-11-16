@@ -1,26 +1,20 @@
+import { Menus } from '../../../browser/menus.js';
 import { getActiveElement, h } from '../../../../base/browser/dom.js';
-import type { ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { Action, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
-import { isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IMenuService, type MenuId } from '../../../../platform/actions/common/actions.js';
-import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { renderInlineRenameInput, showInlineRenameInput } from '../../../browser/parts/titlebar/inlineRenameInput.js';
 import { TitleMenuActionViewItem } from '../../../browser/parts/titlebar/titleMenuActionViewItem.js';
-import { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
-import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
-import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
-import { SHOW_CHAT_WORKSPACE_COMMAND } from '../../chat/common/constants.js';
 import { isArtifactName } from '../common/artifactWorkspace.js';
 
 type RenameArtifact = (name: string) => Promise<void>;
@@ -39,8 +33,6 @@ export class ArtifactTitleBarWidget extends Disposable {
 	private title = '';
 	private readonly actionsHost: HTMLElement;
 	private readonly toolbar: WorkbenchToolBar;
-	private readonly closeAction: IAction;
-	private sizeAction: IAction | undefined;
 	private contentActions: readonly IAction[] = [];
 
 	constructor(
@@ -50,9 +42,6 @@ export class ArtifactTitleBarWidget extends Disposable {
 		@IMenuService menus: IMenuService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextKeyService contextKeys: IContextKeyService,
-		@IAgentWorkbenchLayoutService layout: IAgentWorkbenchLayoutService,
-		@ISessionsEntryService entries: ISessionsEntryService,
-		@ICommandService commands: ICommandService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IAccessibilityService private readonly accessibility: IAccessibilityService,
 		@IHoverService hoverService: IHoverService,
@@ -75,7 +64,7 @@ export class ArtifactTitleBarWidget extends Disposable {
 			onCancel: () => { if (!this.edit?.saving) this.finishRename(true); },
 			onBlur: () => { if (!this.edit?.saving) this.finishRename(false); },
 		}, this._register(new DisposableStore()));
-		this.actionsHost = h(document, 'div');
+		this.actionsHost = h(document, 'div', { className: 'ash-artifact-title-actions' });
 		this.domNode.append(this.heading, this.actionsHost);
 		const options = {
 			ariaLabel, presentation: 'inherit-foreground' as const, highlightToggledItems: true,
@@ -87,34 +76,14 @@ export class ArtifactTitleBarWidget extends Disposable {
 		this.toolbar = this._register(menu
 			? new MenuWorkbenchToolBar(this.actionsHost, menus, contextMenus, menu, { ...options, contextKeyService: contextKeys })
 			: new WorkbenchToolBar(this.actionsHost, contextMenus, options));
-		const runLayoutAction = async (run: () => Promise<unknown>): Promise<void> => {
-			try { await run(); }
-			catch (error) {
-				if (!isCancellationError(error)) notifications.error(error instanceof Error ? error : String(error));
-			}
-		};
-		const close = localize('sessions.artifacts.close', 'Close artifact');
-		this.closeAction = {
-			id: 'sessions.artifacts.close', label: close, tooltip: close, icon: Lxicon.close, enabled: true,
-			run: () => runLayoutAction(() => contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code'
-				? commands.executeCommand('sessions.open.code', 'conversation')
-				: commands.executeCommand(CommandsRegistry.hasCommand(SHOW_CHAT_WORKSPACE_COMMAND) ? SHOW_CHAT_WORKSPACE_COMMAND : 'sessions.open.chat')),
-		};
-		let maximized: boolean | undefined;
-		const updateSize = () => {
-			const next = !layout.isPartAvailable('sessions');
-			if (maximized === next) return;
-			maximized = next;
-			const label = maximized ? localize('sessions.artifacts.restoreSize', 'Restore artifact size') : localize('sessions.artifacts.maximize', 'Maximize artifact');
-			this.sizeAction = {
-				id: 'sessions.artifacts.toggleSize', label, tooltip: label,
-				icon: maximized ? Lxicon.screenNormal : Lxicon.screenFull, enabled: true,
-				run: () => runLayoutAction(() => entries.setConversationVisible(!layout.isPartAvailable('sessions'), { preserveFocus: true })),
-			};
-			this.updateActions();
-		};
-		this._register(layout.onDidChangePartVisibility(({ partId }) => { if (partId === 'sessions') updateSize(); }));
-		updateSize();
+		this._register(new MenuWorkbenchToolBar(this.actionsHost, menus, contextMenus, Menus.EditorPartLayout, {
+			ariaLabel: localize('sessions.layout.editorActions', 'Editor layout'),
+			presentation: 'inherit-foreground',
+			contextKeyService: contextKeys,
+			actionViewItemProvider: (action, options) => new ButtonActionViewItem(action, {
+				...options, iconOnly: action.id !== 'sessions.toggleSessionPart' || !action.checked,
+			}),
+		}));
 	}
 
 	setTitle(title: string): void {
@@ -208,9 +177,8 @@ export class ArtifactTitleBarWidget extends Disposable {
 	}
 
 	private updateActions(): void {
-		const windowActions = this.sizeAction ? [this.sizeAction, this.closeAction] : [this.closeAction];
-		if (this.toolbar instanceof MenuWorkbenchToolBar) this.toolbar.setTrailingActions([...this.contentActions, ...windowActions]);
-		else this.toolbar.setActions([...this.contentActions, ...windowActions]);
+		if (this.toolbar instanceof MenuWorkbenchToolBar) this.toolbar.setTrailingActions(this.contentActions);
+		else this.toolbar.setActions(this.contentActions);
 	}
 
 	setActionsVisible(visible: boolean): void {

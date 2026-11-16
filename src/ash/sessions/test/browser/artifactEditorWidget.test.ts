@@ -1,3 +1,4 @@
+import { constObservable } from '../../../base/common/observable.js';
 import { IDocsService } from '../../contrib/docs/common/docsService.js';
 import { DocumentCommands } from '../../contrib/artifact/common/commands/documentCommands.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
@@ -163,7 +164,7 @@ services.registerInstance(IFileDialogService, {
 services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
 services.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: unexpected });
 services.registerInstance(ISessionsEntryService, {
-	...Disposable.None, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
+	...Disposable.None, conversationBrowserContext: constObservable(undefined), closeConversationEditor: unexpected, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
 	conversationEditors: [], isConversationEditor: () => false, openConversationBrowser: unexpected,
 	openEntry: unexpected, replaceEditorResource: unexpected, restore: unexpected,
 });
@@ -1289,7 +1290,7 @@ class ArtifactFixture extends Disposable {
 			get activePane() { return { page: fixture.page }; },
 		} as unknown as import('../../../workbench/browser/parts/editor/editorPart.js').IEditorPart);
 		child.registerInstance(ISessionsEntryService, {
-			...Disposable.None, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
+			...Disposable.None, conversationBrowserContext: constObservable(undefined), closeConversationEditor: unexpected, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
 			conversationEditors: [], isConversationEditor: () => false, openConversationBrowser: unexpected,
 			openEntry: async (_entry, initialize) => { initialize?.(); },
 			replaceEditorResource: unexpected, restore: unexpected,
@@ -3056,7 +3057,7 @@ test('Table artifact commands open resource inputs and restore the same file wit
 	fixture.child.registerInstance(IArtifactTableService, tables);
 	const entries: import('../../services/layout/common/sessionsEntryService.js').ISessionsEntry[] = [];
 	fixture.child.registerInstance(ISessionsEntryService, {
-		...Disposable.None, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
+		...Disposable.None, conversationBrowserContext: constObservable(undefined), closeConversationEditor: unexpected, setConversationVisible: unexpected, checkpointEditorLayout: unexpected,
 		conversationEditors: [], isConversationEditor: () => false, openConversationBrowser: unexpected,
 		replaceEditorResource: unexpected, restore: unexpected,
 		openEntry: async (entry, initialize) => { entries.push(entry); initialize?.(); },

@@ -28,6 +28,8 @@ import { BrowserEditorChatIntegration } from '../../electron-browser/features/br
 import { ChatContextPickService } from '../../../../contrib/chat/browser/attachments/chatContextPickService.js';
 
 import { VSBuffer } from '../../../../../base/common/buffer.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { URI } from '../../../../../base/common/uri.js';
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const data: IBrowserEditorInputData = { version: 1, id, url: 'https://example.test/', title: 'Saved page', session: { scope: BrowserViewStorageScope.Workspace } };
@@ -43,6 +45,7 @@ suite('Browser editor page model and restoration', () => {
 		f.events.fire({ type: 'stateChanged', state: { ...first.state, title: 'Updated title', url: 'https://example.test/next' } });
 		assert.deepEqual([first === second, f.creations, input.label, input.serialize().url], [true, 1, 'Updated title', 'https://example.test/next']);
 		assert.equal(input.getTitle(), 'Updated title\nhttps://example.test/next');
+		assert.equal(input.url, 'https://example.test/next');
 	});
 
 	test('developer tools use the page owner and mirror real state changes without optimistic toggles', async () => {
@@ -59,6 +62,23 @@ suite('Browser editor page model and restoration', () => {
 		f.events.fire({ type: 'stateChanged', state: { ...model.state, title: 'Changed title' } });
 		f.events.fire({ type: 'stateChanged', state: { ...model.state, isDevToolsOpen: false } });
 		assert.deepEqual([model.isDevToolsOpen, changes], [false, [true, false]]);
+	});
+
+	test('all tab presentations read the page favicon and use the browser icon while loading', async () => {
+		using f = fixture();
+		const input = f.input(data);
+		assert.equal(input.getIcon(), Lxicon.global);
+		const model = await input.resolve();
+		const favicon = 'data:image/png;base64,fixture';
+		let changes = 0;
+		using listener = input.onDidChangeLabel(() => changes++);
+		f.events.fire({ type: 'stateChanged', state: { ...model.state, favicon, loading: true } });
+		assert.equal(input.getIcon(), Lxicon.global);
+		f.events.fire({ type: 'stateChanged', state: { ...model.state, loading: false } });
+		assert.equal((input.getIcon() as URI).toString(), favicon);
+		f.events.fire({ type: 'stateChanged', state: { ...model.state, url: 'https://other.test/', favicon: undefined } });
+		assert.equal(input.getIcon(), Lxicon.global);
+		assert.equal(changes, 3);
 	});
 
 	test('a newer event wins over a snapshot response arriving later', async () => {

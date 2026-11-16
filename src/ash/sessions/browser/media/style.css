@@ -288,6 +288,21 @@
 	border-radius: var(--ash-cornerRadius-large);
 }
 
+.ash-sessions-window .ash-menu .ash-menu-row-actions {
+	--ash-toolbar-actionSize: var(--ash-spacing-size240);
+	inset-block: var(--ash-spacing-size20);
+	inset-inline-end: var(--ash-spacing-size20);
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-sessions-window .ash-menu .ash-menu-row-actions .ash-button {
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
 .ash-sessions-window .ash-keybinding-label-keycap kbd {
 	box-shadow: none;
 }

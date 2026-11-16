@@ -134,7 +134,7 @@ export abstract class ActionViewItem extends Disposable {
 export class ButtonActionViewItem extends ActionViewItem {
 	private _button: Button | undefined;
 
-	constructor(action: IAction, options: ActionViewItemOptions = {}) {
+	constructor(action: IAction, private readonly options: ActionViewItemOptions = {}) {
 		super(action, options);
 	}
 
@@ -142,6 +142,8 @@ export class ButtonActionViewItem extends ActionViewItem {
 		if (this._button) {
 			throw new Error(`Action view item is already rendered: ${this.action.id}`);
 		}
+		// An explicitly labelled action must not inherit the toolbar's icon-only slot sizing.
+		if (this.options.iconOnly === false) container.classList.remove('icon');
 		this._button = this.createButton(container, {
 			label: this.action.label,
 			icon: this.action.icon,

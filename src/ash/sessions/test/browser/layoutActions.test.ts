@@ -64,7 +64,18 @@ test('Sessions layout commands update menu state from their owners and release w
 	services.registerInstance(ICommandService, commands);
 	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, resources.add(new TestPart(browser.window.document.body, id))]));
 	const editorServices = resources.add(registerTestComponentServices(createTestEditorServices(undefined, undefined, browser.window.document), browser.window.document));
-	const hosts = resources.add(createDesktopEditorTestServices(editorServices, {}, browser.window.document));
+	const registry = resources.add(new EditorPaneRegistry());
+	registry.registerEditorPane({
+		id: 'test.retainedLayout', name: 'Retained layout fixture', canOpen: () => 1,
+		create: () => new class extends EditorPane {
+			readonly id = 'test.retainedLayout';
+			async setInput(): Promise<void> { }
+			clearInput(): void { }
+			layout(): void { }
+			focus(): void { }
+		}('test.retainedLayout', editorServices.get(IThemeService), editorServices.get(IStorageService)),
+	});
+	const hosts = resources.add(createDesktopEditorTestServices(editorServices, { registry }, browser.window.document));
 	parts.set('editor', hosts.area);
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	let historyIndex = 1;
@@ -151,6 +162,26 @@ test('Sessions layout commands update menu state from their owners and release w
 		assert.deepEqual(navigationState(), [true, false]);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
 		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
+		const input = { resource: URI.file('/fixture/retained.md'), editorId: 'test.retainedLayout' };
+		await hosts.editor.openEditor(input, { pinned: true });
+		const group = hosts.editor.activeGroup;
+		layout.showPart('editor');
+		layout.setPartAvailable('sessions', false);
+		using partMenu = new MenuService(commands, contextKeys).createMenu(Menus.EditorPartLayout);
+		const partActions = () => partMenu.getActions().flatMap(([, actions]) => actions);
+		assert.deepEqual(partActions().map(action => [action.id, action.label, action.icon]), [
+			['sessions.toggleSessionPart', 'Show Chat', Lxicon.minimize],
+			['sessions.closeEditorPart', 'Close editor', Lxicon.close],
+		]);
+		await partActions()[1]!.run();
+		assert.equal(layout.isPartVisible('editor'), false);
+		assert.equal(layout.isPartVisible('sessions'), true);
+		assert.equal(group.activeInput, input);
+		assert.deepEqual(group.inputs, [input], 'Hiding the Part retains its document working set');
+		assert.equal(partActions()[0]!.label, 'Maximize');
+		layout.showPart('editor');
+		assert.equal(group.activeInput, input);
+
 		actions.dispose();
 		assert.deepEqual(navigationState(), [false, false]);
 		assert.deepEqual(menu.getActions(), []);

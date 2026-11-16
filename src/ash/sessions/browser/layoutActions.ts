@@ -1,3 +1,4 @@
+import { ISessionsEntryService } from '../services/layout/common/sessionsEntryService.js';
 import { SessionSideChatEditorInput } from '../contrib/chat/browser/sessionSideChatEditorInput.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import type { EditorParts } from './parts/editorParts.js';
@@ -22,6 +23,7 @@ import { CanGoBackContext, CanGoForwardContext, IsNewSessionContext, NewSessionH
 import { hasSelectedCodeWorkspace } from '../common/sessionWorkspace.js';
 
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
+const sessionsPartHidden = new RawContextKey<boolean>('sessions.sessionPartHidden', false);
 const conversationCovered = new RawContextKey<boolean>('sessions.conversationCovered', false);
 const showSessionTools = ContextKeyExpr.and(sessionTools.isEqualTo(true), ContextKeyExpr.not(IsNewSessionContext.key));
 
@@ -41,11 +43,13 @@ export function registerLayoutActions(
 	const codeAvailable = sessionTools.bindTo(contextKeys);
 	const panelVisible = PanelVisibleContext.bindTo(contextKeys);
 	const covered = conversationCovered.bindTo(contextKeys);
+	const sessionsHidden = sessionsPartHidden.bindTo(contextKeys);
 	const isNewSession = IsNewSessionContext.bindTo(contextKeys);
 	const hasUsableWorkspace = NewSessionHasUsableWorkspaceContext.bindTo(contextKeys);
 	const updateContext = (): void =>
 		contextKeys.bufferChangeEvents(() => {
 			sidebarVisible.set(layout.isPartVisible('sidebar'));
+			sessionsHidden.set(!layout.isPartAvailable('sessions'));
 			backEnabled.set(sessions.canNavigateBack);
 			forwardEnabled.set(sessions.canNavigateForward);
 			codeAvailable.set(contextKeys.getValue(SessionsCodeEditorContext.key) === true);
@@ -69,6 +73,7 @@ export function registerLayoutActions(
 		toDisposable(() =>
 			contextKeys.bufferChangeEvents(() => {
 				sidebarVisible.reset();
+				sessionsHidden.reset();
 				backEnabled.reset();
 				forwardEnabled.reset();
 				codeAvailable.reset();
@@ -88,6 +93,44 @@ export function registerLayoutActions(
 			}
 		}),
 	);
+	disposables.add(registerAction2(class ToggleSessionPartAction extends Action2 {
+		constructor() {
+			super({
+				id: 'sessions.toggleSessionPart',
+				title: localize2('sessions.layout.maximize', 'Maximize'),
+				icon: Lxicon.maximize,
+				toggled: {
+					condition: sessionsPartHidden.isEqualTo(true),
+					title: localize2('sessions.layout.showChat', 'Show Chat'),
+					icon: Lxicon.minimize,
+				},
+				menu: { id: Menus.EditorPartLayout, group: 'navigation', order: 1 },
+			});
+		}
+
+		override run(accessor: ServicesAccessor): Promise<void> {
+			return accessor.get(ISessionsEntryService).setConversationVisible(!layout.isPartAvailable('sessions'), { preserveFocus: true });
+		}
+	}));
+	disposables.add(registerAction2(class CloseEditorPartAction extends Action2 {
+		constructor() {
+			super({
+				id: 'sessions.closeEditorPart',
+				title: localize2('sessions.layout.closeEditor', 'Close editor'),
+				icon: Lxicon.close,
+				menu: { id: Menus.EditorPartLayout, group: 'navigation', order: 2 },
+			});
+		}
+
+		override run(): void {
+			// Closing a Part hides its retained editors; tab actions own closing individual inputs.
+			layout.updateParts(() => {
+				layout.setPartAvailable('sessions', true);
+				layout.hidePart('editor');
+			});
+			layout.focus();
+		}
+	}));
 	disposables.add(CommandsRegistry.register('ash.sessions.back', () => sessions.openPreviousSession()));
 	disposables.add(CommandsRegistry.register('ash.sessions.forward', () => sessions.openNextSession()));
 	disposables.add(registerAction2(class ShowConversationAction extends Action2 {

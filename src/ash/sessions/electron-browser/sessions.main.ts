@@ -399,6 +399,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.browserView.autoReload',
 					'workbench.contrib.sessionBrowserViewController',
 					'workbench.contrib.sessionBrowserNetwork',
+					'sessions.contrib.browserTabs',
 					'sessions.chatgpt.web',
 					'sessions.chatgpt.experimental',
 					'sessions.chatWorkspace',

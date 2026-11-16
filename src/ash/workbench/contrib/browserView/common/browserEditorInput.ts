@@ -9,6 +9,7 @@ import {
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import type { Icon } from '../../../../base/common/icon.js';
 import { EditorInput } from '../../../common/editor/editorInput.js';
 
 import { type EditorInputSerializer, requireRecord, requireString } from '../../../services/editor/common/editorInputSerializer.js';
@@ -47,6 +48,7 @@ export class BrowserEditorInput extends EditorInput {
 	}
 
 	public get id(): string { return this.data.id; }
+	public get url(): string { return this.model?.state.url ?? this.data.url; }
 	public get model(): IBrowserViewModel | undefined { return this.resolvedModel.value; }
 
 	/** Attach Main's discovered page without creating another page or changing its owner. */
@@ -63,16 +65,18 @@ export class BrowserEditorInput extends EditorInput {
 
 	public getName(): string {
 		const state = this.model?.state;
-		const url = state?.url ?? this.data.url;
+		const url = this.url;
 		const title = state?.title ?? this.data.title;
 		if (url === 'about:blank') { return localize({ bundle: 'ash.workbench', key: 'browser.title' }, 'Browser'); }
 		return title.trim() || new URL(url).host;
 	}
 
-	public getIcon(): typeof Lxicon.global { return Lxicon.global; }
+	public getIcon(): Icon | URI {
+		const state = this.model?.state;
+		return state?.favicon && !state.loading ? URI.parse(state.favicon) : Lxicon.global;
+	}
 	public getTitle(): string {
-		const url = this.model?.state.url ?? this.data.url;
-		return `${this.getName()}\n${url}`;
+		return `${this.getName()}\n${this.url}`;
 	}
 
 	public resolve(): Promise<IBrowserViewModel> {
