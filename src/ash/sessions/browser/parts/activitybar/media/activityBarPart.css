@@ -99,43 +99,6 @@
 	font-size: var(--ash-fontSize-body1);
 }
 
-.ash-sessions-activity-projects {
-	position: relative;
-}
-
-.ash-sessions-activity-content.labeled
-	.ash-sessions-activity-projects
-	> .ash-sessions-activity-item {
-	padding-inline-end: calc(
-		var(--ash-toolbar-actionSize) + 2 *
-			var(--ash-sessions-sidebar-item-inset)
-	);
-}
-
-:where(.ash-sessions-activity-projects:hover) > .ash-sessions-activity-item {
-	background: var(--ash-sessions-sidebar-hover-background);
-}
-
-.ash-sessions-activity-projects > button.ash-sessions-activity-create-project {
-	--ash-button-border-radius: var(--ash-cornerRadius-medium);
-	position: absolute;
-	inset-block-start: var(--ash-sessions-sidebar-item-inset);
-	inset-inline-end: var(--ash-sessions-sidebar-item-inset);
-	width: var(--ash-toolbar-actionSize);
-	height: var(--ash-toolbar-actionSize);
-	min-width: var(--ash-toolbar-actionSize);
-	min-height: var(--ash-toolbar-actionSize);
-	padding: 0;
-	opacity: 0;
-	pointer-events: none;
-}
-
-.ash-sessions-activity-projects:is(:hover, :focus-within)
-	> .ash-sessions-activity-create-project {
-	opacity: 1;
-	pointer-events: auto;
-}
-
 /* Keep the two-button layout when the shared menu stylesheet loads later. */
 .ash-menu.ash-sessions-navigation-menu > .ash-sessions-navigation-menu-row {
 	display: grid;

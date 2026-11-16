@@ -1,7 +1,8 @@
 import { IDocsService } from '../../../src/ash/sessions/contrib/docs/common/docsService.js';
+import { AccessibilityVerbositySettingId } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { IAgentHostConnectionsService } from '../../../src/ash/platform/agentHost/common/agentHostConnectionsService.js';
 import { ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
-import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { IWorkspacesService } from '../../../src/ash/platform/workspaces/common/workspaces.js';
 import { createServiceIdentifier } from '../../../src/ash/platform/instantiation/common/instantiation.js';
@@ -220,6 +221,17 @@ const projectChanges = new Emitter<void>();
 window.addEventListener('pagehide', () => projectChanges.dispose(), { once: true });
 if (new URL(location.href).searchParams.has('projectCreation')) {
 	const { ChatListCatalog, IChatListCatalog } = await import('../../../src/ash/sessions/contrib/chat/browser/chatListModel.js');
+	if (new URL(location.href).searchParams.has('projectType')) {
+		const { registerChatWorkspaceNavigation } = await import('../../../src/ash/sessions/contrib/chat/electron-browser/chatWorkspace.contribution.js');
+		const { CHAT_WORKSPACE_NAVIGATION_ID } = await import('../../../src/ash/sessions/contrib/chat/common/constants.js');
+		const { ISessionsEntryService } = await import('../../../src/ash/sessions/services/layout/common/sessionsEntryService.js');
+		const registration = registerChatWorkspaceNavigation({ verbositySetting: AccessibilityVerbositySettingId.Chat, hint: () => '' });
+		const startup = CommandsRegistry.register('sessions.open.new', accessor => accessor.get(ISessionsEntryService).openEntry({
+			id: 'fixture.chat', content: 'conversation', workspaceMode: 'chat', sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID,
+			restoreCommand: 'sessions.open.new', conversationKind: 'chat', activityContext: 'sessions.activity.chatSelected', focus: 'conversation',
+		}));
+		window.addEventListener('pagehide', () => { startup.dispose(); registration.dispose(); }, { once: true });
+	}
 	const remote = new SyncDescriptor(class implements ChatListSource {
 		readonly snapshot = constObservable({
 			entries: [],

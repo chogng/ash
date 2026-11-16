@@ -1118,7 +1118,7 @@ suite('sessions browser component', () => {
 		await page.getByRole('menuitemradio', { name: 'Default' }).click();
 		await expect(activityBar).toHaveCount(0);
 		await expectActivityIconSize(activityNavigation, 18);
-		await expect(createProject).toHaveCount(1);
+		await expect(createProject).toHaveCount(0);
 		await chatButton.click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 		await page.getByRole('menuitemradio', { name: 'Top' }).click();
@@ -1899,7 +1899,7 @@ suite('sessions browser component', () => {
 			const projectRow = list.locator('[data-project-id="search-project"]');
 			await expect(list.getByRole('heading', { level: 2 })).toHaveCount(0);
 			await expect(heading).toBeVisible();
-			await expect(toolbar.getByRole('button')).toHaveCount(code ? 2 : 1);
+			await expect(toolbar.getByRole('button')).toHaveCount(2);
 			await expect(toolbar).toHaveCSS('opacity', '0');
 			await expect(projects.locator('[data-ash-icon-id="list-filter"]')).toBeVisible();
 			await expect(more.locator('.ash-dropdown-menu-indicator')).toBeHidden();
@@ -1951,21 +1951,29 @@ suite('sessions browser component', () => {
 			await expect(treeRow).toHaveCSS('background-color', transparent);
 			await expect(toolbar).toHaveCSS('opacity', '1');
 			await page.keyboard.press('Tab');
-			if (code) {
-				await expect(create).toBeFocused();
-				await page.keyboard.press('ArrowRight');
-			}
+			await expect(create).toBeFocused();
+			await page.keyboard.press('ArrowRight');
 			await expect(more).toBeFocused();
 			await expect(more).toHaveCSS('outline-style', 'solid');
 			await page.keyboard.press('Enter');
 			await expect(more).toHaveAttribute('aria-expanded', 'true');
 			await expect(toolbar).toHaveCSS('opacity', '1');
 			const filterMenu = page.locator('.ash-sessions-list-menu');
-			await expect(filterMenu.getByRole('menuitem')).toContainText(chinese
-				? ['分组方式', '排序方式', '显示']
-				: ['Group By', 'Sort By', 'Show']);
+			const groupName = chinese ? '分组方式 项目' : 'Group By Projects';
+			const sortName = chinese ? '排序方式 最近更新' : 'Sort By Last Updated';
+			const showName = chinese ? '显示' : 'Show';
+			const menuItems = filterMenu.getByRole('menuitem');
+			const names = [groupName, sortName, showName];
+			await expect(menuItems).toHaveCount(names.length);
+			for (const [index, name] of names.entries()) await expect(menuItems.nth(index)).toHaveAccessibleName(name);
 			await expect(filterMenu.getByRole('menuitem', { name: chinese ? '在侧栏中搜索会话' : 'Search sessions in the sidebar', exact: true })).toHaveCount(0);
-			const group = page.getByRole('menuitem', { name: chinese ? '分组方式' : 'Group By', exact: true });
+			const group = filterMenu.getByRole('menuitem', { name: groupName, exact: true });
+			const sort = filterMenu.getByRole('menuitem', { name: sortName, exact: true });
+			const groupValue = (await group.locator('.ash-icon-label-description').boundingBox())!;
+			const sortValue = (await sort.locator('.ash-icon-label-description').boundingBox())!;
+			const arrow = (await group.locator('.ash-submenu-indicator').boundingBox())!;
+			expect(groupValue.x + groupValue.width).toBeCloseTo(sortValue.x + sortValue.width);
+			expect(groupValue.x + groupValue.width).toBeLessThan(arrow.x);
 			await expect(group).toBeFocused();
 			await group.press('ArrowRight');
 			await expect(page.getByRole('menuitemradio', { name: chinese ? '状态' : 'Status', exact: true })).toBeVisible();
@@ -1984,6 +1992,43 @@ suite('sessions browser component', () => {
 			await expect(more).toBeFocused();
 			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 		}
+	});
+
+	test('Chat sidebar filters projects by type and remembers the selection', async function () {
+		const { page, info: testInfo } = browserTests;
+		await page.goto('/sessions.html?catalog&search&projectCreation&projectType&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const list = page.locator('.ash-sessions-list[data-mode="chat"]:visible');
+		const chatProject = list.locator('[data-project-id="g-p-research"]');
+		const fileProject = list.locator('[data-project-id="search-project"]');
+		const more = list.getByRole('button', { name: '更多会话操作', exact: true });
+		const typeMenu = (value: string) => page.getByRole('menuitem', { name: `类型 ${value}`, exact: true });
+		const selectType = async (current: string, next: string) => {
+			await more.press('Enter');
+			await typeMenu(current).press('ArrowRight');
+			await expect(page.getByRole('menuitemradio', { name: current, exact: true, checked: true })).toBeVisible();
+			await page.getByRole('menuitemradio', { name: next, exact: true }).press('Enter');
+			await expect(more).toBeFocused();
+		};
+		await expect(chatProject).toBeVisible();
+		await expect(fileProject).toBeVisible();
+		await selectType('全部', '聊天');
+		await expect(chatProject).toBeVisible();
+		await expect(fileProject).toHaveCount(0);
+		await selectType('聊天', '文件');
+		await expect(chatProject).toHaveCount(0);
+		await expect(fileProject).toBeVisible();
+		await page.reload();
+		await expect(fileProject).toBeVisible();
+		await expect(chatProject).toHaveCount(0);
+		await more.press('Enter');
+		await typeMenu('文件').press('ArrowRight');
+		await page.screenshot({ path: testInfo.outputPath('sidebar-project-type-zh-CN.png') });
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+		await selectType('文件', '全部');
+		await expect(chatProject).toBeVisible();
+		await expect(fileProject).toBeVisible();
 	});
 
 	for (const locale of ['en', 'zh-CN']) test(`Code creates a project from local source folders (${locale})`, async function () {
@@ -2156,18 +2201,22 @@ suite('sessions browser component', () => {
 		await expect(savedIcon).toHaveCSS('color', previewColor);
 	});
 
-	for (const locale of ['en', 'zh-CN']) test(`Projects navigation opens the project creation dialog (${locale})`, async function () {
+	for (const locale of ['en', 'zh-CN']) test(`Projects heading opens the project creation dialog (${locale})`, async function () {
 		const { page } = browserTests;
 		const chinese = locale === 'zh-CN';
 		await page.goto(`/sessions.html?catalog&search&locale=${locale}`);
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-		const row = page.locator('.ash-sessions-navigation [data-action-id="sessions.open.projects"]');
-		const projects = row.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true });
-		const create = row.getByRole('button', { name: chinese ? '创建项目' : 'Create project', exact: true });
+		const navigation = page.locator('.ash-sessions-navigation [data-action-id="sessions.open.projects"]');
+		const projects = navigation.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true });
+		const row = page.locator('.ash-sessions-list[data-mode="chat"]:visible [data-section="projects"]');
+		const toolbar = row.getByRole('toolbar');
+		const createName = chinese ? '创建项目' : 'Create project';
+		const create = row.getByRole('button', { name: createName, exact: true });
 		const dialog = page.getByRole('dialog', { name: chinese ? '创建项目' : 'Create a project', exact: true });
 		const name = dialog.getByRole('textbox', { name: chinese ? '你正在做什么？' : 'What are you working on?', exact: true });
-		await expect(create).toHaveCSS('opacity', '0');
-		await projects.focus();
+		await expect(navigation.getByRole('button', { name: createName, exact: true })).toHaveCount(0);
+		await expect(toolbar).toHaveCSS('opacity', '0');
+		await row.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true }).focus();
 		await page.keyboard.press('Tab');
 		await expect(create).toBeFocused();
 		await expect(create.locator('[data-ash-icon-id="add"]')).toBeVisible();
@@ -2179,11 +2228,12 @@ suite('sessions browser component', () => {
 		await expect(projects).toHaveAttribute('aria-current', 'page');
 		await create.hover();
 		await expect(create).toHaveCSS('background-color', 'rgba(90, 93, 94, 0.16)');
-		const rowBounds = (await projects.boundingBox())!;
+		const rowBounds = (await row.boundingBox())!;
+		const moreBounds = (await row.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true }).boundingBox())!;
 		const createBounds = (await create.boundingBox())!;
 		expect(createBounds.width).toBe(24);
 		expect(createBounds.height).toBe(24);
-		expect(rowBounds.x + rowBounds.width - createBounds.x - createBounds.width).toBeCloseTo(4);
+		expect(moreBounds.x - createBounds.x - createBounds.width).toBeCloseTo(4);
 		expect(createBounds.y - rowBounds.y).toBeCloseTo(4);
 		await create.click();
 		await expect(name).toBeFocused();

@@ -5,6 +5,7 @@ import './chatFixtureLocalization.js';
 import { projectMaterialFilesScheme } from '../../../src/ash/platform/projects/common/projectMaterialFiles.js';
 import { IWorkbenchEnvironmentService } from '../../../src/ash/workbench/services/environment/common/environmentService.js';
 import { IBrowserViewService } from '../../../src/ash/platform/browserView/common/browserView.js';
+import { IBrowserViewWorkbenchService } from '../../../src/ash/workbench/contrib/browserView/common/browserView.js';
 import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import '../../../src/ash/sessions/browser/actions/sessionsChatActions.js';
 import '../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js';
@@ -63,6 +64,7 @@ import { ISessionsListModelService, SessionsListModelService } from '../../../sr
 import type { ChatView } from '../../../src/ash/sessions/contrib/chat/browser/chatView.js';
 import { ChatViewFactory } from '../../../src/ash/sessions/contrib/chat/browser/chatViewFactory.js';
 import { ISessionsConversationService } from '../../../src/ash/sessions/services/sessions/common/sessionsConversation.js';
+import { ISessionsEntryService } from '../../../src/ash/sessions/services/layout/common/sessionsEntryService.js';
 import { chatGPTViewSource, chatGPTScrollOptimization } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTWeb.js';
 import { registerChatGPTResponseActions } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTResponseActions.js';
 import { ChatCopyActionRendering } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatCopyActions.js';
@@ -205,6 +207,9 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService],
 	[INotificationService, notifications],
 	[ILayoutService, resources.add(new BrowserLayoutService({ root: document.body }))],
+	// The standalone page has no embedded browser or Sessions window layout.
+	[IBrowserViewWorkbenchService, undefined],
+	[ISessionsEntryService, undefined],
 	[IImageEditorService, {} as IImageEditorService],
 	[IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService()],
 	[IChatGPTTransport, {

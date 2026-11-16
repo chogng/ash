@@ -15,6 +15,11 @@
 	flex: 0 0 auto;
 }
 
+.ash-sessions-list-menu .ash-submenu-trigger .ash-icon-label-description {
+	margin-inline: auto 0;
+	padding-inline-start: var(--ash-spacing-size120);
+}
+
 .ash-sessions-list-search {
 	min-width: 0;
 	min-height: var(--ash-spacing-size320);

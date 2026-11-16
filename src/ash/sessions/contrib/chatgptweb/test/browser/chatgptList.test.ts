@@ -498,7 +498,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(rows).toHaveText(['Echo', 'Zulu', 'Alpha']);
 			await expect(projects.getByRole('heading')).toHaveText(chinese ? '项目' : 'Projects');
 			await expect(projects.locator('.ash-sessions-list-section-toggle')).toHaveCount(0);
-			await expect(toolbar.getByRole('button')).toHaveCount(1);
+			await expect(toolbar.getByRole('button')).toHaveCount(2);
 			await expect(toolbar).toHaveCSS('opacity', '0');
 			await projects.getByRole('heading').hover();
 			await expect(toolbar).toHaveCSS('opacity', '1');
@@ -514,7 +514,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(toolbar).toHaveCSS('opacity', '1');
 			const openSort = async () => {
 				await more.press('Enter');
-				const sort = page.getByRole('menuitem', { name: chinese ? '排序方式' : 'Sort By', exact: true });
+				const sort = page.getByRole('menuitem', { name: chinese ? /^排序方式 /u : /^Sort By /u });
 				await sort.focus();
 				await page.keyboard.press('ArrowRight');
 			};
@@ -1836,7 +1836,9 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			});
 			await page.route('**/service/backend-api/files/file-project-note/uploaded', route => route.fulfill({ json: { status: 'success' } }));
 			await page.route('**/service/backend-api/f/conversation/prepare', route => {
-				preparations.push(route.request().postDataJSON());
+				const body = route.request().postDataJSON();
+				// Typing can prime the route with an empty message list before Send.
+				if (!(Array.isArray(body.messages) && body.messages.length === 0)) preparations.push(body);
 				return route.fallback();
 			});
 			await page.route('**/service/backend-api/f/conversation', route => {

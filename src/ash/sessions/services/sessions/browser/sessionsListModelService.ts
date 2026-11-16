@@ -13,6 +13,7 @@ export type SessionSortMode = 'name' | 'created' | 'updated';
 export type SessionSortDirection = 'ascending' | 'descending';
 const sessionGroupings = ['none', 'projects', 'repository', 'status', 'environment'] as const;
 export type SessionGrouping = typeof sessionGroupings[number];
+export type SidebarProjectTypeFilter = 'all' | 'chat' | 'file';
 export type AutomationSessionsListMode = 'always' | 'afterReply' | 'never';
 const listModes = ['chat', 'code'] as const;
 export type SessionsListMode = typeof listModes[number];
@@ -33,6 +34,8 @@ export interface ISessionsListModelService {
 	setSortDirection(mode: SessionsListMode, direction: SessionSortDirection): void;
 	getGrouping(mode: SessionsListMode): SessionGrouping;
 	setGrouping(mode: SessionsListMode, grouping: SessionGrouping): void;
+	getProjectTypeFilter(): SidebarProjectTypeFilter;
+	setProjectTypeFilter(filter: SidebarProjectTypeFilter): void;
 	readonly showAttentionGroup: boolean;
 	setShowAttentionGroup(show: boolean): void;
 	readonly showComparisonGroups: boolean;
@@ -65,6 +68,7 @@ const automationReplyPrefix = 'sessions.list.automationReply.';
 const sortModeKey = 'sessions.list.sortMode';
 const sortDirectionKey = 'sessions.list.sortDirection';
 const groupingKey = 'sessions.list.grouping';
+const projectTypeFilterKey = 'sessions.list.chat.projectTypeFilter';
 const comparisonGroupsKey = 'sessions.list.showComparisonGroups';
 const attentionGroupKey = 'sessions.list.showAttentionGroup';
 const manualOrderPrefix = 'sessions.list.manualOrder.';
@@ -94,7 +98,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 		this.onDidChange = (listener, thisArgs, disposables) => storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && (event.key === automationVisibilityKey || event.key.startsWith(`${sortModeKey}.`)
 				|| event.key.startsWith(`${sortDirectionKey}.`) || event.key.startsWith(`${groupingKey}.`) || event.key === comparisonGroupsKey
-				|| event.key === attentionGroupKey || event.key === automationFilterKey
+				|| event.key === attentionGroupKey || event.key === automationFilterKey || event.key === projectTypeFilterKey
 				|| event.key.startsWith(automationOverridePrefix) || event.key.startsWith(automationReplyPrefix)
 				|| event.key.startsWith(pinnedSessionPrefix) || event.key.startsWith(manualOrderPrefix) || event.key.startsWith(rowIconPrefix) || event.key.startsWith(catalogRowIconPrefix))) {
 				listener.call(thisArgs);
@@ -159,6 +163,15 @@ export class SessionsListModelService implements ISessionsListModelService {
 
 	setGrouping(mode: SessionsListMode, grouping: SessionGrouping): void {
 		this.storage.store(`${groupingKey}.${mode}`, grouping, StorageScope.PROFILE, StorageTarget.USER);
+	}
+
+	getProjectTypeFilter(): SidebarProjectTypeFilter {
+		const value = this.storage.get(projectTypeFilterKey, StorageScope.PROFILE);
+		return value === 'chat' || value === 'file' ? value : 'all';
+	}
+
+	setProjectTypeFilter(filter: SidebarProjectTypeFilter): void {
+		this.storage.store(projectTypeFilterKey, filter, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
 	get showAttentionGroup(): boolean {

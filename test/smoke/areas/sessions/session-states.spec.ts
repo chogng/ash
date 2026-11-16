@@ -271,7 +271,7 @@ for (const locale of ['en', 'zh-CN']) {
 			// Keep row order stable while status changes update the last activity time.
 			await page.locator('.ash-tree-row[data-tree-id="section:projects"]').hover();
 			await page.locator('.ash-sessions-list-more').getByRole('button', { name: locale === 'zh-CN' ? '更多会话操作' : 'More Sessions Actions', exact: true }).click();
-			await page.getByRole('menuitem', { name: locale === 'zh-CN' ? '排序方式' : 'Sort By', exact: true }).press('ArrowRight');
+			await page.getByRole('menuitem', { name: locale === 'zh-CN' ? '排序方式 最近更新' : 'Sort By Last Updated', exact: true }).press('ArrowRight');
 			await page.getByRole('menuitemradio', { name: locale === 'zh-CN' ? '创建日期' : 'Date Created', exact: true }).click();
 			await expect(active().locator('.ash-chat-input-model-action')).toHaveText(model.model);
 			await editor.waitForEditorFocus();

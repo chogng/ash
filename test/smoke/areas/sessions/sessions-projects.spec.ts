@@ -186,7 +186,7 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		const grouping = async (list: ReturnType<typeof page.locator>, selected: string, next: string) => {
 			const trigger = list.getByRole('button', { name: 'More Sessions Actions', exact: true });
 			await trigger.press('Enter');
-			await page.getByRole('menuitem', { name: 'Group By', exact: true }).press('ArrowRight');
+			await page.getByRole('menuitem', { name: `Group By ${selected}`, exact: true }).press('ArrowRight');
 			await expect(page.getByRole('menuitemradio', { name: selected, exact: true, checked: true })).toBeVisible();
 			await page.getByRole('menuitemradio', { name: next, exact: true }).press('Enter');
 			await expect(trigger).toBeFocused();

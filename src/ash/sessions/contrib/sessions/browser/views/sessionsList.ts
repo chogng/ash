@@ -1,6 +1,6 @@
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CodeConversationPageContext, SessionsMenuCanMoveConversationContext, SessionsMenuCanSetFolderContext, SessionsMenuWorkspaceIdleContext } from '../../../../common/contextkeys.js';
-import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping } from '../../../../services/sessions/browser/sessionsListModelService.js';
+import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping, type SidebarProjectTypeFilter } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
@@ -113,9 +113,11 @@ const codeManagementIcons: typeof managementIcons = {
 
 export type SessionsListPresentation = 'chat' | 'code'
 	| { readonly createProject: () => Promise<void>; readonly editProject: (id: string, restoreFocus: () => void) => Promise<void>; }
+	| { readonly createChatProject: () => Promise<void>; }
 	| { readonly openCommand: string; readonly activeContext: string; }
 	| {
 		readonly catalog: SessionsCatalogListInput; readonly accessibility: SessionsCatalogAccessibility;
+		readonly createChatProject?: () => Promise<void>;
 		readonly createProjectForConversation?: (creator: NonNullable<SessionListProjectOrganization['creator']>, restoreFocus: () => void) => void;
 		readonly editProject?: (read: (signal: AbortSignal) => Promise<ChatProjectEdit>, restoreFocus: () => void) => Promise<void>;
 	};
@@ -414,13 +416,14 @@ export class SessionsList extends DomWidget {
 		this._register(groups.onDidChange(() => this.render()));
 		const menuContext = this.menuContext = contextKeys && this._register(contextKeys.createScoped(this.domNode));
 		const createProjectLabel = localize('sessions.activity.createProject', 'Create project');
-		const createProject: IAction | undefined = code ? {
-			id: createCodeProjectAction,
+		const create = typeof presentation !== 'string' && 'createChatProject' in presentation ? presentation.createChatProject : code?.createProject;
+		const createProject: IAction | undefined = create ? {
+			id: code ? createCodeProjectAction : 'sessions.list.createChatProject',
 			label: createProjectLabel,
 			tooltip: createProjectLabel,
 			icon: Lxicon.add,
 			enabled: true,
-			run: code.createProject,
+			run: create,
 		} : undefined;
 		this.listToolbar = createSessionsListToolbar(
 			h(ownerDocument, 'div'), this._store, menus, contextMenus, menuContext,
@@ -469,19 +472,33 @@ export class SessionsList extends DomWidget {
 	private getFilterActions(contributed: readonly IAction[]): readonly IAction[] {
 		const model = this.listModel;
 		const choice = (id: string, label: string, checked: boolean, run: () => void): IAction => ({ id, label, tooltip: '', enabled: true, checked, run });
+		const selectedGrouping = model.getGrouping(this.mode);
 		const group = (value: SessionGrouping, label: string): IAction =>
-			choice(`sessions.list.groupBy.${value}`, label, model.getGrouping(this.mode) === value, () => model.setGrouping(this.mode, value));
+			choice(`sessions.list.groupBy.${value}`, label, selectedGrouping === value, () => model.setGrouping(this.mode, value));
+		const groups = [
+			group('projects', localize('projects.title', 'Projects')),
+			group('none', localize('sessions.list.groupFlat', 'Flat List')),
+			new Separator(),
+			group('repository', localize('sessions.list.groupRepository', 'Repository')),
+			group('status', localize('sessions.list.groupStatus', 'Status')),
+			group('environment', localize('sessions.list.groupEnvironment', 'Environment')),
+		];
+		const projectType = model.getProjectTypeFilter();
+		const type = (value: SidebarProjectTypeFilter, label: string): IAction =>
+			choice(`sessions.list.projectType.${value}`, label, projectType === value, () => model.setProjectTypeFilter(value));
+		const types = this.catalog && selectedGrouping !== 'none' ? [
+			type('all', localize('sessions.list.projectTypeAll', 'All')),
+			type('chat', localize('sessions.list.projectTypeChat', 'Chat')),
+			type('file', localize('sessions.list.projectTypeFile', 'File')),
+		] : [];
+		const sort = sessionSortActions(model, this.mode);
+		const submenu = (id: string, label: string, actions: readonly IAction[]): SubmenuAction =>
+			Object.assign(new SubmenuAction(id, label, actions), { labelDescription: actions.find(action => action.checked)?.label });
 		const automation = model.automationSessionsMode;
 		return Separator.join([
-			new SubmenuAction('sessions.list.groupBy', localize('sessions.list.groupBy', 'Group By'), [
-				group('projects', localize('projects.title', 'Projects')),
-				group('none', localize('sessions.list.groupFlat', 'Flat List')),
-				new Separator(),
-				group('repository', localize('sessions.list.groupRepository', 'Repository')),
-				group('status', localize('sessions.list.groupStatus', 'Status')),
-				group('environment', localize('sessions.list.groupEnvironment', 'Environment')),
-			]),
-			new SubmenuAction('sessions.list.sortBy', localize('sessions.list.sortBy', 'Sort By'), sessionSortActions(model, this.mode)),
+			submenu('sessions.list.groupBy', localize('sessions.list.groupBy', 'Group By'), groups),
+			...(types.length ? [submenu('sessions.list.projectType', localize('sessions.list.projectType', 'Type'), types)] : []),
+			submenu('sessions.list.sortBy', localize('sessions.list.sortBy', 'Sort By'), sort),
 			new SubmenuAction('sessions.list.show', localize('sessions.list.show', 'Show'), [
 				...(!this.entry ? [choice('sessions.list.showAttentionGroup', localize('sessions.list.needsAttention', 'Needs Attention'),
 					model.showAttentionGroup, () => model.setShowAttentionGroup(!model.showAttentionGroup))] : []),
@@ -1112,6 +1129,7 @@ export class SessionsList extends DomWidget {
 		const sort = this.listModel.getSort(this.mode);
 		const grouping = this.listModel.getGrouping(this.mode);
 		const flat = grouping === 'none';
+		const projectType = this.listModel.getProjectTypeFilter();
 		const groupRecents = grouping !== 'projects' && grouping !== 'none';
 		const sortKeys = new Map<HTMLElement, string | number>();
 		const sortRows = (rows: readonly HTMLElement[]): readonly HTMLElement[] => {
@@ -1281,6 +1299,7 @@ export class SessionsList extends DomWidget {
 					recent.push(...catalogRowsFor(project.rows, 'recent', project));
 					continue;
 				}
+				if (projectType !== 'all' && projectType !== (project.localProject ? 'file' : 'chat')) continue;
 				const children = catalogRowsFor(project.rows, section.key, project);
 				if (!children.length && !this.search.matches(project.title)) continue;
 				const key = `catalog-project:${project.key}`;
@@ -1579,7 +1598,8 @@ function createSessionsListToolbar(container: HTMLElement, disposables: Disposab
 						getMenuClassName: () => 'ash-sessions-list-menu',
 						submenuClassName: 'ash-sessions-list-menu',
 						iconPlacement: 'trailing',
-						getCheckedActionsRepresentation: item => item.id.startsWith('sessions.list.groupBy.') || item.id.startsWith('sessions.list.sort') ? 'radio' : 'checkbox',
+						getCheckedActionsRepresentation: item => item.id.startsWith('sessions.list.groupBy.') || item.id.startsWith('sessions.list.projectType.')
+							|| item.id.startsWith('sessions.list.sort') ? 'radio' : 'checkbox',
 					}),
 				},
 				{ ...options, iconOnly: true },

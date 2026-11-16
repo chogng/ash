@@ -13,6 +13,7 @@ import type { SessionsCatalogAccessibility, SessionsCatalogListInput } from './s
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../../chat/common/constants.js';
 import { IProjectDialogService, type ChatProjectEdit } from '../../../projects/browser/projectDialogService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 
 export const SESSIONS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.chats';
@@ -49,12 +50,14 @@ export class SessionsView extends ViewPane {
 	constructor(presentation: SessionsListPresentation | SessionsCatalogPresentation, parent: HTMLElement, options: IViewPaneOptions,
 		@IInstantiationService instantiation: IInstantiationService,
 		@IProjectDialogService private readonly projectDialogs: IProjectDialogService,
+		@ICommandService commands: ICommandService,
 	) {
 		const embedded = typeof presentation !== 'string' && 'openCommand' in presentation;
 		super(parent, embedded ? { ...options, headerSize: 32, minimumBodySize: 0 } : options);
 		this.embedded = embedded;
 		this.contentElement.classList.add('ash-sessions-navigation-view');
 		this.contentElement.classList.toggle('embedded', embedded);
+		const createChatProject = () => commands.executeCommand<void>('sessions.createProject');
 		if (typeof presentation !== 'string' && 'input' in presentation) {
 			const input = this._register(instantiation.createInstance(presentation.input));
 			input.attach(getWindow(this.element), () => this.isBodyVisible());
@@ -63,6 +66,7 @@ export class SessionsView extends ViewPane {
 			presentation = {
 				catalog: input,
 				accessibility: presentation.accessibility,
+				createChatProject,
 				createProjectForConversation: (creator, restoreFocus) => {
 					if (!this.isBodyVisible()) return;
 					restoreFocus();
@@ -86,7 +90,9 @@ export class SessionsView extends ViewPane {
 				},
 			};
 		}
-		if (presentation === 'code') {
+		if (presentation === 'chat') {
+			presentation = { createChatProject };
+		} else if (presentation === 'code') {
 			presentation = {
 				createProject: () => this.projectDialogs.showCodeProjectDialog(this.element),
 				editProject: (id: string, restoreFocus: () => void) => this.projectDialogs.showCodeProjectDialog(this.element, { id, restoreFocus }),
