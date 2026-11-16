@@ -256,6 +256,8 @@ export interface IChatGPTService {
 	reload(): Promise<void>;
 	newChat(options?: { readonly clearDraft: boolean; }): void;
 	select(id: string, accountScope?: string): Promise<void>;
+	/** Restores an independent unsent draft without replacing the ordinary New draft. */
+	selectDraft(id: string, signal?: AbortSignal): Promise<void>;
 	loadOlderHistory?(): Promise<void>;
 	loadMore(): Promise<void>;
 	loadProjectConversations(projectId: string, mode?: ProjectHistoryLoad): Promise<void>;
@@ -2266,17 +2268,26 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.openNewChat();
 	}
 
-	private openNewChat(): void {
+	public async selectDraft(id: string, signal?: AbortSignal): Promise<void> {
+		signal?.throwIfAborted();
+		if (this.isDisposed || this.model.get().sending || this.model.get().managing) return;
+		await this.endVoice(true);
+		signal?.throwIfAborted();
+		if (this.isDisposed || this.model.get().sending || this.model.get().managing) return;
+		this.openNewChat(id);
+	}
+
+	private openNewChat(draftId = this.newConversationId): void {
 		const models = this.model.get().models;
 		this.operation?.abort();
 		this.refreshOperation?.abort();
 		this.generation++;
 		this.draftRevision++;
 		this.taskWatchers.clear();
-		const draft = this.readDraft(this.newConversationId);
+		const draft = this.readDraft(draftId);
 		const selected = models.find(model => model.id === draft?.selection?.model);
 		const selection = selected ? { model: selected.id, modelPreset: this.resolveModelPreset(selected, draft?.selection?.modelPreset) } : draft?.selection;
-		this.update({ linkedTasks: [], localConversationId: this.newConversationId, draft: draft?.text ?? '', attachments: draft?.attachments ?? [], conversationId: undefined, title: 'ChatGPT', messages: [], parentId: crypto.randomUUID(), error: '', busy: false, loading: undefined, uncertain: false, stopped: false, models, ...selection });
+		this.update({ linkedTasks: [], localConversationId: draftId, draft: draft?.text ?? '', attachments: draft?.attachments ?? [], conversationId: undefined, title: 'ChatGPT', messages: [], parentId: crypto.randomUUID(), error: '', busy: false, loading: undefined, uncertain: false, stopped: false, models, ...selection });
 		this.setHistoryFailure('conversation', undefined);
 		this.rememberConversation(undefined);
 		// New may interrupt the first catalog while its native auth owner is still

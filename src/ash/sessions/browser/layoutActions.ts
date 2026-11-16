@@ -20,6 +20,7 @@ import type { ISessionsService } from '../services/sessions/browser/sessionsServ
 import type { IAgentWorkbenchLayoutService } from './workbench.js';
 import { Menus } from './menus.js';
 import { CanGoBackContext, CanGoForwardContext, IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../common/contextkeys.js';
+import { isRecord } from '../../base/common/types.js';
 import { hasSelectedCodeWorkspace } from '../common/sessionWorkspace.js';
 
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
@@ -104,7 +105,10 @@ export function registerLayoutActions(
 					title: localize2('sessions.layout.showChat', 'Show Chat'),
 					icon: Lxicon.minimize,
 				},
-				menu: { id: Menus.EditorPartLayout, group: 'navigation', order: 1 },
+				menu: [
+					{ id: Menus.EditorPartLayout, group: 'navigation', order: 1 },
+					{ id: Menus.SessionsEditorHeaderLayout, when: ContextKeyExpr.not(SessionsCodeEditorContext.key), group: 'navigation', order: 1 },
+				],
 			});
 		}
 
@@ -118,12 +122,22 @@ export function registerLayoutActions(
 				id: 'sessions.closeEditorPart',
 				title: localize2('sessions.layout.closeEditor', 'Close editor'),
 				icon: Lxicon.close,
-				menu: { id: Menus.EditorPartLayout, group: 'navigation', order: 2 },
+				menu: [
+					{ id: Menus.EditorPartLayout, group: 'navigation', order: 2 },
+					{ id: Menus.SessionsEditorHeaderLayout, when: ContextKeyExpr.not(SessionsCodeEditorContext.key), group: 'navigation', order: 3 },
+				],
 			});
 		}
 
-		override run(): void {
-			// Closing a Part hides its retained editors; tab actions own closing individual inputs.
+		override run(_accessor: ServicesAccessor, arg?: unknown): void {
+			const groupId = isRecord(arg) && typeof arg.groupId === 'number' ? arg.groupId
+				: editor.area.hasProductPage ? undefined : editor.activeGroup.id;
+			if (groupId !== undefined) {
+				if (!editor.mainWindowGroups.some(group => group.id === groupId)) return;
+				editor.hideTool(groupId);
+				if (editor.mainWindowGroups.some(group => editor.isGroupVisible(group.id))) return;
+			}
+			// Product pages own the whole editor area; tool headers supply their group.
 			layout.updateParts(() => {
 				layout.setPartAvailable('sessions', true);
 				layout.hidePart('editor');

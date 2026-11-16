@@ -38,7 +38,7 @@ export interface ISessionsService {
 	readonly recentSessions: readonly SessionRecencyEntry[];
 	readonly chatSelection: IObservable<StoredChatSelection | undefined>;
 	getChatSelection(reader?: IReader): SessionsViewSelection | undefined;
-	restoreChatSelection(): Promise<void>;
+	restoreChatSelection(selection?: StoredChatSelection): Promise<void>;
 	openChatDraft(model?: ModelRef, prepare?: (draftId: string) => void): void;
 	selectChatThread(sessionId: SessionId, threadId: ThreadId): void;
 	setChatModelPreference(preference: SessionsChatModelPreference): void;
@@ -166,7 +166,8 @@ export class SessionsService extends Disposable implements ISessionsService {
 		return undefined;
 	}
 
-	async restoreChatSelection(): Promise<void> {
+	async restoreChatSelection(selection?: StoredChatSelection): Promise<void> {
+		if (selection) this.setChatSelection(selection);
 		const reference = this.chatSelection.get();
 		if (reference?.kind === 'thread') {
 			await this.sessionService.initialize();

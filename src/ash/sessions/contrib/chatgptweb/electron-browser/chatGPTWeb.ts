@@ -25,10 +25,11 @@ import { CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WOR
 import { IChatViewFactory, type ChatDraftModelSource, type ICompactChatModel, type IChatViewSource } from '../../chat/browser/chatViewFactory.js';
 import { chatGPTModelEntries, ChatGPTWidgetModel } from './chatGPTWidgetModel.js';
 import { ChatGPTProjectFolderPicker } from './chatGPTProjectFolderPicker.js';
-import { IChatGPTNativeService, IChatGPTService, isChatGPTNewDraft } from '../browser/chatGPTService.js';
+import { IChatGPTNativeService, IChatGPTService, isChatGPTNewDraft, selectedChatConversationId } from '../browser/chatGPTService.js';
 import { ISessionsSearchService } from '../../search/browser/searchService.js';
 import type { SearchResult } from '../../search/browser/searchModel.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
+import { DocumentConversation } from '../../chat/browser/documentConversation.js';
 
 export const SESSIONS_CHATGPT_DEFAULT_BACKEND = 'sessions.chatgpt.defaultBackend';
 export const chatGPTScrollOptimization = 'sessions.chatgpt.optimizeScrolling';
@@ -142,6 +143,31 @@ export class ChatGPTDraftModelSource implements ChatDraftModelSource {
 	}
 }
 
+function documentConversations(chat: IChatGPTService, storage: IStorageService, key: string): DocumentConversation {
+	return new DocumentConversation(key, chat.state.map(state => state.catalogScope ? {
+		scope: state.catalogScope,
+		identity: state.localConversationId,
+		reference: selectedChatConversationId(state)
+			? { kind: 'conversation' as const, id: selectedChatConversationId(state)! }
+			: { kind: 'draft' as const, id: state.localConversationId },
+	} : undefined), async (reference, signal) => {
+		signal.throwIfAborted();
+		const scope = chat.state.get().catalogScope;
+		if (!scope) return false;
+		const draftId = reference?.id ?? crypto.randomUUID();
+		if (reference?.kind === 'conversation') {
+			await chat.select(reference.id, scope);
+		} else {
+			await chat.selectDraft(draftId, signal);
+		}
+		signal.throwIfAborted();
+		const state = chat.state.get();
+		return state.catalogScope === scope && (reference?.kind === 'conversation'
+			? selectedChatConversationId(state) === reference.id
+			: isChatGPTNewDraft(state) && state.localConversationId === draftId);
+	}, storage);
+}
+
 export class ChatGPTWebContribution extends Disposable implements IWorkbenchContribution {
 	public static readonly ID = 'sessions.chatgpt.web';
 	constructor(
@@ -154,12 +180,14 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 	) {
 		super();
 		const chatSource = 'chatgpt';
+		const documents = this._register(documentConversations(chat, storage, 'sessions.chatgpt.documentConversations'));
 		this._register(chatViews.registerSource(chatSource, chatGPTViewSource));
 		const newDraft = chat.state.map(isChatGPTNewDraft);
 		const entry: ISessionsEntry = {
 			id: chatSource, activityContext: chatGPTSelectedContext, content: 'conversation',
 			sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
 			browserContext: chat.state.map(state => JSON.stringify([state.catalogScope, state.localConversationId])),
+			openDocumentConversation: (resource, signal) => documents.open(resource, signal),
 			restoreCommand: SHOW_CHATGPT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
 		};
 		const showChat = async (source?: unknown, create?: unknown) => {
@@ -223,6 +251,7 @@ export class ChatGPTExperimentalContribution extends Disposable implements IWork
 	) {
 		super();
 		const chatSource = 'chatgpt-experimental';
+		const documents = this._register(documentConversations(chat, storage, 'sessions.experimentalChatgpt.documentConversations'));
 		this._register(chatViews.registerSource(chatSource, experimentalChatGPTViewSource));
 		const newDraft = chat.state.map(isChatGPTNewDraft);
 		const newChatCommand = 'sessions.experimentalChatgpt.newChat';
@@ -230,6 +259,7 @@ export class ChatGPTExperimentalContribution extends Disposable implements IWork
 			id: chatSource, activityContext: experimentalChatGPTSelected, content: 'conversation',
 			sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
 			browserContext: chat.state.map(state => JSON.stringify([state.catalogScope, state.localConversationId])),
+			openDocumentConversation: (resource, signal) => documents.open(resource, signal),
 			restoreCommand: SHOW_EXPERIMENTAL_CHATGPT, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
 		};
 		const connect = async (notifyLogin = true): Promise<boolean> => {

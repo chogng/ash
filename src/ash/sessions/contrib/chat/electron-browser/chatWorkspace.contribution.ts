@@ -1,6 +1,6 @@
 import { getActiveElement } from '../../../../base/browser/dom.js';
 import { canceled, onUnexpectedError } from '../../../../base/common/errors.js';
-import { autorun, type IReader } from '../../../../base/common/observable.js';
+import { autorun, derived, type IReader } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { OPEN_SESSION_LINK_SCHEME, parseOpenSessionLinkUri } from '../../../../platform/agentHost/common/openSessionLink.js';
@@ -39,6 +39,7 @@ import type { SessionsCatalogAccessibility } from '../../sessions/browser/views/
 import { ISessionsEntryService, type ISessionsEntry } from '../../../services/layout/common/sessionsEntryService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { DocumentConversation } from '../browser/documentConversation.js';
 import { INativeChatModelPreferencesService } from '../common/nativeChatModelPreferencesService.js';
 import '../browser/chat.contribution.js';
 
@@ -194,6 +195,34 @@ export class ChatWorkspaceContribution extends Disposable {
 	) {
 		super();
 		const chatSource = 'ashChat';
+		const documents = this._register(new DocumentConversation('sessions.ashChat.documentConversations', derived(reader => {
+			const selection = view.chatSelection.read(reader);
+			if (!selection) return undefined;
+			const materialized = sessions.materializedSessions.read(reader);
+			const draftId = selection.kind === 'thread'
+				? [...materialized].find(([, session]) => session.sessionId === selection.sessionId && session.threadId === selection.threadId)?.[0] : selection.id;
+			return {
+				scope: 'ash', identity: draftId ?? (selection.kind === 'thread' ? JSON.stringify([selection.sessionId, selection.threadId]) : selection.id),
+				reference: selection.kind === 'draft' ? { kind: 'draft' as const, id: selection.id }
+					: { kind: 'conversation' as const, id: selection.sessionId, threadId: selection.threadId },
+			};
+		}), async (reference, signal) => {
+			signal.throwIfAborted();
+			if (!reference) {
+				view.openChatDraft();
+			} else if (reference.kind === 'draft') {
+				await view.restoreChatSelection({ kind: 'draft', id: reference.id });
+			} else {
+				const session = await sessions.readCatalog(reference.id);
+				signal.throwIfAborted();
+				if (!reference.threadId || session?.kind !== 'chat' || session.status !== 'active'
+					|| !session.chats.some(chat => chat.threadId === reference.threadId && chat.status === 'active')) return false;
+				await sessions.prepareThread(reference.id, reference.threadId);
+				signal.throwIfAborted();
+				view.selectChatThread(reference.id, reference.threadId);
+			}
+			return true;
+		}, storage));
 		this._register(chatViews.registerSource(chatSource, { ...ashChatViewSource, model: new SyncDescriptor(NativeChatWorkspaceModel, [draftModels]) }));
 		const newDraft = view.chatSelection.map(current => current?.kind === 'draft');
 		const entry: ISessionsEntry = {
@@ -201,6 +230,7 @@ export class ChatWorkspaceContribution extends Disposable {
 			content: 'conversation', sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
 			browserContext: view.chatSelection.map(selection => selection?.kind === 'thread'
 				? JSON.stringify([selection.sessionId, selection.threadId]) : selection?.id ?? 'draft'),
+			openDocumentConversation: (resource, signal) => documents.open(resource, signal),
 			restoreCommand: SHOW_ASH_CHAT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
 		};
 		const openAshChat = async (source?: unknown): Promise<void> => {

@@ -1,4 +1,3 @@
-import { ButtonActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { ServiceCollection } from '../../../platform/instantiation/common/serviceCollection.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IThemeService, type IColorTheme } from '../../../platform/theme/common/themeService.js';
@@ -67,7 +66,6 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	private readonly layoutActions: MenuWorkbenchToolBar;
 	private activityActionViewItemProvider: ActionViewItemProvider | undefined;
 	private sidebarMinimumWidth = 0;
-	private readonly editorLayoutActions: HTMLElement;
 
 	/** Intrinsic left controls, their gaps and the sidebar-aligned outer insets. */
 	public get minimumSidebarWidth(): number { return this.sidebarMinimumWidth; }
@@ -208,7 +206,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 						const accounts = this.activityActions?.element;
 						const accountsWidth = accounts?.getBoundingClientRect().width ?? 0;
 						const accountsGap = accounts && accountsWidth ? pixels(ownerWindow.getComputedStyle(accounts).marginLeft) : 0;
-						const editorHeaderWidth = this.editorHeaders.getBoundingClientRect().width + (this.editorLayoutActions?.getBoundingClientRect().width ?? 0);
+						const editorHeaderWidth = this.editorHeaders.getBoundingClientRect().width;
 						const titleMinimum = editorHeaderWidth ? pixels(ownerWindow.getComputedStyle(center).minWidth) : 0;
 						// Use the remaining titlebar space so growing the window can restore overflowed actions.
 						const reservedWidth = horizontalPadding(this.contentDomNode) + left.getBoundingClientRect().width
@@ -228,25 +226,13 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 			presentation: 'inherit-foreground',
 			actionViewItemProvider: (action, options) => this.activityActionViewItemProvider?.(action, options),
 		}));
-		this.editorLayoutActions = h(container.ownerDocument, 'div', { className: 'ash-sessions-editor-layout-actions', properties: { hidden: true } });
-		this.contentDomNode.append(this.editorLayoutActions);
-		this._register(new MenuWorkbenchToolBar(this.editorLayoutActions, menuService, contextMenus, Menus.EditorPartLayout, {
-			ariaLabel: localize('sessions.layout.editorActions', 'Editor layout'),
-			presentation: 'inherit-foreground',
-			contextKeyService: contextKeys,
-			actionViewItemProvider: (action, options) => new ButtonActionViewItem(action, {
-				...options, iconOnly: action.id !== 'sessions.toggleSessionPart' || !action.checked,
-			}),
-		}));
 
 		const relayoutActions = this._register(new AnimationFrameScheduler(ownerWindow, () => layoutActions.relayout()));
-		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.editorHeaders, this.editorLayoutActions], () => relayoutActions.schedule(), { box: 'border-box' }));
+		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.editorHeaders], () => relayoutActions.schedule(), { box: 'border-box' }));
 	}
 
 	public layoutEditorHeaders(left: number | undefined, page: HTMLElement | undefined, setToolHost: (host: HTMLElement | undefined) => void, browser = false, conversationVisible = true): void {
 		this.domNode.classList.toggle('conversation-hidden', !conversationVisible);
-		this.editorLayoutActions.hidden = !browser;
-		this.domNode.classList.toggle('has-editor-layout-actions', browser);
 		let width = 0;
 		if (left !== undefined) {
 			const controlsEnd = this.leftControls.getBoundingClientRect().right;
@@ -260,7 +246,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 			if (page || browser || left - controlsEnd >= this.minimumHeight * 2 + accountsWidth) {
 				const row = this.contentDomNode;
 				const rightInset = parseFloat(row.ownerDocument.defaultView!.getComputedStyle(row).paddingRight);
-				width = Math.max(0, row.getBoundingClientRect().right - rightInset - left - (browser ? this.editorLayoutActions.offsetWidth : 0));
+				width = Math.max(0, row.getBoundingClientRect().right - rightInset - left);
 			}
 		}
 		const dockTools = width > 0 && !page;

@@ -208,20 +208,12 @@
 	--ash-titlebar-controls-rightInset: 0px;
 }
 
-.ash-sessions-editor-layout-actions:not([hidden]) {
-	display: flex;
-	flex: none;
-	align-items: center;
-	-webkit-app-region: no-drag;
-}
-
 .ash-artifact-title-actions {
 	display: flex;
 	align-items: center;
 }
 
-.ash-sessions-titlebar.has-editor-layout-actions
-	.ash-sessions-tool-header-slot {
+.ash-sessions-titlebar.has-tool-headers .ash-sessions-tool-header-slot {
 	max-width: 100%;
 }
 
@@ -232,12 +224,11 @@
 }
 
 /* Keep the trailing controls inside the window when captions or navigation grow. */
-.ash-sessions-titlebar.has-editor-layout-actions
-	.ash-sessions-titlebar-editor-headers {
+.ash-sessions-titlebar.has-tool-headers .ash-sessions-titlebar-editor-headers {
 	flex-shrink: 1;
 }
 
-.ash-sessions-titlebar.has-editor-layout-actions.conversation-hidden
+.ash-sessions-titlebar.has-tool-headers.conversation-hidden
 	.ash-sessions-titlebar-editor-headers {
 	flex: 1 1 0;
 }

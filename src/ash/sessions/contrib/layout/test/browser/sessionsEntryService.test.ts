@@ -155,6 +155,21 @@ suite('SessionsEntryService lifecycle and focus', () => {
 		await fixture.service.openEntry(documentEntry);
 	});
 
+	test('closing the last Chat browser tab preserves the open project PDF', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry({ ...chatEntry, chatSource: 'desktop-chat' });
+		const pdf = { resource: URI.file('/report.pdf'), readOnly: true };
+		await fixture.service.openConversationFile(pdf, () => { }, new AbortController().signal);
+		const fileGroup = fixture.activeGroupId;
+		const browser = { resource: URI.parse('ash-browser:/reference') };
+		await fixture.service.openConversationBrowser(target => fixture.openEditor(browser, target));
+		await fixture.closeRetainedEditor(browser);
+		fixture.visibleEditorsChanged.fire();
+		assert.equal(fixture.service.isConversationEditor(pdf.resource, true), true);
+		assert.equal(fixture.groupVisibility.get(String(fileGroup)), undefined);
+		assert.equal(fixture.visible.get('editor'), true);
+	});
+
 	test('Closing a project file restores sidebar focus while Chat browser tabs stay open', async () => {
 		using fixture = new EntryFixture();
 		await fixture.service.openEntry({ ...chatEntry, chatSource: 'desktop-chat' });
@@ -781,6 +796,7 @@ class EntryFixture extends Disposable {
 	public readonly customViews = this._register(new CustomViewService(new NullLoggerService(), this.storage));
 	private readonly workspace = this._register(new TestWorkspaceService({ id: 'sessions', folders: [] }));
 	public readonly editorChanged = this._register(new Emitter<EditorPartChangeEvent>());
+	public readonly visibleEditorsChanged = this._register(new Emitter<void>());
 	public readonly activeEditorChanged = this._register(new Emitter<void>());
 	public readonly revealActiveEditor = this._register(new Emitter<void>());
 	public readonly visible = new Map<string, boolean>([['sessions', true], ['editor', false], ['auxiliarybar', false], ['sidebar', true], ['panel', false]]);
@@ -891,7 +907,7 @@ class EntryFixture extends Disposable {
 				fixture.activeInput = input;
 				fixture.revealActiveEditor.fire();
 			},
-			onDidActiveEditorChange: this.activeEditorChanged.event, onDidVisibleEditorsChange: Event.None,
+			onDidActiveEditorChange: this.activeEditorChanged.event, onDidVisibleEditorsChange: this.visibleEditorsChanged.event,
 			get activeEditor() { return fixture.activeInput; }, visibleEditors: [],
 			focusActiveEditor: () => { this.focused = 'editor'; },
 		} as unknown as IEditorService);

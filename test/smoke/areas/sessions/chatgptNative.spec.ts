@@ -35,14 +35,15 @@ declare global {
 
 interface FixtureReply {
 	readonly suffix: string;
+	readonly streamSuffix?: string;
 	readonly timestamp?: number;
 	readonly sources?: readonly { readonly ref_id: string; readonly url: string; readonly title: string; readonly snippet: string; }[];
 	readonly workbook?: { readonly name: string; readonly bytes: readonly number[]; };
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
-async function installService(application: ElectronApplication, holdInitialization = false, historyReplySuffix: string | FixtureReply = '', historyImage = false, projectFiles = false, holdVerificationLoad = false): Promise<void> {
-	await application.evaluate(async ({ app, session, webContents }, { catalog, authentication, holdInitialization, historyReplySuffix, historyImage, projectFiles, holdVerificationLoad }) => {
+async function installService(application: ElectronApplication, holdInitialization = false, historyReplySuffix: string | FixtureReply = '', historyImage = false, projectFiles = false, holdVerificationLoad = false, projectFile?: { readonly name: string; readonly body: string; }): Promise<void> {
+	await application.evaluate(async ({ app, session, webContents }, { catalog, authentication, holdInitialization, historyReplySuffix, historyImage, projectFiles, holdVerificationLoad, projectFile }) => {
 		const fs = process.getBuiltinModule('fs/promises');
 		const path = process.getBuiltinModule('path');
 		const home = path.join(process.env.HOME!, '.codex');
@@ -119,7 +120,7 @@ async function installService(application: ElectronApplication, holdInitializati
 			},
 			advance() {
 				step++;
-				reply!.enqueue(chunk(step === 1 ? 'First chunk, second chunk' : 'First chunk, second chunk, complete'));
+				reply!.enqueue(chunk(step === 1 ? 'First chunk, second chunk' : 'First chunk, second chunk, complete' + (historyReply.streamSuffix ?? '')));
 				if (step === 2) {
 					// The server continuation can be a hidden leaf after the visible reply.
 					const id = `leaf-${sends}`; live[id] = { parent: head, message: message(id, 'assistant', '') }; head = id;
@@ -322,12 +323,12 @@ async function installService(application: ElectronApplication, holdInitializati
 				if (projectFiles && url.pathname === '/backend-api/gizmos/g-p-files-fixture') {
 					return Response.json({
 						gizmo: { id: 'g-p-files-fixture', display: { name: 'File project fixture' } },
-						files: [{ file_id: 'file-fixture-notes', name: 'project-fixture.txt' }, { file_id: 'file-fixture-other', name: 'other-fixture.txt' },
+						files: [{ file_id: 'file-fixture-notes', name: projectFile?.name ?? 'project-fixture.txt' }, { file_id: 'file-fixture-other', name: 'other-fixture.txt' },
 						...[...projectMemory.values()].map(({ file_id, name }) => ({ file_id, name }))],
 					});
 				}
 				if (projectFiles && url.pathname.startsWith('/backend-api/files/download/file-fixture-')) {
-					return new Response(url.pathname.endsWith('-notes') ? 'Saved project material fixture' : 'Second project file');
+					return new Response(url.pathname.endsWith('-notes') ? projectFile?.body ?? 'Saved project material fixture' : 'Second project file');
 				}
 				if (projectFiles && url.pathname.startsWith('/backend-api/files/download/')) {
 					const file = projectMemory.get(url.pathname.split('/').at(-1)!);
@@ -437,7 +438,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		};
 		install(session.defaultSession); for (const contents of webContents.getAllWebContents()) { install(contents.session); }
 		app.on('session-created', install);
-	}, { catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument(), holdInitialization, historyReplySuffix, historyImage, projectFiles, holdVerificationLoad });
+	}, { catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument(), holdInitialization, historyReplySuffix, historyImage, projectFiles, holdVerificationLoad, projectFile });
 }
 
 const ashFixtureModel = { provider: 'custom-chat-routing-fixture', model: 'ash-routing-fixture' };
@@ -582,6 +583,40 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 		await expect.poll(() => (application as ElectronApplication).evaluate(() => ashNativeFixture.verificationFinalizations)).toBe(2);
 		expect(await (application as ElectronApplication).evaluate(() => ashNativeFixture.conversationPreparations)).toBe(1);
 	});
+	test('sticky prompt stays hidden with the Workbench during entry restoration', { tag: ['@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
+		await installService(application as ElectronApplication, false, { suffix: '', streamSuffix: ('\n\nLong fixture reply paragraph.').repeat(120) });
+		const page = await workbench.openAgentsWindow('electron');
+		const native = page.locator('.ash-chatgpt-widget:visible');
+		const input = new Editor(native);
+		await input.waitForEditorFocus();
+		await input.waitForTypeInEditor('Sticky prompt fixture');
+		await native.getByRole('button', { name: '发送', exact: true }).click();
+		await expect(native).toContainText('First chunk');
+		await (application as ElectronApplication).evaluate(() => { ashNativeFixture.advance(); ashNativeFixture.advance(); });
+		await expect(page.locator('.ash-chatgpt-widget:visible')).toContainText('Long fixture reply paragraph');
+		const viewport = page.locator('.ash-chatgpt-widget:visible .ash-chat-transcript-scrollable > .ash-scrollbar-viewport');
+		await viewport.hover();
+		await page.mouse.wheel(0, -100_000);
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
+		await page.mouse.wheel(0, 80);
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		const prompt = page.locator('.ash-chatgpt-widget .ash-chat-sticky-prompt').filter({ hasText: 'Sticky prompt fixture' });
+		await expect(prompt).toBeVisible();
+		const workbenchRoot = page.locator('.ash-sessions-window');
+		await workbenchRoot.evaluate(element => element.classList.add('restoring-entry'));
+		try {
+			await expect(prompt).toBeHidden();
+			await page.screenshot({ path: testInfo.outputPath('restoring-entry-without-sticky-leak.png') });
+		} finally {
+			await workbenchRoot.evaluate(element => element.classList.remove('restoring-entry'));
+		}
+		await expect(prompt).toBeVisible();
+		await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
+		await prompt.focus();
+		await prompt.press('Enter');
+		await expect(prompt).toBeHidden();
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`Chat browser tab menu previews retained tabs and routes close, maximize and new tab (${locale})`, { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 			await installService(application as ElectronApplication, false, '\n\n[First browser tab](https://example.com/browser-one)\n\n[Second browser tab](https://example.com/browser-two)');
@@ -2416,6 +2451,97 @@ test.describe('Ash project file copies', () => {
 		} finally {
 			await application.evaluate(() => { ashNativeFixture.setOffline(false); ashNativeFixture.holdUploads(false); });
 		}
+	});
+
+	test('project PDF opens its own clean draft and restores its submitted conversation after unrelated navigation', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench, testWorkspace }, testInfo) => {
+		const application = browser as ElectronApplication;
+		await installService(application, false, '', false, true, false, { name: 'project-fixture.pdf', body: await readFile(testWorkspace.pdfFile, 'utf8') });
+		let page = await workbench.openAgentsWindow('electron');
+		let sidebar = page.locator('.ash-chat-navigation-list');
+		await sidebar.getByRole('button', { name: 'File project fixture', exact: true }).press('ArrowRight');
+		await sidebar.getByRole('button', { name: 'First native history', exact: true }).press('Enter');
+		const native = page.locator('.ash-chatgpt-widget:visible');
+		const editor = new Editor(native);
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor('Keep unrelated unsent text');
+		await sidebar.getByRole('button', { name: 'project-fixture.pdf', exact: true }).press('Enter');
+		await expect(page.getByRole('tab', { name: 'project-fixture.pdf', exact: true })).toBeVisible();
+		await expect(native).not.toContainText('History one answer');
+		await editor.waitForEditorContents(text => text === '');
+		await expect.poll(() => application.evaluate(() => ashNativeFixture.sends)).toBe(0);
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor('PDF association question');
+		await sidebar.getByRole('button', { name: 'First native history', exact: true }).press('Enter');
+		await editor.waitForEditorContents(text => text === 'Keep unrelated unsent text');
+		await sidebar.getByRole('button', { name: 'project-fixture.pdf', exact: true }).press('Enter');
+		await editor.waitForEditorContents(text => text === 'PDF association question');
+		await native.getByRole('button', { name: '发送', exact: true }).click();
+		await expect(native).toContainText('First chunk');
+		await application.evaluate(() => { ashNativeFixture.advance(); ashNativeFixture.advance(); });
+		await expect(native).toContainText('First chunk, second chunk, complete');
+		await sidebar.getByRole('button', { name: 'Second native history', exact: true }).press('Enter');
+		await expect(native).toContainText('History two answer');
+		await sidebar.getByRole('button', { name: 'project-fixture.pdf', exact: true }).press('Enter');
+		await expect(native).toContainText('PDF association question');
+		await expect(native).not.toContainText('History two answer');
+		await page.screenshot({ path: testInfo.outputPath('pdf-associated-conversation.png') });
+		page = await workbench.reopenAgentsWindow(application, page);
+		sidebar = page.locator('.ash-chat-navigation-list');
+		await sidebar.getByRole('button', { name: 'Second native history', exact: true }).press('Enter');
+		await sidebar.getByRole('button', { name: 'project-fixture.pdf', exact: true }).press('Enter');
+		await expect(page.locator('.ash-chatgpt-widget:visible')).toContainText('PDF association question');
+	});
+
+	test('Chat tool panes close independently while a project file stays open', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench, testWorkspace }, testInfo) => {
+		const application = browser as ElectronApplication;
+		await installService(application, false, { suffix: '', streamSuffix: '\n\n[Browser reference](https://example.com/reference)' }, false, true, false, { name: 'project-fixture.pdf', body: await readFile(testWorkspace.pdfFile, 'utf8') });
+		const page = await workbench.openAgentsWindow('electron');
+		const sidebar = page.locator('.ash-chat-navigation-list');
+		await sidebar.getByRole('button', { name: 'File project fixture', exact: true }).press('ArrowRight');
+		await sidebar.getByRole('button', { name: 'First native history', exact: true }).press('Enter');
+		await sidebar.getByRole('button', { name: 'project-fixture.pdf', exact: true }).press('Enter');
+		const native = page.locator('.ash-chatgpt-widget:visible');
+		const editor = new Editor(native);
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor('PDF browser fixture');
+		await native.getByRole('button', { name: '发送', exact: true }).click();
+		await expect(native).toContainText('First chunk');
+		await application.evaluate(() => { ashNativeFixture.advance(); ashNativeFixture.advance(); });
+		await expect(native.getByRole('link', { name: 'Browser reference', exact: true })).toBeVisible();
+		const openBrowser = () => native.getByRole('link', { name: 'Browser reference', exact: true }).click();
+		const fileTab = page.getByRole('tab', { name: 'project-fixture.pdf', exact: true });
+		await expect(fileTab).toBeVisible();
+		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await openBrowser();
+		const browserPane = page.locator('.ash-tool-editor-workspace[data-editor-tool="browser"]');
+		await expect(browserPane).toBeVisible();
+		await page.locator('[role="tab"]:visible').filter({ hasNotText: 'project-fixture.pdf' }).locator('..').locator('.ash-tab-close-action button').click();
+		await expect(browserPane).toBeHidden();
+		await expect(fileTab).toBeVisible();
+		await openBrowser();
+		await expect(browserPane).toBeVisible();
+		const browserControls = page.locator('[data-editor-tool="browser"] .ash-editor-header-layout:visible');
+		await expect(page.locator('[data-action-id="sessions.closeEditorPart"] button:visible')).toHaveCount(2);
+		const controlsBounds = (await browserControls.boundingBox())!;
+		const paneBounds = (await browserPane.boundingBox())!;
+		expect(controlsBounds.y).toBeGreaterThanOrEqual(paneBounds.y);
+		expect(controlsBounds.y + controlsBounds.height).toBeLessThanOrEqual(paneBounds.y + paneBounds.height);
+		await page.screenshot({ path: testInfo.outputPath('chat-tool-controls.png') });
+		await browserControls.locator('[data-action-id="sessions.toggleSessionPart"] button').click();
+		await expect(page.locator('[data-part="sessions"]')).toBeHidden();
+		await expect(fileTab).toBeVisible();
+		await browserControls.getByRole('button', { name: '显示聊天', exact: true }).click();
+		await expect(page.locator('[data-part="sessions"]')).toBeVisible();
+		await browserControls.locator('[data-action-id="sessions.closeEditorPart"] button').click();
+		await expect(browserPane).toBeHidden();
+		await expect(fileTab).toBeVisible();
+		await page.screenshot({ path: testInfo.outputPath('pdf-after-browser-close.png') });
+		await page.locator('[data-editor-tool="files"] .ash-editor-header-layout:visible [data-action-id="sessions.closeEditorPart"] button').click();
+		await expect(fileTab).toBeHidden();
+		await expect(page.locator('[data-part="sessions"]')).toBeVisible();
+		await sidebar.getByRole('button', { name: 'project-fixture.pdf', exact: true }).press('Enter');
+		await expect(fileTab).toBeVisible();
+		await expect(browserPane).toBeHidden();
 	});
 
 	test('saves project files locally and changes their Ash folder while ChatGPT is unavailable', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }, testInfo) => {

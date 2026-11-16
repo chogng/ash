@@ -25,7 +25,8 @@
 }
 
 .ash-chat-sticky-prompt.visible {
-	visibility: visible;
+	/* Restore only within a visible host, including during Workbench startup. */
+	visibility: inherit;
 }
 
 .ash-chat-sticky-prompt:hover {

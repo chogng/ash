@@ -82,6 +82,24 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(hosts.editor.isGroupVisible(restored.id), false);
 	});
 
+	test('closing the last retained Chat browser tab keeps the PDF pane visible', async () => {
+		using hosts = fixture();
+		const pdf = { resource: URI.file('/report.pdf') };
+		const fileGroup = hosts.editor.createRetainedGroup('files');
+		const browserGroup = hosts.editor.createRetainedGroup('browser');
+		using scope = hosts.editor.setGroupScope(id => id === fileGroup.id || id === browserGroup.id);
+		for (const group of hosts.editor.groups) hosts.editor.setGroupVisible(group.id, false);
+		await hosts.editor.openEditor(pdf, { pinned: true }, { groupId: fileGroup.id });
+		const browser = { resource: URI.parse('ash-browser:/reference') };
+		await hosts.editor.openEditor(browser, { pinned: true }, { groupId: browserGroup.id });
+		assert.equal(await browserGroup.closeEditor(browser), true);
+		await new Promise<void>(resolve => queueMicrotask(resolve));
+		assert.deepEqual(fileGroup.inputs, [pdf]);
+		assert.equal(hosts.editor.isGroupVisible(fileGroup.id), true);
+		assert.equal(hosts.area.isToolVisible('files'), true);
+		assert.equal(hosts.area.isToolVisible('browser'), false);
+	});
+
 	test('requires the window context service before mounting any tool Parts', () => {
 		using services = createTestEditorServices(undefined, undefined, browserEnvironment.window.document);
 		using hosts = createDesktopEditorTestServices(services, {}, browserEnvironment.window.document);

@@ -19,6 +19,8 @@ export interface ISessionsEntry {
 	readonly chatSource?: string;
 	/** Stable, source-owned conversation identity for the optional browser working set. */
 	readonly browserContext?: IObservable<string>;
+	/** Selects this document's own conversation or a separate empty draft before revealing its editor. */
+	readonly openDocumentConversation?: (resource: URI, signal: AbortSignal) => Promise<void>;
 	/** Places the ordinary Chat view beside this editor and sets its initial visibility. */
 	readonly conversation?: 'visible' | 'optional';
 	/** Overrides workspace navigation; omission retains its current sidebar or opens the registered default on startup. */

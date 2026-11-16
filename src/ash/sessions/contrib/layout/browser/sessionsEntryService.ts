@@ -112,6 +112,9 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			const command = CommandsRegistry.hasCommand(SHOW_CHAT_WORKSPACE_COMMAND) ? SHOW_CHAT_WORKSPACE_COMMAND : 'sessions.open.chat';
 			await this.commands.executeCommand(command);
 		}
+		signal.throwIfAborted();
+		await this.activeEntry.get()?.openDocumentConversation?.(input.resource, signal);
+		signal.throwIfAborted();
 		await this.openConversationEditor('files', async target => {
 			await this.editors.openEditor(input, { pinned: true }, target);
 			const opened = this.getConversationGroup('files')?.inputs.find(candidate => extUri.isEqual(candidate.resource, input.resource));

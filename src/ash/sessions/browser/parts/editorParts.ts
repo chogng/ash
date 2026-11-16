@@ -415,8 +415,9 @@ export class EditorParts extends WorkbenchEditorParts {
 		const part = this.owner(groupId);
 		const focused = part.domNode.ownerDocument.activeElement;
 		const hadFocus = part.domNode.contains(focused) || part.groups.some(group => group.headerElement.contains(focused));
+		// A retained Chat group is a valid target outside the active Code working set.
 		for (const group of part.groups) {
-			if (group.id !== this.pageGroupId && this.inWorkingSet(group.id)) { this.setGroupVisible(group.id, false); }
+			if (group.id !== this.pageGroupId && (group.id === groupId || this.inWorkingSet(group.id))) { this.setGroupVisible(group.id, false); }
 		}
 		const next = this.groups.find(group => this.inWorkingSet(group.id) && this.isGroupVisible(group.id));
 		if (hadFocus && next) {

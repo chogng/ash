@@ -56,6 +56,13 @@ suite('Chat transcript navigation', () => {
 		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
 		await expect(pinned).toHaveAccessibleName('跳转到第 2 条用户消息，共 2 条：Second request');
 		await expect(pinned.locator('.ash-chat-sticky-prompt-count')).toHaveText('2/2');
+		const bounds = await pinned.boundingBox();
+		// Startup restoration hides a measurable ancestor before revealing its layout.
+		await page.locator('main').evaluate(element => { element.style.visibility = 'hidden'; });
+		await expect(pinned).toBeHidden();
+		expect(await pinned.boundingBox()).toEqual(bounds);
+		await page.locator('main').evaluate(element => { element.style.removeProperty('visibility'); });
+		await expect(pinned).toBeVisible();
 		await pinned.focus();
 		await pinned.press('Enter');
 		const second = page.locator('[data-item-id="second"]');

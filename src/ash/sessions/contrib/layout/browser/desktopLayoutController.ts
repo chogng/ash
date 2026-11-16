@@ -180,7 +180,12 @@ export class DesktopLayoutController extends BaseLayoutController {
 				&& (this.layout.isPartRequested('editor') || !this.editors.activeEditor || !this.tabs.isManaged(this.editors.activeEditor)))
 		));
 	}
-	protected override isEditorAutoVisibilitySuppressed(): boolean { return super.isEditorAutoVisibilitySuppressed() || this.context.isChangingContent; }
+	protected override isEditorAutoVisibilitySuppressed(): boolean {
+		// The entry service owns retained Chat tools. Code's visible-editor events must
+		// not hide their shared area when a sibling tool loses its last tab.
+		return super.isEditorAutoVisibilitySuppressed() || this.context.isChangingContent
+			|| (this.context.isSessionContent && !this.context.isDocumentContent);
+	}
 	protected override getWorkingSet(key: string): EditorWorkingSet {
 		// New drafts adopt the current composition under the base controller's policy.
 		if (this.currentWorkingSet && this.currentWorkingSet !== key) this.liveGroups.delete(this.currentWorkingSet);

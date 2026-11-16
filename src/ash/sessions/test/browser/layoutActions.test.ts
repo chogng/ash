@@ -32,7 +32,7 @@ import { registerSessionsTerminalContribution } from '../../contrib/terminal/bro
 import { DesktopWorkbenchLayout } from '../../browser/desktopWorkbench.js';
 import { Menus } from '../../browser/menus.js';
 import { CanGoBackContext, CanGoForwardContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
-import { PanelMaximizedContext, PanelPositionContext } from '../../../workbench/common/contextkeys.js';
+import { PanelMaximizedContext, PanelPositionContext, SessionsCodeEditorContext } from '../../../workbench/common/contextkeys.js';
 import { Position } from '../../../workbench/services/layout/browser/layoutService.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { EditorPaneRegistry } from '../../../workbench/browser/editor.js';
@@ -182,6 +182,27 @@ test('Sessions layout commands update menu state from their owners and release w
 		layout.showPart('editor');
 		assert.equal(group.activeInput, input);
 
+		hosts.editor.setGroupVisible(group.id, true);
+		const browserInput = { resource: URI.parse('ash-browser:/retained-reference'), editorId: 'test.retainedLayout' };
+		const browserGroup = hosts.editor.createRetainedGroup('browser');
+		// Chat retained groups are outside the Code working-set scope.
+		using chatScope = hosts.editor.setGroupScope(id => id === group.id);
+		await hosts.editor.openEditor(browserInput, { pinned: true }, { groupId: browserGroup.id });
+		SessionsCodeEditorContext.bindTo(contextKeys).set(false);
+		using toolMenu = new MenuService(commands, contextKeys).createMenu(Menus.SessionsEditorHeaderLayout);
+		assert.deepEqual(toolMenu.getActions().flatMap(([, actions]) => actions).map(action => action.id), [
+			'sessions.toggleSessionPart', 'sessions.closeEditorPart',
+		]);
+		await commands.executeCommand('sessions.closeEditorPart', { groupId: browserGroup.id });
+		assert.equal(hosts.editor.isGroupVisible(browserGroup.id), false);
+		assert.equal(hosts.editor.isGroupVisible(group.id), true);
+		assert.equal(layout.isPartVisible('editor'), true);
+		assert.deepEqual(group.inputs, [input]);
+		assert.deepEqual(browserGroup.inputs, [browserInput]);
+
+		chatScope.dispose();
+		await browserGroup.closeEditor(browserInput);
+		await new Promise<void>(resolve => queueMicrotask(resolve));
 		actions.dispose();
 		assert.deepEqual(navigationState(), [false, false]);
 		assert.deepEqual(menu.getActions(), []);
@@ -191,6 +212,7 @@ test('Sessions layout commands update menu state from their owners and release w
 		assert.equal(changed.hasListeners(), false);
 	} finally {
 		actions.dispose();
+		terminal.dispose();
 		layout.dispose();
 		resources.dispose();
 		browser.window.close();

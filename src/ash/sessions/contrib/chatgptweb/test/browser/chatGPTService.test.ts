@@ -444,6 +444,27 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().conversations.filter(row => row.id === 'still-here').length, 1);
 	});
 
+	test('document drafts retain their own text without reusing the ordinary New draft', async () => {
+		const values = new Map<string, string>();
+		using chat = fixture(async path => response(path), { values });
+		await chat.reload();
+		chat.setDraft('Ordinary draft');
+		const ordinary = chat.state.get().localConversationId;
+		await chat.selectDraft('pdf-draft');
+		assert.equal(chat.state.get().draft, '');
+		assert.deepEqual(chat.state.get().messages, []);
+		chat.setDraft('Question about PDF');
+		chat.newChat();
+		assert.equal(chat.state.get().localConversationId, ordinary);
+		assert.equal(chat.state.get().draft, 'Ordinary draft');
+		await chat.selectDraft('pdf-draft');
+		assert.equal(chat.state.get().draft, 'Question about PDF');
+		using restored = fixture(async path => response(path), { values });
+		await restored.reload();
+		await restored.selectDraft('pdf-draft');
+		assert.equal(restored.state.get().draft, 'Question about PDF');
+	});
+
 	test('window restoration keeps the selected conversation and its unsent text, while fresh New stays blank', async () => {
 		const values = new Map<string, string>();
 		const respond = async (path: string) => response(path);

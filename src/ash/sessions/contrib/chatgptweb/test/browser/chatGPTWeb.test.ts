@@ -1,5 +1,7 @@
+import '../../../../../editor/test/browser/testEditorDom.js';
 import { IDocsService } from '../../../../contrib/docs/common/docsService.js';
 import assert from 'node:assert/strict';
+import { URI } from '../../../../../base/common/uri.js';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -74,6 +76,7 @@ function chatSelectionFixture(storage: IStorageService, sessions: readonly ISess
 			drafts.push(draft);
 			return draft;
 		},
+		restoreUntitledSession(draft: IUntitledChatSession) { if (!drafts.some(current => current.untitledSessionId === draft.untitledSessionId)) drafts.push(draft); return draft; },
 		discardUntitledSession(id: string) { drafts = drafts.filter(draft => draft.untitledSessionId !== id); },
 		setUntitledSessionModel(id: string, model: ModelRef) { drafts = drafts.map(draft => draft.untitledSessionId === id ? { ...draft, model } : draft); },
 		setUntitledSessionCreationKind(id: string, creationKind: ChatCreationKind | undefined) { drafts = drafts.map(draft => draft.untitledSessionId === id ? { ...draft, creationKind } : draft); },
@@ -308,6 +311,15 @@ suite('ChatGPT entry', () => {
 			assert.equal(entry.sidebarContainerId, CHAT_WORKSPACE_NAVIGATION_ID);
 			assert.equal(entry.restoreCommand, SHOW_ASH_CHAT_COMMAND);
 		}
+		const pdf = URI.file('/project-report.pdf');
+		await entries[0]!.openDocumentConversation!(pdf, new AbortController().signal);
+		const pdfDraft = selection.chatSelection.get();
+		assert.equal(pdfDraft?.kind, 'draft');
+		selection.selectChatThread('saved', 'old-root');
+		await entries[0]!.openDocumentConversation!(pdf, new AbortController().signal);
+		assert.equal(selection.chatSelection.get()?.kind, pdfDraft?.kind);
+		const restoredPdfDraft = selection.chatSelection.get();
+		assert.equal(restoredPdfDraft?.kind === 'draft' && restoredPdfDraft.id, pdfDraft?.kind === 'draft' && pdfDraft.id);
 		selection.openChatDraft();
 		assert.equal(await linkOpener!.open(buildOpenSessionLinkUri('code', 'code', 'local')), false);
 		assert.equal(await linkOpener!.open(buildOpenSessionLinkUri('saved', 'old-root', 'sessions+remote')), false);

@@ -32,7 +32,7 @@
     "sessions.browser.maximizeTab": "最大化标签页",
     "sessions.browser.newTab": "新标签页",
     "sessions.browser.tabsHelp": "对话标题栏中的“浏览器”按钮打开右侧保留标签页的菜单。上下方向键移动焦点，Enter 打开标签页。Tab 可聚焦关闭和最大化操作。底部的“新标签页”打开空白页。网页加载后显示网站图标。Escape 关闭菜单并返回浏览器按钮。",
-    "sessions.layout.partHelp": "浏览器和作品窗格提供最大化和关闭操作。最大化会隐藏对话。“显示聊天”会恢复对话。关闭会隐藏编辑区域、保留其中的标签页，并将焦点返回对话。",
+    "sessions.layout.partHelp": "聊天中的每个工具窗格均提供最大化和关闭操作。最大化隐藏对话，“显示聊天”恢复对话。关闭仅隐藏当前工具并保留其标签页。关闭标签页不影响其他工具。打开项目 PDF 会恢复其关联对话，或打开独立的空白草稿，并保留其他草稿。作品页面的关闭操作隐藏整个编辑区域并将焦点返回对话。",
     "sessions.layout.editorActions": "编辑区域布局",
     "sessions.layout.showChat": "显示聊天",
     "sessions.layout.maximize": "最大化",
