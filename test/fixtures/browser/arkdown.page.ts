@@ -1,3 +1,4 @@
+import { exportDocsDocument, getDocsExportFormats } from '../../../src/ash/sessions/contrib/docs/browser/docsImportExport.js';
 import './chatFixtureLocalization.js';
 import '../../../src/ash/sessions/browser/media/style.css';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
@@ -167,6 +168,17 @@ const fixture = {
 			const result = commentsFor(model).snapshot;
 			return { converged: left.source === right.source, invalid: result.invalid, messages: result.threads[0]?.messages.map(message => message.body) };
 		} finally { lifetime.dispose(); }
+	},
+	get exportFormats() { return getDocsExportFormats().map(format => ({ id: format.id, label: format.label, extension: format.extension })); },
+	async exportFile(format: string, replacement?: string) {
+		const pending = exportDocsDocument(model!.getValue(), format, document, new AbortController().signal);
+		if (replacement !== undefined) model!.setValue(replacement);
+		return Array.from(await pending);
+	},
+	async abortedExport(format: string) {
+		const controller = new AbortController(); controller.abort();
+		try { await exportDocsDocument(model!.getValue(), format, document, controller.signal); return false; }
+		catch (error) { return error instanceof DOMException && error.name === 'AbortError'; }
 	},
 	external(source: string) { model!.setValue(source); },
 };

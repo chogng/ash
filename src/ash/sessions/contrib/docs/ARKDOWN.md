@@ -14,7 +14,7 @@
 
 `EditorWorkingCopy` 与文本模型持有保存、dirty、外部变更和本地撤销历史。协作期间，`TextModel` 通过有作用域的编辑参与者将操作与选择性历史交给 Yrs；源码视图、正文、其他编辑器和保存仍使用同一缓冲区。离开房间时解除参与者并清除跨会话历史。Arkdown 的语法树是投影，不保留第二份可写文档。Sessions 的 `ArkdownDocsEditorPane` 持有 Docs 标题栏、作品操作及默认模式，借用本目录的编辑器，不再创建自己的工作副本。
 
-通用 Markdown 预览、数学渲染和图片粘贴位于 [`contrib/markdown`](../../../workbench/contrib/markdown/README.md)。Chat 消息正文由 [`ChatMarkdownContentPart`](../../../workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.ts) 进行流式 Markdown 渲染。旧 `.ash-doc` 经过格式校验后单向迁移为 Markdown，原文件保留。
+通用 Markdown 预览、数学渲染和图片粘贴位于 [`contrib/markdown`](../../../workbench/contrib/markdown/README.md)。Chat 消息正文由 [`ChatMarkdownContentPart`](../../../workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.ts) 进行流式 Markdown 渲染。Docs 导入直接生成 Markdown，不依赖 Academy 的结构化模型，也不迁移旧 `.ash-doc`。
 
 Clarkdown 的对齐以直接编辑行为为依据。正文使用区块窗口增量解析，引用与 HTML 保守完整解析，DOM 只替换变化区块。标题／段落和列表转换已接快捷键，表格编辑通过 Rust 结构操作提交。Rust/WASM CRDT 会话已接入 Workbench 房间。安装包取证记录见 [Docs](README.md#clarkdown-功能复核)。
 

@@ -9,9 +9,9 @@ const clipboardHtmlPolicy = createTrustedTypesPolicy('ashHtmlToMarkdown', { crea
  * and destinations that need the source window are represented by their readable labels.
  * Empty output lets the caller fall back to the clipboard's plain-text representation.
  */
-export function convertHtmlToMarkdown(html: string): string {
+export function convertHtmlToMarkdown(html: string, ownerDocument: Document = getDocument()): string {
 	if (!html || html.length > 200_000) { return ''; }
-	const template = getDocument().createElement('template');
+	const template = ownerDocument.createElement('template');
 	template.innerHTML = (clipboardHtmlPolicy?.createHTML?.(html) ?? html) as string;
 	// Formatting whitespace can be normalized, but literal code must survive byte for byte.
 	const literals: string[] = [];
@@ -47,8 +47,8 @@ export function convertHtmlToMarkdown(html: string): string {
 			// Public hrefs are authoritative for imported HTML; routing metadata is a fallback.
 			const target = isPortableMarkdownTarget(href) ? href : element.getAttribute('data-href')?.trim() || href;
 			const label = plain(element).trim();
-			if (!label) { return ''; }
-			return isPortableMarkdownTarget(target)
+			if (!label && tag === 'A') { return ''; }
+			return (isPortableMarkdownTarget(target) || tag === 'IMG' && /^data:image\/(?:png|jpeg|gif|webp);base64,[a-z\d+/=]+$/i.test(target))
 				? `${tag === 'IMG' ? '!' : ''}[${tag === 'IMG' ? escapeMarkdownSyntaxTokens(label) : children(element, depth)}](${destination(target)})`
 				: preserve(appendEscapedMarkdownInlineCode(label));
 		}

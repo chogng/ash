@@ -5,12 +5,10 @@ import { MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { IArtifactAutoSaveService } from '../../../services/artifactAutoSave/common/artifactAutoSaveService.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Action, Separator } from '../../../../base/common/actions.js';
-import { isNative } from '../../../../base/common/platform.js';
-import { basename, extUri } from '../../../../base/common/resources.js';
-import { URI } from '../../../../base/common/uri.js';
+import { basename } from '../../../../base/common/resources.js';
+import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
@@ -19,7 +17,7 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import type { EditorWorkingCopy } from '../../../../workbench/browser/parts/editor/textResourceEditor.js';
 import type { IResourceEditorInput, ISaveOptions } from '../../../../workbench/common/editor.js';
-import { resourceFileName, saveResourceAs } from '../../../../workbench/services/files/browser/resourceSave.js';
+import { resourceFileName } from '../../../../workbench/services/files/browser/resourceSave.js';
 import { IFileTextModelService } from '../../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyBackupService } from '../../../../workbench/services/workingCopy/common/workingCopyBackupService.js';
 import type { DocumentTextFormat } from '../../../../workbench/services/documentEditor/common/documentCodec.js';
@@ -33,6 +31,7 @@ import { ArtifactKindContext } from '../../../common/contextkeys.js';
 import { DocsToolbar } from './docsToolbar.js';
 import { DocsSelectionToolbar } from './docsSelectionToolbar.js';
 import { DocsCommentsWidget } from './docsCommentsWidget.js';
+import { exportDocsDocument, exportDocsFile, getDocsExportFormats } from './docsImportExport.js';
 
 /** Docs presentation over Arkdown and the shared file-backed text working copy. */
 export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditorPage {
@@ -43,7 +42,7 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 	private body!: HTMLElement;
 	private documentInput: IResourceEditorInput | undefined;
 	private readonly autoSaveScope = this._register(new MutableDisposable());
-	private exportAction!: Action;
+	private exportActions: readonly Action[] = [];
 	private toolbar!: ArtifactToolbar;
 	private docsToolbar!: DocsToolbar;
 	private contextMenu!: ArtifactContextMenu;
@@ -57,7 +56,6 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
-		@IFileDialogService private readonly fileDialogs: IFileDialogService,
 		@IArtifactAutoSaveService private readonly autoSave: IArtifactAutoSaveService,
 		@IFileTextModelService private readonly models: IFileTextModelService,
 		@IWorkingCopyBackupService private readonly backups: IWorkingCopyBackupService,
@@ -119,7 +117,11 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 			this.contextMenu.show(this.editor.getControl()!.domNode, () => this.editor.focus());
 		}));
 		super.create(this.root);
-		this.exportAction = this._register(new Action('sessions.docs.export.markdown', localize({ bundle: 'ash.docs', key: 'exportMarkdown' }, 'Markdown file (.md)'), '', true, () => this.exportMarkdown()));
+		this.exportActions = getDocsExportFormats().map(format => {
+			const action = this._register(new Action(`sessions.docs.export.${format.id}`, format.label, '', true, () => this.exportFile(format.id)));
+			action.icon = format.icon;
+			return action;
+		});
 		this.refreshActions();
 	}
 
@@ -157,40 +159,32 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 	containsAccessibilityFocus(target: HTMLElement): boolean { return this.root.contains(target) || this.editor.containsAccessibilityFocus(target); }
 	getAccessibleContent(): string { return [this.editor.getAccessibleContent(), this.comments?.getAccessibleContent()].filter(Boolean).join('\n\n'); }
 	getAccessibilityHelp(): readonly string[] {
-		return [...this.editor.getAccessibilityHelp(), localize({ bundle: 'ash.docs', key: 'imageHelp' }, 'Insert image opens a local PNG, JPEG, GIF or WebP file. Images can also be pasted or dropped and are embedded in the document. Use Tab to focus an image. Its toolbar offers alignment; More provides Copy image, Edit image description, Set image size and Delete image. Drag a side handle to resize proportionally. Focus a handle and use Left or Right to change width, Shift for larger steps, Home for the minimum and End to fit the text column. Escape cancels a drag or returns to the document. Delete removes the selected image. Image edits support undo and redo. Each local image can be up to 8 MB.'), localize({ bundle: 'ash.docs', key: 'editingToolsHelp' }, 'The bottom toolbar provides Font, Table, Image, Checklist, Dropdown, More, Comments and Ask Ash. Use Tab to reach it and arrow keys to choose an action. Font opens paragraph and heading choices. More contains lists, code blocks, dividers, dates and page width. The document title menu and document context menu provide Markdown source and Discuss document. Page width changes only this editor view. Checklist is an insertion action; the selection list menu reports the current list format. Dropdown inserts a labeled choice block; its selection saves with the document and supports undo. Discuss document opens the conversation. Ask Ash adds the selection or document to the chat draft without sending. Selecting text opens a formatting toolbar above the selection. The selection toolbar provides underline, text colors, highlight and list indentation. Control or Command+U toggles underline. In list text, Tab and Shift+Tab increase or decrease indentation. Default clears text color; No highlight clears the highlight. Right-click the selection or press Shift+F10 to reach its formatting controls; use arrow keys to choose an action. Escape closes the toolbar and returns to the selection. Right-click outside a selection to open the document context menu.'), localize({ bundle: 'ash.docs', key: 'commentsHelp' }, 'Select text and choose Add comment, or press Control or Command+Alt+M. At a comment, this shortcut opens its thread. Comments opens the sidebar; New comment starts a document comment. Tab reaches each thread and its reply, edit, delete, resolve and reopen controls. Enter posts a comment; Shift+Enter or Alt+Enter inserts a new line. Escape closes the sidebar and returns to the document. Unsent input is retained while the sidebar is closed. Filters show open, resolved or all threads. Comment changes save with the document and support undo and redo. Read-only documents allow reading comments. The accessible view includes all comment threads.')];
+		return [...this.editor.getAccessibilityHelp(), localize({ bundle: 'ash.docs', key: 'exportHelp' }, 'Export offers Word document, PDF document and Markdown file. Export creates a separate file from the current document, including unsaved edits. PDF contains rendered page images.'), localize({ bundle: 'ash.docs', key: 'imageHelp' }, 'Insert image opens a local PNG, JPEG, GIF or WebP file. Images can also be pasted or dropped and are embedded in the document. Use Tab to focus an image. Its toolbar offers alignment; More provides Copy image, Edit image description, Set image size and Delete image. Drag a side handle to resize proportionally. Focus a handle and use Left or Right to change width, Shift for larger steps, Home for the minimum and End to fit the text column. Escape cancels a drag or returns to the document. Delete removes the selected image. Image edits support undo and redo. Each local image can be up to 8 MB.'), localize({ bundle: 'ash.docs', key: 'editingToolsHelp' }, 'The bottom toolbar provides Font, Table, Image, Checklist, Dropdown, More, Comments and Ask Ash. Use Tab to reach it and arrow keys to choose an action. Font opens paragraph and heading choices. More contains lists, code blocks, dividers, dates and page width. The document title menu and document context menu provide Markdown source and Discuss document. Page width changes only this editor view. Checklist is an insertion action; the selection list menu reports the current list format. Dropdown inserts a labeled choice block; its selection saves with the document and supports undo. Discuss document opens the conversation. Ask Ash adds the selection or document to the chat draft without sending. Selecting text opens a formatting toolbar above the selection. The selection toolbar provides underline, text colors, highlight and list indentation. Control or Command+U toggles underline. In list text, Tab and Shift+Tab increase or decrease indentation. Default clears text color; No highlight clears the highlight. Right-click the selection or press Shift+F10 to reach its formatting controls; use arrow keys to choose an action. Escape closes the toolbar and returns to the selection. Right-click outside a selection to open the document context menu.'), localize({ bundle: 'ash.docs', key: 'commentsHelp' }, 'Select text and choose Add comment, or press Control or Command+Alt+M. At a comment, this shortcut opens its thread. Comments opens the sidebar; New comment starts a document comment. Tab reaches each thread and its reply, edit, delete, resolve and reopen controls. Enter posts a comment; Shift+Enter or Alt+Enter inserts a new line. Escape closes the sidebar and returns to the document. Unsent input is retained while the sidebar is closed. Filters show open, resolved or all threads. Comment changes save with the document and support undo and redo. Read-only documents allow reading comments. The accessible view includes all comment threads.')];
 	}
 	exportText(format: DocumentTextFormat): string { return (format === 'markdown' ? this.editor.getControl()?.getText() : this.editor.getControl()?.getPlainText()) ?? ''; }
-	getArtifactFormats() { return [{ id: 'markdown', label: localize({ bundle: 'ash.docs', key: 'exportMarkdown' }, 'Markdown file (.md)'), extension: 'md', mimeType: 'text/markdown', canImport: false }]; }
+	getArtifactFormats() { return getDocsExportFormats(); }
 	async exportArtifact(format: string, signal: AbortSignal): Promise<Uint8Array> {
-		signal.throwIfAborted();
-		if (format !== 'markdown') throw new Error(localize('document.output.unavailable', 'This document provider does not support the selected output.'));
-		return new TextEncoder().encode(this.exportText('markdown'));
+		return exportDocsDocument(this.exportText('markdown'), format, this.root.ownerDocument, signal);
 	}
 
 	private refreshActions(): void {
-		if (!this.exportAction) return;
+		if (!this.exportActions.length) return;
 		const editing = this.editor.getEditingActions();
 		this.docsToolbar.update();
 		this.comments?.update();
 		this.selectionToolbar?.update();
-		this.titlebar.setActions(this.editor.getActions().filter(action => !editing.some(edit => edit.id === action.id)), [this.exportAction]);
+		this.titlebar.setActions(this.editor.getActions().filter(action => !editing.some(edit => edit.id === action.id)), this.exportActions);
 	}
 	private hideMenus(): void {
 		this.toolbar?.hideMenu();
 		this.contextMenu?.hide();
 		this.selectionToolbar?.close();
 	}
-	private async exportMarkdown(): Promise<void> {
+	private async exportFile(format: string): Promise<void> {
 		const input = this.documentInput;
 		if (!input || !this.editor.getControl()) return;
-		const name = resourceFileName(basename(input.resource), 'text/markdown');
-		await this.instantiation.invokeFunction(saveResourceAs, new TextEncoder().encode(this.editor.getControl()!.getText()), name, this.root.ownerDocument, {
-			selectTarget: isNative ? async () => {
-				const target = await this.fileDialogs.pickFileToSave(URI.file('/' + name));
-				if (this.documentInput !== input || this.isDisposed) return undefined;
-				if (target && extUri.isEqual(target, input.resource)) throw new Error(localize('document.output.sourceTarget', 'Choose a separate output file to preserve the open document.'));
-				return target;
-			} : undefined
-		});
+		const source = this.editor.getControl()!.getText();
+		await this.instantiation.invokeFunction(exportDocsFile, source, input.resource, format, this.root.ownerDocument,
+			() => !this.isDisposed && this.documentInput === input);
 	}
 }

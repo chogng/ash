@@ -6,7 +6,7 @@ import type { DocumentSchema } from '../../../common/model/documentSchema.js';
 import { serializeDocument, deserializeDocument } from '../../../common/model/documentSerialization.js';
 import { resolveDocumentParagraphAttributes, getDocumentParagraphStyles } from '../../../common/model/documentParagraph.js';
 import { documentPageDimensions } from '../../../common/model/documentPageLayout.js';
-import { zipFiles, unzipFiles } from './zip.js';
+import { zipFiles, unzipFiles } from 'ash:editor/base/browser/zip.js';
 import { buildReferenceIndex } from '../citation/common/references.js';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

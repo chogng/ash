@@ -14,9 +14,7 @@ import { IWorkingCopyBackupService } from '../../../../workbench/services/workin
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import { IArtifactCatalogService } from '../../../services/artifactCatalog/common/artifactCatalogService.js';
-import { LEGACY_DOCS_CONTENT_TYPE } from '../common/docs.js';
 import { createArkdownDocsInput } from './docsEditorInput.js';
-import { migrateLegacyDocsInput } from './legacyDocsMigration.js';
 
 /** Profile-owned Docs recovery remains independent of the selected conversation workspace. */
 export function createDocsBackupContribution(accessor: ServicesAccessor): IWorkbenchContribution {
@@ -32,7 +30,7 @@ export function createDocsBackupContribution(accessor: ServicesAccessor): IWorkb
 	const generated = accessor.get(IArtifactCatalogService);
 	const docs = accessor.get(IDocsService);
 	// Source and Docs facades share a Markdown model, including after either view closes.
-	const isDocsCopy = (copy: IWorkingCopy) => copy.backupContentType === 'text/markdown' || copy.backupContentType === LEGACY_DOCS_CONTENT_TYPE || /\.md$/iu.test(copy.resource.path);
+	const isDocsCopy = (copy: IWorkingCopy) => copy.backupContentType === 'text/markdown' || /\.md$/iu.test(copy.resource.path);
 	const docsEvent = (event: Event<IWorkingCopy>): Event<IWorkingCopy> => (listener, thisArgs, disposables) =>
 		event(copy => { if (isDocsCopy(copy)) listener.call(thisArgs, copy); }, undefined, disposables);
 	const tracker = lifetime.add(new WorkingCopyBackupTracker({
@@ -64,14 +62,11 @@ export function createDocsBackupContribution(accessor: ServicesAccessor): IWorkb
 			for (const backup of pending) {
 				if (lifetime.isDisposed) return;
 				if (generatedResources.has(backup.resource.toString()) && (!generatedReady || !generated.files.some(file => file.resource.toString() === backup.resource.toString()))) continue;
-				const legacy = backup.contentType === LEGACY_DOCS_CONTENT_TYPE || /\.ash-doc$/iu.test(backup.resource.path);
-				if (!legacy && backup.contentType !== 'text/markdown' && !/\.md$/iu.test(backup.resource.path)) continue;
+				if (backup.kind !== 'text' || backup.contentType !== 'text/markdown' && !/\.md$/iu.test(backup.resource.path)) continue;
 				try {
 					const source = { resource: backup.resource, label: backup.label, initialText: backup.resource.scheme === 'untitled' ? backup.content : undefined };
-					const docs = legacy || backup.contentType === 'text/markdown';
-					const input = legacy
-						? await instantiation.invokeFunction(accessor => migrateLegacyDocsInput(source, accessor))
-						: docs ? createArkdownDocsInput(source) : { ...source, languageId: 'markdown' };
+					const docs = backup.contentType === 'text/markdown';
+					const input = docs ? createArkdownDocsInput(source) : { ...source, languageId: 'markdown' };
 					if (lifetime.isDisposed) return;
 					const recovery = await backups.resolve(input.resource);
 					const copy = copies.get(input.resource).find(copy => copy.backupKind === 'text');

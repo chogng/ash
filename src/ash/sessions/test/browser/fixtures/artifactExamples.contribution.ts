@@ -56,12 +56,7 @@ export async function prepareArtifactFixtures(files: IFileService, profile: URI,
 	] as const) {
 		await writeMissing(files, tables.joinPathSegment(`${fixtureTableIds[kind]}.json`), JSON.stringify({ kind, rows, createdAt: Date.now(), title: exampleText('exampleTitle', '{0} example', getArtifactTitle(kind)) }));
 	}
-	let markdown = exampleText('exampleDocsContent', '# Studio launch brief\n\nLaunch a shared home for the studio’s work. Start with a small pilot and use feedback to guide the public release.\n\n## Readiness checklist\n\n- [x] Review the visual direction\n- [ ] Invite the pilot group\n- [ ] Publish the launch notes\n\n## Schedule\n\n| Milestone | Target |\n| --- | --- |\n| Pilot | Tuesday |\n| Feedback review | Thursday |\n| Public launch | Next Monday |');
-	try {
-		const legacy = await files.readFile(home.joinPathSegment('studio-launch.ash-doc'));
-		const { legacyDocsToMarkdown } = await import('../../../contrib/docs/browser/docsImport.js');
-		markdown = legacyDocsToMarkdown(legacy.content);
-	} catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
+	const markdown = exampleText('exampleDocsContent', '# Studio launch brief\n\nLaunch a shared home for the studio’s work. Start with a small pilot and use feedback to guide the public release.\n\n## Readiness checklist\n\n- [x] Review the visual direction\n- [ ] Invite the pilot group\n- [ ] Publish the launch notes\n\n## Schedule\n\n| Milestone | Target |\n| --- | --- |\n| Pilot | Tuesday |\n| Feedback review | Thursday |\n| Public launch | Next Monday |');
 	await writeMissing(files, docs, markdown);
 	await files.writeFile({ resource: marker, content: '1' });
 	return docs;

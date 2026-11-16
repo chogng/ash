@@ -170,3 +170,35 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		}
 	});
 }
+
+test('Docs exports DOCX, PDF and Markdown files from its title menu', { tag: ['@browser-ui'] }, async ({ target, workbench }, testInfo) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await new QuickAccess(page).runCommand('workbench.action.document.new');
+	const docs = page.locator('.ash-docs-workspace:visible');
+	const body = docs.getByRole('textbox', { name: 'Document body', exact: true });
+	await body.click();
+	await page.keyboard.insertText('Export sample 中文');
+	const toolbar = page.locator('[data-part="titlebar"] .ash-sessions-titlebar-editor-page').getByRole('toolbar', { name: 'Docs actions', exact: true });
+	const exports = toolbar.getByRole('button', { name: 'Export', exact: true });
+	await exports.click();
+	const names = ['Word document (.docx)', 'PDF document (.pdf)', 'Markdown file (.md)'];
+	for (const name of names) await expect(page.getByRole('menuitem', { name, exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	for (const [index, extension] of ['docx', 'pdf', 'md'].entries()) {
+		await exports.focus(); await exports.press('Enter');
+		const item = page.getByRole('menuitem', { name: names[index], exact: true });
+		await item.focus();
+		const downloading = page.waitForEvent('download');
+		await item.press('Enter');
+		const download = await downloading;
+		expect(download.suggestedFilename()).toMatch(new RegExp(`\\.${extension}$`));
+		const bytes = await readFile((await download.path())!);
+		if (extension === 'docx') expect(bytes.subarray(0, 2).toString()).toBe('PK');
+		else if (extension === 'pdf') expect(bytes.subarray(0, 8).toString()).toBe('%PDF-1.4');
+		else expect(bytes.toString()).toContain('Export sample 中文');
+		await expect(body).toHaveText('Export sample 中文');
+	}
+	await exports.click();
+	await page.screenshot({ path: testInfo.outputPath('docs-export-menu.png') });
+	await page.keyboard.press('Escape');
+});

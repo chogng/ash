@@ -9,11 +9,10 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { getArtifactTitle } from '../../artifact/browser/artifactKindPresentation.js';
 import { registerArtifactCatalogSource, type ArtifactCard } from '../../artifact/browser/artifactWorkspaceRegistry.js';
-import { LEGACY_DOCS_CONTENT_TYPE } from '../common/docs.js';
 
 export function isRetainedDocsInput(input: IResourceEditorInput, generated: IArtifactCatalogService, docs: IDocsService): boolean {
 	const { resource, contentType } = input;
-	return (contentType === LEGACY_DOCS_CONTENT_TYPE || contentType === 'text/markdown' || /\.md$/iu.test(resource.path))
+	return (contentType === 'text/markdown' || /\.md$/iu.test(resource.path))
 		&& !docs.isProfileDocumentPath(resource) && !generated.hasResource(resource);
 }
 
@@ -25,7 +24,7 @@ registerArtifactCatalogSource(accessor => {
 		isRestoring: observableFromEvent(generated, generated.onDidChange, () => generated.loading),
 		error: observableFromEvent(docs, Event.any(generated.onDidChange, docs.onDidChange), () => generated.error ?? docs.error),
 		cards: observableFromEvent(editors, Event.any(editors.onDidChangeEditors, generated.onDidChange, docs.onDidChange), () => {
-			const cards: ArtifactCard[] = generated.files.filter(file => file.contentType === 'text/markdown' || file.contentType === LEGACY_DOCS_CONTENT_TYPE).map(file => ({
+			const cards: ArtifactCard[] = generated.files.filter(file => file.contentType === 'text/markdown').map(file => ({
 				title: file.title, owner: 'you', resource: file.resource, createdAt: file.createdAt,
 				kind: 'docs',
 				detail: file.contentType === 'text/markdown' ? localize('sessions.artifacts.markdown', 'Markdown') : file.contentType,
@@ -40,7 +39,7 @@ registerArtifactCatalogSource(accessor => {
 				if (documents.has(identity)) continue;
 				documents.add(identity);
 				cards.push({
-					title: input.label ?? basename(input.resource).replace(/\.(?:ash-doc|md)$/iu, ''),
+					title: input.label ?? basename(input.resource).replace(/\.md$/iu, ''),
 					kind: 'docs', owner: 'you', resource: input.resource,
 					detail: getArtifactTitle('docs'),
 					command: { id: 'sessions.docs.openDocument', args: [identity] },

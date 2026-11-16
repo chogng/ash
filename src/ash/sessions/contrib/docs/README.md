@@ -2,24 +2,27 @@
 
 Docs 持有 Sessions 的文档创建、打开、默认视图选择、HTML 写作块导入、格式导入导出、恢复状态与作品目录适配。前端 Arkdown 实现位于 [`browser/arkdown`](browser/arkdown)，编辑与协作接口见 [Arkdown](ARKDOWN.md)。文档使用 Arkdown 连续正文。
 
-| 文件                                                           | 职责                                                           |
-| -------------------------------------------------------------- | -------------------------------------------------------------- |
-| [docs.contribution.ts](browser/docs.contribution.ts)           | 编辑器、配置、命令及生成文档打开入口                           |
-| [arkdownDocsEditorPane.ts](browser/arkdownDocsEditorPane.ts)   | Docs 标题栏、作品操作和默认模式，借用 Arkdown 文档宿主         |
-| [docsToolbar.ts](browser/docsToolbar.ts)                       | 向 Artifact 工具栏贡献字体、插入、更多、讨论和 Ask Ash 操作    |
-| [docsDropdown.ts](common/docsDropdown.ts)                      | 文档下拉选择块的 Markdown 编码与持久化边界校验                 |
-| [docsImport.ts](browser/docsImport.ts)                         | 复用 Academy 格式语义，转换旧文档、HTML 和文本为 Markdown      |
-| [legacyDocsMigration.ts](browser/legacyDocsMigration.ts)       | 旧文件与崩溃草稿的单向迁移、冲突处理及完成记录                 |
-| [docsEditorInput.ts](browser/docsEditorInput.ts)               | Arkdown 输入身份与另存为                                       |
-| [docsBackupContribution.ts](browser/docsBackupContribution.ts) | Docs 备份追踪、关闭排空与未保存草稿恢复                        |
-| [documentActions.ts](browser/documentActions.ts)               | 创建、转换、文件 IO 和 `sessions.docs.activeDocument` 恢复状态 |
-| [docsArtifactCatalog.ts](browser/docsArtifactCatalog.ts)       | 从文档和生成文件投影 Artifacts 卡片，不复制文档状态            |
+| 文件                                                           | 职责                                                        |
+| -------------------------------------------------------------- | ----------------------------------------------------------- |
+| [docs.contribution.ts](browser/docs.contribution.ts)           | 编辑器、配置、命令及生成文档打开入口                        |
+| [arkdownDocsEditorPane.ts](browser/arkdownDocsEditorPane.ts)   | Docs 标题栏、作品操作和默认模式，借用 Arkdown 文档宿主      |
+| [docsToolbar.ts](browser/docsToolbar.ts)                       | 向 Artifact 工具栏贡献字体、插入、更多、讨论和 Ask Ash 操作 |
+| [docsDropdown.ts](common/docsDropdown.ts)                      | 文档下拉选择块的 Markdown 编码与持久化边界校验              |
+| [docsImportExport.ts](browser/docsImportExport.ts)             | 导入导出编排、格式选择、文件保存与源文件保护                |
+| [docsExportContent.ts](browser/docsExportContent.ts)           | 从 Arkdown 解析结果生成独立导出快照                         |
+| [docsDocxExport.ts](browser/docsDocxExport.ts)                 | 导出标准 OOXML Word 文件                                    |
+| [docsPdfExport.ts](browser/docsPdfExport.ts)                   | 导出分页 PDF 文件                                           |
+| [docsDocxImport.ts](browser/docsDocxImport.ts)                 | 标准 OOXML 正文直接导入 Markdown                            |
+| [docsEditorInput.ts](browser/docsEditorInput.ts)               | Arkdown 输入身份与另存为                                    |
+| [docsBackupContribution.ts](browser/docsBackupContribution.ts) | Docs 备份追踪、关闭排空与未保存草稿恢复                     |
+| [documentActions.ts](browser/documentActions.ts)               | 创建、打开和 `sessions.docs.activeDocument` 恢复状态        |
+| [docsArtifactCatalog.ts](browser/docsArtifactCatalog.ts)       | 从文档和生成文件投影 Artifacts 卡片，不复制文档状态         |
 
 Docs 命令使用 `sessions.docs.*`，恢复入口为 `sessions.restore.docs`。恢复时读取并迁移旧的 Artifacts 文档指针。作品标题栏和作品页布局属于 Artifacts 的共享呈现能力，Docs 通过公共契约消费。生成 Markdown 的通用链接根据当前模式打开，Chat 进入 Docs，Code 使用文件编辑器。显式 Docs 命令通过作品入口进入 Chat。
 
-`DocsEditorMode` 表达 Arkdown 的正文与 Markdown 源码视图。默认视图由 `DOCS_DEFAULT_MODE_SETTING` 持有，持久化键为 `sessions.docs.editor`，命令 ID 为 `sessions.docs.chooseEditor`。设置使用现有 Application 范围与用户配置文件，`automatic` 读取为 `rich`。新建入口共用 `createDocsDocument`，新建、文本转换、HTML 写作块与通用 DOCX 导入均创建内部持久化 `.md` 草稿，使用 Artifacts 自动保存策略；导出创建独立副本。论文 DOCX 继续交给论文编辑器。
+`DocsEditorMode` 表达 Arkdown 的正文与 Markdown 源码视图。默认视图由 `DOCS_DEFAULT_MODE_SETTING` 持有，持久化键为 `sessions.docs.editor`，命令 ID 为 `sessions.docs.chooseEditor`。设置使用现有 Application 范围与用户配置文件，`automatic` 读取为 `rich`。新建入口共用 `createDocsDocument`，新建、文本转换、HTML 写作块与通用 DOCX 导入均创建内部持久化 `.md` 草稿，使用 Artifacts 自动保存策略；导出创建独立副本。DOCX 读取标准 OOXML 正文，不使用扩展私有快照。
 
-Arkdown 的 Markdown 入口接续文档导出命令：Markdown 导出保留源码，纯文本导出读取正文投影；文件导出当前提供 `.md`。超过解析复杂度限制时保留原文并切换到可编辑源码，可缩减内容后返回正文视图。
+Arkdown 的 Markdown 入口接续文档导出命令：Markdown 导出保留源码，纯文本导出读取正文投影；文件导出提供 `.docx`、`.pdf` 和 `.md`，标题栏菜单与命令共用格式目录和保存策略。DOCX 使用标准 OOXML，保留可编辑的正文、标题、列表、链接、图片和表格。PDF 使用白底 A4 分页图像，文字不可选择或搜索；Markdown 保留源码。二进制导出解析独立的 Markdown 快照，不依赖当前编辑器视图或虚拟化范围，也不修改工作副本。超过解析复杂度限制时保留原文并切换到可编辑源码，可缩减内容后返回正文视图。
 
 底部工具栏依次提供字体、表格、图片、清单、下拉选择块、更多、评论和 Ask Ash。字体菜单提供正文与标题层级，选中态读取 Arkdown 当前选区；加粗与斜体由选区工具栏、正文快捷键和文档右键菜单提供。更多菜单提供列表、代码块、分隔线、日期与页面宽度；源码切换及讨论文档位于文档标题菜单和右键菜单。评论打开文档线程侧栏，讨论文档打开关联对话。Ask Ash 把选区或文档加入聊天草稿，不发送消息。图片入口选择本地 PNG、JPEG、GIF 或 WebP 文件，也支持粘贴和拖入。图片嵌入 Markdown；每张图片最大 8 MB。HTTP/HTTPS 图片仍可从 Markdown 渲染。选中图片后可对齐、复制、修改替代文本、设置尺寸或删除；左右手柄支持等比缩放，图片编辑共用文档撤销。尺寸与对齐保存在保留的 GFM 图片标题 `ash-image:` 中，普通图片标题保留在该元数据内。
 
@@ -27,13 +30,13 @@ Arkdown 的 Markdown 入口接续文档导出命令：Markdown 导出保留源�
 
 Docs 的唯一编辑器为 `ArkdownDocsEditorPane`，借用 [ArkdownEditorPane](browser/arkdown/arkdownEditorPane.ts)，支持排版正文与共用 CodeEditor 的 Markdown 源码视图。Docs 入口进入 Chat 模式，IDE 和 Agent Window Code 使用 Markdown 扩展。Markdown 原文由 `TextModel` 持有，`EditorWorkingCopy` 接入保存、dirty、外部变更与备份，Rust 提供增量解析、结构编辑与协作操作日志。
 
-旧 `.ash-doc` 与持久化编辑器 ID `ash.editor.document`、`sessions.editor.docs` 仅进入迁移器。迁移先校验结构，再用 Academy 的共享转换器生成同目录 `.md`，保留原文件。文件使用排他创建，同名目标内容相等时复用，内容冲突或格式无法保留时报告错误。未保存内容单独转入文本备份，保存基线保持独立。
+Docs 仅接收 Markdown，不注册旧 `.ash-doc` 编辑器或迁移入口。HTML 通过基础层转换器生成 Markdown；Markdown 导入保留源码并内嵌本地图片；DOCX 由 Docs 读取标准 OOXML，转换正文、标题、列表、链接、图片和普通表格。不支持的正文结构拒绝导入，源文件保留。
 
 Docs 与源码视图共用 Markdown 工作副本备份，使用 Profile 范围的 `sessions-docs` 存储范围，Desktop 经 `ash-sessions` 备份客户端写入现有 State SQLite，Browser 使用现有 IndexedDB 实现。备份跟踪与保存排空复用 Workbench，恢复的孤立草稿进入 Artifacts。
 
 协作的“近期远端修改”显示当前会话最近接收的 20 项更新、连接 ID 和最多 160 个字符的增删预览，正文与源码使用对应颜色标记受影响范围。范围来自同步更新，可能包含中间未变化的文字，不代表永久作者归属；快照同步不推断作者。列表随 buffer 会话保留，离开协作后清空。连接 ID 不代表已验证的用户身份。
 
-迁移记录属于 Profile 范围的机器状态，存入 `IStorageService`，记录源内容和恢复内容的摘要。目标与记录持久化后清理旧备份，后续读取 Markdown，保留其中的新编辑。旧文件改动会报告冲突。工作台在创建窗格前异步解析迁移后的输入，工作区恢复保存目标身份。Academy 论文与频道笔记继续由各自结构化模型持有。
+Academy 论文与频道笔记继续由各自结构化模型持有，Docs 不导入 Academy 实现。ZIP 读写由基础层持有。
 
 ## 本机源码核对
 
@@ -115,6 +118,6 @@ Docs 的实现方向是维护自己的产品层，复用开源依赖，逐步建
 - 保存、工作副本、dirty、外部变更和恢复继续由 Workbench 持有。富文档保留结构化模型，Markdown 保留文本模型；不在每次编辑时通过 Markdown 导入导出往返同步，以免丢失格式或文档信息。同一个编辑会话的写入必须经过其模型或事务 owner，不能让 WASM 与原生副本分别覆盖状态。
 - `ash-collab` 的结构化文档房间使用有序事务、版本和重放契约。Markdown 房间使用独立的 `arkdown-markdown-v1` profile 和 Yrs 更新，房间生命周期与权限由通用协作服务持有。
 
-Rust 核心命名为 [Arkdown](../../../../../crates/arkdown/README.md)，位于 `crates/arkdown`，Cargo 包名为 `ash-arkdown`。初版包含源码保留解析、UTF-8/UTF-16 区间、字素导航、带版本的文本事务、撤销重做、HTML 预览，以及原生与 WASM 绑定的一致性验证。Docs 的新建和聊天写作入口已连接 Arkdown WASM，支持正文直接编辑、加粗、斜体、源码切换、中文组合输入和共享撤销重做。常规构建准备及 Vite 负责从 Rust 源码生成浏览器绑定。当前使用区块窗口增量解析，协作房间已接入。`.ash-doc` 通过单向导入迁移为 Markdown，专业结构化文档保存与协作继续由各自 owner 持有。
+Rust 核心命名为 [Arkdown](../../../../../crates/arkdown/README.md)，位于 `crates/arkdown`，Cargo 包名为 `ash-arkdown`。初版包含源码保留解析、UTF-8/UTF-16 区间、字素导航、带版本的文本事务、撤销重做、HTML 预览，以及原生与 WASM 绑定的一致性验证。Docs 的新建和聊天写作入口已连接 Arkdown WASM，支持正文直接编辑、加粗、斜体、源码切换、中文组合输入和共享撤销重做。常规构建准备及 Vite 负责从 Rust 源码生成浏览器绑定。当前使用区块窗口增量解析，协作房间已接入。专业结构化文档保存与协作继续由各自 owner 持有。
 
 若后续选择 VS Code 的混合 Markdown 体验，应让其使用现有 Markdown 文本工作副本，将编辑应用为文本变更，并复用保存、撤销、外部变更及只读语义。不能把渲染后的 HTML 当作 Markdown 文件的数据源，也不能仅凭两者都支持可视编辑就替换富文档引擎。

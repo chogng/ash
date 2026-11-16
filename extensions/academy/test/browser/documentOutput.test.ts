@@ -3,7 +3,7 @@ import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { createDefaultDocumentSchema } from '../../common/model/documentSchema.js';
 import { exportDocx, importDocx } from '../../browser/contrib/documentOutput/docx.js';
-import { zipFiles, unzipFiles } from '../../browser/contrib/documentOutput/zip.js';
+import { zipFiles, unzipFiles } from 'ash:editor/base/browser/zip.js';
 import { documentToPlainText } from '../../common/model/documentSerialization.js';
 import { createResolveRevisionCommand } from '../../common/model/documentReview.js';
 import { DocumentTextModel } from '../../common/model/documentTextModel.js';

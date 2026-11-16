@@ -1,6 +1,4 @@
 import { IDocsService } from '../../common/docsService.js';
-import { createDefaultDocumentSchema } from '../../../../../../../extensions/academy/common/model/documentSchema.js';
-import { serializeDocument } from '../../../../../../../extensions/academy/common/model/documentSerialization.js';
 import { createTestDocsService } from '../../../../test/common/testArtifactCatalogService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IUserDataProfileService } from '../../../../../workbench/services/userDataProfile/common/userDataProfile.js';
@@ -31,7 +29,7 @@ import { TestConfigurationService } from '../../../../../workbench/services/conf
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { EditorPanes } from '../../../../../workbench/browser/editor.js';
-import { DOCS_ARKDOWN_EDITOR_ID, DOCS_DEFAULT_MODE_SETTING, LEGACY_DOCS_EDITOR_ID, LEGACY_DOCS_FILE_EDITOR_ID } from '../../common/docs.js';
+import { DOCS_ARKDOWN_EDITOR_ID, DOCS_DEFAULT_MODE_SETTING } from '../../common/docs.js';
 import { createDocsOpener, newDocsResource, restoredDocsResource } from '../../browser/documentActions.js';
 import { createArkdownDocsInput } from '../../browser/docsEditorInput.js';
 import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
@@ -65,38 +63,6 @@ test('Docs resource creation always uses Markdown', () => {
 	assert.equal(DOCS_ARKDOWN_EDITOR_ID, 'sessions.editor.docs.markdown');
 });
 
-for (const failure of ['none', 'write', 'open', 'flush', 'invalid'] as const) test(`Docs restores a legacy structured draft without retiring recovery on failure: ${failure}`, async () => {
-	using lifetime = new DisposableStore();
-	const services = lifetime.add(new InstantiationService());
-	const backups = lifetime.add(new InMemoryWorkingCopyBackupService('legacy-draft'));
-	const persisted = draftPersistence(services, {}, backups);
-	const storage = lifetime.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: crypto.randomUUID(), flushInterval: 0 }));
-	services.registerInstance(IStorageService, storage);
-	const original = URI.parse('untitled:/old/Recovered.ash-doc');
-	const schema = createDefaultDocumentSchema();
-	const content = failure === 'invalid' ? '{invalid' : serializeDocument(schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('旧草稿🙂')] })]), schema);
-	await backups.store({ resource: original, kind: 'structuredDocument', content, updatedAt: 1 });
-	if (failure === 'write') services.get(IFileService).writeFile = async () => { throw new Error('write failed'); };
-	if (failure === 'flush') storage.flush = async () => { throw new Error('flush failed'); };
-	let opened = false;
-	services.registerInstance(ISessionsEntryService, {
-		openEntry: async (entry: ISessionsEntry, create: () => ISessionsEntry) => {
-			opened = true;
-			assert.ok(entry.editorInput!.resource.path.endsWith('.md'));
-			assert.equal(persisted.get(entry.editorInput!.resource.toString())?.trim(), '旧草稿🙂');
-			assert.equal((await backups.resolve(original))?.content, content);
-			if (failure === 'open') throw new Error('open failed');
-			create();
-		},
-	} as unknown as ISessionsEntryService);
-	const open = services.invokeFunction(createDocsOpener);
-	if (failure === 'none') await open(original, { source: 'restore' });
-	else await assert.rejects(open(original, { source: 'restore' }));
-	assert.equal(opened, failure !== 'write' && failure !== 'invalid');
-	assert.equal((await backups.resolve(original))?.content, failure === 'none' ? undefined : content);
-	if (failure === 'invalid') assert.equal(persisted.size, 0);
-});
-
 for (const failOpen of [false, true]) test(`Docs recovers an untitled backup and retires it only after opening succeeds: ${!failOpen}`, async () => {
 	using lifetime = new DisposableStore();
 	const services = lifetime.add(new InstantiationService());
@@ -118,6 +84,19 @@ for (const failOpen of [false, true]) test(`Docs recovers an untitled backup and
 	assert.equal(!!await backups.resolve(original), failOpen);
 });
 
+test('Docs refuses old files before opening or retiring their backups', async () => {
+	using lifetime = new DisposableStore();
+	const services = lifetime.add(new InstantiationService());
+	const backups = lifetime.add(new InMemoryWorkingCopyBackupService('retired-docs'));
+	const resource = URI.parse('untitled:/draft/old.ash-doc');
+	await backups.store({ resource, kind: 'structuredDocument', content: 'old recovery', updatedAt: 1 });
+	draftPersistence(services, {}, backups);
+	services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'retired-docs', flushInterval: 0 })));
+	services.registerInstance(ISessionsEntryService, { openEntry: async () => assert.fail('opened a retired document') } as unknown as ISessionsEntryService);
+	await assert.rejects(services.invokeFunction(createDocsOpener)(resource));
+	assert.equal((await backups.resolve(resource))?.content, 'old recovery');
+});
+
 test('Docs catalog retains Markdown inputs with uppercase extensions and explicit content types', () => {
 	const generated = { hasResource: () => false } as unknown as IArtifactCatalogService;
 	assert.equal(isRetainedDocsInput({ resource: URI.file('/notes/UPPER.MD') }, generated, createTestDocsService()), true);
@@ -125,13 +104,11 @@ test('Docs catalog retains Markdown inputs with uppercase extensions and explici
 	assert.equal(isRetainedDocsInput({ resource: URI.file('/notes/plain.txt') }, generated, createTestDocsService()), false);
 });
 
-test('retired Docs identities expose one legacy importer and remain absent from Markdown editor choices', () => {
-	const legacyChoices = (input: IResourceEditorInput) => EditorPanes.getEditorPanesForInput(input)
-		.filter(pane => pane.id === LEGACY_DOCS_EDITOR_ID || pane.id === LEGACY_DOCS_FILE_EDITOR_ID);
-	const resource = URI.file('/legacy.ash-doc');
-	assert.deepEqual(legacyChoices({ resource }).map(pane => pane.id), [LEGACY_DOCS_FILE_EDITOR_ID]);
-	assert.deepEqual(legacyChoices({ resource, editorId: LEGACY_DOCS_EDITOR_ID }).map(pane => pane.id), [LEGACY_DOCS_EDITOR_ID]);
-	assert.deepEqual(legacyChoices({ resource: URI.file('/notes.md') }), []);
+test('retired Docs identities are not registered or retained as Docs', () => {
+	for (const id of ['sessions.editor.docs', 'ash.editor.document']) {
+		assert.ok(!EditorPanes.getEditorPanes().some(pane => pane.id === id));
+	}
+	assert.equal(isRetainedDocsInput({ resource: URI.file('/legacy.ash-doc'), contentType: 'application/vnd.ash.document+json' }, { hasResource: () => false } as unknown as IArtifactCatalogService, createTestDocsService()), false);
 });
 
 for (const [createInput, editorId, contentType] of [
@@ -228,19 +205,18 @@ for (const [preference, extension] of [
 	assert.ok(!EditorPanes.getEditorPanesForInput({ resource: input.resource, languageId: 'markdown' }).some(pane => pane.id === DOCS_ARKDOWN_EDITOR_ID));
 });
 
-test('Docs restores its own document pointer and migrates the former Artifacts state', () => {
+test('Docs restores only its Markdown pointer', () => {
 	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'docs-state', flushInterval: 0 });
-	const resource = 'file:///tmp/readme.md';
-	storage.store('sessions.artifacts.activeDocument', resource, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	assert.equal(restoredDocsResource(storage)?.toString(), resource);
-	assert.equal(storage.get('sessions.docs.activeDocument', StorageScope.WORKSPACE), resource);
-	assert.equal(storage.get('sessions.artifacts.activeDocument', StorageScope.WORKSPACE), undefined);
-	storage.store('sessions.artifacts.activeDocument', 'file:///tmp/stale.ash-doc', StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	assert.equal(restoredDocsResource(storage)?.toString(), resource);
+	storage.store('sessions.artifacts.activeDocument', 'file:///tmp/old.md', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	assert.equal(restoredDocsResource(storage), undefined);
+	storage.store('sessions.docs.activeDocument', 'file:///tmp/readme.md', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	assert.equal(restoredDocsResource(storage)?.toString(), 'file:///tmp/readme.md');
+	storage.store('sessions.docs.activeDocument', 'file:///tmp/old.ash-doc', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	assert.equal(restoredDocsResource(storage), undefined);
 });
 
 test('Docs imports sanitized HTML directly into Markdown', async () => {
-	const { importDocsHtml } = await import('../../browser/docsImport.js');
+	const { importDocsHtml } = await import('../../browser/docsImportExport.js');
 	const markdown = importDocsHtml('<h1>Editable document</h1><p>Body text</p><script>alert(1)</script>', browser.window.document);
 	assert.ok(markdown);
 	assert.match(markdown, /Editable document[\s\S]*Body text/u);
@@ -260,7 +236,7 @@ test('Docs text conversion captures unsaved source and embeds local images into 
 	services.registerInstance(IFileTextModelService, { getModel: () => ({ getValue: () => text }) } as unknown as IFileTextModelService);
 	const persisted = draftPersistence(services, { readFileBytes: async (resource: URI) => { reads.push(resource.toString()); return { bytes: new Uint8Array([0, 127, 255]) }; } } as Partial<IFileService>);
 	services.registerInstance(ISessionsEntryService, { openEntry: async (entry: ISessionsEntry) => { entries.push(entry); } } as ISessionsEntryService);
-	const { convertActiveTextToDocument } = await import('../../browser/documentActions.js');
+	const { convertActiveTextToDocument } = await import('../../browser/docsImportExport.js');
 	const pending = services.invokeFunction(accessor => convertActiveTextToDocument(accessor, 'markdown'));
 	text = 'Edited while conversion awaits';
 	await pending;
@@ -273,11 +249,12 @@ test('Docs text conversion captures unsaved source and embeds local images into 
 });
 
 test('Docs imports a general DOCX directly into an Arkdown Markdown draft', async () => {
-	const { createDefaultDocumentSchema } = await import('../../../../../../../extensions/academy/common/model/documentSchema.js');
-	const { exportDocx } = await import('../../../../../../../extensions/academy/browser/contrib/documentOutput/docx.js');
-	const schema = createDefaultDocumentSchema();
-	const document = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('Imported Word document')] })]);
-	const bytes = await exportDocx(document, schema, new AbortController().signal);
+	const { zipFiles } = await import('../../../../../base/browser/zip.js');
+	const encode = (text: string) => new TextEncoder().encode(text);
+	const bytes = zipFiles(new Map([
+		['_rels/.rels', encode('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>')],
+		['word/document.xml', encode('<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Imported Word document</w:t></w:r></w:p></w:body></w:document>')],
+	]));
 	using lifetime = new DisposableStore();
 	const services = lifetime.add(new InstantiationService());
 	const storage = lifetime.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'import-docx', flushInterval: 0 }));
@@ -287,7 +264,7 @@ test('Docs imports a general DOCX directly into an Arkdown Markdown draft', asyn
 	services.registerInstance(IFileDialogService, { showOpenDialog: async () => [URI.file('/import.docx')] } as unknown as IFileDialogService);
 	const persisted = draftPersistence(services, { stat: async () => ({ sizeBytes: bytes.length }), readFileBytes: async () => ({ bytes }) } as unknown as Partial<IFileService>);
 	services.registerInstance(ISessionsEntryService, { openEntry: async (entry: ISessionsEntry) => { entries.push(entry); } } as ISessionsEntryService);
-	const { importDocumentArtifact } = await import('../../browser/documentActions.js');
+	const { importDocumentArtifact } = await import('../../browser/docsImportExport.js');
 	await services.invokeFunction(importDocumentArtifact);
 	assert.equal(entries[0].editorInput?.editorId, DOCS_ARKDOWN_EDITOR_ID);
 	assert.ok(entries[0].editorInput?.resource.path.endsWith('/import.md'));
@@ -336,4 +313,31 @@ test('Docs recovery checks the refreshed account catalog and retains Code source
 	assert.equal(opened[1].groupId, 0);
 	assert.equal(restored.get(codeResource.toString()), 'Code source draft');
 	assert.equal((await backups.resolve(generatedResource))?.content, 'Previous account draft');
+});
+
+for (const outcome of ['save', 'cancel', 'switch', 'source'] as const) test(`Docs export owns async service access and protects its source: ${outcome}`, async () => {
+	using lifetime = new DisposableStore();
+	const services = lifetime.add(new InstantiationService());
+	const resource = URI.file('/notes/source.md');
+	const written: { resource: URI; bytes: Uint8Array; }[] = [];
+	let current = true, dialogs = 0;
+	services.registerInstance(IFileService, { writeFileBytes: async (resource: URI, bytes: Uint8Array) => { written.push({ resource, bytes }); } } as unknown as IFileService);
+	services.registerInstance(IFileDialogService, {
+		showSaveDialog: async () => {
+			dialogs++;
+			await Promise.resolve();
+			if (outcome === 'switch') current = false;
+			return outcome === 'cancel' ? undefined : outcome === 'source' ? resource : URI.file('/export/copy.md');
+		},
+	} as unknown as IFileDialogService);
+	const { exportDocsFile } = await import('../../browser/docsImportExport.js');
+	const exporting = services.invokeFunction(exportDocsFile, '# Unsaved version', resource, 'markdown', browser.window.document, () => current);
+	if (outcome === 'source') await assert.rejects(exporting, /separate output file/u);
+	else await exporting;
+	assert.equal(dialogs, 1);
+	assert.equal(written.length, outcome === 'save' ? 1 : 0);
+	if (outcome === 'save') {
+		assert.equal(written[0].resource.path, '/export/copy.md');
+		assert.equal(new TextDecoder().decode(written[0].bytes), '# Unsaved version');
+	}
 });

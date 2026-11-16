@@ -28,13 +28,12 @@ import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { isResourceDiffEditorInput } from '../../../../workbench/common/editor.js';
-import { CODE_EDITOR_ID } from '../../../../workbench/common/editor/codeEditorId.js';
 import { EDIT_CHAT_WRITING_COMMAND_ID } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import { DocumentTypes } from '../../../../workbench/services/documentEditor/common/documentTypes.js';
-import { DOCS_DEFAULT_MODE_SETTING, DOCS_ARKDOWN_EDITOR_ID, LEGACY_DOCS_CONTENT_TYPE, LEGACY_DOCS_FILE_EDITOR_ID, LEGACY_DOCS_EDITOR_ID, type DocsEditorMode } from '../common/docs.js';
-import { convertActiveTextToDocument, createDocsOpener, createDocsDocument, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact, openWritingDraft, restoredDocsResource } from './documentActions.js';
+import { DOCS_DEFAULT_MODE_SETTING, DOCS_ARKDOWN_EDITOR_ID, type DocsEditorMode } from '../common/docs.js';
+import { createDocsOpener, createDocsDocument, restoredDocsResource } from './documentActions.js';
+import { convertActiveTextToDocument, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact, openWritingDraft } from './docsImportExport.js';
 import { createArkdownDocsInput } from './docsEditorInput.js';
-import { migrateLegacyDocsInput } from './legacyDocsMigration.js';
 import { ArkdownDocsEditorPane } from './arkdownDocsEditorPane.js';
 import { createDocsBackupContribution } from './docsBackupContribution.js';
 
@@ -63,31 +62,13 @@ registerWorkbenchContribution('sessions.docs.resourceOpener', WorkbenchPhase.Blo
 			await generated.refresh();
 			const file = generated.files.find(file => file.resource.toString() === resource.toString());
 			if (!file) throw new Error(localize({ bundle: 'ash.artifacts', key: 'artifactUnavailable' }, 'This artifact is unavailable.'));
-			if (file.contentType !== 'text/markdown' && file.contentType !== LEGACY_DOCS_CONTENT_TYPE) return false;
+			if (file.contentType !== 'text/markdown') return false;
 			// Resolve the current presentation after the account-scoped catalog refresh.
 			if (contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code') return false;
 			await open(file.resource, { label: file.title });
 			return true;
 		}
 	});
-});
-
-for (const id of [LEGACY_DOCS_FILE_EDITOR_ID, LEGACY_DOCS_EDITOR_ID]) registerEditorPane({
-	id,
-	get name() { return localize({ bundle: 'ash.docs', key: 'legacyDocument' }, 'Legacy document'); },
-	canOpen: input => {
-		if (isResourceDiffEditorInput(input)) return EditorPaneMatch.None;
-		const matchesLegacyFile = id === LEGACY_DOCS_FILE_EDITOR_ID && input.editorId !== LEGACY_DOCS_EDITOR_ID
-			&& (/\.ash-doc$/iu.test(input.resource.path) || input.contentType === LEGACY_DOCS_CONTENT_TYPE);
-		return input.editorId === id || matchesLegacyFile ? EditorPaneMatch.Builtin : EditorPaneMatch.None;
-	},
-	async resolveInput(input, accessor) {
-		const migrated = await migrateLegacyDocsInput(input, accessor);
-		// Ordinary files retain the Code workflow. Explicit legacy Docs retains its product host.
-		return input.editorId === LEGACY_DOCS_EDITOR_ID ? migrated
-			: { ...migrated, editorId: CODE_EDITOR_ID, rename: undefined, showBreadcrumbs: input.showBreadcrumbs };
-	},
-	create() { throw new Error('Legacy Docs must resolve to Arkdown before pane creation'); },
 });
 
 registerEditorPane({

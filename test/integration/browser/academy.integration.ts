@@ -1,7 +1,7 @@
 import { languagePackCatalog as chineseCatalog } from '../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { InMemoryFileSystemProvider } from '../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js';
-import { exportDocumentArtifact, importDocumentArtifact } from '../../../src/ash/sessions/contrib/docs/browser/documentActions.js';
+import { exportDocumentArtifact } from '../../../src/ash/sessions/contrib/docs/browser/docsImportExport.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -492,7 +492,15 @@ window.ashAcademyIntegration = {
 	importArtifact: async bytes => {
 		artifactTarget = URI.parse('artifact:/import.docx');
 		await services.get(IFileService).writeFileBytes(artifactTarget, new Uint8Array(bytes), { create: true, overwrite: true });
-		await services.invokeFunction(accessor => importDocumentArtifact(accessor));
+		// This fixture exercises the installed structured-document provider. Docs has
+		// its own Markdown importer and does not interpret package-private snapshots.
+		const descriptor = EditorPanes.getEditorPane({ resource: structuredResource })!;
+		const profile = await descriptor.resolveDocumentProfile!();
+		const configuration = profile.create();
+		const imported = await configuration.importBinary!(new Uint8Array(bytes), 'docx', document, new AbortController().signal);
+		configuration.codec.validate(imported.document);
+		await services.get(IEditorPart).openEditor({ resource: URI.parse('untitled:/import' + descriptor.documentType!.extensions[0]), contentType: profile.contentType }, { pinned: true });
+		importedPane!.restoreDraft(imported.document);
 		return { backup: importedPane!.workingCopy!.backup(), scheme: importedPane!.workingCopy!.resource.scheme, dirty: importedPane!.isDirty, source: structuredPane.workingCopy!.backup() };
 	},
 	getStructuredCollaborationSubmissions: () => [...collaborationSubmissions],

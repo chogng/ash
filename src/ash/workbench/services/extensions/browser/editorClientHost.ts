@@ -9,6 +9,8 @@ import { addDisposableListener, fragment, h, svg } from '../../../../base/browse
 import { Separator } from '../../../../base/common/actions.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { streamToBuffer } from '../../../../base/common/buffer.js';
+import { createImagePdf } from '../../../../base/common/pdf.js';
+import { zipFiles, unzipFiles } from '../../../../base/browser/zip.js';
 import { CancellationTokenSource, throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -51,6 +53,8 @@ export const editorClientHost = Object.freeze({
 	'base/common/actions.js': Object.freeze({ Separator }),
 	'base/common/async.js': Object.freeze({ raceCancellationError }),
 	'base/common/buffer.js': Object.freeze({ streamToBuffer }),
+	'base/common/pdf.js': Object.freeze({ createImagePdf }),
+	'base/browser/zip.js': Object.freeze({ zipFiles, unzipFiles }),
 	'base/common/cancellation.js': Object.freeze({ CancellationTokenSource, throwIfCancelled }),
 	'base/browser/domSanitize.js': Object.freeze({ sanitizeHtmlToFragment }),
 	'base/browser/ui/button/button.js': Object.freeze({ Button }),

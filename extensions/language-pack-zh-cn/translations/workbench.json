@@ -875,7 +875,6 @@
     "document.conversion.textRequired": "请先打开文本编辑器，再转换其内容。",
     "document.conversion.documentRequired": "请先打开文档，再导出其内容。",
     "document.untitled": "未命名",
-    "document.creation.failed": "文档编辑器无法打开新草稿。",
     "document.saveAs.type": "请使用支持的扩展名（{0}）保存此文档。要更改格式，请使用显式转换命令。",
     "document.new": "新建文档",
     "document.importMarkdown": "将当前 Markdown 转换为文档",

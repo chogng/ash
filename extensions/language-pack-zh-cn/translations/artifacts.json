@@ -320,6 +320,12 @@
     "sessions.design.agentRequest": "修改附带的 Design HTML，并返回可运行的预览。"
   },
   "ash.docs": {
+    "exportDocx": "Word 文档 (.docx)",
+    "exportPdf": "PDF 文档 (.pdf)",
+    "exportImageFailed": "无法在导出文档中加入图片。",
+    "exportPdfFailed": "无法生成 PDF 文档。",
+    "exportHelp": "导出菜单提供 Word 文档、PDF 文档和 Markdown 文件。导出根据当前文档生成独立文件，包含未保存的编辑。PDF 包含渲染后的页面图片。",
+    "unsupportedImport": "此文档包含 Docs 无法导入的内容。",
     "selectionFormatting": "选区格式",
     "strikethrough": "删除线",
     "inlineCode": "行内代码",
@@ -358,10 +364,6 @@
     "chooseMode": "选择 Docs 默认视图",
     "actions": "Docs 操作",
     "exportMarkdown": "Markdown 文件 (.md)",
-    "invalidLegacyResource": "无法迁移此旧版文档资源。",
-    "missingLegacyDraft": "旧版文档草稿没有可恢复的内容。",
-    "migrationConflict": "旧版文档与对应的 Markdown 文档存在冲突修改。两份文件均已保留。",
-    "legacyDocument": "旧版文档",
     "underline": "下划线",
     "textSection": "文字",
     "defaultColor": "默认",
