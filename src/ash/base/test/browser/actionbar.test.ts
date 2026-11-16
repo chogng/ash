@@ -16,6 +16,35 @@ import { addDisposableListener } from '../../browser/dom.js';
 suite('ActionBar open dropdown updates', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('mutable actions update retained buttons and keep an enabled keyboard tab stop', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using first = new Action('first', 'First');
+			using second = new Action('second', 'Second');
+			first.icon = Lxicon.note;
+			using bar = new ActionBar(dom.window.document.body, { actions: [first, second] });
+			const [button, next] = bar.domNode.querySelectorAll('button');
+			assert.equal(button.tabIndex, 0);
+			first.enabled = false;
+			assert.equal(button.disabled, true);
+			assert.equal(button.tabIndex, -1);
+			assert.equal(next.tabIndex, 0);
+			first.label = 'Changed';
+			first.tooltip = 'Changed tooltip';
+			first.checked = true;
+			first.icon = Lxicon.save;
+			assert.equal(button.getAttribute('aria-label'), 'Changed');
+			assert.equal(button.getAttribute('aria-pressed'), 'true');
+			assert.ok(button.querySelector('.ash-icon-save'));
+			first.enabled = true;
+			second.enabled = false;
+			assert.equal(button.disabled, false);
+			assert.equal(button.tabIndex, 0);
+			assert.equal(next.tabIndex, -1);
+			assert.equal(bar.domNode.querySelector('button'), button);
+		} finally { dom.window.close(); }
+	});
+
 	test('dropdown triggers expose current and updated checked action state', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {

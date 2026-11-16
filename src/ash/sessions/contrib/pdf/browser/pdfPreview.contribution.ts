@@ -65,7 +65,7 @@ registerWorkbenchContribution('sessions.pdfPreview.backup', WorkbenchPhase.Block
 
 registerEditorPane({
 	id,
-	get name() { return localize('sessions.pdfPreview.title', 'aspdf'); },
+	get name() { return localize('sessions.pdfPreview.title', 'PDF'); },
 	resourceEditor: true,
 	canOpen: input => !isResourceDiffEditorInput(input) &&
 		(input.contentType === 'application/pdf' || extname(input.resource.path).toLowerCase() === '.pdf')

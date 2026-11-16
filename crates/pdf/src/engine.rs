@@ -37,7 +37,7 @@ pub(super) fn serve() -> Result<(), String> {
     if metadata.len() == 0 || metadata.len() > crate::MAX_FILE_BYTES as u64 {
         return Err("Invalid PDF size".into());
     }
-    let document = pdfium
+    let mut document = pdfium
         .load_pdf_from_file(&first.source, None)
         .map_err(pdf_error)?;
     // Hash the source once, not once per page. The PDFium reader retains its own file.
@@ -48,11 +48,20 @@ pub(super) fn serve() -> Result<(), String> {
     let mut file_size = metadata.len() as usize;
     let mut request = Some(first);
     while let Some(operation) = request {
+        let modified = operation.modified.clone();
         let result = execute(&document, operation, &sha256, file_size);
         let success = result.is_ok();
         if let Ok(result) = &result {
             sha256 = result.page.sha256.clone();
             file_size = result.page.file_size;
+            if let Some(path) = modified {
+                document = pdfium
+                    .load_pdf_from_byte_vec(
+                        std::fs::read(path).map_err(|error| error.to_string())?,
+                        None,
+                    )
+                    .map_err(pdf_error)?;
+            }
         }
         let mut output = std::io::stdout().lock();
         serde_json::to_writer(&mut output, &result).map_err(|error| error.to_string())?;
@@ -113,6 +122,107 @@ pub(super) fn execute(
     let config = PdfRenderConfig::new()
         .set_fixed_size(width, height)
         .render_annotations(true);
+    if let Some(edit) = &request.edit {
+        let rotation = match page.rotation().map_err(pdf_error)? {
+            PdfPageRenderRotation::None => 0,
+            PdfPageRenderRotation::Degrees90 => 90,
+            PdfPageRenderRotation::Degrees180 => 180,
+            PdfPageRenderRotation::Degrees270 => 270,
+        };
+        let extended = match edit {
+            PdfAnnotationEdit::Ink { points } => {
+                if !(2..=1024).contains(&points.len())
+                    || points.iter().any(|point| {
+                        !point.x.is_finite()
+                            || !point.y.is_finite()
+                            || !(0.0..=1.0).contains(&point.x)
+                            || !(0.0..=1.0).contains(&point.y)
+                    })
+                {
+                    return Err("Invalid ink stroke".into());
+                }
+                let points = points
+                    .iter()
+                    .map(|point| {
+                        page.pixels_to_points(
+                            (point.x * width as f32).round() as i32,
+                            (point.y * height as f32).round() as i32,
+                            &config,
+                        )
+                        .map(|(x, y)| (x.value, y.value))
+                        .map_err(pdf_error)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Some(crate::annotations::Edit::Ink { points })
+            }
+            PdfAnnotationEdit::Text { bounds, contents } => {
+                validate_contents(contents)?;
+                let rect = annotation_rect(&page, &config, width, height, bounds)?;
+                Some(crate::annotations::Edit::Text {
+                    rect: [
+                        rect.left().value,
+                        rect.bottom().value,
+                        rect.right().value,
+                        rect.top().value,
+                    ],
+                    contents,
+                    rotation,
+                })
+            }
+            PdfAnnotationEdit::Update { index, contents }
+                if page
+                    .annotations()
+                    .get(*index as usize)
+                    .map_err(pdf_error)?
+                    .annotation_type()
+                    == PdfPageAnnotationType::FreeText =>
+            {
+                validate_contents(contents)?;
+                Some(crate::annotations::Edit::UpdateText {
+                    index: *index as usize,
+                    contents,
+                    rotation,
+                })
+            }
+            PdfAnnotationEdit::Update { .. }
+            | PdfAnnotationEdit::Delete { .. }
+            | PdfAnnotationEdit::Highlight { .. }
+            | PdfAnnotationEdit::Note { .. } => None,
+        };
+        if let Some(edit) = extended {
+            let bytes = crate::annotations::apply(
+                &document.save_to_bytes().map_err(pdf_error)?,
+                request.page,
+                edit,
+            )?;
+            if bytes.len() > crate::MAX_FILE_BYTES {
+                return Err("Modified PDF exceeds the file budget".into());
+            }
+            std::fs::write(
+                request
+                    .modified
+                    .as_ref()
+                    .ok_or("Missing modified PDF path")?,
+                &bytes,
+            )
+            .map_err(|error| error.to_string())?;
+            let pdfium = Pdfium::default();
+            let edited = pdfium
+                .load_pdf_from_byte_vec(bytes.clone(), None)
+                .map_err(pdf_error)?;
+            let request = EngineRequest {
+                edit: None,
+                modified: None,
+                ..request
+            };
+            return execute(
+                &edited,
+                request,
+                &format!("{:x}", Sha256::digest(&bytes)),
+                bytes.len(),
+            );
+        }
+    }
     // Coordinate conversion uses exactly the same dimensions as the single raster pass.
     if let Some(edit) = &request.edit {
         apply_edit(&mut page, &config, width, height, edit)?;
@@ -265,42 +375,7 @@ fn apply_edit(
         PdfAnnotationEdit::Highlight { bounds, contents }
         | PdfAnnotationEdit::Note { bounds, contents } => {
             validate_contents(contents)?;
-            if ![bounds.x, bounds.y, bounds.width, bounds.height]
-                .into_iter()
-                .all(f32::is_finite)
-                || bounds.x < 0.0
-                || bounds.y < 0.0
-                || bounds.width <= 0.0
-                || bounds.height <= 0.0
-                || bounds.x + bounds.width > 1.001
-                || bounds.y + bounds.height > 1.001
-            {
-                return Err("Annotation bounds must be inside the page".into());
-            }
-            let mut xs = Vec::new();
-            let mut ys = Vec::new();
-            for (x, y) in [
-                (bounds.x, bounds.y),
-                (bounds.x + bounds.width, bounds.y),
-                (bounds.x, bounds.y + bounds.height),
-                (bounds.x + bounds.width, bounds.y + bounds.height),
-            ] {
-                let (x, y) = page
-                    .pixels_to_points(
-                        (x * width as f32).round() as i32,
-                        (y * height as f32).round() as i32,
-                        config,
-                    )
-                    .map_err(pdf_error)?;
-                xs.push(x.value);
-                ys.push(y.value);
-            }
-            let rect = pdfium_render::prelude::PdfRect::new_from_values(
-                ys.iter().copied().fold(f32::INFINITY, f32::min),
-                xs.iter().copied().fold(f32::INFINITY, f32::min),
-                ys.into_iter().fold(f32::NEG_INFINITY, f32::max),
-                xs.into_iter().fold(f32::NEG_INFINITY, f32::max),
-            );
+            let rect = annotation_rect(page, config, width, height, bounds)?;
             match edit {
                 PdfAnnotationEdit::Highlight { .. } => {
                     let mut annotation = page
@@ -326,10 +401,16 @@ fn apply_edit(
                     annotation.set_bounds(rect).map_err(pdf_error)?;
                     annotation.set_creator("aspdf").map_err(pdf_error)?;
                 }
-                PdfAnnotationEdit::Update { .. } | PdfAnnotationEdit::Delete { .. } => {
+                PdfAnnotationEdit::Text { .. }
+                | PdfAnnotationEdit::Ink { .. }
+                | PdfAnnotationEdit::Update { .. }
+                | PdfAnnotationEdit::Delete { .. } => {
                     unreachable!()
                 }
             }
+        }
+        PdfAnnotationEdit::Ink { .. } | PdfAnnotationEdit::Text { .. } => {
+            unreachable!("Dictionary edits are applied before rendering")
         }
         PdfAnnotationEdit::Update { index, contents } => {
             validate_contents(contents)?;
@@ -359,4 +440,50 @@ fn validate_contents(contents: &str) -> Result<(), String> {
 
 fn pdf_error(error: PdfiumError) -> String {
     error.to_string()
+}
+
+fn annotation_rect(
+    page: &pdfium_render::prelude::PdfPage<'_>,
+    config: &PdfRenderConfig,
+    width: i32,
+    height: i32,
+    bounds: &PdfRect,
+) -> Result<pdfium_render::prelude::PdfRect, String> {
+    if ![bounds.x, bounds.y, bounds.width, bounds.height]
+        .into_iter()
+        .all(f32::is_finite)
+        || bounds.x < 0.0
+        || bounds.y < 0.0
+        || bounds.width <= 0.0
+        || bounds.height <= 0.0
+        || bounds.x + bounds.width > 1.001
+        || bounds.y + bounds.height > 1.001
+    {
+        return Err("Annotation bounds must be inside the page".into());
+    }
+    let mut xs = Vec::new();
+    let mut ys = Vec::new();
+    for (x, y) in [
+        (bounds.x, bounds.y),
+        (bounds.x + bounds.width, bounds.y),
+        (bounds.x, bounds.y + bounds.height),
+        (bounds.x + bounds.width, bounds.y + bounds.height),
+    ] {
+        let (x, y) = page
+            .pixels_to_points(
+                (x * width as f32).round() as i32,
+                (y * height as f32).round() as i32,
+                config,
+            )
+            .map_err(pdf_error)?;
+        xs.push(x.value);
+        ys.push(y.value);
+    }
+    let rect = pdfium_render::prelude::PdfRect::new_from_values(
+        ys.iter().copied().fold(f32::INFINITY, f32::min),
+        xs.iter().copied().fold(f32::INFINITY, f32::min),
+        ys.into_iter().fold(f32::NEG_INFINITY, f32::max),
+        xs.into_iter().fold(f32::NEG_INFINITY, f32::max),
+    );
+    Ok(rect)
 }

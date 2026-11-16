@@ -1,5 +1,6 @@
 //! aspdf's native PDF domain. PDFium is loaded only in an expendable helper process.
 
+mod annotations;
 mod engine;
 mod service;
 mod worker;
@@ -8,6 +9,7 @@ pub use ash_pdf_contract::PdfAnnotation;
 pub use ash_pdf_contract::PdfAnnotationEdit;
 pub use ash_pdf_contract::PdfCharacter;
 pub use ash_pdf_contract::PdfPage;
+pub use ash_pdf_contract::PdfPoint;
 pub use ash_pdf_contract::PdfRect;
 pub use service::PdfService;
 

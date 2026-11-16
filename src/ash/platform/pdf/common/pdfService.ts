@@ -2,10 +2,12 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 
 export interface PdfRect { readonly x: number; readonly y: number; readonly width: number; readonly height: number; }
+export interface PdfPoint { readonly x: number; readonly y: number; }
 export interface PdfCharacter { readonly text: string; readonly bounds: PdfRect; }
 export interface PdfAnnotation { readonly index: number; readonly kind: string; readonly contents: string; readonly author: string; readonly bounds: PdfRect; }
 export type PdfAnnotationEdit =
-	| { readonly kind: 'highlight' | 'note'; readonly bounds: PdfRect; readonly contents: string; }
+	| { readonly kind: 'highlight' | 'note' | 'text'; readonly bounds: PdfRect; readonly contents: string; }
+	| { readonly kind: 'ink'; readonly points: readonly PdfPoint[]; }
 	| { readonly kind: 'update'; readonly index: number; readonly contents: string; }
 	| { readonly kind: 'delete'; readonly index: number; };
 

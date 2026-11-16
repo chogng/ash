@@ -3,6 +3,7 @@ import { addDisposableListener, getWindow, h } from '../../../../base/browser/do
 import { GlobalPointerMoveMonitor } from '../../../../base/browser/globalPointerMoveMonitor.js';
 import { StandardWheelEvent } from '../../../../base/browser/mouseEvent.js';
 import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
+import { ZoomAnchor } from '../../../../base/browser/ui/zoom/zoomAnchor.js';
 import { animateElement } from '../../../../base/browser/ui/animations/animations.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
@@ -36,25 +37,6 @@ export interface IImageViewerSourceOptions {
 
 const zoomLevels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.5, 2, 3, 4, 5, 7, 10, 15, 20];
 
-interface WheelZoomAxis {
-	readonly viewport: number;
-	readonly scroll: number;
-	readonly start: number;
-	zoomedStart: number;
-}
-
-function captureWheelZoomAxis(viewport: number, scroll: number, scaledSize: number): WheelZoomAxis {
-	const start = Math.max(0, (viewport - scaledSize) / 2) - scroll;
-	return { viewport, scroll, start, zoomedStart: start };
-}
-
-/** Keep the point under the pointer fixed as far as the viewport permits. */
-function zoomAround(axis: WheelZoomAxis, anchor: number, ratio: number, scaledSize: number): void {
-	axis.zoomedStart = scaledSize <= axis.viewport
-		? (axis.viewport - scaledSize) / 2
-		: clamp(anchor + (axis.zoomedStart - anchor) * ratio, axis.viewport - scaledSize, 0);
-}
-
 /** Owns image geometry, scrolling and input; its host owns the source URL and placement. */
 export class ImageViewer extends Disposable {
 	/** Mounting surface. Hosts may place and size it, but must use semantic methods for content. */
@@ -65,7 +47,7 @@ export class ImageViewer extends Disposable {
 	private readonly sourceTransition = this._register(new MutableDisposable());
 	private readonly wheelZoomFrame: AnimationFrameScheduler;
 	private readonly wheelZoomIdle = this._register(new RunOnceScheduler(() => this.finishWheelZoom(), 120));
-	private wheelZoom: { readonly baseScale: number; readonly x: WheelZoomAxis; readonly y: WheelZoomAxis; scale: number; } | undefined;
+	private wheelZoom: { readonly baseScale: number; readonly x: ZoomAnchor; readonly y: ZoomAnchor; scale: number; } | undefined;
 	private readonly pan: GlobalPointerMoveMonitor | undefined;
 	private readonly scaleChanged = this._register(new Emitter<ImageViewerScale>());
 	public readonly onDidChangeScale = this.scaleChanged.event;
@@ -259,8 +241,8 @@ export class ImageViewer extends Disposable {
 		if (zoom) {
 			return {
 				scale: zoom.scale,
-				scrollLeft: Math.max(0, -zoom.x.zoomedStart),
-				scrollTop: Math.max(0, -zoom.y.zoomedStart),
+				scrollLeft: zoom.x.scrollPosition,
+				scrollTop: zoom.y.scrollPosition,
 			};
 		}
 		return { scale: this.scale, scrollLeft: this.domNode.scrollLeft, scrollTop: this.domNode.scrollTop };
@@ -279,8 +261,8 @@ export class ImageViewer extends Disposable {
 		this.pan?.stopMonitoring(true);
 		const previous = zoom?.scale ?? this.effectiveScale();
 		const { clientWidth, clientHeight, scrollLeft, scrollTop } = this.domNode;
-		const offsetX = zoom ? zoom.x.scroll + zoom.x.zoomedStart : 0;
-		const offsetY = zoom ? zoom.y.scroll + zoom.y.zoomedStart : 0;
+		const offsetX = zoom ? zoom.x.scroll + zoom.x.position : 0;
+		const offsetY = zoom ? zoom.y.scroll + zoom.y.position : 0;
 		this.currentScale = scale === 'fit' ? scale : clamp(scale, 0.1, 20);
 		this.layout();
 		const next = this.effectiveScale();
@@ -380,16 +362,15 @@ export class ImageViewer extends Disposable {
 			if (deltaY < 0 ? scale <= previous : scale >= previous) return;
 			zoom = this.wheelZoom = {
 				baseScale: previous,
-				x: captureWheelZoomAxis(this.domNode.clientWidth, this.domNode.scrollLeft, size.width * previous),
-				y: captureWheelZoomAxis(this.domNode.clientHeight, this.domNode.scrollTop, size.height * previous),
+				x: new ZoomAnchor({ viewport: this.domNode.clientWidth, scroll: this.domNode.scrollLeft, size: size.width * previous }),
+				y: new ZoomAnchor({ viewport: this.domNode.clientHeight, scroll: this.domNode.scrollTop, size: size.height * previous }),
 				scale: previous,
 			};
 			this.media.style.willChange = 'transform';
 		}
 		if (scale !== previous) {
-			const ratio = scale / previous;
-			zoomAround(zoom.x, anchor?.x ?? zoom.x.viewport / 2, ratio, size.width * scale);
-			zoomAround(zoom.y, anchor?.y ?? zoom.y.viewport / 2, ratio, size.height * scale);
+			zoom.x.zoomAround(anchor?.x ?? zoom.x.viewport / 2, size.width * scale);
+			zoom.y.zoomAround(anchor?.y ?? zoom.y.viewport / 2, size.height * scale);
 			zoom.scale = scale;
 			this.wheelZoomFrame.schedule();
 		}
@@ -399,8 +380,8 @@ export class ImageViewer extends Disposable {
 	private renderWheelZoom(): void {
 		const zoom = this.wheelZoom;
 		if (!zoom) return;
-		const x = zoom.x.zoomedStart - zoom.x.start;
-		const y = zoom.y.zoomedStart - zoom.y.start;
+		const x = zoom.x.translation;
+		const y = zoom.y.translation;
 		this.media.style.transform = `translate(${x}px, ${y}px) scale(${zoom.scale / zoom.baseScale})`;
 		this.displayScaleChanged.fire(zoom.scale);
 	}

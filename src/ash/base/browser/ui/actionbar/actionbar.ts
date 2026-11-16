@@ -548,6 +548,15 @@ export class ActionBar extends Disposable implements IActionRunner {
 		item.setHoverGroupId(this.actionViewItemOptions.hoverGroupId);
 		item.render(container);
 		const entry = { action, container, item, store };
+		if (action.onDidChange) {
+			store.add(action.onDidChange(event => {
+				if (event && event.enabled === undefined) { return; }
+				const tabStop = this.entries.find(entry => entry.item === this.tabStop && entry.action.enabled)
+					?? this.entries.find(entry => entry.action.enabled);
+				for (const entry of this.entries) { entry.item.setTabbable(this.isTabbable(entry.action, entry === tabStop)); }
+				this.tabStop = tabStop?.item;
+			}));
+		}
 		if (item.draggable) {
 			container.draggable = true;
 			container.classList.add(DndCssClasses.Draggable);

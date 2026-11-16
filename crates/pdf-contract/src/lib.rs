@@ -17,6 +17,13 @@ pub struct PdfRect {
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PdfPoint {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PdfCharacter {
     pub text: String,
     pub bounds: PdfRect,
@@ -38,6 +45,8 @@ pub struct PdfAnnotation {
 pub enum PdfAnnotationEdit {
     Highlight { bounds: PdfRect, contents: String },
     Note { bounds: PdfRect, contents: String },
+    Text { bounds: PdfRect, contents: String },
+    Ink { points: Vec<PdfPoint> },
     Update { index: u32, contents: String },
     Delete { index: u32 },
 }

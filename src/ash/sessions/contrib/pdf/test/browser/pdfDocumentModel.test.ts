@@ -1,21 +1,49 @@
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { test } from 'mocha';
-import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import { URI } from '../../../base/common/uri.js';
-import { FileService } from '../../../platform/files/common/fileService.js';
-import { InMemoryFileSystemProvider } from '../../../platform/files/common/inMemoryFilesystemProvider.js';
-import type { IPdfDocument, IPdfService, PdfAnnotation, PdfAnnotationEdit, PdfPage } from '../../../platform/pdf/common/pdfService.js';
-import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
-import { TestUriIdentityServices } from '../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import { BrowserWorkingCopyService } from '../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
-import { WorkingCopyBackupTracker } from '../../../workbench/services/workingCopy/browser/workingCopyBackupTracker.js';
-import { InMemoryWorkingCopyBackupService } from '../../../workbench/services/workingCopy/common/workingCopyBackupService.js';
-import { PdfDocumentModel } from '../../contrib/files/browser/pdfDocumentModel.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
+import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
+import type { IPdfDocument, IPdfService, PdfAnnotation, PdfAnnotationEdit, PdfPage } from '../../../../../platform/pdf/common/pdfService.js';
+import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
+import { BrowserWorkingCopyService } from '../../../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
+import { WorkingCopyBackupTracker } from '../../../../../workbench/services/workingCopy/browser/workingCopyBackupTracker.js';
+import { InMemoryWorkingCopyBackupService } from '../../../../../workbench/services/workingCopy/common/workingCopyBackupService.js';
+import { PdfDocumentModel } from '../../browser/pdfDocumentModel.js';
 
 const resource = URI.file('/paper.pdf');
 const signal = new AbortController().signal;
 const note = { kind: 'note', bounds: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 }, contents: 'Saved note' } satisfies PdfAnnotationEdit;
+
+test('PDF recovery retains drawing and text drafts and saves their replayed annotations', async () => {
+	using store = new DisposableStore();
+	const files = await createFiles(store);
+	using model = await openPdf(files);
+	await model.render(1, { kind: 'ink', points: [{ x: 0.1, y: 0.2 }, { x: 0.4, y: 0.3 }] });
+	await model.render(1, { kind: 'text', bounds: note.bounds, contents: 'Review 文本' });
+	using recovered = await openPdf(files);
+	recovered.restoreBackup(model.backup());
+	const { page } = await recovered.render(1);
+	assert.deepEqual(page.annotations.map(annotation => [annotation.kind, annotation.contents]), [['Ink', ''], ['FreeText', 'Review 文本']]);
+	assert.equal(recovered.isDirty, true);
+	await recovered.save(signal);
+	using reopened = await openPdf(files);
+	assert.deepEqual(reopened.current?.annotations, page.annotations);
+});
+
+test('PDF recovery rejects out-of-page and oversized drawing data', async () => {
+	using store = new DisposableStore();
+	const files = await createFiles(store);
+	using model = await openPdf(files);
+	await model.render(1, note);
+	for (const points of [[{ x: -0.1, y: 0.2 }, { x: 0.2, y: 0.3 }], Array.from({ length: 1025 }, () => ({ x: 0.1, y: 0.2 }))]) {
+		const backup = JSON.parse(model.backup());
+		backup.edits = [{ page: 1, edit: { kind: 'ink', points } }];
+		assert.throws(() => model.restoreBackup(JSON.stringify(backup)), /Invalid aspdf recovery data/);
+	}
+});
 
 for (const format of ['current', 'legacy'] as const) {
 	test(`PDF ${format} recovery retains an unsaved undo until a normal save`, async () => {
@@ -265,6 +293,10 @@ class TestPdfDocument extends Disposable implements IPdfDocument {
 			const annotation = this.annotations[edit.index];
 			assert.ok(annotation);
 			this.annotations[edit.index] = { ...annotation, contents: edit.contents };
+		} else if (edit?.kind === 'ink') {
+			this.annotations.push({ kind: 'Ink', bounds: note.bounds, contents: '', author: '', index: this.annotations.length });
+		} else if (edit?.kind === 'text') {
+			this.annotations.push({ ...edit, kind: 'FreeText', author: '', index: this.annotations.length });
 		} else if (edit) {
 			assert.equal(edit.kind, 'note');
 			this.annotations.push({ ...edit, author: '', index: this.annotations.length });

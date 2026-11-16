@@ -46,7 +46,7 @@ class AppServerPdfDocument implements IPdfDocument {
 		signal.addEventListener('abort', abort, { once: true });
 		try {
 			const result = await appServerRequest(this.connection, 'pdf/page', {
-				documentId: this.id, revision: this.revision, page, dimension, edit: edit ?? null,
+				documentId: this.id, revision: this.revision, page, dimension, edit: edit?.kind === 'ink' ? { ...edit, points: edit.points.map(point => ({ ...point })) } : edit ?? null,
 			});
 			this.check(signal);
 			this.revision = result.revision;

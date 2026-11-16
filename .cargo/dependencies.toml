@@ -437,3 +437,38 @@ reason = "rust-analyzer's rowan 0.17 keeps rustc-hash 1.1; the existing workspac
 name = "toml"
 versions = ["0.9.12+spec-1.1.0", "1.1.8+spec-1.1.0"]
 reason = "Ash configuration and build tools retain toml 0.9; unmodified rust-analyzer 0.0.358 uses toml 1.1 for Cargo configuration. The bridge exchanges JSON, not either TOML value type."
+
+[[multiple_versions]]
+name = "aes"
+versions = ["0.8.4", "0.9.4"]
+reason = "0.8 serves aes-gcm and the platform secret service; lopdf 0.47 uses 0.9 for PDF encryption."
+
+[[multiple_versions]]
+name = "block-padding"
+versions = ["0.3.3", "0.4.2"]
+reason = "0.3 follows the platform secret service and cipher 0.4; lopdf uses 0.4 through cipher 0.5 and inout 0.2."
+
+[[multiple_versions]]
+name = "cbc"
+versions = ["0.1.2", "0.2.1"]
+reason = "0.1 serves dbus-secret-service; lopdf uses 0.2 for PDF encryption."
+
+[[multiple_versions]]
+name = "cipher"
+versions = ["0.4.4", "0.5.2"]
+reason = "0.4 serves aes-gcm and dbus-secret-service; lopdf uses 0.5 through aes 0.9, cbc 0.2 and ecb 0.2."
+
+[[multiple_versions]]
+name = "inout"
+versions = ["0.1.4", "0.2.6"]
+reason = "0.1 follows cipher 0.4 for platform credentials; lopdf uses 0.2 through cipher 0.5."
+
+[[multiple_versions]]
+name = "md-5"
+versions = ["0.10.6", "0.11.0"]
+reason = "0.10 serves rtc-crypto for optional LiveKit media; lopdf uses 0.11 for legacy PDF encryption."
+
+[[multiple_versions]]
+name = "weezl"
+versions = ["0.1.12", "0.2.1"]
+reason = "0.1 serves image GIF and TIFF decoders; lopdf uses 0.2 for PDF LZW streams."

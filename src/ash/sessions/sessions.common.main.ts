@@ -88,7 +88,7 @@ import './contrib/symphony/browser/symphony.contribution.js';
 import './contrib/automations/browser/automations.contribution.js';
 import './contrib/sessions/browser/sessions.contribution.js';
 import './contrib/layout/browser/sessions.layout.contribution.js';
-import './contrib/files/browser/pdfPreview.contribution.js';
+import './contrib/pdf/browser/pdfPreview.contribution.js';
 import '../workbench/contrib/codeEditor/browser/codeEditor.contribution.js';
 import '../workbench/contrib/documentEditor/browser/documentEditor.contribution.js';
 import '../workbench/contrib/markdown/browser/markdown.contribution.js';

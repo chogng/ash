@@ -1,0 +1,248 @@
+.ash-sessions-pdf-preview {
+	display: grid;
+	grid-template-rows: auto auto minmax(0, 1fr);
+	block-size: 100%;
+	min-block-size: 0;
+	overflow: hidden;
+	min-inline-size: 0;
+	background: var(--ash-editor-background);
+	color: var(--ash-editor-foreground);
+}
+
+.ash-sessions-pdf-controls {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size80);
+	border-block-end: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-sessions-pdf-navigation,
+.ash-sessions-pdf-pagination {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	flex-shrink: 0;
+}
+
+.ash-sessions-pdf-page-number {
+	box-sizing: content-box;
+	min-inline-size: 2ch;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-sessions-pdf-pagination {
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.ash-sessions-pdf-status {
+	position: absolute;
+	inline-size: 1px;
+	block-size: 1px;
+	clip-path: inset(50%);
+	overflow: hidden;
+}
+
+.ash-sessions-pdf-page-number,
+.ash-sessions-pdf-text-editor textarea,
+.ash-sessions-pdf-annotations textarea {
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, transparent);
+	border-radius: var(--ash-cornerRadius-small);
+	font: inherit;
+	padding: var(--ash-spacing-size40);
+}
+
+.ash-sessions-pdf-error {
+	margin: 0;
+	padding-inline: var(--ash-spacing-size160);
+	color: var(--ash-error-foreground);
+}
+
+.ash-sessions-pdf-content {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	overflow: hidden;
+	min-block-size: 0;
+	min-inline-size: 0;
+}
+
+.ash-sessions-pdf-preview.has-annotation-panel .ash-sessions-pdf-content {
+	grid-template-columns: minmax(0, 1fr) minmax(120px, 24%);
+}
+
+.ash-sessions-pdf-page {
+	background: var(--ash-editor-widgetBackground);
+}
+
+.ash-sessions-pdf-sheet {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: var(--ash-spacing-size120);
+}
+
+.ash-sessions-pdf-annotation-panel {
+	min-block-size: 0;
+	min-inline-size: 0;
+	border-inline-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+}
+
+.ash-sessions-pdf-annotation-panel > .ash-scrollable-element {
+	block-size: 100%;
+}
+
+.ash-sessions-pdf-page:focus-visible,
+.ash-sessions-pdf-page-number:focus-visible,
+.ash-sessions-pdf-text-editor textarea:focus-visible,
+.ash-sessions-pdf-erase-target:focus-visible,
+.ash-sessions-pdf-annotations textarea:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-sessions-pdf-stage {
+	position: relative;
+	container-type: inline-size;
+	margin-inline: auto;
+	flex-shrink: 0;
+	outline: var(--ash-strokeThickness) solid var(--ash-border);
+	box-shadow: 0 2px 8px var(--ash-widget-shadow);
+}
+
+:is(.hc-black, .hc-light) .ash-sessions-pdf-stage {
+	outline-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+.ash-sessions-pdf-stage > img {
+	display: block;
+	inline-size: 100%;
+	block-size: 100%;
+	user-select: none;
+}
+
+.ash-sessions-pdf-text {
+	position: absolute;
+	inset: 0;
+	user-select: text;
+}
+
+.ash-sessions-pdf-text > span {
+	position: absolute;
+	color: transparent;
+	white-space: pre;
+	line-height: 1;
+	cursor: text;
+}
+
+.ash-sessions-pdf-text > span::selection {
+	background: var(--ash-editor-selectionBackground);
+	color: transparent;
+}
+
+.ash-sessions-pdf-annotations {
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-sessions-pdf-annotations textarea {
+	box-sizing: border-box;
+	inline-size: 100%;
+	resize: vertical;
+}
+
+.ash-sessions-pdf-annotation {
+	margin-block: var(--ash-spacing-size120);
+}
+
+.ash-sessions-pdf-annotation p {
+	margin-block: var(--ash-spacing-size40);
+	overflow-wrap: anywhere;
+}
+
+.ash-sessions-pdf-preview.narrow.has-annotation-panel
+	.ash-sessions-pdf-content {
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr) minmax(0, 25%);
+}
+
+.ash-sessions-pdf-stage.drawing,
+.ash-sessions-pdf-stage.erasing,
+.ash-sessions-pdf-stage.adding-text {
+	touch-action: none;
+	user-select: none;
+}
+
+.ash-sessions-pdf-stage.drawing,
+.ash-sessions-pdf-stage.adding-text {
+	cursor: crosshair;
+}
+
+.ash-sessions-pdf-stage.drawing .ash-sessions-pdf-text,
+.ash-sessions-pdf-stage.erasing .ash-sessions-pdf-text,
+.ash-sessions-pdf-stage.adding-text .ash-sessions-pdf-text {
+	pointer-events: none;
+}
+
+.ash-sessions-pdf-stroke {
+	position: absolute;
+	inset: 0;
+	inline-size: 100%;
+	block-size: 100%;
+	pointer-events: none;
+}
+
+.ash-sessions-pdf-stroke polyline {
+	fill: none;
+	stroke: var(--ash-editor-foreground);
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.ash-sessions-pdf-erase-target {
+	position: absolute;
+	min-inline-size: 8px;
+	min-block-size: 8px;
+	padding: 0;
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+}
+
+.ash-sessions-pdf-erase-target:hover,
+.ash-sessions-pdf-erase-target:focus-visible {
+	background: var(--ash-editor-selectionBackground);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}
+
+.ash-sessions-pdf-text-editor {
+	position: absolute;
+	display: flex;
+	flex-direction: column;
+	min-inline-size: 160px;
+	min-block-size: 100px;
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	border-radius: var(--ash-cornerRadius-small);
+}
+
+.ash-sessions-pdf-text-editor textarea {
+	flex: 1;
+	min-block-size: 0;
+	resize: none;
+}
+
+.ash-sessions-pdf-text-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size40);
+}

@@ -149,3 +149,71 @@ fn imports_are_bounded_and_connection_owned() {
         Err(PdfError::NotFound)
     ));
 }
+
+#[test]
+fn ink_and_text_render_and_round_trip_without_changing_page_content() {
+    for rotation in [0, 90, 180, 270] {
+        let source = fixture(rotation);
+        let original = execute(&source, None);
+        for (edit, kind) in [
+            (
+                PdfAnnotationEdit::Ink {
+                    points: vec![
+                        PdfPoint { x: 0.15, y: 0.2 },
+                        PdfPoint { x: 0.3, y: 0.25 },
+                        PdfPoint { x: 0.4, y: 0.2 },
+                    ],
+                },
+                "Ink",
+            ),
+            (
+                PdfAnnotationEdit::Text {
+                    bounds: PdfRect {
+                        x: 0.15,
+                        y: 0.2,
+                        width: 0.35,
+                        height: 0.16,
+                    },
+                    contents: "Review text".into(),
+                },
+                "FreeText",
+            ),
+        ] {
+            let edited = execute(&source, Some(edit));
+            let bytes = edited.modified.unwrap();
+            let reopened = execute(&bytes, None);
+            assert_eq!(reopened.page.annotations.len(), 1);
+            assert_eq!(reopened.page.annotations[0].kind, kind);
+            assert!(
+                reopened.image != original.image,
+                "{kind} must be visible at rotation {rotation}"
+            );
+            assert!(
+                (reopened.page.annotations[0].bounds.x - 0.15).abs() < 0.03,
+                "{kind} bounds at rotation {rotation}"
+            );
+            if kind == "FreeText" {
+                let updated = execute(
+                    &bytes,
+                    Some(PdfAnnotationEdit::Update {
+                        index: 0,
+                        contents: "Updated 文本批注".into(),
+                    }),
+                );
+                let updated = execute(&updated.modified.unwrap(), None);
+                assert_eq!(updated.page.annotations[0].contents, "Updated 文本批注");
+                assert!(
+                    updated.image != reopened.image,
+                    "Updated text must change the saved appearance"
+                );
+            }
+            let erased = execute(&bytes, Some(PdfAnnotationEdit::Delete { index: 0 }));
+            let reopened = execute(&erased.modified.unwrap(), None);
+            assert!(reopened.page.annotations.is_empty());
+            assert!(
+                reopened.image == original.image,
+                "Erasing {kind} must retain original pixels"
+            );
+        }
+    }
+}

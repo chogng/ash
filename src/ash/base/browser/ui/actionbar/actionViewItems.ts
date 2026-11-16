@@ -153,6 +153,18 @@ export class ButtonActionViewItem extends ActionViewItem {
 			onClick: event => this.runAction(event),
 		});
 		this.setupTooltip();
+		if (this.action.onDidChange) {
+			this._register(this.action.onDidChange(event => {
+				if (!event || 'enabled' in event) { this.button.enabled = this.action.enabled; }
+				if (!event || 'label' in event) {
+					this.button.label = this.action.label;
+					setAriaAttribute(this.button.domNode, 'label', this.action.label);
+				}
+				if (!event || 'icon' in event) { this.button.icon = this.action.icon; }
+				if (!event || 'checked' in event) { this.button.checked = this.action.checked; }
+				if (!event || 'tooltip' in event) { this.setupTooltip(); }
+			}));
+		}
 	}
 
 	override focus(): void {

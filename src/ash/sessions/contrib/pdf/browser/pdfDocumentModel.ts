@@ -264,13 +264,21 @@ function parseBackupEdits(value: unknown, limit = maxBackupEdits): PdfEdit[] {
 
 function parseEdit(value: unknown): PdfAnnotationEdit {
 	if (value && typeof value === 'object' && 'kind' in value) {
+		if (value.kind === 'ink' && 'points' in value && Array.isArray(value.points)
+			&& value.points.length >= 2 && value.points.length <= 1024
+			&& value.points.every(point => point && typeof point === 'object'
+				&& typeof point.x === 'number' && typeof point.y === 'number'
+				&& Number.isFinite(point.x) && Number.isFinite(point.y)
+				&& point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1)) {
+			return { kind: 'ink', points: value.points.map(point => ({ x: point.x, y: point.y })) };
+		}
 		if (value.kind === 'delete' || value.kind === 'update') {
 			if ('index' in value && typeof value.index === 'number' && Number.isSafeInteger(value.index) && value.index >= 0) {
 				if (value.kind === 'delete') { return { kind: 'delete', index: value.index }; }
 				if ('contents' in value && typeof value.contents === 'string' && value.contents.length <= 8192) { return { kind: 'update', index: value.index, contents: value.contents }; }
 			}
 		}
-		if ((value.kind === 'highlight' || value.kind === 'note') && 'contents' in value && typeof value.contents === 'string'
+		if ((value.kind === 'highlight' || value.kind === 'note' || value.kind === 'text') && 'contents' in value && typeof value.contents === 'string'
 			&& value.contents.length <= 8192 && 'bounds' in value && value.bounds && typeof value.bounds === 'object') {
 			const bounds = value.bounds;
 			if ('x' in bounds && typeof bounds.x === 'number' && 'y' in bounds && typeof bounds.y === 'number'

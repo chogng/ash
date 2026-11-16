@@ -1,3 +1,6 @@
+import { Event } from '../../../src/ash/base/common/event.js';
+import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/agentHost/test/common/testAppServerProtocol.js';
@@ -19,9 +22,9 @@ import { IWorkingCopyService } from '../../../src/ash/workbench/services/working
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
-import { IPdfEditorService, PdfEditorService } from '../../../src/ash/sessions/contrib/files/browser/pdfEditorService.js';
-import { highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
-import '../../../src/ash/sessions/contrib/files/browser/pdfPreview.contribution.js';
+import { IPdfEditorService, PdfEditorService } from '../../../src/ash/sessions/contrib/pdf/browser/pdfEditorService.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import '../../../src/ash/sessions/contrib/pdf/browser/pdfPreview.contribution.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 
 class Transport implements AppServerTransport {
@@ -53,6 +56,11 @@ const memory = new InMemoryFileSystemProvider();
 const files = createTestFileService(memory);
 services.registerInstance(IFileService, files); registerTestComponentServices(services);
 services.registerInstance(IConfigurationService, new TestConfigurationService());
+services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+services.registerInstance(IContextMenuService, {
+	contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+	showContextMenu() { throw new Error('PDF controls have no secondary menu'); }, hideContextMenu() { },
+});
 services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));
 services.registerSingleton(IPdfEditorService, () => services.createInstance(PdfEditorService));
 const theme = bindTestColorTheme(services.get(IThemeService), document.body);
@@ -72,7 +80,12 @@ window.aspdfTest = {
 		const descriptor = EditorPanes.getEditorPane(input)!;
 		pane = await descriptor.create({ input, instantiationService: services });
 		pane.create(document.getElementById('viewer')!); pane.setVisible(true);
+		pane.layout({ width: document.getElementById('viewer')!.clientWidth, height: document.getElementById('viewer')!.clientHeight });
 		await pane.setInput(input, new AbortController().signal);
+	},
+	resize(width: number, height: number) {
+		const host = document.getElementById('viewer')!; host.style.width = `${width}px`; host.style.height = `${height}px`;
+		pane?.layout({ width, height });
 	},
 	dirty() { return pane?.workingCopy?.isDirty ?? false; },
 	async externalWrite() { await memory.writeFile(resource, new Uint8Array([...original, ...new TextEncoder().encode('\n% external change\n')]), { create: false, overwrite: true }); },
@@ -86,9 +99,12 @@ window.aspdfTest = {
 	},
 	closeFirst() { pane?.dispose(); pane = split; split = undefined; },
 	async saved() { const bytes = (await memory.readFile(resource)).bytes; return { changed: String(bytes) !== String(original), pdf: new TextDecoder().decode(bytes.slice(0, 8)).startsWith('%PDF-') }; },
+	colorTheme(scheme: 'light' | 'dark' | 'hcDark' | 'hcLight') {
+		(services.get(IThemeService) as TestThemeService).setColorTheme({ light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[scheme]);
+	},
 	highContrast() { (services.get(IThemeService) as TestThemeService).setColorTheme(highContrastDarkColorTheme); },
 	dispose() { pane?.dispose(); split?.dispose(); client.dispose(); theme.dispose(); services.dispose(); files.dispose(); memory.dispose(); },
 };
 declare global {
-	interface Window { aspdfTest: { open(readOnly?: boolean): Promise<void>; dirty(): boolean; saved(): Promise<{ changed: boolean; pdf: boolean; }>; externalWrite(): Promise<void>; hasExternalBytes(): Promise<boolean>; revert(): Promise<void>; split(): Promise<void>; closeFirst(): void; highContrast(): void; dispose(): void; }; }
+	interface Window { aspdfTest: { open(readOnly?: boolean): Promise<void>; resize(width: number, height: number): void; dirty(): boolean; saved(): Promise<{ changed: boolean; pdf: boolean; }>; externalWrite(): Promise<void>; hasExternalBytes(): Promise<boolean>; revert(): Promise<void>; split(): Promise<void>; closeFirst(): void; highContrast(): void; colorTheme(scheme: 'light' | 'dark' | 'hcDark' | 'hcLight'): void; dispose(): void; }; }
 }

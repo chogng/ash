@@ -311,6 +311,8 @@ use ash_pdf_contract::PdfCharacter;
 #[cfg(any(test, feature = "export"))]
 use ash_pdf_contract::PdfPage;
 #[cfg(any(test, feature = "export"))]
+use ash_pdf_contract::PdfPoint;
+#[cfg(any(test, feature = "export"))]
 use ash_pdf_contract::PdfRect;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SymphonyControl;
@@ -7890,6 +7892,7 @@ typescript_bindings! {
     PdfCloseParams,
     PdfPage,
     PdfRect,
+    PdfPoint,
     PdfCharacter,
     PdfAnnotation,
     PdfAnnotationEdit,
