@@ -12,6 +12,7 @@ mod markdown;
 mod operations;
 mod source;
 mod table;
+mod table_cell;
 
 #[cfg(all(feature = "wasm", target_arch = "wasm32"))]
 mod wasm;
@@ -45,6 +46,7 @@ pub use table::TableAction;
 pub use table::TableCellLayout;
 pub use table::TableColor;
 pub use table::TableLayout;
+pub use table_cell::CellBlock;
 
 #[cfg(test)]
 mod tests;

@@ -64,7 +64,15 @@ function tableInlineSource(source: string, nodes: readonly ArkdownNode[], format
 			} else atoms.push(atom);
 		};
 		const visit = (node: ArkdownNode, marks: readonly TableMarkdownMark[]): void => {
-			if (tableMarkdownMarks.includes(node.kind as TableMarkdownMark)) {
+			if (['paragraph', 'heading', 'list', 'item'].includes(node.kind) && node.children.length) {
+				// Cell block wrappers and task markers are structure. Keep requested
+				// inline marks inside them, including the task marker's trailing space.
+				const children = node.kind === 'item' && node.children[0].kind === 'task_list_marker' ? node.children.slice(1) : node.children;
+				const first = children[0]?.range.start ?? node.children.at(-1)!.range.end;
+				const last = children.at(-1)?.range.end ?? first;
+				const value = source.slice(node.range.start, first) + render(children, marks, suppressed) + source.slice(last, node.range.end);
+				append({ marks: [], source: value });
+			} else if (tableMarkdownMarks.includes(node.kind as TableMarkdownMark)) {
 				const kind = node.kind as TableMarkdownMark;
 				const next = kind === format.kind || marks.includes(kind) || suppressed.includes(kind) ? marks : tableMarkdownMarks.filter(mark => mark === kind || marks.includes(mark));
 				for (const child of node.children) visit(child, next);

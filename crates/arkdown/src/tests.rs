@@ -839,6 +839,125 @@ fn heading_and_list_operations_preserve_unicode_line_endings_and_undo() {
 }
 
 #[test]
+fn structural_conversions_edit_nested_blocks_and_setext_headings() {
+    use crate::ListKind;
+    use crate::Operation;
+    for (source, target, level, expected) in [
+        (
+            "中文🙂\r\n====\r\n\r\ntail\r\n",
+            "中文",
+            2,
+            "## 中文🙂\r\n\r\ntail\r\n",
+        ),
+        (
+            "> 中文 **标题**\r\n> 第二行🙂\r\n> ----\r\n",
+            "中文",
+            3,
+            "> ### 中文 **标题** 第二行🙂\r\n",
+        ),
+        ("> ## 中文🙂 ##\n", "中文", 0, "> 中文🙂\n"),
+        (
+            "- Parent\n  - Child🙂\n  - Next\n- Tail\n",
+            "Child",
+            2,
+            "- Parent\n  - ## Child🙂\n  - Next\n- Tail\n",
+        ),
+        (
+            "- Parent\n\n  中文🙂\n  ----\n",
+            "中文",
+            0,
+            "- Parent\n\n  中文🙂\n",
+        ),
+        ("## ##\n", "##", 0, "\n"),
+        ("first\nsecond\n", "first", 1, "# first second\n"),
+    ] {
+        let offset = source[..source.find(target).unwrap()]
+            .encode_utf16()
+            .count() as u32;
+        let mut doc = Document::new(source).unwrap();
+        let edits =
+            crate::operation_edits(source, Operation::SetHeading { offset, level }).unwrap();
+        apply(&mut doc, edits);
+        assert_eq!(doc.source(), expected, "{source}");
+        doc.undo(doc.revision()).unwrap();
+        assert_eq!(doc.source(), source);
+        doc.redo(doc.revision()).unwrap();
+        assert_eq!(doc.source(), expected);
+    }
+    for (source, target, list, expected) in [
+        ("# 中文🙂 #\r\n", "中文", ListKind::Bullet, "- 中文🙂\r\n"),
+        (
+            "> Title\n> ====\n",
+            "Title",
+            ListKind::Task,
+            "> - [ ] Title\n",
+        ),
+        (
+            "- Parent\n  - Child🙂\n    - Grandchild\n  - Next\n- Tail\n",
+            "Child",
+            ListKind::Ordered,
+            "- Parent\n  1. Child🙂\n     - Grandchild\n  2. Next\n- Tail\n",
+        ),
+        (
+            "> - [x] Done\r\n>   - Child\r\n> - [ ] Todo\r\n",
+            "Done",
+            ListKind::Ordered,
+            "> 1. Done\r\n>    - Child\r\n> 2. Todo\r\n",
+        ),
+        (
+            "> - [X] Done\n> - [ ] Todo\n",
+            "Done",
+            ListKind::Task,
+            "> - [X] Done\n> - [ ] Todo\n",
+        ),
+        (
+            "1. Parent\n   - Child\n2. Next\n",
+            "Parent",
+            ListKind::Bullet,
+            "- Parent\n  - Child\n- Next\n",
+        ),
+    ] {
+        let offset = source[..source.find(target).unwrap()]
+            .encode_utf16()
+            .count() as u32;
+        let mut doc = Document::new(source).unwrap();
+        let edits =
+            crate::operation_edits(source, Operation::SetListKind { offset, list }).unwrap();
+        apply(&mut doc, edits);
+        assert_eq!(doc.source(), expected, "{source}");
+        doc.undo(doc.revision()).unwrap();
+        assert_eq!(doc.source(), source);
+    }
+}
+
+#[test]
+fn structural_conversions_keep_literal_checkboxes_and_reject_code_blocks() {
+    let source = "- [x]literal\n";
+    let edits = crate::operation_edits(
+        source,
+        crate::Operation::SetListKind {
+            offset: 5,
+            list: crate::ListKind::Task,
+        },
+    )
+    .unwrap();
+    let mut doc = Document::new(source).unwrap();
+    apply(&mut doc, edits);
+    assert_eq!(doc.source(), "- [ ] [x]literal\n");
+    let source = "- Parent\n\n  ```md\n  code\n  ```\n";
+    let offset = source.find("code").unwrap() as u32;
+    for operation in [
+        crate::Operation::SetHeading { offset, level: 2 },
+        crate::Operation::SetListKind {
+            offset,
+            list: crate::ListKind::Task,
+        },
+    ] {
+        assert!(crate::operation_edits(source, operation).is_err());
+    }
+}
+
+#[test]
 fn collaborative_undo_size_limit_preserves_live_source_and_history() {
     use crate::Buffer;
     let mut a = Buffer::new(51, "").unwrap();
@@ -1005,6 +1124,119 @@ fn table_operations_preserve_outer_source_unicode_crlf_and_inline_marks() {
         },
     );
     assert!(sorted.contains("| 甲\\|一 | 1 |\r\n| **乙** | 2 |"));
+}
+
+#[test]
+fn table_cells_create_real_headings_lists_and_tasks_without_changing_the_grid() {
+    use crate::CellBlock;
+    use crate::ListKind;
+    use crate::TableAction;
+    let source = "Before\r\n\r\n| A | B |\r\n| --- | --- |\r\n| 中文 **bold**🙂 | |\r\n\r\nAfter";
+    let format = |source: &str, row, column, block| {
+        table_action(
+            source,
+            TableAction::SetCellBlock {
+                top: row,
+                left: column,
+                bottom: row,
+                right: column,
+                block,
+                offset: None,
+            },
+        )
+    };
+    let heading = format(source, 1, 0, CellBlock::Heading { level: 2 });
+    assert!(heading.contains("<h2>中文 **bold**🙂</h2>"));
+    let nodes = parse(&heading).unwrap();
+    let cell = &nodes[1].children[1].children[0];
+    assert!(matches!(
+        cell.children[0].kind,
+        NodeKind::Heading { level: 2 }
+    ));
+    assert!(
+        render_html(&heading)
+            .unwrap()
+            .contains("<h2>中文 <strong>bold</strong>🙂</h2>")
+    );
+    let task = format(
+        &heading,
+        1,
+        0,
+        CellBlock::List {
+            list: ListKind::Task,
+        },
+    );
+    assert!(task.contains("<ul><li>[ ] 中文 **bold**🙂</li></ul>"));
+    let nodes = parse(&task).unwrap();
+    let item = &nodes[1].children[1].children[0].children[0].children[0];
+    assert!(matches!(item.kind, NodeKind::Item));
+    assert!(matches!(
+        item.children[0].kind,
+        NodeKind::TaskListMarker { checked: false }
+    ));
+    let mut doc = Document::new(&task).unwrap();
+    let edits = crate::operation_edits(
+        &task,
+        crate::Operation::SetTaskChecked {
+            offset: item.children[0].source.utf16.start,
+            checked: true,
+        },
+    )
+    .unwrap();
+    apply(&mut doc, edits);
+    assert!(doc.source().contains("<li>[x] 中文"));
+    assert!(
+        render_html(doc.source())
+            .unwrap()
+            .contains("<input type=\"checkbox\" disabled checked>")
+    );
+    let numbered = format(
+        doc.source(),
+        1,
+        0,
+        CellBlock::List {
+            list: ListKind::Ordered,
+        },
+    );
+    assert!(numbered.contains("<ol><li>中文 **bold**🙂</li></ol>"));
+    let paragraph = format(&numbered, 1, 0, CellBlock::Heading { level: 0 });
+    assert!(paragraph.contains("<p>中文 **bold**🙂</p>"));
+    for block in [
+        CellBlock::Heading { level: 1 },
+        CellBlock::List {
+            list: ListKind::Bullet,
+        },
+        CellBlock::List {
+            list: ListKind::Task,
+        },
+    ] {
+        let value = format(source, 1, 1, block);
+        let nodes = parse(&value).unwrap();
+        assert_eq!(nodes[1].children.len(), 2);
+        assert_eq!(nodes[1].children[1].children.len(), 2);
+        assert!(value.starts_with("Before\r\n\r\n"));
+        assert!(value.ends_with("\r\n\r\nAfter"));
+        assert!(nodes[1].children[1].children[1].children[0].children.len() > 0);
+    }
+    let evil = "| A |\n| - |\n| <h2 onclick=\"bad()\">unsafe</h2><script>bad()</script> |";
+    assert!(!render_html(evil).unwrap().contains("<script>"));
+    assert!(!render_html(evil).unwrap().contains("<h2 onclick="));
+    let missing = "| A | B |\n| - | - |\n| short |";
+    let filled = format(
+        missing,
+        1,
+        1,
+        CellBlock::List {
+            list: ListKind::Task,
+        },
+    );
+    assert!(filled.contains("<ul><li>[ ] </li></ul>"));
+    assert!(
+        parse(&filled).unwrap()[0].children[1].children[1]
+            .children
+            .len()
+            > 0
+    );
 }
 
 #[test]

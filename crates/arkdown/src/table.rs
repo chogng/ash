@@ -119,6 +119,15 @@ impl TableLayout {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum TableAction {
+    SetCellBlock {
+        top: usize,
+        left: usize,
+        bottom: usize,
+        right: usize,
+        block: crate::CellBlock,
+        #[serde(default)]
+        offset: Option<u32>,
+    },
     InsertRow {
         index: usize,
     },
@@ -314,7 +323,7 @@ pub(crate) fn edit(
         layout: layout.clone(),
     };
     let before = matrix.clone();
-    matrix.apply(action)?;
+    matrix.apply(action, source, table)?;
     if !matrix.values.is_empty() && !matrix.alignments.is_empty() {
         matrix.layout = matrix
             .layout
@@ -412,8 +421,48 @@ impl Matrix {
             Ok(())
         }
     }
-    fn apply(&mut self, action: TableAction) -> Result<(), Error> {
+    fn apply(&mut self, action: TableAction, source: &str, table: &Node) -> Result<(), Error> {
         match action {
+            TableAction::SetCellBlock {
+                top,
+                left,
+                bottom,
+                right,
+                block,
+                offset,
+            } => {
+                let rect = self.rect(top, left, bottom, right)?;
+                if let Some(offset) = offset {
+                    crate::SourceIndex::new(source)?.utf16_to_byte(offset)?;
+                    let cell = &table.children[top].children[left];
+                    if top != bottom
+                        || left != right
+                        || offset < cell.source.utf16.start
+                        || offset > cell.source.utf16.end
+                    {
+                        return Err(invalid("Block caret must stay inside its target cell"));
+                    }
+                }
+                for row in rect.top..=rect.bottom {
+                    for column in rect.left..=rect.right {
+                        if self.layout.cells.iter().any(|cell| {
+                            cell.row <= row
+                                && row < cell.row + cell.rowspan
+                                && cell.column <= column
+                                && column < cell.column + cell.colspan
+                                && (cell.row != row || cell.column != column)
+                        }) {
+                            continue;
+                        }
+                        self.values[row][column] = crate::table_cell::format(
+                            &table.children[row].children[column],
+                            source,
+                            block,
+                            offset,
+                        )?;
+                    }
+                }
+            }
             TableAction::InsertRow { index } => {
                 if index > self.rows() {
                     return Err(invalid("Invalid row insertion index"));
@@ -1150,14 +1199,19 @@ pub(crate) fn render_html(table: &Node, source: &str) -> Result<String, Error> {
             }
             html.push('>');
             if let Some(cell) = row.children.get(column) {
-                let content = crate::markdown::render_html(
-                    source[cell.source.bytes.start..cell.source.bytes.end].trim(),
-                )?;
-                let content = content
-                    .strip_prefix("<p>")
-                    .and_then(|value| value.strip_suffix("</p>\n"))
-                    .unwrap_or(&content);
-                html.push_str(content);
+                if crate::table_cell::has_blocks(&cell.children) {
+                    html.push_str(&crate::table_cell::render_html(&cell.children, source)?);
+                } else {
+                    let content = crate::markdown::render_html(
+                        source[cell.source.bytes.start..cell.source.bytes.end].trim(),
+                    )?;
+                    html.push_str(
+                        content
+                            .strip_prefix("<p>")
+                            .and_then(|value| value.strip_suffix("</p>\n"))
+                            .unwrap_or(&content),
+                    );
+                }
             }
             html.push_str("</");
             html.push_str(tag);

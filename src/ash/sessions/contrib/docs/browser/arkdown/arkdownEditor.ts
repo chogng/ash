@@ -487,8 +487,8 @@ export class ArkdownEditor extends Disposable {
 		const range = this.readSelection();
 		this.structure({ kind: 'indent_list', offset: range.start, end: range.end, direction });
 	}
-	setHeading(level: number): void { if (!this.tables.hasCellSelection) this.structure({ kind: 'set_heading', offset: this.readSelection().start, level }); }
-	setListKind(list: 'bullet' | 'ordered' | 'task'): void { if (!this.tables.hasCellSelection) this.structure({ kind: 'set_list_kind', offset: this.readSelection().start, list }); }
+	setHeading(level: number): void { if (!this.tables.setBlock({ kind: 'heading', level }, this.readSelection().start)) this.structure({ kind: 'set_heading', offset: this.readSelection().start, level }); }
+	setListKind(list: 'bullet' | 'ordered' | 'task'): void { if (!this.tables.setBlock({ kind: 'list', list }, this.readSelection().start)) this.structure({ kind: 'set_list_kind', offset: this.readSelection().start, list }); }
 	/** Inserts a complete block after the current top-level block without splitting its Markdown syntax. */
 	insertBlock(markdown: string): void {
 		if (this.readOnly || this.composition) return;
@@ -593,11 +593,17 @@ export class ArkdownEditor extends Disposable {
 		this.skipCompositionInput = undefined;
 		let range = this.readSelection();
 		const cell = this.activeTableCell();
-		const cellSegments = cell ? this.segments.filter(segment => cell.element.contains(segment.text)) : [];
+		let cellSegments = cell ? this.segments.filter(segment => cell.element.contains(segment.text)) : [];
+		if (cell && range.start === range.end) {
+			const focus = this.prose.ownerDocument.getSelection()?.focusNode;
+			const block = (focus?.nodeType === Node.ELEMENT_NODE ? focus as Element : focus?.parentElement)?.closest('p, h1, h2, h3, h4, h5, h6, li');
+			// Deletion at a cell block boundary must not consume its hidden tags.
+			if (block && cell.element.contains(block)) cellSegments = cellSegments.filter(segment => block.contains(segment.text));
+		}
 		const start = cellSegments[0]?.offsets[0], end = cellSegments.at(-1)?.offsets.at(-1);
 		switch (event.inputType) {
 			case 'insertText': case 'insertReplacementText': this.insertText(range, event.data ?? ''); break;
-			case 'insertParagraph': if (cell) this.insertText(range, '\n'); else this.replace(range, '\n\n', true); break;
+			case 'insertParagraph': if (cell && this.splitTableCellBlock(range)) break; if (cell) this.insertText(range, '\n'); else this.replace(range, '\n\n', true); break;
 			case 'insertLineBreak': if (cell) this.insertText(range, '\n'); else this.replace(range, '  \n', true); break;
 			case 'deleteContentBackward': case 'deleteContentForward':
 				if (range.start === range.end) {
@@ -649,11 +655,11 @@ export class ArkdownEditor extends Disposable {
 		}
 		if ((event.ctrlKey || event.metaKey) && event.altKey && /^Digit[0-6]$/u.test(event.code)) {
 			event.preventDefault(); event.stopPropagation();
-			this.structure({ kind: 'set_heading', offset: this.readSelection().start, level: Number(event.code.slice(-1)) }); return;
+			this.setHeading(Number(event.code.slice(-1))); return;
 		}
 		if ((event.ctrlKey || event.metaKey) && event.shiftKey && ['7', '8', '9'].includes(event.code.slice(-1)) && event.code.startsWith('Digit')) {
 			event.preventDefault(); event.stopPropagation();
-			this.structure({ kind: 'set_list_kind', offset: this.readSelection().start, list: event.code === 'Digit7' ? 'ordered' : event.code === 'Digit8' ? 'bullet' : 'task' }); return;
+			this.setListKind(event.code === 'Digit7' ? 'ordered' : event.code === 'Digit8' ? 'bullet' : 'task'); return;
 		}
 		if (event.isComposing || this.composition || !(event.ctrlKey || event.metaKey) || event.altKey) return;
 		const key = event.key.toLowerCase();
@@ -692,7 +698,7 @@ export class ArkdownEditor extends Disposable {
 			this.model.pushEditOperations([Selection.fromPositions(this.model.getPositionAt(before.start), this.model.getPositionAt(before.end))], edits.map(edit => ({ range: Range.fromPositions(this.model.getPositionAt(edit.range.start), this.model.getPositionAt(edit.range.end)), text: edit.text })), () => [Selection.fromPositions(this.model.getPositionAt(after.start), this.model.getPositionAt(after.end))]);
 			this.model.pushStackElement();
 			this.focus();
-		} catch (error) { this.onError(new Error(localize({ bundle: 'ash.arkdown', key: 'structureUnavailable' }, 'This structure cannot be changed here. Use Markdown source to edit nested blocks or Setext headings.'), { cause: error })); }
+		} catch (error) { this.onError(new Error(localize({ bundle: 'ash.arkdown', key: 'structureUnavailable' }, 'Could not change the document structure.'), { cause: error })); }
 	}
 
 	private tableTab(backwards: boolean): boolean {
@@ -749,11 +755,43 @@ export class ArkdownEditor extends Disposable {
 			const edits = this.runtime.operation(this.model.getValue(), { kind: 'table', offset: node.range.start, action });
 			if (!edits.length) return table;
 			const before = this.readSelection();
+			const cell = action.kind === 'set_cell_block' && !this.tables.hasCellSelection
+				? table.querySelector(`[data-row="${target.row}"][data-column="${target.column}"]`) : undefined;
+			const segments = cell ? this.segments.filter(segment => cell.contains(segment.text)) : [];
+			const textOffset = (offset: number): number => {
+				let length = 0;
+				for (const segment of segments) {
+					const index = segment.offsets.findIndex(value => value >= offset);
+					if (index >= 0) return length + index;
+					length += segment.text.length;
+				}
+				return length;
+			};
+			const textSelection = cell ? { start: textOffset(before.start), end: textOffset(before.end) } : undefined;
 			this.model.pushStackElement();
 			this.model.pushEditOperations([Selection.fromPositions(this.model.getPositionAt(before.start), this.model.getPositionAt(before.end))], edits.map(edit => ({ range: Range.fromPositions(this.model.getPositionAt(edit.range.start), this.model.getPositionAt(edit.range.end)), text: edit.text })), () => [Selection.fromPositions(this.model.getPositionAt(Math.min(node.range.start, this.model.getValueLength())))]);
 			this.model.pushStackElement();
 			const next = [...this.prose.querySelectorAll('table')].find(element => this.ranges.get(element)?.start === node.range.start);
-			if (next) this.setTableCaret(next, target.row, target.column);
+			if (next) {
+				this.setTableCaret(next, target.row, target.column);
+				const cell = next.querySelector(`[data-row="${target.row}"][data-column="${target.column}"]`);
+				if (cell && textSelection) {
+					const segments = this.segments.filter(segment => cell.contains(segment.text));
+					const locate = (offset: number): { node: Text; offset: number; source: number; } | undefined => {
+						for (const segment of segments) {
+							if (offset <= segment.text.length) return { node: segment.text, offset, source: segment.offsets[offset] };
+							offset -= segment.text.length;
+						}
+						return undefined;
+					};
+					const start = locate(textSelection.start), end = locate(textSelection.end);
+					if (start && end) {
+						this.selection = { start: start.source, end: end.source };
+						this.prose.ownerDocument.getSelection()?.setBaseAndExtent(start.node, start.offset, end.node, end.offset);
+						this.selectionChanged.fire();
+					}
+				}
+			}
 			else this.focus();
 			return next;
 		} catch (error) {
@@ -860,6 +898,64 @@ export class ArkdownEditor extends Disposable {
 			return;
 		}
 		this.insertText(composition.range, text);
+	}
+
+	private splitTableCellBlock(range: ArkdownRange): boolean {
+		const cell = this.activeTableCell();
+		if (!cell) return false;
+		const path: ArkdownNode[] = [];
+		let children = cell.node.children;
+		while (true) {
+			const node = children.find(node => node.range.start <= range.start && range.end <= node.range.end);
+			if (!node) break;
+			path.push(node);
+			children = node.children;
+		}
+		path.reverse();
+		const block = path.find(node => node.kind === 'item') ?? path.find(node => node.kind === 'heading' || node.kind === 'paragraph');
+		if (!block) return false;
+		const source = this.model.getValue();
+		const raw = source.slice(block.range.start, block.range.end);
+		const contentStart = block.range.start + raw.indexOf('>') + 1;
+		const contentEnd = block.range.start + raw.lastIndexOf('</');
+		const list = path.find(node => node.kind === 'list');
+		if (block.kind === 'item' && list && !source.slice(contentStart, contentEnd).replace(/^\[[ xX]\] /u, '').trim()) {
+			const index = list.children.indexOf(block);
+			const tag = list.start === undefined ? 'ul' : 'ol';
+			const part = (nodes: readonly ArkdownNode[]): string => nodes.length ? `<${tag}>${nodes.map(node => source.slice(node.range.start, node.range.end)).join('')}</${tag}>` : '';
+			const before = part(list.children.slice(0, index));
+			this.replace(list.range, before + '<p></p>' + part(list.children.slice(index + 1)), true, list.range.start + before.length + 3);
+			return true;
+		}
+		// Split inline ancestors on both sides so a block boundary cannot cross
+		// an emphasis/link delimiter or a known inline HTML mark.
+		const marks = (offset: number, edge: 'left' | 'right'): { offset: number; syntax: string; } => {
+			const ancestors: ArkdownNode[] = [];
+			let children = block.children;
+			while (true) {
+				const node = children.find(node => node.range.start < offset && offset < node.range.end);
+				if (!node) break;
+				if (['strong', 'emphasis', 'strikethrough', 'underline', 'highlight', 'text_color', 'comment', 'link'].includes(node.kind) && node.children.length) ancestors.push(node);
+				children = node.children;
+			}
+			const delimiters: string[] = [];
+			for (const node of ancestors.reverse()) {
+				const boundary = edge === 'left' ? node.children[0].range.start : node.children.at(-1)!.range.end;
+				if (offset === boundary) {
+					offset = edge === 'left' ? node.range.start : node.range.end;
+				} else {
+					delimiters.push(edge === 'left' ? source.slice(node.children.at(-1)!.range.end, node.range.end) : source.slice(node.range.start, node.children[0].range.start));
+				}
+			}
+			return { offset, syntax: (edge === 'left' ? delimiters : delimiters.reverse()).join('') };
+		};
+		const tag = block.kind === 'item' ? 'li' : block.kind === 'heading' ? `h${block.level}` : 'p';
+		const next = block.kind === 'item' ? 'li' : 'p';
+		const task = block.kind === 'item' && this.taskMarker(block) ? '[ ] ' : '';
+		const left = marks(range.start, 'left'), right = marks(range.end, 'right');
+		const prefix = left.syntax + `</${tag}><${next}>` + task + right.syntax;
+		this.replace({ start: left.offset, end: block.range.end }, prefix + source.slice(right.offset, contentEnd) + `</${next}>`, true, left.offset + prefix.length);
+		return true;
 	}
 
 	private insertText(range: ArkdownRange, text: string): void {

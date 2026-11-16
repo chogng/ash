@@ -54,6 +54,133 @@ suite('Arkdown table interactions', () => {
 		}
 	});
 
+	test('clicking table borders and padding places a text caret inside the nearest cell', async () => {
+		await mount();
+		const table = await body().getByRole('table').boundingBox();
+		assert.ok(table);
+		for (const point of [{ x: table.x + 2, y: table.y - 4 }, { x: table.x + 1, y: table.y + 1 }]) {
+			await browser.page.mouse.click(point.x, point.y);
+			const caret = await browser.page.evaluate(() => {
+				const selection = getSelection()!;
+				const parent = selection.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode as Element : selection.focusNode?.parentElement;
+				const cell = parent?.closest('td, th');
+				const caret = selection.getRangeAt(0).getBoundingClientRect();
+				const text = document.createRange();
+				if (cell) text.selectNodeContents(cell);
+				const bounds = text.getBoundingClientRect();
+				return { tag: parent?.tagName, cell: cell?.textContent, collapsed: selection.isCollapsed, caret: { x: caret.x, y: caret.y, height: caret.height }, text: { x: bounds.x, y: bounds.y, height: bounds.height } };
+			});
+			assert.equal(caret.cell, 'Task', JSON.stringify(caret));
+			assert.equal(caret.collapsed, true);
+			assert.ok(caret.caret.height > 0);
+			assert.ok(Math.abs(caret.caret.height - caret.text.height) < 1, 'the native caret follows the cell text size');
+			assert.ok(Math.abs(caret.caret.y - caret.text.y) < 1, 'the caret aligns vertically with the cell text');
+			assert.ok(Math.abs(caret.caret.x - caret.text.x) < 1, 'the caret starts at the text inset, not the table border');
+		}
+		await browser.page.keyboard.insertText('New ');
+		await expect(cell(0, 0)).toHaveText('New Task');
+		await undo();
+		assert.equal(await source(), original);
+	});
+
+	test('cells create headings, lists and checked tasks through the shared source and undo history', async () => {
+		for (const content of ['中文 **内容**🙂', '']) {
+			const initial = `| A | B |\r\n| --- | --- |\r\n| ${content} | Neighbor |`;
+			await mount(initial);
+			await cell(1, 0).click();
+			await body().press('ControlOrMeta+Alt+Digit2');
+			await expect(cell(1, 0).locator('h2')).toHaveText(content ? '中文 内容🙂' : '');
+			await body().press('ControlOrMeta+Shift+Digit9');
+			const checkbox = cell(1, 0).getByRole('checkbox');
+			await expect(checkbox).not.toBeChecked();
+			if (!content) await browser.page.keyboard.insertText('New task');
+			await checkbox.click();
+			await expect(checkbox).toBeChecked();
+			const saved = await source();
+			await mount(saved);
+			await expect(cell(1, 0).getByRole('checkbox')).toBeChecked();
+			await expect(cell(1, 1)).toHaveText('Neighbor');
+			await cell(1, 0).locator('.ash-arkdown-task-content p').click();
+			await browser.page.evaluate(() => window.arkdownFixture.setListKind('ordered'));
+			await expect(cell(1, 0).locator('ol > li')).toHaveText(content ? '中文 内容🙂' : 'New task');
+			await undo();
+			await expect(cell(1, 0).getByRole('checkbox')).toBeChecked();
+			assert.equal(await source(), saved);
+			assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+		}
+	});
+
+	test('cell rectangles and virtual cells create block structures without altering neighboring cells', async () => {
+		await mount('| A | B | C |\n| - | - | - |\n| Short |\n| One | Two | Three |');
+		await cell(1, 2).click();
+		await browser.page.evaluate(() => window.arkdownFixture.setListKind('task'));
+		await expect(cell(1, 2).getByRole('checkbox')).toHaveCount(1);
+		await browser.page.keyboard.insertText('Created');
+		await expect(cell(1, 2)).toContainText('Created');
+		await rectangle(2, 0, 2, 1);
+		await browser.page.evaluate(() => window.arkdownFixture.setHeading(3));
+		await expect(cell(2, 0).locator('h3')).toHaveText('One');
+		await expect(cell(2, 1).locator('h3')).toHaveText('Two');
+		await expect(cell(2, 2)).toHaveText('Three');
+		await browser.page.evaluate(() => window.arkdownFixture.format('**'));
+		await expect(cell(2, 0).locator('h3 strong')).toHaveText('One');
+		await expect(cell(2, 1).locator('h3 strong')).toHaveText('Two');
+		await undo();
+		await expect(cell(2, 0).locator('h3')).toHaveText('One');
+		await undo();
+		await expect(cell(2, 0).locator('h3')).toHaveCount(0);
+		await expect(cell(2, 1).locator('h3')).toHaveCount(0);
+		await expect(cell(1, 2).getByRole('checkbox')).toHaveCount(1);
+		await browser.page.evaluate(() => window.arkdownFixture.readOnly(true));
+		const saved = await source();
+		await browser.page.evaluate(() => window.arkdownFixture.setListKind('task'));
+		assert.equal(await source(), saved);
+		assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+	});
+
+	test('Enter creates cell list items, preserves inline marks and exits an empty item to a paragraph', async () => {
+		await mount('| A | B |\n| - | - |\n| First | Neighbor |');
+		await cell(1, 0).click();
+		await browser.page.evaluate(() => window.arkdownFixture.setListKind('task'));
+		await cell(1, 0).locator('.ash-arkdown-task-content p').evaluate(element => {
+			element.ownerDocument.getSelection()!.setBaseAndExtent(element.firstChild!, 5, element.firstChild!, 5);
+		});
+		await browser.page.keyboard.press('Enter');
+		await browser.page.keyboard.insertText('Second');
+		await expect(cell(1, 0).getByRole('checkbox')).toHaveCount(2);
+		await expect(cell(1, 0).locator('.ash-arkdown-task-content p')).toHaveText(['First', 'Second']);
+		await browser.page.keyboard.press('Enter');
+		await expect(cell(1, 0).getByRole('checkbox')).toHaveCount(3);
+		await browser.page.keyboard.press('Enter');
+		await expect(cell(1, 0).getByRole('checkbox')).toHaveCount(2);
+		await browser.page.keyboard.insertText('Paragraph');
+		await expect(cell(1, 0).locator(':scope > p')).toHaveText('Paragraph');
+		await body().press('ControlOrMeta+Alt+Digit3');
+		await expect(cell(1, 0).locator('h3')).toHaveText('Paragraph');
+		await expect(cell(1, 0).getByRole('checkbox')).toHaveCount(2);
+		await browser.page.keyboard.press('Enter');
+		await browser.page.keyboard.insertText('After heading');
+		await expect(cell(1, 0).locator(':scope > p')).toHaveText('After heading');
+		await expect(cell(1, 1)).toHaveText('Neighbor');
+		assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+		const saved = await source();
+		await mount(saved);
+		await expect(cell(1, 0).getByRole('checkbox')).toHaveCount(2);
+		await expect(cell(1, 0).locator('h3')).toHaveText('Paragraph');
+		await expect(cell(1, 0).locator(':scope > p')).toHaveText('After heading');
+		for (const offset of [0, 2, 4]) {
+			await mount('| A |\n| - |\n| <ul><li>**bold**</li></ul> |');
+			await cell(1, 0).locator('strong').evaluate((element, offset) => {
+				element.ownerDocument.getSelection()!.setBaseAndExtent(element.firstChild!, offset, element.firstChild!, offset);
+			}, offset);
+			await browser.page.keyboard.press('Enter');
+			await expect(cell(1, 0).locator('li')).toHaveText(['bold'.slice(0, offset), 'bold'.slice(offset)]);
+			await expect(cell(1, 0).locator('li strong')).toHaveCount(offset === 2 ? 2 : 1);
+			await undo();
+			await expect(cell(1, 0).locator('li strong')).toHaveText('bold');
+		}
+	});
+
 	test('new rows retain normal cell height and new columns accept input at the revealed caret', async () => {
 		await mount(); await cell(3, 2).hover();
 		const previous = await cell(3, 2).boundingBox(); assert.ok(previous);

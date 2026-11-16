@@ -11,7 +11,11 @@ export type ArkdownColumnAlignment = 'none' | 'left' | 'center' | 'right';
 export type ArkdownTableColor = 'gray' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple';
 export interface ArkdownTableCellLayout { readonly row: number; readonly column: number; readonly rowspan: number; readonly colspan: number; readonly color?: ArkdownTableColor; }
 export interface ArkdownTableLayout { readonly widths: readonly number[]; readonly header: boolean; readonly cells: readonly ArkdownTableCellLayout[]; }
+export type ArkdownCellBlock =
+	| { readonly kind: 'heading'; readonly level: number; }
+	| { readonly kind: 'list'; readonly list: 'bullet' | 'ordered' | 'task'; };
 export type ArkdownTableAction =
+	| { readonly kind: 'set_cell_block'; readonly top: number; readonly left: number; readonly bottom: number; readonly right: number; readonly block: ArkdownCellBlock; readonly offset?: number; }
 	| { readonly kind: 'insert_row' | 'insert_column'; readonly index: number; }
 	| { readonly kind: 'delete_rows' | 'delete_columns' | 'move_row' | 'move_column'; readonly from: number; readonly to: number; }
 	| { readonly kind: 'clear_cells' | 'merge_cells'; readonly top: number; readonly left: number; readonly bottom: number; readonly right: number; }

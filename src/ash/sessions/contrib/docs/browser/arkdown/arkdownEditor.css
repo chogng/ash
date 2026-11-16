@@ -133,6 +133,14 @@
 	margin: 0;
 }
 
+.stanza-arkdown-prose :is(th, td) > :first-child {
+	margin-block-start: 0;
+}
+
+.stanza-arkdown-prose :is(th, td) > :last-child {
+	margin-block-end: 0;
+}
+
 .stanza-arkdown-prose .ash-arkdown-cell-gray {
 	background-image: linear-gradient(
 		var(--ash-sessions-docs-cellGray),

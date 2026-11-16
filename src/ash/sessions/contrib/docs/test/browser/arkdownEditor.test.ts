@@ -212,6 +212,60 @@ suite('Arkdown document editing', () => {
 		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.formatting.list), 'task');
 	});
 
+	test('Setext and nested headings convert through rich editing and document history', async () => {
+		const source = '> 中文 **标题**\r\n> 第二行🙂\r\n> ----\r\n\r\nTail';
+		await mount(source);
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await body.locator('h2').evaluate(element => {
+			const text = element.firstChild!;
+			element.ownerDocument.getSelection()!.setBaseAndExtent(text, 0, text, 2);
+		});
+		await body.press('ControlOrMeta+Alt+Digit3');
+		await expect(body.locator('blockquote h3')).toHaveText('中文 标题 第二行🙂');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '> ### 中文 **标题** 第二行🙂\r\n\r\nTail');
+		assert.equal(await browser.page.evaluate(() => window.getSelection()?.toString()), '中文');
+		await body.press('ControlOrMeta+z');
+		await expect(body.locator('blockquote h2')).toBeVisible();
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), source);
+		await browser.page.evaluate(() => window.arkdownFixture.setHeading(0));
+		await expect(body.locator('blockquote p')).toHaveText('中文 标题 第二行🙂');
+		assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+	});
+
+	test('nested list conversion keeps descendants, checked state and selection', async () => {
+		const source = '- Parent\r\n  - [x] Child🙂\r\n    - Grandchild\r\n  - [ ] Next\r\n- Tail\r\n';
+		await mount(source);
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await body.locator('.ash-arkdown-task-content p').first().evaluate(element => {
+			element.ownerDocument.getSelection()!.setBaseAndExtent(element.firstChild!, 0, element.firstChild!, 5);
+		});
+		await body.press('ControlOrMeta+Shift+Digit7');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '- Parent\r\n  1. Child🙂\r\n     - Grandchild\r\n  2. Next\r\n- Tail\r\n');
+		await expect(body.locator('ul > li > ol')).toHaveCount(1);
+		await expect(body.locator('ol > li > ul')).toHaveText('Grandchild');
+		assert.equal(await browser.page.evaluate(() => window.getSelection()?.toString()), 'Child');
+		await body.press('ControlOrMeta+z');
+		await expect(body.getByRole('checkbox', { name: 'Task: Child🙂', exact: true })).toBeChecked();
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), source);
+		await browser.page.evaluate(() => window.arkdownFixture.setListKind('task'));
+		await expect(body.getByRole('checkbox', { name: 'Task: Child🙂', exact: true })).toBeChecked();
+		assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+	});
+
+	test('headings become lists without leaking heading delimiters into the text', async () => {
+		for (const source of ['## 中文🙂 ##\n', '中文🙂\n====\n']) {
+			await mount(source);
+			const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+			await body.locator('h1, h2').click();
+			await browser.page.evaluate(() => window.arkdownFixture.setListKind('task'));
+			await expect(body.getByRole('checkbox', { name: 'Task: 中文🙂', exact: true })).toBeVisible();
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '- [ ] 中文🙂\n');
+			await body.press('ControlOrMeta+z');
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), source);
+			assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+		}
+	});
+
 	test('checklist pointer and keyboard changes use Markdown history and retain text selection', async () => {
 		await mount('- [ ] Ship docs\r\n- [x] Review docs\r\n');
 		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
@@ -434,6 +488,20 @@ suite('Arkdown document editing', () => {
 		await browser.page.keyboard.insertText('前');
 		await expect(body.locator('tr').nth(1).locator('td').last()).toContainText('前');
 		assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+	});
+
+	test('Tab repeatedly creates rows through empty final cells', async () => {
+		for (const eol of ['\n', '\r\n']) {
+			await mount(['| 里程碑 | 目标日期 |', '| --- | --- |', '| 公开发布 | 下周一 |'].join(eol));
+			const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+			await body.locator('td').last().click();
+			for (let row = 2; row < 6; row++) {
+				await browser.page.keyboard.press('Tab');
+				await expect(body.locator('tr')).toHaveCount(row + 1);
+				await browser.page.keyboard.press('Tab');
+				assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+			}
+		}
 	});
 
 	test('table navigation and typing reveal offscreen cells in the table scroll lane', async () => {

@@ -201,12 +201,21 @@ pub fn parse(source: &str) -> Result<Vec<Node>, Error> {
         }
     }
     debug_assert!(stack.is_empty());
-    crate::table::fold_layouts(fold_inline_formats(roots, 0)?, source, &index)
+    crate::table::fold_layouts(
+        fold_inline_formats(roots, 0, source, false)?,
+        source,
+        &index,
+    )
 }
 
 /// Interpret only the exact inline tags emitted by Docs. Unknown HTML remains
 /// inert source text, and an unmatched tag never consumes the rest of a block.
-fn fold_inline_formats(nodes: Vec<Node>, depth: usize) -> Result<Vec<Node>, Error> {
+fn fold_inline_formats(
+    nodes: Vec<Node>,
+    depth: usize,
+    source: &str,
+    in_cell: bool,
+) -> Result<Vec<Node>, Error> {
     fn height(node: &Node) -> usize {
         1 + node.children.iter().map(height).max().unwrap_or(0)
     }
@@ -220,10 +229,17 @@ fn fold_inline_formats(nodes: Vec<Node>, depth: usize) -> Result<Vec<Node>, Erro
     let mut stack: Vec<Frame> = Vec::new();
     for mut node in nodes {
         if !matches!(node.kind, NodeKind::CodeBlock { .. } | NodeKind::HtmlBlock) {
-            node.children = fold_inline_formats(node.children, depth + 1)?;
+            node.children = fold_inline_formats(
+                node.children,
+                depth + 1,
+                source,
+                in_cell || matches!(node.kind, NodeKind::TableCell { .. }),
+            )?;
         }
         if let NodeKind::RawHtml { ref text } = node.kind {
-            if let Some((kind, close)) = inline_format(text) {
+            if let Some((kind, close)) = inline_format(text)
+                .or_else(|| in_cell.then(|| crate::table_cell::tag(text)).flatten())
+            {
                 if depth + stack.len() >= 128 {
                     return Err(Error::ParseLimit {
                         limit: "128 nested containers".to_owned(),
@@ -255,6 +271,9 @@ fn fold_inline_formats(nodes: Vec<Node>, depth: usize) -> Result<Vec<Node>, Erro
                     },
                     children: frame.children,
                 };
+                if in_cell {
+                    crate::table_cell::finish(&mut node, frame.open.source, source);
+                }
             }
         }
         // HTML marks can surround an already parsed Markdown subtree. Count
@@ -413,10 +432,9 @@ fn tag_kind(tag: Tag<'_>) -> NodeKind {
 pub fn render_html(source: &str) -> Result<String, Error> {
     check_source_size(source.len())?;
     let mut inline_tags = HashSet::new();
-    let table_nodes =
-        (source.contains("<!-- ash-table ") || source.contains("&#10;") || source.contains("&#9;"))
-            .then(|| parse(source))
-            .transpose()?;
+    let table_nodes = (source.contains('<') || source.contains("&#10;") || source.contains("&#9;"))
+        .then(|| parse(source))
+        .transpose()?;
     let mut tables = std::collections::BTreeMap::new();
     let mut table_metadata = Vec::new();
     fn collect_tables(
@@ -440,6 +458,11 @@ pub fn render_html(source: &str) -> Result<String, Error> {
                     );
                 } else if source[node.source.bytes.start..node.source.bytes.end].contains("&#10;")
                     || source[node.source.bytes.start..node.source.bytes.end].contains("&#9;")
+                    || node.children.iter().any(|row| {
+                        row.children
+                            .iter()
+                            .any(|cell| crate::table_cell::has_blocks(&cell.children))
+                    })
                 {
                     tables.insert(
                         node.source.bytes.start,

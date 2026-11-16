@@ -12,7 +12,7 @@ import { IClipboardService } from '../../../../../platform/clipboard/common/clip
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
-import type { ArkdownNode, ArkdownTableAction, ArkdownTableCellLayout, ArkdownTableColor } from './arkdownRuntime.js';
+import type { ArkdownCellBlock, ArkdownNode, ArkdownTableAction, ArkdownTableCellLayout, ArkdownTableColor } from './arkdownRuntime.js';
 
 /** View callbacks keep all table transactions in the editor's source/history owner. */
 export interface ArkdownTableHost {
@@ -197,6 +197,16 @@ export class ArkdownTableController extends Disposable {
 	get hasCellSelection(): boolean { return !!this.selection; }
 	getSelectedText(): string | undefined { return this.selection ? this.copyData(this.selection).text : undefined; }
 
+	setBlock(block: ArkdownCellBlock, offset: number): boolean {
+		const selection = this.selection;
+		const cell = selection ? { table: selection.table, point: { row: selection.row, column: selection.column } } : this.caretCell();
+		if (!cell) return false;
+		this.activate(cell.table, cell.point);
+		const rectangle = selection ? this.rectangle(selection) : { top: cell.point.row, left: cell.point.column, bottom: cell.point.row, right: cell.point.column };
+		this.execute({ kind: 'set_cell_block', ...rectangle, block, ...(selection ? {} : { offset }) }, cell.point);
+		return true;
+	}
+
 	get selectedCells(): readonly ArkdownNode[] {
 		const selection = this.selection, node = selection && this.host.getNode(selection.table);
 		if (!selection || !node) return [];
@@ -333,6 +343,26 @@ export class ArkdownTableController extends Disposable {
 		return this.eventCell(selection?.focusNode?.nodeType === 1 ? selection.focusNode : selection?.focusNode?.parentElement ?? null);
 	}
 
+	private nearestCell(event: PointerEvent): ReturnType<ArkdownTableController['eventCell']> {
+		const lane = (event.target as Element | null)?.closest?.<HTMLElement>('.ash-arkdown-table');
+		const table = lane?.querySelector('table');
+		if (!lane || !table || !this.prose.contains(lane)) return undefined;
+		const bounds = lane.getBoundingClientRect();
+		// The native scrollbar owns pointer input outside the lane's client area.
+		if (event.clientX >= bounds.left + lane.clientLeft + lane.clientWidth || event.clientY >= bounds.top + lane.clientTop + lane.clientHeight) return undefined;
+		let nearest: HTMLTableCellElement | undefined;
+		let distance = Infinity;
+		for (const cell of table.querySelectorAll<HTMLTableCellElement>('td[data-row], th[data-row]')) {
+			if (cell.hidden) continue;
+			const rect = cell.getBoundingClientRect();
+			const x = Math.max(rect.left - event.clientX, 0, event.clientX - rect.right);
+			const y = Math.max(rect.top - event.clientY, 0, event.clientY - rect.bottom);
+			const next = x * x + y * y;
+			if (next < distance) { nearest = cell; distance = next; }
+		}
+		return this.eventCell(nearest ?? null);
+	}
+
 	private cellElement(table: HTMLTableElement, row: number, column: number): HTMLTableCellElement | undefined {
 		return Array.from(table.querySelectorAll<HTMLTableCellElement>('td[data-row], th[data-row]')).find(cell => {
 			if (cell.hidden) return false;
@@ -404,8 +434,12 @@ export class ArkdownTableController extends Disposable {
 		if (event.button !== 0) return;
 		this.skipClick = false;
 		this.hoverCell = undefined;
-		const cell = this.eventCell(event.target);
+		const direct = this.eventCell(event.target);
+		const cell = direct ?? (this.host.canEdit() ? this.nearestCell(event) : undefined);
 		if (!cell) { this.close(); return; }
+		// A native caret on the scroll wrapper has no text baseline and can type
+		// outside the grid. Border/padding clicks enter the nearest editable cell.
+		if (!direct) event.preventDefault();
 		const caret = this.caretCell();
 		const anchor = this.selection?.table === cell.table ? this.selection.anchor : caret?.table === cell.table ? caret.point : cell.point;
 		this.activate(cell.table, cell.point);
@@ -413,7 +447,10 @@ export class ArkdownTableController extends Disposable {
 			event.preventDefault(); event.stopImmediatePropagation();
 			this.select(cell.table, anchor, cell.point);
 			this.prose.focus({ preventScroll: true });
-		} else this.clearSelection();
+		} else {
+			this.clearSelection();
+			if (!direct) this.host.setCaret(cell.table, cell.point.row, cell.point.column);
+		}
 		this.drag = { kind: 'cells', table: cell.table, anchor: event.shiftKey ? anchor : cell.point, pointer: event.pointerId, moved: event.shiftKey };
 	}
 
@@ -768,7 +805,7 @@ export class ArkdownTableController extends Disposable {
 			const table = this.host.apply(this.table, action, target);
 			this.table = table;
 			this.cell = target;
-			const retain = ['set_column_width', 'set_column_alignment', 'set_cell_color', 'clear_cells', 'toggle_header', 'merge_cells', 'split_cell'].includes(action.kind);
+			const retain = ['set_cell_block', 'set_column_width', 'set_column_alignment', 'set_cell_color', 'clear_cells', 'toggle_header', 'merge_cells', 'split_cell'].includes(action.kind);
 			if (old && table && preserve && retain) this.selection = { ...old, table };
 			else this.clearSelection();
 			if (!table) this.layer.hidden = true;

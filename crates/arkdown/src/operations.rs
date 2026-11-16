@@ -122,127 +122,90 @@ pub fn operation_edits(source: &str, operation: Operation) -> Result<Vec<TextEdi
             if level > 6 {
                 return Err(invalid("Heading level must be between 0 and 6"));
             }
-            let block = nodes
+            let path = conversion_path(&nodes, offset, index.utf16_len());
+            let block = path
                 .iter()
+                .rev()
                 .find(|node| {
-                    node.source.utf16.start <= offset
-                        && offset <= node.source.utf16.end
-                        && matches!(node.kind, NodeKind::Paragraph | NodeKind::Heading { .. })
+                    matches!(
+                        node.kind,
+                        NodeKind::Paragraph | NodeKind::Heading { .. } | NodeKind::Item
+                    )
                 })
-                .ok_or_else(|| {
-                    invalid("Heading conversion requires a top-level paragraph or heading")
-                })?;
-            let raw = &source[block.source.bytes.start..block.source.bytes.end];
-            let first_line = raw.split(['\r', '\n']).next().unwrap_or("");
-            let hashes = first_line.bytes().take_while(|&byte| byte == b'#').count();
-            let prefix =
-                if matches!(block.kind, NodeKind::Heading { .. }) && hashes > 0 && hashes <= 6 {
-                    hashes
-                        + first_line[hashes..]
-                            .bytes()
-                            .take_while(|&byte| byte == b' ' || byte == b'\t')
-                            .count()
-                } else {
-                    0
-                };
-            if matches!(block.kind, NodeKind::Heading { .. }) && prefix == 0 {
-                return Err(invalid("Setext heading conversion requires source editing"));
-            }
-            let start = block.source.utf16.start;
-            let text = if level == 0 {
+                .ok_or_else(|| invalid("Heading conversion requires a text block"))?;
+            let prefix = if level == 0 {
                 String::new()
             } else {
                 format!("{} ", "#".repeat(level as usize))
             };
-            let mut edits = vec![TextEdit {
-                range: Utf16Range {
-                    start,
-                    end: start + prefix as u32,
-                },
-                text,
-            }];
-            if level == 0 && matches!(block.kind, NodeKind::Heading { .. }) {
-                let trimmed = first_line.trim_end_matches([' ', '\t']);
-                let before_hashes = trimmed.trim_end_matches('#');
-                if before_hashes.len() < trimmed.len() && before_hashes.ends_with([' ', '\t']) {
-                    let content_end = before_hashes.trim_end_matches([' ', '\t']).len();
-                    edits.push(TextEdit {
-                        range: Utf16Range {
-                            start: index.byte_to_utf16(block.source.bytes.start + content_end)?,
-                            end: index
-                                .byte_to_utf16(block.source.bytes.start + first_line.len())?,
-                        },
-                        text: String::new(),
-                    });
-                }
-            }
-            Ok(edits)
+            text_block_edits(source, &index, block, prefix)
         }
         Operation::SetListKind { list, .. } => {
-            let block = nodes
+            let path = conversion_path(&nodes, offset, index.utf16_len());
+            // The innermost list owns its sibling markers. Paragraphs inside an
+            // item must not turn a list-kind change into a second list marker.
+            let block = path
                 .iter()
-                .find(|node| {
-                    node.source.utf16.start <= offset
-                        && offset <= node.source.utf16.end
-                        && matches!(node.kind, NodeKind::Paragraph | NodeKind::List { .. })
+                .rev()
+                .find(|node| matches!(node.kind, NodeKind::List { .. }))
+                .or_else(|| {
+                    path.iter().rev().find(|node| {
+                        matches!(node.kind, NodeKind::Paragraph | NodeKind::Heading { .. })
+                    })
                 })
-                .ok_or_else(|| invalid("List conversion requires a top-level paragraph or list"))?;
-            let items: Vec<&Node> = if matches!(block.kind, NodeKind::List { .. }) {
-                block.children.iter().collect()
-            } else {
-                vec![block]
+                .ok_or_else(|| invalid("List conversion requires a text block or list"))?;
+            let marker = |number: usize| match list {
+                ListKind::Bullet => "- ".to_owned(),
+                ListKind::Ordered => format!("{}. ", number + 1),
+                ListKind::Task => "- [ ] ".to_owned(),
             };
-            let mut edits = Vec::new();
-            for (number, item) in items.iter().enumerate() {
-                let raw = &source[item.source.bytes.start..item.source.bytes.end];
-                let line = raw.split(['\r', '\n']).next().unwrap_or("");
-                let mut removed = 0;
-                let mut indent = 0;
-                if matches!(block.kind, NodeKind::List { .. }) {
-                    indent = line.bytes().take_while(|&byte| byte == b' ').count();
-                    let marker = if line[indent..].starts_with(['-', '+', '*']) {
-                        1
-                    } else {
-                        line[indent..]
+            if !matches!(block.kind, NodeKind::List { .. }) {
+                text_block_edits(source, &index, block, marker(0))
+            } else {
+                let mut edits = Vec::new();
+                for (number, item) in block.children.iter().enumerate() {
+                    let raw = &source[item.source.bytes.start..item.source.bytes.end];
+                    let indent = raw.bytes().take_while(|&byte| byte == b' ').count();
+                    let marker_end = indent + list_marker_end(&raw[indent..]);
+                    let mut removed = marker_end;
+                    let checkbox = raw
+                        .get(removed..removed + 3)
+                        .filter(|value| matches!(*value, "[ ]" | "[x]" | "[X]"));
+                    let checkbox = checkbox.filter(|_| {
+                        find(
+                            &item.children,
+                            item.source.utf16.start + marker_end as u32,
+                            |kind| matches!(kind, NodeKind::TaskListMarker { .. }),
+                        )
+                        .is_some()
+                    });
+                    if checkbox.is_some() {
+                        removed += 3;
+                        removed += raw[removed..]
                             .bytes()
-                            .take_while(u8::is_ascii_digit)
-                            .count()
-                            + 1
-                    };
-                    removed = indent
-                        + marker
-                        + line[indent + marker..]
-                            .bytes()
-                            .take_while(|&byte| byte == b' ' || byte == b'\t')
+                            .take_while(|byte| matches!(byte, b' ' | b'\t'))
                             .count();
-                    if ["[ ] ", "[x] ", "[X] "]
-                        .iter()
-                        .any(|marker| line[removed..].starts_with(marker))
-                    {
-                        removed += 4;
                     }
+                    let text = match list {
+                        ListKind::Task => format!("- {} ", checkbox.unwrap_or("[ ]")),
+                        ListKind::Bullet | ListKind::Ordered => marker(number),
+                    };
+                    let new_indent = indent + list_marker_end(&text);
+                    edits.push(TextEdit {
+                        range: Utf16Range {
+                            start: item.source.utf16.start + indent as u32,
+                            end: index.byte_to_utf16(item.source.bytes.start + removed)?,
+                        },
+                        text,
+                    });
+                    // Continuations and child lists follow the marker's content
+                    // column, not the checkbox width. Keep them in the same item.
+                    reindent_continuations(
+                        source, &index, item, marker_end, new_indent, &mut edits,
+                    )?;
                 }
-                let text = match list {
-                    ListKind::Bullet => "- ".to_owned(),
-                    ListKind::Ordered => format!("{}. ", number + 1),
-                    ListKind::Task => {
-                        let checkbox = line
-                            .get(removed.saturating_sub(4)..removed)
-                            .filter(|value| value.starts_with('['))
-                            .unwrap_or("[ ] ");
-                        format!("- {checkbox}")
-                    }
-                };
-                let start = item.source.utf16.start + indent as u32;
-                edits.push(TextEdit {
-                    range: Utf16Range {
-                        start,
-                        end: item.source.utf16.start + removed as u32,
-                    },
-                    text,
-                });
+                Ok(edits)
             }
-            Ok(edits)
         }
         Operation::SetTaskChecked { checked, .. } => {
             let marker = find(&nodes, offset, |kind| {
@@ -363,6 +326,215 @@ pub fn operation_edits(source: &str, operation: Operation) -> Result<Vec<TextEdi
             edits,
         })?
         .edits)
+}
+
+/// Only descend through editable block containers. Inline syntax and table/code
+/// contents are not independent blocks, even when their text contains Markdown.
+fn conversion_path(nodes: &[Node], offset: u32, length: u32) -> Vec<&Node> {
+    let mut path = Vec::new();
+    let mut children = nodes;
+    while let Some(node) = children.iter().find(|node| {
+        node.source.utf16.start <= offset
+            && (offset < node.source.utf16.end
+                || offset == length && offset == node.source.utf16.end)
+    }) {
+        if !matches!(
+            node.kind,
+            NodeKind::Paragraph
+                | NodeKind::Heading { .. }
+                | NodeKind::BlockQuote { .. }
+                | NodeKind::List { .. }
+                | NodeKind::Item
+                | NodeKind::FootnoteDefinition { .. }
+        ) {
+            if matches!(
+                node.kind,
+                NodeKind::CodeBlock { .. }
+                    | NodeKind::HtmlBlock
+                    | NodeKind::Table { .. }
+                    | NodeKind::Rule
+            ) {
+                return Vec::new();
+            }
+            break;
+        }
+        path.push(node);
+        children = &node.children;
+    }
+    path
+}
+
+fn list_marker_end(raw: &str) -> usize {
+    let marker = if raw.starts_with(['-', '+', '*']) {
+        1
+    } else {
+        raw.bytes().take_while(u8::is_ascii_digit).count() + 1
+    };
+    marker
+        + raw[marker..]
+            .bytes()
+            .take_while(|byte| matches!(byte, b' ' | b'\t'))
+            .count()
+}
+
+fn text_block_edits(
+    source: &str,
+    index: &SourceIndex,
+    block: &Node,
+    prefix: String,
+) -> Result<Vec<TextEdit>, Error> {
+    let start = block.source.bytes.start;
+    let raw = &source[start..block.source.bytes.end];
+    let first_line = raw.split(['\r', '\n']).next().unwrap_or("");
+    let hashes = first_line.bytes().take_while(|&byte| byte == b'#').count();
+    let heading = matches!(block.kind, NodeKind::Heading { .. });
+    let atx = heading
+        && (1..=6).contains(&hashes)
+        && (hashes == first_line.len() || first_line[hashes..].starts_with([' ', '\t']));
+    let mut removed = if atx {
+        hashes
+            + first_line[hashes..]
+                .bytes()
+                .take_while(|byte| matches!(byte, b' ' | b'\t'))
+                .count()
+    } else {
+        0
+    };
+    if matches!(block.kind, NodeKind::Item) {
+        if prefix.is_empty() {
+            return Ok(Vec::new());
+        }
+        let indent = raw.bytes().take_while(|&byte| byte == b' ').count();
+        let content = indent + list_marker_end(&raw[indent..]);
+        removed = block
+            .children
+            .iter()
+            .find(|child| !matches!(child.kind, NodeKind::TaskListMarker { .. }))
+            .map_or(content, |child| child.source.bytes.start - start);
+        // Keep the owning list marker. A heading replaces the item's paragraph
+        // (and its task marker), never the surrounding list or its child blocks.
+        return Ok(vec![TextEdit {
+            range: Utf16Range {
+                start: index.byte_to_utf16(start + content)?,
+                end: index.byte_to_utf16(start + removed)?,
+            },
+            text: prefix,
+        }]);
+    }
+    let join_lines = prefix.starts_with('#') || heading && !atx;
+    let mut edits = vec![TextEdit {
+        range: Utf16Range {
+            start: block.source.utf16.start,
+            end: index.byte_to_utf16(start + removed)?,
+        },
+        text: prefix,
+    }];
+    if heading && !atx {
+        // Setext's underline belongs to this heading. Remove it together with
+        // its preceding line break, leaving the final line ending untouched.
+        let body = raw.trim_end_matches(['\r', '\n']);
+        let underline = body
+            .rfind('\n')
+            .ok_or_else(|| invalid("Missing heading underline"))?;
+        let from = underline - usize::from(body[..underline].ends_with('\r'));
+        edits.push(TextEdit {
+            range: Utf16Range {
+                start: index.byte_to_utf16(start + from)?,
+                end: index.byte_to_utf16(start + body.len())?,
+            },
+            text: String::new(),
+        });
+    } else if atx {
+        let trimmed = first_line.trim_end_matches([' ', '\t']);
+        let before_hashes = trimmed.trim_end_matches('#');
+        if before_hashes.len() < trimmed.len() && before_hashes.ends_with([' ', '\t']) {
+            // A closing hash run is syntax, not list/paragraph content. Do not
+            // overlap the opening marker for an empty heading such as `## ##`.
+            let content_end = before_hashes
+                .trim_end_matches([' ', '\t'])
+                .len()
+                .max(removed);
+            if content_end < first_line.len() {
+                edits.push(TextEdit {
+                    range: Utf16Range {
+                        start: index.byte_to_utf16(start + content_end)?,
+                        end: index.byte_to_utf16(start + first_line.len())?,
+                    },
+                    text: String::new(),
+                });
+            }
+        }
+    }
+    if join_lines {
+        join_heading_lines(&block.children, index, &mut edits)?;
+    }
+    edits.sort_by_key(|edit| edit.range.start);
+    Ok(edits)
+}
+
+fn join_heading_lines(
+    nodes: &[Node],
+    index: &SourceIndex,
+    edits: &mut Vec<TextEdit>,
+) -> Result<(), Error> {
+    for (position, node) in nodes.iter().enumerate() {
+        if matches!(node.kind, NodeKind::SoftBreak | NodeKind::HardBreak) {
+            let end = nodes
+                .get(position + 1)
+                .map_or(node.source.bytes.end, |next| next.source.bytes.start);
+            edits.push(TextEdit {
+                range: Utf16Range {
+                    start: node.source.utf16.start,
+                    end: index.byte_to_utf16(end)?,
+                },
+                text: " ".to_owned(),
+            });
+        } else {
+            join_heading_lines(&node.children, index, edits)?;
+        }
+    }
+    Ok(())
+}
+
+fn reindent_continuations(
+    source: &str,
+    index: &SourceIndex,
+    item: &Node,
+    old_indent: usize,
+    new_indent: usize,
+    edits: &mut Vec<TextEdit>,
+) -> Result<(), Error> {
+    if old_indent == new_indent {
+        return Ok(());
+    }
+    let start = item.source.bytes.start;
+    let line_start = source[..start]
+        .rfind('\n')
+        .map_or(0, |position| position + 1);
+    let container = &source[line_start..start];
+    let mut byte = start;
+    for (line_number, line) in source[start..item.source.bytes.end]
+        .split_inclusive('\n')
+        .enumerate()
+    {
+        if line_number > 0 {
+            if let Some(content) = line.strip_prefix(container) {
+                let spaces = content.bytes().take_while(|&byte| byte == b' ').count();
+                if spaces >= old_indent && !content.trim().is_empty() {
+                    let start = index.byte_to_utf16(byte + container.len())?;
+                    edits.push(TextEdit {
+                        range: Utf16Range {
+                            start,
+                            end: start + old_indent.saturating_sub(new_indent) as u32,
+                        },
+                        text: " ".repeat(new_indent.saturating_sub(old_indent)),
+                    });
+                }
+            }
+        }
+        byte += line.len();
+    }
+    Ok(())
 }
 
 fn indent_list(
