@@ -25,6 +25,7 @@ test/componentFixtures/
   component-explorer-attach.json
   component-explorer-diff.json
   blocks-ci-screenshots.md
+  baselines/images/
   cssOrderScan.mts
   cssOrderBisect.mts
   cssOrderShared.mts
@@ -69,9 +70,9 @@ Browser tests keep their own unique `component-fixtures-*` results directory and
 
 ## Local checks before cloud CI
 
-`pnpm test:component-fixtures:ci` prepares generated assets, then runs algorithm/CLI units, screenshot-report and blocking-hash units, fixture browser tests, a fresh screenshot capture, and the committed hash check. Once generated assets are ready, `pnpm test:component-fixtures:ci:prepared` runs the same sequence without preparation. Changed approved screenshots and rendering errors fail it. The proposed approval list is saved as `.build/component-fixtures/blocks-ci-updated.md`; it is not approved automatically.
+`pnpm test:component-fixtures:ci` prepares generated assets, then runs algorithm/CLI units, screenshot-report and approval units, fixture browser tests, a fresh screenshot capture, and the committed approval check. Once generated assets are ready, `pnpm test:component-fixtures:ci:prepared` runs the same sequence without preparation. Changed approved screenshots and rendering errors fail it. The proposed approval list is saved as `.build/component-fixtures/blocks-ci-updated.md`; it is not approved automatically.
 
-The browser suite includes byte-for-byte repeatability of approved screenshots across fresh browsers and an actual Git-worktree comparison with cleanup. Unmarked exploratory fixtures use the CSS scanner's existing per-channel allowance of 1/255 for rasterization rounding; dimensions and larger pixel changes still fail. Every capture also retains its same-page state and exact PNG repeatability checks. Unit tests deliberately change an approved hash and require exit status 1. Format, build/browser type checks, and CI selector tests are separate cheap checks. Full platform builds and hosted Actions artifact integration remain cloud validation.
+The browser suite checks fresh-browser captures for all fixtures and performs an actual Git-worktree comparison with cleanup. Rasterization may change at most 32 pixels per screenshot by one RGB level (1/255); alpha and dimensions must match exactly. Larger changes fail. Every capture also retains its same-page computed-state and exact PNG repeatability checks. Tests exercise the actual approval command with permitted rounding, visible changes, too many changed pixels, alpha changes, resized images and corrupt baseline files. Format, build/browser type checks, and CI selector tests are separate cheap checks. Full platform builds and hosted Actions artifact integration remain cloud validation.
 
 ## Screenshot capture and baseline comparison
 
@@ -94,9 +95,9 @@ To approve reviewed screenshots on the canonical Windows/Chromium environment:
 pnpm test:component-fixtures:screenshots --update-screenshots
 ```
 
-This regenerates `test/componentFixtures/blocks-ci-screenshots.md` from a complete successful capture. Filtered or comparison runs cannot update it. Mark important scenarios with `labels: ['blocks-ci']` in `defineComponentFixture`; all three initial groups are marked. Adding or removing marked fixtures also changes approval state. PNGs stay in build outputs and Actions artifacts; the committed Markdown links to the canonical local capture directory.
+This copies reviewed content-addressed PNGs to `test/componentFixtures/baselines/images/` and regenerates `blocks-ci-screenshots.md` from a complete successful capture. The Markdown identifies the approved images and environment; each image must match its SHA-256 filename. Filtered or comparison runs cannot update it. Mark important scenarios with `labels: ['blocks-ci']` in `defineComponentFixture`; all three initial groups are marked. Adding or removing marked fixtures also requires explicit approval. Review the CI artifact before approving changed product rendering.
 
-CI uses the same prepared runner commands on Windows with lockfile-pinned full Chromium in headless mode (`channel: 'chromium'`). High-contrast rounded-border pixels can still vary by 1/255 across identical processes, including full Chromium. Manifests retain the channel and comparisons reject different capture environments. The hash checker compares approved captures to the committed list, never rewrites it, and fails on changes. It uploads proposed hashes, before/after images, browser diagnostics and reports even on failure, and writes the comparison to the job summary. External screenshot hosting, write tokens, and PR-comment posting are not required. A hosted OS/font image upgrade may change pixels; review its artifact before explicitly approving that change.
+CI uses the same prepared runner commands on Windows with lockfile-pinned full Chromium in headless mode (`channel: 'chromium'`). High-contrast rounded-border pixels can still vary by 1/255 across identical processes, including full Chromium. Manifests retain the channel and comparisons reject different capture environments. The approval checker verifies the committed PNG checksums, fixture catalog and capture environment, then compares changed images using the bounded RGB allowance above. It never rewrites approval state and rejects other visual changes. It uploads proposed hashes, before/after images, browser diagnostics and reports even on failure, and writes the comparison to the job summary. External screenshot hosting, write tokens, and PR-comment posting are not required. A hosted OS/font image upgrade may change pixels; review its artifact before explicitly approving that change.
 
 ## Adding fixtures
 
@@ -125,7 +126,7 @@ Fixtures have separate iframe documents. They share the eagerly discovered fixtu
 
 The scanner runs against the Vite development server so each source CSS document has real `data-vite-dev-id` metadata. It moves those existing stylesheet nodes between fixed comment slots; it does not append a second, reparsed copy of a stylesheet. Dynamic theme styles keep their slots. Changes to the source CSS during a scan invalidate the run.
 
-Each fixture is captured in the original order twice, with selected CSS documents reversed, and after restoring the original order. The oracle compares computed styles, generated pseudo-elements, bounds, scroll dimensions, focus/ARIA state, and cropped component screenshots. It ignores only the `background-position` shorthand (its longhands are compared) and pixel deltas of at most 1/255 from repainting; raw pixel counts remain in finding diagnostics.
+Each fixture is captured in the original order twice, with selected CSS documents reversed, and after restoring the original order. The oracle compares computed styles, generated pseudo-elements, bounds, scroll dimensions, focus/ARIA state, and cropped component screenshots. It ignores only the `background-position` shorthand (its longhands are compared) and RGB deltas of at most 1/255 in at most 32 pixels from repainting; alpha and dimensions remain exact, and raw pixel counts remain in finding diagnostics.
 
 On a difference, binary search follows a path of adjacent stylesheet swaps from the original order to the requested reversal. It keeps endpoints with different rendering verdicts; it does not assume intermediate verdicts are monotonic. The final pair is rendered again for confirmation. Its before/after orders, property differences, and screenshots are retained. A source filter limits the initial reversal; localization may identify an unselected stylesheet crossed by a selected one. An unmapped dynamic stylesheet between the final two sources prevents confirmed source-pair attribution.
 

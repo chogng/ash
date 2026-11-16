@@ -26,6 +26,8 @@ test('real blocks-ci command passes unchanged hashes and fails an intentionally 
 		const imageHash = createHash('sha256').update(png).digest('hex');
 		await mkdir(resolve(directory, 'images'));
 		await writeFile(resolve(directory, 'images', `${imageHash}.png`), png);
+		await mkdir(resolve(directory, 'local-images/images'), { recursive: true });
+		await writeFile(resolve(directory, 'local-images/images', `${imageHash}.png`), png);
 		const manifest: ScreenshotManifest = { environment: { platform: 'win32', browserVersion: 'test' }, fixtures: [{ fixtureId: 'test/Light', labels: ['blocks-ci'], imageHash, imagePath: `images/${imageHash}.png` }] };
 		const manifestPath = resolve(directory, 'manifest.json');
 		const markdownPath = resolve(directory, 'blocks-ci-screenshots.md');
@@ -43,5 +45,9 @@ test('real blocks-ci command passes unchanged hashes and fails an intentionally 
 			return true;
 		});
 		assert.equal(await readFile(markdownPath, 'utf8'), markdown.replace(imageHash, 'b'.repeat(64)));
+		await writeFile(markdownPath, markdown);
+		await writeFile(resolve(directory, 'local-images/images', `${imageHash}.png`), Buffer.concat([png, Buffer.from([0])]));
+		await assert.rejects(execute(process.execPath, args, { windowsHide: true }), (error: Error & { code?: number; }) => error.code === 1);
+		assert.equal(await readFile(markdownPath, 'utf8'), markdown);
 	} finally { await rm(directory, { recursive: true, force: true }); }
 });

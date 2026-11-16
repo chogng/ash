@@ -210,7 +210,7 @@
     "test:component-fixtures:compare:prepared": "node test/componentFixtures/run.ts --compare",
     "pretest:component-fixtures:ci": "pnpm run prepare:generated",
     "test:component-fixtures:ci": "pnpm run test:component-fixtures:ci:prepared",
-    "test:component-fixtures:ci:prepared": "pnpm test:component-fixtures:unit && node --test build/lib/test/screenshotBlocksCi.test.ts build/lib/test/screenshotDiffReport.test.ts && pnpm test:component-fixtures:prepared && pnpm test:component-fixtures:screenshots:prepared && node build/lib/screenshotBlocksCi.ts .build/component-fixtures/screenshots/current/manifest.json test/componentFixtures/blocks-ci-screenshots.md ../../.build/component-fixtures/screenshots/current > .build/component-fixtures/blocks-ci-updated.md"
+    "test:component-fixtures:ci:prepared": "pnpm test:component-fixtures:unit && node --test build/lib/test/screenshotBlocksCi.test.ts build/lib/test/screenshotDiffReport.test.ts && pnpm test:component-fixtures:prepared && pnpm test:component-fixtures:screenshots:prepared && node build/lib/screenshotBlocksCi.ts .build/component-fixtures/screenshots/current/manifest.json test/componentFixtures/blocks-ci-screenshots.md baselines > .build/component-fixtures/blocks-ci-updated.md"
   },
   "devDependencies": {
     "esbuild": "0.27.3",

@@ -1,9 +1,12 @@
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { chromium } from '@playwright/test';
 import { readScreenshotManifest, type ScreenshotManifest } from './screenshotDiffReport.ts';
+import { compareImages, isScreenshotDifferenceStable } from './screenshotPixels.ts';
 
-/** The committed hash list is the approval state; CI only proposes replacements. */
+/** The committed list identifies reviewed PNGs; CI only proposes replacements. */
 export function generateBlocksCiMarkdown(manifest: ScreenshotManifest, imageBaseURL: string): string {
 	const fixtures = manifest.fixtures.filter(fixture => fixture.labels.includes('blocks-ci')).sort((left, right) => left.fixtureId.localeCompare(right.fixtureId));
 	if (manifest.fixtures.some(fixture => fixture.hasError || !fixture.imageHash || !fixture.imagePath)) throw new Error('Screenshot rendering errors must be resolved before checking or updating baselines');
@@ -12,16 +15,50 @@ export function generateBlocksCiMarkdown(manifest: ScreenshotManifest, imageBase
 	return lines.join('\n');
 }
 
+async function matchesApproval(manifest: ScreenshotManifest, manifestPath: string, markdownPath: string, imageBaseURL: string, committed: string): Promise<boolean> {
+	const base = resolve(dirname(markdownPath), imageBaseURL);
+	const inside = relative(dirname(markdownPath), base);
+	if (isAbsolute(imageBaseURL) || inside === '..' || inside.startsWith('../') || inside.startsWith('..\\')) throw new Error('Approved PNGs must remain inside the baseline directory');
+	const environment = /^<!-- environment: (.+) -->$/m.exec(committed);
+	if (!environment) return false;
+	const approved = [...committed.matchAll(/^#### (.+)\n\n!\[screenshot\]\((.+)\/images\/([a-f0-9]{64})\.png\)\n/gm)].map(match => ({
+		fixtureId: match[1], labels: ['blocks-ci'], imageHash: match[3], imagePath: `images/${match[3]}.png`,
+	}));
+	const baseline: ScreenshotManifest = { environment: JSON.parse(environment[1]), fixtures: approved };
+	if (generateBlocksCiMarkdown(baseline, imageBaseURL) !== committed || JSON.stringify(baseline.environment) !== JSON.stringify(manifest.environment)) return false;
+	const current = manifest.fixtures.filter(fixture => fixture.labels.includes('blocks-ci')).sort((a, b) => a.fixtureId.localeCompare(b.fixtureId));
+	if (new Set(approved.map(fixture => fixture.fixtureId)).size !== approved.length || current.length !== approved.length || current.some((fixture, index) => fixture.fixtureId !== approved[index].fixtureId)) return false;
+	const before: Buffer[] = [];
+	const after: Buffer[] = [];
+	for (const [index, fixture] of approved.entries()) {
+		const png = await readFile(resolve(base, fixture.imagePath));
+		if (png.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' || createHash('sha256').update(png).digest('hex') !== fixture.imageHash) throw new Error(`Approved PNG or hash is invalid: ${fixture.fixtureId}`);
+		if (fixture.imageHash !== current[index].imageHash) {
+			before.push(png);
+			after.push(await readFile(resolve(dirname(manifestPath), current[index].imagePath!)));
+		}
+	}
+	if (!before.length) return true;
+	const browser = await chromium.launch({ headless: true, channel: 'chromium' });
+	try {
+		const page = await browser.newPage();
+		return (await compareImages(page, before, after)).every(isScreenshotDifferenceStable);
+	} finally { await browser.close(); }
+}
+
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
 	const args = process.argv.slice(2);
 	const positional = args.filter(argument => argument !== '--json');
 	const [manifestPath, markdownPath, imageBaseURL] = positional;
-	if (positional.length !== 3) throw new Error('Usage: node build/lib/screenshotBlocksCi.ts <manifest> <committed-markdown> <image-base-url> [--json]');
+	if (positional.length !== 3) throw new Error('Usage: node build/lib/screenshotBlocksCi.ts <manifest> <committed-markdown> <baseline-directory> [--json]');
 	const manifest = await readScreenshotManifest(resolve(manifestPath));
-	const expected = generateBlocksCiMarkdown(manifest, imageBaseURL);
-	const committed = await readFile(markdownPath, 'utf8');
+	const committed = (await readFile(markdownPath, 'utf8')).replaceAll('\r\n', '\n');
+	let accepted = false;
+	try { accepted = await matchesApproval(manifest, resolve(manifestPath), resolve(markdownPath), imageBaseURL, committed); }
+	catch (error) { console.error(error instanceof Error ? error.message : String(error)); }
+	const expected = accepted ? committed : generateBlocksCiMarkdown(manifest, imageBaseURL);
 	if (args.includes('--json')) {
 		process.stdout.write(`${JSON.stringify({ startLine: 1, endLine: committed.split('\n').length, replacement: expected })}\n`);
 	} else process.stdout.write(expected);
-	if (committed.replaceAll('\r\n', '\n') !== expected) process.exitCode = 1;
+	if (!accepted) process.exitCode = 1;
 }

@@ -1,13 +1,15 @@
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rmdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rmdir, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { chromium, expect, type Browser, type BrowserContext, type BrowserServer, type Page } from '@playwright/test';
+import { chromium, expect, type Browser, type BrowserContext, type BrowserServer, type Page, type Request } from '@playwright/test';
 import type { ProcessRun } from '../../build/processes.ts';
 import { collectTests, playwrightArguments } from '../../build/playwright.ts';
 import { writeScreenshotDiffReport, type ScreenshotFixture, type ScreenshotManifest } from '../../build/lib/screenshotDiffReport.ts';
 import { generateBlocksCiMarkdown } from '../../build/lib/screenshotBlocksCi.ts';
+import { compareImages, isScreenshotDifferenceStable } from '../../build/lib/screenshotPixels.ts';
+export { compareImages } from '../../build/lib/screenshotPixels.ts';
 
 interface Sample {
 	readonly element: string;
@@ -19,6 +21,32 @@ interface Change {
 	readonly property: string;
 	readonly baseline: string | number | undefined;
 	readonly probe: string | number | undefined;
+}
+
+async function openReadyPage(page: Page, url: string, timeoutMs: number): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	let allocationFailure: string | undefined;
+	const failed = (request: Request): void => {
+		if (request.failure()?.errorText === 'net::ERR_NO_BUFFER_SPACE') allocationFailure = request.url();
+	};
+	page.on('requestfailed', failed);
+	try {
+		for (let attempt = 0; attempt < 2; attempt++) {
+			allocationFailure = undefined;
+			try {
+				await page.goto(url, { timeout: Math.max(1, deadline - Date.now()) });
+				if (allocationFailure) throw new Error(`Chromium could not allocate a module request: ${allocationFailure}`);
+				await expect(page.locator('body')).toHaveAttribute('data-ready', 'true', { timeout: Math.max(1, deadline - Date.now()) });
+				return;
+			} catch (error) {
+				// A Windows Chromium resource-allocation failure aborts the ESM graph
+				// before fixture code runs. Retry that infrastructure failure once,
+				// within the original deadline; never retry a fixture assertion/error.
+				if (attempt !== 0 || !allocationFailure || Date.now() >= deadline) throw error;
+				console.warn(`Retrying Chromium resource allocation after ERR_NO_BUFFER_SPACE: ${allocationFailure}`);
+			}
+		}
+	} finally { page.off('requestfailed', failed); }
 }
 
 export async function capture(page: Page, selectors: readonly string[]): Promise<{ samples: Sample[]; images: Buffer[]; imageHash: string; }> {
@@ -86,46 +114,8 @@ export function changesBetween(baseline: readonly Sample[], probe: readonly Samp
 	});
 }
 
-export async function compareImages(page: Page, baseline: readonly Buffer[], probe: readonly Buffer[]) {
-	expect(probe.length, 'Every sampled component must retain its screenshot').toBe(baseline.length);
-	return page.evaluate(async ({ baseline, probe }) => {
-		const decode = async (base64: string): Promise<ImageData> => {
-			const bytes = Uint8Array.from(atob(base64), character => character.charCodeAt(0));
-			const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
-			try {
-				const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-				const context = canvas.getContext('2d')!;
-				context.drawImage(bitmap, 0, 0);
-				return context.getImageData(0, 0, bitmap.width, bitmap.height);
-			} finally { bitmap.close(); }
-		};
-		const differences = [];
-		for (let index = 0; index < baseline.length; index++) {
-			const before = await decode(baseline[index]);
-			const after = await decode(probe[index]);
-			const sizeChanged = before.width !== after.width || before.height !== after.height;
-			let changedPixels = 0;
-			let significantPixels = 0;
-			let maxChannelDelta = 0;
-			if (!sizeChanged) {
-				for (let offset = 0; offset < before.data.length; offset += 4) {
-					let delta = 0;
-					for (let channel = 0; channel < 4; channel++) delta = Math.max(delta, Math.abs(before.data[offset + channel] - after.data[offset + channel]));
-					if (delta > 0) changedPixels++;
-					// Repainting unchanged HC edges can differ by 1/255. Keep the raw count
-					// in the report; only larger changes contribute to the visual verdict.
-					if (delta > 1) significantPixels++;
-					maxChannelDelta = Math.max(maxChannelDelta, delta);
-				}
-			}
-			differences.push({ index, sizeChanged, changedPixels, significantPixels, maxChannelDelta });
-		}
-		return differences;
-	}, { baseline: baseline.map(image => image.toString('base64')), probe: probe.map(image => image.toString('base64')) });
-}
-
 export function expectImagesStable(differences: Awaited<ReturnType<typeof compareImages>>, message: string): void {
-	expect(differences.filter(difference => difference.sizeChanged || difference.significantPixels > 0), message).toEqual([]);
+	expect(differences.filter(difference => !isScreenshotDifferenceStable(difference)), message).toEqual([]);
 }
 
 export class ScanBudgetExceeded extends Error {
@@ -316,8 +306,7 @@ export async function scanFixture(
 		({ id, status, detected, reason, conflict, documents, probes, elapsedMs: Date.now() - started });
 	try {
 		await bounded(async () => {
-			await page.goto(`/componentFixture.html?fixture=${encodeURIComponent(id)}`);
-			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
+			await openReadyPage(page, `/componentFixture.html?fixture=${encodeURIComponent(id)}`, 30_000);
 			await page.mouse.move(0, 0);
 			await prepare?.(page);
 		});
@@ -507,8 +496,7 @@ export class Renderer {
 	async fixtures(pattern: string): Promise<readonly { id: string; labels: readonly string[]; }[]> {
 		const page = await this.context!.newPage();
 		try {
-			await page.goto('/componentExplorer.html');
-			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
+			await openReadyPage(page, '/componentExplorer.html', 30_000);
 			const catalog = await page.evaluate(() => window.componentExplorer.catalog);
 			const fixtures = catalog.filter(entry => new RegExp(pattern).test(entry.id));
 			if (!fixtures.length) throw new Error(`No component fixtures matched ${pattern}`);
@@ -570,8 +558,7 @@ export class Renderer {
 					results[index] = await beforeDeadline(deadline, async () => {
 						page = await this.context!.newPage();
 						page.setDefaultTimeout(Math.max(1, deadline - Date.now()));
-						await page.goto(`/componentFixture.html?fixture=${encodeURIComponent(fixture.id)}`);
-						await expect(page.locator('body')).toHaveAttribute('data-ready', 'true', { timeout: Math.max(1, deadline - Date.now()) });
+						await openReadyPage(page, `/componentFixture.html?fixture=${encodeURIComponent(fixture.id)}`, Math.max(1, deadline - Date.now()));
 						await page.mouse.move(0, 0);
 						const selectors = await page.evaluate(() => window.componentFixture.selectors);
 						const image = async (): Promise<Buffer> => {
@@ -667,7 +654,11 @@ async function runScreenshots(run: ProcessRun, environment: NodeJS.ProcessEnv, r
 		const fixtures = await current.fixtures(request.options.pattern);
 		const manifest = await current.screenshots(fixtures, request.options);
 		if (request.updateScreenshots) {
-			const markdown = generateBlocksCiMarkdown(manifest, '../../.build/component-fixtures/screenshots/current');
+			const markdown = generateBlocksCiMarkdown(manifest, 'baselines');
+			await mkdir(resolve(import.meta.dirname, 'baselines/images'), { recursive: true });
+			for (const fixture of manifest.fixtures.filter(fixture => fixture.labels.includes('blocks-ci'))) {
+				await copyFile(resolve(out, fixture.imagePath!), resolve(import.meta.dirname, `baselines/images/${fixture.imageHash}.png`));
+			}
 			await writeFile(resolve(import.meta.dirname, 'blocks-ci-screenshots.md'), markdown);
 		}
 		if (request.compare) {

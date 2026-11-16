@@ -85,7 +85,7 @@ jobs:
           printf '\n[Download before/after images and the full report](%s/%s/actions/runs/%s#artifacts)\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
       - name: Check approved blocks-ci hashes
         if: ${{ !cancelled() && steps.capture.outcome == 'success' }}
-        run: node build/lib/screenshotBlocksCi.ts .build/component-fixtures/screenshots/current/manifest.json test/componentFixtures/blocks-ci-screenshots.md ../../.build/component-fixtures/screenshots/current > .build/component-fixtures/blocks-ci-updated.md
+        run: node build/lib/screenshotBlocksCi.ts .build/component-fixtures/screenshots/current/manifest.json test/componentFixtures/blocks-ci-screenshots.md baselines > .build/component-fixtures/blocks-ci-updated.md
       - name: Upload screenshots, reports and proposed baselines
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
