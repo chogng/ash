@@ -202,6 +202,11 @@ export function trapTabFocus(container: HTMLElement): IDisposable {
 		) {
 			return;
 		}
+		const modal = getActiveElement(container.ownerDocument)?.closest('dialog:modal');
+		// The active child modal owns Tab. Running both traps would skip controls.
+		if (modal && modal !== container && container.contains(modal)) {
+			return;
+		}
 		const direction = event.shiftKey
 			? FocusNavigationDirection.Backward
 			: FocusNavigationDirection.Forward;

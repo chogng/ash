@@ -2,25 +2,23 @@ import './media/sessionsStorageContent.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Checkbox } from '../../../../base/browser/ui/toggle/toggle.js';
-import { Event } from '../../../../base/common/event.js';
-import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { IProfileStorageService, type ProfileStorageWorktree } from '../../../../platform/storage/common/profileStorageService.js';
 import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { SettingsPageRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
-import type { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
-import type { SettingsSectionReference, SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 
 export const storageSettingsTitle = () => localize({ bundle: 'ash.sessions', key: 'sessions.storage.title' }, 'Storage');
 
-export class SessionsStorageContent extends SettingsPageRenderer<SettingsSectionReference> {
-	readonly categoryId = 'storage';
-	readonly onDidChange = Event.None;
+export class SessionsStorageContent extends Disposable {
+	private readonly dialog: Dialog;
 	private readonly domNode: HTMLElement;
 	private readonly total: HTMLElement;
 	private readonly chart: HTMLElement;
 	private readonly legend: HTMLElement;
+	private readonly pathDetails: HTMLDetailsElement;
 	private readonly roots: HTMLElement;
 	private readonly status: HTMLElement;
 	private readonly refreshButton: Button;
@@ -31,11 +29,10 @@ export class SessionsStorageContent extends SettingsPageRenderer<SettingsSection
 	private readonly worktreeControls = this._register(new DisposableStore());
 	private worktrees: readonly { readonly worktree: ProfileStorageWorktree; readonly checkbox: Checkbox; }[] = [];
 	private request: AbortController | undefined;
-	private loaded = false;
-	private searching = false;
+	private sessionAction: 'restore' | 'delete' | undefined;
 	private cleaning = false;
 
-	constructor(container: HTMLElement, openSessionAction: (action: 'restore' | 'delete') => Promise<void>,
+	constructor(container: HTMLElement,
 		@IProfileStorageService private readonly storage: IProfileStorageService,
 	) {
 		super();
@@ -43,11 +40,14 @@ export class SessionsStorageContent extends SettingsPageRenderer<SettingsSection
 		this.domNode = h(document, 'section', { className: 'ash-sessions-storage' });
 		const summary = h(document, 'div', { className: 'ash-sessions-storage-summary' });
 		const header = h(document, 'div', { className: 'ash-sessions-storage-header' });
-		this.total = h(document, 'h2', { className: 'ash-sessions-storage-total' });
-		this.total.textContent = localize({ bundle: 'ash.sessions', key: 'sessions.storage.local' }, 'Local profile');
-		header.append(this.total);
-		this.refreshButton = this._register(new Button(header, {
+		this.total = h(document, 'span', { className: 'ash-sessions-storage-total' });
+		const usageTitle = h(document, 'h3', { className: 'ash-sessions-storage-section-title' },
+			localize({ bundle: 'ash.sessions', key: 'sessions.storage.usage' }, 'Disk space used'));
+		header.append(usageTitle, this.total);
+		const footer = h(document, 'div', { className: 'ash-sessions-form-actions' });
+		this.refreshButton = this._register(new Button(footer, {
 			...defaultButtonStyles, presentation: 'secondary', size: 'small',
+			icon: Lxicon.refresh,
 			label: localize({ bundle: 'ash.sessions', key: 'sessions.storage.refresh' }, 'Refresh'),
 			onClick: () => { void this.refresh(); },
 		}));
@@ -56,33 +56,36 @@ export class SessionsStorageContent extends SettingsPageRenderer<SettingsSection
 		this.legend = h(document, 'ul', { className: 'ash-sessions-storage-legend' });
 		this.roots = h(document, 'p', { className: 'ash-sessions-storage-details' });
 		this.status = h(document, 'p', { className: 'ash-sessions-storage-details', attributes: { role: 'status' } });
-		summary.append(header, this.chart, this.legend, this.roots, this.status);
+		summary.append(header, this.status, this.chart, this.legend);
 		this.domNode.append(summary);
 
-		const archive = h(document, 'div', { className: 'ash-settings-field-row' });
-		const copy = h(document, 'div', { className: 'ash-settings-field-copy' });
-		const title = h(document, 'h2');
+		const archive = h(document, 'section', { className: 'ash-sessions-storage-section' });
+		const title = h(document, 'h3', { className: 'ash-sessions-storage-section-title' });
 		title.textContent = localize({ bundle: 'ash.sessions', key: 'sessions.storage.archive' }, 'Archived sessions');
-		const description = h(document, 'p', { className: 'ash-settings-field-description' });
+		const description = h(document, 'p', { className: 'ash-sessions-storage-details' });
 		description.textContent = localize({ bundle: 'ash.sessions', key: 'sessions.storage.archiveDescription' }, 'Restore an archived session or permanently delete its conversation history.');
-		copy.append(title, description);
-		archive.append(copy);
-		this._register(new Button(archive, {
+		const archiveActions = h(document, 'div', { className: 'ash-sessions-storage-archive-actions' });
+		archive.append(title, description, archiveActions);
+		this._register(new Button(archiveActions, {
 			...defaultButtonStyles, presentation: 'secondary', size: 'small',
 			label: localize({ bundle: 'ash.sessions', key: 'sessions.storage.restore' }, 'Restore'),
-			onClick: () => { void openSessionAction('restore'); },
+			onClick: () => this.selectSessionAction('restore'),
 		}));
-		this._register(new Button(archive, {
+		this._register(new Button(archiveActions, {
 			...defaultButtonStyles, presentation: 'secondary', size: 'small',
 			label: localize({ bundle: 'ash.sessions', key: 'sessions.storage.delete' }, 'Review for deletion'),
-			onClick: () => { void openSessionAction('delete'); },
+			onClick: () => this.selectSessionAction('delete'),
 		}));
 		this.domNode.append(archive);
 
-		const management = h(document, 'details', { className: 'ash-sessions-storage-management' });
-		this.worktreeSummary = h(document, 'summary', {}, localize({ bundle: 'ash.sessions', key: 'sessions.storage.manageWorktrees' }, 'Manage worktrees'));
+		const worktrees = h(document, 'section', { className: 'ash-sessions-storage-section' });
+		const worktreesTitle = h(document, 'h3', { className: 'ash-sessions-storage-section-title' },
+			localize({ bundle: 'ash.sessions', key: 'sessions.storage.worktrees' }, 'Worktrees'));
+		const worktreesDescription = h(document, 'p', { className: 'ash-sessions-storage-details' },
+			localize({ bundle: 'ash.sessions', key: 'sessions.storage.worktreeDescription' }, 'Clean worktrees from archived local sessions while keeping their conversation history.'));
+		const management = h(document, 'details', { className: 'ash-sessions-storage-disclosure' });
+		this.worktreeSummary = storageDisclosureSummary(document, localize({ bundle: 'ash.sessions', key: 'sessions.storage.manageWorktrees' }, 'Manage worktrees'));
 		management.append(this.worktreeSummary);
-		management.append(h(document, 'p', { className: 'ash-sessions-storage-details' }, localize({ bundle: 'ash.sessions', key: 'sessions.storage.worktreeDescription' }, 'Clean worktrees from archived local sessions while keeping their conversation history.')));
 		this.worktreeList = h(document, 'div', { className: 'ash-sessions-storage-worktree-list' });
 		this.cleanupStatus = h(document, 'p', { className: 'ash-sessions-storage-details', attributes: { role: 'status' } });
 		management.append(this.worktreeList, this.cleanupStatus);
@@ -91,29 +94,48 @@ export class SessionsStorageContent extends SettingsPageRenderer<SettingsSection
 			label: localize({ bundle: 'ash.sessions', key: 'sessions.storage.cleanup' }, 'Clean up selected worktrees'),
 			onClick: () => { void this.cleanup(); },
 		}));
-		this.domNode.append(management);
+		worktrees.append(worktreesTitle, worktreesDescription, management);
+		this.domNode.append(worktrees);
+
+		this.pathDetails = h(document, 'details', { className: 'ash-sessions-storage-disclosure' },
+			storageDisclosureSummary(document, localize({ bundle: 'ash.sessions', key: 'sessions.storage.pathDetails' }, 'Details')),
+			this.roots);
+		this.pathDetails.hidden = true;
+		this.domNode.append(this.pathDetails);
+
+		this.dialog = this._register(new Dialog(container, storageSettingsTitle(), [], {
+			layout: 'form',
+			extraClasses: ['ash-sessions-storage-dialog'],
+			buttonStyles: defaultButtonStyles, dialogStyles: defaultDialogStyles,
+			checkboxStyles: defaultCheckboxStyles, inputBoxStyles: defaultInputBoxStyles,
+			closeOnBackdropClick: true,
+			disableDefaultAction: true,
+			canClose: () => !this.cleaning,
+			renderBody: body => body.append(this.domNode),
+			renderFooter: container => container.append(footer),
+		}));
 		this._register(toDisposable(() => {
 			this.request?.abort();
-			this.domNode.remove();
 		}));
 	}
 
-	protected override buildNodes(query: SettingsSearchQuery): readonly SettingsTreeNode<SettingsSectionReference>[] {
-		this.searching = !query.isEmpty;
-		return [{
-			element: {
-				kind: 'item', id: 'sessions.storage', title: storageSettingsTitle(),
-				description: localize({ bundle: 'ash.sessions', key: 'sessions.storage.search' }, 'Disk usage, worktrees and archived sessions'),
-				value: this.retainElement('sessions.storage', this.domNode),
-			}
-		}];
+	async show(): Promise<'restore' | 'delete' | undefined> {
+		const closed = this.dialog.show();
+		this.refreshButton.domNode.focus({ preventScroll: true });
+		void this.refresh();
+		await closed;
+		return this.sessionAction;
 	}
 
-	setVisible(visible: boolean): void {
-		if (visible && !this.searching && !this.loaded && !this.request) void this.refresh();
+	get accessibleContent(): string {
+		return `${storageSettingsTitle()}\n${this.domNode.innerText}\n${this.refreshButton.label}`;
 	}
 
-	canClose(): boolean { return !this.cleaning; }
+	private selectSessionAction(action: 'restore' | 'delete'): void {
+		if (this.cleaning) return;
+		this.sessionAction = action;
+		void this.dialog.requestClose();
+	}
 
 	private renderWorktrees(worktrees: readonly ProfileStorageWorktree[]): void {
 		const document = this.domNode.ownerDocument;
@@ -195,17 +217,19 @@ export class SessionsStorageContent extends SettingsPageRenderer<SettingsSection
 				{ id: 'other', label: localize({ bundle: 'ash.sessions', key: 'sessions.storage.other' }, 'Other'), bytes: overview.otherBytes },
 			];
 			const total = categories.reduce((bytes, category) => bytes + category.bytes, 0);
-			this.total.textContent = overview.complete
-				? localize({ bundle: 'ash.sessions', key: 'sessions.storage.total' }, '{0} used', formatStorageBytes(total))
-				: localize({ bundle: 'ash.sessions', key: 'sessions.storage.partial' }, 'At least {0} used', formatStorageBytes(total));
+			const formattedTotal = formatStorageBytes(total);
+			this.total.textContent = overview.complete ? formattedTotal
+				: localize({ bundle: 'ash.sessions', key: 'sessions.storage.partial' }, 'At least {0}', formattedTotal);
 			this.chart.replaceChildren();
 			this.chart.hidden = total === 0;
 			this.legend.replaceChildren();
 			for (const { id, label, bytes } of categories) {
 				const document = this.domNode.ownerDocument;
-				const segment = h(document, 'span', { className: `ash-sessions-storage-${id}` });
-				segment.style.flexGrow = String(bytes);
-				this.chart.append(segment);
+				if (bytes > 0) {
+					const segment = h(document, 'span', { className: `ash-sessions-storage-${id}` });
+					segment.style.flexGrow = String(bytes);
+					this.chart.append(segment);
+				}
 				const item = h(document, 'li', { className: `ash-sessions-storage-${id}` });
 				const marker = h(document, 'span', { className: 'ash-sessions-storage-marker', attributes: { 'aria-hidden': 'true' } });
 				item.append(marker, localize({ bundle: 'ash.sessions', key: 'sessions.storage.legend' }, '{0} · {1}', label, formatStorageBytes(bytes)));
@@ -213,11 +237,11 @@ export class SessionsStorageContent extends SettingsPageRenderer<SettingsSection
 			}
 			this.roots.textContent = localize({ bundle: 'ash.sessions', key: 'sessions.storage.roots' }, 'Profile at {0}\nWorktrees at {1}', overview.profileRoot, overview.worktreeRoot);
 			if (overview.desktopRoot) this.roots.append('\n', localize({ bundle: 'ash.sessions', key: 'sessions.storage.desktopRoot' }, 'Desktop data at {0}', overview.desktopRoot));
+			this.pathDetails.hidden = false;
 			this.renderWorktrees(overview.worktrees);
 			this.status.textContent = overview.complete
 				? localize({ bundle: 'ash.sessions', key: 'sessions.storage.measured' }, 'Estimated file sizes. Session data includes the shared database and attachments.')
 				: localize({ bundle: 'ash.sessions', key: 'sessions.storage.incomplete' }, 'Some locations could not be measured.');
-			this.loaded = true;
 		} catch {
 			if (!request.signal.aborted) this.status.textContent = localize({ bundle: 'ash.sessions', key: 'sessions.storage.failed' }, 'Could not measure local storage. Try refreshing.');
 		} finally {
@@ -228,6 +252,14 @@ export class SessionsStorageContent extends SettingsPageRenderer<SettingsSection
 			}
 		}
 	}
+}
+
+function storageDisclosureSummary(document: Document, label: string): HTMLElement {
+	const summary = h(document, 'summary');
+	appendIcon(Lxicon.chevronRight, summary);
+	appendIcon(Lxicon.chevronDown, summary);
+	summary.append(label);
+	return summary;
 }
 
 function formatStorageBytes(bytes: number): string {

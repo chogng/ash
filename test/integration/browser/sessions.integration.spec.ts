@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { EditorGroup } from '../../automation/editors.js';
+import { Editor } from '../../automation/editor.js';
 import { QuickAccess } from '../../automation/quickaccess.js';
 import { StorageTarget } from '../../../src/ash/platform/storage/common/storage.js';
 
@@ -1565,7 +1565,7 @@ test.describe('Sessions settings components', () => {
 		await expect(empty).toBeHidden();
 	});
 
-	test('preferences keyboard navigation works in a narrow window and opens Agent Window shortcuts', async ({
+	test('preferences keyboard navigation works in a narrow window and Accounts opens Agent Window shortcuts', async ({
 		page,
 	}, testInfo) => {
 		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
@@ -1598,23 +1598,22 @@ test.describe('Sessions settings components', () => {
 		await expect(general).toBeInViewport();
 		await general.focus();
 		await general.press('End');
-		const shortcutsCategory = settings.locator('[data-settings-category-id="keyboard-shortcuts"]');
-		await expect(shortcutsCategory).toBeFocused();
-		await expect(shortcutsCategory).toBeInViewport();
-		await expect(shortcutsCategory).toHaveAttribute('aria-current', 'page');
-		await shortcutsCategory.press('ArrowDown');
+		const environment = settings.locator('[data-settings-category-id="environment"]');
+		await expect(environment).toBeFocused();
+		await expect(environment).toBeInViewport();
+		await expect(environment).toHaveAttribute('aria-current', 'page');
+		await environment.press('ArrowDown');
 		await expect(general).toBeFocused();
 		await expect(general).toBeInViewport();
 		await expect(general).toHaveAttribute('aria-current', 'page');
 		await page.setViewportSize(viewport);
 		await search.fill('keyboard shortcuts');
-		await search.press('ArrowDown');
-		const openShortcuts = settings
-			.locator('.ash-sessions-settings-page')
-			.getByRole('button', { name: 'Keyboard Shortcuts', exact: true });
-		await expect(openShortcuts).toBeFocused();
-		await openShortcuts.press('Enter');
+		await expect(settings.getByRole('button', { name: 'Keyboard Shortcuts', exact: true })).toHaveCount(0);
+		await search.press('Escape');
+		await search.press('Escape');
 		await expect(settings).toHaveCount(0);
+		await page.getByRole('button', { name: 'Accounts', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Shortcuts', exact: true }).click();
 		const shortcuts = page.getByRole('dialog', { name: 'Agent Window Keyboard Shortcuts', exact: true });
 		await expect(shortcuts).toBeVisible();
 		const chat = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true });
@@ -1713,28 +1712,23 @@ test.describe('Sessions settings components', () => {
 	test('preferences JSON actions reveal ordinary Code editors with their shared configuration resources', async ({
 		page,
 	}) => {
-		for (const [category, command, title, contents] of [
-			['customize', 'Preferences: Open User Settings (JSON)', 'User Settings (JSON)', '{}'],
-			['keyboard-shortcuts', 'Preferences: Open Keyboard Shortcuts (JSON)', 'Keyboard Shortcuts (JSON)', '[]'],
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+		await settings.locator('[data-settings-category-id="customize"]').click();
+		await settings.getByRole('button', { name: 'Preferences: Open User Settings (JSON)', exact: true }).click();
+		await expect(settings).toHaveCount(0);
+		for (const [title, contents] of [
+			['User Settings (JSON)', '{}'],
+			['Keyboard Shortcuts (JSON)', '[]'],
 		] as const) {
-			const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-			await settings.locator(`[data-settings-category-id="${category}"]`).click();
-			await settings.getByRole('button', { name: command, exact: true }).click();
-			await expect(settings).toHaveCount(0);
-			const group = new EditorGroup(
-				page
-					.locator('.ash-editor-group:visible')
-					.filter({ has: page.getByRole('tab', { name: title, exact: true }) }),
-			);
-			await expect(group.tabs.getByText(title, { exact: true })).toBeVisible();
-			await group.editor.waitForEditorContents(source => source.replace(/\s/gu, '') === contents);
+			if (title === 'Keyboard Shortcuts (JSON)') {
+				await new QuickAccess(page).runCommand('workbench.action.openGlobalKeybindingsFile');
+			}
+			await expect(page.getByRole('tab', { name: title, exact: true })).toBeVisible();
+			const editor = new Editor(page.getByRole('tabpanel', { name: title, exact: true }));
+			await editor.waitForEditorContents(source => source.replace(/\s/gu, '') === contents);
 			await expect(
 				page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }),
 			).toHaveAttribute('aria-pressed', 'true');
-			if (category === 'customize') {
-				await page.getByRole('button', { name: 'Accounts', exact: true }).click();
-				await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
-			}
 		}
 	});
 

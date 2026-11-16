@@ -2450,6 +2450,7 @@ test.describe('Ash project file copies', () => {
 		await new QuickAccess(page).runCommand('workbench.action.openSettings');
 		const settings = page.locator('.ash-sessions-settings-dialog');
 		const folderSetting = settings.locator('[data-settings-item-id="sessions.projects.localFilesLocation"]');
+		await settings.getByRole('navigation').getByRole('button', { name: '桌面应用', exact: true }).click();
 		await expect(folderSetting).toContainText(URI.file(originalRoot).fsPath);
 		const change = folderSetting.getByRole('button', { name: '更改', exact: true });
 		await settings.screenshot({ path: testInfo.outputPath('project-files-settings-zh-CN.png') });

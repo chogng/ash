@@ -11,7 +11,7 @@ import type { SettingsSectionField, SettingsSectionModel } from '../../../../wor
 import { projectMaterialFilesLocation, projectMaterialFilesRoot } from '../../../../platform/projects/common/projectMaterialFiles.js';
 
 export class ProjectMaterialFilesSettings extends Disposable implements SettingsSectionModel {
-	readonly categoryId = 'general';
+	readonly categoryId = 'desktop-app';
 	readonly itemId = projectMaterialFilesLocation;
 	readonly groupId = null;
 	readonly title = localize('projects.localFilesTitle', 'Project files');

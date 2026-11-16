@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Workbench } from '../../../automation/workbench.js';
 import { EditorGroup } from '../../../automation/editors.js';
+import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import type { Locator } from '@playwright/test';
 
@@ -534,30 +535,20 @@ test('Workbench and Sessions keep one settings document across edits and window 
 });
 
 
-test('Sessions preferences opens shared shortcuts and retains the profile after reopening', async ({ application, target, workbench, runningApplication }, testInfo) => {
+test('Sessions shared shortcut editor retains the profile after reopening', async ({ application, target, workbench, runningApplication }, testInfo) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	const openPreferences = async (): Promise<void> => {
 		const shortcuts = page.getByRole('dialog', { name: 'Keyboard Shortcuts', exact: true });
-		if (await shortcuts.isVisible()) await shortcuts.getByRole('button', { name: 'Close Keyboard Shortcuts', exact: true }).click();
-		const accounts = page.getByRole('button', { name: 'Accounts', exact: true });
-		if ('windows' in application && process.platform === 'darwin') {
-			await captureElectronMenu(application, () => accounts.click(), { label: 'Settings' });
-		} else {
-			await accounts.click();
-			await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
-		}
+		await shortcuts.getByRole('toolbar', { name: 'Close Keyboard Shortcuts', exact: true }).getByRole('button', { name: 'Close', exact: true }).click();
+		await new QuickAccess(page).runCommand('workbench.action.openSettings');
 		await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
 	};
 	const openShortcuts = async (): Promise<void> => {
-		await openPreferences();
-		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-		await settings.locator('[data-settings-category-id="keyboard-shortcuts"]').click();
-		await settings.locator('.ash-sessions-settings-page').getByRole('button', { name: 'Keyboard Shortcuts', exact: true }).click();
-		await expect(settings).toHaveCount(0);
+		await new QuickAccess(page).runCommand('workbench.action.openKeyboardShortcuts');
 		await expect(page.locator('.ash-keybindings-editor')).toBeVisible();
 	};
 	await openShortcuts();
-	await expect(page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.getByRole('toolbar', { name: 'Workspace mode' }).getByRole('button', { name: 'Chat / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	let shortcuts = page.locator('.ash-keybindings-editor');
 	await shortcuts.getByRole('searchbox').fill('workbench.action.openSettings');
 	const userRows = () => shortcuts.locator('.ash-keybindings-row').filter({ has: page.locator('.ash-keybindings-source', { hasText: /^User$/u }) });
@@ -599,12 +590,12 @@ test('Sessions preferences opens shared shortcuts and retains the profile after 
 	await expect(userRow.locator('.ash-keybindings-key')).toHaveText(/Y/u);
 	await userRow.getByRole('button', { name: /^Remove keybinding for /u }).click();
 	await expect(userRows()).toHaveCount(0);
-	await openPreferences();
-	await page.locator('[data-settings-category-id="keyboard-shortcuts"]').click();
-	await page.locator('.ash-sessions-settings-page').getByRole('button', { name: 'Preferences: Open Keyboard Shortcuts (JSON)', exact: true }).click();
-	const group = new EditorGroup(page.locator('.ash-editor-group:visible').filter({ has: page.getByRole('tab', { name: 'Keyboard Shortcuts (JSON)', exact: true }) }));
-	await expect(group.tabs.getByText('Keyboard Shortcuts (JSON)', { exact: true })).toBeVisible();
-	await group.editor.waitForEditorContents(source => source.replace(/\s/gu, '') === '[]');
+	await page.getByRole('dialog', { name: 'Keyboard Shortcuts', exact: true })
+		.getByRole('button', { name: 'Open Keyboard Shortcuts (JSON)', exact: true }).click();
+	const title = 'Keyboard Shortcuts (JSON)';
+	await expect(page.getByRole('tab', { name: title, exact: true })).toBeVisible();
+	const editor = new Editor(page.getByRole('tabpanel', { name: title, exact: true }));
+	await editor.waitForEditorContents(source => source.replace(/\s/gu, '') === '[]');
 	expect(runningApplication.diagnostics.consoleErrors.filter(message => message.startsWith('Code editor contribution failed'))).toEqual([]);
 	await testInfo.attach('sessions-preferences-shortcuts-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
 	expect(runningApplication.diagnostics.errors).toEqual([]);

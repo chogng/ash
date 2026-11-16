@@ -501,6 +501,25 @@ suite('dialog browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastResult)).toBe('cancel');
 	});
 
+	test('a nested modal advances focus by one control and returns focus on Escape', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showNested());
+		const parent = page.getByRole('dialog', { name: 'Parent dialog' });
+		const open = parent.getByRole('button', { name: 'Open child' });
+		await open.press('Enter');
+
+		const child = page.getByRole('dialog', { name: 'Child dialog' });
+		await expect(child.getByRole('button', { name: 'First', exact: true })).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(child.getByRole('button', { name: 'Second', exact: true })).toBeFocused();
+		await page.keyboard.press('Shift+Tab');
+		await expect(child.getByRole('button', { name: 'First', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(child).toHaveCount(0);
+		await expect(open).toBeFocused();
+	});
+
 	test('action prompt returns the selected button index and checkbox state', async function () {
 		const { page } = browserTests;
 

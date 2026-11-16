@@ -34,8 +34,8 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 		for (const [key, label] of Object.entries({
 			'sessions.settings.section.basics': '基础',
 			'sessions.settings.section.development': '开发',
-			'sessions.settings.section.management': '管理',
 			'sessions.settings.general': '通用',
+			'sessions.settings.desktopApp': '桌面应用',
 			'sessions.settings.account': '账号',
 			'sessions.settings.appearance': '外观',
 			'sessions.settings.customize': '自定义',
@@ -46,7 +46,6 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 			'sessions.settings.tab': '标签页',
 			'sessions.settings.codeIntelligence': '代码智能',
 			'sessions.settings.environment': '环境',
-			'sessions.settings.shortcuts': '快捷键',
 		})) {
 			assert.equal(chinese.bundles.ash?.[key], label);
 		}

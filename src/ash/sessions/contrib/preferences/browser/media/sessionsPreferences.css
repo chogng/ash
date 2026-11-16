@@ -269,8 +269,6 @@
 		.ash-settings-section-status,
 		.ash-memories .memories-manager,
 		.ash-memories .memories-status:where(:not(:empty)),
-		.ash-sessions-storage-summary,
-		.ash-sessions-storage-management,
 		.ash-chat-models-catalog .ash-models-settings-model-row,
 		.ash-chat-models-list > .ash-models-settings-expand,
 		.ash-models-settings-search-row,
@@ -347,11 +345,12 @@
 	text-overflow: ellipsis;
 }
 
-.ash-sessions-settings-page .ash-button-secondary:not(:where(.icon-only)) {
+:is(.ash-sessions-settings-page, .ash-sessions-storage-dialog)
+	.ash-button-secondary:not(:where(.icon-only)) {
 	border-color: var(--ash-contrastBorder, transparent);
 }
 
-.ash-sessions-settings-page
+:is(.ash-sessions-settings-page, .ash-sessions-storage-dialog)
 	.ash-button-secondary:not(:where(.icon-only, :active)) {
 	/* Set the paint on the page so the widget's inline theme defaults cannot mask it. */
 	background-color: var(--ash-button-hoverBackground);
@@ -373,7 +372,7 @@
 	);
 }
 
-.ash-sessions-settings-page
+:is(.ash-sessions-settings-page, .ash-sessions-storage-dialog)
 	.ash-button-secondary:hover:not(:active, :disabled, :where(.icon-only)) {
 	background: color-mix(
 		in srgb,

@@ -15,9 +15,10 @@ import type { IDirectoryPermissionRequestService } from '../../../../../../../pl
 import { MenuId, MenusRegistry } from '../../../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../../../platform/actions/common/menuService.js';
 import { CommandRegistry, ICommandService } from '../../../../../../../platform/commands/common/commands.js';
-import { ContextKeyService } from '../../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../../../platform/instantiation/common/instantiationService.js';
 import { IKeybindingService } from '../../../../../../../platform/keybinding/common/keybinding.js';
+import { BrowserLayoutService, ILayoutService } from '../../../../../../../platform/layout/browser/layoutService.js';
 import { IConfigurationService } from '../../../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IStorageService } from '../../../../../../../platform/storage/common/storage.js';
@@ -45,6 +46,7 @@ declare global {
 			showInput(): void;
 			showCheckboxConfirmation(): void;
 			showBare(): void;
+			showNested(): void;
 			showCore(kind: 'standard' | 'custom' | 'blocked' | 'detail' | 'footer' | 'default' | 'buttons' | 'search' | 'vertical' | 'cancel-focus' | 'confirm-close'): void;
 			updateCoreMessage(message: string): void;
 			lastCoreResult?: IDialogResult;
@@ -241,6 +243,22 @@ window.ashDialogIntegration = {
 	},
 	updateCoreMessage(message): void { bareDialog.updateMessage(message); },
 
+	showNested(): void {
+		const resources = new DisposableStore();
+		const parent = resources.add(new Dialog(document.body, 'Parent dialog', [], createWorkbenchDialogOptions({
+			renderBody: body => {
+				resources.add(new Button(body, {
+					label: 'Open child',
+					onClick: async () => {
+						using child = new Dialog(body, 'Child dialog', ['First', 'Second', 'Third'], createWorkbenchDialogOptions({}));
+						await child.show();
+					},
+				}));
+			},
+		})));
+		void parent.show().then(() => resources.dispose());
+	},
+
 	showBare(): void {
 		bareDialog = new Dialog(document.body, 'Plain dialog', [], { buttonStyles: defaultButtonStyles, checkboxStyles: defaultCheckboxStyles, inputBoxStyles: defaultInputBoxStyles, dialogStyles: defaultDialogStyles, detail: 'Plain content', disableCloseAction: true, disableDefaultAction: true });
 		void bareDialog.show().then(result => { window.ashDialogIntegration.lastResult = String(result.button); });
@@ -268,6 +286,8 @@ window.ashDialogIntegration = {
 		} as unknown as IKeybindingService;
 		const editors = commandResources.add(services.createInstance(StandaloneCodeEditorService));
 		services.registerInstance(ICommandService, commands);
+		services.registerInstance(IContextKeyService, contexts);
+		services.registerInstance(ILayoutService, commandResources.add(new BrowserLayoutService({ root: document.body })));
 		services.registerInstance(IMenuService, new MenuService(commands, contexts));
 		services.registerInstance(IKeybindingService, keybindings);
 		services.registerInstance(IDialogService, dialogs);

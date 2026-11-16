@@ -11,7 +11,7 @@ import { ProjectMaterialFilesSettings } from './projectMaterialFilesSettings.js'
 
 registerSettingsSection({
 	id: 'project-material-files',
-	categoryId: 'general',
+	categoryId: 'desktop-app',
 	model: new SyncDescriptor(ProjectMaterialFilesSettings),
 	accessibleViewProviderId: AccessibleViewProviderId.SessionsSettings,
 	accessibilityVerbositySettingId: AccessibilityVerbositySettingId.SessionsSettings,

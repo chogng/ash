@@ -475,7 +475,7 @@ suite('sessions browser component', () => {
 		}
 	});
 
-	for (const locale of ['en', 'zh-CN']) test(`Agent Window shortcuts open from Accounts and Settings (${locale})`, async function () {
+	for (const locale of ['en', 'zh-CN']) test(`Agent Window shortcuts open from Accounts (${locale})`, async function () {
 		const { page, info } = browserTests;
 		const chinese = locale === 'zh-CN';
 		if (chinese) await page.goto('/sessions.html?catalog&locale=zh-CN');
@@ -646,13 +646,8 @@ suite('sessions browser component', () => {
 		await accounts.click();
 		await page.getByRole('menuitem', { name: chinese ? '设置' : 'Settings', exact: true }).click();
 		const settings = page.locator('.ash-sessions-settings');
-		await settings.getByRole('navigation').getByRole('button', { name: label, exact: true }).click();
-		await settings.locator('.ash-sessions-settings-page').getByRole('button', { name: label, exact: true }).click();
-		await expect(modal).toBeVisible();
-		await expect(search).toBeFocused();
-		await expect(settings).toHaveCount(0);
-		await modal.getByRole('button', { name: chinese ? '关闭' : 'Close', exact: true }).click();
-		await expect(modal).toHaveCount(0);
+		await expect(settings).toBeVisible();
+		await expect(settings.getByRole('navigation').getByRole('button', { name: label, exact: true })).toHaveCount(0);
 	});
 
 	suite('Sessions settings components', () => {
@@ -758,12 +753,10 @@ suite('sessions browser component', () => {
 		test('settings categories, localization icons and search display their own contents', async function () {
 			const { page } = browserTests;
 			const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-			const settingsPage = settings.locator('.ash-sessions-settings-page');
 			const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 			for (const [section, categories] of [
 				['Basics', ['General', 'Account', 'Appearance', 'Customize', 'Voice']],
 				['Development', ['Agents', 'Design', 'Models', 'Git & PRs', 'Browser', 'Tab', 'Code Intelligence', 'Environment']],
-				['Management', ['Keyboard Shortcuts']],
 			] as const) {
 				const group = navigation.getByRole('group', { name: section });
 				for (const category of categories) {
@@ -798,10 +791,8 @@ suite('sessions browser component', () => {
 			await expect(settings.locator('.ash-local-transcription-model-controls')).toHaveCount(0);
 			await expect(navigation.getByRole('button', { name: 'Archived Chats', exact: true })).toHaveCount(0);
 			await expect(navigation.getByRole('button', { name: 'Worktree', exact: true })).toHaveCount(0);
-			await navigation.getByRole('button', { name: 'Keyboard Shortcuts', exact: true }).click();
-			await expect(settingsPage.getByRole('heading', { name: 'Keyboard Shortcuts' }).first()).toBeVisible();
-			await expect(settingsPage.getByRole('button', { name: 'Keyboard Shortcuts', exact: true })).toBeVisible();
-			await expect(settingsPage.getByRole('button', { name: 'Preferences: Open Keyboard Shortcuts (JSON)', exact: true })).toHaveCount(0);
+			await expect(navigation.getByRole('button', { name: 'Desktop App', exact: true })).toHaveCount(0);
+			await expect(navigation.getByRole('group', { name: 'Management', exact: true })).toHaveCount(0);
 			await navigation.getByRole('button', { name: 'Appearance' }).click();
 			await expect(settings.getByRole('heading', { name: 'Appearance' })).toBeVisible();
 			await expect(settings.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
