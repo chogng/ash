@@ -53,6 +53,7 @@ struct ConfigAuthority {
 struct ObservedAuthority {
     authority: ConfigAuthority,
     content_changed: bool,
+    digest_upgrade_required: bool,
     rewrite_required: bool,
 }
 
@@ -334,7 +335,10 @@ fn synchronize_authority(
         .map_err(sql_error)?;
     if !has_pending {
         let observed = read_authority(connection, config_path)?;
-        if !observed.content_changed && !observed.rewrite_required {
+        if !observed.content_changed
+            && !observed.rewrite_required
+            && !observed.digest_upgrade_required
+        {
             return Ok(observed.authority);
         }
     }
@@ -353,6 +357,7 @@ fn reconcile_authority(
     let ObservedAuthority {
         mut authority,
         content_changed,
+        digest_upgrade_required,
         rewrite_required,
     } = read_authority(transaction, config_path)?;
     if rewrite_required {
@@ -361,6 +366,8 @@ fn reconcile_authority(
     if content_changed {
         authority.revision = authority.revision.next();
         authority.generation = authority.generation.next();
+    }
+    if content_changed || digest_upgrade_required {
         write_metadata(transaction, &authority)?;
     }
     Ok((authority, content_changed))
@@ -418,13 +425,14 @@ fn finish_pending(
         )
         .optional()
         .map_err(sql_error)?;
-    let Some((command_id, previous_digest, result_digest, revision, generation)) = pending else {
+    let Some((command_id, previous_digest, mut result_digest, revision, generation)) = pending
+    else {
         return Ok(PendingCommand::Absent);
     };
     let staged = crate::store_file::staged_document_path(config_path);
     if staged.try_exists().map_err(io_error)? {
         let observed = crate::store_file::read_document(config_path)?.document;
-        if crate::store_file::document_digest(&observed)? != previous_digest {
+        if !crate::store_file::document_matches_digest(&observed, &previous_digest)? {
             transaction
                 .execute("DELETE FROM config_pending_command WHERE singleton = 1", [])
                 .map_err(sql_error)?;
@@ -437,11 +445,25 @@ fn finish_pending(
             return Ok(PendingCommand::Superseded);
         }
         let prepared = crate::store_file::read_document(&staged)?.document;
-        if crate::store_file::document_digest(&prepared)? != result_digest {
+        let matches = if crate::store_file::is_legacy_digest(&result_digest) {
+            // Legacy hashes depended on JSON insertion order and may no longer
+            // match after TOML encoding. Recover only the exact recorded command
+            // applied to its verified predecessor, never arbitrary staged content.
+            let receipt = read_receipt(transaction, &command_id)?
+                .ok_or_else(|| ConfigError("pending config command has no receipt".into()))?;
+            let mut expected = observed;
+            crate::mutation::apply_command(&mut expected, &receipt.command)?;
+            expected.validate()?;
+            expected == prepared
+        } else {
+            crate::store_file::document_matches_digest(&prepared, &result_digest)?
+        };
+        if !matches {
             return Err(ConfigError(
                 "staged config document digest does not match its command".into(),
             ));
         }
+        result_digest = crate::store_file::document_digest(&prepared)?;
         crate::store_file::publish_staged_document(config_path, &staged)?;
     } else {
         // The rename consumes the staging file. A rollback after rename must finish
@@ -489,7 +511,11 @@ fn read_authority(
     let decoded = crate::store_file::read_document(config_path)?;
     let content_digest = crate::store_file::document_digest(&decoded.document)?;
     Ok(ObservedAuthority {
-        content_changed: content_digest != metadata.3,
+        content_changed: !crate::store_file::document_matches_digest(
+            &decoded.document,
+            &metadata.3,
+        )?,
+        digest_upgrade_required: crate::store_file::is_legacy_digest(&metadata.3),
         rewrite_required: decoded.rewrite_required,
         authority: ConfigAuthority {
             schema_version: metadata.0,

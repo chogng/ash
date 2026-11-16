@@ -951,6 +951,196 @@ fn frontend_sections_preserve_fields_the_backend_does_not_understand() {
 }
 
 #[test]
+fn frontend_structured_arrays_persist_and_reopen_without_losing_fields() {
+    let database_path = config_path("frontend-structured-arrays");
+    let store = ConfigStore::open(&database_path).unwrap();
+    let configured = BTreeMap::from([
+        (
+            "keybindings".into(),
+            serde_json::json!([
+                {"key": "ctrl+y", "command": "ashCode.action.copyLastResponse"}
+            ]),
+        ),
+        (
+            "pinnedModels".into(),
+            serde_json::json!([
+                {"provider": "custom-first", "model": "shared-alias"},
+                {"provider": "custom-second", "model": "shared-alias"}
+            ]),
+        ),
+    ]);
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("configure-structured-frontend").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                tui: Patch::Value(configured.clone()),
+                ..PreferencesUpdate::default()
+            }),
+        })
+        .unwrap();
+    assert_eq!(store.read_snapshot().unwrap().values.tui, configured);
+    drop(store);
+    let store = ConfigStore::open(&database_path).unwrap();
+    assert_eq!(store.read_snapshot().unwrap().values.tui, configured);
+    drop(store);
+    remove_config_files(&database_path);
+}
+
+#[test]
+fn canonical_config_digest_ignores_nested_object_order_and_survives_toml() {
+    let mut document = UserConfigDocument::default();
+    document.tui.insert(
+        "keybindings".into(),
+        serde_json::from_str(r#"[{"key":"ctrl+y","command":"copy","when":{"z":1,"a":2}}]"#)
+            .unwrap(),
+    );
+    document
+        .desktop
+        .insert("z".into(), serde_json::json!({"z":1,"a":2}));
+    document.desktop.insert("a".into(), serde_json::json!(true));
+    let digest = crate::store_file::document_digest(&document).unwrap();
+    let encoded = crate::document_migration::encode(&document).unwrap();
+    let decoded = crate::document_migration::decode(&encoded)
+        .unwrap()
+        .document;
+    assert_eq!(document, decoded);
+    assert_eq!(
+        digest,
+        crate::store_file::document_digest(&decoded).unwrap()
+    );
+    let mut changed = decoded;
+    changed
+        .tui
+        .insert("keybindings".into(), serde_json::json!([]));
+    assert_ne!(
+        digest,
+        crate::store_file::document_digest(&changed).unwrap()
+    );
+}
+
+#[test]
+fn legacy_config_digest_upgrades_without_a_revision_change() {
+    use sha2::Digest;
+    use sha2::Sha256;
+    let path = config_path("legacy-digest-upgrade");
+    let store = ConfigStore::open(&path).unwrap();
+    let revision = store.read_snapshot().unwrap().revision;
+    drop(store);
+    let document = crate::store_file::read_document(&path.with_extension("toml"))
+        .unwrap()
+        .document;
+    let legacy = format!(
+        "{:x}",
+        Sha256::digest(serde_json::to_vec(&document).unwrap())
+    );
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute("UPDATE config_metadata SET content_digest=?1", [&legacy])
+        .unwrap();
+    drop(connection);
+    let store = ConfigStore::open(&path).unwrap();
+    assert_eq!(store.read_snapshot().unwrap().revision, revision);
+    let digest: String = rusqlite::Connection::open(&path)
+        .unwrap()
+        .query_row("SELECT content_digest FROM config_metadata", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(
+        digest,
+        crate::store_file::document_digest(&document).unwrap()
+    );
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
+fn legacy_pending_config_recovers_the_exact_command_and_rejects_tampering() {
+    use sha2::Digest;
+    use sha2::Sha256;
+    for tampered in [false, true] {
+        let path = config_path("legacy-pending-digest");
+        let store = ConfigStore::open(&path).unwrap();
+        drop(store);
+        let document_path = path.with_extension("toml");
+        let document = crate::store_file::read_document(&document_path)
+            .unwrap()
+            .document;
+        let command = UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            tui: Patch::Value(BTreeMap::from([(
+                "keybindings".into(),
+                serde_json::json!([{"key":"ctrl+y","command":"copy"}]),
+            )])),
+            ..Default::default()
+        });
+        let mut prepared = document.clone();
+        crate::mutation::apply_command(&mut prepared, &command).unwrap();
+        let legacy_digest = |document: &UserConfigDocument| {
+            format!(
+                "{:x}",
+                Sha256::digest(serde_json::to_vec(document).unwrap())
+            )
+        };
+        let previous_digest = legacy_digest(&document);
+        let result_digest = legacy_digest(&prepared);
+        if tampered {
+            prepared
+                .tui
+                .insert("keybindings".into(), serde_json::json!([]));
+        }
+        let staged = crate::store_file::staged_document_path(&document_path);
+        crate::store_file::write_document(&staged, &prepared).unwrap();
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        connection
+            .execute(
+                "UPDATE config_metadata SET content_digest=?1",
+                [&previous_digest],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO config_command_receipts VALUES ('legacy-pending', 0, ?1, 1, 1)",
+                [serde_json::to_string(&command).unwrap()],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO config_pending_command VALUES (1, 'legacy-pending', ?1, ?2)",
+                rusqlite::params![previous_digest, result_digest],
+            )
+            .unwrap();
+        drop(connection);
+        let reopened = ConfigStore::open(&path);
+        if tampered {
+            assert!(reopened.err().unwrap().0.contains("digest does not match"));
+            assert_eq!(
+                crate::store_file::read_document(&document_path)
+                    .unwrap()
+                    .document,
+                document
+            );
+        } else {
+            let store = reopened.unwrap();
+            let snapshot = store.read_snapshot().unwrap();
+            assert_eq!(snapshot.revision.get(), 1);
+            assert_eq!(snapshot.values.tui, prepared.tui);
+            let replay = store
+                .apply(ConfigCommandRequest {
+                    command_id: CommandId::new("legacy-pending").unwrap(),
+                    expected_revision: ConfigRevision::INITIAL,
+                    command,
+                })
+                .unwrap();
+            assert_eq!(replay.disposition, ConfigCommandDisposition::Replayed);
+            assert_eq!(replay.revision, snapshot.revision);
+        }
+        let _ = std::fs::remove_file(staged);
+        remove_config_files(&path);
+    }
+}
+
+#[test]
 fn tool_mode_defaults_to_direct_and_updates_durably() {
     let database_path = config_path("tool-mode");
     let store = ConfigStore::open(&database_path).unwrap();

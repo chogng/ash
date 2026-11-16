@@ -51,8 +51,33 @@ pub(crate) fn staged_document_path(path: &Path) -> PathBuf {
 }
 
 pub(crate) fn document_digest(document: &UserConfigDocument) -> Result<String, ConfigError> {
-    let canonical = serde_json::to_vec(document).map_err(|error| ConfigError(error.to_string()))?;
-    Ok(format!("{:x}", Sha256::digest(canonical)))
+    // TOML round trips and serde_json's preserve_order feature can reorder nested
+    // objects. Hash the complete document in a canonical order, including HashMaps.
+    let mut canonical =
+        serde_json::to_value(document).map_err(|error| ConfigError(error.to_string()))?;
+    canonical.sort_all_objects();
+    let encoded = serde_json::to_vec(&canonical).map_err(|error| ConfigError(error.to_string()))?;
+    Ok(format!("sha256:{:x}", Sha256::digest(encoded)))
+}
+
+pub(crate) fn is_legacy_digest(digest: &str) -> bool {
+    digest.len() == 64
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+pub(crate) fn document_matches_digest(
+    document: &UserConfigDocument,
+    digest: &str,
+) -> Result<bool, ConfigError> {
+    if is_legacy_digest(digest) {
+        let encoded =
+            serde_json::to_vec(document).map_err(|error| ConfigError(error.to_string()))?;
+        Ok(format!("{:x}", Sha256::digest(encoded)) == digest)
+    } else {
+        Ok(document_digest(document)? == digest)
+    }
 }
 
 fn write_and_replace(path: &Path, temporary: &Path, contents: &[u8]) -> Result<(), ConfigError> {
