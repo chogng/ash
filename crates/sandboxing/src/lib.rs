@@ -44,3 +44,33 @@ pub use model::{
 pub use scope::SandboxDirAccess;
 pub use scope::SandboxDirGrant;
 pub use scope::SandboxScope;
+
+#[cfg(windows)]
+extern crate windows_sys_061 as windows_sys;
+#[cfg(windows)]
+mod locked_process;
+/// Sources the trusted startup thread must load before releasing its authority.
+#[cfg(windows)]
+#[derive(Clone, Copy)]
+pub enum LockedProcessSources {
+    /// Read the installed package rooted at the command's working directory.
+    Package,
+    /// Use only module bytes compiled into the executable, without filesystem grants.
+    Embedded,
+}
+
+/// Starts a product-owned 64-bit process with a private restricted token, an AppContainer
+/// without capabilities and a single-process kill-on-close job. Only the initial thread
+/// receives temporary startup authority to read the package. The trusted entry point must
+/// call [`finish_locked_process_startup`] before evaluating third-party code. No account
+/// provisioning, administrator rights or product-install ACL changes are required.
+/// The process handle removes the launch's package ACL grants and AppContainer on drop.
+/// Embedded sources require no package ACL changes, regardless of the working directory.
+#[cfg(windows)]
+pub use locked_process::spawn as spawn_locked_process;
+
+/// Permanently releases the startup thread's impersonation token after attesting the
+/// primary token, job and mitigation settings installed by [`spawn_locked_process`].
+/// Worker threads already use the locked primary token from their creation.
+#[cfg(windows)]
+pub use locked_process::finish_startup as finish_locked_process_startup;

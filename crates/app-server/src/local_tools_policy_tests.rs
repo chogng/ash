@@ -135,7 +135,6 @@ fn sandbox_managed_ceilings_survive_approval_at_the_executor_boundary() {
             grep,
             Arc::new(file_search::Service),
             None,
-            None,
             Arc::new(ash_core::ThreadController::with_store(Arc::new(
                 ash_core::InMemoryThreadStore::default(),
             ))),

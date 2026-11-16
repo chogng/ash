@@ -11,7 +11,6 @@ fn unsupported_mxc_preserves_isolation_and_acl_authority_for_account_selection()
     )
     .with_network_proxy(ash_sandboxing::ManagedNetworkAccess::new(
         3128.try_into().unwrap(),
-        3128.try_into().unwrap(),
     ));
     for (isolation, reason) in [
         (

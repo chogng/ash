@@ -12,9 +12,7 @@ use std::os::windows::io::RawHandle;
 use std::sync::Arc;
 use std::sync::Once;
 
-mod job;
-
-pub use job::JobObject;
+use ash_utils_process::JobObject;
 pub use portable_pty::win::conpty_supported;
 pub(crate) use portable_pty::win::supports_client_lifetime;
 

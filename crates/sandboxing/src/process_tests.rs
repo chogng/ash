@@ -24,11 +24,14 @@ fn session_child() {
     let Some(directory) = std::env::var_os("ASH_TEST_SESSION_CHILD") else {
         return;
     };
-    ash_utils_pty::process_group::set_process_group().unwrap();
+    use std::os::unix::process::CommandExt;
     let directory = std::path::PathBuf::from(directory);
-    std::fs::write(directory.join("ready"), "").unwrap();
-    std::thread::sleep(Duration::from_millis(600));
-    std::fs::write(directory.join("escaped"), "").unwrap();
+    Command::new("/bin/sh")
+        .args(["-c", "touch ready; sleep 0.6; touch escaped"])
+        .current_dir(directory)
+        .process_group(0)
+        .status()
+        .unwrap();
 }
 
 #[test]

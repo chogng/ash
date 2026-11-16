@@ -2,31 +2,20 @@ use super::*;
 use ash_sandboxing::FileSystemAccess;
 #[cfg(target_os = "windows")]
 use ash_sandboxing::FileSystemIsolation;
+#[cfg(target_os = "windows")]
 use ash_sandboxing::ManagedNetworkAccess;
 use ash_sandboxing::NetworkAccess;
 #[cfg(target_os = "windows")]
 use ash_sandboxing::SandboxBackends;
 
 #[test]
-fn managed_execution_requires_a_single_owned_endpoint() {
+fn managed_execution_requires_an_owned_endpoint() {
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
     let backend = MxcSandbox::new(InstallContext::current());
     let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Managed);
-    for access in [
-        None,
-        Some(ManagedNetworkAccess::new(
-            3128.try_into().unwrap(),
-            8081.try_into().unwrap(),
-        )),
-    ] {
-        let command = SandboxCommand::new("must-not-start", ["argument"], dir.canonical_path());
-        let command = match access {
-            Some(access) => command.with_network_proxy(access),
-            None => command,
-        };
-        assert!(backend.prepare(&command, policy, &dir).is_err());
-    }
+    let command = SandboxCommand::new("must-not-start", ["argument"], dir.canonical_path());
+    assert!(backend.prepare(&command, policy, &dir).is_err());
 }
 
 #[cfg(target_os = "windows")]
@@ -36,7 +25,7 @@ fn managed_execution_rejects_psec_when_private_network_ingress_cannot_stay_denie
     let dir = Dir::open_local(temp.path()).unwrap();
     let backend = MxcSandbox::new(InstallContext::current());
     let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Managed);
-    let proxy = ManagedNetworkAccess::new(3128.try_into().unwrap(), 3128.try_into().unwrap());
+    let proxy = ManagedNetworkAccess::new(3128.try_into().unwrap());
     let command = SandboxCommand::new(
         "must-not-start",
         std::iter::empty::<&str>(),
@@ -85,7 +74,7 @@ fn managed_psec_rejection_keeps_the_policy_unchanged_for_the_account_candidate()
 
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
-    let proxy = ManagedNetworkAccess::new(3128.try_into().unwrap(), 3128.try_into().unwrap());
+    let proxy = ManagedNetworkAccess::new(3128.try_into().unwrap());
     let command = SandboxCommand::new(
         "must-not-start",
         std::iter::empty::<&str>(),

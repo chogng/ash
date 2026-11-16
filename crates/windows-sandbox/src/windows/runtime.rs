@@ -344,7 +344,7 @@ pub(super) fn setup(slots: usize, runner_source: &Path, approved: &str) -> Resul
                 DACL_SECURITY_INFORMATION
                     | PROTECTED_DACL_SECURITY_INFORMATION
                     | windows_sys::Win32::Security::OWNER_SECURITY_INFORMATION,
-                sd.0,
+                sd.as_ptr(),
             )
         } == 0
         {
@@ -366,7 +366,7 @@ pub(super) fn setup(slots: usize, runner_source: &Path, approved: &str) -> Resul
         SetFileSecurityW(
             win::wide(&root).as_ptr(),
             DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-            root_sd.0,
+            root_sd.as_ptr(),
         )
     } == 0
     {
@@ -383,7 +383,7 @@ pub(super) fn setup(slots: usize, runner_source: &Path, approved: &str) -> Resul
             SetFileSecurityW(
                 win::wide(&path).as_ptr(),
                 DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                sd.0,
+                sd.as_ptr(),
             )
         } == 0
         {
@@ -549,7 +549,7 @@ pub(super) fn remove(approved: &str) -> Result<()> {
     }
     for account in &state.accounts {
         let journal = root.join("acl").join(&account.sid);
-        let recovery = mxc_sdk::mxc_common::filesystem_dacl::recover_orphaned_state_in(&journal)
+        let recovery = mxc_sdk::v1::filesystem_acl::recover_orphaned_state_in(&journal)
             .map_err(|error| error.to_string())?;
         if !recovery.errors.is_empty() {
             return Err("ACL recovery is incomplete; keep the runtime journal for recovery".into());
@@ -753,7 +753,8 @@ fn require_administrator() -> Result<()> {
     use windows_sys::Win32::Security::CheckTokenMembership;
     let administrators = win::sid("S-1-5-32-544")?;
     let mut member = 0;
-    if unsafe { CheckTokenMembership(std::ptr::null_mut(), administrators.0, &mut member) } == 0
+    if unsafe { CheckTokenMembership(std::ptr::null_mut(), administrators.as_ptr(), &mut member) }
+        == 0
         || member == 0
     {
         Err("runtime provisioning requires explicit administrator approval; normal command execution does not".into())

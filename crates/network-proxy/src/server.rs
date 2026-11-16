@@ -26,96 +26,49 @@ const MAX_CONNECTIONS: usize = 64;
 /// Dropping this value cancels pending policy requests, closes tunnels and listeners, and joins
 /// its runtime thread. It must outlive the child process, including process-tree termination.
 pub struct NetworkProxy {
-    http_port: u16,
-    socks_port: u16,
+    port: u16,
     cancellation: CancellationSource,
     worker: Option<thread::JoinHandle<()>>,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum ListenerLayout {
-    Separate,
-    Shared,
-}
-
 impl NetworkProxy {
+    /// Serves HTTP, CONNECT and SOCKS5 on one execution-owned loopback endpoint.
     pub fn start(policy: NetworkPolicyHandle, parent: &CancellationToken) -> io::Result<Self> {
-        Self::start_with_layout(policy, parent, ListenerLayout::Separate)
-    }
-
-    /// Serves HTTP, CONNECT and SOCKS5 on the single endpoint a PSEC policy can authorize.
-    pub fn start_shared(
-        policy: NetworkPolicyHandle,
-        parent: &CancellationToken,
-    ) -> io::Result<Self> {
-        Self::start_with_layout(policy, parent, ListenerLayout::Shared)
-    }
-
-    fn start_with_layout(
-        policy: NetworkPolicyHandle,
-        parent: &CancellationToken,
-        layout: ListenerLayout,
-    ) -> io::Result<Self> {
-        let http = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
-        let socks = match layout {
-            ListenerLayout::Separate => {
-                Some(std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?)
-            }
-            ListenerLayout::Shared => None,
-        };
-        let http_port = http.local_addr()?.port();
-        let socks_port = match &socks {
-            Some(socks) => socks.local_addr()?.port(),
-            None => http_port,
-        };
-        http.set_nonblocking(true)?;
-        if let Some(socks) = &socks {
-            socks.set_nonblocking(true)?;
-        }
+        let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+        let port = listener.local_addr()?.port();
+        listener.set_nonblocking(true)?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
-        let (http, socks) = {
+        let listener = {
             let _entered = runtime.enter();
-            (
-                TcpListener::from_std(http)?,
-                socks.map(TcpListener::from_std).transpose()?,
-            )
+            TcpListener::from_std(listener)?
         };
         let cancellation = parent.child_source();
         let context = Arc::new(Context {
             policy,
             cancellation: cancellation.token(),
             policy_gate: Mutex::new(()),
-            proxy_ports: [http_port, socks_port],
+            proxy_port: port,
         });
         let worker = thread::Builder::new()
             .name("network-proxy".into())
-            .spawn(move || {
-                runtime.block_on(serve(http, socks, context));
-            })?;
+            .spawn(move || runtime.block_on(serve(listener, context)))?;
         Ok(Self {
-            http_port,
-            socks_port,
+            port,
             cancellation,
             worker: Some(worker),
         })
     }
 
-    pub fn http_port(&self) -> u16 {
-        self.http_port
-    }
-    pub fn socks_port(&self) -> u16 {
-        self.socks_port
+    pub fn port(&self) -> u16 {
+        self.port
     }
 
     /// Replaces inherited proxy routes for this child without changing the host environment.
     pub fn apply_to_command(&self, command: &mut Command) {
-        crate::ProxyEnvironment::new(
-            self.http_port.try_into().expect("bound HTTP port"),
-            self.socks_port.try_into().expect("bound SOCKS port"),
-        )
-        .apply_to_command(command);
+        crate::ProxyEnvironment::new(self.port.try_into().expect("bound proxy port"))
+            .apply_to_command(command);
     }
 }
 
@@ -132,7 +85,7 @@ pub(crate) struct Context {
     policy: NetworkPolicyHandle,
     pub(crate) cancellation: CancellationToken,
     policy_gate: Mutex<()>,
-    proxy_ports: [u16; 2],
+    proxy_port: u16,
 }
 
 impl Context {
@@ -171,7 +124,7 @@ impl Context {
         }
         let literal = request.host().parse::<IpAddr>().ok();
         for address in &addresses {
-            if address.ip().is_loopback() && self.proxy_ports.contains(&address.port()) {
+            if address.ip().is_loopback() && self.proxy_port == address.port() {
                 return Err(denied("proxy cannot connect to its own listeners"));
             }
             // A DNS name cannot authorize a private destination by changing its resolution.
@@ -201,7 +154,7 @@ pub(crate) fn denied(reason: &str) -> io::Error {
     io::Error::new(io::ErrorKind::PermissionDenied, reason.to_owned())
 }
 
-async fn serve(http: TcpListener, socks: Option<TcpListener>, context: Arc<Context>) {
+async fn serve(listener: TcpListener, context: Arc<Context>) {
     let permits = Arc::new(Semaphore::new(MAX_CONNECTIONS));
     let mut connections = JoinSet::new();
     loop {
@@ -209,32 +162,10 @@ async fn serve(http: TcpListener, socks: Option<TcpListener>, context: Arc<Conte
             biased;
             _ = context.cancellation.cancelled() => break,
             Some(_) = connections.join_next(), if !connections.is_empty() => {},
-            result = http.accept() => match result {
+            result = listener.accept() => match result {
                 Ok((stream, _)) => {
                     if let Ok(permit) = Arc::clone(&permits).try_acquire_owned() {
-                        let context = Arc::clone(&context);
-                        if socks.is_some() {
-                            connections.spawn(crate::http::serve(stream, context, Arc::new(permit)));
-                        } else {
-                            connections.spawn(serve_shared(stream, context, Arc::new(permit)));
-                        }
-                    }
-                }
-                Err(_) => break,
-            },
-            result = async {
-                match &socks {
-                    Some(socks) => socks.accept().await,
-                    None => std::future::pending().await,
-                }
-            } => match result {
-                Ok((stream, _)) => {
-                    if let Ok(permit) = Arc::clone(&permits).try_acquire_owned() {
-                        let context = Arc::clone(&context);
-                        connections.spawn(async move {
-                            let _permit = permit;
-                            let _ = crate::socks::serve(stream, context).await;
-                        });
+                        connections.spawn(serve_shared(stream, Arc::clone(&context), Arc::new(permit)));
                     }
                 }
                 Err(_) => break,

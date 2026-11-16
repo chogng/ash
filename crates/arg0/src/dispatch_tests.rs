@@ -46,17 +46,8 @@ fn malformed_elevated_role_fails_before_connecting_to_a_socket() {
     }
 }
 
-#[cfg(windows)]
 #[test]
-fn malformed_pty_role_fails_before_reading_launch_authority() {
-    assert_eq!(
-        dispatch(["--ash-mxc-pty".into(), "unexpected".into()]),
-        Some(Err("PTY helper accepts no arguments".into()))
-    );
-}
-
-#[cfg(not(windows))]
-#[test]
-fn unix_has_no_pty_helper_role() {
+fn retired_mxc_pty_role_is_not_dispatched() {
     assert!(dispatch(["--ash-mxc-pty".into()]).is_none());
+    assert!(dispatch(["--ash-mxc-pty".into(), "unexpected".into()]).is_none());
 }

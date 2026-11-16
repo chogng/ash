@@ -7,7 +7,7 @@ fn acl_setup_restores_partial_changes_before_retrying_a_missing_file() {
     let work = temp.path().join("work");
     let journal = temp.path().join("journal");
     std::fs::create_dir(&work).unwrap();
-    let mut files = mxc_sdk::mxc_common::models::ContainerPolicy::default();
+    let mut files = mxc_sdk::v1::FilesystemPolicy::default();
     files.readwrite_paths.push(work.to_str().unwrap().into());
     let mut attempts = 0;
     let mut manager = apply_acl_with_retry(&journal, &files, |manager| {
@@ -29,7 +29,7 @@ fn acl_setup_restores_partial_changes_before_retrying_a_missing_file() {
 #[test]
 fn acl_setup_limits_missing_file_retries_and_rejects_other_errors_immediately() {
     let temp = tempfile::tempdir().unwrap();
-    let files = mxc_sdk::mxc_common::models::ContainerPolicy::default();
+    let files = mxc_sdk::v1::FilesystemPolicy::default();
     for (kind, expected_attempts) in [
         (std::io::ErrorKind::NotFound, 3),
         (std::io::ErrorKind::PermissionDenied, 1),
@@ -84,7 +84,7 @@ fn a_write_grant_cannot_change_an_outside_file_through_a_hard_link() {
     let outside = temp.path().join("outside");
     std::fs::write(&outside, "unchanged").unwrap();
     std::fs::hard_link(&outside, work.join("alias")).unwrap();
-    let mut policy = mxc_sdk::mxc_common::models::ContainerPolicy::default();
+    let mut policy = mxc_sdk::v1::FilesystemPolicy::default();
     policy.readwrite_paths.push(work.to_str().unwrap().into());
     assert!(validate(&policy).unwrap_err().contains("multiply linked"));
     assert_eq!(std::fs::read_to_string(outside).unwrap(), "unchanged");

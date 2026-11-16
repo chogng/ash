@@ -63,7 +63,7 @@ fn namespace_proxy_allows_authorized_traffic_and_blocks_direct_host_access() {
         },
     );
     let cancellation = CancellationSource::new();
-    let proxy = NetworkProxy::start_shared(policy, &cancellation.token()).unwrap();
+    let proxy = NetworkProxy::start(policy, &cancellation.token()).unwrap();
     let directory = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(directory.path()).unwrap();
     let probe =
@@ -78,10 +78,7 @@ fn namespace_proxy_allows_authorized_traffic_and_blocks_direct_host_access() {
         ],
         dir.canonical_path(),
     )
-    .with_network_proxy(ManagedNetworkAccess::new(
-        proxy.http_port().try_into().unwrap(),
-        proxy.socks_port().try_into().unwrap(),
-    ));
+    .with_network_proxy(ManagedNetworkAccess::new(proxy.port().try_into().unwrap()));
     let sandbox = MxcSandbox::new(ash_install_context::InstallContext::current());
     let prepared = sandbox
         .prepare(
@@ -90,14 +87,11 @@ fn namespace_proxy_allows_authorized_traffic_and_blocks_direct_host_access() {
             &dir,
         )
         .unwrap();
-    let environment = network_proxy::ProxyEnvironment::new(
-        proxy.http_port().try_into().unwrap(),
-        proxy.socks_port().try_into().unwrap(),
-    )
-    .variables()
-    .into_iter()
-    .map(|(key, value)| (key.to_owned(), value))
-    .collect::<Vec<_>>();
+    let environment = network_proxy::ProxyEnvironment::new(proxy.port().try_into().unwrap())
+        .variables()
+        .into_iter()
+        .map(|(key, value)| (key.to_owned(), value))
+        .collect::<Vec<_>>();
     let mut child = prepared.spawn(&environment).unwrap();
     drop(child.take_stdin());
     let mut stdout = child.take_stdout().unwrap();

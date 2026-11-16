@@ -4,7 +4,6 @@ mod audit;
 mod desktop;
 mod filesystem;
 mod job;
-pub(crate) mod locked_process;
 mod network;
 mod process;
 mod proxy;
@@ -29,7 +28,7 @@ use ash_sandboxing::SandboxPolicy;
 use ash_sandboxing::SandboxProcess;
 use ash_sandboxing::SandboxProcessExitStatus;
 use ash_sandboxing::SandboxScope;
-use mxc_sdk::mxc_common::models::ContainerPolicy;
+use mxc_sdk::v1::FilesystemPolicy;
 use std::collections::BTreeMap;
 use std::io;
 use std::io::Read;
@@ -45,7 +44,7 @@ use windows_sys::Win32::System::Threading::WaitForSingleObject;
 
 struct Execution {
     runner_hash: String,
-    files: ContainerPolicy,
+    files: FilesystemPolicy,
     host_acl_scope: Option<HostAclScope>,
     acl_changes: HostAclChanges,
     command: String,
@@ -93,7 +92,7 @@ pub(super) fn prepare(
             "Windows account isolation cannot enforce a minimal host-read scope".into(),
         ));
     }
-    let mut files = ContainerPolicy::default();
+    let mut files = FilesystemPolicy::default();
     files.readwrite_paths = unicode_paths(resolved_filesystem.readwrite_paths())?;
     files.readonly_paths = unicode_paths(resolved_filesystem.readonly_paths())?;
     files.denied_paths = unicode_paths(resolved_filesystem.denied_paths())?;
@@ -126,16 +125,12 @@ pub(super) fn prepare(
         NetworkAccess::Managed => NetworkMode::Managed,
     };
     let proxy_port = if mode == NetworkMode::Managed {
-        let ports = command
+        let port = command
             .network_proxy()
             .ok_or_else(|| unavailable("managed execution requires an execution-owned proxy"))?
-            .ports();
-        if ports[0] != ports[1] {
-            return Err(SandboxError::UnsupportedPolicy(
-                "Windows account execution requires a shared proxy endpoint".into(),
-            ));
-        }
-        Some(ports[0])
+            .port()
+            .get();
+        Some(port)
     } else {
         None
     };
@@ -189,10 +184,9 @@ pub(super) fn prepare(
 }
 
 fn command_line(argv: &[String]) -> Result<String, SandboxError> {
-    let context = mxc_sdk::mxc_common::cmdline::CommandLineContext::WindowsCreateProcess;
+    let context = mxc_sdk::v1::CommandLineContext::WindowsCreateProcess;
     ash_sandboxing::windows_command_line(argv, true, |arguments| {
-        mxc_sdk::mxc_common::cmdline::cmdline_from_argv_for_context(arguments, context)
-            .map_err(unavailable)
+        mxc_sdk::v1::cmdline_from_argv_for_context(arguments, context).map_err(unavailable)
     })
 }
 
@@ -246,7 +240,7 @@ impl Directory {
             SetFileSecurityW(
                 win::wide(&directory.0).as_ptr(),
                 DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                sd.0,
+                sd.as_ptr(),
             )
         } == 0
         {

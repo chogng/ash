@@ -104,3 +104,10 @@ pub fn canonical_path_from_handle(file: &File) -> io::Result<PathBuf> {
 pub fn validate_administrator_owned(file: &File) -> io::Result<()> {
     platform::validate_administrator_owned(file)
 }
+
+/// Enumerates Windows logical drive roots without probing absent drive letters.
+/// Explicit UNC roots are supplied separately by the caller's authorized paths.
+#[cfg(windows)]
+pub fn volume_roots() -> io::Result<Vec<PathBuf>> {
+    platform::volume_roots()
+}

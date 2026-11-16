@@ -22,15 +22,6 @@ const TIMEOUT: Duration = Duration::from_secs(30);
 
 pub(super) fn trials() -> Vec<Trial> {
     vec![
-        Trial::test("helper_requires_a_launch_request", || {
-            let output = super::helper().command().env_clear()
-                .env("SystemRoot", std::env::var_os("SystemRoot").unwrap())
-                .output().unwrap();
-            assert_eq!(output.status.code(), Some(1));
-            assert!(output.stdout.is_empty());
-            assert!(String::from_utf8(output.stderr).unwrap().contains("missing PTY launch request"));
-            Ok(())
-        }),
         Trial::test("psec_terminal_input_resize_large_environment_and_exit_code", || {
             let value = "🧊中文=".repeat(3000);
             let mut terminal = Terminal::start(
@@ -144,7 +135,6 @@ impl Terminal {
             }
         }
         let mut process = MxcSandbox::new(InstallContext::current())
-            .with_pty_helper(super::helper().executable().to_owned())
             .prepare(
                 &command,
                 SandboxPolicy::new(files, NetworkAccess::Denied),

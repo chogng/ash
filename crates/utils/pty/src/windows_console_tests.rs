@@ -1,6 +1,7 @@
 //! Verify natural and terminated console clients close output without losing descendants.
 
 use std::collections::HashMap;
+use std::os::windows::io::AsHandle;
 use std::path::Path;
 use std::time::Duration;
 
@@ -152,4 +153,40 @@ async fn output_closes_after_termination_while_session_is_retained() -> anyhow::
 #[test]
 fn conpty_supported_on_current_windows() {
     assert!(crate::conpty_supported());
+}
+
+#[test]
+fn conpty_rejects_job_attachment_before_child_execution() {
+    let marker =
+        std::env::temp_dir().join(format!("ash-conpty-job-rejected-{}", std::process::id()));
+    let _ = std::fs::remove_file(&marker);
+    let file = std::fs::File::open(std::env::current_exe().unwrap()).unwrap();
+    let pair = portable_pty::win::conpty::ConPtySystem::default()
+        .openpty(PtySize::default())
+        .unwrap();
+    let mut command = CommandBuilder::new(std::env::current_exe().unwrap());
+    command.args([
+        "--exact",
+        "windows_console_tests::rejected_child_fixture",
+        "--nocapture",
+    ]);
+    command.env("ASH_JOB_TEST_MARKER", &marker);
+    // The borrowed handle is valid, but its file type cannot be attached as a Job.
+    // CreateProcess must reject the attribute before the fixture can execute.
+    assert!(
+        pair.slave
+            .spawn_command_in_job(command, file.as_handle())
+            .is_err()
+    );
+    assert!(
+        !marker.exists(),
+        "uncontained ConPTY child must never execute"
+    );
+}
+
+#[test]
+fn rejected_child_fixture() {
+    if let Some(marker) = std::env::var_os("ASH_JOB_TEST_MARKER") {
+        std::fs::write(marker, "executed").unwrap();
+    }
 }

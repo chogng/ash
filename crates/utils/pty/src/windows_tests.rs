@@ -3,7 +3,6 @@ use super::combine_spawned_output;
 use super::find_python;
 use super::wait_for_output_contains;
 use crate::TerminalSize;
-use crate::spawn_pipe_process_no_stdin;
 use crate::spawn_pty_process;
 use std::collections::HashMap;
 use std::path::Path;
@@ -77,9 +76,7 @@ async fn assert_terminate_kills_descendant(
         utf8_hex(&child_code)
     );
     let args = vec!["-u".to_string(), "-c".to_string(), code];
-    let spawned = if backend == "pipe" {
-        spawn_pipe_process_no_stdin(python, &args, Path::new("."), env, /*arg0*/ &None, &[]).await?
-    } else {
+    let spawned = {
         spawn_pty_process(
             python,
             &args,
@@ -132,9 +129,7 @@ async fn assert_normal_exit_preserves_descendant(
         utf8_hex(&ready_marker.to_string_lossy())
     );
     let args = vec!["-u".to_string(), "-c".to_string(), code];
-    let spawned = if backend == "pipe" {
-        spawn_pipe_process_no_stdin(python, &args, Path::new("."), env, /*arg0*/ &None, &[]).await?
-    } else {
+    let spawned = {
         spawn_pty_process(
             python,
             &args,
@@ -158,24 +153,22 @@ async fn assert_normal_exit_preserves_descendant(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn terminate_kills_immediate_descendants_for_pipe_and_conpty() -> anyhow::Result<()> {
+async fn terminate_kills_immediate_descendants_for_conpty() -> anyhow::Result<()> {
     let Some(python) = find_python() else {
         eprintln!("python not found; skipping Windows process-tree termination test");
         return Ok(());
     };
     let env: HashMap<String, String> = std::env::vars().collect();
-    assert_terminate_kills_descendant("pipe", &python, &env).await?;
     assert_terminate_kills_descendant("ConPTY", &python, &env).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn normal_exit_preserves_descendants_for_pipe_and_conpty() -> anyhow::Result<()> {
+async fn normal_exit_preserves_descendants_for_conpty() -> anyhow::Result<()> {
     let Some(python) = find_python() else {
         eprintln!("python not found; skipping Windows process-tree natural-exit test");
         return Ok(());
     };
     let env: HashMap<String, String> = std::env::vars().collect();
-    assert_normal_exit_preserves_descendant("pipe", &python, &env).await?;
     assert_normal_exit_preserves_descendant("ConPTY", &python, &env).await
 }
 

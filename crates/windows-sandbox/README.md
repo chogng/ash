@@ -6,22 +6,7 @@
 - 每次执行独占账户、随机文件 SID、Job、桌面、代理路由和 ACL 恢复记录。
 - 产品包提供执行 helper 和管理服务；运行时校验 helper 路径与 SHA-256，不搜索 PATH。
 
-JS 扩展使用独立的 `spawn_locked_process` / `finish_locked_process_startup` 路径：64 位 Windows
-上组合无网络能力的 AppContainer、每次启动独立的限制 SID、禁止子进程的创建策略和单进程 Job。
-只给初始线程临时读取扩展包的权限，V8 初始化后释放；工作线程从创建时即使用受限主令牌。
-启动方通过 `LockedProcessSources` 区分安装包和内置模块。安装包仍只授权工作目录中的包文件；
-内置模块的源文件已编译进宿主，不授予包文件读取权限，也不遍历或修改工作目录的 ACL。
-这条路径不安装账户或服务，不需要管理员权限，不修改产品安装目录；进程结束后移除本次包 ACL
-授权和 AppContainer 配置。执行错误不弹系统错误窗口。它不替代下文的 Shell 账户执行策略。
-
-真实进程验证由 `external-js-ext` 承担，包括文档事件、诊断、补全、内存预算和超时恢复。
-单独运行 Windows 隔离测试前先构建探针：
-
-```powershell
-python -B scripts/cargo.py build -p ash-external-js-ext --example windows_isolation_probe
-just test ash-external-js-ext --bin ash-external-js-ext windows_tests
-just test ash-external-js-ext --test host
-```
+JS 进程锁定由 [`sandboxing`](../../docs/sandboxing.md#js-进程隔离) 拥有，不依赖账户安装或管理服务。
 
 | 归属                                                              | 职责                                                                                        |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -75,6 +60,6 @@ just test ash-app-server-runtime --lib windows_shell_turn_enforces_account_isola
 ./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -NetworkDnsServer '[2606:4700:4700::1111]:53' -NetworkPublicIpv6Http '[2606:4700:4700::1111]:80'
 ```
 
-网络连接进程归属实现参考 Codex `da20788df913189878ebca7f4963d8a363ee6bf2`；对应许可与归属保存在 `LICENSE-APACHE` 和 `NOTICE`。文件 ACL 日志复用固定版本的 `mxc-sdk` 的 `mxc_common`，不引入 Codex 的协议或产品配置。
+网络连接进程归属实现参考 Codex `da20788df913189878ebca7f4963d8a363ee6bf2`；对应许可与归属保存在 `LICENSE-APACHE` 和 `NOTICE`。文件 ACL 日志通过 `mxc-sdk` 的 `v1::filesystem_acl` 接入，不引入 Codex 的协议或产品配置。
 
 服务管理协议版本 3 提供 `ash-windows-sandbox metrics`，读取当前服务进程内 setup/update/remove 的累计次数、失败类别和耗时。测量包围认证后的真实管理 dispatch，安装校验失败也计数；plan、status 和 metrics 读取不计为安装操作。标签只包含固定模式、结果和错误类别，不采集账户、审批摘要、路径或错误正文。服务重启后重新计数；读取要求服务已运行，不触发安装操作。

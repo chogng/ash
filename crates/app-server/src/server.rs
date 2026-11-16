@@ -419,7 +419,6 @@ pub struct AppServer {
     env_state: EnvStateMode,
     debug_workspaces: Option<Arc<ash_debug_manager::DebugWorkspaceStore>>,
     debug_sessions: Arc<ash_debug_manager::DebugSessions>,
-    pty_helper: Option<std::path::PathBuf>,
     codebase_models: Option<CodebaseModels>,
     provider_runtime: Option<Arc<ash_model_provider::ModelProviderRuntime>>,
     network_diagnostics: Option<network_operations::NetworkDiagnostics>,
@@ -812,7 +811,6 @@ impl AppServer {
             &self.home,
             &self.model_catalog,
             &self.model_instructions,
-            &self.pty_helper,
             &self.updates,
         )
     }
@@ -1546,7 +1544,6 @@ impl AppServer {
             env_state: EnvStateMode::Unconfigured,
             debug_workspaces: None,
             debug_sessions: Arc::default(),
-            pty_helper: None,
             codebase_models: None,
             provider_runtime: None,
             network_diagnostics: None,
@@ -2735,10 +2732,6 @@ impl AppServer {
     }
 
     /// Configures the executable that dispatches the internal sandbox PTY role.
-    pub(crate) fn with_pty_helper(mut self, executable: std::path::PathBuf) -> Self {
-        self.pty_helper = Some(executable);
-        self
-    }
 
     /// Installs immutable embedding/rerank adapters for local semantic indexing.
     pub(crate) fn with_codebase_models(mut self, models: CodebaseModels) -> Self {

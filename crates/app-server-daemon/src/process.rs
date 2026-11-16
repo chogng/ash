@@ -583,7 +583,7 @@ fn detach_command(command: &mut Command) -> Result<(), String> {
     // remain authoritative, including when the CLI runs in a host-owned terminal.
     // Unconditionally requesting breakaway would fail with ERROR_ACCESS_DENIED.
     let mut flags = CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW;
-    if ash_utils_pty::JobObject::current_allows_breakaway().map_err(io_error)? {
+    if ash_utils_process::JobObject::current_allows_breakaway().map_err(io_error)? {
         flags |= CREATE_BREAKAWAY_FROM_JOB;
     }
     command.creation_flags(flags);

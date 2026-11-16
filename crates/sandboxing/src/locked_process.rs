@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 //! Windows JS processes start with a locked primary token and a temporary startup
 //! impersonation token. Only the product child may remove the latter, before evaluating JS.
 
@@ -108,7 +109,7 @@ use windows_sys::Win32::System::Threading::TerminateProcess;
 use windows_sys::Win32::System::Threading::UpdateProcThreadAttribute;
 use windows_sys::Win32::System::Threading::WaitForSingleObject;
 
-use ash_sandboxing::SandboxCommand;
+use crate::SandboxCommand;
 
 mod app_container;
 
@@ -176,8 +177,8 @@ fn tokens(
 ) -> io::Result<(
     OwnedHandle,
     OwnedHandle,
-    super::desktop::Desktop,
-    super::win::Local,
+    ash_utils_process::windows_security::Desktop,
+    ash_utils_process::windows_security::Local,
 )> {
     let mut current = null_mut();
     // SAFETY: token handles are locally owned and never inherited by the child.
@@ -195,8 +196,9 @@ fn tokens(
             .map(|part| u32::from_le_bytes(part.try_into().unwrap()))
             .collect();
         let identity = format!("S-1-5-21-{}-{}-{}-{}", ids[0], ids[1], ids[2], ids[3]);
-        let private_sid = super::win::sid(&identity).map_err(io::Error::other)?;
-        let private_sid_ptr = private_sid.0;
+        let private_sid =
+            ash_utils_process::windows_security::sid(&identity).map_err(io::Error::other)?;
+        let private_sid_ptr = private_sid.as_ptr();
         let user_data = query(&current, TokenUser)?;
         let group_data = query(&current, TokenGroups)?;
         let user = &*user_data.as_ptr().cast::<TOKEN_USER>();
@@ -272,17 +274,18 @@ fn tokens(
         // Rust's Windows runtime initializes bcrypt before main; low integrity is
         // required there. The trusted child lowers this token to untrusted before JS.
         set_integrity(&lockdown, WinLowLabelSid)?;
-        let owner = super::win::sid_text(user.User.Sid).map_err(io::Error::other)?;
-        let desktop =
-            super::desktop::Desktop::new(&owner, &owner, &identity).map_err(io::Error::other)?;
-        let objects = super::win::descriptor(&format!(
+        let owner = ash_utils_process::windows_security::sid_text(user.User.Sid)
+            .map_err(io::Error::other)?;
+        let desktop = ash_utils_process::windows_security::Desktop::new(&owner, &owner, &identity)
+            .map_err(io::Error::other)?;
+        let objects = ash_utils_process::windows_security::descriptor(&format!(
             "D:P(A;;GA;;;{owner})(A;;GA;;;SY)(A;;GA;;;RC)(A;;GA;;;{identity})(A;;GA;;;{app_sid})"
         ))
         .map_err(io::Error::other)?;
         checked(SetKernelObjectSecurity(
             raw(&lockdown),
             DACL_SECURITY_INFORMATION,
-            objects.0,
+            objects.as_ptr(),
         ))?;
         Ok((lockdown, initial, desktop, objects))
     }
@@ -436,7 +439,7 @@ fn command_line(launch: &SandboxCommand) -> Vec<u16> {
 pub fn spawn(
     launch: &SandboxCommand,
     sources: crate::LockedProcessSources,
-) -> io::Result<ash_sandboxing::ProcessHandle> {
+) -> io::Result<crate::ProcessHandle> {
     if !cfg!(target_pointer_width = "64") {
         return Err(io::Error::new(
             io::ErrorKind::Unsupported,
@@ -469,7 +472,7 @@ pub fn spawn(
     info.StartupInfo.lpDesktop = desktop_name.as_mut_ptr();
     let object_security = SECURITY_ATTRIBUTES {
         nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
-        lpSecurityDescriptor: object_descriptor.0,
+        lpSecurityDescriptor: object_descriptor.as_ptr(),
         bInheritHandle: 0,
     };
     let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
@@ -589,7 +592,7 @@ pub fn spawn(
         if ResumeThread(raw(&thread)) == u32::MAX {
             return Err(io::Error::last_os_error());
         }
-        Ok(ash_sandboxing::ProcessHandle::new(child))
+        Ok(crate::ProcessHandle::new(child))
     }
 }
 
@@ -685,7 +688,7 @@ fn prepare_loader(_: HANDLE) -> io::Result<()> {
 struct WindowsProcess {
     process: OwnedHandle,
     job: OwnedHandle,
-    _desktop: super::desktop::Desktop,
+    _desktop: ash_utils_process::windows_security::Desktop,
     _app_container: app_container::AppContainer,
     stdin: Option<File>,
     stdout: Option<File>,
@@ -693,7 +696,7 @@ struct WindowsProcess {
     closed: bool,
 }
 
-impl ash_sandboxing::SandboxProcess for WindowsProcess {
+impl crate::SandboxProcess for WindowsProcess {
     fn take_stdin(&mut self) -> Option<Box<dyn io::Write + Send>> {
         self.stdin.take().map(|pipe| Box::new(pipe) as _)
     }
@@ -703,7 +706,7 @@ impl ash_sandboxing::SandboxProcess for WindowsProcess {
     fn take_stderr(&mut self) -> Option<Box<dyn io::Read + Send>> {
         self.stderr.take().map(|pipe| Box::new(pipe) as _)
     }
-    fn try_wait(&mut self) -> io::Result<Option<ash_sandboxing::SandboxProcessExitStatus>> {
+    fn try_wait(&mut self) -> io::Result<Option<crate::SandboxProcessExitStatus>> {
         // SAFETY: process handle remains owned throughout query and wait.
         unsafe {
             match WaitForSingleObject(raw(&self.process), 0) {
@@ -711,9 +714,7 @@ impl ash_sandboxing::SandboxProcess for WindowsProcess {
                 WAIT_OBJECT_0 => {
                     let mut code = 0;
                     checked(GetExitCodeProcess(raw(&self.process), &mut code))?;
-                    Ok(Some(ash_sandboxing::SandboxProcessExitStatus::Code(
-                        code as i32,
-                    )))
+                    Ok(Some(crate::SandboxProcessExitStatus::Code(code as i32)))
                 }
                 _ => Err(io::Error::last_os_error()),
             }
@@ -742,7 +743,7 @@ impl ash_sandboxing::SandboxProcess for WindowsProcess {
 
 impl Drop for WindowsProcess {
     fn drop(&mut self) {
-        let _ = ash_sandboxing::SandboxProcess::close(self);
+        let _ = crate::SandboxProcess::close(self);
     }
 }
 

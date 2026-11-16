@@ -73,9 +73,7 @@ impl ExecutionRegistry {
             return Err(ExecError::Busy);
         }
         let sandbox =
-            exec_server::LocalSandbox::new(ash_install_context::InstallContext::current())
-                .with_pty_helper(std::env::current_exe().map_err(|_| ExecError::Io)?)
-                .build();
+            exec_server::LocalSandbox::new(ash_install_context::InstallContext::current()).build();
         let environment = Arc::new(
             LocalEnvironment::open(
                 id.into(),

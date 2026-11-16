@@ -510,7 +510,6 @@ dependencies = [
  "ash-uds",
  "ash-utils-home-dir",
  "ash-utils-process",
- "ash-utils-pty",
  "dunce",
  "libc",
  "portable-pty",
@@ -828,8 +827,7 @@ version = "0.1.0"
 dependencies = [
  "ash-file-system",
  "ash-file-watcher",
- "ash-mxc-sandbox",
- "ash-utils-pty",
+ "ash-utils-process",
 ]
 
 [[package]]
@@ -1611,6 +1609,7 @@ dependencies = [
  "ash-remote",
  "ash-sandboxing",
  "ash-uds",
+ "ash-utils-process",
  "ash-utils-pty",
  "ash-windows-sandbox",
  "getrandom 0.2.17",
@@ -1674,7 +1673,6 @@ dependencies = [
  "ash-file-identity",
  "ash-package-store",
  "ash-sandboxing",
- "ash-windows-sandbox",
  "flate2",
  "getrandom 0.2.17",
  "jsonc-parser",
@@ -1719,7 +1717,6 @@ dependencies = [
  "ash-sandboxing",
  "ash-utils-string",
  "ash-v8-runtime",
- "ash-windows-sandbox",
  "serde",
  "serde_json",
  "tempfile",
@@ -1859,7 +1856,7 @@ version = "0.1.0"
 dependencies = [
  "ash-diff",
  "ash-install-context",
- "ash-utils-pty",
+ "ash-utils-process",
  "dirs",
  "dunce",
  "fs2",
@@ -2661,6 +2658,7 @@ version = "0.1.0"
 dependencies = [
  "ash-async-utils",
  "ash-file-access",
+ "ash-file-identity",
  "ash-install-context",
  "ash-network-proxy",
  "ash-protocol",
@@ -2668,16 +2666,12 @@ dependencies = [
  "ash-test-binary-support",
  "ash-tool-executor",
  "ash-utils-pty",
- "ash-utils-string",
  "dunce",
- "globset",
  "libc",
  "libtest-mimic",
  "log",
  "mxc-sdk",
  "rustix 1.1.6",
- "serde",
- "serde_json",
  "tempfile",
 ]
 
@@ -3013,7 +3007,7 @@ name = "ash-rmcp-client"
 version = "0.1.0"
 dependencies = [
  "ash-http-client",
- "ash-utils-pty",
+ "ash-utils-process",
  "futures",
  "reqwest 0.13.4",
  "rmcp",
@@ -3084,13 +3078,16 @@ version = "0.1.0"
 dependencies = [
  "ash-file-access",
  "ash-file-identity",
+ "ash-utils-process",
  "ash-utils-pty",
+ "getrandom 0.2.17",
  "globset",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
  "winapi-util",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3434,7 +3431,7 @@ dependencies = [
  "ash-file-search",
  "ash-install-context",
  "ash-process-hardening",
- "ash-utils-pty",
+ "ash-utils-process",
  "dunce",
  "ignore",
  "regex",
@@ -3749,7 +3746,14 @@ dependencies = [
 name = "ash-utils-process"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "getrandom 0.2.17",
+ "libc",
+ "rustix 1.1.6",
+ "sysinfo",
  "tokio",
+ "winapi",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3757,6 +3761,7 @@ name = "ash-utils-pty"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "ash-utils-process",
  "libc",
  "log",
  "portable-pty",
@@ -3901,6 +3906,7 @@ dependencies = [
  "ash-protocol",
  "ash-sandboxing",
  "ash-tool-executor",
+ "ash-utils-process",
  "ash-utils-pty",
  "getrandom 0.2.17",
  "mxc-sdk",
@@ -8357,7 +8363,7 @@ dependencies = [
 [[package]]
 name = "mxc-sdk"
 version = "1.1.0"
-source = "git+https://github.com/chogng/mxc?rev=6448a05eb5ef43507102e7acb690e96059566875#6448a05eb5ef43507102e7acb690e96059566875"
+source = "git+https://github.com/chogng/mxc?rev=37130e3d3a5116cb48ec333c9595fb969f603af2#37130e3d3a5116cb48ec333c9595fb969f603af2"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -8366,6 +8372,7 @@ dependencies = [
  "cidr",
  "flatbuffers",
  "getrandom 0.2.17",
+ "globset",
  "libc",
  "native-tls",
  "nix 0.29.0",

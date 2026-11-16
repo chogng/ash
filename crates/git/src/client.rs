@@ -277,7 +277,7 @@ struct GitProcessGroup(Option<u32>);
 impl Drop for GitProcessGroup {
     fn drop(&mut self) {
         if let Some(id) = self.0 {
-            let _ = pty::process_group::kill_process_group(id);
+            let _ = ash_utils_process::process_group::kill_process_group(id);
         }
     }
 }
@@ -1007,7 +1007,7 @@ impl GitClient {
             .as_ref()
             .map(|observer| GitProcessMeasurement::new(observer.clone(), &invocation));
         #[cfg(windows)]
-        let job = pty::JobObject::create()
+        let job = ash_utils_process::JobObject::create()
             .map_err(|source| GitError::io("create Git process job", source))?;
         #[cfg(windows)]
         let mut child = job
@@ -1130,9 +1130,10 @@ impl GitClient {
             .as_ref()
             .map(|observer| GitProcessMeasurement::new(observer.clone(), &invocation));
         #[cfg(windows)]
-        let job = pty::JobObject::create().map_err(|source| GitError::LaunchFailed {
-            source: Arc::new(source),
-        })?;
+        let job =
+            ash_utils_process::JobObject::create().map_err(|source| GitError::LaunchFailed {
+                source: Arc::new(source),
+            })?;
         #[cfg(windows)]
         let mut child =
             job.spawn_contained(&mut command)
@@ -1368,7 +1369,7 @@ pub(crate) struct GitQueryStream {
     #[cfg(unix)]
     group: GitProcessGroup,
     #[cfg(windows)]
-    job: pty::JobObject,
+    job: ash_utils_process::JobObject,
     stdout: BufReader<ChildStdout>,
     stderr_task: Option<JoinHandle<std::io::Result<BoundedRead>>>,
     command: String,

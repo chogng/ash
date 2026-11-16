@@ -1,10 +1,5 @@
-#[cfg(target_os = "linux")]
-mod linux_fds;
 pub mod pipe;
 mod process;
-pub mod process_group;
-#[cfg(unix)]
-pub mod process_guard;
 pub mod pty;
 #[cfg(test)]
 #[path = "tests.rs"]
@@ -18,12 +13,6 @@ mod windows_console_tests;
 #[cfg(windows)]
 mod windows_input;
 
-/// Spawn a non-interactive process using regular pipes for stdin/stdout/stderr.
-pub use pipe::spawn_process as spawn_pipe_process;
-/// Spawn a non-interactive process using regular pipes, but close stdin immediately.
-pub use pipe::spawn_process_no_stdin as spawn_pipe_process_no_stdin;
-/// Driver-backed process adapter used by integrations with their own process transport.
-pub use process::ProcessDriver;
 /// Handle for interacting with a spawned process (PTY or pipe).
 pub use process::ProcessHandle;
 /// Process signal supported by spawned-process handles.
@@ -32,17 +21,11 @@ pub use process::ProcessSignal;
 pub use process::SpawnedProcess;
 /// Terminal size in character cells used for PTY spawn and resize operations.
 pub use process::TerminalSize;
-/// Combine stdout/stderr receivers into a single broadcast receiver.
-pub use process::combine_output_receivers;
-/// Adapt an externally-driven process into the standard spawned-process handle.
-pub use process::spawn_from_driver;
 pub use pty::PtyArguments;
 /// Report whether ConPTY is available on this platform (Windows only).
 pub use pty::conpty_supported;
 /// Spawn a process attached to a PTY for interactive use.
 pub use pty::spawn_process as spawn_pty_process;
-#[cfg(windows)]
-pub use win::JobObject;
 #[cfg(windows)]
 pub use windows_input::WindowsTtyInputNormalizer;
 

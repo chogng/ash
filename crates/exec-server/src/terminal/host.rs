@@ -559,7 +559,7 @@ fn detach(command: &mut Command) -> io::Result<()> {
     // have escaped an inner job while remaining in a restrictive ancestor;
     // requesting breakaway again then fails with ERROR_ACCESS_DENIED. Inherit
     // that ancestor's constraints without tying the host to this process.
-    if ash_utils_pty::JobObject::current_allows_breakaway()? {
+    if ash_utils_process::JobObject::current_allows_breakaway()? {
         flags |= 0x0100_0000; // BREAKAWAY_FROM_JOB
     }
     command.creation_flags(flags);

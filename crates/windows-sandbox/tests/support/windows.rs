@@ -25,7 +25,6 @@ pub(super) fn executor(dir: &Dir, timeout: Duration) -> CommandExecutor<Approved
         SandboxKind::Restricted,
         "the adapter must prepare restricted execution"
     );
-    assert!(backend.requires_shared_network_proxy());
     CommandExecutor::new(
         dir.clone(),
         backend,

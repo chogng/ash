@@ -7,7 +7,7 @@ pub fn restrict_javascript_process() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     return seatbelt::restrict();
     #[cfg(windows)]
-    return windows_sandbox::finish_locked_process_startup().map_err(|error| error.to_string());
+    return ash_sandboxing::finish_locked_process_startup().map_err(|error| error.to_string());
     #[cfg(not(any(target_os = "macos", windows)))]
     Err("JavaScript process isolation is unavailable on this platform".into())
 }

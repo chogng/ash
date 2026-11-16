@@ -70,21 +70,24 @@ just test ash-mxc-sandbox --test macos --locked -- --test-threads=1 --nocapture
 
 ## PTY 启动
 
-- Unix 使用 SDK 的 `RestrictedLaunch::spawn_with_pty`，由 SDK 分配终端并启动 Bubblewrap 或 Seatbelt。Ash 接入终端输入、合并输出、resize、前台作业中断及进程树关闭。
-- [Windows 接入](src/windows.rs) 负责 PSEC 的宿主卷授权和 ConPTY helper。Rust SDK 仍不支持 ProcessContainer 分配 PTY，宿主通过 `with_pty_helper` 提供启动器；`utils-pty` 启动该程序的 `--ash-mxc-pty` 角色，产品入口先调用 `arg0::dispatch`。
-- Windows 交接格式归 Ash，包含具体命令、显式环境、文件和网络策略、准备阶段的文件身份。环境始终保存为键值对，直接转换为 typed SDK 请求；内部角色不反序列化 SDK 内部执行模型，新增宿主 ACL 授权字段会被拒绝。
-- Windows 交接请求最多 1 MiB UTF-8，按字符边界拆成不超过 8 KiB 的环境项；帮助进程检查块数、总字节数、缺块、重复键及多余字段。工作负载环境与启动器环境分开，传输变量不注入工作负载，显式空环境保持为空。PSEC 所需的 `SYSTEMROOT` 和 `LOCALAPPDATA` 由执行器提供。
-- `tests/pty.rs` 在 Unix 实际验证输入、resize、环境、只读拒绝、退出、前台作业中断和回收；Windows 普通回归验证帮助进程入口，[PSEC 终端用例](tests/pty/windows.rs) 另检查真实终端输入、尺寸、大环境、传输变量隔离、只读拒写、退出码及后代回收。[执行服务验收](../exec-server/README.md#pty-边界) 通过产品可执行文件和 RPC 检查帮助进程装配、重连与退出输出。这些用例须在支持 PSEC 的系统显式执行，已接入 `scripts/test-psec.ps1`；交叉编译不代表对应系统已通过运行验收。
+所有平台直接调用 SDK 的 `RestrictedLaunch::spawn_with_pty`。SDK 创建 Bubblewrap、Seatbelt 或 Windows PSEC 的终端，
+并拥有平台句柄、尺寸、前台中断和清理。Ash 适配输入、合并输出与执行生命周期，不再启动自身 helper 或传输环境分块。
+显式环境直接进入 SDK；文件身份快照仍在准备和启动边界验证。
+
+Windows 的 `windows.rs` 仅投影宿主卷授权，通过实际挂载卷枚举避免探测缺失盘符，并保留显式 UNC 工作目录根。
+PSEC 终端与 RPC 回归已接入 `scripts/test-psec.ps1`，必须在支持完整策略的宿主运行；能力缺失不计为运行通过。
 
 ## SDK 依赖
 
-使用官方 `mxc-sdk = "=1.1.0"` 声明；兼容 fork 基于官方 `c6620183`。根清单和 `Cargo.lock` 固定实际来源，Cargo 与 Bazel 使用同一外部源码。仍需保留的严格启动、前台中断和账户 ACL 接口见 [SDK 依赖说明](../../third_party/mxc/README.md)。
+声明版本为 `mxc-sdk = "=1.1.0"`，兼容基线为官方 `c6620183`。当前开发验证使用桌面 `mxc/src/mxc-sdk`，
+发布前必须将兼容修改发布到固定 Git revision，并更新根清单、lockfile 与 Bazel 来源。
 
-适配器通过 SDK `v1::prepare_restricted` 固定 PSEC、禁止宿主 ACL 改动并传入受信 Bubblewrap 路径及 Seatbelt 追加拒绝规则。SDK 拥有运行器选择、基础 profile 和资源清理；Ash 保存唯一的执行规格，准备和启动时临时生成 SDK 请求。管道、PTY 和 Windows helper 分别取得标准 SDK 句柄。
+适配器通过 `v1::prepare_restricted` 固定平台后端、禁止宿主 ACL 改动，并提供受信 Bubblewrap 路径。
+持续路径限制使用 typed `FilesystemRestriction`，规则编译、祖先移动保护和匹配对象的链接检查由 SDK 负责。
+Ash 继续决定保护哪些目录、元数据与模式。SDK 依赖及退出兼容 fork 的条件见 [SDK 说明](../../third_party/mxc/README.md)。
 
-文件身份快照由 `sandboxing` 持有，使用 `file-identity` 的句柄检查；Windows ACL 授权范围仍由 `windows-sandbox` 持有。终端交接直接保存 Ash 的 Allowed、Denied 或 Managed 模式，以及显式环境和文件身份；SDK 的方向网络策略在接入边界生成，无需反向恢复权限或修补内部运行时标记。
-
-升级时固定 commit 并复核兼容 fork 相对官方基线的差异，再验证两个沙箱消费者及平台行为。源码版本和官方支持说明不能替代产品隔离验收。
+文件身份快照由 `sandboxing` 持有，Windows 账户后端的 ACL 授权范围仍由 `windows-sandbox` 持有。
+网络方向策略只在 SDK 接入边界生成，不从底层请求反向恢复产品授权。
 
 ## 验证
 

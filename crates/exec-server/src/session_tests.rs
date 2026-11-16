@@ -252,7 +252,7 @@ fn managed_session_read_failure_releases_its_proxy_before_reporting_failure() {
             },
         )
         .unwrap();
-    assert_eq!(fixture.state.proxy_ports.lock().unwrap().len(), 2);
+    assert_eq!(fixture.state.proxy_ports.lock().unwrap().len(), 1);
     fixture
         .stdout
         .send(Err(io::Error::other("proxy workload output failed")))
@@ -387,7 +387,7 @@ impl SandboxBackend for StreamBackend {
     ) -> Result<PreparedCommand, SandboxError> {
         let process = self.0.lock().unwrap().take().unwrap();
         if let Some(proxy) = command.network_proxy() {
-            *process.state.proxy_ports.lock().unwrap() = proxy.ports().to_vec();
+            *process.state.proxy_ports.lock().unwrap() = vec![proxy.port().get()];
         }
         Ok(PreparedCommand::sandboxed(command, StreamLaunch(process)))
     }

@@ -309,7 +309,6 @@ pub(crate) fn compose_local_tools_with_config(
     dir_grants: Arc<DirGrants>,
     grep: Arc<grep::Service>,
     file_search: Arc<file_search::Service>,
-    pty_helper: Option<&std::path::PathBuf>,
     documents: Option<Arc<dyn ash_tools::TextDocumentEditorProvider>>,
     threads: Arc<ash_core::ThreadController>,
     session_environments: Arc<crate::session_environment::SessionEnvironments>,
@@ -327,10 +326,7 @@ pub(crate) fn compose_local_tools_with_config(
     let install_context = InstallContext::current();
     let sandbox = || {
         let sandbox = exec_server::LocalSandbox::new(install_context.clone());
-        match pty_helper {
-            Some(executable) => sandbox.with_pty_helper(executable.clone()).build(),
-            None => sandbox.build(),
-        }
+        sandbox.build()
     };
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let environment_id = ash_tools::EnvId::local();

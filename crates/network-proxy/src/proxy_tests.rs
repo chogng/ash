@@ -63,7 +63,7 @@ fn http_forwards_the_observed_target_and_strips_proxy_credentials() {
         &CancellationSource::new().token(),
     )
     .unwrap();
-    let mut stream = client(proxy.http_port());
+    let mut stream = client(proxy.port());
     write!(stream, "GET http://127.0.0.1:{port}/resource?x=1 HTTP/1.1\r\nHost: forged.example\r\nProxy-Authorization: secret\r\nConnection: close, x-private\r\nX-Private: secret\r\n\r\n").unwrap();
     let mut response = String::new();
     stream.read_to_string(&mut response).unwrap();
@@ -96,7 +96,7 @@ fn explicit_denial_never_opens_an_upstream_connection() {
     )
     .unwrap();
     for method in ["GET", "POST"] {
-        let mut stream = client(proxy.http_port());
+        let mut stream = client(proxy.port());
         write!(stream, "{method} http://127.0.0.1:{port}/ HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: 0\r\n\r\n").unwrap();
         assert!(read_headers(&mut stream).starts_with("HTTP/1.1 403"));
     }
@@ -104,7 +104,7 @@ fn explicit_denial_never_opens_an_upstream_connection() {
         origin.accept().unwrap_err().kind(),
         std::io::ErrorKind::WouldBlock
     );
-    let mut stream = client(proxy.http_port());
+    let mut stream = client(proxy.port());
     stream.write_all(b"GET http://not-resolvable.invalid/ HTTP/1.1\r\nHost: not-resolvable.invalid\r\nConnection: close\r\n\r\n").unwrap();
     assert!(
         read_headers(&mut stream).starts_with("HTTP/1.1 403"),
@@ -129,7 +129,7 @@ fn connect_tunnels_bytes_after_authorization_and_closes_on_drop() {
         closed_tx.send(stream.read(&mut bytes).unwrap()).unwrap();
     });
     let proxy = NetworkProxy::start(allow(), &CancellationSource::new().token()).unwrap();
-    let proxy_port = proxy.http_port();
+    let proxy_port = proxy.port();
     let mut stream = client(proxy_port);
     write!(
         stream,
@@ -160,7 +160,7 @@ fn socks_tcp_uses_the_same_policy_and_rejects_udp() {
     )
     .unwrap();
     for (command, expected) in [(1, 2), (3, 7)] {
-        let mut stream = client(proxy.socks_port());
+        let mut stream = client(proxy.port());
         stream.write_all(&[5, 1, 0]).unwrap();
         let mut reply = [0; 2];
         stream.read_exact(&mut reply).unwrap();
@@ -196,7 +196,7 @@ fn shared_listener_serves_http_connect_and_socks_with_the_same_authority() {
     });
     let requests = Arc::new(Mutex::new(Vec::new()));
     let observed = Arc::clone(&requests);
-    let proxy = NetworkProxy::start_shared(
+    let proxy = NetworkProxy::start(
         NetworkPolicyHandle::new(move |request, _| {
             observed.lock().unwrap().push(request);
             async { NetworkDecision::Allow }
@@ -204,13 +204,12 @@ fn shared_listener_serves_http_connect_and_socks_with_the_same_authority() {
         &CancellationSource::new().token(),
     )
     .unwrap();
-    assert_eq!(proxy.http_port(), proxy.socks_port());
     for protocol in [
         NetworkProtocol::Http,
         NetworkProtocol::HttpsConnect,
         NetworkProtocol::Socks5Tcp,
     ] {
-        let mut stream = client(proxy.http_port());
+        let mut stream = client(proxy.port());
         match protocol {
             NetworkProtocol::Http => {
                 write!(stream, "GET http://127.0.0.1:{port}/ HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").unwrap();
@@ -261,8 +260,8 @@ fn shared_listener_serves_http_connect_and_socks_with_the_same_authority() {
 
 #[test]
 fn dropping_shared_listener_closes_incomplete_protocol_handshakes() {
-    let proxy = NetworkProxy::start_shared(allow(), &CancellationSource::new().token()).unwrap();
-    let port = proxy.http_port();
+    let proxy = NetworkProxy::start(allow(), &CancellationSource::new().token()).unwrap();
+    let port = proxy.port();
     let mut stream = client(port);
     drop(proxy);
     let result = stream.read(&mut [0]);
@@ -289,7 +288,7 @@ fn cancelling_an_execution_cancels_pending_authorization() {
             }
         });
     let proxy = NetworkProxy::start(policy, &source.token()).unwrap();
-    let mut stream = client(proxy.http_port());
+    let mut stream = client(proxy.port());
     stream
         .write_all(b"CONNECT 127.0.0.1:443 HTTP/1.1\r\nHost: 127.0.0.1:443\r\n\r\n")
         .unwrap();

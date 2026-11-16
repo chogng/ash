@@ -754,7 +754,7 @@ debug = "limited"
 sherpa-onnx-sys = { git = "https://github.com/chogng/ash-sherpa-onnx", rev = "3ec6c278a136f0d42235db5e72863774543c291b" }
 # Preserve the sandbox boundaries absent from the published SDK. The compatibility
 # fork keeps upstream layout; remove this override after equivalent upstream support.
-mxc-sdk = { git = "https://github.com/chogng/mxc", rev = "6448a05eb5ef43507102e7acb690e96059566875" }
+mxc-sdk = { git = "https://github.com/chogng/mxc", rev = "37130e3d3a5116cb48ec333c9595fb969f603af2" }
 # Upstream PR #637 removes anymap2 while preserving Liquid's typed registers.
 # Pin core and its derive crate together so the optional derive feature has one source.
 # This PR is not yet merged; remove these pins after an upstream release includes it.

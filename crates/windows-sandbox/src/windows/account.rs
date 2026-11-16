@@ -160,7 +160,7 @@ fn ensure_users_membership(account: &Account) -> Result<()> {
     unsafe {
         LookupAccountSidW(
             std::ptr::null(),
-            users.0,
+            users.as_ptr(),
             std::ptr::null_mut(),
             &mut name_size,
             std::ptr::null_mut(),
@@ -173,7 +173,7 @@ fn ensure_users_membership(account: &Account) -> Result<()> {
     if unsafe {
         LookupAccountSidW(
             std::ptr::null(),
-            users.0,
+            users.as_ptr(),
             name.as_mut_ptr(),
             &mut name_size,
             domain.as_mut_ptr(),
@@ -185,7 +185,9 @@ fn ensure_users_membership(account: &Account) -> Result<()> {
         return Err(win::error("LookupAccountSidW(Users group)"));
     }
     let sid = win::sid(&account.sid)?;
-    let member = LOCALGROUP_MEMBERS_INFO_0 { lgrmi0_sid: sid.0 };
+    let member = LOCALGROUP_MEMBERS_INFO_0 {
+        lgrmi0_sid: sid.as_ptr(),
+    };
     // Ordinary user membership supplies directory traversal and OS runtime
     // access. It does not grant administrator rights; the child is restricted
     // again with its execution-specific SID before any command runs.
@@ -356,7 +358,7 @@ pub(super) fn seal(path: &Path, bytes: &mut [u8]) -> Result<()> {
     {
         return Err(win::error("CryptProtectData"));
     }
-    let _guard = win::Local(output.pbData.cast());
+    let _guard = unsafe { win::Local::from_raw(output.pbData.cast()) };
     let encrypted = unsafe { std::slice::from_raw_parts(output.pbData, output.cbData as usize) };
     use std::io::Write;
     let pending = path.with_extension("pending");
@@ -413,7 +415,7 @@ pub(super) fn unseal(path: &Path) -> Result<Vec<u8>> {
     {
         return Err(win::error("CryptUnprotectData"));
     }
-    let _guard = win::Local(output.pbData.cast());
+    let _guard = unsafe { win::Local::from_raw(output.pbData.cast()) };
     let plaintext =
         unsafe { std::slice::from_raw_parts(output.pbData, output.cbData as usize).to_vec() };
     for index in 0..output.cbData as usize {

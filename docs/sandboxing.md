@@ -131,3 +131,20 @@ PSEC 的 `allowedProxyPeer` 可以绑定代理身份，但其私网代理模型�
 ## 验证入口
 
 文件、网络、终端和进程生命周期使用 [MXC 适配器测试](../crates/mxc-sandbox/README.md#验证)。Windows 的 PSEC、账户服务与虚拟机环境使用 [Windows 验收入口](windows-sandbox-acceptance-runbook.md)。验证结论限于实际运行的系统、策略和执行边界。
+
+## JS 进程隔离
+
+`sandboxing::spawn_locked_process` 与 `finish_locked_process_startup` 拥有 Windows JS 宿主的启动与单向降权。
+它组合无网络能力的 AppContainer、独立限制 SID、禁止子进程的创建策略和单进程 Job。
+初始线程仅在准备引擎及源文件期间保留临时令牌，执行扩展代码前释放；工作线程始终使用受限主令牌。
+安装包只读取已授权包目录；内置源文件不获得工作目录读取权限。进程结束后回收包 ACL 和 AppContainer。
+
+这条路径不安装账户或服务。`utils/process` 拥有共用 Windows 安全对象和桌面句柄，账户后端继续拥有其预配、
+审计、WFP 与 ACL 授权。macOS JS 宿主在准备完成后安装进程级 Seatbelt。
+
+真实隔离回归由扩展宿主测试：
+
+```sh
+python -B scripts/cargo.py build -p ash-external-js-ext --example windows_isolation_probe --profile ci-test
+just test ash-external-js-ext --bin ash-external-js-ext windows_tests
+```

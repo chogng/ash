@@ -1,4 +1,5 @@
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
+load("@rules_rs//rs/private:cargo_workspace_graph.bzl", "cargo_toml_dependencies")
 load("@rules_rs//rs/private:resolver.bzl", "resolve")
 
 def _ignore_progress(_message):
@@ -45,3 +46,33 @@ def _nested_platform_features_impl(ctx):
     return unittest.end(env)
 
 nested_platform_features_test = unittest.make(_nested_platform_features_impl)
+
+def _target_build_dependencies_impl(ctx):
+    env = unittest.begin(ctx)
+    target = "cfg(windows)"
+    dependencies = cargo_toml_dependencies({
+        "package": {"name": "fixture"},
+        "dependencies": {"runtime": "1"},
+        "target": {target: {
+            "dependencies": {"platform-runtime": "1"},
+            "build-dependencies": {
+                "cc": "1",
+                "windows": {"workspace": True, "features": ["Win32_Security"]},
+            },
+        }},
+    }, {"workspace": {"dependencies": {
+        "windows": {"version": "0.62", "features": ["Win32_Foundation"]},
+    }}})
+    build = {dep["name"]: dep for dep in dependencies if dep.get("kind") == "build"}
+    asserts.equals(env, ["cc", "windows"], sorted(build.keys()))
+    asserts.equals(env, target, build["cc"]["target"])
+    asserts.equals(env, target, build["windows"]["target"])
+    asserts.equals(env, "0.62", build["windows"]["req"])
+    asserts.equals(env, ["Win32_Foundation", "Win32_Security"], build["windows"]["features"])
+    runtime = {dep["name"]: dep for dep in dependencies if dep.get("kind") != "build"}
+    asserts.equals(env, ["platform-runtime", "runtime"], sorted(runtime.keys()))
+    asserts.equals(env, None, runtime["runtime"].get("target"))
+    asserts.equals(env, target, runtime["platform-runtime"]["target"])
+    return unittest.end(env)
+
+target_build_dependencies_test = unittest.make(_target_build_dependencies_impl)

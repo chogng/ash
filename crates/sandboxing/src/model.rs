@@ -30,23 +30,19 @@ pub enum NetworkAccess {
     Managed,
 }
 
-/// Exact proxy endpoints supplied by the process owner after its listeners have bound.
+/// One HTTP/SOCKS endpoint supplied by the process owner after its listener has bound.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ManagedNetworkAccess {
-    http_port: std::num::NonZeroU16,
-    socks_port: std::num::NonZeroU16,
+    port: std::num::NonZeroU16,
 }
 
 impl ManagedNetworkAccess {
-    pub fn new(http_port: std::num::NonZeroU16, socks_port: std::num::NonZeroU16) -> Self {
-        Self {
-            http_port,
-            socks_port,
-        }
+    pub fn new(port: std::num::NonZeroU16) -> Self {
+        Self { port }
     }
 
-    pub fn ports(self) -> [u16; 2] {
-        [self.http_port.get(), self.socks_port.get()]
+    pub fn port(self) -> std::num::NonZeroU16 {
+        self.port
     }
 }
 

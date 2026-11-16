@@ -194,7 +194,7 @@ impl Rules {
             ..unsafe { std::mem::zeroed() }
         };
         check(
-            unsafe { FwpmProviderAdd0(engine.0, &provider, access.0) },
+            unsafe { FwpmProviderAdd0(engine.0, &provider, access.as_ptr()) },
             "FwpmProviderAdd0",
         )?;
         let sublayer = FWPM_SUBLAYER0 {
@@ -206,7 +206,7 @@ impl Rules {
             ..unsafe { std::mem::zeroed() }
         };
         check(
-            unsafe { FwpmSubLayerAdd0(engine.0, &sublayer, access.0) },
+            unsafe { FwpmSubLayerAdd0(engine.0, &sublayer, access.as_ptr()) },
             "FwpmSubLayerAdd0",
         )?;
         for plan in &self.filters {
@@ -215,8 +215,8 @@ impl Rules {
                 .ok_or("invalid account in network plan")?;
             let user = win::descriptor(&format!("D:(A;;CC;;;{})", account.sid))?;
             let mut blob = FWP_BYTE_BLOB {
-                size: unsafe { GetSecurityDescriptorLength(user.0) },
-                data: user.0.cast(),
+                size: unsafe { GetSecurityDescriptorLength(user.as_ptr()) },
+                data: user.as_ptr().cast(),
             };
             let conditions = conditions(account, plan.action, &mut blob);
             let filter = FWPM_FILTER0 {
@@ -241,7 +241,7 @@ impl Rules {
                 ..unsafe { std::mem::zeroed() }
             };
             check(
-                unsafe { FwpmFilterAdd0(engine.0, &filter, access.0, std::ptr::null_mut()) },
+                unsafe { FwpmFilterAdd0(engine.0, &filter, access.as_ptr(), std::ptr::null_mut()) },
                 "FwpmFilterAdd0",
             )?;
         }
@@ -486,7 +486,10 @@ unsafe fn matches_user(descriptor: *mut std::ffi::c_void, expected: &str) -> boo
         let Ok(sid) = win::sid(expected) else {
             return false;
         };
-        EqualSid((&ace.SidStart as *const u32).cast_mut().cast(), sid.0) != 0
+        EqualSid(
+            (&ace.SidStart as *const u32).cast_mut().cast(),
+            sid.as_ptr(),
+        ) != 0
     }
 }
 

@@ -18,7 +18,7 @@ v8-runtime.workspace = true
 v8 = { workspace = true, features = ["v8_enable_sandbox"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sandbox.workspace = true
+ash-sandboxing.workspace = true
 
 [dev-dependencies]
 host = { package = "ash-external-ext", path = "../external-ext" }

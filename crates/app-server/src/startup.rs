@@ -425,8 +425,7 @@ pub(super) fn open_server(
         .with_build_info(build_info)
         .with_host_grok_auth()
         .with_host_kimi_credentials()
-        .with_host_zcode_credentials()
-        .with_pty_helper(env::current_exe().map_err(|error| error.to_string())?);
+        .with_host_zcode_credentials();
     if let Some(exporter) = crate::trace::from_environment()? {
         options = options.with_trace_exporter(exporter);
     }

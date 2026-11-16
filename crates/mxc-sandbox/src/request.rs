@@ -4,15 +4,12 @@ use ash_sandboxing::FilesystemSnapshot;
 use ash_sandboxing::NetworkAccess;
 use ash_sandboxing::SandboxError;
 use mxc_sdk::v1::FilesystemPolicy;
-use serde::Deserialize;
-use serde::Serialize;
 use std::path::Path;
 use std::path::PathBuf;
 
-// The same concrete specification crosses the Windows helper boundary. SDK implementation
-// state is never persisted or reconstructed from a second representation of the policy.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+// SDK requests are created only at the launch boundary. Filesystem identity remains
+// attached to the authorization captured during preparation.
+#[derive(Debug)]
 pub(super) struct Request {
     pub command_line: String,
     pub cwd: String,
@@ -25,10 +22,10 @@ pub(super) struct Request {
     bubblewrap: Option<PathBuf>,
     private_ipc: Vec<String>,
     #[cfg(target_os = "macos")]
-    seatbelt_rules: String,
+    filesystem_restrictions: Vec<mxc_sdk::v1::FilesystemRestriction>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Network {
     Allowed,
     Denied,
@@ -42,7 +39,7 @@ impl Request {
         cwd: String,
         files: FilesystemPolicy,
         network: NetworkAccess,
-        proxy_port: Option<u16>,
+        proxy_port: Option<std::num::NonZeroU16>,
     ) -> Result<Self, SandboxError> {
         let network = match (network, proxy_port) {
             (NetworkAccess::Allowed, None) => Network::Allowed,
@@ -50,9 +47,7 @@ impl Request {
             #[cfg(windows)]
             (NetworkAccess::Managed, _) => return Err(crate::policy::unsupported_managed_network()),
             #[cfg(not(windows))]
-            (NetworkAccess::Managed, Some(port)) if port != 0 => {
-                Network::Managed(std::num::NonZeroU16::new(port).expect("port was checked"))
-            }
+            (NetworkAccess::Managed, Some(port)) => Network::Managed(port),
             _ => {
                 return Err(unavailable(
                     "managed networking requires one execution-owned HTTP/SOCKS endpoint",
@@ -83,7 +78,7 @@ impl Request {
             bubblewrap: None,
             private_ipc: Vec::new(),
             #[cfg(target_os = "macos")]
-            seatbelt_rules: String::new(),
+            filesystem_restrictions: Vec::new(),
         })
     }
 
@@ -128,8 +123,11 @@ impl Request {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn set_seatbelt_rules(&mut self, rules: String) {
-        self.seatbelt_rules = rules;
+    pub fn set_filesystem_restrictions(
+        &mut self,
+        restrictions: Vec<mxc_sdk::v1::FilesystemRestriction>,
+    ) {
+        self.filesystem_restrictions = restrictions;
     }
 
     pub fn prepare(&self) -> Result<mxc_sdk::v1::RestrictedLaunch, SandboxError> {
@@ -141,7 +139,7 @@ impl Request {
         options.unix_socket_paths = self.private_ipc.clone();
         #[cfg(target_os = "macos")]
         {
-            options.seatbelt_denials = self.seatbelt_rules.clone();
+            options.filesystem_restrictions = self.filesystem_restrictions.clone();
         }
         mxc_sdk::v1::prepare_restricted(crate::policy::sdk_request(self), options).map_err(
             |error| {

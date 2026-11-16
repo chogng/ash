@@ -1,9 +1,9 @@
 use super::restrict_javascript_process as finish_startup;
 use ash_sandboxing::SandboxCommand;
+use ash_sandboxing::spawn_locked_process as spawn;
 use std::fs::File;
 use std::io;
 use std::os::windows::io::AsRawHandle;
-use windows_sandbox::spawn_locked_process as spawn;
 use windows_sys::Win32::Foundation::HANDLE_FLAG_INHERIT;
 use windows_sys::Win32::Foundation::SetHandleInformation;
 use windows_sys_061 as windows_sys;
@@ -23,15 +23,15 @@ use std::time::Instant;
 
 #[test]
 fn locked_process_blocks_host_io_on_initial_existing_and_new_threads() {
-    verify_locked_process(windows_sandbox::LockedProcessSources::Package);
+    verify_locked_process(ash_sandboxing::LockedProcessSources::Package);
 }
 
 #[test]
 fn embedded_process_never_grants_its_working_directory_and_still_blocks_host_io() {
-    verify_locked_process(windows_sandbox::LockedProcessSources::Embedded);
+    verify_locked_process(ash_sandboxing::LockedProcessSources::Embedded);
 }
 
-fn verify_locked_process(sources: windows_sandbox::LockedProcessSources) {
+fn verify_locked_process(sources: ash_sandboxing::LockedProcessSources) {
     let root = tempfile::tempdir().unwrap();
     let secret = root.path().join("secret.txt");
     std::fs::write(&secret, "host-only").unwrap();
@@ -66,8 +66,8 @@ fn verify_locked_process(sources: windows_sandbox::LockedProcessSources) {
         "endpoint":listener.local_addr().unwrap().to_string(),
         "parentPid":std::process::id(),
         "sources": match sources {
-            windows_sandbox::LockedProcessSources::Package => "package",
-            windows_sandbox::LockedProcessSources::Embedded => "embedded",
+            ash_sandboxing::LockedProcessSources::Package => "package",
+            ash_sandboxing::LockedProcessSources::Embedded => "embedded",
         },
     });
     writeln!(child.take_stdin().unwrap(), "{config}").unwrap();
@@ -106,7 +106,7 @@ fn verify_locked_process(sources: windows_sandbox::LockedProcessSources) {
         .find_map(|line| line.strip_prefix("app-sid="))
         .unwrap();
     let profile = profile_folder(sid);
-    if matches!(sources, windows_sandbox::LockedProcessSources::Embedded) {
+    if matches!(sources, ash_sandboxing::LockedProcessSources::Embedded) {
         // The handle still owns the launch. Equal ACLs here prove that cleanup is
         // not concealing temporary access to unrelated build/install files.
         assert_eq!(

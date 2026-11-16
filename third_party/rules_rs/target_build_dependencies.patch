@@ -1,0 +1,83 @@
+diff --git a/rs/private/cargo_workspace_graph.bzl b/rs/private/cargo_workspace_graph.bzl
+--- a/rs/private/cargo_workspace_graph.bzl
++++ b/rs/private/cargo_workspace_graph.bzl
+@@ -178,7 +178,21 @@
+                 target = target,
+             ))
+
++        for dep, spec in value.get("build-dependencies", {}).items():
++            dependencies.append(cargo_toml_dep_to_dep_dict(
++                dep,
++                spec,
++                package_name,
++                workspace_cargo_toml_json,
++                is_build = True,
++                target = target,
++            ))
++
+     return dependencies
++
++def cargo_toml_fact_key(source, name):
++    # Older facts omitted target build dependencies; never reuse that metadata.
++    return "cargo_toml_v2_" + source + "_" + name
+
+ def cargo_toml_fact(cargo_toml_json, workspace_cargo_toml_json = None, strip_prefix = ""):
+     return dict(
+diff --git a/rs/private/downloader.bzl b/rs/private/downloader.bzl
+--- a/rs/private/downloader.bzl
++++ b/rs/private/downloader.bzl
+@@ -1,6 +1,7 @@
+ load("@bazel_tools//tools/build_defs/repo:git_worker.bzl", "git_repo")
+ load(":annotations.bzl", "annotation_for")
+ load(":cargo_credentials.bzl", "registry_auth_headers")
++load(":cargo_workspace_graph.bzl", "cargo_toml_fact_key")
+ load(":registry_utils.bzl", "CRATES_IO_REGISTRY", "sharded_path")
+ load(":toml2json.bzl", "run_toml2json")
+
+@@ -53,7 +54,7 @@
+
+         name = package["name"]
+
+-        key = source + "_" + name
++        key = cargo_toml_fact_key(source, name)
+         if key in existing_facts:
+             continue
+
+@@ -119,7 +120,7 @@
+                 # Github already handled above
+                 continue
+
+-            key = source + "_" + name
++            key = cargo_toml_fact_key(source, name)
+             if key in existing_facts:
+                 continue
+
+diff --git a/rs/extensions.bzl b/rs/extensions.bzl
+--- a/rs/extensions.bzl
++++ b/rs/extensions.bzl
+@@ -7,6 +7,7 @@
+ load(
+     "//rs/private:cargo_workspace_graph.bzl",
+     "cargo_toml_fact",
++    "cargo_toml_fact_key",
+     "platform_label",
+     "render_dep_data",
+     "render_string_list",
+@@ -217,7 +218,7 @@
+             facts[key] = json.encode(fact)
+             package["strip_prefix"] = fact.get("strip_prefix", "")
+         elif source.startswith("git+"):
+-            key = source + "_" + name
++            key = cargo_toml_fact_key(source, name)
+             fact = existing_facts.get(key)
+             if fact:
+                 facts[key] = fact
+@@ -767,7 +768,7 @@
+
+                 strip_prefix = package.get("strip_prefix")
+                 if strip_prefix == None:
+-                    strip_prefix = json.decode(facts[source + "_" + package["name"]])["strip_prefix"]
++                    strip_prefix = json.decode(facts[cargo_toml_fact_key(source, package["name"])])["strip_prefix"]
+                 package_path = _git_crate_package_path(annotation, strip_prefix)
+                 build_file_path = paths.join(package_path, "BUILD.bazel") if package_path else "BUILD.bazel"
+                 git_repo["build_files"][build_file_path] = _additive_build_file_content(mctx, annotation)

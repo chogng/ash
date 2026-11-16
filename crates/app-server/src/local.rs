@@ -134,7 +134,6 @@ pub struct AppServerOptions {
     profile_runtime: Option<Arc<LocalProfileRuntime>>,
     trace_exporter: Option<otel_trace_websocket::Exporter>,
     build_info: Option<build_info::BuildInfo>,
-    pty_helper: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -210,7 +209,6 @@ impl AppServerOptions {
             profile_runtime: None,
             trace_exporter: None,
             build_info: None,
-            pty_helper: None,
         }
     }
 
@@ -335,10 +333,6 @@ impl AppServerOptions {
 
     /// Runs tgrep indexing and mmap-backed search in a private long-lived process.
     /// Configures the executable that dispatches the internal sandbox PTY role.
-    pub fn with_pty_helper(mut self, executable: std::path::PathBuf) -> Self {
-        self.pty_helper = Some(executable);
-        self
-    }
 
     /// Replaces the production model operation client for this composition root.
     ///
@@ -594,7 +588,6 @@ impl PartialEq for AppServerOptions {
             && self.github_authentication_extension == other.github_authentication_extension
             && self.github_extension == other.github_extension
             && self.product_services == other.product_services
-            && self.pty_helper == other.pty_helper
     }
 }
 
@@ -1440,7 +1433,6 @@ pub fn open_app_server_with_codebase_providers(
     let report_issue_url = product_services
         .as_ref()
         .and_then(|services| services.report_issue_url.clone());
-    let pty_helper = options.pty_helper.take();
     if options.plugin_package_service.is_none()
         && let Some(sources) = product_services
             .as_ref()
@@ -2372,9 +2364,6 @@ pub fn open_app_server_with_codebase_providers(
             )
             .map_err(open_error)?,
         ));
-    }
-    if let Some(executable) = pty_helper {
-        server = server.with_pty_helper(executable);
     }
     if let Some(models) = providers.models {
         server = server.with_codebase_models(models);

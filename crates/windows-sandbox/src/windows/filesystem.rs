@@ -5,8 +5,8 @@ use super::Execution;
 use super::win;
 use super::win::Handle;
 use super::win::Result;
-use mxc_sdk::mxc_common::filesystem_dacl::DaclError;
-use mxc_sdk::mxc_common::filesystem_dacl::DaclManager;
+use mxc_sdk::v1::filesystem_acl::DaclError;
+use mxc_sdk::v1::filesystem_acl::DaclManager;
 use std::collections::BTreeSet;
 use std::os::windows::fs::MetadataExt;
 use std::path::Path;
@@ -200,9 +200,9 @@ impl Filesystem {
         }
         // Check delegation before any ACL change. An elevated setup process is
         // never used to reinterpret a caller's filesystem grants.
-        mxc_sdk::mxc_common::filesystem_access::check_delegation(&request.files)
+        mxc_sdk::v1::filesystem_acl::check_delegation(&request.files)
             .map_err(|error| error.message().to_owned())?;
-        let report = mxc_sdk::mxc_common::filesystem_dacl::recover_orphaned_state_in(journal)
+        let report = mxc_sdk::v1::filesystem_acl::recover_orphaned_state_in(journal)
             .map_err(|error| error.to_string())?;
         if !report.errors.is_empty() {
             return Err("orphaned Windows ACL state must be recovered before execution".into());
@@ -237,7 +237,7 @@ impl Filesystem {
 
 fn apply_acl_with_retry(
     journal: &Path,
-    files: &mxc_sdk::mxc_common::models::ContainerPolicy,
+    files: &mxc_sdk::v1::FilesystemPolicy,
     mut apply: impl FnMut(&mut DaclManager) -> std::result::Result<(), DaclError>,
 ) -> Result<DaclManager> {
     let mut attempts_remaining = 3;
@@ -261,7 +261,7 @@ fn apply_acl_with_retry(
     }
 }
 
-pub(super) fn validate(policy: &mxc_sdk::mxc_common::models::ContainerPolicy) -> Result<()> {
+pub(super) fn validate(policy: &mxc_sdk::v1::FilesystemPolicy) -> Result<()> {
     use windows_sys::Win32::Storage::FileSystem::BY_HANDLE_FILE_INFORMATION;
     use windows_sys::Win32::Storage::FileSystem::GetFileInformationByHandle;
     let writable = policy

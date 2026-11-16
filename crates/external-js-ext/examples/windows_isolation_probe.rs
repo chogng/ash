@@ -1,6 +1,6 @@
 #[cfg(windows)]
 mod probe {
-    use windows_sandbox::finish_locked_process_startup as finish_startup;
+    use ash_sandboxing::finish_locked_process_startup as finish_startup;
 
     use std::io;
 

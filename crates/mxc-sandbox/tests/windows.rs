@@ -49,7 +49,6 @@ fn executor(dir: &Dir, timeout: Duration) -> CommandExecutor<Approved, MxcSandbo
         SandboxKind::Restricted,
         "the adapter must prepare restricted execution"
     );
-    assert!(backend.requires_shared_network_proxy());
     CommandExecutor::new(
         dir.clone(),
         backend,

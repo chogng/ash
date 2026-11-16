@@ -16,6 +16,18 @@ use windows_sys::Win32::Storage::FileSystem::{
     GetFileInformationByHandleEx,
 };
 
+pub(super) fn volume_roots() -> io::Result<Vec<PathBuf>> {
+    // SAFETY: GetLogicalDrives has no pointer parameters or preconditions.
+    let drives = unsafe { windows_sys::Win32::Storage::FileSystem::GetLogicalDrives() };
+    if drives == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok((0..26)
+        .filter(|index| drives & (1 << index) != 0)
+        .map(|index| PathBuf::from(format!("{}:\\", char::from(b'A' + index))))
+        .collect())
+}
+
 pub(super) fn open_for_inspection(path: &Path) -> io::Result<File> {
     use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
     use windows_sys::Win32::Storage::FileSystem::FILE_READ_ATTRIBUTES;

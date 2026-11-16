@@ -12,11 +12,6 @@ use std::sync::Arc;
 pub trait SandboxBackend: Send + Sync + 'static {
     fn kind(&self) -> SandboxKind;
 
-    /// Whether HTTP and SOCKS must share the one endpoint allowed by this backend.
-    fn requires_shared_network_proxy(&self) -> bool {
-        false
-    }
-
     /// Classifies a non-successful prepared process result as sandbox enforcement or an ordinary
     /// command failure.
     ///
@@ -78,10 +73,6 @@ impl<B: SandboxBackend> SandboxManager<B> {
 
     pub fn dir(&self) -> &Dir {
         &self.dir
-    }
-
-    pub fn requires_shared_network_proxy(&self) -> bool {
-        self.backend.requires_shared_network_proxy()
     }
 
     pub fn prepare(

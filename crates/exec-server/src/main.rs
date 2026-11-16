@@ -98,7 +98,6 @@ fn run() -> Result<(), String> {
             network,
             Arc::new(
                 exec_server::LocalSandbox::new(ash_install_context::InstallContext::current())
-                    .with_pty_helper(std::env::current_exe().map_err(|error| error.to_string())?)
                     .build(),
             ),
         )

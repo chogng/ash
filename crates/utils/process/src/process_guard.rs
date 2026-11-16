@@ -146,7 +146,7 @@ unsafe fn close_descriptors(maximum_fd: i32) -> bool {
         let _ = maximum_fd;
         // Reuse descriptor-table enumeration, including sparse descriptors above
         // a lowered RLIMIT_NOFILE. CLOEXEC descriptors close at the immediate exec.
-        crate::pipe::close_inherited_fds_except(&[3]).is_ok()
+        crate::descriptors::close_inherited_fds_except(&[3]).is_ok()
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {

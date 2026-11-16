@@ -11,6 +11,20 @@ use ash_sandboxing::SandboxPathRule;
 use ash_sandboxing::SandboxPolicy;
 use ash_sandboxing::SandboxProcessExitStatus;
 use std::io::Read;
+use std::time::Duration;
+use std::time::Instant;
+
+fn prepare_scope(scope: &SandboxScope) -> Result<ash_sandboxing::PreparedCommand, SandboxError> {
+    MxcSandbox::new(InstallContext::current()).prepare_scoped(
+        &SandboxCommand::new(
+            "/bin/sh",
+            ["-c", "true"],
+            scope.command_dir().canonical_path(),
+        ),
+        SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied),
+        scope,
+    )
+}
 
 // These are the common path grammar cases exercised by the frontend glob
 // tests. Validate the OS policy too, rather than merely comparing regex text.
@@ -111,11 +125,8 @@ fn continuous_denials_reject_existing_hard_link_and_symlink_aliases() {
                 .unwrap(),
             ])
             .unwrap();
-        let filesystem = scope
-            .resolve_filesystem_with_continuous_patterns(FileSystemAccess::DirectoryWrite)
-            .unwrap();
         assert!(matches!(
-            rules(&scope, &filesystem),
+            prepare_scope(&scope),
             Err(SandboxError::UnsupportedPolicy(_))
         ));
     }
@@ -136,11 +147,8 @@ fn non_ascii_byte_classes_cannot_silently_change_matching_semantics() {
             .unwrap(),
         ])
         .unwrap();
-    let filesystem = scope
-        .resolve_filesystem_with_continuous_patterns(FileSystemAccess::DirectoryWrite)
-        .unwrap();
     assert!(matches!(
-        rules(&scope, &filesystem),
+        prepare_scope(&scope),
         Err(SandboxError::UnsupportedPolicy(_))
     ));
 }

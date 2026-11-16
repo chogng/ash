@@ -36,6 +36,7 @@ single_version_override(
         "//third_party/rules_rs:immutable_zlib_urls.patch",
         "//third_party/rules_rs:nested_platform_features.patch",
         "//third_party/rules_rs:windows_gnullvm_exec_triples.patch",
+        "//third_party/rules_rs:target_build_dependencies.patch",
     ],
 )
 
@@ -249,7 +250,6 @@ use_repo(
 
 crate.annotation(
     crate = "sherpa-onnx-sys",
-    workspace_cargo_toml = "sherpa-onnx/rust/Cargo.toml",
     gen_build_script = "off",
     repositories = ["crates"],
     deps = ["@ash_sherpa_targets//:library"],
@@ -283,13 +283,6 @@ inject_repo(crate, "ash_system_wayland")
 crate.annotation(
     crate = "runfiles",
     workspace_cargo_toml = "rust/runfiles/Cargo.toml",
-)
-
-# The pinned Sherpa fork keeps both Rust crates in a nested workspace; its
-# repository root has no Cargo.toml for rules_rs's GitHub metadata fast path.
-crate.annotation(
-    crate = "sherpa-onnx",
-    workspace_cargo_toml = "sherpa-onnx/rust/Cargo.toml",
 )
 
 # The consolidated SDK stamps its Windows helper binaries during its build.

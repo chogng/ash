@@ -47,17 +47,7 @@ pub(super) fn request(
     let script = ash_sandboxing::windows_command_line(&argv, false, render_argv)?;
     #[cfg(unix)]
     let script = format!("exec {}", render_argv(&argv)?);
-    let proxy_port = command
-        .network_proxy()
-        .map(|proxy| {
-            if proxy.ports()[0] != proxy.ports()[1] {
-                return Err(unavailable(
-                    "managed networking requires one execution-owned HTTP/SOCKS endpoint",
-                ));
-            }
-            Ok(proxy.ports()[0])
-        })
-        .transpose()?;
+    let proxy_port = command.network_proxy().map(|proxy| proxy.port());
     let mut request = crate::request::Request::new(
         script,
         text(command.working_directory())?,
@@ -97,7 +87,10 @@ pub(super) fn request(
                 request.readwrite_paths.push(device.to_owned());
             }
         }
-        request.set_seatbelt_rules(crate::seatbelt::rules(scope, &resolved_filesystem)?);
+        request.set_filesystem_restrictions(crate::seatbelt::restrictions(
+            scope,
+            &resolved_filesystem,
+        )?);
     }
     #[cfg(target_os = "macos")]
     request.set_private_ipc(

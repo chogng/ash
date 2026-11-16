@@ -70,7 +70,7 @@ fn mask_allowed(path: &Path, principals: &[&str], desired: u32) -> Result<bool> 
             &mut descriptor,
         )
     };
-    let _descriptor = win::Local(descriptor);
+    let _descriptor = unsafe { win::Local::from_raw(descriptor) };
     if status != 0 {
         return Err(format!("read audit ACL: Windows error {status}"));
     }
@@ -101,7 +101,7 @@ fn mask_allowed(path: &Path, principals: &[&str], desired: u32) -> Result<bool> 
         }
         let ace = unsafe { &*entry.cast::<ACCESS_ALLOWED_ACE>() };
         if !principals.iter().any(
-            |sid| unsafe { EqualSid((&ace.SidStart as *const u32).cast_mut().cast(), sid.0) } != 0,
+            |sid| unsafe { EqualSid((&ace.SidStart as *const u32).cast_mut().cast(), sid.as_ptr()) } != 0,
         ) {
             continue;
         }

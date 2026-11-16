@@ -1,8 +1,4 @@
 use super::JobObject;
-use portable_pty::CommandBuilder;
-use portable_pty::PtySize;
-use portable_pty::PtySystem;
-use std::os::windows::io::AsHandle;
 use std::os::windows::io::FromRawHandle;
 use std::os::windows::io::IntoRawHandle;
 use std::os::windows::io::OwnedHandle;
@@ -11,7 +7,7 @@ use tokio::process::Command;
 
 fn child_command() -> Command {
     let mut command = Command::new(std::env::current_exe().unwrap());
-    command.args(["--exact", "win::job::tests::child_fixture", "--nocapture"]);
+    command.args(["--exact", "job::tests::child_fixture", "--nocapture"]);
     command
 }
 
@@ -51,7 +47,7 @@ fn current_job_reports_explicit_breakaway_permission() {
         command
             .args([
                 "--exact",
-                "win::job::tests::current_job_reports_explicit_breakaway_permission",
+                "job::tests::current_job_reports_explicit_breakaway_permission",
                 "--nocapture",
             ])
             .env(EXPECTED, if allowed { "allowed" } else { "restricted" });
@@ -93,30 +89,5 @@ async fn missing_executable_returns_creation_error() {
     assert_eq!(
         job.spawn_contained(&mut command).unwrap_err().kind(),
         std::io::ErrorKind::NotFound
-    );
-}
-
-#[test]
-fn conpty_rejects_job_attachment_before_child_execution() {
-    let marker =
-        std::env::temp_dir().join(format!("ash-conpty-job-rejected-{}", std::process::id()));
-    let _ = std::fs::remove_file(&marker);
-    let file = std::fs::File::open(std::env::current_exe().unwrap()).unwrap();
-    let pair = portable_pty::win::conpty::ConPtySystem::default()
-        .openpty(PtySize::default())
-        .unwrap();
-    let mut command = CommandBuilder::new(std::env::current_exe().unwrap());
-    command.args(["--exact", "win::job::tests::child_fixture", "--nocapture"]);
-    command.env("ASH_JOB_TEST_MARKER", &marker);
-    // The borrowed handle is valid, but its file type cannot be attached as a Job.
-    // CreateProcess must reject the attribute before the fixture can execute.
-    assert!(
-        pair.slave
-            .spawn_command_in_job(command, file.as_handle())
-            .is_err()
-    );
-    assert!(
-        !marker.exists(),
-        "uncontained ConPTY child must never execute"
     );
 }

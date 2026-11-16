@@ -263,7 +263,6 @@ pub(super) struct AgentRequestProcessor<'ctx, C: AgentRequestProcessorContext + 
     home: &'ctx Option<super::Arc<ash_home::AshHome>>,
     model_catalog: &'ctx super::Arc<dyn super::ModelCatalog>,
     model_instructions: &'ctx super::Arc<ash_models_manager::ModelInstructionCatalog>,
-    pty_helper: &'ctx Option<std::path::PathBuf>,
     updates: &'ctx super::Arc<super::UpdateBroker>,
 }
 
@@ -280,7 +279,6 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         home: &'ctx Option<super::Arc<ash_home::AshHome>>,
         model_catalog: &'ctx super::Arc<dyn super::ModelCatalog>,
         model_instructions: &'ctx super::Arc<ash_models_manager::ModelInstructionCatalog>,
-        pty_helper: &'ctx Option<std::path::PathBuf>,
         updates: &'ctx super::Arc<super::UpdateBroker>,
     ) -> Self {
         Self {
@@ -294,7 +292,6 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             home,
             model_catalog,
             model_instructions,
-            pty_helper,
             updates,
         }
     }
@@ -503,11 +500,8 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 .map_err(core_error)?;
             let executable = std::env::current_exe()
                 .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
-            let mut sandbox =
+            let sandbox =
                 exec_server::LocalSandbox::new(ash_install_context::InstallContext::current());
-            if let Some(helper) = &self.pty_helper {
-                sandbox = sandbox.with_pty_helper(helper.clone());
-            }
             let command = ash_sandboxing::SandboxCommand::new(
                 executable,
                 Vec::<String>::new(),

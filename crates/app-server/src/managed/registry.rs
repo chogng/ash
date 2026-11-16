@@ -853,7 +853,6 @@ fn open_server_with_profile_runtime(
         .with_host_kimi_credentials()
         .with_host_zcode_credentials()
         .with_profile_runtime(profile_runtime);
-    options = options.with_pty_helper(std::env::current_exe().map_err(|error| error.to_string())?);
     if let Some(dir_root) = host.dir_root() {
         options = match host.dir_grant_source() {
             GrantSource::UserConfig => options.with_user_config_dir_root(dir_root),

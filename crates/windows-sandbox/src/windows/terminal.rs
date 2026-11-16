@@ -164,7 +164,9 @@ fn protect_worker(owner: &str) -> Result<()> {
     for object in [unsafe { GetCurrentProcess() }, unsafe {
         GetCurrentThread()
     }] {
-        if unsafe { SetKernelObjectSecurity(object, DACL_SECURITY_INFORMATION, descriptor.0) } == 0
+        if unsafe {
+            SetKernelObjectSecurity(object, DACL_SECURITY_INFORMATION, descriptor.as_ptr())
+        } == 0
         {
             return Err(win::error("SetKernelObjectSecurity(terminal worker)"));
         }
@@ -181,14 +183,17 @@ fn protect_worker(owner: &str) -> Result<()> {
         return Err(win::error("OpenProcessToken(terminal worker)"));
     }
     let token = Handle::new(raw, "terminal worker token")?;
-    if unsafe { SetKernelObjectSecurity(token.0, DACL_SECURITY_INFORMATION, descriptor.0) } == 0 {
+    if unsafe { SetKernelObjectSecurity(token.0, DACL_SECURITY_INFORMATION, descriptor.as_ptr()) }
+        == 0
+    {
         return Err(win::error("SetKernelObjectSecurity(terminal worker token)"));
     }
     let mut dacl = std::ptr::null_mut();
     let mut present = 0;
     let mut defaulted = 0;
-    if unsafe { GetSecurityDescriptorDacl(descriptor.0, &mut present, &mut dacl, &mut defaulted) }
-        == 0
+    if unsafe {
+        GetSecurityDescriptorDacl(descriptor.as_ptr(), &mut present, &mut dacl, &mut defaulted)
+    } == 0
         || present == 0
     {
         return Err(win::error("GetSecurityDescriptorDacl(terminal worker)"));
@@ -206,8 +211,9 @@ fn protect_worker(owner: &str) -> Result<()> {
         return Err(win::error("SetTokenInformation(terminal worker ACL)"));
     }
     for thread in threads {
-        if unsafe { SetKernelObjectSecurity(thread.0, DACL_SECURITY_INFORMATION, descriptor.0) }
-            == 0
+        if unsafe {
+            SetKernelObjectSecurity(thread.0, DACL_SECURITY_INFORMATION, descriptor.as_ptr())
+        } == 0
         {
             return Err(win::error(
                 "SetKernelObjectSecurity(terminal worker thread)",

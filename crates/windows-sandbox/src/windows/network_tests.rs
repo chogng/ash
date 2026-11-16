@@ -56,8 +56,8 @@ fn installed_policy_verification_rejects_broader_network_access() {
         .unwrap();
     let user = win::descriptor(&format!("D:(A;;CC;;;{})", account.sid)).unwrap();
     let mut blob = FWP_BYTE_BLOB {
-        size: unsafe { GetSecurityDescriptorLength(user.0) },
-        data: user.0.cast(),
+        size: unsafe { GetSecurityDescriptorLength(user.as_ptr()) },
+        data: user.as_ptr().cast(),
     };
     let mut conditions = conditions(&account, Action::Proxy, &mut blob);
     let mut provider = guid(rules.provider);
@@ -93,8 +93,8 @@ fn installed_policy_verification_rejects_broader_network_access() {
     filter.layerKey = plan.layer.key();
     let broad_user = win::descriptor("D:(A;;CC;;;WD)").unwrap();
     let mut broad_blob = FWP_BYTE_BLOB {
-        size: unsafe { GetSecurityDescriptorLength(broad_user.0) },
-        data: broad_user.0.cast(),
+        size: unsafe { GetSecurityDescriptorLength(broad_user.as_ptr()) },
+        data: broad_user.as_ptr().cast(),
     };
     conditions[0].conditionValue.Anonymous.sd = &mut broad_blob;
     assert!(!unsafe { rules.matches(&filter, plan, &account) });

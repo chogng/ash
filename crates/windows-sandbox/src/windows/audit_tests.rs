@@ -18,7 +18,7 @@ fn sddl(path: &Path) -> String {
         },
         0
     );
-    let _descriptor = win::Local(descriptor);
+    let _descriptor = unsafe { win::Local::from_raw(descriptor) };
     let mut text = std::ptr::null_mut();
     let mut length = 0;
     assert_ne!(
@@ -33,7 +33,7 @@ fn sddl(path: &Path) -> String {
         },
         0
     );
-    let _text = win::Local(text.cast());
+    let _text = unsafe { win::Local::from_raw(text.cast()) };
     let text = unsafe { std::slice::from_raw_parts(text, length as usize) };
     String::from_utf16(text.split(|unit| *unit == 0).next().unwrap()).unwrap()
 }
@@ -55,7 +55,7 @@ fn ancestor_traversal_does_not_grant_listing_or_inherit_to_children() {
             SetFileSecurityW(
                 win::wide(&child).as_ptr(),
                 DACL_SECURITY_INFORMATION,
-                child_acl.0,
+                child_acl.as_ptr(),
             )
         },
         0
@@ -63,10 +63,9 @@ fn ancestor_traversal_does_not_grant_listing_or_inherit_to_children() {
     let sid = "S-1-5-21-531-532-533-534";
     let before = sddl(temp.path());
     let child_before = sddl(&child);
-    let mut acl = mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(
-        &temp.path().join("journal"),
-    )
-    .unwrap();
+    let mut acl =
+        mxc_sdk::v1::filesystem_acl::DaclManager::in_directory(&temp.path().join("journal"))
+            .unwrap();
     assert!(!mask_allowed(temp.path(), &[sid], FILE_READ_ATTRIBUTES).unwrap());
     acl.grant_directory_traversal(sid, temp.path()).unwrap();
     assert!(mask_allowed(temp.path(), &[sid], FILE_READ_ATTRIBUTES).unwrap());
@@ -99,7 +98,7 @@ fn audit_checks_world_writable_files_as_well_as_directories() {
             SetFileSecurityW(
                 win::wide(&path).as_ptr(),
                 DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                sd.0,
+                sd.as_ptr(),
             )
         },
         0
@@ -126,17 +125,16 @@ fn object_acl_edits_preserve_legacy_inheritance_control() {
             SetFileSecurityW(
                 win::wide(&target).as_ptr(),
                 DACL_SECURITY_INFORMATION,
-                descriptor.0,
+                descriptor.as_ptr(),
             )
         },
         0
     );
     let before = sddl(&target);
     assert!(before.starts_with("D:("), "legacy fixture: {before}");
-    let mut acl = mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(
-        &temp.path().join("journal"),
-    )
-    .unwrap();
+    let mut acl =
+        mxc_sdk::v1::filesystem_acl::DaclManager::in_directory(&temp.path().join("journal"))
+            .unwrap();
     acl.grant_directory_traversal("S-1-5-21-531-532-533-534", &target)
         .unwrap();
     acl.restore_strict().unwrap();
@@ -159,7 +157,7 @@ fn inheritable_acl_edits_restore_legacy_directory_and_file_control() {
                 SetFileSecurityW(
                     win::wide(path).as_ptr(),
                     DACL_SECURITY_INFORMATION,
-                    descriptor.0,
+                    descriptor.as_ptr(),
                 )
             },
             0
@@ -170,10 +168,9 @@ fn inheritable_acl_edits_restore_legacy_directory_and_file_control() {
         before.iter().all(|acl| acl.starts_with("D:(")),
         "{before:?}"
     );
-    let mut acl = mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(
-        &temp.path().join("journal"),
-    )
-    .unwrap();
+    let mut acl =
+        mxc_sdk::v1::filesystem_acl::DaclManager::in_directory(&temp.path().join("journal"))
+            .unwrap();
     acl.grant_appcontainer_access(
         "S-1-5-21-531-532-533-534",
         std::slice::from_ref(&target),

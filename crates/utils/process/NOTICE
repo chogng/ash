@@ -1,0 +1,5 @@
+Source provenance only; this crate has no Codex wire-protocol or runtime dependency.
+
+The process group and Windows Job helpers were copied and adapted from OpenAI
+Codex revision bdd3118c71a29f26b9df3a47f91efea38a0d58bd (2026-07-21), licensed
+Apache-2.0. They were moved from ash-utils-pty without changing that attribution.

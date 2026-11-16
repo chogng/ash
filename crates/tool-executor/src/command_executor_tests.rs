@@ -74,43 +74,6 @@ fn managed_command_can_reach_only_its_authorized_proxy_destinations() {
 }
 
 #[cfg(target_os = "macos")]
-#[test]
-fn shared_proxy_execution_enforces_the_same_destination_and_file_policy() {
-    struct SharedProxyBackend;
-    impl SandboxBackend for SharedProxyBackend {
-        fn prepare_scoped(
-            &self,
-            command: &SandboxCommand,
-            policy: SandboxPolicy,
-            scope: &ash_sandboxing::SandboxScope,
-        ) -> Result<PreparedCommand, SandboxError> {
-            let ports = command.network_proxy().unwrap().ports();
-            assert_eq!(ports[0], ports[1]);
-            mxc_sandbox::MxcSandbox::new(ash_install_context::InstallContext::current())
-                .prepare_scoped(command, policy, scope)
-        }
-        fn kind(&self) -> SandboxKind {
-            SandboxKind::Restricted
-        }
-        fn requires_shared_network_proxy(&self) -> bool {
-            true
-        }
-        fn prepare(
-            &self,
-            command: &SandboxCommand,
-            policy: SandboxPolicy,
-            dir: &Dir,
-        ) -> Result<PreparedCommand, SandboxError> {
-            let ports = command.network_proxy().unwrap().ports();
-            assert_eq!(ports[0], ports[1]);
-            mxc_sandbox::MxcSandbox::new(ash_install_context::InstallContext::current())
-                .prepare(command, policy, dir)
-        }
-    }
-    assert_managed_command(SharedProxyBackend);
-}
-
-#[cfg(target_os = "macos")]
 fn assert_managed_command(backend: impl SandboxBackend) {
     use std::io::Read;
     use std::io::Write;
@@ -130,7 +93,7 @@ fn assert_managed_command(backend: impl SandboxBackend) {
         &CancellationSource::new().token(),
     )
     .unwrap();
-    let foreign_port = foreign.http_port();
+    let foreign_port = foreign.port();
     let upstream = thread::spawn(move || {
         let (mut stream, _) = origin.accept().unwrap();
         stream

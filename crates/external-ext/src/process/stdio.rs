@@ -80,7 +80,7 @@ impl StdioExtensionHostProcess {
             );
             let sources = match &launch.runtime {
                 super::LaunchRuntime::JavaScript(_) => {
-                    windows_sandbox::LockedProcessSources::Package
+                    ash_sandboxing::LockedProcessSources::Package
                 }
                 super::LaunchRuntime::Executable(_)
                 | super::LaunchRuntime::NodeHost
@@ -88,7 +88,7 @@ impl StdioExtensionHostProcess {
                     return Err(ExtensionHostError::IsolationUnavailable);
                 }
             };
-            let child = windows_sandbox::spawn_locked_process(&command, sources)
+            let child = ash_sandboxing::spawn_locked_process(&command, sources)
                 .map_err(|_| ExtensionHostError::IsolationUnavailable)?;
             return Self::from_child(child, limits, None);
         }

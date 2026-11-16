@@ -10,5 +10,6 @@ from OpenAI Codex revision 954fa9057bf3a4521ea34dbd010ff291d5b39763.
 The Windows ConPTY implementation is maintained in the portable-pty 0.9.0
 source under ../../../third_party/wezterm/portable-pty, derived from WezTerm
 revision f8921727a11b9f8b073e8c24821d72fd41283500 and licensed under MIT.
-Ash's Job and process lifecycle adapters remain in this crate.
+Ash's terminal adapter remains in this crate; shared Job and process lifecycle
+helpers are maintained in ../process.
 See ../../../third_party/wezterm/LICENSE.

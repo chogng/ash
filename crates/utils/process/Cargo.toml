@@ -8,8 +8,26 @@ publish.workspace = true
 [lib]
 doctest = false
 
+[features]
+windows-security = ["dep:windows-sys-061", "dep:getrandom"]
+process-tree = ["dep:tokio", "dep:sysinfo", "dep:libc", "dep:rustix", "dep:winapi"]
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true, optional = true }
+sysinfo = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { workspace = true, features = ["fs"], optional = true }
+
+[target.'cfg(windows)'.dependencies]
+tokio = { workspace = true, features = ["process"], optional = true }
+getrandom = { workspace = true, optional = true }
+windows-sys-061 = { workspace = true, optional = true, features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_StationsAndDesktops"] }
+winapi = { workspace = true, features = ["handleapi", "jobapi", "jobapi2", "minwinbase", "processthreadsapi", "synchapi", "winbase", "winerror", "winnt"], optional = true }
+
 [dev-dependencies]
+anyhow = { workspace = true }
 tokio = { workspace = true, features = ["macros", "process"] }
 
-[lints]
-workspace = true
+[lints.rust]
+unsafe_code = "allow"

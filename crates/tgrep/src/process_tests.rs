@@ -339,7 +339,7 @@ fn supervised_shutdown_keeps_an_unbound_live_owner_until_its_guard_ends() {
             deadline,
         )
         .unwrap();
-    drop(server.child.lock().unwrap().child.stdin.take());
+    drop(server.child.lock().unwrap().child.take_stdin());
     thread::sleep(Duration::from_millis(250));
     assert!(!server.is_stopped().unwrap());
     server.rpc("hello", json!({}), &token, deadline).unwrap();

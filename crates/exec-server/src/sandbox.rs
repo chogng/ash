@@ -1,6 +1,5 @@
 use ash_install_context::InstallContext;
 use ash_sandboxing::SandboxBackends;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Configures the shared local sandbox candidates without changing caller authority.
@@ -16,23 +15,6 @@ impl LocalSandbox {
             mxc: mxc_sandbox::MxcSandbox::new(context.clone()),
             #[cfg(windows)]
             context,
-        }
-    }
-
-    /// Configures the Windows executable that dispatches Ash's internal terminal role.
-    /// Unix allocates its terminal through MXC and does not use this host setting.
-    pub fn with_pty_helper(self, executable: PathBuf) -> Self {
-        #[cfg(windows)]
-        {
-            Self {
-                mxc: self.mxc.with_pty_helper(executable),
-                ..self
-            }
-        }
-        #[cfg(not(windows))]
-        {
-            let _ = executable;
-            self
         }
     }
 

@@ -126,107 +126,28 @@ impl Drop for ProcessHandle {
 }
 
 use std::io;
-use std::process::Child;
 use std::process::Command;
-use std::process::ExitStatus;
 
-/// Owns one prepared launch and its process tree through exit, cancellation and drop.
-/// Platform helpers keep their sandbox resources alive until their descendants terminate.
-struct CommandProcess {
-    child: Child,
-    #[cfg(unix)]
-    _guard: Option<ash_utils_pty::process_guard::ProcessGuard>,
-    #[cfg(windows)]
-    job: ash_utils_pty::JobObject,
-    closed: bool,
-}
+struct CommandProcess(ash_utils_process::OwnedChild);
 
 impl CommandProcess {
-    fn spawn(mut command: Command) -> io::Result<Self> {
-        #[cfg(unix)]
-        {
-            ash_utils_pty::process_group::configure_command_session(&mut command);
-        }
-        #[cfg(unix)]
-        let guard = ash_utils_pty::process_guard::configure_command_guard(&mut command)?;
-        #[cfg(windows)]
-        let job = ash_utils_pty::JobObject::create()?;
-        #[cfg(windows)]
-        let child = job.spawn_contained_std(&mut command)?;
-        #[cfg(not(windows))]
-        let child = command.spawn()?;
-        Ok(Self {
-            child,
-            #[cfg(unix)]
-            _guard: guard,
-            #[cfg(windows)]
-            job,
-            closed: false,
-        })
-    }
-
-    /// A completed result includes process-tree cleanup, so output readers can reach EOF.
-    pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
-        if self.closed {
-            return self.child.try_wait();
-        }
-        #[cfg(unix)]
-        {
-            // Observe exit without reaping: the leader's PID stays reserved while its group
-            // is killed, so cleanup cannot signal a recycled process-group identity.
-            if !ash_utils_pty::process_group::child_has_exited(self.child.id())? {
-                return Ok(None);
-            }
-            self.close()?;
-            self.child.try_wait()
-        }
-        #[cfg(not(unix))]
-        {
-            let status = self.child.try_wait()?;
-            if status.is_some() {
-                self.close()?;
-            }
-            Ok(status)
-        }
-    }
-
-    pub fn close(&mut self) -> io::Result<()> {
-        if self.closed {
-            return Ok(());
-        }
-        #[cfg(unix)]
-        let tree = ash_utils_pty::process_group::kill_process_session(self.child.id());
-        #[cfg(windows)]
-        let tree = self.job.terminate();
-        #[cfg(not(any(unix, windows)))]
-        let tree = ash_utils_pty::process_group::kill_process_group(self.child.id());
-        let _ = self.child.kill();
-        let reaped = self.child.wait();
-        self.closed = reaped.is_ok();
-        tree?;
-        reaped?;
-        Ok(())
-    }
-}
-
-impl Drop for CommandProcess {
-    fn drop(&mut self) {
-        let _ = self.close();
+    fn spawn(command: Command) -> io::Result<Self> {
+        ash_utils_process::OwnedChild::spawn(command).map(Self)
     }
 }
 
 impl SandboxProcess for CommandProcess {
     fn take_stdin(&mut self) -> Option<Box<dyn Write + Send>> {
-        self.child.stdin.take().map(|stream| Box::new(stream) as _)
+        self.0.take_stdin().map(|stream| Box::new(stream) as _)
     }
     fn take_stdout(&mut self) -> Option<Box<dyn Read + Send>> {
-        self.child.stdout.take().map(|stream| Box::new(stream) as _)
+        self.0.take_stdout().map(|stream| Box::new(stream) as _)
     }
     fn take_stderr(&mut self) -> Option<Box<dyn Read + Send>> {
-        self.child.stderr.take().map(|stream| Box::new(stream) as _)
+        self.0.take_stderr().map(|stream| Box::new(stream) as _)
     }
     fn try_wait(&mut self) -> io::Result<Option<SandboxProcessExitStatus>> {
-        CommandProcess::try_wait(self).map(|status| {
+        self.0.try_wait().map(|status| {
             status.map(|status| {
                 status.code().map_or(
                     SandboxProcessExitStatus::Terminated,
@@ -237,10 +158,10 @@ impl SandboxProcess for CommandProcess {
     }
     #[cfg(unix)]
     fn interrupt(&mut self) -> io::Result<()> {
-        ash_utils_pty::process_group::interrupt_process_group(self.child.id())
+        ash_utils_process::process_group::interrupt_process_group(self.0.id())
     }
     fn close(&mut self) -> io::Result<()> {
-        CommandProcess::close(self)
+        self.0.close()
     }
 }
 #[cfg(all(test, unix))]

@@ -11,6 +11,7 @@ name = "ash_sandboxing"
 path = "src/lib.rs"
 
 [dependencies]
+ash-utils-process = { workspace = true, features = ["process-tree"] }
 ash-file-identity = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 globset = { workspace = true }
@@ -19,11 +20,15 @@ ash-file-access = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
 
 [target.'cfg(windows)'.dependencies]
+ash-utils-process = { workspace = true, features = ["windows-security"] }
+getrandom = { workspace = true }
+windows-sys-061 = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Isolation", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_Diagnostics_Debug"] }
 winapi-util = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 
-[lints]
-workspace = true
+# Windows token setup is isolated in locked_process; other modules deny unsafe.
+[lints.rust]
+unsafe_code = "deny"

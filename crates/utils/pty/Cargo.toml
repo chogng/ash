@@ -11,6 +11,7 @@ name = "ash_utils_pty"
 path = "src/lib.rs"
 
 [dependencies]
+ash-utils-process = { workspace = true, features = ["process-tree"] }
 anyhow = { workspace = true }
 portable-pty = { workspace = true }
 sysinfo = { workspace = true }
@@ -27,7 +28,6 @@ winapi = { workspace = true, features = ["handleapi", "namedpipeapi", "jobapi", 
 libc = { workspace = true }
 rustix = { workspace = true, features = ["fs", "termios"] }
 
-# This systems crate is the only local exception to the workspace unsafe ban:
-# its PTY and ConPTY implementation requires audited platform FFI.
+# PTY and ConPTY require audited platform FFI.
 [lints.rust]
 unsafe_code = "allow"

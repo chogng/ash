@@ -23,5 +23,34 @@ pub fn background_command(program: impl AsRef<OsStr>) -> Command {
     Command::new(program)
 }
 
+#[cfg(feature = "process-tree")]
+mod owned_child;
+#[cfg(feature = "process-tree")]
+pub use owned_child::OwnedChild;
+
 #[cfg(test)]
 mod background_command_tests;
+
+#[cfg(all(feature = "process-tree", unix))]
+mod descriptors;
+#[cfg(all(feature = "process-tree", windows))]
+mod job;
+#[cfg(all(feature = "process-tree", target_os = "linux"))]
+mod linux_fds;
+#[cfg(all(feature = "process-tree", unix))]
+pub mod process_group;
+#[cfg(all(feature = "process-tree", unix))]
+pub mod process_guard;
+#[cfg(all(feature = "process-tree", windows))]
+pub use job::JobObject;
+#[cfg(all(
+    test,
+    feature = "process-tree",
+    any(target_os = "linux", target_os = "macos")
+))]
+mod descriptor_tests;
+
+#[cfg(all(feature = "windows-security", windows))]
+extern crate windows_sys_061 as windows_sys;
+#[cfg(all(feature = "windows-security", windows))]
+pub mod windows_security;

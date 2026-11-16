@@ -81,7 +81,7 @@ impl Pipes {
         let sd = win::descriptor(&format!("D:P(A;;GA;;;{owner})(A;;GRGW;;;{account})"))?;
         let security = SECURITY_ATTRIBUTES {
             nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
-            lpSecurityDescriptor: sd.0,
+            lpSecurityDescriptor: sd.as_ptr(),
             bInheritHandle: 0,
         };
         let prefix = format!(r"\\.\pipe\ash-windows-sandbox-{}", win::random_hex(16)?);
@@ -166,9 +166,9 @@ pub(super) fn spawn(
         "run".into(),
         input.to_string_lossy().into_owned(),
     ];
-    let command = mxc_sdk::mxc_common::cmdline::cmdline_from_argv_for_context(
+    let command = mxc_sdk::v1::cmdline_from_argv_for_context(
         &arguments,
-        mxc_sdk::mxc_common::cmdline::CommandLineContext::WindowsCreateProcess,
+        mxc_sdk::v1::CommandLineContext::WindowsCreateProcess,
     )
     .map_err(|error| error.to_string())?;
     let mut command = win::wide(command);
@@ -187,7 +187,7 @@ pub(super) fn spawn(
     // The trusted bootstrap has no workspace-relative operations. LogonW's
     // service-side cwd checks cannot use our private pinned runtime directory;
     // use the OS-resolved system directory while keeping the command's own cwd.
-    let worker_directory = mxc_sdk::mxc_common::system_dir::resolve_system_directory()
+    let worker_directory = mxc_sdk::v1::resolve_system_directory()
         .ok_or("could not resolve the Windows system directory")?;
     let started = unsafe {
         CreateProcessWithLogonW(
@@ -478,15 +478,15 @@ pub(super) fn restricted_token(owner: &str, account: &str, capability: &str) -> 
     let everyone = win::sid("S-1-1-0")?;
     let restricting = [
         SID_AND_ATTRIBUTES {
-            Sid: sid.0,
+            Sid: sid.as_ptr(),
             Attributes: 0,
         },
         SID_AND_ATTRIBUTES {
-            Sid: logon.0,
+            Sid: logon.as_ptr(),
             Attributes: 0,
         },
         SID_AND_ATTRIBUTES {
-            Sid: everyone.0,
+            Sid: everyone.as_ptr(),
             Attributes: 0,
         },
     ];
@@ -541,7 +541,9 @@ pub(super) fn restricted_token(owner: &str, account: &str, capability: &str) -> 
         "D:P(A;;GA;;;SY)(A;;0x8;;;{})(A;;GA;;;{})(A;;GA;;;{})",
         owner, account, capability
     ))?;
-    if unsafe { SetKernelObjectSecurity(token.0, DACL_SECURITY_INFORMATION, token_sd.0) } == 0 {
+    if unsafe { SetKernelObjectSecurity(token.0, DACL_SECURITY_INFORMATION, token_sd.as_ptr()) }
+        == 0
+    {
         return Err(win::error("SetKernelObjectSecurity(restricted token)"));
     }
     // Codex's capability + logon + Everyone token supports Windows CLR
@@ -555,8 +557,9 @@ pub(super) fn restricted_token(owner: &str, account: &str, capability: &str) -> 
     let mut dacl = std::ptr::null_mut();
     let mut present = 0;
     let mut defaulted = 0;
-    if unsafe { GetSecurityDescriptorDacl(default_sd.0, &mut present, &mut dacl, &mut defaulted) }
-        == 0
+    if unsafe {
+        GetSecurityDescriptorDacl(default_sd.as_ptr(), &mut present, &mut dacl, &mut defaulted)
+    } == 0
         || present == 0
     {
         return Err(win::error("GetSecurityDescriptorDacl(default token ACL)"));
@@ -684,7 +687,7 @@ pub(super) fn prepare_child(request: &Request) -> Result<(Handle, Handle, u32, u
     ))?;
     let security = SECURITY_ATTRIBUTES {
         nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
-        lpSecurityDescriptor: sd.0,
+        lpSecurityDescriptor: sd.as_ptr(),
         bInheritHandle: 0,
     };
     let mut desktop = win::wide(&request.desktop);

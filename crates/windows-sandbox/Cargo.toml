@@ -24,6 +24,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
+ash-utils-process = { workspace = true, features = ["windows-security"] }
 mxc-sdk = { workspace = true }
 getrandom = { workspace = true }
 socket2 = { workspace = true }

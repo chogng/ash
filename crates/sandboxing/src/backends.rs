@@ -59,7 +59,6 @@ impl SandboxBackends {
                             .clone()
                             .with_network_proxy(crate::ManagedNetworkAccess::new(
                                 std::num::NonZeroU16::new(1).unwrap(),
-                                std::num::NonZeroU16::new(1).unwrap(),
                             ))
                     } else {
                         command.clone()
@@ -99,12 +98,6 @@ impl SandboxBackends {
 impl SandboxBackend for SandboxBackends {
     fn kind(&self) -> SandboxKind {
         SandboxKind::Restricted
-    }
-
-    fn requires_shared_network_proxy(&self) -> bool {
-        self.backends
-            .iter()
-            .any(|(_, backend)| backend.requires_shared_network_proxy())
     }
 
     fn prepare(

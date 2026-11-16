@@ -31,6 +31,7 @@ fn startup_diagnostics_keep_sdk_categories_and_system_errors_without_authorizing
     }
 }
 
+#[cfg(unix)]
 fn request(dir: &Dir) -> Request {
     crate::policy::request(
         &SandboxCommand::new(
@@ -76,99 +77,6 @@ fn workload_environment_adds_socket_denials_without_refreshing_prepared_authorit
     );
 }
 
-#[test]
-fn terminal_handoff_preserves_explicit_environment_and_filesystem_identity() {
-    let temp = tempfile::tempdir().unwrap();
-    let work = temp.path().join("work");
-    std::fs::create_dir(&work).unwrap();
-    let dir = Dir::open_local(&work).unwrap();
-    let mut prepared = request(&dir);
-    prepared
-        .set_env(&[("ASH_TEST".into(), "a=b 中文".into())])
-        .unwrap();
-    let encoded = serde_json::to_string(&prepared).unwrap();
-    drop(dir);
-    let decoded: Request = serde_json::from_str(&encoded).unwrap();
-    assert_eq!(
-        decoded.environment,
-        Some(vec![("ASH_TEST".into(), "a=b 中文".into())])
-    );
-    assert_eq!(
-        crate::policy::sdk_request(&decoded).environment,
-        decoded.environment
-    );
-    assert_eq!(
-        crate::policy::sdk_request(&decoded).inherit_default_environment,
-        Some(false)
-    );
-    assert_eq!(decoded.command_line, prepared.command_line);
-    assert_eq!(decoded.readwrite_paths, prepared.readwrite_paths);
-    #[cfg(target_os = "macos")]
-    assert_eq!(decoded.seatbelt_rules, prepared.seatbelt_rules);
-    decoded.snapshot.validate().unwrap();
-    std::fs::rename(&work, temp.path().join("old-work")).unwrap();
-    std::fs::create_dir(&work).unwrap();
-    assert!(decoded.snapshot.validate().is_err());
-    assert!(decoded.prepare().is_err());
-}
-
-#[test]
-fn explicit_empty_environment_stays_empty_after_terminal_handoff() {
-    let temp = tempfile::tempdir().unwrap();
-    let dir = Dir::open_local(temp.path()).unwrap();
-    let mut prepared = request(&dir);
-    prepared.set_env(&[]).unwrap();
-    let decoded: Request =
-        serde_json::from_str(&serde_json::to_string(&prepared).unwrap()).unwrap();
-    assert_eq!(decoded.environment, Some(Vec::new()));
-    assert_eq!(
-        crate::policy::sdk_request(&decoded).inherit_default_environment,
-        Some(false)
-    );
-}
-
-#[test]
-fn chunked_terminal_handoff_keeps_large_environment_and_prepared_file_authority() {
-    let temp = tempfile::tempdir().unwrap();
-    let dir = Dir::open_local(temp.path()).unwrap();
-    let mut prepared = request(&dir);
-    let value = "🧊中文=\\\"".repeat(4000);
-    prepared
-        .set_env(&[("WORKLOAD_VALUE".into(), value.clone())])
-        .unwrap();
-    let mut helper_environment = std::collections::HashMap::new();
-    crate::windows_transport::encode(
-        &serde_json::to_string(&prepared).unwrap(),
-        &mut helper_environment,
-    )
-    .unwrap();
-    let decoded: Request =
-        serde_json::from_str(&crate::windows_transport::decode(helper_environment.iter()).unwrap())
-            .unwrap();
-    assert_eq!(
-        decoded.environment,
-        Some(vec![("WORKLOAD_VALUE".into(), value.clone())])
-    );
-    assert_eq!(
-        crate::policy::sdk_request(&decoded).inherit_default_environment,
-        Some(false)
-    );
-    assert_eq!(decoded.command_line, prepared.command_line);
-    assert_eq!(decoded.readwrite_paths, prepared.readwrite_paths);
-    assert_eq!(decoded.denied_paths, prepared.denied_paths);
-    assert_eq!(decoded.snapshot, prepared.snapshot);
-    decoded.snapshot.validate().unwrap();
-}
-
-#[test]
-fn terminal_handoff_cannot_add_host_acl_authority() {
-    let temp = tempfile::tempdir().unwrap();
-    let dir = Dir::open_local(temp.path()).unwrap();
-    let mut value = serde_json::to_value(request(&dir)).unwrap();
-    value["host_acl_scope"] = serde_json::json!({ "roots": [dir.canonical_path()] });
-    assert!(serde_json::from_value::<Request>(value).is_err());
-}
-
 #[cfg(target_os = "linux")]
 #[test]
 fn backend_launch_failure_reaches_the_caller_with_the_sdk_diagnosis() {
@@ -201,27 +109,23 @@ fn backend_launch_failure_reaches_the_caller_with_the_sdk_diagnosis() {
 
 #[cfg(unix)]
 #[test]
-fn terminal_handoff_keeps_managed_proxy_and_network_restrictions() {
+fn managed_proxy_projection_keeps_both_network_directions_restricted() {
     use ash_sandboxing::ManagedNetworkAccess;
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
-    let command =
-        SandboxCommand::new("/bin/sh", ["-c", "exit 0"], dir.canonical_path()).with_network_proxy(
-            ManagedNetworkAccess::new(3128.try_into().unwrap(), 3128.try_into().unwrap()),
-        );
+    let command = SandboxCommand::new("/bin/sh", ["-c", "exit 0"], dir.canonical_path())
+        .with_network_proxy(ManagedNetworkAccess::new(3128.try_into().unwrap()));
     let prepared = crate::policy::request(
         &command,
         SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Managed),
         &SandboxScope::single(dir).with_host_read(HostReadScope::Minimal),
     )
     .unwrap();
-    let decoded: Request =
-        serde_json::from_str(&serde_json::to_string(&prepared).unwrap()).unwrap();
     assert_eq!(
-        decoded.network,
+        prepared.network,
         super::Network::Managed(3128.try_into().unwrap())
     );
-    let sdk = crate::policy::sdk_request(&decoded);
+    let sdk = crate::policy::sdk_request(&prepared);
     let network = sdk.network.unwrap();
     assert_eq!(
         network.runtime_config.unwrap().network_proxy.as_deref(),
@@ -240,7 +144,7 @@ fn terminal_handoff_keeps_managed_proxy_and_network_restrictions() {
 }
 
 #[test]
-fn terminal_handoff_retains_both_network_directions() {
+fn approved_request_retains_both_network_directions() {
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
     for network in [NetworkAccess::Allowed, NetworkAccess::Denied] {
@@ -250,10 +154,7 @@ fn terminal_handoff_retains_both_network_directions() {
             &SandboxScope::single(dir.clone()).with_host_read(HostReadScope::Minimal),
         )
         .unwrap();
-        let decoded: Request =
-            serde_json::from_str(&serde_json::to_string(&prepared).unwrap()).unwrap();
-        assert_eq!(decoded.network, prepared.network);
-        let sdk = crate::policy::sdk_request(&decoded).network.unwrap();
+        let sdk = crate::policy::sdk_request(&prepared).network.unwrap();
         let action = match network {
             NetworkAccess::Allowed => mxc_sdk::v1::NetworkAction::Allow,
             NetworkAccess::Denied => mxc_sdk::v1::NetworkAction::Deny,
@@ -264,18 +165,6 @@ fn terminal_handoff_retains_both_network_directions() {
         assert_eq!(ingress.default, Some(action));
         assert_eq!(ingress.host_loopback, Some(action));
     }
-}
-
-#[test]
-fn terminal_handoff_refuses_network_rules_it_cannot_preserve() {
-    let temp = tempfile::tempdir().unwrap();
-    let dir = Dir::open_local(temp.path()).unwrap();
-    let mut encoded = serde_json::to_value(request(&dir)).unwrap();
-    encoded["network"] = serde_json::json!({ "Denied": { "hostLoopback": "allow" } });
-    assert!(serde_json::from_value::<Request>(encoded).is_err());
-    let mut encoded = serde_json::to_value(request(&dir)).unwrap();
-    encoded["egress_allow"] = serde_json::json!(["example.com"]);
-    assert!(serde_json::from_value::<Request>(encoded).is_err());
 }
 
 #[cfg(unix)]
@@ -321,21 +210,11 @@ fn unsupported_managed_policy_does_not_snapshot_files_before_the_account_candida
         "C:\\missing-ash-sandbox-work".into(),
         mxc_sdk::v1::FilesystemPolicy::default(),
         NetworkAccess::Managed,
-        Some(3128),
+        Some(3128.try_into().unwrap()),
     )
     .unwrap_err();
     assert!(matches!(
         error,
         ash_sandboxing::SandboxError::UnsupportedPolicy(_)
     ));
-}
-
-#[cfg(not(windows))]
-#[test]
-fn terminal_handoff_rejects_zero_proxy_ports_at_decoding() {
-    let temp = tempfile::tempdir().unwrap();
-    let dir = Dir::open_local(temp.path()).unwrap();
-    let mut encoded = serde_json::to_value(request(&dir)).unwrap();
-    encoded["network"] = serde_json::json!({ "Managed": 0 });
-    assert!(serde_json::from_value::<Request>(encoded).is_err());
 }

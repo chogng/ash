@@ -1,9 +1,9 @@
 //! Startup-only package read grants and an AppContainer without network capabilities.
-use super::super::win;
 use super::checked;
 use super::owned;
 use super::raw;
 use super::wide;
+use ash_utils_process::windows_security as win;
 use std::io;
 use std::path::Path;
 use std::path::PathBuf;
@@ -98,7 +98,7 @@ impl AppContainer {
     }
 
     pub(super) fn sid_text(&self) -> io::Result<String> {
-        win::sid_text(self.sid).map_err(io::Error::other)
+        unsafe { win::sid_text(self.sid) }.map_err(io::Error::other)
     }
 
     pub(super) fn grant_internal_objects(
@@ -227,7 +227,7 @@ unsafe fn change_acl(path: &Path, sid: PSID, mode: ACCESS_MODE) -> io::Result<()
         if result != 0 {
             return Err(io::Error::from_raw_os_error(result as i32));
         }
-        let _descriptor = win::Local(descriptor.cast());
+        let _descriptor = win::Local::from_raw(descriptor.cast());
         let access = EXPLICIT_ACCESS_W {
             grfAccessPermissions: FILE_GENERIC_READ | FILE_GENERIC_EXECUTE,
             grfAccessMode: mode,
@@ -245,7 +245,7 @@ unsafe fn change_acl(path: &Path, sid: PSID, mode: ACCESS_MODE) -> io::Result<()
         if result != 0 {
             return Err(io::Error::from_raw_os_error(result as i32));
         }
-        let _updated = win::Local(updated.cast());
+        let _updated = win::Local::from_raw(updated.cast());
         let result = SetNamedSecurityInfoW(
             name.as_mut_ptr(),
             SE_FILE_OBJECT,

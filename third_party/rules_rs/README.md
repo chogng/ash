@@ -5,6 +5,15 @@ The repository pins `rules_rs 0.0.96` through [Bazel Central Registry](https://g
 and module version metadata patch. `single_version_override` adds only the local
 compatibility patches:
 
+- `target_build_dependencies.patch` preserves target-scoped build dependencies
+  when Git manifests are converted into dependency metadata, including inherited
+  workspace features. Older cached Git facts are invalidated because they omit
+  those edges. This keeps MXC's Windows resource and signing build dependencies
+  in its manifest instead of duplicating them in an annotation. Remove the patch
+  when upstream includes those tables and invalidates its old facts. Validate with
+  `bazel test //third_party/rules_rs:target-build-dependencies-test` and an actual
+  Windows `bazel build //crates/mxc-sandbox:mxc-sandbox`.
+
 - `nested_platform_features.patch` preserves the dependency's platform set while
   the resolver consumes a copy to track completed edges. Otherwise a Linux-only
   consumer of a platform-independent optional dependency loses features enabled

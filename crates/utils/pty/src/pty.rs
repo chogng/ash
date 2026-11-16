@@ -21,7 +21,6 @@ use crate::process::ProcessSignal;
 use crate::process::PtyHandles;
 use crate::process::SpawnedProcess;
 use crate::process::TerminalSize;
-use crate::process::WaitTask;
 
 /// Returns true when ConPTY support is available (Windows only).
 #[cfg(windows)]
@@ -45,7 +44,7 @@ impl ChildTerminator for PtyChildTerminator {
     fn signal(&mut self, signal: ProcessSignal) -> std::io::Result<()> {
         #[cfg(unix)]
         if let Some(process_group_id) = self.process_group_id {
-            return crate::process_group::signal_process_group_id(
+            return ash_utils_process::process_group::signal_process_group_id(
                 process_group_id as libc::pid_t,
                 signal.unix_number(),
             )
@@ -61,7 +60,7 @@ impl ChildTerminator for PtyChildTerminator {
             // groups within their owned PTY session. Closing just the shell's
             // group leaves jobs which ignore terminal hangup running.
             let process_group_kill_result =
-                crate::process_group::kill_process_session(process_group_id);
+                ash_utils_process::process_group::kill_process_session(process_group_id);
             let child_kill_result = self.killer.kill();
             return match child_kill_result {
                 Ok(()) => Ok(()),
@@ -223,13 +222,11 @@ pub async fn spawn_process<'a>(
             process_group_id,
         }),
         reader_handle,
-        Vec::new(),
         writer_handle,
-        WaitTask::Child(wait_handle),
+        wait_handle,
         exit_status,
         exit_code,
         Some(handles),
-        /*resizer*/ None,
     );
 
     Ok(SpawnedProcess {

@@ -508,7 +508,7 @@ fn detached_backend_can_start_in_a_restrictive_job() {
         .env("ASH_DAEMON_JOB_TEST_CHILD", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    let job = ash_utils_pty::JobObject::create().unwrap();
+    let job = ash_utils_process::JobObject::create().unwrap();
     let output = job
         .spawn_contained_std(&mut command)
         .unwrap()

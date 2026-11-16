@@ -7,12 +7,6 @@ mod request;
 mod seatbelt;
 #[cfg(windows)]
 mod windows;
-#[cfg(any(windows, test))]
-mod windows_transport;
-#[cfg(windows)]
-pub use windows::PTY_HELPER_ARGUMENT;
-#[cfg(windows)]
-pub use windows::run_pty_helper;
 
 use ash_file_access::Dir;
 use ash_install_context::InstallContext;
@@ -30,33 +24,18 @@ use std::path::PathBuf;
 /// MXC-backed execution. Ash selects the backend; MXC creates processes and cleans up OS resources.
 pub struct MxcSandbox {
     runtime: InstallContext,
-    #[cfg(windows)]
-    pty_helper: Option<PathBuf>,
 }
 
 impl MxcSandbox {
     /// Captures runtime locations; the SDK checks the capabilities of each execution request.
     pub fn new(context: InstallContext) -> Self {
-        Self {
-            runtime: context,
-            #[cfg(windows)]
-            pty_helper: None,
-        }
-    }
-    #[cfg(windows)]
-    /// Supplies the host executable whose entrypoint dispatches the internal PTY role.
-    pub fn with_pty_helper(mut self, executable: PathBuf) -> Self {
-        self.pty_helper = Some(executable);
-        self
+        Self { runtime: context }
     }
 }
 
 impl SandboxBackend for MxcSandbox {
     fn kind(&self) -> SandboxKind {
         SandboxKind::Restricted
-    }
-    fn requires_shared_network_proxy(&self) -> bool {
-        true
     }
 
     fn classify_denial(
@@ -108,14 +87,6 @@ impl SandboxBackend for MxcSandbox {
             request.set_bubblewrap_executable(&path);
         }
         request.prepare()?;
-        #[cfg(windows)]
-        if let ash_sandboxing::ProcessIo::Pty(size) = command.io() {
-            let executable = self
-                .pty_helper
-                .as_ref()
-                .ok_or_else(|| unavailable("PTY helper is not configured by this host"))?;
-            return windows::prepare(command, request, scope, size, executable.clone());
-        }
         Ok(PreparedCommand::sandboxed(
             command,
             process::Launch {

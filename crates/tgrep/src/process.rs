@@ -17,7 +17,6 @@ use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Child;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
@@ -38,35 +37,21 @@ const MAX_RESPONSE: usize = 64 * 1024 * 1024;
 // Keep the leader unreaped until its descendants are stopped. Otherwise its PID can
 // be reused while cleanup still treats it as an owned session identity.
 struct OwnedChild {
-    child: Child,
-    #[cfg(windows)]
-    job: ash_utils_pty::JobObject,
-    closed: bool,
+    child: ash_utils_process::OwnedChild,
     diagnostics: Option<thread::JoinHandle<String>>,
     stderr: String,
 }
 impl OwnedChild {
-    fn spawn(mut command: Command) -> std::io::Result<Self> {
-        #[cfg(unix)]
-        ash_utils_pty::process_group::configure_command_session(&mut command);
-        #[cfg(windows)]
-        let job = ash_utils_pty::JobObject::create()?;
-        #[cfg(windows)]
-        let child = job.spawn_contained_std(&mut command)?;
-        #[cfg(not(windows))]
-        let child = command.spawn()?;
+    fn spawn(command: Command) -> std::io::Result<Self> {
         Ok(Self {
-            child,
-            #[cfg(windows)]
-            job,
-            closed: false,
+            child: ash_utils_process::OwnedChild::spawn(command)?,
             diagnostics: None,
             stderr: String::new(),
         })
     }
 
     fn capture_diagnostics(&mut self) {
-        let mut stderr = self.child.stderr.take().expect("piped server stderr");
+        let mut stderr = self.child.take_stderr().expect("piped server stderr");
         self.diagnostics = Some(thread::spawn(move || {
             let mut retained = Vec::new();
             let _ = stderr.by_ref().take(4096).read_to_end(&mut retained);
@@ -76,35 +61,14 @@ impl OwnedChild {
         }));
     }
     fn try_wait(&mut self) -> std::io::Result<Option<ExitStatus>> {
-        if self.closed {
-            return self.child.try_wait();
+        let status = self.child.try_wait()?;
+        if status.is_some() {
+            self.stop()?;
         }
-        #[cfg(unix)]
-        if !ash_utils_pty::process_group::child_has_exited(self.child.id())? {
-            return Ok(None);
-        }
-        #[cfg(not(unix))]
-        if self.child.try_wait()?.is_none() {
-            return Ok(None);
-        }
-        self.stop()?;
-        self.child.try_wait()
+        Ok(status)
     }
     fn stop(&mut self) -> std::io::Result<()> {
-        if self.closed {
-            return Ok(());
-        }
-        #[cfg(unix)]
-        let tree = ash_utils_pty::process_group::kill_process_session(self.child.id());
-        #[cfg(windows)]
-        let tree = self.job.terminate();
-        #[cfg(not(any(unix, windows)))]
-        let tree: std::io::Result<()> = Ok(());
-        let _ = self.child.kill();
-        let reaped = self.child.wait();
-        self.closed = reaped.is_ok();
-        tree?;
-        reaped?;
+        self.child.close()?;
         if let Some(diagnostics) = self.diagnostics.take() {
             self.stderr = diagnostics.join().unwrap_or_default();
         }
@@ -144,7 +108,7 @@ fn stop_owned_servers_at_exit() {
         let mut supervised = Vec::new();
         for child in &children {
             let mut child = child.lock().unwrap_or_else(|e| e.into_inner());
-            supervised.push(child.child.stdin.take().is_some());
+            supervised.push(child.child.take_stdin().is_some());
         }
         // Close every host/owner pipe first. Managed daemons can cancel and reap their
         // producers before exit; plain servers retain the existing forced cleanup.
@@ -625,13 +589,9 @@ impl Owner {
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
         let mut child = OwnedChild::spawn(command)?;
-        if child.child.stdin.is_none() {
-            return Err(failed("missing owner input"));
-        }
         let output = child
             .child
-            .stdout
-            .take()
+            .take_stdout()
             .ok_or_else(|| failed("missing owner output"))?;
         let child = Arc::new(Mutex::new(child));
         register(&child);
@@ -708,8 +668,8 @@ fn capture_selected(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = OwnedChild::spawn(command)?;
-    let stdout = child.child.stdout.take().expect("piped stdout");
-    let stderr = child.child.stderr.take().expect("piped stderr");
+    let stdout = child.child.take_stdout().expect("piped stdout");
+    let stderr = child.child.take_stderr().expect("piped stderr");
     thread::scope(|scope| {
         let (sender, receiver) = mpsc::sync_channel(8);
         let output_reader = scope.spawn(move || {

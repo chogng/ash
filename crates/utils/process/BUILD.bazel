@@ -3,4 +3,13 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "process",
     crate_name = "ash_utils_process",
+    crate_features = ["process-tree"] + select({
+        "@platforms//os:windows": ["windows-security"],
+        "//conditions:default": [],
+    }),
+    # Process-tree tests launch the host Python, shell, and Windows commands.
+    test_env_inherit = ["PATH"] + select({
+        "@platforms//os:windows": ["COMSPEC", "PATHEXT", "SystemRoot"],
+        "//conditions:default": [],
+    }),
 )

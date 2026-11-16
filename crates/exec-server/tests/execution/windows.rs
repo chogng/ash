@@ -24,7 +24,7 @@ fn terminal_host_starts_in_restrictive_job_and_survives_its_client() {
     use ash_file_access::GrantSource;
     use ash_file_access::Permission;
     use ash_file_access::Permissions;
-    use ash_utils_pty::JobObject;
+    use ash_utils_process::JobObject;
     use exec_server::terminal::TerminalService;
     use std::path::Path;
 
@@ -138,7 +138,7 @@ fn assert_drained(client: &ExecClient, snapshot: &ProcessSnapshot) {
 }
 
 #[test]
-#[ignore = "requires PSEC through the product RPC and ConPTY helper"]
+#[ignore = "requires PSEC through the product RPC and MXC ConPTY"]
 fn psec_rpc_terminal_reconnect_preserves_execution_resize_and_exit_output() {
     let host = Host::start();
     let client = host.client();
@@ -258,7 +258,7 @@ fn psec_rpc_pipe_preserves_stdin_stderr_and_exit_output() {
 }
 
 #[test]
-#[ignore = "requires PSEC through the product RPC and ConPTY helper"]
+#[ignore = "requires PSEC through the product RPC and MXC ConPTY"]
 fn psec_rpc_terminal_read_only_ceiling_blocks_writes() {
     let host = Host::with_access("read-only");
     let protected = host.root.path().join("protected.txt");
@@ -294,7 +294,7 @@ fn psec_rpc_terminal_read_only_ceiling_blocks_writes() {
 }
 
 #[test]
-#[ignore = "requires PSEC through the product RPC and ConPTY helper"]
+#[ignore = "requires PSEC through the product RPC and MXC ConPTY"]
 fn psec_rpc_terminal_cancellation_reaps_workload_and_descendants() {
     let host = Host::start();
     let client = host.client();

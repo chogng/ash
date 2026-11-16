@@ -81,7 +81,7 @@ impl StdioServerCommand {
 pub(crate) struct StdioTransport {
     child: Child,
     #[cfg(windows)]
-    job: ash_utils_pty::JobObject,
+    job: ash_utils_process::JobObject,
     transport: AsyncRwTransport<RoleClient, ChildStdout, ChildStdin>,
 }
 
@@ -93,9 +93,9 @@ impl StdioTransport {
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
         #[cfg(unix)]
-        ash_utils_pty::process_group::configure_command_session(command.as_std_mut());
+        ash_utils_process::process_group::configure_command_session(command.as_std_mut());
         #[cfg(windows)]
-        let job = ash_utils_pty::JobObject::create()?;
+        let job = ash_utils_process::JobObject::create()?;
         #[cfg(windows)]
         let mut child = job.spawn_contained(&mut command)?;
         #[cfg(not(windows))]
@@ -116,7 +116,7 @@ impl StdioTransport {
         #[cfg(unix)]
         if let Some(pid) = self.child.id() {
             // No wait/try_wait may reap the leader before its session is cleaned up.
-            ash_utils_pty::process_group::kill_process_session(pid)?;
+            ash_utils_process::process_group::kill_process_session(pid)?;
         }
         self.child.start_kill()
     }
@@ -127,7 +127,7 @@ impl StdioTransport {
         while tokio::time::Instant::now() < deadline {
             #[cfg(unix)]
             let exited = match self.child.id() {
-                Some(pid) => ash_utils_pty::process_group::child_has_exited(pid)?,
+                Some(pid) => ash_utils_process::process_group::child_has_exited(pid)?,
                 None => true,
             };
             #[cfg(not(unix))]

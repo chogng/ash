@@ -342,15 +342,10 @@ impl<B: SandboxBackend> ProcessExecutor<B> {
                     "managed networking has no request authorization authority".into(),
                 )
             })?;
-            let proxy = if self.sandbox.requires_shared_network_proxy() {
-                network_proxy::NetworkProxy::start_shared(policy.clone(), cancellation)
-            } else {
-                network_proxy::NetworkProxy::start(policy.clone(), cancellation)
-            }
-            .map_err(|error| ExecutionError::Network(error.to_string()))?;
+            let proxy = network_proxy::NetworkProxy::start(policy.clone(), cancellation)
+                .map_err(|error| ExecutionError::Network(error.to_string()))?;
             command = command.with_network_proxy(ash_sandboxing::ManagedNetworkAccess::new(
-                std::num::NonZeroU16::new(proxy.http_port()).expect("bound port"),
-                std::num::NonZeroU16::new(proxy.socks_port()).expect("bound port"),
+                std::num::NonZeroU16::new(proxy.port()).expect("bound port"),
             ));
             Some(proxy)
         } else {
@@ -407,8 +402,7 @@ impl<B: SandboxBackend> ProcessExecutor<B> {
                 .as_ref()
                 .map(|proxy| {
                     network_proxy::ProxyEnvironment::new(
-                        proxy.http_port().try_into().expect("bound port"),
-                        proxy.socks_port().try_into().expect("bound port"),
+                        proxy.port().try_into().expect("bound port"),
                     )
                     .variables()
                     .into_iter()
