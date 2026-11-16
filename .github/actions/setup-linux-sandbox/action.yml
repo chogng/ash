@@ -1,0 +1,23 @@
+name: Prepare Linux sandbox namespaces
+description: Allow the sandbox's unshare launcher under Ubuntu AppArmor and verify namespace startup
+runs:
+  using: composite
+  steps:
+    - name: Permit user namespaces for the sandbox launcher
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Ubuntu 24.04 restricts capabilities inside unprivileged user namespaces.
+        # Grant only the unshare launcher used before Bubblewrap; keep the global
+        # restriction and the product's filesystem/network sandbox enabled.
+        if [ "$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || true)" = 1 ]; then
+          sudo tee /etc/apparmor.d/ash-ci-unshare > /dev/null <<'PROFILE'
+        abi <abi/4.0>,
+        include <tunables/global>
+        /usr/bin/unshare flags=(unconfined) {
+          userns,
+        }
+        PROFILE
+          sudo apparmor_parser -r /etc/apparmor.d/ash-ci-unshare
+        fi
+        unshare --user --map-root-user /bin/true

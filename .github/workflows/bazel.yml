@@ -36,6 +36,8 @@ jobs:
             libxkbcommon-dev \
             pkg-config
 
+      - uses: ./.github/actions/setup-linux-sandbox
+
       - name: Prepare locked search programs
         run: |
           python3 -B - <<'PY'

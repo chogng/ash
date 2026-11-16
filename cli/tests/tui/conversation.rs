@@ -243,6 +243,8 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     decline.down();
     decline.wait_for_screen("> Approve same action this session");
     decline.down();
+    decline.wait_for_screen("> Allow edits to this file this session");
+    decline.down();
     decline.wait_for_screen("> Save approval for this exact action");
     decline.down();
     decline.wait_for_screen("> Decline");
@@ -342,6 +344,7 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     bypass.space();
     bypass.wait_for_stable_screen("written with permission bypass");
     bypass.wait_for_stable_screen("Space to expand");
+    bypass.wait_for_screen_to_omit("/permission to change permissions");
     bypass.assert_snapshot("real/03-approval/08-bypass-details");
     let bypassed_thread_path = bypass_fixture.find_file("permission-bypassed.txt").unwrap();
     assert_eq!(

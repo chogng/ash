@@ -6,6 +6,7 @@
     "crates/**",
     "resources/extension-host/*.js",
     "resources/extension-host/*.mjs",
+    "resources/extension-recommendations.json",
     "sdk/**",
     "examples/extensions/**",
     "build/**",
@@ -23,7 +24,8 @@
     ".bazelrc",
     ".bazelversion",
     ".github/actions/setup-ubuntu-apt/action.yml",
-    ".github/workflows/bazel.yml"
+    ".github/workflows/bazel.yml",
+    ".github/actions/setup-linux-sandbox/action.yml"
   ],
   "blob-size-policy": null,
   "cargo-deny": null,
@@ -126,6 +128,7 @@
     "**/*.rs",
     "resources/extension-host/*.js",
     "resources/extension-host/*.mjs",
+    "resources/extension-recommendations.json",
     "cli/**/*.snap",
     "crates/**/*.snap",
     "**/Cargo.toml",
@@ -138,7 +141,8 @@
     "build/lib/ripgrep.py",
     "third_party/ripgrep/runtime-lock.json",
     ".github/actions/setup-ubuntu-apt/action.yml",
-    ".github/workflows/rust-warnings.yml"
+    ".github/workflows/rust-warnings.yml",
+    ".github/actions/setup-linux-sandbox/action.yml"
   ],
   "v8-security": [
     "crates/v8-runtime/**",
@@ -204,6 +208,7 @@
     "cli/**",
     "remote-server/**",
     "resources/extension-host/**",
+    "resources/extension-recommendations.json",
     "extensions/**",
     "sdk/**",
     "build/lib/**",
@@ -213,6 +218,7 @@
     "justfile",
     ".github/actions/setup-just/action.yml",
     ".github/actions/setup-ubuntu-apt/action.yml",
-    ".github/workflows/app-server.yml"
+    ".github/workflows/app-server.yml",
+    ".github/actions/setup-linux-sandbox/action.yml"
   ]
 }

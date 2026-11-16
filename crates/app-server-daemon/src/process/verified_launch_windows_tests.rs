@@ -45,14 +45,27 @@ fn restoring_last_write_time_does_not_restore_the_change_stamp() {
     let file = File::open(&path).unwrap();
     let stamp = FileStamp::read(&file).unwrap();
     let modified = file.metadata().unwrap().modified().unwrap();
-    std::fs::write(&path, b"modified").unwrap();
-    OpenOptions::new()
-        .write(true)
-        .open(&path)
-        .unwrap()
-        .set_modified(modified)
-        .unwrap();
-    let current = FileStamp::read(&file).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let current = loop {
+        std::fs::write(&path, b"modified").unwrap();
+        OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        let current = FileStamp::read(&file).unwrap();
+        if current.changed != stamp.changed {
+            break current;
+        }
+        // NTFS can coalesce mutations inside one filesystem clock tick. Exercise
+        // a distinct change stamp while keeping the original write time restored.
+        assert!(
+            Instant::now() < deadline,
+            "file change stamp did not advance"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    };
     assert_eq!(current.modified, stamp.modified);
     assert_ne!(current.changed, stamp.changed);
     assert!(stamp.check(&file, &path).is_err());

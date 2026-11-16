@@ -19,7 +19,6 @@ expression: screen
 
 
 
-
 ○ Waiting for approval · 0s · esc to interrupt
 
 ┌Approval required─────────────────────────────────────────────────────────────────────────────────┐
@@ -28,6 +27,7 @@ expression: screen
 │File write  ·  <FIXTURE>/profile/worktree│
 │> Approve once                                                                                    │
 │  Approve same action this session                                                                │
+│  Allow edits to this file this session                                                           │
 │  Save approval for this exact action                                                             │
 │  Decline                                                                                         │
 │                                                                                                  │

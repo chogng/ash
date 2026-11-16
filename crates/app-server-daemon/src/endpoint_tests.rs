@@ -185,7 +185,9 @@ fn profile_operation_lock_serializes_mutating_lifecycle_commands() {
     let endpoint = EndpointPaths::prepare(profile.path()).unwrap();
     let first = endpoint.acquire_operation_lock().unwrap();
     // An expired heartbeat must not evict a live holder of the OS guard.
-    std::fs::File::open(endpoint.operation_lock.join("heartbeat"))
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(endpoint.operation_lock.join("heartbeat"))
         .unwrap()
         .set_modified(std::time::UNIX_EPOCH)
         .unwrap();
@@ -234,7 +236,10 @@ fn operation_lock_recovers_a_crashed_carrier_without_waiting_for_heartbeat_expir
         .unwrap();
     assert!(status.success());
     let endpoint = EndpointPaths::prepare(profile.path()).unwrap();
-    let heartbeat = std::fs::File::open(endpoint.operation_lock.join("heartbeat")).unwrap();
+    let heartbeat = std::fs::OpenOptions::new()
+        .write(true)
+        .open(endpoint.operation_lock.join("heartbeat"))
+        .unwrap();
     // Age-based recovery cannot succeed, even on a slow test host.
     heartbeat
         .set_modified(std::time::SystemTime::now() + Duration::from_secs(3600))

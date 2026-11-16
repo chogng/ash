@@ -125,6 +125,7 @@ exports_files([
     "Cargo.lock",
     "Cargo.toml",
     "rust-toolchain.toml",
+    "resources/extension-recommendations.json",
     "test/fixtures/languages/associations.json",
     "test/fixtures/languages/folding.json",
     "test/fixtures/tree-sitter/languages.json",

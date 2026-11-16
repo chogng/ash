@@ -92,6 +92,7 @@ pub(super) struct AppDriver {
     conversation: Option<Conversation>,
     requests: RequestTasks,
     queued_commands: VecDeque<ScheduledCommand>,
+    deferred_agent_requests: Vec<client::ClientEvent>,
     refresh: ServerRefresh,
     queue_refresh_requested: bool,
     model_picker: crate::models::ModelPickerData,
@@ -136,6 +137,7 @@ impl AppDriver {
             conversation,
             requests: RequestTasks::default(),
             queued_commands: VecDeque::from([initial]),
+            deferred_agent_requests: Vec::new(),
             refresh: ServerRefresh::default(),
             queue_refresh_requested: true,
             model_picker: resources.model_picker,
@@ -175,6 +177,20 @@ impl AppDriver {
     }
 
     pub(super) fn handle_client_event(&mut self, event: client::ClientEvent) {
+        if let client::ClientEvent::AgentRequest(request) = &event
+            && !self.conversation.as_ref().is_some_and(|current| {
+                request.session_id == *current.conversation.session_id()
+                    && request.thread_id == *current.conversation.thread_id()
+            })
+            && (!self.requests.is_idle(Some(RequestKey::Thread))
+                || !self.requests.is_idle(Some(RequestKey::Sessions)))
+        {
+            // A fast Turn can request approval before its start/resume completion
+            // binds the conversation. Retain delivery until that selection settles;
+            // inactive conversations are still filtered by refresh_server_event.
+            self.deferred_agent_requests.push(event);
+            return;
+        }
         let stale_dictation = match &event {
             client::ClientEvent::DictationTranscript(transcript) => self
                 .app
@@ -332,6 +348,15 @@ impl AppDriver {
             changed = true;
         }
         changed |= self.reconcile_memory_diagnostics();
+        if self.requests.is_idle(Some(RequestKey::Thread))
+            && self.requests.is_idle(Some(RequestKey::Sessions))
+        {
+            let deferred = std::mem::take(&mut self.deferred_agent_requests);
+            changed |= !deferred.is_empty();
+            for event in deferred {
+                self.handle_client_event(event);
+            }
+        }
         changed
     }
 

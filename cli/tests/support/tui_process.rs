@@ -769,14 +769,12 @@ impl TuiProcess {
     pub fn wait_for_stable_screen(&mut self, expected: &str) {
         let deadline = Instant::now() + STATE_TIMEOUT;
         loop {
-            let (screen, revision) = {
-                let capture = self.capture.lock().unwrap();
-                (capture.screen(), capture.revision())
-            };
+            let screen = self.screen();
             if screen.contains(expected) {
                 thread::sleep(Duration::from_millis(250));
-                let capture = self.capture.lock().unwrap();
-                if capture.revision() == revision && capture.screen().contains(expected) {
+                // Cursor/status writes and identical redraws advance the transport
+                // revision without changing the visible frame under assertion.
+                if self.screen() == screen {
                     return;
                 }
             }
@@ -1063,10 +1061,12 @@ fn normalize_truncated_fixture_path(line: &str, paths: &[String]) -> String {
     let mut matched = None;
     for path in paths {
         for (end, _) in path.char_indices().rev() {
-            if end < MINIMUM_PREFIX_BYTES {
-                break;
-            }
             let prefix = &path[..end];
+            // A modal can cover a path after only a few columns. Accept short
+            // fragments only at its border, keeping ordinary short text intact.
+            if end < MINIMUM_PREFIX_BYTES && (end < 4 || !line.contains(&format!("{prefix}│"))) {
+                continue;
+            }
             if line.contains(prefix) {
                 if matched.is_none_or(|current: &str| prefix.len() > current.len()) {
                     matched = Some(prefix);
@@ -1079,7 +1079,11 @@ fn normalize_truncated_fixture_path(line: &str, paths: &[String]) -> String {
         return line.to_string();
     };
     let replacement = format!(
-        "<FIXTURE…>{}",
+        "{}{}",
+        "<FIXTURE…>"
+            .chars()
+            .take(prefix.chars().count())
+            .collect::<String>(),
         " ".repeat(
             prefix
                 .chars()
@@ -1201,6 +1205,17 @@ fn snapshot_normalization_replaces_fixture_paths_and_generated_thread_ids() {
 }
 
 #[test]
+fn snapshot_normalization_redacts_short_fixture_paths_clipped_by_a_modal() {
+    assert_eq!(
+        normalize_snapshot(
+            "'/tmp/zt│ modal; ordinary /tmp/ text".into(),
+            &["/tmp/zt-random/padding".into()]
+        ),
+        "'<FIXTUR│ modal; ordinary /tmp/ text"
+    );
+}
+
+#[test]
 fn snapshot_normalization_prefers_the_longest_path_and_short_clipped_prefix() {
     let private = "/private/var/folders/account/T/ash-fixture";
     let visible = "/private/var/fold";
@@ -1229,6 +1244,17 @@ fn terminal_revision_advances_after_raw_capture_reaches_its_limit() {
 
     assert_eq!(capture.raw.len(), OUTPUT_LIMIT);
     assert_eq!(capture.revision(), 42);
+}
+
+#[test]
+fn terminal_control_output_does_not_change_a_settled_screen() {
+    let mut capture = TerminalCapture::new(LARGE_SIZE);
+    capture.push(b"> Approve once");
+    let screen = capture.screen();
+    let revision = capture.revision();
+    capture.push(b"\x1b]0;approval\x07\x1b[?25l");
+    assert!(capture.revision() > revision);
+    assert_eq!(capture.screen(), screen);
 }
 
 #[test]

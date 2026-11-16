@@ -202,9 +202,11 @@ fn actual_tui_dictation_download_cancels_recovers_and_restarts() {
         });
         process.type_text("KEEP-DICTATION-DRAFT");
         process.send(b"\x1b[23;8~");
-        process.wait_for_screen("Dictation · checking model files");
+        process.wait_for_screen("Dictation · downloading model_quant.onnx:");
         let connection = proxy.connection();
-        process.wait_for_stable_screen("Dictation · checking model files · ctrl+c to stop");
+        process.wait_for_stable_screen(
+            "Dictation · downloading model_quant.onnx: 0.0 MiB · ctrl+c to stop dictation",
+        );
         assert_eq!(
             std::fs::metadata(staging.join("encoder.onnx.download"))
                 .unwrap()
@@ -227,14 +229,14 @@ fn actual_tui_dictation_download_cancels_recovers_and_restarts() {
         process.send(&vec![0x7f; "KEEP-DICTATION-DRAFT".len()]);
         process.wait_for_screen_to_omit("KEEP-DICTATION-DRAFT");
         process.submit("/voice");
-        process.wait_for_screen("Dictation · checking model files");
+        process.wait_for_screen("Dictation · downloading model_quant.onnx:");
         let connection = proxy.connection();
         drop(connection);
         process.wait_for_stable_screen("Dictation failed:");
         assert_dictation_download_released(&fixture);
         proxy.assert_no_pending_connections();
         process.submit("/voice");
-        process.wait_for_screen("Dictation · checking model files");
+        process.wait_for_screen("Dictation · downloading model_quant.onnx:");
         let connection = proxy.connection();
         process.send(b"\x03");
         process.wait_for_stable_screen("Dictation stopped.");
@@ -327,9 +329,11 @@ fn actual_tui_dictation_download_exit_releases_the_connection_owner() {
         let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
         process.wait_for_stable_screen("? for shortcuts");
         process.submit("/voice");
-        process.wait_for_screen("Dictation · checking model files");
+        process.wait_for_screen("Dictation · downloading model_quant.onnx:");
         let connection = proxy.connection();
-        process.wait_for_stable_screen("Dictation · checking model files · ctrl+c to stop");
+        process.wait_for_stable_screen(
+            "Dictation · downloading model_quant.onnx: 0.0 MiB · ctrl+c to stop dictation",
+        );
         match exit {
             Exit::Command => process.exit_with_command(),
             Exit::TerminationSignal => process.terminate(),
@@ -376,7 +380,7 @@ fn actual_tui_dictation_download_respects_another_process_model_lock() {
     proxy.assert_no_pending_connections();
     drop(lock);
     process.submit("/voice");
-    process.wait_for_screen("Dictation · checking model files");
+    process.wait_for_screen("Dictation · downloading model_quant.onnx:");
     let connection = proxy.connection();
     process.send(b"\x03");
     process.wait_for_stable_screen("Dictation stopped.");
@@ -478,12 +482,12 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("Automatic model");
     process.submit("/model openai/gpt-6-luna high");
-    process.wait_for_stable_screen("GPT-6 Luna (high)");
+    process.wait_for_stable_screen("Luna 6 (high)");
     process.type_text("BOUND-DRAFT");
     process.send(b"\x1b[1;2A");
-    process.wait_for_stable_screen("GPT-6 Luna (xhigh)");
+    process.wait_for_stable_screen("Luna 6 (xhigh)");
     assert!(process.screen().contains("BOUND-DRAFT"));
-    assert!(process.screen().contains("GPT-6 Luna (xhigh)"));
+    assert!(process.screen().contains("Luna 6 (xhigh)"));
     assert!(!process.screen().contains("/effort"));
     assert!(!process.screen().contains("Thinking effort:"));
     assert!(
@@ -494,9 +498,9 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     process.wait_for_stable_screen("⏸ Manual");
     process.assert_snapshot("real/02-terminal/effort-shortcut");
     for (sequence, status, effort) in [
-        (b"\x1b[1;2B".as_slice(), "GPT-6 Luna (high)", "high"),
-        (b"\x1b[1;2A".as_slice(), "GPT-6 Luna (xhigh)", "extraHigh"),
-        (b"\x1b[1;2B".as_slice(), "GPT-6 Luna (high)", "high"),
+        (b"\x1b[1;2B".as_slice(), "Luna 6 (high)", "high"),
+        (b"\x1b[1;2A".as_slice(), "Luna 6 (xhigh)", "extraHigh"),
+        (b"\x1b[1;2B".as_slice(), "Luna 6 (high)", "high"),
     ] {
         process.send(sequence);
         process.wait_for_stable_screen(status);
@@ -509,9 +513,9 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
         );
     }
     process.send(b"\x1b[1;2A");
-    process.wait_for_stable_screen("GPT-6 Luna (xhigh)");
+    process.wait_for_stable_screen("Luna 6 (xhigh)");
     process.send(b"\x1b[1;2A");
-    process.wait_for_stable_screen("GPT-6 Luna (max)");
+    process.wait_for_stable_screen("Luna 6 (max)");
     let config_at_max = fixture.config_source();
     process.send(b"\x1b[1;2A");
     // A following edit proves the boundary key was processed before checking silence.
@@ -519,7 +523,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     process.wait_for_stable_screen("BOUND-DRAFT-AT-MAX");
     assert!(!process.screen().contains("Thinking effort is already"));
     assert_eq!(fixture.config_source(), config_at_max);
-    assert!(process.screen().contains("GPT-6 Luna (max)"));
+    assert!(process.screen().contains("Luna 6 (max)"));
     assert!(process.screen().contains("BOUND-DRAFT"));
     process.assert_snapshot("real/02-terminal/effort-highest-boundary");
     process.quit();
@@ -1025,6 +1029,14 @@ fn actual_tui_sandbox_process_details_show_enforcement() {
         .parent()
         .unwrap()
         .join("sandbox-must-not-write.txt");
+    // Tie the denied target to the exact file asserted below, independent of
+    // the session's managed working directory.
+    std::fs::write(&outside_path, b"unsandboxed control").unwrap();
+    std::fs::remove_file(&outside_path).unwrap();
+    let command = format!(
+        "touch '{}' 2>&- || {{ echo 'sandbox fixture: operation not permitted' >&2; exit 1; }}",
+        outside_path.to_str().unwrap().replace('\'', "'\\''")
+    );
     let server = ScenarioServer::start([
         HttpResponse::streaming(["SANDBOX-SETUP-DONE"], None),
         HttpResponse::reasoning_tool_call(
@@ -1035,7 +1047,7 @@ fn actual_tui_sandbox_process_details_show_enforcement() {
                 "program": "/bin/sh",
                 "arguments": [
                     "-c",
-                    "touch ../sandbox-must-not-write.txt 2>&- || { echo 'sandbox fixture: operation not permitted' >&2; exit 1; }",
+                    command,
                 ],
                 "working_directory": ".",
             }),
@@ -1043,6 +1055,9 @@ fn actual_tui_sandbox_process_details_show_enforcement() {
         HttpResponse::streaming(["沙盒拒绝了越界写入，目标文件没有生成。"], None),
     ]);
     fixture.write_config(&server.base_url());
+    // Keep an explicit directory and network ceiling even when confirmation is
+    // bypassed. The scenario proves filesystem enforcement on both Unix backends.
+    fixture.append_config("\n[permissions]\ndefaultProfile = \":workspace\"\n");
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Start a task below, or continue a previous session.");
     process.submit("start a session before changing permissions");
@@ -1053,10 +1068,11 @@ fn actual_tui_sandbox_process_details_show_enforcement() {
     process.wait_for_stable_screen("目标文件没有生成");
     process.confirm_current_permission();
     process.wait_for_stable_screen("Bypass permissions");
+    process.wait_for_screen_to_omit("/permission to change permissions");
     process.assert_snapshot("real/03-approval/09-sandbox-blocked");
     assert!(!outside_path.exists());
     assert_eq!(server.request_count(), 3);
-    assert!(server.request_bodies()[2].contains("sandbox"));
+    assert!(server.request_bodies()[2].contains("sandbox fixture: operation not permitted"));
 
     process.control_up();
     process.up();

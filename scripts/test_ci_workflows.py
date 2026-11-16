@@ -224,6 +224,17 @@ class CiWorkflowTests(unittest.TestCase):
             with self.subTest(workflow=name):
                 self.assertTrue(selected[name])
 
+    def test_namespace_launcher_and_embedded_catalog_select_native_consumers(self):
+        for path in (
+            ".github/actions/setup-linux-sandbox/action.yml",
+            "resources/extension-recommendations.json",
+        ):
+            with self.subTest(path=path):
+                selected = ci_workflows.select([path], self.policy)
+                for name in ("app-server", "bazel", "rust-warnings"):
+                    self.assertTrue(selected[name])
+                self.assertFalse(selected["v8-security"])
+
     def baseline_record(self):
         selection = ci_workflows.select([], self.policy, force_all=True)
         return {

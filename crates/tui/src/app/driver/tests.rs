@@ -106,6 +106,110 @@ use std::sync::Arc;
 
 #[test]
 #[cfg(feature = "in-process-tests")]
+fn first_turn_approval_survives_arriving_before_conversation_binding() {
+    let _guard = crate::test_support::in_process_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let session = AppServerSession::start_embedded(crate::test_support::in_process_options(
+        root.path(),
+        ClientInfo {
+            name: "ash-tui-early-approval-test".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+    let mut client = session.client();
+    let active =
+        crate::sessions::ActiveConversation::start(&mut client, "Approval".into()).unwrap();
+    let (subscription, _, _) = crate::thread::ThreadSubscription::start(
+        &mut client,
+        active.session_id(),
+        active.thread_id(),
+    )
+    .unwrap();
+    let model_picker = crate::models::ModelPickerData::new(
+        client.list_models().unwrap(),
+        client.read_config().unwrap(),
+    );
+    let runtime = state::StateRuntime::open(root.path()).unwrap();
+    let local_settings = Arc::new(
+        crate::config::LocalTuiSettings::open(root.path(), runtime.database_path()).unwrap(),
+    );
+    let mut driver = AppDriver::new(
+        App::new(),
+        client,
+        None,
+        AppDriverResources {
+            file_search: None,
+            host_dir_root: root.path().to_path_buf(),
+            theme_resource: crate::theme::ThemeResource::in_product_root(
+                root.path().to_path_buf(),
+                None,
+            ),
+            server_slash_commands: vec![],
+            plugins_enabled: false,
+            local_settings,
+            model_picker,
+        },
+    )
+    .unwrap();
+    let (release, wait) = std::sync::mpsc::channel();
+    let origin = RequestOrigin::current(driver.app());
+    driver.requests.spawn(
+        Some(RequestKey::Thread),
+        "early-approval",
+        move || {
+            wait.recv().unwrap();
+            Completion::Presentation(Ok(
+                crate::thread::Event::ProductNotice("ready".into()).into()
+            ))
+        },
+        &mut driver.app,
+        origin,
+    );
+    let approval = |session_id: &ash_protocol::SessionId, reason: &str| {
+        crate::client::ClientEvent::AgentRequest(Box::new(serde_json::from_value(serde_json::json!({
+            "sessionId": session_id, "threadId": active.thread_id(), "turnId": "turn",
+            "interaction": { "requestId": reason, "itemId": null, "deadline": null,
+                "request": { "type": "approval", "request": {
+                    "actionDigest": "a".repeat(64), "policyRevision": "policy", "reason": reason,
+                    "capabilities": [], "allowedDecisions": ["approveOnce", "decline"]
+                }}
+            }
+        })).unwrap()))
+    };
+    driver.handle_client_event(approval(active.session_id(), "active-request"));
+    driver.handle_client_event(approval(
+        &ash_protocol::SessionId::new("inactive").unwrap(),
+        "inactive-request",
+    ));
+    assert!(driver.app.chat_panel.approval_view().is_none());
+    driver.conversation = Some(crate::sessions::Conversation {
+        conversation: active.clone(),
+        subscription,
+    });
+    release.send(()).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !driver.requests.is_idle(Some(RequestKey::Thread)) {
+        assert!(std::time::Instant::now() < deadline);
+        driver.poll_request_completions();
+        std::thread::yield_now();
+    }
+    assert_eq!(
+        driver.app.chat_panel.approval_view().unwrap().reason,
+        "active-request"
+    );
+    driver.handle_client_event(approval(
+        &ash_protocol::SessionId::new("inactive").unwrap(),
+        "late-inactive-request",
+    ));
+    assert_eq!(
+        driver.app.chat_panel.approval_view().unwrap().reason,
+        "active-request"
+    );
+}
+
+#[test]
+#[cfg(feature = "in-process-tests")]
 fn suspend_discards_queued_dictation_and_requires_cancellation_acknowledgement() {
     let _guard = crate::test_support::in_process_test_guard();
     let root = tempfile::tempdir().unwrap();

@@ -403,14 +403,14 @@ fn actual_tui_provider_autosaves_and_tests_without_fetching_models() {
     process.escape();
     process.submit("/model");
     process.wait_for_screen("Search models");
-    select_config_item(&mut process, "GPT-6 Astra");
+    select_config_item(&mut process, "Astra 6");
     process.type_text("p");
     wait_for_config(&fixture, "pinnedModels");
     assert!(fixture.config_source().contains("gpt-6-astra"));
     process.escape();
     process.submit("/model");
     process.wait_for_stable_screen("Pinned");
-    process.wait_for_screen("> GPT-6 Astra");
+    process.wait_for_screen("> Astra 6");
     process.escape();
     open_provider(&mut process, "PTY service");
     process.wait_for_screen("> Provider name");

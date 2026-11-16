@@ -212,6 +212,8 @@ jobs:
       - name: Install Just for TUI test entrypoints
         uses: ./.github/actions/setup-just
 
+      - uses: ./.github/actions/setup-linux-sandbox
+
       - name: Test TUI interactions
         run: just test-tui-unit --features in-process-tests
 

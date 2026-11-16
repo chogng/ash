@@ -4,25 +4,25 @@ expression: screen
 ---
   <FIXTURE…>                                                …                          [Dashboard]
 
-
-● Reasoning ┌── Transcript cell ──────────────────────────────────────────────────[✗]─┐
- └─ 先在受限│                                                                         │
-    再根据进│  Content: shell-command [call-sandbox]                                  │
-            │           {                                                             │
-● Command fa│             "program": "/bin/sh",                                       │
- └─ shell-co│             "arguments": [                                              │
-    {       │               "-c",                                                     │
-      "progr│               "touch ../sandbox-must-not-write.txt 2>&- || { echo       │
-      "argum│  'sandbox fixture: operation not permitted' >&2; exit 1; }"             │
-        "-c"│             ],                                                          │
-        "tou│             "working_directory": "."                                    │ not
-    permitte│           }                                                             │
-      ],    │           sandbox denied the action, but the attempt may have produced  │
-      "worki│  side effects, so the exact call was not retried; reason: the process   │
-    }       │  reported an access restriction; output: sandbox fixture: operation not │
-    sandbox │  permitted                                                              │xact call was
-    not retr│                                                                         │xture:
-    operatio│                                                                         │
+> 尝试在工作区外创建 sandbox-must-not-write.txt
+            ┌── Transcript cell ──────────────────────────────────────────────────[✗]─┐
+● Reasoning │                                                                         │
+ └─ 先在受限│  Content: shell-command [call-sandbox]                                  │
+    再根据进│           {                                                             │
+            │             "program": "/bin/sh",                                       │
+● Command fa│             "arguments": [                                              │
+ └─ shell-co│               "-c",                                                     │
+    {       │               "touch                                                    │
+      "progr│  '<FIXTURE>/sa │
+      "argum│  ndbox-must-not-write.txt' 2>&- || { echo 'sandbox fixture: operation   │
+        "-c"│  not permitted' >&2; exit 1; }"                                         │
+        "tou│             ],                                                          │
+    '<FIXTUR│             "working_directory": "."                                    │t-write.txt'
+    2>&- || │           }                                                             │
+      ],    │           the process reported an access restriction                    │
+      "worki│                                                                         │
+    }       │                                                                         │
+    the proc│                                                                         │
     view ful│                                                                         │
             │                                                                         │
 ● 沙盒拒绝了│                                                                         │

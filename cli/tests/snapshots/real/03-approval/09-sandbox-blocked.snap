@@ -15,11 +15,10 @@ expression: screen
     再根据进程结果确认目录边界是否生效。
 
 ● Command failed
- └─ /bin/sh -c 'touch ../sandbox-must-not-write.txt 2>&- || { echo '\''sandbox fixture: operation
-    not permitted'\'' >&2; exit 1; }'
-    sandbox denied the action, but the attempt may have produced side effects, so the exact call was
-    not retried; reason: the process reported an access restriction; output: sandbox fixture:
-    operation not permitted
+ └─ /bin/sh -c 'touch '\''<FIXTURE>/sandbox
+    -must-not-write.txt'\'' 2>&- || { echo '\''sandbox fixture: operation not permitted'\'' >&2;
+    exit 1; }'
+    the process reported an access restriction
     view full
 
 ● 沙盒拒绝了越界写入，目标文件没有生成。
@@ -28,7 +27,8 @@ expression: screen
 
 
 
-                                                                 /permission to change permissions
+
+
   ────────────────────────────────────────────────────────────────────────────────────────────────
   >
   ───────────────────────────────────────────────────────────────────────────── ash-real-scenario

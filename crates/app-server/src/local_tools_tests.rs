@@ -705,6 +705,8 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
             "edit",
             "glob",
             "grep",
+            "pdf_annotate",
+            "pdf_read",
             "read_file",
             "shell-command",
             "shell-session",
@@ -963,6 +965,27 @@ fn agent_edit_refreshes_an_existing_tgrep_generation_before_returning() {
         LocalShellToolService::new(dir.authorization(), ripgrep.clone(), PassThroughBackend)
             .unwrap();
     let grep = Arc::new(grep::Service::new(grep::Backend::Tgrep, ripgrep.clone(), None).unwrap());
+    let cancellation = CancellationSource::new().token();
+    // This test requires an existing generation. Agent queries intentionally use
+    // a disk scan during index startup; the argument-echoing rg fixture is not a scanner.
+    let initial = grep::Search::search(
+        grep.as_ref(),
+        &dir.root(),
+        &grep::Query {
+            query: "before_immediate_marker".into(),
+            pattern: grep::Pattern::Literal,
+            case_sensitivity: grep::CaseSensitivity::Sensitive,
+            scope: PathBuf::new(),
+            include_patterns: Vec::new(),
+            exclude_patterns: Vec::new(),
+            max_results: 10,
+            freshness: grep::Freshness::Indexed,
+        },
+        &cancellation,
+    )
+    .unwrap();
+    assert!(initial.index_stats.is_some());
+    assert_eq!(initial.matches.len(), 1);
     let suite = LocalToolSuite::new(
         shell,
         grep,
@@ -971,7 +994,6 @@ fn agent_edit_refreshes_an_existing_tgrep_generation_before_returning() {
         dir.grant(),
     );
     let authorization = ToolAuthorization::Sandboxed(read_only_sandbox());
-    let cancellation = CancellationSource::new().token();
     let grep = |pattern: &str| ToolCall {
         id: ToolCallId::new(format!("grep-{pattern}")).unwrap(),
         name: ToolName::new("grep").unwrap(),
