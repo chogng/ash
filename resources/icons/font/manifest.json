@@ -401,7 +401,8 @@
     "strikethrough": "E18F",
     "markdown-filled": "E190",
     "markdown": "E191",
-    "note": "E192"
+    "note": "E192",
+    "desktop": "E193"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -498,6 +499,7 @@
     "debug": "b2b4d76d8e0563383343f0fa3d71eba6d171a88aa4e0142c3195756f7a47209e",
     "deepseek": "c4eb717d5810507f5810c24c9df12a61d9a8855b83be66a503c3e3630eed55e3",
     "design": "35cf4c5e0f6bf79e639b9ed3ff418b9a11d8f5f391d8851b504807c0d2efd95d",
+    "desktop": "e54340da2e48d7aa5c94d045c640aea977eb1f146fc4be0ea61b0622d77d5630",
     "device-mobile": "b109ab7d94ccf20f3e08e73e755715385a6124ee42175f0e873ed89e43977132",
     "diagnostics": "2ca117f19cd1bcd7fde7282cec6d274075b9f6058e449cb8d9657437341303a0",
     "diff-added": "f0f7b934fef76dd6b8ce62e345c8b53d97bd04dc7229a01a54dff4ae7c772d90",

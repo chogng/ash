@@ -98,6 +98,7 @@ export const lxiconsLibrary = {
 	debugStart: registerLxicon("debug-start", 0xe050),
 	deepseek: registerLxicon("deepseek", 0xe16e),
 	design: registerLxicon("design", 0xe052),
+	desktop: registerLxicon("desktop", 0xe193),
 	deviceMobile: registerLxicon("device-mobile", 0xe053),
 	diagnostics: registerLxicon("diagnostics", 0xe054),
 	diff: registerLxicon("diff", 0xe057),

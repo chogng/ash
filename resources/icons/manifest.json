@@ -472,6 +472,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "desktop",
+      "file": "desktop.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "device-mobile",
       "file": "device-mobile.svg",
       "rendering": "symbolic"
