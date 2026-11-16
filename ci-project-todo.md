@@ -77,9 +77,21 @@ Windows 本地 build 322 项／6 跳过、scripts 239 项／7 跳过通过；CI 
 
 组件测试首跑 8 项通过、1 项截图稳定性失败：多选菜单入场动画保留的 transform 层使圆角 16 个像素出现 1/255 差异。fixture 现等待动画完成并释放动画对象，保留严格 PNG 和完整 manifest 一致性检查。相关 CSS 二分及全新浏览器截图 2 项复验通过，日志为 `fixture-retest.log`；首跑记录保留在 `fixture-tests.log`。
 
+## 2026-11-17 固定基线复验
+
+修复已发布至 `4b932cd2db`，按[该提交的主 CI](https://github.com/chogng/ash/actions/runs/43903186720)验收。当前 28 项通过、无已完成的失败作业，后端、前端和部分平台仍在执行，不能据此认定完整矩阵通过。
+
+- 修复配置文档摘要对 JSON 键顺序敏感的问题，并保留旧摘要的校验和升级路径。配置 105 项测试及 `serde_json/preserve_order` 组合通过。
+- 修复首轮审批事件早于会话绑定到达时丢失的问题。WSL 54 项真实终端场景、1458 项 TUI 单测（2 跳过）、17 项后端工具测试及相关 Rust 警告检查通过。Windows daemon 完整验证通过 82 项（2 跳过）。本机完整 stdio 入口 7 项通过，2 项 OpenSSH fixture 因 WSL 缺少所需可执行文件失败；远端对应作业继续按原断言验收。
+- 前端修正假进程进入真实进程监管器导致的等待，以及构建准备、原生绑定和恢复流程的旧 fixture；首轮完整 build 测试发现的失败目标已逐项复验通过。scripts 241 项测试通过（7 跳过）。
+- 截图专项 [43898753333](https://github.com/chogng/ash/actions/runs/43898753333) 已通过。已审核的 12 张 CI PNG 与摘要一同提交；跨进程比较只允许最多 32 个像素出现一级 RGB 舍入差异，透明度和尺寸必须一致。同页状态和 PNG 重复采样仍精确比较，较大变化和损坏基线仍失败。
+- Linux 本机 Bazel 实际构建 `//crates/app-server:app-server` 通过；新主 CI 的 [Bazel TUI 场景](https://github.com/chogng/ash/actions/runs/43903186720/job/133427853993)也已通过。Ubuntu 命名空间启动使用针对 unshare 的 AppArmor 配置，保留产品沙盒。
+
+V8 仍精确固定 `152.2.0`，未升级引擎或替换已发布产物。独立仓库 `a6f19a2` 删除周期性源码重建；仅生产输入变化或手动请求运行源码验证，发布仍由 tag 或手动入口负责。源码构建和发布队列已经独立，但 V8、LiveKit 生产工具仍引用 Ash 的不可变 harness 提交；这属于尚未彻底分离的构建依赖，不能将其表述为完全独立生产链。独立 V8 新 harness 的 Linux 源码和 Bazel 消费验证已通过；多余的 Windows 源码运行已按用户要求取消。已发布配对保留原构建和校验证据。
+
 - [ ] 按本轮发布后的新 main SHA 核对完整 CI 矩阵。
 - [ ] 补 Desktop runtime acceptance 的 macOS hosted MCP 进程回归通过证据。已有 [macOS 本机补验](agenthost-todo.md#2026-10-29-macos-进程补验)。
-- [ ] 在 Linux CI 真正执行 `//cli:tui-real-scenarios`，不能以本机 query 代替。
+- [x] Linux CI 实际执行 `//cli:tui-real-scenarios` 已通过，证据见上述固定基线的 Bazel TUI 作业。
 - [ ] 根据最新 protocol 和 TUI 日志检查依赖准备与 V8 构建产物；保留依赖边界和产品断言。
 
 旧 57 文件格式批次因材料下载 HTTP 403 未取得字节，未重建或应用。上述未完成事项不影响已经保存的工作树恢复资料。

@@ -6,7 +6,7 @@
 
 ## CI · 远端矩阵验收
 
-- [ ] CI 已补独立 App Server 测试、拆开媒体集成与分发检查，并将 V8、LiveKit Server 产物迁入独立仓库；LiveKit 六平台发布通过，V8 配对摘要保留，本地 Python、依赖、V8 消费及工作流检查通过。仍需按新 SHA 核对完整产品矩阵，取得 macOS hosted MCP 重启、Linux `//cli:tui-real-scenarios` 和新增 App Server 测试的实际通过日志。具体证据见 [CI 交接记录](ci-project-todo.md#接手顺序)。通过后删除本条。
+- [ ] CI 修复已发布至 `4b932cd2db`；截图专项和 Linux Bazel TUI 场景已通过，本机 TUI、daemon、后端工具及警告检查通过。完整产品矩阵仍按[固定提交 CI](https://github.com/chogng/ash/actions/runs/43903186720)验收，需取得后端三平台、macOS hosted MCP 与前端整窗的通过结果。V8、LiveKit 生产队列已拆出，生产工具仍引用固定 Ash harness，尚未完全独立。证据和本机环境限制见 [CI 记录](ci-project-todo.md#2026-11-17-固定基线复验)。通过后删除本条。
 
 ## aspdf · App Server 与整窗验收
 
