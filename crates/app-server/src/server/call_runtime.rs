@@ -15,7 +15,8 @@ use call::MemberCredential;
 use call::ServicePaths;
 use livekit_client::AudioPublication;
 use livekit_client::MediaRoom;
-use sha2::{Digest, Sha256};
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -45,6 +46,21 @@ pub(super) struct Session {
     fingerprint: [u8; 32],
     commands: mpsc::Sender<(Option<CallControl>, Reply)>,
     worker: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        // A dropped JoinHandle detaches its task. Session ownership must also retire capture.
+        self.worker.abort();
+    }
+}
+
+struct PolicyWatcher(tokio::task::JoinHandle<()>);
+
+impl Drop for PolicyWatcher {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 
 #[derive(Default)]
@@ -369,14 +385,14 @@ impl Calls {
             .map_err(|error| error.to_string())?;
         let worker = self.executor()?.spawn(async move {
             let _local = local;
-            let policy_guard = tokio::spawn(async move {
+            let _policy_guard = PolicyWatcher(tokio::spawn(async move {
                 tokio::select! {
                     () = worker_policy.wait_until_denied(&worker_url) => {},
                     () = worker_policy.wait_until_denied(&media_url) => {},
                 }
                 let (reply, _) = oneshot::channel();
                 let _ = policy_commands.send((None, reply)).await;
-            });
+            }));
             call::SessionRuntime {
                 media: Box::new(super::call_adapters::Room::new(room, worker_screens, room_policy, worker_media, worker_media_lease)),
                 devices: Box::new(super::call_adapters::Devices::new(audio)),
@@ -388,7 +404,6 @@ impl Calls {
                 client: worker_client,
                 device: params.device_id,
             }.run(receiver).await;
-            policy_guard.abort();
         });
         let opened = state.lock().map_err(|_| "Call state unavailable")?.clone();
         self.sessions
@@ -465,14 +480,54 @@ impl Calls {
         }
     }
 
+    /// Retires local capture on disconnect without depending on remote room authority.
     pub fn close(&self, owner: u64) {
+        let workers: Vec<_> = match self.sessions.lock() {
+            Ok(sessions) => sessions
+                .iter()
+                .filter(|((id, _), _)| *id == owner)
+                .map(|(key, session)| {
+                    (
+                        key.clone(),
+                        session.commands.clone(),
+                        session.worker.abort_handle(),
+                    )
+                })
+                .collect(),
+            Err(_) => return,
+        };
+        if workers.is_empty() {
+            return;
+        }
+        // Keep records visible to microphone arbitration until their workers have disposed
+        // the devices. Never hold the registry lock while waiting for media cleanup.
+        let runtime = self.executor.get().expect("Call workers have an executor");
+        runtime.block_on(futures::future::join_all(workers.iter().map(
+            |(key, commands, worker)| async move {
+                let stop = async {
+                    let (reply, _) = oneshot::channel();
+                    // Other senders (including the policy watcher) can outlive the UI.
+                    // Explicit leave preempts pending room/device operations in the pump.
+                    let _ = commands.send((None, reply)).await;
+                    while !worker.is_finished() {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                };
+                if tokio::time::timeout(Duration::from_secs(30), stop)
+                    .await
+                    .is_err()
+                {
+                    log::error!("Call {} cleanup timed out; cancelling its worker", key.1);
+                    worker.abort();
+                    // Aborting is only a request. Wait for adapter drops to retire capture.
+                    while !worker.is_finished() {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                }
+            },
+        )));
         if let Ok(mut sessions) = self.sessions.lock() {
-            let keys: Vec<_> = sessions
-                .keys()
-                .filter(|(id, _)| *id == owner)
-                .cloned()
-                .collect();
-            for key in keys {
+            for (key, _, _) in workers {
                 sessions.remove(&key);
             }
         }
