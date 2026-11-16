@@ -8,11 +8,7 @@ Docs 持有 Sessions 的文档创建、打开、默认视图选择、HTML 写作
 | [arkdownDocsEditorPane.ts](browser/arkdownDocsEditorPane.ts)   | Docs 标题栏、作品操作和默认模式，借用 Arkdown 文档宿主      |
 | [docsToolbar.ts](browser/docsToolbar.ts)                       | 向 Artifact 工具栏贡献字体、插入、更多、讨论和 Ask Ash 操作 |
 | [docsDropdown.ts](common/docsDropdown.ts)                      | 文档下拉选择块的 Markdown 编码与持久化边界校验              |
-| [docsImportExport.ts](browser/docsImportExport.ts)             | 导入导出编排、格式选择、文件保存与源文件保护                |
-| [docsExportContent.ts](browser/docsExportContent.ts)           | 从 Arkdown 解析结果生成独立导出快照                         |
-| [docsDocxExport.ts](browser/docsDocxExport.ts)                 | 导出标准 OOXML Word 文件                                    |
-| [docsPdfExport.ts](browser/docsPdfExport.ts)                   | 导出分页 PDF 文件                                           |
-| [docsDocxImport.ts](browser/docsDocxImport.ts)                 | 标准 OOXML 正文直接导入 Markdown                            |
+| [docsImportExport.ts](browser/docsImportExport.ts)             | 导入导出、DOCX/PDF 转换、格式选择和文件保存                 |
 | [docsEditorInput.ts](browser/docsEditorInput.ts)               | Arkdown 输入身份与另存为                                    |
 | [docsBackupContribution.ts](browser/docsBackupContribution.ts) | Docs 备份追踪、关闭排空与未保存草稿恢复                     |
 | [documentActions.ts](browser/documentActions.ts)               | 创建、打开和 `sessions.docs.activeDocument` 恢复状态        |
@@ -30,13 +26,13 @@ Arkdown 的 Markdown 入口接续文档导出命令：Markdown 导出保留源�
 
 Docs 的唯一编辑器为 `ArkdownDocsEditorPane`，借用 [ArkdownEditorPane](browser/arkdown/arkdownEditorPane.ts)，支持排版正文与共用 CodeEditor 的 Markdown 源码视图。Docs 入口进入 Chat 模式，IDE 和 Agent Window Code 使用 Markdown 扩展。Markdown 原文由 `TextModel` 持有，`EditorWorkingCopy` 接入保存、dirty、外部变更与备份，Rust 提供增量解析、结构编辑与协作操作日志。
 
-Docs 仅接收 Markdown，不注册旧 `.ash-doc` 编辑器或迁移入口。HTML 通过基础层转换器生成 Markdown；Markdown 导入保留源码并内嵌本地图片；DOCX 由 Docs 读取标准 OOXML，转换正文、标题、列表、链接、图片和普通表格。不支持的正文结构拒绝导入，源文件保留。
+Docs 仅接收 Markdown，不注册旧 `.ash-doc` 编辑器或迁移入口。HTML 通过基础层转换器生成 Markdown；Markdown 导入按 Arkdown 源码区间内嵌本地图片，复用编辑器的图片校验和写入规则，其余源码保持原样；DOCX 由 Docs 读取标准 OOXML，转换正文、标题、列表、链接、图片和普通表格。不支持的正文结构拒绝导入，源文件保留。
 
 Docs 与源码视图共用 Markdown 工作副本备份，使用 Profile 范围的 `sessions-docs` 存储范围，Desktop 经 `ash-sessions` 备份客户端写入现有 State SQLite，Browser 使用现有 IndexedDB 实现。备份跟踪与保存排空复用 Workbench，恢复的孤立草稿进入 Artifacts。
 
 协作的“近期远端修改”显示当前会话最近接收的 20 项更新、连接 ID 和最多 160 个字符的增删预览，正文与源码使用对应颜色标记受影响范围。范围来自同步更新，可能包含中间未变化的文字，不代表永久作者归属；快照同步不推断作者。列表随 buffer 会话保留，离开协作后清空。连接 ID 不代表已验证的用户身份。
 
-Academy 论文与频道笔记继续由各自结构化模型持有，Docs 不导入 Academy 实现。ZIP 读写由基础层持有。
+Academy 论文与频道笔记继续由各自结构化模型持有，Docs 不导入 Academy 实现。ZIP 打包复用 `base/common/zip.ts`，解压复用 `base/browser/zip.ts`。
 
 ## 本机源码核对
 

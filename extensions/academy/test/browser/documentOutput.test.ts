@@ -3,7 +3,9 @@ import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { createDefaultDocumentSchema } from '../../common/model/documentSchema.js';
 import { exportDocx, importDocx } from '../../browser/contrib/documentOutput/docx.js';
-import { zipFiles, unzipFiles } from 'ash:editor/base/browser/zip.js';
+import { unzipFiles } from 'ash:editor/base/browser/zip.js';
+import { createZip } from 'ash:editor/base/common/zip.js';
+import { VSBuffer } from 'ash:editor/base/common/buffer.js';
 import { documentToPlainText } from '../../common/model/documentSerialization.js';
 import { createResolveRevisionCommand } from '../../common/model/documentReview.js';
 import { DocumentTextModel } from '../../common/model/documentTextModel.js';
@@ -13,12 +15,13 @@ suiteTeardown(() => environment.window.close());
 const owner = environment.window.document;
 const schema = createDefaultDocumentSchema();
 const signal = () => new AbortController().signal;
+const archive = (files: ReadonlyMap<string, Uint8Array>) => createZip([...files].map(([path, bytes]) => ({ path, contents: VSBuffer.wrap(new Uint8Array(bytes)) }))).buffer;
 const encode = (text: string) => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 const paragraph = (text: string) => schema.createNode('paragraph', { content: [schema.createText(text)] });
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const foreign = (body: string, parts: Record<string, string> = {}) => zipFiles(new Map(Object.entries({
+const foreign = (body: string, parts: Record<string, string> = {}) => archive(new Map(Object.entries({
 	'_rels/.rels': `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="main" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`,
 	'word/document.xml': `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, ...parts,
 }).map(([name, value]) => [name, encode(value)])));
@@ -41,7 +44,7 @@ test('DOCX standard parts and authenticated Ash roundtrip retain sections, forma
 test('DOCX changed interoperable content invalidates the old Ash snapshot', async () => {
 	const files = await unzipFiles(await exportDocx(schema.createDocument([paragraph('Original')]), schema, signal()), signal());
 	files.set('word/document.xml', encode(decode(files.get('word/document.xml')!).replace('Original', 'Edited in Word')));
-	assert.equal(documentToPlainText(await importDocx(zipFiles(files), schema, owner, signal())), 'Edited in Word');
+	assert.equal(documentToPlainText(await importDocx(archive(files), schema, owner, signal())), 'Edited in Word');
 });
 
 test('DOCX foreign comments and insert/delete revisions enter editable model review', async () => {
@@ -63,9 +66,9 @@ test('DOCX rejects unsupported features, invalid archives, expansion and cancell
 	await assert.rejects(importDocx(foreign('<w:p><w:r><w:object/></w:r></w:p>'), schema, owner, signal()), /Cannot preserve DOCX feature/);
 	await assert.rejects(importDocx(foreign('<w:p><m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"/></w:p>'), schema, owner, signal()), /XML namespace/);
 	await assert.rejects(unzipFiles(new Uint8Array(70000), signal()), /Invalid ZIP/);
-	const file = zipFiles(new Map([['a', encode('body')]])); file[31] ^= 1;
+	const file = archive(new Map([['a', encode('body')]])); file[31] ^= 1;
 	await assert.rejects(unzipFiles(file, signal()), /checksum/);
-	assert.throws(() => zipFiles(new Map([['../escape', encode('body')]])), /Invalid ZIP/);
+	assert.throws(() => archive(new Map([['../escape', encode('body')]])), /Invalid ZIP/);
 	const aborted = new AbortController(); aborted.abort();
 	await assert.rejects(importDocx(foreign('<w:p/>'), schema, owner, aborted.signal), /abort/i);
 });
@@ -101,7 +104,7 @@ test('DOCX citation output uses current bibliography ordinals and retains explic
 	const xml = decode(files.get('word/document.xml')!);
 	for (const label of ['[2]', '[Custom]', '[missing]']) assert.ok(xml.includes(label));
 	assert.ok(!xml.includes('[second]'));
-	assert.deepEqual(await importDocx(zipFiles(files), academy, owner, signal()), document);
+	assert.deepEqual(await importDocx(archive(files), academy, owner, signal()), document);
 });
 
 test('DOCX resolves used style inheritance, materializes character marks and ignores unused unsupported styles', async () => {

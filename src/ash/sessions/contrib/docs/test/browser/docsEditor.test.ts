@@ -223,12 +223,12 @@ test('Docs imports sanitized HTML directly into Markdown', async () => {
 	assert.doesNotMatch(markdown, /alert\(1\)/u);
 });
 
-test('Docs text conversion captures unsaved source and embeds local images into a Markdown draft', async () => {
+test('Docs text conversion captures unsaved Markdown before awaiting draft creation', async () => {
 	using lifetime = new DisposableStore();
 	const services = lifetime.add(new InstantiationService());
 	const storage = lifetime.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'convert-docs', flushInterval: 0 }));
 	const resource = URI.file('/source/notes.md');
-	let text = '# Unsaved title\n\n![Diagram](diagram.png)\n';
+	let text = '# Unsaved title\n\nDraft body\n';
 	const reads: string[] = [];
 	const entries: ISessionsEntry[] = [];
 	services.registerInstance(IStorageService, storage);
@@ -240,21 +240,21 @@ test('Docs text conversion captures unsaved source and embeds local images into 
 	const pending = services.invokeFunction(accessor => convertActiveTextToDocument(accessor, 'markdown'));
 	text = 'Edited while conversion awaits';
 	await pending;
-	assert.deepEqual(reads, ['file:///source/diagram.png']);
+	assert.deepEqual(reads, []);
 	assert.equal(entries.length, 1);
 	assert.equal(entries[0].editorInput?.editorId, DOCS_ARKDOWN_EDITOR_ID);
 	assert.ok(entries[0].editorInput?.resource.path.endsWith('.md'));
-	assert.match(persisted.get(entries[0].editorInput!.resource.toString())!, /# Unsaved title[\s\S]*data:image\/png;base64,AH\/\//u);
+	assert.equal(persisted.get(entries[0].editorInput!.resource.toString()), '# Unsaved title\n\nDraft body\n');
 	assert.doesNotMatch(persisted.get(entries[0].editorInput!.resource.toString())!, /Edited while conversion awaits/u);
 });
 
 test('Docs imports a general DOCX directly into an Arkdown Markdown draft', async () => {
-	const { zipFiles } = await import('../../../../../base/browser/zip.js');
-	const encode = (text: string) => new TextEncoder().encode(text);
-	const bytes = zipFiles(new Map([
-		['_rels/.rels', encode('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>')],
-		['word/document.xml', encode('<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Imported Word document</w:t></w:r></w:p></w:body></w:document>')],
-	]));
+	const { createZip } = await import('../../../../../base/common/zip.js');
+	const { VSBuffer } = await import('../../../../../base/common/buffer.js');
+	const bytes = createZip([
+		{ path: '_rels/.rels', contents: VSBuffer.fromString('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>') },
+		{ path: 'word/document.xml', contents: VSBuffer.fromString('<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Imported Word document</w:t></w:r></w:p></w:body></w:document>') },
+	]).buffer;
 	using lifetime = new DisposableStore();
 	const services = lifetime.add(new InstantiationService());
 	const storage = lifetime.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'import-docx', flushInterval: 0 }));

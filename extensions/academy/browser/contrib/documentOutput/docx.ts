@@ -6,7 +6,9 @@ import type { DocumentSchema } from '../../../common/model/documentSchema.js';
 import { serializeDocument, deserializeDocument } from '../../../common/model/documentSerialization.js';
 import { resolveDocumentParagraphAttributes, getDocumentParagraphStyles } from '../../../common/model/documentParagraph.js';
 import { documentPageDimensions } from '../../../common/model/documentPageLayout.js';
-import { zipFiles, unzipFiles } from 'ash:editor/base/browser/zip.js';
+import { unzipFiles } from 'ash:editor/base/browser/zip.js';
+import { createZip } from 'ash:editor/base/common/zip.js';
+import { VSBuffer } from 'ash:editor/base/common/buffer.js';
 import { buildReferenceIndex } from '../citation/common/references.js';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -179,7 +181,7 @@ export async function exportDocx(document: DocumentNode, schema: DocumentSchema,
 	for (const [name, bytes] of files) { signal.throwIfAborted(); hashes[name] = await digest(bytes); }
 	files.set('customXml/ash-document.json', encode(serializeDocument(document, schema)));
 	files.set('customXml/ash-manifest.json', encode(JSON.stringify({ version: 1, hashes })));
-	return zipFiles(files);
+	return createZip([...files].map(([path, bytes]) => ({ path, contents: VSBuffer.wrap(new Uint8Array(bytes)) }))).buffer;
 }
 
 export async function importDocx(bytes: Uint8Array, schema: DocumentSchema, owner: Document, signal: AbortSignal): Promise<DocumentNode> {

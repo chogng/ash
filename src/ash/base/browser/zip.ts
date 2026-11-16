@@ -1,40 +1,7 @@
-const encoder = new TextEncoder();
+import { crc32, isValidZipPath } from '../common/zip.js';
+
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const limit = 64 * 1024 * 1024;
-const crcTable = Uint32Array.from({ length: 256 }, (_, value) => {
-	for (let bit = 0; bit < 8; bit++) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
-	return value >>> 0;
-});
-function crc(bytes: Uint8Array): number {
-	let value = 0xffffffff;
-	for (const byte of bytes) value = crcTable[(value ^ byte) & 255]! ^ (value >>> 8);
-	return (value ^ 0xffffffff) >>> 0;
-}
-function nameValid(name: string): boolean { return !!name && name.length < 500 && !name.startsWith('/') && !name.includes('\\') && !name.includes(':') && !name.split('/').some(part => !part || part === '.' || part === '..'); }
-export function zipFiles(files: ReadonlyMap<string, Uint8Array>): Uint8Array {
-	let offset = 0;
-	const local: Uint8Array[] = [], central: Uint8Array[] = [];
-	for (const [name, bytes] of files) {
-		if (!nameValid(name) || bytes.length > limit || files.size > 2000) throw new TypeError('Invalid ZIP part');
-		const encoded = encoder.encode(name), checksum = crc(bytes);
-		const header = new Uint8Array(30 + encoded.length), view = new DataView(header.buffer);
-		view.setUint32(0, 0x04034b50, true); view.setUint16(4, 20, true); view.setUint16(6, 0x800, true);
-		view.setUint32(14, checksum, true); view.setUint32(18, bytes.length, true); view.setUint32(22, bytes.length, true); view.setUint16(26, encoded.length, true); header.set(encoded, 30);
-		local.push(header, bytes);
-		const directory = new Uint8Array(46 + encoded.length), info = new DataView(directory.buffer);
-		info.setUint32(0, 0x02014b50, true); info.setUint16(4, 20, true); info.setUint16(6, 20, true); info.setUint16(8, 0x800, true);
-		info.setUint32(16, checksum, true); info.setUint32(20, bytes.length, true); info.setUint32(24, bytes.length, true); info.setUint16(28, encoded.length, true); info.setUint32(42, offset, true); directory.set(encoded, 46);
-		central.push(directory); offset += header.length + bytes.length;
-	}
-	const centralLength = central.reduce((sum, bytes) => sum + bytes.length, 0);
-	if (offset + centralLength > limit) throw new RangeError('ZIP exceeds 64 MiB');
-	const end = new Uint8Array(22), view = new DataView(end.buffer);
-	view.setUint32(0, 0x06054b50, true); view.setUint16(8, files.size, true); view.setUint16(10, files.size, true); view.setUint32(12, centralLength, true); view.setUint32(16, offset, true);
-	const output = new Uint8Array(offset + centralLength + 22);
-	let position = 0;
-	for (const bytes of [...local, ...central, end]) { output.set(bytes, position); position += bytes.length; }
-	return output;
-}
 
 /** Bound decompression before allocating output; never follow ZIP paths on the filesystem. */
 export async function unzipFiles(bytes: Uint8Array, signal: AbortSignal): Promise<Map<string, Uint8Array>> {
@@ -55,7 +22,7 @@ export async function unzipFiles(bytes: Uint8Array, signal: AbortSignal): Promis
 		const name = decoder.decode(bytes.subarray(position + 46, position + 46 + nameLength));
 		const local = view.getUint32(position + 42, true);
 		total += size;
-		if (!nameValid(name.endsWith('/') ? name.slice(0, -1) : name) || names.has(name.toLowerCase()) || flags & 1 || ![0, 8].includes(method) || total > limit || local + 30 > bytes.length || view.getUint32(local, true) !== 0x04034b50) throw new TypeError('Unsupported ZIP entry');
+		if (name.length >= 500 || !isValidZipPath(name.endsWith('/') ? name.slice(0, -1) : name) || names.has(name.toLowerCase()) || flags & 1 || ![0, 8].includes(method) || total > limit || local + 30 > bytes.length || view.getUint32(local, true) !== 0x04034b50) throw new TypeError('Unsupported ZIP entry');
 		names.add(name.toLowerCase());
 		const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
 		if (start + compressed > bytes.length) throw new TypeError('Truncated ZIP entry');
@@ -68,7 +35,7 @@ export async function unzipFiles(bytes: Uint8Array, signal: AbortSignal): Promis
 			finally { await reader.cancel(); }
 			output = new Uint8Array(length); let at = 0; for (const chunk of chunks) { output.set(chunk, at); at += chunk.length; }
 		}
-		if (output.length !== size || crc(output) !== checksum) throw new TypeError('ZIP checksum mismatch');
+		if (output.length !== size || crc32(output) !== checksum) throw new TypeError('ZIP checksum mismatch');
 		if (!name.endsWith('/')) files.set(name, output);
 		else if (size) throw new TypeError('Invalid ZIP directory entry');
 		position += 46 + nameLength + view.getUint16(position + 30, true) + view.getUint16(position + 32, true);
