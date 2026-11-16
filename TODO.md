@@ -3,7 +3,10 @@
 ## MXC 收敛 · 平台验收与依赖检查
 
 - [ ] **直接 PSEC 路径验收** · 当前 Windows 缺少 `api-win-appmodel-processmodel~securityenvironment`，3 项直接 PSEC PTY 验收均在准备阶段失败，没有执行工作负载。ConPTY 本身的创建、控制、关闭及 JS 锁定启动实机测试通过，但不能替代 PSEC 组合验收。支持 PSEC 的主机须运行 `scripts/test-psec.ps1 -Capability required`，覆盖直接 PTY 和执行服务 RPC；SDK 的 `processcontainer_pty_preserves_input_resize_and_exit_output` 已接入自身后端验收和测试包发现检查。macOS 验收沿用下文条目；完成后删除本条。
-- [ ] **依赖安全检查** · `just dependencies`、依赖来源与许可证检查通过；完整 `just dependency-security` 仍被既有 `yrs 0.26.0 → smallstr 0.3.1` 的 `RUSTSEC-2026-0215` 停止维护告警阻塞，当前无安全升级版本。需在协作文档依赖中处理该传递依赖，再重跑检查；不能将本次来源校验通过记为完整安全门禁通过。
+
+## CI · 远端矩阵验收
+
+- [ ] 当前 main `5e05db0379` 的 CI #1347 在依赖安全和 CSS 格式门禁失败，下游被跳过。本地已按现有策略审查 smallstr 维护通知例外并修正 CSS，完整依赖安全及 TypeScript／config 格式检查通过。剩余工作：按已授权的提交、发布和远端验收流程核对新 SHA 的完整 CI，取得 macOS hosted MCP 重启及 Linux `//cli:tui-real-scenarios` 的实际通过日志，再检查 protocol／TUI 的依赖准备和 V8 产物。具体进展见 [CI 交接记录](ci-project-todo.md#接手顺序)。通过后删除本条。
 
 ## aspdf · App Server 与整窗验收
 

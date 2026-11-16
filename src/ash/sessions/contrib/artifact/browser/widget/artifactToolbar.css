@@ -35,8 +35,12 @@
 }
 
 .ash-artifact-toolbar.canvas {
-	--ash-artifact-toolbar-background: var(--ash-sessions-design-chromeBackground);
-	--ash-artifact-toolbar-foreground: var(--ash-sessions-design-chromeForeground);
+	--ash-artifact-toolbar-background: var(
+		--ash-sessions-design-chromeBackground
+	);
+	--ash-artifact-toolbar-foreground: var(
+		--ash-sessions-design-chromeForeground
+	);
 }
 
 .ash-artifact-toolbar-group .ash-button.ash-button-standard {
@@ -50,7 +54,9 @@
 	min-width: 0;
 }
 
-.ash-artifact-toolbar-group .ash-button.icon-only > .ash-dropdown-menu-indicator {
+.ash-artifact-toolbar-group
+	.ash-button.icon-only
+	> .ash-dropdown-menu-indicator {
 	display: none;
 }
 

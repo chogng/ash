@@ -49,9 +49,21 @@
 
 2026-11-05 在 Windows x64 用 Bazel 9.0.0 和仓库外的输出目录重建 `MODULE.bazel.lock`，随后用 `bazel mod deps --lockfile_mode=error` 验证通过。日志位于 `.build/todo-local-acceptance-20261105/bazel-lockfile-final.log`。Linux TUI 真实场景仍单独验收。
 
+## 2026-11-16 门禁修复与复验
+
+当前基线 `5e05db0379` 的 [main CI #1347](https://github.com/chogng/ash/actions/runs/43845062198) 在依赖安全和前端格式检查失败，Bazel、Rust、tooling 等下游被跳过。安全日志为 `yrs 0.26.0 → smallstr 0.3.1` 的 `RUSTSEC-2026-0215`；格式日志仅列出 `artifactToolbar.css`。
+
+本轮按现有依赖策略为该维护通知添加逐项审查例外。它不是已知漏洞；最新 Yrs 0.28.1 仍依赖 smallstr，上游 [#755](https://github.com/y-crdt/y-crdt/issues/755) 尚未解决。例外仅覆盖该 ID，上游替换后移除；不关闭其他告警、来源或许可证检查。CSS 经仓库 formatter 修正换行，没有样式行为变更。
+
+Windows x64 本地 `just dependency-security` 退出 0，输出 `advisories ok, licenses ok, sources ok`；与 CI 相同入口的全量 TypeScript 和 config 格式检查均退出 0。日志位于 `.build/ci-acceptance-20261116/{dependency-security,format-typescript,format-config}.log`。本轮未改依赖图、Cargo lockfile、测试或产品断言。
+
+以上仅证明本地门禁已解除，不能作为远端矩阵、macOS hosted MCP 或 Linux TUI 通过证据。下列四项继续待验收。
+
+本轮已获准提交、推送并触发远端验收；发布后按新 SHA 核对矩阵。原 `pr-57-ci` heartbeat 不在本轮恢复范围。
+
 ## 接手顺序
 
-- [ ] 在获准发布后按新 main SHA 核对完整 CI 矩阵。PR #57 后续验证在本地进行，发布、主动触发远端 CI 和恢复 `pr-57-ci` heartbeat 均需单独授权。
+- [ ] 按本轮发布后的新 main SHA 核对完整 CI 矩阵。
 - [ ] 补 Desktop runtime acceptance 的 macOS hosted MCP 进程回归通过证据。已有 [macOS 本机补验](agenthost-todo.md#2026-10-29-macos-进程补验)。
 - [ ] 在 Linux CI 真正执行 `//cli:tui-real-scenarios`，不能以本机 query 代替。
 - [ ] 根据最新 protocol 和 TUI 日志检查依赖准备与 V8 构建产物；保留依赖边界和产品断言。
