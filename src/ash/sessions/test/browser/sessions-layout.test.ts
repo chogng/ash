@@ -649,6 +649,46 @@ test('Sessions layout temporarily hides the sidebar when the conversation needs 
 	}
 });
 
+test('Document splits keep navigation expandable when the conversation must yield width', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	using services = registerTestComponentServices(createTestEditorServices(undefined, undefined, dom.window.document), dom.window.document);
+	using hosts = createDesktopEditorTestServices(services, {}, dom.window.document);
+	parts.get('editor')!.dispose();
+	parts.set('editor', hosts.area);
+	class DocumentTitlebar extends TestSessionsPart {
+		readonly minimumSidebarWidth = 330;
+	}
+	parts.get('titlebar')!.dispose();
+	parts.set('titlebar', new DocumentTitlebar('titlebar', dom.window.document.body));
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1440, 900) });
+		layout.hidePart('auxiliarybar');
+		layout.updateParts(() => { layout.setPrimaryPart('editor'); layout.showPart('editor'); });
+		layout.resizePart('sidebar', new Dimension(330, 900));
+		layout.resizePart('sessions', new Dimension(400, 900));
+		layout.hidePart('sidebar');
+		layout.layout(new Dimension(925, 900));
+		layout.showPart('sidebar');
+		assert.equal(layout.isPartVisible('sidebar'), true);
+		assert.equal(layout.isPartVisible('sessions'), true);
+		assert.equal(layout.isPartVisible('editor'), true);
+		assert.ok(layout.getPartSize('sidebar').width >= 330);
+		assert.ok(layout.getPartSize('sessions').width < parts.get('sessions')!.minimumWidth);
+		assert.equal(['sidebar', 'sessions', 'editor'].reduce((width, id) => width + layout.getPartSize(id).width, 0), 925);
+		layout.hidePart('sidebar');
+		assert.equal(layout.isPartVisible('sidebar'), false);
+		layout.showPart('sidebar');
+		assert.equal(layout.isPartVisible('sidebar'), true);
+		layout.layout(new Dimension(1440, 900));
+		assert.equal(layout.getPartSize('sidebar').width, 330);
+		assert.equal(layout.getPartSize('sessions').width, 400, 'Widening restores the preferred conversation width');
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
 test('Sessions compound composition changes lay out Parts once at the completed width', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const parts = createParts(dom.window.document);

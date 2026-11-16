@@ -762,7 +762,9 @@ export class DesktopWorkbenchLayout
 		const conversationView = this.view('sessions');
 		const workspaceWidth = dimension.width;
 		const eligible = !this.customViewVisible && wanted('editor') && area.hasTools;
-		const overflow = eligible && this.primaryPart === 'sessions' && conversationView.part instanceof SessionsPart;
+		// Product editors also borrow width from their companion conversation so
+		// opening navigation does not immediately hide it again beside a document.
+		const overflow = wanted('editor') && (this.primaryPart === 'editor' || eligible && conversationView.part instanceof SessionsPart);
 		const conversation = wanted('sessions')
 			? overflow ? conversationSlotMinimumWidth : conversationView.part.minimumWidth
 			: 0;
