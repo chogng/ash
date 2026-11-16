@@ -1,13 +1,34 @@
 import type { BufferAction, CollabBuffer } from '../../../../../workbench/services/collab/common/bufferCollabService.js';
 import { toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { isUuid, parseUuid } from '../../../../../base/common/uuid.js';
 
 /** Browser boundary for the Rust core. Workbench text models remain the only
  * writable source and history owner; Arkdown caches are disposable read-only projections. */
 export interface ArkdownRange { readonly start: number; readonly end: number; }
+export const arkdownTextColors = ['red', 'yellow', 'green', 'teal', 'purple'] as const;
+export type ArkdownTextColor = typeof arkdownTextColors[number];
+export type ArkdownColumnAlignment = 'none' | 'left' | 'center' | 'right';
+export type ArkdownTableColor = 'gray' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple';
+export interface ArkdownTableCellLayout { readonly row: number; readonly column: number; readonly rowspan: number; readonly colspan: number; readonly color?: ArkdownTableColor; }
+export interface ArkdownTableLayout { readonly widths: readonly number[]; readonly header: boolean; readonly cells: readonly ArkdownTableCellLayout[]; }
+export type ArkdownTableAction =
+	| { readonly kind: 'insert_row' | 'insert_column'; readonly index: number; }
+	| { readonly kind: 'delete_rows' | 'delete_columns' | 'move_row' | 'move_column'; readonly from: number; readonly to: number; }
+	| { readonly kind: 'clear_cells' | 'merge_cells'; readonly top: number; readonly left: number; readonly bottom: number; readonly right: number; }
+	| { readonly kind: 'paste_cells'; readonly row: number; readonly column: number; readonly values: readonly (readonly string[])[]; readonly cells?: readonly ArkdownTableCellLayout[]; }
+	| { readonly kind: 'set_column_width'; readonly column: number; readonly end_column?: number; readonly width: number; }
+	| { readonly kind: 'set_column_alignment'; readonly from: number; readonly to: number; readonly alignment: ArkdownColumnAlignment; }
+	| { readonly kind: 'set_cell_color'; readonly top: number; readonly left: number; readonly bottom: number; readonly right: number; readonly color?: ArkdownTableColor; }
+	| { readonly kind: 'split_cell'; readonly row: number; readonly column: number; }
+	| { readonly kind: 'toggle_header' | 'delete_table'; }
+	| { readonly kind: 'sort_column'; readonly column: number; readonly direction: 'ascending' | 'descending'; };
 export type ArkdownOperation =
 	| { readonly kind: 'set_heading'; readonly offset: number; readonly level: number; }
 	| { readonly kind: 'set_list_kind'; readonly offset: number; readonly list: 'bullet' | 'ordered' | 'task'; }
-	| { readonly kind: 'insert_table_row'; readonly offset: number; };
+	| { readonly kind: 'set_task_checked'; readonly offset: number; readonly checked: boolean; }
+	| { readonly kind: 'indent_list'; readonly offset: number; readonly end: number; readonly direction: 'increase' | 'decrease'; }
+	| { readonly kind: 'insert_table_row'; readonly offset: number; }
+	| { readonly kind: 'table'; readonly offset: number; readonly action: ArkdownTableAction; };
 export interface ArkdownEdit { readonly range: ArkdownRange; readonly text: string; }
 export interface ArkdownNode {
 	readonly kind: string;
@@ -17,7 +38,13 @@ export interface ArkdownNode {
 	readonly level?: number;
 	readonly start?: number;
 	readonly checked?: boolean;
+	readonly color?: ArkdownTextColor;
+	readonly threadId?: string;
 	readonly destination?: string;
+	readonly title?: string;
+	readonly alignments?: readonly ArkdownColumnAlignment[];
+	readonly tableLayout?: ArkdownTableLayout;
+	readonly tableCellMissing?: boolean;
 }
 export interface ArkdownProjection extends IDisposable {
 	parse(source: string): readonly ArkdownNode[];
@@ -89,14 +116,46 @@ function decodeNodes(value: unknown, length: number, depth = 0): readonly Arkdow
 		const node = object(item);
 		if (typeof node.kind !== 'string') throw new TypeError('Invalid Arkdown node kind');
 		const source = object(node.source);
+		if (node.kind === 'text_color' && !arkdownTextColors.some(color => color === node.color)) throw new TypeError('Invalid Arkdown text color');
+		if (node.kind === 'table_cell' && typeof node.missing !== 'boolean') throw new TypeError('Invalid Arkdown table cell');
+		if (node.kind === 'comment' && !isUuid(node.thread_id)) throw new TypeError('Invalid Arkdown comment anchor');
+		const children = decodeNodes(node.children ?? [], length, depth + 1);
+		const table = node.kind === 'table' ? decodeTable(node, children.length) : undefined;
 		const result: ArkdownNode = {
-			kind: node.kind, range: range(source.utf16, length), children: decodeNodes(node.children ?? [], length, depth + 1),
+			kind: node.kind, range: range(source.utf16, length), children,
 			...(typeof node.text === 'string' ? { text: node.text } : {}),
 			...(Number.isInteger(node.level) ? { level: node.level as number } : {}),
 			...(Number.isInteger(node.start) ? { start: node.start as number } : {}),
 			...(typeof node.checked === 'boolean' ? { checked: node.checked } : {}),
+			...(node.kind === 'text_color' ? { color: node.color as ArkdownTextColor } : {}),
+			...(node.kind === 'comment' ? { threadId: parseUuid(node.thread_id) } : {}),
+			...(node.kind === 'table_cell' && node.missing === true ? { tableCellMissing: true } : {}),
+			...table,
 			...(typeof node.destination === 'string' ? { destination: node.destination } : {}),
+			...(typeof node.title === 'string' ? { title: node.title } : {}),
 		};
 		return result;
 	});
+}
+
+function decodeTable(node: Record<string, unknown>, rows: number): { alignments: readonly ArkdownColumnAlignment[]; tableLayout: ArkdownTableLayout; } {
+	const alignments = node.alignments;
+	const alignmentsSet: readonly unknown[] = ['none', 'left', 'center', 'right'];
+	if (!Array.isArray(alignments) || !alignments.length || rows < 1 || rows * alignments.length > 100000 || !alignments.every(value => alignmentsSet.includes(value))) throw new TypeError('Invalid Arkdown table alignments');
+	const layout = object(node.layout);
+	if (!Array.isArray(layout.widths) || layout.widths.length !== alignments.length || !layout.widths.every(value => Number.isInteger(value) && (value === 0 || value >= 48 && value <= 4000)) || typeof layout.header !== 'boolean' || !Array.isArray(layout.cells) || layout.cells.length > rows * alignments.length) throw new TypeError('Invalid Arkdown table layout');
+	const colors: readonly unknown[] = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple'];
+	const occupied = new Set<number>();
+	const cells = layout.cells.map(value => {
+		const cell = object(value);
+		if (![cell.row, cell.column, cell.rowspan, cell.colspan].every(Number.isSafeInteger) || (cell.row as number) < 0 || (cell.column as number) < 0 || (cell.rowspan as number) < 1 || (cell.colspan as number) < 1 || (cell.row as number) + (cell.rowspan as number) > rows || (cell.column as number) + (cell.colspan as number) > alignments.length || cell.color !== undefined && !colors.includes(cell.color)) throw new TypeError('Invalid Arkdown table cell layout');
+		const result = cell as unknown as ArkdownTableCellLayout;
+		for (let row = result.row; row < result.row + result.rowspan; row++) for (let column = result.column; column < result.column + result.colspan; column++) {
+			const index = row * alignments.length + column;
+			if (occupied.has(index)) throw new TypeError('Overlapping Arkdown table cell layout');
+			occupied.add(index);
+		}
+		return { row: result.row, column: result.column, rowspan: result.rowspan, colspan: result.colspan, ...(result.color === undefined ? {} : { color: result.color }) };
+	});
+	return { alignments: alignments as ArkdownColumnAlignment[], tableLayout: { widths: layout.widths as number[], header: layout.header, cells } };
 }

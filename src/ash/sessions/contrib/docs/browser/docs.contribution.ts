@@ -1,6 +1,9 @@
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IDocsService } from '../common/docsService.js';
 import { DocsService } from './docsService.js';
+import { DocsCommentsFocused } from './docsCommentsWidget.js';
+import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
+import { KeybindingWeight, KeybindingsRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import './arkdown/arkdown.contribution.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
@@ -36,6 +39,12 @@ import { ArkdownDocsEditorPane } from './arkdownDocsEditorPane.js';
 import { createDocsBackupContribution } from './docsBackupContribution.js';
 
 registerSingleton(IDocsService, DocsService, InstantiationType.Delayed);
+
+// Textareas retain native text undo; other comment controls route undo to the
+// owning document instead of another visible Code editor.
+for (const keybinding of [KeyMod.CtrlCmd | KeyCode.KeyZ, KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyZ, KeyMod.CtrlCmd | KeyCode.KeyY]) {
+	KeybindingsRegistry.registerKeybindingPassThrough({ keybinding, when: DocsCommentsFocused.isEqualTo(true), priority: KeybindingWeight.WorkbenchContrib + 10 });
+}
 
 DocumentTypes.enableFileEditors();
 

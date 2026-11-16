@@ -9,13 +9,22 @@
 | [`arkdownRuntime.ts`](browser/arkdown/arkdownRuntime.ts)                                   | Rust/WASM 边界、只读语法投影及 `CollabBuffer` 适配    |
 | [`arkdownCollabProfile.ts`](browser/arkdown/arkdownCollabProfile.ts)                       | Markdown 房间的版本化载荷、编码与大小限制             |
 | [`arkdownEditor.ts`](browser/arkdown/arkdownEditor.ts)                                     | 正文 DOM、选区、输入及共用 CodeEditor 源码视图        |
+| [`arkdownTableController.ts`](browser/arkdown/arkdownTableController.ts)                   | 表格选区、把手、菜单和拖动预览；通过编辑器提交事务    |
 | [`BufferCollabSession`](../../../workbench/services/collab/browser/bufferCollabSession.ts) | 通用缓冲区房间连接、重试、确认与增量同步              |
 
 `EditorWorkingCopy` 与文本模型持有保存、dirty、外部变更和本地撤销历史。协作期间，`TextModel` 通过有作用域的编辑参与者将操作与选择性历史交给 Yrs；源码视图、正文、其他编辑器和保存仍使用同一缓冲区。离开房间时解除参与者并清除跨会话历史。Arkdown 的语法树是投影，不保留第二份可写文档。Sessions 的 `ArkdownDocsEditorPane` 持有 Docs 标题栏、作品操作及默认模式，借用本目录的编辑器，不再创建自己的工作副本。
 
 通用 Markdown 预览、数学渲染和图片粘贴位于 [`contrib/markdown`](../../../workbench/contrib/markdown/README.md)。Chat 消息正文由 [`ChatMarkdownContentPart`](../../../workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.ts) 进行流式 Markdown 渲染。旧 `.ash-doc` 经过格式校验后单向迁移为 Markdown，原文件保留。
 
-Clarkdown 的对齐以直接编辑行为为依据。正文使用区块窗口增量解析，引用与 HTML 保守完整解析，DOM 只替换变化区块。标题／段落和列表转换已接快捷键，表格支持 Tab 导航与末尾加行。Rust/WASM CRDT 会话已接入 Workbench 房间。安装包取证记录见 [Docs](README.md#clarkdown-功能复核)。
+Clarkdown 的对齐以直接编辑行为为依据。正文使用区块窗口增量解析，引用与 HTML 保守完整解析，DOM 只替换变化区块。标题／段落和列表转换已接快捷键，表格编辑通过 Rust 结构操作提交。Rust/WASM CRDT 会话已接入 Workbench 房间。安装包取证记录见 [Docs](README.md#clarkdown-功能复核)。
+
+表格的单元格内容和列对齐仍使用 GFM。列宽、表头开关、合并跨度及单元格底色由表格后紧邻的 `<!-- ash-table {JSON} -->` 注释保存；Rust 验证完整布局后将其折叠进对应表格的投影范围，未知字段、非法尺寸、重叠跨度或无效颜色保留为原始文本。列宽为 0（自动）或 48–4000 像素，底色限定为 gray、red、orange、yellow、green、blue、purple。合并后的覆盖单元格仍保留源坐标，DOM 只显示所属合并格。行列操作、粘贴和布局变更作为单次 TextModel 事务提交。整表移动保留源码及布局注释，通过 Rust 校验后的删除和插入编辑在同一事务中提交。所有变更共用保存、撤销和协作链路；控制器仅持有当前选区及拖动预览。HTML 导出恢复布局，纯文本导出不包含布局注释。
+
+Docs 的下划线、高亮和文字颜色保存在 Markdown 源码中的成对行内 `<u>`、`<mark>`、`<span data-text-color="…">` 标签中。颜色值限定为 red、yellow、green、teal、purple，呈现随主题变化。Rust 只识别这些精确标签，其他 HTML 仍为惰性文本；部分选区清除格式时拆分原标记，保留其他格式与源码语法。列表缩进操作由 Rust 生成文本编辑，经同一 TextModel 事务保存和撤销。
+
+Docs 评论由同一个 Markdown 工作副本持有。UUID 形式的 `<span data-comment-id="…">` 锚定正文，各次创建、回复、编辑、解决和删除作为独立的版本化 `ash-comments` 围栏记录追加；线程按逻辑时钟及事件 UUID 确定顺序，删除保留墓碑。选区锚点只插入行内标记，不重写段落；锚点与事件在一个 TextModel 事务中提交。并发回复通过现有文本 CRDT 合并，不互相替换共享 JSON 数组。评论侧栏和正文只读取投影，不另存线程状态。删除引用文字后保留原始摘录和线程。
+
+有效评论记录在正文和纯文本导出中隐藏，Markdown 源码及导出保留评论历史。未知版本、无效 UUID、冲突事件或超过 4096 条事件／1048576 个 UTF-16 单元的元数据不启用评论编辑，原记录作为代码显示。单条评论最多 8000 个 UTF-16 单元。正文代码块不支持行内锚点，可使用文档评论。作者使用 Profile 范围的本机标识区分「自己」与「协作者」，不推断真人姓名；未发表的草稿仅由当前视图持有。只读文档可阅读线程。
 
 工具栏“Collaborate”创建或加入房间，空服务器地址使用当前 App Server；远端服务器沿用现有 URL 和访问令牌入口。“Copy room ID”复制标识，“Leave collaboration”停止同步并保留当前文件。加入内容不同的房间前确认替换；只读成员无法修改缓冲区。保存仍写入本地文件。
 

@@ -1,0 +1,72 @@
+.ash-arkdown-image {
+	position: relative;
+	display: block;
+	width: fit-content;
+	max-width: 100%;
+	margin: 0.6em 0;
+	border-radius: var(--ash-cornerRadius-small);
+	line-height: 0;
+}
+
+.ash-arkdown-image > img {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	height: auto;
+	border-radius: inherit;
+}
+
+.ash-arkdown-image:is(.selected, :focus-visible) {
+	outline: 2px solid var(--ash-focusBorder);
+	outline-offset: 3px;
+}
+
+.ash-arkdown-image.failed {
+	min-width: 120px;
+	min-height: 48px;
+	line-height: 1.5;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+}
+
+.ash-arkdown-image-handle {
+	position: absolute;
+	top: 50%;
+	width: 12px;
+	height: clamp(16px, 50%, 48px);
+	transform: translateY(-50%);
+	cursor: ew-resize;
+	display: none;
+	user-select: none;
+	touch-action: none;
+}
+
+.ash-arkdown-image:is(
+		:hover,
+		:focus-visible,
+		:has(.ash-arkdown-image-handle:focus-visible),
+		.resizing
+	)
+	> .ash-arkdown-image-handle:not([hidden]) {
+	display: block;
+}
+.ash-arkdown-image-handle.left {
+	left: -12px;
+}
+.ash-arkdown-image-handle.right {
+	right: -12px;
+}
+.ash-arkdown-image[data-align="center"] {
+	margin-inline: auto;
+}
+.ash-arkdown-image[data-align="right"] {
+	margin-inline-start: auto;
+}
+.ash-arkdown-image-handle::after {
+	position: absolute;
+	inset: 0;
+	width: 3px;
+	margin-inline: auto;
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-focusBorder);
+	content: "";
+}

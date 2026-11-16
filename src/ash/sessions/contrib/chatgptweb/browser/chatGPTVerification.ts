@@ -21,7 +21,10 @@ export function installChatGPTVerification(): void {
 		return originalFetch(input, init);
 	};
 	type Phase = 'discovery' | 'import' | 'requirements' | 'headers';
-	const loadApi = async (setPhase: (phase: Phase) => void) => {
+	type VerificationApi = {
+		finalizeChatRequirements(options: { allowPreparedOnly: boolean; refreshRequirements: boolean; requestSignal: AbortSignal; }): unknown;
+	};
+	const loadApi = async (setPhase: (phase: Phase) => void): Promise<VerificationApi> => {
 		let moduleUrl: string | undefined;
 		let inspectedEntry: string | undefined;
 		// Discover the resource loaded by the current official page, rather than pinning a
@@ -64,8 +67,8 @@ export function installChatGPTVerification(): void {
 		setPhase('import');
 		const module: unknown = await import(/* @vite-ignore */ moduleUrl);
 		if (!module || typeof module !== 'object') { throw new Error('Invalid verification module'); }
-		const api: unknown = Object.values(module).find(value => value && typeof value === 'object' && typeof value.finalizeChatRequirements === 'function');
-		if (!api || typeof api !== 'object' || !('finalizeChatRequirements' in api) || typeof api.finalizeChatRequirements !== 'function') { throw new Error('Verification API is unavailable'); }
+		const api = Object.values(module).find((value: unknown): value is VerificationApi => !!value && typeof value === 'object' && 'finalizeChatRequirements' in value && typeof value.finalizeChatRequirements === 'function');
+		if (!api) { throw new Error('Verification API is unavailable'); }
 		return api;
 	};
 	let loadedApi: ReturnType<typeof loadApi> | undefined;

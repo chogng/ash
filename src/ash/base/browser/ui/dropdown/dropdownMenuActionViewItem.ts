@@ -16,6 +16,11 @@ export type DropdownMenuActions =
 	| readonly IAction[]
 	| (() => readonly IAction[]);
 
+export interface DropdownMenuActionViewItemOptions extends ActionViewItemOptions {
+	/** Toolbars normally hide the indicator on icon-only actions. */
+	readonly indicator?: 'automatic' | 'visible';
+}
+
 /**
  * ActionBar item that delegates a dropdown action menu to the host provider.
  *
@@ -29,18 +34,20 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 	readonly onDidChangeVisibility = this._onDidChangeVisibility.event;
 	private button: Button | undefined;
 	private visible = false;
+	private readonly indicator: 'automatic' | 'visible';
 	private readonly menuCancellation = this._register(new MutableDisposable<CancellationTokenSource>());
 
 	constructor(
 		action: IAction,
 		actions: DropdownMenuActions,
 		contextMenuProvider: IContextMenuProvider,
-		options: ActionViewItemOptions = {},
+		options: DropdownMenuActionViewItemOptions = {},
 		private readonly getAnchorOptions?: (anchor: HTMLElement) => Pick<IContextMenuDelegate, 'anchorAlignment' | 'anchorAxisAlignment'>,
 	) {
 		super(action, options);
 		this.actions = actions;
 		this.contextMenuProvider = contextMenuProvider;
+		this.indicator = options.indicator ?? 'automatic';
 	}
 
 	override render(container: HTMLElement): void {
@@ -53,6 +60,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 			ariaLabel: this.action.label,
 			title: this.action.tooltip,
 			enabled: this.action.enabled,
+			checked: this.action.checked,
 			onClick: event => {
 				if (this.visible) {
 					this.hide();
@@ -63,11 +71,13 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		});
 		this.button = button;
 		container.classList.add('ash-dropdown-menu-action-view-item');
+		container.classList.toggle('ash-dropdown-menu-indicator-visible', this.indicator === 'visible');
 		button.domNode.setAttribute('aria-haspopup', 'menu');
 		button.domNode.setAttribute('aria-expanded', 'false');
 		if (this.action.onDidChange) {
 			this._register(this.action.onDidChange(() => {
 				button.enabled = this.action.enabled;
+				button.checked = this.action.checked;
 				if (!button.enabled) this.hide();
 			}));
 		}

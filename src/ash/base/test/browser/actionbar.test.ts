@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IAction } from '../../common/actions.js';
-import { ActionRunner, Separator } from '../../common/actions.js';
+import { Action, ActionRunner, Separator } from '../../common/actions.js';
 import { Lxicon } from '../../common/lxicons.js';
 import { ActionBar } from '../../browser/ui/actionbar/actionbar.js';
 import { ButtonActionViewItem, LabelActionViewItem } from '../../browser/ui/actionbar/actionViewItems.js';
@@ -15,6 +15,20 @@ import { addDisposableListener } from '../../browser/dom.js';
 
 suite('ActionBar open dropdown updates', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('dropdown triggers expose current and updated checked action state', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using menu = new Action('listKind', 'List kind');
+			menu.checked = true;
+			using item = new DropdownMenuActionViewItem(menu, [action('choice')], { showContextMenu() { } });
+			item.render(dom.window.document.body);
+			const button = dom.window.document.querySelector('button')!;
+			assert.equal(button.getAttribute('aria-pressed'), 'true');
+			menu.checked = false;
+			assert.equal(button.getAttribute('aria-pressed'), 'false');
+		} finally { dom.window.close(); }
+	});
 
 	for (const method of ['setActions', 'updateActions'] as const) {
 		test(`${method} preserves an open menu and applies only the latest actions after dismissal`, async () => {

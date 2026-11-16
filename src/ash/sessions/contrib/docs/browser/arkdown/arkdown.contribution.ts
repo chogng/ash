@@ -14,7 +14,7 @@ for (const [command, operation] of [[SelectAllCommand, 'selectAll'], [UndoComman
 		return true;
 	});
 }
-for (const key of [KeyCode.KeyB, KeyCode.KeyI]) {
+for (const key of [KeyCode.KeyB, KeyCode.KeyI, KeyCode.KeyU]) {
 	KeybindingsRegistry.registerKeybindingPassThrough({
 		keybinding: KeyMod.CtrlCmd | key, when: ArkdownEditorFocused.isEqualTo(true),
 		priority: KeybindingWeight.WorkbenchContrib + 10,
@@ -23,6 +23,7 @@ for (const key of [KeyCode.KeyB, KeyCode.KeyI]) {
 
 for (const keybinding of [
 	KeyCode.Tab, KeyMod.Shift | KeyCode.Tab,
+	KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyM,
 	...[KeyCode.Digit0, KeyCode.Digit1, KeyCode.Digit2, KeyCode.Digit3, KeyCode.Digit4, KeyCode.Digit5, KeyCode.Digit6].map(key => KeyMod.CtrlCmd | KeyMod.Alt | key),
 	...[KeyCode.Digit7, KeyCode.Digit8, KeyCode.Digit9].map(key => KeyMod.CtrlCmd | KeyMod.Shift | key),
 ]) {

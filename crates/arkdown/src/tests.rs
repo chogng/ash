@@ -34,6 +34,197 @@ fn walk<'a>(nodes: &'a [Node], output: &mut Vec<&'a Node>) {
 }
 
 #[test]
+fn comment_anchors_preserve_nested_marks_and_validate_identifiers() {
+    let id = "33333333-3333-4333-8333-333333333333";
+    let source = format!("中文 <span data-comment-id=\"{id}\"><u>**评论🙂**</u></span> tail");
+    let nodes = parse(&source).unwrap();
+    let mut flat = Vec::new();
+    walk(&nodes, &mut flat);
+    let anchor = flat
+        .iter()
+        .find(|node| matches!(node.kind, NodeKind::Comment { .. }))
+        .unwrap();
+    assert_eq!(
+        anchor.kind,
+        NodeKind::Comment {
+            thread_id: id.to_owned()
+        }
+    );
+    assert!(
+        flat.iter()
+            .any(|node| matches!(node.kind, NodeKind::Strong))
+    );
+    assert!(
+        flat.iter()
+            .any(|node| matches!(node.kind, NodeKind::Underline))
+    );
+    assert_eq!(anchor.source.utf16.start, 3);
+    assert!(
+        render_html(&source)
+            .unwrap()
+            .contains(&format!("data-comment-id=\"{id}\""))
+    );
+    for bad in [
+        "bad",
+        "33333333-3333-0333-8333-333333333333",
+        "33333333-3333-4333-0333-333333333333",
+        "x\" onclick=\"bad()",
+    ] {
+        let source = format!("text <span data-comment-id=\"{bad}\">literal</span>");
+        let nodes = parse(&source).unwrap();
+        let mut flat = Vec::new();
+        walk(&nodes, &mut flat);
+        assert!(
+            !flat
+                .iter()
+                .any(|node| matches!(node.kind, NodeKind::Comment { .. }))
+        );
+        assert!(!render_html(&source).unwrap().contains("<span"));
+    }
+    let source = format!("`<span data-comment-id=\"{id}\">code</span>`");
+    assert!(!render_html(&source).unwrap().contains("<span"));
+}
+
+#[test]
+fn document_inline_formats_preserve_unicode_ranges_and_reject_unknown_html() {
+    let source =
+        "<span data-text-color=\"red\"><u>中文 **bold**</u></span> and <mark>highlight</mark>";
+    let nodes = parse(source).unwrap();
+    let mut all = Vec::new();
+    walk(&nodes, &mut all);
+    let color = all
+        .iter()
+        .find(|node| {
+            matches!(
+                node.kind,
+                NodeKind::TextColor {
+                    color: crate::TextColor::Red
+                }
+            )
+        })
+        .unwrap();
+    assert_eq!(
+        &source[color.source.bytes.start..color.source.bytes.end],
+        "<span data-text-color=\"red\"><u>中文 **bold**</u></span>"
+    );
+    assert!(
+        all.iter()
+            .any(|node| matches!(node.kind, NodeKind::Underline))
+    );
+    assert!(
+        all.iter()
+            .any(|node| matches!(node.kind, NodeKind::Highlight))
+    );
+    assert!(
+        render_html(source)
+            .unwrap()
+            .contains("<u>中文 <strong>bold</strong></u>")
+    );
+    for source in [
+        "<u>unclosed",
+        "<span data-text-color=\"blue\">unknown</span>",
+        "<span data-text-color=\"red\" onclick=\"alert(1)\">unsafe</span>",
+        "`<u>code</u>`",
+    ] {
+        let nodes = parse(source).unwrap();
+        let mut all = Vec::new();
+        walk(&nodes, &mut all);
+        assert!(!all.iter().any(|node| matches!(
+            node.kind,
+            NodeKind::TextColor { .. } | NodeKind::Underline | NodeKind::Highlight
+        )));
+        assert!(!render_html(source).unwrap().contains("<span"));
+    }
+    assert!(parse(&format!("{}x{}", "<u>".repeat(129), "</u>".repeat(129))).is_err());
+    let mixed = format!(
+        "{}**{}x{}**{}",
+        "<u>".repeat(70),
+        "<mark>".repeat(70),
+        "</mark>".repeat(70),
+        "</u>".repeat(70)
+    );
+    assert!(parse(&mixed).is_err());
+}
+
+#[test]
+fn list_indentation_preserves_subtrees_unicode_crlf_and_history() {
+    let source = "- Parent\r\n- Child🙂\r\n  - Nested\r\n- Last\r\n";
+    let mut document = Document::new(source).unwrap();
+    let child = source.find("Child").unwrap() as u32;
+    let edits = crate::operation_edits(
+        source,
+        crate::Operation::IndentList {
+            offset: child,
+            end: child,
+            direction: crate::IndentDirection::Increase,
+        },
+    )
+    .unwrap();
+    apply(&mut document, edits);
+    assert_eq!(
+        document.source(),
+        "- Parent\r\n  - Child🙂\r\n    - Nested\r\n- Last\r\n"
+    );
+    let source = document.source().to_owned();
+    let child = source.find("Child").unwrap() as u32;
+    let edits = crate::operation_edits(
+        &source,
+        crate::Operation::IndentList {
+            offset: child,
+            end: child,
+            direction: crate::IndentDirection::Decrease,
+        },
+    )
+    .unwrap();
+    apply(&mut document, edits);
+    assert_eq!(
+        document.source(),
+        "- Parent\r\n- Child🙂\r\n  - Nested\r\n- Last\r\n"
+    );
+    assert!(
+        crate::operation_edits(
+            document.source(),
+            crate::Operation::IndentList {
+                offset: 2,
+                end: 2,
+                direction: crate::IndentDirection::Increase
+            }
+        )
+        .is_err()
+    );
+    assert!(
+        crate::operation_edits(
+            document.source(),
+            crate::Operation::IndentList {
+                offset: 2,
+                end: 2,
+                direction: crate::IndentDirection::Decrease
+            }
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn indentation_moves_selected_siblings_together() {
+    let source = "- Parent\n- One\n- Two\n- Last\n";
+    let mut document = Document::new(source).unwrap();
+    let offset = source.find("One").unwrap() as u32;
+    let end = source.find("- Last").unwrap() as u32;
+    let edits = crate::operation_edits(
+        source,
+        crate::Operation::IndentList {
+            offset,
+            end,
+            direction: crate::IndentDirection::Increase,
+        },
+    )
+    .unwrap();
+    apply(&mut document, edits);
+    assert_eq!(document.source(), "- Parent\n  - One\n  - Two\n- Last\n");
+}
+
+#[test]
 fn unicode_offsets_round_trip_and_reject_partial_encodings() {
     for source in ["", "ASCII\r\n", "中文🙂e\u{301}👩‍👩‍👧‍👦!", "𐐷aé\0"] {
         let index = SourceIndex::new(source).unwrap();
@@ -243,6 +434,30 @@ fn preview_escapes_html_and_drops_active_url_schemes() {
     assert!(html.contains("&lt;script&gt;"));
     assert!(html.contains("href=\"https://example.com\""));
     assert!(html.contains("click alt"));
+}
+
+#[test]
+fn preview_embedded_images_accepts_only_bounded_raster_base64() {
+    for mime in ["png", "jpeg", "gif", "webp"] {
+        let url = format!("data:image/{mime};base64,AQID");
+        let html = render_html(&format!("![Image]({url}) [Link]({url})")).unwrap();
+        assert!(html.contains(&format!("src=\"{url}\"")));
+        assert!(!html.contains("href="));
+    }
+    for url in [
+        "data:image/svg+xml;base64,AQID",
+        "data:text/html;base64,AQID",
+        "data:image/png,AQID",
+        "data:image/png;base64,",
+        "data:image/png;base64,AQ=I",
+        "data:image/png;base64,AQID====",
+    ] {
+        assert!(
+            !render_html(&format!("![Image]({url})"))
+                .unwrap()
+                .contains("<img")
+        );
+    }
 }
 
 #[test]
@@ -753,4 +968,621 @@ fn collaborative_history_checkpoints_bound_deleted_contents() {
     assert!(server.encode_update(&[]).unwrap().len() < 8 * 1024);
     assert_eq!(server.source(), local.source());
     assert!(local.can_undo());
+}
+
+fn table_action(source: &str, action: crate::TableAction) -> String {
+    let offset = source.find('|').unwrap();
+    let offset = SourceIndex::new(source)
+        .unwrap()
+        .byte_to_utf16(offset)
+        .unwrap();
+    let mut document = Document::new(source).unwrap();
+    apply(
+        &mut document,
+        crate::operation_edits(source, crate::Operation::Table { offset, action }).unwrap(),
+    );
+    document.source().to_owned()
+}
+
+#[test]
+fn table_operations_preserve_outer_source_unicode_crlf_and_inline_marks() {
+    use crate::TableAction;
+    let source = "前言🙂\r\n\r\n| 名称 | 值 |\r\n| :-- | --: |\r\n| **乙** | 2 |\r\n| 甲\\|一 | 1 |\r\n\r\n后记\r\n";
+    let moved = table_action(source, TableAction::MoveRow { from: 2, to: 1 });
+    assert!(moved.starts_with("前言🙂\r\n\r\n"));
+    assert!(moved.ends_with("\r\n\r\n后记\r\n"));
+    assert!(moved.contains("| 甲\\|一 | 1 |\r\n| **乙** | 2 |"));
+    assert!(moved.contains("| :--- | ---: |"));
+    let inserted = table_action(&moved, TableAction::InsertColumn { index: 1 });
+    assert!(inserted.contains("| 名称 |  | 值 |"));
+    let deleted = table_action(&inserted, TableAction::DeleteColumns { from: 1, to: 1 });
+    assert_eq!(deleted, moved);
+    let sorted = table_action(
+        source,
+        TableAction::SortColumn {
+            column: 1,
+            direction: crate::SortDirection::Ascending,
+        },
+    );
+    assert!(sorted.contains("| 甲\\|一 | 1 |\r\n| **乙** | 2 |"));
+}
+
+#[test]
+fn table_layout_metadata_is_validated_and_attached_without_visible_html() {
+    let source = "| a | b |\n| --- | --- |\n| c | d |\n";
+    let sized = table_action(
+        source,
+        crate::TableAction::SetColumnWidth {
+            column: 1,
+            end_column: None,
+            width: 224,
+        },
+    );
+    let nodes = parse(&sized).unwrap();
+    assert_eq!(nodes.len(), 1);
+    let NodeKind::Table { layout, alignments } = &nodes[0].kind else {
+        panic!()
+    };
+    assert_eq!(layout.widths, [0, 224]);
+    assert_eq!(alignments.len(), 2);
+    assert_eq!(nodes[0].source.bytes.end, sized.len());
+    let html = render_html(&sized).unwrap();
+    assert!(!html.contains("ash-table"));
+    assert!(html.contains("width:224px"));
+    for invalid in [
+        r#"{"widths":[0,47]}"#,
+        r#"{"widths":[0,4001]}"#,
+        r#"{"widths":[0]}"#,
+        r#"{"widths":[0,0],"extra":true}"#,
+        r#"{"cells":[{"row":0,"column":0,"rowspan":3,"colspan":1}]}"#,
+        r#"{"cells":[{"row":0,"column":0,"rowspan":1,"colspan":2},{"row":0,"column":1,"rowspan":1,"colspan":1,"color":"red"}]}"#,
+    ] {
+        let source = format!("{source}\n<!-- ash-table {invalid} -->\n");
+        assert_eq!(parse(&source).unwrap().len(), 2, "{invalid}");
+    }
+}
+
+#[test]
+fn table_merge_split_color_and_header_round_trip_through_source() {
+    use crate::TableAction;
+    let source = "| a | b |\n| --- | --- |\n| c | d |\n";
+    let merged = table_action(
+        source,
+        TableAction::MergeCells {
+            top: 0,
+            left: 0,
+            bottom: 1,
+            right: 1,
+        },
+    );
+    assert!(merged.starts_with("| a b c d |  |\n| --- | --- |\n|  |  |"));
+    let colored = table_action(
+        &merged,
+        TableAction::SetCellColor {
+            top: 0,
+            left: 0,
+            bottom: 1,
+            right: 1,
+            color: Some(crate::TableColor::Purple),
+        },
+    );
+    let no_header = table_action(&colored, TableAction::ToggleHeader {});
+    let nodes = parse(&no_header).unwrap();
+    let NodeKind::Table { layout, .. } = &nodes[0].kind else {
+        panic!()
+    };
+    assert!(!layout.header);
+    assert_eq!(layout.cells[0].rowspan, 2);
+    assert_eq!(layout.cells[0].colspan, 2);
+    assert_eq!(layout.cells[0].color, Some(crate::TableColor::Purple));
+    let html = render_html(&no_header).unwrap();
+    assert!(html.contains("rowspan=\"2\" colspan=\"2\""));
+    assert!(html.contains("background-color:#ede6fa"));
+    assert!(!html.contains("<th"));
+    assert!(!html.contains("ash-table"));
+    let split = table_action(&no_header, TableAction::SplitCell { row: 1, column: 1 });
+    let nodes = parse(&split).unwrap();
+    let NodeKind::Table { layout, .. } = &nodes[0].kind else {
+        panic!()
+    };
+    assert_eq!(layout.cells[0].rowspan, 1);
+    assert_eq!(layout.cells[0].colspan, 1);
+    assert!(split.contains("a b c d"));
+}
+
+#[test]
+fn table_paste_expands_grid_escapes_plain_text_and_rejects_partial_merge_edits() {
+    use crate::TableAction;
+    let source = "| a | b |\n| --- | --- |\n| c | d |\n";
+    let pasted = table_action(
+        source,
+        TableAction::PasteCells {
+            cells: None,
+            row: 1,
+            column: 1,
+            values: vec![
+                vec!["**literal**|中文🙂".to_owned(), "<script>\nline".to_owned()],
+                vec!["last".to_owned(), "".to_owned()],
+            ],
+        },
+    );
+    let nodes = parse(&pasted).unwrap();
+    let NodeKind::Table { alignments, .. } = &nodes[0].kind else {
+        panic!()
+    };
+    assert_eq!(alignments.len(), 3);
+    assert_eq!(nodes[0].children.len(), 3);
+    assert!(pasted.contains("\\*\\*literal\\*\\*\\|中文🙂"));
+    assert!(pasted.contains("\\<script\\>&#10;line"));
+    let merged = table_action(
+        source,
+        TableAction::MergeCells {
+            top: 1,
+            left: 0,
+            bottom: 1,
+            right: 1,
+        },
+    );
+    let invalid = TableAction::ClearCells {
+        top: 1,
+        left: 0,
+        bottom: 1,
+        right: 0,
+    };
+    assert!(
+        crate::operation_edits(
+            &merged,
+            crate::Operation::Table {
+                offset: 0,
+                action: invalid
+            }
+        )
+        .is_err()
+    );
+    for action in [
+        TableAction::InsertRow { index: 99 },
+        TableAction::SetColumnWidth {
+            column: 0,
+            end_column: None,
+            width: 47,
+        },
+        TableAction::DeleteRows { from: 1, to: 0 },
+        TableAction::PasteCells {
+            cells: None,
+            row: 0,
+            column: 0,
+            values: vec![vec!["a".to_owned()], vec![]],
+        },
+    ] {
+        assert!(
+            crate::operation_edits(source, crate::Operation::Table { offset: 0, action }).is_err()
+        );
+    }
+    assert!(
+        crate::operation_edits(
+            "> | a |\n> | --- |\n> | b |",
+            crate::Operation::Table {
+                offset: 3,
+                action: TableAction::DeleteTable {}
+            }
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn table_delete_and_insert_update_spans_and_layout_coordinates() {
+    use crate::TableAction;
+    let source = "| a | b | c |\n| --- | --- | --- |\n| d | e | f |\n| g | h | i |\n";
+    let merged = table_action(
+        source,
+        TableAction::MergeCells {
+            top: 1,
+            left: 0,
+            bottom: 2,
+            right: 1,
+        },
+    );
+    let inserted = table_action(&merged, TableAction::InsertRow { index: 2 });
+    let removed = table_action(&inserted, TableAction::DeleteRows { from: 1, to: 1 });
+    let nodes = parse(&removed).unwrap();
+    let NodeKind::Table { layout, .. } = &nodes[0].kind else {
+        panic!()
+    };
+    assert_eq!((layout.cells[0].row, layout.cells[0].rowspan), (1, 2));
+    assert!(removed.contains("d e g h"));
+    assert_eq!(
+        table_action(source, TableAction::DeleteColumns { from: 0, to: 2 }),
+        ""
+    );
+    assert_eq!(
+        table_action(source, TableAction::DeleteRows { from: 0, to: 2 }),
+        ""
+    );
+}
+
+#[test]
+fn legacy_table_row_append_stays_before_layout_annotation_and_preserves_markdown() {
+    let source = "| a | b |\n| - | - |\n| c | d |\n\n<!-- ash-table {\"widths\":[112,224]} -->\n";
+    let mut document = Document::new(source).unwrap();
+    let offset = source.find('c').unwrap() as u32;
+    apply(
+        &mut document,
+        crate::operation_edits(source, crate::Operation::InsertTableRow { offset }).unwrap(),
+    );
+    assert!(
+        document
+            .source()
+            .starts_with("| a | b |\n| - | - |\n| c | d |\n|   |   |\n\n")
+    );
+    let nodes = parse(document.source()).unwrap();
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].children.len(), 3);
+}
+
+#[test]
+fn table_noops_preserve_original_format_and_do_not_offer_transactions() {
+    use crate::TableAction;
+    let source = "| a | b |\n| - | - |\n| 1 |  |\n";
+    for action in [
+        TableAction::SetColumnWidth {
+            column: 0,
+            end_column: None,
+            width: 0,
+        },
+        TableAction::SetColumnAlignment {
+            from: 0,
+            to: 1,
+            alignment: crate::ColumnAlignment::None,
+        },
+        TableAction::MoveRow { from: 1, to: 1 },
+        TableAction::ClearCells {
+            top: 1,
+            left: 1,
+            bottom: 1,
+            right: 1,
+        },
+        TableAction::SetCellColor {
+            top: 1,
+            left: 1,
+            bottom: 1,
+            right: 1,
+            color: None,
+        },
+        TableAction::SplitCell { row: 1, column: 0 },
+        TableAction::SortColumn {
+            column: 0,
+            direction: crate::SortDirection::Ascending,
+        },
+    ] {
+        assert!(
+            crate::operation_edits(source, crate::Operation::Table { offset: 0, action })
+                .unwrap()
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn table_width_ranges_are_atomic_and_validate_both_boundaries() {
+    use crate::TableAction;
+    let source = "| a | b | c |\n| --- | --- | --- |\n| 1 | 2 | 3 |\n";
+    let action = TableAction::SetColumnWidth {
+        column: 0,
+        end_column: Some(1),
+        width: 224,
+    };
+    let edits =
+        crate::operation_edits(source, crate::Operation::Table { offset: 0, action }).unwrap();
+    assert_eq!(edits.len(), 1);
+    let mut document = Document::new(source).unwrap();
+    apply(&mut document, edits);
+    let nodes = parse(document.source()).unwrap();
+    let NodeKind::Table { layout, .. } = &nodes[0].kind else {
+        panic!()
+    };
+    assert_eq!(layout.widths, [224, 224, 0]);
+    document.undo(document.revision()).unwrap();
+    assert_eq!(document.source(), source);
+    for (column, end_column) in [(1, Some(0)), (0, Some(3)), (3, None)] {
+        assert!(
+            crate::operation_edits(
+                source,
+                crate::Operation::Table {
+                    offset: 0,
+                    action: TableAction::SetColumnWidth {
+                        column,
+                        end_column,
+                        width: 112
+                    }
+                }
+            )
+            .is_err()
+        );
+    }
+    let omitted: crate::Operation = serde_json::from_str(r#"{"kind":"table","offset":0,"action":{"kind":"set_column_width","column":1,"width":112}}"#).unwrap();
+    assert!(crate::operation_edits(source, omitted).is_ok());
+    assert!(serde_json::from_str::<crate::Operation>(r#"{"kind":"table","offset":0,"action":{"kind":"set_column_width","column":1,"width":112,"extra":0}}"#).is_err());
+}
+
+#[test]
+fn short_table_rows_project_complete_grid_and_keep_missing_ranges_inside_their_row() {
+    let source =
+        "| a | b | c |\r\n| --- | --- | --- |\r\n| 中文🙂 |\r\n| two | three |\r\n\r\nAfter\r\n";
+    let nodes = parse(source).unwrap();
+    let table = &nodes[0];
+    assert_eq!(table.children.len(), 3);
+    assert!(table.children.iter().all(|row| row.children.len() == 3));
+    let first = &table.children[1];
+    for cell in &first.children[1..] {
+        assert_eq!(cell.kind, NodeKind::TableCell { missing: true });
+        assert!(cell.children.is_empty());
+        assert_eq!(cell.source.bytes.start, cell.source.bytes.end);
+        assert_eq!(cell.source.bytes.end, first.source.bytes.end - 2);
+        assert!(cell.source.bytes.end < table.children[2].source.bytes.start);
+    }
+    assert_eq!(
+        table.children[2].children[2].kind,
+        NodeKind::TableCell { missing: true }
+    );
+    let filled = table_action(
+        source,
+        crate::TableAction::PasteCells {
+            cells: None,
+            row: 1,
+            column: 2,
+            values: vec![vec!["补齐".to_owned()]],
+        },
+    );
+    assert!(filled.contains("| 中文🙂 |  | 补齐 |\r\n| two | three |  |"));
+    assert!(filled.ends_with("\r\n\r\nAfter\r\n"));
+    let explicit = parse("| a | b |\n| --- | --- |\n| one |  |\n").unwrap();
+    assert_eq!(
+        explicit[0].children[1].children[1].kind,
+        NodeKind::TableCell { missing: false }
+    );
+}
+
+#[test]
+fn table_clipboard_fragment_preserves_relative_spans_colors_and_cell_linebreaks() {
+    use crate::TableAction;
+    let source = "| a | b | c |\r\n| --- | --- | --- |\r\n| d | e | f |\r\n\r\nAfter\r\n";
+    let colored = table_action(
+        source,
+        TableAction::SetCellColor {
+            top: 1,
+            left: 0,
+            bottom: 1,
+            right: 2,
+            color: Some(crate::TableColor::Blue),
+        },
+    );
+    let fragment = crate::TableCellLayout {
+        row: 0,
+        column: 0,
+        rowspan: 2,
+        colspan: 2,
+        color: Some(crate::TableColor::Yellow),
+    };
+    let values = vec![
+        vec!["合并\r\n格\r第三行\t尾".to_owned(), "".to_owned()],
+        vec!["".to_owned(), "".to_owned()],
+    ];
+    let action = TableAction::PasteCells {
+        row: 1,
+        column: 1,
+        values: values.clone(),
+        cells: Some(vec![fragment.clone()]),
+    };
+    let pasted = table_action(&colored, action);
+    assert!(pasted.contains("合并&#10;格&#10;第三行&#9;尾"));
+    assert!(pasted.ends_with("\r\n\r\nAfter\r\n"));
+    let nodes = parse(&pasted).unwrap();
+    let NodeKind::Table { layout, .. } = &nodes[0].kind else {
+        panic!()
+    };
+    assert_eq!(layout.cells.len(), 2);
+    assert_eq!(layout.cells[0].column, 0);
+    assert_eq!(layout.cells[0].color, Some(crate::TableColor::Blue));
+    assert_eq!(
+        layout.cells[1],
+        crate::TableCellLayout {
+            row: 1,
+            column: 1,
+            ..fragment.clone()
+        }
+    );
+    let html = render_html(&pasted).unwrap();
+    assert!(html.contains("white-space:pre-wrap"));
+    assert!(html.contains("合并\n格\n第三行\t尾"));
+    let invalid = crate::TableCellLayout {
+        colspan: 3,
+        ..fragment
+    };
+    assert!(
+        crate::operation_edits(
+            &colored,
+            crate::Operation::Table {
+                offset: 0,
+                action: TableAction::PasteCells {
+                    row: 1,
+                    column: 1,
+                    values,
+                    cells: Some(vec![invalid])
+                }
+            }
+        )
+        .is_err()
+    );
+    let cleared = table_action(
+        &pasted,
+        TableAction::PasteCells {
+            row: 1,
+            column: 1,
+            values: vec![
+                vec!["x".to_owned(), "y".to_owned()],
+                vec!["z".to_owned(), "w".to_owned()],
+            ],
+            cells: Some(Vec::new()),
+        },
+    );
+    let nodes = parse(&cleared).unwrap();
+    let NodeKind::Table { layout, .. } = &nodes[0].kind else {
+        panic!()
+    };
+    assert_eq!(layout.cells.len(), 1);
+    assert_eq!(layout.cells[0].column, 0);
+}
+
+#[test]
+fn table_plain_paste_keeps_cell_newlines_without_turning_literal_entities_into_markup() {
+    let source = "| a | b |\n| --- | --- |\n| c | d |\n";
+    let pasted = table_action(
+        source,
+        crate::TableAction::PasteCells {
+            row: 1,
+            column: 0,
+            values: vec![vec![
+                "first\r\nsecond\rthird\nfourth".to_owned(),
+                "&#10;".to_owned(),
+            ]],
+            cells: None,
+        },
+    );
+    assert!(pasted.contains("first&#10;second&#10;third&#10;fourth"));
+    assert!(pasted.contains("\\&#10;"));
+    let nodes = parse(&pasted).unwrap();
+    let row = &nodes[0].children[1];
+    let mut flat = Vec::new();
+    walk(&row.children[0].children, &mut flat);
+    let text: String = flat
+        .into_iter()
+        .filter_map(|node| {
+            if let NodeKind::Text { text } = &node.kind {
+                Some(text.as_str())
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(text, "first\nsecond\nthird\nfourth");
+    assert!(render_html(&pasted).unwrap().contains("&amp;#10;"));
+}
+
+fn sorted_table_indices(keys: &[&str], direction: crate::SortDirection) -> Vec<usize> {
+    let rows = keys
+        .iter()
+        .enumerate()
+        .map(|(index, key)| format!("| {key} | {index} |\n"))
+        .collect::<String>();
+    let source = format!("| Key | Row |\n| --- | --- |\n{rows}");
+    let sorted = table_action(
+        &source,
+        crate::TableAction::SortColumn {
+            column: 0,
+            direction,
+        },
+    );
+    parse(&sorted).unwrap()[0]
+        .children
+        .iter()
+        .skip(1)
+        .map(|row| {
+            let range = row.children[1].source.bytes;
+            sorted[range.start..range.end].trim().parse().unwrap()
+        })
+        .collect()
+}
+
+#[test]
+fn table_sort_keeps_blank_cells_last_in_both_directions_and_preserves_ties() {
+    use crate::SortDirection;
+    let keys = ["", "2", "10", " ", "2", ""];
+    assert_eq!(
+        sorted_table_indices(&keys, SortDirection::Ascending),
+        [1, 4, 2, 0, 3, 5]
+    );
+    assert_eq!(
+        sorted_table_indices(&keys, SortDirection::Descending),
+        [2, 1, 4, 0, 3, 5]
+    );
+    assert_eq!(
+        sorted_table_indices(&["", "", ""], SortDirection::Descending),
+        [0, 1, 2]
+    );
+    assert_eq!(
+        sorted_table_indices(&["-0", "0", "0.00", "-1"], SortDirection::Descending),
+        [0, 1, 2, 3]
+    );
+}
+
+#[test]
+fn table_sort_uses_numeric_mode_only_for_an_entire_numeric_column() {
+    use crate::SortDirection;
+    let formatted = [
+        "$1,200.50",
+        "€50",
+        "10%",
+        "£-3",
+        "1,200.5",
+        "**50**",
+        "",
+        "0x10",
+        "1e2",
+    ];
+    assert_eq!(
+        sorted_table_indices(&formatted, SortDirection::Ascending),
+        [3, 2, 7, 1, 5, 8, 0, 4, 6]
+    );
+    assert_eq!(
+        sorted_table_indices(&formatted, SortDirection::Descending),
+        [0, 4, 8, 1, 5, 7, 2, 3, 6]
+    );
+    let mixed = ["10 apples", "3", "2 apples", "ITEM10", "item2", "", "12,34"];
+    assert_eq!(
+        sorted_table_indices(&mixed, SortDirection::Ascending),
+        [2, 1, 0, 6, 4, 3, 5]
+    );
+    assert_eq!(
+        sorted_table_indices(&mixed, SortDirection::Descending),
+        [3, 4, 6, 0, 1, 2, 5]
+    );
+    // A decimal comma is text, so the whole column uses the same natural order.
+    assert_eq!(
+        sorted_table_indices(&["1,2", "3", "10"], SortDirection::Ascending),
+        [0, 1, 2]
+    );
+}
+
+#[test]
+fn table_sort_natural_text_folds_case_accents_and_leading_zero_runs_stably() {
+    use crate::SortDirection;
+    let keys = [
+        "Item2",
+        "item02",
+        "ITEM2",
+        "café2",
+        "Cafe2",
+        "cafe\u{0301}2",
+        "Item10",
+        "",
+        "",
+    ];
+    assert_eq!(
+        sorted_table_indices(&keys, SortDirection::Ascending),
+        [3, 4, 5, 0, 1, 2, 6, 7, 8]
+    );
+    assert_eq!(
+        sorted_table_indices(&keys, SortDirection::Descending),
+        [6, 0, 1, 2, 3, 4, 5, 7, 8]
+    );
+    let long = [
+        "part9999999999999999999999999999999999999999999999999",
+        "part10",
+        "PART2",
+    ];
+    assert_eq!(
+        sorted_table_indices(&long, SortDirection::Ascending),
+        [2, 1, 0]
+    );
 }

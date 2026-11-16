@@ -11,6 +11,7 @@ mod incremental;
 mod markdown;
 mod operations;
 mod source;
+mod table;
 
 #[cfg(all(feature = "wasm", target_arch = "wasm32"))]
 mod wasm;
@@ -28,8 +29,10 @@ pub use error::Error;
 pub use markdown::ColumnAlignment;
 pub use markdown::Node;
 pub use markdown::NodeKind;
+pub use markdown::TextColor;
 pub use markdown::parse;
 pub use markdown::render_html;
+pub use operations::IndentDirection;
 pub use operations::ListKind;
 pub use operations::Operation;
 pub use operations::operation_edits;
@@ -37,6 +40,11 @@ pub use source::ByteRange;
 pub use source::SourceIndex;
 pub use source::SourceSpan;
 pub use source::Utf16Range;
+pub use table::SortDirection;
+pub use table::TableAction;
+pub use table::TableCellLayout;
+pub use table::TableColor;
+pub use table::TableLayout;
 
 #[cfg(test)]
 mod tests;

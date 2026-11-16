@@ -1,8 +1,120 @@
 .ash-docs-workspace {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	width: 100%;
 	height: 100%;
+	min-width: 0;
+	min-height: 0;
+}
+
+.ash-docs-selection-toolbar {
+	--ash-toolbar-actionSize: 28px;
+	position: absolute;
+	z-index: 10;
+	box-sizing: border-box;
+	max-width: calc(100% - 16px);
+	padding: var(--ash-spacing-size60);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-menu-background);
+	color: var(--ash-foreground);
+	box-shadow: 0 4px 16px var(--ash-widget-shadow);
+	overflow-x: auto;
+}
+
+.ash-docs-selection-toolbar[hidden] {
+	display: none;
+}
+
+.ash-docs-selection-toolbar .ash-button {
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	padding: 0;
+}
+
+.ash-docs-selection-toolbar .ash-icon {
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-docs-selection-toolbar
+	.ash-toolbar
+	> .ash-dropdown-menu-action-view-item.icon
+	> .ash-button {
+	width: 44px;
+	padding-inline: var(--ash-spacing-size40);
+}
+
+.ash-docs-selection-toolbar .ash-dropdown-menu-indicator .ash-icon {
+	font-size: var(--ash-lxiconFontSize-compact);
+}
+
+.ash-docs-selection-toolbar .ash-docs-list-selector.checked {
+	--ash-actionBar-toggledBackground: color-mix(
+		in srgb,
+		var(--ash-accent-foreground) 12%,
+		var(--ash-menu-background)
+	);
+	--ash-toolbar-hoverBackground: var(--ash-actionBar-toggledBackground);
+	color: var(--ash-accent-foreground);
+}
+
+.ash-docs-format-menu {
+	--ash-menu-check-foreground: var(--ash-menu-foreground);
+	min-width: 216px;
+}
+
+.ash-docs-palette-menu {
+	min-width: 168px;
+}
+
+.ash-docs-insert-menu {
+	min-width: 168px;
+}
+
+.ash-docs-palette-menu .ash-menu-action-icon {
+	box-sizing: border-box;
+	width: 16px;
+	height: 16px;
+	border-radius: var(--ash-cornerRadius-small);
+	background: currentColor;
+}
+
+.ash-docs-palette-menu .ash-menu-action-icon .ash-icon {
+	visibility: hidden;
+}
+
+.ash-docs-format-menu .ash-docs-menu-section {
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	color: var(--ash-muted-foreground);
+	font-size: var(--ash-fontSize-label2);
+}
+
+.ash-docs-format-menu .ash-docs-no-highlight .ash-menu-action-icon {
+	box-sizing: border-box;
+	width: 16px;
+	height: 16px;
+	border: var(--ash-strokeThickness) dashed var(--ash-muted-foreground);
+	border-radius: var(--ash-cornerRadius-small);
+	background: transparent;
+}
+
+.ash-docs-format-menu .ash-docs-no-highlight .ash-menu-action-icon .ash-icon {
+	visibility: hidden;
+}
+
+[data-color-scheme="hcDark"] .ash-docs-selection-toolbar,
+[data-color-scheme="hcLight"] .ash-docs-selection-toolbar {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+.ash-docs-workspace-main {
+	container-type: inline-size;
+	container-name: docs-workspace;
+	position: relative;
+	display: flex;
+	flex: 1;
 	min-width: 0;
 	min-height: 0;
 }
@@ -19,23 +131,39 @@
 	gap: var(--ash-spacing-size40);
 }
 
-.ash-docs-workspace > .ash-artifact-toolbar .ash-artifact-toolbar-group .ash-button {
+.ash-docs-workspace
+	> .ash-artifact-toolbar
+	.ash-artifact-toolbar-group
+	.ash-button {
 	width: var(--ash-toolbar-actionSize);
 	height: var(--ash-toolbar-actionSize);
 }
 
-.ash-docs-workspace > .ash-artifact-toolbar .ash-artifact-toolbar-group .ash-button:not(.icon-only) {
+.ash-docs-workspace
+	> .ash-artifact-toolbar
+	.ash-artifact-toolbar-group
+	.ash-button:not(.icon-only) {
 	width: auto;
 	padding-inline: var(--ash-spacing-size120);
 }
 
 .ash-docs-workspace > .ash-artifact-toolbar .ash-button-secondary {
-	--ash-button-secondaryBackground: color-mix(in srgb, var(--ash-artifact-toolbar-foreground) 6%, var(--ash-artifact-toolbar-background));
+	--ash-button-secondaryBackground: color-mix(
+		in srgb,
+		var(--ash-artifact-toolbar-foreground) 6%,
+		var(--ash-artifact-toolbar-background)
+	);
 	--ash-widget-border: transparent;
 }
 
-[data-color-scheme="hcDark"] .ash-docs-workspace > .ash-artifact-toolbar .ash-button-secondary,
-[data-color-scheme="hcLight"] .ash-docs-workspace > .ash-artifact-toolbar .ash-button-secondary {
+[data-color-scheme="hcDark"]
+	.ash-docs-workspace
+	> .ash-artifact-toolbar
+	.ash-button-secondary,
+[data-color-scheme="hcLight"]
+	.ash-docs-workspace
+	> .ash-artifact-toolbar
+	.ash-button-secondary {
 	--ash-button-secondaryBackground: var(--ash-artifact-toolbar-background);
 	--ash-widget-border: var(--ash-contrastBorder);
 }

@@ -56,7 +56,7 @@
 }
 
 .ash-toolbar
-	.ash-action-view-item.icon
+	.ash-action-view-item.icon:not(.ash-dropdown-menu-indicator-visible)
 	> .ash-button
 	> .ash-dropdown-menu-indicator {
 	display: none;

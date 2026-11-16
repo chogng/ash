@@ -14,6 +14,8 @@
 	height: 100%;
 	overflow: auto;
 	padding: var(--ash-spacing-size240);
+	/* Keep block handles inside the document pane, beside the text column. */
+	padding-inline-start: calc(2 * var(--ash-spacing-size240));
 	font-size: var(--ash-fontSize-body1);
 	line-height: 1.65;
 	white-space: pre-wrap;
@@ -25,15 +27,153 @@
 	max-width: 820px;
 	margin-inline: auto;
 }
+
+.stanza-arkdown-prose.wide > * {
+	max-width: none;
+}
+
+.stanza-arkdown-prose::selection,
+.stanza-arkdown-prose ::selection {
+	background-color: var(--ash-selection-background);
+	color: var(--ash-selection-foreground);
+}
+
+[data-color-scheme="light"] .stanza-arkdown-prose::selection,
+[data-color-scheme="light"] .stanza-arkdown-prose ::selection {
+	color: color-mix(
+		in srgb,
+		var(--ash-textLink-activeForeground) 60%,
+		var(--ash-editor-foreground)
+	);
+}
 .stanza-arkdown-prose p {
 	min-height: 1em;
 }
+
+.stanza-arkdown-prose .ash-arkdown-task-list {
+	padding-inline-start: 0;
+	margin-block: var(--ash-spacing-size80);
+}
+
+.ash-arkdown-task-item {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--ash-spacing-size40);
+	list-style: none;
+}
+
+.ash-arkdown-task-checkbox {
+	user-select: none;
+	--ash-checkbox-border: var(--ash-muted-foreground);
+	--ash-checkbox-background: var(--ash-editor-background);
+	display: grid;
+	place-items: center;
+	flex: 0 0 28px;
+	width: 28px;
+	height: 28px;
+}
+
+.ash-arkdown-task-checkbox.checked {
+	--ash-checkbox-background: var(--ash-editor-foreground);
+	--ash-checkbox-border: var(--ash-editor-foreground);
+	--ash-checkbox-foreground: var(--ash-editor-background);
+}
+
+.ash-arkdown-task-content {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-arkdown-task-content > p {
+	margin: 0;
+	min-height: 28px;
+	line-height: max(1.65em, 28px);
+}
+
+.ash-arkdown-task-content > .ash-arkdown-task-list {
+	margin-block: 0;
+}
+
+.ash-arkdown-task-item.completed > .ash-arkdown-task-content > p:first-child {
+	color: var(--ash-muted-foreground);
+	text-decoration: line-through;
+	text-decoration-thickness: var(--ash-strokeThickness);
+}
+.ash-arkdown-table {
+	position: relative;
+	margin-block: var(--ash-spacing-size20) calc(-1 * var(--ash-spacing-size80));
+	padding-block: var(--ash-spacing-size160) var(--ash-spacing-size200);
+	overflow-x: auto;
+}
+
 .stanza-arkdown-prose table {
 	border-collapse: collapse;
+	width: max-content;
+	font-size: 0.94em;
+	line-height: 1.45;
 }
-.stanza-arkdown-prose td {
-	border: var(--ash-strokeThickness) solid var(--ash-border);
-	padding: var(--ash-spacing-size40);
+
+.stanza-arkdown-prose :is(th, td) {
+	box-sizing: border-box;
+	min-width: 48px;
+	max-width: 42ch;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-sessions-docs-tableBorder);
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size100);
+	text-align: start;
+	vertical-align: top;
+}
+
+.stanza-arkdown-prose th {
+	background: var(--ash-sessions-docs-tableHeaderBackground);
+	font-weight: inherit;
+}
+
+.stanza-arkdown-prose :is(th, td) > p {
+	margin: 0;
+}
+
+.stanza-arkdown-prose .ash-arkdown-cell-gray {
+	background-image: linear-gradient(
+		var(--ash-sessions-docs-cellGray),
+		var(--ash-sessions-docs-cellGray)
+	);
+}
+.stanza-arkdown-prose .ash-arkdown-cell-red {
+	background-image: linear-gradient(
+		var(--ash-sessions-docs-cellRed),
+		var(--ash-sessions-docs-cellRed)
+	);
+}
+.stanza-arkdown-prose .ash-arkdown-cell-orange {
+	background-image: linear-gradient(
+		var(--ash-sessions-docs-cellOrange),
+		var(--ash-sessions-docs-cellOrange)
+	);
+}
+.stanza-arkdown-prose .ash-arkdown-cell-yellow {
+	background-image: linear-gradient(
+		var(--ash-sessions-docs-cellYellow),
+		var(--ash-sessions-docs-cellYellow)
+	);
+}
+.stanza-arkdown-prose .ash-arkdown-cell-green {
+	background-image: linear-gradient(
+		var(--ash-sessions-docs-cellGreen),
+		var(--ash-sessions-docs-cellGreen)
+	);
+}
+.stanza-arkdown-prose .ash-arkdown-cell-blue {
+	background-image: linear-gradient(
+		var(--ash-sessions-docs-cellBlue),
+		var(--ash-sessions-docs-cellBlue)
+	);
+}
+.stanza-arkdown-prose .ash-arkdown-cell-purple {
+	background-image: linear-gradient(
+		var(--ash-sessions-docs-cellPurple),
+		var(--ash-sessions-docs-cellPurple)
+	);
 }
 .stanza-arkdown-prose pre {
 	white-space: pre-wrap;
@@ -41,6 +181,56 @@
 }
 .stanza-arkdown-prose code {
 	font-family: var(--ash-font-family-monospace, monospace);
+}
+
+.stanza-arkdown-prose .ash-arkdown-text-red {
+	color: var(--ash-sessions-docs-textRed);
+}
+.stanza-arkdown-prose .ash-arkdown-text-yellow {
+	color: var(--ash-sessions-docs-textYellow);
+}
+.stanza-arkdown-prose .ash-arkdown-text-green {
+	color: var(--ash-sessions-docs-textGreen);
+}
+.stanza-arkdown-prose .ash-arkdown-text-teal {
+	color: var(--ash-sessions-docs-textTeal);
+}
+.stanza-arkdown-prose .ash-arkdown-text-purple {
+	color: var(--ash-sessions-docs-textPurple);
+}
+
+.stanza-arkdown-prose mark {
+	color: inherit;
+	background: var(--ash-sessions-docs-highlightBackground);
+	border-radius: var(--ash-cornerRadius-xSmall);
+}
+
+[data-color-scheme="hcDark"] .stanza-arkdown-prose mark,
+[data-color-scheme="hcLight"] .stanza-arkdown-prose mark {
+	color: var(--ash-selection-foreground);
+}
+
+[data-color-scheme="hcDark"]
+	.stanza-arkdown-prose
+	mark
+	:is(
+		.ash-arkdown-text-red,
+		.ash-arkdown-text-yellow,
+		.ash-arkdown-text-green,
+		.ash-arkdown-text-teal,
+		.ash-arkdown-text-purple
+	),
+[data-color-scheme="hcLight"]
+	.stanza-arkdown-prose
+	mark
+	:is(
+		.ash-arkdown-text-red,
+		.ash-arkdown-text-yellow,
+		.ash-arkdown-text-green,
+		.ash-arkdown-text-teal,
+		.ash-arkdown-text-purple
+	) {
+	color: inherit;
 }
 
 .stanza-arkdown-prose img {
@@ -63,7 +253,7 @@
 	outline-offset: -1px;
 }
 .stanza-arkdown-prose a {
-	color: var(--ash-link-foreground);
+	color: var(--ash-textLink-activeForeground);
 }
 .stanza-arkdown-prose blockquote {
 	border-inline-start: var(--ash-strokeThickness) solid var(--ash-border);
@@ -222,4 +412,21 @@
 		transparent
 	);
 	text-decoration: underline var(--ash-charts-yellow);
+}
+.ash-arkdown-comment {
+	background: var(--ash-sessions-docs-commentBackground, transparent);
+	text-decoration: underline;
+	text-decoration-color: var(--ash-accent-foreground);
+	text-underline-offset: 3px;
+}
+
+.ash-arkdown-comment-active {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+[data-color-scheme="hcDark"] .ash-arkdown-comment,
+[data-color-scheme="hcLight"] .ash-arkdown-comment {
+	background: transparent;
+	text-decoration-color: var(--ash-foreground);
 }

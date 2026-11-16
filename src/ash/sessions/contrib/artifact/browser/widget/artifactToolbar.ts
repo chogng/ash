@@ -3,7 +3,7 @@ import { h } from '../../../../../base/browser/dom.js';
 import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { DropdownMenuActionViewItem } from '../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { AnchorPosition } from '../../../../../base/browser/ui/contextview/contextview.js';
-import type { IContextMenuProvider } from '../../../../../base/browser/contextmenu.js';
+import type { IContextMenuDelegate, IContextMenuProvider } from '../../../../../base/browser/contextmenu.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
@@ -41,7 +41,7 @@ export class ArtifactToolbar extends Disposable {
 
 	constructor(
 		ownerDocument: Document,
-		options: { readonly appearance?: 'canvas' },
+		options: { readonly appearance?: 'canvas'; readonly menuClassName?: string; readonly menuIconPlacement?: IContextMenuDelegate['iconPlacement']; },
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IMenuService menuService: IMenuService,
 		@IContextKeyService contextKeys: IContextKeyService,
@@ -55,8 +55,8 @@ export class ArtifactToolbar extends Disposable {
 					...delegate,
 					anchorPosition: AnchorPosition.Above,
 					gap: delegate.gap ?? 8,
-					getMenuClassName: () => options.appearance === 'canvas' ? 'ash-canvas-editor-menu' : '',
-					iconPlacement: options.appearance === 'canvas' ? 'leading-with-trailing-check' : 'trailing',
+					getMenuClassName: () => options.menuClassName ?? (options.appearance === 'canvas' ? 'ash-canvas-editor-menu' : ''),
+					iconPlacement: options.menuIconPlacement ?? (options.appearance === 'canvas' ? 'leading-with-trailing-check' : 'trailing'),
 					getCheckedActionsRepresentation: options.appearance === 'canvas' ? () => 'radio' : delegate.getCheckedActionsRepresentation,
 					onHide: cancelled => {
 						this.menuVisible = false;

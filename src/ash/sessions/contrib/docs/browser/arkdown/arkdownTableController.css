@@ -1,0 +1,330 @@
+.ash-arkdown-table-controls {
+	position: fixed;
+	inset: 0;
+	z-index: 40;
+	pointer-events: none;
+}
+
+.ash-arkdown-table-controls > .ash-button {
+	--ash-button-hoverBackground: transparent;
+	--ash-button-activeBackground: transparent;
+	--ash-popup-trigger-background: transparent;
+	position: fixed;
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--ash-cornerRadius-small);
+	background: transparent;
+	color: var(--ash-muted-foreground);
+	pointer-events: auto;
+}
+
+/* Sessions icon buttons normally reserve 28px. Table grips own smaller hit
+ * geometry, including their border-crossing capsule and padding-free dots. */
+.ash-arkdown-table-controls > .ash-button.ash-button-standard {
+	box-sizing: border-box;
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
+}
+
+.ash-arkdown-table-controls > .ash-arkdown-table-select:hover,
+.ash-arkdown-table-controls > .ash-arkdown-table-select:active {
+	background: var(--ash-toolbar-hoverBackground);
+	color: var(--ash-editor-foreground);
+}
+
+.ash-arkdown-table-controls > .ash-arkdown-table-select {
+	--ash-button-hoverBackground: var(--ash-toolbar-hoverBackground);
+	--ash-button-activeBackground: var(--ash-toolbar-hoverBackground);
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-arkdown-table-controls
+	> .ash-button.ash-button-standard
+	.ash-icon-label-icon
+	> .ash-icon {
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+	font-size: var(--ash-lxiconFontSize);
+}
+
+.ash-arkdown-table-controls > .ash-arkdown-table-row-grip,
+.ash-arkdown-table-controls > .ash-arkdown-table-column-grip,
+.ash-arkdown-table-controls > .ash-arkdown-table-select {
+	cursor: grab;
+}
+
+.ash-arkdown-table-row-grip::before,
+.ash-arkdown-table-column-grip::before {
+	position: absolute;
+	inset: 0;
+	box-sizing: border-box;
+	margin: auto;
+	border: var(--ash-strokeThickness) solid
+		color-mix(in srgb, var(--ash-editor-foreground) 32%, transparent);
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-editor-background);
+	content: "";
+}
+
+.ash-arkdown-table-row-grip::before {
+	width: 8px;
+	height: 24px;
+}
+
+.ash-arkdown-table-column-grip::before {
+	width: 24px;
+	height: 8px;
+}
+
+.ash-arkdown-table-row-grip:is(
+		:hover,
+		:focus-visible,
+		.checked,
+		.dragging,
+		[aria-expanded="true"]
+	)::before,
+.ash-arkdown-table-column-grip:is(
+		:hover,
+		:focus-visible,
+		.checked,
+		.dragging,
+		[aria-expanded="true"]
+	)::before {
+	width: 100%;
+	height: 100%;
+}
+
+.ash-arkdown-table-row-grip::after,
+.ash-arkdown-table-column-grip::after,
+.ash-arkdown-table-select::after {
+	position: relative;
+	display: block;
+	width: 8px;
+	height: 12px;
+	background-image: radial-gradient(currentColor 0.75px, transparent 0.85px);
+	background-size: 4px 4px;
+	content: "";
+	pointer-events: none;
+}
+
+.ash-arkdown-table-column-grip::after {
+	width: 12px;
+	height: 8px;
+}
+
+.ash-arkdown-table-row-grip:not(
+		:hover,
+		:focus-visible,
+		.checked,
+		.dragging,
+		[aria-expanded="true"]
+	)::after,
+.ash-arkdown-table-column-grip:not(
+		:hover,
+		:focus-visible,
+		.checked,
+		.dragging,
+		[aria-expanded="true"]
+	)::after {
+	display: none;
+}
+
+.ash-arkdown-table-controls > .ash-arkdown-table-menu {
+	--ash-popup-trigger-background: var(--ash-toolbar-hoverBackground);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-editor-background);
+}
+
+.ash-arkdown-table-controls > .ash-arkdown-table-menu:hover,
+.ash-arkdown-table-controls > .ash-arkdown-table-menu[aria-expanded="true"] {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-arkdown-table-controls > .ash-arkdown-table-add-row,
+.ash-arkdown-table-controls > .ash-arkdown-table-add-column {
+	box-sizing: border-box;
+}
+
+.ash-arkdown-table-controls > .ash-arkdown-table-add-row.ash-button-standard {
+	padding-block-start: var(--ash-spacing-size40);
+}
+
+.ash-arkdown-table-controls
+	> .ash-arkdown-table-add-column.ash-button-standard {
+	padding-inline-start: var(--ash-spacing-size40);
+}
+
+.ash-arkdown-table-add-row::before,
+.ash-arkdown-table-add-column::before {
+	position: absolute;
+	inset: 0;
+	border-radius: var(--ash-cornerRadius-small);
+	background: color-mix(
+		in srgb,
+		var(--ash-editor-foreground) 5%,
+		transparent
+	);
+	content: "";
+}
+
+.ash-arkdown-table-add-row::before {
+	inset-block-start: 4px;
+}
+.ash-arkdown-table-add-column::before {
+	inset-inline-start: 4px;
+}
+
+.ash-arkdown-table-add-row:hover::before,
+.ash-arkdown-table-add-column:hover::before {
+	background: color-mix(
+		in srgb,
+		var(--ash-editor-foreground) 10%,
+		transparent
+	);
+}
+
+.ash-arkdown-table-add-row:active::before,
+.ash-arkdown-table-add-column:active::before {
+	background: color-mix(
+		in srgb,
+		var(--ash-editor-foreground) 20%,
+		transparent
+	);
+}
+
+.ash-arkdown-table-add-row > .ash-button-content,
+.ash-arkdown-table-add-column > .ash-button-content {
+	position: relative;
+}
+
+.ash-arkdown-table-controls
+	> .ash-button:is(.ash-arkdown-table-add-row, .ash-arkdown-table-add-column)
+	.ash-icon-label-icon
+	> .ash-icon {
+	width: var(--ash-lxiconFontSize-compact);
+	height: var(--ash-lxiconFontSize-compact);
+	font-size: var(--ash-lxiconFontSize-compact);
+}
+
+.ash-arkdown-table-controls > .ash-arkdown-table-resize {
+	border-radius: 0;
+	background: transparent;
+	cursor: col-resize;
+}
+
+.ash-arkdown-table-controls > .ash-arkdown-table-resize::after {
+	position: absolute;
+	inset-block: 0;
+	left: calc(50% - var(--ash-strokeThickness));
+	width: calc(2 * var(--ash-strokeThickness));
+	background: transparent;
+	content: "";
+}
+
+.ash-arkdown-table-controls > .ash-arkdown-table-resize:hover,
+.ash-arkdown-table-controls > .ash-arkdown-table-resize:focus-visible {
+	background: transparent;
+}
+
+.ash-arkdown-table-controls > .ash-arkdown-table-resize:hover::after,
+.ash-arkdown-table-controls > .ash-arkdown-table-resize:focus-visible::after {
+	background: var(--ash-focusBorder);
+}
+
+.ash-arkdown-table-drop {
+	position: fixed;
+	border-radius: var(--ash-cornerRadius-circle);
+	background: color-mix(
+		in srgb,
+		var(--ash-accent-foreground) 50%,
+		transparent
+	);
+	pointer-events: none;
+}
+
+.stanza-arkdown-prose .ash-arkdown-cell-selected {
+	position: relative;
+}
+
+.stanza-arkdown-prose .ash-arkdown-cell-selected::after {
+	position: absolute;
+	inset: 0;
+	background: color-mix(
+		in srgb,
+		var(--ash-accent-foreground) 10%,
+		transparent
+	);
+	content: "";
+	pointer-events: none;
+}
+
+.stanza-arkdown-prose.ash-arkdown-table-selecting {
+	user-select: none;
+}
+
+.stanza-arkdown-prose td.ash-arkdown-cell-hover-row {
+	background-color: color-mix(
+		in srgb,
+		var(--ash-muted-foreground) 4%,
+		transparent
+	);
+}
+
+.stanza-arkdown-prose td.ash-arkdown-cell-hover-column {
+	background-color: color-mix(
+		in srgb,
+		var(--ash-muted-foreground) 5.5%,
+		transparent
+	);
+}
+
+.stanza-arkdown-prose
+	th:is(.ash-arkdown-cell-hover-row, .ash-arkdown-cell-hover-column) {
+	background-color: color-mix(
+		in srgb,
+		var(--ash-editor-foreground) 2%,
+		var(--ash-sessions-docs-tableHeaderBackground)
+	);
+}
+
+.stanza-arkdown-prose .ash-arkdown-table-moving {
+	opacity: 0.4;
+}
+
+[data-color-scheme="hcDark"] .ash-arkdown-cell-selected,
+[data-color-scheme="hcLight"] .ash-arkdown-cell-selected {
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+	background: var(--ash-selection-background);
+	color: var(--ash-selection-foreground);
+}
+
+[data-color-scheme="hcDark"] .ash-arkdown-cell-selected::after,
+[data-color-scheme="hcLight"] .ash-arkdown-cell-selected::after {
+	background: transparent;
+}
+
+[data-color-scheme="hcDark"]
+	:is(.ash-arkdown-table-row-grip, .ash-arkdown-table-column-grip)::before,
+[data-color-scheme="hcLight"]
+	:is(.ash-arkdown-table-row-grip, .ash-arkdown-table-column-grip)::before,
+[data-color-scheme="hcDark"]
+	.ash-arkdown-table-controls
+	> .ash-arkdown-table-menu,
+[data-color-scheme="hcLight"]
+	.ash-arkdown-table-controls
+	> .ash-arkdown-table-menu {
+	border-color: var(--ash-contrastBorder);
+}
+
+[data-color-scheme="hcDark"]
+	:is(.ash-arkdown-table-add-row, .ash-arkdown-table-add-column)::before,
+[data-color-scheme="hcLight"]
+	:is(.ash-arkdown-table-add-row, .ash-arkdown-table-add-column)::before {
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	background: var(--ash-editor-background);
+}

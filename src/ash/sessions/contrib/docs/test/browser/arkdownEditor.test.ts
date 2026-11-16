@@ -12,6 +12,188 @@ suite('Arkdown document editing', () => {
 		await browser.page.evaluate(({ source, mode }) => window.arkdownFixture.mount(source, mode), { source, mode });
 	};
 
+	test('select all replaces leading and trailing atomic content and Markdown block syntax', async () => {
+		await browser.page.route('https://docs-assets.test/**', route => route.abort());
+		const dropdown = '```ash-dropdown\n{"label":"Status","options":["Todo","Done"],"selected":0}\n```';
+		const image = '![Logo](https://docs-assets.test/logo.png)';
+		for (const source of [dropdown, image, '# Heading\n\n- [ ] Task', `${dropdown}\n\n${image}\n\n# Heading\n\nBody **text**`, `Text\n\n${dropdown}\n\n${image}`]) {
+			await mount(source);
+			const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+			if (source === dropdown) await body.getByRole('combobox').press('ControlOrMeta+a');
+			else await body.press('ControlOrMeta+a');
+			await browser.page.keyboard.insertText('Replacement');
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), 'Replacement', source);
+			await expect(body.locator('select, img, h1, li')).toHaveCount(0);
+			await body.press('ControlOrMeta+z');
+			assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), source);
+		}
+	});
+
+	test('select all paste replaces a mixed document including its first dropdown and image', async () => {
+		await browser.page.route('https://docs-assets.test/**', route => route.abort());
+		await mount('```ash-dropdown\n{"label":"状态","options":["待办","完成"],"selected":1}\n```\n\n![图](https://docs-assets.test/logo.png)\n\nLast **text**');
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await body.press('ControlOrMeta+a');
+		await body.evaluate(element => {
+			const data = new DataTransfer(); data.setData('text/plain', '粘贴 replacement🙂');
+			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
+		});
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '粘贴 replacement🙂');
+		await expect(body.locator('select, img')).toHaveCount(0);
+	});
+
+	test('a selection spanning task rows retains checklist formatting and exact text endpoints', async () => {
+		await mount('- [ ] 审阅视觉方向\n- [ ] 邀请试用成员\n- [ ] 发布更新说明\n\n## 日程');
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await body.locator('.ash-arkdown-task-content > p').nth(1).evaluate(element => {
+			const last = element.closest('ul')!.querySelectorAll('.ash-arkdown-task-content > p')[2];
+			element.ownerDocument.getSelection()!.setBaseAndExtent(element.firstChild!, 3, last.firstChild!, 6);
+		});
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.formatting.list), 'task');
+		const bounds = await browser.page.evaluate(() => window.arkdownFixture.selectionBounds);
+		const lastText = await body.locator('.ash-arkdown-task-content > p').nth(2).evaluate(element => {
+			const range = element.ownerDocument.createRange(); range.selectNodeContents(element); return range.getBoundingClientRect().toJSON();
+		});
+		assert.ok(bounds && bounds.left >= lastText.left && bounds.right <= lastText.right + 1 && bounds.bottom <= lastText.bottom + 1);
+		await body.press('Backspace');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '- [ ] 审阅视觉方向\n- [ ] 邀请试\n\n## 日程');
+	});
+
+	test('page width changes only the view and persists across source mode round trips', async () => {
+		await mount('A paragraph with a constrained reading width.');
+		await browser.page.evaluate(() => { document.getElementById('root')!.style.width = '1200px'; });
+		const paragraph = browser.page.getByRole('textbox', { name: 'Document body', exact: true }).locator('p');
+		const narrow = (await paragraph.boundingBox())!.width;
+		await browser.page.evaluate(() => window.arkdownFixture.togglePageWidth());
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.isPageWide), true);
+		assert.ok((await paragraph.boundingBox())!.width > narrow + 200);
+		await browser.page.evaluate(() => { window.arkdownFixture.mode('markdown'); window.arkdownFixture.mode('rich'); });
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.isPageWide), true);
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), 'A paragraph with a constrained reading width.');
+		await browser.page.evaluate(() => window.arkdownFixture.togglePageWidth());
+		assert.equal((await paragraph.boundingBox())!.width, narrow);
+	});
+
+	test('inline colors, underline and highlight preserve nested marks, partial clearing and undo', async () => {
+		await mount('alpha **beta** gamma');
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await body.locator('strong').evaluate(element => element.ownerDocument.getSelection()!.setBaseAndExtent(element.firstChild!, 0, element.firstChild!, 4));
+		await browser.page.evaluate(() => window.arkdownFixture.setTextColor('red'));
+		await expect(body.locator('strong .ash-arkdown-text-red')).toHaveText('beta');
+		await browser.page.evaluate(() => window.arkdownFixture.toggleUnderline());
+		await browser.page.evaluate(() => window.arkdownFixture.setHighlight(true));
+		await expect(body.locator('u mark')).toHaveText('beta');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.formatting.textColor), 'red');
+		await browser.page.evaluate(() => window.arkdownFixture.setTextColor('purple'));
+		await expect(body.locator('.ash-arkdown-text-red')).toHaveCount(0);
+		const purple = body.locator('.ash-arkdown-text-purple');
+		await expect(purple).toHaveText('beta');
+		await purple.evaluate(element => element.ownerDocument.getSelection()!.setBaseAndExtent(element.firstChild!, 1, element.firstChild!, 3));
+		await browser.page.evaluate(() => window.arkdownFixture.setTextColor(undefined));
+		assert.equal(await browser.page.evaluate(() => window.getSelection()?.toString()), 'et');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.formatting.textColor), undefined);
+		await expect(body.locator('.ash-arkdown-text-purple')).toHaveText(['b', 'a']);
+		await browser.page.evaluate(() => window.arkdownFixture.toggleUnderline());
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.formatting.underline), false);
+		await browser.page.evaluate(() => window.arkdownFixture.setHighlight(false));
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.formatting.highlight), false);
+		await body.locator('strong').evaluate(element => {
+			const range = element.ownerDocument.createRange();
+			range.selectNodeContents(element);
+			const selection = element.ownerDocument.getSelection()!;
+			selection.removeAllRanges(); selection.addRange(range);
+		});
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.formatting.mixedHighlight), true);
+		await body.press('ControlOrMeta+z');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.formatting.highlight), true);
+		await browser.page.evaluate(() => window.arkdownFixture.mode('markdown'));
+		await browser.page.evaluate(() => window.arkdownFixture.mode('rich'));
+		await expect(body.locator('strong')).toHaveText('beta');
+		const saved = await browser.page.evaluate(() => window.arkdownFixture.source);
+		await browser.page.evaluate(() => { window.arkdownFixture.readOnly(true); window.arkdownFixture.setTextColor('green'); });
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), saved);
+		assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+	});
+
+	test('inline palette formatting keeps link destinations and Markdown code syntax', async () => {
+		await mount('[Read **docs**](https://example.com) and `code`');
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await body.locator('a').evaluate(element => {
+			const range = element.ownerDocument.createRange(); range.selectNodeContents(element);
+			const selection = element.ownerDocument.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+		});
+		await browser.page.evaluate(() => window.arkdownFixture.setTextColor('green'));
+		await browser.page.evaluate(() => window.arkdownFixture.setHighlight(true));
+		await expect(body.locator('a')).toHaveAttribute('data-href', 'https://example.com');
+		await expect(body.locator('a')).toHaveText('Read docs');
+		await expect(body.locator('strong')).toHaveText('docs');
+		await expect(body.locator('code')).toHaveText('code');
+		assert.ok((await browser.page.evaluate(() => window.arkdownFixture.source)).endsWith(' and `code`'));
+	});
+
+	test('multiblock formatting preserves Markdown blocks and arbitrary HTML stays inert', async () => {
+		await mount('First **paragraph**\r\n\r\nSecond 中文🙂\r\n');
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await body.press('ControlOrMeta+a');
+		await browser.page.evaluate(() => window.arkdownFixture.setTextColor('teal'));
+		await expect(body.locator('p')).toHaveCount(2);
+		await expect(body.locator('strong')).toHaveText('paragraph');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.plainText), 'First paragraph\n\nSecond 中文🙂');
+		assert.ok((await browser.page.evaluate(() => window.arkdownFixture.source)).includes('\r\n\r\n'));
+		await body.press('ControlOrMeta+z');
+		await expect(body.locator('.ash-arkdown-text-teal')).toHaveCount(0);
+		await mount('<span data-text-color="red" onclick="bad()">unsafe</span>\n\n<script>bad()</script>');
+		await expect(body.locator('script, [onclick], .ash-arkdown-text-red')).toHaveCount(0);
+	});
+
+	test('Tab and Shift Tab indent selected list subtrees and retain selection and history', async () => {
+		const original = '- Parent\r\n- Child🙂\r\n  - Nested\r\n- Last\r\n';
+		await mount(original);
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await body.locator(':scope > ul > li').nth(1).evaluate(element => element.ownerDocument.getSelection()!.setBaseAndExtent(element.firstChild!, 0, element.firstChild!, 'Child🙂'.length));
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.canIndent('increase')), true);
+		await body.press('Tab');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '- Parent\r\n  - Child🙂\r\n    - Nested\r\n- Last\r\n');
+		assert.equal(await browser.page.evaluate(() => window.getSelection()?.toString()), 'Child🙂');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.canIndent('decrease')), true);
+		await body.press('Shift+Tab');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), original);
+		await body.press('ControlOrMeta+z');
+		assert.ok((await browser.page.evaluate(() => window.arkdownFixture.source)).includes('  - Child🙂'));
+	});
+
+	test('selection formats retain the selected text and toggle through model undo', async () => {
+		await mount('选中文字 alpha');
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await body.press('ControlOrMeta+a');
+		await browser.page.evaluate(() => window.arkdownFixture.format('~~'));
+		await expect(body.locator('s')).toHaveText('选中文字 alpha');
+		assert.equal(await browser.page.evaluate(() => window.getSelection()?.toString()), '选中文字 alpha');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.formatting.strikethrough), true);
+		await browser.page.evaluate(() => window.arkdownFixture.format('~~'));
+		await expect(body.locator('s')).toHaveCount(0);
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '选中文字 alpha');
+		await body.press('ControlOrMeta+z');
+		await expect(body.locator('s')).toHaveText('选中文字 alpha');
+	});
+
+	test('inline code handles backticks and selection geometry respects editing state', async () => {
+		await mount('alpha \\` beta');
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.selectionBounds), undefined);
+		await body.press('ControlOrMeta+a');
+		assert.ok(await browser.page.evaluate(() => window.arkdownFixture.selectionBounds?.width > 0));
+		await browser.page.evaluate(() => window.arkdownFixture.format('`'));
+		await expect(body.locator('code')).toHaveText('alpha ` beta');
+		await browser.page.evaluate(() => window.arkdownFixture.format('`'));
+		await expect(body.locator('code')).toHaveCount(0);
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.plainText), 'alpha ` beta');
+		await browser.page.evaluate(() => window.arkdownFixture.readOnly(true));
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.selectionBounds), undefined);
+		await browser.page.evaluate(() => window.arkdownFixture.mode('markdown'));
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.selectionBounds), undefined);
+	});
+
 	test('toolbar inserts whole blocks and structural edits share document undo', async () => {
 		await mount('alpha beta');
 		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
@@ -26,8 +208,81 @@ suite('Arkdown document editing', () => {
 		await expect(body.locator('h2')).toHaveText('alpha beta');
 		await body.press('ControlOrMeta+z');
 		await browser.page.evaluate(() => window.arkdownFixture.setListKind('task'));
-		await expect(body.getByRole('img', { name: 'Incomplete task' })).toBeVisible();
+		await expect(body.getByRole('checkbox', { name: 'Task: alpha beta' })).toBeVisible();
 		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.formatting.list), 'task');
+	});
+
+	test('checklist pointer and keyboard changes use Markdown history and retain text selection', async () => {
+		await mount('- [ ] Ship docs\r\n- [x] Review docs\r\n');
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		const task = body.getByRole('checkbox', { name: 'Task: Ship docs', exact: true });
+		await expect(task).not.toBeChecked();
+		await body.locator('.ash-arkdown-task-content p').first().evaluate(element => {
+			element.ownerDocument.getSelection()!.setBaseAndExtent(element.firstChild!, 0, element.firstChild!, 4);
+		});
+		await task.click();
+		await expect(task).toBeChecked();
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '- [x] Ship docs\r\n- [x] Review docs\r\n');
+		assert.equal(await browser.page.evaluate(() => window.getSelection()?.toString()), 'Ship');
+		await expect(body.locator('.ash-arkdown-task-item').first()).toHaveClass(/completed/);
+		await body.press('ControlOrMeta+z');
+		await expect(task).not.toBeChecked();
+		await task.focus();
+		await task.press('Space');
+		await expect(task).toBeChecked();
+		await expect(task).toBeFocused();
+		await task.press('Space');
+		await expect(task).not.toBeChecked();
+		await expect(task).toBeFocused();
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.plainText), '[ ] Ship docs\n\n[x] Review docs');
+		await browser.page.evaluate(() => window.arkdownFixture.readOnly(true));
+		await expect(task).toBeDisabled();
+		assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+	});
+
+	test('nested checklists keep independent completion and survive offset changes and composition', async () => {
+		await mount('Intro\n\n- [ ] Parent\n  - [ ] Child\n');
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await body.locator('p').first().click();
+		await body.press('Home');
+		await browser.page.keyboard.insertText('前言🙂 ');
+		const parent = body.getByRole('checkbox', { name: 'Task: Parent', exact: true });
+		const child = body.getByRole('checkbox', { name: 'Task: Child', exact: true });
+		await parent.click();
+		await expect(parent).toBeChecked();
+		await expect(child).not.toBeChecked();
+		await child.click();
+		await expect(child).toBeChecked();
+		assert.ok((await browser.page.evaluate(() => window.arkdownFixture.source)).includes('- [x] Parent\n  - [x] Child'));
+		await body.locator('.ash-arkdown-task-content p').last().click();
+		await body.press(process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End');
+		await body.evaluate(element => {
+			element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+			element.dispatchEvent(new CompositionEvent('compositionend', { data: '中文', bubbles: true }));
+		});
+		await expect(body.getByRole('checkbox', { name: 'Task: Child中文', exact: true })).toBeChecked();
+		await browser.page.evaluate(() => window.arkdownFixture.mode('markdown'));
+		await browser.page.evaluate(() => window.arkdownFixture.mode('rich'));
+		await expect(parent).toBeChecked();
+		await expect(body.getByRole('checkbox', { name: 'Task: Child中文', exact: true })).toBeChecked();
+		assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+	});
+
+	test('an empty checklist has an editable caret and a native accessible checkbox', async () => {
+		await mount('- [ ] \n');
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await expect(body.getByRole('checkbox', { name: 'Empty task', exact: true })).not.toBeChecked();
+		await body.locator('.ash-arkdown-task-content p').click();
+		await browser.page.keyboard.insertText('New task');
+		await expect(body.getByRole('checkbox', { name: 'Task: New task', exact: true })).toBeVisible();
+		await body.press('ControlOrMeta+Enter');
+		await expect(body.getByRole('checkbox', { name: 'Task: New task', exact: true })).toBeChecked();
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '- [x] New task\n');
+		await mount('- [ ] \n  - [ ] Nested\n');
+		await body.locator('.ash-arkdown-task-content > p').first().click();
+		await browser.page.keyboard.insertText('Parent');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '- [ ] Parent\n  - [ ] Nested\n');
+		await expect(body.getByRole('checkbox', { name: 'Task: Nested', exact: true })).not.toBeChecked();
 	});
 
 	test('dropdown selection persists in source, supports undo and remains safe and read-only', async () => {
@@ -152,7 +407,8 @@ suite('Arkdown document editing', () => {
 		await expect(body.locator('p')).toHaveText('中文🙂');
 		await body.press('ControlOrMeta+Shift+9');
 		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '- [ ] 中文🙂');
-		await expect(body.locator('li')).toHaveText('☐ 中文🙂');
+		await expect(body.locator('.ash-arkdown-task-content')).toHaveText('中文🙂');
+		await expect(body.getByRole('checkbox', { name: 'Task: 中文🙂', exact: true })).not.toBeChecked();
 		await body.press('ControlOrMeta+z');
 		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), '中文🙂');
 	});
@@ -161,6 +417,14 @@ suite('Arkdown document editing', () => {
 		const original = '| a | b |\n| - | - |\n| c | d |';
 		await mount(original);
 		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		await expect(body.getByRole('columnheader')).toHaveText(['a', 'b']);
+		await expect(body.getByRole('columnheader').first()).toHaveAttribute('scope', 'col');
+		await body.getByRole('columnheader').first().click();
+		await browser.page.keyboard.press('Tab');
+		await browser.page.keyboard.insertText('头');
+		await expect(body.getByRole('columnheader').last()).toContainText('头');
+		await body.press('ControlOrMeta+z');
+		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), original);
 		await body.locator('td').last().click();
 		await browser.page.keyboard.press('Tab');
 		assert.equal(await browser.page.evaluate(() => window.arkdownFixture.source), original + '\n|   |   |\n');
@@ -170,6 +434,22 @@ suite('Arkdown document editing', () => {
 		await browser.page.keyboard.insertText('前');
 		await expect(body.locator('tr').nth(1).locator('td').last()).toContainText('前');
 		assert.deepEqual(await browser.page.evaluate(() => window.arkdownFixture.errors), []);
+	});
+
+	test('table navigation and typing reveal offscreen cells in the table scroll lane', async () => {
+		const columns = Array.from({ length: 12 }, (_, index) => `Column ${index + 1}`);
+		await mount(`| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n| ${columns.map(() => 'Long cell content'.repeat(5)).join(' | ')} |`);
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
+		const scroll = body.locator('.ash-arkdown-table');
+		await body.getByRole('columnheader').first().click();
+		for (let index = 0; index < columns.length - 1; index++) await browser.page.keyboard.press('Tab');
+		await expect.poll(() => scroll.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+		await browser.page.keyboard.insertText('末列');
+		await expect(body.getByRole('columnheader').last()).toContainText('末列');
+		await expect.poll(() => scroll.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+		const bounds = await scroll.boundingBox(), header = await body.getByRole('columnheader').last().boundingBox();
+		assert.ok(bounds && header && header.x >= bounds.x - 1 && header.x + header.width <= bounds.x + bounds.width + 1);
+		assert.ok(await body.evaluate(element => element.scrollWidth <= element.clientWidth + 1));
 	});
 
 	test('formatted selection commits Markdown through the text model', async () => {

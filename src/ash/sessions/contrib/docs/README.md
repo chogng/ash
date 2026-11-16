@@ -6,8 +6,8 @@ Docs 持有 Sessions 的文档创建、打开、默认视图选择、HTML 写作
 | -------------------------------------------------------------- | -------------------------------------------------------------- |
 | [docs.contribution.ts](browser/docs.contribution.ts)           | 编辑器、配置、命令及生成文档打开入口                           |
 | [arkdownDocsEditorPane.ts](browser/arkdownDocsEditorPane.ts)   | Docs 标题栏、作品操作和默认模式，借用 Arkdown 文档宿主         |
-| [docsToolbar.ts](browser/docsToolbar.ts)                     | 向 Artifact 工具栏贡献字体、插入、更多、讨论和 Ask Ash 操作    |
-| [docsDropdown.ts](common/docsDropdown.ts)                    | 文档下拉选择块的 Markdown 编码与持久化边界校验                |
+| [docsToolbar.ts](browser/docsToolbar.ts)                       | 向 Artifact 工具栏贡献字体、插入、更多、讨论和 Ask Ash 操作    |
+| [docsDropdown.ts](common/docsDropdown.ts)                      | 文档下拉选择块的 Markdown 编码与持久化边界校验                 |
 | [docsImport.ts](browser/docsImport.ts)                         | 复用 Academy 格式语义，转换旧文档、HTML 和文本为 Markdown      |
 | [legacyDocsMigration.ts](browser/legacyDocsMigration.ts)       | 旧文件与崩溃草稿的单向迁移、冲突处理及完成记录                 |
 | [docsEditorInput.ts](browser/docsEditorInput.ts)               | Arkdown 输入身份与另存为                                       |
@@ -21,7 +21,7 @@ Docs 命令使用 `sessions.docs.*`，恢复入口为 `sessions.restore.docs`。
 
 Arkdown 的 Markdown 入口接续文档导出命令：Markdown 导出保留源码，纯文本导出读取正文投影；文件导出当前提供 `.md`。超过解析复杂度限制时保留原文并切换到可编辑源码，可缩减内容后返回正文视图。
 
-底部工具栏依次提供字体、表格、图片、清单、下拉选择块、更多、讨论和 Ask Ash。字体菜单提供加粗、斜体和标题层级，选中态读取 Arkdown 当前选区。更多菜单提供列表、代码块、分隔线、日期和源码切换。讨论打开关联对话，Ask Ash 把选区或文档加入聊天草稿，不发送消息。图片使用 HTTP 或 HTTPS 地址，说明保留为替代文本。
+底部工具栏依次提供字体、表格、图片、清单、下拉选择块、更多、评论和 Ask Ash。字体菜单提供正文与标题层级，选中态读取 Arkdown 当前选区；加粗与斜体由选区工具栏、正文快捷键和文档右键菜单提供。更多菜单提供列表、代码块、分隔线、日期与页面宽度；源码切换及讨论文档位于文档标题菜单和右键菜单。评论打开文档线程侧栏，讨论文档打开关联对话。Ask Ash 把选区或文档加入聊天草稿，不发送消息。图片入口选择本地 PNG、JPEG、GIF 或 WebP 文件，也支持粘贴和拖入。图片嵌入 Markdown；每张图片最大 8 MB。HTTP/HTTPS 图片仍可从 Markdown 渲染。选中图片后可对齐、复制、修改替代文本、设置尺寸或删除；左右手柄支持等比缩放，图片编辑共用文档撤销。尺寸与对齐保存在保留的 GFM 图片标题 `ash-image:` 中，普通图片标题保留在该元数据内。
 
 下拉选择块使用 `ash-dropdown` 围栏代码块保存 JSON 名称、选项与选值。正文仅把通过边界校验的块投影为选择控件；无效内容保留为代码，标签按纯文本呈现。修改选值通过同一个 `TextModel` 提交，参与保存、撤销和协作。通用 Markdown 查看器将其显示为代码块；源码视图可直接修改选项。
 
