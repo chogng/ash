@@ -23,6 +23,14 @@ impl GitClient {
     /// Captures repository context using bounded, non-interactive queries with hooks and
     /// configured filesystem-monitor programs disabled, even for repository-inspection grants.
     pub async fn environment_summary(&self, start: &Path) -> GitResult<GitEnvironmentSummary> {
+        // Ordinary directories need no Git process, including its installation probe.
+        // Check again on every invocation so a newly initialized repository is visible.
+        // Explicit executables retain their own discovery semantics.
+        if self.uses_system_executable() && !repository_may_exist(start) {
+            return Err(crate::GitError::NotAWorkingTree {
+                path: start.to_path_buf(),
+            });
+        }
         let repository = self.open_repository(start).await?;
         let cwd = repository.worktree_root();
         // These independent queries describe this invocation; do not serve a prior
@@ -152,6 +160,22 @@ impl GitClient {
                 .any(|record| !matches!(record[2], b"unspecified" | b"unset")),
         )
     }
+}
+
+fn repository_may_exist(start: &Path) -> bool {
+    let Ok(start) = dunce::canonicalize(start) else {
+        return true;
+    };
+    start.ancestors().any(|directory| {
+        // A worktree has a .git directory/file; a standalone Git directory has HEAD.
+        // Unknown metadata must fall back to Git rather than be treated as absence.
+        [".git", "HEAD"].into_iter().any(|name| {
+            match std::fs::symlink_metadata(directory.join(name)) {
+                Ok(_) => true,
+                Err(error) => error.kind() != std::io::ErrorKind::NotFound,
+            }
+        })
+    })
 }
 
 #[cfg(test)]

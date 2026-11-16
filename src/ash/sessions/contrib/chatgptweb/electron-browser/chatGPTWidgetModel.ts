@@ -1,5 +1,6 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { canceled } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -7,6 +8,7 @@ import { autorun, derived, observableSignalFromEvent, observableValue, type IObs
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { findLast } from '../../../../base/common/arraysFind.js';
+import { equals } from '../../../../base/common/objects.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { ICompactChatModel } from '../../chat/browser/chatViewFactory.js';
@@ -82,6 +84,14 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 	private ashCatalogRequest = 0;
 	private currentItems: readonly IChatListItem[] = [];
 	private transcriptState: ChatGPTState | undefined;
+	private readonly projectionFrame = this._register(new AnimationFrameScheduler(window, () => {
+		// The service remains current on every stream event; only its rendered
+		// projection is coalesced. No intermediate response snapshot is retained here.
+		const state = this.backend.state.get();
+		this.currentItems = this.projectTranscript(state);
+		this.transcriptState = state;
+		this.changed.fire();
+	}));
 	private readonly decoded = new WeakMap<ChatGPTMessage, { readonly conversationId: string | undefined; readonly reply: ReturnType<typeof decodeChatGPTReply>; }>();
 	private sources = new Map<string, { readonly messageId: string; readonly conversationId: string | undefined; }>();
 	private readonly playback = this._register(new MutableDisposable());
@@ -115,6 +125,8 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 				this.generation++;
 				this.playback.clear();
 			}
+			if (!switched && this.deferLiveProjection(state)) return;
+			this.projectionFrame.cancel();
 			const previous = this.transcriptState;
 			if (!previous || previous.messages !== state.messages || previous.voiceTranscript !== state.voiceTranscript
 				|| previous.linkedTasks !== state.linkedTasks || previous.sending !== state.sending
@@ -131,9 +143,31 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 			void this.loadAshModels();
 		}));
 		this._register(artifactCatalog.onDidChange(() => {
-			this.currentItems = this.projectTranscript(backend.state.get());
+			this.projectionFrame.cancel();
+			const state = backend.state.get();
+			this.currentItems = this.projectTranscript(state);
+			this.transcriptState = state;
 			this.changed.fire();
 		}));
+	}
+
+	private deferLiveProjection(state: ChatGPTState): boolean {
+		const previous = this.transcriptState;
+		if (!previous?.sending || !state.sending || previous.messages.length !== state.messages.length
+			|| Object.keys(previous).length !== Object.keys(state).length
+			|| (Object.keys(state) as (keyof ChatGPTState)[]).some(key => key !== 'messages' && state[key] !== previous[key])) return false;
+		const before = previous.messages.at(-1);
+		const after = state.messages.at(-1);
+		if (before?.role !== 'assistant' || after?.role !== 'assistant' || before.activity || after.activity
+			|| before.id !== after.id || !before.text.trim() || after.text.length <= before.text.length
+			|| !after.text.startsWith(before.text) || before.completion === 'complete'
+			|| state.messages.some((message, index) => index < state.messages.length - 1 && message !== previous.messages[index])) return false;
+		const { text: _beforeText, ...beforeMetadata } = before;
+		const { text: _afterText, ...afterMetadata } = after;
+		if (!equals(beforeMetadata, afterMetadata)) return false;
+		// First content, corrections, completion and composer changes stay synchronous.
+		this.projectionFrame.schedule();
+		return true;
 	}
 
 	get olderHistory(): { readonly loading: boolean; } | undefined {
@@ -474,6 +508,15 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 	private decodeReply(message: ChatGPTMessage, conversationId: string | undefined): ReturnType<typeof decodeChatGPTReply> {
 		const cached = this.decoded.get(message);
 		if (cached && cached.conversationId === conversationId) return cached.reply;
+		const previous = this.transcriptState?.messages.find(candidate => candidate.id === message.id);
+		const previousCache = previous && this.decoded.get(previous);
+		if (previousCache && previousCache.conversationId === conversationId && previous.text === message.text
+			&& equals(previous.references, message.references) && equals(previous.imageGroups, message.imageGroups)) {
+			// Completion and attachment metadata can change without changing any decoder
+			// input. Keep their projection synchronous while reusing the parsed body.
+			this.decoded.set(message, previousCache);
+			return previousCache.reply;
+		}
 		const reply = decodeChatGPTReply(message.text, message.references, conversationId, message.imageGroups);
 		this.decoded.set(message, { conversationId, reply });
 		return reply;

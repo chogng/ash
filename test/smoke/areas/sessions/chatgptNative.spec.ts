@@ -23,6 +23,11 @@ declare global {
 		releaseNextUpload(): void;
 		readonly projectMemoryBodies: readonly string[];
 		readonly workbookRequests: number;
+		readonly verificationPreparations: number;
+		readonly verificationFinalizations: number;
+		readonly conversationPreparations: number;
+		readonly preparedWithoutMessages: boolean;
+		readonly replyFrames: readonly { readonly send: number; readonly at: number; readonly text: string; }[];
 	};
 	var ashLibraryLinkFixture: { readonly opened: string[]; restore(): void; };
 	var ashTableCsvSaveFixture: { readonly calls: number; finish(filePath?: string): void; restore(): void; };
@@ -36,8 +41,8 @@ interface FixtureReply {
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
-async function installService(application: ElectronApplication, holdInitialization = false, historyReplySuffix: string | FixtureReply = '', historyImage = false, projectFiles = false): Promise<void> {
-	await application.evaluate(async ({ app, session, webContents }, { catalog, authentication, holdInitialization, historyReplySuffix, historyImage, projectFiles }) => {
+async function installService(application: ElectronApplication, holdInitialization = false, historyReplySuffix: string | FixtureReply = '', historyImage = false, projectFiles = false, holdVerificationLoad = false): Promise<void> {
+	await application.evaluate(async ({ app, session, webContents }, { catalog, authentication, holdInitialization, historyReplySuffix, historyImage, projectFiles, holdVerificationLoad }) => {
 		const fs = process.getBuiltinModule('fs/promises');
 		const path = process.getBuiltinModule('path');
 		const home = path.join(process.env.HOME!, '.codex');
@@ -51,6 +56,10 @@ async function installService(application: ElectronApplication, holdInitializati
 		let recentHistoryRequests = 0;
 		let shareRequests = 0;
 		let workbookRequests = 0;
+		let verificationPreparations = 0;
+		let verificationFinalizations = 0;
+		const replyFrames: { send: number; at: number; text: string; }[] = [];
+		const conversationPreparations: { messages: unknown[]; }[] = [];
 		let shareUrl = 'https://chatgpt.com/share/fixture-live';
 		let uploadsHeld = false;
 		let heldUploads = 0;
@@ -65,7 +74,9 @@ async function installService(application: ElectronApplication, holdInitializati
 		let head: string | null = null;
 		let userId = '';
 		let liveTitle = 'Live fixture';
+		let finishVerificationLoad: (() => void) | undefined;
 		const chunk = (text: string) => {
+			replyFrames.push({ send: sends, at: performance.timeOrigin + performance.now(), text });
 			const id = `reply-live-${sends}`;
 			live[id] = { parent: userId, message: message(id, 'assistant', text, 1_794_245_520 + (sends - 1) * 60) }; head = id;
 			return new TextEncoder().encode(`data: ${JSON.stringify({ conversation_id: 'fixture-live', message: live[id]!.message })}\n\n`);
@@ -81,6 +92,11 @@ async function installService(application: ElectronApplication, holdInitializati
 			get recentHistoryRequests() { return recentHistoryRequests; },
 			get shareRequests() { return shareRequests; },
 			get workbookRequests() { return workbookRequests; },
+			get verificationPreparations() { return verificationPreparations; },
+			get verificationFinalizations() { return verificationFinalizations; },
+			get conversationPreparations() { return conversationPreparations.length; },
+			get preparedWithoutMessages() { return conversationPreparations.every(body => body.messages.length === 0); },
+			get replyFrames() { return replyFrames; },
 			setShareUrl(value) { shareUrl = value; },
 			holdUploads(value) {
 				uploadsHeld = value;
@@ -114,25 +130,75 @@ async function installService(application: ElectronApplication, holdInitializati
 		const installed = new WeakSet<Electron.Session>();
 		const install = (storage: Electron.Session) => {
 			if (installed.has(storage)) { return; } installed.add(storage);
+			// protocol.handle replaces Chromium I/O, including its webRequest callbacks.
+			// Preserve the production observer contract for these synthetic SDK requests.
+			let verificationRequestId = 1_000_000;
+			let beforeHeaders: ((details: { id: number; url: string; method: string; requestHeaders: object; }, callback: (value: unknown) => void) => void) | undefined;
+			let completed: ((details: { id: number; statusCode: number; }) => void) | undefined;
+			for (const event of ['onBeforeSendHeaders', 'onCompleted'] as const) {
+				const register = storage.webRequest[event];
+				Object.defineProperty(storage.webRequest, event, {
+					value: (...args: unknown[]) => {
+						const listener = args.at(-1);
+						if (event === 'onBeforeSendHeaders') beforeHeaders = typeof listener === 'function' ? listener as typeof beforeHeaders : undefined;
+						else completed = typeof listener === 'function' ? listener as typeof completed : undefined;
+						return Reflect.apply(register, storage.webRequest, args);
+					}
+				});
+			}
 			storage.protocol.handle('https', request => {
 				const url = new URL(request.url);
 				if (url.hostname !== 'chatgpt.com') { return new Response(null, { status: 404 }); }
-				if (url.pathname === '/backend-api/sentinel/chat-requirements/prepare') { return Response.json({ prepare_token: 'synthetic-sidebar-proof' }); }
+				if (url.pathname === '/pending-resource.svg') {
+					return new Response(new ReadableStream<Uint8Array>({
+						start(controller) {
+							finishVerificationLoad = () => {
+								controller.enqueue(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'));
+								controller.close();
+							};
+						}
+					}), { headers: { 'Content-Type': 'image/svg+xml' } });
+				}
+				if (/^\/backend-api\/sentinel\/chat-requirements\/(?:prepare|finalize)$/u.test(url.pathname)) {
+					const id = ++verificationRequestId;
+					const respond = () => {
+						const prepare = url.pathname.endsWith('/prepare');
+						if (prepare) verificationPreparations++; else verificationFinalizations++;
+						queueMicrotask(() => completed?.({ id, statusCode: 200 }));
+						return Response.json(prepare ? { prepare_token: 'synthetic-sidebar-proof' } : { token: 'synthetic-proof' });
+					};
+					return beforeHeaders ? new Promise<Response>(resolve => beforeHeaders!({ id, url: url.href, method: 'POST', requestHeaders: {} }, () => resolve(respond()))) : respond();
+				}
 				if (url.pathname === '/sentinel-fixture.js') {
 					return new Response(`
 						let authenticated = false;
+						let prepared;
+						let finalized;
 						export const api = {
 							primeChatRequirements(value) { authenticated = value; },
+							primeChatRequirementsEnforcement(_names, value) {
+								authenticated = value;
+								if (prepared) return;
+								prepared = fetch('/backend-api/sentinel/chat-requirements/prepare').then(response => response.json());
+								finalized = prepared.then(() => fetch('/backend-api/sentinel/chat-requirements/finalize')).then(response => response.json());
+							},
+							waitForPrimedChatRequirements() { return prepared; },
 							async finalizeChatRequirements({ allowPreparedOnly }) {
-								if (!allowPreparedOnly) return { chatRequirementsToken: 'synthetic-proof' };
+								if (!allowPreparedOnly) {
+									if (finalized) await finalized;
+									prepared = undefined; finalized = undefined;
+									return { chatRequirementsToken: 'synthetic-proof' };
+								}
 								if (!authenticated) throw new Error('Expected authenticated preparation');
+								prepared = undefined; finalized = undefined;
 								const response = await fetch('/backend-api/sentinel/chat-requirements/prepare');
 								return { chatRequirementsPrepareToken: (await response.json()).prepare_token };
 							},
 						};
 					`, { headers: { 'Content-Type': 'text/javascript' } });
 				}
-				return new Response('<!doctype html><title>ChatGPT verification fixture</title><script type="module" src="/sentinel-fixture.js"></script>', { headers: { 'Content-Type': 'text/html' } });
+				return new Response('<!doctype html><title>ChatGPT verification fixture</title><script type="module" src="/sentinel-fixture.js"></script>'
+					+ (holdVerificationLoad ? '<img src="/pending-resource.svg">' : ''), { headers: { 'Content-Type': 'text/html' } });
 			});
 			storage.fetch = async (input, init) => {
 				const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
@@ -339,10 +405,16 @@ async function installService(application: ElectronApplication, holdInitializati
 						}
 					});
 				}
-				if (url.pathname.endsWith('/prepare')) { return Response.json({ conduit_token: 'synthetic-conduit' }); }
+				if (url.pathname.endsWith('/prepare')) {
+					conversationPreparations.push(JSON.parse(String(init?.body)));
+					return Response.json({ conduit_token: `header.${Buffer.from(JSON.stringify({ exp: Date.now() / 1000 + 60 })).toString('base64url')}.signature` });
+				}
 				if (url.pathname.endsWith('/stop_conversation')) { return Response.json({ success: true }); }
 				if (url.pathname === '/realtime/vp') { return Response.json({ error: 'Synthetic unavailable voice service' }, { status: 404 }); }
 				if (url.pathname.endsWith('/f/conversation') && init?.method === 'POST') {
+					// Only an accepted message releases the unrelated page resource. Waiting
+					// for did-finish-load instead of document readiness deadlocks this send.
+					finishVerificationLoad?.(); finishVerificationLoad = undefined;
 					const request = JSON.parse(String(init.body));
 					if (sends && (request.conversation_id !== 'fixture-live' || request.parent_message_id !== head)) { return Response.json({ error: 'Wrong continuation' }, { status: 400 }); }
 					userId = request.messages[0].id; live[userId] = { parent: head, message: request.messages[0] };
@@ -354,7 +426,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		};
 		install(session.defaultSession); for (const contents of webContents.getAllWebContents()) { install(contents.session); }
 		app.on('session-created', install);
-	}, { catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument(), holdInitialization, historyReplySuffix, historyImage, projectFiles });
+	}, { catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument(), holdInitialization, historyReplySuffix, historyImage, projectFiles, holdVerificationLoad });
 }
 
 const ashFixtureModel = { provider: 'custom-chat-routing-fixture', model: 'ash-routing-fixture' };
@@ -430,6 +502,75 @@ async function configureAshModel(catalog: ReturnType<typeof createAshModelServer
 
 test.describe('Experimental ChatGPT desktop entry', () => {
 	test.use({ electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN' } });
+
+	test('displays the first response without waiting for later chunks or completion', { tag: ['@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
+		await installService(application as ElectronApplication);
+		const page = await workbench.openAgentsWindow('electron');
+		const native = page.getByRole('region', { name: 'ChatGPT（实验性）', exact: true });
+		await expect(native).toBeVisible();
+		await expect.poll(() => (application as ElectronApplication).evaluate(() => ashNativeFixture.verificationFinalizations)).toBe(1);
+		const samples: unknown[] = [];
+		for (let iteration = 1; iteration <= 3; iteration++) {
+			const input = new Editor(native);
+			await input.waitForEditorFocus();
+			await input.waitForTypeInEditor(`Response latency sample ${iteration}`);
+			const observed = page.evaluate(async iteration => {
+				const clock = () => performance.timeOrigin + performance.now();
+				let ipcAt: number | undefined;
+				let clickedAt: number | undefined;
+				const bridge = (globalThis as unknown as { ash: { ipcRenderer: { on(channel: string, listener: (value: Uint8Array) => void): { dispose(): void; }; }; }; }).ash.ipcRenderer;
+				const subscription = bridge.on('ash:message', bytes => {
+					const packet = JSON.parse(new TextDecoder().decode(bytes));
+					if (packet.format === 'buffer' && typeof packet.data === 'string' && atob(packet.data).includes(`reply-live-${iteration}`)) ipcAt ??= clock();
+				});
+				const click = (event: MouseEvent) => { if ((event.target as Element).closest('button[aria-label="发送"]')) clickedAt = clock(); };
+				document.addEventListener('click', click, true);
+				return new Promise<{ ipcAt?: number; clickedAt?: number; domAt: number; frameAt: number; }>((resolve, reject) => {
+					const timer = setTimeout(() => { cleanup(); reject(new Error('The first response did not appear')); }, 15_000);
+					const cleanup = () => { clearTimeout(timer); observer.disconnect(); subscription.dispose(); document.removeEventListener('click', click, true); };
+					const observer = new MutationObserver(() => {
+						const row = [...document.querySelectorAll<HTMLElement>('.ash-chat-item[data-item-id]')].find(element => element.dataset.itemId?.includes(`reply-live-${iteration}`));
+						if (!row?.textContent?.includes('First chunk') || !row.getClientRects().length) return;
+						const domAt = clock();
+						cleanup();
+						requestAnimationFrame(() => resolve({ ipcAt, clickedAt, domAt, frameAt: clock() }));
+					});
+					observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+				});
+			}, iteration);
+			await native.getByRole('button', { name: '发送', exact: true }).click();
+			const timing = await observed;
+			const frames = await (application as ElectronApplication).evaluate(() => ashNativeFixture.replyFrames);
+			expect(frames.filter(frame => frame.send === iteration)).toHaveLength(1);
+			expect(timing.ipcAt).toBeDefined();
+			samples.push({ iteration, ...timing, producedAt: frames.at(-1)!.at });
+			await testInfo.attach(`response-latency-${iteration}.json`, { body: JSON.stringify(samples.at(-1), null, 2), contentType: 'application/json' });
+			await (application as ElectronApplication).evaluate(() => { ashNativeFixture.advance(); ashNativeFixture.advance(); });
+			await expect(native).toContainText('First chunk, second chunk, complete');
+		}
+		await testInfo.attach('response-latency.json', { body: JSON.stringify(samples, null, 2), contentType: 'application/json' });
+	});
+
+	test('streams a reply while unrelated verification page resources are still loading', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
+		await installService(application as ElectronApplication, false, '', false, false, true);
+		const page = await workbench.openAgentsWindow('electron');
+		const native = page.getByRole('region', { name: 'ChatGPT（实验性）', exact: true });
+		await expect(native).toBeVisible();
+		await expect.poll(() => (application as ElectronApplication).evaluate(() => ashNativeFixture.verificationFinalizations)).toBe(1);
+		await expect.poll(() => (application as ElectronApplication).evaluate(() => ashNativeFixture.sends)).toBe(0);
+		const input = new Editor(native);
+		await input.waitForEditorFocus();
+		await input.waitForTypeInEditor('Document-ready verification');
+		await expect.poll(() => (application as ElectronApplication).evaluate(() => ashNativeFixture.conversationPreparations)).toBe(1);
+		expect(await (application as ElectronApplication).evaluate(() => ashNativeFixture.preparedWithoutMessages)).toBe(true);
+		await native.getByRole('button', { name: '发送', exact: true }).click();
+		await expect(native).toContainText('First chunk');
+		await (application as ElectronApplication).evaluate(() => { ashNativeFixture.advance(); ashNativeFixture.advance(); });
+		await expect(native).toContainText('First chunk, second chunk, complete');
+		await expect.poll(() => (application as ElectronApplication).evaluate(() => ashNativeFixture.sends)).toBe(1);
+		await expect.poll(() => (application as ElectronApplication).evaluate(() => ashNativeFixture.verificationFinalizations)).toBe(2);
+		expect(await (application as ElectronApplication).evaluate(() => ashNativeFixture.conversationPreparations)).toBe(1);
+	});
 
 	test('opens native history, pages on demand, streams a reply, and switches the default entry in Settings', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
 		await installService(application as ElectronApplication);

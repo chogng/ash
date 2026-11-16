@@ -6,6 +6,7 @@ use ash_agent_environment::RepositoryEnvironment;
 use ash_file_access::Authorization;
 use ash_file_access::Grant;
 use ash_file_access::Permission;
+use ash_git::GitClient;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -32,6 +33,18 @@ struct AuthorizedRepository {
 }
 
 impl RepositorySource {
+    fn capture(
+        root: &Path,
+        inspection: RepositoryInspection,
+        git: &GitClient,
+    ) -> Result<Self, AgentEnvironmentError> {
+        Ok(match inspection {
+            RepositoryInspection::Allowed => Self::Captured(capture_repository(root, git)?),
+            RepositoryInspection::Omit => Self::Captured(RepositoryEnvironment::NotDetected),
+            RepositoryInspection::OnSnapshot(authorization) => Self::authorized(authorization),
+        })
+    }
+
     fn authorized(authorization: Authorization) -> Self {
         Self::Authorized(Arc::new(AuthorizedRepository {
             authorization,
@@ -45,6 +58,9 @@ impl RepositorySource {
 pub(super) struct AgentEnvironmentSource {
     host: HostEnvironment,
     repository: RepositorySource,
+    // Directory projections share the installation probe, never a previous
+    // invocation's repository status or request-bound Git credentials.
+    git: GitClient,
 }
 
 impl AgentEnvironmentSource {
@@ -57,9 +73,6 @@ impl AgentEnvironmentSource {
         path: &Path,
         repository_inspection: RepositoryInspection,
     ) -> Result<Self, AgentEnvironmentError> {
-        if !matches!(repository_inspection, RepositoryInspection::Omit) {
-            return Self::capture(path, repository_inspection);
-        }
         Ok(Self {
             host: HostEnvironment::new(
                 path.to_path_buf(),
@@ -67,7 +80,8 @@ impl AgentEnvironmentSource {
                 self.host.os_version().to_owned(),
                 self.host.shell().to_owned(),
             )?,
-            repository: RepositorySource::Captured(RepositoryEnvironment::NotDetected),
+            repository: RepositorySource::capture(path, repository_inspection, &self.git)?,
+            git: self.git.clone(),
         })
     }
 
@@ -75,17 +89,8 @@ impl AgentEnvironmentSource {
         dir_root: &Path,
         repository_inspection: RepositoryInspection,
     ) -> Result<Self, AgentEnvironmentError> {
-        let repository = match repository_inspection {
-            RepositoryInspection::Allowed => {
-                RepositorySource::Captured(capture_repository(dir_root)?)
-            }
-            RepositoryInspection::Omit => {
-                RepositorySource::Captured(RepositoryEnvironment::NotDetected)
-            }
-            RepositoryInspection::OnSnapshot(authorization) => {
-                RepositorySource::authorized(authorization)
-            }
-        };
+        let git = GitClient::system();
+        let repository = RepositorySource::capture(dir_root, repository_inspection, &git)?;
         let host = HostEnvironment::new(
             dir_root.to_path_buf(),
             platform_name().into(),
@@ -97,7 +102,11 @@ impl AgentEnvironmentSource {
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| "unknown".into()),
         )?;
-        Ok(Self { host, repository })
+        Ok(Self {
+            host,
+            repository,
+            git,
+        })
     }
 
     pub(super) fn replace_repository_grant(&mut self, grant: &Grant) {
@@ -136,7 +145,7 @@ impl AgentEnvironmentSource {
                         || {
                             repository
                                 .snapshot
-                                .get_or_init(|| capture_repository(dir.canonical_path()))
+                                .get_or_init(|| capture_repository(dir.canonical_path(), &self.git))
                                 .clone()
                         },
                     )
@@ -170,7 +179,10 @@ fn command_output(dir_root: &Path, program: &str, arguments: &[&str]) -> Option<
     Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
-fn capture_repository(dir_root: &Path) -> Result<RepositoryEnvironment, AgentEnvironmentError> {
+fn capture_repository(
+    dir_root: &Path,
+    git: &GitClient,
+) -> Result<RepositoryEnvironment, AgentEnvironmentError> {
     // InspectRepository does not authorize executing repository-configured programs.
     // Keep process identity, query hardening, and resource limits in the shared Git owner.
     let summary = tokio::runtime::Builder::new_current_thread()
@@ -179,7 +191,11 @@ fn capture_repository(dir_root: &Path) -> Result<RepositoryEnvironment, AgentEnv
         .ok()
         .and_then(|runtime| {
             runtime
-                .block_on(crate::git_service::current_client().environment_summary(dir_root))
+                .block_on(
+                    crate::git_service::current_client()
+                        .with_shared_reads(git)
+                        .environment_summary(dir_root),
+                )
                 .ok()
         });
     let Some(summary) = summary else {

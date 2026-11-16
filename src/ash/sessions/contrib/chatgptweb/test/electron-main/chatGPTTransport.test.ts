@@ -77,11 +77,30 @@ function scopedChannel(transport: ChatGPTTransport, auth: Authentication): IServ
 	};
 }
 function runtime(fetcher: typeof fetch, prepareHeaders: IChatGPTVerificationRuntime['prepareHeaders'] = async () => ({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'fixture-proof' })): IChatGPTVerificationRuntime {
-	return { isDisposed: false, session: { fetch: fetcher, getUserAgent: () => 'Ash/0.1.0 Chrome/152.0.0.0 Electron/44.0.0 Safari/537.36' }, prepareHeaders, dispose() { }, [Symbol.dispose]() { this.dispose(); } };
+	return { isDisposed: false, session: { fetch: fetcher, getUserAgent: () => 'Ash/0.1.0 Chrome/152.0.0.0 Electron/44.0.0 Safari/537.36' }, warmup: async () => { }, prepareHeaders, dispose() { }, [Symbol.dispose]() { this.dispose(); } };
 }
 
 suite('ChatGPT transport', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('overlaps optional verification warmup with authorized models, context preparation and file creation', async () => fixture(async auth => {
+		let warmups = 0;
+		let respond!: (response: Response) => void;
+		using transport = new ChatGPTTransport({
+			authentication: auth, readVerificationScript: async () => 'fixture-script', createRuntime: () => ({
+				...runtime(async () => new Promise<Response>(resolve => { respond = resolve; })),
+				warmup: async readScript => { assert.equal(await readScript(new AbortController().signal), 'fixture-script'); warmups++; },
+			})
+		}, new NullLoggerService());
+		const fetcher = createChatGPTFetch(adapt(transport, auth));
+		for (const [path, method] of [['models', 'GET'], ['f/conversation/prepare', 'POST'], ['files', 'POST']]) {
+			const pending = fetcher(`/service/backend-api/${path}`, { method });
+			await new Promise(resolve => setImmediate(resolve));
+			assert.ok(warmups > 0, 'Warmup begins while the independent request is still pending');
+			respond(Response.json({ models: [] }));
+			assert.deepEqual(await (await pending).json(), { models: [] });
+		}
+		assert.equal(warmups, 3);
+	}));
 	for (const native of [false, true]) {
 		test(`${native ? 'Native' : 'Web'} recent history shares the original 429 deadline across windows and desktop restarts`, async () => {
 			mock.timers.enable({ apis: ['Date'], now: 1_000_000 });

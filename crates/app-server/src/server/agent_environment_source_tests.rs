@@ -1,5 +1,6 @@
 use super::AgentEnvironmentSource;
 use super::RepositoryInspection;
+use ash_agent_environment::HostEnvironment;
 use ash_agent_environment::RepositoryEnvironment;
 use ash_config::ConfigCommandRequest;
 use ash_config::ConfigStore;
@@ -220,6 +221,88 @@ fn environment_capture_preserves_unborn_detached_and_plain_directories() {
             .unwrap()
             .repository()
             .unwrap(),
+        RepositoryEnvironment::NotDetected
+    );
+}
+
+#[test]
+fn directory_projections_reuse_installation_checks_without_reusing_repository_facts() {
+    let source_dir = tempfile::tempdir().unwrap();
+    let target = tempfile::tempdir().unwrap();
+    git(
+        source_dir.path(),
+        &["init", "--quiet", "--initial-branch=source"],
+    );
+    let (source, initial) = crate::git_service::with_process_timings(|| {
+        AgentEnvironmentSource::capture(source_dir.path(), RepositoryInspection::Allowed).unwrap()
+    });
+    assert_eq!(
+        initial
+            .records
+            .iter()
+            .filter(|record| matches!(record.kind, ash_git::GitProcessKind::Version))
+            .count(),
+        1
+    );
+    let mut source = source;
+    source.host = HostEnvironment::new(
+        source_dir.path().to_path_buf(),
+        "host-platform".into(),
+        "host-version".into(),
+        "host-shell".into(),
+    )
+    .unwrap();
+    git(
+        target.path(),
+        &["init", "--quiet", "--initial-branch=projection"],
+    );
+    std::fs::write(target.path().join("first.txt"), "first\n").unwrap();
+    let (projected, reads) = crate::git_service::with_process_timings(|| {
+        source
+            .for_directory(target.path(), RepositoryInspection::Allowed)
+            .unwrap()
+    });
+    assert!(
+        !reads
+            .records
+            .iter()
+            .any(|record| matches!(record.kind, ash_git::GitProcessKind::Version))
+    );
+    assert!(
+        reads
+            .records
+            .iter()
+            .any(|record| matches!(record.kind, ash_git::GitProcessKind::RevParse))
+    );
+    assert_eq!(projected.host.cwd(), target.path());
+    assert_eq!(projected.host.platform(), "host-platform");
+    assert_eq!(projected.host.os_version(), "host-version");
+    assert_eq!(projected.host.shell(), "host-shell");
+    assert!(
+        matches!(projected.repository().unwrap(), RepositoryEnvironment::Git { branch, status, .. } if branch.as_deref() == Some("projection") && status.contains("first.txt"))
+    );
+    git(
+        target.path(),
+        &["symbolic-ref", "HEAD", "refs/heads/updated"],
+    );
+    std::fs::write(target.path().join("second.txt"), "second\n").unwrap();
+    let refreshed = projected
+        .for_directory(target.path(), RepositoryInspection::Allowed)
+        .unwrap();
+    assert!(
+        matches!(refreshed.repository().unwrap(), RepositoryEnvironment::Git { branch, status, .. } if branch.as_deref() == Some("updated") && status.contains("second.txt"))
+    );
+    assert!(
+        matches!(source.repository().unwrap(), RepositoryEnvironment::Git { branch, .. } if branch.as_deref() == Some("source"))
+    );
+    let (omitted, reads) = crate::git_service::with_process_timings(|| {
+        refreshed
+            .for_directory(source_dir.path(), RepositoryInspection::Omit)
+            .unwrap()
+    });
+    assert!(reads.records.is_empty());
+    assert_eq!(
+        omitted.repository().unwrap(),
         RepositoryEnvironment::NotDetected
     );
 }

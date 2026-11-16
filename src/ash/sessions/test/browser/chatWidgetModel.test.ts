@@ -8,6 +8,7 @@ import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { IsSessionsWindowContext } from '../../../workbench/common/contextkeys.js';
 import type { IStorageService } from '../../../platform/storage/common/storage.js';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -80,7 +81,7 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 			return subscribe ? subscribe(threadId) : { ...snapshot(threadId, 1, waiting), updates: [] };
 		},
 		unsubscribe: async () => { },
-		readContext: async () => ({ context: { estimatedTokens: 0, categories: [] } }),
+		readContext: async (_params: { sessionId: string; threadId: string; }) => ({ context: { estimatedTokens: 0, categories: [] } }),
 	};
 	const modelApi = { readAdvisorDefault: async (): Promise<AdvisorConfig | null> => ({ model: { provider: 'provider', model: 'advisor' }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 }) } as IAgentModelsService;
 	const turnApi = {
@@ -129,6 +130,39 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 async function turnTask(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
 async function waitFor(condition: () => boolean): Promise<void> { for (let i = 0; i < 200 && !condition(); i++) await turnTask(); assert.ok(condition(), 'expected deferred operation reached'); }
 function approval(requestId: string): AgentInteractionOffer { return { connectionGeneration: 1, sessionId: 'session', threadId: 'A', turnId: 'turn-A', interaction: { requestId, request: { type: 'approval', request: { reason: requestId, capabilities: [{ kind: 'fileWrite', scope: '/owned/file' }] } } } }; }
+
+test('context estimates coalesce submission snapshots and retire pending work with the Thread', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const f = fixture('Code');
+		using resources = f.resources;
+		const usage = () => f.model.inputState.contextUsage;
+		const requests: string[] = [];
+		const pending = new DeferredPromise<Awaited<ReturnType<typeof f.threadApi.readContext>>>();
+		f.threadApi.readContext = async ({ threadId }: { threadId: string; }) => {
+			requests.push(threadId);
+			return threadId === 'A' ? pending.p : { context: { estimatedTokens: 50, categories: [] } };
+		};
+		await f.model.initialize();
+		await f.model.send('First input', 'agent');
+		await f.model.send('Second input', 'agent');
+		assert.deepEqual(requests, []);
+		mock.timers.tick(100);
+		assert.deepEqual(requests, ['A']);
+		await f.model.selectThread({ session: f.session, threadId: 'B' });
+		await pending.complete({ context: { estimatedTokens: 999, categories: [] } });
+		await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+		assert.equal(usage(), undefined, 'A retired Thread cannot supply the new estimate');
+		mock.timers.tick(100);
+		await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+		assert.deepEqual(requests, ['A', 'B']);
+		assert.equal(usage()?.estimatedTokens, 50);
+		await f.model.send('Pending estimate', 'agent');
+		resources.dispose();
+		mock.timers.tick(200);
+		assert.deepEqual(requests, ['A', 'B']);
+	} finally { mock.timers.reset(); }
+});
 
 function creationDraftFixture(kind: ChatCreationKind = 'docs') {
 	const f = fixture('Cowork');

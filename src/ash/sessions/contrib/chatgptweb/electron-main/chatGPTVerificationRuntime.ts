@@ -1,6 +1,6 @@
 import { session, WebContentsView, type Session } from 'electron/main';
 import { randomUUID } from 'node:crypto';
-import { TaskQueue } from '../../../../base/common/async.js';
+import { DeferredPromise, raceCancellationError, TaskQueue } from '../../../../base/common/async.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 
 export type ChatGPTRequestHeaderHandler = (url: URL, method: string, headers: Readonly<Record<string, string>>) => Promise<Record<string, string>>;
@@ -10,6 +10,7 @@ export interface IChatGPTVerificationRuntime extends IDisposable {
 	readonly session: Pick<Session, 'fetch' | 'getUserAgent'>;
 	readonly verificationPhase?: 'navigation' | 'install' | 'proof';
 	readonly verificationRequests?: readonly VerificationRequest[];
+	warmup(readScript: (signal: AbortSignal) => Promise<string>): Promise<void>;
 	prepareHeaders(script: string, signal: AbortSignal, sidebar?: boolean): Promise<unknown>;
 }
 
@@ -22,8 +23,11 @@ interface VerificationRequest {
 export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVerificationRuntime {
 	readonly session = session.fromPartition(`chatgpt-verification:${randomUUID()}`);
 	private readonly sequencer = new TaskQueue();
+	private readonly lifetime = new AbortController();
 	private view: WebContentsView | undefined;
 	private ready: Promise<void> | undefined;
+	private prewarmed = false;
+	private warmupFinished: DeferredPromise<void> | undefined;
 	private phase: IChatGPTVerificationRuntime['verificationPhase'];
 	private readonly requests = new Map<number, VerificationRequest>();
 	get verificationPhase(): IChatGPTVerificationRuntime['verificationPhase'] { return this.phase; }
@@ -51,6 +55,7 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 			});
 		});
 		this._register(toDisposable(() => {
+			this.lifetime.abort();
 			this.sequencer.clearPending();
 			this.session.webRequest.onBeforeSendHeaders(null);
 			this.session.webRequest.onCompleted(null);
@@ -61,15 +66,61 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 		}));
 	}
 
+	warmup(readScript: (signal: AbortSignal) => Promise<string>): Promise<void> {
+		return this.sequencer.schedule(async () => {
+			if (this.isDisposed) return;
+			const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(35_000)]);
+			const close = () => this.closePage();
+			signal.addEventListener('abort', close, { once: true });
+			using removeAbortListener = toDisposable(() => signal.removeEventListener('abort', close));
+			try {
+				const script = await raceCancellationError(readScript(signal), signal);
+				signal.throwIfAborted();
+				this.ready ??= this.initialize(script);
+				await raceCancellationError(this.ready, signal);
+				const contents = this.view!.webContents;
+				await contents.debugger.sendCommand('Page.setWebLifecycleState', { state: 'active' });
+				contents.setBackgroundThrottling(false);
+				this.phase = 'proof';
+				this.requests.clear();
+				// The SDK's priming call returns before its final HTTP request completes.
+				// Freezing earlier suspends that work and puts it back on the Send path.
+				const finished = this.warmupFinished = new DeferredPromise<void>();
+				const hadPrewarmed = this.prewarmed;
+				await raceCancellationError(Promise.all([
+					this.evaluate('globalThis.__ashWarmChatGPTVerification()').then(value => {
+						// The SDK checks its own expiry and context. Reusing a settled entry
+						// produces no second finalization event, so there is nothing to wait for.
+						if (hadPrewarmed && value && typeof value === 'object' && 'requestsStarted' in value && value.requestsStarted === false && !finished.isSettled) {
+							void finished.complete();
+						}
+					}), finished.p,
+				]), signal);
+				signal.throwIfAborted();
+				this.prewarmed = true;
+				await this.suspendPage();
+			} catch {
+				// Prewarming is optional. A foreground send can retry from a fresh page.
+				this.closePage();
+			} finally { this.warmupFinished = undefined; this.phase = undefined; }
+		});
+	}
+
 	private finishRequest(id: number, outcome: VerificationRequest['outcome']): void {
 		const request = this.requests.get(id);
-		if (request?.outcome === 'pending') this.requests.set(id, { route: request.route, outcome });
+		if (request?.outcome !== 'pending') return;
+		this.requests.set(id, { route: request.route, outcome });
+		if (this.warmupFinished && !this.warmupFinished.isSettled) {
+			if (outcome !== 200) { void this.warmupFinished.error(new Error('ChatGPT verification warmup failed')); }
+			else if (request.route.endsWith('/chat-requirements/finalize')) { void this.warmupFinished.complete(); }
+		}
 	}
 
 	private closePage(): void {
 		const view = this.view;
 		this.view = undefined;
 		this.ready = undefined;
+		this.prewarmed = false;
 		if (view && !view.webContents.isDestroyed()) { view.webContents.close(); }
 	}
 
@@ -104,12 +155,16 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 				contents.setBackgroundThrottling(false);
 				signal.throwIfAborted();
 				this.phase = 'proof';
-				const value: unknown = await this.view!.webContents.executeJavaScript(`globalThis.__ashPrepareChatGPTHeaders(${sidebar})`);
+				this.prewarmed = false;
+				const value = await this.evaluate(`globalThis.__ashPrepareChatGPTHeaders(${sidebar})`);
 				signal.throwIfAborted();
 				// This internal page has no user-owned background work. Preserve its
 				// installed verification state while stopping timers and animation frames.
 				await this.suspendPage();
 				signal.throwIfAborted();
+				// Refill after handing off this one-use result. It runs alongside the reply,
+				// never holds up its submission, and freezes again when verification settles.
+				if (this.view) { void this.warmup(async () => script).catch(() => { }); }
 				return value;
 			} catch (error) {
 				this.closePage();
@@ -120,9 +175,17 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 		});
 	}
 
+	private async evaluate(expression: string): Promise<unknown> {
+		// executeJavaScript waits for page loading to stop, including unrelated website
+		// resources. Verification only needs the document and its own module to be ready.
+		const response = await this.view!.webContents.debugger.sendCommand('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+		if (response.exceptionDetails) { throw new Error('ChatGPT verification script failed'); }
+		return response.result.value;
+	}
+
 	private async initialize(script: string): Promise<void> {
 		this.phase = 'navigation';
-		this.view = new WebContentsView({ webPreferences: { session: this.session, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: true } });
+		this.view = new WebContentsView({ webPreferences: { session: this.session, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
 		this.view.setVisible(false);
 		this.view.setBounds({ x: 0, y: 0, width: 800, height: 600 });
 		const contents = this.view.webContents;
@@ -131,9 +194,15 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 		const navigation = (event: Electron.Event, target: string): void => { if (target !== 'https://chatgpt.com/') { event.preventDefault(); } };
 		contents.on('will-navigate', navigation);
 		contents.on('will-redirect', navigation);
-		await contents.loadURL('https://chatgpt.com/');
+		let committed!: () => void;
+		using removeCommitListener = toDisposable(() => contents.removeListener('did-navigate', committed));
+		await new Promise<void>((resolve, reject) => {
+			committed = () => resolve();
+			contents.once('did-navigate', committed);
+			void contents.loadURL('https://chatgpt.com/').catch(reject);
+		});
 		if (this.isDisposed) { throw new Error('ChatGPT verification is closed'); }
 		this.phase = 'install';
-		await contents.executeJavaScript(script);
+		await this.evaluate(script);
 	}
 }

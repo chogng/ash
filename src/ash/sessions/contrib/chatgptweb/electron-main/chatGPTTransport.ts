@@ -158,6 +158,11 @@ export class ChatGPTTransport extends Disposable {
 			const send = async () => {
 				signal.throwIfAborted();
 				const runtime = this.getRuntime(context);
+				if (url.pathname === '/backend-api/models' || request.method === 'POST' && (url.pathname === '/backend-api/f/conversation/prepare' || url.pathname === '/backend-api/files')) {
+					// These already-authorized Chat activities precede Send. Let the SDK
+					// refresh its own expiring cache while this independent request runs.
+					void runtime.warmup(signal => this.options.readVerificationScript(signal)).catch(() => { });
+				}
 				const response = await this.fetchAuthorized(runtime, url, { method: request.method, headers: request.headers, body: request.body instanceof VSBuffer ? request.body.buffer : request.body, credentials: 'include', redirect: 'error', signal }, authorization);
 				if (!response.ok) {
 					const isConversationSend = conversationSendPaths.has(url.pathname);

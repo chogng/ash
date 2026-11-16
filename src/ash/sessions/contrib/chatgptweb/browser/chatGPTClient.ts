@@ -6,6 +6,8 @@ import { isRecord } from '../../../../base/common/types.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { SSEParser } from '../../../../base/common/sseParser.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
+import { decodeBase64 } from '../../../../base/common/buffer.js';
 import { chatGPTEntityDetailPath, chatGPTHistoryCooldownMs, chatGPTPrepareTokenHeader, readChatGPTGalleryImageUrl, readChatGPTRetryAfter } from '../common/chatGPTTransport.js';
 import type { CatalogProjectMemoryMode } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { chatCreationKinds, getChatCreationContext, type ChatCreationKind } from '../../../common/chatCreation.js';
@@ -189,12 +191,102 @@ export function isChatGPTRateLimit(error: unknown): error is ChatGPTRequestError
 
 type HistoryRead = 'recent' | 'projects' | 'pins' | 'project' | 'conversation';
 
+/** Expiry is only a reuse hint; the service validates the opaque conduit on submission. */
+function readConduitExpiry(token: string): number | undefined {
+	if (token.length > 16 * 1024) return undefined;
+	const parts = token.split('.');
+	if (parts.length !== 3) return undefined;
+	try {
+		const claims: unknown = JSON.parse(decodeBase64(parts[1]).toString());
+		if (!isRecord(claims) || typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) return undefined;
+		// Leave five seconds for dispatch and clock skew, and never retain a prepared
+		// conversation beyond the official client's 45-second freshness window.
+		const expiresAt = Math.min(claims.exp * 1000 - 5_000, Date.now() + 45_000);
+		return expiresAt > Date.now() ? expiresAt : undefined;
+	} catch { return undefined; }
+}
+
+type ConversationPreparationContext = Pick<ChatGPTReplyRequest, 'model' | 'thinkingEffort' | 'parentId' | 'conversationId' | 'projectId'>;
+interface PreparedConversation {
+	readonly key: string;
+	readonly controller: AbortController;
+	readonly result: Promise<{ readonly token: string; readonly expiresAt: number; } | undefined>;
+	expiresAt: number;
+}
+
 /** ChatGPT web conversation client. Authentication is supplied by the host per request. */
 export class ChatGPTClient {
 	private readonly historyLimits = new Map<HistoryRead, ChatGPTRequestError>();
+	private preparedConversation: PreparedConversation | undefined;
 	constructor(private readonly fetcher: typeof fetch = globalThis.fetch.bind(globalThis), private readonly native = false) { }
 
 	clearHistoryLimits(): void { this.historyLimits.clear(); }
+
+	clearConversationPreparation(): void {
+		this.preparedConversation?.controller.abort();
+		this.preparedConversation = undefined;
+	}
+
+	/** Prepare only routing context. Draft text, message IDs and files stay local until Send. */
+	primeConversation(context: ConversationPreparationContext, signal: AbortSignal): void {
+		const key = this.preparationKey(context);
+		const current = this.preparedConversation;
+		if (current?.key === key && !current.controller.signal.aborted && current.expiresAt > Date.now()) return;
+		this.clearConversationPreparation();
+		const controller = new AbortController();
+		const preparation: PreparedConversation = {
+			key, controller, expiresAt: Date.now() + 10_000,
+			result: this.request('/f/conversation/prepare', AbortSignal.any([signal, controller.signal, AbortSignal.timeout(10_000)]), {
+				method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+					action: 'next', model: context.model, parent_message_id: context.parentId,
+					...(context.conversationId ? { conversation_id: context.conversationId } : {}),
+					...(context.thinkingEffort !== undefined ? { thinking_effort: context.thinkingEffort } : {}),
+					messages: [], timezone_offset_min: new Date().getTimezoneOffset(), history_and_training_disabled: false,
+					conversation_mode: context.projectId ? { kind: 'gizmo_interaction', gizmo_id: context.projectId } : { kind: 'primary_assistant' },
+					supports_buffering: true,
+				}),
+			}).then(async response => {
+				const value: unknown = await response.json();
+				if (!isRecord(value) || typeof value.conduit_token !== 'string') return undefined;
+				const expiresAt = readConduitExpiry(value.conduit_token);
+				if (expiresAt === undefined) return undefined;
+				preparation.expiresAt = expiresAt;
+				return { token: value.conduit_token, expiresAt };
+			}).then(result => {
+				// Avoid retrying failed speculative I/O on every keystroke. A real Send
+				// still performs its ordinary preparation when no reusable result exists.
+				if (!result) preparation.expiresAt = Date.now() + 5_000;
+				return result;
+			}, error => {
+				preparation.expiresAt = Math.max(Date.now() + 5_000, error instanceof ChatGPTRequestError ? error.retryAt ?? 0 : 0);
+				return undefined;
+			}),
+		};
+		this.preparedConversation = preparation;
+	}
+
+	private preparationKey(context: ConversationPreparationContext): string {
+		return JSON.stringify([context.model, context.thinkingEffort, context.parentId, context.conversationId, context.projectId]);
+	}
+
+	private async prepareConversation(input: ChatGPTReplyRequest, body: unknown, signal: AbortSignal): Promise<{ readonly token: string; readonly expiresAt?: number; }> {
+		const prepared = this.preparedConversation;
+		this.preparedConversation = undefined;
+		if (prepared) {
+			try {
+				if (!input.branch && !input.files?.length && prepared.key === this.preparationKey(input) && prepared.expiresAt > Date.now()) {
+					const result = await raceCancellationError(prepared.result, signal);
+					signal.throwIfAborted();
+					if (result && result.expiresAt > Date.now()) return result;
+				}
+			} finally { prepared.controller.abort(); }
+		}
+		const value: unknown = await (await this.request('/f/conversation/prepare', signal, {
+			method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+		})).json();
+		if (!isRecord(value) || typeof value.conduit_token !== 'string') { throw this.invalidResponse(); }
+		return { token: value.conduit_token };
+	}
 
 	async models(signal: AbortSignal): Promise<{ models: readonly ChatGPTModel[]; defaultModel: string; }> {
 		const value = await this.json('/models?iim=false&include_icons=false&is_gizmo=false', signal);
@@ -799,21 +891,35 @@ export class ChatGPTClient {
 			conversation_mode: projectId ? { kind: 'gizmo_interaction', gizmo_id: projectId } : { kind: 'primary_assistant' },
 			supports_buffering: true,
 		};
-		const preparation = await (await this.request('/f/conversation/prepare', signal, {
-			method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-		})).json() as unknown;
-		if (!isRecord(preparation) || typeof preparation.conduit_token !== 'string') { throw this.invalidResponse(); }
-		// Verification has its own request. If the user cancels while it runs, no message
-		// POST can be dispatched later by a still-running verification task.
-		const verification: unknown = await (await this.request('/f/conversation', signal, { method: 'POST' }, true)).json();
-		if (!isRecord(verification) || typeof verification['OpenAI-Sentinel-Chat-Requirements-Token'] !== 'string') { throw this.invalidResponse(); }
+		// Neither preparation submits a message or depends on the other's result.
+		// Cancel both on failure; only their combined success permits the message POST.
+		const preparing = new AbortController();
+		const preparationSignal = AbortSignal.any([signal, preparing.signal]);
+		let preparation: { readonly token: string; readonly expiresAt?: number; };
+		let verification: Record<string, unknown>;
+		try {
+			[preparation, verification] = await Promise.all([
+				this.prepareConversation(input, body, preparationSignal),
+				this.request('/f/conversation', preparationSignal, { method: 'POST' }, true).then(async response => {
+					const value: unknown = await response.json();
+					if (!isRecord(value) || typeof value['OpenAI-Sentinel-Chat-Requirements-Token'] !== 'string') { throw this.invalidResponse(); }
+					return value;
+				}),
+			]);
+			signal.throwIfAborted();
+		} finally { preparing.abort(); }
+		// Verification may have waited for a cold or recovering runtime. Refresh an
+		// expired speculative conduit before recording the message as submitted.
+		if (preparation.expiresAt !== undefined && preparation.expiresAt <= Date.now()) {
+			preparation = await this.prepareConversation(input, body, signal);
+		}
 		const verificationHeaders: Record<string, string> = {};
 		for (const name of ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token']) {
 			if (typeof verification[name] === 'string') { verificationHeaders[name] = verification[name]; }
 		}
 		if (beforeSubmit) { await beforeSubmit(); }
 		let response = await this.request('/f/conversation', signal, {
-			method: 'POST', headers: { ...verificationHeaders, Accept: 'text/event-stream', 'Content-Type': 'application/json', 'x-conduit-token': preparation.conduit_token }, body: JSON.stringify(body),
+			method: 'POST', headers: { ...verificationHeaders, Accept: 'text/event-stream', 'Content-Type': 'application/json', 'x-conduit-token': preparation.token }, body: JSON.stringify(body),
 		});
 		let conversationId = input.conversationId;
 		let resumeToken: string | undefined;

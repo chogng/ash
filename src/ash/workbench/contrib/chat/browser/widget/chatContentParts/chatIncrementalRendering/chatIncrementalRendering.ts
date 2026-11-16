@@ -1,4 +1,4 @@
-import { getWindow, scheduleAtNextAnimationFrame } from '../../../../../../../base/browser/dom.js';
+import { getWindow, runAtThisOrScheduleAtNextAnimationFrame } from '../../../../../../../base/browser/dom.js';
 import type { IMarkdownString } from '../../../../../../../base/common/htmlContent.js';
 import { Disposable, MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
 
@@ -27,7 +27,9 @@ export class IncrementalDOMMorpher<T extends IMarkdownString = IMarkdownString> 
 		// Corrections and completion can supersede any snapshot in this frame.
 		this.snapshot = { markdown, incomplete };
 		if (!this.frame.value) {
-			this.frame.value = scheduleAtNextAnimationFrame(getWindow(this.element), () => {
+			// Model projections can already arrive from the window's frame queue.
+			// Commit in that frame instead of adding a second display-frame delay.
+			this.frame.value = runAtThisOrScheduleAtNextAnimationFrame(getWindow(this.element), () => {
 				this.frame.clear();
 				const snapshot = this.snapshot;
 				this.snapshot = undefined;

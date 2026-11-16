@@ -403,10 +403,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			}
 		}));
 		this.restoreNewDraftReference();
-		this.update({ conversations: this.localConversations(), localConversationId: this.newConversationId, draft: this.readDraft(this.newConversationId)?.text ?? '' });
 		this.client = new ChatGPTClient(createChatGPTFetch(transport), transport.native);
 		this.replyBackend = new ChatGPTReplyBackend(this.client);
+		this.update({ conversations: this.localConversations(), localConversationId: this.newConversationId, draft: this.readDraft(this.newConversationId)?.text ?? '' });
 		this._register(toDisposable(() => {
+			this.client.clearConversationPreparation();
 			this.management.abort();
 			this.olderRead?.abort();
 			this.historyConnection.abort();
@@ -447,6 +448,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.localIdsByRemoteId.clear();
 		this.historyValidations.clear();
 		this.client.clearHistoryLimits();
+		this.client.clearConversationPreparation();
 		this.historyFailures.clear();
 		if (this.historyNotice !== 'offline') { this.closeHistoryNotice(); }
 		this.taskWatchers.clear();
@@ -1896,6 +1898,23 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			explicitDraftModel: !next.conversationId && !!draft?.selection,
 			draftTarget: !next.conversationId && !creation ? draft?.target : undefined,
 		});
+		this.primeConversation(this.model.get());
+	}
+
+	private primeConversation(state: ChatGPTState): void {
+		// Send consumes the current preparation immediately after publishing its state.
+		if (state.sending || state.busy || state.managing) return;
+		const preset = state.models.find(model => model.id === state.model)?.presets.find(preset => preset.id === state.modelPreset);
+		if (!state.draft.trim() || !preset || !state.connected || !state.networkAvailable
+			|| state.uncertain || state.pendingCreation || state.voice !== 'idle' || state.branch || state.attachments.length) {
+			this.client.clearConversationPreparation();
+			return;
+		}
+		const target = isChatGPTNewDraft(state) ? state.draftTarget : undefined;
+		this.client.primeConversation({
+			model: preset.model, thinkingEffort: preset.thinkingEffort, parentId: state.parentId, conversationId: state.conversationId,
+			projectId: target?.projectId ?? this.conversationProjectId(state, state.conversationId),
+		}, this.management.signal);
 	}
 	private draftKey(): string { return this.model.get().localConversationId; }
 

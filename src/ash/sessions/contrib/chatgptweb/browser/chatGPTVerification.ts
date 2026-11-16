@@ -4,9 +4,16 @@
  * The official runtime performs the challenges; Ash supplies its authenticated transport.
  */
 export function installChatGPTVerification(): void {
+	// Module discovery/import can overlap the document's deferred scripts. The
+	// official page still owns session initialization before requirements are primed.
+	const documentReady = document.readyState !== 'loading' ? Promise.resolve() : new Promise<void>(resolve => {
+		document.addEventListener('DOMContentLoaded', () => resolve(), { once: true });
+	});
 	const originalFetch = globalThis.fetch.bind(globalThis);
+	let verificationRequests = 0;
 	globalThis.fetch = (input, init) => {
 		const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, location.href);
+		if (url.origin === location.origin && /^\/(?:backend-api|backend-anon|unauth-mweb)\/sentinel\/chat-requirements(?:\/(?:prepare|finalize))?$/u.test(url.pathname)) verificationRequests++;
 		if (url.origin === location.origin && /^\/(?:backend-anon|unauth-mweb)\/sentinel\//u.test(url.pathname)) {
 			url.pathname = url.pathname.replace(/^\/(?:backend-anon|unauth-mweb)\//u, '/backend-api/');
 			return originalFetch(input instanceof Request ? new Request(url, input) : url, init);
@@ -14,7 +21,7 @@ export function installChatGPTVerification(): void {
 		return originalFetch(input, init);
 	};
 	type Phase = 'discovery' | 'import' | 'requirements' | 'headers';
-	const prepare = async (sidebar: boolean, setPhase: (phase: Phase) => void): Promise<Record<string, string>> => {
+	const loadApi = async (setPhase: (phase: Phase) => void) => {
 		let moduleUrl: string | undefined;
 		let inspectedEntry: string | undefined;
 		// Discover the resource loaded by the current official page, rather than pinning a
@@ -59,6 +66,13 @@ export function installChatGPTVerification(): void {
 		if (!module || typeof module !== 'object') { throw new Error('Invalid verification module'); }
 		const api: unknown = Object.values(module).find(value => value && typeof value === 'object' && typeof value.finalizeChatRequirements === 'function');
 		if (!api || typeof api !== 'object' || !('finalizeChatRequirements' in api) || typeof api.finalizeChatRequirements !== 'function') { throw new Error('Verification API is unavailable'); }
+		return api;
+	};
+	let loadedApi: ReturnType<typeof loadApi> | undefined;
+	const getApi = (setPhase: (phase: Phase) => void) => loadedApi ??= loadApi(setPhase);
+	const prepare = async (sidebar: boolean, setPhase: (phase: Phase) => void): Promise<Record<string, string>> => {
+		const api = await getApi(setPhase);
+		await documentReady;
 		setPhase('requirements');
 		// Ash supplies authenticated request headers to this otherwise signed-out document.
 		// The sidebar accepts the SDK's prepared result and completes verification with its request.
@@ -66,7 +80,8 @@ export function installChatGPTVerification(): void {
 			if (!('primeChatRequirements' in api) || typeof api.primeChatRequirements !== 'function') { throw new Error('ChatGPT preparation API is unavailable'); }
 			api.primeChatRequirements(true);
 		}
-		const value: unknown = await api.finalizeChatRequirements({ allowPreparedOnly: sidebar, requestSignal: new AbortController().signal });
+		// A sidebar needs a prepared-only result, independent of a fully primed reply.
+		const value: unknown = await api.finalizeChatRequirements({ allowPreparedOnly: sidebar, refreshRequirements: sidebar, requestSignal: new AbortController().signal });
 		setPhase('headers');
 		if (!value || typeof value !== 'object') { throw new Error('Invalid verification result'); }
 		const headers: Record<string, string> = {};
@@ -86,7 +101,24 @@ export function installChatGPTVerification(): void {
 		if (!headers[required]) { throw new Error('Verification did not finish'); }
 		return headers;
 	};
-	const target = globalThis as typeof globalThis & { __ashPrepareChatGPTHeaders?: (sidebar?: boolean) => Promise<Record<string, string> | { failedPhase: Phase; }>; };
+	const target = globalThis as typeof globalThis & {
+		__ashWarmChatGPTVerification?: () => Promise<{ readonly requestsStarted: boolean; }>;
+		__ashPrepareChatGPTHeaders?: (sidebar?: boolean) => Promise<Record<string, string> | { failedPhase: Phase; }>;
+	};
+	// The SDK owns expiry and one-use consumption. Keep its prepared result inside
+	// this account-bound document; Main waits for finalization before freezing it.
+	target.__ashWarmChatGPTVerification = async () => {
+		const api = await getApi(() => { });
+		await documentReady;
+		if (!('primeChatRequirementsEnforcement' in api) || typeof api.primeChatRequirementsEnforcement !== 'function'
+			|| !('waitForPrimedChatRequirements' in api) || typeof api.waitForPrimedChatRequirements !== 'function') {
+			throw new Error('ChatGPT preparation API is unavailable');
+		}
+		const previousRequests = verificationRequests;
+		api.primeChatRequirementsEnforcement(undefined, true);
+		await api.waitForPrimedChatRequirements();
+		return { requestsStarted: verificationRequests !== previousRequests };
+	};
 	target.__ashPrepareChatGPTHeaders = async (sidebar = false) => {
 		let phase: Phase = 'discovery';
 		try {

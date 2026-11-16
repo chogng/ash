@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { suite, test } from 'mocha';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { chatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
 import { ChatGPTClient, ChatGPTRequestError, chatGPTRequestText, decodeChatGPTStream, readChatGPTVoiceUpdate } from '../../browser/chatGPTClient.js';
 
@@ -39,6 +40,143 @@ suite('Bundled ChatGPT client', () => {
 			})) as typeof fetch, native);
 			assert.deepEqual((await client.history('chat', signal())).messages.map(message => message.completion), cases.map(entry => entry.expected));
 		}
+	});
+
+	test('prepares routing without draft text and consumes the context once on Send', async () => {
+		const bodies: Record<string, unknown>[] = [];
+		let submissions = 0;
+		const token = `header.${Buffer.from(JSON.stringify({ exp: Date.now() / 1000 + 60 })).toString('base64url')}.signature`;
+		const client = new ChatGPTClient((async (url, options) => {
+			const path = String(url);
+			if (path.endsWith('/prepare')) { bodies.push(JSON.parse(options!.body as string)); return json({ conduit_token: token }); }
+			if (path.includes('/.headers/')) return json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' });
+			submissions++;
+			assert.equal(new Headers(options?.headers).get('x-conduit-token'), token);
+			return new Response('data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+		}) as typeof fetch);
+		const context = { model: 'fixture', parentId: 'parent', projectId: 'g-p-fixture' };
+		client.primeConversation(context, signal());
+		client.primeConversation(context, signal());
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(bodies.length, 1);
+		assert.deepEqual(bodies[0].messages, []);
+		assert.deepEqual(bodies[0].conversation_mode, { kind: 'gizmo_interaction', gizmo_id: 'g-p-fixture' });
+		assert.equal(submissions, 0);
+		await collect(client.send({ ...context, text: 'Private draft', messageId: 'user' }, signal()));
+		assert.equal(bodies.length, 1);
+		await collect(client.send({ ...context, text: 'Second draft', messageId: 'user-two' }, signal()));
+		assert.deepEqual([bodies.length, submissions], [2, 2]);
+	});
+
+	test('never reuses preparation after a context change, attachment, expiry or explicit retirement', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		try {
+			const original = { model: 'fixture', parentId: 'parent' };
+			const changes = [
+				{ model: 'other' }, { parentId: 'other' }, { conversationId: 'other' }, { thinkingEffort: 'extended' }, { projectId: 'g-p-other' },
+				{ files: [{ id: 'file-fixture', name: 'fixture.txt', mimeType: 'text/plain', size: 1 }] },
+				{ branch: { conversationId: 'branch', messageId: 'source' } }, {}, {},
+			];
+			for (const [index, change] of changes.entries()) {
+				let preparations = 0;
+				const token = `header.${Buffer.from(JSON.stringify({ exp: Date.now() / 1000 + 60 })).toString('base64url')}.signature`;
+				const client = new ChatGPTClient((async url => {
+					if (String(url).endsWith('/prepare')) { preparations++; return json({ conduit_token: token }); }
+					if (String(url).includes('/.headers/')) return json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' });
+					return new Response('data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+				}) as typeof fetch);
+				client.primeConversation(original, signal());
+				await new Promise(resolve => setImmediate(resolve));
+				if (index === changes.length - 2) mock.timers.tick(46_000);
+				if (index === changes.length - 1) client.clearConversationPreparation();
+				await collect(client.send({ ...original, ...change, text: 'Fixture', messageId: 'user' }, signal()));
+				assert.equal(preparations, 2, `Preparation must be replaced for case ${index}`);
+			}
+		} finally { mock.timers.reset(); }
+	});
+
+	test('bounds failed speculative retries and falls back to fresh preparation on Send', async () => {
+		let preparations = 0;
+		const client = new ChatGPTClient((async url => {
+			if (String(url).endsWith('/prepare')) {
+				if (++preparations === 1) return new Response(null, { status: 503 });
+				return json({ conduit_token: 'opaque-valid-for-an-immediate-send' });
+			}
+			if (String(url).includes('/.headers/')) return json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' });
+			return new Response('data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+		}) as typeof fetch);
+		const context = { model: 'fixture', parentId: 'parent' };
+		client.primeConversation(context, signal());
+		await new Promise(resolve => setImmediate(resolve));
+		client.primeConversation(context, signal());
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(preparations, 1);
+		await collect(client.send({ ...context, text: 'Fixture', messageId: 'user' }, signal()));
+		assert.equal(preparations, 2);
+	});
+
+	test('refreshes a speculative conduit that expires while verification is pending', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		try {
+			const proof = new DeferredPromise<Response>();
+			let preparations = 0;
+			let submitted = false;
+			const old = `header.${Buffer.from(JSON.stringify({ exp: 1060 })).toString('base64url')}.signature`;
+			const client = new ChatGPTClient((async (url, options) => {
+				if (String(url).endsWith('/prepare')) { assert.equal(submitted, false); return json({ conduit_token: ++preparations === 1 ? old : 'fresh' }); }
+				if (String(url).includes('/.headers/')) return proof.p;
+				assert.equal(new Headers(options?.headers).get('x-conduit-token'), 'fresh');
+				return new Response('data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+			}) as typeof fetch);
+			const context = { model: 'fixture', parentId: 'parent' };
+			client.primeConversation(context, signal());
+			await new Promise(resolve => setImmediate(resolve));
+			const pending = collect(client.send({ ...context, text: 'Fixture', messageId: 'user' }, signal(), async () => { submitted = true; }));
+			await new Promise(resolve => setImmediate(resolve));
+			mock.timers.tick(46_000);
+			await proof.complete(json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' }));
+			await pending;
+			assert.equal(preparations, 2);
+		} finally { mock.timers.reset(); }
+	});
+
+	test('typing respects Retry-After for a rate-limited speculative preparation', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		try {
+			let calls = 0;
+			const client = new ChatGPTClient((async () => { calls++; return new Response(null, { status: 429, headers: { 'Retry-After': '60' } }); }) as typeof fetch);
+			const context = { model: 'fixture', parentId: 'parent' };
+			client.primeConversation(context, signal());
+			await new Promise(resolve => setImmediate(resolve));
+			mock.timers.tick(6_000);
+			client.primeConversation(context, signal());
+			assert.equal(calls, 1);
+			mock.timers.tick(54_000);
+			client.primeConversation(context, signal());
+			await new Promise(resolve => setImmediate(resolve));
+			assert.equal(calls, 2);
+			client.clearConversationPreparation();
+		} finally { mock.timers.reset(); }
+	});
+
+	test('cancels an in-flight preparation when a waiting Send is cancelled without submitting', async () => {
+		const response = new DeferredPromise<Response>();
+		let preparationSignal: AbortSignal | undefined;
+		let submissions = 0;
+		const client = new ChatGPTClient((async (url, options) => {
+			if (String(url).endsWith('/prepare')) { preparationSignal = options?.signal ?? undefined; return response.p; }
+			if (String(url).includes('/.headers/')) return json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' });
+			submissions++; return new Response(null, { status: 500 });
+		}) as typeof fetch);
+		const context = { model: 'fixture', parentId: 'parent' };
+		client.primeConversation(context, signal());
+		const controller = new AbortController();
+		const pending = collect(client.send({ ...context, text: 'Fixture', messageId: 'user' }, controller.signal));
+		controller.abort();
+		await assert.rejects(pending);
+		assert.equal(preparationSignal?.aborted, true);
+		await response.complete(json({ conduit_token: 'unused' }));
+		assert.equal(submissions, 0);
 	});
 
 	test('history shows the original creation prompt and only removes the exact Ash request suffix', async () => {
@@ -657,6 +795,54 @@ suite('Bundled ChatGPT client', () => {
 		assert.deepEqual(updates.flatMap(update => update.message ? [update.message.text] : []), ['Visible answer']);
 	});
 
+	test('prepares the conversation and verification concurrently and submits only after both complete', async () => {
+		for (const first of ['conversation', 'verification']) {
+			const conversation = new DeferredPromise<Response>();
+			const verification = new DeferredPromise<Response>();
+			const started: string[] = [];
+			let sent = 0;
+			let submitted = false;
+			const client = new ChatGPTClient((async url => {
+				const path = String(url);
+				if (path.endsWith('/prepare')) { started.push('conversation'); return conversation.p; }
+				if (path.includes('/.headers/')) { started.push('verification'); return verification.p; }
+				sent++;
+				assert.equal(submitted, true);
+				return new Response('data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+			}) as typeof fetch);
+			const pending = collect(client.send({ text: 'Fixture', model: 'fixture', parentId: 'parent', messageId: 'user' }, signal(), async () => { submitted = true; }));
+			await new Promise(resolve => setImmediate(resolve));
+			assert.deepEqual(started, ['conversation', 'verification']);
+			const completeConversation = () => conversation.complete(json({ conduit_token: 'fixture-conduit' }));
+			const completeVerification = () => verification.complete(json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'fixture-proof' }));
+			await (first === 'conversation' ? completeConversation() : completeVerification());
+			await new Promise(resolve => setImmediate(resolve));
+			assert.deepEqual([submitted, sent], [false, 0]);
+			await (first === 'conversation' ? completeVerification() : completeConversation());
+			await pending;
+			assert.equal(sent, 1);
+		}
+	});
+
+	test('cancels the other preparation when either HTTP response or preparation payload is rejected', async () => {
+		for (const failure of ['conversation-http', 'conversation-payload', 'verification-http', 'verification-payload']) {
+			let otherAborted = false;
+			let submitted = false;
+			const client = new ChatGPTClient((async (url, options) => {
+				const path = String(url);
+				assert.ok(path.endsWith('/prepare') || path.includes('/.headers/'), 'A failed preparation must never submit the message');
+				if (path.endsWith('/prepare') === failure.startsWith('conversation')) {
+					return failure.endsWith('http') ? new Response(null, { status: 401 }) : json({});
+				}
+				return new Promise<Response>((_resolve, reject) => {
+					options!.signal!.addEventListener('abort', () => { otherAborted = true; reject(options!.signal!.reason); }, { once: true });
+				});
+			}) as typeof fetch);
+			await assert.rejects(collect(client.send({ text: 'Fixture', model: 'fixture', parentId: 'parent', messageId: 'user' }, signal(), async () => { submitted = true; })));
+			assert.deepEqual([otherAborted, submitted], [true, false]);
+		}
+	});
+
 	test('never sends after verification is rejected or cancelled', async () => {
 		let resolveVerification!: (response: Response) => void;
 		let rejectVerification = true;
@@ -763,6 +949,7 @@ suite('Bundled ChatGPT client', () => {
 	test('reports web request failures without replaying or requiring an account handshake', async () => {
 		let sends = 0;
 		const client = new ChatGPTClient((async url => {
+			if (String(url).includes('/.headers/')) { return json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'unused' }); }
 			assert.equal(String(url), '/service/backend-api/f/conversation/prepare');
 			sends++;
 			return new Response(null, { status: 401 });

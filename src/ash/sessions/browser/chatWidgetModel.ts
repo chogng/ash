@@ -97,6 +97,9 @@ export class ChatWidgetModel extends Disposable {
 	private readonly refreshRequestVersions = this._register(new RunOnceScheduler(() => void this.loadRequestVersions(), 100));
 	private contextUsage: ChatContextUsage | undefined;
 	private contextUsageRequest = 0;
+	// Capacity is an auxiliary estimate. Coalesce durable-state bursts so rebuilding
+	// context for the indicator does not compete with the actual model request.
+	private readonly refreshContextUsage = this._register(new RunOnceScheduler(() => { void this.loadContextUsage(this.generation); }, 100));
 	private _state: ChatWidgetState = 'loading';
 	// A late local completion cannot release a newer operation's busy state.
 	private stateRequest = 0;
@@ -1322,6 +1325,7 @@ export class ChatWidgetModel extends Disposable {
 		this.olderHistoryError = undefined;
 		this.contextUsage = undefined;
 		this.contextUsageRequest++;
+		this.refreshContextUsage.cancel();
 		this.transcriptRevision = 0;
 		this._changeSets = [];
 		this.threadChanges = undefined;
@@ -1355,7 +1359,7 @@ export class ChatWidgetModel extends Disposable {
 			if (this.isDisposed || generation !== this.generation) return;
 			const snapshot = this.acceptThreadSnapshot(result, request);
 			const currentThread = this.thread;
-			void this.loadContextUsage(generation);
+			this.refreshContextUsage.schedule();
 			if (currentThread && !this.selectedModes.has(active.threadId)) {
 				this.selectedModes.set(active.threadId, currentThread.turns.at(-1)?.mode ?? 'agent');
 			}
@@ -1644,7 +1648,7 @@ export class ChatWidgetModel extends Disposable {
 			) return;
 			const snapshot = this.acceptThreadSnapshot(result, request, { refresh: true, replaceHistory });
 			if (!snapshot.thread) { if (snapshot.transcript) this._onDidChange.fire(); return; }
-			void this.loadContextUsage(generation);
+			this.refreshContextUsage.schedule();
 			this._error = undefined;
 			this._historyStatus.set(undefined);
 			this._state = 'ready';

@@ -110,14 +110,12 @@ export class GitHubService extends Disposable implements IGitHubService {
 				hostListeners.add(api.github.onDidChangeSessionPullRequests(sessionId => {
 					const id = scope.identity(sessionId);
 					if (this.isSelected(id) || this.watched.has(id)) {
-						this.operation.value?.cancel();
-						this.refresh.schedule(0);
+						this.invalidateSelection();
 					}
 				}));
 				hostListeners.add(api.github.onDidChangeSessionIssues(sessionId => {
 					if (this.isSelected(scope.identity(sessionId))) {
-						this.operation.value?.cancel();
-						this.refresh.schedule(0);
+						this.invalidateSelection();
 					}
 				}));
 				const events = api.events.subscribe(event => {

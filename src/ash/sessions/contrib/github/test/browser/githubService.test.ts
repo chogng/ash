@@ -628,7 +628,7 @@ suite('Session GitHub associations', () => {
 			const refreshed = context.nextChange();
 			await pending.complete([]);
 			await yieldEventLoop();
-			mock.timers.tick(0);
+			mock.timers.tick(100);
 			await refreshed;
 			assert.equal(reads, 2);
 			assert.deepEqual(context.service.getSessionPullRequests('session'), []);

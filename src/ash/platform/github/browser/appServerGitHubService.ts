@@ -20,11 +20,13 @@ type GitHubMethod = Exclude<Extract<AppServerMethod, `github/${string}`>, 'githu
 enum RequestKind { Read, Write }
 
 export class AppServerGitHubService implements IGitHubService {
+	// Reference writes publish catalog-only invalidation. Thread progress also
+	// changes the Session, but must not restart GitHub reads during every turn.
 	public readonly onDidChangeSessionPullRequests: Event<string> = listener => this.connection.onNotification(notification => {
-		if (notification.method === 'session/changed') { listener(notification.params.sessionId); }
+		if (notification.method === 'session/changed' && !notification.params.agentTreeChanged) { listener(notification.params.sessionId); }
 	});
 	public readonly onDidChangeSessionIssues: Event<string> = listener => this.connection.onNotification(notification => {
-		if (notification.method === 'session/changed') { listener(notification.params.sessionId); }
+		if (notification.method === 'session/changed' && !notification.params.agentTreeChanged) { listener(notification.params.sessionId); }
 	});
 	constructor(private readonly connection: AppServerProtocolClient) { }
 

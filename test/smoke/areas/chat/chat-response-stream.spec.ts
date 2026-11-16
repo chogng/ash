@@ -1,6 +1,7 @@
 import { createServer, type ServerResponse } from 'node:http';
 import type { Locator } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
+import { Editor } from '../../../automation/editor.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
 import { connectProfile } from '../sessions/sessionProfileFixture.js';
 
@@ -15,6 +16,7 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 	const requests: unknown[] = [];
 	const stages: { stage: string; at: string; }[] = [];
 	let stream: ServerResponse | undefined;
+	let modelRequestAt: number | undefined;
 	const server = createServer(async (request, response) => {
 		if (request.method === 'GET') {
 			response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
@@ -23,6 +25,7 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		try {
 			const chunks: Buffer[] = [];
 			for await (const chunk of request) chunks.push(Buffer.from(chunk));
+			modelRequestAt = performance.timeOrigin + performance.now();
 			requests.push(JSON.parse(Buffer.concat(chunks).toString('utf8')));
 			if (stream) throw new Error('The response fixture expected exactly one model request');
 			stream = response;
@@ -51,6 +54,8 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 		await client.request(APP_SERVER_METHODS['provider/configure'], { commandId: 'response-provider', expectedRevision: config.revision, config: { connection: provider, provider, baseUrl: `http://127.0.0.1:${address.port}/v1`, custom: { name: 'Isolated response stream fixture', protocol: 'responses', order: 0, contextWindow: 272_000 }, modelContext: { [model.model]: { contextWindow: 272_000 } } } });
 		await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'synthetic-fixture-key' });
+		const configured = await client.request(APP_SERVER_METHODS['config/read'], {});
+		await client.request(APP_SERVER_METHODS['config/update'], { commandId: 'response-default', expectedRevision: configured.revision, model });
 		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'response-session', kind: 'code', title: 'Controlled Chat response', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
 		const threadId = created.session.threads[0]!.threadId;
@@ -60,9 +65,18 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Controlled Chat response' }).click();
 		const chat = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 		await expect(chat).toHaveAttribute('data-thread-id', threadId);
-		const before = await read();
-		await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'response-turn', sessionId, request: { type: 'startTurn', threadId, expectedSequence: before.sequence, mode: 'ask', approvalMode: 'bypassPermissions', model, input: [{ type: 'text', text: 'Return the synthetic streamed response without using tools.' }] } });
+		const input = new Editor(chat);
+		await input.waitForEditorFocus();
+		await input.waitForTypeInEditor('Return the synthetic streamed response without using tools.');
+		const submission = await chat.getByRole('button', { name: 'Send', exact: true }).evaluateHandle(button => {
+			const timing = { clickedAt: 0 };
+			button.addEventListener('click', () => { timing.clickedAt = performance.timeOrigin + performance.now(); }, { once: true, capture: true });
+			return timing;
+		});
+		await chat.getByRole('button', { name: 'Send', exact: true }).click();
 		await expect.poll(() => requests.length).toBe(1);
+		await testInfo.attach('send-to-provider-latency.json', { body: JSON.stringify({ ...await submission.jsonValue(), modelRequestAt }, null, 2), contentType: 'application/json' });
+		await submission.dispose();
 		const workingLogo = chat.locator('.ash-chat-working-logo');
 		await expect(workingLogo).toBeVisible();
 		await expect(workingLogo).toHaveClass(/atlas/);
@@ -70,7 +84,30 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		await testInfo.attach('working-logo.png', { body: await page.screenshot(), contentType: 'image/png' });
 		const code = '```typescript\nconst value = 1;\n```';
 		for (const index of [0, 1]) send({ type: 'response.output_item.added', output_index: index, item: message(index, '') });
-		delta(0, 'Synthetic media is being prepared.');
+		const latency = [];
+		let commentary = '';
+		for (const fragment of ['Synthetic', ' media is', ' being prepared.']) {
+			commentary += fragment;
+			const observation = await chat.evaluateHandle((element, text) => ({
+				ready: new Promise<{ domAt: number; frameAt: number; }>((resolve, reject) => {
+					const timer = setTimeout(() => { observer.disconnect(); reject(new Error('The real response did not reach the transcript')); }, 10_000);
+					const observer = new MutationObserver(() => {
+						const content = [...element.querySelectorAll<HTMLElement>('.ash-chat-markdown-part')].find(node => node.textContent?.includes(text));
+						if (!content?.getClientRects().length) return;
+						const domAt = performance.timeOrigin + performance.now();
+						observer.disconnect(); clearTimeout(timer);
+						requestAnimationFrame(() => resolve({ domAt, frameAt: performance.timeOrigin + performance.now() }));
+					});
+					observer.observe(element, { childList: true, characterData: true, subtree: true });
+				}),
+			}), commentary);
+			try {
+				const producedAt = performance.timeOrigin + performance.now();
+				delta(0, fragment);
+				latency.push({ fragment, producedAt, ...await observation.evaluate(value => value.ready) });
+			} finally { await observation.dispose(); }
+		}
+		await testInfo.attach('provider-to-transcript-latency.json', { body: JSON.stringify(latency, null, 2), contentType: 'application/json' });
 		delta(1, code);
 		mark('initial-code');
 		const block = chat.locator('.ash-chat-code-block');

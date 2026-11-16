@@ -434,7 +434,11 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		const url = parseWebLink(reference.url);
 		if (url) addCitation({ url, title: reference.title });
 	}
-	if (!/[<\[\uE200]|:::writing/u.test(normalized) && !/(?:https?:\/\/|www\.)\S*\?/iu.test(normalized)) {
+	// Shared Markdown already owns ordinary links and reference definitions. Only
+	// images, provider file URLs and encoded/escaped destinations need this lexer.
+	const markdownProjection = normalized.includes('[') && (normalized.includes('![')
+		|| chatGPTFileLinkSchemes.some(scheme => normalized.includes(`${scheme}:`)) || /[\\&]/u.test(normalized));
+	if (!/[<\uE200]|:::writing/u.test(normalized) && !markdownProjection && !/(?:https?:\/\/|www\.)\S*\?/iu.test(normalized)) {
 		return { text: normalized, resources: [], ...(citations.size && { citations: [...citations.values()] }) };
 	}
 	const resources: ChatReplyResource[] = [];

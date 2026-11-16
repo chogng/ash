@@ -6,9 +6,10 @@ import { createTestArtifactCatalogService, createTestDocsService } from '../../.
 import { chatGPTWritingSource } from '../../browser/chatGPTRichContent.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { suite, test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -65,11 +66,122 @@ function fixture(options?: { registerGenerated?: boolean; }) {
 	}
 }
 
+function frameClock() {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	return toDisposable(() => { mock.timers.tick(16); mock.timers.reset(); });
+}
+
 suite('ChatGPT generated Markdown publication', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('production model construction requires the generated files service', () => {
 		assert.throws(() => fixture({ registerGenerated: false }), /artifactCatalogService/u);
+	});
+
+	test('shows first content synchronously and projects the latest live append once per frame', () => {
+		const f = fixture();
+		using resources = f.resources;
+		using clock = frameClock();
+		let changes = 0;
+		resources.add(f.model.onDidChange(() => changes++));
+		f.state.set({ ...initialState, sending: true, messages: [reply('First', 'incomplete')] });
+		assert.equal(f.model.items[0]?.text, 'First');
+		for (let i = 1; i <= 8; i++) f.state.set({ ...f.state.get(), messages: [reply(`First${'.'.repeat(i)}`, 'incomplete')] });
+		assert.equal(f.state.get().messages[0]?.text, 'First........', 'The provider model accepts every update immediately');
+		assert.equal(f.model.items[0]?.text, 'First');
+		assert.equal(changes, 1);
+		mock.timers.tick(16);
+		assert.equal(f.model.items[0]?.text, 'First........');
+		assert.equal(changes, 2);
+	});
+
+	test('completion, cancellation and corrections synchronously supersede a queued append', () => {
+		for (const terminal of ['complete', 'cancel', 'correct'] as const) {
+			const f = fixture();
+			using resources = f.resources;
+			using clock = frameClock();
+			f.state.set({ ...initialState, sending: true, messages: [reply('First', 'incomplete')] });
+			f.state.set({ ...f.state.get(), messages: [reply('First append', 'incomplete')] });
+			let changes = 0;
+			resources.add(f.model.onDidChange(() => changes++));
+			const text = terminal === 'correct' ? 'Corrected' : 'First append';
+			f.state.set({
+				...f.state.get(),
+				sending: terminal === 'correct', stopped: terminal === 'cancel',
+				messages: [reply(text, terminal === 'complete' ? 'complete' : 'incomplete')],
+			});
+			assert.equal(f.model.items[0]?.text, text);
+			assert.equal(f.model.items[0]?.transient, terminal === 'correct');
+			assert.equal(changes, 1);
+			mock.timers.tick(16);
+			assert.equal(changes, 1, 'The replaced frame cannot publish the older append');
+		}
+	});
+
+	test('conversation switching retires the old frame and publishes the new conversation immediately', () => {
+		const f = fixture();
+		using resources = f.resources;
+		using clock = frameClock();
+		f.state.set({ ...initialState, sending: true, messages: [reply('First', 'incomplete')] });
+		f.state.set({ ...f.state.get(), messages: [reply('First append', 'incomplete')] });
+		f.state.set({ ...initialState, localConversationId: 'another-local', conversationId: 'another-provider', messages: [reply('Another conversation')] });
+		assert.equal(f.model.items[0]?.text, 'Another conversation');
+		mock.timers.tick(16);
+		assert.equal(f.model.items[0]?.text, 'Another conversation');
+	});
+
+	test('disposal cancels a pending projection', () => {
+		const f = fixture();
+		using resources = f.resources;
+		using clock = frameClock();
+		f.state.set({ ...initialState, sending: true, messages: [reply('First', 'incomplete')] });
+		f.state.set({ ...f.state.get(), messages: [reply('First append', 'incomplete')] });
+		let changes = 0;
+		resources.add(f.model.onDidChange(() => changes++));
+		f.model.dispose();
+		mock.timers.tick(16);
+		assert.equal(changes, 0);
+	});
+
+	test('completion reuses the decoded body while new attachments still update immediately', () => {
+		const f = fixture();
+		using resources = f.resources;
+		const text = '<entity value="Zed" category="software"/>';
+		f.state.set({ ...initialState, sending: true, messages: [reply(text, 'incomplete')] });
+		const entity = f.model.items[0]?.markdown?.richContent?.parts[0];
+		assert.equal(entity?.kind, 'entity');
+		const attachment = { uri: 'file-service://report', kind: 'document' as const, name: 'Report.md', mimeType: 'text/markdown' };
+		f.state.set({ ...f.state.get(), sending: false, messages: [{ ...reply(text), resources: [attachment] }] });
+		assert.equal(f.model.items[0]?.transient, false);
+		assert.equal(f.model.items[0]?.markdown?.richContent?.parts[0], entity);
+		assert.deepEqual(f.model.items[0]?.resources, [attachment]);
+	});
+
+	test('a changed citation target is decoded even when the reply text is unchanged', () => {
+		const f = fixture();
+		using resources = f.resources;
+		const text = 'Reference \uE200cite\uE202turn0search0\uE201';
+		const reference = { id: 'turn0search0', url: 'https://example.com/first', title: 'First', snippet: '', cited: true as const };
+		f.state.set({ ...initialState, messages: [{ ...reply(text), references: [reference] }] });
+		assert.deepEqual(f.model.items[0]?.citations, [{ type: 'web', url: reference.url, title: reference.title }]);
+		const next = { ...reference, url: 'https://example.com/second', title: 'Second' };
+		f.state.set({ ...f.state.get(), messages: [{ ...reply(text), references: [next] }] });
+		assert.deepEqual(f.model.items[0]?.citations, [{ type: 'web', url: next.url, title: next.title }]);
+	});
+
+	test('conversation sources and resolved image groups invalidate the decoded body', () => {
+		const f = fixture();
+		using resources = f.resources;
+		const text = '<AsyncImage query="Zed"/>';
+		f.state.set({ ...initialState, messages: [reply(text)] });
+		const unavailable = () => f.model.items[0]?.markdown?.richContent?.parts.find(part => part.kind === 'unavailableMedia');
+		assert.equal(unavailable()?.fallback.href, 'https://chatgpt.com/c/provider-chat');
+		f.state.set({ ...f.state.get(), conversationId: 'another-provider' });
+		assert.equal(unavailable()?.fallback.href, 'https://chatgpt.com/c/another-provider');
+		const image = { uri: 'https://images.openai.com/example.png', label: 'Zed' };
+		f.state.set({ ...f.state.get(), messages: [{ ...reply(text), imageGroups: [{ query: 'Zed', images: [image] }] }] });
+		const gallery = f.model.items[0]?.markdown?.richContent?.parts.find(part => part.kind === 'imageGallery');
+		assert.deepEqual(gallery?.images, [image]);
 	});
 
 	test('a managed writing block exposes its editor only after its exact file has been published', () => {

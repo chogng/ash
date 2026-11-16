@@ -1765,6 +1765,22 @@ test('aborted input sends no request and completion removes its abort listener b
 	assert.equal(client.state, 'ready');
 });
 
+test('GitHub associations invalidate catalog changes without refreshing on Thread progress', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const service = new AppServerGitHubService(client);
+	const issues: string[] = [];
+	const requests: string[] = [];
+	using issueChanges = service.onDidChangeSessionIssues(id => issues.push(id));
+	using requestChanges = service.onDidChangeSessionPullRequests(id => requests.push(id));
+	transport.frame({ method: 'session/changed', params: { sessionId: 'working', agentTreeChanged: true } });
+	assert.deepEqual([issues, requests], [[], []]);
+	transport.frame({ method: 'session/changed', params: { sessionId: 'linked', agentTreeChanged: false } });
+	assert.deepEqual([issues, requests], [['linked'], ['linked']]);
+});
+
 test('GitHub read cancellation keeps refresh coalescing until remote retirement and skips the unused result', async () => {
 	const transport = new ProtocolTransport();
 	const client = new AppServerProtocolClient(transport);

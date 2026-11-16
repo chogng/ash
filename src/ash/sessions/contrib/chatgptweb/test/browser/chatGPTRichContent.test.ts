@@ -18,13 +18,16 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { ChatGPTClient, type ChatGPTReference } from '../../browser/chatGPTClient.js';
 
 function render(value: string, references?: readonly ChatGPTReference[]): string {
+	return renderReply(decodeChatGPTReply(value, references, 'fixture'));
+}
+
+function renderReply(reply: Pick<ReturnType<typeof decodeChatGPTReply>, 'text' | 'richContent'>): string {
 	using services = new InstantiationService(new ServiceCollection([IOpenerService, { open: async () => true } as unknown as IOpenerService]));
 	services.registerInstance(IExtensionHostApi, createDisconnectedExtensionHostApi(async () => { throw new Error('No extension host'); }));
 	using configuration = new InMemoryConfigurationService();
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IMarkdownRendererService, services.createInstance(MarkdownRendererService));
 	using resultRenderer = services.createInstance(ChatContentMarkdownRenderer);
-	const reply = decodeChatGPTReply(value, references, 'fixture');
 	using result = resultRenderer.render({ value: reply.text, supportHtml: true, supportThemeIcons: true, isTrusted: false }, {
 		markedExtensions: reply.richContent && [chatMarkdownRichContentExtension(reply.richContent)],
 	});
@@ -38,6 +41,40 @@ function getChatGPTRichContentText(source: string, references?: readonly ChatGPT
 
 suite('ChatGPT rich content', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('ordinary Markdown links and reference definitions keep the shared renderer semantics while streaming', () => {
+		const source = '[**Paper**](https://example.test/paper "Publication")\n\n[Reference *label*][paper]\n\n[paper]: https://example.test/referenced "Reference"';
+		for (const end of [1, 12, 28, 47, 70, source.length]) {
+			const prefix = source.slice(0, end);
+			assert.equal(decodeChatGPTReply(prefix).text, prefix);
+			assert.equal(render(prefix), renderReply({ text: prefix }));
+		}
+	});
+
+	test('encoded and escaped link destinations still remove ChatGPT attribution', () => {
+		for (const source of [
+			'[Encoded](https://example.test/paper&#63;utm_source=chatgpt.com)',
+			'[Escaped](https\\://example.test/paper?utm_source=chatgpt.com)',
+		]) {
+			const root = document.createElement('div'); root.innerHTML = render(source);
+			assert.equal(root.querySelector('a')?.getAttribute('href'), 'https://example.test/paper');
+		}
+	});
+
+	test('late image and provider file reference definitions retain resource projection', () => {
+		for (const scheme of ['sandbox', 'file-service', 'sediment']) {
+			const target = `${scheme}:/report.md`;
+			const source = `[Report][file]\n\n[file]: ${target}`;
+			assert.deepEqual(decodeChatGPTReply(source, [], 'fixture').resources.map(resource => resource.uri), [target]);
+		}
+		const partial = '![Diagram][image]';
+		assert.deepEqual(decodeChatGPTReply(partial).resources, []);
+		const image = partial + '\n\n[image]: https://example.test/diagram.png';
+		assert.deepEqual(decodeChatGPTReply(image).resources.map(resource => ({ uri: resource.uri, kind: resource.kind })), [
+			{ uri: 'https://example.test/diagram.png', kind: 'image' },
+		]);
+		assert.deepEqual(decodeChatGPTReply('![Diagram](https://example.test/diagram').resources, []);
+	});
+
 	test('renders writing bodies as shared Markdown without displaying envelope metadata', () => {
 		const source = 'Before\n\n:::writing{variant="chat_message" id="64821" title="A } quoted title"}**杭州周末**\n\n两间房共1160元。:::\n\nAfter';
 		assert.equal(decodeChatGPTReply(source).richContent?.parts.find(part => part.kind === 'writing')?.title, 'A } quoted title');

@@ -1767,8 +1767,10 @@ suite('ChatGPT shared service', () => {
 
 	test('conversation actions commit after confirmation and keep drafts and selected title consistent', async () => {
 		const writes: { method: string; path: string; body: unknown; }[] = [];
+		const preparations: { messages: unknown[]; }[] = [];
 		let reject = false;
 		using chat = fixture(async (path, _signal, request) => {
+			if (path.endsWith('/prepare')) { preparations.push(JSON.parse(String(request.body))); return Response.json({ conduit_token: 'fixture' }); }
 			if (request.method !== 'GET') {
 				writes.push({ method: request.method, path, body: request.body ? JSON.parse(String(request.body)) : undefined });
 				return reject ? new Response(null, { status: 500 }) : Response.json({ success: true });
@@ -1807,6 +1809,8 @@ suite('ChatGPT shared service', () => {
 		]);
 		assert.ok(writes[0]!.path.endsWith('/conversation/id/one/rename'));
 		assert.ok(writes.at(-1)!.path.endsWith('/conversation/id/two'));
+		assert.ok(preparations.length > 0);
+		assert.ok(preparations.every(preparation => preparation.messages.length === 0));
 	});
 
 	test('a failed move keeps the newly created project available for retry', async () => {
@@ -1889,6 +1893,35 @@ suite('ChatGPT shared service', () => {
 		assert.match(chat.state.get().error, /unsupported/);
 	});
 
+	test('typing prepares only routing context and a later Send reuses it with the latest draft', async () => {
+		const preparations: Record<string, unknown>[] = [];
+		const submitted: Record<string, unknown>[] = [];
+		using chat = fixture(async (path, _signal, request) => {
+			if (path.endsWith('/prepare')) {
+				preparations.push(JSON.parse(String(request.body)));
+				return Response.json({ conduit_token: `header.${Buffer.from(JSON.stringify({ exp: Date.now() / 1000 + 60 })).toString('base64url')}.signature` });
+			}
+			if (path.includes('/.headers/')) return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'fixture' });
+			if (path.endsWith('/f/conversation')) {
+				submitted.push(JSON.parse(String(request.body)));
+				return new Response('data: {"conversation_id":"one","message":{"id":"reply","author":{"role":"assistant"},"content":{"parts":["Reply"]}}}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+			}
+			return response(path);
+		});
+		await chat.reload();
+		await chat.select('one');
+		chat.setDraft('Private draft');
+		chat.setDraft('Private draft, edited');
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(preparations.length, 1);
+		assert.deepEqual(preparations[0].messages, []);
+		assert.equal(submitted.length, 0);
+		await chat.send();
+		assert.equal(preparations.length, 1);
+		assert.equal(submitted.length, 1);
+		assert.match(JSON.stringify(submitted[0].messages), /Private draft, edited/u);
+	});
+
 	test('all five presets send their mapped targets and family changes preserve the product level', async () => {
 		const sent: Record<string, unknown>[] = [];
 		let catalog = chatGPTModelCatalog();
@@ -1897,7 +1930,7 @@ suite('ChatGPT shared service', () => {
 			if (path.includes('/.headers/')) { return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'fixture' }); }
 			if (path.endsWith('/prepare')) {
 				sent.push(JSON.parse(String(request.body)));
-				return Response.json({ conduit_token: 'fixture' });
+				return Response.json({ conduit_token: `header.${Buffer.from(JSON.stringify({ exp: Date.now() / 1000 + 60 })).toString('base64url')}.signature` });
 			}
 			if (path.endsWith('/f/conversation')) {
 				sent.push(JSON.parse(String(request.body)));

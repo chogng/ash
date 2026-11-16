@@ -406,6 +406,18 @@ suite('Shared chat Markdown rendering', () => {
 		}
 	});
 
+	test('streaming Markdown commits a frame-batched model update within the same frame', async () => {
+		const committed: string[] = [];
+		using morpher = new IncrementalDOMMorpher(document.body, true, 4096, markdown => committed.push(markdown.value));
+		const frame = new DeferredPromise<readonly string[]>();
+		using update = scheduleAtNextAnimationFrame(getWindow(document.body), () => {
+			morpher.tryMorph({ value: 'Intermediate response' }, true);
+			morpher.tryMorph({ value: 'Latest response' }, true);
+		});
+		using observed = scheduleAtNextAnimationFrame(getWindow(document.body), () => frame.complete([...committed]), -1);
+		assert.deepEqual(await frame.p, ['Latest response']);
+	});
+
 	test('streaming Markdown discards a queued append when a replacement exceeds the size limit', async () => {
 		const committed: string[] = [];
 		using morpher = new IncrementalDOMMorpher(document.body, true, 16, markdown => committed.push(markdown.value));
