@@ -21,6 +21,7 @@ import { getArtifactTitle } from './artifactKindPresentation.js';
 import { IArtifactTableService } from '../common/artifactTableService.js';
 import type { ArtifactTableModel } from '../common/artifactTableModel.js';
 import { ArtifactTableEditorWidget } from './artifactTableEditorWidget.js';
+import './widget/artifactSurface.css';
 
 const panes = new WeakMap<Element, ArtifactTableEditor>();
 
@@ -49,7 +50,7 @@ export class ArtifactTableEditor extends EditorPane implements ISessionsEditorPa
 	) { super(ArtifactTableEditor.ID, theme, storage); }
 
 	override create(parent: HTMLElement): void {
-		this.body = h(parent.ownerDocument, 'div', { className: 'ash-table-editor-pane' });
+		this.body = h(parent.ownerDocument, 'div', { className: 'ash-table-editor-pane ash-artifact-surface' });
 		parent.append(this.body);
 		super.create(this.body);
 		this.titlebar = this._register(this.instantiation.createInstance(ArtifactTitleBarWidget, parent.ownerDocument,

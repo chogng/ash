@@ -6,6 +6,7 @@ import { artifactCanvasNetworkRegions } from '../../common/model/artifactCanvasV
 import { artifactCanvasPathEditingContours, moveArtifactCanvasPathNode } from '../../common/model/artifactCanvasVector.js';
 import type { AssetVersion } from '../../../../../platform/assets/common/assetService.js';
 import './artifactEditorWidget.css';
+import './artifactSurface.css';
 import { addDisposableListener, h, type IDimension } from '../../../../../base/browser/dom.js';
 import { Separator, type IAction } from '../../../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -83,7 +84,7 @@ export class ArtifactEditorWidget extends Disposable {
 		}));
 		this.canvas = this._register(contributionsFactory.createCanvasView(ownerDocument));
 		this.canvas.setTool(this.tool);
-		const stage = h(ownerDocument, 'div', { className: 'ash-sessions-design-stage' });
+		const stage = h(ownerDocument, 'div', { className: 'ash-sessions-design-stage ash-artifact-surface' });
 		this.toolbar = this._register(instantiationService.createInstance(ArtifactToolbar, ownerDocument, { appearance: 'canvas' }));
 		this.contextMenu = this._register(instantiationService.createInstance(ArtifactContextMenu, {
 			getActions: () => this.getContextMenuActions(),

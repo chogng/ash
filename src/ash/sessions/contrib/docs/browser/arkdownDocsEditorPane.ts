@@ -31,6 +31,7 @@ import { ArtifactKindContext } from '../../../common/contextkeys.js';
 import { DocsToolbar } from './docsToolbar.js';
 import { DocsSelectionToolbar } from './docsSelectionToolbar.js';
 import { DocsCommentsWidget } from './docsCommentsWidget.js';
+import '../../artifact/browser/widget/artifactSurface.css';
 import { exportDocsDocument, exportDocsFile, getDocsExportFormats } from './docsImportExport.js';
 
 /** Docs presentation over Arkdown and the shared file-backed text working copy. */
@@ -76,7 +77,7 @@ export class ArkdownDocsEditorPane extends EditorPane implements ISessionsEditor
 			...this.docsToolbar.getDocumentActions(), new Separator(),
 			...titleActions.getActions({ title: this.documentInput.label ?? basename(this.documentInput.resource), getCodeAttachment: () => ({ name: resourceFileName(basename(this.documentInput!.resource), 'text/markdown'), content: this.editor.getControl()?.getText() ?? '' }) }),
 		] : []);
-		this.body = h(document, 'div', { className: 'ash-docs-workspace-body' });
+		this.body = h(document, 'div', { className: 'ash-docs-workspace-body ash-artifact-surface' });
 		const context = this._register(this.contextKeys.createScoped(this.root));
 		ArtifactKindContext.bindTo(context).set('docs');
 		const scopedInstantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, context])));

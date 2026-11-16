@@ -1,0 +1,54 @@
+/* Artifact hosts own the viewport edge treatment. Content, native scrollbars and
+   floating tools retain their own painting and pointer input. */
+.ash-artifact-surface {
+	position: relative;
+	isolation: isolate;
+}
+
+.ash-artifact-surface::before,
+.ash-artifact-surface::after {
+	content: "";
+	position: absolute;
+	inset-inline: 0;
+	z-index: 1;
+	height: var(--ash-spacing-size240);
+	pointer-events: none;
+	background: var(--ash-editor-background);
+}
+
+.ash-artifact-surface::before {
+	top: 0;
+	mask-image: linear-gradient(
+		to bottom,
+		black,
+		rgb(0 0 0 / 84%),
+		rgb(0 0 0 / 50%),
+		rgb(0 0 0 / 16%),
+		transparent
+	);
+}
+
+.ash-artifact-surface::after {
+	bottom: 0;
+	mask-image: linear-gradient(
+		to top,
+		black,
+		rgb(0 0 0 / 84%),
+		rgb(0 0 0 / 50%),
+		rgb(0 0 0 / 16%),
+		transparent
+	);
+}
+
+/* Canvas tools float above the shared edge treatment. */
+.ash-artifact-surface > .ash-artifact-toolbar,
+.ash-artifact-surface > .ash-design-motion-widget {
+	z-index: 2;
+}
+
+[data-color-scheme="hcDark"] .ash-artifact-surface::before,
+[data-color-scheme="hcDark"] .ash-artifact-surface::after,
+[data-color-scheme="hcLight"] .ash-artifact-surface::before,
+[data-color-scheme="hcLight"] .ash-artifact-surface::after {
+	display: none;
+}
