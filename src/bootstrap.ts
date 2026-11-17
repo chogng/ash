@@ -14,6 +14,13 @@ export function bootstrapElectronMain(): void {
 
 	Error.stackTraceLimit = 100;
 	app.enableSandbox();
+	if (process.platform === 'darwin') {
+		// Budget roughly one 4K RGBA viewport each for tiles and discardable GPU
+		// resources before Chromium allocates IOSurfaces.
+		for (const memorySwitch of ['force-gpu-mem-available-mb', 'force-gpu-mem-discardable-limit-mb']) {
+			if (!app.commandLine.hasSwitch(memorySwitch)) { app.commandLine.appendSwitch(memorySwitch, '32'); }
+		}
+	}
 	registerProcessErrorHandlers();
 }
 

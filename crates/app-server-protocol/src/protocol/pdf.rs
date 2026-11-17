@@ -15,6 +15,22 @@ pub struct PdfOpenParams {
     pub size: usize,
 }
 
+/// Imports an immutable binary resource owned by this connection.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PdfOpenResourceParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub document_id: String,
+    pub resource_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PdfOpenResourceResult {
+    /// False when the snapshot belongs to a routed execution target; it remains available to read.
+    pub opened: bool,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PdfAppendParams {
@@ -40,6 +56,27 @@ pub struct PdfPageParams {
     #[schemars(range(min = 256, max = 2048))]
     pub dimension: u32,
     pub edit: Option<PdfAnnotationEdit>,
+}
+
+/// Renders a read-only page without taking ownership of the document lifetime.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PdfRenderPageParams {
+    pub document_id: String,
+    pub revision: u32,
+    #[schemars(range(min = 1))]
+    pub page: u32,
+    #[schemars(range(min = 256, max = 2048))]
+    pub dimension: u32,
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PdfCancelRenderParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]

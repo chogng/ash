@@ -2015,6 +2015,13 @@ fn directory_resources_remain_on_their_creating_gateway_connection() {
     let opened = call(&mut owner, 3, "fs/readBinaryFile", read_params.clone());
     assert!(opened.get("result").is_some(), "{opened}");
     let resource = opened["result"]["resource"]["resourceId"].clone();
+    let routed_pdf = call(
+        &mut owner,
+        40,
+        "pdf/openResource",
+        serde_json::json!({"resourceId":resource,"documentId":"directory-pdf"}),
+    );
+    assert_eq!(routed_pdf["result"]["opened"], false, "{routed_pdf}");
     let metadata = call(
         &mut owner,
         4,
@@ -2080,6 +2087,27 @@ fn directory_resources_remain_on_their_creating_gateway_connection() {
             assert_eq!(response["result"]["dataBase64"], "cA==");
         }
     }
+    let snapshot = call(
+        &mut owner,
+        41,
+        "fs/readBinaryFile",
+        serde_json::json!({"dirId":"profile-files","path":"profile.bin"}),
+    );
+    let snapshot_id = &snapshot["result"]["resource"]["resourceId"];
+    let profile_pdf = call(
+        &mut owner,
+        42,
+        "pdf/openResource",
+        serde_json::json!({"resourceId":snapshot_id,"documentId":"profile-pdf"}),
+    );
+    assert_eq!(profile_pdf["result"]["opened"], true, "{profile_pdf}");
+    let pdf_bytes = call(
+        &mut owner,
+        43,
+        "pdf/read",
+        serde_json::json!({"documentId":"profile-pdf","revision":0,"image":false,"offset":0,"maxBytes":1}),
+    );
+    assert_eq!(pdf_bytes["result"]["dataBase64"], "cA==", "{pdf_bytes}");
     let still_owned = call(
         &mut owner,
         25,

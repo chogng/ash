@@ -122,7 +122,9 @@ fn dispatch(service: &PdfService, request: &Value) -> Result<Value, String> {
 fn real_document_acceptance(service: &PdfService) {
     use ash_pdf::PdfAnnotationEdit;
     use ash_pdf::PdfOutput;
+    use sha2::Digest;
     let source = support::fixture(90);
+    let original_digest = format!("{:x}", sha2::Sha256::digest(&source));
     let mut original = None;
     // Three open documents exceed the two-helper pool; revisit each after eviction.
     for id in ["first", "second", "third"] {
@@ -130,8 +132,22 @@ fn real_document_acceptance(service: &PdfService) {
         service.append(2, id, 0, &source).unwrap();
         original = Some(service.page(2, id, 0, 1, 800, None).unwrap());
     }
+    let checks = std::cell::Cell::new(0);
+    let cancelled = service.render_page(2, "third", 0, 1, 1024, &|| {
+        checks.set(checks.get() + 1);
+        checks.get() >= 4
+    });
+    assert!(matches!(cancelled, Err(ash_pdf::PdfError::Cancelled)));
+    assert_eq!(
+        service
+            .render_page(2, "third", 0, 1, 1024, &|| false)
+            .unwrap()
+            .page,
+        1
+    );
     for id in ["first", "second", "third", "first"] {
         let page = service.page(2, id, 0, 1, 512, None).unwrap();
+        assert_eq!(page.sha256, original_digest);
         assert!(page.text.contains("aspdf native review"));
         let (image, eof) = service
             .read(
@@ -183,14 +199,16 @@ fn real_document_acceptance(service: &PdfService) {
             )
             .is_err()
     );
+    let reopened = service.page(2, "first", 1, 1, 512, None).unwrap();
+    let (bytes, eof) = service
+        .read(2, "first", 1, false, None, 0, ash_pdf::MAX_CHUNK_BYTES)
+        .unwrap();
+    assert!(eof);
     assert_eq!(
-        service
-            .page(2, "first", 1, 1, 512, None)
-            .unwrap()
-            .annotations[0]
-            .contents,
-        "retained after eviction"
+        reopened.sha256,
+        format!("{:x}", sha2::Sha256::digest(&bytes))
     );
+    assert_eq!(reopened.annotations[0].contents, "retained after eviction");
     service.close_owner(2);
     let (text, image, modified) = service
         .process(&source, 1, PdfOutput::Text, None, || false)

@@ -18,10 +18,15 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
+use sysinfo::Pid;
+use sysinfo::ProcessRefreshKind;
+use sysinfo::ProcessesToUpdate;
+use sysinfo::System;
 
 pub(super) type Handle = Arc<Mutex<Option<Worker>>>;
 static WORKERS: Mutex<Vec<Weak<Mutex<Option<Worker>>>>> = Mutex::new(Vec::new());
 static ACTIVE: AtomicUsize = AtomicUsize::new(0);
+const MAX_RETAINED_WORKER_BYTES: u64 = 96 * 1024 * 1024;
 
 pub(super) fn handle() -> Result<Handle, PdfError> {
     let handle = Arc::new(Mutex::new(None));
@@ -60,11 +65,11 @@ pub(super) fn run(
         }
         *worker = Some(Worker::spawn(executable)?);
     }
-    let result = worker
-        .as_mut()
-        .ok_or(PdfError::Capacity)?
-        .request(request, cancelled);
-    if result.is_err() {
+    let active = worker.as_mut().ok_or(PdfError::Capacity)?;
+    let result = active.request(request, cancelled);
+    // Decoding a scan can leave PDFium and its allocator holding a large arena.
+    // Cached page artifacts and the private source outlive the native worker.
+    if result.is_err() || request.modified.is_some() || active.exceeds_retention_budget() {
         worker.take();
     }
     result
@@ -84,14 +89,30 @@ pub(super) struct Worker {
 }
 
 impl Worker {
+    fn exceeds_retention_budget(&self) -> bool {
+        let pid = Pid::from_u32(self.child.id());
+        let mut system = System::new();
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[pid]),
+            true,
+            ProcessRefreshKind::nothing().with_memory(),
+        );
+        system
+            .process(pid)
+            .is_some_and(|process| process.memory() > MAX_RETAINED_WORKER_BYTES)
+    }
+
     fn spawn(executable: &Path) -> Result<Self, PdfError> {
-        let mut child = Command::new(executable)
+        let mut command = Command::new(executable);
+        command
             .arg(crate::WORKER_ARGUMENT)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(failed)?;
+            .stderr(Stdio::null());
+        // Return large raster buffers once PDFium and the encoder release them.
+        #[cfg(target_os = "macos")]
+        command.env("MallocLargeCache", "0");
+        let mut child = command.spawn().map_err(failed)?;
         let input = child.stdin.take().expect("piped stdin");
         let stdout = child.stdout.take().expect("piped stdout");
         let (sender, replies) = mpsc::sync_channel(1);

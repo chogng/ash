@@ -24,6 +24,7 @@ import {
 	type FileExistingTargetBehavior,
 	type FileMissingTargetBehavior,
 	type IFileBytes,
+	type IFileReadSnapshot,
 	type IFileContent,
 	type IFilePathIdentity,
 	type IFileSystemProviderWithPathIdentity,
@@ -536,6 +537,47 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		const route = this.connectionRoute(resource);
 		if (route) { return this.onRoute(route, provider => provider.readFile(resource)); }
 		return this.readFileOnConnection(resource);
+	}
+
+	async openReadSnapshot(resource: URI, owner: IResourceApi, signal: AbortSignal): Promise<IFileReadSnapshot | undefined> {
+		if (this.resourceApi !== owner || this.isConfiguration(resource) || this.connectionRoute(resource)) { return undefined; }
+		const generation = owner.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		const assertScope = () => {
+			signal.throwIfAborted();
+			this.assertResourceConnection(generation, epoch);
+			if (this.connectionRoute(resource)) { throw canceled(); }
+		};
+		let result: BinaryFile;
+		try {
+			assertScope();
+			const target = await this.fileTarget(resource);
+			assertScope();
+			// The PDF service belongs to the profile, while Session directories can route elsewhere.
+			if (target.sessionDirectory) { return undefined; }
+			result = await this.api.readBinaryFile(target);
+		} catch (error) {
+			if (isFileNotFound(error)) { throw new FileNotFoundError(resource); }
+			throw error;
+		}
+		const resourceId = result.resource.resourceId;
+		let consumed = false;
+		const lease = toDisposable(() => {
+			if (!consumed && this.isCurrentResourceConnection(generation, epoch)) {
+				void owner.release({ resourceId }).catch(() => undefined);
+			}
+		});
+		try {
+			assertScope();
+			return Object.assign(lease, {
+				resourceId,
+				revision: result.revision,
+				complete: () => { consumed = true; lease.dispose(); },
+			});
+		} catch (error) {
+			lease.dispose();
+			throw error;
+		}
 	}
 
 	private async readFileOnConnection(resource: URI, assertScope?: () => void): Promise<IFileBytes> {

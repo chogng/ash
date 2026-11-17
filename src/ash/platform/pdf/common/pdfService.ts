@@ -1,5 +1,7 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { IResourceApi } from '../../agentHost/common/appServerApi.js';
+import type { IFileReadSnapshot } from '../../files/common/files.js';
 
 export interface PdfRect { readonly x: number; readonly y: number; readonly width: number; readonly height: number; }
 export interface PdfPoint { readonly x: number; readonly y: number; }
@@ -40,4 +42,5 @@ export interface IPdfDocument extends IDisposable {
 export const IPdfService = createServiceIdentifier<IPdfService>('pdfService');
 export interface IPdfService {
 	open(bytes: Uint8Array, signal: AbortSignal): Promise<IPdfDocument>;
+	openSnapshot?(acquire: (owner: IResourceApi) => Promise<IFileReadSnapshot | undefined>, signal: AbortSignal): Promise<{ document: IPdfDocument; revision: string; } | undefined>;
 }

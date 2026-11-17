@@ -39,6 +39,7 @@ struct DocumentState {
     worker: worker::Handle,
     directory: tempfile::TempDir,
     source: PathBuf,
+    source_sha256: Option<String>,
     uploaded: usize,
     revision: u32,
     sequence: u64,
@@ -63,6 +64,7 @@ impl DocumentState {
             worker: worker::handle()?,
             directory,
             source,
+            source_sha256: None,
             uploaded: 0,
             revision: 0,
             sequence: 0,
@@ -90,6 +92,15 @@ impl PdfService {
     }
 
     pub fn open(&self, owner: u64, id: &str, size: usize) -> Result<(), PdfError> {
+        self.register_document(owner, id, size).map(|_| ())
+    }
+
+    fn register_document(
+        &self,
+        owner: u64,
+        id: &str,
+        size: usize,
+    ) -> Result<Arc<Document>, PdfError> {
         if id.is_empty() || id.len() > 128 || !(1..=MAX_FILE_BYTES).contains(&size) {
             return Err(PdfError::Invalid);
         }
@@ -114,15 +125,13 @@ impl PdfService {
         {
             return Err(PdfError::Capacity);
         }
-        documents.insert(
-            (owner, id.into()),
-            Arc::new(Document {
-                expected: size,
-                cancelled: AtomicBool::new(false),
-                state: Mutex::new(DocumentState::new()?),
-            }),
-        );
-        Ok(())
+        let document = Arc::new(Document {
+            expected: size,
+            cancelled: AtomicBool::new(false),
+            state: Mutex::new(DocumentState::new()?),
+        });
+        documents.insert((owner, id.into()), Arc::clone(&document));
+        Ok(document)
     }
 
     pub fn append(
@@ -155,6 +164,50 @@ impl PdfService {
         Ok(state.uploaded)
     }
 
+    /// Imports an authorized snapshot without sending its bytes through the renderer.
+    pub fn open_from_reader(
+        &self,
+        owner: u64,
+        id: &str,
+        size: usize,
+        reader: impl Read,
+    ) -> Result<(), PdfError> {
+        let document = self.register_document(owner, id, size)?;
+        let result = (|| {
+            let mut state = document.state.lock().map_err(failed)?;
+            if document.cancelled.load(Ordering::Acquire) {
+                return Err(PdfError::Cancelled);
+            }
+            let mut output = File::options()
+                .write(true)
+                .open(&state.source)
+                .map_err(failed)?;
+            let copied =
+                std::io::copy(&mut reader.take(size as u64 + 1), &mut output).map_err(failed)?;
+            if copied != size as u64 {
+                return Err(PdfError::Invalid);
+            }
+            if document.cancelled.load(Ordering::Acquire) {
+                return Err(PdfError::Cancelled);
+            }
+            state.uploaded = size;
+            Ok(())
+        })();
+        if result.is_err() {
+            document.cancelled.store(true, Ordering::Release);
+            if let Ok(mut documents) = self.documents.lock() {
+                let key = (owner, id.into());
+                if documents
+                    .get(&key)
+                    .is_some_and(|entry| Arc::ptr_eq(entry, &document))
+                {
+                    documents.remove(&key);
+                }
+            }
+        }
+        result
+    }
+
     pub fn page(
         &self,
         owner: u64,
@@ -164,15 +217,43 @@ impl PdfService {
         dimension: u32,
         edit: Option<PdfAnnotationEdit>,
     ) -> Result<PdfPage, PdfError> {
+        self.page_with_cancellation(owner, id, revision, (page, dimension), edit, &|| false)
+    }
+
+    pub fn render_page(
+        &self,
+        owner: u64,
+        id: &str,
+        revision: u32,
+        page: u32,
+        dimension: u32,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Result<PdfPage, PdfError> {
+        self.page_with_cancellation(owner, id, revision, (page, dimension), None, cancelled)
+    }
+
+    fn page_with_cancellation(
+        &self,
+        owner: u64,
+        id: &str,
+        revision: u32,
+        (page, dimension): (u32, u32),
+        edit: Option<PdfAnnotationEdit>,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Result<PdfPage, PdfError> {
+        if cancelled() {
+            return Err(PdfError::Cancelled);
+        }
         let document = self.document(owner, id)?;
         let mut state = document.state.lock().map_err(failed)?;
+        let cancelled = || cancelled() || document.cancelled.load(Ordering::Acquire);
         if state.revision != revision {
             return Err(PdfError::Conflict);
         }
         if page == 0 || !(256..=2048).contains(&dimension) || state.uploaded != document.expected {
             return Err(PdfError::Invalid);
         }
-        if document.cancelled.load(Ordering::Acquire) {
+        if cancelled() {
             return Err(PdfError::Cancelled);
         }
         if edit.is_none() {
@@ -187,9 +268,14 @@ impl PdfService {
                 return Ok(result);
             }
         }
-        self.perform(&mut state, page, dimension, PdfOutput::Image, edit, &|| {
-            document.cancelled.load(Ordering::Acquire)
-        })
+        self.perform(
+            &mut state,
+            page,
+            dimension,
+            PdfOutput::Image,
+            edit,
+            &cancelled,
+        )
     }
 
     fn perform(
@@ -214,6 +300,7 @@ impl PdfService {
         });
         let request = EngineRequest {
             source: state.source.clone(),
+            source_sha256: state.source_sha256.clone(),
             image: image.clone(),
             modified: modified.clone(),
             page,
@@ -253,13 +340,17 @@ impl PdfService {
             if size != metadata.file_size || size > MAX_FILE_BYTES {
                 return Err(PdfError::Failed("Invalid PDF worker document".into()));
             }
+            let revision = state.revision.checked_add(1).ok_or(PdfError::Capacity)?;
             std::fs::remove_file(&state.source).map_err(failed)?;
             state.source = path;
-            state.revision = state.revision.checked_add(1).ok_or(PdfError::Capacity)?;
+            state.revision = revision;
             for cached in state.pages.drain(..) {
                 let _ = std::fs::remove_file(cached.image);
             }
         }
+        // Each revision owns a private immutable source. Its digest survives PDFium
+        // helper eviction and advances only after the modified file is committed.
+        state.source_sha256 = Some(metadata.sha256.clone());
         metadata.revision = state.revision;
         if matches!(output, PdfOutput::Image) {
             state.pages.push_back(CachedPage {

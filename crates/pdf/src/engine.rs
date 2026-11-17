@@ -5,12 +5,18 @@ use crate::PdfAnnotationEdit;
 use crate::PdfCharacter;
 use crate::PdfPage;
 use crate::PdfRect;
+use image::ImageEncoder;
+use image::codecs::png::PngEncoder;
 use pdfium_render::prelude::*;
 use sha2::Digest;
 use sha2::Sha256;
+use std::fs::File;
 use std::io::BufRead;
-use std::io::Cursor;
+use std::io::BufWriter;
 use std::io::Write;
+use std::path::Path;
+
+const MAX_PAGE_IMAGE_BYTES: usize = 16 * 1024 * 1024;
 
 pub(super) fn library_path() -> Result<std::path::PathBuf, String> {
     let name = Pdfium::pdfium_platform_library_name();
@@ -37,37 +43,36 @@ pub(super) fn serve() -> Result<(), String> {
     if metadata.len() == 0 || metadata.len() > crate::MAX_FILE_BYTES as u64 {
         return Err("Invalid PDF size".into());
     }
-    let mut document = pdfium
+    let document = pdfium
         .load_pdf_from_file(&first.source, None)
         .map_err(pdf_error)?;
-    // Hash the source once, not once per page. The PDFium reader retains its own file.
-    let mut file = std::fs::File::open(&first.source).map_err(|error| error.to_string())?;
-    let mut hash = Sha256::new();
-    std::io::copy(&mut file, &mut hash).map_err(|error| error.to_string())?;
-    let mut sha256 = format!("{:x}", hash.finalize());
-    let mut file_size = metadata.len() as usize;
+    let sha256 = if let Some(digest) = &first.source_sha256 {
+        if digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+        {
+            return Err("Invalid PDF source digest".into());
+        }
+        digest.clone()
+    } else {
+        let mut file = File::open(&first.source).map_err(|error| error.to_string())?;
+        let mut hash = Sha256::new();
+        std::io::copy(&mut file, &mut hash).map_err(|error| error.to_string())?;
+        format!("{:x}", hash.finalize())
+    };
+    let file_size = metadata.len() as usize;
     let mut request = Some(first);
     while let Some(operation) = request {
-        let modified = operation.modified.clone();
+        let modified = operation.modified.is_some();
         let result = execute(&document, operation, &sha256, file_size);
         let success = result.is_ok();
-        if let Ok(result) = &result {
-            sha256 = result.page.sha256.clone();
-            file_size = result.page.file_size;
-            if let Some(path) = modified {
-                document = pdfium
-                    .load_pdf_from_byte_vec(
-                        std::fs::read(path).map_err(|error| error.to_string())?,
-                        None,
-                    )
-                    .map_err(pdf_error)?;
-            }
-        }
         let mut output = std::io::stdout().lock();
         serde_json::to_writer(&mut output, &result).map_err(|error| error.to_string())?;
         output.write_all(b"\n").map_err(|error| error.to_string())?;
         output.flush().map_err(|error| error.to_string())?;
-        if !success {
+        // After an edit, the service commits the file and releases this helper.
+        if !success || modified {
             break;
         }
         request = read_request(&mut input)?;
@@ -116,11 +121,14 @@ pub(super) fn execute(
     }
     let page_index = i32::try_from(request.page - 1).map_err(|_| "Page is outside this PDF")?;
     let mut page = document.pages().get(page_index).map_err(pdf_error)?;
-    let scale = request.dimension as f32 / page.width().value.max(page.height().value);
-    let width = (page.width().value * scale).round().max(1.0) as i32;
-    let height = (page.height().value * scale).round().max(1.0) as i32;
+    let width_points = page.width().value;
+    let height_points = page.height().value;
+    let scale = request.dimension as f32 / width_points.max(height_points);
+    let width = (width_points * scale).round().max(1.0) as i32;
+    let height = (height_points * scale).round().max(1.0) as i32;
     let config = PdfRenderConfig::new()
         .set_fixed_size(width, height)
+        .limit_render_image_cache_size(true)
         .render_annotations(true);
     if let Some(edit) = &request.edit {
         let rotation = match page.rotation().map_err(pdf_error)? {
@@ -190,37 +198,26 @@ pub(super) fn execute(
             | PdfAnnotationEdit::Note { .. } => None,
         };
         if let Some(edit) = extended {
-            let bytes = crate::annotations::apply(
+            let path = request
+                .modified
+                .as_ref()
+                .ok_or("Missing modified PDF path")?;
+            let mut output = ArtifactWriter::new(path, crate::MAX_FILE_BYTES)?;
+            crate::annotations::apply(
                 &document.save_to_bytes().map_err(pdf_error)?,
                 request.page,
                 edit,
+                &mut output,
             )?;
-            if bytes.len() > crate::MAX_FILE_BYTES {
-                return Err("Modified PDF exceeds the file budget".into());
-            }
-            std::fs::write(
-                request
-                    .modified
-                    .as_ref()
-                    .ok_or("Missing modified PDF path")?,
-                &bytes,
-            )
-            .map_err(|error| error.to_string())?;
+            let (file_size, sha256) = output.finish()?;
             let pdfium = Pdfium::default();
-            let edited = pdfium
-                .load_pdf_from_byte_vec(bytes.clone(), None)
-                .map_err(pdf_error)?;
+            let edited = pdfium.load_pdf_from_file(path, None).map_err(pdf_error)?;
             let request = EngineRequest {
                 edit: None,
                 modified: None,
                 ..request
             };
-            return execute(
-                &edited,
-                request,
-                &format!("{:x}", Sha256::digest(&bytes)),
-                bytes.len(),
-            );
+            return execute(&edited, request, &sha256, file_size);
         }
     }
     // Coordinate conversion uses exactly the same dimensions as the single raster pass.
@@ -228,28 +225,25 @@ pub(super) fn execute(
         apply_edit(&mut page, &config, width, height, edit)?;
     }
     let text = page.text().map_err(pdf_error)?;
-    let all: String = text
-        .chars()
-        .iter()
-        .take(60_000)
-        .filter_map(|character| character.unicode_string())
-        .collect();
-    let characters = if matches!(request.output, crate::PdfOutput::Image) {
-        text.chars()
-            .iter()
-            .take(20_000)
-            .filter_map(|character| {
-                let text = character.unicode_string()?;
-                let bounds = character.tight_bounds().ok()?;
-                Some(PdfCharacter {
-                    text,
-                    bounds: displayed_rect(&page, &config, width, height, bounds).ok()?,
-                })
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    let include_geometry = matches!(request.output, crate::PdfOutput::Image);
+    let mut all = String::new();
+    let mut characters = Vec::new();
+    for (index, character) in text.chars().iter().take(60_000).enumerate() {
+        let Some(value) = character.unicode_char() else {
+            continue;
+        };
+        all.push(value);
+        if include_geometry
+            && index < 20_000
+            && let Ok(bounds) = character.tight_bounds()
+            && let Ok(bounds) = displayed_rect(&page, &config, width, height, bounds)
+        {
+            characters.push(PdfCharacter {
+                text: value.to_string(),
+                bounds,
+            });
+        }
+    }
     let annotations = page
         .annotations()
         .iter()
@@ -281,37 +275,37 @@ pub(super) fn execute(
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
-    let image = if matches!(request.output, crate::PdfOutput::Image) {
-        let image = page
-            .render_with_config(&config)
-            .map_err(pdf_error)?
-            .as_image()
-            .map_err(pdf_error)?;
-        let mut png = Cursor::new(Vec::new());
-        image
-            .write_to(&mut png, image::ImageFormat::Png)
-            .map_err(|error| error.to_string())?;
-        png.into_inner()
-    } else {
-        Vec::new()
-    };
-    if image.len() > 16 * 1024 * 1024 {
-        return Err("Rendered page exceeds the image budget".into());
-    }
-    if !image.is_empty() {
-        std::fs::write(&request.image, &image).map_err(|error| error.to_string())?;
-    }
-    let modified = if let Some(path) = &request.modified {
-        let bytes = document.save_to_bytes().map_err(pdf_error)?;
-        if bytes.len() > crate::MAX_FILE_BYTES {
-            return Err("Modified PDF exceeds the file budget".into());
+    let (image_size, image_sha256) = if include_geometry {
+        // BGRA has no row padding. PDFium's reversed byte order yields RGBA in
+        // this buffer, which the encoder can borrow after the bitmap is released.
+        let mut pixels = vec![0; width as usize * height as usize * 4];
+        {
+            let mut bitmap =
+                PdfBitmap::from_bytes(width, height, PdfBitmapFormat::BGRA, &mut pixels)
+                    .map_err(pdf_error)?;
+            page.render_into_bitmap_with_config(&mut bitmap, &config.set_reverse_byte_order(true))
+                .map_err(pdf_error)?;
         }
-        std::fs::write(path, &bytes).map_err(|error| error.to_string())?;
-        Some((format!("{:x}", Sha256::digest(&bytes)), bytes.len()))
+        let mut output = ArtifactWriter::new(&request.image, MAX_PAGE_IMAGE_BYTES)?;
+        PngEncoder::new(&mut output)
+            .write_image(
+                &pixels,
+                width as u32,
+                height as u32,
+                image::ExtendedColorType::Rgba8,
+            )
+            .map_err(|error| error.to_string())?;
+        output.finish()?
     } else {
-        None
+        (0, format!("{:x}", Sha256::digest([])))
     };
-    let (sha256, file_size) = modified.unwrap_or_else(|| (sha256.into(), file_size));
+    let (file_size, sha256) = if let Some(path) = &request.modified {
+        let mut output = ArtifactWriter::new(path, crate::MAX_FILE_BYTES)?;
+        document.save_to_writer(&mut output).map_err(pdf_error)?;
+        output.finish()?
+    } else {
+        (file_size, sha256.into())
+    };
     let result = PdfPage {
         revision: 0,
         sha256,
@@ -319,19 +313,58 @@ pub(super) fn execute(
         page: request.page,
         width: width as u32,
         height: height as u32,
-        width_points: page.width().value,
-        height_points: page.height().value,
-        text: all.chars().take(60_000).collect(),
-        text_truncated: text.len() > 60_000
-            || matches!(request.output, crate::PdfOutput::Image) && text.len() > 20_000,
+        width_points,
+        height_points,
+        text: all,
+        text_truncated: text.len() > 60_000 || include_geometry && text.len() > 20_000,
         characters,
         annotations,
         annotations_truncated: page.annotations().len() > 2_000,
-        image_size: image.len(),
-        image_sha256: format!("{:x}", Sha256::digest(&image)),
+        image_size,
+        image_sha256,
         file_size,
     };
     Ok(EngineResult { page: result })
+}
+
+/// Writes worker artifacts within their disk budget and hashes them as they are written.
+struct ArtifactWriter {
+    file: BufWriter<File>,
+    hash: Sha256,
+    size: usize,
+    limit: usize,
+}
+
+impl ArtifactWriter {
+    fn new(path: &Path, limit: usize) -> Result<Self, String> {
+        Ok(Self {
+            file: BufWriter::new(File::create(path).map_err(|error| error.to_string())?),
+            hash: Sha256::new(),
+            size: 0,
+            limit,
+        })
+    }
+
+    fn finish(mut self) -> Result<(usize, String), String> {
+        self.flush().map_err(|error| error.to_string())?;
+        Ok((self.size, format!("{:x}", self.hash.finalize())))
+    }
+}
+
+impl Write for ArtifactWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if bytes.len() > self.limit - self.size {
+            return Err(std::io::Error::other("PDF artifact exceeds its size limit"));
+        }
+        let written = self.file.write(bytes)?;
+        self.hash.update(&bytes[..written]);
+        self.size += written;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.flush()
+    }
 }
 
 fn displayed_rect(
@@ -341,26 +374,23 @@ fn displayed_rect(
     height: i32,
     rect: pdfium_render::prelude::PdfRect,
 ) -> Result<PdfRect, String> {
-    let points = [
-        (rect.left(), rect.bottom()),
-        (rect.left(), rect.top()),
-        (rect.right(), rect.bottom()),
-        (rect.right(), rect.top()),
-    ];
-    let mut xs = Vec::new();
-    let mut ys = Vec::new();
-    for (x, y) in points {
-        let (x, y) = page.points_to_pixels(x, y, config).map_err(pdf_error)?;
-        xs.push(x as f32 / width as f32);
-        ys.push(y as f32 / height as f32);
-    }
-    let x = xs.iter().copied().fold(f32::INFINITY, f32::min);
-    let y = ys.iter().copied().fold(f32::INFINITY, f32::min);
+    // The page-to-bitmap transform only scales and rotates by right angles.
+    // Opposite corners still enclose the rectangle after rotation.
+    let (left, bottom) = page
+        .points_to_pixels(rect.left(), rect.bottom(), config)
+        .map_err(pdf_error)?;
+    let (right, top) = page
+        .points_to_pixels(rect.right(), rect.top(), config)
+        .map_err(pdf_error)?;
+    let width = width as f32;
+    let height = height as f32;
+    let x = left.min(right) as f32 / width;
+    let y = bottom.min(top) as f32 / height;
     Ok(PdfRect {
         x,
         y,
-        width: xs.into_iter().fold(f32::NEG_INFINITY, f32::max) - x,
-        height: ys.into_iter().fold(f32::NEG_INFINITY, f32::max) - y,
+        width: left.max(right) as f32 / width - x,
+        height: bottom.max(top) as f32 / height - y,
     })
 }
 

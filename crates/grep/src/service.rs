@@ -29,6 +29,7 @@ use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::RwLock;
+use std::sync::TryLockError;
 use std::sync::Weak;
 use std::time::Duration;
 
@@ -49,11 +50,12 @@ struct State {
 }
 struct Index {
     search: tgrep::Session,
-    _storage: Arc<IndexStorage>,
+    storage: Arc<IndexStorage>,
 }
 struct IndexStorage {
     _lease: Option<DirIndexLease>,
     _temporary: Option<tempfile::TempDir>,
+    rebuild: Mutex<()>,
 }
 
 struct DirectoryIndex {
@@ -418,6 +420,16 @@ impl Service {
         let index = self
             .index_for(root, cancellation)?
             .ok_or_else(|| Error::Failed("selected grep engine does not use an index".into()))?;
+        // Worktrees sharing a repository serialize rebuilds. IndexUse pins the registration
+        // through backend switches, and its storage lease prevents concurrent deletion.
+        let _rebuild = loop {
+            cancelled(cancellation)?;
+            match index.index.storage.rebuild.try_lock() {
+                Ok(guard) => break guard,
+                Err(TryLockError::Poisoned(error)) => break error.into_inner(),
+                Err(TryLockError::WouldBlock) => std::thread::sleep(Duration::from_millis(25)),
+            }
+        };
         Ok(status(index.index.search.rebuild(cancellation)?))
     }
 
@@ -535,6 +547,7 @@ impl Service {
             let storage = Arc::new(IndexStorage {
                 _lease: lease,
                 _temporary: temporary,
+                rebuild: Mutex::new(()),
             });
             // Registrations own leases; this lookup must not keep an unused repository in use.
             repositories.insert(identity, Arc::downgrade(&storage));
@@ -557,10 +570,7 @@ impl Service {
                 _directory: usage.retain(),
             },
         )?;
-        Ok(Arc::new(Index {
-            search,
-            _storage: storage,
-        }))
+        Ok(Arc::new(Index { search, storage }))
     }
 }
 impl Search for Service {

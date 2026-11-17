@@ -110,7 +110,6 @@
 
 .ash-sessions-pdf-stage {
 	position: relative;
-	container-type: inline-size;
 	margin-inline: auto;
 	flex-shrink: 0;
 	outline: var(--ash-strokeThickness) solid var(--ash-border);
@@ -132,10 +131,17 @@
 .ash-sessions-pdf-text {
 	position: absolute;
 	inset: 0;
+	overflow: clip;
 	user-select: text;
 }
 
-.ash-sessions-pdf-text > span {
+.ash-sessions-pdf-text-content {
+	position: absolute;
+	inset: 0 auto auto 0;
+	transform-origin: top left;
+}
+
+.ash-sessions-pdf-text-content > span {
 	position: absolute;
 	color: transparent;
 	white-space: pre;
@@ -143,7 +149,7 @@
 	cursor: text;
 }
 
-.ash-sessions-pdf-text > span::selection {
+.ash-sessions-pdf-text-content > span::selection {
 	background: var(--ash-editor-selectionBackground);
 	color: transparent;
 }

@@ -950,7 +950,7 @@ fn linked_worktrees_share_storage_until_the_last_registration_is_released() {
 }
 
 #[test]
-fn directory_release_and_rebuild_do_not_wait_for_another_directory_query() {
+fn rebuilds_wait_for_the_same_repository_without_blocking_other_repositories() {
     let (_first_tmp, first) = fixture();
     let (_second_tmp, second) = fixture();
     fs::write(first.canonical_path().join("first.txt"), "first").unwrap();
@@ -965,12 +965,42 @@ fn directory_release_and_rebuild_do_not_wait_for_another_directory_query() {
         .indexed_fuzzy(&second, "second", 1, &token)
         .unwrap()
         .unwrap();
-    // Hold the same per-directory admission guard used by a running indexed query.
-    let _second_query = service.index_for(&second, &token).unwrap().unwrap();
+    let second_index = service.index_for(&second, &token).unwrap().unwrap();
+    let second_rebuild = second_index.index.storage.rebuild.lock().unwrap();
     service
         .release_directory(first.canonical_path(), &token)
         .unwrap();
     assert!(service.rebuild_index(&first, &token).unwrap().ready);
+    let cancel = CancellationSource::new();
+    std::thread::scope(|scope| {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let service = &service;
+        let second = &second;
+        let waiting = cancel.token();
+        scope.spawn(move || {
+            tx.send(service.rebuild_index(second, &waiting)).unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let directory = &second_index._directory.directory;
+        let admitted = loop {
+            if directory.state.lock().unwrap().active == 2 {
+                break true;
+            }
+            if Instant::now() >= deadline {
+                break false;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        let pending = matches!(rx.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty));
+        cancel.cancel();
+        let result = rx.recv_timeout(Duration::from_secs(2));
+        drop(second_rebuild);
+        assert!(
+            admitted && pending,
+            "second rebuild must wait for the same index"
+        );
+        assert!(matches!(result.unwrap(), Err(Error::Cancelled(_))));
+    });
     assert_eq!(
         service
             .indexed_fuzzy(&second, "second", 1, &token)

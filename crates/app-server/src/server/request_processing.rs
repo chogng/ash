@@ -94,6 +94,8 @@ impl RequestLane {
                 | ClientMethod::GitTransportCancel
                 | ClientMethod::TestingCancel
                 | ClientMethod::SyntaxCancel
+                | ClientMethod::PdfCancelRender
+                | ClientMethod::PdfClose
                 | ClientMethod::LanguageCancel
                 | ClientMethod::IssueReporterSearchCancel
                 | ClientMethod::ContentSearchCancel

@@ -76,6 +76,16 @@ impl FileSystem for ExactFileSystem {
         self.ensure_file(path)?;
         self.inner.read_file_with_revision(path, maximum_bytes)
     }
+    fn copy_file_with_revision(
+        &self,
+        path: &Path,
+        maximum_bytes: usize,
+        output: &mut dyn std::io::Write,
+    ) -> Result<(usize, String), FileSystemError> {
+        self.ensure_file(path)?;
+        self.inner
+            .copy_file_with_revision(path, maximum_bytes, output)
+    }
     fn write_file(
         &self,
         path: &Path,

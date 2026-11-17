@@ -24,6 +24,8 @@ use cap_fs_ext::FollowSymlinks;
 use cap_fs_ext::OpenOptionsFollowExt;
 use cap_std::fs::Dir as Directory;
 use cap_std::fs::OpenOptions;
+use sha2::Digest;
+use sha2::Sha256;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::io::{Read, Write};
@@ -347,6 +349,46 @@ impl FileSystem for LocalFileSystem {
             files.read_file_with_revision(path, maximum_bytes)
         })
     }
+
+    fn copy_file_with_revision(
+        &self,
+        path: &Path,
+        maximum_bytes: usize,
+        output: &mut dyn Write,
+    ) -> Result<(usize, String), FileSystemError> {
+        self.execute(Permission::ReadFiles, |files| {
+            let mut file = files.open_file(path)?.into_std();
+            if !file.metadata().map_err(io_error)?.is_file() {
+                return Err(FileSystemError::NotFile(path.to_path_buf()));
+            }
+            let stamp = FileReadStamp::observe(&file)?;
+            if maximum_bytes == 0 || stamp.length > maximum_bytes as u64 {
+                return Err(FileSystemError::ReadLimitExceeded { maximum_bytes });
+            }
+            let mut read = Read::by_ref(&mut file).take((maximum_bytes as u64).saturating_add(1));
+            let mut buffer = [0; 32 * 1024];
+            let mut hash = Sha256::new();
+            let mut size = 0;
+            loop {
+                let length = read.read(&mut buffer).map_err(io_error)?;
+                if length == 0 {
+                    break;
+                }
+                size += length;
+                if size > maximum_bytes {
+                    return Err(FileSystemError::ReadLimitExceeded { maximum_bytes });
+                }
+                let bytes = &buffer[..length];
+                output.write_all(bytes).map_err(io_error)?;
+                hash.update(bytes);
+            }
+            if stamp != FileReadStamp::observe(&file)? || size as u64 != stamp.length {
+                return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
+            }
+            Ok((size, format!("{:x}", hash.finalize())))
+        })
+    }
+
     fn write_file(
         &self,
         path: &Path,
@@ -1520,6 +1562,9 @@ impl ScopedFiles {
             return Err(FileSystemError::ReadLimitExceeded { maximum_bytes });
         }
         let mut file = self.open_file(path)?;
+        if file.metadata().map_err(io_error)?.len() > maximum_bytes as u64 {
+            return Err(FileSystemError::ReadLimitExceeded { maximum_bytes });
+        }
         let mut bytes = Vec::with_capacity(maximum_bytes.min(8 * 1024));
         Read::by_ref(&mut file)
             .take((maximum_bytes + 1) as u64)

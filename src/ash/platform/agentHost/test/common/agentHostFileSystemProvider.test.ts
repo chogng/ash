@@ -38,6 +38,47 @@ function connection(resource: URI, label: string, api: Partial<IFileApi> = {}, r
 suite('Agent Host filesystem authority routes', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('leases an exact file snapshot only to its owning connection', async () => {
+		const workspace = URI.file('/workspace');
+		const file = URI.joinPath(workspace, 'paper.pdf');
+		const readStarted = new DeferredPromise<void>();
+		const unblockRead = new DeferredPromise<void>();
+		const released: string[] = [];
+		let reads = 0;
+		const host = connection(workspace, 'primary', {
+			readBinaryFile: async target => {
+				assert.deepEqual(target, { dirId: 'primary', path: 'paper.pdf' });
+				const resourceId = String(++reads);
+				if (reads === 3) {
+					void readStarted.complete();
+					await unblockRead.p;
+				}
+				return {
+					revision: 'exact',
+					resource: { resourceId, size: 4, sha256: 'sha256:exact', mimeType: 'application/octet-stream' },
+				};
+			},
+		}, {
+			release: async ({ resourceId }) => { released.push(resourceId); },
+		});
+		using provider = new AgentHostFileSystemProvider(host);
+		const abort = new AbortController();
+		assert.equal(await provider.openReadSnapshot(file, createDisconnectedResourceApi(unavailable), abort.signal), undefined);
+		assert.equal(reads, 0);
+		using snapshot = await provider.openReadSnapshot(file, host.resourceApi, abort.signal);
+		assert.equal(snapshot?.revision, 'exact');
+		assert.equal(snapshot?.resourceId, '1');
+		snapshot?.complete();
+		const abandoned = await provider.openReadSnapshot(file, host.resourceApi, abort.signal);
+		abandoned?.dispose();
+		const pending = provider.openReadSnapshot(file, host.resourceApi, abort.signal);
+		await readStarted.p;
+		abort.abort();
+		await unblockRead.complete();
+		await assert.rejects(pending, { name: 'AbortError' });
+		assert.deepEqual(released, ['2', '3']);
+	});
+
 	test('surfaces scoped filesystem denials as file provider permissions errors', async () => {
 		const workspace = URI.file('/workspace');
 		using provider = new AgentHostFileSystemProvider(connection(workspace, 'primary', {

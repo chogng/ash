@@ -1,9 +1,11 @@
 use super::ConnectionState;
 use super::RpcError;
 use super::decode;
+use super::resources_processor::resource_rpc_error;
 use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::pdf::*;
+use ash_async_utils::CancellationToken;
 use ash_pdf::PdfError;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -46,6 +48,25 @@ impl super::AppServer {
         result(&PdfAppendResult { next_offset })
     }
 
+    pub(super) fn pdf_open_resource(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: PdfOpenResourceParams = decode(value)?;
+        let owner = connection.connection_id;
+        let (size, reader) = self
+            .resources
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
+            .take_reader(owner, &params.resource_id)
+            .map_err(resource_rpc_error)?;
+        self.pdf
+            .open_from_reader(owner, &params.document_id, size, reader)
+            .map_err(error)?;
+        result(&PdfOpenResourceResult { opened: true })
+    }
+
     pub(super) fn pdf_page(
         &self,
         connection: &ConnectionState,
@@ -64,6 +85,42 @@ impl super::AppServer {
             )
             .map_err(error)?;
         result(&page)
+    }
+
+    pub(super) fn pdf_render_page(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        let params: PdfRenderPageParams = decode(value)?;
+        let page = self
+            .pdf
+            .render_page(
+                connection.connection_id,
+                &params.document_id,
+                params.revision,
+                params.page,
+                params.dimension,
+                &|| cancellation.is_cancelled(),
+            )
+            .map_err(error)?;
+        result(&page)
+    }
+
+    pub(super) fn pdf_cancel_render(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: PdfCancelRenderParams = decode(value)?;
+        if !(1..=128).contains(&params.operation_id.chars().count()) {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        self.request_cancellations
+            .cancel_operation(connection.connection_id, params.operation_id);
+        self.request_scheduler.cancel_waiting_requests();
+        result(&())
     }
 
     pub(super) fn pdf_read(

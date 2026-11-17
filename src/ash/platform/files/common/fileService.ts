@@ -9,6 +9,7 @@ import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposa
 import { URI } from '../../../base/common/uri.js';
 import { dirname, extUri } from '../../../base/common/resources.js';
 import { generateUuid } from '../../../base/common/uuid.js';
+import type { IResourceApi } from '../../agentHost/common/appServerApi.js';
 import {
 	createFileSystemProviderError,
 	FileSystemProviderErrorCode,
@@ -25,6 +26,7 @@ import {
 	type FileExistingTargetBehavior,
 	type FileMissingTargetBehavior,
 	type IFileBytes,
+	type IFileReadSnapshot,
 	type IFileChangeEvent,
 	type IFileRenameEvent,
 	type IFileContent,
@@ -209,6 +211,12 @@ export class FileService extends Disposable implements IFileService {
 		const provider = this.provider(resource);
 		if (!this.hasCapability(resource, FileSystemProviderCapabilities.FileReadWrite)) throw new FileOperationNotSupportedError(resource, 'readFile');
 		return provider.readFile(resource);
+	}
+
+	public async openReadSnapshot(resource: URI, owner: IResourceApi, signal: AbortSignal): Promise<IFileReadSnapshot | undefined> {
+		const provider = this.provider(resource);
+		if (!this.hasCapability(resource, FileSystemProviderCapabilities.FileReadWrite)) { return undefined; }
+		return provider.openReadSnapshot?.(resource, owner, signal);
 	}
 
 	public async readFileStream(resource: URI, options: IReadFileStreamOptions = {}, token: CancellationToken = CancellationToken.None): Promise<IFileStreamContent> {

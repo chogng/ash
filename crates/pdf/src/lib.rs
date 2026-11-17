@@ -51,6 +51,7 @@ pub enum PdfOutput {
 #[derive(Deserialize, Serialize)]
 struct EngineRequest {
     source: std::path::PathBuf,
+    source_sha256: Option<String>,
     image: std::path::PathBuf,
     modified: Option<std::path::PathBuf>,
     page: u32,

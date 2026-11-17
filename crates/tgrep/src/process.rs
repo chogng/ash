@@ -271,6 +271,10 @@ impl Server {
                 identity.directory.join("tgrep-daemon-v1.json")
             }
         } else {
+            // A standalone directory rebuild replaces its index with new allocations.
+            // Keep macOS from accumulating the freed large buffers across rebuilds.
+            #[cfg(target_os = "macos")]
+            command.env("MallocLargeCache", "0");
             command
                 .arg("--index-path")
                 .arg(index)

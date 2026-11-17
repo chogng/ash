@@ -5,6 +5,7 @@ import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { VSBufferReadableStream } from '../../../base/common/buffer.js';
 import type { ReadableStreamEvents } from '../../../base/common/stream.js';
 import { localize } from '../../../nls.js';
+import type { IResourceApi } from '../../agentHost/common/appServerApi.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 /** Formats a raw byte count for file surfaces. */
@@ -225,6 +226,14 @@ export interface IFileReadOptions {
 /** Operation-scoped reader supplied by an authority narrower than the editor's file service. */
 export type FileReadOperation = (resource: URI, encoding: string, options: IFileReadOptions | undefined, signal: AbortSignal) => Promise<IFileContent>;
 
+/** Exact file bytes leased to a consumer on the same backend connection. */
+export interface IFileReadSnapshot extends IDisposable {
+	readonly resourceId: string;
+	readonly revision: string;
+	/** Ends the lease after the backend has consumed the resource. */
+	complete(): void;
+}
+
 /** Storage operations implemented by a runtime or virtual resource provider. */
 export interface IFileSystemProvider {
 	readonly capabilities: FileSystemProviderCapabilities;
@@ -235,6 +244,7 @@ export interface IFileSystemProvider {
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
 	/** Reads exact stored bytes; the revision continues to identify those bytes across text decoding. */
 	readFile(resource: URI): Promise<IFileBytes>;
+	openReadSnapshot?(resource: URI, owner: IResourceApi, signal: AbortSignal): Promise<IFileReadSnapshot | undefined>;
 	/** Text codecs are provider-owned; absence limits this provider to UTF-8. */
 	readTextFile?(resource: URI, encoding: string, options?: IFileReadOptions): Promise<IFileContent>;
 	writeTextFile?(resource: URI, content: string, encoding: string, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
@@ -292,6 +302,7 @@ export interface IFileService {
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
 	readFile(resource: URI, encoding?: string, options?: IFileReadOptions): Promise<IFileContent>;
 	readFileBytes(resource: URI): Promise<IFileBytes>;
+	openReadSnapshot?(resource: URI, owner: IResourceApi, signal: AbortSignal): Promise<IFileReadSnapshot | undefined>;
 	readFileStream(resource: URI, options?: IReadFileStreamOptions, token?: CancellationToken): Promise<IFileStreamContent>;
 	writeFile(request: IFileWriteRequest, options?: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
 	/** Writes exact bytes; default import options reject existing files, including empty ones. */

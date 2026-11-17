@@ -55,6 +55,14 @@ pub trait FileSystem: Send + Sync {
         maximum_bytes: usize,
     ) -> Result<FileContent, FileSystemError>;
 
+    /// Streams an authorized regular file to a private destination, returning its byte count and revision.
+    fn copy_file_with_revision(
+        &self,
+        path: &Path,
+        maximum_bytes: usize,
+        output: &mut dyn std::io::Write,
+    ) -> Result<(usize, String), FileSystemError>;
+
     /// Atomically replaces or creates one file, failing if `content` exceeds `maximum_bytes`.
     fn write_file(
         &self,

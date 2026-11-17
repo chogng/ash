@@ -22,7 +22,12 @@ pub(super) enum Edit<'a> {
     },
 }
 
-pub(super) fn apply(bytes: &[u8], page: u32, edit: Edit<'_>) -> Result<Vec<u8>, String> {
+pub(super) fn apply(
+    bytes: &[u8],
+    page: u32,
+    edit: Edit<'_>,
+    output: &mut impl std::io::Write,
+) -> Result<(), String> {
     let mut document = Document::load_mem(bytes).map_err(|error| error.to_string())?;
     let page_id = *document
         .get_pages()
@@ -125,11 +130,10 @@ pub(super) fn apply(bytes: &[u8], page: u32, edit: Edit<'_>) -> Result<Vec<u8>, 
                 .get_dictionary_mut(page_id)
                 .map_err(|error| error.to_string())?
                 .set("Annots", annotations);
-            let mut output = Vec::new();
-            document
-                .save_to(&mut output)
-                .map_err(|error| error.to_string())?;
-            return Ok(output);
+            return document
+                .save_to(output)
+                .map(|_| ())
+                .map_err(|error| error.to_string());
         }
     }
     let annotation = document.add_object(annotation);
@@ -138,11 +142,10 @@ pub(super) fn apply(bytes: &[u8], page: u32, edit: Edit<'_>) -> Result<Vec<u8>, 
         .get_dictionary_mut(page_id)
         .map_err(|error| error.to_string())?
         .set("Annots", annotations);
-    let mut output = Vec::new();
     document
-        .save_to(&mut output)
+        .save_to(output)
         .map_err(|error| error.to_string())?;
-    Ok(output)
+    Ok(())
 }
 
 fn numbers(values: &[f32]) -> Vec<Object> {

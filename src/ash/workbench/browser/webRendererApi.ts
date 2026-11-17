@@ -146,7 +146,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 			contentSearchConfiguration: createAppServerContentSearchConfigurationApi(connection),
 			terminal: new AppServerTerminalProcessService(connection, appServer),
 			assets: new AppServerAssetService(connection),
-			pdf: new AppServerPdfService(connection),
+			pdf: new AppServerPdfService(connection, resource),
 			projects: new AppServerProjectService(connection),
 			artifactCatalog: connection.capabilities?.contracts.artifactCatalog?.version === 1 ? new AppServerArtifactCatalog(connection) : undefined,
 			testing: new AppServerTestExecutionService(connection),

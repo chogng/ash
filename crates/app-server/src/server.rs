@@ -4641,8 +4641,17 @@ impl AppServer {
             Some(ClientMethod::AssetVersion) => self.asset_processor.asset_version(&request.params),
             Some(ClientMethod::AssetRead) => self.asset_processor.asset_read(&request.params),
             Some(ClientMethod::PdfOpen) => self.pdf_open(connection, &request.params),
+            Some(ClientMethod::PdfOpenResource) => {
+                self.pdf_open_resource(connection, &request.params)
+            }
             Some(ClientMethod::PdfAppend) => self.pdf_append(connection, &request.params),
             Some(ClientMethod::PdfPage) => self.pdf_page(connection, &request.params),
+            Some(ClientMethod::PdfRenderPage) => {
+                self.pdf_render_page(connection, &request.params, cancellation)
+            }
+            Some(ClientMethod::PdfCancelRender) => {
+                self.pdf_cancel_render(connection, &request.params)
+            }
             Some(ClientMethod::PdfRead) => self.pdf_read(connection, &request.params),
             Some(ClientMethod::PdfClose) => self.pdf_close(connection, &request.params),
             Some(ClientMethod::ResourceMetadata) => self
@@ -5426,6 +5435,7 @@ fn resource_error(error: ResourceError) -> String {
         ResourceError::TooLarge => "ResourceTooLarge",
         ResourceError::InvalidChunkSize => "InvalidResourceChunkSize",
         ResourceError::InvalidOffset => "InvalidResourceOffset",
+        ResourceError::ReadFailed => "FileSystemOperationFailed",
     }
     .into()
 }

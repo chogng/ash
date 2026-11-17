@@ -99,6 +99,7 @@ pub(super) fn resource_rpc_error(error: crate::resource_store::ResourceError) ->
             ResourceError::TooLarge => AppServerErrorName::ResourceTooLarge,
             ResourceError::InvalidChunkSize => AppServerErrorName::InvalidResourceChunkSize,
             ResourceError::InvalidOffset => AppServerErrorName::InvalidResourceOffset,
+            ResourceError::ReadFailed => AppServerErrorName::FileSystemOperationFailed,
         },
     )
 }

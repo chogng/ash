@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { test } from 'mocha';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
@@ -16,6 +17,72 @@ import { PdfDocumentModel } from '../../browser/pdfDocumentModel.js';
 const resource = URI.file('/paper.pdf');
 const signal = new AbortController().signal;
 const note = { kind: 'note', bounds: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 }, contents: 'Saved note' } satisfies PdfAnnotationEdit;
+
+test('Cancels active and queued preview reads while leaving the working copy editable', async () => {
+	using store = new DisposableStore();
+	const files = await createFiles(store);
+	const started = new DeferredPromise<void>();
+	const renders: [number, number][] = [];
+	using model = await openPdf(files, {
+		async open(bytes, signal) {
+			const document = await pdf.open(bytes, signal);
+			const page = document.page.bind(document);
+			document.page = async (number, dimension, signal, edit) => {
+				renders.push([number, dimension]);
+				if (number === 2) {
+					void started.complete();
+					await new Promise<void>((_, reject) => {
+						signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+					});
+				}
+				return page(number, dimension, signal, edit);
+			};
+			return document;
+		},
+	});
+	const first = new AbortController();
+	const queued = new AbortController();
+	const running = model.render(2, undefined, { dimension: 1600, signal: first.signal });
+	const runningCancelled = assert.rejects(running, { name: 'AbortError' });
+	await started.p;
+	const pending = model.render(3, undefined, { dimension: 1600, signal: queued.signal });
+	const pendingCancelled = assert.rejects(pending, { name: 'AbortError' });
+	first.abort();
+	queued.abort();
+	await Promise.all([runningCancelled, pendingCancelled]);
+	assert.equal(model.current?.page, 1);
+	await model.render(4, undefined, { dimension: 2048 });
+	await model.render(4, note);
+	assert.deepEqual(renders, [[1, 1600], [2, 1600], [4, 2048], [4, 1600]]);
+	assert.equal(model.isDirty, true);
+});
+
+test('A large PDF captures its original snapshot only when the first edit needs it', async () => {
+	using store = new DisposableStore();
+	const files = await createFiles(store);
+	const original = new TextEncoder().encode('[]'.padEnd(2 * 1024 * 1024));
+	await files.writeFileBytes(resource, original, { create: false, overwrite: true });
+	let exports = 0;
+	using model = await openPdf(files, {
+		async open(bytes, signal) {
+			const document = await pdf.open(bytes, signal);
+			document.export = async () => {
+				exports++;
+				return bytes;
+			};
+			return document;
+		},
+	});
+	await model.render(1);
+	assert.equal(exports, 0);
+	await files.writeFileBytes(resource, new TextEncoder().encode('[]'), { create: false, overwrite: true });
+	await model.render(1, note);
+	await model.render(1, { ...note, contents: 'Second note' });
+	assert.equal(exports, 1);
+	assert.equal(JSON.parse(model.backup()).source, Buffer.from(original).toString('base64'));
+	await model.undo();
+	assert.deepEqual(model.current?.annotations.map(annotation => annotation.contents), [note.contents]);
+});
 
 test('PDF recovery retains drawing and text drafts and saves their replayed annotations', async () => {
 	using store = new DisposableStore();

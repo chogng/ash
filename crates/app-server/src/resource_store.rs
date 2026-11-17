@@ -1,6 +1,11 @@
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::Cursor;
+use std::io::Read;
+use std::io::Seek;
+use std::io::SeekFrom;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -32,9 +37,37 @@ pub struct ResourceChunk {
 struct Resource {
     owner_connection_id: u64,
     mime_type: String,
-    bytes: Vec<u8>,
+    payload: Payload,
     sha256: String,
     expires_at: Instant,
+}
+
+enum Payload {
+    Memory(Vec<u8>),
+    File { file: File, size: usize },
+}
+
+impl Payload {
+    fn len(&self) -> usize {
+        match self {
+            Self::Memory(bytes) => bytes.len(),
+            Self::File { size, .. } => *size,
+        }
+    }
+    fn read(&self, start: usize, end: usize) -> Result<Vec<u8>, ResourceError> {
+        match self {
+            Self::Memory(bytes) => Ok(bytes[start..end].to_vec()),
+            Self::File { file, .. } => {
+                let mut reader = file;
+                let mut bytes = vec![0; end - start];
+                reader
+                    .seek(SeekFrom::Start(start as u64))
+                    .and_then(|_| reader.read_exact(&mut bytes))
+                    .map_err(|_| ResourceError::ReadFailed)?;
+                Ok(bytes)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -92,24 +125,60 @@ impl ResourceStore {
         if bytes.len() > max_bytes {
             return Err(ResourceError::TooLarge);
         }
+        let sha256 = format!("sha256:{:x}", Sha256::digest(&bytes));
+        self.create_payload(
+            owner_connection_id,
+            mime_type,
+            Payload::Memory(bytes),
+            sha256,
+            ttl,
+        )
+    }
+
+    /// Takes ownership of a private file already verified and hashed by the file service.
+    pub(crate) fn create_file_snapshot(
+        &mut self,
+        owner_connection_id: u64,
+        mime_type: String,
+        file: File,
+        size: usize,
+        revision: &str,
+        ttl: Duration,
+    ) -> Result<ResourceMetadata, ResourceError> {
+        self.create_payload(
+            owner_connection_id,
+            mime_type,
+            Payload::File { file, size },
+            format!("sha256:{revision}"),
+            ttl,
+        )
+    }
+
+    fn create_payload(
+        &mut self,
+        owner_connection_id: u64,
+        mime_type: String,
+        payload: Payload,
+        sha256: String,
+        ttl: Duration,
+    ) -> Result<ResourceMetadata, ResourceError> {
         self.cleanup();
         let usage = self
             .usage_by_connection
             .get(&owner_connection_id)
             .copied()
             .unwrap_or_default();
-        if !usage.can_add(bytes.len()) {
+        if !usage.can_add(payload.len()) {
             return Err(ResourceError::TooLarge);
         }
         let resource_id = format!(
             "resource_{:016x}",
             self.next_id.fetch_add(1, Ordering::Relaxed)
         );
-        let sha256 = format!("sha256:{:x}", Sha256::digest(&bytes));
         let metadata = ResourceMetadata {
             resource_id: resource_id.clone(),
             mime_type: mime_type.clone(),
-            size: bytes.len(),
+            size: payload.len(),
             sha256: sha256.clone(),
         };
         self.resources.insert(
@@ -117,7 +186,7 @@ impl ResourceStore {
             Resource {
                 owner_connection_id,
                 mime_type,
-                bytes,
+                payload,
                 sha256,
                 expires_at: Instant::now() + ttl,
             },
@@ -141,7 +210,7 @@ impl ResourceStore {
         Ok(ResourceMetadata {
             resource_id: resource_id.into(),
             mime_type: resource.mime_type.clone(),
-            size: resource.bytes.len(),
+            size: resource.payload.len(),
             sha256: resource.sha256.clone(),
         })
     }
@@ -157,14 +226,15 @@ impl ResourceStore {
             return Err(ResourceError::InvalidChunkSize);
         }
         let resource = self.resource(owner_connection_id, resource_id)?;
-        if offset > resource.bytes.len() {
+        let size = resource.payload.len();
+        if offset > size {
             return Err(ResourceError::InvalidOffset);
         }
-        let end = (offset + max_bytes).min(resource.bytes.len());
+        let end = (offset + max_bytes).min(size);
         Ok(ResourceChunk {
             offset,
-            data: resource.bytes[offset..end].to_vec(),
-            eof: end == resource.bytes.len(),
+            data: resource.payload.read(offset, end)?,
+            eof: end == size,
         })
     }
 
@@ -175,9 +245,32 @@ impl ResourceStore {
     ) -> Result<(), ResourceError> {
         self.resource(owner_connection_id, resource_id)?;
         if let Some(resource) = self.resources.remove(resource_id) {
-            self.remove_usage(resource.owner_connection_id, resource.bytes.len());
+            self.remove_usage(resource.owner_connection_id, resource.payload.len());
         }
         Ok(())
+    }
+
+    /// Transfers a connection-owned resource to a server-side consumer and releases its quota.
+    pub(crate) fn take_reader(
+        &mut self,
+        owner_connection_id: u64,
+        resource_id: &str,
+    ) -> Result<(usize, Box<dyn Read>), ResourceError> {
+        self.resource(owner_connection_id, resource_id)?;
+        let resource = self
+            .resources
+            .remove(resource_id)
+            .ok_or(ResourceError::NotFound)?;
+        let size = resource.payload.len();
+        self.remove_usage(owner_connection_id, size);
+        let reader: Box<dyn Read> = match resource.payload {
+            Payload::Memory(bytes) => Box::new(Cursor::new(bytes)),
+            Payload::File { mut file, .. } => {
+                file.rewind().map_err(|_| ResourceError::ReadFailed)?;
+                Box::new(file)
+            }
+        };
+        Ok((size, reader))
     }
 
     pub fn release_owner(&mut self, owner_connection_id: u64) {
@@ -223,7 +316,7 @@ impl ResourceStore {
             .collect::<Vec<_>>();
         for resource_id in expired {
             if let Some(resource) = self.resources.remove(&resource_id) {
-                self.remove_usage(resource.owner_connection_id, resource.bytes.len());
+                self.remove_usage(resource.owner_connection_id, resource.payload.len());
             }
         }
     }
@@ -236,6 +329,7 @@ pub enum ResourceError {
     TooLarge,
     InvalidChunkSize,
     InvalidOffset,
+    ReadFailed,
 }
 
 #[cfg(test)]

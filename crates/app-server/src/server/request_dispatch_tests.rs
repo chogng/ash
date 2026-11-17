@@ -1274,6 +1274,20 @@ fn registered_cancel_methods_have_reserved_control_execution() {
 }
 
 #[test]
+fn pdf_render_cancellation_and_close_keep_control_priority() {
+    assert_eq!(
+        RequestLane::for_message("pdf/renderPage", &json!({"operationId":"render"})),
+        RequestLane::Interactive
+    );
+    for method in ["pdf/cancelRender", "pdf/close"] {
+        assert_eq!(
+            RequestLane::for_message(method, &json!({})),
+            RequestLane::Control
+        );
+    }
+}
+
+#[test]
 fn subscription_dictation_upload_cannot_occupy_its_cancellation_lane() {
     assert_eq!(
         RequestLane::for_message("dictation/stop", &json!({})),

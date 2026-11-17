@@ -130,8 +130,18 @@ for (const locale of ['en', 'zh-CN']) {
 			const bounds = await stage.boundingBox(); const container = await surface.boundingBox();
 			return bounds!.height <= container!.height && bounds!.width <= container!.width;
 		}).toBe(true);
+		const glyph = viewer.locator('.ash-sessions-pdf-text span').first();
+		const glyphPosition = async () => {
+			const pageBounds = (await stage.boundingBox())!;
+			const glyphBounds = (await glyph.boundingBox())!;
+			return { x: (glyphBounds.x - pageBounds.x) / pageBounds.width, y: (glyphBounds.y - pageBounds.y) / pageBounds.height };
+		};
+		const fittedGlyph = await glyphPosition();
 		await button('Fit width', '适合宽度').click();
 		const width = (await stage.boundingBox())!.width;
+		const enlargedGlyph = await glyphPosition();
+		expect(enlargedGlyph.x).toBeCloseTo(fittedGlyph.x, 3);
+		expect(enlargedGlyph.y).toBeCloseTo(fittedGlyph.y, 3);
 		await button('Fit page', '适合页面').click();
 		expect((await stage.boundingBox())!.width).toBeLessThan(width);
 		await surface.locator('> .ash-scrollbar-viewport').evaluate(element => { element.scrollTop = 0; });
@@ -329,6 +339,7 @@ for (const modifier of ['Control', 'Meta'] as const) {
 		await expect.poll(async () => (await stage.boundingBox())!.width).toBeGreaterThan(400);
 		for (let index = 0; index < 12; index++) { await reader.dispatchEvent('wheel', { ctrlKey: true, deltaY: -10000 }); }
 		await expect.poll(async () => (await stage.boundingBox())!.width).toBeCloseTo(3200, 1);
+		await expect(stage.locator('img')).toHaveJSProperty('naturalHeight', 2048);
 		for (let index = 0; index < 20; index++) { await reader.dispatchEvent('wheel', { ctrlKey: true, deltaY: 10000 }); }
 		await expect.poll(async () => (await stage.boundingBox())!.width).toBeCloseTo(40, 1);
 		await expect(viewer.getByRole('button', { name: 'Save changes', exact: true })).toBeDisabled();

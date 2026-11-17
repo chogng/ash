@@ -282,6 +282,7 @@ fn concurrent_symlink_replacement_cannot_read_a_denied_subtree() {
     enum ReadOperation {
         Read,
         Revision,
+        Stream,
         Snapshot,
         Validate,
         Copy,
@@ -295,6 +296,7 @@ fn concurrent_symlink_replacement_cannot_read_a_denied_subtree() {
         for operation in [
             ReadOperation::Read,
             ReadOperation::Revision,
+            ReadOperation::Stream,
             ReadOperation::Snapshot,
             ReadOperation::Validate,
             ReadOperation::Copy,
@@ -353,6 +355,9 @@ fn concurrent_symlink_replacement_cannot_read_a_denied_subtree() {
                 match operation {
                     ReadOperation::Read => files.read_file(path, 100).map(|_| ()),
                     ReadOperation::Revision => files.read_file_with_revision(path, 100).map(|_| ()),
+                    ReadOperation::Stream => files
+                        .copy_file_with_revision(path, 100, &mut std::io::sink())
+                        .map(|_| ()),
                     ReadOperation::Snapshot => files.read_file_snapshot(path, 100).map(|_| ()),
                     ReadOperation::Validate => files.validate_file_snapshot(path, &snapshot),
                     ReadOperation::Copy => {
@@ -843,6 +848,28 @@ fn rejects_parent_traversal_and_read_overflow() {
     assert_eq!(
         file_system.read_file(Path::new("large.txt"), 5),
         Err(FileSystemError::ReadLimitExceeded { maximum_bytes: 5 }),
+    );
+}
+
+#[test]
+fn streamed_snapshot_uses_the_exact_revision_and_read_limit() {
+    let dir = TestDir::new();
+    let bytes = vec![123; 48 * 1024];
+    let path = Path::new("snapshot");
+    fs::write(dir.path.join(path), &bytes).unwrap();
+    let files = dir.file_system();
+    let mut snapshot = Vec::new();
+    let (size, revision) = files
+        .copy_file_with_revision(path, bytes.len(), &mut snapshot)
+        .unwrap();
+    assert_eq!(size, bytes.len());
+    assert_eq!(snapshot, bytes);
+    assert_eq!(revision, crate::file_revision(&bytes));
+    assert_eq!(
+        files.copy_file_with_revision(path, size - 1, &mut std::io::sink()),
+        Err(FileSystemError::ReadLimitExceeded {
+            maximum_bytes: size - 1
+        })
     );
 }
 

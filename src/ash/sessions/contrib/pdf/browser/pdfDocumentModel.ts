@@ -17,6 +17,7 @@ interface PdfRebuild { readonly document: IPdfDocument; readonly page: PdfPage; 
 const backupVersion = 2;
 const maxBackupEdits = 1000;
 const maxPdfBytes = 64 * 1024 * 1024;
+const maxResidentOriginalBytes = 1024 * 1024;
 
 /** Owns the editor's draft, undo history and file revision; the native session is a derived snapshot. */
 export class PdfDocumentModel extends Disposable implements IWorkingCopy {
@@ -29,7 +30,7 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 	public readonly onDidChangeExternalChange = this.changed.event;
 	private readonly lifetime = new AbortController();
 	private document: IPdfDocument | undefined;
-	private source: Uint8Array = new Uint8Array();
+	private source: Uint8Array | undefined;
 	private fileRevision: string | undefined;
 	private edits: PdfEdit[] = [];
 	private undone: PdfEdit[] = [];
@@ -61,34 +62,56 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 
 	public open(): Promise<void> {
 		return this.serialize(async () => {
-			if (this.input.initialBytes && this.readOnly) { this.source = this.input.initialBytes.slice(); }
-			else {
-				const stat = await this.files.stat(this.resource);
-				if (stat.sizeBytes > maxPdfBytes) { throw new Error(localize('sessions.pdfPreview.tooLarge', 'PDFs larger than 64 MiB cannot be opened.')); }
-				const file = await this.files.readFileBytes(this.resource);
-				this.source = file.bytes;
-				this.fileRevision = file.revision;
+			const signal = this.lifetime.signal;
+			if (this.input.initialBytes && this.readOnly) {
+				this.document = await this.pdf.open(this.input.initialBytes, signal);
+				return;
 			}
-			this.lifetime.signal.throwIfAborted();
-			this.document = await this.pdf.open(this.source, this.lifetime.signal);
+			const stat = await this.files.stat(this.resource);
+			if (stat.sizeBytes > maxPdfBytes) { throw new Error(localize('sessions.pdfPreview.tooLarge', 'PDFs larger than 64 MiB cannot be opened.')); }
+			const { document, revision, source } = await this.openFile(signal);
+			this.document = document;
+			this.source = source;
+			this.fileRevision = revision;
 		});
 	}
 
-	public render(number: number, edit?: PdfAnnotationEdit): Promise<{ page: PdfPage; bytes: Uint8Array; }> {
+	private async openFile(signal: AbortSignal): Promise<{ document: IPdfDocument; revision: string; source?: Uint8Array; }> {
+		const snapshot = await this.pdf.openSnapshot?.(
+			async owner => this.files.openReadSnapshot?.(this.resource, owner, signal), signal,
+		);
+		if (snapshot) { return snapshot; }
+		const file = await this.files.readFileBytes(this.resource);
+		signal.throwIfAborted();
+		const document = await this.pdf.open(file.bytes, signal);
+		return { document, revision: file.revision, source: this.residentSource(file.bytes) };
+	}
+
+	public render(number: number, edit?: PdfAnnotationEdit, preview?: { readonly dimension: number; readonly signal?: AbortSignal; }): Promise<{ page: PdfPage; bytes: Uint8Array; }> {
 		return this.serialize(async () => {
 			if (edit && this.readOnly) { throw new Error(localize('sessions.pdfPreview.readOnly', 'This PDF is read-only.')); }
 			if (edit && this.failedRecovery) { throw this.failedRecovery.error; }
-			const checkpoint = edit ? await this.checkpointForNextEdit() : this.checkpoint;
 			const document = this.document!;
-			const page = await document.page(number, 1600, this.lifetime.signal, edit);
-			this.current = page;
+			const signal = preview?.signal && !edit ? AbortSignal.any([this.lifetime.signal, preview.signal]) : this.lifetime.signal;
+			signal.throwIfAborted();
+			// The server's unmodified snapshot remains valid even if the file on disk changes.
+			// The first edit fetches uncached original bytes for undo and crash recovery.
+			const source = edit && !this.source
+				? await document.export(this.current ?? await document.page(number, 1600, signal), signal)
+				: this.source;
+			const checkpoint = edit ? await this.checkpointForNextEdit() : this.checkpoint;
+			const page = await document.page(number, preview?.dimension ?? 1600, signal, edit);
 			if (edit) {
+				this.current = page;
+				this.source = source;
 				this.checkpoint = checkpoint;
 				this.edits.push({ page: number, edit });
 				this.undone = [];
 				this.changed.fire();
 			}
-			const bytes = await document.image(page, this.lifetime.signal);
+			const bytes = await document.image(page, signal);
+			signal.throwIfAborted();
+			this.current = page;
 			return { page, bytes };
 		});
 	}
@@ -98,7 +121,7 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 			const edit = this.edits.at(-1);
 			if (!edit) { return; }
 			if (this.failedRecovery) { throw this.failedRecovery.error; }
-			this.install(await this.rebuild(this.source, this.edits.slice(0, -1), this.checkpoint));
+			this.install(await this.rebuild(this.originalSource(), this.edits.slice(0, -1), this.checkpoint));
 			this.edits.pop(); this.undone.push(edit); this.changed.fire();
 		});
 	}
@@ -109,7 +132,7 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 			if (!edit) { return; }
 			if (this.failedRecovery) { throw this.failedRecovery.error; }
 			const checkpoint = await this.checkpointForNextEdit();
-			this.install(await this.rebuild(this.source, [...this.edits, edit], checkpoint));
+			this.install(await this.rebuild(this.originalSource(), [...this.edits, edit], checkpoint));
 			this.undone.pop(); this.edits.push(edit); this.changed.fire();
 		});
 	}
@@ -144,12 +167,12 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 	public revert(signal: AbortSignal): Promise<void> {
 		return this.serialize(async () => {
 			signal.throwIfAborted();
-			const file = await this.files.readFileBytes(this.resource);
-			const document = await this.pdf.open(file.bytes, AbortSignal.any([signal, this.lifetime.signal]));
+			const operationSignal = AbortSignal.any([signal, this.lifetime.signal]);
+			const { document, revision, source } = await this.openFile(operationSignal);
 			try {
-				const page = await document.page(this.current?.page ?? 1, 1600, signal);
+				const page = await document.page(this.current?.page ?? 1, 1600, operationSignal);
 				this.install({ document, page, checkpoint: undefined });
-				this.source = file.bytes; this.fileRevision = file.revision;
+				this.source = source; this.fileRevision = revision;
 				this.edits = []; this.undone = []; this.savedEdits = [];
 				this.hasExternalChange = false; this.changed.fire();
 			} catch (error) { document.dispose(); throw error; }
@@ -166,13 +189,24 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 		// A save before the checkpoint or on a different branch cannot be reached by replay from this source.
 		const savedEdits = saved && saved.length >= editCount && saved.length - editCount <= maxBackupEdits
 			&& structuralEquals(saved.slice(0, editCount), this.edits.slice(0, editCount)) ? saved.slice(editCount) : undefined;
+		const source = this.checkpoint?.source ?? this.originalSource();
+		const bytes = source.buffer instanceof ArrayBuffer ? new Uint8Array(source.buffer, source.byteOffset, source.byteLength) : source.slice();
 		return JSON.stringify({
 			version: backupVersion,
-			source: encodeBase64(VSBuffer.wrap((this.checkpoint?.source ?? this.source).slice())),
+			source: encodeBase64(VSBuffer.wrap(bytes)),
 			edits,
 			revision: this.fileRevision,
 			savedEdits,
 		});
+	}
+
+	private residentSource(bytes: Uint8Array): Uint8Array | undefined {
+		return !this.readOnly && bytes.byteLength <= maxResidentOriginalBytes ? bytes : undefined;
+	}
+
+	private originalSource(): Uint8Array {
+		assert(this.source, 'PDF edit history requires its original snapshot');
+		return this.source;
 	}
 
 	public restoreBackup(content: string): void {

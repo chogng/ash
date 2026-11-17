@@ -244,6 +244,14 @@ impl AppServer {
                 "pdf".into(),
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
             );
+            capabilities.contracts.insert(
+                "pdfResource".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+            capabilities.contracts.insert(
+                "pdfRender".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
         }
         if self.home.is_some()
             && self.provider_runtime.is_some()

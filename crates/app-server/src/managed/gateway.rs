@@ -7,11 +7,14 @@ use crate::server::request_dispatch::RequestDispatcher;
 use crate::server::request_dispatch::RequestLane;
 use ash_app_server_protocol::protocol::error::AppServerError;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::pdf::PdfOpenResourceParams;
+use ash_app_server_protocol::protocol::pdf::PdfOpenResourceResult;
 use ash_app_server_protocol::protocol::registry::ClientMethod;
 use ash_app_server_protocol::protocol::registry::client_method;
 use ash_app_server_protocol::rpc::JsonRpcFailure;
 use ash_app_server_protocol::rpc::JsonRpcId;
 use ash_app_server_protocol::rpc::JsonRpcRequest;
+use ash_app_server_protocol::rpc::JsonRpcSuccess;
 use ash_app_server_protocol::rpc::JsonRpcVersion;
 use ash_app_server_transport::DEFAULT_MAX_MESSAGE_BYTES;
 use ash_app_server_transport::JsonlReader;
@@ -608,6 +611,31 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                             .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
                         continue;
                     };
+                    if method == Some("pdf/openResource") && route_id != 0 {
+                        // PDF documents belong to the profile route. Leave resources from
+                        // other targets available for the client's ordinary chunked read.
+                        let id = serde_json::from_value(id).expect("gateway validated request ID");
+                        let params = serde_json::from_value::<PdfOpenResourceParams>(
+                            request["params"].take(),
+                        );
+                        let response = match params {
+                            Ok(params) if (1..=128).contains(&params.document_id.len()) => {
+                                serde_json::to_string(&JsonRpcSuccess::new(
+                                    id,
+                                    PdfOpenResourceResult { opened: false },
+                                ))
+                            }
+                            _ => serde_json::to_string(&JsonRpcFailure::new(
+                                id,
+                                AppServerError::new(-32602, AppServerErrorName::InvalidParams),
+                            )),
+                        }
+                        .expect("valid PDF resource routing response");
+                        outbound
+                            .send(response.into())
+                            .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
+                        continue;
+                    }
                     *request.pointer_mut(kind.field()).expect("decoded handle") =
                         Value::String(handle.to_owned());
                     raw = request.to_string().into();
@@ -983,7 +1011,9 @@ impl GatewayHandleKind {
             "fs/readFile" if request.pointer(Self::DocumentRead.field())?.is_string() => {
                 Some(Self::DocumentRead)
             }
-            "resource/metadata" | "resource/read" | "resource/release" => Some(Self::Resource),
+            "resource/metadata" | "resource/read" | "resource/release" | "pdf/openResource" => {
+                Some(Self::Resource)
+            }
             method
                 if method.starts_with("git/")
                     && request

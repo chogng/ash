@@ -121,6 +121,10 @@ export function bufferToStream(buffer: VSBuffer): VSBufferReadableStream {
 }
 
 export function encodeBase64({ buffer }: VSBuffer, padded = true, urlSafe = false): string {
+	const native = buffer as Uint8Array & { toBase64?(options?: { alphabet: 'base64' | 'base64url'; omitPadding: boolean; }): string; };
+	if (typeof native.toBase64 === 'function') {
+		return padded && !urlSafe ? native.toBase64() : native.toBase64({ alphabet: urlSafe ? 'base64url' : 'base64', omitPadding: !padded });
+	}
 	const alphabet = urlSafe ? 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_' : 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	const parts: string[] = [];
 	let chunk = '';

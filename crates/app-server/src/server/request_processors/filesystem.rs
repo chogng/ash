@@ -64,6 +64,7 @@ const MAX_EDITOR_FILE_BYTES: usize = 50 * 1024 * 1024;
 const MAX_DOCUMENT_FILE_BYTES: usize = 32 * 1024 * 1024;
 // Binary editors support large PDFs without changing text-document limits.
 const MAX_BINARY_EDITOR_FILE_BYTES: usize = 64 * 1024 * 1024;
+const MAX_IN_MEMORY_BINARY_SNAPSHOT_BYTES: usize = 8 * 1024 * 1024;
 const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
 
 /// Coordinates the existing owners needed by the filesystem adapter.
@@ -260,26 +261,59 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: FsReadBinaryFileParams = decode(params)?;
-        let content = self
-            .file_system_for_request(
-                params.dir_id.as_deref(),
-                params.session_directory.as_ref(),
-                Permission::ReadFiles,
-            )?
-            .read_file_with_revision(&params.path, MAX_BINARY_EDITOR_FILE_BYTES)
-            .map_err(file_system_error)?;
-        let metadata = self
-            .resources
-            .lock()
-            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
-            .create_with_limit(
-                connection.connection_id,
-                "application/octet-stream".into(),
-                content.bytes,
-                BINARY_PREVIEW_RESOURCE_TTL,
-                MAX_BINARY_EDITOR_FILE_BYTES,
-            )
-            .map_err(resource_rpc_error)?;
+        let files = self.file_system_for_request(
+            params.dir_id.as_deref(),
+            params.session_directory.as_ref(),
+            Permission::ReadFiles,
+        )?;
+        // The bounded read checks the size of the opened file. A separate metadata
+        // request would require browse permission even for a read-only grant.
+        let small = match files
+            .read_file_with_revision(&params.path, MAX_IN_MEMORY_BINARY_SNAPSHOT_BYTES)
+        {
+            Ok(content) => Some(content),
+            Err(FileSystemError::ReadLimitExceeded { .. }) => None,
+            Err(error) => return Err(file_system_error(error)),
+        };
+        let owner = connection.connection_id;
+        let mime_type = "application/octet-stream".into();
+        let (metadata, revision) = if let Some(content) = small {
+            let metadata = self
+                .resources
+                .lock()
+                .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
+                .create_with_limit(
+                    owner,
+                    mime_type,
+                    content.bytes,
+                    BINARY_PREVIEW_RESOURCE_TTL,
+                    MAX_BINARY_EDITOR_FILE_BYTES,
+                )
+                .map_err(resource_rpc_error)?;
+            (metadata, content.revision)
+        } else {
+            // A connection-owned snapshot survives external writes without pinning the
+            // entire binary file in the long-lived App Server heap.
+            let mut snapshot = tempfile::tempfile()
+                .map_err(|error| file_system_error(FileSystemError::Io(error.to_string())))?;
+            let (size, revision) = files
+                .copy_file_with_revision(&params.path, MAX_BINARY_EDITOR_FILE_BYTES, &mut snapshot)
+                .map_err(file_system_error)?;
+            let metadata = self
+                .resources
+                .lock()
+                .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
+                .create_file_snapshot(
+                    owner,
+                    mime_type,
+                    snapshot,
+                    size,
+                    &revision,
+                    BINARY_PREVIEW_RESOURCE_TTL,
+                )
+                .map_err(resource_rpc_error)?;
+            (metadata, revision)
+        };
         result(&FsReadBinaryFileResult {
             resource: ResourceMetadataResult {
                 resource_id: metadata.resource_id,
@@ -287,7 +321,7 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
                 size: metadata.size,
                 sha256: metadata.sha256,
             },
-            revision: content.revision,
+            revision,
         })
     }
 

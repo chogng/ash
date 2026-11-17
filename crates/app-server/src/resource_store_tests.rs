@@ -4,7 +4,76 @@ use super::MAX_RESOURCE_BYTES_PER_CONNECTION;
 use super::MAX_RESOURCES_PER_CONNECTION;
 use super::ResourceError;
 use super::ResourceStore;
+use std::io::Read;
+use std::io::Write;
 use std::time::Duration;
+
+#[test]
+fn file_snapshot_preserves_random_reads_and_connection_ownership() {
+    let mut store = ResourceStore::default();
+    let mut file = tempfile::tempfile().unwrap();
+    file.write_all(b"snapshot").unwrap();
+    let metadata = store
+        .create_file_snapshot(
+            7,
+            "application/octet-stream".into(),
+            file,
+            8,
+            "revision",
+            Duration::from_secs(60),
+        )
+        .unwrap();
+    assert_eq!(metadata.sha256, "sha256:revision");
+    assert!(matches!(
+        store.read(8, &metadata.resource_id, 0, 3),
+        Err(ResourceError::NotOwner)
+    ));
+    let tail = store.read(7, &metadata.resource_id, 4, 8).unwrap();
+    assert_eq!(tail.data, b"shot");
+    assert!(tail.eof);
+    let start = store.read(7, &metadata.resource_id, 0, 4).unwrap();
+    assert_eq!(start.data, b"snap");
+    assert!(!start.eof);
+    store.release_owner(7);
+    assert!(matches!(
+        store.read(7, &metadata.resource_id, 0, 3),
+        Err(ResourceError::NotFound)
+    ));
+}
+
+#[test]
+fn transferring_a_file_snapshot_rewinds_it_and_releases_its_quota() {
+    let mut store = ResourceStore::default();
+    let mut file = tempfile::tempfile().unwrap();
+    file.write_all(b"snapshot").unwrap();
+    let id = store
+        .create_file_snapshot(
+            1,
+            "application/pdf".into(),
+            file,
+            8,
+            "revision",
+            Duration::from_secs(60),
+        )
+        .unwrap()
+        .resource_id;
+    assert!(matches!(
+        store.take_reader(2, &id),
+        Err(ResourceError::NotOwner)
+    ));
+    assert_eq!(store.read(1, &id, 4, 4).unwrap().data, b"shot");
+
+    let (size, mut reader) = store.take_reader(1, &id).unwrap();
+    let mut bytes = Vec::new();
+    reader.read_to_end(&mut bytes).unwrap();
+    assert_eq!(size, 8);
+    assert_eq!(bytes, b"snapshot");
+    assert!(!store.usage_by_connection.contains_key(&1));
+    assert!(matches!(
+        store.take_reader(1, &id),
+        Err(ResourceError::NotFound)
+    ));
+}
 
 #[test]
 fn domain_read_limit_preserves_general_resource_limit() {

@@ -246,15 +246,23 @@ use crate::protocol::pdf::PdfAppendParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::pdf::PdfAppendResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfCancelRenderParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::pdf::PdfCloseParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::pdf::PdfOpenParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfOpenResourceParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfOpenResourceResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::pdf::PdfPageParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::pdf::PdfReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::pdf::PdfReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfRenderPageParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionListParams;
 #[cfg(any(test, feature = "export"))]
@@ -5079,11 +5087,21 @@ client_methods! {
     PdfOpen => "pdf/open" {
         params: PdfOpenParams, response: (), serialization: ResourceExclusive("documentId"),
     },
+    PdfOpenResource => "pdf/openResource" {
+        params: PdfOpenResourceParams, response: PdfOpenResourceResult, serialization: ResourceExclusive("documentId"),
+    },
     PdfAppend => "pdf/append" {
         params: PdfAppendParams, response: PdfAppendResult, serialization: ResourceExclusive("documentId"),
     },
     PdfPage => "pdf/page" {
         params: PdfPageParams, response: PdfPage, serialization: ResourceExclusive("documentId"),
+    },
+    PdfRenderPage => "pdf/renderPage" {
+        params: PdfRenderPageParams, response: PdfPage, serialization: ResourceExclusive("documentId"),
+        cancellation: "operationId",
+    },
+    PdfCancelRender => "pdf/cancelRender" {
+        params: PdfCancelRenderParams, response: (), serialization: None,
     },
     PdfRead => "pdf/read" {
         params: PdfReadParams, response: PdfReadResult, serialization: ResourceExclusive("documentId"),
@@ -5991,7 +6009,7 @@ client_methods! {
     GrepIndexRebuild => "grep/index/rebuild" {
         params: EmptyParams,
         response: GrepIndexStatusResult,
-        serialization: GlobalExclusive,
+        serialization: None,
     },
     GrepIndexDisableAndDelete => "grep/index/disableAndDelete" {
         params: GrepIndexDisableAndDeleteParams,
@@ -7884,11 +7902,15 @@ typescript_bindings! {
     AssetVersionResult,
     AssetImageType,
     PdfOpenParams,
+    PdfOpenResourceParams,
+    PdfOpenResourceResult,
     PdfAppendParams,
     PdfAppendResult,
+    PdfCancelRenderParams,
     PdfPageParams,
     PdfReadParams,
     PdfReadResult,
+    PdfRenderPageParams,
     PdfCloseParams,
     PdfPage,
     PdfRect,

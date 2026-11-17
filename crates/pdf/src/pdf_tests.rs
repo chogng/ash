@@ -24,6 +24,7 @@ fn execute(bytes: &[u8], edit: Option<PdfAnnotationEdit>) -> TestResult {
         &document,
         EngineRequest {
             source,
+            source_sha256: None,
             image: image.clone(),
             modified: modified.clone(),
             page: 1,
@@ -148,6 +149,24 @@ fn imports_are_bounded_and_connection_owned() {
         service.read(1, "document", 0, false, None, 0, 4),
         Err(PdfError::NotFound)
     ));
+}
+
+#[test]
+fn snapshot_import_checks_exact_size_and_discards_failed_uploads() {
+    let service = PdfService::new(std::path::PathBuf::from("unused"));
+    for bytes in [b"abc".as_slice(), b"abcde".as_slice()] {
+        assert!(matches!(
+            service.open_from_reader(1, "document", 4, bytes),
+            Err(PdfError::Invalid)
+        ));
+    }
+    service
+        .open_from_reader(1, "document", 4, b"abcd".as_slice())
+        .unwrap();
+    assert_eq!(
+        service.read(1, "document", 0, false, None, 0, 4).unwrap(),
+        (b"abcd".to_vec(), true)
+    );
 }
 
 #[test]
