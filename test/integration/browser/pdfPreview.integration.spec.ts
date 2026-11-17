@@ -9,13 +9,16 @@ let worker: ChildProcessWithoutNullStreams;
 let sequence = 0;
 const pending = new Map<number, (reply: unknown) => void>();
 
-function pdf(): Buffer {
+function pdf(pageCount = 2, mixedSizes = false): Buffer {
 	const stream = 'BT /F1 18 Tf 30 220 Td (aspdf native review) Tj ET';
 	const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>'];
+	for (let number = 3; number <= pageCount; number++) { objects.push(objects[2]); }
+	if (mixedSizes) { objects[5] = objects[5].replace('300 400', '600 300'); }
+	objects[1] = `<< /Type /Pages /Kids [3 0 R ${Array.from({ length: pageCount - 1 }, (_, index) => `${index + 6} 0 R`).join(' ')}] /Count ${pageCount} >>`;
 	let text = '%PDF-1.4\n'; const offsets: number[] = [];
 	for (const [index, object] of objects.entries()) { offsets.push(text.length); text += `${index + 1} 0 obj\n${object}\nendobj\n`; }
 	const start = text.length;
-	text += `xref\n0 7\n0000000000 65535 f \n${offsets.map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF\n`;
+	text += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${start}\n%%EOF\n`;
 	return Buffer.from(text);
 }
 
@@ -49,9 +52,46 @@ test.afterEach(async ({ page }) => {
 });
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`PDF defaults to continuous scrolling and remembers the mode for new files in ${locale}`, async ({ page }) => {
+		await page.goto(`/pdfPreview.html?locale=${locale}`);
+		await page.waitForFunction(() => !!window.aspdfTest);
+		await page.evaluate(() => window.aspdfTest.open());
+		const viewer = page.locator('.ash-sessions-pdf-preview');
+		const continuous = viewer.locator('.ash-sessions-pdf-continuous');
+		const mode = viewer.getByRole('button', { name: locale === 'en' ? 'Scroll mode' : '滚动模式', exact: true });
+		await expect(continuous).toBeVisible();
+		await expect(viewer).toHaveAttribute('aria-busy', 'false');
+		await mode.click();
+		await page.getByRole('menuitemradio', { name: locale === 'en' ? 'Page scrolling' : '按页滚动', exact: true }).click();
+		await expect(continuous).toHaveCount(0);
+		const preference = await page.evaluate(() => window.aspdfTest.scrollPreference());
+		expect(preference.value).toBe('paged');
+		expect(JSON.parse(preference.source)['sessions.pdf.scrollMode']).toBe('paged');
+		await page.evaluate(() => window.aspdfTest.open(false, 'second.pdf'));
+		await expect(viewer).toHaveAttribute('aria-busy', 'false');
+		await expect(continuous).toHaveCount(0);
+		// Stale per-file modes cannot override the profile preference.
+		await page.evaluate(() => window.aspdfTest.restoreViewState({ page: 2, scrollMode: 'continuous' }));
+		await expect(viewer.locator('.ash-sessions-pdf-page-number')).toHaveValue('2');
+		await expect(continuous).toHaveCount(0);
+		await expect(page.evaluate(() => window.aspdfTest.setScrollMode('invalid'))).rejects.toThrow();
+		expect((await page.evaluate(() => window.aspdfTest.scrollPreference())).value).toBe('paged');
+		await mode.click();
+		await page.getByRole('menuitemradio', { name: locale === 'en' ? 'Continuous scrolling' : '连续滚动', exact: true }).click();
+		await expect(continuous).toBeVisible();
+		await page.evaluate(() => window.aspdfTest.open(false, 'third.pdf'));
+		await expect(continuous).toBeVisible();
+		await expect(viewer).toHaveAttribute('aria-busy', 'false');
+		await page.evaluate(() => window.aspdfTest.restoreViewState({ page: 2, scrollMode: 'paged' }));
+		await expect(viewer.locator('.ash-sessions-pdf-page-number')).toHaveValue('2');
+		await expect(continuous).toBeVisible();
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
 	test(`aspdf reads, annotates, saves and reopens through the native PDF service in ${locale}`, async ({ page }, testInfo) => {
 		const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-		await page.goto(`/pdfPreview.html?locale=${locale}`);
+		await page.goto(`/pdfPreview.html?scrollMode=paged&locale=${locale}`);
 		await page.waitForFunction(() => !!window.aspdfTest);
 		await page.evaluate(() => window.aspdfTest.open());
 		const viewer = page.locator('.ash-sessions-pdf-preview');
@@ -105,7 +145,7 @@ for (const locale of ['en', 'zh-CN']) {
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`PDF toolbar jumps pages, fits, draws, erases and saves text in ${locale}`, async ({ page }, testInfo) => {
-		await page.goto(`/pdfPreview.html?locale=${locale}`);
+		await page.goto(`/pdfPreview.html?scrollMode=paged&locale=${locale}`);
 		await page.waitForFunction(() => !!window.aspdfTest);
 		await page.evaluate(() => window.aspdfTest.open());
 		const viewer = page.locator('.ash-sessions-pdf-preview');
@@ -201,7 +241,7 @@ for (const locale of ['en', 'zh-CN']) {
 for (const locale of ['en', 'zh-CN']) {
 	test(`PDF reading viewport centers native pages and owns scrolling in ${locale}`, async ({ page }, testInfo) => {
 		await page.setViewportSize({ width: 1440, height: 960 });
-		await page.goto(`/pdfPreview.html?locale=${locale}`);
+		await page.goto(`/pdfPreview.html?scrollMode=paged&locale=${locale}`);
 		await page.waitForFunction(() => !!window.aspdfTest);
 		await page.evaluate(() => window.aspdfTest.open(true));
 		await page.evaluate(() => window.aspdfTest.resize(1400, 860));
@@ -270,10 +310,229 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`PDF wheel and keyboard turn pages at scroll boundaries in ${locale}`, async ({ page }) => {
+		await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(3), contentType: 'application/pdf' }));
+		await page.setViewportSize({ width: 1440, height: 960 });
+		await page.goto(`/pdfPreview.html?scrollMode=paged&locale=${locale}`);
+		await page.waitForFunction(() => !!window.aspdfTest);
+		await page.evaluate(readOnly => window.aspdfTest.open(readOnly), locale === 'en');
+		await page.evaluate(() => window.aspdfTest.resize(1400, 860));
+		const viewer = page.locator('.ash-sessions-pdf-preview');
+		const reader = viewer.locator('.ash-sessions-pdf-page');
+		const viewport = reader.locator('> .ash-scrollbar-viewport');
+		const number = viewer.locator('.ash-sessions-pdf-page-number');
+		const rendered = viewer.locator('[role="status"]');
+		const status = (number: number) => locale === 'en' ? `Page ${number} of 3` : `第 ${number} 页，共 3 页`;
+		await expect(rendered).toHaveText(status(1));
+		await reader.hover();
+		await page.mouse.wheel(0, -120);
+		await expect(number).toHaveValue('1');
+		await reader.dispatchEvent('wheel', { deltaY: 120, shiftKey: true });
+		await expect(number).toHaveValue('1');
+		// Keep one trackpad gesture alive across the async page render.
+		await reader.evaluate(async element => {
+			for (let index = 0; index < 40; index++) {
+				element.dispatchEvent(new WheelEvent('wheel', { deltaY: 20, bubbles: true, cancelable: true }));
+				await new Promise(resolve => setTimeout(resolve, 20));
+			}
+		});
+		await expect(rendered).toHaveText(status(2));
+		// An idle interval starts a new wheel gesture.
+		await page.waitForTimeout(240);
+		await page.mouse.wheel(0, 120);
+		await expect(rendered).toHaveText(status(3));
+		await page.mouse.wheel(0, -120);
+		await expect(rendered).toHaveText(status(2));
+		await reader.press('PageUp');
+		await expect(rendered).toHaveText(status(1));
+		await reader.press('PageDown');
+		await expect(rendered).toHaveText(status(2));
+		await viewer.getByRole('button', { name: locale === 'en' ? 'Fit width' : '适合宽度', exact: true }).click();
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(100);
+		await reader.hover();
+		await page.waitForTimeout(240);
+		await page.mouse.wheel(0, 120);
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		await expect(number).toHaveValue('2');
+		await reader.press('End');
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThanOrEqual(1);
+		await page.mouse.wheel(0, 120);
+		await expect(rendered).toHaveText(status(3));
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
+		await reader.press('PageUp');
+		await expect(rendered).toHaveText(status(2));
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThanOrEqual(1);
+		await reader.press('Home');
+		await reader.hover();
+		await page.mouse.wheel(0, -120);
+		await expect(rendered).toHaveText(status(1));
+		await reader.press('Home');
+		await reader.press('PageUp');
+		await expect(number).toHaveValue('1');
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`PDF continuous mode reuses the menu and virtual scrolling in ${locale}`, async ({ page }, testInfo) => {
+		await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(20), contentType: 'application/pdf' }));
+		await page.setViewportSize({ width: 1440, height: 960 });
+		await page.goto(`/pdfPreview.html?scrollMode=paged&locale=${locale}`);
+		await page.waitForFunction(() => !!window.aspdfTest);
+		await page.evaluate(() => window.aspdfTest.open());
+		await page.evaluate(() => window.aspdfTest.resize(1400, 860));
+		const viewer = page.locator('.ash-sessions-pdf-preview');
+		const mode = viewer.getByRole('button', { name: locale === 'en' ? 'Scroll mode' : '滚动模式', exact: true });
+		const continuousLabel = locale === 'en' ? 'Continuous scrolling' : '连续滚动';
+		const pagedLabel = locale === 'en' ? 'Page scrolling' : '按页滚动';
+		const number = viewer.locator('.ash-sessions-pdf-page-number');
+		await expect(mode).toHaveAttribute('aria-haspopup', 'menu');
+		await mode.click();
+		await expect(page.getByRole('menuitemradio', { name: pagedLabel, exact: true })).toHaveAttribute('aria-checked', 'true');
+		await page.getByRole('menuitemradio', { name: continuousLabel, exact: true }).click();
+		const continuous = viewer.locator('.ash-sessions-pdf-continuous');
+		const viewport = continuous.locator('> .ash-scrollbar-viewport');
+		await expect(continuous).toBeVisible();
+		await expect(continuous.locator('img').first()).toHaveJSProperty('naturalWidth', 1200);
+		await expect(number).toHaveValue('1');
+		const frame = (await viewport.boundingBox())!;
+		await continuous.hover();
+		await page.mouse.wheel(0, frame.height * 0.8);
+		await expect(number).toHaveValue('2');
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(frame.height * 0.5);
+		await expect.poll(async () => {
+			const pages = await continuous.locator('.ash-sessions-pdf-stage').evaluateAll(elements => elements.map(element => element.getBoundingClientRect()));
+			return pages.filter(rect => rect.bottom > frame.y && rect.top < frame.y + frame.height).length;
+		}).toBeGreaterThanOrEqual(2);
+		await expect.poll(() => continuous.locator('img').count()).toBeGreaterThanOrEqual(2);
+		expect(await continuous.locator('img').count()).toBeLessThan(6);
+		await continuous.locator('[data-page-number="1"]').dispatchEvent('pointerdown', { pointerId: 1, pointerType: 'mouse', button: 0 });
+		await expect(number).toHaveValue('1');
+		await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+		await expect(number).toHaveValue('1');
+		await page.mouse.wheel(0, 1);
+		await expect(number).toHaveValue('2');
+		await testInfo.attach(`pdf-continuous-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
+		await mode.click();
+		await expect(page.getByRole('menuitemradio', { name: continuousLabel, exact: true })).toHaveAttribute('aria-checked', 'true');
+		await page.getByRole('menuitemradio', { name: pagedLabel, exact: true }).click();
+		await expect(continuous).toHaveCount(0);
+		await expect(number).toHaveValue('2');
+		await expect(viewer.locator('img')).toHaveCount(1);
+		await mode.focus(); await mode.press('ArrowDown');
+		await page.getByRole('menuitemradio', { name: continuousLabel, exact: true }).click();
+		await expect(continuous).toBeVisible();
+		await number.fill('20'); await number.press('Enter');
+		await expect(continuous.locator('[data-page-number="20"] img')).toHaveJSProperty('naturalWidth', 1200);
+		await expect(number).toHaveValue('20');
+		await continuous.press('PageUp');
+		await expect(number).toHaveValue('19');
+		const stage = continuous.locator('[data-page-number="19"]');
+		const width = (await stage.boundingBox())!.width;
+		await continuous.press('ControlOrMeta+=');
+		await expect.poll(async () => (await stage.boundingBox())!.width).toBeGreaterThan(width);
+		await viewer.getByRole('textbox', { name: locale === 'en' ? 'Annotation text' : '批注内容', exact: true }).fill('Continuous review');
+		await viewer.getByRole('button', { name: locale === 'en' ? 'Add note' : '添加便签', exact: true }).click();
+		await expect(viewer.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('Continuous review');
+		await expect(number).toHaveValue('19');
+		expect(await continuous.locator('img').count()).toBeLessThan(6);
+	});
+}
+
+test('PDF restores continuous mode after a pending page turn finishes', async ({ page }) => {
+	await page.goto('/pdfPreview.html?scrollMode=paged');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open());
+	let enter!: () => void;
+	let release!: () => void;
+	const entered = new Promise<void>(resolve => { enter = resolve; });
+	const gate = new Promise<void>(resolve => { release = resolve; });
+	let held = false;
+	await page.route('**/__aspdf_rpc', async route => {
+		const request = route.request().postDataJSON();
+		if (!held && ['pdf/page', 'pdf/renderPage'].includes(request.method) && request.params.page === 2) {
+			held = true; enter(); await gate;
+		}
+		await route.fallback();
+	});
+	try {
+		const number = page.locator('.ash-sessions-pdf-page-number');
+		await number.fill('2'); await number.press('Enter');
+		await entered;
+		await page.evaluate(() => window.aspdfTest.setScrollMode('continuous'));
+		await page.evaluate(() => window.aspdfTest.restoreViewState({ page: 2 }));
+		release();
+		await expect(page.locator('.ash-sessions-pdf-continuous')).toBeVisible();
+		await expect(number).toHaveValue('2');
+		await expect(page.locator('.ash-sessions-pdf-continuous [data-page-number="2"] img')).toHaveJSProperty('naturalWidth', 1200);
+	} finally { release(); }
+});
+
+test('PDF defers continuous restoration until the hidden viewport is laid out', async ({ page }) => {
+	await page.goto('/pdfPreview.html?scrollMode=paged');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open());
+	await page.evaluate(() => window.aspdfTest.resize(0, 0));
+	await page.evaluate(() => window.aspdfTest.setScrollMode('continuous'));
+	await page.evaluate(() => window.aspdfTest.restoreViewState({ page: 2 }));
+	await expect(page.locator('.ash-sessions-pdf-continuous')).toHaveCount(0);
+	await page.evaluate(() => window.aspdfTest.resize(1400, 860));
+	await expect(page.locator('.ash-sessions-pdf-continuous')).toBeVisible();
+	await expect(page.locator('.ash-sessions-pdf-page-number')).toHaveValue('2');
+	await expect(page.locator('.ash-sessions-pdf-error')).toBeEmpty();
+	await expect(page.locator('.ash-sessions-pdf-continuous [data-page-number="2"] img')).toHaveJSProperty('naturalWidth', 1200);
+});
+
+test('PDF continuous mode preserves mixed page sizes and restored reading mode', async ({ page }) => {
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(3, true), contentType: 'application/pdf' }));
+	await page.setViewportSize({ width: 1440, height: 960 });
+	await page.goto('/pdfPreview.html?scrollMode=paged');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open(true));
+	await page.evaluate(() => window.aspdfTest.resize(1400, 860));
+	const viewer = page.locator('.ash-sessions-pdf-preview');
+	const mode = viewer.getByRole('button', { name: 'Scroll mode', exact: true });
+	await mode.click();
+	await page.getByRole('menuitemradio', { name: 'Continuous scrolling', exact: true }).click();
+	const continuous = viewer.locator('.ash-sessions-pdf-continuous');
+	const number = viewer.locator('.ash-sessions-pdf-page-number');
+	await number.fill('2'); await number.press('Enter');
+	const landscape = continuous.locator('[data-page-number="2"]');
+	await expect(landscape.locator('img')).toHaveJSProperty('naturalWidth', 1600);
+	await expect.poll(async () => {
+		const bounds = (await landscape.boundingBox())!;
+		return bounds.width / bounds.height;
+	}).toBeCloseTo(2, 2);
+	await expect(viewer.getByRole('button', { name: 'Add note', exact: true })).toBeDisabled();
+	await continuous.press('Control+0');
+	await expect.poll(async () => (await landscape.boundingBox())!.width).toBeCloseTo(800, 1);
+	for (let index = 0; index < 3; index++) { await continuous.press('Control+='); }
+	const viewport = continuous.locator('> .ash-scrollbar-viewport');
+	await expect.poll(() => viewport.evaluate(element => element.scrollWidth - element.clientWidth)).toBeGreaterThan(0);
+	const frame = (await continuous.boundingBox())!;
+	const bounds = (await landscape.boundingBox())!;
+	const anchor = { x: frame.x + frame.width * 0.6, y: frame.y + Math.min(bounds.height * 0.3, frame.height * 0.3) };
+	const fraction = { x: (anchor.x - bounds.x) / bounds.width, y: (anchor.y - bounds.y) / bounds.height };
+	await page.mouse.move(anchor.x, anchor.y);
+	await page.keyboard.down('Control');
+	try { await page.mouse.wheel(0, -120); } finally { await page.keyboard.up('Control'); }
+	await expect.poll(async () => (await landscape.boundingBox())!.width).toBeGreaterThan(bounds.width);
+	const enlarged = (await landscape.boundingBox())!;
+	expect(Math.abs(enlarged.x + enlarged.width * fraction.x - anchor.x)).toBeLessThan(2);
+	expect(Math.abs(enlarged.y + enlarged.height * fraction.y - anchor.y)).toBeLessThan(2);
+	const state = await page.evaluate(() => window.aspdfTest.viewState());
+	expect(state).toEqual({ page: 2 });
+	await page.evaluate(() => window.aspdfTest.open(true));
+	await page.evaluate(state => window.aspdfTest.restoreViewState(state), state);
+	await expect(continuous).toBeVisible();
+	await expect(number).toHaveValue('2');
+	await expect(continuous.locator('[data-page-number="2"] img')).toHaveJSProperty('naturalWidth', 1600);
+});
+
 for (const modifier of ['Control', 'Meta'] as const) {
 	test(`PDF ${modifier}+wheel zooms at the pointer without zooming the host`, async ({ page }) => {
 		await page.setViewportSize({ width: 1440, height: 960 });
-		await page.goto('/pdfPreview.html');
+		await page.goto('/pdfPreview.html?scrollMode=paged');
 		await page.waitForFunction(() => !!window.aspdfTest);
 		await page.evaluate(() => window.aspdfTest.open(true));
 		await page.evaluate(() => window.aspdfTest.resize(1400, 860));
@@ -357,7 +616,7 @@ test('aspdf sustains a thousand page turns with bounded renderer state', async (
 	const timings: number[] = [];
 	try {
 		await session.send('Performance.enable');
-		await page.goto('/pdfPreview.html');
+		await page.goto('/pdfPreview.html?scrollMode=paged');
 		await page.waitForFunction(() => !!window.aspdfTest);
 		await page.evaluate(() => window.aspdfTest.open());
 		const viewer = page.locator('.ash-sessions-pdf-preview');
@@ -392,7 +651,7 @@ test('aspdf opens a 42 MiB scanned PDF and saves an annotation', async ({ page }
 	test.skip(process.env.ASPDF_STRESS !== '1', 'Opt-in performance workload');
 	test.setTimeout(120000);
 	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: readFileSync('.build/aspdf-perf/corpus/large-scan.pdf'), contentType: 'application/pdf' }));
-	await page.goto('/pdfPreview.html');
+	await page.goto('/pdfPreview.html?scrollMode=paged');
 	await page.waitForFunction(() => !!window.aspdfTest);
 	await page.evaluate(() => window.aspdfTest.open());
 	const viewer = page.locator('.ash-sessions-pdf-preview');

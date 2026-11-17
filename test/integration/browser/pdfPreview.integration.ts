@@ -1,6 +1,12 @@
-import { Event } from '../../../src/ash/base/common/event.js';
+import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
+import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
+import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
+import { registerTestTitlebarServices } from '../../../src/ash/workbench/test/common/testTitlebarServices.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
-import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
+import { IContextMenuService, IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/agentHost/test/common/testAppServerProtocol.js';
@@ -13,6 +19,7 @@ import { InstantiationService } from '../../../src/ash/platform/instantiation/co
 import { createTestFileService, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import type { EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
+import type { IEditorPaneWithViewState } from '../../../src/ash/workbench/browser/parts/editor/editorWithViewState.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { languagePackCatalog as chineseCatalog } from '../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { bindTestColorTheme } from '../../fixtures/browser/themeFixture.js';
@@ -20,8 +27,9 @@ import { IThemeService } from '../../../src/ash/platform/theme/common/themeServi
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
-import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { ConfigurationTarget, IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
+import { pdfScrollModeSetting } from '../../../src/ash/sessions/contrib/pdf/browser/pdfPreviewConfiguration.js';
 import { IPdfEditorService, PdfEditorService } from '../../../src/ash/sessions/contrib/pdf/browser/pdfEditorService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import '../../../src/ash/sessions/contrib/pdf/browser/pdfPreview.contribution.js';
@@ -55,12 +63,19 @@ const services = new InstantiationService();
 const memory = new InMemoryFileSystemProvider();
 const files = createTestFileService(memory);
 services.registerInstance(IFileService, files); registerTestComponentServices(services);
-services.registerInstance(IConfigurationService, new TestConfigurationService());
+const configuration = new TestConfigurationService();
+services.registerInstance(IConfigurationService, configuration);
+const initialMode = new URL(location.href).searchParams.get('scrollMode');
+if (initialMode) { await configuration.updateValue(pdfScrollModeSetting, initialMode, ConfigurationTarget.USER_LOCAL); }
 services.registerSingleton(IContextKeyService, () => new ContextKeyService());
-services.registerInstance(IContextMenuService, {
-	contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
-	showContextMenu() { throw new Error('PDF controls have no secondary menu'); }, hideContextMenu() { },
-});
+registerTestTitlebarServices(services);
+const commands = new CommandService(services);
+services.registerInstance(ICommandService, commands);
+services.registerInstance(IMenuService, services.createInstance(MenuService));
+const contextViews = new BrowserContextViewService(document.body);
+services.registerInstance(IContextViewService, contextViews);
+const menus = services.createInstance(BrowserContextMenuService);
+services.registerInstance(IContextMenuService, menus);
 services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));
 services.registerSingleton(IPdfEditorService, () => services.createInstance(PdfEditorService));
 const theme = bindTestColorTheme(services.get(IThemeService), document.body);
@@ -74,9 +89,11 @@ await memory.writeFile(resource, original, { create: true, overwrite: false });
 let pane: EditorPane | undefined;
 let split: EditorPane | undefined;
 window.aspdfTest = {
-	async open(readOnly = false) {
+	async open(readOnly = false, name = 'review.pdf') {
 		pane?.dispose();
-		const input = { resource, readOnly };
+		const target = URI.file(`/fixture/${name}`);
+		if (name !== 'review.pdf') { await memory.writeFile(target, original, { create: true, overwrite: true }); }
+		const input = { resource: target, readOnly };
 		const descriptor = EditorPanes.getEditorPane(input)!;
 		pane = await descriptor.create({ input, instantiationService: services });
 		pane.create(document.getElementById('viewer')!); pane.setVisible(true);
@@ -88,6 +105,10 @@ window.aspdfTest = {
 		pane?.layout({ width, height });
 	},
 	dirty() { return pane?.workingCopy?.isDirty ?? false; },
+	setScrollMode(value: unknown) { return configuration.updateValue(pdfScrollModeSetting, value, ConfigurationTarget.USER_LOCAL); },
+	async scrollPreference() { return { value: configuration.getValue(pdfScrollModeSetting), source: (await configuration.read()).source }; },
+	viewState() { return (pane as EditorPane & IEditorPaneWithViewState).saveViewState(); },
+	restoreViewState(state: unknown) { (pane as EditorPane & IEditorPaneWithViewState).restoreViewState(state); },
 	async externalWrite() { await memory.writeFile(resource, new Uint8Array([...original, ...new TextEncoder().encode('\n% external change\n')]), { create: false, overwrite: true }); },
 	async hasExternalBytes() { return new TextDecoder().decode((await memory.readFile(resource)).bytes).includes('% external change'); },
 	async revert() { await pane?.workingCopy?.revert(new AbortController().signal); },
@@ -103,8 +124,8 @@ window.aspdfTest = {
 		(services.get(IThemeService) as TestThemeService).setColorTheme({ light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[scheme]);
 	},
 	highContrast() { (services.get(IThemeService) as TestThemeService).setColorTheme(highContrastDarkColorTheme); },
-	dispose() { pane?.dispose(); split?.dispose(); client.dispose(); theme.dispose(); services.dispose(); files.dispose(); memory.dispose(); },
+	dispose() { pane?.dispose(); split?.dispose(); client.dispose(); menus.dispose(); contextViews.dispose(); commands.dispose(); configuration.dispose(); theme.dispose(); services.dispose(); files.dispose(); memory.dispose(); },
 };
 declare global {
-	interface Window { aspdfTest: { open(readOnly?: boolean): Promise<void>; resize(width: number, height: number): void; dirty(): boolean; saved(): Promise<{ changed: boolean; pdf: boolean; }>; externalWrite(): Promise<void>; hasExternalBytes(): Promise<boolean>; revert(): Promise<void>; split(): Promise<void>; closeFirst(): void; highContrast(): void; colorTheme(scheme: 'light' | 'dark' | 'hcDark' | 'hcLight'): void; dispose(): void; }; }
+	interface Window { aspdfTest: { open(readOnly?: boolean, name?: string): Promise<void>; setScrollMode(value: unknown): Promise<void>; scrollPreference(): Promise<{ value: unknown; source: string; }>; resize(width: number, height: number): void; dirty(): boolean; viewState(): unknown; restoreViewState(state: unknown): void; saved(): Promise<{ changed: boolean; pdf: boolean; }>; externalWrite(): Promise<void>; hasExternalBytes(): Promise<boolean>; revert(): Promise<void>; split(): Promise<void>; closeFirst(): void; highContrast(): void; colorTheme(scheme: 'light' | 'dark' | 'hcDark' | 'hcLight'): void; dispose(): void; }; }
 }

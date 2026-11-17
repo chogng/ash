@@ -25,6 +25,8 @@ export interface ListViewOptions<T> {
 	readonly role?: 'listbox' | 'tree' | 'rowgroup';
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
+	/** Allows wide row content to pan while retaining vertical row virtualization. */
+	readonly horizontalScrolling?: boolean;
 	readonly domFocusable?: boolean;
 	readonly getId?: (item: T) => string;
 	/** A fixed height enables viewport virtualization for managed scrolling; omit it for content-sized rows. */
@@ -114,7 +116,7 @@ export class ListView<T> extends Disposable {
 		if (options.scrolling === 'managed') {
 			this.element.classList.add('ash-list-managed');
 			if (options.getHeight) this.element.style.position = 'relative';
-			this.scrollable = this._register(new ScrollableElement(container, { direction: 'vertical', tabIndex: -1, mouseWheelSmoothScroll: options.smoothScrolling }));
+			this.scrollable = this._register(new ScrollableElement(container, { direction: options.horizontalScrolling ? 'both' : 'vertical', tabIndex: -1, mouseWheelSmoothScroll: options.smoothScrolling }));
 			this.scrollable.setContent(this.element);
 			this.domNode = this.scrollable.element;
 			this.domNode.classList.add('ash-list-scrollable');

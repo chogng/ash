@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { expect, test } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
 
-test.use({ electronArgs: ['--agents-window'], useDefaultLanguageServer: false });
+test.use({ electronArgs: ['--agents-window'], electronUserSettings: { 'sessions.pdf.scrollMode': 'paged' }, useDefaultLanguageServer: false });
 
 test('aspdf saves an undo after a renderer crash', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
 	if (!('windows' in application)) throw new Error('This scenario requires Electron');
@@ -102,7 +102,7 @@ test('aspdf saves an undo after a renderer crash', { tag: ['@electron-app-server
 	const controls = pdf().locator('.ash-sessions-pdf-controls');
 	await expect(controls.locator('.ash-sessions-pdf-page-number')).toHaveValue('1');
 	await expect(controls.locator('.ash-sessions-pdf-pagination')).toHaveText('/1');
-	await expect(controls.getByRole('button')).toHaveCount(9);
+	await expect(controls.getByRole('button')).toHaveCount(10);
 	for (const button of await controls.getByRole('button').all()) { await expect(button.locator('.ash-button-label')).toBeHidden(); }
 	await testInfo.attach('pdf-toolbar-desktop', { body: await page.screenshot(), contentType: 'image/png' });
 

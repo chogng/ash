@@ -1,4 +1,4 @@
-import { getActiveElement, getWindow, h, addDisposableListener, runWhenWindowIdle, scheduleAtNextAnimationFrame, type IDimension } from '../../../../base/browser/dom.js';
+import { getActiveElement, getWindow, h, addDisposableListener, type IDimension } from '../../../../base/browser/dom.js';
 import { StandardWheelEvent } from '../../../../base/browser/mouseEvent.js';
 import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { ZoomAnchor } from '../../../../base/browser/ui/zoom/zoomAnchor.js';
@@ -9,7 +9,8 @@ import { Delayer, RunOnceScheduler } from '../../../../base/common/async.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { Icon } from '../../../../base/common/icon.js';
@@ -21,7 +22,7 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { PdfAnnotationEdit, PdfPage, PdfPoint, PdfRect } from '../../../../platform/pdf/common/pdfService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -32,6 +33,9 @@ import type { IResourceEditorInput } from '../../../../workbench/common/editor.j
 import { registerResourceEditorAccessibility } from '../../../../workbench/services/extensions/browser/resourceEditorAccessibility.js';
 import { PdfDocumentModel } from './pdfDocumentModel.js';
 import { IPdfEditorService } from './pdfEditorService.js';
+import { PdfPageView } from './pdfPageView.js';
+import { PdfContinuousView } from './pdfContinuousView.js';
+import { PdfScrollMode, pdfScrollModeSetting } from './pdfPreviewConfiguration.js';
 import './media/pdfPreview.css';
 
 type PdfTool = 'ink' | 'eraser' | 'text';
@@ -46,14 +50,19 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	public readonly viewStateTypeId = 'sessions.pdfPreview';
 	private readonly inputLifetime = this._register(new MutableDisposable<DisposableStore>());
 	private readonly pageLifetime = this._register(new MutableDisposable<DisposableStore>());
-	private readonly imageLifetime = this._register(new MutableDisposable<IDisposable>());
+	private readonly continuousLifetime = this._register(new MutableDisposable<DisposableStore>());
+	private continuous: PdfContinuousView | undefined;
+	private pagedView!: PdfPageView;
+	private activeView!: PdfPageView;
+	private readingArea!: HTMLElement;
+	private scrollMode = PdfScrollMode.Paged;
+	private pendingViewState = false;
 	private element!: HTMLElement;
 	private surface!: HTMLElement;
 	private pageScroll!: ScrollableElement;
 	private annotationScroll!: ScrollableElement;
 	private annotationPanel!: HTMLElement;
 	private stage!: HTMLElement;
-	private selectionLayer: HTMLElement | undefined;
 	private progress!: HTMLElement;
 	private pageInput!: HTMLInputElement;
 	private pageCount!: HTMLElement;
@@ -69,9 +78,13 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	private eraserAction!: Action;
 	private textAction!: Action;
 	private fitAction!: Action;
+	private scrollModeAction!: Action;
+	private readonly scrollModeActions: Action[] = [];
 	private zoom: PdfZoom = 'page';
 	private wheelZoomFrame!: AnimationFrameScheduler;
 	private wheelZoom: { scale: number; readonly x: ZoomAnchor; readonly y: ZoomAnchor; } | undefined;
+	private continuousWheelZoom: { scale: number; x: number; y: number; } | undefined;
+	private wheelNavigation: { time: number; readonly direction: number; distance: number; turned: boolean; } | undefined;
 	private tool: PdfTool | undefined;
 	private stroke: PdfPoint[] | undefined;
 	private strokePreview: SVGPolylineElement | undefined;
@@ -139,13 +152,25 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.textAction = this.action('text', localize('sessions.pdfPreview.addText', 'Add text box'), Lxicon.text, () => this.selectTool('text'));
 		this.toolbar(controls, [this.noteAction, this.highlightAction, this.inkAction, this.eraserAction, this.textAction], localize('sessions.pdfPreview.annotations', 'PDF annotations'));
 		this.fitAction = this.action('fit', localize('sessions.pdfPreview.fitPage', 'Fit page'), Lxicon.screenNormal, () => this.setZoom(this.zoom === 'page' ? 'width' : 'page'), false);
+		this.scrollModeAction = this.action('scrollMode', localize('sessions.pdfPreview.scrollMode', 'Scroll mode'), Lxicon.file, () => undefined, false);
+		for (const [mode, label, icon] of [
+			[PdfScrollMode.Continuous, localize('sessions.pdfPreview.continuous', 'Continuous scrolling'), Lxicon.files],
+			[PdfScrollMode.Paged, localize('sessions.pdfPreview.paged', 'Page scrolling'), Lxicon.file],
+		] as const) {
+			this.scrollModeActions.push(this.action(mode, label, icon, async () => {
+				try { await this.configuration.updateValue(pdfScrollModeSetting, mode, ConfigurationTarget.USER_LOCAL); }
+				catch (error) { this.showError(error); }
+			}, false));
+		}
 		this.saveAction = this.action('save', localize('sessions.pdfPreview.save', 'Save changes'), Lxicon.save, () => this.save());
-		this.toolbar(controls, [this.fitAction, this.saveAction], localize('sessions.pdfPreview.documentActions', 'PDF document actions'));
+		this.toolbar(controls, [this.fitAction, this.scrollModeAction, this.saveAction], localize('sessions.pdfPreview.documentActions', 'PDF document actions'));
 		this.progress = h(document, 'span', { className: 'ash-sessions-pdf-status', attributes: { role: 'status' } });
 		controls.append(this.progress);
 		this.error = h(document, 'p', { className: 'ash-sessions-pdf-error', attributes: { role: 'alert' } });
 		const content = h(document, 'div', { className: 'ash-sessions-pdf-content' });
-		this.pageScroll = this._register(new ScrollableElement(content, {
+		this.readingArea = h(document, 'div', { className: 'ash-sessions-pdf-reading-area' });
+		content.append(this.readingArea);
+		this.pageScroll = this._register(new ScrollableElement(this.readingArea, {
 			direction: 'both', vertical: 'auto', horizontal: 'auto',
 			ariaLabel: localize('sessions.pdfPreview.documentPage', 'PDF page'),
 			mouseWheelSmoothScroll: true,
@@ -160,25 +185,26 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		}
 		this.wheelZoomFrame = this._register(new AnimationFrameScheduler(getWindow(this.surface), () => this.flushWheelZoom()));
 		// Consume modified input before the shared scroll owner or Chromium handles it.
-		this._register(addDisposableListener(this.surface, 'wheel', event => {
-			if (!event.ctrlKey && !event.metaKey) { this.flushWheelZoom(); return; }
+		this._register(addDisposableListener(this.readingArea, 'wheel', event => {
+			if (!event.ctrlKey && !event.metaKey) {
+				this.flushWheelZoom();
+				this.handlePageWheel(event);
+				return;
+			}
+			this.wheelNavigation = undefined;
 			const wheel = new StandardWheelEvent(event, { pageWidth: this.pageScroll.scrollableElement.clientWidth, pageHeight: this.pageScroll.scrollableElement.clientHeight });
 			wheel.stop();
 			if (!this.busy && !this.stroke && wheel.deltaY !== 0) { this.queueWheelZoom(wheel); }
 		}, { capture: true, passive: false }));
-		this._register(addDisposableListener(this.surface, 'pointerdown', () => this.flushWheelZoom(), true));
+		this._register(addDisposableListener(this.readingArea, 'pointerdown', () => this.flushWheelZoom(), true));
 		this._register(this.pageScroll.onDidScroll(() => this.flushWheelZoom()));
 		this.pageScroll.contentElement.classList.add('ash-sessions-pdf-sheet');
-		this.stage = h(document, 'div', { className: 'ash-sessions-pdf-stage' });
-		this._register(addDisposableListener(this.stage, 'pointerdown', event => this.handlePointerDown(event)));
-		this._register(addDisposableListener(this.stage, 'pointermove', event => this.handlePointerMove(event)));
-		this._register(addDisposableListener(this.stage, 'pointerup', event => {
-			if (event.pointerId === this.pointerId) { void this.perform(() => this.finishStroke()); }
-		}));
-		this._register(addDisposableListener(this.stage, 'pointercancel', () => this.cancelStroke()));
-		this._register(addDisposableListener(this.surface, 'keydown', event => this.handlePageKeydown(event), true));
-		const observer = new ResizeObserver(() => { this.flushWheelZoom(); this.updateZoom(); });
-		observer.observe(this.pageScroll.scrollableElement);
+		this.pagedView = this._register(this.createPageView());
+		this.activeView = this.pagedView;
+		this.stage = this.pagedView.domNode;
+		this._register(addDisposableListener(this.readingArea, 'keydown', event => this.handlePageKeydown(event), true));
+		const observer = new ResizeObserver(() => { this.flushWheelZoom(); this.updateZoom(); this.restorePendingViewState(); });
+		observer.observe(this.readingArea);
 		this._register(toDisposable(() => observer.disconnect()));
 		this.pageScroll.append(this.stage);
 		const sidebar = this.annotationPanel = h(document, 'aside', { className: 'ash-sessions-pdf-annotation-panel', attributes: { 'aria-label': localize('sessions.pdfPreview.annotations', 'PDF annotations') } });
@@ -194,7 +220,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		parent.append(this.element);
 		super.create(this.element);
 		this._register(registerResourceEditorAccessibility(this.element, this.configuration,
-			() => this.accessibleContent(), () => localize('sessions.pdfPreview.help', 'The page opens centered and fitted to the reading area. Use the arrow keys, Page Up and Page Down to scroll. Hold Control or Command and use the mouse wheel to zoom around the pointer. With the page focused, Control or Command plus + or - zooms in or out; Control or Command plus 0 restores 100 percent. Enter a page number and press Enter to navigate, or use Previous page and Next page. Select text and choose Highlight selection. Enter annotation text and choose Add note. Choose Draw and drag on the page; with the page focused, press Space to start a stroke, use arrow keys to draw and press Enter to finish. Choose Erase highlights and drawings, then click a mark or focus its erase button and press Enter. Choose Add text box, then click the page or press Enter with the page focused; enter text and press Control+Enter or Command+Enter to apply. Escape cancels the current tool or text box. Fit page and Fit width switch the page size. Save changes writes annotations into the PDF file. Control+Z or Command+Z undoes an edit; add Shift to redo. Existing annotations have Update and Delete controls. Read-only attachments cannot be changed.')));
+			() => this.accessibleContent(), () => localize('sessions.pdfPreview.help', 'The page opens centered and fitted to the reading area. Use the arrow keys, Page Up and Page Down to scroll. Use Scroll mode to choose Continuous scrolling or Page scrolling. New PDFs use the last selected mode. Continuous scrolling places pages in one scrollable document. In Page scrolling, scroll the mouse wheel or press Page Up or Page Down at a page boundary to turn pages. Hold Control or Command and use the mouse wheel to zoom around the pointer. With the page focused, Control or Command plus + or - zooms in or out; Control or Command plus 0 restores 100 percent. Enter a page number and press Enter to navigate, or use Previous page and Next page. Select text and choose Highlight selection. Enter annotation text and choose Add note. Choose Draw and drag on the page; with the page focused, press Space to start a stroke, use arrow keys to draw and press Enter to finish. Choose Erase highlights and drawings, then click a mark or focus its erase button and press Enter. Choose Add text box, then click the page or press Enter with the page focused; enter text and press Control+Enter or Command+Enter to apply. Escape cancels the current tool or text box. Fit page and Fit width switch the page size. Save changes writes annotations into the PDF file. Control+Z or Command+Z undoes an edit; add Shift to redo. Existing annotations have Update and Delete controls. Read-only attachments cannot be changed.')));
 		// Workbench dispatches edit commands before bubbling DOM key events.
 		for (const [command, operation] of [[UndoCommand, 'undo'], [RedoCommand, 'redo']] as const) {
 			this._register(command.addImplementation(120, 'pdf-editor', () => {
@@ -222,10 +248,17 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); void this.perform(() => this.save()); }
 		}));
 		this._register(toDisposable(() => { this.clearInput(); this.element.remove(); }));
+		this._register(this.configuration.onDidChangeConfiguration(event => {
+			if (!event.affectsConfiguration(pdfScrollModeSetting)) { return; }
+			if (!this.pendingViewState) { this.savedPage = this.pageNumber; }
+			this.pendingViewState = true;
+			this.restorePendingViewState();
+		}));
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
+		this.pendingViewState = true;
 		this.element.setAttribute('aria-label', localize('sessions.pdfPreview.reader', 'PDF — {0}', input.label ?? basename(input.resource)));
 		const store = new DisposableStore();
 		this.inputLifetime.value = store;
@@ -251,6 +284,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 			await lease.ready;
 			if (this.model !== model) { return; }
 			await this.showPage(this.savedPage);
+			this.restorePendingViewState();
 		} catch (error) {
 			signal.throwIfAborted();
 			if (this.model === model) { this.showError(error); }
@@ -268,8 +302,78 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	}
 
 	private toolbar(parent: HTMLElement, actions: readonly Action[], label: string): void {
-		const toolbar = this._register(new WorkbenchToolBar(parent, this.contextMenus, { ariaLabel: label, highlightToggledItems: true, actionViewItemProvider: (action, options) => new ButtonActionViewItem(action, { ...options, iconOnly: true }) }));
+		const toolbar = this._register(new WorkbenchToolBar(parent, this.contextMenus, {
+			ariaLabel: label, highlightToggledItems: true, actionViewItemProvider: (action, options) => action === this.scrollModeAction
+				? new DropdownMenuActionViewItem(action, () => this.scrollModeActions, { showContextMenu: delegate => this.contextMenus.showContextMenu({ ...delegate, getCheckedActionsRepresentation: () => 'radio' }) }, { ...options, iconOnly: true })
+				: new ButtonActionViewItem(action, { ...options, iconOnly: true })
+		}));
 		toolbar.setActions(actions);
+	}
+
+	private createPageView(): PdfPageView {
+		const view = new PdfPageView(this.element.ownerDocument, {
+			pointerDown: event => {
+				if (view !== this.activeView) {
+					if (this.busy || this.stroke || this.textLifetime.value || !view.page) { return; }
+					this.activatePage(view);
+				}
+				this.handlePointerDown(event);
+			},
+			pointerMove: event => this.handlePointerMove(event),
+			pointerUp: event => { if (event.pointerId === this.pointerId) { void this.perform(() => this.finishStroke()); } },
+			pointerCancel: () => this.cancelStroke(),
+		});
+		return view;
+	}
+
+	private async setScrollMode(mode: PdfScrollMode): Promise<void> {
+		if (mode === this.scrollMode || !this.displayedPage || this.stroke || this.textLifetime.value) { return; }
+		await this.perform(async () => {
+			const page = this.displayedPage!;
+			const number = this.pageNumber;
+			const document = this.element.ownerDocument;
+			const hadFocus = this.element.contains(getActiveElement(document));
+			this.wheelNavigation = undefined;
+			this.scrollMode = mode;
+			if (mode === PdfScrollMode.Continuous) {
+				const store = new DisposableStore();
+				this.continuousLifetime.value = store;
+				this.pageScroll.element.hidden = true;
+				const continuous = this.continuous = store.add(new PdfContinuousView(this.readingArea, page, {
+					createPage: () => this.createPageView(),
+					loadPage: (number, signal) => this.model!.render(number, undefined, { dimension: initialRasterDimension, signal }),
+					isActive: view => this.activeView === view,
+					onDidChangePage: view => {
+						if (!this.busy && !this.isNavigating() && !this.stroke && !this.textLifetime.value) { this.activatePage(view); }
+					},
+					onError: error => this.showError(error),
+				}));
+				this.surface = continuous.domNode;
+				store.add(addDisposableListener(continuous.viewport, 'scroll', () => this.flushWheelZoom()));
+				continuous.layout(this.zoom);
+				try {
+					const view = await continuous.reveal(number);
+					if (this.continuous !== continuous) { return; }
+					this.activatePage(view);
+					this.pagedView.clear();
+				} catch (error) {
+					if (this.continuous !== continuous) { return; }
+					this.continuous = undefined; this.continuousLifetime.clear();
+					this.scrollMode = PdfScrollMode.Paged;
+					this.surface = this.pageScroll.element; this.surface.hidden = false;
+					throw error;
+				}
+			} else {
+				this.pageLifetime.clear(); this.eraseLifetime.clear();
+				this.activeView = this.pagedView; this.stage = this.pagedView.domNode;
+				this.continuous = undefined; this.continuousLifetime.clear();
+				this.surface = this.pageScroll.element; this.surface.hidden = false;
+				await this.paint(undefined, number, initialRasterDimension);
+				this.pageScroll.scrollTo(0, 0);
+			}
+			const focused = getActiveElement(document);
+			if (hadFocus && (!focused || focused === document.body || this.element.contains(focused))) { this.surface.focus(); }
+		});
 	}
 
 	private async perform(run: () => Promise<unknown>): Promise<void> {
@@ -281,14 +385,14 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.busy = true; this.error.textContent = ''; this.updateControls();
 		try { await run(); }
 		catch (error) { this.showError(error); }
-		finally { this.busy = false; this.updateControls(); }
+		finally { this.busy = false; this.updateControls(); this.restorePendingViewState(); }
 	}
 
 	private isNavigating(): boolean {
 		return this.pageRender !== undefined && this.displayedPage?.page !== this.pageNumber;
 	}
 
-	private async showPage(number: number, dimension = initialRasterDimension, refinement = false): Promise<void> {
+	private async showPage(number: number, dimension = initialRasterDimension, refinement = false, scrollEdge: 'start' | 'end' = 'start'): Promise<void> {
 		if (!this.model || (this.busy && this.displayedPage) || !Number.isSafeInteger(number) || number < 1 || number > (this.displayedPage?.pageCount ?? Infinity)) { return; }
 		const previous = this.displayedPage?.page ?? 1;
 		const replacesPageTurn = this.pageRender && !this.pageRender.refinement && !refinement;
@@ -311,11 +415,13 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 			// Only the latest request may start once the previous render has released its buffer.
 			await this.pagePaint;
 			if (signal.aborted) { return; }
-			const paint = this.paint(undefined, number, dimension, signal);
+			const paint = this.continuous && number !== this.displayedPage?.page && !refinement
+				? this.continuous.reveal(number).then(view => { if (!signal.aborted) { this.activatePage(view); } })
+				: this.paint(undefined, number, dimension, signal);
 			this.pagePaint = paint.catch(() => undefined);
 			await paint;
 			if (signal.aborted) { return; }
-			if (number !== previous) { this.pageScroll.scrollTo(0, 0); }
+			if (number !== previous && !this.continuous) { this.pageScroll.scrollTo(0, scrollEdge === 'end' ? this.pageScroll.state.maximumTop : 0); }
 			if (!refinement && typeof this.zoom === 'number') { this.zoomRefinement.schedule(); }
 		} catch (error) {
 			if (signal.aborted) { return; }
@@ -327,6 +433,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 				this.pageRender = undefined;
 				this.pagePaint = undefined;
 				this.updateControls();
+				this.restorePendingViewState();
 			}
 		}
 	}
@@ -358,49 +465,35 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		const model = this.model;
 		if (!model) { return; }
 		const input = this.inputLifetime.value;
+		const view = this.activeView;
 		const { page, bytes } = await model.render(number, edit, { dimension, signal });
+		if (signal?.aborted || this.inputLifetime.value !== input || view !== this.activeView) { return; }
+		await view.render(page, bytes, dimension, signal);
 		if (signal?.aborted || this.inputLifetime.value !== input) { return; }
-		const document = this.element.ownerDocument;
-		const imageBytes = bytes.buffer instanceof ArrayBuffer ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength) : bytes.slice();
-		const url = URL.createObjectURL(new Blob([imageBytes], { type: 'image/png' }));
-		const image = h(document, 'img', { properties: { src: url, draggable: false }, attributes: { alt: '', 'aria-hidden': 'true' } });
-		const raster = toDisposable(() => {
-			image.removeAttribute('src');
-			URL.revokeObjectURL(url);
-		});
-		const abortDecode = () => raster.dispose();
-		signal?.addEventListener('abort', abortDecode, { once: true });
-		try {
-			// Keep the previous page visible until the new raster is ready to swap.
-			await image.decode();
-		} catch (error) {
-			raster.dispose();
-			throw error;
-		} finally {
-			signal?.removeEventListener('abort', abortDecode);
+		this.renderedDimension = view.dimension;
+		this.activatePage(view);
+		if (!this.pageRender?.refinement && this.continuous) { this.continuous.invalidateOtherPages(view); }
+	}
+
+	private activatePage(view: PdfPageView): void {
+		const page = view.page;
+		if (!page || (this.activeView === view && this.displayedPage === page)) { return; }
+		if (this.displayedPage?.page !== page.page) {
+			this.zoomRefinement.cancel();
+			if (this.pageRender?.refinement) { this.pageRender.controller.abort(); }
 		}
-		if (signal?.aborted || this.inputLifetime.value !== input) { raster.dispose(); return; }
-		const previousImage = this.stage.querySelector(':scope > img');
-		if (previousImage && !edit && dimension > this.renderedDimension
-			&& this.displayedPage?.page === page.page && this.displayedPage.revision === page.revision) {
-			// Sharpening the same page leaves its text selection, search geometry
-			// and annotation controls on the existing page coordinate system.
-			previousImage.replaceWith(image);
-			this.imageLifetime.value = raster;
-			this.renderedDimension = dimension;
-			return;
-		}
+		this.textLifetime.clear(); this.cancelStroke();
 		const store = new DisposableStore();
 		this.pageLifetime.value = store;
+		this.activeView = view;
+		this.stage = view.domNode;
 		this.displayedPage = page;
-		this.renderedDimension = dimension;
-		this.selectionLayer = undefined;
-		this.textLifetime.clear(); this.cancelStroke();
-		this.stage.replaceChildren(image);
-		this.imageLifetime.value = raster;
-		this.paintTextLayer(page, store);
+		this.renderedDimension = view.dimension;
+		this.pageNumber = page.page;
+		this.pageInput.value = String(page.page);
+		store.add(view.onDidChangeText(() => this.updateControls()));
 		this.renderEraseTargets();
-		this.stage.style.aspectRatio = `${page.width} / ${page.height}`;
+		const document = this.element.ownerDocument;
 		this.annotations.replaceChildren();
 		for (const annotation of page.annotations) {
 			const item = h(document, 'div', { className: 'ash-sessions-pdf-annotation' });
@@ -422,45 +515,10 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		const progress = localize('sessions.pdfPreview.page', 'Page {0} of {1}', page.page, page.pageCount);
 		if (this.progress.textContent !== progress) { this.progress.textContent = progress; }
 		this.updateAnnotationPanel();
-		this.updateZoom(); this.updateControls();
-	}
-
-	private paintTextLayer(page: PdfPage, store: DisposableStore): void {
-		if (page.characters.length === 0) { return; }
-		const document = this.stage.ownerDocument;
-		const window = getWindow(this.stage);
-		const text = h(document, 'div', { className: 'ash-sessions-pdf-text' });
-		const selection = h(document, 'div', { className: 'ash-sessions-pdf-text-content' });
-		selection.style.width = `${page.width}px`;
-		selection.style.height = `${page.height}px`;
-		text.append(selection);
-		const pending = store.add(new MutableDisposable<IDisposable>());
-		let index = 0;
-		const build = (idle: IdleDeadline): void => {
-			const stop = window.performance.now() + (idle.didTimeout ? 4 : Math.min(4, idle.timeRemaining()));
-			do {
-				const character = page.characters[index++];
-				const span = document.createElement('span');
-				span.textContent = character.text;
-				this.position(span, character.bounds);
-				span.style.fontSize = `${character.bounds.height * page.height}px`;
-				selection.append(span);
-			} while (index < page.characters.length && window.performance.now() < stop);
-			if (index < page.characters.length) {
-				pending.value = runWhenWindowIdle(window, build, 100);
-				return;
-			}
-			pending.clear();
-			// The selection layer stays in raster coordinates so zoom changes one transform.
-			selection.style.transform = `scale(${parseFloat(this.stage.style.width) / page.width})`;
-			this.selectionLayer = selection;
-			this.stage.querySelector(':scope > img')?.after(text);
-			this.updateControls();
-		};
-		// Give the decoded raster a frame before creating potentially thousands of text runs.
-		pending.value = scheduleAtNextAnimationFrame(window, () => {
-			pending.value = runWhenWindowIdle(window, build, 100);
-		});
+		if (this.continuous) { this.updateFitAction(); }
+		else { this.updateZoom(); }
+		this.updateControls();
+		this.continuous?.releaseInvisiblePages();
 	}
 
 	private selectTool(tool: PdfTool | undefined): void {
@@ -538,8 +596,51 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.strokePreview = undefined;
 	}
 
+	private turnPageAtBoundary(direction: number): boolean {
+		const page = this.displayedPage;
+		if (!page || this.busy || this.isNavigating() || this.stroke || this.textLifetime.value || this.continuous) { return false; }
+		const { top, maximumTop } = this.pageScroll.state;
+		if (direction > 0 ? top < maximumTop - 1 : top > 1) { return false; }
+		const number = this.pageNumber + direction;
+		if (number < 1 || number > page.pageCount) { return false; }
+		void this.showPage(number, initialRasterDimension, false, direction < 0 ? 'end' : 'start');
+		return true;
+	}
+
+	private handlePageWheel(event: WheelEvent): void {
+		if (this.continuous) { return; }
+		const target = event.target as HTMLElement;
+		if (event.shiftKey || event.altKey || target.closest('input, textarea, [contenteditable="true"]')) { return; }
+		const wheel = new StandardWheelEvent(event, { pageWidth: this.pageScroll.state.width, pageHeight: this.pageScroll.state.height });
+		if (Math.abs(wheel.deltaY) <= Math.abs(wheel.deltaX)) { return; }
+		const direction = Math.sign(wheel.deltaY);
+		let gesture = this.wheelNavigation;
+		if (!gesture || event.timeStamp - gesture.time > 200 || gesture.direction !== direction) {
+			gesture = this.wheelNavigation = { time: event.timeStamp, direction, distance: 0, turned: false };
+		}
+		gesture.time = event.timeStamp;
+		// A trackpad's momentum must not turn another page after the raster arrives.
+		if (gesture.turned) { wheel.stop(); return; }
+		const { top, maximumTop } = this.pageScroll.state;
+		if (direction > 0 ? top < maximumTop - 1 : top > 1) {
+			gesture.distance = 0;
+			return;
+		}
+		gesture.distance += Math.abs(wheel.deltaY);
+		if (gesture.distance >= 60 && this.turnPageAtBoundary(direction)) {
+			gesture.turned = true;
+			wheel.stop();
+		}
+	}
+
 	private handlePageKeydown(event: KeyboardEvent): void {
-		if (event.target !== this.surface || this.busy || this.isNavigating() || this.readonlyMode) { return; }
+		if (event.target !== this.surface || this.busy || this.isNavigating()) { return; }
+		if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && ['PageUp', 'PageDown'].includes(event.key)
+			&& this.turnPageAtBoundary(event.key === 'PageDown' ? 1 : -1)) {
+			event.preventDefault(); event.stopImmediatePropagation();
+			return;
+		}
+		if (this.readonlyMode) { return; }
 		if (this.tool === 'text' && event.key === 'Enter') {
 			event.preventDefault(); event.stopImmediatePropagation();
 			this.openTextBox(this.keyboardPoint);
@@ -644,11 +745,17 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	private queueWheelZoom(wheel: StandardWheelEvent): void {
 		const page = this.displayedPage;
 		if (!page) { return; }
-		const current = this.wheelZoom?.scale ?? this.currentScale();
+		const current = this.continuousWheelZoom?.scale ?? this.wheelZoom?.scale ?? this.currentScale();
 		if (current <= 0) { return; }
 		const delta = clamp(wheel.deltaY, -240, 240);
 		const scale = clamp(current * Math.exp(-delta * 0.002), 0.1, 8);
 		if (delta < 0 ? scale <= current : scale >= current) { return; }
+		if (this.continuous) {
+			this.continuousWheelZoom = { scale, x: wheel.browserEvent.clientX, y: wheel.browserEvent.clientY };
+			this.wheelZoomFrame.schedule();
+			this.queueZoomRefinement();
+			return;
+		}
 		const zoom = this.wheelZoom ??= { scale: current, ...this.zoomAnchors() };
 		const viewport = this.pageScroll.scrollableElement.getBoundingClientRect();
 		const width = page.widthPoints * 96 / 72 * scale;
@@ -660,6 +767,13 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	}
 
 	private flushWheelZoom(): void {
+		const continuousZoom = this.continuousWheelZoom;
+		if (continuousZoom && this.continuous) {
+			this.cancelWheelZoom();
+			this.zoom = continuousZoom.scale;
+			this.continuous.layout(this.zoom, continuousZoom);
+			return;
+		}
 		const zoom = this.wheelZoom;
 		if (!zoom) { return; }
 		this.cancelWheelZoom();
@@ -674,12 +788,21 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	private cancelWheelZoom(): void {
 		this.wheelZoomFrame?.cancel();
 		this.wheelZoom = undefined;
+		this.continuousWheelZoom = undefined;
 	}
 
 	private setZoom(zoom: PdfZoom): void {
 		this.cancelWheelZoom();
 		const page = this.displayedPage;
 		if (!page || this.busy || this.stroke || this.currentScale() <= 0) { return; }
+		if (this.continuous) {
+			const viewport = this.continuous.viewport.getBoundingClientRect();
+			this.zoom = zoom;
+			this.continuous.layout(zoom, { x: viewport.left + viewport.width / 2, y: viewport.top + viewport.height / 2 });
+			this.queueZoomRefinement();
+			this.updateFitAction();
+			return;
+		}
 		const anchor = this.zoomAnchors();
 		this.zoom = zoom;
 		this.updateZoom();
@@ -711,6 +834,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		if (!this.pageScroll || !this.fitAction) { return; }
 		const page = this.displayedPage;
 		if (!page) { return; }
+		if (this.continuous) { this.continuous.layout(this.zoom); this.updateFitAction(); return; }
 		const viewport = this.pageScroll.scrollableElement;
 		const style = viewport.ownerDocument.defaultView!.getComputedStyle(this.pageScroll.contentElement);
 		const width = Math.max(1, viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
@@ -718,10 +842,12 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		let pageWidth = width;
 		if (typeof this.zoom === 'number') { pageWidth = page.widthPoints * 96 / 72 * this.zoom; }
 		else if (this.zoom === 'page') { pageWidth = Math.min(width, height * page.width / page.height); }
-		this.stage.style.width = `${pageWidth}px`;
-		this.stage.style.height = `${pageWidth * page.height / page.width}px`;
-		if (this.selectionLayer) { this.selectionLayer.style.transform = `scale(${pageWidth / page.width})`; }
+		this.activeView.setSize(pageWidth, pageWidth * page.height / page.width);
 		this.pageScroll.layout();
+		this.updateFitAction();
+	}
+
+	private updateFitAction(): void {
 		this.fitAction.label = this.fitAction.tooltip = this.zoom === 'page' ? localize('sessions.pdfPreview.fitWidth', 'Fit width') : localize('sessions.pdfPreview.fitPage', 'Fit page');
 		this.fitAction.icon = this.zoom === 'page' ? Lxicon.screenFull : Lxicon.screenNormal;
 	}
@@ -733,11 +859,14 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.previous.enabled = !this.busy && !!page && this.pageNumber > 1;
 		this.next.enabled = !this.busy && !!page && this.pageNumber < page.pageCount;
 		this.saveAction.enabled = !this.busy && !navigating && !this.readonlyMode && !!this.model?.isDirty;
-		this.highlightAction.enabled = !this.busy && !navigating && !this.readonlyMode && !!this.selectionLayer;
+		this.highlightAction.enabled = !this.busy && !navigating && !this.readonlyMode && this.activeView.hasText;
 		for (const action of [this.noteAction, this.inkAction, this.eraserAction, this.textAction]) {
 			action.enabled = !this.busy && !navigating && !this.readonlyMode && !!page;
 		}
 		this.fitAction.enabled = !!page;
+		this.scrollModeAction.enabled = !this.busy && !navigating && !!page;
+		this.scrollModeAction.icon = this.scrollMode === PdfScrollMode.Continuous ? Lxicon.files : Lxicon.file;
+		for (const action of this.scrollModeActions) { action.checked = action.id === `sessions.pdfPreview.${this.scrollMode}`; }
 		this.pageInput.disabled = this.busy || !page;
 		this.note.disabled = this.busy || this.readonlyMode;
 		this.element.setAttribute('aria-busy', String(this.busy || navigating));
@@ -758,6 +887,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	public override async save(): Promise<void> { await this.model?.save(new AbortController().signal); }
 	public override clearInput(): void {
 		this.cancelWheelZoom();
+		this.wheelNavigation = undefined;
 		this.zoomRefinement.cancel();
 		this.pageRender?.controller.abort();
 		this.pageTurnDelay.cancel();
@@ -766,9 +896,10 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.displayedPage = undefined;
 		this.renderedDimension = initialRasterDimension;
 		this.textLifetime.clear(); this.cancelStroke(); this.selectTool(undefined);
-		this.imageLifetime.clear(); this.pageLifetime.clear(); this.inputLifetime.clear(); this.model = undefined; this.pageNumber = 1;
-		this.selectionLayer = undefined;
-		this.stage?.replaceChildren(); this.annotations?.replaceChildren();
+		this.continuous = undefined; this.continuousLifetime.clear(); this.activeView = this.pagedView; this.stage = this.pagedView?.domNode; this.scrollMode = PdfScrollMode.Paged;
+		if (this.pageScroll) { this.surface = this.pageScroll.element; this.surface.hidden = false; }
+		this.pageLifetime.clear(); this.inputLifetime.clear(); this.model = undefined; this.pageNumber = 1;
+		this.pagedView?.clear(); this.annotations?.replaceChildren();
 		this.pageScroll?.scrollTo(0, 0);
 		if (this.progress) { this.progress.textContent = ''; this.error.textContent = ''; this.pageInput.value = '1'; this.pageCount.textContent = '/–'; this.note.value = ''; }
 		this.updateControls();
@@ -779,12 +910,31 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.element.classList.toggle('narrow', dimension.width < 640);
 		this.updateZoom();
 		this.annotationScroll.layout();
+		this.restorePendingViewState();
 	}
-	public saveViewState(): unknown { return this.pageNumber; }
+	public saveViewState(): unknown { return { page: this.pageNumber }; }
 	public restoreViewState(state: unknown): void {
+		// Older states included a per-file mode. The profile now owns that preference.
+		if (state && typeof state === 'object' && 'page' in state) { state = state.page; }
 		if (typeof state === 'number' && Number.isSafeInteger(state) && state > 0) {
-			this.savedPage = state;
-			if (this.displayedPage && state !== this.pageNumber) { void this.showPage(state); }
+			const number = state;
+			this.savedPage = number;
+			this.pendingViewState = true;
+			this.restorePendingViewState();
 		}
 	}
+
+	private restorePendingViewState(): void {
+		// Startup restores inactive panes before their page and viewport are ready.
+		if (!this.pendingViewState || !this.displayedPage || this.busy || this.isNavigating()
+			|| this.readingArea.clientWidth === 0 || this.readingArea.clientHeight === 0) { return; }
+		this.pendingViewState = false;
+		const model = this.model;
+		const number = this.savedPage;
+		const mode = this.configuration.getValue<PdfScrollMode>(pdfScrollModeSetting);
+		void this.setScrollMode(mode).then(() => {
+			if (this.model === model && this.savedPage === number && this.configuration.getValue<PdfScrollMode>(pdfScrollModeSetting) === mode && number !== this.pageNumber) { return this.showPage(number); }
+		});
+	}
+
 }

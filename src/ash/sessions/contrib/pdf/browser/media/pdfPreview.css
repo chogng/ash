@@ -80,6 +80,28 @@
 	background: var(--ash-editor-widgetBackground);
 }
 
+.ash-sessions-pdf-reading-area {
+	position: relative;
+	min-block-size: 0;
+	min-inline-size: 0;
+}
+
+.ash-sessions-pdf-reading-area > .ash-scrollable-element {
+	position: absolute;
+	inset: 0;
+}
+
+.ash-sessions-pdf-reading-area > [hidden] {
+	display: none;
+}
+
+.ash-sessions-pdf-continuous .ash-sessions-pdf-page-row {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--ash-spacing-size120);
+}
+
 .ash-sessions-pdf-sheet {
 	display: flex;
 	flex-direction: column;

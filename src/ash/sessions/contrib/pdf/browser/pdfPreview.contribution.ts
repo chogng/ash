@@ -15,6 +15,7 @@ import { WorkingCopyBackupTracker } from '../../../../workbench/services/working
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { PdfDocumentModel } from './pdfDocumentModel.js';
 import { IPdfEditorService, PdfEditorService } from './pdfEditorService.js';
+import './pdfPreviewConfiguration.js';
 
 registerSingleton(IPdfEditorService, PdfEditorService, InstantiationType.Delayed);
 

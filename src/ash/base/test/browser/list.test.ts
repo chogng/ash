@@ -12,6 +12,30 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
 suite('List splice lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('ListView pans wide rows while keeping vertical rows virtualized', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using view = new ListView<number>(dom.window.document.body, {
+				scrolling: 'managed', horizontalScrolling: true,
+				getId: item => String(item), getHeight: () => 22,
+				renderItem: item => h(dom.window.document, 'span', undefined, String(item)),
+			});
+			Object.defineProperties(view.scrollElement, {
+				clientWidth: { value: 200 }, clientHeight: { value: 44 },
+				scrollWidth: { value: 800 }, scrollHeight: { value: 22_000 },
+			});
+			view.items = Array.from({ length: 1000 }, (_, index) => index);
+			view.layout(44);
+			view.scrollElement.dispatchEvent(new dom.window.WheelEvent('wheel', { deltaY: 120, shiftKey: true, bubbles: true, cancelable: true }));
+			assert.equal(view.scrollElement.scrollLeft, 120);
+			assert.equal(view.scrollTop, 0);
+			view.scrollElement.dispatchEvent(new dom.window.WheelEvent('wheel', { deltaY: 1200, bubbles: true, cancelable: true }));
+			assert.equal(view.scrollTop, 1200);
+			assert.equal(view.row(0), undefined);
+			assert.ok(view.element.children.length < 30);
+		} finally { dom.window.close(); }
+	});
+
 	test('ListView recycled templates reset selection for their new item', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {
