@@ -23,6 +23,7 @@ export interface DiffModelReadyState {
 	readonly kind: 'ready';
 	readonly originalVersion: number;
 	readonly modifiedVersion: number;
+	readonly identical: boolean;
 	readonly quitEarly: boolean;
 	readonly diff: LineDiff;
 }
@@ -134,6 +135,7 @@ export class DiffModel extends Disposable {
 				kind: 'ready',
 				originalVersion,
 				modifiedVersion,
+				identical: result.identical,
 				quitEarly: result.quitEarly,
 				diff,
 			}));

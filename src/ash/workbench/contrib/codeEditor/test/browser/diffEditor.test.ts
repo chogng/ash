@@ -402,6 +402,8 @@ suite('diff browser component', () => {
 			const host = page.locator('#title-comparison');
 			const toolbar = host.locator('.ash-editor-title-actions');
 			const whitespace = toolbar.getByRole('button', { name: localized(locale, 'Show Leading/Trailing Whitespace Differences', '显示行首/行尾空白差异'), exact: true });
+			const modifiedSide = host.locator('.stanza-diff-editor-side.modified');
+			const hint = modifiedSide.getByRole('button', { name: localized(locale, 'Show whitespace differences', '显示空白差异'), exact: true });
 			await expect(whitespace.locator('[data-ash-icon-id="whitespace"]')).toHaveCount(1);
 			await expectIconFontLoaded(whitespace.locator('[data-ash-icon-id="whitespace"]'));
 			const original = '  const a = 1;\nshared\nconst b = 2; \nshared again\n\tconst c = 3;\nlast shared\nconst d = 4;\t';
@@ -415,6 +417,22 @@ suite('diff browser component', () => {
 			const textBefore = await readText();
 			expect(textBefore).toEqual({ original, modified, renderWhitespace: 'selection' });
 			const persistenceBefore = await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence());
+			await expect(hint).toBeVisible();
+			await page.evaluate(() => window.ashDiffIntegration.setTitleTheme('hc-black'));
+			await expect(hint).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+			const hintBounds = (await hint.boundingBox())!;
+			const sideBounds = (await modifiedSide.boundingBox())!;
+			expect(hintBounds.x + hintBounds.width).toBeLessThanOrEqual(sideBounds.x + sideBounds.width);
+			expect(hintBounds.y + hintBounds.height).toBeLessThanOrEqual(sideBounds.y + sideBounds.height);
+			await hint.focus();
+			await expect(hint).toBeFocused();
+			await hint.press('Enter');
+			await expect(hint).toHaveCount(0);
+			await expect(modifiedSide.locator('.stanza-editor-input')).toBeFocused();
+			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().changes)).toBe(4);
+			expect(await readText()).toEqual(textBefore);
+			await page.evaluate(() => window.ashDiffIntegration.updateTitleEditorConfiguration('diffEditor.ignoreTrimWhitespace', true));
+			await expect(hint).toBeVisible();
 			for (const [checkedBefore, changes] of [[false, 4], [true, 0]] as const) {
 				await whitespace.focus();
 				await whitespace.press('ArrowRight');
@@ -431,6 +449,7 @@ suite('diff browser component', () => {
 			}
 			await page.evaluate(() => window.ashDiffIntegration.setTitleComparisonText('const a = 1;', 'const  a = 1;'));
 			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().changes)).toBe(1);
+			await expect(hint).toHaveCount(0);
 			for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light'] as const) {
 				await page.evaluate(themeId => window.ashDiffIntegration.setTitleTheme(themeId), theme);
 				await expect(whitespace).toBeVisible();

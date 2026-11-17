@@ -1,10 +1,13 @@
-import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
-import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../../../nls.js';
-import type { IResourceEditorInput } from '../../../../common/editor.js';
+import type { IEditorPane, IResourceEditorInput } from '../../../../common/editor.js';
+import { IMarkerService } from '../../../../../platform/markers/common/markers.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -13,7 +16,7 @@ import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
-import { type EditorOpenOptions, type IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
+import { type EditorOpenOptions, IEditorService } from '../../../../services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 
 test('ProblemsViewPane filters diagnostics and opens the selected range', async () => {
@@ -35,15 +38,30 @@ test('ProblemsViewPane filters diagnostics and opens the selected range', async 
 	]);
 	let opened: { readonly input: IResourceEditorInput; readonly options?: EditorOpenOptions; } | undefined;
 	let focusCount = 0;
+	let activePane: IEditorPane | undefined;
 	const editorService: IEditorService = {
 		...emptyEditorServiceState,
+		get activeEditorPane() { return activePane; },
 		openEditor: async (input, options) => { opened = { input, options }; if (options?.preserveFocus !== true) focusCount += 1; },
 		focusActiveEditor() { focusCount += 1; },
 	};
 
 	try {
 		const { ProblemsViewPane } = await import('../../../../../workbench/contrib/problems/browser/problemsViewPane.js');
-		using pane = new ProblemsViewPane(browser.window.document.body, { id: 'ash.problems', title: 'Problems' }, markerService, editorService, workspace, contextMenus, clipboard);
+		const { createTestCodeEditor } = await import('../../../../../editor/test/browser/testCodeEditor.js');
+		const { TextModel } = await import('../../../../../editor/common/model/textModel.js');
+		const document = browser.window.document;
+		browser.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using services = new InstantiationService();
+		services.registerInstance(IMarkerService, markerService);
+		services.registerInstance(IEditorService, editorService);
+		services.registerInstance(IWorkspaceContextService, workspace);
+		services.registerInstance(IContextMenuService, contextMenus);
+		services.registerInstance(IClipboardService, clipboard);
+		using model = new TextModel('first\nsecond\nthird', { resource: main });
+		using editor = createTestCodeEditor({ container: document.body.appendChild(document.createElement('div')), model });
+		activePane = { getControl: () => editor } as unknown as IEditorPane;
+		using pane = services.createInstance(ProblemsViewPane, document.body, { id: 'ash.problems', title: 'Problems' });
 		browser.window.document.body.append(pane.element);
 		const titleControls = pane.partTitleProjection.actions!;
 		browser.window.document.body.append(titleControls);
@@ -91,6 +109,15 @@ test('ProblemsViewPane filters diagnostics and opens the selected range', async 
 		assert.equal(opened?.input.resource.toString(), main.toString());
 		assert.deepEqual(opened?.options?.selection, Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (4) + 1)));
 		assert.equal(focusCount, 1);
+		const highlight = () => model.getAllDecorations().find(decoration => decoration.options.className === 'rangeHighlight');
+		assert.deepEqual(highlight()?.range, opened?.options?.selection);
+		editor.setPosition(new Position(3, 1));
+		assert.equal(highlight(), undefined);
+		pane.element.querySelector<HTMLButtonElement>('.ash-problems-item.error .ash-problems-item-button')!.click();
+		await Promise.resolve();
+		assert.ok(highlight());
+		editor.setModel(null);
+		assert.equal(highlight(), undefined);
 
 		markerService.changeAll('fixture', []);
 		assert.equal(pane.element.querySelectorAll('.ash-problems-item').length, 0);

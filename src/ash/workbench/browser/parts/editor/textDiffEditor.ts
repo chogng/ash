@@ -7,6 +7,8 @@ import { type IDimension } from '../../../../base/browser/dom.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
+import { localize } from '../../../../nls.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import type { Range } from '../../../../editor/common/core/range.js';
 import { ScrollType } from '../../../../editor/common/editorCommon.js';
@@ -32,6 +34,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
 import { toEditorPaneSelectionChangeReason } from './textEditor.js';
 import { editorOptionsRegistry, type IDiffEditorOptions, type IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
+import { FloatingEditorClickWidget } from '../../codeeditor.js';
 
 export interface DiffEditorPaneOptions extends Pick<CodeEditorWidgetOptions, 'onOpenLocation' | 'onApplyWorkspaceEdit'> {
 	readonly modelService: ITextModelResourceService;
@@ -350,6 +353,38 @@ class DiffEditorPaneSession extends Disposable {
 			modifiedAriaLabel: modifiedInput.label,
 		}));
 		this.editor.setAccessibilityHelpHint(configuration.getValue(AccessibilityVerbositySettingId.DiffEditor));
+
+		const hint = this._register(new MutableDisposable<DisposableStore>());
+		this._register(model.onDidChange(state => {
+			const key = 'diffEditor.ignoreTrimWhitespace';
+			const languageId = model.modified.getLanguageId();
+			if (state.kind !== 'ready' || state.identical || state.quitEarly || state.diff.changes.length > 0
+				|| !configuration.getValue<boolean>(key, { overrideIdentifier: languageId })) {
+				hint.clear();
+				return;
+			}
+			if (hint.value) return;
+
+			const lifetime = new DisposableStore();
+			hint.value = lifetime;
+			const editor = this.editor.modifiedEditor;
+			const widget = lifetime.add(instantiationService.createInstance(
+				FloatingEditorClickWidget,
+				editor,
+				localize({ bundle: 'ash.workbench', key: 'diff.showWhitespaceHint' }, 'Show whitespace differences'),
+				null,
+			));
+			lifetime.add(widget.onClick(() => {
+				editor.focus();
+				const overrideIdentifier = model.modified.getLanguageId();
+				const settings = configuration.inspect<boolean>(key, { overrideIdentifier });
+				const update = settings.overrideIdentifiers?.includes(overrideIdentifier)
+					? configuration.updateValue(key, false, { overrideIdentifier })
+					: configuration.updateValue(key, false);
+				void update.catch(onUnexpectedError);
+			}));
+			widget.render();
+		}));
 	}
 
 	updateOptions(options: IDocumentDiffProviderOptions): void {

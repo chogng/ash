@@ -62,7 +62,7 @@ import '../../../../contrib/debug/browser/media/debugViewlet.css';
 import { ProblemsViewPane } from '../../../../contrib/problems/browser/problemsViewPane.js';
 import { BulkEditPane } from '../../../../contrib/bulkEdit/browser/preview/bulkEditPane.js';
 import { TunnelPanel } from '../../../../contrib/remote/browser/tunnelView.js';
-import { MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
+import { IMarkerService, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -252,6 +252,13 @@ function createReviewPane(): ScmAgentReviewViewPane {
 	scope.registerInstance(IConfigurationService, configuration);
 	return scope.createInstance(ScmAgentReviewViewPane, root, { id: 'fixture.review', title: 'Agent Review' });
 }
+function createProblemsPane(): ProblemsViewPane {
+	const scope = resources.add(changesServices.createChild(new ServiceCollection(
+		[IMarkerService, markers], [IEditorService, editors], [IWorkspaceContextService, workspace],
+		[IContextMenuService, contextMenus], [IClipboardService, clipboard],
+	)));
+	return scope.createInstance(ProblemsViewPane, root, { id: 'fixture.problems', title: 'Problems' });
+}
 const pane = resources.add(view === 'timeline' ? createTimelinePane() : view === 'empty'
 	? new EmptyView(root, { id: 'fixture.empty', title: 'Files' }, {
 		pickFolderAndOpen: async () => { throw new Error('Folder opening failed. '.repeat(12)); },
@@ -259,7 +266,7 @@ const pane = resources.add(view === 'timeline' ? createTimelinePane() : view ===
 	: view === 'review'
 		? createReviewPane()
 		: view === 'problems'
-			? new ProblemsViewPane(root, { id: 'fixture.problems', title: 'Problems' }, markers, editors, workspace, contextMenus, clipboard)
+			? createProblemsPane()
 			: view === 'bulk'
 				? new BulkEditPane(root, { id: 'fixture.bulk', title: 'Refactor Preview' }, configuration, editors, contextKeys, resources.add(new InstantiationService()))
 				: view === 'ports'

@@ -4,6 +4,7 @@ import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { localize } from '../../../../nls.js';
@@ -17,6 +18,7 @@ import { type URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { MarkerSeverity, type IMarker } from '../../../../platform/markers/common/markers.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { RangeHighlightDecorations } from '../../../browser/codeeditor.js';
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../browser/parts/views/viewPane.js';
 import { IMarkerService } from '../../../../platform/markers/common/markers.js';
 
@@ -52,6 +54,8 @@ export class ProblemsViewPane extends ViewPane {
 	private readonly resultsElement: HTMLUListElement;
 	private renderedProblems: readonly ProblemEntry[] = [];
 	private interactionError: string | undefined;
+	private readonly rangeHighlight: RangeHighlightDecorations;
+	private openRequest = 0;
 
 	constructor(
 		container: HTMLElement,
@@ -61,8 +65,10 @@ export class ProblemsViewPane extends ViewPane {
 		@IWorkspaceContextService private readonly workspaceService: IWorkspaceContextService,
 		@IContextMenuService contextMenuService: IContextMenuService,
 		@IClipboardService private readonly clipboardService: IClipboardService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super(container, options);
+		this.rangeHighlight = this._register(instantiationService.createInstance(RangeHighlightDecorations));
 		this.contentElement.classList.add('ash-problems');
 		const document = container.ownerDocument;
 		const controls = this.titleControls = h(document, 'div');
@@ -285,10 +291,17 @@ export class ProblemsViewPane extends ViewPane {
 
 	private async openProblem(entry: ProblemEntry): Promise<void> {
 		this.interactionError = undefined;
+		const request = ++this.openRequest;
+		const { resource, startLineNumber, startColumn, endLineNumber, endColumn } = entry.marker;
+		const selection = new Range(startLineNumber, startColumn, endLineNumber, endColumn);
+		this.rangeHighlight.removeHighlightRange();
 		try {
-			await this.editorService.openEditor({ resource: entry.marker.resource, label: resourceName(entry.marker.resource) }, { selection: new Range(entry.marker.startLineNumber, entry.marker.startColumn, entry.marker.endLineNumber, entry.marker.endColumn) });
+			await this.editorService.openEditor({ resource, label: resourceName(resource) }, { selection });
+			if (request === this.openRequest && !this.isDisposed) {
+				this.rangeHighlight.highlightRange({ resource, range: selection });
+			}
 		} catch (error) {
-			if (this.isDisposed) return;
+			if (request !== this.openRequest || this.isDisposed) return;
 			this.interactionError = error instanceof Error ? error.message : localize('problems.openFailed', 'Could not open problem location.');
 			this.render();
 		}
