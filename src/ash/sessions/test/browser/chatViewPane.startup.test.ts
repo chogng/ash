@@ -22,6 +22,7 @@ import { IAgentExecutionSettingsService } from '../../../platform/agentHost/comm
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -144,6 +145,7 @@ test('opens a local Chat conversation before the backend session request settles
 	viewServices.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
 	if (!viewServices.has(IDocsService)) viewServices.registerInstance(IDocsService, createTestDocsService());
 	viewServices.registerInstance(IWorkbenchLayoutService, layoutService);
+	viewServices.registerInstance(IViewsService, {} as IViewsService);
 	viewServices.registerInstance(IFileService, files);
 	viewServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
 	viewServices.registerInstance(ISessionGroupsService, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService);
@@ -162,6 +164,7 @@ test('opens a local Chat conversation before the backend session request settles
 		moveToMainWindow: async () => { throw new Error('Unexpected chat window'); },
 	});
 	using view = viewServices.createInstance(SessionChatViewPane, document.body, { id: 'workbench.chat', title: 'Chat' });
+	view.setVisible(true);
 
 	assert.deepEqual(escaped, []);
 	assert.equal(sessionService.untitledSessions.length, 1);
@@ -241,7 +244,9 @@ class VisibleAuxiliarybarLayoutService extends BrowserLayoutService implements I
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	setLayoutStyle(): void { }
 
-	isPartVisible(partId: WorkbenchPartId): boolean { return partId === 'auxiliarybar'; }
+	isPartVisible(partId: WorkbenchPartId): boolean { return partId === 'chat'; }
+	isEditorHiddenByChat(): boolean { return false; }
+	setEditorHiddenByChat(): void { }
 	hasFocus(): boolean { return false; }
 	getVisibleNeighborPart(): undefined { return undefined; }
 	readonly onDidChangeAuxiliaryBarMaximized = Event.None;
@@ -255,11 +260,9 @@ class VisibleAuxiliarybarLayoutService extends BrowserLayoutService implements I
 	isPanelMaximized(): boolean { return false; }
 	toggleMaximizedPanel(): void { }
 	showPart(_partId: WorkbenchPartId): void { }
-	showParts(_partIds: readonly WorkbenchPartId[]): void { }
 	hidePart(_partId: WorkbenchPartId): void { }
-	hideParts(_partIds: readonly WorkbenchPartId[]): void { }
 	getPartSize(_partId: WorkbenchPartId) { return { width: 0, height: 0 }; }
-	resizePart(_partId: WorkbenchPartId, _dimension: { readonly width: number; readonly height: number; }): void { }
+	setPartSize(_partId: WorkbenchPartId, _dimension: { readonly width: number; readonly height: number; }): void { }
 }
 
 function unavailableChatService(): IChatService & ILanguageModelsService {

@@ -37,16 +37,16 @@ class TestWorkbenchLayoutService extends BrowserLayoutService implements IWorkbe
 	getVisibleNeighborPart(): undefined { return undefined; }
 	readonly onDidChangeAuxiliaryBarMaximized = Event.None;
 	isAuxiliaryBarMaximized(): boolean { return false; }
+	isEditorHiddenByChat(): boolean { return false; }
+	setEditorHiddenByChat(): void { }
 	toggleMaximizedAuxiliaryBar(): void { }
 	setAuxiliaryBarMaximized(): boolean { return false; }
 	isPanelMaximized(): boolean { return false; }
 	toggleMaximizedPanel(): void { }
 	showPart(): void { }
-	showParts(): void { }
 	hidePart(): void { }
-	hideParts(): void { }
 	getPartSize() { return { width: 0, height: 0 }; }
-	resizePart(): void { }
+	setPartSize(): void { }
 
 	public setLayoutStyle(style: WorkbenchLayoutStyle): void {
 		this.styles.push(style);

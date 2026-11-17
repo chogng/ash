@@ -90,7 +90,7 @@ for (const presentation of ['Tabs', 'List']) {
 		const page = workbench.page;
 		await driver.setWindowSize({ width: 1800, height: 900 });
 		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+			await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 		}
 		await resizeChat(page, 380);
 		if (presentation === 'List') await workbench.quickaccess.runCommand('workbench.action.chat.setAgentSessionsPresentationList');
@@ -141,7 +141,7 @@ test('Sessions shared Tree switches retained drafts, searches and pins the captu
 	const page = workbench.page;
 	await driver.setWindowSize({ width: 1800, height: 900 });
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	await resizeChat(page, 800);
 	const body = page.locator('.ash-chat-body');
@@ -214,7 +214,7 @@ test('Sessions shared Tree switches retained drafts, searches and pins the captu
 test('Sessions Tree restores folded sections after reopening the Workbench', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ driver, workbench, reloadWorkbench }) => {
 	await driver.setWindowSize({ width: 1800, height: 900 });
 	if (!await workbench.page.locator('.ash-chat-view-pane').isVisible()) {
-		await workbench.page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await workbench.page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	await resizeChat(workbench.page, 800);
 	const input = new Editor(workbench.page.locator('.ash-chat-pane-host > .ash-chat:visible'));
@@ -237,19 +237,18 @@ test('Chat session tabs share one title row and retain drafts across navigation 
 	await driver.setWindowSize({ width: 1440, height: 900 });
 	await workbench.openExplorer();
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
-	const auxiliary = page.locator('[data-part="auxiliarybar"]');
-	const tabs = auxiliary.locator('.ash-chat-view-tabs [role="tab"]');
+	const chatPart = page.locator('[data-part="chat"]');
+	const tabs = chatPart.locator('.ash-chat-view-tabs [role="tab"]');
 	await expect(tabs).toHaveCount(1);
-	await expect(auxiliary.locator('.ash-auxiliarybar-view-selector')).toBeHidden();
-	await expect(auxiliary.locator('.ash-composite-bar')).toBeHidden();
-	const header = (await auxiliary.locator('.ash-pane-composite-title').boundingBox())!;
-	expect(Math.abs(header.y - (await auxiliary.boundingBox())!.y)).toBeLessThanOrEqual(1);
-	const input = new Editor(auxiliary.locator('.ash-chat:visible'));
+	await expect(chatPart.locator('.ash-composite-bar')).toBeHidden();
+	const header = (await chatPart.locator('.ash-pane-composite-title').boundingBox())!;
+	expect(Math.abs(header.y - (await chatPart.boundingBox())!.y)).toBeLessThanOrEqual(1);
+	const input = new Editor(chatPart.locator('.ash-chat:visible'));
 	await input.waitForEditorFocus();
 	await input.waitForTypeInEditor('Draft A');
-	await auxiliary.locator('.ash-split-action-primary button').click();
+	await chatPart.locator('.ash-split-action-primary button').click();
 	await expect(tabs).toHaveCount(2);
 	await input.waitForEditorFocus();
 	await input.waitForTypeInEditor('Draft B');
@@ -261,11 +260,11 @@ test('Chat session tabs share one title row and retain drafts across navigation 
 	await page.keyboard.press('Delete');
 	await expect(tabs).toHaveCount(1);
 	await input.waitForEditorContents(text => text === 'Draft A');
-	const toggle = auxiliary.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button');
-	const sidebar = auxiliary.locator('.ash-chat-sessions-sidebar');
+	const toggle = chatPart.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button');
+	const sidebar = chatPart.locator('.ash-chat-sessions-sidebar');
 	await toggle.click();
 	await expect(sidebar.locator('.ash-agent-session-row')).toHaveCount(2);
-	await expect(auxiliary.locator('.ash-chat-body')).toHaveClass(/sessions-side-by-side/);
+	await expect(chatPart.locator('.ash-chat-body')).toHaveClass(/sessions-side-by-side/);
 	await sidebar.locator('.ash-agent-session-row').first().click();
 	await expect(sidebar).toBeVisible();
 	await expect(tabs).toHaveCount(2);
@@ -278,7 +277,7 @@ test('Chat session tabs share one title row and retain drafts across navigation 
 test('Chat More switches Tabs and List while preserving drafts and the saved preference', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, reloadWorkbench }) => {
 	let page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const input = new Editor(page.locator('.ash-chat-view-pane .ash-chat:visible'));
 	await input.waitForEditorFocus();
@@ -300,7 +299,7 @@ test('Chat More switches Tabs and List while preserving drafts and the saved pre
 	const restored = await reloadWorkbench();
 	page = restored.workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	await expect(page.locator('.ash-chat-view-title-button')).toBeVisible();
 	await new Editor(page.locator('.ash-chat-view-pane .ash-chat:visible')).waitForEditorContents(text => text === 'Saved draft');
@@ -318,7 +317,7 @@ test('Session display and tab actions use the Chinese display language', { tag: 
 	({ application, workbench } = await restartWorkbench());
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: '显示辅助侧栏', exact: true }).click();
+		await page.getByRole('button', { name: '切换聊天', exact: true }).click();
 	}
 	await expect(page.getByRole('tablist', { name: '已打开的会话', exact: true })).toBeVisible();
 	await page.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button').click();
@@ -343,7 +342,7 @@ test('List mode automatically docks sessions beside a wide Chat and preserves in
 	const page = workbench.page;
 	await driver.setWindowSize({ width: 1800, height: 900 });
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const body = page.locator('.ash-chat-body');
 	const chat = body.locator('.ash-chat-pane-host');
@@ -428,7 +427,7 @@ test('Dragging Sessions switches to a saved stacked layout and can return to sid
 	let page = workbench.page;
 	await driver.setWindowSize({ width: 1800, height: 900 });
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	await resizeChat(page, 800);
 	await workbench.quickaccess.runCommand('workbench.action.chat.setAgentSessionsPresentationList');
@@ -479,23 +478,24 @@ test('Dragging Sessions switches to a saved stacked layout and can return to sid
 	await expect(page.locator('.ash-chat-body')).not.toHaveClass(/sessions-side-by-side/);
 });
 
-test('Sidebars share a 220px minimum and Chat retains its draft across snapping', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ driver, workbench, reloadWorkbench }, testInfo) => {
+test('Chat has a 280px minimum and retains its draft across snapping', { tag: ['@browser-ui', '@electron-ui', '@browser-app-server', '@electron-app-server'] }, async ({ driver, workbench, reloadWorkbench }, testInfo) => {
 	let page = workbench.page;
 	await driver.setWindowSize({ width: 1800, height: 900 });
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
-	const auxiliary = page.locator('[data-part="auxiliarybar"]');
+	const chatPart = page.locator('[data-part="chat"]');
 	const sidebar = page.locator('.ash-chat-sessions-sidebar');
-	const input = new Editor(auxiliary.locator('.ash-chat:visible'));
+	const input = new Editor(chatPart.locator('.ash-chat:visible'));
 	await input.waitForEditorFocus();
 	await input.waitForTypeInEditor('Draft');
 	// The minimum belongs to the whole Part, including its theme-dependent frame insets.
-	const frameWidth = (await auxiliary.boundingBox())!.width - (await page.locator('.ash-chat-body').boundingBox())!.width;
-	await resizeChat(page, 150, 220 - frameWidth);
-	await expect.poll(async () => (await auxiliary.boundingBox())!.width).toBeCloseTo(220, 0);
+	const frameWidth = (await chatPart.boundingBox())!.width - (await page.locator('.ash-chat-body').boundingBox())!.width;
+	await resizeChat(page, 150, 280 - frameWidth);
+	await expect.poll(async () => (await chatPart.boundingBox())!.width).toBeCloseTo(280, 0);
 	await expect(input.element).toBeInViewport();
 	await expect(sidebar).toBeHidden();
+	await workbench.openExplorer();
 	const primary = page.locator('[data-part="sidebar"]');
 	const primaryBounds = (await primary.boundingBox())!;
 	const primarySash = (await page.locator('.ash-primary-sidebar-sash').boundingBox())!;
@@ -506,7 +506,7 @@ test('Sidebars share a 220px minimum and Chat retains its draft across snapping'
 	await page.mouse.move(primaryX + 150 - primaryBounds.width, primaryY, { steps: 5 });
 	await page.mouse.up();
 	await expect.poll(async () => (await primary.boundingBox())!.width).toBeCloseTo(220, 0);
-	await page.screenshot({ path: testInfo.outputPath('sidebars-220px-minimum.png') });
+	await page.screenshot({ path: testInfo.outputPath('chat-and-sidebar-minimums.png') });
 	await workbench.quickaccess.runCommand('workbench.action.chat.setAgentSessionsPresentationList');
 	await expect(sidebar).toBeHidden();
 	await resizeChat(page, 580);
@@ -517,9 +517,9 @@ test('Sidebars share a 220px minimum and Chat retains its draft across snapping'
 	await workbench.quickaccess.runCommand('agentSessions.hideAgentSessionsSidebar');
 	const originalEditor = await input.element.elementHandle();
 	const sash = await resizeChat(page, 0);
-	await expect(auxiliary).toBeHidden();
-	await expect(page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true })).toBeVisible();
-	await page.screenshot({ path: testInfo.outputPath('chat-auxiliary-snapped-closed.png') });
+	await expect(chatPart).toBeHidden();
+	await expect(page.getByRole('button', { name: 'Toggle Chat', exact: true })).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath('chat-snapped-closed.png') });
 	const handle = (await sash.boundingBox())!;
 	// Half of the collapsed edge handle lies outside the window.
 	const x = Math.min(handle.x + handle.width / 2, await page.evaluate(() => window.innerWidth) - 1);
@@ -528,27 +528,27 @@ test('Sidebars share a 220px minimum and Chat retains its draft across snapping'
 	await page.mouse.down();
 	await page.mouse.move(x - 200, y, { steps: 5 });
 	await page.mouse.up();
-	await expect(auxiliary).toBeVisible();
+	await expect(chatPart).toBeVisible();
 	expect(await input.element.evaluate((element, original) => element === original, originalEditor)).toBe(true);
 	await input.waitForEditorContents(text => text === 'Draft');
-	await page.screenshot({ path: testInfo.outputPath('chat-auxiliary-dragged-open.png') });
+	await page.screenshot({ path: testInfo.outputPath('chat-dragged-open.png') });
 	await resizeChat(page, 0);
 	({ workbench } = await reloadWorkbench());
 	page = workbench.page;
-	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
-	await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	await expect(page.locator('[data-part="chat"]')).toBeHidden();
+	await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	await new Editor(page.locator('.ash-chat-view-pane .ash-chat:visible')).waitForEditorContents(text => text === 'Draft');
 });
 
 async function resizeChat(page: import('@playwright/test').Page, width: number, expectedWidth = width): Promise<import('@playwright/test').Locator> {
 	const body = page.locator('.ash-chat-body');
 	const current = (await body.boundingBox())!;
-	const auxiliary = (await page.locator('[data-part="auxiliarybar"]').boundingBox())!;
+	const chatPart = (await page.locator('[data-part="chat"]').boundingBox())!;
 	const sashes = page.locator('.ash-sash');
 	const index = await sashes.evaluateAll((elements, edge) => elements.findIndex(element => {
 		const bounds = element.getBoundingClientRect();
 		return bounds.height > 100 && Math.abs(bounds.x + bounds.width / 2 - edge) < 8;
-	}), auxiliary.x);
+	}), chatPart.x);
 	expect(index).toBeGreaterThanOrEqual(0);
 	const sash = (await sashes.nth(index).boundingBox())!;
 	const x = sash.x + sash.width / 2;
@@ -557,7 +557,7 @@ async function resizeChat(page: import('@playwright/test').Page, width: number, 
 	await page.mouse.down();
 	await page.mouse.move(x + current.width - width, y, { steps: 5 });
 	await page.mouse.up();
-	if (width === 0) await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
+	if (width === 0) await expect(page.locator('[data-part="chat"]')).toBeHidden();
 	else await expect.poll(async () => (await body.boundingBox())!.width).toBeCloseTo(expectedWidth, 0);
 	return sashes.nth(index);
 }

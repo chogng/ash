@@ -46,7 +46,7 @@ import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../services/userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../services/userDataProfile/browser/userDataProfileService.js';
 import { IKeybindingEditingService, KeybindingsEditingService } from '../services/keybinding/common/keybindingEditing.js';
-import type { PaneCompositePart } from './parts/paneCompositePart.js';
+import { PaneCompositePart } from './parts/paneCompositePart.js';
 import { ITextResourcePropertiesService } from '../../editor/common/services/textResourceConfiguration.js';
 import { TextResourcePropertiesService } from '../services/textresourceProperties/common/textResourcePropertiesService.js';
 import { IModelService } from '../../editor/common/services/model.js';
@@ -190,6 +190,7 @@ import { FileDialogService as BrowserFileDialogService } from '../services/dialo
 import { IUserThemeService, type IUserThemeService as IUserThemeServiceContract, UnavailableUserThemeService } from '../common/userThemes.js';
 import {
 	ViewContainerLocation,
+	ViewsRegistry,
 	type IView,
 } from '../common/views.js';
 import { IStatusbarService } from '../services/statusbar/browser/statusbar.js';
@@ -219,6 +220,7 @@ import { IContentSearchService, IContentSearchConfigurationService } from '../..
 import { BrowserContentSearchService, FileContentSearchService } from '../../platform/search/browser/searchService.js';
 import type { Part } from './part.js';
 import { AuxiliaryBarPart } from './parts/auxiliarybar/auxiliaryBarPart.js';
+import { ChatHostPart } from './parts/chat/chatHostPart.js';
 import { EditorContextKeyController } from './parts/editor/editorContextKeys.js';
 import { EditorOpenSupersededError, EditorPart, IEditorPart, type IEditorPartOptions } from './parts/editor/editorPart.js';
 import { BreadcrumbsFilePicker, BreadcrumbsSymbolPicker } from './parts/editor/breadcrumbsPicker.js';
@@ -977,9 +979,11 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchThemeService, themeService);
 		const auxiliaryWindows = this._register(createAuxiliaryWindowService ? createAuxiliaryWindowService(ownerWindow, workbenchRoot, services) : services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
 		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
+		const chatAvailable = ViewsRegistry.getDefaultViewContainer(ViewContainerLocation.Chat) !== undefined;
 		const layoutService = this._register(services.createInstance(WorkbenchLayout, workbenchRoot, {
 			workbenchState,
 			defaultLayout,
+			chatAvailable,
 			focus: () => this.editor.focus(),
 		}));
 		this.workbenchLayout = layoutService;
@@ -1254,7 +1258,12 @@ export class Workbench extends Disposable {
 				});
 			},
 		};
-		const editor = this._register(instantiationService.createInstance(EditorPart, workbenchRoot, editorOptions));
+		const editor = this._register(instantiationService.createInstance(EditorPart, workbenchRoot, {
+			...editorOptions,
+			revealOnOpen: () => {
+				if (editorRestoration.isSettled) layoutService.setEditorHiddenByChat(false);
+			},
+		}));
 		if (nativeHostApi) {
 			this._register(editor.onDidChangeModalVisibility(visible => {
 				void nativeHostApi.setWindowDimmed(visible).catch(error => console.error('Failed to update window controls', error));
@@ -1449,6 +1458,35 @@ export class Workbench extends Disposable {
 			['editor', editor],
 			['panel', panel],
 		]);
+		const paneParts = new Map<ViewContainerLocation, PaneCompositePart>([
+			[ViewContainerLocation.Sidebar, sidebar],
+			[ViewContainerLocation.Panel, panel],
+			[ViewContainerLocation.AuxiliaryBar, auxiliarybar],
+			[ViewContainerLocation.AgentSidebar, agentSidebar],
+		]);
+		if (chatAvailable) {
+			const chat = this._register(services.createInstance(ChatHostPart, workbenchRoot));
+			const content = this._register(services.createInstance(PaneCompositePart, workbenchRoot, {
+				openComposite: (id: string, preserveFocus?: boolean) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
+				viewDescriptorService: viewDescriptors,
+				localizationService,
+				id: 'chat-content',
+				location: ViewContainerLocation.Chat,
+				ariaLabel: 'Chat',
+				ariaLabelKey: { bundle: 'ash.views', key: 'chat' },
+				viewsAriaLabel: 'Chat',
+				viewsAriaLabelKey: { bundle: 'ash.views', key: 'chat' },
+				compositeBarVisible: false,
+				titleActions: { menuService: menus, contextMenuProvider: contextMenus, menuId: MenuId.ChatHostTitle },
+			}));
+			content.domNode.removeAttribute('aria-label');
+			this._register(chat.setContent(content, () => {
+				const active = content.activeCompositeId;
+				if (active) content.getComposite(active)?.focus();
+			}));
+			parts.set('chat', chat);
+			paneParts.set(ViewContainerLocation.Chat, content);
+		}
 		const layout = layoutService;
 		layout.createParts(parts);
 		this._register(configuration.onDidChangeConfiguration(event => {
@@ -1479,12 +1517,6 @@ export class Workbench extends Disposable {
 			if (partId === 'sidebar') activitybar.setSidebarVisible(visible);
 		}));
 		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService, nativeHostApi !== undefined || webWorkspaceClient !== undefined, browserFileSystemProvider !== undefined, services.get(IWorkbenchEnvironmentService)));
-		const paneParts = new Map<ViewContainerLocation, PaneCompositePart>([
-			[ViewContainerLocation.Sidebar, sidebar],
-			[ViewContainerLocation.Panel, panel],
-			[ViewContainerLocation.AuxiliaryBar, auxiliarybar],
-			[ViewContainerLocation.AgentSidebar, agentSidebar],
-		]);
 		this._register(storage.onWillSaveState(() => {
 			const empty = viewDescriptors.getViewContainers(ViewContainerLocation.AuxiliaryBar).every(container =>
 				viewDescriptors.getViewContainerModel(container.id).activeViewDescriptors.length === 0);
@@ -1494,6 +1526,11 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(instantiationService.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
+		this._register(viewDescriptors.onDidChangeContainerLocation(({ from }) => {
+			if (from === ViewContainerLocation.Chat && viewDescriptors.getViewContainers(from).length === 0) {
+				layout.hidePart('chat');
+			}
+		}));
 		if (api.appServer.isAvailable) services.get(ILanguageServerStatusService);
 		this._register(services.createInstance(ViewDragAndDropController, workbenchRoot));
 		// Extension adapters require the completed editor and view service graph.
@@ -1545,7 +1582,11 @@ export class Workbench extends Disposable {
 				if (!visible) { views.closeViewContainer(container.id); }
 			}
 			try { await Promise.all(openings); }
-			finally { if (auxiliaryBarMaximized) layout.setAuxiliaryBarMaximized(true); }
+			finally {
+				if (auxiliaryBarMaximized && viewDescriptors.getViewContainers(ViewContainerLocation.AuxiliaryBar).length > 0) {
+					layout.setAuxiliaryBarMaximized(true);
+				}
+			}
 			if (isStartup) { performance.mark('ash.workbench.views-restored'); }
 		};
 		// The shell can use its bootstrap colors while extension themes load.

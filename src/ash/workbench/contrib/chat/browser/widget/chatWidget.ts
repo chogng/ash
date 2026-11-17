@@ -58,7 +58,7 @@ import type { IEditorService } from '../../../../services/editor/common/editorSe
 import { URI } from '../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
-import { OPEN_CHAT_CHANGES_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../common/chat.js';
+import { NEW_CHAT_COMMAND_ID, OPEN_CHAT_CHANGES_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../common/chat.js';
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatQueueEditor } from './input/chatInputPart.js';
@@ -378,9 +378,13 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				interrupt: () => this.runVoice(() => voiceClient.stopSpeaking()),
 			},
 			send: (text, mode, skills, contexts, submissionSignal, queue) => this.send(text, mode, skills, contexts, undefined, submissionSignal, queue),
-			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
-				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
-				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
+			executeCommand: ({ commandId, argumentsText }) => {
+				if (commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID) {
+					return commandService.executeCommand(commandId, this.model, argumentsText);
+				}
+				if (commandId === NEW_CHAT_COMMAND_ID) return commandService.executeCommand(commandId, { preserveFocus: true });
+				return argumentsText ? commandService.executeCommand(commandId, argumentsText) : commandService.executeCommand(commandId);
+			},
 			executeServerCommand: model.executeServerCommand && (async (invocation, submissionSignal) => {
 				if (invocation.name === 'advisor' && !invocation.argumentsText.trim()) {
 					await commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);

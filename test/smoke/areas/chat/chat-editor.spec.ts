@@ -24,7 +24,7 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`Chat main canvas (
 		});
 		await expect(chat.locator('.ash-chat-code-reference')).toContainText('canvas-draft.txt');
 		const original = await chat.getAttribute('id');
-		await workbench.quickaccess.runCommand('workbench.action.chat.moveToEditor');
+		await workbench.quickaccess.runCommand('workbench.action.chat.openInEditor');
 		chat = page.locator('.ash-chat-editor .ash-chat:visible');
 		await expect(chat).toHaveAttribute('id', original!);
 		await expect(chat.locator('.stanza-editor-input')).toBeFocused();
@@ -43,7 +43,7 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`Chat main canvas (
 		await expect(chat).toBeVisible();
 		await chat.locator('.stanza-editor-input').focus();
 		await expect(chat.locator('.stanza-editor-input')).toBeFocused();
-		await workbench.quickaccess.open('>workbench.action.chat.moveToSideBar');
+		await workbench.quickaccess.open('>workbench.action.chat.openInSidebar');
 		await workbench.quickaccess.close();
 		await expect(chat).toBeVisible();
 		await expect(chat.locator('.ash-chat-item')).toHaveCount(0);
@@ -62,7 +62,7 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`Chat main canvas (
 		const help = page.locator('.ash-accessible-view-content');
 		await expect(help).toHaveValue(locale === 'en' ? /Move Chat to Editor Area[\s\S]*never sends a message/u : /将聊天移到编辑器区域[\s\S]*不会发送消息/u);
 		await help.press('Escape');
-		await workbench.quickaccess.runCommand('workbench.action.chat.moveToSideBar');
+		await workbench.quickaccess.runCommand('workbench.action.chat.openInSidebar');
 		chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 		await expect(chat).toBeVisible();
 		await expect(chat.locator('.stanza-editor-input')).toBeFocused();

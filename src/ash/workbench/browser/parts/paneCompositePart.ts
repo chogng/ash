@@ -78,7 +78,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 
 	/** The host chooses presentation; the shared service only creates and activates containers. */
 	public getPaneCompositeOptions(): Pick<PaneCompositeOptions, 'paneHeaders' | 'paneLayout' | 'mergeViewWithContainerWhenSingleView'> {
-		const fill = this.location === ViewContainerLocation.Panel || this.location === ViewContainerLocation.AuxiliaryBar;
+		const fill = this.location === ViewContainerLocation.Panel || this.location === ViewContainerLocation.AuxiliaryBar || this.location === ViewContainerLocation.Chat;
 		return { paneHeaders: fill ? 'hidden' : 'visible', paneLayout: fill ? 'fill' : 'stack' };
 	}
 	constructor(
@@ -92,7 +92,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		this.activeCompositeStorageKey = options.activeCompositeStorageKey ?? activeCompositeStorageKeys[options.location];
 		this.viewDescriptorService = options.viewDescriptorService;
 		this.activeCompositeContext = options.contextKeyService
-			? activeCompositeContextKeys[options.location].bindTo(options.contextKeyService)
+			? activeCompositeContextKeys[options.location]?.bindTo(options.contextKeyService)
 			: undefined;
 		this._register(toDisposable(() => this.activeCompositeContext?.reset()));
 		this.location = options.location;
@@ -183,9 +183,9 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 
 	protected override updateTitleArea(): void {
 		super.updateTitleArea();
-		if (this.activeCompositeId) {
-			this.getComposite(this.activeCompositeId)?.setMergedTitleActionsHost(this.viewTitleActionsDomNode, this.compositeToolBar?.element);
-		}
+		const composite = this.activeCompositeId ? this.getComposite(this.activeCompositeId) : undefined;
+		if (this.location === ViewContainerLocation.Chat) this.setTitleProjection(composite?.partTitleProjection);
+		composite?.setMergedTitleActionsHost(this.viewTitleActionsDomNode, this.compositeToolBar?.element);
 	}
 
 	/** Resolves the last valid workspace selection, then falls back to the Registry default. */
@@ -253,6 +253,7 @@ const activeCompositeStorageKeys = {
 	[ViewContainerLocation.Panel]: 'workbench.panel.activeViewContainer',
 	[ViewContainerLocation.AuxiliaryBar]: 'workbench.auxiliarybar.activeViewContainer',
 	[ViewContainerLocation.AgentSidebar]: 'workbench.agentSidebar.activeViewContainer',
+	[ViewContainerLocation.Chat]: 'workbench.chat.activeViewContainer',
 } as const satisfies Record<ViewContainerLocation, string>;
 
 const activeCompositeContextKeys = {
@@ -260,4 +261,5 @@ const activeCompositeContextKeys = {
 	[ViewContainerLocation.Panel]: ActivePanelContext,
 	[ViewContainerLocation.AuxiliaryBar]: ActiveAuxiliaryContext,
 	[ViewContainerLocation.AgentSidebar]: ActiveAgentSidebarContext,
-} as const satisfies Record<ViewContainerLocation, typeof ActiveViewletContext>;
+	[ViewContainerLocation.Chat]: undefined,
+} as const satisfies Record<ViewContainerLocation, typeof ActiveViewletContext | undefined>;

@@ -5,7 +5,7 @@ test.use({ openWorkspace: false });
 test('creating another Chat keeps the existing composer and draft mounted', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const view = page.locator('.ash-chat-view-pane');
 	const composer = view.locator('.ash-chat:visible .ash-chat-input-part');
@@ -50,7 +50,7 @@ test('Chat host retains its composer through session-list resizing and editor mo
 	const page = workbench.page;
 	await driver.setWindowSize({ width: 1800, height: 900 });
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const input = chat.locator('.stanza-editor-input');
@@ -58,6 +58,19 @@ test('Chat host retains its composer through session-list resizing and editor mo
 	await page.keyboard.insertText('Keep this host migration draft');
 	const originalInput = await input.elementHandle();
 	const originalChatId = await chat.getAttribute('id');
+	const host = page.locator('[data-part="chat"]');
+	const editor = page.locator('[data-part="editor"]');
+	const initialWidth = (await host.boundingBox())!.width;
+	await host.getByRole('button', { name: 'Expand Chat', exact: true }).click();
+	await expect(editor).toBeHidden();
+	await expect.poll(async () => (await host.boundingBox())!.width).toBeGreaterThan(initialWidth);
+	await host.getByRole('button', { name: 'Restore Chat Width', exact: true }).click();
+	await expect(editor).toBeVisible();
+	await expect.poll(async () => (await host.boundingBox())!.width).toBeCloseTo(initialWidth, 0);
+	await host.getByRole('button', { name: 'Expand Chat', exact: true }).click();
+	await page.keyboard.press('ControlOrMeta+N');
+	await expect(editor).toBeVisible();
+	await expect(editor.getByRole('textbox', { name: 'Untitled-1' })).toBeVisible();
 	const body = page.locator('.ash-chat-body');
 	const sidebar = body.locator('.ash-chat-sessions-sidebar');
 	const toggle = page.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button');
@@ -82,12 +95,12 @@ test('Chat host retains its composer through session-list resizing and editor mo
 	await separator.press('Escape');
 	await expect(sidebar).toBeHidden();
 	await expect(toggle).toBeFocused();
-	await workbench.quickaccess.runCommand('workbench.action.chat.moveToEditor');
+	await workbench.quickaccess.runCommand('workbench.action.chat.openInEditor');
 	const editorChat = page.locator('.ash-chat-editor .ash-chat:visible');
 	await expect(editorChat).toHaveAttribute('id', originalChatId!);
 	await expect(editorChat.locator('.stanza-editor-line-text')).toHaveText('Keep this host migration draft');
 	expect(await editorChat.locator('.stanza-editor-input').evaluate((element, original) => element === original, originalInput)).toBe(true);
-	await workbench.quickaccess.runCommand('workbench.action.chat.moveToSideBar');
+	await workbench.quickaccess.runCommand('workbench.action.chat.openInSidebar');
 	await expect(chat).toHaveAttribute('id', originalChatId!);
 	await expect(input).toBeFocused();
 	await expect(chat.locator('.stanza-editor-line-text')).toHaveText('Keep this host migration draft');

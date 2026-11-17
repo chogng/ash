@@ -5,6 +5,7 @@ import { IsDevelopmentContext, IsLinuxContext, IsMacContext, IsNativeContext, Is
 import type { IWorkbenchEnvironmentService } from '../services/environment/common/environmentService.js';
 import { type IWorkspaceContextService, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
 import { ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, AgentSidebarVisibleContext, AuxiliaryBarMaximizedContext, AuxiliaryBarVisibleContext, BrowserLocalFolderSupportContext, DirtyWorkingCopiesContext, EditorAreaVisibleContext, EditorsVisibleContext, MultipleEditorGroupsContext, OpenFolderWorkspaceSupportContext, PanelMaximizedContext, PanelVisibleContext, PanelPositionContext, SideBarVisibleContext, WorkbenchStateContext, WorkspaceFolderCountContext } from '../common/contextkeys.js';
+import { ChatPartVisibleContext, EditorAreaHiddenByChatContext } from '../common/contextkeys.js';
 import type { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import type { IEditorService } from '../services/editor/common/editorService.js';
 import { positionToString, type IWorkbenchLayoutService, type WorkbenchPartId } from '../services/layout/browser/layoutService.js';
@@ -83,6 +84,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 			visibilityKeys: new Map<WorkbenchPartId, IContextKey<boolean>>([
 				['sidebar', SideBarVisibleContext.bindTo(contextKeyService)],
 				['auxiliarybar', AuxiliaryBarVisibleContext.bindTo(contextKeyService)],
+				['chat', ChatPartVisibleContext.bindTo(contextKeyService)],
 				['agentSidebar', AgentSidebarVisibleContext.bindTo(contextKeyService)],
 				['panel', PanelVisibleContext.bindTo(contextKeyService)],
 				['editor', EditorAreaVisibleContext.bindTo(contextKeyService)],
@@ -91,11 +93,13 @@ export class WorkbenchContextKeysHandler extends Disposable {
 			panelPosition: PanelPositionContext.bindTo(contextKeyService),
 			auxiliaryBarMaximized: AuxiliaryBarMaximizedContext.bindTo(contextKeyService),
 		}));
+		const editorAreaHiddenByChat = EditorAreaHiddenByChatContext.bindTo(contextKeyService);
 		const updateAll = (): void => contextKeyService.bufferChangeEvents(() => {
 			for (const [partId, key] of visibilityKeys) key.set(layoutService.isPartVisible(partId));
 			panelMaximized.set(layoutService.isPanelMaximized());
 			panelPosition.set(positionToString(layoutService.getPanelPosition()));
 			auxiliaryBarMaximized.set(layoutService.isAuxiliaryBarMaximized());
+			editorAreaHiddenByChat.set(layoutService.isEditorHiddenByChat());
 		});
 		updateAll();
 		this._register(layoutService.onDidChangePartVisibility(event => {
@@ -103,11 +107,12 @@ export class WorkbenchContextKeysHandler extends Disposable {
 				visibilityKeys.get(event.partId)?.set(event.visible);
 				panelMaximized.set(layoutService.isPanelMaximized());
 				auxiliaryBarMaximized.set(layoutService.isAuxiliaryBarMaximized());
+				editorAreaHiddenByChat.set(layoutService.isEditorHiddenByChat());
 			});
 		}));
 		this._register(layoutService.onDidChangeAuxiliaryBarMaximized(updateAll));
 		this._register(layoutService.onDidChangePanelPosition(updateAll));
-		this._register(toDisposable(() => resetContextKeys(contextKeyService, [...visibilityKeys.values(), panelMaximized, panelPosition, auxiliaryBarMaximized])));
+		this._register(toDisposable(() => resetContextKeys(contextKeyService, [...visibilityKeys.values(), panelMaximized, panelPosition, auxiliaryBarMaximized, editorAreaHiddenByChat])));
 	}
 }
 

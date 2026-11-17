@@ -135,12 +135,12 @@ test('region navigation visits editor splits, skips hidden parts and follows sid
 	await expect(second).toBeFocused();
 	await workbench.quickaccess.runCommand('workbench.action.closePanel');
 	await expect(panel).toBeHidden();
-	await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
-	const auxiliary = page.locator('[data-part="auxiliarybar"]');
-	await expect(auxiliary).toBeVisible();
+	const chat = page.locator('[data-part="chat"]');
+	if (await chat.isHidden()) await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
+	await expect(chat).toBeVisible();
 	await second.focus();
 	await page.keyboard.press('F6');
-	await expect.poll(() => auxiliary.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+	await expect.poll(() => chat.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
 	await expect(panel).toBeHidden();
 	await page.keyboard.press('Shift+F6');
 	await expect(second).toBeFocused();

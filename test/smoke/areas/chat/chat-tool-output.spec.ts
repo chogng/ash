@@ -15,7 +15,7 @@ async function reloadWindow(workbench: Workbench): Promise<void> {
 	await workbench.waitForReady();
 }
 
-test('Chat restores the selected thread and side bar visibility alongside Welcome', { tag: ['@electron-app-server'] }, async ({ application, webAppServer, workbench, testWorkspace }) => {
+test('Chat restores the selected thread and Chat visibility alongside Welcome', { tag: ['@electron-app-server'] }, async ({ application, webAppServer, workbench, testWorkspace }) => {
 	const page = workbench.page;
 	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, page);
 	try {
@@ -25,10 +25,10 @@ test('Chat restores the selected thread and side bar visibility alongside Welcom
 		});
 		const welcome = page.locator('.ash-agent-sessions-welcome');
 		const titleBarActions = page.getByRole('toolbar', { name: 'Title Bar global actions' });
-		const showSideBar = titleBarActions.getByRole('button', { name: 'Show Secondary Side Bar', exact: true });
+		const toggleChat = titleBarActions.getByRole('button', { name: 'Toggle Chat', exact: true });
 		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 		await expect(welcome).toBeVisible();
-		if (!await chat.isVisible()) { await showSideBar.click(); }
+		if (!await chat.isVisible()) { await toggleChat.click(); }
 		const sidebar = page.locator('.ash-chat-sessions-sidebar');
 		if (!await sidebar.isVisible()) {
 			await page.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button').click();
@@ -40,12 +40,12 @@ test('Chat restores the selected thread and side bar visibility alongside Welcom
 		await expect(welcome).toBeVisible();
 		await expect(chat).toHaveAttribute('data-thread-id', session.threads[0].threadId);
 
-		await titleBarActions.getByRole('button', { name: 'Hide Secondary Side Bar', exact: true }).click();
+		await toggleChat.click();
 		await reloadWindow(workbench);
 		await expect(welcome).toBeVisible();
-		await expect(showSideBar).toBeVisible();
+		await expect(toggleChat).toBeVisible();
 		await expect(chat).toBeHidden();
-		await showSideBar.click();
+		await toggleChat.click();
 		await expect(chat).toHaveAttribute('data-thread-id', session.threads[0].threadId);
 	} finally {
 		await connection.close();
@@ -73,7 +73,7 @@ for (const approvalMode of ['bypassPermissions', 'manual'] as const) test(`Chat 
 		expect(await realpath(sessionDirectory)).not.toBe(await realpath(testWorkspace.directory));
 		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 		if (!await chat.isVisible()) {
-			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+			await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 		}
 		const sidebar = page.locator('.ash-chat-sessions-sidebar');
 		if (!await sidebar.isVisible()) {

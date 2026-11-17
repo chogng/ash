@@ -141,6 +141,8 @@ export interface IEditorPartOptions {
 	readonly modalContainer?: HTMLElement;
 	/** Waits for resource-owned save recovery before reading dirty state or releasing a pane. */
 	readonly beforeCloseEditor?: (resource: URI) => Promise<boolean>;
+	/** Allows the owning window to reveal this Part before an interactive editor open. */
+	readonly revealOnOpen?: () => void;
 	/** Ash extension: reuse the editor host for single-content groups without changing ordinary multi-tab editors. */
 	readonly editorLimit?: 1;
 	readonly configurationService?: IConfigurationService;
@@ -242,7 +244,13 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			editorLimit: options.editorLimit,
 			registry: options.registry ?? EditorPanes,
 			resolveOpenError: (error, input, openOptions, open) => this.resolveEditorOpenError(error, input, openOptions, open),
-			onWillOpenEditor: input => this.confirmLargeFileOpen(input),
+			onWillOpenEditor: (input, openOptions) => {
+				const confirmation = this.confirmLargeFileOpen(input);
+				if (!options.revealOnOpen || openOptions.restoring || openOptions.inactive) return confirmation;
+				if (confirmation) return confirmation.then(options.revealOnOpen);
+				options.revealOnOpen();
+				return undefined;
+			},
 			onOpenError: (error, input, openOptions) => this.showEditorOpenErrorDialog(error, input, openOptions),
 			configurationService: options.configurationService,
 			contextKeyService: options.contextKeyService ? this._register(options.contextKeyService.createScoped(this.domNode)) : undefined,

@@ -88,7 +88,7 @@ registerAction2(class extends Action2 {
 		const descriptors = accessor.get(IViewDescriptorService);
 		descriptors.reset();
 		const views = accessor.get(IViewsService);
-		for (const location of [ViewContainerLocation.Sidebar, ViewContainerLocation.Panel, ViewContainerLocation.AuxiliaryBar]) {
+		for (const location of [ViewContainerLocation.Sidebar, ViewContainerLocation.Panel, ViewContainerLocation.AuxiliaryBar, ViewContainerLocation.Chat]) {
 			const container = descriptors.getDefaultViewContainer(location);
 			if (container) await views.openViewContainer(container.id);
 		}

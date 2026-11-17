@@ -14,7 +14,7 @@ test('Workbench context picker uploads, previews and removes attachments with th
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const add = chat.getByRole('button', { name: 'Add context', exact: true });
@@ -68,7 +68,7 @@ test('Workbench context picker uploads, previews and removes attachments with th
 test('cancelling attachment selection removes the picker and lets the composer attach again', async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const add = chat.getByRole('button', { name: 'Add context', exact: true });
@@ -96,7 +96,7 @@ test('cancelling attachment selection removes the picker and lets the composer a
 test('host clipboard image becomes a decoded context attachment in Workbench and Sessions', async ({ workbench, target, application }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const marker = 'ash-input-owned-clipboard-fixture-20261012';
@@ -192,7 +192,7 @@ test('host clipboard image becomes a decoded context attachment in Workbench and
 test('host screenshot captures a PNG and releases the browser capture stream', async ({ workbench, target, application }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	if (target.kind === 'browser') {
 		await page.evaluate(() => {
@@ -257,7 +257,7 @@ test('host screenshot captures a PNG and releases the browser capture stream', a
 test('browser screen chooser cancellation closes the picker and restores the message', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	await page.evaluate(() => {
 		Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', { configurable: true, value: async () => { throw new DOMException('Cancelled', 'NotAllowedError'); } });
@@ -302,7 +302,7 @@ test('terminal, symbol and search context source buttons return to their product
 	await workbench.search.search('const value');
 	await expect(workbench.search.status).toHaveText('1 results');
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const add = chat.getByRole('button', { name: 'Add context', exact: true });
@@ -349,7 +349,7 @@ instructionTest('instruction context discovers the authorized directory and open
 	instructionTest.skip(target.appServerMode !== 'required', 'Requires the backend instruction catalog.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
@@ -390,7 +390,7 @@ test('live GitHub account attaches a real issue and pull request through the con
 		expect(issue.number).toBeGreaterThan(0);
 		expect(pr.number).toBeGreaterThan(0);
 		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+			await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 		}
 		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 		for (const item of [{ label: 'Issue…', url: issue.url, number: issue.number }, { label: 'Pull Request…', url: pr.url, number: pr.number }]) {
@@ -412,7 +412,7 @@ test('live GitHub account attaches a real issue and pull request through the con
 test('tool context reads the current backend catalog and opens Tools settings', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
@@ -461,7 +461,7 @@ for (const surface of ['Workbench', 'Sessions']) {
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		}
 		if (surface === 'Workbench' && !await page.locator('.ash-chat-view-pane').isVisible()) {
-			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+			await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 		}
 		const chat = page.locator(surface === 'Sessions' ? '.ash-sessions-chat-slot.active:visible' : '.ash-chat-view-pane .ash-chat:visible');
 		const picker = page.getByRole('dialog');

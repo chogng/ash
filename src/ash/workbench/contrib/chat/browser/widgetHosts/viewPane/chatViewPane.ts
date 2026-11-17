@@ -15,6 +15,7 @@ import { INotificationService } from '../../../../../../platform/notification/co
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../../../browser/parts/views/viewPane.js';
 import { IWorkbenchLayoutService } from '../../../../../services/layout/browser/layoutService.js';
 import { ILifecycleService } from '../../../../../services/lifecycle/common/lifecycle.js';
+import { IViewsService } from '../../../../../services/views/common/viewsService.js';
 import type { IChatViewPane, IQuickChatSession, IChatWidgetViewOptions } from '../../chat.js';
 import type { ChatWidget, IChatWidgetModel } from '../../widget/chatWidget.js';
 import { AgentSessionsControl, type IAgentSessionsControlOptions } from '../../agentSessions/agentSessionsControl.js';
@@ -26,6 +27,7 @@ import {
 	AgentSessionsPresentationContext,
 	AgentSessionsSidebarVisibleContext,
 	OPEN_CHAT_SETTINGS_COMMAND_ID,
+	CHAT_VIEW_CONTAINER_ID,
 } from '../../../common/chat.js';
 import { ChatConfiguration } from '../../../common/constants.js';
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
@@ -111,6 +113,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		@ILifecycleService protected readonly lifecycleService: ILifecycleService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IEditorGroupsService private readonly editorGroups: IEditorGroupsService,
+		@IViewsService protected readonly viewsService: IViewsService,
 		@IEditorService protected readonly editorService?: IEditorService,
 	) {
 		super(container, options);
@@ -135,7 +138,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 					const dragged = this.getDraggedSession();
 					if (dragged && dragged.input instanceof ChatEditorInput) {
 						this.editorTransfer.clearData(DraggedEditorIdentifier.prototype);
-						void this.moveSessionToSideBar(dragged.input.resource, target, position).catch(onUnexpectedError);
+						void this.returnSessionToChatView(dragged.input.resource, target, position).catch(onUnexpectedError);
 						return;
 					}
 					const source = this.draggedPaneId;
@@ -311,8 +314,8 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		})();
 	}
 
-	/** A close releases the editor's lease; only then can the tab be selected and ordered in the side bar. */
-	public async moveSessionToSideBar(resource: URI, target?: string, position: 'before' | 'after' = 'after'): Promise<void> {
+	/** A close releases the editor's lease; only then can the tab be selected and ordered in the Chat view. */
+	public async returnSessionToChatView(resource: URI, target?: string, position: 'before' | 'after' = 'after'): Promise<void> {
 		const mounted = [...this.sessionEditors].find(([, mount]) => mount.input.resource.toString() === resource.toString());
 		if (!mounted) return;
 		const [pane] = mounted;
@@ -328,7 +331,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		this.activatePane(entry.id);
 		this.syncSessions();
 		this.saveViewState();
-		this.layoutService.showPart('auxiliarybar');
+		await this.viewsService.openViewContainer(CHAT_VIEW_CONTAINER_ID);
 		pane.focus();
 	}
 
@@ -456,13 +459,13 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 			this.updateSessionsControlVisibility();
 			this.updateTitleArea();
 			if (!this.isDisposed && !this.lifecycleService.willShutdown) {
-				this.layoutService.showPart('auxiliarybar');
+				void this.viewsService.openViewContainer(CHAT_VIEW_CONTAINER_ID).catch(onUnexpectedError);
 			}
 		});
 		this.editorMount = lease;
 		this.editorMountParent = parent;
 		this.updateSessionsControlVisibility();
-		this.layoutService.hidePart('auxiliarybar');
+		this.viewsService.closeViewContainer(CHAT_VIEW_CONTAINER_ID);
 		if (isHTMLElement(focused) && parent.contains(focused)) {
 			focused.focus({ preventScroll: true });
 		}
@@ -770,8 +773,8 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 				return;
 			}
 			if (!this.editorMount && this.openedPaneIds.length === 1) {
-				// Keep the last conversation available when the retained side bar is reopened.
-				await this.commandService.executeCommand('workbench.action.closeAuxiliaryBar');
+				// Keep the last conversation available when the retained Chat view is reopened.
+				this.viewsService.closeViewContainer(CHAT_VIEW_CONTAINER_ID);
 				return;
 			}
 			const index = this.openedPaneIds.indexOf(id);

@@ -3,8 +3,9 @@ import { expect, test } from '../../../automation/test.js';
 test('Chat conversation title uses toolbar colors and exposes keyboard focus', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
+	await workbench.quickaccess.runCommand('workbench.action.chat.setAgentSessionsPresentationList');
 	const title = page.locator('.ash-chat-view-title-button');
 	await expect(title).toHaveAttribute('aria-haspopup', 'dialog');
 	await expect(title).toHaveAttribute('aria-expanded', 'false');

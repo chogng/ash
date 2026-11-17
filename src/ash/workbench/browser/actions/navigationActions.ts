@@ -9,17 +9,17 @@ import { GroupDirection, IEditorGroupsService } from '../../services/editor/comm
 import { IWorkbenchLayoutService, type WorkbenchPartId } from '../../services/layout/browser/layoutService.js';
 import { IPaneCompositePartService } from '../../services/panecomposite/browser/panecomposite.js';
 
-const navigationParts = ['editor', 'panel', 'auxiliarybar', 'sidebar', 'agentSidebar'] as const;
+const navigationParts = ['editor', 'panel', 'chat', 'auxiliarybar', 'sidebar', 'agentSidebar'] as const;
 const groupDirections = { [Direction.Up]: GroupDirection.UP, [Direction.Down]: GroupDirection.DOWN, [Direction.Left]: GroupDirection.LEFT, [Direction.Right]: GroupDirection.RIGHT };
 const oppositeDirections = { [Direction.Up]: GroupDirection.DOWN, [Direction.Down]: GroupDirection.UP, [Direction.Left]: GroupDirection.RIGHT, [Direction.Right]: GroupDirection.LEFT };
-const paneLocations = { sidebar: ViewContainerLocation.Sidebar, panel: ViewContainerLocation.Panel, auxiliarybar: ViewContainerLocation.AuxiliaryBar, agentSidebar: ViewContainerLocation.AgentSidebar };
+const paneLocations = { sidebar: ViewContainerLocation.Sidebar, panel: ViewContainerLocation.Panel, auxiliarybar: ViewContainerLocation.AuxiliaryBar, agentSidebar: ViewContainerLocation.AgentSidebar, chat: ViewContainerLocation.Chat };
 
 async function focusPart(accessor: ServicesAccessor, part: WorkbenchPartId): Promise<IComposite | undefined> {
 	if (part === 'editor') {
 		accessor.get(IEditorGroupsService).activeGroup.focus();
 		return undefined;
 	}
-	if (part !== 'sidebar' && part !== 'panel' && part !== 'auxiliarybar' && part !== 'agentSidebar') { return undefined; }
+	if (part !== 'sidebar' && part !== 'panel' && part !== 'auxiliarybar' && part !== 'agentSidebar' && part !== 'chat') { return undefined; }
 	const panes = accessor.get(IPaneCompositePartService);
 	const location = paneLocations[part];
 	const active = panes.getActivePaneComposite(location);

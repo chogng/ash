@@ -163,7 +163,7 @@ export class ModalEditorPart extends Disposable {
 			const identity = this.uriIdentity.resolveCanonicalUri(input.resource);
 			if (!(identity instanceof URI)) await identity;
 			this.assertNotDisposed();
-			const confirmation = this.options.onWillOpenEditor?.(input);
+			const confirmation = this.options.onWillOpenEditor?.(input, openOptions);
 			if (confirmation) await confirmation;
 			if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
 			return await this.doOpenEditor(input, openOptions, sequence);

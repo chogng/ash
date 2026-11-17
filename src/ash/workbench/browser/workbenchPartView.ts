@@ -5,6 +5,7 @@ import type { Event } from '../../base/common/event.js';
 import type { WorkbenchPartId } from '../services/layout/browser/layoutService.js';
 import type { Part } from './part.js';
 import type { IBoundarySashes } from '../../base/browser/ui/sash/sash.js';
+import type { LayoutPriority } from '../../base/browser/ui/splitview/splitview.js';
 
 export interface WorkbenchPartFrameInsets {
 	readonly top: number;
@@ -23,6 +24,7 @@ export const NoWorkbenchPartFrameInsets: WorkbenchPartFrameInsets = {
 export interface WorkbenchPartViewOptions {
 	/** Whether the hosting Grid may snap this Part closed through its Sash. */
 	readonly snap?: boolean;
+	readonly priority?: () => LayoutPriority;
 }
 
 /** Adapts one Workbench Part to the generic Grid view contract. */
@@ -34,7 +36,7 @@ export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
 	constructor(
 		readonly partId: TPartId,
 		readonly part: Part,
-		options: WorkbenchPartViewOptions = {},
+		private readonly options: WorkbenchPartViewOptions = {},
 	) {
 		const frame = h(part.domNode.ownerDocument, 'div');
 		this.frame = frame;
@@ -45,6 +47,10 @@ export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
 
 	get element(): HTMLElement {
 		return this.frame;
+	}
+
+	get priority(): LayoutPriority | undefined {
+		return this.options.priority?.();
 	}
 
 	get minimumWidth(): number {

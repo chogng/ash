@@ -96,6 +96,7 @@ export enum ViewContainerLocation {
 	Panel = 'panel',
 	AuxiliaryBar = 'auxiliarybar',
 	AgentSidebar = 'agentSidebar',
+	Chat = 'chat',
 }
 
 /** Static declaration of a named workbench view container. */

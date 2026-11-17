@@ -28,6 +28,8 @@ import { h } from '../../../base/browser/dom.js';
 import type { ILocalizationService } from '../../../workbench/services/localization/common/localizationService.js';
 import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
 import { BrowserContextViewService } from '../../../platform/contextview/browser/contextViewService.js';
+import { IHostService } from '../../services/host/browser/host.js';
+import { TestHostService } from '../../services/host/test/browser/testHostService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -44,6 +46,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { Dimension } = await import('../../../base/browser/dom.js');
+const { Direction } = await import('../../../base/browser/ui/grid/grid.js');
 const { Lxicon } = await import('../../../base/common/lxicons.js');
 const { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } =
 	await import('../../../platform/storage/common/storage.js');
@@ -90,6 +93,7 @@ const { ILocalizationService: PanelLocalizationService } =
 	await import('../../../workbench/services/localization/common/localizationService.js');
 const { CompositeBar } = await import('../../../workbench/browser/parts/compositeBar.js');
 const { AuxiliaryBarPart } = await import('../../../workbench/browser/parts/auxiliarybar/auxiliaryBarPart.js');
+const { ChatHostPart } = await import('../../../workbench/browser/parts/chat/chatHostPart.js');
 const { PaneComposite } = await import('../../browser/panecomposite.js');
 const { ViewPane } = await import('../../../workbench/browser/parts/views/viewPane.js');
 const { EditorPart } = await import('../../../workbench/browser/parts/editor/editorPart.js');
@@ -165,6 +169,7 @@ function createLayoutHarness(
 	readonly disposables: DisposableStore;
 	readonly container: HTMLElement;
 	readonly editor: EditorPartInstance;
+	readonly chat: InstanceType<typeof ChatHostPart>;
 	readonly layout: WorkbenchLayoutInstance;
 	readonly services: InstanceType<typeof InstantiationService>;
 	readonly configuration: InstanceType<typeof InMemoryConfigurationService>;
@@ -210,6 +215,7 @@ function createLayoutHarness(
 		);
 	}
 	const services = disposables.add(createTestEditorServices(configuration, undefined, ownerDocument, storage));
+	services.registerInstance(IHostService, new TestHostService());
 	const layout = disposables.add(
 		services.createInstance(WorkbenchLayout, container, {
 			workbenchState: WorkbenchState.FOLDER,
@@ -220,8 +226,13 @@ function createLayoutHarness(
 	);
 	services.registerInstance(IWorkbenchLayoutService, layout);
 	const parts = new Map<WorkbenchPartId, WorkbenchPartInstance>();
+	const chat = disposables.add(services.createInstance(ChatHostPart, container));
 	let editor: EditorPartInstance | undefined;
 	for (const partId of workbenchPartIds) {
+		if (partId === 'chat') {
+			parts.set(partId, chat);
+			continue;
+		}
 		const part =
 			partId === 'editor'
 				? registerContainerServices(services).createInstance(EditorPart, container, {})
@@ -235,8 +246,108 @@ function createLayoutHarness(
 	if (!editor) throw new Error('Test layout requires an editor Part');
 
 	layout.createParts(parts);
-	return { disposables, container, editor, layout, configuration, services };
+	return { disposables, container, editor, layout, configuration, services, chat };
 }
+
+test('The Chat part borrows content and restores the editor when its focused content closes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root = dom.window.document.createElement('main');
+	dom.window.document.body.append(root);
+	const editorFocus = dom.window.document.createElement('button');
+	root.append(editorFocus);
+	const harness = createLayoutHarness(dom.window.document, {
+		initialDimension: new Dimension(1_600, 900),
+		chatAvailable: true,
+		defaultLayout: { parts: { panel: true, auxiliarybar: false, chat: false } },
+		focus: () => editorFocus.focus(),
+	}, root);
+	try {
+		const { chat, layout, disposables } = harness;
+		layout.layout(new Dimension(1_600, 900));
+		const first = disposables.add(new TestPart('sidebar', root));
+		const second = disposables.add(new TestPart('auxiliarybar', root));
+		const input = dom.window.document.createElement('input');
+		second.domNode.append(input);
+		using oldMount = chat.setContent(first, () => assert.fail('The replaced Chat received focus'));
+		using mount = chat.setContent(second, () => input.focus());
+		oldMount.dispose();
+		assert.equal(first.domNode.isConnected, false);
+		assert.equal(first.isDisposed, false);
+		assert.equal(second.domNode.hidden, true);
+
+		layout.showPart('chat');
+		const width = layout.getPartSize('chat').width;
+		assert.equal(layout.isPartVisible('auxiliarybar'), false);
+		assert.equal(layout.getVisibleNeighborPart('editor', Direction.Right), 'chat');
+		chat.focusContent();
+		assert.equal(dom.window.document.activeElement, input);
+		layout.setEditorHiddenByChat(true);
+		assert.equal(layout.isPartVisible('editor'), false);
+		assert.equal(layout.isPanelMaximized(), false);
+		assert.ok(layout.getPartSize('chat').width > width);
+
+		layout.setAuxiliaryBarMaximized(true);
+		assert.equal(layout.isPartVisible('chat'), false);
+		layout.setAuxiliaryBarMaximized(false);
+		assert.equal(layout.isEditorHiddenByChat(), true);
+
+		layout.toggleMaximizedPanel();
+		assert.equal(layout.isPanelMaximized(), true);
+		assert.equal(layout.isPartVisible('chat'), false);
+		layout.toggleMaximizedPanel();
+		assert.equal(layout.isPanelMaximized(), false);
+		assert.equal(layout.isPartVisible('chat'), true);
+		assert.equal(layout.getPartSize('chat').width, width);
+
+		chat.focusContent();
+		layout.setEditorHiddenByChat(true);
+		layout.hidePart('chat');
+		assert.equal(layout.isPartVisible('editor'), true);
+		assert.equal(dom.window.document.activeElement, editorFocus);
+		assert.equal(second.domNode.hidden, true);
+		assert.equal(chat.domNode.contains(second.domNode), true);
+	} finally {
+		harness.disposables.dispose();
+		dom.window.close();
+	}
+});
+
+test('Chat restores its workspace width independently after migrating the auxiliary sidebar layout', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const createStorage = () => new BrowserStorageService({
+		ownerWindow: dom.window as unknown as Window,
+		workspaceId: 'chat-layout',
+		backend: dom.window.localStorage,
+		flushInterval: 0,
+	});
+	const options = { chatAvailable: true, initialDimension: new Dimension(1_600, 900) };
+	try {
+		{
+			using storage = createStorage();
+			storage.store('workbench.layout.auxiliarybar.width', 360, StorageScope.PROFILE, StorageTarget.MACHINE);
+			storage.store('workbench.layout.auxiliarybar.visible', false, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			const { layout, disposables } = createLayoutHarness(dom.window.document, { ...options, storageService: storage });
+			using lifetime = disposables;
+			assert.deepEqual(layout.state.chat, { width: 360, visible: false, editorHidden: false });
+			layout.layout(options.initialDimension);
+			layout.showPart('chat');
+			layout.setPartSize('chat', layout.getPartSize('chat').with(440));
+			layout.setEditorHiddenByChat(true);
+			await storage.flush(WillSaveStateReason.SHUTDOWN);
+		}
+		using storage = createStorage();
+		const { layout, disposables } = createLayoutHarness(dom.window.document, { ...options, storageService: storage });
+		using lifetime = disposables;
+		layout.layout(options.initialDimension);
+		assert.deepEqual(layout.state.chat, { width: 440, visible: true, editorHidden: true });
+		assert.equal(layout.isPartVisible('auxiliarybar'), false);
+		assert.equal(layout.isPartVisible('editor'), false);
+		layout.showPart('editor');
+		assert.equal(layout.getPartSize('chat').width, 440);
+	} finally {
+		dom.window.close();
+	}
+});
 
 test('Workbench layout keeps the footer inside fractional container bounds on first layout and relayout', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -340,7 +451,9 @@ test('Workbench layout hides and restores Parts with context keys', () => {
 		assert.equal(sash.classList.contains('ash-sash-inset'), true);
 		assert.equal(sash.style.getPropertyValue('--ash-sash-inset-gap'), '4px');
 	}
-	harness.layout.hideParts(['sidebar', 'auxiliarybar', 'panel']);
+	harness.layout.hidePart('sidebar');
+	harness.layout.hidePart('auxiliarybar');
+	harness.layout.hidePart('panel');
 	assert.ok(overlay.isConnected);
 	assert.equal(harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.hidden, true);
 	assert.equal(harness.container.querySelector<HTMLElement>("[data-part='auxiliarybar']")?.hidden, true);
@@ -740,7 +853,7 @@ test('Panel position commands preserve visibility, both axis sizes, focus and sc
 	const events: string[] = [];
 	resources.add(harness.layout.onDidChangePanelPosition(position => events.push(position)));
 	harness.layout.layout(new Dimension(1_800, 900));
-	harness.layout.resizePart('panel', new Dimension(1_000, 180));
+	harness.layout.setPartSize('panel', new Dimension(1_000, 180));
 	const input = dom.window.document.createElement('textarea');
 	harness.container.querySelector('[data-part="panel"]')!.append(input);
 	input.focus();
@@ -757,7 +870,7 @@ test('Panel position commands preserve visibility, both axis sizes, focus and sc
 		assert.equal(harness.layout.isPartVisible('panel'), true);
 		if (position === Position.LEFT || position === Position.RIGHT) {
 			assert.equal(harness.layout.getPartSize('panel').width, 256);
-			harness.layout.resizePart('panel', new Dimension(256, 800));
+			harness.layout.setPartSize('panel', new Dimension(256, 800));
 		} else {
 			assert.equal(harness.layout.getPartSize('panel').height, 180);
 		}
@@ -766,7 +879,7 @@ test('Panel position commands preserve visibility, both axis sizes, focus and sc
 	await positionMenu()
 		.find(action => action.id.endsWith('Left'))!
 		.run();
-	harness.layout.resizePart('panel', new Dimension(350, 800));
+	harness.layout.setPartSize('panel', new Dimension(350, 800));
 	harness.layout.hidePart('panel');
 	await commands.executeCommand('workbench.action.positionPanelRight');
 	assert.equal(harness.layout.isPartVisible('panel'), true);
@@ -803,7 +916,7 @@ test('maximized Panel survives configuration changes and restores its saved heig
 	services.registerInstance(IWorkbenchLayoutService, harness.layout);
 	const commands = disposables.add(new CommandService(services));
 	harness.layout.layout(new Dimension(1_200, 800));
-	harness.layout.resizePart('panel', new Dimension(harness.layout.getPartSize('panel').width, 180));
+	harness.layout.setPartSize('panel', new Dimension(harness.layout.getPartSize('panel').width, 180));
 
 	await commands.executeCommand('workbench.action.toggleMaximizedPanel');
 	await harness.configuration.updateValue(WorkbenchConfiguration.sideBarLocation, 'right');
@@ -836,7 +949,7 @@ test('maximized Panel survives configuration changes and restores its saved heig
 	assert.equal(harness.layout.getPartSize('panel').height, 180);
 	harness.layout.hidePart('editor');
 	harness.layout.showPart('editor');
-	harness.layout.resizePart('panel', new Dimension(harness.layout.getPartSize('panel').width, 210));
+	harness.layout.setPartSize('panel', new Dimension(harness.layout.getPartSize('panel').width, 210));
 	assert.equal(harness.layout.state.panel.height, 210);
 	harness.layout.toggleMaximizedPanel();
 	harness.layout.restoreWorkspaceState();
@@ -868,8 +981,8 @@ test('Auxiliary Bar commands restore dimensions, hidden Parts and Panel maximiza
 		});
 		const commands = resources.add(new CommandService(harness.services));
 		harness.layout.layout(new Dimension(1600, 900));
-		harness.layout.resizePart('auxiliarybar', new Dimension(320, 800));
-		harness.layout.resizePart('panel', new Dimension(800, 180));
+		harness.layout.setPartSize('auxiliarybar', new Dimension(320, 800));
+		harness.layout.setPartSize('panel', new Dimension(800, 180));
 		const ordinary = harness.layout.state;
 		for (const panelMaximized of [false, true]) {
 			if (panelMaximized) harness.layout.toggleMaximizedPanel();
@@ -931,7 +1044,7 @@ test('Panel reopening remembers its closing state across layout recreation and k
 			defaultLayout: { parts: { panel: true } },
 		});
 		first.layout.layout(new Dimension(1_200, 800));
-		first.layout.resizePart('panel', new Dimension(first.layout.getPartSize('panel').width, 180));
+		first.layout.setPartSize('panel', new Dimension(first.layout.getPartSize('panel').width, 180));
 		first.layout.toggleMaximizedPanel();
 		first.layout.hidePart('panel');
 		first.layout.hidePart('panel');
@@ -968,11 +1081,11 @@ test('Workbench layout state is versioned and excludes topology', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const harness = createLayoutHarness(dom.window.document, { defaultLayout: { parts: { panel: true } } });
 	harness.layout.layout(new Dimension(1_000, 700));
-	harness.layout.resizePart('sidebar', harness.layout.getPartSize('sidebar').with(250));
+	harness.layout.setPartSize('sidebar', harness.layout.getPartSize('sidebar').with(250));
 	harness.layout.hidePart('auxiliarybar');
-	harness.layout.resizePart('agentSidebar', harness.layout.getPartSize('agentSidebar').with(300));
+	harness.layout.setPartSize('agentSidebar', harness.layout.getPartSize('agentSidebar').with(300));
 	harness.layout.showPart('agentSidebar');
-	harness.layout.resizePart('panel', new Dimension(harness.layout.getPartSize('panel').width, 180));
+	harness.layout.setPartSize('panel', new Dimension(harness.layout.getPartSize('panel').width, 180));
 	const state = harness.layout.state;
 
 	assert.deepEqual(state, {
@@ -980,6 +1093,7 @@ test('Workbench layout state is versioned and excludes topology', () => {
 		sidebar: { width: 250, visible: true },
 		auxiliarybar: { width: 256, visible: false },
 		agentSidebar: { width: 300, visible: true },
+		chat: { width: 300, visible: false, editorHidden: false },
 		panel: { position: Position.BOTTOM, width: 256, height: 180, visible: true },
 	});
 	assert.equal('children' in state, false);
@@ -1014,8 +1128,8 @@ test('Workbench sash reset keeps unrelated sidebars at their current widths', ()
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const harness = createLayoutHarness(dom.window.document, { initialDimension: new Dimension(1_200, 800) });
 	harness.layout.layout(new Dimension(1_200, 800));
-	harness.layout.resizePart('sidebar', harness.layout.getPartSize('sidebar').with(260));
-	harness.layout.resizePart('auxiliarybar', harness.layout.getPartSize('auxiliarybar').with(320));
+	harness.layout.setPartSize('sidebar', harness.layout.getPartSize('sidebar').with(260));
+	harness.layout.setPartSize('auxiliarybar', harness.layout.getPartSize('auxiliarybar').with(320));
 	const sidebarWidth = harness.layout.getPartSize('sidebar').width;
 
 	resetWorkbenchSash(dom.window, harness.container, 'auxiliarybar', 1);
@@ -1080,7 +1194,7 @@ test('Git sidebar uses its preferred reset width and merges a lone view into the
 		sidebar,
 	);
 	harness.layout.layout(new Dimension(1_200, 800));
-	harness.layout.resizePart('sidebar', harness.layout.getPartSize('sidebar').with(250));
+	harness.layout.setPartSize('sidebar', harness.layout.getPartSize('sidebar').with(250));
 	assert.equal(sidebar.preferredWidth, 400);
 	resetWorkbenchSash(dom.window, host, 'sidebar', 0);
 	assert.equal(harness.layout.getPartSize('sidebar').width, 402);
@@ -1109,7 +1223,7 @@ test('Git sidebar uses its preferred reset width and merges a lone view into the
 	assert.equal(changes.action.closest('.ash-pane-view-header') !== null, true);
 	assert.equal(dom.window.document.activeElement, changes.action);
 	harness.layout.setSideBarLocation('right');
-	harness.layout.resizePart('sidebar', harness.layout.getPartSize('sidebar').with(250));
+	harness.layout.setPartSize('sidebar', harness.layout.getPartSize('sidebar').with(250));
 	resetWorkbenchSash(dom.window, host, 'sidebar', 2);
 	assert.equal(harness.layout.getPartSize('sidebar').width, 402);
 
@@ -1148,7 +1262,7 @@ test('Workbench initializes widths from the viewport without rescaling restored 
 		initialDimension: new Dimension(1600, 900),
 	});
 	first.layout.layout(new Dimension(1600, 900));
-	first.layout.resizePart('sidebar', new Dimension(420, 800));
+	first.layout.setPartSize('sidebar', new Dimension(420, 800));
 	first.layout.hidePart('auxiliarybar');
 	await storage.flush(WillSaveStateReason.SHUTDOWN);
 	first.disposables.dispose();
@@ -1493,9 +1607,9 @@ test('Workbench layout restores scoped state through the storage service', async
 		storageService: firstStorage,
 	});
 	first.layout.layout(new Dimension(1_000, 700));
-	first.layout.resizePart('auxiliarybar', first.layout.getPartSize('auxiliarybar').with(310));
+	first.layout.setPartSize('auxiliarybar', first.layout.getPartSize('auxiliarybar').with(310));
 	dragWorkbenchSash(dom.window, first.container, 'auxiliarybar', 1, 310);
-	first.layout.resizePart('panel', new Dimension(first.layout.getPartSize('panel').width, 175));
+	first.layout.setPartSize('panel', new Dimension(first.layout.getPartSize('panel').width, 175));
 	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
 	first.disposables.dispose();
 	firstStorage.dispose();
@@ -1560,7 +1674,7 @@ test('Workbench layout retains resized Part dimensions across visibility', () =>
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const harness = createLayoutHarness(dom.window.document);
 	harness.layout.layout(new Dimension(1_000, 700));
-	harness.layout.resizePart('sidebar', harness.layout.getPartSize('sidebar').with(250));
+	harness.layout.setPartSize('sidebar', harness.layout.getPartSize('sidebar').with(250));
 	assert.equal(harness.layout.getPartSize('sidebar').width, 250);
 	harness.layout.hidePart('sidebar');
 	harness.layout.showPart('sidebar');
@@ -3501,9 +3615,9 @@ test('Panel position commands rotate the actual Grid, retain focus and restore b
 		await commands.executeCommand('workbench.action.positionPanelBottom');
 		assert.equal(harness.layout.isPartVisible('panel'), true);
 		harness.layout.setPanelPosition(Position.LEFT);
-		harness.layout.resizePart('panel', new Dimension(420, harness.layout.getPartSize('panel').height));
+		harness.layout.setPartSize('panel', new Dimension(420, harness.layout.getPartSize('panel').height));
 		harness.layout.setPanelPosition(Position.BOTTOM);
-		harness.layout.resizePart('panel', new Dimension(harness.layout.getPartSize('panel').width, 230));
+		harness.layout.setPartSize('panel', new Dimension(harness.layout.getPartSize('panel').width, 230));
 		harness.layout.setPanelPosition(Position.RIGHT);
 		assert.equal(harness.layout.getPartSize('panel').width, 420);
 		const state = harness.layout.state;

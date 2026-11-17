@@ -515,7 +515,7 @@ export class ThemeEditor extends EditorPane {
 		super.setVisible(visible);
 		if (visible) {
 			// Use the containing window's layout owner; embedded previews keep their own Parts.
-			for (const part of ['sidebar', 'auxiliarybar', 'panel'] as const) this.workbenchLayout.hidePart(part);
+			for (const part of ['sidebar', 'auxiliarybar', 'chat', 'panel'] as const) this.workbenchLayout.hidePart(part);
 		}
 		this.textEditor.setVisible(false);
 		this.applyPreview();

@@ -383,7 +383,7 @@ test('Skill enablement updates Chat completion and survives a window reload', { 
 	await expect(skills.getByRole('switch')).not.toBeChecked();
 	await expect(skills.getByRole('switch')).toBeEnabled();
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	let editor = page.locator('.ash-chat-input-editor');
 	await editor.locator('.stanza-editor-input').focus();
@@ -402,7 +402,7 @@ test('Skill enablement updates Chat completion and survives a window reload', { 
 	await expect(skills.getByRole('switch')).toBeChecked();
 	await expect(skills.getByRole('switch')).toBeEnabled();
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	editor = page.locator('.ash-chat-input-editor');
 	await editor.locator('.stanza-editor-input').focus();
@@ -610,7 +610,7 @@ exports.activate = async function(context) {
 test('Extensions slash commands open their Workbench owners without sending a chat message', async ({ target, application, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const input = page.locator('.ash-chat-input-editor .stanza-editor-input');
 	const editor = new Editor(page.locator('.ash-chat-input-editor'));

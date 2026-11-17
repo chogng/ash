@@ -98,7 +98,7 @@ export interface EditorGroupOptions extends IEditorGroupViewOptions {
 	/** Lets the layout owner reconsider an empty group after its latest open settles. */
 	readonly onDidFinishOpenEditor?: () => void;
 	readonly resolveOpenError?: (error: unknown, input: IResourceEditorInput, options: EditorOpenOptions, open: (options: EditorOpenOptions) => Promise<IEditorPane>) => unknown;
-	readonly onWillOpenEditor?: (input: IResourceEditorInput) => Promise<void> | undefined;
+	readonly onWillOpenEditor?: (input: IResourceEditorInput, options: EditorOpenOptions & { readonly restoring?: boolean; }) => Promise<void> | undefined;
 	readonly onOpenError?: (error: unknown, input: IResourceEditorInput, options: EditorOpenOptions) => Promise<void>;
 	readonly dragAndDrop?: IEditorTabDragAndDrop;
 }
@@ -604,7 +604,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
 		try {
-			const confirmation = this.onWillOpenEditor?.(input);
+			const confirmation = this.onWillOpenEditor?.(input, options);
 			if (confirmation) await confirmation;
 		} catch (error) {
 			if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);

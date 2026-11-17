@@ -163,7 +163,7 @@ test('editor and Chat input font settings apply independently and persist in Chi
 	await expect(editor.element).toHaveCSS('font-size', `${defaultSize}px`);
 	await expect(editor.element).toHaveCSS('line-height', `${Math.round(defaultSize * (process.platform === 'darwin' ? 1.5 : 1.35))}px`);
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat-input-editor .stanza-editor');
 	await expect(chat).toHaveCSS('font-size', '13px');

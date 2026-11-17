@@ -156,7 +156,7 @@ function prepareChatResize(accessor: ServicesAccessor): (view: IChatViewPane, or
 			return;
 		}
 		// Maximization belongs to the Workbench; closing the inner sidebar keeps that state.
-		if (!sideBySide && part === 'auxiliarybar' && layout.isAuxiliaryBarMaximized()) {
+		if (!sideBySide && ((part === 'auxiliarybar' && layout.isAuxiliaryBarMaximized()) || (part === 'chat' && layout.isEditorHiddenByChat()))) {
 			return;
 		}
 		if (part === 'auxiliarybar' && layout.isAuxiliaryBarMaximized()) {
@@ -167,9 +167,10 @@ function prepareChatResize(accessor: ServicesAccessor): (view: IChatViewPane, or
 		const width = sideBySide
 			? Math.max(minimumWidth, previousWidth ?? layout.mainContainerDimension.width / 2)
 			: previousWidth ?? Math.max(view.getOptimalWidth() + frameWidth, size.width - view.getOptimalWidth());
-		layout.resizePart(part, new Dimension(width, size.height));
-		if (sideBySide && part === 'auxiliarybar' && layout.getPartSize(part).width < minimumWidth) {
-			layout.setAuxiliaryBarMaximized(true);
+		layout.setPartSize(part, new Dimension(width, size.height));
+		if (sideBySide && layout.getPartSize(part).width < minimumWidth) {
+			if (part === 'auxiliarybar') layout.setAuxiliaryBarMaximized(true);
+			if (part === 'chat') layout.setEditorHiddenByChat(true);
 		}
 	};
 }

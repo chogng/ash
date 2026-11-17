@@ -168,10 +168,11 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 		id: CHAT_VIEW_CONTAINER_ID,
 		title: 'Chat',
 		localizationKey: { bundle: 'ash.views', key: 'chat' },
-		location: ViewContainerLocation.AuxiliaryBar,
+		location: ViewContainerLocation.Chat,
 		icon: Lxicon.chat,
 		order: 1,
 		isDefault: true,
+		rejectAddedViews: true,
 	});
 	registry.registerStaticViews(CHAT_VIEW_CONTAINER_ID, [{
 		id: CHAT_VIEW_ID,

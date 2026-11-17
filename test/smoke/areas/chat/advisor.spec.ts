@@ -5,7 +5,7 @@ test('Model options combine thinking effort, context size and speed and save pre
 	const page = workbench.page;
 	const chat = page.locator('.ash-chat-view-pane');
 	if (!await chat.isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const model = chat.locator('.ash-chat-input-model-action');
 	await model.click();
@@ -84,7 +84,7 @@ test('Model options combine thinking effort, context size and speed and save pre
 test('Model visibility changes in Language Models refresh the existing Chat catalog', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const selector = page.locator('.ash-chat-input-model-action');
 	await selector.press('Enter');
@@ -111,7 +111,7 @@ test('Model visibility changes in Language Models refresh the existing Chat cata
 test('Disconnected model picker explains the empty catalog and opens settings', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const selector = page.locator('.ash-chat-input-model-action');
 	await expect(selector).toBeEnabled();
@@ -146,7 +146,7 @@ test('Disconnected model picker explains the empty catalog and opens settings', 
 test('Model catalog descriptions reach keyboard help and accessible view', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
+		await workbench.quickaccess.runCommand('workbench.action.toggleChat');
 	}
 	const selector = page.locator('.ash-chat-input-model-action');
 	await selector.press('Enter');
@@ -202,7 +202,7 @@ test('Model picker details and keyboard help follow the Chinese display language
 	({ workbench } = await restartWorkbench());
 	page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: '显示辅助侧栏', exact: true }).click();
+		await page.getByRole('button', { name: '切换聊天', exact: true }).click();
 	}
 	const selector = page.locator('.ash-chat-input-model-action');
 	await selector.click();
@@ -232,7 +232,7 @@ test('Model picker details and keyboard help follow the Chinese display language
 test('New Chat starts with the last model chosen in the picker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const selector = page.locator('.ash-chat-pane-host > .ash-chat:not([hidden]) .ash-chat-input-model-action');
 	await expect(selector).toBeEnabled();
@@ -277,7 +277,7 @@ test('Advisor settings and direct questions use one chat command', { tag: ['@bro
 	const page = workbench.page;
 	const chat = page.locator('.ash-chat-view-pane');
 	if (!await chat.isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
 	await expect(input).toBeEditable();
@@ -306,7 +306,7 @@ test('Advisor settings and direct questions use one chat command', { tag: ['@bro
 test('Model provider key entry uses the App Server and shows only saved status', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	await expect(page.locator('.ash-chat-status')).not.toHaveText('Loading chat...');
 	const electron = target.kind === 'electron' ? application as ElectronApplication : undefined;
@@ -350,7 +350,7 @@ test('Model provider key entry uses the App Server and shows only saved status',
 test('Model connections support Chinese labels and keyboard navigation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	await page.keyboard.press('F1');
 	let picker = page.locator('.ash-quick-pick');

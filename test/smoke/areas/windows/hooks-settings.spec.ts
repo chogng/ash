@@ -65,7 +65,7 @@ test('Hooks management reads TOML, appends a draft, and configures a project thr
 	try {
 		await writeFile(configurationPath, original + declaration);
 		const page = workbench.page;
-		if (!await page.locator('.ash-chat-view-pane').isVisible()) await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		if (!await page.locator('.ash-chat-view-pane').isVisible()) await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 		const composer = page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-input-editor');
 		await composer.locator('.stanza-editor-input').focus();
 		await page.keyboard.insertText('Existing draft');

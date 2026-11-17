@@ -10,7 +10,7 @@ test('Guardian setup shares reviewed project background between IDE Chat and Age
 	const original = '{"name":"review-fixture","scripts":{"build":"pnpm build"}}';
 	await writeFile(file, original);
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	for (const surface of ['IDE', 'Agents']) {
 		if (surface === 'Agents') {

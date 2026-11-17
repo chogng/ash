@@ -278,7 +278,7 @@ class FixturePart extends Part {
 const parts = new Map<WorkbenchPartId, Part>(workbenchPartIds.map(id => [id, id === 'sidebar' ? sidebar : store.add(new FixturePart(id))]));
 layout.createParts(parts);
 layout.layout(new Dimension(1024, 600));
-layout.resizePart('sidebar', new Dimension(280, 600));
+layout.setPartSize('sidebar', new Dimension(280, 600));
 const panes = store.add(instantiation.createInstance(PaneCompositePartService, new Map([[ViewContainerLocation.Sidebar, sidebar]])));
 instantiation.registerInstance(IPaneCompositePartService, panes);
 const views = store.add(instantiation.createInstance(ViewsService));
@@ -350,7 +350,7 @@ window.ashSearchIntegration = {
 	cancelled: () => cancelled,
 	closeWorkspace: () => workspace.updateWorkspace({ id: 'empty', folders: [] }),
 	setTheme: name => theme.setColorTheme(themes[name]),
-	setWidth: width => layout.resizePart('sidebar', new Dimension(width, 600)),
+	setWidth: width => layout.setPartSize('sidebar', new Dimension(width, 600)),
 	setSidebarPosition: position => configuration.updateValue(WorkbenchConfiguration.sideBarLocation, position),
 	setActivityBarLocation: position => configuration.updateValue(WorkbenchConfiguration.activityBarLocation, position),
 	setAutoHide: value => configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, value),

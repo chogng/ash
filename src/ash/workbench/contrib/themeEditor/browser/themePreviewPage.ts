@@ -100,13 +100,14 @@ class ChatPreviewPane extends ChatViewPane {
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IEditorGroupsService editorGroups: IEditorGroupsService,
 		@IEditorService editorService: IEditorService,
+		@IViewsService viewsService: IViewsService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 		@IOpenerService private readonly opener: IOpenerService,
 	) {
 		const scope = instantiationService.createChild();
-		super(container, options, commandService, layoutService, scope, configuration, notifications, lifecycleService, contextKeyService, editorGroups, editorService);
+		super(container, options, commandService, layoutService, scope, configuration, notifications, lifecycleService, contextKeyService, editorGroups, viewsService, editorService);
 		this._register(scope);
 		const owner = this;
 		const model: IAgentSessionsModel = {
@@ -197,7 +198,7 @@ class ChatPreviewPane extends ChatViewPane {
 if (chatPreview) {
 	ViewsRegistry.registerStaticViewContainer({
 		id: CHAT_VIEW_CONTAINER_ID, title: localize('themeEditor.group.chat', 'Chat'),
-		location: ViewContainerLocation.AuxiliaryBar, icon: Lxicon.chat, isDefault: true,
+		location: ViewContainerLocation.Chat, icon: Lxicon.chat, isDefault: true,
 	});
 	ViewsRegistry.registerStaticViews(CHAT_VIEW_CONTAINER_ID, [{
 		id: CHAT_VIEW_ID, title: localize('themeEditor.group.chat', 'Chat'), canToggleVisibility: false,
@@ -298,7 +299,8 @@ const workbench = resources.add(
 			parts: {
 				sidebar: !diffPreview && !codePreview && !chatPreview,
 				panel: !diffPreview && !codePreview && !scmPreview && !chatPreview,
-				auxiliarybar: chatPreview,
+				auxiliarybar: false,
+				chat: chatPreview,
 				agentSidebar: false,
 			},
 		},
@@ -413,7 +415,7 @@ if (scmPreview) {
 	views.closeView(VIEW_PANE_ID);
 	views.closeView('ash.gitAgentReview');
 	const layout = services.get(IWorkbenchLayoutService);
-	layout.resizePart('sidebar', { width: 480, height: layout.getPartSize('sidebar').height });
+	layout.setPartSize('sidebar', { width: 480, height: layout.getPartSize('sidebar').height });
 }
 const editorService = services.get(IEditorService);
 await openThemePreviewEditors(host, services, diffPreview ? 'diff' : 'code');
@@ -421,7 +423,7 @@ if (chatPreview) {
 	const view = await services.get(IViewsService).openView<ChatPreviewPane>(CHAT_VIEW_ID);
 	view?.initialize();
 	const layout = services.get(IWorkbenchLayoutService);
-	layout.resizePart('auxiliarybar', { width: 480, height: layout.getPartSize('auxiliarybar').height });
+	layout.setPartSize('chat', { width: 480, height: layout.getPartSize('chat').height });
 }
 
 const publishContent = connectThemePreview(

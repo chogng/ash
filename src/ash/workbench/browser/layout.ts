@@ -6,6 +6,7 @@ import { SerializableGrid, type SerializedGridDescriptor, type Direction } from 
 import { isAncestorOfActiveElement } from '../../base/browser/focus.js';
 import { Emitter } from '../../base/common/event.js';
 import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../base/common/lifecycle.js';
+import type { ISize } from '../../base/common/layout.js';
 import { isRecord } from '../../base/common/types.js';
 import { IConfigurationService, isConfigured } from '../../platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../platform/chat/common/chatSettings.js';
@@ -34,6 +35,7 @@ import {
 	workbenchPartIds,
 } from '../services/layout/browser/layoutService.js';
 import type { Part } from './part.js';
+import { ChatHostPart } from './parts/chat/chatHostPart.js';
 import { WorkbenchPartView } from './workbenchPartView.js';
 import {
 	IAuxiliaryWindowService,
@@ -48,6 +50,7 @@ const PART_GUTTER_SIZE = PART_GUTTER_HALF * 2;
 const DEFAULT_SIDEBAR_WIDTH = 300;
 const DEFAULT_AUXILIARYBAR_WIDTH = 300;
 const DEFAULT_AGENT_SIDEBAR_WIDTH = 280;
+const DEFAULT_CHAT_WIDTH = 300;
 const DEFAULT_PANEL_HEIGHT = 300;
 const DEFAULT_PANEL_WIDTH = 300;
 const EDITOR_LAYOUT_PRIORITY = LayoutPriority.High;
@@ -76,6 +79,7 @@ export interface WorkbenchDefaultLayout {
 		readonly sidebar?: boolean;
 		readonly auxiliarybar?: boolean;
 		readonly agentSidebar?: boolean;
+		readonly chat?: boolean;
 		readonly panel?: boolean;
 	};
 	/** Applies explicitly supplied Part visibility even when workspace state exists. */
@@ -88,6 +92,7 @@ export interface WorkbenchLayoutState {
 	readonly sidebar: { readonly width: number; readonly visible: boolean; };
 	readonly auxiliarybar: { readonly width: number; readonly visible: boolean; };
 	readonly agentSidebar: { readonly width: number; readonly visible: boolean; };
+	readonly chat: { readonly width: number; readonly visible: boolean; readonly editorHidden: boolean; };
 	readonly panel: {
 		readonly position: Position;
 		readonly width: number;
@@ -100,6 +105,7 @@ export interface WorkbenchLayoutOptions {
 	readonly initialDimension?: IDimension;
 	readonly workbenchState: WorkbenchState;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
+	readonly chatAvailable?: boolean;
 	readonly focus?: () => void;
 }
 
@@ -128,6 +134,8 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 	readonly onDidChangePanelPosition = this.panelPositionEmitter.event;
 	// Maximization is transient; retain the restored size on the Panel's current axis.
 	private panelSizeBeforeMaximize: number | undefined;
+	private chatEditorRestoreWidth: number | undefined;
+	private restoreChatWithEditor = false;
 	// The ordinary layout remains the persistence source while maximization temporarily hides its Parts.
 	private auxiliaryBarRestoreState:
 		{ readonly layout: WorkbenchLayoutState; readonly editorVisible: boolean; } | undefined;
@@ -145,11 +153,13 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 	}
 
 	public getVisibleNeighborPart(partId: WorkbenchPartId, direction: Direction): WorkbenchPartId | undefined {
+		if (!this.views.has(partId)) return undefined;
 		return this.grid
 			.getNeighborViews(this.view(partId), direction)
 			.find(
 				view =>
 					view.partId === 'editor' ||
+					view.partId === 'chat' ||
 					view.partId === 'sidebar' ||
 					view.partId === 'panel' ||
 					view.partId === 'auxiliarybar' ||
@@ -187,6 +197,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 			positionFromString(configurationService.getValue(WorkbenchConfiguration.panelDefaultLocation)),
 			this.initialDimension,
 			configurationService,
+			options.chatAvailable === true,
 		);
 		const panel = this.stateModel.state.panel;
 		this.panelPosition = panel.position;
@@ -276,18 +287,26 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 	createParts(parts: ReadonlyMap<WorkbenchPartId, Part>): void {
 		validateParts(parts);
 		for (const partId of workbenchPartIds) {
+			if (partId === 'chat' && !this.stateModel.chatAvailable) continue;
+			const part = requiredPart(parts, partId);
 			this.views.set(
 				partId,
-				new WorkbenchPartView(partId, requiredPart(parts, partId), { snap: isSnappableWorkbenchPart(partId) }),
+				new WorkbenchPartView(partId, part, {
+					snap: isSnappableWorkbenchPart(partId),
+					priority: part instanceof ChatHostPart ? () => part.priority : undefined,
+				}),
 			);
 		}
 		const initialState = this.stateModel.state;
+		this.setChatEditorRestoreWidth(initialState.chat.visible && initialState.chat.editorHidden ? initialState.chat.width : undefined);
 		this.domNode.dataset.panelPosition = positionToString(this.panelPosition);
 		this.projectPartFrameInsets(
 			initialState.sidebar.visible,
 			initialState.auxiliarybar.visible,
 			initialState.agentSidebar.visible,
 			initialState.panel.visible,
+			initialState.chat.visible,
+			!this.isEditorHiddenByChat(),
 		);
 		this.grid = SerializableGrid.deserialize(
 			this.domNode,
@@ -297,6 +316,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 				initialState,
 				this.activityBarLocation,
 				this.sideBarLocation,
+				!this.isEditorHiddenByChat(),
 			),
 			{ fromJSON: data => this.view(parseWorkbenchPartId(data)) },
 			{
@@ -321,6 +341,9 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		this._register(this.storageService.onWillSaveState(() => this.saveState()));
 		this._register(
 			this.configurationService.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(ChatAIDisabledSettingId) && this.configurationService.getValue<boolean>(ChatAIDisabledSettingId)) {
+					this.hidePart('chat');
+				}
 				if (event.affectsConfiguration(WorkbenchConfiguration.secondarySideBarForceMaximized)) {
 					this.setAuxiliaryBarMaximized(
 						this.configurationService.getValue(WorkbenchConfiguration.secondarySideBarForceMaximized),
@@ -407,6 +430,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		const auxiliaryBarMaximized = this.isAuxiliaryBarMaximized();
 		if (auxiliaryBarMaximized) this.setAuxiliaryBarMaximized(false);
 		const state = restoredState ?? this.state;
+		const visibleState = this.restoreChatWithEditor ? { ...state, chat: { ...state.chat, visible: false } } : state;
 		const editorVisible = this.isPartVisible('editor');
 		const bannerVisible = this.isPartVisible('banner');
 		const dimension = new Dimension(
@@ -420,7 +444,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 			createWorkbenchGridDescriptor(
 				this.views,
 				dimension,
-				state,
+				visibleState,
 				this.activityBarLocation,
 				this.sideBarLocation,
 				editorVisible,
@@ -469,11 +493,21 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		super.layout(dimension);
 	}
 
+	override focus(): void {
+		const chat = this.views.get('chat')?.part;
+		if (this.activeContainer === this.mainContainer && this.isEditorHiddenByChat() && chat instanceof ChatHostPart) {
+			chat.focusContent();
+			return;
+		}
+		super.focus();
+	}
+
 	get state(): WorkbenchLayoutState {
 		if (this.auxiliaryBarRestoreState) return this.auxiliaryBarRestoreState.layout;
 		const sidebar = this.getPartSize('sidebar');
 		const auxiliarybar = this.getPartSize('auxiliarybar');
 		const agentSidebar = this.getPartSize('agentSidebar');
+		const chat = this.getPartSize('chat');
 		const panel = this.getPartSize('panel');
 		if (isHorizontal(this.panelPosition)) this.panelRestoredHeight = this.panelSizeBeforeMaximize ?? panel.height;
 		else this.panelRestoredWidth = this.panelSizeBeforeMaximize ?? panel.width;
@@ -482,6 +516,11 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 			sidebar: { width: sidebar.width, visible: this.isPartVisible('sidebar') },
 			auxiliarybar: { width: auxiliarybar.width, visible: this.isPartVisible('auxiliarybar') },
 			agentSidebar: { width: agentSidebar.width, visible: this.isPartVisible('agentSidebar') },
+			chat: {
+				width: this.chatEditorRestoreWidth ?? chat.width,
+				visible: this.isPartVisible('chat') || this.restoreChatWithEditor,
+				editorHidden: this.isEditorHiddenByChat(),
+			},
 			panel: {
 				position: this.panelPosition,
 				width: this.panelRestoredWidth,
@@ -507,11 +546,35 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 	}
 
 	isPartVisible(partId: WorkbenchPartId): boolean {
+		if (partId === 'chat' && !this.views.has(partId)) return false;
 		return this.grid.isViewVisible(this.view(partId));
 	}
 
 	isPanelMaximized(): boolean {
-		return !this.isAuxiliaryBarMaximized() && this.isPartVisible('panel') && !this.isPartVisible('editor');
+		return !this.isAuxiliaryBarMaximized() && !this.isEditorHiddenByChat() && this.isPartVisible('panel') && !this.isPartVisible('editor');
+	}
+
+	isEditorHiddenByChat(): boolean {
+		return this.chatEditorRestoreWidth !== undefined;
+	}
+
+	private setChatEditorRestoreWidth(width: number | undefined): void {
+		this.chatEditorRestoreWidth = width;
+		const part = this.views.get('chat')?.part;
+		if (part instanceof ChatHostPart) part.fillsEditorArea = width !== undefined;
+	}
+
+	setEditorHiddenByChat(hidden: boolean): void {
+		if (!hidden) {
+			if (this.isEditorHiddenByChat()) this.showPart('editor');
+			return;
+		}
+		if (!this.isPartVisible('chat') || !this.isPartVisible('editor')) return;
+		const hadFocus = this.hasFocus('editor');
+		this.setChatEditorRestoreWidth(this.getPartSize('chat').width);
+		this.updatePartsVisibility(['editor'], false);
+		const part = this.view('chat').part;
+		if (hadFocus && part instanceof ChatHostPart) part.focusContent();
 	}
 
 	public isAuxiliaryBarMaximized(): boolean {
@@ -527,30 +590,34 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		if (maximized) {
 			const layout = this.state;
 			const editorVisible = this.isPartVisible('editor');
+			this.setEditorHiddenByChat(false);
 			this.updatePartsVisibility(['auxiliarybar'], true);
 			this.auxiliaryBarRestoreState = { layout, editorVisible };
 			// Bypass Panel close/reopen policy: this is a temporary layout, not a user closing the Panel.
-			this.updatePartsVisibility(['sidebar', 'agentSidebar', 'panel', 'editor'], false);
+			this.updatePartsVisibility(['sidebar', 'agentSidebar', 'panel', 'chat', 'editor'], false);
 		} else {
 			const restore = this.auxiliaryBarRestoreState!;
 			this.auxiliaryBarRestoreState = undefined;
-			for (const partId of ['editor', 'panel', 'sidebar', 'agentSidebar'] as const) {
-				this.updatePartsVisibility(
-					[partId],
-					partId === 'editor' ? restore.editorVisible : restore.layout[partId].visible,
-				);
+			const editorVisible = restore.editorVisible || restore.layout.chat.editorHidden;
+			const chatVisible = restore.layout.chat.visible && !this.restoreChatWithEditor
+				&& !this.configurationService.getValue<boolean>(ChatAIDisabledSettingId);
+			this.updatePartsVisibility(['editor'], editorVisible);
+			for (const partId of ['panel', 'sidebar', 'agentSidebar'] as const) {
+				this.updatePartsVisibility([partId], restore.layout[partId].visible);
 			}
-			for (const partId of ['sidebar', 'agentSidebar', 'auxiliarybar'] as const) {
-				this.resizePart(partId, this.getPartSize(partId).with(restore.layout[partId].width));
+			this.updatePartsVisibility(['chat'], chatVisible);
+			for (const partId of ['sidebar', 'agentSidebar', 'auxiliarybar', 'chat'] as const) {
+				this.setPartSize(partId, this.getPartSize(partId).with(restore.layout[partId].width));
 			}
-			if (restore.editorVisible) {
-				this.resizePart(
+			if (editorVisible) {
+				this.setPartSize(
 					'panel',
 					this.panelDimension(
 						isHorizontal(this.panelPosition) ? restore.layout.panel.height : restore.layout.panel.width,
 					),
 				);
 			}
+			if (chatVisible && restore.layout.chat.editorHidden) this.setEditorHiddenByChat(true);
 		}
 		this.stateModel.auxiliaryBarWasLastMaximized = maximized;
 		this.auxiliaryBarMaximizedEmitter.fire();
@@ -566,30 +633,29 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		}
 	}
 
-	showPart(partId: WorkbenchPartId): void {
-		this.showParts([partId]);
-	}
-
-	showParts(partIds: readonly WorkbenchPartId[]): void {
-		if (
-			partIds.some(
-				partId =>
-					partId === 'editor' || partId === 'panel' || partId === 'sidebar' || partId === 'agentSidebar',
-			)
-		) {
+	public showPart(partId: WorkbenchPartId): void {
+		if (partId === 'chat' && !this.views.has('chat')) return;
+		if (partId === 'editor' || partId === 'panel' || partId === 'sidebar' || partId === 'agentSidebar' || partId === 'chat') {
 			this.setAuxiliaryBarMaximized(false);
 		}
+		if (partId === 'chat' && this.isPanelMaximized()) this.showPart('editor');
 		const panelOpensMaximized = this.configurationService.getValue(WorkbenchConfiguration.panelOpensMaximized);
 		const reopenMaximizedPanel =
-			partIds.includes('panel') &&
-			!partIds.includes('editor') &&
+			partId === 'panel' &&
 			!this.isPartVisible('panel') &&
 			(panelOpensMaximized === 'always' ||
 				(panelOpensMaximized === 'preserve' && this.stateModel.panelWasLastMaximized));
-		const panelSize = partIds.includes('editor') ? this.panelSizeBeforeMaximize : undefined;
-		this.updatePartsVisibility(partIds, true);
+		const panelSize = partId === 'editor' ? this.panelSizeBeforeMaximize : undefined;
+		const chatWidth = partId === 'editor' ? this.chatEditorRestoreWidth : undefined;
+		if (chatWidth !== undefined) this.setChatEditorRestoreWidth(undefined);
+		this.updatePartsVisibility([partId], true);
+		if (chatWidth !== undefined) this.setPartSize('chat', this.getPartSize('chat').with(chatWidth));
+		if (partId === 'editor' && this.restoreChatWithEditor) {
+			this.restoreChatWithEditor = false;
+			this.updatePartsVisibility(['chat'], true);
+		}
 		if (panelSize !== undefined) {
-			this.resizePart('panel', this.panelDimension(panelSize));
+			this.setPartSize('panel', this.panelDimension(panelSize));
 			this.panelSizeBeforeMaximize = undefined;
 		}
 		if (reopenMaximizedPanel) {
@@ -597,34 +663,45 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		}
 	}
 
-	hidePart(partId: WorkbenchPartId): void {
-		this.hideParts([partId]);
-	}
-
-	hideParts(partIds: readonly WorkbenchPartId[]): void {
-		if (partIds.includes('auxiliarybar')) this.setAuxiliaryBarMaximized(false);
-		if (partIds.includes('panel') && this.isPartVisible('panel')) {
+	public hidePart(partId: WorkbenchPartId): void {
+		if (partId === 'auxiliarybar') this.setAuxiliaryBarMaximized(false);
+		const chatHadFocus = partId === 'chat' && this.hasFocus('chat');
+		if (partId === 'chat') {
+			this.restoreChatWithEditor = false;
+			this.setEditorHiddenByChat(false);
+		}
+		if (partId === 'panel' && this.isPartVisible('panel')) {
 			// Capture the closing state before restoring the editor and the ordinary Panel height.
 			this.stateModel.panelWasLastMaximized = this.isPanelMaximized();
 			if (this.isPanelMaximized()) {
 				this.showPart('editor');
 			}
 		}
-		if (partIds.includes('editor') && this.isPartVisible('editor') && this.isPartVisible('panel')) {
+		if (partId === 'editor' && this.isPartVisible('panel') && (this.isPartVisible('editor') || this.isEditorHiddenByChat())) {
+			this.setEditorHiddenByChat(false);
 			const size = this.getPartSize('panel');
 			this.panelSizeBeforeMaximize = isHorizontal(this.panelPosition) ? size.height : size.width;
+			if (this.isPartVisible('chat')) {
+				this.restoreChatWithEditor = true;
+				// Cache Chat's ordinary width before removing the editor from the split.
+				this.updatePartsVisibility(['chat', 'editor'], false);
+				return;
+			}
 		}
-		this.updatePartsVisibility(partIds, false);
+		this.updatePartsVisibility([partId], false);
+		if (chatHadFocus && this.isPartVisible('editor')) super.focus();
 	}
 
 	getPartSize(partId: WorkbenchPartId): Dimension {
+		if (partId === 'chat' && !this.views.has(partId)) return new Dimension(this.stateModel.state.chat.width, 0);
 		const size = this.grid.getViewSize(this.view(partId));
 		return new Dimension(size.width, size.height);
 	}
 
-	resizePart(partId: WorkbenchPartId, dimension: IDimension): void {
-		assertDimension(dimension);
-		this.grid.resizeView(this.view(partId), dimension);
+	public setPartSize(partId: WorkbenchPartId, size: ISize): void {
+		assertDimension(size);
+		if (partId === 'chat' && !this.views.has(partId)) return;
+		this.grid.resizeView(this.view(partId), size);
 	}
 
 	private saveState(): void {
@@ -633,6 +710,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 
 	private applyState(state: WorkbenchLayoutState): void {
 		this.setAuxiliaryBarMaximized(false);
+		this.setEditorHiddenByChat(false);
 		if (this.isPanelMaximized()) {
 			this.toggleMaximizedPanel();
 		}
@@ -644,10 +722,11 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 			this.rebuildGrid(state);
 			this.panelPositionEmitter.fire(positionToString(this.panelPosition));
 		}
-		this.resizePart('sidebar', this.getPartSize('sidebar').with(state.sidebar.width));
-		this.resizePart('auxiliarybar', this.getPartSize('auxiliarybar').with(state.auxiliarybar.width));
-		this.resizePart('agentSidebar', this.getPartSize('agentSidebar').with(state.agentSidebar.width));
-		this.resizePart(
+		this.setPartSize('sidebar', this.getPartSize('sidebar').with(state.sidebar.width));
+		this.setPartSize('auxiliarybar', this.getPartSize('auxiliarybar').with(state.auxiliarybar.width));
+		this.setPartSize('agentSidebar', this.getPartSize('agentSidebar').with(state.agentSidebar.width));
+		this.setPartSize('chat', this.getPartSize('chat').with(state.chat.width));
+		this.setPartSize(
 			'panel',
 			this.panelDimension(isHorizontal(this.panelPosition) ? state.panel.height : state.panel.width),
 		);
@@ -655,16 +734,20 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		this.updatePartsVisibility(['auxiliarybar'], state.auxiliarybar.visible);
 		this.updatePartsVisibility(['agentSidebar'], state.agentSidebar.visible);
 		this.updatePartsVisibility(['panel'], state.panel.visible);
+		this.updatePartsVisibility(['chat'], state.chat.visible);
+		this.setEditorHiddenByChat(state.chat.visible && state.chat.editorHidden);
 	}
 
 	private updatePartsVisibility(partIds: readonly WorkbenchPartId[], visible: boolean): void {
-		const uniquePartIds = [...new Set(partIds)];
+		const uniquePartIds = [...new Set(partIds)].filter(partId => partId !== 'chat' || this.views.has(partId));
 		for (const partId of uniquePartIds) this.view(partId);
 		this.projectPartFrameInsets(
 			uniquePartIds.includes('sidebar') ? visible : this.isPartVisible('sidebar'),
 			uniquePartIds.includes('auxiliarybar') ? visible : this.isPartVisible('auxiliarybar'),
 			uniquePartIds.includes('agentSidebar') ? visible : this.isPartVisible('agentSidebar'),
 			uniquePartIds.includes('panel') ? visible : this.isPartVisible('panel'),
+			uniquePartIds.includes('chat') ? visible : this.isPartVisible('chat'),
+			uniquePartIds.includes('editor') ? visible : this.isPartVisible('editor'),
 		);
 		const changed = uniquePartIds.filter(partId => this.isPartVisible(partId) !== visible);
 		for (const partId of changed) {
@@ -678,6 +761,8 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		auxiliarybarVisible = this.isPartVisible('auxiliarybar'),
 		agentSidebarVisible = this.isPartVisible('agentSidebar'),
 		panelVisible = this.isPartVisible('panel'),
+		chatVisible = this.isPartVisible('chat'),
+		editorVisible = this.isPartVisible('editor'),
 	): void {
 		const metrics = this.layoutStyle === 'modern' ? modernWorkbenchLayoutMetrics : flatWorkbenchLayoutMetrics;
 		// The sidebar owns the outer window inset whenever the vertical Activity Bar is hidden.
@@ -739,11 +824,18 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		const panelRight = panelVisible && this.panelPosition === Position.RIGHT;
 		const panelTop = panelVisible && this.panelPosition === Position.TOP;
 		const panelBottom = panelVisible && this.panelPosition === Position.BOTTOM;
+		const chatOnRight = this.sideBarLocation === 'left';
+		this.views.get('chat')?.setFrameInsets({
+			top: panelTop ? metrics.partGutterHalf : 0,
+			bottom: panelBottom ? metrics.partGutterHalf : 0,
+			left: (chatOnRight ? editorVisible || panelLeft : panelLeft) ? metrics.partGutterHalf : centralInsets.left,
+			right: (!chatOnRight ? editorVisible || panelRight : panelRight) ? metrics.partGutterHalf : centralInsets.right,
+		});
 		this.view('editor').setFrameInsets({
 			top: panelTop ? metrics.partGutterHalf : 0,
-			right: panelRight ? metrics.partGutterHalf : centralInsets.right,
+			right: panelRight || (chatOnRight && chatVisible) ? metrics.partGutterHalf : centralInsets.right,
 			bottom: panelBottom ? metrics.partGutterHalf : 0,
-			left: panelLeft ? metrics.partGutterHalf : centralInsets.left,
+			left: panelLeft || (!chatOnRight && chatVisible) ? metrics.partGutterHalf : centralInsets.left,
 		});
 		this.view('panel').setFrameInsets({
 			top: panelBottom ? metrics.partGutterHalf : 0,
@@ -754,7 +846,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 	}
 
 	private publishPartVisibility(): void {
-		for (const partId of workbenchPartIds) {
+		for (const partId of this.views.keys()) {
 			const visible = this.isPartVisible(partId);
 			if (this.partVisibility.get(partId) === visible) continue;
 			this.partVisibility.set(partId, visible);
@@ -770,7 +862,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 }
 
 function validateParts(parts: ReadonlyMap<WorkbenchPartId, Part>): void {
-	const missing = workbenchPartIds.filter(partId => !parts.has(partId));
+	const missing = workbenchPartIds.filter(partId => partId !== 'chat' && !parts.has(partId));
 	if (missing.length > 0) {
 		throw new TypeError(`Workbench layout is missing Parts: ${missing.join(', ')}`);
 	}
@@ -783,7 +875,7 @@ function requiredPart(parts: ReadonlyMap<WorkbenchPartId, Part>, partId: Workben
 }
 
 function isSnappableWorkbenchPart(partId: WorkbenchPartId): boolean {
-	return partId === 'sidebar' || partId === 'auxiliarybar' || partId === 'agentSidebar' || partId === 'panel';
+	return partId === 'sidebar' || partId === 'auxiliarybar' || partId === 'agentSidebar' || partId === 'panel' || partId === 'chat';
 }
 
 function createWorkbenchGridDescriptor(
@@ -814,7 +906,7 @@ function createWorkbenchGridDescriptor(
 		0,
 		bodyHeight - (state.panel.visible && isHorizontal(state.panel.position) ? panelHeight : 0),
 	);
-	const editorWidth = Math.max(
+	const centerWidth = Math.max(
 		0,
 		dimension.width -
 		(activityBarLocation === ActivityBarPosition.DEFAULT ? activitybarWidth : 0) -
@@ -837,30 +929,33 @@ function createWorkbenchGridDescriptor(
 		leaf('agentSidebar', state.agentSidebar.width, state.agentSidebar.visible),
 	];
 	const horizontalPanel = isHorizontal(state.panel.position);
+	const chatView = views.get('chat');
+	const chatWidth = chatView && state.chat.visible ? Math.max(chatView.minimumWidth, state.chat.width) : state.chat.width;
+	const contentWidth = Math.max(0, centerWidth - (!horizontalPanel && state.panel.visible ? state.panel.width : 0));
+	const chat = chatView ? leaf('chat', !editorVisible && state.chat.editorHidden ? contentWidth : chatWidth, state.chat.visible) : undefined;
 	const editor = leaf(
 		'editor',
-		horizontalPanel ? editorHeight : Math.max(0, editorWidth - (state.panel.visible ? state.panel.width : 0)),
+		horizontalPanel && !chat ? editorHeight : Math.max(0, contentWidth - (state.chat.visible && editorVisible ? chatWidth : 0)),
 		editorVisible,
 		EDITOR_LAYOUT_PRIORITY,
 	);
 	const panel = leaf('panel', horizontalPanel ? panelHeight : state.panel.width, state.panel.visible);
-	const centralParts =
-		state.panel.position === Position.TOP || state.panel.position === Position.LEFT
-			? [panel, editor]
-			: [editor, panel];
-	// Side panels are siblings in the horizontal body. Nesting another horizontal
-	// branch would violate Grid's alternating-axis contract.
-	const center: SerializedGridDescriptor[] = horizontalPanel
-		? [
-			{
-				type: 'branch',
-				orientation: Orientation.VERTICAL,
-				size: editorWidth,
-				priority: EDITOR_LAYOUT_PRIORITY,
-				children: centralParts,
-			},
-		]
-		: centralParts;
+	const chatOnRight = sideBarLocation === 'left';
+	const editorParts = chat ? (chatOnRight ? [editor, chat] : [chat, editor]) : [editor];
+	const editorSection: SerializedGridDescriptor = chat ? {
+		type: 'branch',
+		orientation: Orientation.HORIZONTAL,
+		size: editorHeight,
+		priority: EDITOR_LAYOUT_PRIORITY,
+		children: editorParts,
+	} : editor;
+	const center: SerializedGridDescriptor[] = horizontalPanel ? [{
+		type: 'branch',
+		orientation: Orientation.VERTICAL,
+		size: centerWidth,
+		priority: EDITOR_LAYOUT_PRIORITY,
+		children: state.panel.position === Position.TOP ? [panel, editorSection] : [editorSection, panel],
+	}] : state.panel.position === Position.LEFT ? [panel, ...editorParts] : [...editorParts, panel];
 	return {
 		type: 'branch',
 		orientation: Orientation.VERTICAL,
@@ -949,6 +1044,11 @@ function createDefaultWorkbenchLayoutState(
 			width: DEFAULT_AGENT_SIDEBAR_WIDTH,
 			visible: defaultPartVisibility(parts, 'agentSidebar', false),
 		},
+		chat: {
+			width: Math.min(DEFAULT_CHAT_WIDTH, dimension.width / 3),
+			visible: defaultPartVisibility(parts, 'chat', false),
+			editorHidden: false,
+		},
 		panel: {
 			position: Position.BOTTOM,
 			width: dimension.width / 4,
@@ -1017,11 +1117,17 @@ function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
 	} else {
 		throw new TypeError('Workbench layout state is invalid or unsupported');
 	}
+	const chat = value.chat;
+	const editorHidden = isRecord(chat) ? chat.editorHidden : undefined;
+	if (chat !== undefined && (!isHorizontalLayoutRegionState(chat) || typeof editorHidden !== 'boolean')) {
+		throw new TypeError('Workbench layout state is invalid or unsupported');
+	}
 	return {
 		version: 3,
 		sidebar: { width: value.sidebar.width, visible: value.sidebar.visible },
 		auxiliarybar: { width: value.auxiliarybar.width, visible: value.auxiliarybar.visible },
 		agentSidebar,
+		chat: chat ? { ...chat, editorHidden: editorHidden === true } : { width: DEFAULT_CHAT_WIDTH, visible: false, editorHidden: false },
 		panel: {
 			position: readPanelPosition(isRecord(value.panel) ? value.panel.position : undefined),
 			width:
@@ -1041,6 +1147,7 @@ class WorkbenchLayoutStateModel {
 		public defaultPanelPosition: Position,
 		private readonly initialDimension: IDimension,
 		private readonly configurationService: IConfigurationService,
+		readonly chatAvailable: boolean,
 	) { }
 
 	get auxiliaryBarWasLastMaximized(): boolean | undefined {
@@ -1085,6 +1192,12 @@ class WorkbenchLayoutStateModel {
 		return visibility === 'visible' || visibility === 'maximized' || this.workbenchState !== WorkbenchState.EMPTY;
 	}
 
+	private get defaultChatVisible(): boolean {
+		const previousVisibility = this.configurationService.getValue(WorkbenchConfiguration.secondarySideBarDefaultVisibility);
+		return previousVisibility !== 'hidden' && (previousVisibility === 'visible' || previousVisibility === 'maximized'
+			|| this.workbenchState !== WorkbenchState.EMPTY || this.storageService.isNew(StorageScope.APPLICATION));
+	}
+
 	get panelWasLastMaximized(): boolean {
 		const key = WorkbenchLayoutStorageKeys.PANEL_WAS_LAST_MAXIMIZED;
 		return this.storageService.getBoolean(key.key, key.scope, false);
@@ -1103,12 +1216,23 @@ class WorkbenchLayoutStateModel {
 			sidebar: this.workbenchState !== WorkbenchState.EMPTY && !forceMaximized,
 			auxiliarybar: this.defaultAuxiliaryBarVisible,
 			agentSidebar: false,
+			chat: this.defaultChatVisible,
 			panel: false,
 		} as const satisfies NonNullable<WorkbenchDefaultLayout['parts']>;
 		const parts = this.shouldApplyDefaultLayout(storage)
 			? { ...fallbackParts, ...this.defaultLayout?.parts }
 			: fallbackParts;
 		const defaults = createDefaultWorkbenchLayoutState(parts, this.initialDimension, forceMaximized);
+		const auxiliaryBarWidth = storage.getNumber(
+			WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.key,
+			WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.scope,
+		);
+		// Existing workspaces last showed Chat in the Auxiliary Bar. Once saved, Chat uses its own keys.
+		const chatVisible = this.chatAvailable && !this.configurationService.getValue<boolean>(ChatAIDisabledSettingId) && this.storedVisibility(
+			storage, WorkbenchLayoutStorageKeys.CHAT_VISIBLE.key, StorageScope.WORKSPACE,
+			storage.getBoolean(WorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE.key, StorageScope.WORKSPACE, defaults.chat.visible),
+			'chat',
+		);
 		return {
 			version: 3,
 			sidebar: {
@@ -1129,10 +1253,7 @@ class WorkbenchLayoutStateModel {
 			},
 			auxiliarybar: {
 				width: storedDimension(
-					storage.getNumber(
-						WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.key,
-						WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.scope,
-					),
+					auxiliaryBarWidth,
 					defaults.auxiliarybar.width,
 				),
 				visible: this.storedVisibility(
@@ -1158,6 +1279,14 @@ class WorkbenchLayoutStateModel {
 					defaults.agentSidebar.visible,
 					'agentSidebar',
 				),
+			},
+			chat: {
+				width: storedDimension(
+					storage.getNumber(WorkbenchLayoutStorageKeys.CHAT_WIDTH.key, StorageScope.WORKSPACE),
+					storedDimension(auxiliaryBarWidth, defaults.chat.width),
+				),
+				visible: chatVisible,
+				editorHidden: chatVisible && storage.getBoolean(WorkbenchLayoutStorageKeys.CHAT_EDITOR_HIDDEN.key, StorageScope.WORKSPACE, false),
 			},
 			panel: {
 				position: readPanelPosition(
@@ -1223,6 +1352,11 @@ class WorkbenchLayoutStateModel {
 		storeLayoutValue(storage, WorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE, state.auxiliarybar.visible);
 		storeLayoutValue(storage, WorkbenchLayoutStorageKeys.AGENT_SIDEBAR_WIDTH, state.agentSidebar.width);
 		storeLayoutValue(storage, WorkbenchLayoutStorageKeys.AGENT_SIDEBAR_VISIBLE, state.agentSidebar.visible);
+		if (this.chatAvailable) {
+			storeLayoutValue(storage, WorkbenchLayoutStorageKeys.CHAT_WIDTH, state.chat.width);
+			storeLayoutValue(storage, WorkbenchLayoutStorageKeys.CHAT_VISIBLE, state.chat.visible);
+			storeLayoutValue(storage, WorkbenchLayoutStorageKeys.CHAT_EDITOR_HIDDEN, state.chat.editorHidden);
+		}
 		storeLayoutValue(storage, WorkbenchLayoutStorageKeys.PANEL_HEIGHT, state.panel.height);
 		storeLayoutValue(storage, WorkbenchLayoutStorageKeys.PANEL_VISIBLE, state.panel.visible);
 	}
@@ -1267,6 +1401,21 @@ const WorkbenchLayoutStorageKeys = {
 	},
 	AGENT_SIDEBAR_VISIBLE: {
 		key: 'workbench.layout.agentSidebar.visible',
+		scope: StorageScope.WORKSPACE,
+		target: StorageTarget.MACHINE,
+	},
+	CHAT_WIDTH: {
+		key: 'workbench.layout.chat.width',
+		scope: StorageScope.WORKSPACE,
+		target: StorageTarget.MACHINE,
+	},
+	CHAT_VISIBLE: {
+		key: 'workbench.layout.chat.visible',
+		scope: StorageScope.WORKSPACE,
+		target: StorageTarget.MACHINE,
+	},
+	CHAT_EDITOR_HIDDEN: {
+		key: 'workbench.layout.chat.editorHidden',
 		scope: StorageScope.WORKSPACE,
 		target: StorageTarget.MACHINE,
 	},

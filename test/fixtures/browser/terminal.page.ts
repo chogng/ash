@@ -143,11 +143,12 @@ function createTerminalFixtureLayout(root: HTMLElement, lifetime: DisposableStor
 		getPanelPosition: () => Position.BOTTOM, setPanelPosition: () => { }, onDidChangePanelPosition: Event.None,
 		getSideBarPosition: () => Position.LEFT,
 		onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
+		isEditorHiddenByChat: () => false, setEditorHiddenByChat: () => { },
 		toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
 		onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,
 		setLayoutStyle: () => { }, getVisibleNeighborPart: () => undefined, isPanelMaximized: () => false,
 		toggleMaximizedPanel: () => { }, getPartSize: () => ({ width: root.clientWidth, height: root.clientHeight }),
-		resizePart: () => { }, showPart: () => { }, showParts: () => { }, hideParts: () => { },
+		setPartSize: () => { }, showPart: () => { },
 	});
 }
 
@@ -646,6 +647,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			getSideBarPosition: () => Position.LEFT,
 			onDidChangePartVisibility: visibility.event,
 			onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
+			isEditorHiddenByChat: () => false, setEditorHiddenByChat: () => { },
 			toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
 			isPartVisible: () => visible,
 			hasFocus: () => false,
@@ -653,11 +655,9 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			isPanelMaximized: () => false,
 			toggleMaximizedPanel: () => { },
 			showPart: () => setPanel(true),
-			showParts: () => setPanel(true),
 			hidePart: () => setPanel(false),
-			hideParts: () => setPanel(false),
 			getPartSize: () => ({ width: 800, height: 400 }),
-			resizePart: () => { },
+			setPartSize: () => { },
 			setLayoutStyle: () => { },
 		});
 		services.registerInstance(IWorkbenchLayoutService, paneLayout);

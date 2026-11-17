@@ -1,0 +1,14 @@
+.ash-workbench-chat {
+	background: transparent;
+}
+
+.ash-workbench-chat-content {
+	background: var(--ash-auxiliaryBar-background);
+	overflow: hidden;
+}
+
+.ash-workbench.modern-ui .ash-workbench-chat-content {
+	border: var(--ash-strokeThickness) solid
+		var(--ash-border, var(--ash-contrastBorder));
+	border-radius: var(--ash-cornerRadius-large);
+}

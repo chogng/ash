@@ -62,7 +62,7 @@ for (const surface of ['workbench', 'sessions']) {
 				page = await workbench.openAgentsWindow(target.kind);
 				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			} else if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-				await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+				await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 			}
 			const composer = page.locator(surface === 'sessions' ? '.ash-sessions-chat-slot.active:visible .ash-chat' : '.ash-chat-view-pane .ash-chat:visible');
 			await composer.locator('.ash-chat-input-model-action').press('ArrowDown');

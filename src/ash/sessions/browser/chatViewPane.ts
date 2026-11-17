@@ -46,6 +46,9 @@ import { IStorageService, StorageScope, StorageTarget } from '../../platform/sto
 import type { IAction } from '../../base/common/actions.js';
 import { ForkConversationActionId } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
+import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
+import { CHAT_VIEW_CONTAINER_ID } from '../../workbench/contrib/chat/common/chat.js';
+import { onUnexpectedError } from '../../base/common/errors.js';
 import { createTurnMultiDiffEditorInput } from './turnMultiDiffSource.js';
 import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../contrib/chat/common/constants.js';
 
@@ -99,8 +102,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		@IEditorService editorService: IEditorService | undefined,
 		@ISessionProviderScopeService private readonly providerScopes: ISessionProviderScopeService,
 		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
+		@IViewsService viewsService: IViewsService,
 	) {
-		super(container, options, commandService, layoutService, instantiationService, configuration, notifications, lifecycleService, contextKeyService, editorGroups, editorService);
+		super(container, options, commandService, layoutService, instantiationService, configuration, notifications, lifecycleService, contextKeyService, editorGroups, viewsService, editorService);
 		this.chatService = chatService;
 		this.sessionService = sessionService;
 		this.contextMenuService = contextMenuService;
@@ -158,14 +162,19 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		});
 		const storedSelection = storage.get('chat.viewState', StorageScope.WORKSPACE);
 		const restored = this.restoreViewState(storedSelection);
+		let restoringRevision = sessionService.navigationRevision;
 		this._register(sessionService.onDidChange(() => {
 			this.syncSessions();
 			if (!this.restoringViewState && this.failedSelectionRevision !== sessionService.navigationRevision) this.failedSelectionRevision = undefined;
 			this.saveViewState();
 		}));
 		this._register(storage.onWillSaveState(() => this.saveViewState()));
-		this._register(layoutService.onDidChangePartVisibility((event) => {
-			if (event.partId === 'auxiliarybar' && event.visible) this.ensureConversationForVisibleChat();
+		this._register(this.onDidChangeBodyVisibility(visible => {
+			if (!visible) return;
+			const restoringInitialSelection = this.restoringViewState && sessionService.navigationRevision === restoringRevision;
+			this.ensureConversationForVisibleChat();
+			// The draft created on first reveal must not supersede the stored conversation.
+			if (restoringInitialSelection) restoringRevision = sessionService.navigationRevision;
 		}));
 		this._register(toDisposable(() => {
 			this.viewDisposed = true;
@@ -177,8 +186,6 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		}));
 		this.updateSessionsLayout();
 		this.syncSessions();
-		this.ensureConversationForVisibleChat();
-		let restoringRevision = sessionService.navigationRevision;
 		const restoring = sessionService.initialize().then(async () => {
 			if (this.viewDisposed) return;
 			if (restored && sessionService.navigationRevision === restoringRevision) {
@@ -345,7 +352,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			if (pane.sessionId && pane.threadId) this.sessionService.selectThread(pane.sessionId, pane.threadId);
 			else if (pane.model.untitledSessionId) this.sessionService.selectUntitledSession(pane.model.untitledSessionId);
 			this.syncSessions();
-			if (!this.editorMount) this.layoutService.showPart('auxiliarybar');
+			if (!this.editorMount) void this.viewsService.openViewContainer(CHAT_VIEW_CONTAINER_ID).catch(onUnexpectedError);
 			this.paneHost.ownerDocument.defaultView?.focus();
 			pane.focus();
 		}));
@@ -599,7 +606,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 	}
 
 	protected override ensureConversationForVisibleChat(): void {
-		if (!this.layoutService.isPartVisible('auxiliarybar') || this.panes.size > 0) return;
+		if (!this.isBodyVisible() || this.panes.size > 0) return;
 		const session = this.sessionService.createUntitledSession();
 		if (this.sessionService.state === 'loading' && this.initialUntitledSessionId === undefined) {
 			this.initialUntitledSessionId = session.untitledSessionId;

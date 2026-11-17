@@ -1593,7 +1593,7 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 }) => {
 	const parent = workbench.page;
 	if (!(await parent.locator('.ash-chat-view-pane').isVisible())) {
-		await parent.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await parent.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const defaultInput = parent.locator('.ash-chat-view-pane :is(.ash-chat-input-part,.ash-native-chat-input-part)').first();
 	const defaultCard = defaultInput.locator(':is(.ash-chat-input-container,.ash-native-chat-input-container)');
@@ -1659,7 +1659,7 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 	await closed;
 	await workbench.waitForReady();
 	if (!(await parent.locator('.ash-chat-view-pane').isVisible())) {
-		await parent.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await parent.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	await expect(defaultInput.locator(':is(.ash-chat-input-container,.ash-native-chat-input-container)')).toHaveCSS(
 		'border-radius',
@@ -2634,7 +2634,7 @@ focusTest(
 
 		const workbenchPage = workbench.page;
 		if (!(await workbenchPage.locator('.ash-chat-view-pane').isVisible())) {
-			await workbenchPage.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+			await workbenchPage.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 		}
 		const sourceChat = workbenchPage.locator('.ash-chat-view-pane :is(.ash-chat,.ash-native-chat)').first();
 		const sourceDraft = sourceChat.getByRole('textbox', { name: 'Chat message' });
@@ -2672,7 +2672,7 @@ focusTest(
 		await sessionsWindow.evaluate(window => window.close());
 		await closed;
 		await sessionsWindow.dispose();
-		await workbenchPage.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await workbenchPage.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 		await sourceDraft.focus();
 		await workbenchPage.keyboard.insertText('Keep this second draft in the IDE');
 		await expect(sourceLine).toHaveText('Keep this second draft in the IDE');
@@ -2700,7 +2700,7 @@ test(
 
 		const workbenchPage = workbench.page;
 		if (!(await workbenchPage.locator('.ash-chat-view-pane').isVisible())) {
-			await workbenchPage.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+			await workbenchPage.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 		}
 		const sourceChat = workbenchPage.locator('.ash-chat-view-pane :is(.ash-chat,.ash-native-chat):visible');
 		await sourceChat.getByRole('textbox', { name: 'Chat message' }).focus();

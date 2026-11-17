@@ -20,8 +20,8 @@ for (const locale of ['en', 'zh-CN']) {
 				({ application, workbench } = await restartWorkbench());
 			}
 			const copy = locale === 'zh-CN'
-				? { code: '代码', picker: '选择聊天模型', auto: '自动', enable: '启用', sideBar: '显示辅助侧栏' }
-				: { code: 'Code', picker: 'Choose a chat model', auto: 'Auto', enable: 'Enable', sideBar: 'Show Secondary Side Bar' };
+				? { code: '代码', picker: '选择聊天模型', auto: '自动', enable: '启用', toggleChat: '切换聊天' }
+				: { code: 'Code', picker: 'Choose a chat model', auto: 'Auto', enable: 'Enable', toggleChat: 'Toggle Chat' };
 			const provider = 'custom-pending-input-fixture';
 			const model = 'pending-input-model';
 			const marker = `pending_mouse_attachment_${surface}_${locale}`;
@@ -70,7 +70,7 @@ for (const locale of ['en', 'zh-CN']) {
 					await page.locator('[data-action-id="sessions.newSession"] button').click();
 					composer = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 				} else {
-					if (!await page.locator('.ash-chat-view-pane').isVisible()) await page.getByRole('button', { name: copy.sideBar, exact: true }).click();
+					if (!await page.locator('.ash-chat-view-pane').isVisible()) await page.getByRole('button', { name: copy.toggleChat, exact: true }).click();
 					composer = page.locator('.ash-chat-view-pane .ash-chat:visible');
 				}
 				await composer.locator('.ash-chat-input-model-action').press('ArrowDown');
@@ -181,7 +181,7 @@ for (const text of ['', 'Private instruction intended for A']) {
 				if (!await enabled.isChecked()) await enabled.press('Space');
 				await expect(enabled).toBeChecked();
 				await page.locator('.ash-modal-editor-close').click();
-				if (!await page.locator('.ash-chat-view-pane').isVisible()) await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+				if (!await page.locator('.ash-chat-view-pane').isVisible()) await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 				const composer = page.locator('.ash-chat-view-pane .ash-chat:visible');
 				await composer.locator('.ash-chat-input-model-action').press('ArrowDown');
 				const picker = page.getByRole('dialog', { name: 'Choose a chat model', exact: true });

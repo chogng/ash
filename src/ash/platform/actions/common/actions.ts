@@ -129,6 +129,7 @@ export class MenuId {
 	static readonly SCMHistoryItemChangeContext = new MenuId('SCMHistoryItemChangeContext');
 	static readonly PanelTitle = new MenuId('PanelTitle');
 	static readonly AuxiliaryBarTitle = new MenuId('AuxiliaryBarTitle');
+	static readonly ChatHostTitle = new MenuId('ChatHostTitle');
 	static readonly TerminalTitle = new MenuId('TerminalTitle');
 	static readonly TerminalNewDropdownContext = new MenuId('TerminalNewDropdownContext');
 	static readonly TerminalInstanceContext = new MenuId('TerminalInstanceContext');

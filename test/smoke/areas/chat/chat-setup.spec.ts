@@ -3,7 +3,7 @@ import { expect, test } from '../../../automation/test.js';
 test('Chat setup preserves the keyboard draft and opens the existing model settings', { tag: ['@electron-ui', '@browser-ui'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const input = page.locator('.ash-chat-view-pane .ash-chat-input-editor .stanza-editor-input');
 	await input.focus();

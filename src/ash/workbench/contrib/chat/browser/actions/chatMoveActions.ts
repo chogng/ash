@@ -38,14 +38,14 @@ export function registerMoveActions(): void {
 		}
 	});
 
-	registerAction2(class MoveChatToSidebarAction extends Action2 {
+	registerAction2(class ReturnChatToViewAction extends Action2 {
 		constructor() {
 			const when = ContextKeyExpr.or(ContextKeyExpr.equals('chatInEditor', true), ContextKeyExpr.and(
 				AgentSessionsPresentationContext.isEqualTo(AgentSessionsPresentation.Tabs), ActiveEditorContext.isEqualTo(ChatEditorInput.EditorID),
 			));
 			super({
 				id: 'workbench.action.chat.openInSidebar',
-				title: localize2('chat.moveToSidebar', 'Move Chat to Side Bar'),
+				title: localize2('chat.moveToSidebar', 'Return to Chat View'),
 				precondition: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), when),
 				f1: true,
 				menu: [
@@ -65,7 +65,7 @@ export function registerMoveActions(): void {
 			}
 			if (input instanceof ChatEditorInput && input.paneId !== undefined) {
 				const view = await views.openView<IChatViewPane>(CHAT_VIEW_ID);
-				await view?.moveSessionToSideBar(input.resource);
+				await view?.returnSessionToChatView(input.resource);
 				return;
 			}
 			if (context !== undefined && !(input instanceof ChatEditorInput)) return;

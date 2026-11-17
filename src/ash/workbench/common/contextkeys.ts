@@ -47,6 +47,8 @@ export const ActiveViewletContext = new RawContextKey<string>('activeViewlet', '
 
 /** Whether the auxiliary side bar is currently visible. */
 export const AuxiliaryBarVisibleContext = new RawContextKey<boolean>('auxiliaryBarVisible', true);
+export const ChatPartVisibleContext = new RawContextKey<boolean>('chatPartVisible', false);
+export const EditorAreaHiddenByChatContext = new RawContextKey<boolean>('editorAreaHiddenByChat', false);
 
 /** Whether the auxiliary side bar temporarily occupies the Workbench content area. */
 export const AuxiliaryBarMaximizedContext = new RawContextKey<boolean>('auxiliaryBarMaximized', false);

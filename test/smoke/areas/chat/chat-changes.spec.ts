@@ -56,7 +56,7 @@ test('Chat changes follow the selected conversation, history cursor and workspac
 		? `for /L %i in (1,1,${count}) do @echo ${prefix} %i>>${path}`
 		: `i=1; while [ "$i" -le ${count} ]; do printf '${prefix} %s\\n' "$i"; i=$((i+1)); done > ${path}`;
 	try {
-		if (!await page.locator('.ash-chat-view-pane').isVisible()) await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		if (!await page.locator('.ash-chat-view-pane').isVisible()) await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 		await expect(pill).toHaveAttribute('aria-label', 'Open Workspace Changes: 1 files, 3 lines added, 0 lines removed', { timeout: 30_000 });
 		const a = await create('Conversation A');
 		const b = await create('Conversation B');

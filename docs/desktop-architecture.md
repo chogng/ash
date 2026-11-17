@@ -925,7 +925,7 @@ base 能力不引用 Part、ViewContainer 或其他 Workbench domain。
 拥有合法的 Workbench 拓扑和初始化策略；Mode 入口通过
 `workbench/browser/workbenchSession.ts` 提供初始 Sidebar、Auxiliary Bar、Agent Sidebar 和
 Panel profile，Workbench 不反向导入 Mode contribution。窗口变化由高优先级 Editor 区域吸收，
-Part 即使隐藏也保持挂载，尺寸查询返回其可恢复尺寸。
+Part 即使隐藏也保持挂载，`getPartSize` 返回其可恢复尺寸，`setPartSize` 接收目标尺寸，由 Grid 应用当前布局约束。
 
 `IWorkbenchLayoutService` 扩展平台 `ILayoutService`，两者共用一个注册标识和同一个
 `WorkbenchLayout` 实例。它复用 `BrowserLayoutService` 的容器尺寸观察与事件机制，在 Parts

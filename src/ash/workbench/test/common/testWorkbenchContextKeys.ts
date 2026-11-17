@@ -109,6 +109,8 @@ const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
 	onDidChangePartVisibility: Event.None,
 	isPartVisible: () => false,
 	hasFocus: () => false,
+	isEditorHiddenByChat: () => false,
+	setEditorHiddenByChat: () => { },
 	getVisibleNeighborPart: () => undefined,
 	onDidChangeAuxiliaryBarMaximized: Event.None,
 	isAuxiliaryBarMaximized: () => false,
@@ -121,11 +123,9 @@ const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
 	isPanelMaximized: () => false,
 	toggleMaximizedPanel: () => { },
 	showPart: () => { },
-	showParts: () => { },
 	hidePart: () => { },
-	hideParts: () => { },
 	getPartSize: () => ({ width: 0, height: 0 }),
-	resizePart: () => { },
+	setPartSize: () => { },
 });
 
 const emptyWorkingCopyService: IWorkingCopyService = Object.freeze({

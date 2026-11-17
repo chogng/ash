@@ -95,7 +95,7 @@ test('standalone capture copies on Enter while Chat stays closed', { tag: ['@ele
 	if (!('browserWindow' in application)) throw new Error('Expected an Electron window');
 	const permission = await application.evaluate(({ systemPreferences }) => process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted');
 	test.skip(permission !== 'granted', 'Screen Recording permission is required for actual desktop pixels.');
-	await workbench.quickaccess.runCommand('workbench.action.closeAuxiliaryBar');
+	await workbench.quickaccess.runCommand('workbench.action.closeChat');
 	const chat = workbench.page.locator('[data-view-id="ash.chat.view"] .ash-chat-input-editor');
 	await expect(chat).toBeHidden();
 	const covers = await coverDisplays(application);

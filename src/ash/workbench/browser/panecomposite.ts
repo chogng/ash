@@ -10,6 +10,7 @@ import { IMenuService, MenuId, SubmenuItemAction } from '../../platform/actions/
 import { Separator, type IAction } from '../../base/common/actions.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
+import { ViewContainerLocation } from '../common/views.js';
 
 export interface PaneCompositeOptions extends IViewPaneContainerOptions {
 	readonly paneHeaders?: PaneHeaderVisibility;
@@ -48,8 +49,12 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 		this.element.classList.toggle('ash-pane-composite-pane-layout-fill', options.paneLayout === 'fill');
 		this.element.setAttribute('aria-label', this.title);
 		this.element.id = compositePanelId(options.viewContainer.location, options.viewContainer.id);
-		this.element.setAttribute('role', 'tabpanel');
-		this.element.setAttribute('aria-labelledby', compositeTabId(options.viewContainer.location, options.viewContainer.id));
+		if (options.viewContainer.location === ViewContainerLocation.Chat) {
+			this.element.setAttribute('role', 'region');
+		} else {
+			this.element.setAttribute('role', 'tabpanel');
+			this.element.setAttribute('aria-labelledby', compositeTabId(options.viewContainer.location, options.viewContainer.id));
+		}
 		if (options.mergeViewWithContainerWhenSingleView) {
 			this._register(options.model.onDidChangeVisibleViewDescriptors(() => this.updateMergedPane()));
 			this.updateMergedPane();

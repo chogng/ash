@@ -77,7 +77,7 @@ exports.activate = context => {
 test('Empty chat anchors its input and secondary toolbar to the bottom pane edge', async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await expect(chat).toHaveClass(/empty/u);
@@ -150,7 +150,7 @@ test('Empty chat anchors its input and secondary toolbar to the bottom pane edge
 test('Chat mode changes reach the input and keyboard help restores its selected action', async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const picker = chat.locator('[data-action-id="ash.chat.input.mode"] button');
@@ -197,7 +197,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 	})();
 	try {
 		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+			await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 		}
 		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 		const composer = chat.locator('.ash-chat-input-container');
@@ -243,7 +243,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 test('Chat input grows upward with wrapped text and retains keyboard focus', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const host = page.locator('.ash-chat-input-editor-host');
 	const editor = host.locator('.ash-chat-input-editor');
@@ -280,7 +280,7 @@ test('Chat input grows upward with wrapped text and retains keyboard focus', { t
 test('Chat completes catalog commands from the keyboard and restores the empty input', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const editor = page.locator('.ash-chat-view-pane .ash-chat-input-editor');
 	const input = editor.locator('.stanza-editor-input');

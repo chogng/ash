@@ -77,6 +77,7 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 			case ViewContainerLocation.Panel: return 'panel';
 			case ViewContainerLocation.AuxiliaryBar: return 'auxiliarybar';
 			case ViewContainerLocation.AgentSidebar: return 'agentSidebar';
+			case ViewContainerLocation.Chat: return 'chat';
 		}
 	}
 

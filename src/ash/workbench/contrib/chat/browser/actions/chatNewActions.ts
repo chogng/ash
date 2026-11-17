@@ -31,9 +31,9 @@ export class NewChatAction extends Action2 {
 		});
 	}
 
-	override async run(accessor: ServicesAccessor): Promise<boolean> {
+	override async run(accessor: ServicesAccessor, options?: { readonly preserveFocus?: boolean; }): Promise<boolean> {
 		if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) return false;
-		await accessor.get(IChatSessionNavigationService).createNewConversation();
+		await accessor.get(IChatSessionNavigationService).createNewConversation({ focus: options?.preserveFocus !== true });
 		return true;
 	}
 }
