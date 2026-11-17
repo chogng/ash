@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import type { IChatService, Thread, Turn, TurnChangeDetails, TurnChangeFile, TurnChangeFileContents, TurnChangeSetSummary } from '../../../workbench/services/chat/common/chatService.js';
+import type { IChatService, Thread, Turn } from '../../../workbench/services/chat/common/chatService.js';
+import type { TurnChangeDetails, TurnChangeFile, TurnChangeFileContents, TurnChangeSetSummary } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { readChatRequestVersions } from '../../browser/chatRequestVersions.js';
 import { createTurnResultComparisonInput } from '../../browser/turnMultiDiffSource.js';
 import type { ISession } from '../../services/sessions/common/session.js';

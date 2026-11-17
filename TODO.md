@@ -150,18 +150,14 @@
 
 ## AgentHost · TODO
 
-以下新产品能力和专项环境验收暂缓，按实际使用需要恢复。
+以下新产品能力按用户决定保持独立暂缓范围。
 
-- [ ] **复核 · 自举场景的完整外部 Codex 目录接入**：相同普通代码目录在无外部账号连接的对照场景中启动通过；使用完整外部 Codex home 时重复出现初始化或 `env/dirs/set` 超时，仅引用认证文件的隔离目录则可启动并调用真实模型。尚未证明是模型目录导入、认证路径还是其他初始化问题；排查前保留失败日志，补启动失败时的证据收集，不将有限启动重试当作通过。记录见上述场景目录的 `startup-attempt*.log` 与 `preflight-no-auth.log`。临时认证文件引用已移除，重跑需重新显式准备只读引用，不能复制凭证进入证据。
-
-已完成的统一宿主、多 Provider Session／Chat、附件快照、查询过滤及历史仓库契约见 [通用服务端到端记录](agenthost-todo.md#通用服务端到端闭合--2026-10-18)。下面保留产品能力和真实环境验收缺口；文件台账不表示上游 AHP wire protocol 兼容。
+现有能力与必要基座已通过 [当前验收](agenthost-todo.md#验收复核--2026-11-17)，包含模型／Chat／变更记录职责、远端文件路径与重连刷新、完整外部 Codex home 启动矩阵、自托管 Tunnel 和 Windows→WSL 独立 Runtime 整链。跨机器 SSH 按用户要求跳过。统一宿主、多 Provider Session／Chat、附件快照、查询过滤及历史仓库契约另见 [通用服务端到端记录](agenthost-todo.md#通用服务端到端闭合--2026-10-18)。
 
 - [ ] **新产品 · Agent SDK／Codex 续接／本地模型／独立 Web 启用**（用户决定先列缺口）：SDK 下载／重载、Codex 专属账号与配额续接、模型安装／server lifecycle、Web 启用设置／context owner 均须先闭合领域契约与生产入口；保留现有多 provider 账号和 Web transport 可用性，不新增空服务。准确文件清单见上述 Workbench 记录。
 - [ ] **新产品 · 同步 customization 与附加宿主可选执行能力**：synced OpenPlugin／active-client 分发尚无 Ash producer 与执行策略；附加宿主尚无独立窗口 Git 扩展实例和跨宿主扩展命令契约，`pull`／`push`／`publish`／打开源代码只按真实 provider availability 提供，不能转发主窗口命令；Guardian 远端安装沿现有产品限制。现有通用 GitHub／PR、历史仓库读取、执行默认值和目录权限已按 Session scope 闭合。
 - [ ] **新产品 · Cloud Sandbox**（用户决定先 TODO）：先确定服务端实例／仓库 producer、账号和凭证刷新、Session／文件权限及 Provider 归属，再实现连接、目录、模型和会话入口；当前没有对应生产 producer，具体路径见清单 `todo-by-user`。
-- [ ] **新产品 · Tunnel／WSL**（用户决定先 TODO）：分别确定网关／认证／重连／存储与 WSL runtime 启停／分发／authority 契约，再接既有 Remote owner；当前 SSH／Dev Container 不作为这些能力已实现的证据。
 - [ ] **新产品 · Mission Control**（用户决定先 TODO）：先确定后端控制与会话事实、认证／credential delegation、共享权限及 Provider 归属，再实现环境与会话入口；不预建镜像状态或转发类。
-- [ ] **复核 · 旧隔离环境故障**：取得麦克风枚举失败的准确步骤和底层诊断，沿音频设备 owner 定位。原 2026-10-08 证据目录不在当前检出；不能凭通用错误码或普通音频测试关闭报告。
 
 ## Sessions · TODO
 
@@ -179,6 +175,8 @@
 布局、工作集、Common 与 Changes 契约见 [Sessions](docs/sessions.md)。
 
 ## Chat / Speech · TODO
+
+- [ ] **复核 · 旧隔离环境麦克风枚举**：取得麦克风枚举失败的准确步骤和底层诊断，沿音频设备 owner 定位。原 2026-10-08 证据目录不在当前检出；不能凭通用错误码或普通音频测试关闭报告。
 
 - [ ] **Chat widget 剩余对齐** · 对照本地 VS Code 的 `chat/browser/widget`，仍有 74 个 TypeScript／CSS 同路径差异。回复的 Turn 文件可行内预览或打开完整变更，Markdown Git diff 可逐文件切换。问题和权限确认、计划列表、进行中状态、推理标题、检查点按钮与工具调用摘要已有独立部件。MCP 输出重挂载会恢复尺寸。此前已接入 Code Review 引用、模型选择控制器和 Sessions 共享工具目录，并归位排队重排、归档只读提示、工具结果、MCP 登录、代码出处、工作区文件变更、输入介绍和编辑器显示配置。模型选择器已复用供应商图标、速度选项和推理档位逻辑，扩展安装审批可跳转到 Extensions 搜索。会话输入区可展开当前检查点的文件变更并审查单个文件，聊天文件链接支持编辑器关联。MCP 启动提示需先由服务暴露可观察的启动状态。
 

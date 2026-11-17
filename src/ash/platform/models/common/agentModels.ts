@@ -1,4 +1,5 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import type { Event } from '../../../base/common/event.js';
 
 export interface ModelRef {
 	readonly provider: string;
@@ -213,7 +214,14 @@ export interface AgentModelDefaultsUpdate {
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 }
 
+/** Invalidates a connection's model view; consumers reread the authoritative catalog. */
+export type ModelInvalidation =
+	| { readonly reason: 'configuration'; }
+	| { readonly reason: 'credentials'; }
+	| { readonly reason: 'catalog'; readonly scope?: { readonly connection: string; readonly identity: string | null; }; };
+
 export interface IAgentModelsService {
+	readonly onDidChangeModels: Event<ModelInvalidation>;
 	readModelAvailability(model: ModelRef | undefined): Promise<ModelSelectionAvailability>;
 	readDefaults(): Promise<AgentModelDefaults>;
 	configureDefaults(update: AgentModelDefaultsUpdate, expectedRevision: number): Promise<void>;

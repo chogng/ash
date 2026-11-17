@@ -134,7 +134,8 @@ import { createMultiDiffEditorInput, isMultiDiffEditorInput, matchMultiDiffEdito
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
-import { IChatService, type TurnChangeSetSummary } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import type { TurnChangeSetSummary } from '../../../src/ash/platform/turnChanges/common/turnChangesApi.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import { CHANGESET_REVIEW_ACTION_ID, SessionChangesEditor } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesEditor.js';
 

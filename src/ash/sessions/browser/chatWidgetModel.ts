@@ -13,7 +13,8 @@ import { ILanguageModelsService } from '../../workbench/contrib/chat/common/lang
 import { Emitter, Event } from '../../base/common/event.js';
 import { canceled, isCancellationError } from '../../base/common/errors.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../base/common/lifecycle.js';
-import type { AgentInteractionDecision, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from '../../workbench/services/chat/common/chatService.js';
+import type { AgentInteractionDecision, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnInteraction } from '../../workbench/services/chat/common/chatService.js';
+import type { TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary } from '../../platform/turnChanges/common/turnChangesApi.js';
 import { localize } from '../../nls.js';
 import type { SkillReference } from '../../platform/agentHost/common/appServerApi.js';
 import type { ResolvedChatContext } from '../../workbench/services/chat/common/chatContextService.js';

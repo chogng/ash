@@ -281,7 +281,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		onDidBecomeReady: neverEvent<void>(),
 		onDidChangeModels: neverEvent<void>(),
 		onDidChangeQueue: neverEvent<void>(),
-		onDidUpdateTurnChanges: neverEvent<import('../../../workbench/services/chat/common/chatService.js').TurnChangesUpdate>(),
+		onDidUpdateTurnChanges: neverEvent<import('../../../platform/turnChanges/common/turnChangesApi.js').TurnChangesUpdate>(),
 		discoverProviderModels: () => pending,
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		getDefaultNewChatModel: () => undefined,

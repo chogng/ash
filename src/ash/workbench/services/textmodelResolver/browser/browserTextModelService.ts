@@ -26,6 +26,7 @@ import type { IInstantiationService } from '../../../../platform/instantiation/c
 import { EncodingMode, type IEncodingSupport } from '../../textfile/common/textfiles.js';
 import { assertEncoding } from '../../textfile/common/encoding.js';
 import { localize } from '../../../../nls.js';
+import { TernarySearchTree } from '../../../../base/common/ternarySearchTree.js';
 
 interface TextModelEntry {
 	readonly isSnapshot: boolean;
@@ -529,12 +530,12 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 
 	private acceptFileChange(event: TextResourceChangeEvent): void {
 		if (!this.entries.size) return;
-		// Resolve provider identity once per changed path, rather than repeating
-		// the whole batch for every open document. Rebuild for each event because
-		// filesystem case rules can change while models remain open.
-		const resources = event.resources && new Set(event.resources.map(resource => this.uriIdentity.extUri.getComparisonKey(resource)));
+		// Directory rescans include descendants. Index the batch by URI segments so
+		// provider casing and authority remain scoped without a paths × models scan.
+		const resources = event.resources && TernarySearchTree.forUris<boolean>(resource => this.uriIdentity.extUri.ignorePathCasing(resource));
+		if (resources) for (const resource of event.resources!) resources.set(resource, true);
 		for (const entry of this.entries.values()) {
-			if (entry.disposed || (resources && !resources.has(this.uriIdentity.extUri.getComparisonKey(entry.resource)))) continue;
+			if (entry.disposed || (resources && !resources.findSubstr(entry.resource))) continue;
 			// Watcher events are invalidations, including workspace rescans and our own writes.
 			void this.refreshEntry(entry, 'fileChange').catch(error => console.error('Could not refresh open file', error));
 		}

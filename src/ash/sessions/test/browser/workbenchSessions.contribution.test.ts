@@ -41,7 +41,8 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workben
 import type { MultiDiffEditorInput } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
-import { IChatService, type TurnChangeSetSummary } from '../../../workbench/services/chat/common/chatService.js';
+import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
+import type { TurnChangeSetSummary } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';

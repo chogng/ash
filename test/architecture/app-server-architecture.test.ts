@@ -21,7 +21,8 @@ test('generated protocol dependencies stay in transport contracts and runtime ad
 		const domainContract = /^platform\/agentHost\/common\/(?:agent|agentService|agentExecutionSettingsService|agentHostFileSystemProvider)\.ts$/u.test(name)
 			|| /^platform\/(?:models|automations)\/common\//u.test(name)
 			|| /^platform\/extensions\/common\/extension(?:Backend|Host)Api\.ts$/u.test(name)
-			|| name === 'platform/files/common/fileApi.ts';
+			|| name === 'platform/files/common/fileApi.ts'
+			|| name === 'platform/turnChanges/common/turnChangesApi.ts';
 		const allowed = !domainContract && (/^platform\/agentHost\//u.test(name)
 			|| /^platform\/[^/]+\/common\/[^/]*Api\.ts$/u.test(name)
 			|| /^platform\/[^/]+\/(?:browser|electron-browser|electron-main|node)\//u.test(name)
@@ -71,6 +72,41 @@ test('Agent connection contracts do not depend on Renderer host composition', ()
 		const dependencies = source.statements.filter(ts.isImportDeclaration).map(declaration => (declaration.moduleSpecifier as ts.StringLiteral).text);
 		assert.deepEqual(dependencies.filter(dependency => dependency.includes('/renderer/')), [], name);
 	}
+});
+
+test('Model invalidations are routed only by model runtime adapters', () => {
+	const violations: string[] = [];
+	for (const file of files(sourceRoot)) {
+		const name = relative(sourceRoot, file).replaceAll('\\', '/');
+		if (/^platform\/models\/(?:browser|electron-browser|electron-main|node)\//u.test(name)) continue;
+		const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+		function visit(node: ts.Node): void {
+			if (ts.isStringLiteral(node) && ['provider/models/updated', 'provider/apiKey/changed'].includes(node.text)) violations.push(name);
+			ts.forEachChild(node, visit);
+		}
+		visit(source);
+	}
+	assert.deepEqual(violations, [], 'Model consumers must subscribe to their connection-owned model domain');
+});
+
+test('Chat execution and change ledger consumers do not parse transport notifications', () => {
+	const owners = new Map([
+		['queue/changed', /^platform\/agentHost\/browser\//u],
+		['thread/goal/updated', /^platform\/agentHost\/browser\//u],
+		['thread/goal/cleared', /^platform\/agentHost\/browser\//u],
+		['turnChanges/changed', /^platform\/turnChanges\/browser\//u],
+	]);
+	const violations: string[] = [];
+	for (const file of files(sourceRoot)) {
+		const name = relative(sourceRoot, file).replaceAll('\\', '/');
+		const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+		function visit(node: ts.Node): void {
+			if (ts.isStringLiteral(node) && owners.has(node.text) && !owners.get(node.text)!.test(name)) violations.push(`${name}: ${node.text}`);
+			ts.forEachChild(node, visit);
+		}
+		visit(source);
+	}
+	assert.deepEqual(violations, [], 'Chat consumes connection-owned execution and change ledger events');
 });
 
 function protocolPath(file: string, specifier: string): string | undefined {

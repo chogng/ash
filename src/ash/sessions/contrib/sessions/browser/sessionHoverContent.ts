@@ -5,7 +5,7 @@ import { raceCancellationError } from '../../../../base/common/async.js';
 import { formatTimeAgo } from '../../../../base/common/date.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
-import type { ThreadChangesSummary } from '../../../../workbench/services/chat/common/chatService.js';
+import type { ThreadChangesSummary } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { agentHostSessionWorkspaceKey, buildAgentHostChatWorkspace } from '../../../common/agentHostSessionWorkspace.js';
 import { chatExecutionWorkspace, type IChat, type ISession, type SessionId, type ThreadId } from '../../../services/sessions/common/session.js';

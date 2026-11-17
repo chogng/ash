@@ -13,7 +13,7 @@ import { OpenerService } from '../../../../../editor/browser/services/openerServ
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
 import { getAccountProviderLabel } from '../../../../../platform/accounts/common/accountService.js';
-import type { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import type { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -22,7 +22,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
-import type { AgentModelDefaults, IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
+import type { AgentModelDefaults, IAgentModelsService, ModelInvalidation } from '../../../../../platform/models/common/agentModels.js';
 import { IOpenerService, type IOpener } from '../../../../../platform/opener/common/opener.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
@@ -378,16 +378,17 @@ suite('ChatGPT entry', () => {
 		});
 		using configuration = new InMemoryConfigurationService();
 		using preferences = new LanguageModelsConfigurationService(ChatModelPreferences, configuration, { onDidChangeValue: Event.None } as IStorageService);
-		using notifications = new Emitter<Parameters<Parameters<IServerEventApi['subscribe']>[0]>[0]>();
+		using notifications = new Emitter<ModelInvalidation>();
 		const defaults = { revision: 1, model: null, reasoningEffort: null, commitMessageModel: null, commitMessageEnabled: false, codeReviewModel: null };
 		let defaultRead: Promise<AgentModelDefaults> = Promise.resolve(defaults);
 		using models = new LanguageModelsService({
+			onDidChangeModels: notifications.event,
 			listModels: async () => ({ models: [native] }),
 			listProviders: async () => ({ providers: [] }),
 			readDefaults: () => defaultRead,
 		} as unknown as IAgentModelsService,
 			{ connectionGeneration: 1, onConnectionState: Event.None } as unknown as IAppServerApi,
-			{ subscribe: notifications.event }, preferences,
+			preferences,
 			{ onDidChangeAccounts: Event.None, read: async () => ({ revision: 1n, accounts: [] }) } as unknown as IAccountService);
 		const calls: unknown[][] = [];
 		using services = new InstantiationService(new ServiceCollection(
@@ -414,7 +415,7 @@ suite('ChatGPT entry', () => {
 		const pendingDefaults = new DeferredPromise<AgentModelDefaults>();
 		defaultRead = pendingDefaults.p;
 		try {
-			notifications.fire({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+			notifications.fire({ reason: 'configuration' });
 			await models.setModelVisible(native.model, false);
 			assert.deepEqual(choices, [web]);
 			assert.deepEqual(draft.inputState.selectedModel, web);

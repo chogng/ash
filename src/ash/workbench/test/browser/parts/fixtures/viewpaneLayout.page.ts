@@ -50,7 +50,8 @@ import { ChangesViewPane } from '../../../../../sessions/contrib/changes/browser
 import { SessionGitActionsService } from '../../../../../sessions/services/sessions/browser/sessionGitActionsService.js';
 import { SessionsWorkspaceFolderLabelService } from '../../../../../sessions/services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { ISessionsService } from '../../../../../sessions/services/sessions/browser/sessionsService.js';
-import { IChatService, type TurnChangeDetails } from '../../../../services/chat/common/chatService.js';
+import { IChatService } from '../../../../services/chat/common/chatService.js';
+import type { TurnChangeDetails } from '../../../../../platform/turnChanges/common/turnChangesApi.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { Repl } from '../../../../contrib/debug/browser/repl.js';

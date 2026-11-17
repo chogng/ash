@@ -44,7 +44,8 @@ import { InstantiationService } from '../../../../../../platform/instantiation/c
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../../workbench/services/configuration/test/common/testServices.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IChatService, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnChangeDetails } from '../../../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type ThreadUpdateEnvelope } from '../../../../../../workbench/services/chat/common/chatService.js';
+import type { ThreadChangesSummary, TurnChangeDetails } from '../../../../../../platform/turnChanges/common/turnChangesApi.js';
 import { IEditorService } from '../../../../../../workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../../../workbench/test/common/testEditorService.js';
 import { registerTestComponentServices } from '../../../../../../workbench/test/common/testEditorServices.js';

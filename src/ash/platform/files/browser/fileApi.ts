@@ -8,6 +8,7 @@ import type { AppServerProtocolClient } from '../../agentHost/browser/appServerP
 import { appServerRequest, voidResult } from '../../agentHost/browser/appServerRequest.js';
 import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import type { FileInvalidation, IFileApi } from '../common/fileApi.js';
+import { ASH_REMOTE_SCHEME, getRemoteWorkspacePath, withRemoteWorkspacePath } from '../../remote/common/remote.js';
 
 export function createDisconnectedFileApi(unavailable: UnavailableOperation): IFileApi {
 	return {
@@ -35,9 +36,13 @@ export function createDisconnectedFileApi(unavailable: UnavailableOperation): IF
 export function createAppServerFileApi(connection: AppServerProtocolClient): IFileApi {
 	return {
 		async resolvePath(resource) {
-			const result = await appServerRequest(connection, 'fs/resolvePath', { path: resource.scheme === 'file' ? resource.fsPath : resource.path });
+			const remote = resource.scheme === ASH_REMOTE_SCHEME;
+			const canonicalResource = resource.with({ query: null, fragment: null });
+			// Remote URI spelling belongs to the target OS, including Windows drive and UNC roots.
+			const path = remote ? getRemoteWorkspacePath(canonicalResource) : resource.scheme === 'file' ? resource.fsPath : resource.path;
+			const result = await appServerRequest(connection, 'fs/resolvePath', { path });
 			return {
-				uri: resource.with({ path: URI.file(result.root).path, query: null, fragment: null }),
+				uri: remote ? withRemoteWorkspacePath(canonicalResource, result.root) : canonicalResource.with({ path: URI.file(result.root).path }),
 				...(result.exactFile && { exactFile: resource.with({ query: null, fragment: null }) }),
 				target: result.target.type === 'environment' ? result.target : { type: 'session', ...result.target.sessionDirectory },
 			};
@@ -46,6 +51,9 @@ export function createAppServerFileApi(connection: AppServerProtocolClient): IFi
 		onDidChangeConnection: listener => connection.onStateChange(() => listener()),
 		onDidChangeFiles: Event.any<FileInvalidation>((listener, thisArgs) => connection.onNotification(notification => {
 			if (notification.method === 'fs/changed') listener.call(thisArgs, notification.params);
+		}), (listener, thisArgs) => connection.onStateChange(state => {
+			// A replacement backend cannot replay changes missed while its connection was down.
+			if (state === 'ready') listener.call(thisArgs, { type: 'rescanRequired' });
 		})),
 		readPathCaseSensitivity: params => appServerRequest(connection, 'fs/readPathCaseSensitivity', params),
 		writeFileElevated: async (params, signal) => {

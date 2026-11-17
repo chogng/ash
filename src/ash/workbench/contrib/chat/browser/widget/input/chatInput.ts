@@ -1,13 +1,14 @@
 import type { IChatToolInvocation } from '../../../common/chatService/chatService.js';
 import type { ChatRequestQueueKind, ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
-import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction, TurnChangeSetSummary } from '../../../../../services/chat/common/chatService.js';
+import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from '../../../../../services/chat/common/chatService.js';
+import type { TurnChangeSetSummary } from '../../../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import type { ModelRef } from '../../../../../services/chat/common/chatService.js';
 import type { ModelReasoningEffort } from '../../../../../services/chat/common/modelCatalog.js';
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 
 import type { ChatChangedFileTarget } from '../../../common/chat.js';
-import type { ThreadChangesSummary } from '../../../../../services/chat/common/chatService.js';
+import type { ThreadChangesSummary } from '../../../../../../platform/turnChanges/common/turnChangesApi.js';
 
 /** Line totals can be partial when the Git provider cannot read some workspace files. */
 export type ChatChangesStatistics = TurnChangeSetSummary['statistics'] & { readonly partial?: boolean; };

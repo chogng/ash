@@ -1,7 +1,8 @@
 import type { ChatMarkdownRichContent } from './chatMarkdownRichContent.js';
 import type { FileSearchDirectory } from '../../../../../platform/search/common/fileSearch.js';
 import type { IChatToolInvocation } from '../chatService/chatService.js';
-import type { IChatHookPart, ChatContentPart, LoadedTurnSkill, PlanUpdate, QueuedMessage, QueueMessageTarget, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnChangeSetSummary, TurnError } from '../../../../services/chat/common/chatService.js';
+import type { IChatHookPart, ChatContentPart, LoadedTurnSkill, PlanUpdate, QueuedMessage, QueueMessageTarget, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from '../../../../services/chat/common/chatService.js';
+import type { TurnChangeSetSummary } from '../../../../../platform/turnChanges/common/turnChangesApi.js';
 import { getNLSLanguage, localize } from '../../../../../nls.js';
 import { isChatResponseFeedbackTarget, type ChatResponseFeedbackTarget } from '../chatResponseFeedback.js';
 import { Lazy } from '../../../../../base/common/lazy.js';

@@ -7,7 +7,8 @@ import { productLanguagePackCatalogs } from '../../../../../workbench/services/l
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
-import { IChatService, type TurnChangeSetSummary } from '../../../../../workbench/services/chat/common/chatService.js';
+import { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
+import type { TurnChangeSetSummary } from '../../../../../platform/turnChanges/common/turnChangesApi.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ChangesMultiDiffSourceResolver } from '../../browser/changesMultiDiffSourceResolver.js';
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';

@@ -140,6 +140,18 @@ suite('Agent Host filesystem authority routes', () => {
 		assert.deepEqual(resolved, [first, second]);
 	});
 
+	test('retained editors can observe an unmounted root without reopening its filesystem route', async () => {
+		using provider = new AgentHostFileSystemProvider(connection(URI.file('/workspace'), 'primary'));
+		using files = new FileService();
+		using mounted = files.registerProvider(Schemas.ashRemote, provider);
+		using authority = provider.registerAuthority(root.authority, connection(root, 'remote'));
+		const file = URI.joinPath(root, 'main.ts');
+		assert.equal((await files.readFile(file, 'utf8')).content, 'remote');
+		authority.dispose();
+		using watch = files.watch(file);
+		await assert.rejects(files.readFile(file, 'utf8'), (error: Error) => toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.Unavailable);
+	});
+
 	test('selects the longest registered root on one authority while preserving sibling roots', async () => {
 		using provider = new AgentHostFileSystemProvider(connection(URI.file('/workspace'), 'primary'));
 		using files = new FileService();

@@ -51,6 +51,37 @@ test('file change batches normalize paths once across retained documents', async
 	} finally { identity.getComparisonKey = original; }
 });
 
+test('directory rescans refresh clean descendants while preserving dirty models and other host roots', async () => {
+	using changes = new Emitter<TextResourceChangeEvent>();
+	const root = URI.parse('ash-remote://wsl+6669727374/Project');
+	const clean = root.joinPathSegment('nested').joinPathSegment('clean.txt');
+	const dirty = root.joinPathSegment('dirty.txt');
+	const adjacent = root.with({ path: '/Project-old/file.txt' });
+	const otherHost = clean.with({ authority: 'wsl+7365636f6e64' });
+	const disk = new Map([clean, dirty, adjacent, otherHost].map(resource => [resource.toString(), 'saved']));
+	const reads = new Map<string, number>();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: changes.event,
+		resolve: async (request: TextResourceResolveRequest) => {
+			const key = request.resource.toString();
+			reads.set(key, (reads.get(key) ?? 0) + 1);
+			const text = disk.get(key)!;
+			return { resource: request.resource, text, revision: text };
+		},
+		save: async () => ({ revision: 'unused' }),
+	}, {});
+	using retained = new DisposableStore();
+	const references = await Promise.all([clean, dirty, adjacent, otherHost].map(async resource => retained.add(await models.acquire({ resource }, new AbortController().signal))));
+	references[1].model.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'local ' }]);
+	disk.set(clean.toString(), 'changed during disconnection');
+	disk.set(dirty.toString(), 'external dirty change');
+	changes.fire({ resources: [root.with({ path: root.path + '/' })] });
+	await waitFor(() => references[0].model.getText() === 'changed during disconnection');
+	assert.deepEqual(references.map(reference => reference.model.getText()), ['changed during disconnection', 'local saved', 'saved', 'saved']);
+	assert.deepEqual([dirty, adjacent, otherHost].map(resource => reads.get(resource.toString())), [1, 1, 1]);
+	assert.equal(references[1].isDirty, true);
+});
+
 test('Stanza text model service shares one model and preserves edits across panes', async () => {
 	const textFiles = new TestTextFileService('from disk');
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});

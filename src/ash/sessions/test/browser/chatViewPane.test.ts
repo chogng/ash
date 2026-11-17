@@ -47,7 +47,7 @@ import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystem
 import { installEditorTestGlobals } from '../../../editor/test/browser/editorTestGlobals.js';
 import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { IAgentVoiceService, IAgentHostInputCompletionService } from '../../../platform/agentHost/common/agentService.js';
-import { createAppServerAgentSessionService, createAppServerAgentThreadService, createDisconnectedAgentThreadService, createDisconnectedAgentHostInputCompletionService } from '../../../platform/agentHost/browser/appServerAgentService.js';
+import { createAppServerAgentSessionService, createAppServerAgentThreadService, createAppServerAgentTurnService, createDisconnectedAgentThreadService, createDisconnectedAgentHostInputCompletionService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerAgentModelsService } from '../../../platform/models/browser/appServerAgentModels.js';
 import type { ModelListResult } from '../../../../../.build/protocol/typescript/index.js';
@@ -83,6 +83,7 @@ import { AppServerAccountService } from '../../../workbench/services/accounts/br
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService, ModelPurpose, type ModelCatalogEntry } from '../../../platform/models/common/agentModels.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
+import { createAppServerTurnChangesApi } from '../../../platform/turnChanges/browser/turnChangesApi.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
@@ -146,7 +147,8 @@ import { IWorkbenchLayoutService, Position, type WorkbenchPartId, type Workbench
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
-import { ChatHistoryAnchorError, IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadGoal, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
+import { ChatHistoryAnchorError, IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadGoal, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
+import type { ThreadChangesSummary } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { ModelCatalogConfiguration } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
@@ -3112,7 +3114,18 @@ function registerChatBackend(services: InstantiationService, api: IWorkbenchHost
 	if (omitted !== IAgentExecutionSettingsService) { services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } }); }
 }
 
-for (const dependency of [IAgentModelsService, IAgentSessionService, IAgentThreadService, IAgentTurnService, ITurnChangesApi, IAppServerApi, IServerEventApi, IConfigurationService]) {
+test('Chat backend assembly consumes domain events without a raw protocol event service', () => {
+	const fake = fakeApi();
+	using services = new InstantiationService();
+	registerChatBackend(services, fake.api, IServerEventApi);
+	using chat = services.createInstance(ChatService);
+	let queues = 0;
+	using listener = chat.onDidChangeQueue(() => queues++);
+	fake.emit({ method: 'queue/changed', params: {} });
+	assert.equal(queues, 1);
+});
+
+for (const dependency of [IAgentModelsService, IAgentSessionService, IAgentThreadService, IAgentTurnService, ITurnChangesApi, IAppServerApi, IConfigurationService]) {
 	test(`Chat rejects missing ${dependency.description} before allocating listeners`, () => {
 		using services = new InstantiationService();
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -4513,6 +4526,9 @@ function fakeApi(options: FakeOptions = {}): {
 		?? (options.createSession?.sessionId === sessionId ? options.createSession : undefined)
 		?? session(sessionId);
 	const api = {
+		turnChanges: createAppServerTurnChangesApi({
+			onNotification: (listener: (event: ServerNotification) => void) => { listeners.add(listener); return toDisposable(() => listeners.delete(listener)); },
+		} as AppServerProtocolClient),
 		accounts: { read: async () => ({ revision: '1', accounts: [] }) },
 		appServer: {
 			isAvailable: true,
@@ -4587,6 +4603,12 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		model: {
+			onDidChangeModels: createAppServerAgentModelsService({
+				onNotification: (listener: (notification: ServerNotification) => void) => {
+					listeners.add(listener);
+					return toDisposable(() => { listeners.delete(listener); });
+				},
+			} as unknown as AppServerProtocolClient).onDidChangeModels,
 			readModelAvailability: options.readModelAvailability ?? (async () => ({ selected: 'unknown', configuredDefault: null, defaultAvailability: 'unknown' })),
 			readDefaults: async () => modelDefaults,
 			configureDefaults: async (update: import('../../../platform/models/common/agentModels.js').AgentModelDefaultsUpdate, expectedRevision: number) => {
@@ -4652,6 +4674,9 @@ function fakeApi(options: FakeOptions = {}): {
 			unsubscribe: async () => undefined,
 		},
 		turn: {
+			onDidChangeQueue: createAppServerAgentTurnService({
+				onNotification: (listener: (event: ServerNotification) => void) => { listeners.add(listener); return toDisposable(() => listeners.delete(listener)); },
+			} as AppServerProtocolClient).onDidChangeQueue,
 			enqueue: async (params: QueueEnqueueParams) => { queuedRequests.push(params); return {}; },
 			listQueued: async () => ({ messages: [] }),
 			consultAdvisor: async (params: SessionOperationInput<'consultAdvisor'>) => { consultRequests.push(params); return { turnId: 'advisor-turn', sequence: params.expectedSequence + 1 }; },
@@ -7665,6 +7690,7 @@ test('IDE background item retains its composer in one light Agent auxiliary wind
 	assert.equal(draftPane.hidden, false);
 	typeChatText(popup.dom.window, draftInput, originalDraft.text + ' Edited in popup');
 	popup.container.querySelector<HTMLButtonElement>('[aria-label="Return to main window"]')!.click();
+	await waitFor(() => f.chatWindows.getWindow(popup.id) === undefined);
 	assert.equal(f.chatWindows.getWindow(popup.id), undefined);
 	assert.equal(f.sessions.activeUntitledSession?.untitledSessionId, draft.untitledSessionId);
 	assert.equal(f.pane.element.querySelector('.ash-chat-pane-host > .ash-chat:not([hidden])'), draftPane);

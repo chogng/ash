@@ -5,7 +5,7 @@ import { createSshRemoteAuthority, createSshRemoteWorkspaceUri, withRemoteWorksp
 import type { SessionCreateParams as SessionCreateParamsDto } from '../../../../../.build/protocol/typescript/index.js';
 import type { IAgentHostResourceService } from '../common/agentHostResourceService.js';
 import type { QueuedMessage as QueuedMessageDto, InputItem } from '../../../../../.build/protocol/typescript/index.js';
-import type { QueuedMessage, AgentInput, SessionCreateParams } from '../common/agent.js';
+import type { QueuedMessage, AgentInput, SessionCreateParams, ThreadGoalUpdate } from '../common/agent.js';
 import { Emitter } from '../../../base/common/event.js';
 import { getNLSLanguage, localize } from '../../../nls.js';
 import { isMacintosh } from '../../../base/common/platform.js';
@@ -102,6 +102,7 @@ export function createDisconnectedAgentThreadService(unavailable: UnavailableOpe
 		onDidChangeConnection: Event.None,
 		onDidUpdateThread: Event.None,
 		onDidUpdateThreadTranscript: Event.None,
+		onDidUpdateGoal: Event.None,
 		readToolResultText: () => unavailable('thread.readToolResultText'),
 		readAttachment: () => unavailable('thread.readAttachment'),
 		readToolResource: () => unavailable('thread.readToolResource'),
@@ -129,6 +130,7 @@ export function createDisconnectedAgentThreadService(unavailable: UnavailableOpe
 
 export function createDisconnectedAgentTurnService(unavailable: UnavailableOperation): IAgentTurnService {
 	return {
+		onDidChangeQueue: Event.None,
 		enqueue: () => unavailable('queue.enqueue'),
 		listQueued: () => unavailable('queue.list'),
 		editQueued: () => unavailable('queue.edit'),
@@ -448,6 +450,10 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		onDidUpdateThreadTranscript: Event.any<ThreadTranscriptUpdateEnvelope>((listener, thisArgs) => connection.onNotification(event => {
 			if (event.method === 'session/thread/transcript/update') listener.call(thisArgs, toThreadTranscriptUpdate(event.params));
 		})),
+		onDidUpdateGoal: Event.any<ThreadGoalUpdate>((listener, thisArgs) => connection.onNotification(event => {
+			if (event.method === 'thread/goal/updated') listener.call(thisArgs, { threadId: event.params.threadId, goal: { ...event.params.goal } });
+			else if (event.method === 'thread/goal/cleared') listener.call(thisArgs, { threadId: event.params.threadId });
+		})),
 		readToolResultText: async ({ sessionId, threadId, turnId, itemId, itemOrdinal }, offset, signal) => {
 			if (signal?.aborted) throw canceled();
 			const generation = connection.generation;
@@ -625,6 +631,9 @@ function queueFailure(error: unknown): never {
 
 export function createAppServerAgentTurnService(connection: AppServerProtocolClient, snapshots?: IAgentHostResourceService): IAgentTurnService {
 	return {
+		onDidChangeQueue: Event.any<void>((listener, thisArgs) => connection.onNotification(event => {
+			if (event.method === 'queue/changed') listener.call(thisArgs);
+		})),
 		enqueue: (params, signal) =>
 			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(connection, 'queue/enqueue', { ...params, input }), signal).then(queuedMessage),
 		listQueued: (params) =>
@@ -1022,7 +1031,7 @@ function toThreadItem(item: ThreadItemDto): ThreadItem {
 	switch (item.type) {
 		case 'agentMessage': return {
 			...item,
-			citations: item.citations?.map(citation => ({ ...citation })),
+			...(item.citations ? { citations: item.citations.map(citation => ({ ...citation })) } : {}),
 		};
 		case 'toolCall': {
 			const binding = item.binding;

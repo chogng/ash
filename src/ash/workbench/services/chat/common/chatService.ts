@@ -1,3 +1,4 @@
+import type { TurnChangeSetSummary, TurnChangeDetails, ThreadChangesSummary, TurnChangeFileContents, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { EditSuggestionId } from '../../../../editor/common/textModelEditSource.js';
 import type { AgentInput, CommandInterpretation } from '../../../../platform/agentHost/common/agent.js';
@@ -185,32 +186,6 @@ export interface SteerTurnOptions extends ChatSubmissionOptions { readonly sessi
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; }
 export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentInteractionDecision; }
 
-export type TurnChangeCaptureState = 'open' | 'sealed' | 'incomplete' | 'discarded';
-export type TurnChangeMessageState = 'unconfigured' | 'queued' | 'generating' | 'ready' | 'failed';
-export type TurnChangeCommitState = 'idle' | 'queued' | 'committing' | 'recovering' | 'recoveryUnavailable' | 'committed' | 'partiallyCommitted' | 'conflict' | 'failed';
-
-export interface TurnChangeSetSummary {
-	readonly changeSetId: string;
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-	readonly turnId: string;
-	readonly repositoryId: string;
-	readonly targetBranch?: string;
-	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number; };
-	readonly captureState: TurnChangeCaptureState;
-	readonly messageState: TurnChangeMessageState;
-	readonly commitState: TurnChangeCommitState;
-	readonly committedPaths: readonly string[];
-	readonly terminalState?: 'completed' | 'failed' | 'interrupted';
-	readonly dependencies: readonly string[];
-	readonly externalDependencyPaths: readonly string[];
-	readonly warnings: readonly string[];
-	readonly conflictPaths: readonly string[];
-	readonly failureMessage?: string;
-	readonly commitId?: string;
-	readonly revision: number;
-}
-
 export function canPreviewTurnChange(summary: TurnChangeSetSummary, path: string): boolean {
 	return summary.captureState === 'sealed'
 		&& summary.commitState !== 'queued'
@@ -220,69 +195,12 @@ export function canPreviewTurnChange(summary: TurnChangeSetSummary, path: string
 		&& (summary.commitState !== 'recoveryUnavailable' || !summary.conflictPaths.includes(path));
 }
 
-export interface TurnChangeFile {
-	readonly path: string;
-	readonly previousPath?: string;
-	readonly kind: 'added' | 'modified' | 'deleted' | 'renamed' | 'typeChanged';
-	readonly beforeMode?: string;
-	readonly afterMode?: string;
-	readonly binary: boolean;
-	readonly additions: number;
-	readonly deletions: number;
-}
-
-export interface TurnChangeDetails {
-	readonly summary: TurnChangeSetSummary;
-	readonly files: readonly TurnChangeFile[];
-	readonly generatedMessage?: string;
-	readonly draftMessage?: string;
-}
-
-/** Net file changes from this conversation's baseline to its current history checkpoint. */
-export interface ThreadChangesSummary {
-	readonly sequence: number;
-	readonly revision: string;
-	/** Verified root of the current thread's managed Git checkout, when readable. */
-	readonly worktreePath?: string;
-	readonly statistics: TurnChangeSetSummary['statistics'];
-	readonly repositories: readonly { readonly repositoryId: string; readonly files: readonly TurnChangeFile[]; }[];
-	readonly warnings: readonly string[];
-}
-
 /** Stable review identity for one file in an exact conversation checkpoint. */
 export function createThreadChangeFileResource(sessionId: string, threadId: string, revision: string, repositoryId: string, path: string): URI {
 	return URI.from({
 		scheme: 'ash-thread-change', path: `/${threadId}/${repositoryId}/${path}`,
 		query: new URLSearchParams({ session: sessionId, thread: threadId, revision, repository: repositoryId }).toString(),
 	});
-}
-
-export interface TurnChangeFileContents {
-	readonly path: string;
-	readonly binary: boolean;
-	readonly truncated: boolean;
-	readonly before?: string;
-	readonly after?: string;
-}
-
-export interface TurnCommitSelection {
-	readonly changeSetId: string;
-	readonly expectedRevision: number;
-	readonly paths: readonly string[];
-}
-
-export interface TurnCommitPreview {
-	readonly commitId: string;
-	readonly targetBranch: string;
-	readonly message: string;
-	readonly files: readonly TurnChangeFile[];
-	readonly warnings: readonly string[];
-}
-
-export interface TurnChangesUpdate {
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-	readonly changeSets: readonly TurnChangeSetSummary[];
 }
 
 export interface IChatRequestSubmittedEvent {

@@ -1,6 +1,8 @@
 import type { ModelListResult } from '../../../../../.build/protocol/typescript/index.js';
 import type { ModelCatalogEntry } from '../common/agentModels.js';
 import { ModelPurpose } from '../common/agentModels.js';
+import type { ModelInvalidation } from '../common/agentModels.js';
+import { Event } from '../../../base/common/event.js';
 import { localize } from '../../../nls.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import type {
@@ -15,6 +17,7 @@ import { withSecretStorageErrors } from '../../secrets/browser/appServerSecretSt
 
 export function createDisconnectedAgentModelsService(unavailable: UnavailableOperation): IAgentModelsService {
 	return {
+		onDidChangeModels: Event.None,
 		readModelAvailability: () => unavailable('model.readModelAvailability'),
 		readDefaults: () => unavailable('model.readDefaults'),
 		configureDefaults: () => unavailable('model.configureDefaults'),
@@ -39,6 +42,18 @@ export function createDisconnectedAgentModelsService(unavailable: UnavailableOpe
 
 export function createAppServerAgentModelsService(connection: AppServerProtocolClient): IAgentModelsService {
 	return {
+		onDidChangeModels: Event.any<ModelInvalidation>((listener, thisArgs) => connection.onNotification(notification => {
+			switch (notification.method) {
+				case 'config/changed': listener.call(thisArgs, { reason: 'configuration' }); break;
+				case 'provider/apiKey/changed': listener.call(thisArgs, { reason: 'credentials' }); break;
+				case 'provider/models/updated': {
+					const scope = 'catalogScope' in notification.params ? notification.params.catalogScope : undefined;
+					// The provider outcome is not a replacement for the complete model catalog.
+					listener.call(thisArgs, { reason: 'catalog', ...(scope ? { scope: { connection: scope.connection, identity: scope.identity } } : {}) });
+					break;
+				}
+			}
+		})),
 		readModelAvailability: async model => {
 			const result = await withSecretStorageErrors(appServerRequest(connection, 'model/availability', { model }));
 			return {

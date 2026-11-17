@@ -1,6 +1,26 @@
-# AgentHost 文件对齐与实施记录
+# AgentHost 文件对齐与验收记录
 
-本轮通用服务已按下节的真实调用与领域 owner 闭合；下面各批记录保留其当时的范围和验证。产品差异及真实环境验收由 [AgentHost TODO](TODO.md#agenthost--todo) 维护。保留 Ash 的 Rust 执行与持久化架构，不声明上游 AHP wire protocol 兼容。
+现有能力与必要基座已通过本轮验收，范围与证据见下节。暂缓产品项由 [AgentHost TODO](TODO.md#agenthost--todo) 独立维护；历史批次及文件台账只记录当时状态。Ash 保留 Rust 执行与持久化架构。
+
+## 验收复核 · 2026-11-17
+
+**结论：现有能力与必要基座验收通过。** 复核基线为 Ash `b0f7d94c43de5443c90f3c9035a2f8600a049f3b`、本地只读 VS Code `38ab687ca17d7887557fbf1550ac5225d30fb96a`；首次复核开始时工作树干净，后续收尾保留同一 checkout 的前批改动。验收环境为 Windows x64 与本机 WSL 2，按用户确认先完成已有能力；Agent SDK、Codex→Copilot 续接、本地模型、Cloud Sandbox、Mission Control 等暂缓项保持独立范围。跨机器 SSH 按用户要求跳过，未计为通过。本结论不声明其他环境通过、完整上游 API 等价或 AHP wire protocol 兼容。
+
+- **文件与基座**：名称含 AgentHost 的当前路径中，双方共有 38 个生产文件，Ash 独有 59 个，上游独有 1,204 个；另有上游生成文件 958 个，按生成目录或文件头的生成声明分类。逐项记录当前 exports、相对 imports 和 Ash 直接生产调用方，未发现缺失的相对导入。上游独有文件仍须按真实消费者和领域 owner 判定，不直接转为补文件队列。当前清单为 `.build/agenthost-acceptance-20261117/inventory.{json,tsv}`；下文 TSV 保留 2026-10-18 历史快照。
+- **模型事件职责**：模型选择器 → `IAgentModelsService.onDidChangeModels` → `platform/models/browser/appServerAgentModels.ts` → 原 connection 的通知；配置、凭据与目录更新在 adapter 转成领域失效事件。`LanguageModelsService` 退出原始通知解析，继续拥有显示目录、账号隔离及选择状态；Rust ModelsManager／subscriptions 继续拥有发现事实。没有新增目录副本或后端协议。
+- **Chat 执行与变更记录职责**：队列、目标和变更记录通知分别由 `IAgentTurnService`、`IAgentThreadService`、`ITurnChangesApi` 提供领域事件。变更记录类型归 `platform/turnChanges/common`，Chat、Sessions、变更视图及 fixture 的调用方直接引用领域 owner；Chat 退出原始通知与生成 DTO 解析。Session scope 同时限定目标事件外层与嵌套 Thread 身份，并随 Provider 释放订阅。
+- **远端文件边界**：文件 adapter 复用 Remote 路径契约，修复 Windows Tunnel 将 `/C:/…` 作为后端路径发送的错误，覆盖盘符、UNC、POSIX 及链接定位字段。连接就绪时补发领域重新扫描；文本模型按 URI 层级索引目录失效，恢复断线期间漏掉的文件变化，保留脏模型及宿主边界。已卸载根的 watcher 可以释放或保留通知兴趣，读写继续拒绝退役路由；修复断开宿主后的保留编辑器报错。
+- **Thread 历史修复**：原 `appServerAgentService.ts` 转换器不再给缺省引用的消息补出 `citations: undefined`；保留原字段缺省／null／数组语义及已存在引用的脱离复制。现有 read、subscribe、Session subscribe 与流式快照回归覆盖这一修复。
+- **宿主能力**：统一宿主、Provider 主列表、Chat scope、文件事件、附件快照和查询过滤已有生产调用。WSL 2 使用本次独立构建的 Linux Remote 包、发行版 PATH 入口及原 Main relay，通过真实 Session、Thread 文件、后端更换、自动恢复与断开验证。自托管 Tunnel 经过真实 Web 后端的 ticket／token 认证、HTTP 转发和 WebSocket，验证工作区固定、文件读取、重连、撤权及 Provider 释放；测试代理映射 Host 并保留精确 Origin，未修改产品认证校验，也未替代 SSH 认证验收。
+- **测试装配**：远端 Provider fixture 补齐既有产物目录服务，Chat fixture 使用生产领域事件 adapter，最近目录回归使用当前平台的绝对路径。独立 profile 的装配补齐 Windows 安装目录环境，供 Git 按可信安装根发现。辅助窗口返回用例等待原异步 owner 完成注销；失败格式化展开大型窗口对象曾造成测试进程内存增长，不据此认定产品内存泄漏。原业务断言保持完整。
+
+最终验证（`.build/agenthost-acceptance-remaining-20261117/`）：
+
+- 标准 `pnpm test:unit` 完成测试项目编译，**42 文件／908 项全部通过**，见 `selected-tests-final.txt`、`unit-acceptance-closed.log`。覆盖真实协议客户端与生成 decoder、跨连接隔离、重连、释放、变更记录脱离复制、URI 身份、目录重新扫描、脏模型保护及架构边界。
+- 当前 Desktop 构建、Renderer **5,402** 文件、Automation **3,771** 文件、浏览器集成项目 **5,360** 文件类型检查通过。Windows 桌面与 Web 后端准备、WSL `just remote-package --target x86_64-unknown-linux-gnu` 独立分发构建通过；协议未改，沿用首轮已通过的正式生成结果。中文缺项为 0。日志为 `desktop-subtree-build.log`、`renderer-final.log`、`automation-final.log`、`integration-final.log`、`web-backend-prepared.log`、`wsl-package-final.log`。
+- Ash Desktop 自举 **7 项全部通过（3.3 分钟）**，见 `desktop-acceptance-final.log`：实际载体退出后的恢复及焦点／几何；临时目录与当前仓库分别使用隔离／完整外部 Codex home 的四组启动和 Agents 重载，外部认证文件摘要保持一致；真实 Tunnel 的 Session／文件／转发重连／撤权；Windows→WSL 的独立 Runtime、限定 Thread 身份、文件读取、后端 PID 与实例更换、离线修改后的保留编辑器刷新及断开释放。WSL 测试操作后端返回的 Thread worktree，临时 PATH 入口与隔离 profile 均随场景清理。
+
+首轮 33 文件／737 项修复过程及载体恢复截图诊断保留在 `.build/agenthost-acceptance-20261117/`，最终结果以上述收尾运行取代。旧外部 Codex home 初始化超时在当前四组矩阵中未复现，历史日志保留，不据此推断旧环境根因。旧隔离环境的麦克风枚举问题已归回根 TODO 的 Chat／Speech owner。
 
 ## 文件事件领域契约与验证收尾 · 2026-11-02
 
@@ -122,7 +142,7 @@ Renderer 4,291、Common 2,752、浏览器集成 4,264 文件类型检查及 Desk
 
 Common **2,761**、Renderer **4,300** 文件类型检查通过，Desktop `pnpm build:prepared` 通过；见同目录 `common-final.log`、`renderer-final.log`、`build.log`。本批没有改 UI、产品文案、协议或 Rust；未执行真实外部 SSH、OS sleep／wake、跨平台或多窗口产品验收。提交门禁的具体结果随交付报告列出，不将未纳入本提交的其他工作树错误记为通过。
 
-## 当前文件台账 · 2026-10-18
+## 历史文件台账 · 2026-10-18
 
 首次盘点基线为 Ash `9cdd17c01337eae7119cb62d04d94e1679aee588` 与只读参照 `../vscode` 的 `2de8dcf8062d43587ee1c552d60b099a58e5c9ef`。下面数量保留首次盘点快照，包含当时的重连策略、领域数据拆分、文件 Provider 迁移及新增回归；本轮 Workbench 的局部复核与新增行在 TSV 的 `reviewScope` 单独记录，不据此重新推断其他目录的最新数量。开始时及实施过程中已有 Terminal、Notifications、Sessions 测试、编辑器路线图与根 TODO 的并行变化，本次保留这些变化。
 
@@ -232,13 +252,13 @@ Session 创建切片的真实入口为新建 composer／SessionsManagement → �
 
 上述行为现已实现，取消统一通过前端 CancellationError 表达。新增 5 项回归先失败后通过；标准 `pnpm test:unit` 选择 Agent adapter、Dev Container service、RemoteExtensionHost、NativeExtensionService 共 37 项通过；Renderer 4,213 文件类型检查、两个源码／测试文件格式及 diff whitespace 检查通过。证据 `.build/agenthost-completion-20261018/runtime-{red,green,renderer-check}.log`。未改变 Rust Provider 执行、取消或持久化协议；当前其他编辑器与 Collab 改动不属于本批。
 
-### 多宿主范围复核 · 尚未完成
+### 多宿主范围复核 · 2026-10-18 历史起点
 
 用户要求继续完成根 TODO 的两条文件对齐任务，明确暂不扩入 Cloud Sandbox、Tunnel／WSL、Mission Control 和环境验收。对“同窗口多宿主”用户请求了产品对照并将建议交给执行者；先前建议暂不纳入，源码复核后修正为不能为清空 TODO 而排除这一缺口，用户随后以 `do` 授权实际实现；当前连接／Provider 切片已落地，完整多宿主管理尚未完成。
 
 只读证据：VS Code `2de8dcf8062` 的 `IAgentHostConnectionsService` 统一 ambient 与多个 remote，普通 Editor 与 Agents Window 的连接支持分别由 `EditorWindowRemoteAgentHostService`／`AgentsWindowRemoteAgentHostService` 约束；Zed `56934ec056` 的 `MultiWorkspace.find_or_create_workspace` 支持每个 Workspace 的独立 RemoteClient，`ProjectGroupKey` 同时包含 host 与 paths；Codex `822e58cc3d` 的公开仓库不能证明桌面 UI 的全部实现，官方 [Remote connections](https://learn.chatgpt.com/docs/remote-connections) 文档确认 SSH 远程项目及跨宿主会话交接。不能把“单工作区有明确执行宿主”与“一个窗口只能管理一个宿主”混为一谈。
 
-Ash 的 `SessionsProvidersService` 现已接入独立 SSH Provider，Automation 是当前可使用它们的生产消费者；`SessionsManagementService` 主模型仍由启动入口直接绑定单个 Provider，Chat／模型服务仍绑定主 Renderer host；文件服务已接通额外宿主的完整 URI 路由，但不表示 Session 选择、搜索及其他领域 scope 已切换。连接与 scope 验证后，下一步必须沿“有宿主归属的 Session 身份 → registry 驱动的主模型 → 对应 Chat／模型／文件／仓库／权限 scope → 窗口显示／切换”深度闭合；不能新增无消费者的标准 AHP facade 或把原始 SessionId 当作跨宿主唯一身份。仓库事实仍由现有 Git/GitHub owner 持有，尚未将 Node/state/meta 文件逐项判为能力等价，两条根 TODO 保留。
+本切片结束时，独立 SSH Provider 只有 Automation 消费者，Session 主模型和 Chat scope 尚未切换。后续已沿“宿主限定 Session 身份 → registry 主模型 → Chat／模型／文件／仓库／权限 scope”闭合，见前文“通用服务端到端闭合”。仓库事实继续由原 Git/GitHub owner 持有，不把 Node/state/meta 文件数量作为能力等价证据。
 
 ### 本轮代码迁移与行为修复
 
@@ -363,7 +383,7 @@ Mac 图形场景共 6 项通过：根会话／子线程模型、手选与 Auto�
 
 独立源码补丁为 `agenthost-b2.patch`，35,119 bytes，SHA256 `682821e7a3a691d5746af0d341d60fe5c8dc7ac414f7b722fc12e82ee85875d7`。只含本批两文件；本文件、后续只读契约方案与证据单独交付。先保存第一批本地 checkpoint，再消费第二批，保持两片可独立审阅与提交。
 
-本批当时列出的 Mac 验收范围为：已打开的 Code/Cowork picker 收到 provider notification 后更新；失败/Empty/账户变化、模型能力和 thinking 元数据、手选/Auto/隐藏模型/profile 默认，以及 pane/profile 重开、重连和多窗口。受控 Web、Mac 图形与 TUI 完整订阅链结果，以及真实 Kimi 验收取舍见上方记录；系统休眠仍见根 TODO，受控结果不扩大为真实环境验收通过。
+本批当时列出的 Mac 验收范围为：已打开的 Code/Cowork picker 收到 provider notification 后更新；失败/Empty/账户变化、模型能力和 thinking 元数据、手选/Auto/隐藏模型/profile 默认，以及 pane/profile 重开、重连和多窗口。受控 Web、Mac 图形与 TUI 完整订阅链、系统休眠补验及真实 Kimi 验收取舍见上方记录；受控结果不扩大为真实外部账号验收通过。
 
 ## 现有能力与演进方向
 
@@ -547,7 +567,7 @@ Session.model 缺失仅表示目录没有模型事实，不能据此推断没有
 
 实现说明：Main 临时表只持有本窗口的 carrier 资源，不保存会话；打开请求先登记可退休租约，再核对用户选中时的完整 catalog 目标，关闭、页面导航或窗口释放均退休该租约，迟到核对不得创建连接。Renderer 各连接各有 protocol client、恢复与 adapter。此切片不修改 DOM／布局，窗口 Provider／会话身份及 Chat／文件路由仍需后续闭环。行为验证覆盖两个独立 carrier、关闭期间的迟到打开、目标变更、重复 ID 与资源释放。
 
-窗口连接切片的真实消费者先接入已有 Provider 注册表和 Automation 聚合。新增上游同路径 `sessions/contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.ts`，从 Desktop Sessions 入口加载；窗口 contribution 是 child service scope 的唯一 owner，Quick Pick 使用现有组件的键盘、ARIA 与主题能力，无新 DOM/CSS。既有 `AppServerSessionsProvider` 只增加每实例 id/label 数据，保留其目录、订阅与操作 owner；注册表借用 Provider，注销先于 scope 释放。测试落在上游同路径 `remoteAgentHost/test/browser/remoteAgentHost.contribution.test.ts`，从真实命令和 Quick Input 操作到注册表、领域 adapter 与 Automation 聚合，核对相同后端 ID 的路由与 disconnect。该窗口注册不代表 Sessions 主列表／Chat 路由已完成，根 TODO 仍保留。
+窗口连接切片的真实消费者先接入已有 Provider 注册表和 Automation 聚合。新增上游同路径 `sessions/contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.ts`，从 Desktop Sessions 入口加载；窗口 contribution 是 child service scope 的唯一 owner，Quick Pick 使用现有组件的键盘、ARIA 与主题能力，无新 DOM/CSS。既有 `AppServerSessionsProvider` 只增加每实例 id/label 数据，保留其目录、订阅与操作 owner；注册表借用 Provider，注销先于 scope 释放。测试落在上游同路径 `remoteAgentHost/test/browser/remoteAgentHost.contribution.test.ts`，从真实命令和 Quick Input 操作到注册表、领域 adapter 与 Automation 聚合，核对相同后端 ID 的路由与 disconnect。本切片当时未包含 Sessions 主列表／Chat 路由；其后续闭合见前文“通用服务端到端闭合”。
 
 路径复核调整：保存 SSH 目标的窗口 scope 实现应归上游同路径 `remoteAgentHost/browser/sshAgentHost.contribution.ts`（`SSHAgentHostContribution`），而非通用 contribution。实现已收回此准确 owner，`remoteAgentHost.contribution.ts` 只保留真实的窗口 phase 注册；无别名、双实现或删除。连接键来自 Ash 既有 canonical catalog 的 host + workspace，内部资源 Map、取消与子容器按 Ash 生命周期独立实现，未沿用上游重连类图、存储或私有控制流。
 

@@ -14,6 +14,10 @@ export function createSessionThreadService(scope: ISessionProviderScope): IAgent
 		onDidOfferInteraction: Event.map(backend.onDidOfferInteraction, identity),
 		onDidUpdateThread: Event.map(backend.onDidUpdateThread, identity),
 		onDidUpdateThreadTranscript: Event.map(backend.onDidUpdateThreadTranscript, identity),
+		onDidUpdateGoal: Event.map(backend.onDidUpdateGoal, event => ({
+			threadId: scope.identity(event.threadId),
+			...(event.goal ? { goal: { ...event.goal, threadId: scope.identity(event.goal.threadId) } } : {}),
+		})),
 		createSideChat: source => run(async () => identity(await backend.createSideChat(params(source)))),
 		fork: (...args: Parameters<IAgentThreadService['fork']>) => run(async () => {
 			const [source, ...rest] = args;

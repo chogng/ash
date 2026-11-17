@@ -5,6 +5,8 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { JSDOM } from 'jsdom';
+import { resolve } from 'node:path';
+import { URI } from '../../../../../base/common/uri.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { SessionsRecentWorkspacesService } from '../../browser/sessionsRecentWorkspacesService.js';
 import { SessionsManagementService } from '../../browser/sessionsManagementService.js';
@@ -250,7 +252,7 @@ test('new drafts restore only a selection from their own host', () => {
 	using browser = { [Symbol.dispose]: () => dom.window.close() };
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'recent-workspace-test' });
 	const recent = new SessionsRecentWorkspacesService(storage);
-	const localFolder = { type: 'local', root: '/local-folder' } as const;
+	const localFolder = { type: 'local', root: URI.file(resolve('/local-folder')).fsPath } as const;
 	const remoteFolder = { type: 'ssh', host: 'remote', root: '/remote-folder' } as const;
 	recent.setSelected(primary.id, localFolder);
 	recent.setSelected(remote.id, remoteFolder);

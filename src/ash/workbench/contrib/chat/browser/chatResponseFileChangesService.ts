@@ -1,6 +1,6 @@
 import type { IChangesStats } from '../../../browser/changesStatsWidget.js';
 import type { IChatListItem } from '../common/model/chatViewModel.js';
-import type { TurnChangeFile } from '../../../services/chat/common/chatService.js';
+import type { TurnChangeFile } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { IEditSessionEntryDiff } from '../common/editing/chatEditingService.js';

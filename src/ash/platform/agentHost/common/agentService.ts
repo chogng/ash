@@ -223,6 +223,7 @@ export interface IAgentThreadService {
 	/** Domain notifications from this renderer's connection; disposing the listener releases it. */
 	readonly onDidUpdateThread: Event<Agent.ThreadUpdateEnvelope>;
 	readonly onDidUpdateThreadTranscript: Event<Agent.ThreadTranscriptUpdateEnvelope>;
+	readonly onDidUpdateGoal: Event<Agent.ThreadGoalUpdate>;
 	readToolResultText(source: Agent.ToolResultTextSource, offset: number, signal?: AbortSignal): Promise<Agent.ToolResultTextPage>;
 	readAttachment(source: Agent.AgentAttachmentSource, signal?: AbortSignal): Promise<{ readonly bytes: Uint8Array; readonly mimeType: string; }>;
 	listAppTools(source: Agent.AgentAttachmentSource & { readonly contentIndex: number; }, signal?: AbortSignal): Promise<readonly Agent.AgentMcpAppTool[]>;
@@ -273,6 +274,7 @@ export class AgentThreadHistoryAnchorError extends Error { }
 export class AgentQueueConflictError extends Error { }
 
 export interface IAgentTurnService {
+	readonly onDidChangeQueue: Event<void>;
 	enqueue(params: Agent.QueueEnqueueParams, signal?: AbortSignal): Promise<Agent.QueuedMessage>;
 	listQueued(params: Agent.QueueListParams): Promise<Agent.QueueListResult>;
 	editQueued(params: Agent.QueueMessageTarget, action: Agent.QueueMessageEdit): Promise<Agent.QueuedMessage>;

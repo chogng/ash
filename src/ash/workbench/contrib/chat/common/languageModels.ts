@@ -7,7 +7,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import { IAgentModelsService, type CustomModelProvider, type ModelProviderTestResult } from '../../../../platform/models/common/agentModels.js';
 import type { ModelPreferencesUpdate } from '../../../../platform/models/common/agentModels.js';
 import type { ApprovalReviewModelSelection } from '../../../../platform/models/common/agentModels.js';
-import { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { IAccountService, type AccountState } from '../../../../platform/accounts/common/accountService.js';
 import { ILanguageModelsConfigurationService } from './languageModelsConfiguration.js';
 import type { ModelRef, ModelProviderCredentialStatus } from '../../../services/chat/common/chatService.js';
@@ -68,33 +68,31 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	private providerState = '[]';
 	private readonly externalScopes = new Map<string, string | null>();
 	constructor(@IAgentModelsService private readonly modelApi: IAgentModelsService,
-		@IAppServerApi private readonly appServer: IAppServerApi, @IServerEventApi events: IServerEventApi,
+		@IAppServerApi private readonly appServer: IAppServerApi,
 		@ILanguageModelsConfigurationService private readonly preferences: ILanguageModelsConfigurationService,
 		@IAccountService private readonly accounts: IAccountService) {
 		super();
 		this._register(toDisposable(() => this.selectionUpdates.clearPending()));
 		this._register(preferences.onDidChangeModels(() => this.changed.fire()));
-		const subscription = events.subscribe(event => {
-			if (event.method === 'config/changed') {
+		this._register(modelApi.onDidChangeModels(event => {
+			if (event.reason === 'configuration') {
 				this.defaultsGeneration++;
 				this.modelDefaults = undefined;
 				this.changed.fire();
 				// Connection removal may have no credential event, including when it originates in another window.
 				this.invalidateModelCatalog();
-			} else if (event.method === 'provider/models/updated') {
-				const scope = 'catalogScope' in event.params ? event.params.catalogScope : undefined;
+			} else if (event.reason === 'catalog') {
+				const scope = event.scope;
 				if (scope && this.externalScopes.get(scope.connection) !== scope.identity) {
 					this.externalScopes.set(scope.connection, scope.identity);
 					this.retireModelCatalog();
 				}
-				// The tagged outcome describes one provider observation, not the global catalog.
 				this.invalidateModelCatalog();
-			} else if (event.method === 'provider/apiKey/changed') {
+			} else if (event.reason === 'credentials') {
 				this.retireModelCatalog(true);
 				this.invalidateModelCatalog();
 			}
-		});
-		this._register(toDisposable(() => subscription.dispose()));
+		}));
 		this._register(accounts.onDidChangeAccounts(state => {
 			this.accountState = state;
 			const scope = accountCatalogScope(state, this.modelAccountConnections);

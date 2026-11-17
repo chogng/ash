@@ -59,6 +59,8 @@ import { TestNotificationService } from '../../../../../../workbench/services/no
 import { ISessionsProvidersService, SessionsProvidersService } from '../../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ProviderAutomationService } from '../../../../automations/browser/providerAutomationService.js';
 import { SSHAgentHostContribution } from '../../browser/sshAgentHost.contribution.js';
+import { IArtifactCatalogService } from '../../../../../services/artifactCatalog/common/artifactCatalogService.js';
+import { createTestArtifactCatalogService } from '../../../../../test/common/testArtifactCatalogService.js';
 
 // Initialize the shared browser test window before tracking fixture-owned disposables.
 getWindows();
@@ -118,6 +120,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	const deleted: string[] = [];
 	let openResult: ((target: RemoteAgentHostConnection, host: IRemoteAgentHostProtocolClient) => Promise<IRemoteAgentHostProtocolClient>) | undefined;
 	const renderer = createDisconnectedRendererApi();
+	services.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
 	let readCapabilities: typeof renderer.agentCapabilities.read | undefined;
 	let containerSessions = false;
 	const sessionDirectoryRequests: unknown[] = [];
@@ -490,7 +493,7 @@ test('the remote environments dialog shows connection status and reconnects the 
 	const command = context.commands.executeCommand(manageHosts);
 	const id = context.crash('build-a');
 	const rows = [...context.dialog().querySelectorAll('tbody tr')];
-	assert.equal(rows.find(row => row.querySelector('th')?.firstChild?.textContent === 'build-a')?.querySelector('td')?.textContent, 'Disconnected');
+	assert.equal(rows.find(row => row.querySelector('th')?.firstChild?.textContent === 'build-a')?.querySelector('td')?.textContent, 'Host offline');
 	assert.equal(rows.find(row => row.querySelector('th')?.firstChild?.textContent === 'build-b')?.querySelector('td')?.textContent, 'Connected');
 	assert.equal(context.dialog().querySelector('[aria-label="Reconnect: build-b"]'), null);
 	await context.choose('Reconnect: build-a');

@@ -15,7 +15,8 @@ import { MultiDiffEditorFileList, type IMultiDiffEditorFileListItem } from '../.
 import { ChangesStatsWidget } from '../../../../workbench/browser/changesStatsWidget.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { IChatService, canPreviewTurnChange, createThreadChangeFileResource, type ThreadChangesSummary, type TurnChangeSetSummary } from '../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, canPreviewTurnChange, createThreadChangeFileResource } from '../../../../workbench/services/chat/common/chatService.js';
+import type { ThreadChangesSummary, TurnChangeSetSummary } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import { createDiffEditorInput } from '../../../../workbench/common/editor/diffEditorInput.js';
 import { createMultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';

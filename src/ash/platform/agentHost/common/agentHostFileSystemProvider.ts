@@ -488,11 +488,10 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		this.identityChanges.fire();
 	}
 
-	public watch(resource: URI, _options: IWatchOptions): IDisposable {
-		const route = this.connectionRoute(resource);
-		if (route) { return route.provider!.watch(resource, _options); }
+	public watch(_resource: URI, _options: IWatchOptions): IDisposable {
 		this.assertNotDisposed();
 		// Rust owns continuous watches for authorized environment and Session roots, including Agent consumers.
+		// Unmount invalidation can retain an editor watcher; observing it never reacquires a retired route.
 		return Disposable.None;
 	}
 

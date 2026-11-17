@@ -14,7 +14,8 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { IAccessibleViewService, AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
-import { createThreadChangeFileResource, IChatService, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnChangeSetSummary } from '../../../../../workbench/services/chat/common/chatService.js';
+import { createThreadChangeFileResource, IChatService, type ThreadUpdateEnvelope } from '../../../../../workbench/services/chat/common/chatService.js';
+import type { ThreadChangesSummary, TurnChangeSetSummary } from '../../../../../platform/turnChanges/common/turnChangesApi.js';
 
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';

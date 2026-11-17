@@ -9,7 +9,8 @@ import { AppServerGitHubService } from '../../../github/browser/appServerGitHubS
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS } from '../../../../../../.build/protocol/typescript/index.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { AppServerConnectionRecovery, AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
-import { createAppServerAgentSessionService } from '../../browser/appServerAgentService.js';
+import { createAppServerAgentSessionService, createAppServerAgentThreadService, createAppServerAgentTurnService } from '../../browser/appServerAgentService.js';
+import { createAppServerTurnChangesApi } from '../../../turnChanges/browser/turnChangesApi.js';
 import type { AgentSessionChange } from '../../common/agent.js';
 import type { LogEntry } from '../../../log/common/log.js';
 import { LogService } from '../../../log/common/logServiceImpl.js';
@@ -23,6 +24,8 @@ import { AppServerFrameDecoder } from '../../browser/appServerFrameDecoder.js';
 import { createAppServerExtensionHostApi } from '../../../extensions/browser/extensionHostApi.js';
 import { createAppServerExtensionManagementApi } from '../../../extensionManagement/browser/extensionManagementApi.js';
 import { createAppServerFileApi } from '../../../files/browser/fileApi.js';
+import { createAppServerAgentModelsService } from '../../../models/browser/appServerAgentModels.js';
+import type { ModelInvalidation } from '../../../models/common/agentModels.js';
 import type { FileInvalidation } from '../../../files/common/fileApi.js';
 import { URI } from '../../../../base/common/uri.js';
 import { createAppServerResourceApi } from '../../browser/appServerApi.js';
@@ -165,6 +168,80 @@ test('Config reads stay ordered across writes, change notifications and reconnec
 	await Promise.all([rejected, afterReconnect]);
 });
 
+test('Model domain invalidations preserve scope across decoding, connection isolation and consumer retirement', async () => {
+	const transport = new ProtocolTransport();
+	const otherTransport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	const other = new AppServerProtocolClient(otherTransport);
+	using cleanup = toDisposable(() => { client.dispose(); other.dispose(); });
+	await Promise.all([client.connect(), other.connect()]);
+	const models = createAppServerAgentModelsService(client);
+	const invalidations: ModelInvalidation[] = [];
+	using listener = models.onDidChangeModels(event => invalidations.push(event));
+	const catalog = { method: 'provider/models/updated', params: { connection: 'kimi-desktop', catalogScope: { connection: 'kimi-desktop', identity: 'scope-a' }, result: { type: 'empty' } } };
+	otherTransport.frame(catalog);
+	transport.frame({ method: 'fs/changed', params: { type: 'rescanRequired', dirId: 'workspace' } });
+	assert.deepEqual(invalidations, []);
+	transport.frame(catalog);
+	transport.frame({ method: 'provider/models/updated', params: { connection: 'kimi-desktop', catalogScope: { connection: 'kimi-desktop', identity: null }, result: { type: 'failed', failure: { code: 'unreachable' } } } });
+	transport.frame({ method: 'provider/apiKey/changed', params: { connection: 'openai', apiKeyConfigured: true } });
+	transport.frame({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+	const expected: ModelInvalidation[] = [
+		{ reason: 'catalog', scope: { connection: 'kimi-desktop', identity: 'scope-a' } },
+		{ reason: 'catalog', scope: { connection: 'kimi-desktop', identity: null } },
+		{ reason: 'credentials' },
+		{ reason: 'configuration' },
+	];
+	assert.deepEqual(invalidations, expected);
+	client.disconnect();
+	transport.frame(catalog);
+	assert.deepEqual(invalidations, expected);
+	await client.connect();
+	transport.frame(catalog);
+	assert.deepEqual(invalidations, [...expected, expected[0]]);
+	listener.dispose();
+	transport.frame(catalog);
+	assert.deepEqual(invalidations, [...expected, expected[0]]);
+});
+
+test('Goal, queue and change ledger events stay on their owning connection through reconnect and consumer disposal', async () => {
+	const transport = new ProtocolTransport();
+	const otherTransport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	const otherClient = new AppServerProtocolClient(otherTransport);
+	using cleanup = toDisposable(() => { client.dispose(); otherClient.dispose(); });
+	await Promise.all([client.connect(), otherClient.connect()]);
+	const threads = createAppServerAgentThreadService(client);
+	const turns = createAppServerAgentTurnService(client);
+	const changes = createAppServerTurnChangesApi(client);
+	const observed: unknown[] = [];
+	using listeners = new DisposableStore();
+	listeners.add(threads.onDidUpdateGoal(event => observed.push(event)));
+	listeners.add(turns.onDidChangeQueue(() => observed.push('queue')));
+	listeners.add(changes.onDidChange(event => observed.push(event)));
+	const goal = { threadId: 'thread', goalId: 'goal', objective: 'Complete the request', status: 'active', tokensUsed: 0 };
+	const notification = { method: 'thread/goal/updated', params: { threadId: 'thread', goal } };
+	otherTransport.frame(notification);
+	assert.deepEqual(observed, []);
+	transport.frame(notification);
+	transport.frame({ method: 'queue/changed', params: {} });
+	transport.frame({ method: 'turnChanges/changed', params: { sessionId: 'session', threadId: 'thread', changeSets: [] } });
+	transport.frame({ method: 'thread/goal/cleared', params: { threadId: 'thread' } });
+	const expected = [{ threadId: 'thread', goal }, 'queue', { sessionId: 'session', threadId: 'thread', changeSets: [] }, { threadId: 'thread' }];
+	assert.deepEqual(observed, expected);
+	client.disconnect();
+	transport.frame(notification);
+	assert.deepEqual(observed, expected);
+	await client.connect();
+	transport.frame(notification);
+	assert.deepEqual(observed, [...expected, expected[0]]);
+	listeners.dispose();
+	transport.frame(notification);
+	transport.frame({ method: 'queue/changed', params: {} });
+	transport.frame({ method: 'turnChanges/changed', params: { sessionId: 'session', threadId: 'thread', changeSets: [] } });
+	assert.deepEqual(observed, [...expected, expected[0]]);
+});
+
 test('File domain invalidations reach only their filesystem connection and release with their consumers', async () => {
 	const transport = new ProtocolTransport();
 	const otherTransport = new ProtocolTransport();
@@ -194,27 +271,33 @@ test('File domain invalidations reach only their filesystem connection and relea
 	cleanup.add(otherProvider.onDidChangeFiles(event => otherObserved.push(event.resources?.map(resource => resource.toString()))));
 	await Promise.all([client.connect(), otherClient.connect()]);
 	const changed = { method: 'fs/changed', params: { type: 'pathsChanged', dirId: 'same', paths: ['main.ts'] } };
+	const rescan = { type: 'rescanRequired' };
+	assert.deepEqual(receiver.changes, [rescan]);
+	assert.deepEqual(observed, [[root.toString()]]);
+	assert.deepEqual(otherObserved, [[otherRoot.toString()]]);
 	transport.frame(changed);
 	transport.frame({ method: 'queue/changed', params: {} });
-	assert.deepEqual(receiver.changes, [changed.params]);
-	assert.deepEqual(observed, [[root.joinPathSegment('main.ts').toString()]]);
-	assert.deepEqual(otherObserved, []);
+	assert.deepEqual(receiver.changes, [rescan, changed.params]);
+	assert.deepEqual(observed, [[root.toString()], [root.joinPathSegment('main.ts').toString()]]);
+	assert.deepEqual(otherObserved, [[otherRoot.toString()]]);
 	client.disconnect();
 	transport.frame(changed);
-	assert.equal(receiver.changes.length, 1);
+	assert.equal(receiver.changes.length, 2);
 	await client.connect();
+	assert.deepEqual(receiver.changes, [rescan, changed.params, rescan]);
+	assert.deepEqual(observed, [[root.toString()], [root.joinPathSegment('main.ts').toString()], [root.toString()]]);
 	transport.frame({ method: 'fs/changed', params: { type: 'rescanRequired', dirId: 'same' } });
-	assert.deepEqual(observed, [[root.joinPathSegment('main.ts').toString()], [root.toString()]]);
-	assert.deepEqual(otherObserved, []);
+	assert.deepEqual(observed, [[root.toString()], [root.joinPathSegment('main.ts').toString()], [root.toString()], [root.toString()]]);
+	assert.deepEqual(otherObserved, [[otherRoot.toString()]]);
 	subscriptions.dispose();
 	transport.frame(changed);
-	assert.equal(receiver.changes.length, 2);
-	assert.equal(observed.length, 3);
+	assert.equal(receiver.changes.length, 4);
+	assert.equal(observed.length, 5);
 	provider.dispose();
 	transport.frame(changed);
-	assert.equal(observed.length, 3);
+	assert.equal(observed.length, 5);
 	otherTransport.frame(changed);
-	assert.deepEqual(otherObserved, [[otherRoot.joinPathSegment('main.ts').toString()]]);
+	assert.deepEqual(otherObserved, [[otherRoot.toString()], [otherRoot.joinPathSegment('main.ts').toString()]]);
 });
 
 test('Session domain events stay on their connection across reconnects and listener disposal', async () => {

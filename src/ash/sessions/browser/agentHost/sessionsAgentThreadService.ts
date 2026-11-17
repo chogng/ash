@@ -16,6 +16,8 @@ export class SessionsAgentThreadService extends Disposable implements IAgentThre
 	readonly onDidUpdateThread = this.onDidUpdateThreadEmitter.event;
 	private readonly onDidUpdateThreadTranscriptEmitter = this._register(new Emitter<EventValue<IAgentThreadService['onDidUpdateThreadTranscript']>>());
 	readonly onDidUpdateThreadTranscript = this.onDidUpdateThreadTranscriptEmitter.event;
+	private readonly onDidUpdateGoalEmitter = this._register(new Emitter<EventValue<IAgentThreadService['onDidUpdateGoal']>>());
+	readonly onDidUpdateGoal = this.onDidUpdateGoalEmitter.event;
 	constructor(@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService) {
 		super(); this._register(scopes.onDidChangeScopes(() => this.bind())); this.bind();
 	}
@@ -26,6 +28,7 @@ export class SessionsAgentThreadService extends Disposable implements IAgentThre
 			this.listeners.add(scope.thread.onDidOfferInteraction(event => this.onDidOfferInteractionEmitter.fire(event)));
 			this.listeners.add(scope.thread.onDidUpdateThread(event => this.onDidUpdateThreadEmitter.fire(event)));
 			this.listeners.add(scope.thread.onDidUpdateThreadTranscript(event => this.onDidUpdateThreadTranscriptEmitter.fire(event)));
+			this.listeners.add(scope.thread.onDidUpdateGoal(event => this.onDidUpdateGoalEmitter.fire(event)));
 		}
 	}
 	createSideChat(...args: Parameters<IAgentThreadService['createSideChat']>): ReturnType<IAgentThreadService['createSideChat']> { return this.scopes.getScope(args[0].sessionId).thread.createSideChat(...args); }

@@ -19,7 +19,7 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../w
 import { ISessionSummaryHoverService, SessionSummaryHoverService } from '../../../../../workbench/contrib/chat/browser/agentSessions/sessionSummaryHoverService.js';
 import { ChatMarkdownDecorationsRenderer } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownDecorationsRenderer.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import type { ThreadChangesSummary } from '../../../../../workbench/services/chat/common/chatService.js';
+import type { ThreadChangesSummary } from '../../../../../platform/turnChanges/common/turnChangesApi.js';
 import { computePullRequestIcon } from '../../../../../workbench/common/chatPullRequest.js';
 import { LinkPresentationService } from '../../../../../workbench/services/dataChannel/browser/dataChannelService.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';

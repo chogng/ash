@@ -2,6 +2,10 @@
 
 结论：Workbench 通过前端领域 Service 使用业务能力；领域 API 把调用交给同一窗口的 App Server 协议客户端。Electron Main 负责取得连接、启动连接载体和转发消息，不按业务方法分发请求。`electron-main/` 不是所有 `xxxApi` 的归属目录，Service 也不负责启动 Rust 进程。
 
+Chat 的队列与目标事件由 `IAgentTurnService.onDidChangeQueue` 和 `IAgentThreadService.onDidUpdateGoal` 提供；`ITurnChangesApi` 拥有变更记录的前端类型和事件。原始通知与生成 DTO 在领域 adapter 转换，Chat、Sessions 和变更视图直接消费领域契约。Session scope 统一限定目标事件中的外层及嵌套 Thread 身份，随 Provider 释放订阅。
+
+文件 adapter 使用 Remote 路径契约转换盘符、UNC 和 POSIX 路径，避免把 URI 的 `/C:/…` 直接传给 Windows 后端。连接就绪时产生 `rescanRequired` 领域失效，补偿断线期间无法重放的文件变化；文本模型按 URI 层级索引消费目录失效，仅刷新干净的后代模型。Rust 持有实际文件监听；前端 watcher 仅保留失效通知兴趣，不获取连接。宿主卸载后，保留编辑器可以释放或重新注册 watcher，文件读写仍由原路由准入并拒绝已退役的根。
+
 ## 一次业务调用经过哪里
 
 ```text
@@ -28,6 +32,8 @@ Workbench 拥有跨领域的 Renderer 服务装配：`browser/webRendererApi.ts`
 `platform/agentHost/common/agentService.ts` 的 `IAgentConnection` 聚合一条后端连接已有的领域端口；注册表、文件路由和 Sessions Provider scope 借用这个契约。`workbench/browser/rendererApi.ts` 的 `IWorkbenchHost` 只作为启动装配参数，不注册为全局服务。消费者分别注入 `IAppServerApi`、`IRemoteAgentHostService`、`IWorkbenchEnvironmentService` 等领域服务；本机目录和 profile 目录随窗口环境提供，临时断连不改变 `IAppServerApi.isAvailable` 表示的宿主支持能力。额外 SSH、WSL、Tunnel 连接的创建、复用和释放由 `platform/agentHost/electron-browser/remoteAgentHostService.ts` 唯一拥有，`AgentHostConnectionsService` 只提供包含当前窗口连接的查询投影。远端 Provider scope 只覆盖 `IAgentConnection` 及对应领域服务，窗口服务仍从父作用域取得，不创建另一份连接表或业务状态。
 
 文件变更由文件 adapter 转成 `IFileApi.onDidChangeFiles` 领域事件，`AgentHostFileSystemProvider` 直接订阅所属连接并将相对路径投影到授权目录；Provider 释放时一并释放监听。Workbench 与 Sessions 的文件消费者不解析原始文件协议通知。窗口目录授权恢复产生的重新扫描仍由窗口 owner 提供，作为连接事件之外的附加失效信号。
+
+模型目录、凭据和配置通知由 `platform/models/browser/appServerAgentModels.ts` 转成 `IAgentModelsService.onDidChangeModels`，只提供失效原因和外部目录身份。`LanguageModelsService` 重读所属连接的权威目录，保留账号隔离、失败缓存及手动选择；不识别原始模型协议通知，也不将单个 provider 的发现结果作为完整目录。
 
 ## 目录按职责选择
 

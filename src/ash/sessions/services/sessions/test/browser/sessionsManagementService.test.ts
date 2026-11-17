@@ -6,7 +6,7 @@ import { test } from 'mocha';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { SessionArtifactType } from '../../../../../platform/agentHost/common/sessionArtifacts.js';
 import type { ArtifactResource } from '../../../../../platform/artifactCatalog/common/artifactCatalog.js';
 import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as BackendSession } from '../../../../../../../.build/protocol/typescript/index.js';
@@ -1463,6 +1463,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		},
 	};
 	const turn: IAgentTurnService = {
+		onDidChangeQueue: Event.None,
 		enqueue: async () => { throw new Error('Queue is unavailable in this fixture'); },
 		listQueued: async () => ({ messages: [] }),
 		editQueued: async () => { throw new Error('Not used'); },

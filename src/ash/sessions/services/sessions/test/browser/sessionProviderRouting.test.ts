@@ -48,6 +48,8 @@ import { ISessionsManagementService } from '../../common/sessionsManagement.js';
 import type { ISessionsProvider } from '../../common/sessionsProvider.js';
 import { sessionIdentity } from '../../common/sessionIdentity.js';
 import type { IWorkspace } from '../../../../../platform/workspace/common/workspace.js';
+import type { ThreadGoalUpdate } from '../../../../../platform/agentHost/common/agent.js';
+import { SessionsAgentThreadService } from '../../../../browser/agentHost/sessionsAgentThreadService.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -56,7 +58,9 @@ function fixture(primaryWorkspace: () => IWorkspace = () => ({ id: 'primary', fo
 	const registry = lifetime.add(new SessionsProvidersService());
 	const root = lifetime.add(new InstantiationService());
 	const child = lifetime.add(root.createChild());
-	const remoteHost = createDisconnectedRendererApi();
+	const threadGoals = lifetime.add(new Emitter<ThreadGoalUpdate>());
+	const disconnected = createDisconnectedRendererApi();
+	const remoteHost = { ...disconnected, thread: { ...disconnected.thread, onDidUpdateGoal: threadGoals.event } };
 	const primaryHost = createDisconnectedRendererApi();
 	const changed = lifetime.add(new Emitter<void>());
 	const goals = lifetime.add(new Emitter<{ threadId: string; }>());
@@ -90,7 +94,7 @@ function fixture(primaryWorkspace: () => IWorkspace = () => ({ id: 'primary', fo
 		lifetime.add(new SessionProviderServices(primaryChat, models, prompts, execution, primaryHost, tools)), registry, management, root));
 	const search = new SessionsSearchService('primary', primaryWorkspace, scopes, registry);
 	return {
-		lifetime, registry, remote, remoteHost, primaryHost, remoteChat, primaryChat, registration, scopes, goals, models, execution, tools, management, changed,
+		lifetime, registry, remote, remoteHost, primaryHost, remoteChat, primaryChat, registration, scopes, goals, threadGoals, models, execution, tools, management, changed,
 		sessionId: sessionIdentity('remote', 'same', 'primary'), threadId: sessionIdentity('remote', 'thread', 'primary'),
 		[Symbol.dispose]: () => lifetime.dispose(),
 	};
@@ -129,6 +133,19 @@ test('Chat and goal events qualify the exact remote Session and Thread while bac
 	assert.equal(result.thread.sessionId, context.sessionId);
 	assert.equal(result.transcript.threadId, context.threadId);
 	assert.deepEqual(goalIds, [context.threadId]);
+});
+
+test('Thread goal events qualify both thread coordinates and retire with their provider scope', () => {
+	using context = fixture();
+	using threads = new SessionsAgentThreadService(context.scopes);
+	const observed: ThreadGoalUpdate[] = [];
+	using listener = threads.onDidUpdateGoal(event => observed.push(event));
+	const goal = { threadId: 'thread', goalId: 'goal', objective: 'Finish the request', status: 'active' as const, tokensUsed: 0 };
+	context.threadGoals.fire({ threadId: 'thread', goal });
+	assert.deepEqual(observed, [{ threadId: context.threadId, goal: { ...goal, threadId: context.threadId } }]);
+	context.registration.dispose();
+	context.threadGoals.fire({ threadId: 'thread' });
+	assert.equal(observed.length, 1);
 });
 
 test('Chat send unwraps the source address and never sends a removed remote Session to primary', async () => {

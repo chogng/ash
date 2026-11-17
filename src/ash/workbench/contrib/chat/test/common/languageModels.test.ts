@@ -7,7 +7,7 @@ import { Event, Emitter } from '../../../../../base/common/event.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import type { AccountDto, AccountReadResult, ModelListResult, ProviderListResult, ProviderModelsListResult, ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
-import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerApi, type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentModelsService, ModelPurpose } from '../../../../../platform/models/common/agentModels.js';
 import { modelsRecommendedFor } from '../../../../services/chat/common/modelCatalog.js';
 import type { IAccountApi } from '../../../../../platform/accounts/common/accountApi.js';
@@ -24,7 +24,6 @@ test('retirement-only catalog changes notify consumers and keep date-only eviden
 		const models = resources.add(new LanguageModelsService(
 			modelCatalogApi(async () => ({ models: [entry] })),
 			{ onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
-			{ subscribe: () => ({ dispose() { } }) } as unknown as IServerEventApi,
 			{ onDidChangeModels: Event.None } as unknown as ILanguageModelsConfigurationService,
 			{ onDidChangeAccounts: Event.None, read: async () => ({ revision: 1n, accounts: [] }) } as unknown as IAccountService,
 		));
@@ -154,7 +153,6 @@ test('model input capabilities notify consumers and do not change previous catal
 	const models = resources.add(new LanguageModelsService(
 		modelCatalogApi(async () => ({ models: [entry] })),
 		{ onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
-		{ subscribe: () => ({ dispose() { } }) } as unknown as IServerEventApi,
 		{ onDidChangeModels: Event.None } as unknown as ILanguageModelsConfigurationService,
 		{ onDidChangeAccounts: Event.None, read: async () => ({ revision: 1n, accounts: [] }) } as unknown as IAccountService,
 	));
@@ -197,7 +195,6 @@ function catalogFixture(resources: DisposableStore, omitAccounts = false) {
 		getSlashCommands: async () => [],
 		onConnectionState: states.event,
 	});
-	services.registerInstance(IServerEventApi, { subscribe: events.event });
 	if (!omitAccounts) {
 		services.registerInstance(IAccountService, resources.add(new AppServerAccountService({
 			read: async () => { source.accountReads++; return source.readAccount ? source.readAccount() : source.account; },
@@ -208,6 +205,7 @@ function catalogFixture(resources: DisposableStore, omitAccounts = false) {
 			async () => { source.catalogReads++; return source.readCatalog ? source.readCatalog() : { models: source.catalog, catalog_scopes: source.catalogScopes }; },
 			async () => { source.providerReads++; return { providers: source.providers }; },
 			async (connection: string) => { source.discoveries.push(connection); return source.readDiscovery ? source.readDiscovery(connection) : []; },
+			events.event,
 		),
 		setModel: async () => { source.configWrites++; },
 	});
@@ -759,8 +757,10 @@ function modelCatalogApi(
 	readCatalog: () => Promise<ModelListResult>,
 	readProviders: () => Promise<ProviderListResult> = async () => ({ providers: [] }),
 	readDiscovery: (connection: string) => Promise<ModelListResult['models']> = async () => [],
+	notifications: Event<ServerNotification> = Event.None,
 ): IAgentModelsService {
 	return createAppServerAgentModelsService({
+		onNotification: notifications,
 		async request(definition: { method: string; }, params: { connection?: string; }): Promise<unknown> {
 			switch (definition.method) {
 				case 'model/list': return readCatalog();
@@ -790,7 +790,6 @@ test('Model and effort saves serialize against fresh backend revisions while Aut
 	};
 	const models = resources.add(new LanguageModelsService(api,
 		{ connectionGeneration: 1, onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
-		{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
 		{ onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined, rememberSelectedModel: (value: import('../../../../../platform/models/common/agentModels.js').ModelRef | undefined | null) => assert.ok(value === null || value === undefined, 'Backend model references must not duplicate UI profile state') } as unknown as ILanguageModelsConfigurationService,
 		{ onDidChangeAccounts: Event.None } as IAccountService));
 	const model = { provider: 'example', model: 'reasoning' };
@@ -821,7 +820,6 @@ test('A failed default save leaves the backend snapshot intact and permits a lat
 		readDefaults: async () => defaults,
 		configureDefaults: async () => { if (fail) throw new Error('write rejected'); configured = true; },
 	}, { connectionGeneration: 1, onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
-		{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
 		{ onDidChangeModels: Event.None, rememberSelectedModel: () => { } } as unknown as ILanguageModelsConfigurationService,
 		{ onDidChangeAccounts: Event.None } as IAccountService));
 	await models.readModelDefaults();
@@ -839,7 +837,6 @@ test('A late model-default snapshot from a disconnected connection cannot become
 	let generation = 1;
 	const models = resources.add(new LanguageModelsService({ ...modelCatalogApi(async () => ({ models: [] })), readDefaults: () => old.p },
 		{ get connectionGeneration() { return generation; }, onConnectionState: connection.event } as unknown as IAppServerApi,
-		{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
 		{ onDidChangeModels: Event.None } as ILanguageModelsConfigurationService,
 		{ onDidChangeAccounts: Event.None } as IAccountService));
 	const reading = models.readModelDefaults();
@@ -862,7 +859,6 @@ for (const pendingOperation of ['read', 'write'] as const) {
 			readDefaults: async () => { if (pendingOperation === 'read') { await started.complete(); await pending.p; } return { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null }; },
 			configureDefaults: async () => { writes++; if (pendingOperation === 'write') { await started.complete(); await pending.p; } },
 		}, { connectionGeneration: 1, onConnectionState: connection.event } as unknown as IAppServerApi,
-			{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
 			{ onDidChangeModels: Event.None, rememberSelectedModel: () => remembered++ } as unknown as ILanguageModelsConfigurationService,
 			{ onDidChangeAccounts: Event.None } as IAccountService));
 		const saving = models.rememberSelectedModel({ provider: 'example', model: 'test' });
@@ -881,23 +877,22 @@ test('A config notification racing a confirmed model save cannot turn its readba
 	using resources = new DisposableStore();
 	const readback = new DeferredPromise<Awaited<ReturnType<IAgentModelsService['readDefaults']>>>();
 	const reading = new DeferredPromise<void>();
-	let notify: (event: ServerNotification) => void = () => { throw new Error('Expected a notification subscription'); };
+	const notifications = resources.add(new Emitter<ServerNotification>());
 	let defaults: Awaited<ReturnType<IAgentModelsService['readDefaults']>> = { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null };
 	let reads = 0;
 	let writes = 0;
 	let remembered = 0;
 	const model = { provider: 'example', model: 'test' };
 	const models = resources.add(new LanguageModelsService({
-		...modelCatalogApi(async () => ({ models: [] })),
+		...modelCatalogApi(async () => ({ models: [] }), undefined, undefined, notifications.event),
 		readDefaults: async () => { if (++reads === 2) { await reading.complete(); return readback.p; } return defaults; },
 		configureDefaults: async () => { writes++; defaults = { ...defaults, revision: 2, model }; },
 	}, { connectionGeneration: 1, onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
-		{ subscribe: listener => { notify = listener; return { dispose() { } }; } } as IServerEventApi,
 		{ onDidChangeModels: Event.None, rememberSelectedModel: () => remembered++ } as unknown as ILanguageModelsConfigurationService,
 		{ onDidChangeAccounts: Event.None } as IAccountService));
 	const saving = models.rememberSelectedModel(model);
 	await reading.p;
-	notify({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+	notifications.fire({ method: 'config/changed', params: { revision: 2, generation: 2 } });
 	await readback.complete(defaults);
 	await saving;
 	assert.equal(reads, 3);
@@ -957,7 +952,6 @@ test('Discovery-only status changes notify consumers, attach to the exact connec
 	const models = resources.add(new LanguageModelsService(
 		modelCatalogApi(async () => wire, async () => providers),
 		{ onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
-		{ subscribe: () => ({ dispose() { } }) } as unknown as IServerEventApi,
 		{ onDidChangeModels: Event.None } as unknown as ILanguageModelsConfigurationService,
 		{ onDidChangeAccounts: Event.None, read: async () => ({ revision: 1n, accounts: [] }) } as unknown as IAccountService,
 	));

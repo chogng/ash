@@ -91,6 +91,11 @@ export async function connectProfile(application: PlaywrightApplication, web: We
 			PATH: process.env.PATH,
 			HOME: process.env.HOME,
 			SystemRoot: process.env.SystemRoot,
+			// Automatic Git discovery uses trusted installation roots, rather than PATH.
+			ProgramW6432: process.env.ProgramW6432,
+			ProgramFiles: process.env.ProgramFiles,
+			'ProgramFiles(x86)': process.env['ProgramFiles(x86)'],
+			LOCALAPPDATA: process.env.LOCALAPPDATA,
 			ASH_RG_PATH: process.env.ASH_RG_PATH,
 			ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH,
 			ASH_USE_INMEMORY_SECRETSTORAGE: process.env.ASH_USE_INMEMORY_SECRETSTORAGE,

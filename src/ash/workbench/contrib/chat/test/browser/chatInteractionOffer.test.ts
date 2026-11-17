@@ -8,7 +8,7 @@ import { ChatService } from '../../../../services/chat/browser/chatService.js';
 import type { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
 import type { AgentInteractionOffer, ThreadSubscription, ThreadUpdateEnvelope } from '../../../../../platform/agentHost/common/agent.js';
 import type { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
-import type { AppServerConnectionState, IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import type { AppServerConnectionState, IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { ITurnChangesApi } from '../../../../../platform/turnChanges/common/turnChangesApi.js';
 
 const offer: AgentInteractionOffer = { connectionGeneration: 1, sessionId: 'session', threadId: 'thread', turnId: 'turn', interaction: { requestId: 'request', request: { type: 'approval', request: { reason: 'Approve access', capabilities: [{ kind: 'network', scope: 'example.test' }] } } } };
@@ -23,9 +23,9 @@ function fixture() {
 	let pending: Promise<ThreadSubscription> = Promise.resolve(snapshot());
 	let subscriptions = 0; let unsubscriptions = 0;
 	const api = { isAvailable: true, get connectionGeneration() { return generation; }, getConnectionState: async () => state, onConnectionState: states.event } as unknown as IAppServerApi;
-	const threads = { onDidOfferInteraction: offers.event, onDidUpdateThread: updates.event, onDidUpdateThreadTranscript: Event.None, subscribe: () => { subscriptions++; return pending; }, unsubscribe: async () => { unsubscriptions++; } } as unknown as IAgentThreadService;
+	const threads = { onDidOfferInteraction: offers.event, onDidUpdateThread: updates.event, onDidUpdateThreadTranscript: Event.None, onDidUpdateGoal: Event.None, subscribe: () => { subscriptions++; return pending; }, unsubscribe: async () => { unsubscriptions++; } } as unknown as IAgentThreadService;
 	const sessions = { onDidChangeSession: Event.None } as IAgentSessionService;
-	const service = lifetime.add(new ChatService({} as IAgentModelsService, sessions, threads, {} as IAgentTurnService, {} as ITurnChangesApi, api, { subscribe: () => ({ dispose() { } }) } as IServerEventApi, lifetime.add(new TestConfigurationService())));
+	const service = lifetime.add(new ChatService({} as IAgentModelsService, sessions, threads, { onDidChangeQueue: Event.None } as IAgentTurnService, { onDidChange: Event.None } as ITurnChangesApi, api, lifetime.add(new TestConfigurationService())));
 	return { lifetime, service, offers, updates, setState(value: AppServerConnectionState, next = generation) { state = value; generation = next; states.fire(value); }, setPending(value: Promise<ThreadSubscription>) { pending = value; }, count: () => ({ subscriptions, unsubscriptions }) };
 }
 function snapshot(requestId?: string): ThreadSubscription {

@@ -4,20 +4,20 @@ import type { ChatContextUsage, IChatRequestSubmittedEvent, RewriteChatRequestOp
 import { getAcceptedChatRequest } from '../common/chatService.js';
 import type { AgentInteractionOffer, AgentInput, ThreadRead, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 import { localize } from '../../../../nls.js';
-import type { TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from '../../../../../../.build/protocol/typescript/index.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { canceled, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../base/common/uuid.js';
-import { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../../platform/models/common/agentModels.js';
 import { ITurnChangesApi } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { QueuedMessage, QueueMessageTarget, ModelRef, SessionId, ThreadId } from '../common/chatService.js';
-import type { AdvisorConfig, ChatSubmissionOptions, ChatInteractionOfferChange, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from '../common/chatService.js';
+import type { AdvisorConfig, ChatSubmissionOptions, ChatInteractionOfferChange, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope } from '../common/chatService.js';
+import type { TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import { parseChatToolSelection, type ResolvedChatContext } from '../common/chatContextService.js';
 import type { ChatCheckpoint, RestoreChatCheckpointOptions } from '../common/chatService.js';
-import type { ThreadChangesSummary, TurnChangeFileContents } from '../common/chatService.js';
+import type { ThreadChangesSummary, TurnChangeFileContents } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 
 interface SharedThreadSubscription {
 	readonly generation: number;
@@ -60,7 +60,6 @@ export class ChatService extends Disposable implements IChatService {
 		@IAgentTurnService private readonly turnApi: IAgentTurnService,
 		@ITurnChangesApi private readonly turnChangesApi: ITurnChangesApi,
 		@IAppServerApi private readonly appServerApi: IAppServerApi,
-		@IServerEventApi eventApi: IServerEventApi,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
@@ -71,17 +70,9 @@ export class ChatService extends Disposable implements IChatService {
 			this._onDidUpdateThread.fire(event);
 		}));
 		this._register(threadApi.onDidUpdateThreadTranscript(event => this._onDidUpdateThreadTranscript.fire(event)));
-		const events = eventApi.subscribe((event) => {
-			if (event.method === 'queue/changed') this._onDidChangeQueue.fire();
-			if (event.method === 'thread/goal/updated') this._onDidUpdateGoal.fire({ threadId: event.params.threadId, goal: { ...event.params.goal } });
-			if (event.method === 'thread/goal/cleared') this._onDidUpdateGoal.fire({ threadId: event.params.threadId });
-			if (event.method === 'turnChanges/changed') this._onDidUpdateTurnChanges.fire({
-				sessionId: event.params.sessionId,
-				threadId: event.params.threadId,
-				changeSets: event.params.changeSets.map(toTurnChangeSummary),
-			});
-		});
-		this._register(toDisposable(() => events.dispose()));
+		this._register(turnApi.onDidChangeQueue(() => this._onDidChangeQueue.fire()));
+		this._register(threadApi.onDidUpdateGoal(event => this._onDidUpdateGoal.fire(event)));
+		this._register(turnChangesApi.onDidChange(event => this._onDidUpdateTurnChanges.fire(event)));
 		const connection = appServerApi.onConnectionState((state) => {
 			this.connectionEpoch++;
 			if (state !== 'ready') {
@@ -461,64 +452,56 @@ export class ChatService extends Disposable implements IChatService {
 
 	async listTurnChanges(sessionId: SessionId, threadId: ThreadId): Promise<readonly TurnChangeSetSummary[]> {
 		const result = await this.turnChangesApi.list({ sessionId, threadId });
-		return result.changeSets.map(toTurnChangeSummary);
+		return result.changeSets;
 	}
 
 	async readThreadChanges(sessionId: SessionId, threadId: ThreadId): Promise<ThreadChangesSummary> {
-		const result = await this.turnChangesApi.summary({ sessionId, threadId });
-		return {
-			sequence: result.sequence, revision: result.revision, statistics: { ...result.statistics },
-			...(result.worktreePath === undefined ? {} : { worktreePath: result.worktreePath }),
-			repositories: result.repositories.map(repository => ({ repositoryId: repository.repositoryId, files: repository.files.map(file => ({ ...file })) })),
-			warnings: [...result.warnings],
-		};
+		return this.turnChangesApi.summary({ sessionId, threadId });
 	}
 
 	async readThreadChangeFile(sessionId: SessionId, threadId: ThreadId, revision: string, repositoryId: string, path: string): Promise<TurnChangeFileContents> {
-		return { ...await this.turnChangesApi.summaryFile({ sessionId, threadId, revision, repositoryId, path }) };
+		return this.turnChangesApi.summaryFile({ sessionId, threadId, revision, repositoryId, path });
 	}
 
 	async readTurnChange(sessionId: SessionId, threadId: ThreadId, changeSetId: string): Promise<TurnChangeDetails> {
-		return toTurnChangeDetails(await this.turnChangesApi.read({ sessionId, threadId, changeSetId }));
+		return this.turnChangesApi.read({ sessionId, threadId, changeSetId });
 	}
 
 	async readTurnChangeFile(sessionId: SessionId, threadId: ThreadId, changeSetId: string, path: string) {
-		return { ...await this.turnChangesApi.readFile({ sessionId, threadId, changeSetId, path }) };
+		return this.turnChangesApi.readFile({ sessionId, threadId, changeSetId, path });
 	}
 
 	async generateTurnChangeMessage(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]> {
 		this.assertAIEnabled();
 		const result = await this.turnChangesApi.generateMessage({ commandId: commandId('turn-changes-message'), sessionId, threadId, changeSetId, expectedRevision });
-		return result.changeSets.map(toTurnChangeSummary);
+		return result.changeSets;
 	}
 
 	async updateTurnChangeDraft(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number, message: string): Promise<readonly TurnChangeSetSummary[]> {
 		const result = await this.turnChangesApi.updateDraft({ commandId: commandId('turn-changes-draft'), sessionId, threadId, changeSetId, expectedRevision, message });
-		return result.changeSets.map(toTurnChangeSummary);
+		return result.changeSets;
 	}
 
 	async prepareTurnCommit(sessionId: SessionId, threadId: ThreadId, selections: readonly TurnCommitSelection[], message: string): Promise<TurnCommitPreview> {
-		const result = await this.turnChangesApi.prepareCommit({ commandId: commandId('turn-changes-prepare'), sessionId, threadId, selections: selections.map(selection => ({ ...selection, paths: [...selection.paths] })), message });
-		return { ...result, files: result.files.map(file => ({ ...file })), warnings: [...result.warnings] };
+		return this.turnChangesApi.prepareCommit({ commandId: commandId('turn-changes-prepare'), sessionId, threadId, selections, message });
 	}
 
 	async readTurnCommit(sessionId: SessionId, threadId: ThreadId, commitId: string): Promise<TurnCommitPreview> {
-		const result = await this.turnChangesApi.readCommit({ sessionId, threadId, commitId });
-		return { ...result, files: result.files.map(file => ({ ...file })), warnings: [...result.warnings] };
+		return this.turnChangesApi.readCommit({ sessionId, threadId, commitId });
 	}
 
 	async readTurnCommitFile(sessionId: SessionId, threadId: ThreadId, commitId: string, path: string) {
-		return { ...await this.turnChangesApi.readCommitFile({ sessionId, threadId, commitId, path }) };
+		return this.turnChangesApi.readCommitFile({ sessionId, threadId, commitId, path });
 	}
 
 	async commitTurnChange(sessionId: SessionId, threadId: ThreadId, commitId: string): Promise<readonly TurnChangeSetSummary[]> {
 		const result = await this.turnChangesApi.commit({ commandId: commandId('turn-changes-commit'), sessionId, threadId, commitId });
-		return result.changeSets.map(toTurnChangeSummary);
+		return result.changeSets;
 	}
 
 	async discardThreadChanges(sessionId: SessionId, threadId: ThreadId, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]> {
 		const result = await this.turnChangesApi.discardThread({ commandId: commandId('turn-changes-discard'), sessionId, threadId, expectedRevision, confirmed: true });
-		return result.changeSets.map(toTurnChangeSummary);
+		return result.changeSets;
 	}
 
 
@@ -564,36 +547,6 @@ function messageInput(text: string, contexts: readonly ResolvedChatContext[] = [
 	const after = text.slice(offset);
 	if (after.trim()) input.push({ type: 'text', text: after });
 	return [...linked, ...input];
-}
-
-function toTurnChangeSummary(summary: TurnChangeSetSummaryDto): TurnChangeSetSummary {
-	return {
-		...summary,
-		statistics: { ...summary.statistics },
-		dependencies: [...summary.dependencies],
-		externalDependencyPaths: [...summary.externalDependencyPaths],
-		warnings: [...summary.warnings],
-		conflictPaths: [...summary.conflictPaths],
-		committedPaths: [...summary.committedPaths],
-	};
-}
-
-function toTurnChangeDetails(details: TurnChangesReadResultDto): TurnChangeDetails {
-	return {
-		summary: toTurnChangeSummary(details.summary),
-		files: details.files.map((file) => ({
-			path: file.path,
-			previousPath: file.previousPath,
-			kind: file.kind,
-			beforeMode: file.beforeMode,
-			afterMode: file.afterMode,
-			binary: file.binary,
-			additions: file.additions,
-			deletions: file.deletions,
-		})),
-		generatedMessage: details.generatedMessage,
-		draftMessage: details.draftMessage,
-	};
 }
 
 function commandId(kind: string): string { return `desktop-${kind}-${createUuid()}`; }

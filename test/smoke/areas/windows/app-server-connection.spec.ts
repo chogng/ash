@@ -280,7 +280,13 @@ test('Agents shows connection status without moving content and automatically re
 	await expect(page.locator('[data-part="banner"]')).toHaveCount(0);
 	await expect(contentAction).toBeFocused();
 	expect(await projects.boundingBox()).toEqual(contentBounds);
-	await page.screenshot({ path: testInfo.outputPath('agent-host-recovery-status.png') });
+	const nativeWindow = await application.browserWindow(page);
+	try {
+		const screenshot = await nativeWindow.evaluate(async window => (await window.webContents.capturePage()).toPNG().toString('base64'));
+		await writeFile(testInfo.outputPath('agent-host-recovery-status.png'), Buffer.from(screenshot, 'base64'));
+	} finally {
+		await nativeWindow.dispose();
+	}
 	await application.evaluate(() =>
 		(globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.releaseValidation(),
 	);

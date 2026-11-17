@@ -6,7 +6,7 @@ import { createUuid } from '../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../nls.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
-import type { ThreadChangesSummary } from '../../../../../services/chat/common/chatService.js';
+import type { ThreadChangesSummary } from '../../../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { ChatChangedFileTarget } from '../../../common/chat.js';
 import { ChatWorkspaceEditContentPart } from '../chatContentParts/chatWorkspaceEditContentPart.js';
 import { chatInputStackSlotClass, ChatInputStackSlot, setChatInputStackSlot } from './chatInputStack.js';

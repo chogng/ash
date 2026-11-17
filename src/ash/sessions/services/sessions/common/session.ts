@@ -2,7 +2,7 @@ import type { SessionKind } from '../../../../platform/agentHost/common/agent.js
 import type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
 export type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
 import type { ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
-import type { TurnChangeFile, TurnChangeSetSummary } from '../../../../workbench/services/chat/common/chatService.js';
+import type { TurnChangeFile, TurnChangeSetSummary } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
