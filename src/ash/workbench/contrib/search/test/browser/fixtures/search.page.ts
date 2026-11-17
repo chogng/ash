@@ -1,3 +1,4 @@
+import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { createTestPathService, testAppServerApi } from '../../../../../test/common/workbenchHostTestServices.js';
 import { StatusbarService } from '../../../../../browser/parts/statusbar/statusbarPart.js';
 import { ActivityService } from '../../../../../services/activity/browser/activityService.js';
@@ -89,6 +90,13 @@ import { UserDataProfileService } from '../../../../../services/userDataProfile/
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { ProgressService } from '../../../../../services/progress/browser/progressService.js';
 import { TreeView, TreeViewPane } from '../../../../../browser/parts/views/treeView.js';
+import { IResourceIconRenderer } from '../../../../../browser/labels.js';
+import { IMarkdownRendererService } from '../../../../../../platform/markdown/browser/markdownRenderer.js';
+import { renderMarkdown } from '../../../../../../base/browser/markdownRenderer.js';
+import { noFileIconTheme } from '../../../../../../platform/theme/common/themeService.js';
+import { ITreeViewsDnDService } from '../../../../../../editor/common/services/treeViewsDndService.js';
+import { TreeViewsDnDService } from '../../../../../../editor/common/services/treeViewsDnd.js';
+import type { VSDataTransfer } from '../../../../../../base/common/dataTransfer.js';
 import { TreeItemCollapsibleState } from '../../../../../common/views.js';
 import { IStatusbarService } from '../../../../../services/statusbar/browser/statusbar.js';
 
@@ -107,6 +115,10 @@ let cancelled = 0;
 const clipboardWrites: string[] = [];
 let clipboardFailure = false;
 const instantiation = store.add(new InstantiationService());
+instantiation.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
+instantiation.registerInstance(IMarkdownRendererService, { _serviceBrand: undefined, render: renderMarkdown, setDefaultCodeBlockRenderer() { } });
+instantiation.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
+instantiation.registerInstance(ITreeViewsDnDService, new TreeViewsDnDService<VSDataTransfer>());
 const commands = store.add(new CommandService(instantiation));
 instantiation.registerInstance(ICommandService, commands);
 const configuration = store.add(new WorkbenchConfigurationService());
@@ -314,6 +326,7 @@ window.ashSearchIntegration = {
 	closeResultMenu: () => resultMenus.hideContextMenu(),
 	replaceResultMenu: () => resultMenus.showContextMenu({ getAnchor: () => host, getActions: () => [{ id: 'fixture.otherMenu', label: 'Other menu action', tooltip: '', enabled: true, run() { } }] }),
 	copyAll: () => commands.executeCommand<void>(SearchCommandIds.CopyAllCommandId),
+	refresh: () => commands.executeCommand<void>(SearchCommandIds.RefreshSearchResultsActionId),
 	clipboardWrites: () => [...clipboardWrites],
 	setClipboardFailure: value => { clipboardFailure = value; },
 	dismiss: () => commands.executeCommand<void>(SearchCommandIds.RemoveActionId),
@@ -368,6 +381,7 @@ declare global {
 			closeResultMenu(): void;
 			replaceResultMenu(): void;
 			copyAll(): Promise<void>;
+			refresh(): Promise<void>;
 			clipboardWrites(): readonly string[];
 			setClipboardFailure(value: boolean): void;
 			dismiss(): Promise<void>;

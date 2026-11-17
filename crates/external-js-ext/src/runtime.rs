@@ -1065,7 +1065,7 @@ fn dispatch_client(
                 | external_ext_protocol::services::CoreServiceRequest::SecretStore { .. }
                 | external_ext_protocol::services::CoreServiceRequest::SecretDelete { .. }
         }
-    ) && !matches!(&operation, ExtensionClientOperation::EditorOperation { payload } if matches!(payload.get("method").and_then(Value::as_str), Some("output" | "treeViewChanged")))
+    ) && !matches!(&operation, ExtensionClientOperation::EditorOperation { payload } if matches!(payload.get("method").and_then(Value::as_str), Some("output" | "treeViewChanged" | "treeViewOperation")))
     {
         return Err("operation is outside JavaScript host contract v1".into());
     }

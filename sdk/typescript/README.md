@@ -207,12 +207,32 @@ Extensions admitted with the `treeView` capability can call
 contributes a view to the current window; omitting `containerId` selects its default
 primary sidebar container. The provider owns elements and implements `getChildren`
 and `getTreeItem`. Stable `TreeItem.id` values retain identity across refreshes;
-otherwise identity follows the element object. Labels, descriptions, string tooltips,
-collapse state and commands are supported. Set `checkboxState` with a
+otherwise identity follows the element object. Labels support highlight ranges. Nodes
+support descriptions, string or Markdown tooltips, resource URIs, theme icons or light/dark
+icon URIs, accessibility labels, collapse state and commands. `contextValue` supplies
+the `viewItem` context for `view/item/context` menus; the `inline` group renders beside
+the node. `view/title` menus use the `view` context. Set `checkboxState` with a
 `setCheckboxState` callback to enable checkboxes, or `editable: true` with `rename`
 to enable F2 editing. Enter commits the name and Escape cancels it.
 
-Fire `onDidChangeTreeData` to refresh the tree. Refreshes wait for active inline edits
+Item menu commands receive `{ viewId, handle }`; assign stable `TreeItem.id` values
+to map handles back to provider elements. Title menu commands receive `{ viewId }`.
+
+Registration returns a disposable `TreeView<T>`. Its async `configure` method updates
+title, description, message, badge, multiple selection and the collapse-all action.
+`reveal` opens and locates a node; implement `getParent` to reveal unloaded descendants.
+`expand`, `setSelection` and `collapseAll` control loaded nodes. Provider callbacks
+report selection/focus, expansion, collapse and visibility. Moving a view retains
+expansion, selection, logical focus and scroll position.
+
+Configure `dragMimeTypes` and `dropMimeTypes` and implement `handleDrag`/`handleDrop`
+to transfer MIME-to-text maps between trees or receive native text drops. Transfers
+are bounded to 32 MIME types and 1 MiB of serialized text; binary file transfers are
+not part of this contract. Providers can expose equivalent move commands through
+item menus for keyboard users.
+
+Fire `onDidChangeTreeData(element)` to refresh that node through its parent branch;
+omit the element for a full refresh. Refreshes wait for active inline edits
 to finish, preserving typed text and selection. The renderer uses the existing view,
 selection, theme and accessibility owners; it keeps only a projection of provider data.
 Disposing the registration or retiring the extension removes the view and cancels

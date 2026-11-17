@@ -263,7 +263,9 @@ export class List<T> extends Disposable {
 			return;
 		}
 		this._selectionIndexes = normalized;
-		this.selectionAnchor ??= normalized[0];
+		// A provider-driven replacement starts a new range; Shift input keeps its anchor.
+		if (!browserEvent) { this.selectionAnchor = normalized[0]; }
+		else { this.selectionAnchor ??= normalized[0]; }
 		this.syncRows();
 		this.emitSelection(browserEvent);
 	}

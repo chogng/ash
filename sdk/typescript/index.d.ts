@@ -287,7 +287,7 @@ export namespace env { const language: string; }
 export namespace l10n { const bundle: Readonly<Record<string, string>> | undefined; const uri: Uri | undefined; function t(message: string, ...args: (string | number | boolean)[]): string; function t(options: { message: string; args?: Record<string, string | number | boolean>; comment?: string | string[] }): string; }
 export enum TreeItemCollapsibleState { None = 0, Collapsed = 1, Expanded = 2 }
 export enum TreeItemCheckboxState { Unchecked = 0, Checked = 1 }
-export class TreeItem { id?: string; editable?: boolean; constructor(label: string | { label: string; highlights?: [number, number][] } | Uri, collapsibleState?: TreeItemCollapsibleState); label?: string | { label: string; highlights?: [number, number][] }; resourceUri?: Uri; collapsibleState: TreeItemCollapsibleState; description?: string | boolean; tooltip?: string | MarkdownString; iconPath?: Uri | { light: Uri; dark: Uri } | { id: string }; contextValue?: string; command?: Command; checkboxState?: TreeItemCheckboxState; }
+export class TreeItem { id?: string; editable?: boolean; constructor(label: string | { label: string; highlights?: [number, number][] } | Uri, collapsibleState?: TreeItemCollapsibleState); label?: string | { label: string; highlights?: [number, number][] }; resourceUri?: Uri; collapsibleState: TreeItemCollapsibleState; description?: string | boolean; tooltip?: string | MarkdownString; iconPath?: Uri | { light: Uri; dark: Uri } | { id: string }; contextValue?: string; accessibilityInformation?: { readonly label: string }; command?: Command; checkboxState?: TreeItemCheckboxState; }
 export interface Terminal { readonly name: string; readonly processId: Promise<number | undefined>; }
 export interface TerminalDimensions { columns: number; rows: number; }
 export interface Pseudoterminal { readonly onDidWrite: Event<string>; readonly onDidClose?: Event<void | number>; readonly onDidChangeName?: Event<string>; readonly onDidOverrideDimensions?: Event<TerminalDimensions | undefined>; open(dimensions?: TerminalDimensions): void; close(): void; handleInput?(text: string): void; setDimensions?(dimensions: TerminalDimensions): void; }
@@ -387,9 +387,34 @@ export interface TreeDataProvider<T> {
 	onDidChangeTreeData?: Event<T | undefined | void>;
 	getChildren(element: T | undefined, token: CancellationToken): ProviderResult<readonly T[]>;
 	getTreeItem(element: T, token: CancellationToken): ProviderResult<TreeItem>;
+	getParent?(element: T, token: CancellationToken): ProviderResult<T | undefined>;
 	setCheckboxState?(element: T, state: TreeItemCheckboxState, token: CancellationToken): ProviderResult<void>;
 	rename?(element: T, value: string, token: CancellationToken): ProviderResult<void>;
 	onDidChangeSelection?(element: T): ProviderResult<void>;
+	onDidChangeSelectionAndFocus?(event: { readonly selection: readonly T[]; readonly focus?: T }): ProviderResult<void>;
+	onDidExpandElement?(element: T): ProviderResult<void>;
+	onDidCollapseElement?(element: T): ProviderResult<void>;
+	onDidChangeVisibility?(visible: boolean): ProviderResult<void>;
+	/** Drag payloads are bounded MIME-to-text maps. */
+	handleDrag?(elements: readonly T[], token: CancellationToken): ProviderResult<Readonly<Record<string, string>>>;
+	handleDrop?(data: Readonly<Record<string, string>>, target: T | undefined, token: CancellationToken): ProviderResult<void>;
 }
 export interface TreeViewOptions { readonly id: string; readonly title: string; readonly containerId?: string; }
-export namespace views { function registerTreeDataProvider<T>(provider: TreeDataProvider<T>, options: TreeViewOptions): Disposable; }
+export interface TreeViewPresentationOptions {
+	readonly title?: string;
+	readonly description?: string;
+	readonly message?: string;
+	readonly badge?: { readonly value: number; readonly tooltip: string } | null;
+	readonly canSelectMany?: boolean;
+	readonly showCollapseAllAction?: boolean;
+	readonly dragMimeTypes?: readonly string[];
+	readonly dropMimeTypes?: readonly string[];
+}
+export interface TreeView<T> extends Disposable {
+	configure(options: TreeViewPresentationOptions): Promise<void>;
+	reveal(element: T, options?: { readonly select?: boolean; readonly focus?: boolean; readonly expand?: boolean }): Promise<void>;
+	expand(elements: readonly T[]): Promise<void>;
+	setSelection(elements: readonly T[]): Promise<void>;
+	collapseAll(): Promise<void>;
+}
+export namespace views { function registerTreeDataProvider<T>(provider: TreeDataProvider<T>, options: TreeViewOptions): TreeView<T>; }

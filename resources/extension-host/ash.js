@@ -1537,6 +1537,7 @@ export function createApi(configuration, initialization) {
 		if (!options || typeof options.id !== 'string' || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(options.id) || typeof options.title !== 'string' || !options.title || options.title.length > 512 || typeof provider?.getChildren !== 'function' || typeof provider?.getTreeItem !== 'function') throw new TypeError('Invalid tree provider or view options');
 		if (options.containerId !== undefined && (typeof options.containerId !== 'string' || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(options.containerId))) throw new TypeError('Invalid tree container ID');
 		const registrationId = `ash.tree.${++providerSequence}`;
+		const reads = new CancellationTokenSource();
 		const nodes = new Map();
 		const identities = new Map();
 		const children = new Map();
@@ -1574,10 +1575,31 @@ export function createApi(configuration, initialization) {
 					const collapsibleState = item.collapsibleState ?? 0;
 					if (![0, 1, 2].includes(collapsibleState)) throw new TypeError('Invalid tree collapse state');
 					const description = item.description === true ? item.resourceUri?.path : item.description === false ? undefined : item.description;
-					const tooltip = typeof item.tooltip === 'string' ? item.tooltip : undefined;
-					for (const text of [description, tooltip]) {
+					const tooltip = item.tooltip === undefined || typeof item.tooltip === 'string' ? item.tooltip : { value: item.tooltip.value, supportThemeIcons: item.tooltip.supportThemeIcons === true };
+					for (const text of [description, typeof tooltip === 'object' ? tooltip.value : tooltip, item.contextValue, item.accessibilityInformation?.label]) {
 						if (text !== undefined && (typeof text !== 'string' || text.length > 4096)) throw new TypeError('Invalid tree description or tooltip');
 					}
+					if (tooltip && typeof tooltip !== 'string' && typeof tooltip.value !== 'string') throw new TypeError('Invalid tree Markdown tooltip');
+					const highlights = typeof item.label === 'object' ? item.label.highlights : undefined;
+					if (highlights !== undefined && (!Array.isArray(highlights) || highlights.length > 4096 || highlights.some(range => !Array.isArray(range) || range.length !== 2 || !Number.isInteger(range[0]) || !Number.isInteger(range[1]) || range[0] < 0 || range[1] <= range[0] || range[1] > label.length))) throw new TypeError('Invalid tree label highlights');
+					const uri = value => {
+						if (value === undefined) return undefined;
+						if (!value || typeof value !== 'object' || typeof value.scheme !== 'string' || !/^[A-Za-z][A-Za-z0-9+.-]*$/.test(value.scheme)) throw new TypeError('Invalid tree URI');
+						const result = { scheme: value.scheme };
+						for (const key of ['authority', 'path', 'query', 'fragment']) {
+							if (value[key] !== undefined) {
+								if (typeof value[key] !== 'string') throw new TypeError('Invalid tree URI component');
+								result[key] = value[key];
+							}
+						}
+						if (JSON.stringify(result).length > 8192) throw new TypeError('Tree URI is too long');
+						return result;
+					};
+					const resourceUri = uri(item.resourceUri);
+					const themeIcon = item.iconPath?.id === undefined ? undefined : { id: item.iconPath.id };
+					if (themeIcon && (typeof themeIcon.id !== 'string' || !/^[A-Za-z0-9-]{1,128}$/.test(themeIcon.id))) throw new TypeError('Invalid tree icon');
+					const icon = themeIcon ? undefined : uri(item.iconPath?.light ?? item.iconPath);
+					const iconDark = themeIcon ? undefined : uri(item.iconPath?.dark);
 					if (item.checkboxState !== undefined && (![0, 1].includes(item.checkboxState) || typeof provider.setCheckboxState !== 'function')) throw new TypeError('Tree checkboxes require a state and callback');
 					let command;
 					if (item.command) {
@@ -1589,6 +1611,10 @@ export function createApi(configuration, initialization) {
 					handles.add(handle);
 					result.push({
 						handle, label, collapsibleState,
+						...(highlights === undefined ? {} : { highlights }), ...(resourceUri ? { resourceUri } : {}),
+						...(icon ? { icon } : {}), ...(iconDark ? { iconDark } : {}), ...(themeIcon ? { themeIcon } : {}),
+						...(item.contextValue === undefined ? {} : { contextValue: item.contextValue }),
+						...(item.accessibilityInformation === undefined ? {} : { accessibilityInformation: { label: item.accessibilityInformation.label } }),
 						...(description === undefined ? {} : { description }), ...(tooltip === undefined ? {} : { tooltip }),
 						...(item.checkboxState === undefined ? {} : { checkboxState: item.checkboxState }),
 						editable: item.editable === true && typeof provider.rename === 'function', ...(command ? { command } : {})
@@ -1612,20 +1638,100 @@ export function createApi(configuration, initialization) {
 				children.set(payload.handle, handles);
 				return result;
 			}
+			if (payload.method === 'visibility') { await provider.onDidChangeVisibility?.(payload.visible === true); return null; }
+			const transferData = value => {
+				if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length > 32 || JSON.stringify(value).length > 1048576
+					|| Object.entries(value).some(([mime, text]) => !/^[a-z0-9.+-]+\/[a-z0-9.+-]{1,128}$/.test(mime) || typeof text !== 'string')) throw new TypeError('Invalid tree data transfer');
+				return value;
+			};
+			if (payload.method === 'drag') {
+				if (!Array.isArray(payload.handles) || payload.handles.length > 10000 || payload.handles.some(handle => !nodes.has(handle))) throw new TypeError('Invalid tree drag sources');
+				return transferData(await provider.handleDrag?.(payload.handles.map(handle => nodes.get(handle).element), token) ?? {});
+			}
+			if (payload.method === 'drop') { await provider.handleDrop?.(transferData(payload.data), node?.element, token); return null; }
+			if (payload.method === 'selection') {
+				const handles = payload.handles ?? (payload.handle === undefined ? [] : [payload.handle]);
+				if (!Array.isArray(handles) || handles.some(handle => !nodes.has(handle))) throw new TypeError('Invalid tree selection');
+				await provider.onDidChangeSelectionAndFocus?.({ selection: handles.map(handle => nodes.get(handle).element), focus: node?.element });
+				if (node) await provider.onDidChangeSelection?.(node.element);
+				return null;
+			}
 			if (!node) throw new Error('Tree operation requires an item');
+			if (payload.method === 'expand') { await provider.onDidExpandElement?.(node.element); return null; }
+			if (payload.method === 'collapse') { await provider.onDidCollapseElement?.(node.element); return null; }
 			if (payload.method === 'checkbox' && typeof provider.setCheckboxState === 'function' && typeof payload.isChecked === 'boolean') { await provider.setCheckboxState(node.element, payload.isChecked ? 1 : 0, token); return null; }
 			if (payload.method === 'rename' && typeof provider.rename === 'function' && typeof payload.value === 'string' && payload.value.length <= 32768) { await provider.rename(node.element, payload.value, token); return null; }
-			if (payload.method === 'selection') { await provider.onDidChangeSelection?.(node.element); return null; }
 			throw new TypeError('Unsupported tree operation');
 		}));
 		let queued = false;
-		const changed = provider.onDidChangeTreeData?.(() => {
-			if (disposed || queued) return;
+		let refreshAll = false;
+		const refreshHandles = new Set();
+		const changed = provider.onDidChangeTreeData?.(element => {
+			if (disposed) return;
+			const handle = identities.get(element);
+			if (handle === undefined) refreshAll = true;
+			else refreshHandles.add(handle);
+			if (queued) return;
 			queued = true;
-			const update = Promise.resolve().then(() => { queued = false; if (!disposed) return request({ operation: 'editorOperation', payload: { method: 'treeViewChanged', registrationId } }, 'value'); });
+			const update = Promise.resolve().then(() => {
+				queued = false;
+				const handles = refreshAll ? undefined : [...refreshHandles];
+				refreshAll = false;
+				refreshHandles.clear();
+				if (!disposed) return request({ operation: 'editorOperation', payload: { method: 'treeViewChanged', registrationId, ...(handles ? { handles } : {}) } }, 'value');
+			});
 			update.catch(error => { if (!disposed) console.error('Tree refresh failed', error); });
 		});
-		const lifetime = new Disposable(() => { disposed = true; changed?.dispose(); registration.dispose(); nodes.clear(); identities.clear(); children.clear(); });
+		const lifetime = new Disposable(() => { disposed = true; reads.cancel(); reads.dispose(); changed?.dispose(); registration.dispose(); nodes.clear(); identities.clear(); children.clear(); });
+		const control = async (action, handles = [], options) => {
+			if (disposed) throw new Error('Tree provider was disposed');
+			await request({ operation: 'editorOperation', payload: { method: 'treeViewOperation', registrationId, action, handles, ...(options === undefined ? {} : { options }) } }, 'value');
+		};
+		const handleFor = element => {
+			const handle = identities.get(element);
+			if (handle === undefined || !nodes.has(handle)) throw new Error('Tree item is not loaded');
+			return handle;
+		};
+		lifetime.configure = async options => {
+			if (disposed) throw new Error('Tree provider was disposed');
+			if (options?.dragMimeTypes?.length && typeof provider.handleDrag !== 'function') throw new TypeError('Tree dragging requires handleDrag');
+			if (options?.dropMimeTypes?.length && typeof provider.handleDrop !== 'function') throw new TypeError('Tree dropping requires handleDrop');
+			await request({ operation: 'editorOperation', payload: { method: 'treeViewOperation', registrationId, action: 'configure', options } }, 'value');
+		};
+		lifetime.reveal = async (element, options) => {
+			const path = [];
+			const seen = new Set();
+			const prepared = new Map();
+			try {
+				for (let current = element; current !== undefined && current !== null;) {
+					if (disposed) throw new Error('Tree provider was disposed');
+					if (seen.has(current) || path.length >= 1000) throw new Error('Invalid tree parent chain');
+					seen.add(current);
+					let handle = identities.get(current);
+					if (handle === undefined) {
+						if (typeof provider.getParent !== 'function') throw new Error('Revealing unloaded items requires getParent');
+						const item = await provider.getTreeItem(current, reads.token);
+						if (disposed) throw new Error('Tree provider was disposed');
+						if (!item || typeof item !== 'object' || item.id !== undefined && (typeof item.id !== 'string' || !item.id || item.id.length > 1024)) throw new TypeError('Invalid tree item ID');
+						handle = item.id ?? `node.${++sequence}`;
+						identities.set(current, handle);
+						prepared.set(current, handle);
+					}
+					path.unshift(handle);
+					if (typeof provider.getParent === 'function') current = await provider.getParent(current, reads.token);
+					else {
+						const parent = nodes.get(handle)?.parent;
+						current = parent === undefined ? undefined : nodes.get(parent)?.element;
+					}
+				}
+				await control('reveal', path, options);
+			} finally {
+				for (const [element, handle] of prepared) { if (!nodes.has(handle)) identities.delete(element); }
+			}
+		};
+		lifetime.expand = elements => control('expand', elements.map(handleFor));
+		lifetime.setSelection = elements => control('select', elements.map(handleFor));
+		lifetime.collapseAll = () => control('collapseAll');
 		subscriptions.push(lifetime);
 		return lifetime;
 	}

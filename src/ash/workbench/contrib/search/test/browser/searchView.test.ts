@@ -2123,8 +2123,12 @@ suite('search browser component', () => {
 		await page.keyboard.press('Escape');
 		await expect(tree).toBeFocused();
 		await tree.press('Shift+F10');
-		await page.getByRole('button', { name: 'Refresh search', exact: true }).click();
+		await expect(page.getByRole('menuitem', { name: 'Copy', exact: true })).toBeVisible();
+		const queriesBeforeRefresh = await page.evaluate(() => window.ashSearchIntegration.queries.length);
+		// The menu consumes outside clicks. Run the toolbar's command while it is open.
+		await page.evaluate(() => window.ashSearchIntegration.refresh());
 		await expect(page.getByRole('menu')).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.queries.length)).toBe(queriesBeforeRefresh + 1);
 		await expect(page.getByRole('status')).toHaveText('1 results');
 	});
 

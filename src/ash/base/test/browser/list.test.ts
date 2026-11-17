@@ -239,6 +239,22 @@ test('List range selection retains its anchor through pointer, keyboard and row 
 	} finally { dom.window.close(); }
 });
 
+test('List programmatic selection starts a new keyboard range at the selected item', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using list = new List<string>(dom.window.document.body, {
+			getId: item => item, multipleSelectionSupport: true, keyboardNavigation: true,
+			renderItem: item => h(dom.window.document, 'span', undefined, item),
+		});
+		list.items = ['First', 'Second', 'Third'];
+		list.setSelection([2]);
+		list.setSelection([0]);
+		list.setActiveIndex(0);
+		list.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', shiftKey: true, bubbles: true }));
+		assert.deepEqual(list.selection, ['First', 'Second']);
+	} finally { dom.window.close(); }
+});
+
 test('List keeps single selection unless multiple selection is enabled', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {

@@ -477,7 +477,7 @@ fn ash_activation_context_uses_captured_package_location_and_exports() {
         provided["tasks"][0]["execution"],
         json!({
             "type": "process",
-            "program": std::path::Path::new(&expected_root).join("bin/compiler").to_str().unwrap(),
+            "program": std::path::Path::new(&expected_root).join("bin").join("compiler").to_str().unwrap(),
             "args": ["literal"]
         })
     );
@@ -2246,7 +2246,7 @@ fn ash_debug_configuration_callbacks_preserve_workspace_metadata_and_resolution_
         const v = require('@ash/sdk');
         exports.activate = context => context.subscriptions.push(v.debug.registerDebugConfigurationProvider('example', {
             provideDebugConfigurations(folder, token) {
-                if (folder.name !== 'Server' || folder.index !== 1 || folder.uri.fsPath !== '/workspace/server' || token.isCancellationRequested) throw Error('Invalid workspace metadata');
+                if (folder.name !== 'Server' || folder.index !== 1 || !(folder.uri instanceof v.Uri) || folder.uri.path !== '/workspace/server' || token.isCancellationRequested) throw Error('Invalid workspace metadata');
                 return [{name: 'Provided', type: 'example', request: 'launch', program: '${workspaceFolder}/app'}];
             },
             resolveDebugConfiguration(folder, configuration) {
@@ -4217,7 +4217,10 @@ fn ash_tree_provider_reads_updates_refreshes_and_retires_handles() {
             registration = ash.views.registerTreeDataProvider({
                 onDidChangeTreeData: changes.event,
                 getChildren: element => element === root ? [child] : element ? [] : [root],
-                getTreeItem: element => ({ id: element === root ? 'root' : 'child', label: element.label,
+                getParent: element => element === child ? root : undefined,
+                getTreeItem: element => ({ id: element === root ? 'root' : 'child', label: { label: element.label, highlights: [[0, 2]] },
+                    resourceUri: ash.Uri.parse('file:///fixture/node.ts'), iconPath: { id: 'file' }, contextValue: 'editable',
+                    tooltip: new ash.MarkdownString('**Provider**'), accessibilityInformation: { label: 'Provider node' },
                     collapsibleState: element === root ? 1 : 0, checkboxState: element.checked, editable: true }),
                 setCheckboxState(element, state) { element.checked = state; changes.fire(element); },
                 rename(element, value) { element.label = value; changes.fire(element); },
@@ -4225,6 +4228,8 @@ fn ash_tree_provider_reads_updates_refreshes_and_retires_handles() {
             }, { id: 'example.tree', title: 'Example Tree' });
             context.subscriptions.push(registration, changes, ash.commands.register('example.probe', action => {
                 if (action === 'remove') { registration.dispose(); }
+                if (action === 'configure') return registration.configure({ title: 'Changed', canSelectMany: true });
+                if (action === 'reveal') return registration.reveal(child, { focus: true });
                 return selected ?? null;
             }));
         };
@@ -4251,6 +4256,15 @@ fn ash_tree_provider_reads_updates_refreshes_and_retires_handles() {
     request.payload = json!({"method":"children"});
     let root = running.supervisor.invoke(request.clone()).unwrap().payload;
     assert_eq!(root[0]["label"], "Root");
+    assert_eq!(root[0]["highlights"], json!([[0, 2]]));
+    assert_eq!(root[0]["themeIcon"], json!({"id":"file"}));
+    assert_eq!(root[0]["contextValue"], "editable");
+    assert_eq!(root[0]["tooltip"]["value"], "**Provider**");
+    assert_eq!(root[0]["resourceUri"]["path"], "/fixture/node.ts");
+    assert_eq!(
+        root[0]["accessibilityInformation"]["label"],
+        "Provider node"
+    );
     request.payload = json!({"method":"children","handle":"root"});
     assert_eq!(
         running.supervisor.invoke(request.clone()).unwrap().payload[0]["handle"],
@@ -4276,13 +4290,40 @@ fn ash_tree_provider_reads_updates_refreshes_and_retires_handles() {
             .unwrap();
         assert_eq!(
             changes,
-            vec![json!({"method":"treeViewChanged","registrationId":"ash.tree.1"})]
+            vec![
+                json!({"method":"treeViewChanged","registrationId":"ash.tree.1","handles":["child"]})
+            ]
         );
     }
     request.payload = json!({"method":"children","handle":"root"});
     let child = running.supervisor.invoke(request.clone()).unwrap().payload;
     assert_eq!(child[0]["label"], "新名称");
     assert_eq!(child[0]["checkboxState"], 0);
+    for (action, expected) in [
+        (
+            "configure",
+            json!({"method":"treeViewOperation","registrationId":"ash.tree.1","action":"configure","options":{"title":"Changed","canSelectMany":true}}),
+        ),
+        (
+            "reveal",
+            json!({"method":"treeViewOperation","registrationId":"ash.tree.1","action":"reveal","handles":["root","child"],"options":{"focus":true}}),
+        ),
+    ] {
+        let mut operations = Vec::new();
+        running
+            .supervisor
+            .begin_invoke(invocation("probe", json!([action]), Duration::from_secs(5)))
+            .unwrap()
+            .wait_with_client(|operation, _, _| {
+                let ExtensionClientOperation::EditorOperation { payload } = operation else {
+                    panic!("Expected tree operation");
+                };
+                operations.push(payload);
+                Ok(ExtensionClientResult::Value { value: Value::Null })
+            })
+            .unwrap();
+        assert_eq!(operations, vec![expected]);
+    }
     request.payload = json!({"method":"selection","handle":"child"});
     running.supervisor.invoke(request.clone()).unwrap();
     assert_eq!(

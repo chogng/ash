@@ -17,6 +17,10 @@ import { getVisibleViewContextKey } from './contextkeys.js';
 import { IViewsService } from '../services/views/common/viewsService.js';
 import type Severity from '../../base/common/severity.js';
 import type { IProgressIndicator } from '../../platform/progress/common/progress.js';
+import type { URI } from '../../base/common/uri.js';
+import type { IMarkdownString } from '../../base/common/htmlContent.js';
+import type { CancellationToken } from '../../base/common/cancellation.js';
+import type { VSDataTransfer } from '../../base/common/dataTransfer.js';
 
 export enum TreeItemCollapsibleState {
 	None = 0,
@@ -35,9 +39,15 @@ export interface ITreeItem {
 	parentHandle?: string;
 	parent?: ITreeItem;
 	collapsibleState: TreeItemCollapsibleState;
-	label?: { readonly label: string; };
+	label?: { readonly label: string; readonly highlights?: readonly [number, number][]; };
 	description?: string;
-	tooltip?: string;
+	tooltip?: string | IMarkdownString;
+	resourceUri?: URI;
+	icon?: URI;
+	iconDark?: URI;
+	themeIcon?: Icon;
+	contextValue?: string;
+	accessibilityInformation?: { readonly label: string; };
 	checkbox?: ITreeItemCheckboxState;
 	editable?: boolean;
 	command?: { readonly id: string; readonly arguments?: readonly unknown[]; };
@@ -54,6 +64,24 @@ export interface IEditableData {
 export interface ITreeViewDataProvider {
 	getChildren(element?: ITreeItem, signal?: AbortSignal): Promise<readonly ITreeItem[] | undefined>;
 	getEditableData?(element: ITreeItem): IEditableData;
+}
+
+/** Presentation settings owned by one retained tree, independent of its pane. */
+export interface ITreeViewOptions {
+	readonly title?: string;
+	readonly description?: string;
+	readonly message?: string;
+	readonly badge?: { readonly value: number; readonly tooltip: string; } | null;
+	readonly canSelectMany?: boolean;
+	readonly showCollapseAllAction?: boolean;
+}
+
+export interface ITreeViewDragAndDropController {
+	readonly dropMimeTypes: string[];
+	readonly dragMimeTypes: string[];
+	handleDrag(sourceTreeItemHandles: string[], operationUuid: string, token: CancellationToken): Promise<VSDataTransfer | undefined>;
+	handleDragEnd?(operationUuid: string): void;
+	handleDrop(elements: VSDataTransfer, target: ITreeItem | undefined, token: CancellationToken, operationUuid?: string, sourceTreeId?: string, sourceTreeItemHandles?: string[]): Promise<void>;
 }
 
 MenusRegistry.appendMenuItem(MenuId.ViewContainerTitle, {

@@ -24,26 +24,31 @@ exports.activate = context => {
  context.subscriptions.push(views.registerTreeDataProvider({ getChildren: () => [], getTreeItem: item => item },
   { id: 'acme.missingTree', title: 'Unavailable tree', containerId: 'acme.missingContainer' }));
  const changes = new ash.EventEmitter(); const node = { label: 'Provider item', checked: 0 };
- context.subscriptions.push(changes, views.registerTreeDataProvider({
+ const tree = views.registerTreeDataProvider({
   onDidChangeTreeData: changes.event,
   getChildren: element => element ? [] : [node],
-  getTreeItem: element => ({ id: 'item', label: element.label, checkboxState: element.checked, editable: true }),
+  getTreeItem: element => ({ id: 'item', label: { label: element.label, highlights: [[0, 3]] }, iconPath: { id: 'file' }, tooltip: new ash.MarkdownString('**Provider** item'), checkboxState: element.checked, editable: true }),
   rename(element, value) { element.label = value; changes.fire(); },
   setCheckboxState(element, value) { element.checked = value; changes.fire(); }
- }, { id: 'acme.treeSmoke', title: 'Extension Tree Smoke' }),
- commands.register('acme.treeSmoke.refresh', () => { node.label = 'Provider refreshed'; changes.fire(); }));
+ }, { id: 'acme.treeSmoke', title: 'Extension Tree Smoke' });
+ context.subscriptions.push(changes, tree,
+ commands.register('acme.treeSmoke.refresh', () => { node.label = 'Provider refreshed'; changes.fire(node); }),
+ commands.register('acme.treeSmoke.configure', async () => {
+  await tree.configure({ title: 'Updated Extension Tree', description: 'Provider description', badge: { value: 2, tooltip: 'Two items' }, canSelectMany: true, showCollapseAllAction: true });
+  await tree.reveal(node, { focus: true });
+ }));
 };`);
 	const page = workbench.page;
-	await expect(page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Editor', exact: true })).toBeVisible();
 	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 	const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 	await installation.getByRole('textbox').fill('tree-extension');
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/tree-smoke 1.0.0');
-	const details = page.locator('.ash-extension-editor:visible').filter({ hasText: 'acme/tree-smoke' });
+	const details = page.locator('.ash-extension-editor:visible').filter({ hasText: 'Extension tree smoke' });
 	const manage = async () => {
 		await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-		const option = page.locator('[data-view-id="ash.extensions.plugins"]').getByRole('option').filter({ hasText: 'acme/tree-smoke' });
+		const option = page.locator('[data-view-id="ash.extensions.plugins"]').getByRole('option').filter({ hasText: 'Extension tree smoke' });
 		await expect(option).toBeVisible();
 		await option.click();
 	};
@@ -69,6 +74,11 @@ exports.activate = context => {
 	await expect(label).toHaveText('From Ash');
 	await workbench.quickaccess.runCommand('acme.treeSmoke.refresh');
 	await expect(label).toHaveText('Provider refreshed');
+	await workbench.quickaccess.runCommand('acme.treeSmoke.configure');
+	await expect(pane.getByRole('tree')).toHaveAttribute('aria-label', 'Updated Extension Tree');
+	await expect(pane.getByRole('treeitem')).toHaveAttribute('aria-selected', 'true');
+	await expect(pane.locator('.ash-custom-tree-badge')).toHaveText('2');
+	await expect(pane.locator('.ash-icon-label-highlight')).toHaveText('Pro');
 	await manage();
 	await details.getByRole('switch').press('Space');
 	await expect(pane).toHaveCount(0);
