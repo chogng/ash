@@ -6,7 +6,7 @@
 
 ## CI · 远端矩阵验收
 
-- [ ] CI 修复已发布至 `4b932cd2db`；截图专项和 Linux Bazel TUI 场景已通过，本机 TUI、daemon、后端工具及警告检查通过。完整产品矩阵仍按[固定提交 CI](https://github.com/chogng/ash/actions/runs/43903186720)验收，需取得后端三平台、macOS hosted MCP 与前端整窗的通过结果。V8、LiveKit 生产队列已拆出，生产工具仍引用固定 Ash harness，尚未完全独立。证据和本机环境限制见 [CI 记录](ci-project-todo.md#2026-11-17-固定基线复验)。通过后删除本条。
+- [ ] CI 修复已发布至 `4b932cd2db`；截图专项和 Linux Bazel TUI 场景已通过，本机 TUI、daemon、后端工具及警告检查通过。完整产品矩阵仍按[固定提交 CI](https://github.com/chogng/ash/actions/runs/43903186720)验收，当前后端、stdio／SSH、前端和 TUI 仍有失败。V8、LiveKit 生产工具已完全迁入独立仓库，Ash 仅消费固定产物；独立生产不再依赖 Ash checkout。证据和本机环境限制见 [CI 记录](ci-project-todo.md#2026-11-17-固定基线复验)。通过后删除本条。
 
 ## aspdf · App Server 与整窗验收
 

@@ -4,7 +4,7 @@
 [independent LiveKit distribution repository](https://github.com/chogng/ash-livekit-server).
 The current release is `livekit-v1.13.7-ash.1`. Every archive has a fixed URL,
 size and SHA-256. The producer verifies the actual server version on each native
-runner, retains upstream/build-harness provenance, and generates the complete
+runner, retains upstream and build provenance, and generates the complete
 consumer lock only after all six targets pass.
 
 Windows/Linux executables retain the upstream official release inputs. macOS

@@ -30,16 +30,3 @@ common:windows --host_platform=//:local_windows
 # MSVC toolchain discovered by rules_cc from Visual Studio Build Tools.
 # Keep Apple's toolchain discovery disabled; its SDK remains hermetic.
 common --repo_env=BAZEL_NO_APPLE_CPP_TOOLCHAIN=1
-
-# Local source builds share Bazel's action cache and expose each compile action.
-# The archive rule applies its C++ flags to the source closure and exec tools.
-build:v8-source --//:rusty_v8_from_source=True
-build:v8-source --compilation_mode=opt
-build:v8-source --show_result=10
-
-# Host mksnapshot must generate code for the target CPU during cross-builds.
-# Preserve this explicit V8 flag through the exec transition as Codex does.
-build:v8-source-arm64 --config=v8-source
-build:v8-source-arm64 --@v8//bazel/config:v8_target_cpu=arm64
-build:v8-source-x64 --config=v8-source
-build:v8-source-x64 --@v8//bazel/config:v8_target_cpu=x64

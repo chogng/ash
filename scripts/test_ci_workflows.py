@@ -504,17 +504,15 @@ class CiWorkflowTests(unittest.TestCase):
         self.assertIn("name: ci-results-${{ github.run_id }}", workflow)
         self.assertIn("always() && needs.select.result == 'success'", workflow)
 
-    def test_v8_backport_changes_require_consumer_checks_without_a_version_bump(
+    def test_v8_consumer_changes_require_checks_without_a_version_bump(
         self,
     ) -> None:
         for path in (
-            "third_party/v8/patches/v8_array_sort_elements_kind.patch",
-            "third_party/v8/patches/future_security_backport.patch",
-            "third_party/v8/source-lock.json",
             "third_party/v8/runtime-lock.json",
+            "third_party/v8/BUILD.bazel",
             "crates/v8-runtime/src/lib.rs",
             "crates/v8-poc/src/array_sort_regression.js",
-            "build/v8/release.py",
+            "build/lib/v8.py",
             ".github/workflows/v8-security.yml",
         ):
             with self.subTest(path=path):
@@ -539,6 +537,9 @@ class CiWorkflowTests(unittest.TestCase):
         self.assertNotIn("continue-on-error", workflow)
         self.assertNotIn("gh release", workflow)
         self.assertFalse((ROOT / ".github/workflows/rusty-v8-release.yml").exists())
+        self.assertFalse((ROOT / "build/v8/release.py").exists())
+        self.assertFalse((ROOT / "third_party/v8/source.bzl").exists())
+        self.assertIn("-m build.lib.v8 --check", workflow)
 
     def test_owned_sources_select_their_real_checks(self) -> None:
         cases = {

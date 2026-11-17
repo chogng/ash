@@ -79,7 +79,7 @@ Windows 本地 build 322 项／6 跳过、scripts 239 项／7 跳过通过；CI 
 
 ## 2026-11-17 固定基线复验
 
-修复已发布至 `4b932cd2db`，按[该提交的主 CI](https://github.com/chogng/ash/actions/runs/43903186720)验收。当前 28 项通过、无已完成的失败作业，后端、前端和部分平台仍在执行，不能据此认定完整矩阵通过。
+修复已发布至 `4b932cd2db`，按[该提交的主 CI](https://github.com/chogng/ash/actions/runs/43903186720)验收。该运行已结束：39 项通过，三平台后端、macOS stdio／SSH、前端单测和 TUI 单测共 6 项失败，必需检查汇总随之失败。该运行早于下述生产工具拆分，完整矩阵尚未通过。
 
 - 修复配置文档摘要对 JSON 键顺序敏感的问题，并保留旧摘要的校验和升级路径。配置 105 项测试及 `serde_json/preserve_order` 组合通过。
 - 修复首轮审批事件早于会话绑定到达时丢失的问题。WSL 54 项真实终端场景、1458 项 TUI 单测（2 跳过）、17 项后端工具测试及相关 Rust 警告检查通过。Windows daemon 完整验证通过 82 项（2 跳过）。本机完整 stdio 入口 7 项通过，2 项 OpenSSH fixture 因 WSL 缺少所需可执行文件失败；远端对应作业继续按原断言验收。
@@ -87,11 +87,15 @@ Windows 本地 build 322 项／6 跳过、scripts 239 项／7 跳过通过；CI 
 - 截图专项 [43898753333](https://github.com/chogng/ash/actions/runs/43898753333) 已通过。已审核的 12 张 CI PNG 与摘要一同提交；跨进程比较只允许最多 32 个像素出现一级 RGB 舍入差异，透明度和尺寸必须一致。同页状态和 PNG 重复采样仍精确比较，较大变化和损坏基线仍失败。
 - Linux 本机 Bazel 实际构建 `//crates/app-server:app-server` 通过；新主 CI 的 [Bazel TUI 场景](https://github.com/chogng/ash/actions/runs/43903186720/job/133427853993)也已通过。Ubuntu 命名空间启动使用针对 unshare 的 AppArmor 配置，保留产品沙盒。
 
-V8 仍精确固定 `152.2.0`，未升级引擎或替换已发布产物。独立仓库 `a6f19a2` 删除周期性源码重建；仅生产输入变化或手动请求运行源码验证，发布仍由 tag 或手动入口负责。源码构建和发布队列已经独立，但 V8、LiveKit 生产工具仍引用 Ash 的不可变 harness 提交；这属于尚未彻底分离的构建依赖，不能将其表述为完全独立生产链。独立 V8 新 harness 的 Linux 源码和 Bazel 消费验证已通过；多余的 Windows 源码运行已按用户要求取消。已发布配对保留原构建和校验证据。
+V8 仍精确固定 `152.2.0`，LiveKit 仍固定 `1.13.7-ash.1`，未升级或替换已发布产物。生产工具现已完全迁入独立仓库，不再 checkout Ash：V8 [`e6e32e6`](https://github.com/chogng/ash-rusty-v8/commit/e6e32e6e4374fcc14ed302c306a01c087b132e61) 拥有源码图、补丁、工具链及仅含原生探针的 Cargo workspace，LiveKit [`bf2a11e`](https://github.com/chogng/ash-livekit-server/commit/bf2a11eb726ef27a36ab4978c485c5ce730ac2a7) 拥有下载、macOS Go 生产及归档汇总。Ash 删除 V8 生产实现，仅保留消费锁、摘要校验和产品运行时测试。
+
+LiveKit 的[独立六平台原生验证与汇总](https://github.com/chogng/ash-livekit-server/actions/runs/43909306814)已通过；V8 的[独立工具与版本校验](https://github.com/chogng/ash-rusty-v8/actions/runs/43915314482)已通过。固定依赖没有周期性源码重建，V8 main 推送只运行轻量校验；生产输入 PR 或手动源码验证运行 Linux／Windows，完整八平台生产与发布仅由独立 tag／手动入口负责。旧 release 及原构建证据保留。
+
+拆分本机验收通过：Linux 在 Ash 目录之外实际生产 V8 配对，Cargo 和 Bazel 原生探针各 8 项通过，生产工具 33 项契约测试通过。Ash 删除源码图后，Bazel 实际构建并执行 `v8-poc` 9 项和 `v8-runtime` 1 项测试，严格 lockfile 检查通过；Windows scripts 241 项（7 跳过）、消费锁／下载 8 项、依赖检查和全仓拼写检查通过。拼写单词表仅补入实际 Rust crate 名 `inout`。日志位于 `.build/dependency-extraction-20261117/`。本轮保留原八平台发布证据，没有重发固定版本。
 
 - [ ] 按本轮发布后的新 main SHA 核对完整 CI 矩阵。
 - [ ] 补 Desktop runtime acceptance 的 macOS hosted MCP 进程回归通过证据。已有 [macOS 本机补验](agenthost-todo.md#2026-10-29-macos-进程补验)。
 - [x] Linux CI 实际执行 `//cli:tui-real-scenarios` 已通过，证据见上述固定基线的 Bazel TUI 作业。
-- [ ] 根据最新 protocol 和 TUI 日志检查依赖准备与 V8 构建产物；保留依赖边界和产品断言。
+- [ ] 修复后端网络策略更新、命令生命周期／重放、TUI 远程启动首帧和前端 fixture 的失败，并复验 macOS stdio／SSH 的 10 分钟超时；保留产品断言。
 
 旧 57 文件格式批次因材料下载 HTTP 403 未取得字节，未重建或应用。上述未完成事项不影响已经保存的工作树恢复资料。

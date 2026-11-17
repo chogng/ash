@@ -21,6 +21,7 @@ from build.lib.v8 import (  # noqa: E402
     LockedFile,
     load_v8_lock,
     materialize,
+    validate_consumer_inputs,
 )
 from build.lib.v8 import resolve_v8_cargo_env  # noqa: E402
 
@@ -115,6 +116,38 @@ class V8ArtifactTests(unittest.TestCase):
             },
             cargo_config["env"]["RUSTY_V8_MIRROR"],
         )
+
+    def test_consumer_metadata_rejects_version_or_artifact_drift(self) -> None:
+        self.assertEqual(validate_consumer_inputs()["targets"], 8)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in (
+                "Cargo.toml",
+                "Cargo.lock",
+                "MODULE.bazel",
+                "third_party/v8/runtime-lock.json",
+            ):
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((REPOSITORY_ROOT / name).read_bytes())
+            manifest = root / "Cargo.toml"
+            original = manifest.read_text(encoding="utf-8")
+            version = next(iter(load_v8_lock().values())).version
+            manifest.write_text(
+                original.replace(f'v8 = "={version}"', 'v8 = "=0.0.0"'),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "versions must agree"):
+                validate_consumer_inputs(root)
+            manifest.write_text(original, encoding="utf-8")
+            module = root / "MODULE.bazel"
+            digest = next(iter(load_v8_lock().values())).binding.sha256
+            module.write_text(
+                module.read_text(encoding="utf-8").replace(digest, "0" * 64, 1),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "Bazel artifact differs"):
+                validate_consumer_inputs(root)
 
     def test_materialize_replaces_a_corrupt_cached_file(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

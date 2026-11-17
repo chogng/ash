@@ -10,7 +10,7 @@ Ash consumes its six-target checksum lock; normal product builds do not compile
 the Go server. The command below packages that locked binary as an Ash hosting
 capability, rather than publishing a new upstream server build.
 
-The locked upstream source, versions and notices remain in
+Ash's consumer lock, version and notices remain in
 [`third_party/livekit`](../third_party/livekit/README.md). Shared call coordination
 stays in `crates/call`; local audio, video and screen clients stay in their existing
 client crates. The server is installed only when explicitly hosting a local call.

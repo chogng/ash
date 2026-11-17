@@ -79,11 +79,11 @@ selector at the Rust link boundary.
 links: remove `--unwindlib=none`, which Clang cannot consume once rustc passes
 `-nodefaultlibs`. Explicit runtime inputs, C/C++ links and Cargo build-script
 linker discovery keep their existing behavior. Remove this patch when upstream
-filters the unused selector from Rust link arguments. The local Linux x64 V8
-source probe exercises a real Rust executable link through this boundary:
+filters the unused selector from Rust link arguments. The Linux x64 V8
+consumer probe exercises a real Rust executable link through this boundary:
 
 ```bash
-bazel test //crates/v8-poc:v8-poc-unit-tests --config=v8-source --platforms=@llvm//platforms:linux_amd64_gnu.2.28 --test_arg=--test-threads=1
+bazel test //crates/v8-poc:v8-poc-unit-tests --compilation_mode=opt --test_arg=--test-threads=1
 ```
 
 Verify this patch with:

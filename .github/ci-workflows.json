@@ -148,7 +148,6 @@
     "crates/v8-runtime/**",
     "crates/v8-poc/**",
     "third_party/v8/**",
-    "build/v8/**",
     "build/lib/v8.py",
     "scripts/cargo.py",
     "Cargo.toml",

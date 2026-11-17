@@ -11,19 +11,10 @@ bazel_dep(name = "llvm", version = "0.8.11")
 bazel_dep(name = "aws-lc", version = "5.1.0.bcr.1")
 bazel_dep(name = "openssl", version = "3.5.9.bcr.1")
 
-# V8's Chromium libc++ must supply both headers and runtime objects throughout
-# its source closure, including ICU/Abseil and the host snapshot generators.
-single_version_override(
-    module_name = "llvm",
-    patch_strip = 1,
-    patches = ["//third_party/v8/patches:llvm_rusty_v8_custom_libcxx.patch"],
-)
-
 single_version_override(
     module_name = "rules_cc",
     patch_strip = 1,
     patches = [
-        "//third_party/v8/patches:rules_cc_rusty_v8_custom_libcxx.patch",
         "//bazel/toolchains:rules_cc_windows_build_tools.patch",
     ],
 )
@@ -335,55 +326,6 @@ inject_repo(crate, "openssl")
 # They are build inputs only: the resulting executables link V8 statically.
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
-# Opt-in source builds use the same V8/crate/runtime revisions as Codex's
-# 152.2.0 graph. Ordinary product builds continue to consume runtime-lock.json.
-bazel_dep(name = "v8", version = "15.2.124.1")
-archive_override(
-    module_name = "v8",
-    integrity = "sha256-aNN5G427qQbP/5o+NXONgXR8ZvS6mjf6mfAI6jtxyzI=",
-    patch_strip = 3,
-    patches = [
-        "//third_party/v8/patches:v8_module_deps.patch",
-        "//third_party/v8/patches:v8_bazel_rules.patch",
-        "//third_party/v8/patches:v8_source_portability.patch",
-        "//third_party/v8/patches:v8_array_sort_elements_kind.patch",
-    ],
-    strip_prefix = "v8-15.2.124.1",
-    urls = ["https://github.com/v8/v8/archive/refs/tags/15.2.124.1.tar.gz"],
-)
-
-http_archive(
-    name = "v8_crate_152_2_0",
-    build_file = "//third_party/v8:v8_crate.BUILD.bazel",
-    sha256 = "a10fe1a92da5c32c7c7f838ce36c0ccfcfd5edf0865b58bdde820aa64cea9888",
-    strip_prefix = "v8-152.2.0",
-    type = "tar.gz",
-    urls = ["https://static.crates.io/crates/v8/v8-152.2.0.crate"],
-)
-
-git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
-
-git_repository(
-    name = "rusty_v8_libcxx",
-    build_file = "//third_party/v8:libcxx.BUILD.bazel",
-    commit = "b16984ce99c702355a5b2b4c52574e82cec41fb9",
-    remote = "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libcxx.git",
-)
-
-git_repository(
-    name = "rusty_v8_libcxxabi",
-    build_file = "//third_party/v8:libcxxabi.BUILD.bazel",
-    commit = "8f11bb1d4438d0239d0dfc1bd9456a9f31629dda",
-    remote = "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libcxxabi.git",
-)
-
-git_repository(
-    name = "rusty_v8_llvm_libc",
-    build_file = "//third_party/v8:llvm_libc.BUILD.bazel",
-    commit = "75ae50cd48c8a9d70f552ccff040029968778da9",
-    remote = "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libc.git",
-)
 
 # Headers are the exact crate source selected by Cargo.lock; strip to include/ so
 # V8's own nested Bazel workspace does not take ownership of this public header target.

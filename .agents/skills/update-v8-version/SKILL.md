@@ -1,72 +1,29 @@
 ---
 name: update-v8-version
-description: Update Codex's pinned `v8` / `rusty_v8` versions, validate the release-candidate path, and investigate failed V8 canary or artifact builds. Use when asked to bump V8, update `rusty_v8` artifacts, prepare or validate a V8 release candidate, check `v8-canary`, or diagnose why a V8 version update no longer builds.
+description: Update Ash's pinned V8 inputs, validate independent dependency production, or diagnose V8 artifact failures.
 ---
 
-# Update V8 Version
+# Update V8 inputs
 
-## Core Workflow
+## Ownership
 
-1. Read `third_party/v8/README.md` and follow its version-bump sequence. Treat
-   that document as the release-process source of truth.
-2. Inspect and update the concrete repo surfaces that carry the pin:
-   - `crates/Cargo.toml`
-   - `crates/Cargo.lock`
-   - `MODULE.bazel`
-   - `third_party/v8/BUILD.bazel`
-   - `third_party/v8/README.md`
-   - the matching `third_party/v8/rusty_v8_<version>.sha256` manifest when the
-     remaining prebuilt inputs change
-3. Keep the existing checksum helpers in the loop:
+`chogng/ash-rusty-v8` owns source production, patches, producer toolchains, native probes and releases. Ash consumes immutable archive/binding pairs and owns product runtime policy. Do not restore a source producer in Ash or check out Ash from the dependency producer.
 
-   ```bash
-   python3 .github/scripts/rusty_v8_bazel.py update-module-bazel
-   python3 .github/scripts/rusty_v8_bazel.py check-module-bazel
-   python3 -m unittest discover -s .github/scripts -p test_rusty_v8_bazel.py
-   ```
+## Producer changes
 
-4. Validate the release-candidate path before broadening the work:
-   - Prefer checking the `v8-canary` CI result for the candidate branch or PR
-     when one exists, using GitHub check tooling or `gh` as appropriate.
-   - If CI is unavailable or the user asked for a local-only check, run the
-     closest local validation that is practical for the changed surface and say
-     explicitly that it is a local substitute, not the full hosted canary.
-5. If the canary path passes, stop there. Summarize the result and encourage the
-   user to commit the candidate changes or proceed with the release flow they
-   requested. Do not publish tags, releases, or pushes unless the user asked.
+1. Work in the independent repository. `upstream-source-lock.json` pins the upstream revision, compiler, Windows tools and source backports. Its `Cargo.toml`, `Cargo.lock`, `MODULE.bazel`, `MODULE.bazel.lock` and `third_party/v8/` declarations must agree with that pin.
+2. Keep the standalone Cargo workspace restricted to the artifact probe. Product crates, app-server APIs and product runtime implementations stay in Ash.
+3. Run the producer's release/smoke Python contracts and metadata command. Validate changed build behavior from a directory without an Ash checkout or parent Cargo/Bazel configuration.
+4. Use the independent source workflow for Linux/Windows recipe checks. Version or native-input changes require the independent full release matrix, including native execution of cross-linked ARM64 probes and exact archive/binding provenance verification.
+5. Publish immutable dependency artifacts through the independent release workflow. Keep existing release assets unchanged. A producer validation result is distinct from publishing or product adoption.
 
-## Failure Path
+## Ash adoption
 
-Enter this path only when the canary or local build path fails.
+1. Keep one exact crate version in root `Cargo.toml` and `Cargo.lock`. Adopt the verified candidate `third_party/v8/runtime-lock.json` and synchronize the header/archive/binding URLs and checksums in `MODULE.bazel`.
+2. Run `python3 -B -m build.lib.v8 --check`, the affected Python acquisition tests and the actual Cargo/Bazel consumer targets. Keep archive/binding target and feature settings matched, including Windows MSVC and Linux musl.
+3. Product CI validates acquisition, runtime policy and integration. It must not build V8 source or dispatch dependency production as a side effect.
+4. Retain runtime mitigations while any supported source, mirror or explicit override can bypass the upstream fix. Sandbox configuration checks alone do not prove a compiler regression is repaired.
 
-1. Capture the failing target, workflow job, and first actionable error.
-2. Compare the currently pinned version with the target version at the relevant
-   upstream tag or SHA. Inspect both:
-   - `denoland/rusty_v8`
-   - upstream V8 source at the target Bazel-pinned version
-3. Track build-relevant deltas rather than broad source churn:
-   - generated binding layout changes
-   - archive or asset naming changes
-   - GN/Bazel target changes
-   - custom libc++ / libc++abi / llvm-libc inputs
-   - sandbox or pointer-compression feature relationships
-   - patch hunks in `patches/` that no longer apply or no longer match upstream
-4. Trace each failing delta back into Codex's build graph:
-   - `MODULE.bazel`
-   - `third_party/v8/BUILD.bazel`
-   - `.github/scripts/rusty_v8_bazel.py`
-   - `.github/workflows/v8-canary.yml`
-   - `.github/workflows/rusty-v8-release.yml`
-5. Update only the pieces required to restore the target version's build and
-   artifact contract. Keep patch explanations and doc changes close to the
-   affected files.
-6. Re-run the focused validation. If it becomes green, return to the normal
-   workflow and stop with a concise summary plus the remaining release step.
+## Failure reporting
 
-## Reporting
-
-- Say whether validation came from hosted `v8-canary` or from a local
-  substitute.
-- Distinguish "version bump complete" from "release published".
-- When blocked, report the upstream delta that matters, the Codex file it hits,
-  and the next concrete fix to try.
+Identify the producer or consumer boundary, target, immutable version and first actionable error. Use the corresponding native build or consumer probe to verify the fix. Distinguish local checks, hosted validation, publication and adoption; build analysis and metadata checks do not prove native execution.

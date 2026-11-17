@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import ast
 import json
+import re
+import tomllib
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -188,3 +191,64 @@ def locked_file(
     ):
         raise RuntimeError(f"rusty_v8 {kind} SHA-256 is invalid for {target}")
     return LockedFile(name=name, sha256=digest, url=f"{base_url}/{name}")
+
+
+def validate_consumer_inputs(root: Path = REPOSITORY_ROOT) -> dict:
+    """Check the pinned Rust, Bazel and native ABI inputs without building V8."""
+    lock = json.loads(
+        (root / "third_party/v8/runtime-lock.json").read_text(encoding="utf-8")
+    )
+    pairs = load_v8_lock(root / "third_party/v8/runtime-lock.json")
+    version = lock["version"]
+    manifest = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+    packages = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))[
+        "package"
+    ]
+    module = (root / "MODULE.bazel").read_text(encoding="utf-8")
+    crate_versions = set(
+        re.findall(r"https://static\.crates\.io/crates/v8/v8-([0-9.]+)\.crate", module)
+    )
+    if (
+        manifest["workspace"]["dependencies"]["v8"] != f"={version}"
+        or {package["version"] for package in packages if package["name"] == "v8"}
+        != {version}
+        or crate_versions != {version}
+        or lock["profile"] != "ptrcomp_sandbox_release"
+    ):
+        raise RuntimeError("Rust, Bazel and sandbox artifact versions must agree")
+    downloads = {}
+    for node in ast.walk(ast.parse(module)):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "http_file"
+        ):
+            entry = {
+                keyword.arg: ast.literal_eval(keyword.value)
+                for keyword in node.keywords
+            }
+            downloads[entry["downloaded_file_path"]] = entry
+    for pair in pairs.values():
+        for artifact in (pair.archive, pair.binding):
+            entry = downloads.get(artifact.name, {})
+            if entry.get("sha256") != artifact.sha256 or entry.get("urls") != [
+                artifact.url
+            ]:
+                raise RuntimeError(
+                    f"Bazel artifact differs from the locked consumer input: {artifact.name}"
+                )
+    return {
+        "version": version,
+        "profile": lock["profile"],
+        "targets": len(pairs),
+        "source": lock["source"],
+    }
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", required=True)
+    parser.parse_args()
+    print(json.dumps(validate_consumer_inputs()))
