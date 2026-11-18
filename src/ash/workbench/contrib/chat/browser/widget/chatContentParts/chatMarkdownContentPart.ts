@@ -22,7 +22,8 @@ import { ILayoutService } from '../../../../../../platform/layout/browser/layout
 import { openLinkFromMarkdown } from '../../../../../../platform/markdown/browser/markdownRenderer.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
-import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultDialogStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
+import { createWorkbenchDialogOptions } from '../../../../../browser/parts/dialogs/dialog.js';
 import { resourceFileName, saveResourceAs } from '../../../../../services/files/browser/resourceSave.js';
 import { serializeChatMarkdownTableCsv, serializeChatMarkdownTableTsv } from './chatMarkdownTableSerialization.js';
 import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExtension.js';
@@ -726,14 +727,11 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		for (const button of snapshot.querySelectorAll(`button:not(.${chatCitationButtonClass})`)) button.replaceWith(...button.childNodes);
 		for (const element of snapshot.querySelectorAll('[id]')) element.removeAttribute('id');
 		snapshot.removeAttribute('id');
-		const dialog = resources.add(new Dialog(this.layout.getContainer(getWindow(table)), localize({ bundle: 'ash.workbench', key: 'chat.markdown.tablePreview' }, 'Table preview'), undefined, {
+		const dialog = resources.add(new Dialog(this.layout.getContainer(getWindow(table)), localize({ bundle: 'ash.workbench', key: 'chat.markdown.tablePreview' }, 'Table preview'), undefined, createWorkbenchDialogOptions({
 			modal: false,
 			layout: 'form',
 			extraClasses: ['ash-chat-table-preview'],
 			disableDefaultAction: true,
-			buttonStyles: defaultButtonStyles,
-			checkboxStyles: defaultCheckboxStyles,
-			inputBoxStyles: defaultInputBoxStyles,
 			dialogStyles: { ...defaultDialogStyles, textLinkForeground: undefined },
 			renderBody: body => {
 				body.classList.add('ash-markdown');
@@ -748,7 +746,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 					this.openMarkdownLink(href, markdown);
 				}));
 			},
-		}));
+		})));
 		await dialog.show();
 	}
 

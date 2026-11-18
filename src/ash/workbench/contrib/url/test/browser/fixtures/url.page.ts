@@ -26,7 +26,7 @@ import { IThemeService } from '../../../../../../platform/theme/common/themeServ
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { IUriIdentityService } from '../../../../../../platform/uriIdentity/common/uriIdentity.js';
 import { UriIdentityService } from '../../../../../../platform/uriIdentity/common/uriIdentityService.js';
-import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialog.js';
+import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialogHandler.js';
 import { DialogHandlerContribution } from '../../../../../browser/parts/dialogs/dialog.web.contribution.js';
 import { TextResourceEditor } from '../../../../../browser/parts/editor/textResourceEditor.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../common/contributions.js';

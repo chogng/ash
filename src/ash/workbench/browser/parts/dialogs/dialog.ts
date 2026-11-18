@@ -1,9 +1,6 @@
 import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { Dialog, type IDialogOptions } from '../../../../base/browser/ui/dialog/dialog.js';
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import type { IDialogOptions } from '../../../../base/browser/ui/dialog/dialog.js';
 import { localize } from '../../../../nls.js';
-import { type DialogRequest, DialogResult, DialogSeverity, type IDialogHandler, type IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 
 interface WorkbenchDialogOptions extends Partial<IDialogOptions> {
 	readonly shouldConfirmDiscard?: () => boolean;
@@ -27,80 +24,4 @@ export function createWorkbenchDialogOptions({ shouldConfirmDiscard, ...options 
 			},
 		}),
 	};
-}
-
-export interface BrowserDialogPresentation extends Pick<IDialogOptions, 'icon' | 'extraClasses' | 'layout' | 'detailElement' | 'buttonOptions' | 'disableCloseButton' | 'disableDefaultAction' | 'focusCancelButton'> {
-	readonly messageAsTitle?: boolean;
-	readonly confirmationLayout?: 'form';
-}
-
-/** Maps queued domain requests to the service-independent Dialog widget. */
-export class BrowserDialogHandler implements IDialogHandler {
-	constructor(private readonly container: HTMLElement, private readonly presentation?: BrowserDialogPresentation) { }
-
-	async showDialog(request: DialogRequest, signal: AbortSignal): Promise<IDialogOutcome> {
-		if (signal.aborted) return { button: DialogResult.Cancel };
-		const disposables = new DisposableStore();
-		try {
-			const buttons = request.kind === 'choice'
-				? [...request.buttons]
-				: [request.primaryButton ?? (request.kind === 'confirmation' ? localize('dialog.confirm', 'Confirm') : localize('dialog.ok', 'OK'))];
-			if (request.kind === 'prompt') buttons.push(request.secondaryButton);
-			if (request.kind !== 'message') buttons.push(request.cancelButton ?? localize('dialog.cancel', 'Cancel'));
-			const cancelId = request.kind === 'message' ? -1 : buttons.length - 1;
-			const formConfirmation = (request.kind === 'confirmation' || request.kind === 'choice') && this.presentation?.confirmationLayout === 'form';
-			const destructiveForm = formConfirmation && request.kind === 'confirmation' && request.destructive;
-			const severity = request.kind === 'message' || request.kind === 'choice' ? request.severity : undefined;
-			const showSeverity = severity === DialogSeverity.Warning || severity === DialogSeverity.Error;
-			const title = this.presentation?.messageAsTitle ? request.message : request.title ?? defaultTitle(request);
-			const options = createWorkbenchDialogOptions({
-				...this.presentation,
-				...(formConfirmation && {
-					layout: 'form',
-					focusCancelButton: true,
-					extraClasses: [...(this.presentation?.extraClasses ?? []),
-					destructiveForm ? 'ash-dialog-destructive-confirmation' : 'ash-dialog-form-confirmation'],
-				}),
-				...(destructiveForm && { buttonOptions: [{ presentation: 'danger' }, { presentation: 'secondary' }] }),
-				cancelId,
-				type: this.presentation?.messageAsTitle || (formConfirmation && !showSeverity) ? 'none' : severity ?? 'question',
-				detail: request.detail,
-				detailPresentation: request.detailPresentation,
-				inputs: request.kind === 'input' ? request.inputs.map(input => ({ ...input })) : undefined,
-				checkboxLabel: request.checkbox?.label,
-				checkboxChecked: request.checkbox?.checked,
-				renderBody: this.presentation?.messageAsTitle ? undefined : body => {
-					const message = h(body.ownerDocument, 'p', { className: 'ash-dialog-message' });
-					message.textContent = request.message;
-					body.append(message);
-				},
-			});
-			const dialog = disposables.add(new Dialog(this.container, title, buttons, options));
-			disposables.add(addDisposableListener(signal, 'abort', () => dialog.dispose(), { once: true }));
-			const result = await dialog.show();
-			const cancelled = result.button === cancelId;
-			const button = cancelled ? DialogResult.Cancel : request.kind === 'choice' || result.button === 0 ? DialogResult.Primary : DialogResult.Secondary;
-			return {
-				button,
-				...(request.kind === 'choice' && !cancelled ? { buttonIndex: result.button } : {}),
-				checkboxChecked: result.checkboxChecked,
-				values: button === DialogResult.Primary && request.kind === 'input' ? result.values : undefined,
-			};
-		} finally {
-			disposables.dispose();
-		}
-	}
-}
-
-function defaultTitle(request: DialogRequest): string {
-	if (request.kind === 'input') return localize('dialog.input', 'Input');
-	if (request.kind !== 'message') return localize('dialog.confirm', 'Confirm');
-	switch (request.severity) {
-		case DialogSeverity.Warning:
-			return localize('dialog.warning', 'Warning');
-		case DialogSeverity.Error:
-			return localize('dialog.error', 'Error');
-		default:
-			return localize('dialog.information', 'Information');
-	}
 }

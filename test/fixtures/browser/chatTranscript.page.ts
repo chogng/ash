@@ -59,7 +59,7 @@ import { TerminalLogService } from '../../../src/ash/platform/terminal/common/te
 import { LogService } from '../../../src/ash/platform/log/common/logServiceImpl.js';
 import { IDialogsModel } from '../../../src/ash/workbench/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
-import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
+import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialogHandler.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { IChatInputNoticeHubService } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputNoticeHub.js';

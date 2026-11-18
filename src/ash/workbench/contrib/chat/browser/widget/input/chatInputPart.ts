@@ -18,7 +18,8 @@ import type { IChatWidget } from '../../chat.js';
 import { InputBox } from '../../../../../../base/browser/ui/inputbox/inputbox.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../../../base/browser/ui/dialog/dialog.js';
-import { defaultInputBoxStyles, defaultCheckboxStyles, defaultDialogStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultInputBoxStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
+import { createWorkbenchDialogOptions } from '../../../../../browser/parts/dialogs/dialog.js';
 import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
 import { restoreChatVariableEntry } from '../../../common/attachments/chatVariableEntries.js';
 import type { IWorkspacePickerDelegate } from '../../chat.js';
@@ -2733,10 +2734,10 @@ export class ChatQueueEditor extends Disposable {
 		const renderActions = () => toolbar.setActions(menu.getActions({ arg: { widget: this.widget } }).flatMap(([, actions]) => actions));
 		lifetime.add(menu.onDidChange(renderActions));
 		const save = lifetime.add(new Button(content, { label: localize('chat.queue.save', 'Save queued message'), presentation: 'primary' }));
-		const dialog = this._register(new Dialog(this.widget.domNode, localize('chat.queue.editTitle', 'Edit queued message'), undefined, {
-			disableDefaultAction: true, buttonStyles: defaultButtonStyles, checkboxStyles: defaultCheckboxStyles, dialogStyles: defaultDialogStyles, inputBoxStyles: defaultInputBoxStyles,
+		const dialog = this._register(new Dialog(this.widget.domNode, localize('chat.queue.editTitle', 'Edit queued message'), undefined, createWorkbenchDialogOptions({
+			disableDefaultAction: true,
 			renderBody: container => container.append(content),
-		}));
+		})));
 		let saved = false;
 		let hidden = false;
 		let pending: Promise<void> | undefined;

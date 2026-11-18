@@ -13,7 +13,7 @@ import { INotificationService } from '../../../../../../platform/notification/co
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
-import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialog.js';
+import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialogHandler.js';
 import { DialogHandlerContribution } from '../../../../../browser/parts/dialogs/dialog.web.contribution.js';
 import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';

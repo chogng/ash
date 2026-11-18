@@ -4,7 +4,7 @@ import { raceCancellationError } from '../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { darkColorTheme, lightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { generateColorThemeCSS } from '../../../services/themes/browser/colorThemeCss.js';
-import { BrowserDialogHandler } from '../../../browser/parts/dialogs/dialog.js';
+import { BrowserDialogHandler } from '../../../browser/parts/dialogs/dialogHandler.js';
 import { DialogResult, type DialogRequest, type IDialogHandler, type IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';

@@ -562,6 +562,19 @@ suite('dialog browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastResult)).toBe('cancel');
 	});
 
+	test('aborting before the browser handler returns discards the selected action', async () => {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.show('Details'));
+		const dialog = page.getByRole('dialog', { name: 'Review changes' });
+		await dialog.getByRole('button', { name: 'Confirm', exact: true }).evaluate(button => {
+			(button as HTMLButtonElement).click();
+			window.ashDialogIntegration.abort();
+		});
+		await expect(dialog).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastResult)).toBe('cancel');
+	});
+
 	test('retiring a workspace connection removes its permission modal and allows the next prompt', async function () {
 		const { page } = browserTests;
 

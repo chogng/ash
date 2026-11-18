@@ -4,7 +4,8 @@ import { Button } from '../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../base/browser/ui/dialog/dialog.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { localize } from '../../../nls.js';
-import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
+import { createWorkbenchDialogOptions } from '../../../workbench/browser/parts/dialogs/dialog.js';
 
 interface SessionsSearchDialogOptions {
 	readonly title: string;
@@ -18,17 +19,13 @@ export class SessionsSearchDialog extends Dialog {
 	readonly input: HTMLInputElement;
 
 	constructor(container: HTMLElement, content: HTMLElement, options: SessionsSearchDialogOptions) {
-		super(container, options.title, [], {
-			buttonStyles: defaultButtonStyles,
-			checkboxStyles: defaultCheckboxStyles,
-			inputBoxStyles: defaultInputBoxStyles,
-			dialogStyles: defaultDialogStyles,
+		super(container, options.title, [], createWorkbenchDialogOptions({
 			extraClasses: ['ash-sessions-search-shell', options.className],
 			disableCloseButton: true,
 			disableDefaultAction: true,
 			closeOnBackdropClick: true,
 			renderBody: body => body.append(content),
-		});
+		}));
 		const document = container.ownerDocument;
 		content.classList.add('ash-sessions-search-content');
 		const header = h(document, 'header', { className: 'ash-sessions-search-header' });

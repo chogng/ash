@@ -1,6 +1,7 @@
 import { BrowserDownloadDirectorySetting, BrowserDownloadAskSetting } from '../../../../platform/browserView/common/browserDownloads.js';
 import { BrowserOpenLinksSettingId, BrowserOpenLocalhostLinksSettingId } from '../../../../platform/browserView/common/browserView.js';
-import { defaultButtonStyles, defaultDialogStyles, defaultInputBoxStyles, defaultCheckboxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
 import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { LspSettingsModel } from './lspSettingsModel.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
@@ -258,11 +259,7 @@ export class SessionsPreferences extends Disposable {
 		if (query !== undefined) searchInput.value = query;
 		let memoryContent: MemorySettingsRenderer | undefined;
 		const storageDialog = resources.add(new MutableDisposable<SessionsStorageContent>());
-		const dialog = resources.add(new Dialog(this.container, localize('sessions.settings.title', 'Settings'), [], {
-			buttonStyles: defaultButtonStyles,
-			dialogStyles: defaultDialogStyles,
-			checkboxStyles: defaultCheckboxStyles,
-			inputBoxStyles: defaultInputBoxStyles,
+		const dialog = resources.add(new Dialog(this.container, localize('sessions.settings.title', 'Settings'), [], createWorkbenchDialogOptions({
 			layout: 'form',
 			extraClasses: ['ash-sessions-settings-dialog'],
 			closeOnBackdropClick: true,
@@ -270,7 +267,7 @@ export class SessionsPreferences extends Disposable {
 			disableDefaultAction: true,
 			renderBody: body => body.append(content),
 			onVisibilityChange: (_window, visible) => { if (this.dialog === dialog) this.dialogVisible = visible; },
-		}));
+		})));
 		const closeDialog = async (): Promise<boolean> => {
 			await dialog.requestClose();
 			return this.dialog !== dialog || !this.dialogVisible;

@@ -6,7 +6,8 @@ import { Disposable, DisposableStore } from '../../../../../base/common/lifecycl
 import type { Event } from '../../../../../base/common/event.js';
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { localize } from '../../../../../nls.js';
-import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import { createWorkbenchDialogOptions } from '../../../../../workbench/browser/parts/dialogs/dialog.js';
 import './media/remotesWidget.css';
 
 interface RemoteRow {
@@ -52,12 +53,10 @@ export class RemotesWidget extends Disposable {
 		}
 		this.body = table.createTBody();
 		content.append(this.status, table);
-		this.dialog = this._register(new Dialog(parent, localize('sessions.remotes.title', 'Remote Environments'), [localize('sessions.remotes.close', 'Close')], {
-			buttonStyles: defaultButtonStyles, checkboxStyles: defaultCheckboxStyles,
-			inputBoxStyles: defaultInputBoxStyles, dialogStyles: defaultDialogStyles,
+		this.dialog = this._register(new Dialog(parent, localize('sessions.remotes.title', 'Remote Environments'), [localize('sessions.remotes.close', 'Close')], createWorkbenchDialogOptions({
 			cancelId: 0, extraClasses: ['ash-remote-environments-dialog'],
 			renderBody: container => container.append(content),
-		}));
+		})));
 		this._register(onDidChange(() => this.render()));
 		this.render();
 	}

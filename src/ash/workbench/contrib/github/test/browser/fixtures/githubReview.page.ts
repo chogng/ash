@@ -41,7 +41,7 @@ import { IEditorPart } from '../../../../../browser/parts/editor/editorPart.js';
 import { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
 import { IDialogsModel, IWorkbenchDialogHandler } from '../../../../../common/dialogs.js';
 import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
-import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialog.js';
+import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialogHandler.js';
 import { DialogHandlerContribution } from '../../../../../browser/parts/dialogs/dialog.web.contribution.js';
 import { bindTestColorTheme } from '../../../../../../../../test/fixtures/browser/themeFixture.js';
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';

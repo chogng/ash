@@ -9,7 +9,7 @@ import { IAgentCapabilitiesService } from '../../../../../../platform/agentCapab
 import { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
 import { IDialogsModel } from '../../../../../common/dialogs.js';
-import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialog.js';
+import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialogHandler.js';
 import { NativeDialogHandler } from '../../../../../electron-browser/parts/dialogs/dialogHandler.js';
 import type { INativeHostApi } from '../../../../../../platform/native/common/nativeHost.js';
 import { ITerminalService } from '../../../../../contrib/terminal/browser/terminal.js';

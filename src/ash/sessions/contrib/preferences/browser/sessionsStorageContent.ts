@@ -8,7 +8,8 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../base/comm
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { IProfileStorageService, type ProfileStorageWorktree } from '../../../../platform/storage/common/profileStorageService.js';
-import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultCheckboxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
 
 export const storageSettingsTitle = () => localize({ bundle: 'ash.sessions', key: 'sessions.storage.title' }, 'Storage');
 
@@ -103,17 +104,15 @@ export class SessionsStorageContent extends Disposable {
 		this.pathDetails.hidden = true;
 		this.domNode.append(this.pathDetails);
 
-		this.dialog = this._register(new Dialog(container, storageSettingsTitle(), [], {
+		this.dialog = this._register(new Dialog(container, storageSettingsTitle(), [], createWorkbenchDialogOptions({
 			layout: 'form',
 			extraClasses: ['ash-sessions-storage-dialog'],
-			buttonStyles: defaultButtonStyles, dialogStyles: defaultDialogStyles,
-			checkboxStyles: defaultCheckboxStyles, inputBoxStyles: defaultInputBoxStyles,
 			closeOnBackdropClick: true,
 			disableDefaultAction: true,
 			canClose: () => !this.cleaning,
 			renderBody: body => body.append(this.domNode),
 			renderFooter: container => container.append(footer),
-		}));
+		})));
 		this._register(toDisposable(() => {
 			this.request?.abort();
 		}));
@@ -173,12 +172,10 @@ export class SessionsStorageContent extends Disposable {
 			localize({ bundle: 'ash.sessions', key: 'sessions.storage.confirmCleanup' }, 'Clean up selected worktrees?'), [
 			localize({ bundle: 'ash.sessions', key: 'sessions.storage.confirmRemove' }, 'Clean up'),
 			localize({ bundle: 'ash.sessions', key: 'sessions.storage.cancel' }, 'Cancel'),
-		], {
-			buttonStyles: defaultButtonStyles, dialogStyles: defaultDialogStyles,
-			checkboxStyles: defaultCheckboxStyles, inputBoxStyles: defaultInputBoxStyles,
+		], createWorkbenchDialogOptions({
 			type: 'warning', cancelId: 1, focusCancelButton: true,
 			detail: localize({ bundle: 'ash.sessions', key: 'sessions.storage.cleanupDetail' }, 'Save open files in the selected worktrees first. Ash keeps the conversation history and skips worktrees with uncommitted changes or a changed detached HEAD. Files ignored by Git may be removed.'),
-		});
+		}));
 		if ((await confirmation.show()).button !== 0 || this.isDisposed) return;
 		this.cleaning = true;
 		this.worktreeSummary.focus();

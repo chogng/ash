@@ -1,4 +1,5 @@
-import { defaultDialogStyles, defaultButtonStyles, defaultCheckboxStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { createWorkbenchDialogOptions } from '../../../browser/parts/dialogs/dialog.js';
 import './media/accessibleView.css';
 import { addDisposableListener, h, getActiveDocument, getActiveElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -134,11 +135,7 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 				? localize('accessibility.helpTitle', 'Accessibility Help')
 				: localize('accessibility.viewTitle', 'Accessible View');
 			content.setAttribute('aria-label', title);
-			const dialog = lifetime.add(new Dialog(root, title, [localize('accessibility.close', 'Close')], {
-				buttonStyles: defaultButtonStyles,
-				dialogStyles: defaultDialogStyles,
-				checkboxStyles: defaultCheckboxStyles,
-				inputBoxStyles: defaultInputBoxStyles,
+			const dialog = lifetime.add(new Dialog(root, title, [localize('accessibility.close', 'Close')], createWorkbenchDialogOptions({
 				renderBody: body => {
 					if (!previous && !next && selectedProvider.actions === undefined) {
 						body.append(content);
@@ -151,7 +148,7 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 				},
 				extraClasses: ['ash-accessible-view-dialog'],
 				cancelId: 0,
-			}));
+			})));
 			if (previous || next) {
 				lifetime.add(addDisposableListener(bodyContent, 'keydown', event => {
 					if (event.defaultPrevented || event.isComposing || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -242,15 +239,11 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 			};
 			updateContent();
 			lifetime.add(this.keybindings.onDidUpdateKeybindings(updateContent));
-			const dialog = lifetime.add(new Dialog(root, title, [localize('accessibility.close', 'Close')], {
-				buttonStyles: defaultButtonStyles,
-				dialogStyles: defaultDialogStyles,
-				checkboxStyles: defaultCheckboxStyles,
-				inputBoxStyles: defaultInputBoxStyles,
+			const dialog = lifetime.add(new Dialog(root, title, [localize('accessibility.close', 'Close')], createWorkbenchDialogOptions({
 				renderBody: body => body.append(content),
 				extraClasses: ['ash-accessible-view-dialog'],
 				cancelId: 0,
-			}));
+			})));
 			this.help.value = lifetime;
 			this.contextKeys.bufferChangeEvents(() => {
 				helpShown.set(true);

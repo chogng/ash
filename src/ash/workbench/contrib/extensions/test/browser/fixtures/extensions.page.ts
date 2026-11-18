@@ -57,7 +57,7 @@ import { BrowserContextViewService } from '../../../../../../platform/contextvie
 import { IConfigurationService, type IConfigurationChangeEvent } from '../../../../../../platform/configuration/common/configuration.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
-import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialog.js';
+import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialogHandler.js';
 import { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
 import '../../../../../browser/parts/dialogs/dialog.web.contribution.js';
 import { IDialogsModel, IWorkbenchDialogHandler } from '../../../../../common/dialogs.js';

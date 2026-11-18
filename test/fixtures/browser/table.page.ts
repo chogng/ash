@@ -84,7 +84,7 @@ import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/
 import { ISecretStorageStatusService, type SecretStorageStatus, type SecretStorageMode, type SecretStorageState } from '../../../src/ash/platform/secrets/common/secrets.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
-import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
+import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialogHandler.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { ModelSettingsRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/modelSettingsRenderer.js';
 import { SettingsTreeModel, type SettingsSectionReference } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTreeModels.js';

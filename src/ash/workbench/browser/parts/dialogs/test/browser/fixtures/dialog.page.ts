@@ -26,7 +26,8 @@ import { BrowserStorageService } from '../../../../../../services/storage/browse
 import { ICodeEditorService } from '../../../../../../../editor/browser/services/codeEditorService.js';
 import { IMenuService } from '../../../../../../../platform/actions/common/actions.js';
 import type { IQuickPick, IQuickPickItem, IQuickPickDidAcceptEvent } from '../../../../../../../platform/quickinput/common/quickInput.js';
-import { BrowserDialogHandler, createWorkbenchDialogOptions } from '../../../dialog.js';
+import { createWorkbenchDialogOptions } from '../../../dialog.js';
+import { BrowserDialogHandler } from '../../../dialogHandler.js';
 import { DialogHandlerContribution } from '../../../dialog.web.contribution.js';
 import { CommandsQuickAccessProvider } from '../../../../../../contrib/quickaccess/browser/commandsQuickAccess.js';
 import { CommandService } from '../../../../../../services/commands/common/commandService.js';

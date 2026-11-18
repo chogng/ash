@@ -253,7 +253,7 @@ import { IDialogService, IFileDialogService } from '../../platform/dialogs/commo
 import { FileService } from '../../platform/files/common/fileService.js';
 import type { DialogService } from '../../workbench/services/dialogs/common/dialogService.js';
 import { IDialogsModel } from '../../workbench/common/dialogs.js';
-import { BrowserDialogHandler } from '../../workbench/browser/parts/dialogs/dialog.js';
+import { BrowserDialogHandler } from '../../workbench/browser/parts/dialogs/dialogHandler.js';
 import { DialogHandlerContribution } from '../../workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import '../../workbench/services/label/common/labelService.js';
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from '../../workbench/browser/labels.js';

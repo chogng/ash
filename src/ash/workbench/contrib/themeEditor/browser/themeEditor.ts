@@ -59,12 +59,8 @@ import {
 	serializeUserColorThemeDraft,
 	userThemeId,
 } from '../../../services/themes/common/colorThemeData.js';
-import {
-	defaultButtonStyles,
-	defaultInputBoxStyles,
-	defaultDialogStyles,
-	defaultCheckboxStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { createWorkbenchDialogOptions } from '../../../browser/parts/dialogs/dialog.js';
 import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
@@ -687,11 +683,7 @@ export class ThemeEditor extends EditorPane {
 				this.root,
 				localize('themeEditor.saveAs', 'Save as…'),
 				[localize('themeEditor.save', 'Save'), localize('themeEditor.cancel', 'Cancel')],
-				{
-					buttonStyles: defaultButtonStyles,
-					checkboxStyles: defaultCheckboxStyles,
-					inputBoxStyles: defaultInputBoxStyles,
-					dialogStyles: defaultDialogStyles,
+				createWorkbenchDialogOptions({
 					cancelId: 1,
 					renderBody: body => body.append(content),
 					buttonOptions: [
@@ -702,7 +694,7 @@ export class ThemeEditor extends EditorPane {
 							},
 						},
 					],
-				},
+				}),
 			),
 		);
 		lifetime.add(

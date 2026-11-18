@@ -40,10 +40,9 @@ test('desktop Workbench and Agents install the complete Host contract and target
 test('browser keeps its save confirmation in the workbench', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
-	await expect(input).toBeVisible();
-	await input.focus();
-	await input.type('unsaved draft');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await editor.waitForTypeInEditor('unsaved draft');
 	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 	const dialog = page.getByRole('dialog', { name: 'Save Changes' });
 	await expect(dialog).toBeVisible();
@@ -54,14 +53,13 @@ test('browser keeps its save confirmation in the workbench', { tag: ['@browser-u
 });
 
 test('desktop dirty editor sends its choices through the owning window dialog', { tag: ['@electron-ui'] }, async ({ target, application, workbench }) => {
-	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
-	await input.focus();
-	await input.type('unsaved draft');
+	const group = workbench.editors.groupAt(0);
+	await group.editor.waitForEditorFocus();
+	await group.editor.waitForTypeInEditor('unsaved draft');
 	const message = await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", () => workbench.quickaccess.runCommand('workbench.action.closeActiveEditor'));
 	expect(message.buttons).toEqual(['Save', "Don't Save", 'Cancel']);
-	await expect(input).toHaveCount(0);
+	await expect(group.tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(0);
 });
 
 test('desktop file dialog bridge preserves shared options and complete results in its owning window', { tag: ['@electron-ui'] }, async ({ target, application, workbench, testWorkspace }) => {
@@ -116,7 +114,7 @@ test('browser Save As writes an untitled editor to the selected folder', { tag: 
 	await input.press('Control+S');
 	const dialog = page.getByRole('dialog', { name: 'Save File' });
 	await expect(dialog).toBeVisible();
-	await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill('draft.txt');
+	await dialog.getByRole('textbox', { name: 'Save File, field 1' }).fill('draft.txt');
 	await dialog.getByRole('button', { name: 'OK' }).click();
 	await expect(dialog).toHaveCount(0);
 	for (const index of [0, 1]) {
@@ -135,7 +133,7 @@ test('browser Save As writes an untitled editor to the selected folder', { tag: 
 	await firstGroup.editor.waitForTypeInEditor('replacement draft');
 	await firstGroup.editor.input.press('Control+S');
 	const secondDialog = page.getByRole('dialog', { name: 'Save File' });
-	await secondDialog.getByRole('textbox', { name: 'File name, field 1' }).fill('draft.txt');
+	await secondDialog.getByRole('textbox', { name: 'Save File, field 1' }).fill('draft.txt');
 	await secondDialog.getByRole('button', { name: 'OK' }).click();
 	const replacement = page.getByRole('dialog', { name: 'Confirm' });
 	await expect(replacement).toContainText('Replace the existing file draft.txt?');

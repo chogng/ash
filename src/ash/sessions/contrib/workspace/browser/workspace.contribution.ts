@@ -1,5 +1,5 @@
 import './media/workspaceTrustDialog.css';
-import { BrowserDialogHandler } from '../../../../workbench/browser/parts/dialogs/dialog.js';
+import { BrowserDialogHandler } from '../../../../workbench/browser/parts/dialogs/dialogHandler.js';
 import { DialogResult, type DialogRequest, type IDialogHandler, type IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';

@@ -347,7 +347,7 @@ suite('banner browser component', () => {
 			await expect(save).toBeDisabled();
 			await editor.focus();
 			await page.keyboard.press('Alt+F1');
-			const help = page.getByRole('textbox', { name: 'Accessibility Help', exact: true });
+			const help = page.getByRole('textbox', { name: zh ? '无障碍帮助' : 'Accessibility Help', exact: true });
 			await expect(help).toHaveValue(zh ? /工作区信任/ : /Workspace Trust/);
 			await expect(help).toHaveValue(zh ? /可能终止正在运行的终端命令和调试会话/ : /may terminate running terminal commands and debug sessions/);
 			await help.press('Escape');

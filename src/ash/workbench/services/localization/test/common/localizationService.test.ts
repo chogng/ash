@@ -70,12 +70,10 @@ suite('Workbench localization', () => {
 		);
 	});
 
-	test('auxiliary window labels and document return notices use the selected Chinese catalog', () => {
+	test('auxiliary window title and editor return help use the selected Chinese catalog', () => {
 		initializeTestLocalization('zh-CN');
-		assert.deepEqual(
-			[localize('auxiliaryWindow.editor', ''), localize('auxiliaryWindow.returningEditors', '')],
-			['编辑器', '正在将未保存的编辑器移回主窗口。'],
-		);
+		assert.equal(localize({ bundle: 'ash', key: 'auxiliaryWindow.editor' }, ''), '编辑器');
+		assert.match(localize('accessibility.editorWindows', ''), /关闭编辑器窗口时，未保存的编辑器会移回主窗口。/);
 	});
 
 	test('theme editor actions and workspace help use the selected Chinese catalog', () => {

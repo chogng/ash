@@ -148,9 +148,7 @@ import { StatusbarHeight } from './parts/workbenchPartDimensions.js';
 import { IMarkerService } from '../../platform/markers/common/markers.js';
 import { MarkerService } from '../../platform/markers/common/markerService.js';
 import type { IKeyboardLayoutProvider } from '../../platform/keyboardLayout/common/keyboardLayout.js';
-import {
-	BrowserDialogHandler,
-} from './parts/dialogs/dialog.js';
+import { BrowserDialogHandler } from './parts/dialogs/dialogHandler.js';
 import {
 	IDialogService,
 	IFileDialogService,

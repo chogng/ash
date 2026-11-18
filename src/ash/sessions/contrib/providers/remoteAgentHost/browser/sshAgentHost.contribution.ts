@@ -1,5 +1,5 @@
 import { Dialog } from '../../../../../base/browser/ui/dialog/dialog.js';
-import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import { createWorkbenchDialogOptions } from '../../../../../workbench/browser/parts/dialogs/dialog.js';
 import { isSSHAgentHost } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -67,14 +67,12 @@ export class SSHAgentHostContribution extends Disposable {
 			localize('sessions.environment.ssh', 'SSH'),
 			localize('sessions.environment.tunnel', 'Ash Tunnel'),
 		] : [localize('sessions.environment.tunnel', 'Ash Tunnel')];
-		const dialogStyles = { buttonStyles: defaultButtonStyles, checkboxStyles: defaultCheckboxStyles, inputBoxStyles: defaultInputBoxStyles, dialogStyles: defaultDialogStyles };
 		try {
 			if (transport === undefined) {
-				const choose = new Dialog(this.layout.activeContainer, localize('sessions.environment.newEnvironment', 'New Environment'), [...transports, cancel], {
-					...dialogStyles,
+				const choose = new Dialog(this.layout.activeContainer, localize('sessions.environment.newEnvironment', 'New Environment'), [...transports, cancel], createWorkbenchDialogOptions({
 					cancelId: transports.length,
 					detail: localize('sessions.environment.transportHelp', 'Save an SSH connection or connect using an authenticated Ash Tunnel URL.'),
-				});
+				}));
 				this.newEnvironment.value = choose;
 				const choice = await choose.show();
 				if (this.isDisposed || choice.button === transports.length) return false;
@@ -85,14 +83,14 @@ export class SSHAgentHostContribution extends Disposable {
 				return !!await this.commands.executeCommand<string>('sessions.action.connectTunnelAgentHost');
 			}
 			if (!this.connections.available) return false;
-			const ssh = new Dialog(this.layout.activeContainer, localize('sessions.environment.newSSH', 'New SSH Connection'), [localize('sessions.environment.save', 'Save'), cancel], {
-				...dialogStyles, cancelId: 1,
+			const ssh = new Dialog(this.layout.activeContainer, localize('sessions.environment.newSSH', 'New SSH Connection'), [localize('sessions.environment.save', 'Save'), cancel], createWorkbenchDialogOptions({
+				cancelId: 1,
 				inputs: [
 					{ placeholder: localize('sessions.environment.connectionName', 'Connection name') },
 					{ placeholder: localize('sessions.environment.sshHost', 'OpenSSH host alias') },
 					{ placeholder: localize('sessions.environment.workspacePath', 'Absolute workspace path') },
 				],
-			});
+			}));
 			this.newEnvironment.value = ssh;
 			const result = await ssh.show();
 			if (this.isDisposed || result.button !== 0 || !result.values) return false;

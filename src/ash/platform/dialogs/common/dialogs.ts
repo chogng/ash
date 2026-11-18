@@ -3,6 +3,7 @@ import {
 } from '../../instantiation/common/instantiation.js';
 import type { URI } from '../../../base/common/uri.js';
 import type { Event } from '../../../base/common/event.js';
+import { localize } from '../../../nls.js';
 
 /** Visual severity used by a modal message dialog. */
 export enum DialogSeverity {
@@ -115,6 +116,35 @@ export interface IDialogOutcome {
 	readonly buttonIndex?: number;
 	readonly values?: readonly string[];
 	readonly checkboxChecked?: boolean;
+}
+
+/** Builds buttons in logical result order, independent of host presentation. */
+export function getDialogButtons(request: DialogRequest): { buttons: string[]; cancelId: number; } {
+	if (request.kind === 'choice') {
+		return { buttons: [...request.buttons, request.cancelButton], cancelId: request.buttons.length };
+	}
+
+	const buttons = [request.primaryButton ?? (request.kind === 'confirmation'
+		? localize('dialog.confirm', 'Confirm')
+		: localize('dialog.ok', 'OK'))];
+	if (request.kind === 'message') {
+		return { buttons, cancelId: -1 };
+	}
+	if (request.kind === 'prompt') {
+		buttons.push(request.secondaryButton);
+	}
+	buttons.push(request.cancelButton ?? localize('dialog.cancel', 'Cancel'));
+	return { buttons, cancelId: buttons.length - 1 };
+}
+
+export function getDialogOutcome(request: DialogRequest, buttonIndex: number, cancelId: number, checkboxChecked: boolean | undefined): IDialogOutcome {
+	if (buttonIndex === cancelId) {
+		return { button: DialogResult.Cancel, checkboxChecked };
+	}
+	if (request.kind === 'choice') {
+		return { button: DialogResult.Primary, buttonIndex, checkboxChecked };
+	}
+	return { button: buttonIndex === 0 ? DialogResult.Primary : DialogResult.Secondary, checkboxChecked };
 }
 
 /**
