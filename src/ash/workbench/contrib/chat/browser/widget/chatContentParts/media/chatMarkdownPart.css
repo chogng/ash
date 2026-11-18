@@ -124,13 +124,16 @@
 }
 
 .ash-chat-resources button {
-	color: var(--ash-button-foreground);
-	background: var(--ash-button-secondaryBackground);
 	margin-inline-end: var(--ash-spacing-size80);
 }
 
+.ash-chat-resources button:not(.ash-button) {
+	color: var(--ash-button-foreground);
+	background: var(--ash-button-secondaryBackground);
+}
+
 .ash-chat-resources summary:focus-visible,
-.ash-chat-resources button:focus-visible {
+.ash-chat-resources button:not(.ash-button):focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: var(--ash-spacing-size40);
 }

@@ -1,4 +1,7 @@
-import { resourceFileName, saveResourceAs } from '../../../../services/files/browser/resourceSave.js';
+import { resourceFileName, saveResourceAs } from '../../../../browser/download.js';
+import { ChatResourcePill } from '../../../../browser/chatResourcePill.js';
+import { createChatPillButton } from '../../../../browser/chatPills.js';
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { allowedMarkdownHtmlAttributes } from '../../../../../base/browser/markdownRenderer.js';
 import { isPortableLinkTarget } from '../../../../../base/common/htmlContent.js';
 import { equals } from '../../../../../base/common/objects.js';
@@ -142,6 +145,7 @@ export class ChatListItemRenderer extends Disposable {
 	private readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
 	private readonly mediaChanges = this._register(new MutableDisposable());
 	private readonly fileButtons = this._register(new MutableDisposable<DisposableStore>());
+	private publishedFileControls: HTMLElement | undefined;
 	private renderedFiles: IChatListItem['files'];
 	private readonly resources = this._register(new MutableDisposable<ChatResourceGroupWidget>());
 	private readonly resourceChanges = this._register(new MutableDisposable());
@@ -332,23 +336,7 @@ export class ChatListItemRenderer extends Disposable {
 
 	private renderAttachments(): void {
 		if (!this.attachments) return;
-		if (!equals(this.renderedFiles, this.item.files)) {
-			this.fileButtons.clear();
-			this.renderedFiles = this.item.files;
-			if (this.item.files?.length) {
-				const lifetime = this.fileButtons.value = new DisposableStore();
-				const files = h(this.element.ownerDocument, 'div', { className: 'ash-chat-file-buttons' });
-				this.attachments.append(files);
-				lifetime.add(toDisposable(() => files.remove()));
-				for (const file of this.item.files) {
-					lifetime.add(new Button(files, {
-						...defaultButtonStyles, label: file.label, icon: Lxicon.file,
-						presentation: 'secondary',
-						onClick: () => { void this.opener.open(URI.parse(file.resource), { fromUserGesture: true }).catch(error => this.notifications.error(error)); },
-					}));
-				}
-			}
-		}
+		this.renderPublishedFiles(this.attachments);
 		const content = this.item.content ?? [];
 		const changed = () => { this.options.onDidChangeHeight(); this.options.onDidChangeContent(); };
 		const useImagePopup = this.contextKeys.getValue(ChatContextKeys.imagePreviewPresentation.key) === 'popup';
@@ -381,6 +369,75 @@ export class ChatListItemRenderer extends Disposable {
 			}
 			this.resources.value.render(content, JSON.stringify([this.item.attachmentSource?.sessionId, this.item.attachmentSource?.threadId, this.item.id]), this.item.attachmentSource);
 		} else { this.resourceChanges.clear(); this.resources.clear(); }
+	}
+
+	private renderPublishedFiles(attachments: HTMLElement): void {
+		const entries = this.item.files;
+		if (equals(this.renderedFiles, entries)) return;
+		this.renderedFiles = entries;
+		const document = this.element.ownerDocument;
+		const restoreFocus = this.publishedFileControls?.contains(document.activeElement)
+			|| this.publishedFileControls?.querySelector('button[aria-expanded="true"]');
+		this.fileButtons.clear();
+		this.publishedFileControls = undefined;
+		if (!entries?.length) {
+			if (restoreFocus) this.element.focus({ preventScroll: true });
+			return;
+		}
+
+		const lifetime = this.fileButtons.value = new DisposableStore();
+		const controls = this.publishedFileControls = h(document, 'div', { className: 'ash-chat-file-buttons' });
+		lifetime.add(toDisposable(() => controls.remove()));
+		const footer = this.messageTime?.parentElement;
+		if (footer) footer.prepend(controls);
+		else attachments.append(controls);
+
+		const open = async (resource: string) => {
+			if (!this.options.isVisible() || lifetime.isDisposed) return;
+			try {
+				await this.opener.open(URI.parse(resource), { fromUserGesture: true });
+			} catch (error) {
+				if (!lifetime.isDisposed) this.notifications.error(error instanceof Error ? error : String(error));
+			}
+		};
+		if (!footer) {
+			for (const file of entries) {
+				lifetime.add(new Button(controls, {
+					...defaultButtonStyles, label: file.label, icon: Lxicon.file,
+					presentation: 'secondary', onClick: () => { void open(file.resource); },
+				}));
+			}
+		} else if (entries.length === 1) {
+			const file = entries[0]!;
+			lifetime.add(this.instantiationService.createInstance(ChatResourcePill, controls, {
+				resource: URI.parse(file.resource), label: file.label, open: () => open(file.resource),
+			}, undefined));
+		} else {
+			const count = entries.length;
+			const menu = new CancellationTokenSource();
+			lifetime.add(toDisposable(() => menu.dispose(true)));
+			const label = localize('chat.response.publishedFiles', '{0} Files', count);
+			const button = lifetime.add(createChatPillButton(controls, { label, icon: Lxicon.chevronDown, presentation: 'secondary' }));
+			button.domNode.setAttribute('aria-haspopup', 'menu');
+			button.domNode.setAttribute('aria-expanded', 'false');
+			lifetime.add(button.onDidClick(event => {
+				event.stopPropagation();
+				if (!this.options.isVisible()) return;
+				if (button.domNode.getAttribute('aria-expanded') === 'true') {
+					this.contextMenus.hideContextMenu();
+					return;
+				}
+				button.domNode.setAttribute('aria-expanded', 'true');
+				this.contextMenus.showContextMenu({
+					getAnchor: () => button.domNode,
+					getActions: () => entries.map((file, index) => this.messageAction(`chat.response.openPublishedFile.${index}`, file.label, Lxicon.file, () => open(file.resource))),
+					autoSelectFirstItem: event.detail === 0,
+					cancellationToken: menu.token,
+					onHide: () => button.domNode.setAttribute('aria-expanded', 'false'),
+				});
+			}));
+		}
+		if (restoreFocus) controls.querySelector('button')?.focus({ preventScroll: true });
 	}
 
 	private createMessageActions(): HTMLElement {

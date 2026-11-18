@@ -1,6 +1,6 @@
 import { IChatResponseResourceFileSystemProvider, type IChatResourceAssociation } from '../../../common/widget/chatResponseResourceFileSystemProvider.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
-import { resourceFileName, saveResourceAs } from '../../../../../services/files/browser/resourceSave.js';
+import { resourceFileName, saveResourceAs } from '../../../../../browser/download.js';
 import './media/chatMarkdownPart.css';
 import { addDisposableListener, getWindow, h } from '../../../../../../base/browser/dom.js';
 import { createObjectUrl } from '../../../../../../base/browser/fileAccess.js';

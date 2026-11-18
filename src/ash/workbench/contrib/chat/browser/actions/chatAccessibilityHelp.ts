@@ -87,6 +87,8 @@ export function getChatInputAccessibilityHelp(screenshotHelp: string, secondaryT
 		getChatInputNoticeHelp(),
 		localize('dictation.downloadHelp', 'The dictation button shows when the local model is downloading. Activate it again, or press Escape in the input to cancel. The microphone opens after the model is ready.'),
 		localize('chat.response.fileLinksHelp', 'Use Tab to reach a file link in a reply and Enter to open the file at the referenced line.'),
+		localize('chat.response.resourcePillHelp', 'Expand a response resource, then Tab to its file name and press Enter or Space to open it read-only.'),
+		localize('chat.response.publishedFilesHelp', 'Use Tab to reach published files below the reply. Press Enter or Space to open a single file or show the file list. Use the arrow keys to select a file and Enter to open it.'),
 		localize('chat.message.actionsHelp', 'Use Tab to reach Response actions below a reply. Press Left or Right to move between actions, then Enter or Space to activate the focused action.'),
 		getChatMermaidAccessibilityHelp(),
 		getChatRequestAccessibilityHelp(),

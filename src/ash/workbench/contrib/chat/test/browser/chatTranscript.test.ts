@@ -1443,6 +1443,28 @@ suite('chatTranscript browser component', () => {
 		});
 	}
 
+	test('published files expose a keyboard menu in the reply footer', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?locale=zh-CN');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showPublishedFiles(1));
+		const footer = page.locator('.ash-chat-message-actions');
+		const single = footer.getByRole('button', { name: '打开 report.md' });
+		await expect(single).toBeVisible();
+		await single.focus();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showPublishedFiles(2));
+		const multiple = footer.getByRole('button', { name: '2 个文件' });
+		await expect(multiple).toBeFocused();
+		await page.keyboard.press('Space');
+		const menu = page.getByRole('menu');
+		await expect(menu.getByRole('menuitem', { name: 'report.md' })).toBeFocused();
+		await page.keyboard.press('ArrowDown');
+		await expect(menu.getByRole('menuitem', { name: 'chart.html' })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(menu).toHaveCount(0);
+		await expect(multiple).toBeFocused();
+		await expect(multiple).toHaveAttribute('aria-expanded', 'false');
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`MCP resources retain exact bytes, readonly editors and safe keyboard disclosure in ${locale}`, async function () {
 			const { page } = browserTests;
@@ -1462,12 +1484,17 @@ suite('chatTranscript browser component', () => {
 			await expect(textRow).toHaveAttribute('open', '');
 			await expect(textRow.locator('pre')).toContainText('<script>window.compromised = true</script>');
 			await expect(tool.locator('script,img')).toHaveCount(0);
-			const open = locale === 'en' ? 'Open resource' : '打开资源';
+			const open = textRow.getByRole('button', { name: locale === 'en' ? 'Open report.md' : '打开 report.md', exact: true });
+			await expect(open).toHaveText('report.md');
 			const copy = locale === 'en' ? 'Copy content' : '复制内容';
 			await textRow.getByRole('button', { name: copy }).click();
 			const raw = '<script>window.compromised = true</script>\r\n中文';
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(raw);
-			await textRow.getByRole('button', { name: open }).click();
+			await textRow.locator('summary').focus();
+			await page.keyboard.press('Tab');
+			await expect(open).toBeFocused();
+			await expect(open).toHaveCSS('outline-style', 'solid');
+			await page.keyboard.press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().resource)).toMatch(/^chat-response-resource:/u);
 			const resource = await page.evaluate(() => window.ashChatTranscriptIntegration.state().resource);
 			expect(await page.evaluate(uri => window.ashChatTranscriptIntegration.readResource(uri), resource)).toEqual([...new TextEncoder().encode(raw)]);

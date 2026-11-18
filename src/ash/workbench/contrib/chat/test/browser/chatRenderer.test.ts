@@ -1,4 +1,8 @@
 import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
+import { BrowserLayoutService, ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
+import { Event } from '../../../../../base/common/event.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { ILoggerService, LogLevel, type LogEntry } from '../../../../../platform/log/common/log.js';
 import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
@@ -13,7 +17,7 @@ import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { createCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
+import { createCodeEditorServices, registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { ChatListWidget } from '../../browser/widget/chatListWidget.js';
 import { chatTranscriptListItem, chatTranscriptListItems } from '../../common/model/chatViewModel.js';
@@ -50,6 +54,7 @@ const source = { sessionId: 'session', threadId: 'thread', itemId: 'image', kind
 const image = { type: 'imageAttachment' as const, detail: 'auto' as const, attachment: { contentDigest: `sha256:${'a'.repeat(64)}`, width: 2, height: 1, mediaType: 'png' as const, encodedBytes: 70 } };
 
 function mount(resources: DisposableStore, services: ReturnType<typeof createTestEditorServices>, classPrefix?: string): ChatListWidget {
+	if (!services.has(ILayoutService)) services.registerSingleton(ILayoutService, () => new BrowserLayoutService({ root: document.body }));
 	if (!services.has(IAgentThreadService)) services.registerInstance(IAgentThreadService, createDisconnectedRendererApi().thread);
 	if (!services.has(IChatResponseResourceFileSystemProvider)) services.registerInstance(IChatResponseResourceFileSystemProvider, resources.add(services.createInstance(ChatResponseResourceFileSystemProvider)));
 	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { throw new Error('Unexpected media preview'); }, focusActiveEditor() { } });
@@ -360,9 +365,77 @@ test('a code card resolves a late language alias without replacing the response 
 	assert.equal(model.isDisposed(), false);
 });
 
+function createResourceRendererServices(resources: DisposableStore): ReturnType<typeof createTestEditorServices> {
+	// Resource labels resolve Workbench and editor services from the same host scope.
+	const services = resources.add(createTestEditorServices());
+	registerCodeEditorServices(services);
+	return resources.add(services.createChild());
+}
+
+test('published files move between a reply footer pill and a menu without losing focus', async () => {
+	using resources = new DisposableStore();
+	const services = createResourceRendererServices(resources);
+	const opened: string[] = [];
+	const openedSingle = new DeferredPromise<void>();
+	resources.add(services.get(IOpenerService).registerOpener({
+		open: async (resource, options) => {
+			assert.equal(options?.fromUserGesture, true);
+			opened.push(resource.toString());
+			if (opened.length === 1) await openedSingle.complete();
+			return true;
+		},
+	}));
+	let menu: Parameters<IContextMenuService['showContextMenu']>[0] | undefined;
+	services.registerInstance(IContextMenuService, {
+		contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+		hideContextMenu() { },
+		showContextMenu: delegate => { menu = delegate; },
+	});
+	const widget = mount(resources, services);
+	const first = { resource: 'file:///workspace/report.md', label: 'report.md' };
+	const second = { resource: 'file:///workspace/chart.html', label: 'chart.html' };
+	const footerButton = () => widget.element.querySelector<HTMLButtonElement>('.ash-chat-message-actions > .ash-chat-file-buttons button');
+
+	setNlsMessages('zh-CN', chineseCatalog.bundles);
+	try {
+		const reply = { ...response, transient: false };
+		widget.render([{ ...reply, files: [first] }]);
+		const single = footerButton()!;
+		assert.equal(single.textContent, first.label);
+		assert.equal(single.getAttribute('aria-label'), '打开 report.md');
+		assert.equal(widget.element.querySelectorAll('.ash-chat-file-buttons').length, 1);
+		single.focus();
+		single.click();
+		await openedSingle.p;
+		assert.deepEqual(opened, [first.resource]);
+
+		widget.render([{ ...reply, files: [first, second] }]);
+		const multiple = footerButton()!;
+		assert.equal(document.activeElement, multiple);
+		assert.equal(multiple.textContent, '2 个文件');
+		multiple.click();
+		assert.equal(multiple.getAttribute('aria-expanded'), 'true');
+		assert.equal(menu?.autoSelectFirstItem, true);
+		const actions = menu?.getActions?.() ?? [];
+		assert.deepEqual(actions.map(action => action.label), [first.label, second.label]);
+		await actions[1]!.run();
+		assert.deepEqual(opened, [first.resource, second.resource]);
+		menu!.onHide?.(false);
+		assert.equal(multiple.getAttribute('aria-expanded'), 'false');
+
+		widget.render([reply]);
+		assert.equal(footerButton(), null);
+		assert.equal(menu!.cancellationToken?.isCancellationRequested, true);
+		await actions[0]!.run();
+		assert.deepEqual(opened, [first.resource, second.resource]);
+	} finally {
+		resetNlsResolver();
+	}
+});
+
 test('corrected response resources retain disclosure identity, expansion and summary focus and retire previous bytes', async () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = createResourceRendererServices(resources);
 	const files = resources.add(new RecordingResponseFiles());
 	services.registerInstance(IChatResponseResourceFileSystemProvider, files);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { throw new Error('Unexpected resource open'); }, focusActiveEditor() { } });
@@ -388,7 +461,7 @@ test('corrected response resources retain disclosure identity, expansion and sum
 
 for (const replacement of ['changed', 'removed'] as const) test(`a ${replacement} linked-resource Item source retires its unchanged content and pending read`, async () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = createResourceRendererServices(resources);
 	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 	let pending = new DeferredPromise<{ bytes: Uint8Array; mimeType: string; }>();
 	let signal: AbortSignal | undefined;
@@ -400,11 +473,16 @@ for (const replacement of ['changed', 'removed'] as const) test(`a ${replacement
 	const opened = new DeferredPromise<void>();
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { opens++; await opened.complete(); }, focusActiveEditor() { } });
 	const widget = mount(resources, services);
-	const artifact = { type: 'artifact' as const, artifact: { source: { type: 'resourceLink' as const, uri: 'mcp://resource/readme.md' }, mimeType: 'text/markdown', data: { type: 'text' as const, text: 'Unchanged description' }, contentDigest: 'unchanged', truncated: false } };
+	const artifact = { type: 'artifact' as const, artifact: { source: { type: 'resourceLink' as const, uri: 'mcp://resource/readme.md?revision=2' }, mimeType: 'text/markdown', data: { type: 'text' as const, text: 'Unchanged description' }, contentDigest: 'unchanged', truncated: false } };
 	widget.render([{ ...response, content: [artifact], attachmentSource: source }]);
 	const disclosure = widget.element.querySelector<HTMLDetailsElement>('.ash-chat-resources details')!;
 	disclosure.open = true;
-	widget.element.querySelector<HTMLButtonElement>('.ash-chat-resources button')!.click();
+	const open = disclosure.querySelector<HTMLButtonElement>('.ash-chat-resource-pill')!;
+	assert.equal(open.textContent, 'readme.md');
+	open.click();
+	open.click();
+	assert.equal(open.getAttribute('aria-busy'), 'true');
+	assert.equal(requests.length, 1);
 	assert.equal(signal?.aborted, false);
 	const nextSource = replacement === 'changed' ? { ...source, itemId: 'corrected-item' } : undefined;
 	widget.render([{ ...response, content: [artifact], attachmentSource: nextSource }]);
@@ -434,7 +512,7 @@ for (const replacement of ['changed', 'removed'] as const) test(`a ${replacement
 
 test('correcting a linked resource cancels its original read and suppresses a retired origin failure', async () => {
 	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const services = createResourceRendererServices(resources);
 	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 	const pending = new DeferredPromise<{ bytes: Uint8Array; mimeType: string; }>();
 	let signal: AbortSignal | undefined;

@@ -24,7 +24,7 @@ import { INotificationService } from '../../../../../../platform/notification/co
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { defaultDialogStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { createWorkbenchDialogOptions } from '../../../../../browser/parts/dialogs/dialog.js';
-import { resourceFileName, saveResourceAs } from '../../../../../services/files/browser/resourceSave.js';
+import { resourceFileName, saveResourceAs } from '../../../../../browser/download.js';
 import { serializeChatMarkdownTableCsv, serializeChatMarkdownTableTsv } from './chatMarkdownTableSerialization.js';
 import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExtension.js';
 import { ChatContentMarkdownRenderer, getChatMarkdownRenderOptions } from '../chatContentMarkdownRenderer.js';

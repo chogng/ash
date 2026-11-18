@@ -17,7 +17,7 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import type { EditorWorkingCopy } from '../../../../workbench/browser/parts/editor/textResourceEditor.js';
 import type { IResourceEditorInput, ISaveOptions } from '../../../../workbench/common/editor.js';
-import { resourceFileName } from '../../../../workbench/services/files/browser/resourceSave.js';
+import { resourceFileName } from '../../../../workbench/browser/download.js';
 import { IFileTextModelService } from '../../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyBackupService } from '../../../../workbench/services/workingCopy/common/workingCopyBackupService.js';
 import type { DocumentTextFormat } from '../../../../workbench/services/documentEditor/common/documentCodec.js';

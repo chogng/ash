@@ -1,10 +1,10 @@
-import { triggerDownload } from '../../../../base/browser/fileAccess.js';
-import { getExtensionForMimeType, getMediaOrTextMime, normalizeMimeType } from '../../../../base/common/mime.js';
-import { isNative } from '../../../../base/common/platform.js';
-import { URI } from '../../../../base/common/uri.js';
-import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { IFileService } from '../../../../platform/files/common/files.js';
-import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { triggerDownload } from '../../base/browser/fileAccess.js';
+import { getExtensionForMimeType, getMediaOrTextMime, normalizeMimeType } from '../../base/common/mime.js';
+import { isNative } from '../../base/common/platform.js';
+import { URI } from '../../base/common/uri.js';
+import { IFileDialogService } from '../../platform/dialogs/common/dialogs.js';
+import { IFileService } from '../../platform/files/common/files.js';
+import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 
 export function resourceFileName(name: string, mimeType: string): string {
 	const safeName = name.split(/[\\/]/u).at(-1)?.replace(/[<>:"|?*\u0000-\u001f]/gu, '_').replace(/[. ]+$/u, '') || 'download';

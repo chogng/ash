@@ -338,6 +338,10 @@ article.ash-chat-user-message > pre {
 .ash-chat-user-message > .ash-chat-message-actions {
 	justify-content: flex-end;
 }
+.ash-chat-message-actions > .ash-chat-file-buttons {
+	min-inline-size: 0;
+	max-inline-size: 100%;
+}
 .ash-chat-message-time {
 	margin-inline-start: var(--ash-spacing-size40);
 	color: var(--ash-description-foreground);

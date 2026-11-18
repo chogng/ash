@@ -16,7 +16,7 @@ import { IUntitledTextEditorService } from '../../../../workbench/services/untit
 import { UntitledTextEditorInput } from '../../../../workbench/services/untitled/common/untitledTextEditorInput.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { DocumentEditorPane } from '../../../../workbench/contrib/documentEditor/browser/documentEditorPane.js';
-import { saveResourceAs } from '../../../../workbench/services/files/browser/resourceSave.js';
+import { saveResourceAs } from '../../../../workbench/browser/download.js';
 import type { DocsEditorPane } from './docsEditorPane.js';
 import { createDocsOpener, newDocsResource } from './documentActions.js';
 import { generateUuid } from '../../../../base/common/uuid.js';

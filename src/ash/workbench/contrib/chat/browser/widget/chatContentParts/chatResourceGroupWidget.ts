@@ -11,6 +11,8 @@ import { IEditorService } from '../../../../../services/editor/common/editorServ
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import { IChatResponseResourceFileSystemProvider } from '../../../common/widget/chatResponseResourceFileSystemProvider.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { ChatResourcePill } from '../../../../../browser/chatResourcePill.js';
+import { IResourceLabelService, type ResourceLabels } from '../../../../../browser/labels.js';
 import { reviveChatTreeData } from '../../../common/chatService/chatService.js';
 import { ChatTreeContentPart } from './chatTreeContentPart.js';
 import type { IChatFileTreeInfo } from '../../chat.js';
@@ -30,6 +32,7 @@ class ResourceRow extends Disposable {
 /** Displays inert tool snapshots; opening a tree leaf uses the original file access boundary. */
 export class ChatResourceGroupWidget extends Disposable {
 	public readonly domNode: HTMLElement;
+	private readonly resourceLabels: ResourceLabels;
 	private readonly rows = this._register(new DisposableMap<number, ResourceRow>());
 	private readonly changedHeight = this._register(new Emitter<void>());
 	private lastFocusedTree: number | undefined;
@@ -42,8 +45,10 @@ export class ChatResourceGroupWidget extends Disposable {
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IResourceLabelService resourceLabels: IResourceLabelService,
 	) {
 		super();
+		this.resourceLabels = this._register(resourceLabels.createGroup());
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-chat-resources';
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -109,31 +114,29 @@ export class ChatResourceGroupWidget extends Disposable {
 		body.setAttribute('aria-label', summary.textContent);
 		body.textContent = text === undefined ? localize('chat.resource.binary', 'Binary resource ({0} bytes)', artifact.data.type === 'bytes' ? artifact.data.bytes.length : 0) : artifact.data.type === 'json' ? JSON.stringify(JSON.parse(text), null, 2) : text;
 		const bytes = artifact.data.type === 'bytes' ? artifact.data.bytes : new TextEncoder().encode(text!);
-		let association = artifact.source.type === 'resourceLink' ? undefined : lifetime.add(this.files.associate(bytes, { id: identity, name: resourceName(artifact) }));
+		const name = resourceName(artifact);
+		let association = artifact.source.type === 'resourceLink' ? undefined : lifetime.add(this.files.associate(bytes, { id: identity, name }));
 		const controller = new AbortController();
 		lifetime.add(toDisposable(() => controller.abort()));
-		const open = h(document, 'button');
-		open.type = 'button';
-		open.textContent = localize('chat.resource.open', 'Open resource');
-		let opening = false;
-		lifetime.add(addDisposableListener(open, 'click', () => {
-			if (opening) return;
-			opening = true;
-			open.setAttribute('aria-busy', 'true');
-			void (async () => {
-				if (!association) {
-					if (!coordinate) throw new Error(localize('chat.resource.originMissing', 'The originating tool is unavailable.'));
-					const data = await this.threads.readToolResource(coordinate, controller.signal);
-					if (controller.signal.aborted || lifetime.isDisposed) return;
-					association = lifetime.add(this.files.associate(data.bytes, { name: resourceName({ ...artifact, mimeType: data.mimeType }) }));
+		node.replaceChildren(summary, metadata);
+		lifetime.add(this.instantiation.createInstance(ChatResourcePill, node, {
+			label: name,
+			resource: association?.resource,
+			open: async () => {
+				try {
+					if (!association) {
+						if (!coordinate) throw new Error(localize('chat.resource.originMissing', 'The originating tool is unavailable.'));
+						const data = await this.threads.readToolResource(coordinate, controller.signal);
+						if (controller.signal.aborted || lifetime.isDisposed) return;
+						association = lifetime.add(this.files.associate(data.bytes, { name: resourceName({ ...artifact, mimeType: data.mimeType }) }));
+					}
+					if (controller.signal.aborted) return;
+					await this.editors.openEditor({ resource: association.resource, readOnly: true, showBreadcrumbs: false }, { pinned: true });
+				} catch (error) {
+					if (!lifetime.isDisposed && !this.isDisposed && node.isConnected) this.notifications.error(localize('chat.resource.openFailed', 'Could not open the response resource: {0}', String(error)));
 				}
-				if (controller.signal.aborted) return;
-				await this.editors.openEditor({ resource: association.resource, readOnly: true, showBreadcrumbs: false }, { pinned: true });
-			})().catch(error => {
-				if (!lifetime.isDisposed && !this.isDisposed && node.isConnected) this.notifications.error(localize('chat.resource.openFailed', 'Could not open the response resource: {0}', String(error)));
-			}).finally(() => { opening = false; open.removeAttribute('aria-busy'); });
-		}));
-		node.replaceChildren(summary, metadata, open);
+			},
+		}, this.resourceLabels));
 		if (row.tree) node.append(row.tree.domNode);
 		if (text !== undefined) {
 			const copy = h(document, 'button');
@@ -156,7 +159,8 @@ export class ChatResourceGroupWidget extends Disposable {
 }
 
 function resourceName(artifact: Artifact): string {
-	const name = 'uri' in artifact.source ? artifact.source.uri.split(/[/?#]/u).filter(Boolean).at(-1)?.replace(/[\\:*"<>|]/gu, '_') ?? 'resource' : 'result.json';
+	const path = 'uri' in artifact.source ? artifact.source.uri.split(/[?#]/u, 1)[0] : undefined;
+	const name = path === undefined ? 'result.json' : path.split('/').filter(Boolean).at(-1)?.replace(/[\\:*"<>|]/gu, '_') ?? 'resource';
 	if (/\.[a-z0-9]+$/iu.test(name)) return name;
 	const extension = artifact.mimeType.split(';', 1)[0] === 'application/pdf' ? '.pdf' : artifact.mimeType.startsWith('image/png') ? '.png' : artifact.mimeType.startsWith('image/jpeg') ? '.jpg' : artifact.mimeType.startsWith('image/webp') ? '.webp' : artifact.mimeType.startsWith('text/html') ? '.html' : artifact.mimeType.startsWith('text/markdown') ? '.md' : artifact.mimeType.startsWith('application/json') ? '.json' : '.txt';
 	return name + extension;

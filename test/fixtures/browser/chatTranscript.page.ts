@@ -805,6 +805,7 @@ declare global {
 			updateTool(finish: boolean): void;
 			showMedia(delay: boolean): void;
 			showArtifacts(revise: boolean): void;
+			showPublishedFiles(count: number): void;
 			showLink(mode: 'read' | 'delay' | 'error'): void;
 			showApp(mode?: 'read' | 'delay' | 'error', allowCsp?: boolean, withMedia?: boolean): void;
 			setAppResourceMode(mode: 'read' | 'error'): void;
@@ -1773,6 +1774,13 @@ window.ashChatTranscriptIntegration = {
 			]
 		});
 		list.render(chatTranscriptListItems(update.changes.flatMap(change => change.type === 'upsert' ? [change.entry] : []), undefined, [], { sessionId: update.sessionId, threadId: update.threadId }));
+	},
+	showPublishedFiles: count => {
+		const files = [
+			{ resource: 'file:///published/report.md', label: 'report.md' },
+			{ resource: 'file:///published/chart.html', label: 'chart.html' },
+		];
+		list.render([{ id: 'published-files', type: 'agentMessage', text: 'Published output', transient: false, files: files.slice(0, count) }]);
 	},
 	showMedia: delay => {
 		delayMedia = delay;

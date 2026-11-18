@@ -30,7 +30,7 @@ import { IHostService } from '../../../services/host/browser/host.js';
 import { ImageAnnotation } from './imageAnnotation.js';
 import { encodeImageBlobAsPng } from './imageEncoder.js';
 import { ImageViewer, type ImageViewerScale, type IImageViewerSourceOptions } from './imageViewer.js';
-import { resourceFileName, saveResourceAs } from '../../../services/files/browser/resourceSave.js';
+import { resourceFileName, saveResourceAs } from '../../../browser/download.js';
 
 export interface IImagePreviewAnnotationTarget {
 	readonly signal: AbortSignal;
