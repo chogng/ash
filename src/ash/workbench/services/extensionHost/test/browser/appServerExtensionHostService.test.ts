@@ -97,7 +97,16 @@ import { createExtensionHostLanguageProviderBatch } from '../../../../api/browse
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { IOutputService } from '../../../output/common/output.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
-import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
+import { IMenuService, MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IMarkdownRendererService, MarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
+import { lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
+import { IThemeService, noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
+import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
+import { IResourceIconRenderer } from '../../../../browser/labels.js';
+import { ITreeViewsDnDService } from '../../../../../editor/common/services/treeViewsDndService.js';
+import { TreeViewsDnDService } from '../../../../../editor/common/services/treeViewsDnd.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IBulkEditService } from '../../../../../editor/browser/services/bulkEditService.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -134,6 +143,22 @@ test('a missing tree container isolates one registration while the fleet commits
 	using descriptors = new TestViewDescriptorService({ registry }, services.get(IContextKeyService));
 	using treeServices = services.createChild();
 	treeServices.registerInstance(IViewDescriptorService, descriptors);
+	treeServices.registerSingleton(IMenuService, () => treeServices.createInstance(MenuService));
+	treeServices.registerSingleton(IMarkdownRendererService, () => treeServices.createInstance(MarkdownRendererService));
+	treeServices.registerSingleton(IThemeService, () => new TestThemeService(lightColorTheme));
+	treeServices.registerInstance(IContextMenuService, {
+		contextMenuStyle: 'custom',
+		onDidShowContextMenu: Event.None,
+		onDidHideContextMenu: Event.None,
+		showContextMenu: () => assert.fail('Unexpected tree context menu'),
+		hideContextMenu() { },
+	});
+	treeServices.registerInstance(IResourceIconRenderer, {
+		onDidChangeResourceIcons: Event.None,
+		getFileIconTheme: () => noFileIconTheme,
+		renderFileIcon: () => assert.fail('Unexpected tree icon render'),
+	});
+	treeServices.registerInstance(ITreeViewsDnDService, new TreeViewsDnDService());
 	using host = treeServices.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
 	const failures: string[] = [];
 	using failed = host.onDidFail(failure => failures.push(`${failure.extensionId}: ${failure.message}`));

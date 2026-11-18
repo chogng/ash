@@ -4,7 +4,7 @@ import type { ExtensionManifest } from '../common/extensionManifest.js';
 import { localizeManifest } from '../../../../platform/extensionManagement/common/extensionNls.js';
 import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacks.js';
 import { MenusRegistry, type ISubmenuItem } from '../../../../platform/actions/common/actions.js';
-import { extensionMenuId } from '../common/extensionMenus.js';
+import { extensionMenuId } from '../../actions/common/menusExtensionPoint.js';
 import { ViewsRegistry } from '../../../common/views.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { KeybindingsRegistry, KeybindingSource, KeybindingWeight, type IKeybindingRule } from '../../../../platform/keybinding/common/keybindingsRegistry.js';

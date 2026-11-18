@@ -65,7 +65,7 @@ import { IMenuService, MenusRegistry } from '../../../src/ash/platform/actions/c
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
-import { extensionMenuId } from '../../../src/ash/workbench/services/extensions/common/extensionMenus.js';
+import { extensionMenuId } from '../../../src/ash/workbench/services/actions/common/menusExtensionPoint.js';
 import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';

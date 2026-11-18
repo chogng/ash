@@ -13,7 +13,7 @@ import { MainThreadSpeech } from './mainThreadSpeech.js';
 import { MainThreadTerminalService, type ExtensionTerminalProfileRegistration, type ExtensionTerminalEnvironmentRegistration, type ExtensionTerminalLinkRegistration, type ExtensionTerminalCompletionRegistration, type ExtensionTerminalQuickFixRegistration } from './mainThreadTerminalService.js';
 import { MainThreadLocalization } from './mainThreadLocalization.js';
 import { MainThreadMessageService } from './mainThreadMessageService.js';
-import { extensionMenuId } from '../../services/extensions/common/extensionMenus.js';
+import { extensionMenuId } from '../../services/actions/common/menusExtensionPoint.js';
 import { MainThreadSCM } from './mainThreadSCM.js';
 import { MainThreadExtensionBackend } from './mainThreadExtensionBackend.js';
 import { MainThreadEditors } from './mainThreadEditors.js';
@@ -680,14 +680,9 @@ export class MainThreadExtensionApi extends Disposable {
 							throw new TypeError(`Invalid menu order for extension command '${registration.command}'`);
 						}
 						const alternate = runtime.registrations.find(candidate => candidate.kind === 'command' && candidate.command === placement.alt);
-						let id = extensionMenuId(placement.menu);
-						if (placement.menu === 'editor/title') {
-							id = MenuId.EditorTitle;
-						} else if (placement.menu === 'editor/title/context') {
-							id = MenuId.EditorTitleContext;
-						}
 						menus.push({
-							id, item: {
+							id: extensionMenuId(placement.menu),
+							item: {
 								command: { id: registration.command, title: registration.title, precondition: registration.enablement ? ContextKeyExpr.deserialize(registration.enablement) : undefined, icon: registration.icon ? Icon.fromId(registration.icon) : undefined },
 								alt: alternate?.kind === 'command' ? { id: alternate.command, title: alternate.title, precondition: alternate.enablement ? ContextKeyExpr.deserialize(alternate.enablement) : undefined, icon: alternate.icon ? Icon.fromId(alternate.icon) : undefined } : undefined,
 								when: placement.when ? ContextKeyExpr.deserialize(placement.when) : undefined,
