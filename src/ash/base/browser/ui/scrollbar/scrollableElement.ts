@@ -187,9 +187,11 @@ export class ScrollableElement extends Disposable {
 		this._register(addDisposableListener(viewport, 'scroll', () =>
 			this.handleNativeScroll(),
 		));
-		this._register(addDisposableListener(viewport, 'wheel', (event: WheelEvent) =>
-			this.handleWheel(event),
-			{ passive: false }));
+		if (options.handleMouseWheel !== false) {
+			this._register(addDisposableListener(viewport, 'wheel', (event: WheelEvent) =>
+				this.handleWheel(event),
+				{ passive: false }));
+		}
 		this._register(addDisposableListener(element, 'keydown', (event: KeyboardEvent) =>
 			this.handleContainerKeydown(event),
 		));

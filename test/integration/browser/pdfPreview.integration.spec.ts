@@ -439,6 +439,107 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
+test('PDF wheel zoom preserves neighboring rasters and text selection, including on a short return scroll', async ({ page }) => {
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(60), contentType: 'application/pdf' }));
+	const renders: number[] = [];
+	page.on('request', request => {
+		if (!request.url().endsWith('/__aspdf_rpc')) { return; }
+		const rpc = request.postDataJSON();
+		if (['pdf/page', 'pdf/renderPage'].includes(rpc.method)) { renders.push(rpc.params.page); }
+	});
+	await page.goto('/pdfPreview.html');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open(true));
+	const reader = page.locator('.ash-sessions-pdf-continuous');
+	const viewport = reader.locator('> .ash-scrollbar-viewport');
+	const image = (number: number) => reader.locator(`[data-page-number="${number}"] img`);
+	const number = page.locator('.ash-sessions-pdf-page-number');
+	await number.fill('40'); await number.press('Enter');
+	await expect(image(40)).toBeVisible();
+	await expect(image(39)).toBeVisible();
+	await expect(reader.locator('[data-page-number="40"] .ash-sessions-pdf-text span').first()).toBeAttached();
+	const previous = await image(39).elementHandle();
+	const previousRenders = renders.filter(number => number === 39).length;
+	const zoom = await viewport.evaluate(async element => {
+		const row = element.querySelector<HTMLElement>('[data-page-number="40"]')!;
+		const text = row.querySelector('span')!.firstChild!;
+		const selection = element.ownerDocument.getSelection()!;
+		selection.setBaseAndExtent(text, 0, text, text.textContent!.length);
+		const selected = selection.toString();
+		const before = row.getBoundingClientRect();
+		const bounds = element.getBoundingClientRect();
+		const x = bounds.left + bounds.width / 2, y = bounds.top + bounds.height / 3;
+		for (let frame = 0; frame < 5; frame++) {
+			element.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: -12, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+			await new Promise(resolve => requestAnimationFrame(resolve));
+		}
+		const after = row.getBoundingClientRect();
+		return {
+			grew: after.width > before.width, selected, remaining: selection.toString(),
+			anchorError: Math.abs(after.y + (y - before.y) * after.height / before.height - y),
+		};
+	});
+	expect(zoom.grew).toBe(true);
+	expect(zoom.selected).not.toBe('');
+	expect(zoom.remaining).toBe(zoom.selected);
+	expect(zoom.anchorError).toBeLessThan(2);
+	// Page 39 leaves the mounted window, then comes back from the decoded-page cache.
+	for (const destination of [42, 39]) {
+		await viewport.evaluate((element, page) => { element.scrollTop = (page - 1) * element.scrollHeight / 60; }, destination);
+		await expect(number).toHaveValue(String(destination));
+		if (destination === 42) { await expect(image(39)).toHaveCount(0); }
+	}
+	expect(await image(39).evaluate((node, original) => node === original, previous)).toBe(true);
+	expect(renders.filter(number => number === 39)).toHaveLength(previousRenders);
+});
+
+test('PDF prioritizes the visible page after a large scroll and zooms while its raster is pending', async ({ page }) => {
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(60), contentType: 'application/pdf' }));
+	let release!: () => void;
+	const gate = new Promise<void>(resolve => { release = resolve; });
+	const renders: number[] = [];
+	await page.route('**/__aspdf_rpc', async route => {
+		const { method, params } = route.request().postDataJSON();
+		if (['pdf/page', 'pdf/renderPage'].includes(method) && params.page >= 40) {
+			renders.push(params.page);
+			await gate;
+		}
+		await route.fallback();
+	});
+	await page.goto('/pdfPreview.html');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open(true));
+	const reader = page.locator('.ash-sessions-pdf-continuous');
+	const viewport = reader.locator('> .ash-scrollbar-viewport');
+	await expect(reader.locator('[data-page-number="1"] img')).toBeVisible();
+	await expect(page.locator('.ash-sessions-pdf-preview')).toHaveAttribute('aria-busy', 'false');
+	const stage = reader.locator('[data-page-number="45"]');
+	try {
+		// A discarded image can still be decoding when the reader jumps a second time.
+		await viewport.evaluate(element => {
+			const decode = HTMLImageElement.prototype.decode;
+			HTMLImageElement.prototype.decode = function () {
+				HTMLImageElement.prototype.decode = decode;
+				element.setAttribute('data-test-decoding', '');
+				return new Promise(resolve => element.addEventListener('finish-test-decode', () => resolve(), { once: true }));
+			};
+			element.scrollTop = 8 * element.scrollHeight / 60;
+		});
+		await expect(viewport).toHaveAttribute('data-test-decoding', '');
+		await viewport.evaluate(element => { element.scrollTop = 44 * element.scrollHeight / 60; });
+		await expect.poll(() => renders[0]).toBe(45);
+		await expect(stage.locator('img')).toHaveCount(0);
+		const before = (await stage.boundingBox())!;
+		await viewport.dispatchEvent('wheel', { ctrlKey: true, deltaY: -60, clientX: before.x + before.width / 2, clientY: before.y + before.height / 2 });
+		await expect.poll(async () => (await stage.boundingBox())!.width).toBeGreaterThan(before.width);
+	} finally {
+		release();
+		await viewport.dispatchEvent('finish-test-decode');
+	}
+	await expect(stage.locator('img')).toBeVisible();
+	await expect(page.locator('.ash-sessions-pdf-page-number')).toHaveValue('45');
+});
+
 test('PDF restores continuous mode after a pending page turn finishes', async ({ page }) => {
 	await page.goto('/pdfPreview.html?scrollMode=paged');
 	await page.waitForFunction(() => !!window.aspdfTest);

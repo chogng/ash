@@ -1,4 +1,5 @@
 import { addDisposableListener, getWindow, h, runWhenWindowIdle, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { PdfPage } from '../../../../platform/pdf/common/pdfService.js';
@@ -47,21 +48,22 @@ export class PdfPageView extends Disposable {
 		this.domNode.replaceChildren();
 	}
 
-	public async render(page: PdfPage, bytes: Uint8Array, dimension: number, signal?: AbortSignal): Promise<void> {
+	public async render(page: PdfPage, bytes: Uint8Array, dimension: number, signal?: AbortSignal, deferText = false): Promise<void> {
 		const generation = ++this.generation;
 		const data = bytes.buffer instanceof ArrayBuffer ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength) : bytes.slice();
 		const url = URL.createObjectURL(new Blob([data], { type: 'image/png' }));
 		const image = h(this.domNode.ownerDocument, 'img', { properties: { src: url, draggable: false }, attributes: { alt: '', 'aria-hidden': 'true' } });
 		const raster = toDisposable(() => { image.removeAttribute('src'); URL.revokeObjectURL(url); });
 		this.decoding.value = raster;
-		const cancellation = signal ? addDisposableListener(signal, 'abort', () => raster.dispose(), { once: true }) : undefined;
-		try { await image.decode(); }
-		catch (error) {
+		try {
+			// Removing the source can leave Chromium's decode pending. Eviction must release the render queue.
+			const decoded = image.decode();
+			await (signal ? raceCancellationError(decoded, signal) : decoded);
+		} catch (error) {
 			raster.dispose();
 			if (signal?.aborted || this.isDisposed || generation !== this.generation) { return; }
 			throw error;
 		} finally {
-			cancellation?.dispose();
 			if (this.decoding.value === raster) { this.decoding.clearAndLeak(); }
 		}
 		if (signal?.aborted || this.isDisposed || generation !== this.generation) { raster.dispose(); return; }
@@ -80,11 +82,13 @@ export class PdfPageView extends Disposable {
 		this.domNode.dataset.pageNumber = String(page.page);
 		this.domNode.replaceChildren(image);
 		this.raster.value = raster;
-		this.paintText(page);
+		if (!deferText) { this.ensureTextLayer(); }
 	}
 
-	private paintText(page: PdfPage): void {
-		if (page.characters.length === 0) { return; }
+	/** Offscreen prefetch can decode the raster before allocating selectable glyphs. */
+	public ensureTextLayer(): void {
+		const page = this.snapshot;
+		if (!page?.characters.length || this.textLifetime.value) { return; }
 		const store = new DisposableStore();
 		this.textLifetime.value = store;
 		const document = this.domNode.ownerDocument;

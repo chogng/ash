@@ -25,6 +25,9 @@ export interface ListViewOptions<T> {
 	readonly role?: 'listbox' | 'tree' | 'rowgroup';
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
+	readonly handleMouseWheel?: boolean;
+	/** Mount this many neighboring rows for asynchronously rendered content. Defaults to a 200px buffer. */
+	readonly overscanRows?: number;
 	/** Allows wide row content to pan while retaining vertical row virtualization. */
 	readonly horizontalScrolling?: boolean;
 	readonly domFocusable?: boolean;
@@ -116,7 +119,7 @@ export class ListView<T> extends Disposable {
 		if (options.scrolling === 'managed') {
 			this.element.classList.add('ash-list-managed');
 			if (options.getHeight) this.element.style.position = 'relative';
-			this.scrollable = this._register(new ScrollableElement(container, { direction: options.horizontalScrolling ? 'both' : 'vertical', tabIndex: -1, mouseWheelSmoothScroll: options.smoothScrolling }));
+			this.scrollable = this._register(new ScrollableElement(container, { direction: options.horizontalScrolling ? 'both' : 'vertical', tabIndex: -1, mouseWheelSmoothScroll: options.smoothScrolling, handleMouseWheel: options.handleMouseWheel }));
 			this.scrollable.setContent(this.element);
 			this.domNode = this.scrollable.element;
 			this.domNode.classList.add('ash-list-scrollable');
@@ -408,6 +411,11 @@ export class ListView<T> extends Disposable {
 		if (!this.isVirtualized || !scrollable) return { start: 0, end: this._items.length };
 		if (scrollable.state.height <= 0) return { start: 0, end: 0 };
 		const viewport = scrollable.state;
+		if (this.options.overscanRows !== undefined) {
+			const start = Math.max(0, this.indexAt(viewport.top) - this.options.overscanRows);
+			const end = Math.min(this._items.length, this.indexAt(viewport.top + viewport.height) + 1 + this.options.overscanRows);
+			return { start, end };
+		}
 		const start = Math.max(0, this.indexAt(Math.max(0, viewport.top - 200)));
 		const end = Math.min(this._items.length, this.indexAt(viewport.top + viewport.height + 200) + 1);
 		return { start, end };
@@ -473,6 +481,17 @@ export class ListView<T> extends Disposable {
 		if (!row || row.parentElement !== this.element) return undefined;
 		const index = Number(row.dataset.index);
 		return Number.isInteger(index) ? index : undefined;
+	}
+
+	/** Reflow a virtual list around a row without replacing its items, DOM or focus. */
+	updateElementHeights(anchor: { index: number; offset: number; left: number; }): void {
+		if (!this.isVirtualized || !this.scrollable) return;
+		this.rangeMap.remeasure(index => this.itemHeight(this._items[index]!, index));
+		this.element.style.height = `${this.rangeMap.size}px`;
+		// Commit the new extent and anchor together, so virtualization sees the destination rows.
+		this.scrollElement.scrollTo(anchor.left, this.getElementTop(anchor.index) + anchor.offset);
+		this.scrollable.layout();
+		this.renderRows();
 	}
 
 	updateElementHeight(index: number, height: number | undefined): void {

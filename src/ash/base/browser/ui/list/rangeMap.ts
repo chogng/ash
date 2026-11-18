@@ -28,6 +28,13 @@ export class RangeMap implements IRangeMap {
 		return this.paddingTop + this.offsets[this.count]!;
 	}
 
+	/** Refresh geometry in place when item identities and order are unchanged. */
+	remeasure(sizeAt: (index: number) => number): void {
+		for (let index = 0; index < this.count; index++) {
+			this.offsets[index + 1] = this.offsets[index]! + sizeAt(index);
+		}
+	}
+
 	splice(index: number, deleteCount: number, items: IItem[] = []): void {
 		const deleteEnd = Math.min(index + deleteCount, this.count);
 		const next = this.offsets.slice(0, index + 1);

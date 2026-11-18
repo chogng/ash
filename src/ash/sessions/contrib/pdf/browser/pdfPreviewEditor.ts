@@ -173,7 +173,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.pageScroll = this._register(new ScrollableElement(this.readingArea, {
 			direction: 'both', vertical: 'auto', horizontal: 'auto',
 			ariaLabel: localize('sessions.pdfPreview.documentPage', 'PDF page'),
-			mouseWheelSmoothScroll: true,
+			handleMouseWheel: false,
 		}));
 		this.surface = this.pageScroll.element;
 		this.surface.classList.add('ash-sessions-pdf-page');
@@ -192,7 +192,8 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 				return;
 			}
 			this.wheelNavigation = undefined;
-			const wheel = new StandardWheelEvent(event, { pageWidth: this.pageScroll.scrollableElement.clientWidth, pageHeight: this.pageScroll.scrollableElement.clientHeight });
+			const viewport = this.continuous?.viewport ?? this.pageScroll.scrollableElement;
+			const wheel = new StandardWheelEvent(event, { pageWidth: viewport.clientWidth, pageHeight: viewport.clientHeight });
 			wheel.stop();
 			if (!this.busy && !this.stroke && wheel.deltaY !== 0) { this.queueWheelZoom(wheel); }
 		}, { capture: true, passive: false }));
@@ -518,7 +519,6 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		if (this.continuous) { this.updateFitAction(); }
 		else { this.updateZoom(); }
 		this.updateControls();
-		this.continuous?.releaseInvisiblePages();
 	}
 
 	private selectTool(tool: PdfTool | undefined): void {
@@ -717,7 +717,8 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.annotationScroll.layout();
 	}
 
-	private currentScale(): number {
+	private currentScale(clientY?: number): number {
+		if (this.continuous) { return this.continuous.scaleAt(clientY); }
 		const page = this.displayedPage;
 		return page ? this.stage.getBoundingClientRect().width / (page.widthPoints * 96 / 72) : 1;
 	}
@@ -745,7 +746,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	private queueWheelZoom(wheel: StandardWheelEvent): void {
 		const page = this.displayedPage;
 		if (!page) { return; }
-		const current = this.continuousWheelZoom?.scale ?? this.wheelZoom?.scale ?? this.currentScale();
+		const current = this.continuousWheelZoom?.scale ?? this.wheelZoom?.scale ?? this.currentScale(wheel.browserEvent.clientY);
 		if (current <= 0) { return; }
 		const delta = clamp(wheel.deltaY, -240, 240);
 		const scale = clamp(current * Math.exp(-delta * 0.002), 0.1, 8);
@@ -772,6 +773,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 			this.cancelWheelZoom();
 			this.zoom = continuousZoom.scale;
 			this.continuous.layout(this.zoom, continuousZoom);
+			this.updateFitAction();
 			return;
 		}
 		const zoom = this.wheelZoom;

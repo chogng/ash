@@ -29,6 +29,8 @@ interface ScrollableElementBaseOptions {
 	readonly minimumThumbSize?: number;
 	readonly trackClickBehavior?: 'jump' | 'page';
 	readonly wheel?: ScrollbarWheelOptions;
+	/** Let the native viewport handle wheel input when false. */
+	readonly handleMouseWheel?: boolean;
 	readonly mouseWheelSmoothScroll?: boolean;
 	readonly onScroll?: (
 		position: { readonly left: number; readonly top: number; },
