@@ -642,6 +642,17 @@ test('FileService routes exact schemes and forwards provider invalidations', asy
 	assert.deepEqual(observed, ['ash-test:/resource.txt']);
 });
 
+test('FileService refuses conditional deletion when the provider only supports ordinary deletion', async () => {
+	using provider = new TestFileProvider('revision');
+	using service = new FileService();
+	using registration = service.registerProvider('file', provider);
+	const resource = URI.file('/workspace/file.txt');
+	const bytes = new Uint8Array([42]);
+	provider.addFile(resource, bytes);
+	await assert.rejects(service.deleteFileIfUnchanged(resource, 'revision'), FileOperationNotSupportedError);
+	assert.deepEqual((await service.readFileBytes(resource)).bytes, bytes);
+});
+
 test('FileService decodes text from provider bytes without changing revisions or binary reads', async () => {
 	using provider = new TestFileProvider('exact-byte-revision');
 	using service = new FileService();

@@ -9,12 +9,23 @@ use crate::MissingTargetBehavior;
 use crate::PathCaseSensitivityScope;
 use std::any::Any;
 use std::path::Path;
+use std::path::PathBuf;
 
 /// File operation requested by a paste action or recorded on the system clipboard.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SystemFileTransferOperation {
     Copy,
     Move,
+}
+
+/// Outcome of a revision-checked deletion.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FileDeleteOutcome {
+    Deleted,
+    /// The staged file remains at this path for recovery.
+    RecoveryRequired {
+        path: PathBuf,
+    },
 }
 
 /// Directory-scoped filesystem access used by both client adapters and Agent tools.
@@ -123,4 +134,17 @@ pub trait FileSystem: Send + Sync {
         missing: MissingTargetBehavior,
         mode: FileDeleteMode,
     ) -> Result<(), FileSystemError>;
+
+    /// Removes only a regular file with the given exact-content revision. Requires WriteFiles.
+    fn delete_file_if_unchanged(
+        &self,
+        path: &Path,
+        _expected_revision: &str,
+        _maximum_bytes: usize,
+    ) -> Result<FileDeleteOutcome, FileSystemError> {
+        Err(FileSystemError::PermissionDenied(format!(
+            "conditional deletion is unavailable for {}",
+            path.display()
+        )))
+    }
 }

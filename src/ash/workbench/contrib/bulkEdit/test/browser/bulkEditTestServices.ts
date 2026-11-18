@@ -8,7 +8,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { BrowserTextModelService } from '../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import type { TextResourceChangeEvent, TextResourceContent, TextResourceResolveRequest, TextResourceSaveRequest, ITextResourceStore } from '../../../../services/textmodelResolver/common/textResourceStore.js';
-import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior } from '../../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior } from '../../../../../platform/files/common/files.js';
 import { BulkEditService } from '../../browser/bulkEditService.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { IDialogService, IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -169,5 +169,11 @@ export class MemoryFileService implements IFileSystemProvider {
 	}
 	async delete(resource: URI, missing: FileMissingTargetBehavior, _mode: FileDeleteMode): Promise<void> {
 		if (!this.resources.delete(resource.toString()) && missing === 'error') throw new Error('FileSystemOperationFailed');
+	}
+	async deleteFileIfUnchanged(resource: URI, expectedRevision: string): Promise<void> {
+		if (this.bytes(resource).join(',') !== expectedRevision) {
+			throw new FileRevisionConflictError(resource);
+		}
+		this.resources.delete(resource.toString());
 	}
 }

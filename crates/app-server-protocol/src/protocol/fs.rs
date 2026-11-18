@@ -429,6 +429,30 @@ pub struct FsDeleteParams {
     pub mode: FsDeleteMode,
 }
 
+/// Removes one regular file after verifying the entry's exact-content revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsDeleteFileIfUnchangedParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<SessionDirSelector>,
+    pub path: PathBuf,
+    pub expected_revision: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum FsDeleteFileIfUnchangedResult {
+    Deleted,
+    /// The staged file remains at this path for recovery.
+    RecoveryRequired {
+        path: PathBuf,
+    },
+}
+
 /// Coarse directory filesystem invalidation published by `fs/changed`.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]

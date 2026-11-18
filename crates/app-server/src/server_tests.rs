@@ -7629,6 +7629,30 @@ fn filesystem_rpc_lists_and_describes_paths() {
     );
     assert_eq!(missing_replace["error"]["message"], "FileSystemNotFound");
     assert!(!root.join("src/missing.bin").exists());
+    let stale_delete = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":21,"method":"fs/deleteFileIfUnchanged","params":{
+            "path":"src/picture.bin","expectedRevision":pasted["result"]["revision"]
+        }}),
+    );
+    assert_eq!(
+        stale_delete["error"]["message"],
+        "FileSystemRevisionConflict"
+    );
+    assert_eq!(
+        std::fs::read(root.join("src/picture.bin")).unwrap(),
+        [0, 255]
+    );
+    let deleted = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":22,"method":"fs/deleteFileIfUnchanged","params":{
+            "path":"src/picture.bin","expectedRevision":replaced["result"]["revision"]
+        }}),
+    );
+    assert_eq!(deleted["result"]["kind"], "deleted");
+    assert!(!root.join("src/picture.bin").exists());
     let large_text = call(
         &server,
         &mut connection,

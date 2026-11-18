@@ -873,6 +873,29 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		return this.onFileTarget(resource, target => this.api.delete({ ...target, missing, mode }), assertScope);
 	}
 
+	async deleteFileIfUnchanged(resource: URI, expectedRevision: string): Promise<void> {
+		const route = this.connectionRoute(resource);
+		if (route) {
+			return this.onRoute(route, provider => provider.deleteFileIfUnchanged(resource, expectedRevision));
+		}
+		try {
+			await this.onFileTarget(resource, target => {
+				if (!this.api.deleteFileIfUnchanged) {
+					throw new FileOperationNotSupportedError(resource, 'deleteFileIfUnchanged');
+				}
+				return this.api.deleteFileIfUnchanged({ ...target, expectedRevision });
+			});
+		} catch (error) {
+			if (isRevisionConflict(error)) {
+				throw new FileRevisionConflictError(resource);
+			}
+			if (isFileNotFound(error)) {
+				throw new FileNotFoundError(resource);
+			}
+			throw error;
+		}
+	}
+
 	private knownDirectory(resource: URI): IFileSystemDirectory | undefined {
 		return [...this.directories(), ...this.resolvedDirectories.values()]
 			.filter(directory => directory.exactFile

@@ -8,6 +8,8 @@ use ash_app_server_protocol::protocol::fs::FsCancelElevatedWriteParams;
 use ash_app_server_protocol::protocol::fs::FsCopyParams;
 use ash_app_server_protocol::protocol::fs::FsCreateDirectoryParams;
 use ash_app_server_protocol::protocol::fs::FsCreateFileParams;
+use ash_app_server_protocol::protocol::fs::FsDeleteFileIfUnchangedParams;
+use ash_app_server_protocol::protocol::fs::FsDeleteFileIfUnchangedResult;
 use ash_app_server_protocol::protocol::fs::FsDeleteMode;
 use ash_app_server_protocol::protocol::fs::FsDeleteParams;
 use ash_app_server_protocol::protocol::fs::FsExistingTargetBehavior;
@@ -41,6 +43,7 @@ use ash_async_utils::CancellationToken;
 use ash_file_access::Permission;
 use ash_file_system::ExistingTargetBehavior;
 use ash_file_system::FileDeleteMode;
+use ash_file_system::FileDeleteOutcome;
 use ash_file_system::FileMetadata;
 use ash_file_system::FileSystemError;
 use ash_file_system::FileType;
@@ -599,6 +602,36 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
         .delete(&params.path, missing, mode)
         .map_err(file_system_error)?;
         result(&())
+    }
+
+    pub(super) fn fs_delete_file_if_unchanged(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsDeleteFileIfUnchangedParams = decode(params)?;
+        if params.expected_revision.len() != 64
+            || !params
+                .expected_revision
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let outcome = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::WriteFiles,
+            )?
+            .delete_file_if_unchanged(
+                &params.path,
+                &params.expected_revision,
+                MAX_BINARY_EDITOR_FILE_BYTES,
+            )
+            .map_err(file_system_error)?;
+        result(&match outcome {
+            FileDeleteOutcome::Deleted => FsDeleteFileIfUnchangedResult::Deleted,
+            FileDeleteOutcome::RecoveryRequired { path } => {
+                FsDeleteFileIfUnchangedResult::RecoveryRequired { path }
+            }
+        })
     }
 
     fn file_system_for_request(

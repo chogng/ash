@@ -8,7 +8,7 @@ import { Range } from '../../../../../editor/common/core/range.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
-import { IBulkEditService, ResourceEdit, ResourceFileEdit, ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
+import { IBulkEditService, ResourceEdit, ResourceFileEdit, ResourceTextEdit, WorkspaceEditConflictError } from '../../../../../editor/browser/services/bulkEditService.js';
 import type { LanguageWorkspaceEdit } from '../../../../../editor/common/languages.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
@@ -189,6 +189,66 @@ test('binary asset creation and its document reference revert as one workspace e
 	await result.undo();
 	assert.equal(fixture.store.text(first), '');
 	assert.equal(fixture.files.has(asset), false);
+});
+
+test('a save after delete preflight preserves the new file and rolls back preceding edits', async () => {
+	using fixture = new BulkEditTestServices([[first, 'original'], [second, 'other']]);
+	let save: Promise<unknown> | undefined;
+	await assert.rejects(fixture.service.apply([
+		new ResourceTextEdit(second, { range: new Range(1, 1, 1, 1), text: 'changed ' }),
+		new ResourceFileEdit(first, undefined),
+	], {
+		progress: {
+			report: step => {
+				if (step && typeof step === 'object' && 'increment' in step && step.increment === 1 && !save) {
+					save = fixture.files.writeFile(first, new TextEncoder().encode('new save'), { create: false, overwrite: true });
+				}
+			}
+		}
+	}), WorkspaceEditConflictError);
+	await save;
+	assert.equal(fixture.files.text(first), 'new save');
+	assert.equal(fixture.store.text(second), 'other');
+});
+
+test('workspace delete undo restores exact bytes', async () => {
+	const original = '\uFEFFfirst\r\nsecond\n';
+	using fixture = new BulkEditTestServices([[first, original]]);
+	const result = await fixture.service.apply([new ResourceFileEdit(first, undefined)]);
+	assert.ok(result.isApplied);
+	assert.equal(fixture.files.has(first), false);
+	await result.undo();
+	assert.deepEqual((await fixture.files.readFile(first)).bytes, new TextEncoder().encode(original));
+});
+
+test('workspace delete uses the revision produced by an earlier rename', async () => {
+	using fixture = new BulkEditTestServices([[first, 'original']]);
+	const result = await fixture.service.apply([
+		new ResourceFileEdit(first, second),
+		new ResourceFileEdit(second, undefined),
+	]);
+	assert.ok(result.isApplied);
+	assert.equal(fixture.files.has(first), false);
+	assert.equal(fixture.files.has(second), false);
+	await result.undo();
+	assert.equal(fixture.files.text(first), 'original');
+	assert.equal(fixture.files.has(second), false);
+});
+
+test('workspace delete rollback does not overwrite a file recreated after deletion', async () => {
+	using fixture = new BulkEditTestServices([[first, 'original'], [second, 'other']]);
+	const rename = fixture.files.rename.bind(fixture.files);
+	fixture.files.rename = async (...args) => {
+		await fixture.files.writeFile(first, new TextEncoder().encode('recreated'), { create: true, overwrite: false });
+		return rename(...args);
+	};
+	fixture.files.failRename = true;
+	await assert.rejects(fixture.service.apply([
+		new ResourceFileEdit(first, undefined),
+		new ResourceFileEdit(second, URI.file('/workspace/renamed.ts')),
+	]), AggregateError);
+	assert.equal(fixture.files.text(first), 'recreated');
+	assert.equal(fixture.files.text(second), 'other');
 });
 
 test('confirmation metadata requests preview even when ordinary preview is disabled', async () => {

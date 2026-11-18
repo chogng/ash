@@ -1211,6 +1211,10 @@ use crate::protocol::fs::FsCreateDirectoryParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsCreateFileParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsDeleteFileIfUnchangedParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsDeleteFileIfUnchangedResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsDeleteMode;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsDeleteParams;
@@ -5601,6 +5605,11 @@ client_methods! {
         response: (),
         serialization: GlobalExclusive,
     },
+    FsDeleteFileIfUnchanged => "fs/deleteFileIfUnchanged" {
+        params: FsDeleteFileIfUnchangedParams,
+        response: FsDeleteFileIfUnchangedResult,
+        serialization: GlobalExclusive,
+    },
     IssueConfigure => "issue/configure" {
         params: IssueConfigureParams,
         response: ConfigCommandResult,
@@ -8110,6 +8119,8 @@ typescript_bindings! {
     FsPasteSystemFilesParams,
     FsRenameParams,
     FsDeleteParams,
+    FsDeleteFileIfUnchangedParams,
+    FsDeleteFileIfUnchangedResult,
     FsChanged,
     GitIntegrationDto,
     GitIntegrationStateDto,

@@ -1,12 +1,14 @@
 import type { URI } from '../../../../base/common/uri.js';
 import type { LanguageWorkspaceEditEntry, LanguageTextDocumentEdit } from '../../../../editor/common/languages.js';
-import { FileKind, FileNotFoundError, type IFileService } from '../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisionConflictError, type IFileService } from '../../../../platform/files/common/files.js';
 import { WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
+import { localize } from '../../../../nls.js';
 
 interface FileOperation {
 	readonly entry: Exclude<LanguageWorkspaceEditEntry, LanguageTextDocumentEdit>;
 	readonly applies: boolean;
 	readonly sourceBefore?: string;
+	readonly sourceRevision?: string;
 	readonly targetBefore?: string;
 	readonly binaryCreate?: { readonly contents: Uint8Array; readonly before?: Uint8Array; };
 }
@@ -71,11 +73,32 @@ export class BulkFileEdits {
 				return [entry.source, entry.target];
 			}
 			case 'delete': {
-				await this.files.delete(entry.resource, entry.missing, entry.mode);
+				const bytes = new TextEncoder().encode(operation.sourceBefore!);
+				try {
+					// Earlier steps may have created this version. Bind it to a provider
+					// revision after verifying that it matches the preflight contents.
+					const revision = operation.sourceRevision ?? await this.assertFileBytes(entry.resource, bytes);
+					await this.files.deleteFileIfUnchanged(entry.resource, revision);
+				} catch (error) {
+					if (entry.missing === 'ignore' && error instanceof FileNotFoundError) {
+						return [];
+					}
+					if (error instanceof FileRevisionConflictError || error instanceof WorkspaceEditConflictError) {
+						throw new WorkspaceEditConflictError(
+							localize('bulkEdit.deleteConflict', 'The file changed before it could be deleted: {0}', entry.resource.path),
+							{ cause: error },
+						);
+					}
+					if (error instanceof FileOperationNotSupportedError) {
+						throw new Error(
+							localize('bulkEdit.deleteUnavailable', 'The file provider cannot safely delete this file as part of a workspace edit: {0}', entry.resource.path),
+							{ cause: error },
+						);
+					}
+					throw error;
+				}
 				this.inverses.push(async () => {
-					await this.assertFileText(entry.resource, undefined);
-					await this.files.createFile(entry.resource, 'overwrite');
-					await this.files.writeFile({ resource: entry.resource, content: operation.sourceBefore! });
+					await this.files.writeFileBytes(entry.resource, bytes);
 				});
 				return [entry.resource];
 			}

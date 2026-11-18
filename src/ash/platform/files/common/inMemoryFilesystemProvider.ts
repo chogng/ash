@@ -89,6 +89,15 @@ export class InMemoryFileSystemProvider extends Disposable implements IFileSyste
 		this.changes.fire({ resources: affected.map(entry => entry.resource) });
 	}
 
+	async deleteFileIfUnchanged(resource: URI, expectedRevision: string): Promise<void> {
+		const entry = this.get(resource);
+		if (entry.kind !== FileKind.File || entry.revision !== expectedRevision) {
+			throw new FileRevisionConflictError(resource);
+		}
+		this.entries.delete(this.key(resource));
+		this.changes.fire({ resources: [resource] });
+	}
+
 	private transfer(source: URI, target: URI, existing: FileExistingTargetBehavior, move: boolean): void {
 		this.get(source);
 		if (this.key(source) === this.key(target) && move) return;

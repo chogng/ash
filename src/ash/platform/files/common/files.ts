@@ -172,7 +172,7 @@ export function hasFileReadStreamCapability(provider: IFileSystemProvider): prov
 	return (provider.capabilities & FileSystemProviderCapabilities.FileReadStream) !== 0;
 }
 
-/** The file changed after a caller read its revision, so its write was rejected. */
+/** The file changed after a caller read its revision, so the mutation was rejected. */
 export class FileRevisionConflictError extends Error {
 	constructor(readonly resource: URI) {
 		super(`File changed since it was read: ${resource.toString()}`);
@@ -255,6 +255,8 @@ export interface IFileSystemProvider {
 	copy(source: URI, target: URI): Promise<void>;
 	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void>;
 	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void>;
+	/** Removes a regular file only if the removed entry has the expected content revision. */
+	deleteFileIfUnchanged?(resource: URI, expectedRevision: string): Promise<void>;
 }
 
 /**
@@ -312,6 +314,7 @@ export interface IFileService {
 	copy(source: URI, target: URI): Promise<void>;
 	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void>;
 	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void>;
+	deleteFileIfUnchanged(resource: URI, expectedRevision: string): Promise<void>;
 	/** One registration per scheme; disposal unregisters it without disposing the caller-owned provider. */
 	registerProvider(scheme: string, provider: IFileSystemProvider): IDisposable;
 	/** Reports routing availability, which does not imply that the provider's storage is currently accessible. */

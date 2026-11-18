@@ -94,4 +94,5 @@ export interface IFileApi {
 		readonly existing: FileExistingTargetBehavior;
 	}): Promise<void>;
 	delete(params: FileTarget & { readonly missing: FileMissingTargetBehavior; readonly mode: FileDeleteMode; }): Promise<void>;
+	deleteFileIfUnchanged?(params: FileTarget & { readonly expectedRevision: string; }): Promise<void>;
 }

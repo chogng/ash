@@ -58,6 +58,65 @@ pub(crate) fn on_mutation_staging(hook: impl FnOnce() + 'static) {
     MUTATION_STAGING_HOOK.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
 }
 
+#[test]
+fn delete_file_if_unchanged_rejects_external_save_between_check_and_removal() {
+    let directory = TestDir::new();
+    let path = Path::new("file");
+    let absolute = directory.path.join(path);
+    fs::write(&absolute, b"original").unwrap();
+    let files = directory.file_system();
+    let revision = files.read_file_with_revision(path, 100).unwrap().revision;
+    let writer_path = absolute.clone();
+    WRITE_PUBLICATION_HOOK.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move || {
+            fs::write(writer_path, b"new save").unwrap()
+        }));
+    });
+    assert_eq!(
+        files.delete_file_if_unchanged(path, &revision, 100),
+        Err(FileSystemError::RevisionConflict(path.into()))
+    );
+    assert_eq!(fs::read(&absolute).unwrap(), b"new save");
+    assert_eq!(fs::read_dir(&directory.path).unwrap().count(), 1);
+
+    let revision = files.read_file_with_revision(path, 100).unwrap().revision;
+    assert_eq!(
+        files.delete_file_if_unchanged(path, &revision, 100),
+        Ok(FileDeleteOutcome::Deleted)
+    );
+    assert_eq!(fs::read_dir(&directory.path).unwrap().count(), 0);
+}
+
+#[test]
+fn delete_file_if_unchanged_keeps_both_saves_when_the_path_is_recreated() {
+    let directory = TestDir::new();
+    let path = Path::new("file");
+    let absolute = directory.path.join(path);
+    fs::write(&absolute, b"original").unwrap();
+    let files = directory.file_system();
+    let revision = files.read_file_with_revision(path, 100).unwrap().revision;
+    let writer_path = absolute.clone();
+    WRITE_PUBLICATION_HOOK.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move || {
+            fs::write(writer_path, b"first save").unwrap()
+        }));
+    });
+    let writer_path = absolute.clone();
+    MUTATION_STAGING_HOOK.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move || {
+            fs::write(writer_path, b"second save").unwrap()
+        }));
+    });
+    let Ok(FileDeleteOutcome::RecoveryRequired {
+        path: recovery_path,
+    }) = files.delete_file_if_unchanged(path, &revision, 100)
+    else {
+        panic!("the staged file must remain available for recovery");
+    };
+    assert_eq!(fs::read(recovery_path).unwrap(), b"first save");
+    assert_eq!(fs::read(absolute).unwrap(), b"second save");
+}
+
 #[cfg(unix)]
 #[test]
 fn concurrent_symlink_replacement_cannot_write_a_restricted_subtree() {

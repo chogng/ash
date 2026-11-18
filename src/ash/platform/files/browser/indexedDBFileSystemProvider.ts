@@ -157,6 +157,20 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 		});
 	}
 
+	public async deleteFileIfUnchanged(resource: URI, expectedRevision: string): Promise<void> {
+		await this.access(true, entries => {
+			const key = this.key(resource);
+			const entry = entries.get(key);
+			if (!entry) {
+				throw new FileNotFoundError(resource);
+			}
+			if (entry.kind !== FileKind.File || entry.revision !== expectedRevision) {
+				throw new FileRevisionConflictError(resource);
+			}
+			entries.delete(key);
+		});
+	}
+
 	private async transfer(source: URI, target: URI, existing: FileExistingTargetBehavior, move: boolean): Promise<void> {
 		await this.access(true, entries => {
 			const from = this.key(source);

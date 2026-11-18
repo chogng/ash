@@ -4952,6 +4952,9 @@ impl AppServer {
             }
             Some(ClientMethod::FsRename) => self.fs_processor().fs_rename(&request.params),
             Some(ClientMethod::FsDelete) => self.fs_processor().fs_delete(&request.params),
+            Some(ClientMethod::FsDeleteFileIfUnchanged) => self
+                .fs_processor()
+                .fs_delete_file_if_unchanged(&request.params),
             Some(ClientMethod::GitInit) => git().git_init(&request.params, cancellation),
             Some(ClientMethod::GitCatalog) => git().git_catalog(&request.params),
             Some(ClientMethod::GitCommand) => git().git_command(&request.params, cancellation),

@@ -2,6 +2,7 @@ use crate::DirectoryEntry;
 use crate::ExistingTargetBehavior;
 use crate::FileContent;
 use crate::FileDeleteMode;
+use crate::FileDeleteOutcome;
 use crate::FileMetadata;
 use crate::FileMutation;
 use crate::FileMutationError;
@@ -483,6 +484,17 @@ impl FileSystem for LocalFileSystem {
     ) -> Result<(), FileSystemError> {
         self.execute(Permission::WriteFiles, |files| {
             files.delete(path, missing, mode)
+        })
+    }
+
+    fn delete_file_if_unchanged(
+        &self,
+        path: &Path,
+        expected_revision: &str,
+        maximum_bytes: usize,
+    ) -> Result<FileDeleteOutcome, FileSystemError> {
+        self.execute(Permission::WriteFiles, |files| {
+            files.delete_file_if_unchanged(path, expected_revision, maximum_bytes)
         })
     }
 }
@@ -1877,6 +1889,93 @@ impl ScopedFiles {
             Err(FileSystemError::NotFound(_)) if missing == MissingTargetBehavior::Ignore => Ok(()),
             result => result,
         }
+    }
+
+    fn delete_file_if_unchanged(
+        &self,
+        path: &Path,
+        expected_revision: &str,
+        maximum_bytes: usize,
+    ) -> Result<FileDeleteOutcome, FileSystemError> {
+        let _guard = self
+            .dir
+            .directory()
+            .lock_writes()
+            .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
+        let (relative, parent) = self.open_mutation_entry(path)?;
+        let name = Path::new(relative.file_name().expect("resolved entry has a name"));
+        let check = |directory: &Directory| {
+            if !directory
+                .symlink_metadata(name)
+                .map_err(|error| entry_error(error, path))?
+                .is_file()
+            {
+                return Err(FileSystemError::RevisionConflict(path.into()));
+            }
+            let mut file = directory
+                .open_with(
+                    name,
+                    OpenOptions::new().read(true).follow(FollowSymlinks::No),
+                )
+                .map_err(|error| entry_error(error, path))?
+                .into_std();
+            let stamp = FileReadStamp::observe(&file)?;
+            let mut bytes = Vec::new();
+            Read::by_ref(&mut file)
+                .take((maximum_bytes as u64).saturating_add(1))
+                .read_to_end(&mut bytes)
+                .map_err(io_error)?;
+            if bytes.len() > maximum_bytes
+                || stamp != FileReadStamp::observe(&file)?
+                || file_revision(&bytes) != expected_revision
+            {
+                return Err(FileSystemError::RevisionConflict(path.into()));
+            }
+            Ok(())
+        };
+        check(&parent)?;
+
+        let staging_name = format!(".ash-delete-{:032x}", rand::random::<u128>());
+        let staged_relative = relative.with_file_name(&staging_name).join(name);
+        self.check_requested(&staged_relative)?;
+        let builder = &mut cap_std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        {
+            use cap_std::fs::DirBuilderExt;
+            builder.mode(0o700);
+        }
+        parent
+            .create_dir_with(&staging_name, builder)
+            .map_err(io_error)?;
+        let result = (|| {
+            let staging = parent.open_dir_nofollow(&staging_name).map_err(io_error)?;
+            #[cfg(test)]
+            tests::before_write_publication();
+            // Moving the entry first binds the second check to the file actually
+            // removed from the workspace, even if an external save replaced it.
+            parent
+                .rename(name, &staging, name)
+                .map_err(|error| entry_error(error, path))?;
+            #[cfg(test)]
+            tests::after_mutation_staging();
+            let result = check(&staging).and_then(|()| staging.remove_file(name).map_err(io_error));
+            if result.is_err() {
+                // Publishing a hard link is exclusive. If the original path was
+                // recreated, keep the displaced entry available for recovery.
+                let restored = staging
+                    .symlink_metadata(name)
+                    .is_ok_and(|metadata| metadata.is_file())
+                    && staging.hard_link(name, &parent, name).is_ok();
+                if !restored || staging.remove_file(name).is_err() {
+                    return Ok(FileDeleteOutcome::RecoveryRequired {
+                        path: self.dir.canonical_path().join(&staged_relative),
+                    });
+                }
+            }
+            result.map(|()| FileDeleteOutcome::Deleted)
+        })();
+        let _ = parent.remove_dir(&staging_name);
+        result
     }
 }
 

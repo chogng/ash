@@ -56,6 +56,7 @@ interface AcquiredModel {
 interface VirtualFile {
 	exists: boolean;
 	text: string | undefined;
+	revision?: string;
 	bytes?: Uint8Array;
 	synthetic: boolean;
 	document?: AcquiredModel;
@@ -75,6 +76,7 @@ interface PreparedResourceEdit {
 	readonly entry: Exclude<LanguageWorkspaceEditEntry, LanguageTextDocumentEdit>;
 	readonly applies: boolean;
 	readonly sourceBefore?: string;
+	readonly sourceRevision?: string;
 	readonly targetBefore?: string;
 	readonly binaryCreate?: { readonly contents: Uint8Array; readonly before?: Uint8Array; };
 }
@@ -249,26 +251,27 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 		const states = new Map<string, VirtualFile>();
 		const acquired = new Map<string, AcquiredModel>();
 		const prepared: PreparedEdit[] = [];
-		const touched = new Map<string, URI>();
+		const touched = new Map<string, { readonly resource: URI; readonly kind: PreparedEdit['kind']; }>();
 		try {
 			for (const [index, entry] of edit.entries.entries()) {
 				throwIfCancelled(signal, 'Workspace edit was cancelled');
 				prepared.push(await this.preflight(entry, states, acquired, signal, binaryCreates.get(index)?.buffer));
 			}
 			const operations = prepared.filter(operation => operation.kind === 'textDocument' ? operation.before !== operation.after : operation.applies);
-			for (const operation of operations) {
-				for (const resource of entryResources(operation.entry)) touched.set(resource.toString(), resource);
-			}
 			const undo: UndoOperation[] = [];
 			progress?.report({ total: operations.length, increment: 0 });
 			try {
 				for (const operation of operations) {
 					throwIfCancelled(signal, 'Workspace edit was cancelled');
+					let resources: readonly URI[];
 					if (operation.kind === 'textDocument') {
 						const skipSave = options.skipSaveForResources?.some(resource => resource.toString() === operation.entry.resource.toString()) === true;
-						await new BulkTextEdits(operation, this.models, undo, this.retainedFailedSaves, signal, options.reason, skipSave).apply();
+						resources = await new BulkTextEdits(operation, this.models, undo, this.retainedFailedSaves, signal, options.reason, skipSave).apply();
 					} else {
-						await new BulkFileEdits(operation, this.files, undo).apply();
+						resources = await new BulkFileEdits(operation, this.files, undo).apply();
+					}
+					for (const resource of resources) {
+						touched.set(resource.toString(), { resource, kind: operation.kind });
 					}
 					// Writes may commit despite cancellation; rollback must use their settled revision.
 					throwIfCancelled(signal, 'Workspace edit was cancelled');
@@ -281,7 +284,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 			}
 			if (options.respectAutoSaveConfig && this.configuration.getValue<boolean>(autoSaveSetting) === true && touched.size > 1) {
 				try {
-					for (const resource of touched.values()) {
+					for (const { resource } of touched.values()) {
 						if (options.skipSaveForResources?.some(skipped => skipped.toString() === resource.toString())) continue;
 						for (const copy of this.workingCopies.get(resource)) {
 							if (copy.isDirty) {
@@ -295,12 +298,8 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 					await this.dialogs.error(localize('bulkEdit.autoSaveFailed', 'The changes were applied, but automatic saving failed: {0}', getErrorMessage(error)));
 				}
 			}
-			const lastKind = new Map<string, PreparedEdit['kind']>();
-			for (const operation of operations) {
-				for (const resource of entryResources(operation.entry)) lastKind.set(resource.toString(), operation.kind);
-			}
-			const finalStates = [...touched.values()].map(resource => {
-				const textModel = lastKind.get(resource.toString()) === 'textDocument';
+			const finalStates = [...touched.values()].map(({ resource, kind }) => {
+				const textModel = kind === 'textDocument';
 				return {
 					resource,
 					expected: { ...states.get(resource.toString())! },
@@ -313,7 +312,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 			});
 			let reverted = false;
 			return Object.freeze({
-				resources: Object.freeze([...touched.values()]),
+				resources: Object.freeze(finalStates.map(state => state.resource)),
 				states: finalStates,
 				undo: async (): Promise<void> => {
 					if (reverted) throw new Error('Workspace edit was already reverted');
@@ -425,7 +424,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 				const applies = source.exists;
 				if (applies && source.text === undefined) throw new Error(`Workspace delete target '${entry.resource.toString()}' is not a UTF-8 file`);
 				if (applies) states.set(entry.resource.toString(), { exists: false, text: undefined, synthetic: true });
-				return { kind: entry.kind, entry, applies, sourceBefore: source.text };
+				return { kind: entry.kind, entry, applies, sourceBefore: source.text, sourceRevision: source.revision };
 			}
 		}
 	}
@@ -468,6 +467,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 					: (original.startsWith('\uFEFF') ? '\uFEFF' : '') + current.text;
 				current.serializedText = current.text;
 				delete current.document;
+				delete current.revision;
 			}
 			return current;
 		}
@@ -475,7 +475,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 			const stat = await this.files.stat(resource);
 			if (stat.kind !== FileKind.File) return { exists: true, text: undefined, synthetic: false };
 			const content = await this.files.readFile(resource);
-			const state = { exists: true, text: content.content, synthetic: false };
+			const state = { exists: true, text: content.content, revision: content.revision, synthetic: false };
 			states.set(key, state);
 			return state;
 		} catch (error) {
@@ -541,10 +541,6 @@ export async function toLanguageWorkspaceEdit(edits: readonly ResourceEdit[], bi
 
 function existing(options: ResourceFileEdit['options']): 'error' | 'overwrite' | 'ignore' {
 	return options.ignoreIfExists ? 'ignore' : options.overwrite ? 'overwrite' : 'error';
-}
-
-function entryResources(entry: LanguageWorkspaceEditEntry): readonly URI[] {
-	return entry.kind === 'rename' ? [entry.source, entry.target] : [entry.resource];
 }
 
 async function rollback(operations: readonly UndoOperation[]): Promise<unknown[]> {

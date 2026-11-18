@@ -21,6 +21,7 @@ pub use find_up::{FindUpErrorPolicy, find_nearest_ancestor_with_markers};
 pub use local::FileReadSnapshot;
 pub use local::LocalFileSystem;
 pub use local::commit_file_mutations;
+pub use service::FileDeleteOutcome;
 pub use service::FileSystem;
 pub use service::SystemFileTransferOperation;
 pub use text_document::{

@@ -325,6 +325,14 @@ export class FileService extends Disposable implements IFileService {
 		return this.writableProvider(resource, 'delete').delete(resource, missing, mode);
 	}
 
+	public async deleteFileIfUnchanged(resource: URI, expectedRevision: string): Promise<void> {
+		const provider = this.writableProvider(resource, 'deleteFileIfUnchanged');
+		if (!provider.deleteFileIfUnchanged) {
+			throw new FileOperationNotSupportedError(resource, 'deleteFileIfUnchanged');
+		}
+		await provider.deleteFileIfUnchanged(resource, expectedRevision);
+	}
+
 	private writableProvider(resource: URI, operation: string): IFileSystemProvider {
 		const provider = this.provider(resource);
 		if (!(provider.capabilities & FileSystemProviderCapabilities.FileReadWrite) || provider.capabilities & FileSystemProviderCapabilities.Readonly) {

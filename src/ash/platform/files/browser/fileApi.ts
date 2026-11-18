@@ -2,6 +2,7 @@ import { URI } from '../../../base/common/uri.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { Event } from '../../../base/common/event.js';
 import { CancellationError } from '../../../base/common/errors.js';
+import { localize } from '../../../nls.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
@@ -30,6 +31,7 @@ export function createDisconnectedFileApi(unavailable: UnavailableOperation): IF
 		pasteSystemFiles: async () => false,
 		rename: () => unavailable('fs.rename'),
 		delete: () => unavailable('fs.delete'),
+		deleteFileIfUnchanged: () => unavailable('fs.deleteFileIfUnchanged'),
 	};
 }
 
@@ -92,5 +94,11 @@ export function createAppServerFileApi(connection: AppServerProtocolClient): IFi
 		pasteSystemFiles: (params) => appServerRequest(connection, 'fs/pasteSystemFiles', params),
 		rename: (params) => voidResult(appServerRequest(connection, 'fs/rename', params)),
 		delete: (params) => voidResult(appServerRequest(connection, 'fs/delete', params)),
+		deleteFileIfUnchanged: async params => {
+			const result = await appServerRequest(connection, 'fs/deleteFileIfUnchanged', params);
+			if (result.kind === 'recoveryRequired') {
+				throw new Error(localize('files.deleteRecoveryRequired', 'The file was kept for recovery at {0}.', result.path));
+			}
+		},
 	};
 }
