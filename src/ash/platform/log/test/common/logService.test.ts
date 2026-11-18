@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { ConsoleLogSink } from '../../common/consoleLogSink.js';
 import { canLog, ConsoleLogger, LogLevel, NullLoggerService, type LogEntry } from '../../common/log.js';
 import { LogService } from '../../common/logServiceImpl.js';
 
@@ -68,6 +69,21 @@ test('log levels, null logging, and console logging expose the complete platform
 	});
 	logger.info('ready', { version: 1 });
 	assert.deepEqual(calls, [['[editor] ready', { version: 1 }]]);
+});
+
+test('console sink forwards log levels and keeps errors as separate arguments', () => {
+	const calls: unknown[][] = [];
+	const sink = new ConsoleLogSink({
+		debug: (...args) => calls.push(['debug', ...args]),
+		info: (...args) => calls.push(['info', ...args]),
+		warn: (...args) => calls.push(['warn', ...args]),
+		error: (...args) => calls.push(['error', ...args]),
+	});
+	using service = new LogService({ level: LogLevel.Trace, sinks: [sink] });
+	const error = new Error('disk');
+	service.trace('editor', 'starting');
+	service.error('editor', 'failed', error);
+	assert.deepEqual(calls, [['debug', '[editor] starting'], ['error', '[editor] failed disk', error]]);
 });
 
 test('LogService accepts uncategorized messages without losing structured local calls', () => {

@@ -3,6 +3,7 @@ import { getWindow, h, type IDimension } from '../../../../../base/browser/dom.j
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { observeElementSize } from '../../../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../../../base/browser/scheduler.js';
+import { ReentrancyBarrier } from '../../../../../base/common/controlFlow.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { CodeEditorWidget } from '../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
@@ -68,7 +69,7 @@ export class MergeEditor extends Disposable {
 	private showBase = false;
 	private columnLayout = false;
 	private activeHunk = 0;
-	private syncingScroll = false;
+	private readonly scrollBarrier = new ReentrancyBarrier();
 	private pendingActionFocus: { readonly index: number; readonly action: MergeEditorChoice | 'markHandled' | 'markUnhandled'; } | undefined;
 
 	constructor(
@@ -410,8 +411,7 @@ export class MergeEditor extends Disposable {
 			}
 		}
 		let focusButton: Button | undefined;
-		this.syncingScroll = true;
-		try {
+		this.scrollBarrier.run(() => {
 			for (const side of sides) {
 				const ids: string[] = [];
 				const editor = this.editorFor(side)!;
@@ -441,9 +441,7 @@ export class MergeEditor extends Disposable {
 				});
 				this.zoneIds.set(side, ids);
 			}
-		} finally {
-			this.syncingScroll = false;
-		}
+		});
 		if (!focusButton && focusedButtonIndex >= 0) focusButton = this.hunkActionButtons[focusedButtonIndex];
 	}
 
@@ -506,8 +504,7 @@ export class MergeEditor extends Disposable {
 	}
 
 	private clearZones(): void {
-		this.syncingScroll = true;
-		try {
+		this.scrollBarrier.run(() => {
 			for (const [side, ids] of this.zoneIds) {
 				const editor = this.editorFor(side);
 				if (editor?.getModel()) editor.changeViewZones(accessor => { for (const id of ids) accessor.removeZone(id); });
@@ -515,9 +512,7 @@ export class MergeEditor extends Disposable {
 			this.zoneIds.clear();
 			this.zoneButtons.clear();
 			this.hunkActionButtons.length = 0;
-		} finally {
-			this.syncingScroll = false;
-		}
+		});
 	}
 
 	private acceptHunk(index: number, choice: MergeEditorChoice): void {
@@ -583,12 +578,11 @@ export class MergeEditor extends Disposable {
 	}
 
 	private synchronizeScroll(source: MergeEditorSide, event: { readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }): void {
-		const model = this.model;
-		if (!model?.isReady || this.syncingScroll || (source === 'base' && !this.showBase)) return;
-		const sourceEditor = source === 'result' ? this.resultEditor.getControl() : this.sourceEditors.get(source);
-		if (!sourceEditor) return;
-		this.syncingScroll = true;
-		try {
+		this.scrollBarrier.runExclusivelyOrSkip(() => {
+			const model = this.model;
+			if (!model?.isReady || (source === 'base' && !this.showBase)) return;
+			const sourceEditor = source === 'result' ? this.resultEditor.getControl() : this.sourceEditors.get(source);
+			if (!sourceEditor) return;
 			const topLine = sourceEditor.getVisibleRanges()[0]?.startLineNumber ?? 1;
 			// Conflict view zones share pixel coordinates; line mappings apply between conflicts.
 			const isAlignedConflict = model.hunks.some(hunk => hunk[source].contains(topLine));
@@ -612,9 +606,7 @@ export class MergeEditor extends Disposable {
 				}
 				if (event.scrollLeftChanged) target.setScrollLeft(sourceEditor.getScrollLeft());
 			}
-		} finally {
-			this.syncingScroll = false;
-		}
+		});
 	}
 
 	private updateNavigation(): void {

@@ -1,3 +1,4 @@
+import { log as logToConsole } from '../../../base/common/console.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
@@ -202,8 +203,8 @@ export class ConsoleLogger implements ILogService {
 	error(message: string | Error, argument?: unknown, ...arguments_: unknown[]): void { this.write('error', message instanceof Error ? message.message : message, argument, message instanceof Error ? [message, ...arguments_] : arguments_); }
 
 	private write(method: 'debug' | 'info' | 'warn' | 'error', message: string, argument: unknown, arguments_: readonly unknown[]): void {
-		const values = argument === undefined ? arguments_ : [argument, ...arguments_];
-		this.target[method](`[${this.category}] ${message}`, ...values);
+		const args: [string, ...unknown[]] = argument === undefined ? [message, ...arguments_] : [message, argument, ...arguments_];
+		logToConsole({ severity: method, arguments: args }, this.category, this.target);
 	}
 }
 

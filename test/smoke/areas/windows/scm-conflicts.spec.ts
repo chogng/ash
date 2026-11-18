@@ -223,7 +223,11 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	await expect(group.content.locator('.ash-merge-hunk')).toHaveCount(2);
 	// Reserve enough width for all four editors during the resize assertion.
 	await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');
-	await workbench.quickaccess.runCommand('workbench.action.closeAuxiliaryBar');
+	const auxiliaryBar = page.locator('[data-part="auxiliarybar"]');
+	if (await auxiliaryBar.isVisible()) {
+		await workbench.quickaccess.runCommand('workbench.action.closeAuxiliaryBar');
+	}
+	await expect(auxiliaryBar).toBeHidden();
 	const editors = ['current', 'incoming'].map(side => group.content.locator(`.ash-merge-input-${side} .stanza-editor`));
 	editors.push(group.content.locator('.ash-merge-result-editor .stanza-editor'));
 	for (const editor of editors) {

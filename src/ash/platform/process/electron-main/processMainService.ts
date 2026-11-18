@@ -1,6 +1,7 @@
 import { arch, freemem, loadavg, release, totalmem, type } from 'node:os';
 import { Worker } from 'node:worker_threads';
 import { app, BrowserWindow } from 'electron/main';
+import { getDesktopEnvironment } from '../../../base/common/desktopEnvironmentInfo.js';
 import { listProcesses } from '../../../base/node/ps.js';
 import { localize } from '../../../nls.js';
 import type { PerformanceInfo, SystemInfo } from '../../diagnostics/common/diagnostics.js';
@@ -17,8 +18,10 @@ export class ProcessMainService implements IProcessService {
 
 	public async getSystemInfo(): Promise<SystemInfo> {
 		const cpus = await this.readCpuInfo();
+		const desktop = process.platform === 'linux' ? getDesktopEnvironment(process.env) : 'UNKNOWN';
+		const os = `${type()} ${arch()} ${release()}`;
 		return {
-			os: `${type()} ${arch()} ${release()}`,
+			os: desktop === 'UNKNOWN' ? os : `${os} (${desktop})`,
 			cpus,
 			memory: localize('diagnostics.memory', '{0} GiB ({1} GiB free)', (totalmem() / 2 ** 30).toFixed(2), (freemem() / 2 ** 30).toFixed(2)),
 			vmHint: localize('issue.diagnosticsUnavailable', 'Unavailable'),
