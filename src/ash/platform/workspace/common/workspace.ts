@@ -9,6 +9,7 @@ import {
 } from '../../instantiation/common/instantiation.js';
 import { createSshRemoteAuthority, getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
 import { getRemoteAuthority } from '../../remote/common/remoteHosts.js';
+import type { FolderLocationChangeReason, IResolvedFolderLocation } from './folderLocations.js';
 
 /** Describes whether a workbench contains no project, one folder, or a workspace. */
 export const enum WorkbenchState {
@@ -82,6 +83,20 @@ export interface IWorkspace {
 	readonly remoteAuthority?: string;
 	readonly configuration?: URI;
 	readonly name?: string;
+	/** Present after a local single-folder location change. The folder list contains the active directory. */
+	readonly folderLocation?: {
+		readonly primary: URI;
+		readonly reason: FolderLocationChangeReason;
+		readonly alternate?: WorkspaceFolderLocationDetails;
+	};
+}
+
+export type WorkspaceFolderLocationDetails = Omit<IResolvedFolderLocation, 'uri' | 'icon'>;
+
+export function getWorkspacePrimaryFolderUri(workspace: IWorkspace): URI | undefined {
+	return !workspace.configuration && workspace.folders.length === 1
+		? workspace.folderLocation?.primary ?? workspace.folders[0]?.uri
+		: undefined;
 }
 
 /** Converts a persisted workspace identity into its minimal resolved projection. */
@@ -150,13 +165,6 @@ export function workspaceRelativePath(root: URI, resource: URI): string {
 		throw new Error('Resource is outside the current workspace folder');
 	}
 	return resourcePath.slice(rootPath.length + 1);
-}
-
-/** Returns the durable path that reopens the current folder or workspace file. */
-export function workspaceOpenTarget(workspace: IWorkspace): string | undefined {
-	const resource = workspace.configuration ?? (workspace.folders.length === 1 ? workspace.folders[0]?.uri : undefined);
-	if (!resource) return undefined;
-	return isRemoteResource(resource) ? getRemoteWorkspacePath(resource) : resource.fsPath;
 }
 
 /** Recognizes workspace configuration paths accepted by the desktop host. */
@@ -298,6 +306,9 @@ export function serializeWorkspace(workspace: IWorkspace): unknown {
 		...(workspace.configuration ? { configuration: workspace.configuration.toString() } : {}),
 		...(workspace.name ? { name: workspace.name } : {}),
 		...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}),
+		...(workspace.folderLocation ? {
+			folderLocation: { ...workspace.folderLocation, primary: workspace.folderLocation.primary.toString() },
+		} : {}),
 	};
 }
 
@@ -308,6 +319,7 @@ export function parseWorkspace(value: unknown): IWorkspace {
 	if ('configuration' in record) expected.push('configuration');
 	if ('name' in record) expected.push('name');
 	if ('remoteAuthority' in record) expected.push('remoteAuthority');
+	if ('folderLocation' in record) expected.push('folderLocation');
 	requireExactKeys(record, expected.sort());
 	const id = nonEmptyString(record.id, 'workspace id');
 	if (!Array.isArray(record.folders)) throw new Error('workspace folders must be an array');
@@ -324,7 +336,50 @@ export function parseWorkspace(value: unknown): IWorkspace {
 		: workspaceConfigUri(record.configuration, 'workspace configuration');
 	const name = record.name === undefined ? undefined : nonEmptyString(record.name, 'workspace name');
 	const remoteAuthority = record.remoteAuthority === undefined ? undefined : parseRemoteAuthority(record.remoteAuthority);
-	return freezeWorkspace({ id, folders, ...(configuration ? { configuration } : {}), ...(name ? { name } : {}), ...(remoteAuthority ? { remoteAuthority } : {}) });
+	const folderLocation = record.folderLocation === undefined ? undefined : parseWorkspaceFolderLocation(record.folderLocation, folders, configuration, remoteAuthority);
+	return freezeWorkspace({
+		id, folders,
+		...(configuration ? { configuration } : {}),
+		...(name ? { name } : {}),
+		...(remoteAuthority ? { remoteAuthority } : {}),
+		...(folderLocation ? { folderLocation } : {}),
+	});
+}
+
+function parseWorkspaceFolderLocation(value: unknown, folders: readonly IWorkspaceFolder[], configuration: URI | undefined, remoteAuthority: string | undefined): NonNullable<IWorkspace['folderLocation']> {
+	const record = exactRecord(value);
+	requireExactKeys(record, record.alternate === undefined ? ['primary', 'reason'] : ['alternate', 'primary', 'reason']);
+	const primary = workspaceResourceUri(record.primary, 'primary folder URI');
+	if (configuration || remoteAuthority || folders.length !== 1 || folders[0]?.uri.scheme !== Schemas.file || primary.scheme !== Schemas.file ||
+		(record.reason !== 'user' && record.reason !== 'programmatic') ||
+		(primary.toString() === folders[0].uri.toString()) !== (record.alternate === undefined)) {
+		throw new TypeError('Invalid workspace folder location');
+	}
+	return Object.freeze({
+		primary,
+		reason: record.reason,
+		...(record.alternate === undefined ? {} : { alternate: parseWorkspaceFolderLocationDetails(record.alternate) }),
+	});
+}
+
+/** Revives provider metadata carried with an accepted or requested location. */
+export function parseWorkspaceFolderLocationDetails(value: unknown): WorkspaceFolderLocationDetails {
+	const record = exactRecord(value);
+	if (Object.keys(record).some(key => key !== 'label' && key !== 'providerId' && key !== 'builtIn' && key !== 'description' && key !== 'group') ||
+		typeof record.label !== 'string' || !record.label || record.label.length > 32768 ||
+		typeof record.providerId !== 'string' || !record.providerId || record.providerId.length > 1024 ||
+		typeof record.builtIn !== 'boolean' ||
+		(record.description !== undefined && (typeof record.description !== 'string' || record.description.length > 32768)) ||
+		(record.group !== undefined && (typeof record.group !== 'string' || record.group.length > 1024))) {
+		throw new TypeError('Invalid workspace folder location metadata');
+	}
+	return Object.freeze({
+		label: record.label,
+		providerId: record.providerId,
+		builtIn: record.builtIn,
+		...(record.description === undefined ? {} : { description: record.description }),
+		...(record.group === undefined ? {} : { group: record.group }),
+	});
 }
 
 function exactRecord(value: unknown): Record<string, unknown> {

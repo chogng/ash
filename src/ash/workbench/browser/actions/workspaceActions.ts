@@ -1,11 +1,18 @@
 import { localize2 } from '../../../nls.js';
+import { CancellationTokenSource } from '../../../base/common/cancellation.js';
+import { isCancellationError } from '../../../base/common/errors.js';
+import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
+import { IWorkspaceFolderLocationService, type IFolderLocation } from '../../../platform/workspace/common/folderLocations.js';
 
 import { Keybinding, logicalKey } from '../../../base/common/keybindings.js';
 import { Action2, MenuId, MenusRegistry } from '../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { IsNativeContext } from '../../../platform/contextkey/common/contextkeys.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
-import { BrowserLocalFolderSupportContext, OpenFolderWorkspaceSupportContext, WorkbenchStateContext } from '../../common/contextkeys.js';
+import { BrowserLocalFolderSupportContext, IsSessionsWindowContext, OpenFolderWorkspaceSupportContext, WorkbenchStateContext } from '../../common/contextkeys.js';
 import { IHostService } from '../../services/host/browser/host.js';
 import { getWorkspaceRemoteAuthority, IWorkspaceContextService, type IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
 import { ADD_ROOT_FOLDER_COMMAND_ID, PICK_WORKSPACE_FOLDER_COMMAND_ID, SET_ROOT_FOLDER_COMMAND_ID } from './workspaceCommands.js';
@@ -18,6 +25,67 @@ import { status } from '../../../base/browser/ui/aria/aria.js';
 import { IEditorService } from '../../services/editor/common/editorService.js';
 
 export const OpenFolderCommandId = 'workbench.action.files.openFolder';
+
+export class SwitchFolderLocationAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.switchFolderLocation',
+			title: localize2('workspace.folderLocation.switch', 'Switch Folder Location'),
+			f1: true,
+			precondition: ContextKeyExpr.and(IsNativeContext.isEqualTo(true), IsSessionsWindowContext.isEqualTo(false), WorkbenchStateContext.isEqualTo('folder')),
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		if (accessor.get(IContextKeyService).getValue(IsSessionsWindowContext.key)) return;
+		const context = accessor.get(IWorkspaceContextService);
+		const locations = accessor.get(IWorkspaceFolderLocationService);
+		const folder = context.getWorkspace().folders[0];
+		if (!folder || !locations.canSetLocation(folder)) return;
+		const editing = accessor.get(IWorkspaceEditingService);
+		const quickInput = accessor.get(IQuickInputService);
+		using picker = quickInput.createQuickPick<IQuickPickItem & IFolderLocation>();
+		using cancellation = new CancellationTokenSource();
+		using disposables = new DisposableStore();
+		disposables.add(context.onDidChangeWorkspace(() => picker.hide()));
+		const title = localize('workspace.folderLocation.switch', 'Switch Folder Location');
+		picker.title = title;
+		picker.ariaLabel = title;
+		picker.placeholder = localize('workspace.folderLocation.placeholder', 'Select a folder location');
+		picker.sortByLabel = false;
+		picker.busy = true;
+
+		let selection: IFolderLocation | undefined;
+		const closed = new Promise<void>(resolve => {
+			disposables.add(picker.onDidAccept(() => {
+				selection = picker.selectedItems[0];
+				if (selection) picker.hide();
+			}));
+			disposables.add(picker.onDidHide(() => {
+				cancellation.cancel();
+				resolve();
+			}));
+		});
+		picker.show();
+		try {
+			const known = await locations.getFolderLocations(folder, cancellation.token);
+			if (cancellation.token.isCancellationRequested) return;
+			const items = known.map(location => ({
+				...location,
+				description: location.description ?? location.uri.fsPath,
+				picked: extUriBiasedIgnorePathCase.isEqual(location.uri, folder.uri),
+			}));
+			picker.items = items;
+			const current = items.find(item => item.picked);
+			if (current) picker.activeItems = [current];
+			picker.busy = false;
+			await closed;
+			if (selection) await editing.setFolderLocation(selection.uri, { folder: folder.uri, reason: 'user' });
+		} catch (error) {
+			if (!isCancellationError(error)) throw error;
+		}
+	}
+}
 
 export class OpenWorkspaceAction extends Action2 {
 	constructor() {

@@ -58,6 +58,10 @@ export abstract class AbstractWorkspaceEditingService extends Disposable impleme
 	abstract updateFolders(index: number, deleteCount?: number, foldersToAdd?: readonly { readonly uri: URI; readonly name?: string; }[]): Promise<void>;
 	abstract saveAndEnterWorkspace(path: URI): Promise<void>;
 
+	async setFolderLocation(_location: URI): Promise<void> {
+		throw new Error(localize('workspace.folderLocation.unavailable', 'Folder locations are unavailable in this workspace.'));
+	}
+
 	async enterWorkspace(path: URI): Promise<void> {
 		this.assertNotDisposed();
 		this.ensureConfigurationSaved();

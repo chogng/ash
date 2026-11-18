@@ -26,9 +26,9 @@ export class Menus {
 				return snapshot(menu);
 			}, path);
 		}
-		const button = this.page.getByRole('button', { name: 'Application menu', exact: true });
-		const items = await this.inspect(application, () => button.click(), path);
-		await expect(button).toHaveAttribute('aria-expanded', 'false');
+		const trigger = this.page.getByRole('menuitem', { name: 'Application menu', exact: true });
+		const items = await this.inspect(application, () => trigger.click(), path);
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
 		return items;
 	}
 
@@ -54,9 +54,9 @@ export class Menus {
 			}, path);
 			return;
 		}
-		const button = this.page.getByRole('button', { name: 'Application menu', exact: true });
-		await this.select(application, () => button.click(), path);
-		await expect(button).toHaveAttribute('aria-expanded', 'false');
+		const trigger = this.page.getByRole('menuitem', { name: 'Application menu', exact: true });
+		await this.select(application, () => trigger.click(), path);
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
 	}
 
 	async select(application: PlaywrightApplication, open: () => Promise<unknown>, path: readonly string[]): Promise<void> {

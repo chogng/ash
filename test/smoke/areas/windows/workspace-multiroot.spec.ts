@@ -1,10 +1,9 @@
 import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
-import { tmpdir } from 'node:os';
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
+import { URI } from '../../../../src/ash/base/common/uri.js';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 
 async function workspace(page: Page) {
@@ -13,11 +12,16 @@ async function workspace(page: Page) {
 	}).ash.ipcRenderer.invoke('ash:workspace:context:read')));
 }
 
+function waitForWorkspaceNavigation(page: Page) {
+	return page.waitForEvent('framenavigated', frame => frame === page.mainFrame());
+}
+
 test('local multi-root commands, live folders and retained second-root terminals work through App Server', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace, reloadWorkbench }, testInfo) => {
 	test.setTimeout(180_000);
 	const electron = application as ElectronApplication;
 	const second = testInfo.outputPath('second-root');
 	const saved = testInfo.outputPath('saved', 'team.ash-workspace');
+	const savedPath = URI.file(saved).fsPath;
 	await mkdir(join(second, '.vscode'), { recursive: true });
 	await writeFile(join(second, 'second.txt'), 'second_root_search_token\n');
 	const platform = process.platform === 'darwin' ? 'osx' : process.platform === 'win32' ? 'windows' : 'linux';
@@ -37,19 +41,22 @@ test('local multi-root commands, live folders and retained second-root terminals
 		await workbench.quickaccess.runCommand('workbench.action.addRootFolder');
 		await directoryPermissionPrompt(page).getByRole('button', { name: 'Trust Folder', exact: true }).click();
 		await expect.poll(async () => (await workspace(page)).folders.length).toBe(2);
+		await expect(page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'second-root' })).toBeVisible();
 		await editor.waitForEditorContents(text => text.includes('kept across workspace creation'));
 		await editor.waitForEditorFocus();
 		await page.keyboard.press('ControlOrMeta+s');
 		await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toContain('kept across workspace creation');
+		const untitled = (await workspace(page)).configuration!.fsPath;
+		const draft = JSON.parse(await readFile(untitled, 'utf8'));
+		draft.settings = { [`terminal.integrated.env.${platform}`]: { WORKSPACE_SELECTED_ROOT: '${workspaceFolder}' } };
+		await writeFile(untitled, JSON.stringify(draft, null, 2));
 		await workbench.quickaccess.runCommand('workbench.action.saveWorkspaceAs');
-		await expect.poll(async () => (await workspace(page)).configuration?.fsPath).toBe(saved);
+		await expect.poll(async () => (await workspace(page)).configuration?.fsPath).toBe(savedPath);
 		const contents = JSON.parse(await readFile(saved, 'utf8')) as { folders: { path: string; name: string; }[]; settings?: unknown; };
 		expect(contents.folders).toHaveLength(2);
-		// Environment settings belong to the workspace scope in VS Code. Their
-		// variable expansion still follows the terminal's selected directory.
-		contents.settings = { [`terminal.integrated.env.${platform}`]: { ASH_SELECTED_ROOT: '${workspaceFolder}' } };
-		await writeFile(saved, JSON.stringify(contents, null, 2));
-		const root = page.locator('.ash-explorer .ash-tree-row').filter({ has: page.locator(`[data-resource="${pathToFileURL(second).toString()}"]`) });
+		expect(contents.settings).toEqual(draft.settings);
+		const secondRoot = (await workspace(page)).folders[1]!;
+		const root = page.locator('.ash-explorer .ash-tree-row').filter({ has: page.locator(`[data-resource=${JSON.stringify(secondRoot.uri.toString())}]`) });
 		await expect(root).toBeVisible();
 		if (await root.getAttribute('aria-expanded') === 'false') await root.locator('.ash-tree-twistie').click();
 		await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'second.txt' }).dblclick();
@@ -60,7 +67,7 @@ test('local multi-root commands, live folders and retained second-root terminals
 		await page.keyboard.press('ControlOrMeta+s');
 		await expect.poll(() => readFile(join(second, 'second.txt'), 'utf8')).toContain('second_root_saved');
 		await workbench.terminal.show();
-		await workbench.terminal.runCommand(`node -e "console.log('SELECTED='+process.cwd());console.log('ENV='+process.env.ASH_SELECTED_ROOT)"`);
+		await workbench.terminal.runCommand(`node -e "console.log('SELECTED='+process.cwd());console.log('ENV='+process.env.WORKSPACE_SELECTED_ROOT)"`);
 		await expect(workbench.terminal.activeInstance.locator('.xterm-rows')).toContainText(`SELECTED=${second}`);
 		await expect(workbench.terminal.activeInstance.locator('.xterm-rows')).toContainText(`ENV=${second}`);
 		const reordered = { ...contents, folders: contents.folders.map((folder, index) => ({ ...folder, name: index === 0 ? 'Client' : 'Server' })).reverse() };
@@ -100,13 +107,15 @@ test('local multi-root commands, live folders and retained second-root terminals
 	({ application, workbench } = await reloadWorkbench());
 	// The fixture relaunches with the original folder argument. Reopen the saved
 	// workspace explicitly, as opening its file after restarting the application.
-	await (application as ElectronApplication).evaluate(({ app }, file) => {
-		app.emit('second-instance', {} as never, [process.execPath, app.getAppPath(), '--workspace', file, '--reuse-window'], process.cwd(), {});
-	}, saved);
-	await expect.poll(async () => (await workspace(workbench.page)).configuration?.fsPath).toBe(saved);
+	await Promise.all([
+		waitForWorkspaceNavigation(workbench.page),
+		(application as ElectronApplication).evaluate(({ app }, file) => {
+			app.emit('second-instance', {} as never, [process.execPath, app.getAppPath(), '--workspace', file, '--reuse-window'], process.cwd(), {});
+		}, saved),
+	]);
 	await workbench.waitForReady();
 	expect((await workspace(workbench.page)).folders.map(folder => folder.name)).toEqual(['Server']);
-	expect((await workspace(workbench.page)).configuration?.fsPath).toBe(saved);
+	expect((await workspace(workbench.page)).configuration?.fsPath).toBe(savedPath);
 });
 
 test('local workspace management commands are translated in Chinese', { tag: ['@electron-app-server'] }, async ({ application, workbench, restartWorkbench }) => {
@@ -116,10 +125,10 @@ test('local workspace management commands are translated in Chinese', { tag: ['@
 	await language.press('Enter');
 	({ application, workbench } = await restartWorkbench());
 	await workbench.quickaccess.open('>workbench.action.addRootFolder');
-	await expect(workbench.quickaccess.items).toContainText('将文件夹添加到工作区');
+	await expect(workbench.quickaccess.items.filter({ hasText: '将文件夹添加到工作区' })).toBeVisible();
 	await workbench.quickaccess.close();
 	await workbench.quickaccess.open('>workbench.action.saveWorkspaceAs');
-	await expect(workbench.quickaccess.items).toContainText('将工作区另存为');
+	await expect(workbench.quickaccess.items.filter({ hasText: '将工作区另存为' })).toBeVisible();
 	await workbench.quickaccess.close();
 });
 
@@ -130,9 +139,10 @@ test.describe('Workspace menu entrypoints', () => {
 		test.setTimeout(180_000);
 		const electron = application as ElectronApplication;
 		const page = workbench.page;
-		const fixture = await realpath(await mkdtemp(join(tmpdir(), 'ash-workspace-menu-')));
+		const fixture = testInfo.outputPath('workspace-menu');
 		const second = join(fixture, 'server');
 		const saved = join(fixture, 'saved', 'menu-team.ash-workspace');
+		const savedPath = URI.file(saved).fsPath;
 		await mkdir(second, { recursive: true });
 		await writeFile(join(second, 'kept.txt'), 'removing a workspace root keeps this file\n');
 		const original = await electron.evaluateHandle(({ dialog }) => ({ open: dialog.showOpenDialog, save: dialog.showSaveDialog }));
@@ -144,21 +154,7 @@ test.describe('Workspace menu entrypoints', () => {
 			}) as typeof dialog.showOpenDialog;
 			dialog.showSaveDialog = (async () => ({ canceled: false, filePath: paths.saved })) as typeof dialog.showSaveDialog;
 		}, { second, saved });
-		const openFileMenu = async () => {
-			await page.getByRole('button', { name: 'Application menu', exact: true }).click();
-			await page.getByRole('menu').first().getByRole('menuitem', { name: 'File', exact: true }).click();
-			return page.getByRole('menu').last();
-		};
-		const runFileMenu = async (label: string) => {
-			if (process.platform === 'darwin') {
-				await expect.poll(() => electron.evaluate(({ Menu }, label) => Menu.getApplicationMenu()?.items.find(item => item.label === 'File')?.submenu?.items.find(item => item.label === label)?.enabled, label)).toBe(true);
-				await electron.evaluate(({ Menu }, label) => {
-					Menu.getApplicationMenu()!.items.find(item => item.label === 'File')!.submenu!.items.find(item => item.label === label)!.click({ altKey: false });
-				}, label);
-			} else {
-				await (await openFileMenu()).getByRole('menuitem', { name: label, exact: true }).click();
-			}
-		};
+		const runFileMenu = (label: string) => workbench.menus.selectApplication(application, ['File', label]);
 		const rootRow = (uri: string) => page.locator('.ash-explorer .ash-tree-row').filter({ has: page.locator(`[data-resource=${JSON.stringify(uri)}]`) });
 		try {
 			await runFileMenu('Add Folder to Workspace...');
@@ -180,12 +176,8 @@ test.describe('Workspace menu entrypoints', () => {
 			expect(fileMenu.map(item => item.label)).not.toContain('Remove Folder from Workspace...');
 			expect(fileMenu.map(item => item.label)).not.toContain('Add Folder to Workspace...');
 			// Keyboard context menus must carry the focused root, independently of the active editor.
-			await secondRow.click();
-			await secondRow.press('Shift+F10');
-			const menu = page.getByRole('menu').last();
-			await expect(menu.getByRole('menuitem', { name: 'Remove Folder from Workspace...', exact: true })).toBeVisible();
-			await testInfo.attach('workspace-root-keyboard-menu', { body: await page.screenshot(), contentType: 'image/png' });
-			await menu.getByRole('menuitem', { name: 'Remove Folder from Workspace...', exact: true }).click();
+			await secondRow.locator('.ash-explorer-row-content').click();
+			await workbench.menus.select(application, () => page.keyboard.press('Shift+F10'), ['Remove Folder from Workspace...']);
 			await expect.poll(async () => (await workspace(page)).folders.map(folder => folder.id)).toEqual([roots[0]!.id]);
 			expect(await readFile(join(second, 'kept.txt'), 'utf8')).toContain('keeps this file');
 			await expect(page.locator('.ash-quick-pick')).not.toBeVisible();
@@ -197,22 +189,23 @@ test.describe('Workspace menu entrypoints', () => {
 			await page.keyboard.press('Escape');
 			expect((await workspace(page)).folders).toHaveLength(2);
 			await runFileMenu('Save Workspace As...');
-			await expect.poll(async () => (await workspace(page)).configuration?.fsPath).toBe(saved);
+			await expect.poll(async () => (await workspace(page)).configuration?.fsPath).toBe(savedPath);
 			expect(JSON.parse(await readFile(saved, 'utf8')).folders).toHaveLength(2);
-			await runFileMenu('Close Workspace');
-			await expect.poll(async () => (await workspace(page)).folders.length).toBe(0);
+			await Promise.all([waitForWorkspaceNavigation(page), runFileMenu('Close Workspace')]);
 			await workbench.waitForReady();
+			expect((await workspace(page)).folders).toHaveLength(0);
 			await electron.evaluate(({ dialog }, saved) => {
 				dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [saved] })) as typeof dialog.showOpenDialog;
 			}, saved);
-			await runFileMenu('Open Workspace from File...');
-			await expect.poll(async () => (await workspace(page)).configuration?.fsPath).toBe(saved);
-			await expect.poll(async () => (await workspace(page)).folders.map(folder => folder.id)).toEqual(roots.map(folder => folder.id));
+			await Promise.all([waitForWorkspaceNavigation(page), runFileMenu('Open Workspace from File...')]);
+			await workbench.waitForReady();
+			const reopened = await workspace(page);
+			expect(reopened.configuration?.fsPath).toBe(savedPath);
+			expect(reopened.folders.map(folder => folder.id)).toEqual(roots.map(folder => folder.id));
 			await testInfo.attach('workspace-menus-reopened', { body: await page.screenshot(), contentType: 'image/png' });
 		} finally {
 			await electron.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original.open; dialog.showSaveDialog = original.save; }, original);
 			await original.dispose();
-			await rm(fixture, { recursive: true, force: true });
 		}
 	});
 });

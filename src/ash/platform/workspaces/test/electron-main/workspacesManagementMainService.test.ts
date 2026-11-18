@@ -12,7 +12,7 @@ import { parseJsonc } from '../../../../base/common/jsonc.js';
 import { WorkspaceContextMainService } from '../../../window/electron-main/window.js';
 import { validateWorkspaceEdit } from '../../../workspace/common/workspaceIpc.js';
 import { WorkspaceEditingMainService, WorkspacesManagementMainService } from '../../electron-main/workspacesManagementMainService.js';
-import { getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier } from '../../node/workspaces.js';
+import { getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier, nodeWorkspacePathService, WorkspacePathKind } from '../../node/workspaces.js';
 import { parseWorkspace, serializeWorkspace } from '../../../workspace/common/workspace.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
@@ -132,6 +132,68 @@ test('real filesystem aliases deduplicate Unicode roots and survive saving to a 
 	assert.equal(f.requests.length, 0, 'saving aliases must retain the canonical execution identities');
 });
 
+test('multi-root resolution bounds concurrent reads and keeps configured order and names', async () => {
+	const root = URI.file(join(tmpdir(), 'ash-batched-workspace')).fsPath;
+	const paths = Array.from({ length: 9 }, (_, index) => `root-${index}`);
+	const reads: string[] = [];
+	const slowRoot = new DeferredPromise<void>();
+	const refilled = new DeferredPromise<void>();
+	let inFlight = 0;
+	let peak = 0;
+	const manager = new WorkspacesManagementMainService({
+		readFile: async () => JSON.stringify({
+			folders: [
+				{ path: paths[0], name: 'First name' },
+				...paths.slice(1).map(path => ({ path })),
+				{ path: paths[0], name: 'Repeated name' },
+				{ path: 'alias' },
+			],
+		}),
+		async resolvePath(path) {
+			reads.push(path);
+			peak = Math.max(peak, ++inFlight);
+			if (path === join(root, paths[0]!)) await slowRoot.p;
+			if (path === join(root, paths[4]!)) refilled.complete();
+			await Promise.resolve();
+			inFlight--;
+			return { kind: WorkspacePathKind.Directory, path: path === join(root, 'alias') ? join(root, paths[0]!) : path };
+		},
+	});
+	const pending = manager.resolveWorkspace(getWorkspaceIdentifier(URI.file(join(root, 'test.ash-workspace'))));
+	await refilled.p;
+	slowRoot.complete();
+	const workspace = await pending;
+	assert.equal(peak, 4);
+	assert.equal(reads.length, paths.length + 1, 'only distinct configured paths are resolved');
+	assert.deepEqual(workspace.folders.map(folder => folder.uri.toString()), paths.map(path => URI.file(join(root, path)).toString()));
+	assert.equal(workspace.folders[0]?.name, 'First name');
+});
+
+test('unchanged edits use one configuration read through the workspace resolver', async () => {
+	await using f = await fixture();
+	const identifier = getWorkspaceIdentifier(URI.file(join(f.root, 'virtual.ash-workspace')));
+	let reads = 0;
+	const manager = new WorkspacesManagementMainService({
+		...nodeWorkspacePathService,
+		async readFile(path) {
+			assert.equal(path, identifier.configPath.fsPath);
+			reads++;
+			return '{"folders":[{"path":"first"}]}';
+		},
+	});
+	const initial = await manager.resolveWorkspace(identifier);
+	f.context.updateWorkspace(identifier, initial);
+	reads = 0;
+	using editing = new WorkspaceEditingMainService(f.context, manager, f.root, {
+		resolveGrant: async () => assert.fail('A no-op must not resolve grants'),
+		persistDirectoryGrant: async () => assert.fail('A no-op must not persist grants'),
+		setFolders: async () => assert.fail('A no-op must not activate directories'),
+		validateFolders: async () => assert.fail('A no-op must not validate a new directory list'),
+	}, error => assert.fail(String(error)));
+	assert.deepEqual(await editing.edit({ operation: 'folders', index: 0, deleteCount: 0, folders: [] }), serializeWorkspace(initial));
+	assert.equal(reads, 1);
+});
+
 test('a rejected directory update leaves both metadata and the window unchanged', async () => {
 	await using f = await fixture();
 	await f.editing.edit({ operation: 'save', path: join(f.root, 'team.ash-workspace') });
@@ -178,6 +240,11 @@ test('workspace metadata access is limited to the current file and preserves rev
 	const uri = URI.file(path).toString();
 	const original = await f.editing.configuration({ operation: 'read', uri }) as { revision: string; content: string; };
 	assert.ok(original.content.includes('folders'));
+	if (process.platform === 'win32' && /^file:\/\/\/[A-Z]:\//u.test(uri)) {
+		const lowerDrive = uri.replace(/^file:\/\/\/[A-Z]:\//u, prefix => prefix.toLowerCase());
+		assert.deepEqual(await f.editing.configuration({ operation: 'read', uri: lowerDrive }), original);
+		assert.deepEqual(await f.editing.configuration({ operation: 'read', uri: lowerDrive.replace('/team.', '/TEAM.') }), { error: 'notCurrent' });
+	}
 	const sibling = URI.file(join(f.root, 'private.txt')).toString();
 	await writeFile(URI.parse(sibling).fsPath, 'private content');
 	assert.deepEqual(await f.editing.configuration({ operation: 'read', uri: sibling }), { error: 'notCurrent' });

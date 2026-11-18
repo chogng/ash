@@ -171,7 +171,7 @@ import { IDecorationsService } from '../services/decorations/common/decorations.
 import {
 	IThemeService,
 } from '../../platform/theme/common/themeService.js';
-import { type IWorkspace, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspace, workspaceOpenTarget } from '../../platform/workspace/common/workspace.js';
+import { type IWorkspace, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspace } from '../../platform/workspace/common/workspace.js';
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from '../common/configuration.js';
 import {
 	type WorkbenchContributionHost,

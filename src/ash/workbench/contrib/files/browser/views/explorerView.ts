@@ -1,6 +1,7 @@
 import { ExplorerRootContext, ExplorerFolderContext } from '../../common/files.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import type { IAsyncDataTreeViewState } from '../../../../../base/browser/ui/tree/asyncDataTree.js';
+import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { isRecord } from '../../../../../base/common/types.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
@@ -213,6 +214,9 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			this.updateCompressedFocus();
 		}, true));
 		this._register(addDisposableListener(this.tree.domNode, 'contextmenu', event => this.showExplorerContextMenu(event)));
+		this._register(this.tree.onContextMenu(({ browserEvent, anchor }) => {
+			if (browserEvent instanceof KeyboardEvent) this.showExplorerContextMenu(browserEvent, anchor);
+		}));
 		let pendingKeyboardPaste: ReturnType<typeof setTimeout> | undefined;
 		let pendingMovePaste = false;
 		this._register(toDisposable(() => clearTimeout(pendingKeyboardPaste)));
@@ -244,7 +248,6 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 					pendingMovePaste = false;
 				}, 0);
 			}
-			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showExplorerContextMenu(event);
 		}));
 		const updateAriaLabel = () => {
 			const label = localize('accessibility.explorerTreeLabel', 'Workspace files');
@@ -508,7 +511,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.updateExplorerContextKeys(this.getContext()[0]);
 	}
 
-	private showExplorerContextMenu(event: MouseEvent | KeyboardEvent): void {
+	private showExplorerContextMenu(event: MouseEvent | KeyboardEvent, keyboardAnchor?: ContextMenuAnchor): void {
 		event.preventDefault();
 		event.stopPropagation();
 		const row = event.target instanceof Element ? event.target.closest<HTMLElement>('.ash-tree-row') : null;
@@ -528,7 +531,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.updateExplorerContextKeys(item);
 		const anchor = event instanceof MouseEvent
 			? { x: event.clientX, y: event.clientY, targetWindow: this.element.ownerDocument.defaultView ?? undefined }
-			: row ?? this.tree.element;
+			: keyboardAnchor ?? this.tree.element;
 		this.contextMenuService.showContextMenu({
 			menuId: MenuId.ExplorerContext,
 			contextKeyService: this.scopedContext,

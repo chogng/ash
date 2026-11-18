@@ -406,7 +406,9 @@ export class DesktopMain extends Disposable {
 
 	private async updateWorkspace(workbench: Workbench, workspace: unknown): Promise<void> {
 		try {
-			await workbench.updateWorkspace(parseWorkspace(workspace));
+			// Main reloads the renderer for a full open. In-place configuration
+			// transitions (creating or saving a workspace) keep the live editors.
+			await workbench.updateWorkspace(parseWorkspace(workspace), true);
 		} catch (error) {
 			if (this.isDisposed) {
 				return;

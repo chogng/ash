@@ -617,7 +617,7 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
   元数据通道读写和监听，不能借此浏览或修改其父目录内的其他文件；
 - 普通单文件参数复用可包含文件的已有工作区，否则选择共同父目录并取得授权，再打开文件编辑器；
 - Explorer 按需读取目录并消费 `fs/changed` 自动刷新；文件编辑器通过共享文本服务保存。
-- 本地多根的增删、保存和配置文件实时同步已经接通；Remote 多根与跨 authority 根集合仍不支持；
+- 本地多根支持增删、保存和配置文件实时同步。SSH 多根的目录须属于同一个远端主机，配置文件保存在 Desktop 本地。
 - LSP 文档按目录 ID 隔离；后端仅接受相对路径的 code-intelligence overlay 仍限单目录窗口，
   多根窗口不向它提交文档，避免调整根顺序后把同名文件同步进错误索引。根变化会清理保留执行根的旧 overlay，
   并为现有模型重新计算 LSP 目录 ID 和相对路径；移除的执行根由后端退休流程清理；
@@ -682,6 +682,10 @@ Browser 保存后的进入与外部配置重载使用这个公开入口。Host �
 配置文件只读访问绕过窗口替换队列；写入仍串行并检查修订。配置文件外部原子替换经同一提交链处理；
 脏文件归属冲突、无效配置或后端拒绝保留上次接受的目录。
 Main 已替换工作区而 Renderer 尚未收到事件时，旧配置读取返回取消结果；不授予旧文件访问，也不把取消报为新工作区配置错误。
+
+打开工作区文件时，Main 只读取并解析一次目录定义。复用窗口时，Main 在窗口操作队列中用同一份结果检查 Remote authority 并发布目录。本地多根路径最多同时检查四个，空出的名额继续检查下一项，目录结果按配置顺序发布。编辑时用同一次源文件读取校验根列表并生成 JSONC，写入时沿用修订检查。
+
+2026-11-18 的 Windows x64 对照在同一 Electron 进程中交替用基线 `a9fe6cd2a7` 的两次解析和当前的一次解析打开双根工作区。两组各取 11 个预热后的样本，使用相同的 Renderer 和 Rust App Server，测量配置关闭语言服务。Main 解析中位数由 2.109 ms 降至 1.004 ms，从打开请求到 Workbench 恢复的中位数由 1.898 s 降至 1.817 s。分别启动 Electron 的对照中，整窗中位数为 1.632 s 和 1.664 s。Windows 文件系统基准的 256 根解析中位数由 37.6 ms 降至 12.7 ms。原始样本见 `.build/workspace-perf/desktop-window-paired.json`、`desktop-window-ab.json` 和 `pipeline-final-2.json`。
 
 其余差异按实际能力记录：`platform/workspace/common/{canonicalUri,editSessions,virtualWorkspace}.ts`、
 `services/workspaces/common/{canonicalUriService,editSessionIdentityService,workspaceFolderLabelService,workspaceIdentityService,workspaceUtils}.ts`、
@@ -1542,4 +1546,5 @@ Browser 的真实目录句柄打开与关闭流程通过，Getting Started／Fil
 本轮定向回归为 19 个文件的 331 项单元测试、15 项层次／App Server 边界检查及 9 项可访问性生命周期测试，均通过；Renderer／Main／自动化类型检查与 Desktop build 通过。
 最终 Desktop 另有 6 步录制验证，含每步截图、原始 WebM、带步骤字幕的 MP4 和 Playwright trace；
 产物位于 `.build/ash-playwright-mcp/evidence/workspace-frontend-menus-*`，汇总日志为 `.build/multi-root-scenario.log`。
-Windows／Linux 和多平台真实系统文件选择器仍不在本次桌面验证范围。Remote SSH 多根验证见第 4.2 节。
+
+2026-11-18，Windows x64 的当前 Desktop 和 Rust App Server 通过同一组三项烟测。创建和另存保留已打开编辑器与未保存内容。配置文件访问兼容 Chromium 与 Node 的盘符大小写差异，目录和文件名仍按原拼写匹配。Explorer 的 `Shift+F10` 沿用树组件的焦点项和菜单位置。日志见 `.build/workspace-perf/desktop-smoke-final.log`，真实 Windows 和 Linux 系统选择器及 Remote SSH 证据见第 4.2 节。

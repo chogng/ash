@@ -1,5 +1,12 @@
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { URI } from '../../../../base/common/uri.js';
+import type { FolderLocationChangeReason } from '../../../../platform/workspace/common/folderLocations.js';
+
+export interface ISetFolderLocationOptions {
+	readonly ifIdle?: boolean;
+	readonly reason?: FolderLocationChangeReason;
+	readonly folder?: URI;
+}
 
 /** Edits workspace metadata through its owning host; directory authorization remains separate. */
 export interface IWorkspaceEditingService {
@@ -7,6 +14,8 @@ export interface IWorkspaceEditingService {
 	addFolders(folders: readonly { readonly uri: URI; readonly name?: string; }[]): Promise<void>;
 	removeFolders(folders: readonly URI[]): Promise<void>;
 	updateFolders(index: number, deleteCount?: number, foldersToAdd?: readonly { readonly uri: URI; readonly name?: string; }[]): Promise<void>;
+	/** Switches the active directory of a local single-folder workspace. */
+	setFolderLocation(location: URI, options?: ISetFolderLocationOptions): Promise<void>;
 	/** Enters an existing workspace through the current window's host. */
 	enterWorkspace(path: URI): Promise<void>;
 	saveAndEnterWorkspace(path: URI): Promise<void>;

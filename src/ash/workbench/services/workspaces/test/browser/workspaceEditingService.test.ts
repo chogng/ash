@@ -20,6 +20,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService, WorkbenchState, type IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
+import type { IWorkspaceFolderLocationService } from '../../../../../platform/workspace/common/folderLocations.js';
 import type { WorkspaceEditRequest } from '../../../../../platform/workspace/common/workspaceIpc.js';
 import { IWorkspaceEditingService } from '../../common/workspaceEditing.js';
 import { CommandService } from '../../../commands/common/commandService.js';
@@ -61,7 +62,7 @@ test('folder validation keeps dirty files accessible until saved or reverted', a
 	using context = new TestWorkspaceService({ id: 'team', folders: [first, second], configuration: URI.file('/team.ash-workspace') });
 	let dirty = true;
 	const copies = { getAll: () => [{ resource: URI.file('/second/src/unsaved.ts'), isDirty: dirty }] } as unknown as IWorkingCopyService;
-	using editing = new WorkspaceEditingService({ getWorkspace: async () => ({}), onDidChange: () => ({ dispose() { } }) }, context, {} as IFileDialogService, copies, {} as IHostService);
+	using editing = new WorkspaceEditingService({ getWorkspace: async () => ({}), onDidChange: () => ({ dispose() { } }) }, context, {} as IFileDialogService, copies, {} as IHostService, {} as IWorkspaceFolderLocationService);
 	assert.throws(() => editing.validateFolders([first.uri]), /Save or revert/);
 	assert.doesNotThrow(() => editing.validateFolders([first.uri, second.uri]));
 	assert.throws(() => editing.validateFolders([URI.file('/')]), /Save or revert/);
@@ -82,7 +83,7 @@ test('enterWorkspace waits for Desktop host acceptance and rejects a dirty curre
 	let dirty = true;
 	const copies = { get: () => dirty ? [{ resource: current, isDirty: true }] : [] } as unknown as IWorkingCopyService;
 	const host = { openWindow: (...args: unknown[]) => { opened.push(args); return accepted.p; } } as unknown as IHostService;
-	using editing = new WorkspaceEditingService({ getWorkspace: async () => ({}), onDidChange: Event.None }, context, {} as IFileDialogService, copies, host);
+	using editing = new WorkspaceEditingService({ getWorkspace: async () => ({}), onDidChange: Event.None }, context, {} as IFileDialogService, copies, host, {} as IWorkspaceFolderLocationService);
 	await assert.rejects(editing.enterWorkspace(target), /Save or revert/);
 	assert.deepEqual(opened, []);
 	dirty = false;
@@ -103,7 +104,7 @@ function commandServices(context: TestWorkspaceService, dialogs: Partial<IFileDi
 	services.registerSingleton(IWorkspaceEditingService, () => new WorkspaceEditingService({
 		getWorkspace: async () => ({}), onDidChange: Event.None,
 		editWorkspace: async request => { submitted.push(request); return {}; },
-	}, context, dialogs as IFileDialogService, { getAll: () => [], get: () => [] } as unknown as IWorkingCopyService, {} as IHostService));
+	}, context, dialogs as IFileDialogService, { getAll: () => [], get: () => [] } as unknown as IWorkingCopyService, {} as IHostService, {} as IWorkspaceFolderLocationService));
 	return services;
 }
 

@@ -146,7 +146,7 @@ import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntr
 import { WindowsMainService, windowOperationIpcRoute, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from '../../platform/windows/electron-main/windowsMainService.js';
 import { LifecycleMainService, ILifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
 import { defaultWindowState, WorkspaceContextMainService, type IWindowState } from '../../platform/window/electron-main/window.js';
-import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, hasWorkspaceFileExtension, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState, workspaceFromIdentifier } from '../../platform/workspace/common/workspace.js';
+import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspacePrimaryFolderUri, getWorkspaceRemoteAuthority, hasWorkspaceFileExtension, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState, workspaceFromIdentifier } from '../../platform/workspace/common/workspace.js';
 import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier } from '../../platform/workspaces/node/workspaces.js';
 import { packagedRemoteRuntimeCatalogSource } from '../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js';
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from '../../platform/remote/electron-main/remoteRuntimeInstaller.js';
@@ -1142,11 +1142,11 @@ export class AshApplication extends Disposable {
 		if (workspace.configuration?.scheme === Schemas.file) {
 			recent = { workspace: { id: workspace.id, configPath: workspace.configuration }, label: workspace.name ?? basename(workspace.configuration.fsPath) };
 		} else {
-			const folder = workspace.folders.length === 1 ? workspace.folders[0] : undefined;
-			if (folder?.uri.scheme !== Schemas.file) {
+			const primary = getWorkspacePrimaryFolderUri(workspace);
+			if (primary?.scheme !== Schemas.file) {
 				return;
 			}
-			recent = { folderUri: folder.uri, label: folder.name };
+			recent = { folderUri: primary, label: workspace.folders[0]!.name };
 		}
 		void this.workspacesHistory.addRecentlyOpened([recent]).catch(error => console.error('Failed to record recent project', error));
 	}
@@ -1747,8 +1747,8 @@ export class AshApplication extends Disposable {
 		const remotePortForwardingService = this.createSshPortForwardingService(() => workspaceContext.getWorkspace());
 		const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 		const browserServices = this.createBrowserServices(window, workspaceContext, remotePortForwardingService, windowDisposables, supervisor, systemContextMenu);
-		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace, resolvedWorkspace }) => {
-			if (window.isDestroyed()) return;
+		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ previous, workspace: nextWorkspace, resolvedWorkspace }) => {
+			if (window.isDestroyed() || previous === nextWorkspace) return;
 			record.windowStateTracking.dispose();
 			const nextWindowsStateHandler = this.createWindowsStateHandler(nextWorkspace);
 			record.windowsStateHandler = nextWindowsStateHandler;
@@ -1800,25 +1800,31 @@ export class AshApplication extends Disposable {
 			}
 		};
 		let workspaceOpenQueue: Promise<void> = Promise.resolve();
-		const transitionToFolder = (folderPath: string, selectionRequired: boolean): Promise<void> => {
-			// Permission selection must finish before another request reaches this window's Workspace host.
-			const operation = workspaceOpenQueue.then(() => performTransitionToFolder(folderPath, selectionRequired));
-			workspaceOpenQueue = operation.then(() => undefined, () => undefined);
-			return operation;
+		const runWorkspaceOperation = <T>(operation: () => Promise<T>): Promise<T> => {
+			const result = workspaceOpenQueue.then(operation);
+			workspaceOpenQueue = result.then(() => undefined, () => undefined);
+			return result;
 		};
+		const transitionToFolder = (folderPath: string, selectionRequired: boolean): Promise<void> =>
+			runWorkspaceOperation(() => performTransitionToFolder(folderPath, selectionRequired));
 		record.openWorkspace = (root) => transitionToFolder(root, true);
 		const replaceWorkspace = (workspace: IAnyWorkspaceIdentifier, replyBeforeLoad: boolean): Promise<boolean> => {
 			let accepted = false;
 			let rendererLoad: Promise<void> | undefined;
 			const operation = workspaceOpenQueue.then(async () => {
-				if (workspace.id === workspaceContext.getWorkspace().id) {
+				const current = workspaceContext.getWorkspace();
+				if (workspace.id === current.id) {
 					accepted = true;
 					return;
 				}
-				if (getWorkspaceRemoteAuthority(workspace) !== getWorkspaceRemoteAuthority(workspaceContext.getWorkspace())) {
+				const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
+				const remoteAuthority = getWorkspaceRemoteAuthority(resolvedWorkspace);
+				if (remoteAuthority !== getWorkspaceRemoteAuthority(current)) {
 					throw new Error('Reusing a window must preserve its Remote authority');
 				}
-				const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
+				if (isWorkspaceIdentifier(workspace) && remoteAuthority && workspace.remoteAuthority === undefined) {
+					workspace = { ...workspace, remoteAuthority };
+				}
 				const root = isSingleFolderWorkspaceIdentifier(workspace) && workspace.uri.scheme === 'file' ? workspace.uri.fsPath : undefined;
 				const grant = root ? await this.resolveDirGrant(workspaceHost, root) : { type: 'config' as const };
 				if (!grant || !await this.lifecycleMainService.unload(window)) {
@@ -1865,11 +1871,7 @@ export class AshApplication extends Disposable {
 		}, error => {
 			this.logService.error('workspaces', String(error));
 			if (!window.isDestroyed()) windowHost.send(WORKSPACE_EDIT_ERROR_CHANNEL, error instanceof Error ? error.message : String(error));
-		}, operation => {
-			const result = workspaceOpenQueue.then(operation);
-			workspaceOpenQueue = result.then(() => undefined, () => undefined);
-			return result;
-		},
+		}, runWorkspaceOperation,
 			() => { if (!window.isDestroyed()) windowHost.send(WORKSPACE_CONFIGURATION_CHANGED_CHANNEL); },
 		));
 
@@ -1907,9 +1909,7 @@ export class AshApplication extends Disposable {
 				},
 				openWorkspace: async (root, forceNewWindow) => {
 					if (hasWorkspaceFileExtension(root)) {
-						let workspace = await this.windowsMainService.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Workspace, path: root }, process.cwd());
-						const resolved = await workspaces.resolveWorkspace(workspace);
-						if ('configPath' in workspace && getWorkspaceRemoteAuthority(resolved)) workspace = { ...workspace, remoteAuthority: getWorkspaceRemoteAuthority(resolved) };
+						const workspace = await this.windowsMainService.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Workspace, path: root }, process.cwd());
 						if (forceNewWindow) await this.openWorkspace(workspace, workspaces, true);
 						else await replaceWorkspace(workspace, true);
 					} else if (forceNewWindow) await this.openWorkspace(await workspaces.resolveFolder(root), workspaces, true);
@@ -1922,7 +1922,23 @@ export class AshApplication extends Disposable {
 				),
 			}),
 			...workspaceContextIpcRoutes(workspaceContext),
-			{ channel: WORKSPACE_EDIT_CHANNEL, validate: validateWorkspaceEdit, invoke: (request: unknown) => workspaceEditing.edit(request as ReturnType<typeof validateWorkspaceEdit>) },
+			{
+				channel: WORKSPACE_EDIT_CHANNEL, validate: validateWorkspaceEdit, invoke: (value: unknown) => {
+					const request = value as ReturnType<typeof validateWorkspaceEdit>;
+					if (request.operation !== 'folderLocation') return workspaceEditing.edit(request);
+					return runWorkspaceOperation(async () => {
+						const result = await workspaceTransitions.transitionToFolderLocation(request, async target => {
+							const path = target.uri.fsPath;
+							const grant = await this.resolveDirGrant(workspaceHost, path);
+							if (!grant) return undefined;
+							await workspaceHost.validateFolders([{ id: request.workspaceId, path, grant }]);
+							windowHost.send('ash:terminal:prepareReplacement');
+							return grant;
+						});
+						if (result.failure) throw workspaceTransitionError(result.failure);
+					});
+				},
+			},
 			{ channel: WORKSPACE_CONFIGURATION_CHANNEL, validate: validateWorkspaceConfigurationRequest, invoke: (request: unknown) => workspaceEditing.configuration(request as ReturnType<typeof validateWorkspaceConfigurationRequest>) },
 			workspaceRecoveryIpcRoute(identifiers => this.windowsMainService.restoreWorkspaces(identifiers, async identifier => (await this.openWorkspace(identifier, workspaces))?.window)),
 		];

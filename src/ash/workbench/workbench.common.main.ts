@@ -1,6 +1,8 @@
 import { IWebWorkerService } from '../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../platform/webWorker/browser/webWorkerServiceImpl.js';
 import { registerSingleton, InstantiationType } from '../platform/instantiation/common/extensions.js';
+import { IWorkspaceFolderLocationService } from '../platform/workspace/common/folderLocations.js';
+import { WorkspaceFolderLocationService } from './services/workspaces/common/workspaceFolderLocationService.js';
 import './contrib/logs/common/logs.contribution.js';
 import './contrib/debug/browser/debugAdapterManager.js';
 import '../platform/uriIdentity/common/uriIdentityService.js';
@@ -100,3 +102,4 @@ registerWorkbenchContribution(
 );
 
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);
+registerSingleton(IWorkspaceFolderLocationService, WorkspaceFolderLocationService, InstantiationType.Delayed);

@@ -2,6 +2,8 @@ import type { URI } from '../../../base/common/uri.js';
 import type { Event } from '../../../base/common/event.js';
 import type { IFileBytes, IFileWriteOptions, IFileWriteResult, IFileStat } from '../../files/common/files.js';
 import type { DirectoryPermissionRequest } from './workspaceTrust.js';
+import type { FolderLocationChangeReason } from './folderLocations.js';
+import { parseWorkspaceFolderLocationDetails, type WorkspaceFolderLocationDetails } from './workspace.js';
 
 /** Validates display context at the IPC boundary without changing the directory being authorized. */
 export function validateDirectoryPermissionRequest(value: unknown): DirectoryPermissionRequest {
@@ -32,7 +34,15 @@ export const WORKSPACE_EDIT_CHANNEL = 'ash:workspace:edit';
 
 export type WorkspaceEditRequest =
 	| { readonly operation: 'folders'; readonly index: number; readonly deleteCount: number; readonly folders: readonly { readonly uri: string; readonly name?: string; }[]; }
-	| { readonly operation: 'save'; readonly path: string; };
+	| { readonly operation: 'save'; readonly path: string; }
+	| {
+		readonly operation: 'folderLocation';
+		readonly workspaceId: string;
+		readonly current: string;
+		readonly target: string;
+		readonly reason: FolderLocationChangeReason;
+		readonly alternate?: WorkspaceFolderLocationDetails;
+	};
 
 /** Workspace metadata requests never authorize access to the directories they reference. */
 export function validateWorkspaceEdit(value: unknown): WorkspaceEditRequest {
@@ -40,6 +50,19 @@ export function validateWorkspaceEdit(value: unknown): WorkspaceEditRequest {
 	const request = value as Record<string, unknown>;
 	if (request.operation === 'save' && Object.keys(request).sort().join(',') === 'operation,path'
 		&& typeof request.path === 'string' && request.path.length > 0 && request.path.length <= 32768 && !request.path.includes('\0')) return request as WorkspaceEditRequest;
+	if (request.operation === 'folderLocation') {
+		const { workspaceId, current, target, reason, alternate } = request;
+		const keys = Object.keys(request).sort().join(',');
+		if (keys !== (alternate === undefined ? 'current,operation,reason,target,workspaceId' : 'alternate,current,operation,reason,target,workspaceId') ||
+			!isFolderLocationEditString(workspaceId) || !isFolderLocationEditString(current) || !isFolderLocationEditString(target) ||
+			(reason !== 'user' && reason !== 'programmatic')) {
+			throw new TypeError('Invalid folder location edit');
+		}
+		return {
+			operation: 'folderLocation', workspaceId, current, target, reason,
+			...(alternate === undefined ? {} : { alternate: parseWorkspaceFolderLocationDetails(alternate) }),
+		};
+	}
 	if (request.operation !== 'folders' || Object.keys(request).sort().join(',') !== 'deleteCount,folders,index,operation'
 		|| !Number.isSafeInteger(request.index) || (request.index as number) < 0
 		|| !Number.isSafeInteger(request.deleteCount) || (request.deleteCount as number) < 0
@@ -53,7 +76,11 @@ export function validateWorkspaceEdit(value: unknown): WorkspaceEditRequest {
 	return request as WorkspaceEditRequest;
 }
 
-export interface IWorkspaceContextSubscription {
+function isFolderLocationEditString(value: unknown): value is string {
+	return typeof value === 'string' && value.length > 0 && value.length <= 32768 && !value.includes('\0');
+}
+
+interface IWorkspaceContextSubscription {
 	dispose(): void;
 }
 
