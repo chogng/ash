@@ -6,6 +6,7 @@ import { localize } from '../../../../nls.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
 import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { chatPillButtonClassName } from '../../../../workbench/browser/chatPills.js';
 import { IBrowserViewWorkbenchService } from '../../../../workbench/contrib/browserView/common/browserView.js';
 import type { BrowserEditorInput } from '../../../../workbench/contrib/browserView/common/browserEditorInput.js';
 import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
@@ -65,6 +66,7 @@ export class SessionBrowsersControl extends Disposable {
 			},
 			onError: error => notifications.error(getErrorMessage(error)),
 		}, menus));
+		this.dropdown.element.classList.add(chatPillButtonClassName);
 		this._register(browsers.onDidChangeBrowserViews(() => this.refresh()));
 		this._register(context.onDidChange(() => this.refresh()));
 		this.refresh();

@@ -687,7 +687,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 						if (previewOwned) {
 							if (previewAttachment?.terminalSnapshot) return localize('terminal.chat.previewAccessibility', 'Saved terminal output: {0}\nThis preview is read only and retains the output captured when attached. Press Escape or Close terminal preview to return to the message.\n\n{1}', previewAttachment.name, previewAttachment.terminalSnapshot.text);
 							if (referencePreview.getAttribute('aria-busy') === 'true') return localize('chat.context.imageLoading', 'Loading preview: {0}', previewName);
-							const image = referencePreview.querySelector<HTMLImageElement>(':scope > img');
+							const image = referencePreview.querySelector<HTMLImageElement>(':scope > .ash-chat-image-hover > img');
 							if (!image?.naturalWidth) return localize('chat.context.previewFailed', 'Preview unavailable: {0}', previewName);
 							return localize('chat.context.imagePreviewAccessibility', 'Image preview: {0}\nDimensions: {1} × {2}\nPress Escape or activate Close image preview to return. This view identifies the image; it does not describe its contents.', previewName, image.naturalWidth, image.naturalHeight);
 						}
@@ -1528,7 +1528,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.state.followups && this.canUseFollowups() ? localize('chat.followups.help', 'From the message input, use Shift+Tab to reach suggested follow-ups. Press Enter or Space to add one to your draft.') : '',
 			this.sessionWorkingSet.available ? localize('chat.changes.reviewFilesHelp', 'Use Review changed files to expand the list. Activate a file to open its comparison. Escape closes the list and returns focus to Review changed files.') : '',
 			this.options.workspacePickerDelegate ? localize('chat.workspace.help', 'The workspace picker chooses the Welcome submission target. In an empty window, use Tab to reach Workspace and Enter, Space or an arrow key to open it, or run Chat: Open Workspace Picker from the Command Palette. Use arrow keys to choose a trusted recent folder or workspace, Enter to select and Escape to return. With a target selected, submitting opens that workspace with the draft and attachments prefilled; it never sends automatically. A failed open keeps your draft.') : '',
-			this.options.stageImages ? localize('chat.input.stagedImagesHelp', 'Attached images appear above the message. From the message field, use Shift+Tab to reach the image controls. Press Enter or Space to preview or remove an image, and press Escape to close the preview.') : '',
+			this.options.stageImages ? localize('chat.input.stagedImagesHelp', 'Attached images appear above the message. From the message field, use Shift+Tab to reach the image controls. Press Enter or Space to open the image preview or remove an image. With the image control focused, use <keybinding:workbench.action.showHover> to show its hover preview. Press Escape to close the preview.') : '',
 			this.contexts.map(attachment => attachment.name).join('\n'),
 			this.options.accessibilityHelp?.(),
 		].filter(Boolean).join('\n');

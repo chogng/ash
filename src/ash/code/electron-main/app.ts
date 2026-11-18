@@ -708,7 +708,7 @@ export class AshApplication extends Disposable {
 		this.windowServices.registerInstance(IBrowserPasswordMainService, browserPasswords);
 		this.mainProcessIpcServer.registerChannel('browserPasswords', browserPasswordChannel(browserPasswords));
 		this.windowServices.registerInstance(ILogService, this.logService);
-		const browserDownloads = this._register(this.windowServices.createInstance(BrowserDownloadMainService, app.getPath('downloads')));
+		const browserDownloads = this._register(this.windowServices.createInstance(BrowserDownloadMainService));
 		this.windowServices.registerInstance(IBrowserDownloadService, browserDownloads);
 		this.mainProcessIpcServer.registerChannel(BrowserDownloadsChannel, browserDownloadsChannel(browserDownloads));
 		this.mainProcessIpcServer.registerChannel('storage', new StorageDatabaseChannel(storage));

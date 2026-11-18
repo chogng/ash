@@ -1,11 +1,5 @@
 .ash-session-chat-input-prs {
-	display: flex;
-	flex-wrap: wrap;
 	gap: var(--ash-spacing-size80);
-}
-
-.ash-session-chat-input-prs[hidden] {
-	display: none;
 }
 
 .ash-session-chat-input-pr {

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import childProcess, { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
 import { chmod, copyFile, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
@@ -59,6 +60,24 @@ test('a cleanup failure preserves the original worker failure', async () => {
 		await writeFile(join(environment.ASH_SMOKE_RUN_DIRECTORY!, 'resource-invalid.json'), '{');
 		throw failure;
 	}), error => error instanceof AggregateError && error.errors.includes(failure) && error.errors.some(item => item instanceof SyntaxError));
+});
+
+test('Windows process preflight identifies a denied piped helper launch', { skip: process.platform !== 'win32' }, async t => {
+	const denied = Object.assign(new Error('spawn EPERM'), { code: 'EPERM' });
+	const spawnMock = t.mock.method(childProcess, 'spawn', () => { throw denied; });
+	syncBuiltinESMExports();
+	const run = new ProcessRun(repository);
+	try {
+		await assert.rejects(run.prepare(), {
+			message: /process-table helper launch with piped stdio/u,
+			cause: denied,
+		});
+		await run.close();
+		assert.equal(spawnMock.mock.callCount(), 1);
+	} finally {
+		spawnMock.mock.restore();
+		syncBuiltinESMExports();
+	}
 });
 
 test('Windows process discovery ignores an inherited incompatible PowerShell module path', { skip: process.platform !== 'win32', timeout: 90_000 }, async t => {

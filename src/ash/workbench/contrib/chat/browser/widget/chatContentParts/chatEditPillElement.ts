@@ -1,10 +1,10 @@
 import { h } from '../../../../../../base/browser/dom.js';
-import { Button } from '../../../../../../base/browser/ui/button/button.js';
+import type { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../nls.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
+import { createChatPillButton } from '../../../../../browser/chatPills.js';
 import type { ChatTurnFileChange } from '../../chatResponseFileChangesService.js';
 import { ChatTextEditContentPart } from './chatTextEditContentPart.js';
 import './media/chatEditStatsButton.css';
@@ -24,7 +24,7 @@ export class ChatEditPillElement extends Disposable {
 		this.item = h(document, 'li');
 		this.actions = h(document, 'div', { className: 'ash-chat-edit-file-actions' });
 		this.item.append(this.actions);
-		this.review = this._register(new Button(this.actions, { ...defaultButtonStyles, label: '', icon: Lxicon.file, presentation: 'quiet', size: 'small' }));
+		this.review = this._register(createChatPillButton(this.actions, { label: '', icon: Lxicon.file, presentation: 'quiet' }));
 		this.review.domNode.classList.add('ash-chat-changed-file');
 		this.added = h(document, 'span', { className: 'ash-changes-stats-added' });
 		this.removed = h(document, 'span', { className: 'ash-changes-stats-removed' });

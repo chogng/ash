@@ -50,6 +50,8 @@ import { extname } from '../../../../../base/common/path.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ImagePreviewPopup, type IImagePreviewAnnotationTarget, type IImagePreviewGallery } from '../../../mediaPreview/browser/imagePreviewPopup.js';
 import { decodeBase64 } from '../../../../../base/common/buffer.js';
+import { createChatPillImagePreview } from '../../../../browser/chatPills.js';
+import { createChatPillHover } from '../../../../browser/chatPillHover.js';
 
 /** Generic sources keep their original navigation; source-less contexts expose their saved-content intent. */
 export class DefaultChatAttachmentWidget extends Disposable implements IChatAttachmentWidgetInstance {
@@ -323,8 +325,14 @@ class AttachmentContentHover extends Disposable {
 		const resources = new DisposableStore();
 		this.resources.value = resources;
 		this.clearTitle?.();
-		const content = resources.add(renderMarkdown(message, { ownerDocument: this.target.ownerDocument }));
-		this.control = resources.add(getHoverDelegate().setupHover({ target: this.target, content: content.element }));
+		const { element } = resources.add(renderMarkdown(message, { ownerDocument: this.target.ownerDocument }));
+		this.control = resources.add(getHoverDelegate().setupHover({
+			target: this.target,
+			content: createChatPillHover({
+				fallback: element.textContent ?? '',
+				createContent: () => ({ element }),
+			}),
+		}));
 		this.message = identity;
 	}
 
@@ -598,6 +606,7 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 		const loading = this._register(new DisposableStore());
 		const objectUrl = this._register(new MutableDisposable());
 		this._register(toDisposable(() => thumbnail.removeAttribute('src')));
+		const thumbnailHover = this._register(new MutableDisposable<IManagedHover>());
 		let imageContent: Blob | string | undefined;
 		let isLoading = false;
 		const activate = () => {
@@ -606,6 +615,7 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 				void load();
 				return;
 			}
+			thumbnailHover.value?.hide();
 			const image = typeof imageContent === 'string'
 				? imageContent.startsWith('data:') ? imageDataUrlToBlob(imageContent) : undefined
 				: imageContent;
@@ -635,6 +645,7 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 			const announce = source.enabled && source.hasFocus();
 			finishLoading();
 			imageContent = undefined;
+			thumbnailHover.clear();
 			thumbnail.removeAttribute('src');
 			objectUrl.clear();
 			const message = localize('chat.context.previewFailed', 'Preview unavailable: {0}', attachment.name);
@@ -671,7 +682,21 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 			} else {
 				element.setAttribute('aria-busy', 'false');
 			}
-			source.setTitle(attachment.name);
+			const captured = imageContent;
+			if (tile && captured && (typeof captured !== 'string' || captured.startsWith('data:'))) {
+				source.setTitle(undefined);
+				thumbnailHover.value = getHoverDelegate().setupHover({
+					target: source.domNode,
+					content: createChatPillImagePreview({
+						label: attachment.name,
+						resource: attachment.resource,
+						loadedImage: thumbnail,
+						image: () => typeof captured === 'string' ? imageDataUrlToBlob(captured) : captured,
+					}, document),
+				});
+			} else {
+				source.setTitle(attachment.name);
+			}
 			source.icon = undefined;
 			thumbnail.hidden = false;
 			source.domNode.hidden = false;

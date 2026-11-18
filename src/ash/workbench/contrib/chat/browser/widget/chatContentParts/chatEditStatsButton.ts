@@ -1,11 +1,11 @@
 import { h } from '../../../../../../base/browser/dom.js';
-import { Button } from '../../../../../../base/browser/ui/button/button.js';
+import type { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
 import { localize } from '../../../../../../nls.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
+import { createChatPillButton } from '../../../../../browser/chatPills.js';
 import { ChangesStatsWidget, getChangesStatsFilesLabel, type IChangesStats } from '../../../../../browser/changesStatsWidget.js';
 import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import './media/chatEditStatsButton.css';
@@ -17,7 +17,7 @@ export class ChatEditStatsButton extends Disposable {
 
 	constructor(container: HTMLElement, @IInstantiationService instantiation: IInstantiationService) {
 		super();
-		this.button = this._register(new Button(container, { ...defaultButtonStyles, label: '', icon: Lxicon.diff, presentation: 'quiet', size: 'small' }));
+		this.button = this._register(createChatPillButton(container, { label: '', icon: Lxicon.diff, presentation: 'quiet' }));
 		this.button.hidden = true;
 		const counts = h(container.ownerDocument, 'span', { className: 'ash-chat-edit-stats', attributes: { 'aria-hidden': 'true' } });
 		this.button.domNode.append(counts);

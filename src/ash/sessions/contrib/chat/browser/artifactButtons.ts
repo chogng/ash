@@ -1,9 +1,8 @@
-import { getActiveElement, h, isHTMLElement } from '../../../../base/browser/dom.js';
+import { h } from '../../../../base/browser/dom.js';
 import { setAriaAttribute } from '../../../../base/browser/ui/aria/aria.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../base/common/uuid.js';
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { ChatPillsWidget, createChatPillButton, type IChatPill } from '../../../../workbench/browser/chatPills.js';
 
 export interface IArtifactButton {
 	readonly id: string;
@@ -14,63 +13,47 @@ export interface IArtifactButton {
 	run(target: HTMLElement): void;
 }
 
-interface RenderedButton extends IDisposable {
-	readonly element: HTMLDivElement;
-	readonly button: Button;
-	readonly description: HTMLParagraphElement;
-	action: IArtifactButton;
-}
-
-/** Owns the buttons in an artifact action group and retains their identity across updates. */
+/** Adds artifact descriptions and actions to the shared pill collection. */
 export class ArtifactButtons extends Disposable {
-	private readonly buttons = this._register(new DisposableMap<string, RenderedButton>());
+	private readonly pills: ChatPillsWidget<IArtifactButton>;
 
 	constructor(readonly element: HTMLElement) {
 		super();
 		element.setAttribute('role', 'group');
+		this.pills = this._register(new ChatPillsWidget(element, {
+			getId: (action: IArtifactButton) => action.id,
+			create: (action: IArtifactButton) => this.createPill(action),
+		}));
 	}
 
 	update(actions: readonly IArtifactButton[]): void {
-		const document = this.element.ownerDocument;
-		const focused = getActiveElement(document);
-		const ids = new Set(actions.map(action => action.id));
-		for (const id of this.buttons.keys()) {
-			if (!ids.has(id)) this.buttons.deleteAndDispose(id);
-		}
-
-		let next = this.element.firstElementChild;
-		for (const action of actions) {
-			const entry = this.buttons.get(action.id) ?? this.buttons.set(action.id, this.createButton(action));
-			if (entry.action.label !== action.label) entry.button.label = action.label;
-			entry.action = action;
-			entry.button.enabled = action.enabled !== false;
-			setAriaAttribute(entry.button.domNode, 'pressed', action.pressed);
-			entry.description.textContent = action.description ?? '';
-			entry.description.hidden = action.description === undefined;
-			setAriaAttribute(entry.button.domNode, 'describedby', action.description === undefined ? undefined : entry.description.id);
-
-			if (entry.element !== next) this.element.insertBefore(entry.element, next);
-			next = entry.element.nextElementSibling;
-		}
-		this.element.hidden = actions.length === 0;
-		if (isHTMLElement(focused) && this.element.contains(focused) && getActiveElement(document) !== focused) {
-			focused.focus({ preventScroll: true });
-		}
+		this.pills.update(actions);
+		this.element.hidden = this.pills.size === 0;
 	}
 
-	private createButton(action: IArtifactButton): RenderedButton {
+	private createPill(action: IArtifactButton): IChatPill<IArtifactButton> {
 		const lifetime = new DisposableStore();
 		const document = this.element.ownerDocument;
 		const element = h(document, 'div', { className: 'ash-session-artifact-button' });
-		const button = lifetime.add(new Button(element, { ...defaultButtonStyles, label: action.label, presentation: 'secondary' }));
+		const button = lifetime.add(createChatPillButton(element, { label: action.label, presentation: 'secondary', size: 'standard' }));
 		const description = h(document, 'p');
 		description.id = createUuid();
 		element.append(description);
-		const entry = Object.assign(lifetime, { element, button, description, action });
 		lifetime.add(button.onDidClick(() => {
-			if (button.enabled) entry.action.run(button.domNode);
+			if (button.enabled) action.run(button.domNode);
 		}));
 		lifetime.add(toDisposable(() => element.remove()));
-		return entry;
+		return Object.assign(lifetime, {
+			element,
+			update: (next: IArtifactButton) => {
+				if (action.label !== next.label) button.label = next.label;
+				action = next;
+				button.enabled = next.enabled !== false;
+				setAriaAttribute(button.domNode, 'pressed', next.pressed);
+				description.textContent = next.description ?? '';
+				description.hidden = next.description === undefined;
+				setAriaAttribute(button.domNode, 'describedby', next.description === undefined ? undefined : description.id);
+			},
+		});
 	}
 }

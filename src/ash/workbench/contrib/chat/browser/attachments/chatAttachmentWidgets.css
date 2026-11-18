@@ -315,18 +315,6 @@
 	flex-wrap: wrap;
 }
 
-.ash-chat-image-reference-preview > img {
-	display: block;
-	max-width: min(600px, calc(100vw - 56px));
-	max-height: 55vh;
-	object-fit: contain;
-}
-
-.ash-chat-image-reference-hover,
-.ash-chat-image-reference-hover > img {
-	max-width: 100%;
-}
-
 .ash-chat-terminal-reference-preview {
 	width: min(600px, calc(100vw - 32px));
 }

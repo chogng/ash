@@ -1,7 +1,6 @@
-import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import './media/chatChangesPill.css';
 import { h } from '../../../../../../base/browser/dom.js';
-import { Button } from '../../../../../../base/browser/ui/button/button.js';
+import type { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../nls.js';
@@ -9,6 +8,7 @@ import type { ChatChangesStatistics } from './chatInput.js';
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
 import { derived, observableValue } from '../../../../../../base/common/observable.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { createChatPillButton } from '../../../../../browser/chatPills.js';
 import { ChangesStatsWidget, getChangesStatsFilesLabel } from '../../../../../browser/changesStatsWidget.js';
 import { chatInputStackSlotClass, ChatInputStackSlot, setChatInputStackSlot } from './chatInputStack.js';
 
@@ -45,8 +45,8 @@ export class ChatChangesPill extends Disposable {
 			setChatInputStackSlot(this.domNode, ChatInputStackSlot.Empty);
 			this.domNode.remove();
 		}));
-		this.button = this._register(new Button(this.actionsDomNode, {
-			...defaultButtonStyles,
+		this.button = this._register(createChatPillButton(this.actionsDomNode, {
+			size: 'standard',
 			label: '',
 			icon: Lxicon.diff,
 			onClick: openChanges,

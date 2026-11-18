@@ -1,12 +1,13 @@
 import { h } from '../../../../../base/browser/dom.js';
 import { ActionViewItem, type ActionViewItemOptions } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { Button } from '../../../../../base/browser/ui/button/button.js';
+import type { Button } from '../../../../../base/browser/ui/button/button.js';
 import { AnchorPosition, ContextViewFocusRestore } from '../../../../../base/browser/ui/contextview/contextview.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { getNLSLanguage, localize } from '../../../../../nls.js';
 import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { chatPillButtonClassName } from '../../../../browser/chatPills.js';
 import { formatLoadedSkillReason } from '../../common/model/chatViewModel.js';
 import { ChatResponseActionContext } from '../chat.js';
 
@@ -26,6 +27,7 @@ export class ChatLoadedSkillsActionViewItem extends ActionViewItem {
 			label: count, title: label, ariaLabel: label, icon: Lxicon.skill, iconOnly: false,
 			onClick: () => this.runActionWithContext(this.action, this),
 		});
+		button.domNode.classList.add(chatPillButtonClassName);
 		button.domNode.setAttribute('aria-haspopup', 'dialog');
 		button.domNode.setAttribute('aria-expanded', 'false');
 	}

@@ -1,0 +1,14 @@
+.ash-chat-pill-button {
+	min-inline-size: 0;
+	max-inline-size: 100%;
+}
+
+.ash-chat-pills-row {
+	display: flex;
+	flex-wrap: wrap;
+	min-inline-size: 0;
+}
+
+.ash-chat-pills-row[hidden] {
+	display: none;
+}

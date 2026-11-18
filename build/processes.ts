@@ -383,7 +383,13 @@ function startWindowsProcessSession(): WindowsProcessSession {
 	// Windows PowerShell needs its own module path when invoked from PowerShell 7.
 	const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PSMODULEPATH'));
 	const command = Buffer.from(windowsProcessInterop, 'utf16le').toString('base64');
-	const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', command], { env, windowsHide: true });
+	let child: ChildProcessWithoutNullStreams;
+	try {
+		child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', command], { env, windowsHide: true });
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== 'EPERM') throw error;
+		throw new Error('Windows denied the process-table helper launch with piped stdio (EPERM). Process supervision requires pipe-backed child processes.', { cause: error });
+	}
 	let diagnostics = '';
 	child.stdin.on('error', () => { /* The process exit reports a broken pipe. */ });
 	child.on('error', error => { diagnostics += error.message; });

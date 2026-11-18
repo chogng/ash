@@ -1,6 +1,7 @@
 import { h } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { chatPillButtonClassName } from '../../../../workbench/browser/chatPills.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -46,7 +47,7 @@ export class ChatInputArtifactPill extends Disposable {
 			label: '', iconOnly: true, size: 'small',
 			onClick: () => this.removeKind(),
 		}));
-		this.remove.domNode.classList.add('ash-chat-input-artifact-pill-remove');
+		this.remove.domNode.classList.add(chatPillButtonClassName, 'ash-chat-input-artifact-pill-remove');
 		appendIcon(Lxicon.close, this.remove.domNode);
 		this.text = h(document, 'span', { className: 'ash-chat-input-artifact-pill-label' });
 		this.element.append(this.text);

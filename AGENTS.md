@@ -47,3 +47,7 @@ If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `
 - Modify the requested checkout; do not substitute another checkout or only a remote branch. Preserve unrelated changes.
 - Run self-hosting validation through Ash itself.
 - Before committing or publishing, run `just commit-check <base-ref>` and handle its result as defined in the [commit workflow](.agents/skills/commit-pr/SKILL.md#prepare-the-exact-change). CI checks the full repository.
+
+## Learnings
+
+* 在受管 Windows 会话中调用 `exec_command` 时，显式设置 `shell: "C:\\Windows\\System32\\cmd.exe"` 和 `login: false`，避免 Microsoft Store PowerShell 别名在启动时返回 Windows 错误 5。需要 PowerShell 时，从该 shell 调用系统 Windows PowerShell。遇到 Node 子进程 `EPERM` 时，对同一可执行文件分别验证 `stdio: 'inherit'` 和 `stdio: 'pipe'`，区分 shell 启动与管道 IPC。

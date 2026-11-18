@@ -1,4 +1,5 @@
-import { addDisposableListener, h } from '../../../../../../../base/browser/dom.js';
+import { h } from '../../../../../../../base/browser/dom.js';
+import { decodeBase64 } from '../../../../../../../base/common/buffer.js';
 import { Button } from '../../../../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../../../../base/common/lxicons.js';
 import { DisposableStore, toDisposable } from '../../../../../../../base/common/lifecycle.js';
@@ -8,6 +9,7 @@ import { Range } from '../../../../../../../editor/common/core/range.js';
 import { HoverParticipantRegistry, type HoverAnchor, type IEditorHoverParticipant, type IEditorHoverRenderContext, type IHoverPart, type IRenderedHoverParts } from '../../../../../../../editor/contrib/hover/browser/hoverTypes.js';
 import { defaultButtonStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
 import { localize } from '../../../../../../../nls.js';
+import { createChatImageHoverContent } from '../../../../../../browser/chatImagePreview.js';
 import type { ChatContextAttachment } from '../../../../../../services/chat/common/chatContextService.js';
 import type { ChatAgent } from '../../../../../../services/chat/common/chatService.js';
 import { ChatAgentHover } from '../../chatAgentHover.js';
@@ -93,7 +95,7 @@ export class ChatAttachmentReferenceHoverParticipant implements IEditorHoverPart
 		const document = context.container.ownerDocument;
 		// Share the existing preview association with Chat's accessible view, including its close action.
 		const content = h(document, 'div');
-		content.className = 'ash-chat-context-reference-preview ash-chat-image-reference-preview ash-chat-image-reference-hover';
+		content.className = 'ash-chat-context-reference-preview ash-chat-image-reference-preview';
 		content.setAttribute('role', 'group');
 		content.tabIndex = -1;
 		const part = parts.find((candidate): candidate is ChatAttachmentReferenceHoverPart =>
@@ -119,40 +121,41 @@ export class ChatAttachmentReferenceHoverParticipant implements IEditorHoverPart
 			const status = h(document, 'p');
 			status.setAttribute('role', 'status');
 			status.textContent = localize('chat.context.imageLoading', 'Loading preview: {0}', part.attachment.name);
-			const image = h(document, 'img');
-			image.alt = part.attachment.name;
-			image.draggable = false;
 			content.append(header, status);
 			const isCurrent = (): boolean => !resources.isDisposed
 				&& this.editor.getModel()?.getDecorationOptions(part.decorationId)?.before?.attachedData === part.attachment;
 			const unavailable = (): void => {
 				if (!isCurrent()) { return; }
-				image.removeAttribute('src');
-				image.remove();
 				content.setAttribute('aria-busy', 'false');
 				status.hidden = false;
 				status.textContent = localize('chat.context.previewFailed', 'Preview unavailable: {0}', part.attachment.name);
 				context.onContentsChanged();
 			};
-			resources.add(addDisposableListener(image, 'error', unavailable));
-			resources.add(addDisposableListener(image, 'load', () => {
-				if (!isCurrent()) { return; }
-				if (!image.naturalWidth) { unavailable(); return; }
-				content.append(image);
-				status.hidden = true;
-				content.setAttribute('aria-busy', 'false');
-				context.onContentsChanged();
-			}));
 			resources.add(this.editor.onDidChangeModelDecorations(() => {
 				if (!isCurrent()) { context.hide(); }
 			}));
-			resources.add(toDisposable(() => image.removeAttribute('src')));
-			// Resolution stays with the canonical capture. Closing a hover only retires its rendering.
-			void part.attachment.resolve().then(resolved => {
+			// The capture outlives this hover. Only its saved raster bytes reach the preview.
+			void part.attachment.resolve().then(({ content: data }) => {
 				if (!isCurrent()) { return; }
-				// Only captured raster bytes may reach this image sink; never request a source URL.
-				if (!/^data:image\/(png|jpeg|gif|webp);base64,/u.test(resolved.content)) { unavailable(); return; }
-				image.src = resolved.content;
+				const format = /^data:(image\/(?:png|jpeg|gif|webp));base64,/u.exec(data);
+				if (!format) { unavailable(); return; }
+				let bytes: Uint8Array;
+				try {
+					bytes = decodeBase64(data.slice(format[0].length)).buffer;
+				} catch {
+					unavailable();
+					return;
+				}
+				const preview = createChatImageHoverContent(undefined, part.attachment.name, bytes, part.attachment.id, () => {
+					if (!isCurrent()) { return; }
+					status.hidden = true;
+					content.setAttribute('aria-busy', 'false');
+					context.onContentsChanged();
+				}, undefined, undefined, part.attachment.name, true, unavailable, {
+					ownerDocument: document, mimeType: format[1], preserveOriginal: true,
+				});
+				resources.add(preview.disposable);
+				content.append(preview.element);
 			}, unavailable);
 		}
 		context.container.append(content);

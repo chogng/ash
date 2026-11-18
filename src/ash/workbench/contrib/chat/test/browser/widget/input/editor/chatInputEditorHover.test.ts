@@ -53,7 +53,7 @@ suite('Chat image reference editor hover', () => {
 			const hover = page.locator('.stanza-editor-hover:not([hidden])');
 			const content = hover.locator('.ash-chat-image-reference-preview');
 			await expect(content).toBeFocused();
-			const image = content.getByRole('img', { name: imageName, exact: true });
+			const image = content.locator('.ash-chat-image-hover').getByRole('img', { name: imageName, exact: true });
 			await expect(image).toBeVisible();
 			assert.deepEqual(await image.evaluate(image => {
 				const element = image as HTMLImageElement;
@@ -102,6 +102,30 @@ suite('Chat image reference editor hover', () => {
 		await preview.hover();
 		await expect(page.locator('.stanza-editor-hover:not([hidden])').getByRole('img', { name: imageName, exact: true })).toBeVisible();
 		await expect(page.getByRole('dialog', { name: `Preview ${imageName}`, exact: true })).toHaveCount(0);
+	});
+
+	test('staged image hover reuses the loaded thumbnail across openings', async () => {
+		const { page } = browser;
+		await page.goto('/chatInput.html?contextHover&stageImages');
+		const data = await imageData();
+		await page.evaluate(data => {
+			window.ashChatInputIntegration.addDeferredImageContext(data);
+			window.ashChatInputIntegration.releaseReferencePreview();
+		}, data);
+		const trigger = page.getByRole('button', { name: 'Preview draft.png', exact: true });
+		await expect(trigger).toBeEnabled();
+		const imageUrl = (await trigger.locator('img').getAttribute('src'))!;
+		const tooltip = page.getByRole('tooltip').filter({ has: page.locator('.ash-chat-image-hover') });
+		const preview = tooltip.locator('.ash-chat-pill-hover-content').getByRole('img', { name: 'draft.png', exact: true });
+		for (let opening = 0; opening < 2; opening++) {
+			await trigger.hover();
+			await expect(preview).toBeVisible();
+			await expect(preview).toHaveAttribute('src', imageUrl);
+			await page.keyboard.press('Escape');
+			await expect(tooltip).toHaveCount(0);
+			await expect(trigger).toBeEnabled();
+			await page.mouse.move(1, 1);
+		}
 	});
 
 	test('closing a pending hover preserves the canonical image capture', async () => {

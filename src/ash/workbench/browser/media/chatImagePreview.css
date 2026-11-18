@@ -1,0 +1,32 @@
+.ash-chat-image-hover {
+	min-width: 0;
+	max-width: min(600px, calc(100vw - 56px));
+}
+
+.ash-chat-image-hover img:not([hidden]) {
+	display: block;
+	max-width: 100%;
+	max-height: min(350px, 55vh);
+	object-fit: contain;
+}
+
+.ash-chat-image-hover-open:not([hidden]) {
+	display: block;
+	max-width: 100%;
+	padding: 0;
+	border: 0;
+	background: none;
+	cursor: pointer;
+}
+
+.ash-chat-image-hover-open:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size20);
+}
+
+.ash-chat-image-hover-caption {
+	margin-block-start: var(--ash-spacing-size80);
+	color: inherit;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}

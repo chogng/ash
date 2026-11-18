@@ -1,0 +1,9 @@
+.ash-chat-pill-hover-content {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-pill-hover-content.preview-sized {
+	inline-size: min(24rem, calc(100vw - 32px));
+	max-inline-size: 100%;
+}

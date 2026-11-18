@@ -990,6 +990,7 @@ part = resources.add(inputServices.createInstance(ChatInputPart, document.queryS
 	configureModelInMenu: new URLSearchParams(location.search).has('modelMenuConfiguration'),
 	chatModelSlider,
 	renderSecondaryToolbar: !cowork,
+	stageImages: new URLSearchParams(location.search).has('stageImages'),
 	workspacePickerDelegate: new URLSearchParams(location.search).has('workspacePicker') ? {
 		getWorkspaces: () => workspaceChoices,
 		getSelectedWorkspace: () => selectedWorkspace,

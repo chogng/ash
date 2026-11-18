@@ -1,12 +1,6 @@
 .ash-canvas-pills {
-	display: flex;
-	flex-wrap: wrap;
 	gap: var(--ash-spacing-size40);
 	padding-block: var(--ash-spacing-size40);
-}
-
-.ash-canvas-pills[hidden] {
-	display: none;
 }
 
 .ash-canvas-pill {

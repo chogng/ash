@@ -1,5 +1,6 @@
 import { h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { chatPillButtonClassName } from '../../../../workbench/browser/chatPills.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -25,7 +26,7 @@ export class ChatInputProjectPill extends Disposable {
 			label: '', ariaLabel: clearLabel, title: clearLabel, size: 'small',
 			onClick: clearProject,
 		}));
-		this.remove.domNode.classList.add('ash-chat-input-project-pill-remove');
+		this.remove.domNode.classList.add(chatPillButtonClassName, 'ash-chat-input-project-pill-remove');
 		this.remove.domNode.hidden = true;
 		appendIcon(Lxicon.close, this.remove.domNode);
 	}

@@ -1,10 +1,10 @@
 import { h } from '../../../../../../../base/browser/dom.js';
-import { Button } from '../../../../../../../base/browser/ui/button/button.js';
+import type { Button } from '../../../../../../../base/browser/ui/button/button.js';
 import { toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../../../../base/common/errors.js';
 import type { ToolResultPresentation } from '../../../../../../../platform/agentHost/common/agent.js';
 import { INotificationService } from '../../../../../../../platform/notification/common/notification.js';
-import { defaultButtonStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
+import { createChatPillButton } from '../../../../../../browser/chatPills.js';
 import { IChatSessionNavigationService } from '../../../../../../services/chat/common/chatSessionNavigationService.js';
 import { localize } from '../../../../../../../nls.js';
 import { BaseChatToolInvocationSubPart } from './chatToolInvocationSubPart.js';
@@ -30,8 +30,8 @@ export class ChatSessionTargetResultPillSubPart extends BaseChatToolInvocationSu
 	}
 
 	protected addOpenAction(label: string, sideBySide = false): void {
-		const button = this._register(new Button(this.controls, {
-			...defaultButtonStyles,
+		const button = this._register(createChatPillButton(this.controls, {
+			size: 'standard',
 			label,
 			onClick: () => {
 				if (!this.navigation.openToolResult || this.opening || this.controller.signal.aborted || !this.domNode.isConnected) return;

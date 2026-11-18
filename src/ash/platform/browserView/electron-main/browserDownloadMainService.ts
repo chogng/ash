@@ -1,11 +1,12 @@
 import { localize } from '../../../nls.js';
-import { dialog, type DownloadItem } from 'electron/main';
+import { app, dialog, type DownloadItem } from 'electron/main';
 import { shell } from 'electron';
 import { basename, extname, isAbsolute, join } from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
+import { Lazy } from '../../../base/common/lazy.js';
 import { RunOnceScheduler } from '../../../base/common/async.js';
 import { isRecord } from '../../../base/common/types.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
@@ -27,19 +28,28 @@ export class BrowserDownloadMainService extends Disposable implements IBrowserDo
 	private readonly progressChanged = this._register(new RunOnceScheduler(() => this.changes.fire(), 100));
 	private readonly save = this._register(new RunOnceScheduler(() => this.persist(), 500));
 	private readonly ready: Promise<void>;
-	private directory: string;
+	private configuredDirectory: string | undefined;
+	private readonly defaultDirectory = new Lazy(() => {
+		try {
+			return app.getPath('downloads');
+		} catch (error) {
+			// The Windows known folder can be unavailable in an isolated profile.
+			this.log.warn('browserDownloads', error);
+			return join(app.getPath('home'), 'Downloads');
+		}
+	});
 	private ask = true;
 	private loaded = false;
-	constructor(private readonly defaultDirectory: string,
+	constructor(
 		@IApplicationStorageMainService private readonly storage: IApplicationStorageMainService,
 		@ILogService private readonly log: ILogService,
 	) {
 		super();
-		this.directory = defaultDirectory;
 		this.ready = this.restore().then(() => { this.loaded = true; });
 		void this.ready.catch(error => this.log.error('browserDownloads', error));
 		this._register(storage.onWillSaveState(() => this.persist()));
 	}
+	private get directory(): string { return this.configuredDirectory ?? this.defaultDirectory.value; }
 	private async restore(): Promise<void> {
 		const raw = (await this.storage.getItems(identity)).entries[historyKey]?.value;
 		if (!raw) return;
@@ -58,7 +68,7 @@ export class BrowserDownloadMainService extends Disposable implements IBrowserDo
 	}
 	async configure(directory: string, ask: boolean): Promise<void> {
 		if (typeof directory !== 'string' || directory.length > 32768 || directory.includes('\0') || directory && !isAbsolute(directory) || typeof ask !== 'boolean') throw new TypeError('Invalid browser download settings');
-		this.directory = directory || this.defaultDirectory;
+		this.configuredDirectory = directory || undefined;
 		this.ask = ask;
 		this.changes.fire();
 	}
@@ -73,15 +83,16 @@ export class BrowserDownloadMainService extends Disposable implements IBrowserDo
 	track(item: DownloadItem): boolean {
 		const id = randomUUID();
 		const filename = basename(item.getFilename().replaceAll('\\', '/')) || 'download';
-		let path = join(this.directory, filename);
+		const directory = this.directory;
+		let path = join(directory, filename);
 		if (this.ask) item.setSaveDialogOptions({ defaultPath: path });
 		else {
 			try {
-				mkdirSync(this.directory, { recursive: true });
+				mkdirSync(directory, { recursive: true });
 				const extension = extname(filename);
 				const stem = filename.slice(0, filename.length - extension.length);
 				let suffix = 1;
-				while (existsSync(path) || this.reservedPaths.has(path)) path = join(this.directory, `${stem} (${suffix++})${extension}`);
+				while (existsSync(path) || this.reservedPaths.has(path)) path = join(directory, `${stem} (${suffix++})${extension}`);
 				this.reservedPaths.add(path);
 				item.setSavePath(path);
 			} catch (error) {
