@@ -1,0 +1,43 @@
+.ash-agent-editor-comments-overlay {
+	z-index: 10;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	box-sizing: border-box;
+	max-inline-size: 100%;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size40);
+	background: var(--ash-editor-widgetBackground);
+	color: var(--ash-editor-foreground);
+	border: var(--ash-strokeThickness) solid var(--ash-editor-widgetBorder);
+	border-radius: var(--ash-cornerRadius-medium);
+	font-family: var(--ash-font-family, system-ui);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.hc-black .ash-agent-editor-comments-overlay,
+.hc-light .ash-agent-editor-comments-overlay {
+	border-color: var(--ash-contrastBorder);
+}
+
+.ash-agent-editor-comment p {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.ash-agent-editor-comment-input {
+	box-sizing: border-box;
+	inline-size: 100%;
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	font: inherit;
+	resize: vertical;
+}
+
+.ash-agent-editor-comment-input:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-strokeThickness);
+}

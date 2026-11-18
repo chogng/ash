@@ -369,6 +369,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.chatScreenshot',
 					'workbench.contrib.agentsWindowInvitation',
 					'chat.edits.editorOverlay',
+					'workbench.contrib.agentEditorComments',
 					'chat.promptLanguageFeatures',
 					'chat.newPromptFileActions',
 					'chat.agentActions',

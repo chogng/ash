@@ -111,6 +111,8 @@ import { IChatDebugService } from '../common/chatDebugService.js';
 import { AppServerChatDebugService } from './chatDebug/appServerChatDebugService.js';
 import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
 import { ChatEditingEditorOverlay } from './chatEditing/chatEditingEditorOverlay.js';
+import { AgentEditorCommentsEditorContribution } from '../../../services/agentEditorComments/browser/agentEditorCommentsOverlayWidget.js';
+import { AgentEditorCommentsBridge, IAgentEditorCommentsBridge } from '../../../services/agentEditorComments/common/agentEditorComments.js';
 import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContributions.js';
 import { registerPromptActions } from './promptSyntax/promptFileActions.js';
 import { registerSkillActions } from './promptSyntax/skillActions.js';
@@ -127,6 +129,7 @@ import { chatUpvoteAnimationConfiguration } from '../common/chatResponseFeedback
 import { ChatStatusBarEntry } from './chatStatus/chatStatusEntry.js';
 // Both renderer hosts use these primitives; each host owns session navigation and History actions.
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
+registerSingleton(IAgentEditorCommentsBridge, AgentEditorCommentsBridge, InstantiationType.Delayed);
 registerSingleton(ISessionSummaryHoverService, SessionSummaryHoverService, InstantiationType.Delayed);
 registerSingleton(IChatMarkdownAnchorService, ChatMarkdownAnchorService, InstantiationType.Delayed);
 registerSingleton(IChatOutputPartStateCache, ChatOutputPartStateCache, InstantiationType.Delayed);
@@ -140,6 +143,7 @@ registerSingleton(IChatDebugService, AppServerChatDebugService, InstantiationTyp
 registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceFileSystemProvider, InstantiationType.Delayed);
 registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));
 registerWorkbenchContribution(ChatEditingEditorOverlay.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatEditingEditorOverlay));
+registerWorkbenchContribution(AgentEditorCommentsEditorContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(AgentEditorCommentsEditorContribution));
 registerWorkbenchContribution(PromptLanguageFeaturesProvider.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(PromptLanguageFeaturesProvider));
 registerWorkbenchContribution('chat.promptActions', WorkbenchPhase.BlockStartup, () => registerPromptActions());
 registerWorkbenchContribution('chat.skillActions', WorkbenchPhase.BlockStartup, () => registerSkillActions());

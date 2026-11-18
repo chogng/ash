@@ -1,4 +1,5 @@
 import { ImageResizeService } from '../../../../../platform/imageResize/browser/imageResizeService.js';
+import { IImageResizeService } from '../../../../../platform/imageResize/common/imageResizeService.js';
 import { ChatUserImageAttachmentService, IChatUserImageAttachmentService } from '../../browser/attachments/chatUserImageAttachments.js';
 import { IChatSlashCommandService, ChatSlashCommandService } from '../../common/participants/chatSlashCommands.js';
 import { IVoiceInputModeService } from '../../browser/voiceInputMode/voiceInputMode.js';
@@ -43,6 +44,7 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { installEditorTestGlobals } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { AgentEditorCommentsBridge, IAgentEditorCommentsBridge } from '../../../../services/agentEditorComments/common/agentEditorComments.js';
 import { ImageEditorService } from '../../../../services/imageEditor/browser/imageEditorService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
@@ -151,6 +153,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	}
 	const partServices = inputResources.add(services.createChild());
 	if (mcp) partServices.registerInstance(IMcpServerManagementService, mcp);
+	if (!partServices.has(IImageResizeService)) partServices.registerSingleton(IImageResizeService, () => partServices.createInstance(ImageResizeService));
 	if (!partServices.has(IChatUserImageAttachmentService)) partServices.registerSingleton(IChatUserImageAttachmentService, () => partServices.createInstance(ChatUserImageAttachmentService));
 	if (!partServices.has(IChatContextPickService)) partServices.registerInstance(IChatContextPickService, new ChatContextPickService());
 	if (!partServices.has(IExtensionService)) registerTestExtensionService(inputResources, partServices);
@@ -166,12 +169,13 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 			{} as IFileSearchService,
 			{} as IWorkspaceContextService,
 			partServices.get(IChatContextService),
-			new ImageResizeService(),
+			partServices.get(IImageResizeService),
 		));
 	}
 	if (!partServices.has(IHostService)) partServices.registerInstance(IHostService, new TestHostService());
 	if (!partServices.has(IImageEditorService)) partServices.registerSingleton(IImageEditorService, () => partServices.createInstance(BrowserImageEditorService));
 	if (!partServices.has(IEditorService)) partServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
+	if (!partServices.has(IAgentEditorCommentsBridge)) partServices.registerSingleton(IAgentEditorCommentsBridge, () => new AgentEditorCommentsBridge());
 	if (!partServices.has(IMessageHistoryService)) partServices.registerInstance(IMessageHistoryService, undefined);
 	if (!partServices.has(IQuickInputService)) partServices.registerSingleton(IQuickInputService, () => new TestQuickInputService({ container: document.body }));
 	partServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
@@ -5824,7 +5828,8 @@ test('Plan review renders Markdown and resolves the original request with locali
 		const review = part.element.querySelector<HTMLFormElement>('.ash-chat-plan-review')!;
 		assert.equal(review.querySelector('h2')?.textContent, 'Reconnect');
 		assert.equal(review.querySelector('code')?.textContent, 'retry()');
-		const revise = review.querySelector<HTMLButtonElement>('button[type="button"]')!;
+		assert.equal(review.querySelector('button[type="button"]')?.textContent, '在编辑器中打开计划');
+		const revise = review.querySelector<HTMLButtonElement>('.ash-chat-interaction-actions button[type="button"]')!;
 		assert.equal(revise.textContent, '继续规划');
 		assert.equal(review.querySelector('button[type="submit"]')?.textContent, '批准并继续');
 		const field = review.querySelector('textarea')!;

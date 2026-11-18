@@ -69,7 +69,7 @@ const test = base.extend<{ traceModelFixture: TraceModelFixture; }>({
 						respond(response, [call('fixture-plan', 'switch_mode', { mode: 'agent', reason: 'Review the proposed coverage.', plan: '# Proposed plan\n\n1. Add a reconnect test.' })]);
 					} else if (results.length === 1) {
 						const declined = fixtureToolOutput(results[0].output);
-						if (!declined.rejected || declined.feedback !== 'Also cover a failed reconnect.') throw new Error('Expected the user’s plan feedback');
+						if (!declined.rejected || declined.feedback !== 'Also cover a failed reconnect.\n\n[L1] Describe the retry limit.') throw new Error('Expected overall and line-level plan feedback');
 						respond(response, [call('fixture-revised-plan', 'switch_mode', { mode: 'agent', reason: 'Review the revised coverage.', plan: '# Revised plan\n\n1. Cover successful and failed reconnects.' })]);
 					} else {
 						const approved = fixtureToolOutput(results.at(-1)!.output);
@@ -333,9 +333,20 @@ test('Chat widget reviews and revises a real plan and stages a follow-up from th
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Plan review fixture' }).click();
 		const review = page.locator('.ash-chat-plan-review');
 		await expect(review.getByRole('heading', { name: 'Proposed plan' })).toBeVisible();
+		await review.getByRole('button', { name: 'Open plan in editor', exact: true }).press('Enter');
+		const comments = page.getByRole('group', { name: 'Agent comments', exact: true });
+		await expect(comments).toBeVisible();
+		const planEditor = page.getByRole('tabpanel', { name: 'Review proposed plan', exact: true });
+		await expect(planEditor.getByRole('textbox', { name: 'Review proposed plan', exact: true })).toBeVisible();
+		await expect(planEditor.locator('.view-lines')).toContainText('Add a reconnect test.');
+		await comments.getByRole('button', { name: 'Add comment', exact: true }).press('Enter');
+		await page.getByRole('textbox', { name: 'Comment for the agent' }).fill('Describe the retry limit.');
+		await page.getByRole('button', { name: 'Save comment', exact: true }).press('Enter');
+		await expect(review.getByRole('button', { name: 'Open plan in editor (Comments: 1)', exact: true })).toBeVisible();
 		await review.getByRole('textbox', { name: 'Changes to the plan (optional)' }).fill('Also cover a failed reconnect.');
 		await review.getByRole('button', { name: 'Keep planning' }).press('Enter');
 		await expect(review.getByRole('heading', { name: 'Revised plan' })).toBeVisible();
+		await expect(comments).toHaveCount(0);
 		expect((await read()).thread.turns.at(-1)?.mode).toBe('plan');
 		await review.getByRole('button', { name: 'Approve and continue' }).press('Enter');
 		await expect.poll(async () => (await read()).thread.turns.at(-1)?.status).toBe('completed');

@@ -123,6 +123,7 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.sessionsMouseNavigation',
 					'sessions.automationSessionsListing',
 					'chat.edits.editorOverlay',
+					'workbench.contrib.agentEditorComments',
 					'chat.promptLanguageFeatures',
 					'chat.newPromptFileActions',
 					'chat.agentActions',

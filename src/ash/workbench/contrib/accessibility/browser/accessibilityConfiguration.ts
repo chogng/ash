@@ -352,6 +352,13 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.AgentEditorComments,
+	defaultValue: true,
+	parse(value: unknown): boolean { if (typeof value !== 'boolean') { throw new TypeError('Agent comments verbosity must be boolean'); } return value; },
+	setting: { valueType: 'boolean', title: localize('agentEditorComments.verbosity', 'Agent comments accessibility help'), description: localize('agentEditorComments.verbosityDescription', 'Announce how to open accessibility help when reviewing Agent comments.') },
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Dictation, defaultValue: true,
 	parse(value: unknown): boolean { if (typeof value !== 'boolean') throw new TypeError('Dictation verbosity must be boolean'); return value; },
 	setting: { valueType: 'boolean', title: localize('dictation.targetVerbosity', 'Dictation accessibility help'), description: localize('dictation.targetVerbosityDescription', 'Announce how to open accessibility help while dictating in an editor or terminal.') },

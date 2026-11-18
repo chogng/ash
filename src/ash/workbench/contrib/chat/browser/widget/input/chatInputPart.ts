@@ -108,7 +108,7 @@ import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import { ILanguageModelToolsService } from '../../../common/tools/languageModelToolsService.js';
 import { ChatElicitationContentPart } from '../chatContentParts/chatElicitationContentPart.js';
 import { ChatQuestionCarouselPart } from '../chatContentParts/chatQuestionCarouselPart.js';
-import { ChatPlanReviewPart } from '../chatContentParts/chatPlanReviewPart.js';
+import { ChatPlanReviewPart, type PlanReviewDraft } from '../chatContentParts/chatPlanReviewPart.js';
 import { ChatFollowups } from './chatFollowups.js';
 import { renderChatMarkdownPlaintext } from '../chatMarkdownRichContent.js';
 import type { ChatQuestionAnswerDraft } from '../chatContentParts/chatQuestionAnswerEditor.js';
@@ -323,7 +323,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly delegate: ChatInputDelegate;
 	private readonly interactionListeners = this._register(new DisposableStore());
 	private renderedInteraction: ChatInputState['interaction'];
-	private questionDraft: { readonly requestId: string; readonly fields: Map<string, ChatQuestionAnswerDraft>; } | undefined;
+	private questionDraft: { readonly requestId: string; readonly fields: Map<string, ChatQuestionAnswerDraft>; plan?: PlanReviewDraft; } | undefined;
 	private renderedToolIdentity: string | undefined;
 	private confirmationCarousel: ChatToolConfirmationCarouselPart | undefined;
 	private readonly elicitationFocused: IContextKey<boolean>;
@@ -1525,7 +1525,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				&& this.state.toolInvocation?.call.binding?.activity?.type === 'confirmation'
 				&& this.state.toolInvocation.call.binding.activity.presentation?.type === 'extensionsInstall'
 				? localize('chat.tool.findExtensionHelp', 'Tab to Find in Extensions to review the requested package. Return to Chat to approve or decline the tool request.') : '',
-			request?.type === 'userInput' && request.request.planReview ? localize('chat.planReview.help', 'Tab to the proposed plan or open Accessible View to read it. You can enter changes before choosing Keep planning or Approve and continue.') : '',
+			request?.type === 'userInput' && request.request.planReview ? localize('chat.planReview.help', 'Tab to the proposed plan or open Accessible View to read it. Choose Open plan in editor to add line comments. You can also enter overall feedback before choosing Keep planning or Approve and continue.') : '',
 			this.state.followups && this.canUseFollowups() ? localize('chat.followups.help', 'From the message input, use Shift+Tab to reach suggested follow-ups. Press Enter or Space to add one to your draft.') : '',
 			this.sessionWorkingSet.available ? localize('chat.changes.reviewFilesHelp', 'Use Review changed files to expand the list. Activate a file to open its comparison. Escape closes the list and returns focus to Review changed files.') : '',
 			this.options.workspacePickerDelegate ? localize('chat.workspace.help', 'The workspace picker chooses the Welcome submission target. In an empty window, use Tab to reach Workspace and Enter, Space or an arrow key to open it, or run Chat: Open Workspace Picker from the Command Palette. Use arrow keys to choose a trusted recent folder or workspace, Enter to select and Escape to return. With a target selected, submitting opens that workspace with the draft and attachments prefilled; it never sends automatically. A failed open keeps your draft.') : '',
@@ -2435,10 +2435,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				break;
 			}
 			case 'userInput': {
-				const fields = this.questionDraft!.fields;
-				const questions = this.interactionListeners.add(request.request.planReview
-					? this.instantiationService.createInstance(ChatPlanReviewPart, this.element.ownerDocument, request.request, fields, resolve)
-					: new ChatQuestionCarouselPart(this.element.ownerDocument, request.request, fields, resolve));
+				const draft = this.questionDraft!;
+				const plan = request.request.planReview;
+				if (plan && draft.plan?.markdown !== plan.markdown) {
+					draft.plan = {
+						markdown: plan.markdown,
+						resource: URI.from({ scheme: 'ash-plan-review', path: `/${createUuid()}/plan` }),
+						comments: new Map(),
+					};
+				}
+				const questions = this.interactionListeners.add(plan
+					? this.instantiationService.createInstance(ChatPlanReviewPart, this.element.ownerDocument, request.request, draft.fields, draft.plan!, resolve)
+					: new ChatQuestionCarouselPart(this.element.ownerDocument, request.request, draft.fields, resolve));
 				this.interaction.append(questions.domNode);
 				break;
 			}
