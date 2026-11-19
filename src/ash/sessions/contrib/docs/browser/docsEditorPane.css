@@ -60,7 +60,6 @@
 }
 
 .ash-docs-format-menu {
-	--ash-menu-check-foreground: var(--ash-menu-foreground);
 	min-width: 216px;
 }
 

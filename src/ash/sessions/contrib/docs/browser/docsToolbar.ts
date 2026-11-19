@@ -221,10 +221,7 @@ export class DocsToolbar extends Disposable {
 		const canAsk = !!widget && !widget.selectedImage && this.configuration.getValue<boolean>(ChatAIDisabledSettingId) !== true;
 		return [
 			{ ...action('typography', localize({ bundle: 'ash.docs', key: 'typography' }, 'Typography'), Lxicon.font, () => undefined, canStyle), menu: typographyMenu },
-			action('table', localize({ bundle: 'ash.docs', key: 'insertTable' }, 'Insert table'), tableIcon, () => {
-				const columns = [1, 2, 3].map(index => localize({ bundle: 'ash.docs', key: 'column' }, 'Column {0}', index));
-				widget?.insertBlock(`| ${columns.join(' | ')} |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |`);
-			}),
+			action('table', localize({ bundle: 'ash.docs', key: 'insertTable' }, 'Insert table'), tableIcon, () => widget?.insertBlock('|  |  |  |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |')),
 			action('image', localize({ bundle: 'ash.docs', key: 'insertImage' }, 'Insert image'), Lxicon.imageSimple, () => this.insertImage()),
 			action('checklist', localize({ bundle: 'ash.docs', key: 'checklist' }, 'Checklist'), checklistIcon, () => widget?.setListKind('task')),
 			action('dropdown', localize({ bundle: 'ash.docs', key: 'insertDropdown' }, 'Insert dropdown'), Lxicon.dropdown, () => this.insertDropdown()),
