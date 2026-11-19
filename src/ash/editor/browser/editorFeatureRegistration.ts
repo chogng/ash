@@ -1,4 +1,4 @@
-import { DisposableStore, markAsSingleton, type IDisposable } from '../../base/common/lifecycle.js';
+import { DisposableStore, markAsSingleton, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { type Command, type EditorAction, type EditorCommand, type EditorContributionHooks, type EditorContributionCtor, type EditorContributionRegistration, type EditorFeatureSet, type MultiEditorAction, EditorContributionInstantiation, EditorExtensionsRegistry } from './editorExtensions.js';
 export * from './editorExtensions.js';
 
@@ -24,6 +24,8 @@ export function getEditorFeatures(): EditorFeatureSet {
 }
 
 const productFeatures = markAsSingleton(new DisposableStore());
+const productScope = new AbortController();
+productFeatures.add(toDisposable(() => productScope.abort()));
 let active: EditorFeatureSet = { contributions: [], actions: [], commands: [], registrations: [] };
 
 /** Product entries can admit a small feature set before loading the complete editor. */
@@ -36,7 +38,7 @@ export function activateEditorFeatures(): void {
 		registrations: next.registrations.filter(value => !active.registrations.includes(value)),
 	};
 	if (!added.contributions.length && !added.actions.length && !added.commands.length && !added.registrations.length) return;
-	// Existing inputs keep their contribution and command identities when Code arrives.
-	productFeatures.add(EditorExtensionsRegistry.registerEditorFeatures(added));
+	// Existing inputs keep their identities, and later contributions can use services from the first batch.
+	productFeatures.add(EditorExtensionsRegistry.registerEditorFeatures(added, productScope.signal));
 	active = next;
 }

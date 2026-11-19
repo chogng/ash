@@ -22,11 +22,16 @@ registerEditorPane({
 	id: SearchEditorID,
 	name: localize('searchEditor.title', 'Search Editor'),
 	canOpen: input => isSearchEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
-	create: options => {
+	create: async options => {
 		if (!options.instantiationService) { throw new Error('Search editor requires the Workbench instantiation service'); }
 		const descriptor = EditorPanes.getEditorPane({ resource: URI.from({ scheme: 'untitled', path: '/search.txt' }) }, { preferredEditorId: CODE_EDITOR_ID })!;
-		const editor = descriptor.create({ ...options, input: { ...options.input!, editorId: CODE_EDITOR_ID } }) as TextResourceEditor;
-		return options.instantiationService.createInstance(SearchEditor, editor);
+		const editor = await descriptor.create({ ...options, input: { ...options.input!, editorId: CODE_EDITOR_ID } }) as TextResourceEditor;
+		try {
+			return options.instantiationService.createInstance(SearchEditor, editor);
+		} catch (error) {
+			editor.dispose();
+			throw error;
+		}
 	},
 });
 

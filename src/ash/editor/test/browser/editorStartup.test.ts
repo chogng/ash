@@ -2,14 +2,16 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import './testEditorDom.js';
 import '../../editor.all.js';
+import '../../contrib/folding/browser/folding.js';
 import '../../contrib/suggest/browser/suggestController.js';
 import { activateEditorFeatures } from '../../browser/editorFeatureRegistration.js';
 import { EditorExtensionsRegistry } from '../../browser/editorExtensions.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { Range } from '../../common/core/range.js';
+import { createTestCodeEditor } from './testCodeEditor.js';
 
 suite('Incremental product editor startup', () => {
-	test('admitting Code preserves an existing plain input and its registered completion identity', async () => {
+	test('admitting Code preserves existing inputs and shares services across feature batches', async () => {
 		activateEditorFeatures();
 		const suggest = EditorExtensionsRegistry.getSomeEditorContributions(['editor.contrib.suggestController'])[0];
 		assert.ok(suggest);
@@ -22,6 +24,9 @@ suite('Incremental product editor startup', () => {
 		await import('../../editor.code.all.js');
 		assert.equal(EditorExtensionsRegistry.getSomeEditorContributions(['editor.contrib.renameController']).length, 1);
 		assert.equal(EditorExtensionsRegistry.getSomeEditorContributions(['editor.contrib.suggestController'])[0], suggest);
+		const { StickyScrollController } = await import('../../contrib/stickyScroll/browser/stickyScrollController.js');
+		using editor = createTestCodeEditor({ container: document.createElement('div'), model });
+		assert.ok(editor.getContribution(StickyScrollController.ID));
 		assert.equal(model.tokenization, tokens);
 		assert.equal(model.getValue(), 'An unsent input draft');
 		assert.equal(model.getVersionId(), version);

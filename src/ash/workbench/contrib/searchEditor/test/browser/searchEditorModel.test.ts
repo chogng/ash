@@ -112,7 +112,7 @@ test('generated Search Editor content stays clean, while manual edits and saved 
 	});
 	using code = EditorPanes.registerEditorPane({
 		id: CODE_EDITOR_ID, name: 'Text editor', canOpen: () => EditorPaneMatch.Builtin,
-		create: () => services.createInstance(TextResourceEditor, resourceStore, {
+		create: async () => services.createInstance(TextResourceEditor, resourceStore, {
 			workingCopyService: workingCopies,
 			createPart: createTestCodeEditor,
 		}),

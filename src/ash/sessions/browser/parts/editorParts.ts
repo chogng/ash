@@ -236,9 +236,10 @@ export class EditorParts extends WorkbenchEditorParts {
 		return tool === 'files' ? this.filesPart.createRetainedGroup() : (this.hosts.get('browser') as DesktopToolEditorPart).createRetainedGroup();
 	}
 	public async restoreRetainedGroup(tool: DesktopEditorTool, saved: EditorWorkingSet): Promise<IEditorGroupView> {
-		if (saved.groups.length !== 1 || saved.groups[0]!.editors.some(editor => serializedTool(editor) !== tool)) {
-			throw new TypeError('Retained editor state must contain one group for its tool');
+		if (saved.groups.length !== 1) {
+			throw new TypeError('Retained editor state must contain one group');
 		}
+		// The conversation's retained group owns tabs moved into it from other tools.
 		const host = this.hosts.get(tool)!;
 		const previous = host.groups.map(group => group.id);
 		const active = this.activeGroup;

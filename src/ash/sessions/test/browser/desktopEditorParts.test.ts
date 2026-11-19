@@ -82,6 +82,25 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(hosts.editor.isGroupVisible(restored.id), false);
 	});
 
+	test('restores a retained Chat Files group with a browser tab moved into it', async () => {
+		using hosts = fixture();
+		const file = { resource: URI.file('/report.pdf') };
+		const browser = { resource: URI.parse('ash-browser:/reference') };
+		const filesGroup = hosts.editor.createRetainedGroup('files');
+		await hosts.editor.openEditor(file, { pinned: true }, { groupId: filesGroup.id });
+		await hosts.editor.openEditor(browser, { pinned: true });
+		await hosts.editor.activeGroup.moveEditorTo(browser, filesGroup, 1);
+		const saved = hosts.editor.saveWorkingSet('files:chat', hosts.editor.groups.filter(group => group !== filesGroup).map(group => group.id));
+		await filesGroup.closeEditor(browser);
+		await filesGroup.closeEditor(file);
+
+		const restored = await hosts.editor.restoreRetainedGroup('files', saved);
+		assert.ok(hosts.files.groups.includes(restored));
+		assert.deepEqual(restored.inputs.map(input => input.resource.toString()), [file.resource.toString(), browser.resource.toString()]);
+		assert.equal(restored.activeInput?.resource.toString(), browser.resource.toString());
+		assert.equal(hosts.editor.isGroupVisible(restored.id), false);
+	});
+
 	test('closing the last retained Chat browser tab keeps the PDF pane visible', async () => {
 		using hosts = fixture();
 		const pdf = { resource: URI.file('/report.pdf') };

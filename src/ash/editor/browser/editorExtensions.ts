@@ -692,7 +692,8 @@ export namespace EditorExtensionsRegistry {
 		return EditorContributionRegistry.INSTANCE.registerEditorContributions(contributions);
 	}
 
-	export function registerEditorFeatures(features: EditorFeatureSet): IDisposable {
+	/** Batches with a shared signal use one service scope and must retire together. */
+	export function registerEditorFeatures(features: EditorFeatureSet, providerSignal?: AbortSignal): IDisposable {
 		const lifetime = new DisposableStore();
 		try {
 			for (const action of features.actions) {
@@ -701,7 +702,7 @@ export namespace EditorExtensionsRegistry {
 			}
 			for (const command of features.commands) lifetime.add(EditorContributionRegistry.INSTANCE.registerScopedEditorCommand(command));
 			for (const register of features.registrations) lifetime.add(register());
-			lifetime.add(registerEditorContributions(features.contributions));
+			lifetime.add(EditorContributionRegistry.INSTANCE.registerEditorContributions(features.contributions, providerSignal));
 			return lifetime;
 		} catch (error) { lifetime.dispose(); throw error; }
 	}
@@ -751,29 +752,31 @@ class EditorContributionRegistry {
 	constructor() {
 	}
 
-	public registerEditorContributions(contributions: readonly EditorContributionRegistration[]): IDisposable {
+	public registerEditorContributions(contributions: readonly EditorContributionRegistration[], sharedSignal?: AbortSignal): IDisposable {
 		const ids = new Set<string>();
 		for (const contribution of contributions) {
 			this.validateContribution(contribution);
 			if (ids.has(contribution.id)) throw new Error(`Duplicate editor contribution '${contribution.id}'`);
 			ids.add(contribution.id);
 		}
+		const controller = sharedSignal === undefined ? new AbortController() : undefined;
+		const providerSignal = sharedSignal ?? controller!.signal;
+		providerSignal.throwIfAborted();
 		const lifetime = new DisposableStore();
-		const controller = new AbortController();
 		try {
 			for (const contribution of contributions) {
-				lifetime.add(this.addEditorContribution({ ...contribution, providerSignal: controller.signal }));
+				lifetime.add(this.addEditorContribution({ ...contribution, providerSignal }));
 			}
 		} catch (error) {
 			lifetime.dispose();
-			controller.abort();
+			controller?.abort();
 			throw error;
 		}
 		this.changeEmitter.fire();
 		return toDisposable(() => {
 			// New views must stop selecting this batch before callbacks dispose old instances.
 			try { lifetime.dispose(); }
-			finally { controller.abort(); this.changeEmitter.fire(); }
+			finally { controller?.abort(); this.changeEmitter.fire(); }
 		});
 	}
 
