@@ -4,7 +4,23 @@ use serde::Deserialize;
 use serde::Serialize;
 
 pub use ash_pdf_contract::PdfAnnotationEdit;
+use ash_pdf_contract::PdfOutlineEntry;
 pub use ash_pdf_contract::PdfPage;
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PdfOutlineParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub document_id: String,
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PdfOutlineResult {
+    pub entries: Vec<PdfOutlineEntry>,
+}
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

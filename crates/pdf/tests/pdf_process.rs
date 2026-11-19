@@ -97,6 +97,7 @@ fn dispatch(service: &PdfService, request: &Value) -> Result<Value, String> {
                 .map_err(fail)?;
             serde_json::to_value(page).map_err(|error| error.to_string())
         }
+        "pdf/outline" => Ok(json!({ "entries": service.outline(1, id, &|| false).map_err(fail)? })),
         "pdf/read" => {
             let (bytes, eof) = service
                 .read(

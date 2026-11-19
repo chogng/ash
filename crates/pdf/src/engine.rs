@@ -1,15 +1,20 @@
+use crate::EngineOperation;
 use crate::EngineRequest;
 use crate::EngineResult;
+use crate::PageRequest;
 use crate::PdfAnnotation;
 use crate::PdfAnnotationEdit;
 use crate::PdfCharacter;
 use crate::PdfPage;
 use crate::PdfRect;
+use ash_pdf_contract::PdfOutlineEntry;
+use ash_pdf_contract::PdfOutlineTarget;
 use image::ImageEncoder;
 use image::codecs::png::PngEncoder;
 use pdfium_render::prelude::*;
 use sha2::Digest;
 use sha2::Sha256;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufWriter;
@@ -63,9 +68,14 @@ pub(super) fn serve() -> Result<(), String> {
     };
     let file_size = metadata.len() as usize;
     let mut request = Some(first);
-    while let Some(operation) = request {
-        let modified = operation.modified.is_some();
-        let result = execute(&document, operation, &sha256, file_size);
+    while let Some(next) = request {
+        let modified = next.operation.modifies_document();
+        let result = match next.operation {
+            EngineOperation::Page(page) => {
+                execute(&document, page, &sha256, file_size).map(EngineResult::Page)
+            }
+            EngineOperation::Outline => Ok(EngineResult::Outline(read_outline(&document))),
+        };
         let success = result.is_ok();
         let mut output = std::io::stdout().lock();
         serde_json::to_writer(&mut output, &result).map_err(|error| error.to_string())?;
@@ -107,12 +117,129 @@ pub(super) fn bind() -> Result<Pdfium, String> {
     }
 }
 
+fn read_outline(document: &PdfDocument<'_>) -> Vec<PdfOutlineEntry> {
+    read_outline_level(
+        document,
+        document.bookmarks().root(),
+        &mut HashSet::new(),
+        0,
+    )
+}
+
+fn read_outline_level<'a>(
+    document: &PdfDocument<'_>,
+    mut bookmark: Option<PdfBookmark<'a>>,
+    seen: &mut HashSet<PdfBookmark<'a>>,
+    depth: usize,
+) -> Vec<PdfOutlineEntry> {
+    // Bound traversal and the worker reply even if the file contains cycles or huge titles.
+    const MAX_DEPTH: usize = 32;
+    const MAX_BOOKMARKS: usize = 2048;
+    let mut entries = Vec::new();
+    while let Some(item) = bookmark {
+        if depth == MAX_DEPTH || seen.len() == MAX_BOOKMARKS || !seen.insert(item.clone()) {
+            break;
+        }
+        let children = read_outline_level(document, item.first_child(), seen, depth + 1);
+        let title: String = item
+            .title()
+            .unwrap_or_default()
+            .chars()
+            .filter(|character| !character.is_control())
+            .take(256)
+            .collect();
+        let title = title.trim();
+        if title.is_empty() {
+            entries.extend(children);
+        } else {
+            let target = item
+                .destination()
+                .and_then(|destination| outline_target(document, &destination))
+                .or_else(|| {
+                    let action = item.action()?;
+                    let destination = action.as_local_destination_action()?.destination().ok()?;
+                    outline_target(document, &destination)
+                });
+            if target.is_some() || !children.is_empty() {
+                entries.push(PdfOutlineEntry {
+                    title: title.into(),
+                    target,
+                    children,
+                });
+            }
+        }
+        bookmark = item.next_sibling();
+    }
+    entries
+}
+
+fn outline_target(
+    document: &PdfDocument<'_>,
+    destination: &PdfDestination<'_>,
+) -> Option<PdfOutlineTarget> {
+    let index = destination.page_index().ok()?;
+    if !(0..document.pages().len()).contains(&index) {
+        return None;
+    }
+    let top = destination
+        .view_settings()
+        .ok()
+        .and_then(|settings| outline_top(document, index, settings));
+    Some(PdfOutlineTarget {
+        page: index as u32 + 1,
+        top,
+    })
+}
+
+fn outline_top(
+    document: &PdfDocument<'_>,
+    index: PdfPageIndex,
+    settings: PdfDestinationViewSettings,
+) -> Option<f32> {
+    use PdfDestinationViewSettings::*;
+    let (x, y, other_corner) = match settings {
+        SpecificCoordinatesAndZoom(x, y, _) if x.is_some() || y.is_some() => (x, y, None),
+        FitPageHorizontallyToWindow(Some(y)) | FitBoundsHorizontallyToWindow(Some(y)) => {
+            (None, Some(y), None)
+        }
+        FitPageVerticallyToWindow(Some(x)) | FitBoundsVerticallyToWindow(Some(x)) => {
+            (Some(x), None, None)
+        }
+        FitPageToRectangle(rect) => (
+            Some(rect.left()),
+            Some(rect.top()),
+            Some((rect.right(), rect.bottom())),
+        ),
+        _ => return None,
+    };
+    // Match the page raster's coordinate system, including CropBox and rotation.
+    let page = document.pages().get(index).ok()?;
+    let width_points = page.width().value;
+    let height_points = page.height().value;
+    let scale = 2048.0 / width_points.max(height_points);
+    let width = (width_points * scale).round().max(1.0) as i32;
+    let height = (height_points * scale).round().max(1.0) as i32;
+    let config = PdfRenderConfig::new().set_fixed_size(width, height);
+    let (left, top) = page.pixels_to_points(0, 0, &config).ok()?;
+    let pixel_y = |x: PdfPoints, y: PdfPoints| {
+        if !x.value.is_finite() || !y.value.is_finite() {
+            return None;
+        }
+        page.points_to_pixels(x, y, &config).ok().map(|(_, y)| y)
+    };
+    let y = pixel_y(x.unwrap_or(left), y.unwrap_or(top))?;
+    let y = other_corner
+        .and_then(|(x, y)| pixel_y(x, y))
+        .map_or(y, |other| y.min(other));
+    Some((y as f32 / height as f32).clamp(0.0, 1.0))
+}
+
 pub(super) fn execute(
     document: &PdfDocument<'_>,
-    request: EngineRequest,
+    request: PageRequest,
     sha256: &str,
     file_size: usize,
-) -> Result<EngineResult, String> {
+) -> Result<PdfPage, String> {
     if request.page == 0
         || !(256..=2048).contains(&request.dimension)
         || request.edit.is_some() != request.modified.is_some()
@@ -212,7 +339,7 @@ pub(super) fn execute(
             let (file_size, sha256) = output.finish()?;
             let pdfium = Pdfium::default();
             let edited = pdfium.load_pdf_from_file(path, None).map_err(pdf_error)?;
-            let request = EngineRequest {
+            let request = PageRequest {
                 edit: None,
                 modified: None,
                 ..request
@@ -324,7 +451,7 @@ pub(super) fn execute(
         image_sha256,
         file_size,
     };
-    Ok(EngineResult { page: result })
+    Ok(result)
 }
 
 /// Writes worker artifacts within their disk budget and hashes them as they are written.

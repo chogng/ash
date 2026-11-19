@@ -4649,6 +4649,9 @@ impl AppServer {
             Some(ClientMethod::PdfRenderPage) => {
                 self.pdf_render_page(connection, &request.params, cancellation)
             }
+            Some(ClientMethod::PdfOutline) => {
+                self.pdf_outline(connection, &request.params, cancellation)
+            }
             Some(ClientMethod::PdfCancelRender) => {
                 self.pdf_cancel_render(connection, &request.params)
             }

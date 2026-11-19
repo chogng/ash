@@ -8,6 +8,7 @@ mod worker;
 pub use ash_pdf_contract::PdfAnnotation;
 pub use ash_pdf_contract::PdfAnnotationEdit;
 pub use ash_pdf_contract::PdfCharacter;
+pub use ash_pdf_contract::PdfOutlineEntry;
 pub use ash_pdf_contract::PdfPage;
 pub use ash_pdf_contract::PdfPoint;
 pub use ash_pdf_contract::PdfRect;
@@ -52,6 +53,23 @@ pub enum PdfOutput {
 struct EngineRequest {
     source: std::path::PathBuf,
     source_sha256: Option<String>,
+    operation: EngineOperation,
+}
+
+#[derive(Deserialize, Serialize)]
+enum EngineOperation {
+    Page(PageRequest),
+    Outline,
+}
+
+impl EngineOperation {
+    fn modifies_document(&self) -> bool {
+        matches!(self, Self::Page(request) if request.modified.is_some())
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+struct PageRequest {
     image: std::path::PathBuf,
     modified: Option<std::path::PathBuf>,
     page: u32,
@@ -61,8 +79,9 @@ struct EngineRequest {
 }
 
 #[derive(Deserialize, Serialize)]
-struct EngineResult {
-    page: PdfPage,
+enum EngineResult {
+    Page(PdfPage),
+    Outline(Vec<PdfOutlineEntry>),
 }
 
 /// Keeps one PDFium document in an expendable helper. The parent owns timeouts,

@@ -249,6 +249,10 @@ impl AppServer {
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
             );
             capabilities.contracts.insert(
+                "pdfOutline".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+            capabilities.contracts.insert(
                 "pdfRender".into(),
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
             );

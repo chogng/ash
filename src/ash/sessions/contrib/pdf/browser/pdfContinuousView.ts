@@ -46,6 +46,7 @@ export class PdfContinuousView extends Disposable {
 	private notifiedPage = 0;
 	private notifiedTop = -1;
 	private revealing: number | undefined;
+	private revealedPage: { readonly number: number; readonly top: number; } | undefined;
 	private readonly inset: number;
 	public get viewport(): HTMLElement { return this.list.scrollElement; }
 
@@ -100,9 +101,14 @@ export class PdfContinuousView extends Disposable {
 
 	/** Schedule from the current viewport after each load. Fast scrolling can skip intermediate pages. */
 	private updateViewport(): void {
-		const first = this.list.indexAt(this.list.scrollTop) + 1;
-		const last = this.list.indexAt(this.list.scrollTop + this.list.renderHeight) + 1;
-		const current = this.list.indexAt(this.list.scrollTop + this.list.renderHeight * 0.35) + 1;
+		const top = this.list.scrollTop;
+		const bottom = top + this.list.renderHeight;
+		const first = this.list.indexAt(top) + 1;
+		const last = this.list.indexAt(bottom) + 1;
+		if (this.revealedPage?.top !== top) { this.revealedPage = undefined; }
+		const atEnd = top > 0 && bottom >= this.list.getElementTop(this.numbers.length) - 1;
+		const current = this.revealing ?? this.revealedPage?.number ??
+			(atEnd ? last : this.list.indexAt(top + this.list.renderHeight * 0.35) + 1);
 		this.notifyCurrentPage(current);
 		let next: PageEntry | undefined;
 		let bestDistance = Infinity;
@@ -222,14 +228,22 @@ export class PdfContinuousView extends Disposable {
 		});
 	}
 
-	public async reveal(number: number): Promise<PdfPageView> {
+	public async reveal(number: number, top?: number): Promise<PdfPageView> {
 		this.revealing = number;
 		try {
 			this.list.reveal(number - 1, 0);
 			const entry = this.entries.get(number);
 			if (!entry) { throw new Error('PDF page is outside the reading viewport'); }
 			const view = await this.load(entry);
-			if (this.revealing === number) { this.list.reveal(number - 1, 0); }
+			if (this.revealing === number) {
+				if (top === undefined) {
+					this.list.reveal(number - 1, 0);
+				} else {
+					this.list.scrollTop = this.list.getElementTop(number - 1) + this.inset + top * this.size(number).height;
+				}
+				// Short pages near the end cannot reach the viewport's usual current-page reference point.
+				this.revealedPage = { number, top: this.list.scrollTop };
+			}
 			return view;
 		} finally {
 			if (this.revealing === number) { this.revealing = undefined; }

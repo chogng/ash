@@ -9,11 +9,28 @@ let worker: ChildProcessWithoutNullStreams;
 let sequence = 0;
 const pending = new Map<number, (reply: unknown) => void>();
 
-function pdf(pageCount = 2, mixedSizes = false, stream = 'BT /F1 18 Tf 30 220 Td (aspdf native review) Tj ET'): Buffer {
+function pdf(pageCount = 2, mixedSizes = false, stream = 'BT /F1 18 Tf 30 220 Td (aspdf native review) Tj ET', firstPageAnnotations: readonly string[] = [], withOutline = false): Buffer {
 	const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>'];
 	for (let number = 3; number <= pageCount; number++) { objects.push(objects[2]); }
 	if (mixedSizes) { objects[5] = objects[5].replace('300 400', '600 300'); }
 	objects[1] = `<< /Type /Pages /Kids [3 0 R ${Array.from({ length: pageCount - 1 }, (_, index) => `${index + 6} 0 R`).join(' ')}] /Count ${pageCount} >>`;
+	if (firstPageAnnotations.length) {
+		const refs = firstPageAnnotations.map((_, index) => `${objects.length + index + 1} 0 R`).join(' ');
+		objects[2] = objects[2].replace(/>>$/, `/Annots [${refs}] >>`);
+		objects.push(...firstPageAnnotations);
+	}
+	if (withOutline) {
+		const root = objects.length + 1;
+		objects[0] = objects[0].replace(/>>$/, `/Outlines ${root} 0 R >>`);
+		objects.push(
+			`<< /Type /Outlines /First ${root + 1} 0 R /Last ${root + 5} 0 R /Count 5 >>`,
+			`<< /Title (Introduction) /Parent ${root} 0 R /Next ${root + 2} 0 R /Dest [3 0 R /Fit] >>`,
+			`<< /Title (Results) /Parent ${root} 0 R /Prev ${root + 1} 0 R /Next ${root + 5} 0 R /First ${root + 3} 0 R /Last ${root + 4} 0 R /Count 2 >>`,
+			`<< /Title (Section start) /Parent ${root + 2} 0 R /Next ${root + 4} 0 R /Dest [6 0 R /Fit] >>`,
+			`<< /Title (Lower section) /Parent ${root + 2} 0 R /Prev ${root + 3} 0 R /A << /S /GoTo /D [6 0 R /XYZ 0 220 null] >> >>`,
+			`<< /Title (External reference) /Parent ${root} 0 R /Prev ${root + 2} 0 R /A << /S /URI /URI (https://example.com) >> >>`,
+		);
+	}
 	let text = '%PDF-1.4\n'; const offsets: number[] = [];
 	for (const [index, object] of objects.entries()) { offsets.push(text.length); text += `${index + 1} 0 obj\n${object}\nendobj\n`; }
 	const start = text.length;
@@ -48,6 +65,215 @@ test.afterEach(async ({ page }) => {
 	worker.stdin.end();
 	await new Promise<void>(resolve => { if (worker.exitCode !== null) { resolve(); } else { worker.once('exit', () => resolve()); } });
 	pending.clear();
+});
+
+test('PDF thumbnails open beside the document and follow page navigation', async ({ page }) => {
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(24), contentType: 'application/pdf' }));
+	const thumbnailRequests: number[] = [];
+	await page.route('**/__aspdf_rpc', route => {
+		const request = route.request().postDataJSON();
+		if (['pdf/page', 'pdf/renderPage'].includes(request.method) && request.params.dimension === 256) {
+			thumbnailRequests.push(request.params.page);
+		}
+		return route.fallback();
+	});
+	await page.goto('/pdfPreview.html?locale=zh-CN');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open(true));
+	const viewer = page.locator('.ash-sessions-pdf-preview');
+	const toolbar = viewer.locator('.ash-sessions-pdf-controls');
+	const toggle = toolbar.getByRole('button', { name: '页面缩略图', exact: true });
+	const rail = viewer.locator('.ash-sessions-pdf-navigation-pane');
+	const list = rail.getByRole('listbox', { name: '页面缩略图', exact: true });
+	const option = (number: number) => list.getByRole('option', { name: `第 ${number} 页`, exact: true });
+	const input = viewer.locator('.ash-sessions-pdf-page-number');
+	const reader = viewer.locator('.ash-sessions-pdf-continuous');
+	await expect(reader).toBeVisible();
+	await expect(toolbar.getByRole('button').first()).toHaveAccessibleName('页面缩略图');
+	await expect(toggle.locator('.ash-icon-list-unordered')).toBeVisible();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(rail).toBeHidden();
+	expect(thumbnailRequests).toEqual([]);
+
+	await toggle.click();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	await expect(list).toBeVisible();
+	await expect(option(1)).toHaveAttribute('aria-selected', 'true');
+	await expect(option(1).locator('img')).toHaveJSProperty('naturalWidth', 192);
+	await expect(rail.getByRole('tablist')).toHaveCount(0);
+	await expect(option(3).locator('.ash-sessions-pdf-thumbnail-number')).toHaveText('3');
+	expect(await list.getByRole('option').count()).toBeLessThan(24);
+	expect(thumbnailRequests.length).toBeLessThan(24);
+	const railBounds = (await rail.boundingBox())!;
+	const readerBounds = (await reader.boundingBox())!;
+	expect(railBounds.x + railBounds.width).toBeCloseTo(readerBounds.x, 0);
+
+	await option(3).click();
+	await expect(input).toHaveValue('3');
+	await expect(viewer.getByRole('status')).toHaveText('第 3 页，共 24 页');
+	await expect(option(3)).toHaveAttribute('aria-selected', 'true');
+	await reader.locator('> .ash-scrollbar-viewport').evaluate(element => { element.scrollTop = 0; });
+	await expect(input).toHaveValue('1');
+	await expect(option(1)).toHaveAttribute('aria-selected', 'true');
+	await expect(option(3)).toHaveAttribute('aria-selected', 'false');
+
+	await list.press('End');
+	await expect(viewer.getByRole('status')).toHaveText('第 24 页，共 24 页');
+	await expect(option(24)).toHaveAttribute('aria-selected', 'true');
+	await list.press('Escape');
+	await expect(rail).toBeHidden();
+	await expect(rail.locator('img')).toHaveCount(0);
+	await expect(toggle).toBeFocused();
+
+	await page.evaluate(() => window.aspdfTest.setScrollMode('paged'));
+	await expect(reader).toHaveCount(0);
+	await expect(viewer).toHaveAttribute('aria-busy', 'false');
+	await toggle.click();
+	await expect(option(24)).toHaveAttribute('aria-selected', 'true');
+	await list.press('Home');
+	await expect(viewer.getByRole('status')).toHaveText('第 1 页，共 24 页');
+	await expect(option(1)).toHaveAttribute('aria-selected', 'true');
+});
+
+test('PDF thumbnail navigation retains the selected page when the view reaches the scroll limit', async ({ page }) => {
+	await page.goto('/pdfPreview.html');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(async () => {
+		window.aspdfTest.resize(440, 800);
+		await window.aspdfTest.open(true);
+	});
+	const viewer = page.locator('.ash-sessions-pdf-preview');
+	const reader = viewer.locator('.ash-sessions-pdf-continuous');
+	const viewport = reader.locator('> .ash-scrollbar-viewport');
+	await expect(reader).toBeVisible();
+	await viewer.getByRole('button', { name: 'Page thumbnails', exact: true }).click();
+	const secondPage = viewer.getByRole('option', { name: 'Page 2', exact: true });
+	await secondPage.click();
+	await expect(viewer.getByRole('status')).toHaveText('Page 2 of 2');
+	await expect.poll(() => viewport.evaluate(element => {
+		const row = element.querySelector('.ash-sessions-pdf-stage[data-page-number="2"]')!;
+		return element.scrollTop > 0 &&
+			element.scrollHeight - element.scrollTop - element.clientHeight < 2 &&
+			row.getBoundingClientRect().top - element.getBoundingClientRect().top > element.clientHeight * 0.35;
+	})).toBe(true);
+	await expect(secondPage).toHaveAttribute('aria-selected', 'true');
+	await viewport.evaluate(element => { element.scrollTop = 0; });
+	await expect(viewer.getByRole('option', { name: 'Page 1', exact: true })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('PDF outline switches with thumbnails and opens nested chapter destinations', async ({ page }) => {
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(3, false, undefined, [], true), contentType: 'application/pdf' }));
+	await page.goto('/pdfPreview.html?locale=zh-CN');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open(true));
+	const viewer = page.locator('.ash-sessions-pdf-preview');
+	const toggle = viewer.getByRole('button', { name: '页面缩略图', exact: true });
+	const tabs = viewer.getByRole('tablist', { name: 'PDF 页面导航' });
+	const thumbnails = tabs.getByRole('tab', { name: '缩略图' });
+	const outline = tabs.getByRole('tab', { name: '目录' });
+	const tree = viewer.getByRole('tree', { name: '目录' });
+	const reader = viewer.locator('.ash-sessions-pdf-continuous');
+	const viewport = reader.locator('> .ash-scrollbar-viewport');
+	const input = viewer.locator('.ash-sessions-pdf-page-number');
+
+	await expect(tabs).toBeHidden();
+	await toggle.click();
+	await expect(thumbnails).toHaveAttribute('aria-selected', 'true');
+	await thumbnails.press('ArrowRight');
+	await expect(outline).toBeFocused();
+	await outline.press('Enter');
+	await expect(outline).toHaveAttribute('aria-selected', 'true');
+	await expect(viewer.getByRole('tabpanel', { name: '目录' })).toBeVisible();
+	await expect(viewer.getByRole('listbox', { name: '页面缩略图' })).toBeHidden();
+
+	const results = tree.getByRole('treeitem', { name: 'Results', exact: true });
+	const lower = tree.getByRole('treeitem', { name: 'Lower section', exact: true });
+	await expect(results).toHaveAttribute('aria-expanded', 'true');
+	await expect(lower).toHaveAttribute('aria-level', '2');
+	await expect(tree.getByRole('treeitem', { name: 'External reference' })).toHaveCount(0);
+	await results.click();
+	await expect(results).toHaveAttribute('aria-expanded', 'false');
+	await expect(lower).toBeHidden();
+	await results.click();
+	await viewer.getByRole('button', { name: '适合宽度', exact: true }).click();
+	await tree.getByRole('treeitem', { name: 'Section start' }).click();
+	await expect(input).toHaveValue('2');
+
+	const pageOffset = (scrollport = viewport) => scrollport.evaluate(element => {
+		const stage = element.querySelector('.ash-sessions-pdf-stage[data-page-number="2"]')!;
+		const bounds = stage.getBoundingClientRect();
+		return (element.getBoundingClientRect().top - bounds.top) / bounds.height;
+	});
+	await expect.poll(() => pageOffset()).toBeLessThan(0.05);
+	await lower.click();
+	await expect.poll(() => pageOffset()).toBeCloseTo(0.45, 1);
+	await expect(input).toHaveValue('2');
+
+	await thumbnails.click();
+	await expect(tree).toBeHidden();
+	await expect(viewer.getByRole('option', { name: '第 2 页', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await outline.click();
+	await tree.getByRole('treeitem', { name: 'Section start' }).click();
+	await tree.press('Home');
+	await expect(input).toHaveValue('2');
+	await tree.press('Enter');
+	await expect(input).toHaveValue('1');
+	await tree.press('Escape');
+	await expect(tabs).toBeHidden();
+	await expect(toggle).toBeFocused();
+
+	await page.evaluate(() => window.aspdfTest.setScrollMode('paged'));
+	await expect(reader).toHaveCount(0);
+	await expect(viewer).toHaveAttribute('aria-busy', 'false');
+	await toggle.click();
+	await expect(outline).toHaveAttribute('aria-selected', 'true');
+	await tree.getByRole('treeitem', { name: 'Section start' }).click();
+	const pagedViewport = viewer.locator('.ash-sessions-pdf-reading-area > .ash-scrollable-element > .ash-scrollbar-viewport');
+	await expect(viewer.getByRole('status')).toHaveText('第 2 页，共 3 页');
+	await expect.poll(() => pageOffset(pagedViewport)).toBeLessThan(0.05);
+	await lower.click();
+	await expect.poll(() => pageOffset(pagedViewport)).toBeCloseTo(0.45, 1);
+});
+
+test('PDF links stay in the document without appearing in the annotation panel', async ({ page }) => {
+	const bytes = pdf(2, false, undefined, [
+		'<< /Type /Annot /Subtype /Link /Rect [30 220 123 240] /Dest [6 0 R /Fit] >>',
+		'<< /Type /Annot /Subtype /Link /Rect [125 220 190 240] /Contents (Citation link) /A << /S /URI /URI (https://example.com) >> >>',
+	]);
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: bytes, contentType: 'application/pdf' }));
+	await page.goto('/pdfPreview.html?scrollMode=paged');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open(true));
+	const viewer = page.locator('.ash-sessions-pdf-preview');
+	const panel = viewer.locator('.ash-sessions-pdf-annotation-panel');
+	const annotations = panel.locator('.ash-sessions-pdf-annotation');
+	await expect(viewer.getByRole('status')).toHaveText('Page 1 of 2');
+	await expect(panel).toBeHidden();
+	await expect(annotations).toHaveCount(0);
+
+	await page.evaluate(() => window.aspdfTest.open());
+	await panel.getByRole('textbox', { name: 'Annotation text' }).fill('Review note');
+	await viewer.getByRole('button', { name: 'Add note', exact: true }).click();
+	const note = annotations.getByRole('textbox');
+	await expect(note).toHaveValue('Review note');
+	await note.fill('Updated review note');
+	await annotations.getByRole('button', { name: 'Update', exact: true }).click();
+	await viewer.getByRole('button', { name: 'Save changes', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.aspdfTest.dirty())).toBe(false);
+
+	const rendered = page.waitForResponse(response => response.url().endsWith('/__aspdf_rpc') &&
+		['pdf/page', 'pdf/renderPage'].includes(response.request().postDataJSON().method));
+	await page.evaluate(() => window.aspdfTest.open(true));
+	const { result } = await (await rendered).json();
+	expect(result.annotations.map(({ kind, contents }: { kind: string; contents: string; }) => ({ kind, contents }))).toEqual([
+		{ kind: 'Link', contents: '' },
+		{ kind: 'Link', contents: 'Citation link' },
+		{ kind: 'Text', contents: 'Updated review note' },
+	]);
+	await expect(panel).toBeVisible();
+	await expect(annotations).toHaveCount(1);
+	await expect(note).toHaveValue('Updated review note');
+	await expect(note).toHaveAttribute('readonly', '');
 });
 
 for (const locale of ['en', 'zh-CN']) {
@@ -509,6 +735,75 @@ test('PDF selection centers on visible ink when the hidden text layer is offset'
 	});
 	await expect.poll(async () => (await geometry()).width).toBeLessThan(full.width);
 	expect((await geometry()).center).toBe(full.center);
+});
+
+test('PDF selection toolbar opens on release and routes localized selection actions', async ({ page, context }) => {
+	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+	await page.goto('/pdfPreview.html?scrollMode=paged&locale=zh-CN');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open());
+	const surface = page.locator('.ash-sessions-pdf-page');
+	const glyphs = surface.locator('.ash-sessions-pdf-text-content > span');
+	await expect(glyphs.first()).toBeVisible();
+	const first = (await glyphs.first().boundingBox())!;
+	const last = (await glyphs.last().boundingBox())!;
+	const toolbar = page.getByRole('toolbar', { name: 'PDF 选区操作' });
+	await page.mouse.move(first.x + 1, first.y + first.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(last.x + last.width - 1, last.y + last.height / 2, { steps: 8 });
+	await expect(toolbar).toBeHidden();
+	await page.mouse.up();
+	await expect(toolbar).toBeVisible();
+	const selected = await page.evaluate(() => {
+		const selection = window.getSelection()!;
+		return { text: selection.toString(), top: selection.getRangeAt(0).getBoundingClientRect().top };
+	});
+	expect(selected.text).toContain('native review');
+	const popup = (await toolbar.boundingBox())!;
+	expect(popup.y + popup.height).toBeLessThan(selected.top);
+	const copy = toolbar.getByRole('button', { name: '复制', exact: true });
+	await surface.press('Shift+F10');
+	await expect(copy).toBeFocused();
+	await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(selected.text);
+	await page.keyboard.press('Escape');
+	await expect(toolbar).toBeHidden();
+	await expect(surface).toBeFocused();
+	expect(await page.evaluate(() => window.getSelection()!.toString())).toBe(selected.text);
+
+	await surface.press('Shift+F10');
+	await toolbar.getByRole('button', { name: '用 Ash 翻译', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.aspdfTest.chatDraft()))
+		.toContain(`zh-CN。请将选段作为待翻译的原文，只返回译文。\n\n${selected.text}`);
+
+	await surface.press('Shift+F10');
+	await toolbar.getByRole('button', { name: '添加评论', exact: true }).click();
+	const dialog = page.getByRole('dialog');
+	await dialog.getByRole('textbox').fill('复核选段');
+	await dialog.getByRole('button', { name: '添加评论', exact: true }).click();
+	const annotations = page.locator('.ash-sessions-pdf-annotation textarea');
+	await expect(annotations).toHaveCount(1);
+	await expect(annotations.first()).toHaveValue('复核选段');
+
+	const selectPageText = () => surface.locator('.ash-sessions-pdf-text-content').evaluate(element => {
+		element.ownerDocument.getSelection()!.selectAllChildren(element);
+	});
+	await selectPageText();
+	await toolbar.getByRole('button', { name: '高亮', exact: true }).click();
+	await expect(annotations).toHaveCount(2);
+	await expect(annotations.last()).toHaveValue('aspdf native review');
+	await page.getByRole('button', { name: '保存修改', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.aspdfTest.dirty())).toBe(false);
+
+	await page.evaluate(() => window.aspdfTest.open(true));
+	await selectPageText();
+	await expect(toolbar).toBeVisible();
+	await expect(copy).toBeEnabled();
+	await expect(toolbar.getByRole('button', { name: '用 Ash 翻译', exact: true })).toBeEnabled();
+	await expect(toolbar.getByRole('button', { name: '添加评论', exact: true })).toBeDisabled();
+	await expect(toolbar.getByRole('button', { name: '高亮', exact: true })).toBeDisabled();
+	await page.getByRole('button', { name: '下一页', exact: true }).click();
+	await expect(toolbar).toBeHidden();
 });
 
 test('PDF wheel zoom preserves neighboring rasters and text selection, including on a short return scroll', async ({ page }) => {

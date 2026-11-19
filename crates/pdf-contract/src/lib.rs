@@ -41,6 +41,24 @@ pub struct PdfAnnotation {
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PdfOutlineEntry {
+    pub title: String,
+    pub target: Option<PdfOutlineTarget>,
+    pub children: Vec<PdfOutlineEntry>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PdfOutlineTarget {
+    #[schemars(range(min = 1))]
+    pub page: u32,
+    /// Vertical position in the displayed page, from its top to its bottom.
+    #[schemars(range(min = 0, max = 1))]
+    pub top: Option<f32>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum PdfAnnotationEdit {
     Highlight { bounds: PdfRect, contents: String },

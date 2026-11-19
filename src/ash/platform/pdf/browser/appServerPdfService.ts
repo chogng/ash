@@ -5,7 +5,7 @@ import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import type { IResourceApi } from '../../agentHost/common/appServerApi.js';
 import type { IFileReadSnapshot } from '../../files/common/files.js';
-import type { IPdfDocument, IPdfService, PdfAnnotationEdit, PdfPage } from '../common/pdfService.js';
+import type { IPdfDocument, IPdfService, PdfAnnotationEdit, PdfOutlineEntry, PdfPage } from '../common/pdfService.js';
 
 /** Generated transport values stay at this adapter; viewers consume only PDF domain values. */
 export class AppServerPdfService implements IPdfService {
@@ -65,6 +65,27 @@ class AppServerPdfDocument implements IPdfDocument {
 	private disposed = false;
 
 	constructor(private readonly connection: AppServerProtocolClient, private readonly id: string) { }
+
+	public async outline(signal: AbortSignal): Promise<readonly PdfOutlineEntry[]> {
+		this.check(signal);
+		if (this.connection.capabilities?.contracts.pdfOutline?.version !== 1) { return []; }
+		const generation = this.connection.generation;
+		const operationId = createUuid();
+		const abort = () => {
+			if (this.connection.generation === generation && !this.disposed) {
+				void appServerRequest(this.connection, 'pdf/cancelRender', { operationId }).catch(() => undefined);
+			}
+		};
+		signal.addEventListener('abort', abort, { once: true });
+		try {
+			const { entries } = await appServerRequest(this.connection, 'pdf/outline', { documentId: this.id, operationId });
+			this.check(signal);
+			return entries;
+		} catch (error) {
+			signal.throwIfAborted();
+			throw error;
+		} finally { signal.removeEventListener('abort', abort); }
+	}
 
 	public async page(page: number, dimension: number, signal: AbortSignal, edit?: PdfAnnotationEdit): Promise<PdfPage> {
 		this.check(signal);

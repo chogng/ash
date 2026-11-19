@@ -1,0 +1,55 @@
+.ash-sessions-pdf-thumbnails > .ash-scrollable-element {
+	block-size: 100%;
+}
+
+.ash-sessions-pdf-thumbnails .ash-list {
+	--ash-list-row-inset-start: var(--ash-spacing-size40);
+	--ash-list-row-inset-end: var(--ash-spacing-size40);
+	--ash-list-row-radius: var(--ash-cornerRadius-small);
+}
+
+.ash-sessions-pdf-thumbnails .ash-list-row {
+	cursor: pointer;
+}
+
+.ash-sessions-pdf-thumbnail {
+	box-sizing: border-box;
+	display: grid;
+	grid-template-rows: minmax(0, 1fr) auto;
+	gap: var(--ash-spacing-size40);
+	block-size: 100%;
+	padding: var(--ash-spacing-size80);
+	text-align: center;
+}
+
+.ash-sessions-pdf-thumbnail-image {
+	display: grid;
+	place-items: center;
+	min-inline-size: 0;
+	min-block-size: 0;
+}
+
+.ash-sessions-pdf-thumbnail-image > img {
+	display: block;
+	max-inline-size: 100%;
+	max-block-size: 100%;
+	outline: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-sessions-pdf-thumbnail-image > img:not([src]) {
+	display: none;
+}
+
+.ash-sessions-pdf-thumbnail-number {
+	font-size: var(--ash-fontSize-label1);
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-sessions-pdf-thumbnails .ash-list:focus-visible > .ash-list-row.focused {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+:is(.hc-black, .hc-light) .ash-sessions-pdf-thumbnails .ash-list-row.selected {
+	box-shadow: inset 0 0 0 var(--ash-strokeThickness) var(--ash-contrastBorder);
+}

@@ -14,17 +14,13 @@ fn execute(bytes: &[u8], edit: Option<PdfAnnotationEdit>) -> TestResult {
     static NATIVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _guard = NATIVE.lock().unwrap();
     let directory = tempfile::tempdir().unwrap();
-    let source = directory.path().join("source.pdf");
     let image = directory.path().join("page.png");
     let modified = edit.as_ref().map(|_| directory.path().join("modified.pdf"));
-    std::fs::write(&source, bytes).unwrap();
     let pdfium = engine::bind().unwrap();
     let document = pdfium.load_pdf_from_byte_slice(bytes, None).unwrap();
     let result = engine::execute(
         &document,
-        EngineRequest {
-            source,
-            source_sha256: None,
+        PageRequest {
             image: image.clone(),
             modified: modified.clone(),
             page: 1,
@@ -37,7 +33,7 @@ fn execute(bytes: &[u8], edit: Option<PdfAnnotationEdit>) -> TestResult {
     )
     .unwrap();
     TestResult {
-        page: result.page,
+        page: result,
         image: std::fs::read(image).unwrap(),
         modified: modified.map(|path| std::fs::read(path).unwrap()),
     }

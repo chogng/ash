@@ -13,6 +13,18 @@ export type PdfAnnotationEdit =
 	| { readonly kind: 'update'; readonly index: number; readonly contents: string; }
 	| { readonly kind: 'delete'; readonly index: number; };
 
+export interface PdfOutlineTarget {
+	readonly page: number;
+	/** Vertical position from the top of the displayed page, if specified by the PDF. */
+	readonly top: number | null;
+}
+
+export interface PdfOutlineEntry {
+	readonly title: string;
+	readonly target: PdfOutlineTarget | null;
+	readonly children: readonly PdfOutlineEntry[];
+}
+
 export interface PdfPage {
 	readonly revision: number;
 	readonly sha256: string;
@@ -34,6 +46,7 @@ export interface PdfPage {
 
 /** One editor owns the working PDF snapshot; saving still belongs to the file/working-copy owner. */
 export interface IPdfDocument extends IDisposable {
+	outline?(signal: AbortSignal): Promise<readonly PdfOutlineEntry[]>;
 	page(page: number, dimension: number, signal: AbortSignal, edit?: PdfAnnotationEdit): Promise<PdfPage>;
 	image(page: PdfPage, signal: AbortSignal): Promise<Uint8Array>;
 	export(page: PdfPage, signal: AbortSignal): Promise<Uint8Array>;

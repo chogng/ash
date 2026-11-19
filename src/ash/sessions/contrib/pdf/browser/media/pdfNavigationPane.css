@@ -1,0 +1,47 @@
+.ash-sessions-pdf-navigation-pane {
+	box-sizing: border-box;
+	display: flex;
+	flex: 0 0 min(152px, 25%);
+	flex-direction: column;
+	min-inline-size: 0;
+	min-block-size: 0;
+	overflow: hidden;
+	background: var(--ash-editor-widgetBackground);
+	border-inline-end: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-sessions-pdf-navigation-pane.has-outline {
+	flex-basis: min(176px, 40%);
+}
+
+.ash-sessions-pdf-navigation-pane[hidden],
+.ash-sessions-pdf-navigation-pane > [hidden] {
+	display: none;
+}
+
+.ash-sessions-pdf-navigation-pane > .ash-tab-list {
+	flex: none;
+	inline-size: 100%;
+	box-shadow: inset 0 calc(-1 * var(--ash-strokeThickness)) var(--ash-border);
+}
+
+.ash-sessions-pdf-thumbnails,
+.ash-sessions-pdf-outline {
+	flex: 1;
+	min-inline-size: 0;
+	min-block-size: 0;
+	overflow: hidden;
+}
+
+.ash-sessions-pdf-outline > .ash-scrollable-element {
+	block-size: 100%;
+}
+
+.ash-sessions-pdf-outline-title {
+	display: block;
+	padding-inline-end: var(--ash-spacing-size60);
+	overflow: hidden;
+	cursor: pointer;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

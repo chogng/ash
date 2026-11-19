@@ -1,8 +1,12 @@
+use crate::EngineOperation;
 use crate::EngineRequest;
+use crate::EngineResult;
 use crate::MAX_CHUNK_BYTES;
 use crate::MAX_FILE_BYTES;
+use crate::PageRequest;
 use crate::PdfAnnotationEdit;
 use crate::PdfError;
+use crate::PdfOutlineEntry;
 use crate::PdfOutput;
 use crate::PdfPage;
 use crate::worker;
@@ -232,6 +236,33 @@ impl PdfService {
         self.page_with_cancellation(owner, id, revision, (page, dimension), None, cancelled)
     }
 
+    pub fn outline(
+        &self,
+        owner: u64,
+        id: &str,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Result<Vec<PdfOutlineEntry>, PdfError> {
+        let document = self.document(owner, id)?;
+        let state = document.state.lock().map_err(failed)?;
+        let cancelled = || cancelled() || document.cancelled.load(Ordering::Acquire);
+        if state.uploaded != document.expected {
+            return Err(PdfError::Invalid);
+        }
+        let request = EngineRequest {
+            source: state.source.clone(),
+            source_sha256: state.source_sha256.clone(),
+            operation: EngineOperation::Outline,
+        };
+        let result = worker::run(&state.worker, &self.executable, &request, &cancelled)?;
+        if cancelled() {
+            return Err(PdfError::Cancelled);
+        }
+        match result {
+            EngineResult::Outline(entries) => Ok(entries),
+            EngineResult::Page(_) => Err(PdfError::Failed("Invalid PDF worker outline".into())),
+        }
+    }
+
     fn page_with_cancellation(
         &self,
         owner: u64,
@@ -301,28 +332,33 @@ impl PdfService {
         let request = EngineRequest {
             source: state.source.clone(),
             source_sha256: state.source_sha256.clone(),
-            image: image.clone(),
-            modified: modified.clone(),
-            page,
-            dimension,
-            output,
-            edit,
+            operation: EngineOperation::Page(PageRequest {
+                image: image.clone(),
+                modified: modified.clone(),
+                page,
+                dimension,
+                output,
+                edit,
+            }),
         };
         let result = worker::run(&state.worker, &self.executable, &request, cancelled);
         // Failed edits may have changed native memory. Discard that helper and all
         // uncommitted artifacts; reopening always uses the last committed snapshot.
-        let result = match result {
-            Ok(result) if !cancelled() => result,
+        let mut metadata = match result {
+            Ok(EngineResult::Page(page)) if !cancelled() => page,
             other => {
                 worker::release(&state.worker);
                 let _ = std::fs::remove_file(&image);
                 if let Some(path) = modified {
                     let _ = std::fs::remove_file(path);
                 }
-                return Err(other.err().unwrap_or(PdfError::Cancelled));
+                return Err(match other {
+                    Err(error) => error,
+                    Ok(_) if cancelled() => PdfError::Cancelled,
+                    Ok(_) => PdfError::Failed("Invalid PDF worker page".into()),
+                });
             }
         };
-        let mut metadata = result.page;
         let image_size = if matches!(output, PdfOutput::Image) {
             std::fs::metadata(&image).map_err(failed)?.len() as usize
         } else {

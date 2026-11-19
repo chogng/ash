@@ -1,5 +1,12 @@
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
+import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialogHandler.js';
+import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
+import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
+import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
@@ -47,7 +54,9 @@ class Transport implements AppServerTransport {
 		const request = JSON.parse((payload as { frame: string; }).frame) as { id?: number; method: string; params: unknown; };
 		if (request.id === undefined) { return; }
 		if (request.method === 'initialize') {
-			const result = createTestInitializeResult(); result.capabilities.contracts.pdf = { version: 1 };
+			const result = createTestInitializeResult();
+			result.capabilities.contracts.pdf = { version: 1 };
+			result.capabilities.contracts.pdfOutline = { version: 1 };
 			this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) });
 			return;
 		}
@@ -60,6 +69,15 @@ class Transport implements AppServerTransport {
 const locale = new URL(location.href).searchParams.get('locale') ?? 'en';
 setNlsMessages(locale, locale === 'zh-CN' ? chineseCatalog.bundles : {});
 const services = new InstantiationService();
+const clipboard = new BrowserClipboardService(navigator.clipboard);
+services.registerInstance(IClipboardService, clipboard);
+const dialogs = new DialogService();
+services.registerInstance(IDialogService, dialogs);
+const dialogHandler = new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body));
+let chatDraft = '';
+services.registerInstance(IChatSessionNavigationService, {
+	appendToActiveDraft(text) { chatDraft += text; },
+} satisfies Pick<IChatSessionNavigationService, 'appendToActiveDraft'> as IChatSessionNavigationService);
 const memory = new InMemoryFileSystemProvider();
 const files = createTestFileService(memory);
 services.registerInstance(IFileService, files); registerTestComponentServices(services);
@@ -105,6 +123,7 @@ window.aspdfTest = {
 		pane?.layout({ width, height });
 	},
 	dirty() { return pane?.workingCopy?.isDirty ?? false; },
+	chatDraft() { return chatDraft; },
 	setScrollMode(value: unknown) { return configuration.updateValue(pdfScrollModeSetting, value, ConfigurationTarget.USER_LOCAL); },
 	async scrollPreference() { return { value: configuration.getValue(pdfScrollModeSetting), source: (await configuration.read()).source }; },
 	viewState() { return (pane as EditorPane & IEditorPaneWithViewState).saveViewState(); },
@@ -124,8 +143,8 @@ window.aspdfTest = {
 		(services.get(IThemeService) as TestThemeService).setColorTheme({ light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[scheme]);
 	},
 	highContrast() { (services.get(IThemeService) as TestThemeService).setColorTheme(highContrastDarkColorTheme); },
-	dispose() { pane?.dispose(); split?.dispose(); client.dispose(); menus.dispose(); contextViews.dispose(); commands.dispose(); configuration.dispose(); theme.dispose(); services.dispose(); files.dispose(); memory.dispose(); },
+	dispose() { pane?.dispose(); split?.dispose(); client.dispose(); menus.dispose(); contextViews.dispose(); commands.dispose(); configuration.dispose(); theme.dispose(); services.dispose(); files.dispose(); memory.dispose(); dialogHandler.dispose(); dialogs.dispose(); clipboard.dispose(); },
 };
 declare global {
-	interface Window { aspdfTest: { open(readOnly?: boolean, name?: string): Promise<void>; setScrollMode(value: unknown): Promise<void>; scrollPreference(): Promise<{ value: unknown; source: string; }>; resize(width: number, height: number): void; dirty(): boolean; viewState(): unknown; restoreViewState(state: unknown): void; saved(): Promise<{ changed: boolean; pdf: boolean; }>; externalWrite(): Promise<void>; hasExternalBytes(): Promise<boolean>; revert(): Promise<void>; split(): Promise<void>; closeFirst(): void; highContrast(): void; colorTheme(scheme: 'light' | 'dark' | 'hcDark' | 'hcLight'): void; dispose(): void; }; }
+	interface Window { aspdfTest: { open(readOnly?: boolean, name?: string): Promise<void>; setScrollMode(value: unknown): Promise<void>; scrollPreference(): Promise<{ value: unknown; source: string; }>; resize(width: number, height: number): void; dirty(): boolean; chatDraft(): string; viewState(): unknown; restoreViewState(state: unknown): void; saved(): Promise<{ changed: boolean; pdf: boolean; }>; externalWrite(): Promise<void>; hasExternalBytes(): Promise<boolean>; revert(): Promise<void>; split(): Promise<void>; closeFirst(): void; highContrast(): void; colorTheme(scheme: 'light' | 'dark' | 'hcDark' | 'hcLight'): void; dispose(): void; }; }
 }

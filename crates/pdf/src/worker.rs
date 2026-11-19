@@ -69,7 +69,8 @@ pub(super) fn run(
     let result = active.request(request, cancelled);
     // Decoding a scan can leave PDFium and its allocator holding a large arena.
     // Cached page artifacts and the private source outlive the native worker.
-    if result.is_err() || request.modified.is_some() || active.exceeds_retention_budget() {
+    if result.is_err() || request.operation.modifies_document() || active.exceeds_retention_budget()
+    {
         worker.take();
     }
     result

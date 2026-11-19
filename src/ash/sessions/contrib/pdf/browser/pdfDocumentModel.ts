@@ -5,7 +5,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { FileRevisionConflictError, IFileService } from '../../../../platform/files/common/files.js';
-import { IPdfService, type IPdfDocument, type PdfAnnotationEdit, type PdfPage } from '../../../../platform/pdf/common/pdfService.js';
+import { IPdfService, type IPdfDocument, type PdfAnnotationEdit, type PdfOutlineEntry, type PdfPage } from '../../../../platform/pdf/common/pdfService.js';
 import type { IResourceEditorInput, ISaveOptions } from '../../../../workbench/common/editor.js';
 import type { IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { localize } from '../../../../nls.js';
@@ -26,6 +26,8 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 	public readonly backupLabel = 'aspdf';
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeContent = this.changed.event;
+	private readonly reverted = this._register(new Emitter<void>());
+	public readonly onDidRevert = this.reverted.event;
 	public readonly onDidChangeDirty = this.changed.event;
 	public readonly onDidChangeExternalChange = this.changed.event;
 	private readonly lifetime = new AbortController();
@@ -116,6 +118,25 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 		});
 	}
 
+	public readOutline(signal: AbortSignal): Promise<readonly PdfOutlineEntry[]> {
+		return this.serialize(async () => {
+			const operation = AbortSignal.any([this.lifetime.signal, signal]);
+			operation.throwIfAborted();
+			return this.document?.outline?.(operation) ?? [];
+		});
+	}
+
+	/** Renders the working snapshot without changing the page used by editing and saving. */
+	public renderThumbnail(number: number, signal: AbortSignal): Promise<Uint8Array> {
+		return this.serialize(async () => {
+			const operation = AbortSignal.any([this.lifetime.signal, signal]);
+			operation.throwIfAborted();
+			const document = this.document!;
+			const page = await document.page(number, 256, operation);
+			return document.image(page, operation);
+		});
+	}
+
 	public undo(): Promise<void> {
 		return this.serialize(async () => {
 			const edit = this.edits.at(-1);
@@ -174,7 +195,9 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 				this.install({ document, page, checkpoint: undefined });
 				this.source = source; this.fileRevision = revision;
 				this.edits = []; this.undone = []; this.savedEdits = [];
-				this.hasExternalChange = false; this.changed.fire();
+				this.hasExternalChange = false;
+				this.reverted.fire();
+				this.changed.fire();
 			} catch (error) { document.dispose(); throw error; }
 		});
 	}

@@ -108,6 +108,22 @@ impl super::AppServer {
         result(&page)
     }
 
+    pub(super) fn pdf_outline(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        let params: PdfOutlineParams = decode(value)?;
+        let entries = self
+            .pdf
+            .outline(connection.connection_id, &params.document_id, &|| {
+                cancellation.is_cancelled()
+            })
+            .map_err(error)?;
+        result(&PdfOutlineResult { entries })
+    }
+
     pub(super) fn pdf_cancel_render(
         &self,
         connection: &ConnectionState,

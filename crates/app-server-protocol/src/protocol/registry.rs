@@ -256,6 +256,10 @@ use crate::protocol::pdf::PdfOpenResourceParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::pdf::PdfOpenResourceResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfOutlineParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::pdf::PdfOutlineResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::pdf::PdfPageParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::pdf::PdfReadParams;
@@ -316,6 +320,10 @@ use ash_pdf_contract::PdfAnnotation;
 use ash_pdf_contract::PdfAnnotationEdit;
 #[cfg(any(test, feature = "export"))]
 use ash_pdf_contract::PdfCharacter;
+#[cfg(any(test, feature = "export"))]
+use ash_pdf_contract::PdfOutlineEntry;
+#[cfg(any(test, feature = "export"))]
+use ash_pdf_contract::PdfOutlineTarget;
 #[cfg(any(test, feature = "export"))]
 use ash_pdf_contract::PdfPage;
 #[cfg(any(test, feature = "export"))]
@@ -5104,6 +5112,10 @@ client_methods! {
         params: PdfRenderPageParams, response: PdfPage, serialization: ResourceExclusive("documentId"),
         cancellation: "operationId",
     },
+    PdfOutline => "pdf/outline" {
+        params: PdfOutlineParams, response: PdfOutlineResult, serialization: ResourceExclusive("documentId"),
+        cancellation: "operationId",
+    },
     PdfCancelRender => "pdf/cancelRender" {
         params: PdfCancelRenderParams, response: (), serialization: None,
     },
@@ -7916,6 +7928,10 @@ typescript_bindings! {
     PdfAppendParams,
     PdfAppendResult,
     PdfCancelRenderParams,
+    PdfOutlineEntry,
+    PdfOutlineParams,
+    PdfOutlineResult,
+    PdfOutlineTarget,
     PdfPageParams,
     PdfReadParams,
     PdfReadResult,
