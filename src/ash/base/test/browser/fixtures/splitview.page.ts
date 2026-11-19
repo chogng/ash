@@ -19,6 +19,7 @@ for (let index = 0; index < 3; index++) {
 splitView.layout(horizontal ? 600 : 300, horizontal ? 300 : 600);
 window.ashSplitViewFixture = {
 	setVisible: (index, visible) => splitView.setViewVisible(index, visible),
+	resize: (index, size) => splitView.resizeView(index, size),
 	setFeedbackPresentation(enabled) {
 		presentation?.dispose();
 		presentation = enabled ? bindSashFeedbackPresentation(document.querySelector<HTMLElement>('#app')!, 'handle') : undefined;
@@ -27,6 +28,6 @@ window.ashSplitViewFixture = {
 
 declare global {
 	interface Window {
-		ashSplitViewFixture: { setVisible(index: number, visible: boolean): void; setFeedbackPresentation(enabled: boolean): void; };
+		ashSplitViewFixture: { setVisible(index: number, visible: boolean): void; resize(index: number, size: number): void; setFeedbackPresentation(enabled: boolean): void; };
 	}
 }

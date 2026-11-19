@@ -172,8 +172,31 @@
 }
 
 .ash-sessions-pdf-text-content > span::selection {
-	background: var(--ash-editor-selectionBackground);
+	background: transparent;
 	color: transparent;
+}
+
+.ash-sessions-pdf-selection {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	user-select: none;
+	opacity: 0.55;
+	mix-blend-mode: multiply;
+}
+
+.ash-sessions-pdf-selection:empty {
+	display: none;
+}
+
+.ash-sessions-pdf-selection > div {
+	position: absolute;
+	background: var(--ash-editor-selectionBackground, Highlight);
+}
+
+:is(.hc-black, .hc-light) .ash-sessions-pdf-selection {
+	opacity: 1;
+	mix-blend-mode: difference;
 }
 
 .ash-sessions-pdf-annotations {

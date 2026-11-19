@@ -3,6 +3,7 @@ import { raceCancellationError } from '../../../../base/common/async.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { PdfPage } from '../../../../platform/pdf/common/pdfService.js';
+import { PdfTextSelection } from './pdfTextSelection.js';
 
 /** Owns one page's raster and selectable text in both reading modes. */
 export class PdfPageView extends Disposable {
@@ -94,10 +95,11 @@ export class PdfPageView extends Disposable {
 		const document = this.domNode.ownerDocument;
 		const window = getWindow(this.domNode);
 		const text = h(document, 'div', { className: 'ash-sessions-pdf-text' });
-		const selection = h(document, 'div', { className: 'ash-sessions-pdf-text-content' });
-		selection.style.width = `${page.width}px`;
-		selection.style.height = `${page.height}px`;
-		text.append(selection);
+		const content = h(document, 'div', { className: 'ash-sessions-pdf-text-content' });
+		const highlight = h(document, 'div', { className: 'ash-sessions-pdf-selection', attributes: { 'aria-hidden': 'true' } });
+		content.style.width = `${page.width}px`;
+		content.style.height = `${page.height}px`;
+		text.append(highlight, content);
 		const pending = store.add(new MutableDisposable<IDisposable>());
 		let index = 0;
 		const build = (idle: IdleDeadline): void => {
@@ -111,13 +113,14 @@ export class PdfPageView extends Disposable {
 				span.style.width = `${character.bounds.width * 100}%`;
 				span.style.height = `${character.bounds.height * 100}%`;
 				span.style.fontSize = `${character.bounds.height * page.height}px`;
-				selection.append(span);
+				content.append(span);
 			} while (index < page.characters.length && window.performance.now() < stop);
 			if (index < page.characters.length) { pending.value = runWhenWindowIdle(window, build, 100); return; }
 			pending.clear();
-			selection.style.transform = `scale(${parseFloat(this.domNode.style.width) / page.width})`;
-			this.textLayer = selection;
+			content.style.transform = `scale(${parseFloat(this.domNode.style.width) / page.width})`;
+			this.textLayer = content;
 			this.domNode.querySelector(':scope > img')?.after(text);
+			store.add(new PdfTextSelection(page, this.domNode, content, highlight));
 			this.changed.fire();
 		};
 		pending.value = scheduleAtNextAnimationFrame(window, () => { pending.value = runWhenWindowIdle(window, build, 100); });

@@ -9,8 +9,7 @@ let worker: ChildProcessWithoutNullStreams;
 let sequence = 0;
 const pending = new Map<number, (reply: unknown) => void>();
 
-function pdf(pageCount = 2, mixedSizes = false): Buffer {
-	const stream = 'BT /F1 18 Tf 30 220 Td (aspdf native review) Tj ET';
+function pdf(pageCount = 2, mixedSizes = false, stream = 'BT /F1 18 Tf 30 220 Td (aspdf native review) Tj ET'): Buffer {
 	const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>'];
 	for (let number = 3; number <= pageCount; number++) { objects.push(objects[2]); }
 	if (mixedSizes) { objects[5] = objects[5].replace('300 400', '600 300'); }
@@ -439,6 +438,79 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
+test('PDF selection joins mixed-height glyphs and spaces while preserving lines, columns and native endpoints', async ({ page }) => {
+	const stream = 'BT /F1 18 Tf 30 310 Td (ABCidef) Tj -2 Ts (.) Tj 0 Ts [( ) -725 (9)] TJ 135 0 Td (WXYZ) Tj -135 -34 Td (Second lineQ) Tj ET';
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(2, false, stream), contentType: 'application/pdf' }));
+	await page.goto('/pdfPreview.html?scrollMode=paged');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open(true));
+	const content = page.locator('.ash-sessions-pdf-text-content');
+	await expect(content).toContainText('Second lineQ');
+	const expected = await content.evaluate(element => {
+		const glyph = (text: string) => Array.from(element.querySelectorAll('span')).find(span => span.textContent === text)!;
+		const selection = element.ownerDocument.getSelection()!;
+		selection.setBaseAndExtent(glyph('Q').firstChild!, 0, glyph('A').firstChild!, 1);
+		return {
+			start: parseFloat(glyph('B').style.left), column: parseFloat(glyph('W').style.left),
+			end: parseFloat(glyph('Q').style.left), text: selection.toString().replace(/\s/g, ''),
+		};
+	});
+	expect(expected.text).toBe('BCidef.9WXYZSecondline');
+	const overlay = page.locator('.ash-sessions-pdf-selection');
+	await expect(overlay).toHaveAttribute('aria-hidden', 'true');
+	await expect(overlay).toHaveCSS('pointer-events', 'none');
+	await expect(overlay).toHaveCSS('mix-blend-mode', 'multiply');
+	const bands = overlay.locator('> div');
+	await expect(bands).toHaveCount(3);
+	const [first, column, last] = await bands.evaluateAll(elements => elements.map(element => {
+		const { left, top, width } = (element as HTMLElement).style;
+		return { left: parseFloat(left), top: parseFloat(top), right: parseFloat(left) + parseFloat(width) };
+	}));
+	expect(first.left).toBeCloseTo(expected.start, 3);
+	expect(first.right).toBeLessThan(column.left);
+	expect(column.left).toBeCloseTo(expected.column, 3);
+	expect(last.top).toBeGreaterThan(first.top);
+	expect(last.right).toBeLessThan(expected.end);
+	await page.evaluate(() => window.aspdfTest.highContrast());
+	await expect(overlay).toHaveCSS('mix-blend-mode', 'difference');
+	await expect(bands).toHaveCount(3);
+	await page.evaluate(() => document.getSelection()?.removeAllRanges());
+	await expect(bands).toHaveCount(0);
+});
+
+test('PDF selection centers on visible ink when the hidden text layer is offset', async ({ page }) => {
+	// The visible ink is four points above the hidden text used for selection.
+	const ink = [31, 43, 55, 67, 79].map(x => `${x} 224 8 13 re`).join(' ');
+	const stream = `0 g ${ink} f BT /F1 18 Tf 3 Tr 30 220 Td (ABCDE) Tj ET`;
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(2, false, stream), contentType: 'application/pdf' }));
+	await page.goto('/pdfPreview.html?scrollMode=paged');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open(true));
+	const content = page.locator('.ash-sessions-pdf-text-content');
+	await expect(content).toHaveText('ABCDE');
+	const textCenter = await content.evaluate(element => {
+		const glyph = element.querySelector('span')!;
+		const selection = element.ownerDocument.getSelection()!;
+		selection.selectAllChildren(element);
+		return (parseFloat(glyph.style.top) + parseFloat(glyph.style.height) / 2) / 100;
+	});
+	const band = page.locator('.ash-sessions-pdf-selection > div');
+	await expect(band).toHaveCount(1);
+	const geometry = () => band.evaluate(element => {
+		const { top, height, width } = (element as HTMLElement).style;
+		return { center: (parseFloat(top) + parseFloat(height) / 2) / 100, width: parseFloat(width) };
+	});
+	const full = await geometry();
+	expect(full.center).toBeCloseTo((400 - 230.5) / 400, 3);
+	expect(textCenter - full.center).toBeGreaterThan(0.005);
+	await content.evaluate(element => {
+		const first = element.querySelector('span')!.firstChild!;
+		element.ownerDocument.getSelection()!.setBaseAndExtent(first, 0, first, 1);
+	});
+	await expect.poll(async () => (await geometry()).width).toBeLessThan(full.width);
+	expect((await geometry()).center).toBe(full.center);
+});
+
 test('PDF wheel zoom preserves neighboring rasters and text selection, including on a short return scroll', async ({ page }) => {
 	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(60), contentType: 'application/pdf' }));
 	const renders: number[] = [];
@@ -483,6 +555,13 @@ test('PDF wheel zoom preserves neighboring rasters and text selection, including
 	expect(zoom.selected).not.toBe('');
 	expect(zoom.remaining).toBe(zoom.selected);
 	expect(zoom.anchorError).toBeLessThan(2);
+	const selectedPage = reader.locator('[data-page-number="40"]');
+	await expect(selectedPage.locator('.ash-sessions-pdf-selection > div')).toHaveCount(1);
+	expect(await selectedPage.evaluate(element => {
+		const glyph = element.querySelector('.ash-sessions-pdf-text-content > span')!.getBoundingClientRect();
+		const band = element.querySelector('.ash-sessions-pdf-selection > div')!.getBoundingClientRect();
+		return Math.max(Math.abs(glyph.left - band.left), Math.abs(glyph.width - band.width));
+	})).toBeLessThan(1);
 	// Page 39 leaves the mounted window, then comes back from the decoded-page cache.
 	for (const destination of [42, 39]) {
 		await viewport.evaluate((element, page) => { element.scrollTop = (page - 1) * element.scrollHeight / 60; }, destination);
@@ -491,6 +570,41 @@ test('PDF wheel zoom preserves neighboring rasters and text selection, including
 	}
 	expect(await image(39).evaluate((node, original) => node === original, previous)).toBe(true);
 	expect(renders.filter(number => number === 39)).toHaveLength(previousRenders);
+});
+
+test('PDF reuses recently visited pages across distant scrolls and releases older rasters', async ({ page }) => {
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(60), contentType: 'application/pdf' }));
+	const renders: number[] = [];
+	page.on('request', request => {
+		if (!request.url().endsWith('/__aspdf_rpc')) { return; }
+		const { method, params } = request.postDataJSON();
+		if (method === 'pdf/page' || method === 'pdf/renderPage') { renders.push(params.page); }
+	});
+	await page.goto('/pdfPreview.html');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open(true));
+	const reader = page.locator('.ash-sessions-pdf-continuous');
+	const viewport = reader.locator('> .ash-scrollbar-viewport');
+	const image = (number: number) => reader.locator(`[data-page-number="${number}"] img`);
+	const scrollTo = async (number: number) => {
+		await viewport.evaluate((element, page) => { element.scrollTop = (page - 1) * element.scrollHeight / 60; }, number);
+		await expect(page.locator('.ash-sessions-pdf-page-number')).toHaveValue(String(number));
+		await expect(image(number)).toHaveJSProperty('complete', true);
+	};
+	await scrollTo(10);
+	const first = await image(10).elementHandle();
+	const requests = () => renders.filter(number => number === 10).length;
+	const initialRequests = requests();
+	await scrollTo(45);
+	await expect(image(10)).toHaveCount(0);
+	await scrollTo(10);
+	await expect(image(10)).toHaveAttribute('src', (await first!.getAttribute('src'))!);
+	expect(requests()).toBe(initialRequests);
+	for (const number of [16, 22, 28, 34, 40, 46, 52, 58]) { await scrollTo(number); }
+	await expect.poll(() => first!.getAttribute('src')).toBeNull();
+	await scrollTo(10);
+	expect(requests()).toBe(initialRequests + 1);
+	await first!.dispose();
 });
 
 test('PDF prioritizes the visible page after a large scroll and zooms while its raster is pending', async ({ page }) => {

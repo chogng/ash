@@ -25,6 +25,7 @@ interface ContinuousOptions {
 
 type PageSize = { readonly width: number; readonly height: number; };
 type PdfZoom = 'page' | 'width' | number;
+const maxRetainedPages = 6;
 
 /** PDF geometry and raster loading over the shared virtual list and its scroll owner. */
 export class PdfContinuousView extends Disposable {
@@ -62,6 +63,9 @@ export class PdfContinuousView extends Disposable {
 			renderItem: (number, _index, row) => {
 				row.classList.add('ash-sessions-pdf-page-row');
 				const entry = this.entries.get(number) ?? this.createEntry(number);
+				// Keep the map in mount order so a return scroll can reuse the most recent decoded pages.
+				this.entries.delete(number);
+				this.entries.set(number, entry);
 				entry.mounted = true;
 				this.rows.set(row, entry);
 				const size = this.size(number);
@@ -91,7 +95,6 @@ export class PdfContinuousView extends Disposable {
 		view.domNode.setAttribute('aria-label', localize('sessions.pdfPreview.page', 'Page {0} of {1}', number, this.numbers.length));
 		view.domNode.setAttribute('aria-busy', 'true');
 		const entry = { number, view, controller: new AbortController(), mounted: true };
-		this.entries.set(number, entry);
 		return entry;
 	}
 
@@ -103,12 +106,12 @@ export class PdfContinuousView extends Disposable {
 		this.notifyCurrentPage(current);
 		let next: PageEntry | undefined;
 		let bestDistance = Infinity;
+		const retained: PageEntry[] = [];
 		for (const [number, entry] of this.entries) {
 			if (!entry.mounted) {
-				// Retain decoded neighbors for short reversals and protect the page being edited or revealed.
 				if (number === this.revealing || this.options.isActive(entry.view)) { continue; }
-				if (entry.view.page && number >= first - 3 && number <= last + 3) { continue; }
-				entry.controller.abort(); entry.view.dispose(); this.entries.delete(number);
+				if (entry.view.page) { retained.push(entry); }
+				else { this.disposeEntry(entry); }
 				continue;
 			}
 			const visible = number >= first && number <= last;
@@ -119,12 +122,20 @@ export class PdfContinuousView extends Disposable {
 				bestDistance = distance;
 			}
 		}
+		// Keep the same six-page offscreen budget across both nearby and distant reversals.
+		for (let index = 0; index < retained.length - maxRetainedPages; index++) { this.disposeEntry(retained[index]); }
 		if (next && !this.pendingLoads) {
 			const entry = next;
 			void this.load(entry).catch(error => {
 				if (!entry.controller.signal.aborted) { this.options.onError(error); }
 			});
 		}
+	}
+
+	private disposeEntry(entry: PageEntry): void {
+		entry.controller.abort();
+		entry.view.dispose();
+		this.entries.delete(entry.number);
 	}
 
 	private load(entry: PageEntry): Promise<PdfPageView> {
@@ -226,10 +237,10 @@ export class PdfContinuousView extends Disposable {
 	}
 
 	public invalidateOtherPages(active: PdfPageView): void {
-		for (const [number, entry] of [...this.entries]) {
+		for (const entry of [...this.entries.values()]) {
 			if (entry.view === active) { continue; }
-			entry.controller.abort(); entry.view.dispose(); this.entries.delete(number);
-			this.list.rerender(number - 1);
+			this.disposeEntry(entry);
+			this.list.rerender(entry.number - 1);
 		}
 		this.notify.schedule();
 	}

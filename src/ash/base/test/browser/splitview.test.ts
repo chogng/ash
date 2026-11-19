@@ -72,7 +72,7 @@ suite('SplitView rendered separators', () => {
 			expect(horizontalSplit ? (await feedback()).height : (await feedback()).width).toBe('60px');
 		});
 
-		test(`${orientation} separators only precede subsequent visible panes`, async () => {
+		test(`${orientation} separators stay between panes with visible space`, async () => {
 			const { page } = browser;
 			await page.goto(`/splitview.html?orientation=${orientation}`);
 			await page.waitForFunction(() => !!window.ashSplitViewFixture);
@@ -85,6 +85,14 @@ suite('SplitView rendered separators', () => {
 			await page.evaluate(() => window.ashSplitViewFixture.setVisible(0, true));
 			expect(await separators()).toEqual(['none', '""']);
 			await page.evaluate(() => window.ashSplitViewFixture.setVisible(1, true));
+			expect(await separators()).toEqual(['none', '""', '""']);
+			await page.evaluate(() => window.ashSplitViewFixture.resize(0, 0));
+			expect(await separators()).toEqual(['none', 'none', '""']);
+			await page.evaluate(() => window.ashSplitViewFixture.resize(1, 0));
+			expect(await separators()).toEqual(['none', 'none', 'none']);
+			await page.evaluate(() => window.ashSplitViewFixture.resize(0, 100));
+			expect(await separators()).toEqual(['none', 'none', '""']);
+			await page.evaluate(() => window.ashSplitViewFixture.resize(1, 100));
 			expect(await separators()).toEqual(['none', '""', '""']);
 		});
 

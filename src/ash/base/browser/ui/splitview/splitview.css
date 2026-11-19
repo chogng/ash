@@ -37,10 +37,7 @@
 	--ash-sash-feedback-cross-offset: calc(var(--ash-strokeThickness) / 2);
 }
 
-/* Only separate visible panes; retained hidden siblings do not create an outer edge. */
-.ash-split-view-separator-border
-	> .ash-split-view-pane:not([hidden])
-	~ .ash-split-view-pane::before {
+.ash-split-view-pane-with-separator:not([hidden])::before {
 	position: absolute;
 	/* Paint above pane tabs and scrollbars (1–3), below resize feedback (35). */
 	z-index: 4;
@@ -50,15 +47,11 @@
 	content: "";
 	pointer-events: none;
 }
-.ash-split-view-horizontal.ash-split-view-separator-border
-	> .ash-split-view-pane:not([hidden])
-	~ .ash-split-view-pane::before {
+.ash-split-view-horizontal > .ash-split-view-pane-with-separator::before {
 	width: var(--ash-strokeThickness);
 	height: 100%;
 }
-.ash-split-view-vertical.ash-split-view-separator-border
-	> .ash-split-view-pane:not([hidden])
-	~ .ash-split-view-pane::before {
+.ash-split-view-vertical > .ash-split-view-pane-with-separator::before {
 	width: 100%;
 	height: var(--ash-strokeThickness);
 }

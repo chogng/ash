@@ -511,6 +511,10 @@ export class SplitView extends Disposable {
 		for (const item of this.items) {
 			if (!item.visible) continue;
 			const primarySize = Math.max(0, item.size);
+			if (this.options.styles?.separatorBorder) {
+				// A retained pane may be visible with no allocation on the split axis.
+				item.container.classList.toggle('ash-split-view-pane-with-separator', offset > 0 && primarySize > 0);
+			}
 			if (this.orientation === Orientation.HORIZONTAL) {
 				item.container.style.left = `${offset}px`;
 				item.container.style.top = '0px';
