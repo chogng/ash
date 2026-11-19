@@ -420,7 +420,7 @@
     "commentPosted": "评论已发表",
     "addComment": "添加评论",
     "commentTextRemoved": "原文已删除",
-    "commentsHelp": "选择文字后选择「添加评论」，或按 Control 或 Command+Alt+M。在评论文字处使用此快捷键会打开对应线程。「评论」打开侧栏，「新建评论」添加文档评论。按 Tab 访问各评论的回复、编辑、删除、解决和重新打开操作。按 Enter 发表，Shift+Enter 或 Alt+Enter 换行。按 Escape 关闭侧栏并返回文档，未发表的内容会保留。可筛选未解决、已解决或全部评论。评论随文档保存，支持撤销和重做。只读文档支持阅读评论，无障碍视图包含全部评论线程。",
+    "commentsHelp": "选择文字后选择「添加评论」，或按 Control 或 Command+Alt+M，即可在选区旁打开评论输入框。在评论文字处使用此快捷键会打开对应线程。「评论」打开侧栏，「新建评论」添加文档评论。按 Tab 访问各评论的回复、编辑、删除、解决和重新打开操作。按 Enter 发表，Shift+Enter 或 Alt+Enter 换行。按 Escape 关闭浮动输入框或侧栏并返回文档，未发表的内容会保留。可筛选未解决、已解决或全部评论。评论随文档保存，支持撤销和重做。只读文档支持阅读评论，无障碍视图包含全部评论线程。",
     "commentBackgroundDescription": "包含未解决文档评论的文字背景色。",
     "tableBorderDescription": "文档表格边框。",
     "tableHeaderBackgroundDescription": "文档表头背景色。",

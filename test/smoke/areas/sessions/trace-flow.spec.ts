@@ -313,7 +313,7 @@ test('Chat widget updates delegated agents in place and opens the child beside t
 	} finally { await connection.close(); }
 });
 
-test('Chat widget reviews and revises a real plan and stages a follow-up from the completed reply', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
+test('Chat widget reviews and revises a real plan and stages a follow-up from the completed reply', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
@@ -337,12 +337,33 @@ test('Chat widget reviews and revises a real plan and stages a follow-up from th
 		const comments = page.getByRole('group', { name: 'Agent comments', exact: true });
 		await expect(comments).toBeVisible();
 		const planEditor = page.getByRole('tabpanel', { name: 'Review proposed plan', exact: true });
-		await expect(planEditor.getByRole('textbox', { name: 'Review proposed plan', exact: true })).toBeVisible();
+		const editorInput = planEditor.getByRole('textbox', { name: 'Review proposed plan', exact: true });
+		await expect(editorInput).toBeVisible();
 		await expect(planEditor.locator('.view-lines')).toContainText('Add a reconnect test.');
-		await comments.getByRole('button', { name: 'Add comment', exact: true }).press('Enter');
-		await page.getByRole('textbox', { name: 'Comment for the agent' }).fill('Describe the retry limit.');
-		await page.getByRole('button', { name: 'Save comment', exact: true }).press('Enter');
+		const addComment = comments.getByRole('button', { name: 'Add comment', exact: true });
+		const popup = planEditor.getByRole('dialog', { name: /^Comments on line \d+$/ });
+		const commentInput = popup.getByRole('textbox', { name: 'Comment for the agent' });
+		const planText = planEditor.getByText('Add a reconnect test.', { exact: true }).first();
+		const before = await planText.boundingBox();
+		await addComment.press('Enter');
+		await expect(commentInput).toBeFocused();
+		await expect(popup).toBeInViewport();
+		expect(await planText.boundingBox()).toEqual(before);
+		await planEditor.screenshot({ path: testInfo.outputPath('floating-plan-comment.png') });
+		await commentInput.fill('Describe the retry limit.');
+		await commentInput.press('Escape');
+		await expect(popup).toBeHidden();
+		await expect(editorInput).toBeFocused();
+		await editorInput.press('ControlOrMeta+Alt+m');
+		await expect(commentInput).toHaveValue('Describe the retry limit.');
+		await popup.getByRole('button', { name: 'Save comment', exact: true }).press('Enter');
 		await expect(review.getByRole('button', { name: 'Open plan in editor (Comments: 1)', exact: true })).toBeVisible();
+		const marker = planEditor.getByRole('button', { name: /^Open comments on line \d+$/ });
+		await expect(marker).toHaveAttribute('aria-expanded', 'true');
+		await marker.click();
+		await expect(popup).toBeHidden();
+		await marker.click();
+		await expect(popup.getByText('Describe the retry limit.', { exact: true })).toBeVisible();
 		await review.getByRole('textbox', { name: 'Changes to the plan (optional)' }).fill('Also cover a failed reconnect.');
 		await review.getByRole('button', { name: 'Keep planning' }).press('Enter');
 		await expect(review.getByRole('heading', { name: 'Revised plan' })).toBeVisible();

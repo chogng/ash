@@ -24,20 +24,3 @@
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }
-
-.ash-agent-editor-comment-input {
-	box-sizing: border-box;
-	inline-size: 100%;
-	padding: var(--ash-spacing-size80);
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
-	border-radius: var(--ash-cornerRadius-small);
-	background: var(--ash-input-background);
-	color: var(--ash-input-foreground);
-	font: inherit;
-	resize: vertical;
-}
-
-.ash-agent-editor-comment-input:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: var(--ash-strokeThickness);
-}

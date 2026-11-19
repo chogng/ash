@@ -146,12 +146,31 @@ suite('Arkdown document comments', () => {
 		await expect(panel.getByRole('button', { name: 'Edit comment', exact: true })).toHaveCount(0);
 	});
 
-	test('comment sidebar posts, replies, edits and resolves through keyboard-accessible controls', async () => {
-		await mount('Review **selected** text'); await browser.page.evaluate(() => window.arkdownFixture.showComments()); await select();
-		await browser.page.getByRole('textbox', { name: 'Document body', exact: true }).press('ControlOrMeta+Alt+m');
+	test('the selection composer retains drafts and shares the sidebar comment workflow', async () => {
+		await mount('Review **selected** text');
+		await browser.page.evaluate(() => window.arkdownFixture.showComments());
+		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
 		const panel = browser.page.getByRole('complementary', { name: 'Comments', exact: true });
+		await panel.getByRole('button', { name: 'Close comments', exact: true }).click();
+		await select();
+		const anchor = await browser.page.evaluate(() => window.arkdownFixture.selectionBounds);
+		await body.press('ControlOrMeta+Alt+m');
+		const popup = browser.page.getByRole('dialog', { name: 'Add comment', exact: true });
+		const floatingInput = popup.getByRole('textbox', { name: 'Comment text', exact: true });
+		await expect(floatingInput).toBeFocused();
+		await expect(panel).toBeHidden();
+		const bounds = await popup.boundingBox();
+		assert.ok(anchor && bounds && (bounds.x >= anchor.right || bounds.x + bounds.width <= anchor.left));
+		await floatingInput.fill('<script>Review safely</script>');
+		await floatingInput.press('Escape');
+		await expect(popup).toBeHidden();
+		await expect(body).toBeFocused();
+		await body.press('ControlOrMeta+Alt+m');
+		await expect(floatingInput).toHaveValue('<script>Review safely</script>');
+		await floatingInput.press('Enter');
+		await expect(popup).toBeHidden();
 		const input = panel.getByRole('textbox', { name: 'Comment text', exact: true });
-		await expect(input).toBeFocused(); await input.fill('<script>Review safely</script>'); await input.press('Enter');
+		await expect(input).toBeFocused();
 		await expect(panel.locator('.ash-docs-comment-body')).toHaveText('<script>Review safely</script>');
 		await expect(panel.locator('script')).toHaveCount(0);
 		await input.fill('Reply line one'); await input.press('Shift+Enter'); await input.pressSequentially('line two'); await input.press('Enter');

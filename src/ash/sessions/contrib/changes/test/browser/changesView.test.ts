@@ -767,6 +767,14 @@ suite('session Code Review', () => {
 		const composer = review.getByRole('textbox', { name: '给 Agent 的评论' });
 		const save = review.getByRole('button', { name: '保存草稿', exact: true });
 		await composer.fill('Explain this replacement');
+		await page.evaluate(() => window.ashChangesIntegration.setCommentStyle('floating'));
+		const floating = review.getByRole('dialog', { name: '第 2 行的评论', exact: true });
+		await expect(floating.getByRole('textbox', { name: '给 Agent 的评论' })).toBeFocused();
+		await expect(composer).toHaveValue('Explain this replacement');
+		await expect(review.locator('.ash-review-zone')).toHaveCount(0);
+		await page.evaluate(() => window.ashChangesIntegration.setCommentStyle('inline'));
+		await expect(floating).toHaveCount(0);
+		await expect(review.locator('.ash-review-zone').getByRole('textbox', { name: '给 Agent 的评论' })).toHaveValue('Explain this replacement');
 		await save.click();
 		await page.evaluate(() => window.ashChangesIntegration.focusReviewLine(1, 3));
 		await page.keyboard.press('K');

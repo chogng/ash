@@ -36,7 +36,8 @@ import { readLocalRepositories } from '../common/localRepository.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
-import { ReviewZoneWidget } from '../../comments/browser/commentThreadZoneWidget.js';
+import type { ICommentThreadEditorWidgetOptions } from '../../comments/browser/commentThreadEditorWidget.js';
+import { DiffCommentThreadWidget } from '../../comments/browser/diffCommentThreadWidget.js';
 import { IGitHubReviewModel, isReviewLine, type GitHubComposeDraft } from './githubReviewModel.js';
 
 export const githubEditorId = 'ash.githubEditor';
@@ -107,7 +108,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	private selectedLine = 1;
 	private diffIdentity: string | undefined;
 	private diffLoad: Promise<void> | undefined;
-	private diffComments: { readonly zones: ReadonlyMap<GitHubDiffSide, ReviewZoneWidget>; readonly ready: () => boolean; } | undefined;
+	private diffComments: { readonly threads: ReadonlyMap<GitHubDiffSide, DiffCommentThreadWidget>; readonly ready: () => boolean; } | undefined;
 	private readonly diffSession = this._register(new MutableDisposable<DisposableStore>());
 	private diffCancellation = new CancellationTokenSource();
 	private readonly listResources = this._register(new DisposableStore());
@@ -537,20 +538,26 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			const commentResources = resources.add(new DisposableStore());
 			const widget = resources.add(this.instantiation.createInstance(DiffEditorWidget, { container: this.diffContainer, model: diff, readOnly: true, originalAriaLabel: localize('github.editor.original', 'Original file'), modifiedAriaLabel: localize('github.editor.modified', 'Modified file') }));
 			widget.updateOptions({ glyphMargin: true });
-			const zones = new Map<GitHubDiffSide, ReviewZoneWidget>();
+			const threads = new Map<GitHubDiffSide, DiffCommentThreadWidget>();
 			for (const [editor, side] of [[widget.originalEditor, GitHubDiffSide.Left], [widget.modifiedEditor, GitHubDiffSide.Right]] as const) {
 				const select = () => { this.selectedSide = side; this.selectedLine = editor.getPosition()?.lineNumber ?? 1; this.updateInlineActions(); };
 				resources.add(editor.onDidFocusEditorText(select)); resources.add(editor.onDidChangeCursorPosition(select));
 				const original = side === GitHubDiffSide.Left;
 				const otherSide = original ? GitHubDiffSide.Right : GitHubDiffSide.Left;
-				zones.set(side, commentResources.add(new ReviewZoneWidget(editor, {
+				const options: ICommentThreadEditorWidgetOptions = {
 					canAdd: line => !!diff.diff && this.canAddLineComment(file, side, line),
-					render: (line, parent, content) => this.renderInlineComments(file, side, line, parent, content),
-					onOpen: () => zones.get(otherSide)?.close(),
-					comparison: { editor: original ? widget.modifiedEditor : widget.originalEditor, original, rows: () => diff.diff?.rows },
+					render: (line, parent, content) => this.renderLineComments(file, side, line, parent, content),
+					onOpen: line => {
+						threads.get(otherSide)?.close();
+						editor.setPosition({ lineNumber: line, column: 1 });
+						select();
+					},
+				};
+				threads.set(side, commentResources.add(this.instantiation.createInstance(DiffCommentThreadWidget, editor, options, {
+					editor: original ? widget.modifiedEditor : widget.originalEditor, original, rows: () => diff.diff?.rows,
 				})));
 			}
-			this.diffComments = { zones, ready: () => !!diff.diff };
+			this.diffComments = { threads, ready: () => !!diff.diff };
 			const settled = new DeferredPromise<void>();
 			commentResources.add(diff.onDidChange(state => {
 				this.updateDiffComments();
@@ -570,7 +577,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		this.lineLabel.textContent = this.selectedFile ? localize('github.editor.selectedLine', '{0}, {1}, line {2}', this.selectedFile.filename, this.selectedSide === GitHubDiffSide.Left ? localize('github.editor.originalSide', 'original') : localize('github.editor.modifiedSide', 'modified'), this.selectedLine) : '';
 		const file = this.selectedFile;
 		this.inlineActions.setActions([this.action('addLineComment', localize('github.editor.openLineComment', 'Write comment on selected line'), !!file && !!this.diffComments?.ready() && this.canAddLineComment(file, this.selectedSide, this.selectedLine), () => {
-			this.diffComments?.zones.get(this.selectedSide)?.show(this.selectedLine, true);
+			this.diffComments?.threads.get(this.selectedSide)?.show(this.selectedLine, true);
 		})]);
 	}
 
@@ -590,7 +597,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		const file = this.selectedFile;
 		const diff = this.diffComments;
 		if (!file || !diff?.ready()) return;
-		for (const [side, zone] of diff.zones) {
+		for (const [side, widget] of diff.threads) {
 			const lines = new Set<number>();
 			for (const thread of this.model.threads) {
 				if (thread.side === side && this.hasThreadAnchor(thread) && this.matchesThreadFile(thread, file)) lines.add(thread.line);
@@ -600,11 +607,11 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 					if (comment.path === file.filename && comment.side === side) lines.add(comment.line);
 				}
 			}
-			zone.update(lines);
+			widget.update(lines);
 		}
 	}
 
-	private renderInlineComments(file: GitHubPullRequestFile, side: GitHubDiffSide, line: number, parent: HTMLElement, resources: DisposableStore): HTMLElement | undefined {
+	private renderLineComments(file: GitHubPullRequestFile, side: GitHubDiffSide, line: number, parent: HTMLElement, resources: DisposableStore): HTMLElement | undefined {
 		for (const thread of this.model.threads) {
 			if (thread.side === side && thread.line === line && this.hasThreadAnchor(thread) && this.matchesThreadFile(thread, file)) {
 				this.renderThread(thread, parent, resources);
@@ -624,11 +631,18 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		const key = JSON.stringify([file.filename, side, line]);
 		const canAdd = this.canAddLineComment(file, side, line);
 		if (!canAdd && !this.commentInputs.has(key)) return undefined;
-		const composer = this.textarea(parent, localize('github.editor.inlineComment', 'Comment on selected line'), key);
+		const text = localize('github.editor.inlineComment', 'Comment on selected line');
+		const label = this.element(parent, 'github-field', 'label');
+		label.append(h(parent.ownerDocument, 'span', text));
+		const composer = resources.add(new InputBox(label, {
+			flexibleHeight: true, presentation: 'field', inputBoxStyles: defaultInputBoxStyles, ariaLabel: text,
+		}));
+		composer.inputElement.dataset.githubFocus = key;
+		composer.inputElement.maxLength = 65_536;
 		composer.value = this.commentInputs.get(key) ?? '';
 		composer.readOnly = !canAdd;
-		resources.add(addDisposableListener(composer, 'input', () => {
-			if (composer.value) this.commentInputs.set(key, composer.value);
+		resources.add(composer.onDidChange(value => {
+			if (value) this.commentInputs.set(key, value);
 			else this.commentInputs.delete(key);
 		}));
 		this.toolbar(parent, localize('github.editor.inlineActions', 'Line comment actions'), resources, true).setActions([
@@ -638,10 +652,10 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 				this.commentInputs.delete(key);
 				try { this.model.addComment({ path: file.filename, line, side, body }); }
 				catch (error) { this.commentInputs.set(key, body); throw error; }
-				this.diffComments?.zones.get(side)?.show(line, true);
+				this.diffComments?.threads.get(side)?.show(line, true);
 			}),
 		]);
-		return composer;
+		return composer.inputElement;
 	}
 
 	private async revealThread(thread: GitHubReviewThread): Promise<void> {
@@ -664,7 +678,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		selection();
 		const current = this.model.threads.find(item => item.id === thread.id);
 		if (this.commentScope !== scope || this.selectedFile?.filename !== file.filename || !current || !this.hasThreadAnchor(current)
-			|| !this.diffComments?.zones.get(current.side)?.show(current.line)) {
+			|| !this.diffComments?.threads.get(current.side)?.show(current.line)) {
 			this.showUnavailableThread();
 			return;
 		}

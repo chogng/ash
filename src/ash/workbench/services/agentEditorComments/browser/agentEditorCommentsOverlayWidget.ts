@@ -1,5 +1,6 @@
 import { addDisposableListener, h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
+import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
 import type { URI } from '../../../../base/common/uri.js';
@@ -11,7 +12,9 @@ import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { ReviewZoneWidget } from '../../../contrib/comments/browser/commentThreadZoneWidget.js';
+import { defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { CommentThreadEditorWidget } from '../../../contrib/comments/browser/commentThreadEditorWidget.js';
+import { ReviewFloatingWidget } from '../../../contrib/comments/browser/commentThreadFloatingWidget.js';
 import { IAgentEditorCommentsBridge, type IAgentEditorComment } from '../common/agentEditorComments.js';
 import './media/agentEditorCommentsOverlayWidget.css';
 
@@ -61,7 +64,7 @@ class AgentEditorCommentsOverlayWidget extends Disposable implements IOverlayWid
 	private readonly previous: HTMLButtonElement;
 	private readonly next: HTMLButtonElement;
 	private readonly count: HTMLElement;
-	private readonly zone: ReviewZoneWidget;
+	private readonly thread: CommentThreadEditorWidget;
 	private readonly drafts = new Map<number, { text: string; range: Range; }>();
 	private selected: string | undefined;
 
@@ -84,11 +87,11 @@ class AgentEditorCommentsOverlayWidget extends Disposable implements IOverlayWid
 
 		const glyphMargin = editor.getOption(EditorOption.glyphMargin);
 		editor.updateOptions({ glyphMargin: true });
-		this.zone = this._register(new ReviewZoneWidget(editor, {
+		this.thread = this._register(new CommentThreadEditorWidget(editor, {
 			canAdd: () => comments.acceptsComments(resource),
 			onOpen: () => { this.selected = undefined; },
 			render: (line, body, resources) => this.renderThread(line, body, resources),
-		}));
+		}, new ReviewFloatingWidget(editor)));
 		editor.addOverlayWidget(this);
 		this._register(toDisposable(() => {
 			editor.removeOverlayWidget(this);
@@ -158,7 +161,7 @@ class AgentEditorCommentsOverlayWidget extends Disposable implements IOverlayWid
 
 	private accessibleContent(type: AccessibleViewType): string {
 		if (type === AccessibleViewType.Help) {
-			return localize('agentEditorComments.help', 'Select text or move to a line. Choose Add comment or press Control+Alt+M (Command+Option+M on macOS). Save the comment to add it to the review draft. Use Previous comment and Next comment to browse comments. Press Escape to return to the editor.');
+			return localize('agentEditorComments.help', 'Select text or move to a line. Choose Add comment or press Control+Alt+M (Command+Option+M on macOS) to open the comment input by that line. Save the comment to add it to the review draft. Use Previous comment and Next comment to browse comments. Press Escape to return to the editor and keep the draft.');
 		}
 		return this.orderedComments().map(comment => localize('agentEditorComments.text', '{0}: {1}', this.location(comment), comment.body)).join('\n\n')
 			|| localize('agentEditorComments.empty', 'No comments.');
@@ -174,10 +177,10 @@ class AgentEditorCommentsOverlayWidget extends Disposable implements IOverlayWid
 		const range = new Range(selection.startLineNumber, selection.startColumn, line,
 			endsAtNextLine ? model.getLineMaxColumn(line) : selection.endColumn);
 		if (!this.drafts.get(line)?.text) {
-			this.zone.close();
+			this.thread.close();
 			this.drafts.set(line, { text: '', range });
 		}
-		return this.zone.show(line, true);
+		return this.thread.show(line, true);
 	}
 
 	private navigate(delta: number): void {
@@ -186,7 +189,7 @@ class AgentEditorCommentsOverlayWidget extends Disposable implements IOverlayWid
 		const current = comments.findIndex(comment => comment.id === this.selected);
 		const index = current === -1 ? (delta < 0 ? comments.length - 1 : 0) : (current + delta + comments.length) % comments.length;
 		const target = comments[index]!;
-		this.zone.show(target.range.endLineNumber);
+		this.thread.show(target.range.endLineNumber);
 		this.selected = target.id;
 		this.editor.setSelection(Range.lift(target.range));
 		status(localize('agentEditorComments.text', '{0}: {1}', this.location(target), target.body));
@@ -196,7 +199,7 @@ class AgentEditorCommentsOverlayWidget extends Disposable implements IOverlayWid
 		const comments = this.orderedComments();
 		this.count.textContent = localize('agentEditorComments.count', 'Comments: {0}', comments.length);
 		this.previous.disabled = this.next.disabled = comments.length === 0;
-		this.zone.update(new Set(comments.map(comment => comment.range.endLineNumber)));
+		this.thread.update(new Set(comments.map(comment => comment.range.endLineNumber)));
 	}
 
 	private renderThread(line: number, body: HTMLElement, resources: DisposableStore): HTMLElement {
@@ -204,17 +207,19 @@ class AgentEditorCommentsOverlayWidget extends Disposable implements IOverlayWid
 		for (const comment of this.orderedComments().filter(comment => comment.range.endLineNumber === line)) {
 			const remove = this.button(document, localize('agentEditorComments.delete', 'Delete comment'), () => {
 				this.comments.deleteComment(this.resource, comment.id);
-				body.querySelector('textarea')?.focus();
+				this.thread.show(line, true);
 			}, resources);
 			remove.setAttribute('aria-label', localize('agentEditorComments.deleteNamed', 'Delete comment: {0}', comment.body));
 			body.append(h(document, 'div', { className: 'ash-agent-editor-comment' }, h(document, 'strong', this.location(comment)), h(document, 'p', comment.body), remove));
 		}
 		const draft = this.drafts.get(line) ?? { text: '', range: new Range(line, 1, line, 1) };
-		const composer = h(document, 'textarea', {
-			className: 'ash-agent-editor-comment-input',
-			properties: { rows: 2, value: draft.text },
-			attributes: { 'aria-label': localize('agentEditorComments.draft', 'Comment for the agent') },
-		});
+		const composer = resources.add(new InputBox(body, {
+			flexibleHeight: true,
+			presentation: 'field',
+			inputBoxStyles: defaultInputBoxStyles,
+			ariaLabel: localize('agentEditorComments.draft', 'Comment for the agent'),
+		}));
+		composer.value = draft.text;
 		const save = this.button(document, localize('agentEditorComments.save', 'Save comment'), () => {
 			const text = composer.value.trim();
 			if (!text) return;
@@ -223,15 +228,15 @@ class AgentEditorCommentsOverlayWidget extends Disposable implements IOverlayWid
 				this.drafts.set(line, draft);
 				return;
 			}
-			body.querySelector('textarea')?.focus();
+			this.thread.show(line, true);
 		}, resources);
 		save.disabled = !draft.text.trim();
-		resources.add(addDisposableListener(composer, 'input', () => {
-			draft.text = composer.value;
+		resources.add(composer.onDidChange(value => {
+			draft.text = value;
 			this.drafts.set(line, draft);
 			save.disabled = !draft.text.trim();
 		}));
-		body.append(composer, save);
-		return composer;
+		body.append(save);
+		return composer.inputElement;
 	}
 }

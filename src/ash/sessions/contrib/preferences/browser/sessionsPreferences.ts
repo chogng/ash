@@ -46,6 +46,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { AppServerAvailableContext } from '../../../../workbench/common/contextkeys.js';
+import { COMMENTS_THREAD_EXPERIMENTAL_STYLE_SETTING } from '../../../../workbench/contrib/comments/common/commentsConfiguration.js';
 import { TerminalCommandId } from '../../../../workbench/contrib/terminal/common/terminal.js';
 import { createSettingsEditorInput } from '../../../../workbench/services/preferences/common/settingsEditorInput.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -741,7 +742,10 @@ export class SessionsPreferences extends Disposable {
 				{ id: 'execution-trace', title: localize('sessions.settings.executionTrace', 'Execution trace'), icon: Lxicon.history, settings: [], content: traceContent },
 				{ id: 'design', title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
 				{ id: 'models', title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },
-				{ id: 'github', title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [], content: githubContent },
+				{
+					id: 'github', title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git,
+					settings: defaults.all.filter(setting => setting.id === COMMENTS_THREAD_EXPERIMENTAL_STYLE_SETTING), content: githubContent,
+				},
 				{
 					id: 'browser', title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.global,
 					settings: [

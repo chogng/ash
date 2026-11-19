@@ -33,6 +33,13 @@
 	line-height: 1.4;
 }
 
+.ash-review-floating-panel {
+	inline-size: 320px;
+	max-inline-size: calc(100vw - var(--ash-spacing-size120));
+	border: 0;
+	background: transparent;
+}
+
 .ash-review-zone-header {
 	display: flex;
 	align-items: center;

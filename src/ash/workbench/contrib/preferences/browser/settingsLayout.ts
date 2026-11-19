@@ -1,7 +1,9 @@
 import '../../../services/language/common/languageServerLifecycleService.js';
 import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
-import { BrowserOpenLocalhostLinksSettingId } from '../../../../platform/browserView/common/browserView.js';
+import { BrowserOpenLinksSettingId, BrowserOpenLocalhostLinksSettingId } from '../../../../platform/browserView/common/browserView.js';
+import { BrowserDownloadAskSetting, BrowserDownloadDirectorySetting } from '../../../../platform/browserView/common/browserDownloads.js';
 import { BrowserNewTabPlacementSettingId } from '../../browserView/common/browserView.js';
+import { COMMENTS_THREAD_EXPERIMENTAL_STYLE_SETTING } from '../../comments/common/commentsConfiguration.js';
 import type { IConfiguredSetting, ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { TRUSTED_DOMAINS_SETTING_ID } from '../../url/browser/trustedDomains.js';
 import { localize } from '../../../../nls.js';
@@ -203,7 +205,7 @@ export const SettingsNavigation = [
 						id: 'url-opening',
 						label: localize('externalUriOpener.settings.group', 'Links'),
 						description: localize('externalUriOpener.settings.groupDescription', 'Choose where website links open.'),
-						settings: [BrowserOpenLocalhostLinksSettingId, BrowserNewTabPlacementSettingId, 'workbench.externalUriOpeners'],
+						settings: [BrowserOpenLinksSettingId, BrowserOpenLocalhostLinksSettingId, BrowserNewTabPlacementSettingId, 'workbench.externalUriOpeners'],
 					},
 					{
 						id: 'browser-controls',
@@ -218,6 +220,12 @@ export const SettingsNavigation = [
 							'workbench.browser.savePasswords',
 							'workbench.browser.autofillPasswords',
 						],
+					},
+					{
+						id: 'downloads',
+						label: localize('downloads.title', 'Downloads'),
+						description: '',
+						settings: [BrowserDownloadDirectorySetting, BrowserDownloadAskSetting],
 					},
 					{
 						id: 'browser-agent',
@@ -837,6 +845,12 @@ export const SettingsNavigation = [
 						label: localize({ bundle: 'ash.settings', key: 'github.repository.label' }, 'Repositories'),
 						description: localize({ bundle: 'ash.settings', key: 'github.repository.description' }, 'Choose the Git protocol and protected branch behavior.'),
 						settings: ['github.gitProtocol', 'github.branchProtection'],
+					},
+					{
+						id: 'review-comments',
+						label: localize({ bundle: 'ash.settings', key: 'github.reviewComments.label' }, 'Review comments'),
+						description: '',
+						settings: [COMMENTS_THREAD_EXPERIMENTAL_STYLE_SETTING],
 					},
 				],
 			},

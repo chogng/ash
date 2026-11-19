@@ -113,6 +113,17 @@
 	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
+.ash-docs-comment-composer.floating {
+	box-sizing: border-box;
+	inline-size: 288px;
+	max-inline-size: calc(100vw - var(--ash-spacing-size120));
+	border-top: 0;
+}
+
+.ash-docs-comment-composer.floating .ash-docs-comment-quote {
+	display: none;
+}
+
 .ash-docs-comment-quote {
 	margin: 0 0 var(--ash-spacing-size80);
 	padding-left: var(--ash-spacing-size80);

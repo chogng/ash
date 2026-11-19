@@ -10,6 +10,9 @@ for (const options of [
 	{ ariaLabel: 'Select multiline', selectOnFocus: true, flexibleHeight: true },
 ]) {
 	const input = resources.add(new InputBox(document.body, { presentation: 'field', ...options }));
+	if (options.flexibleHeight) {
+		resources.add(input.onDidHeightChange(height => { input.element.dataset.contentHeight = String(height); }));
+	}
 	input.value = options.type === 'number' ? '100' : 'D4D4D4';
 }
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

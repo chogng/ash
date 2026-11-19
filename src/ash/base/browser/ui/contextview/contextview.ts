@@ -37,6 +37,8 @@ export type ContextViewPresentation = 'default' | 'hover' | 'menu' | 'dialog' | 
 
 export interface ContextViewOptions {
 	readonly anchor: ContextViewAnchor;
+	/** Gets the current placement rectangle in the anchor's viewport. An unavailable rectangle dismisses the view. */
+	readonly getAnchor?: () => IRectangle | undefined;
 	readonly content: HTMLElement;
 	/** Keep the last position when false, for example while the view animates out. */
 	readonly canRelayout?: boolean;
@@ -215,7 +217,7 @@ export class ContextView
 				if (
 					isNode(target) &&
 					!this.element.contains(target) &&
-					!anchorContains(options.anchor, target) &&
+					!(options.getAnchor === undefined && anchorContains(options.anchor, target)) &&
 					!options.isTargetWithin?.(target)
 				) {
 					this.hide(ContextViewHideReason.OutsidePointer);
@@ -295,7 +297,11 @@ export class ContextView
 		}
 		if (!initial && options.canRelayout === false) return;
 		const targetWindow = getWindow(this.element);
-		const anchor = getAnchorRectangle(options.anchor);
+		const anchor = options.getAnchor ? options.getAnchor() : getAnchorRectangle(options.anchor);
+		if (!anchor) {
+			this.hide(ContextViewHideReason.AnchorRemoved);
+			return;
+		}
 		const bounds = this.element.getBoundingClientRect();
 		const viewport = getViewport(targetWindow);
 		// Account for the surface inset before viewport fitting so rows can line up.
@@ -312,7 +318,7 @@ export class ContextView
 		const result = layout2d(
 			viewport,
 			{ width: bounds.width, height: bounds.height },
-			{ ...anchor, top },
+			{ left: anchor.left, top, width: anchor.width, height: anchor.height },
 			options,
 		);
 		const titlebar = getVisibleWCOTitlebarAreaRect(targetWindow);

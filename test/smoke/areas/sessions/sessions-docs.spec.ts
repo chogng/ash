@@ -4,7 +4,7 @@ import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
-test('Docs comment focus keeps the outer window layout fixed', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
+test('Docs comment focus keeps the outer window layout fixed', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await new QuickAccess(page).runCommand('workbench.action.document.new');
 	const docs = page.locator('.ash-docs-workspace:visible');
@@ -24,9 +24,16 @@ test('Docs comment focus keeps the outer window layout fixed', { tag: ['@electro
 	});
 	await docs.getByRole('toolbar', { name: 'Selection formatting', exact: true }).getByRole('button', { name: 'Add comment', exact: true }).click();
 	const comments = docs.getByRole('complementary', { name: 'Comments', exact: true });
+	const popup = docs.getByRole('dialog', { name: 'Add comment', exact: true });
+	const floatingInput = popup.getByRole('textbox', { name: 'Comment text', exact: true });
+	await expect(floatingInput).toBeFocused();
+	await expect(comments).toBeHidden();
+	expect(await docs.boundingBox()).toEqual(before);
+	await page.screenshot({ path: testInfo.outputPath('docs-floating-comment.png') });
+	await floatingInput.fill('Review layout');
+	await floatingInput.press('Enter');
+	await expect(popup).toBeHidden();
 	const input = comments.getByRole('textbox', { name: 'Comment text', exact: true });
-	await input.fill('Review layout');
-	await input.press('Enter');
 	await expect(comments.locator('.ash-docs-comment-body')).toHaveText('Review layout');
 	await input.fill('Unsent reply');
 	await input.press('Escape');
@@ -40,6 +47,28 @@ test('Docs comment focus keeps the outer window layout fixed', { tag: ['@electro
 		elements.filter(element => element.scrollLeft || element.scrollTop).map(element => [element.className, element.scrollLeft, element.scrollTop]),
 	)).toEqual([]);
 	expect(await page.evaluate(() => (window as unknown as { layoutScrollShifts: number[][]; }).layoutScrollShifts)).toEqual([]);
+});
+
+test('Docs opens the selection comment composer in Simplified Chinese', { tag: ['@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+	await language.fill('简体中文');
+	await language.press('Enter');
+	({ workbench } = await restartWorkbench());
+	const page = await workbench.openAgentsWindow(target.kind);
+	await new QuickAccess(page).runCommand('workbench.action.document.new');
+	const doc = page.locator('.ash-docs-workspace:visible');
+	const body = doc.getByRole('textbox', { name: '文档正文', exact: true });
+	await body.click();
+	await page.keyboard.insertText('文档选区');
+	await body.press('ControlOrMeta+a');
+	await doc.getByRole('toolbar', { name: '选区格式', exact: true }).getByRole('button', { name: '添加评论', exact: true }).click();
+	const popup = doc.getByRole('dialog', { name: '添加评论', exact: true });
+	const input = popup.getByRole('textbox', { name: '评论内容', exact: true });
+	await expect(input).toBeFocused();
+	await expect(input).toHaveAttribute('placeholder', '撰写评论…');
+	await input.press('Escape');
+	await expect(body).toBeFocused();
 });
 
 for (const locale of ['en', 'zh-CN'] as const) {

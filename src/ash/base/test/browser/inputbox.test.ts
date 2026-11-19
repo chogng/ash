@@ -49,6 +49,8 @@ suite('InputBox focus selection in the browser', () => {
 		await input.evaluate((element: HTMLTextAreaElement) => { element.scrollTop = 0; });
 		await expect.poll(() => input.evaluate((element: HTMLTextAreaElement) => element.scrollHeight > element.clientHeight)).toBe(true);
 		const host = input.locator('..');
+		const inputBox = host.locator('..');
+		await expect.poll(async () => Number(await inputBox.getAttribute('data-content-height'))).toBeGreaterThan(134);
 		const track = host.getByRole('scrollbar', { name: 'Vertical scrollbar' });
 		const trackOffset = (): Promise<number> => track.evaluate(element => element.getBoundingClientRect().top - element.parentElement!.getBoundingClientRect().top);
 		const initialOffset = await trackOffset();

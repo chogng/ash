@@ -65,6 +65,30 @@ test('ContextView positions next to its anchor and flips within the viewport', (
 	contextView.dispose();
 });
 
+test('ContextView reevaluates a rectangle anchor on scroll and closes when it disappears', () => {
+	const document = environment.window.document;
+	using view = new ContextView(requiredElement('main'));
+	view.element.getBoundingClientRect = () => rectangle(0, 0, 100, 80);
+	let bounds: DOMRect | undefined = new environment.window.DOMRect(100, 50, 30, 20);
+	const reasons: ContextViewHideReasonValue[] = [];
+	assert.equal(view.show({
+		anchor: requiredElement('#anchor'),
+		getAnchor: () => bounds,
+		content: h(document, 'div'),
+		onHide: reason => reasons.push(reason),
+	}), true);
+	assert.deepEqual([view.element.style.left, view.element.style.top], ['100px', '70px']);
+
+	bounds = new environment.window.DOMRect(150, 75, 40, 24);
+	document.dispatchEvent(new environment.window.Event('scroll'));
+	assert.deepEqual([view.element.style.left, view.element.style.top], ['150px', '99px']);
+
+	bounds = undefined;
+	view.layout();
+	assert.deepEqual(reasons, [ContextViewHideReason.AnchorRemoved]);
+	assert.equal(view.visible, false);
+});
+
 test('ContextView reports replacement and outside-pointer hide reasons exactly once', () => {
 	const container = requiredElement<HTMLElement>('main');
 	const anchor = requiredElement<HTMLElement>('#anchor');

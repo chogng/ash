@@ -270,7 +270,7 @@
     "agentEditorComments.label": "Agent 评论",
     "agentEditorComments.line": "第 {0} 行",
     "agentEditorComments.lines": "第 {0}–{1} 行",
-    "agentEditorComments.help": "选择文本或将光标移到一行。选择添加评论，或按 Control+Alt+M（macOS 上为 Command+Option+M）。保存评论后，它会加入审核草稿。选择上一条评论或下一条评论以浏览。按 Escape 返回编辑器。",
+    "agentEditorComments.help": "选择文本或将光标移到一行。选择添加评论，或按 Control+Alt+M（macOS 上为 Command+Option+M），在该行旁打开评论输入框。保存评论后，它会加入审阅草稿。选择上一条评论或下一条评论以浏览。按 Escape 返回编辑器并保留草稿。",
     "agentEditorComments.text": "{0}：{1}",
     "agentEditorComments.empty": "暂无评论。",
     "agentEditorComments.count": "{0} 条评论",

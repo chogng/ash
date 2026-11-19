@@ -15,6 +15,9 @@ import { IPreferencesService } from '../../../../../services/preferences/common/
 import type { EditorPane } from '../../../../../browser/parts/editor/editorPane.js';
 import '../../../../../../platform/theme/common/sizes/baseSizes.js';
 import '../../../../../../editor/browser/widget/diffEditor/registrations.contribution.js';
+import '../../../../comments/browser/comments.contribution.js';
+import { COMMENTS_THREAD_EXPERIMENTAL_STYLE_SETTING, type CommentThreadStyle } from '../../../../comments/common/commentsConfiguration.js';
+import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import '../../../browser/github.contribution.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { setIconResolver } from '../../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -219,6 +222,7 @@ function showSettings(): void {
 services.registerInstance(IPreferencesService, { openSettings: async () => { showSettings(); }, openUserSettings: async () => { }, openGlobalKeybindingSettings: async () => { } });
 const commands = resources.add(new CommandService(services));
 window.ashGitHubReview = {
+	setCommentStyle: style => services.get(IConfigurationService).updateValue(COMMENTS_THREAD_EXPERIMENTAL_STYLE_SETTING, style),
 	managedFailure: kind => { transport.managedFailure = kind; },
 	external, settings: showSettings, requests: transport.requests, gitRequests, loggedOut, browserHosts, dirty: () => { dirty = true; }, open: () => commands.executeCommand('workbench.action.github.open'), close: () => { pane?.dispose(); pane = undefined; },
 	changeHead: () => { transport.commit = 'c'.repeat(40); }, fail: () => { transport.failure = 'GitHubSubmissionUncertain'; },
@@ -233,4 +237,4 @@ window.ashGitHubReview = {
 };
 window.addEventListener('pagehide', () => { pane?.dispose(); resources.dispose(); }, { once: true });
 if (new URL(location.href).searchParams.has('settings')) { showSettings(); } else { await window.ashGitHubReview.open(); }
-declare global { interface Window { ashGitHubReview: { managedFailure(kind: string | undefined): void; external: string[]; settings(): void; requests: Request[]; browserHosts: (string | undefined)[]; gitRequests: { method: string; params: Record<string, unknown>; }[]; loggedOut: { provider: string; accountId?: string; }[]; dirty(): void; open(): Promise<unknown>; close(): void; changeHead(): void; fail(): void; hold(method: string): void; release(): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; accessibleContent(type: AccessibleViewType): string; }; } }
+declare global { interface Window { ashGitHubReview: { setCommentStyle(style: CommentThreadStyle): Promise<void>; managedFailure(kind: string | undefined): void; external: string[]; settings(): void; requests: Request[]; browserHosts: (string | undefined)[]; gitRequests: { method: string; params: Record<string, unknown>; }[]; loggedOut: { provider: string; accountId?: string; }[]; dirty(): void; open(): Promise<unknown>; close(): void; changeHead(): void; fail(): void; hold(method: string): void; release(): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; accessibleContent(type: AccessibleViewType): string; }; } }

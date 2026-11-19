@@ -56,14 +56,17 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 	private readonly measureInput: HTMLTextAreaElement | undefined;
 	private readonly scrollable: Scrollable | undefined;
 	private readonly maxHeight: number;
-	private height = 0;
+	private contentHeight = 0;
 	private readonly message: HTMLDivElement;
 	private readonly _onDidChange = this._register(new Emitter<string>());
+	private readonly _onDidHeightChange = this._register(new Emitter<number>());
 	private readonly _onDidFocus = this._register(new Emitter<void>());
 	private readonly _onDidBlur = this._register(new Emitter<void>());
 	private _readOnly: boolean;
 
 	readonly onDidChange: Event<string> = this._onDidChange.event;
+	/** Reports changes to the full measured height of multiline content. */
+	readonly onDidHeightChange: Event<number> = this._onDidHeightChange.event;
 	readonly onDidFocus: Event<void> = this._onDidFocus.event;
 	readonly onDidBlur: Event<void> = this._onDidBlur.event;
 	readonly onKeyDown: Event<DOMEventMap['keydown']>;
@@ -197,12 +200,13 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 		if (!this.measureInput || !this.scrollable || this.isDisposed) { return; }
 		this.measureInput.value = this.value || ' ';
 		const contentHeight = Math.max(24, this.measureInput.scrollHeight);
-		const height = Math.min(this.maxHeight, contentHeight);
-		if (height !== this.height) {
-			this.height = height;
-			this.inputElement.style.height = `${height}px`;
+		const heightChanged = contentHeight !== this.contentHeight;
+		if (heightChanged) {
+			this.contentHeight = contentHeight;
+			this.inputElement.style.height = `${Math.min(this.maxHeight, contentHeight)}px`;
 		}
 		this.scrollable.setScrollDimensions({ width: this.inputElement.clientWidth, scrollWidth: this.inputElement.clientWidth, height: this.inputElement.clientHeight, scrollHeight: this.inputElement.scrollHeight }, false);
+		if (heightChanged) this._onDidHeightChange.fire(contentHeight);
 	}
 
 	get value(): string {
@@ -262,8 +266,8 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 		}
 	}
 
-	focus(): void {
-		this.inputElement.focus();
+	focus(options?: FocusOptions): void {
+		this.inputElement.focus(options);
 	}
 
 	blur(): void {

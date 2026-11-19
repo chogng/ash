@@ -6,6 +6,8 @@ import { getIconDefinition } from '../../../../../../platform/theme/common/iconR
 import '../../../../../../editor/browser/widget/diffEditor/registrations.contribution.js';
 import '../../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js';
 import '../../../../codeReview/browser/codeReview.contribution.js';
+import '../../../../../../workbench/contrib/comments/browser/comments.contribution.js';
+import { COMMENTS_THREAD_EXPERIMENTAL_STYLE_SETTING, type CommentThreadStyle } from '../../../../../../workbench/contrib/comments/common/commentsConfiguration.js';
 import '../../../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
 import { SessionChangesEditor } from '../../../browser/sessionChangesEditor.js';
 import { codeReviewScheme } from '../../../../codeReview/browser/sessionCodeReviewService.js';
@@ -411,6 +413,7 @@ declare global {
 			rejectFile(): void;
 			agentRequests(): readonly unknown[];
 			openCodeReview(options?: { multipleRepositories?: boolean; }): Promise<void>;
+			setCommentStyle(style: CommentThreadStyle): Promise<void>;
 			reviewForks(): readonly unknown[];
 			loseReviewAcknowledgement(): void;
 			focusReviewLine(line: number, endLine?: number): void;
@@ -453,6 +456,7 @@ window.ashChangesIntegration = {
 	updateCounter: value => counterValue.set(value),
 	disposeCounter: () => counterOwner.clear(),
 	reduceMotion: value => configuration.updateValue('workbench.reduceMotion', value),
+	setCommentStyle: style => configuration.updateValue(COMMENTS_THREAD_EXPERIMENTAL_STYLE_SETTING, style),
 	agentRequests: () => agentRequests,
 	reviewForks: () => reviewForks,
 	loseReviewAcknowledgement: () => { loseReviewAcknowledgement = true; },

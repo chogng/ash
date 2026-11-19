@@ -2,6 +2,7 @@ import './docsCommentsWidget.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { AnchorAxisAlignment, ContextView, ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -30,6 +31,7 @@ export class DocsCommentsWidget extends Disposable {
 	private readonly root: HTMLElement;
 	private readonly list: HTMLElement;
 	private readonly composer: HTMLElement;
+	private readonly popup: ContextView;
 	private readonly quote: HTMLElement;
 	private readonly input: InputBox<true>;
 	private readonly post: Button;
@@ -72,6 +74,8 @@ export class DocsCommentsWidget extends Disposable {
 		this._register(this.filter.onDidSelect(() => this.update()));
 		this.list = h(document, 'div', { className: 'ash-docs-comments-list' });
 		this.composer = h(document, 'div', { className: 'ash-docs-comment-composer', attributes: { hidden: '' } });
+		DocsCommentsFocused.bindTo(this._register(contextKeys.createScoped(this.composer))).set(true);
+		this.popup = this._register(new ContextView(container));
 		this.quote = h(document, 'blockquote', { className: 'ash-docs-comment-quote' });
 		this.composer.append(this.quote);
 		this.input = this._register(new InputBox(this.composer, {
@@ -84,12 +88,14 @@ export class DocsCommentsWidget extends Disposable {
 		this.post = this._register(new Button(buttons, { label: localize({ bundle: 'ash.docs', key: 'postComment' }, 'Post comment'), presentation: 'primary', enabled: false, onClick: () => this.submit() }));
 		this.composer.append(buttons);
 		this._register(this.input.onDidChange(() => this.updateComposer()));
+		this._register(this.input.onDidHeightChange(() => this.popup.layout()));
 		this._register(this.input.onKeyDown(event => {
 			if (event.isComposing || event.key !== 'Enter' || event.shiftKey || event.altKey) return;
 			event.preventDefault(); event.stopPropagation(); this.submit();
 		}));
-		this._register(addDisposableListener(this.root, 'keydown', event => {
-			if (event.isComposing) return;
+		this._register(addDisposableListener(container, 'keydown', event => {
+			const target = event.target as Node;
+			if (event.isComposing || (!this.root.contains(target) && !this.composer.contains(target))) return;
 			if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.hide(); }
 			if ((event.ctrlKey || event.metaKey) && !event.altKey && (event.code === 'KeyZ' || event.code === 'KeyY') && event.target !== this.input.inputElement) {
 				event.preventDefault(); event.stopPropagation();
@@ -101,6 +107,7 @@ export class DocsCommentsWidget extends Disposable {
 	}
 	get isVisible(): boolean { return !this.root.hidden; }
 	setEditor(editor: ArkdownEditor | undefined): void {
+		this.closePopup();
 		this.editorLifetime.clear();
 		if (this.editor && !this.editor.isDisposed) this.editor.setActiveComment(undefined);
 		this.editor = editor;
@@ -109,28 +116,66 @@ export class DocsCommentsWidget extends Disposable {
 		this.setVisible(false);
 		if (!editor) return;
 		const lifetime = this.editorLifetime.value = new DisposableStore();
+		lifetime.add(editor.onDidChangeMode(() => this.closePopup()));
 		lifetime.add(editor.onDidChangeSelection(() => { if (this.isVisible) this.update(); }));
 		lifetime.add(editor.onDidRequestComment(request => {
 			if (request.threadId) this.showThread(request.threadId, request.focus === true);
-			else if (!editor.comments.isReadonly) this.startComment(request.draft);
+			else if (!editor.comments.isReadonly) this.startComment(request.draft, request.getAnchor);
 			else this.show();
 		}));
 	}
-	show(): void { if (!this.editor) return; this.setVisible(true); this.update(); }
-	hide(): void { this.filter.hide(); this.setVisible(false); this.editor?.setActiveComment(undefined); this.editor?.focus(); }
+	show(): void { if (!this.editor) return; this.closePopup(); this.setVisible(true); this.update(); }
+	hide(): void { this.closePopup(); this.filter.hide(); this.setVisible(false); this.editor?.setActiveComment(undefined); this.editor?.focus(); }
+	closePopup(): void { this.popup.hide(); }
 	private setVisible(visible: boolean): void {
 		if (this.root.hidden === !visible) return;
 		this.root.hidden = !visible;
 		this.visibilityChanged.fire(visible);
 	}
-	private startComment(draft?: DocsCommentDraft): void {
-		if (!this.editor || this.editor.comments.isReadonly) return;
+	private startComment(draft?: DocsCommentDraft, getAnchor?: () => DOMRect | undefined): void {
+		const editor = this.editor;
+		if (!editor || editor.comments.isReadonly) return;
+		this.closePopup();
 		this.compose({ kind: 'new', draft }); this.activeThread = undefined;
-		this.editor.setActiveComment(undefined); this.show(); this.updateComposer(); this.input.focus();
+		editor.setActiveComment(undefined);
+		if (getAnchor && !editor.comments.snapshot.invalid && this.showPopup(editor, getAnchor)) {
+			return;
+		}
+		this.show();
+		this.input.focus();
+	}
+	private showPopup(editor: ArkdownEditor, getAnchor: () => DOMRect | undefined): boolean {
+		if (!getAnchor()) return false;
+		this.composer.classList.add('floating');
+		this.composer.setAttribute('role', 'dialog');
+		this.composer.setAttribute('aria-label', localize({ bundle: 'ash.docs', key: 'addComment' }, 'Add comment'));
+		this.updateComposer();
+		this.popup.show({
+			anchor: editor.domNode,
+			getAnchor,
+			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+			gap: 8,
+			content: this.composer,
+			presentation: 'dialog',
+			onHide: reason => {
+				if (this.composing) this.drafts.set(this.composerKey(this.composing), this.input.value);
+				this.composing = undefined;
+				this.composer.classList.remove('floating');
+				this.composer.removeAttribute('role');
+				this.composer.removeAttribute('aria-label');
+				this.root.append(this.composer);
+				this.updateComposer();
+				if (reason === ContextViewHideReason.Escape) editor.focus();
+			},
+		});
+		this.input.layout();
+		this.input.focus({ preventScroll: true });
+		return true;
 	}
 	private showThread(id: string, focus: boolean): void {
 		const thread = this.editor?.comments.snapshot.threads.find(thread => thread.id === id);
 		if (!thread) return;
+		this.closePopup();
 		// Preserve unsent input when an anchor is pressed again in the document.
 		if (this.activeThread !== id || !this.composing) this.compose({ kind: 'reply', threadId: id });
 		this.activeThread = id;
@@ -258,7 +303,15 @@ export class DocsCommentsWidget extends Disposable {
 	}
 	private cancel(): void {
 		if (this.composing) this.drafts.delete(this.composerKey(this.composing));
-		this.composing = undefined; this.input.value = ''; this.updateComposer(); this.update(); this.add.focus();
+		this.composing = undefined;
+		this.input.value = '';
+		if (this.popup.visible) {
+			this.closePopup();
+			this.editor?.focus();
+			return;
+		}
+		this.update();
+		this.add.focus();
 	}
 	private run(action: () => void): void {
 		const focused = this.root.ownerDocument.activeElement;
@@ -282,5 +335,5 @@ export class DocsCommentsWidget extends Disposable {
 				new Date(message.createdAt).toLocaleString(), message.body)),
 		].join('\n'))].join('\n\n');
 	}
-	protected override disposeCore(): void { this.filter.hide(); this.root.remove(); super.disposeCore(); }
+	protected override disposeCore(): void { this.closePopup(); this.filter.hide(); this.root.remove(); super.disposeCore(); }
 }

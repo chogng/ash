@@ -15,6 +15,7 @@ import './contrib/memory/browser/memory.contribution.js';
 import './contrib/trace/browser/trace.contribution.js';
 import './contrib/issue/browser/issue.contribution.js';
 import './contrib/github/browser/githubLinkPresentation.contribution.js';
+import './contrib/comments/browser/comments.contribution.js';
 import './contrib/github/browser/github.contribution.js';
 import './services/dialogs/common/dialogService.js';
 import './services/path/browser/pathService.js';

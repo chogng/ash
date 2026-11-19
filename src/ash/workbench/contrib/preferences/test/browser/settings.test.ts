@@ -197,6 +197,8 @@ configurationRegistry.updateConfigurations({
 });
 await import('../../../screenshotTool/browser/screenshotToolConfiguration.js');
 await import('../../../screenshotTool/browser/screenshotTool.contribution.js');
+await import('../../../browserView/browser/browserView.contribution.js');
+await import('../../../comments/browser/comments.contribution.js');
 const { EditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
 const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/editor.js');
 const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
@@ -2102,6 +2104,11 @@ test('settingsLayout is the single projection from registered settings to catego
 	const defaults = new DefaultSettings();
 	const layout = createSettingsLayout(defaults.all);
 	const model = new SettingsEditorModel(defaults.all);
+	assert.equal(findSettingCategory(layout, 'workbench.browser.openLinks'), 'browser');
+	assert.deepEqual(layout.find(category => category.id === 'browser')?.groups.find(group => group.id === 'downloads')?.settings.map(setting => setting.id), [
+		'workbench.browser.downloadDirectory', 'workbench.browser.askBeforeDownload',
+	]);
+	assert.equal(findSettingCategory(layout, 'comments.thread.experimental.style'), 'github');
 
 	assert.deepEqual(
 		SettingsCategories.map(category => category.id),
@@ -2364,6 +2371,8 @@ test('feature settings navigation and groups capture the language initialized be
 		assert.equal(style.description, '选择采用圆角区域的 Modern 样式或区域贴边的 Flat 样式。更改会立即生效。');
 		assert.equal(findSettingCategory(layout.createSettingsLayout(new DefaultSettings().all), WorkbenchConfiguration.layoutStyle), 'appearance');
 		assert.equal(layout.SettingsCategories.find(category => category.id === 'appearance')?.groups.find(group => group.id === 'style')?.label, '工作台样式');
+		assert.equal(layout.SettingsCategories.find(category => category.id === 'github')?.groups.find(group => group.id === 'review-comments')?.label, '审阅评论');
+		assert.equal(layout.SettingsCategories.find(category => category.id === 'browser')?.groups.find(group => group.id === 'downloads')?.label, '下载');
 		const application = layout.SettingsNavigation.find(group => group.id === 'application');
 		assert.ok(application);
 		assert.equal(application.label, '应用');

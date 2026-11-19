@@ -82,7 +82,12 @@ export class ArkdownEditor extends Disposable {
 	readonly onDidChangeMode = this.modeChanged.event;
 	private readonly selectionChanged = this._register(new Emitter<void>());
 	readonly onDidChangeSelection = this.selectionChanged.event;
-	private readonly commentRequested = this._register(new Emitter<{ readonly threadId?: string; readonly draft?: DocsCommentDraft; readonly focus?: boolean; }>());
+	private readonly commentRequested = this._register(new Emitter<{
+		readonly threadId?: string;
+		readonly draft?: DocsCommentDraft;
+		readonly getAnchor?: () => DOMRect | undefined;
+		readonly focus?: boolean;
+	}>());
 	readonly onDidRequestComment = this.commentRequested.event;
 	private activeComment: string | undefined;
 	private readonly tables: ArkdownTableController;
@@ -393,7 +398,19 @@ export class ArkdownEditor extends Disposable {
 		if (this.tables.hasCellSelection) { this.commentRequested.fire({ focus: true }); return; }
 		const range = this.readSelection();
 		const id = range.start === range.end ? [...this.comments.snapshot.anchors].find(([, anchor]) => anchor.range.start <= range.start && anchor.range.end >= range.end)?.[0] : undefined;
-		this.commentRequested.fire(id ? { threadId: id, focus: true } : { draft: this.captureCommentSelection(), focus: true });
+		if (id) {
+			this.commentRequested.fire({ threadId: id, focus: true });
+			return;
+		}
+		const draft = this.captureCommentSelection();
+		const selection = this.prose.ownerDocument.getSelection();
+		// Keep the original text range when focus moves into the comment input.
+		const selected = draft && selection?.rangeCount && this.containsSelection() ? selection.getRangeAt(0).cloneRange() : undefined;
+		const getAnchor = draft && selected ? () => {
+			if (this.mode !== 'rich' || this.comments.isReadonly || draft.version !== this.model.getVersionId()) return undefined;
+			return this.getTextSelectionBounds(selected, draft.range);
+		} : undefined;
+		this.commentRequested.fire({ draft, getAnchor, focus: true });
 	}
 	setActiveComment(id: string | undefined): void {
 		this.activeComment = id;
@@ -420,7 +437,10 @@ export class ArkdownEditor extends Disposable {
 		}
 		if (this.tables.hasCellSelection) return this.tables.getSelectionBounds();
 		if (!this.containsSelection() || !selection?.rangeCount || selection.isCollapsed || !selection.toString().trim()) return undefined;
-		const selected = selection.getRangeAt(0), source = this.readSelection(), rectangles: DOMRect[] = [];
+		return this.getTextSelectionBounds(selection.getRangeAt(0), this.readSelection());
+	}
+	private getTextSelectionBounds(selected: globalThis.Range, source: ArkdownRange): DOMRect | undefined {
+		const rectangles: DOMRect[] = [];
 		// A cross-block DOM range can include checkbox and block rectangles. Use
 		// its selected text fragments to anchor the toolbar to the visible words.
 		for (const segment of this.segments) {

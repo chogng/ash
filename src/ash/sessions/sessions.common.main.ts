@@ -67,6 +67,7 @@ import '../workbench/services/policies/browser/policyTelemetry.contribution.js';
 import '../workbench/api/browser/mainThreadDataChannels.contribution.js';
 import '../workbench/api/browser/mainThreadUriOpeners.js';
 import '../workbench/contrib/github/browser/githubLinkPresentation.contribution.js';
+import '../workbench/contrib/comments/browser/comments.contribution.js';
 import '../workbench/contrib/github/browser/github.contribution.js';
 import '../workbench/contrib/bulkEdit/browser/bulkEditService.js';
 import '../workbench/contrib/trace/browser/trace.contribution.js';

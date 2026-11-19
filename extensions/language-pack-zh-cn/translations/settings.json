@@ -484,6 +484,7 @@
     "browser.agent.label": "Agent 控制",
     "github.repository.label": "仓库",
     "github.repository.description": "选择 Git 协议和受保护分支的行为。",
+    "github.reviewComments.label": "审阅评论",
     "browser.agent.description": "控制浏览器自动化和高级调试访问权限。",
     "browser.chatgpt.label": "ChatGPT",
     "browser.chatgpt.description": "配置此窗口中的 ChatGPT。",
