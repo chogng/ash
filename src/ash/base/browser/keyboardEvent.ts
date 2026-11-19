@@ -57,7 +57,7 @@ export class StandardKeyboardEvent implements IKeyboardEvent {
 	constructor(readonly browserEvent: KeyboardEvent) {
 		this.key = browserEvent.key;
 		this.code = browserEvent.code;
-		this.keyCode = keyCodeFromKeyboardEvent(
+		this.keyCode = browserEvent.isComposing ? KeyCode.KeyInComposition : keyCodeFromKeyboardEvent(
 			browserEvent.key,
 			browserEvent.keyCode,
 			browserEvent.code,
@@ -70,7 +70,7 @@ export class StandardKeyboardEvent implements IKeyboardEvent {
 		this.altKey = browserEvent.altKey;
 		this.metaKey = browserEvent.metaKey;
 		this.altGraphKey = browserEvent.getModifierState?.('AltGraph') ?? false;
-		this.isComposing = browserEvent.isComposing;
+		this.isComposing = this.keyCode === KeyCode.KeyInComposition;
 		this.repeat = browserEvent.repeat;
 	}
 

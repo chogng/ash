@@ -35,12 +35,19 @@ test('standard keyboard events match physical chords and modifiers', () => {
 	assert.equal(event.matches({ code: 'KeyO', ctrlKey: true }), false);
 });
 
-test('composing keyboard events do not trigger physical chords', () => {
-	const event = new StandardKeyboardEvent(keyboardEvent({
-		isComposing: true,
-	}));
+test('IME-owned Enter does not trigger physical chords', () => {
+	for (const composing of [{ isComposing: true, keyCode: 13 }, { isComposing: false, keyCode: 229 }]) {
+		const event = new StandardKeyboardEvent(keyboardEvent({
+			key: 'Enter',
+			code: 'Enter',
+			ctrlKey: false,
+			...composing,
+		}));
 
-	assert.equal(event.matches({ code: 'KeyP', ctrlKey: true }), false);
+		assert.equal(event.keyCode, KeyCode.KeyInComposition);
+		assert.equal(event.isComposing, true);
+		assert.equal(event.matches({ code: 'Enter' }), false);
+	}
 });
 
 test('AltGraph does not masquerade as a Ctrl+Alt shortcut', () => {

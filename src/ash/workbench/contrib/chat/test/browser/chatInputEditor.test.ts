@@ -1109,6 +1109,40 @@ test('Chat slash provider finds description text without preselecting it', async
 	]);
 });
 
+test('Chat input leaves Enter to IME composition until the next send gesture', () => {
+	using resources = new DisposableStore();
+	const { editor } = createSnapshotComposer(resources);
+	editor.value = 'Draft';
+	editor.focus();
+	const input = requiredElement<HTMLTextAreaElement>(editor.element, '.stanza-editor-input');
+	const targetWindow = input.ownerDocument.defaultView!;
+	const submissions: string[] = [];
+	resources.add(editor.onDidSubmit(() => submissions.push(editor.value)));
+
+	input.dispatchEvent(new targetWindow.CompositionEvent('compositionstart', { bubbles: true }));
+	assert.equal(editor.codeEditor.inComposition, true);
+	const confirm = new targetWindow.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+	input.dispatchEvent(confirm);
+	assert.equal(confirm.defaultPrevented, false);
+	assert.deepEqual(submissions, []);
+
+	input.setRangeText('你好', input.selectionStart, input.selectionEnd, 'end');
+	input.dispatchEvent(new targetWindow.CompositionEvent('compositionend', { bubbles: true, data: '你好' }));
+	assert.equal(editor.codeEditor.inComposition, false);
+	assert.equal(editor.value, 'Draft你好');
+	const imeConfirm = new targetWindow.KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, bubbles: true, cancelable: true });
+	input.dispatchEvent(imeConfirm);
+	assert.equal(imeConfirm.defaultPrevented, false);
+	assert.deepEqual(submissions, []);
+
+	input.dispatchEvent(new targetWindow.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, shiftKey: true }));
+	assert.deepEqual(submissions, []);
+	const send = new targetWindow.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+	input.dispatchEvent(send);
+	assert.equal(send.defaultPrevented, true);
+	assert.deepEqual(submissions, ['Draft你好']);
+});
+
 test('Chat input completes slash commands before submitting', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

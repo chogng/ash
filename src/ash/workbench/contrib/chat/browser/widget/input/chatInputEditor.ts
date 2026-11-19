@@ -7,6 +7,7 @@ import './editor/chatInputEditorContrib.js';
 import './editor/chatInputEditorHover.js';
 import { ChatInlineAttachments } from './editor/chatInlineAttachments.js';
 import { addDisposableListener, stopEvent, h } from '../../../../../../base/browser/dom.js';
+import { StandardKeyboardEvent } from '../../../../../../base/browser/keyboardEvent.js';
 import { Emitter, type Event } from '../../../../../../base/common/event.js';
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
@@ -117,8 +118,9 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			this._onDidChange.fire(this.value);
 		}));
 		this._register(addDisposableListener(this.editor.controller.element, 'keydown', event => {
-			if (event.defaultPrevented || event.isComposing || event.key !== 'Enter' || event.shiftKey
+			if (event.defaultPrevented || event.key !== 'Enter' || event.shiftKey
 				|| (options.submitWithModifier && !event.ctrlKey && !event.metaKey)) return;
+			if (this.editor.inComposition || new StandardKeyboardEvent(event).isComposing) return;
 			if (event.altKey && !event.ctrlKey && !event.metaKey) {
 				stopEvent(event);
 				this.inlineAttachments.openActivePill();

@@ -42,6 +42,16 @@ test('Chat input editor fallback owns multiline change and submit gestures', () 
 		shiftKey: true,
 	}));
 	assert.equal(submissions, 0);
+	const imeConfirm = new dom.window.KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		key: 'Enter',
+		keyCode: 229,
+	});
+	textarea.dispatchEvent(imeConfirm);
+	assert.equal(imeConfirm.defaultPrevented, false);
+	assert.equal(submissions, 0);
+	assert.equal(editor.value, 'First draft');
 	const submitEvent = new dom.window.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,

@@ -1,4 +1,5 @@
 import { addDisposableListener, getWindow, h } from '../../../../../../base/browser/dom.js';
+import { StandardKeyboardEvent } from '../../../../../../base/browser/keyboardEvent.js';
 import { Emitter, type Event } from '../../../../../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
@@ -132,8 +133,9 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 			this._onDidChange.fire(this.value);
 		}));
 		this._register(addDisposableListener(this.element, 'keydown', (event) => {
-			if (event.key !== 'Enter' || event.shiftKey || event.isComposing || this.element.readOnly
-				|| (options.submitWithModifier && !event.ctrlKey && !event.metaKey)) return;
+			if (event.key !== 'Enter' || event.shiftKey || this.element.readOnly
+				|| (options.submitWithModifier && !event.ctrlKey && !event.metaKey)
+				|| new StandardKeyboardEvent(event).isComposing) return;
 			event.preventDefault();
 			event.stopPropagation();
 			this._onDidSubmit.fire();
