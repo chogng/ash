@@ -79,6 +79,28 @@ test('Bracket match controller distinguishes near, always, and never modes', () 
 	assert.equal(alwaysDecorations.size, 0);
 });
 
+test('bracket matching preserves distant pairs after disjoint multiline edits and undo', () => {
+	using configurations = new TestLanguageConfigurationService();
+	using registration = configurations.register('bracket-test', { brackets: [['{', '}'], ['(', ')']] });
+	using model = new TextModel(['{', ...Array<string>(2000).fill('value(x)'), '}'].join('\r\n'), {
+		languageId: 'bracket-test', languageConfigurationService: configurations,
+	});
+	const enclosing = () => model.bracketPairs.matchBracket(new Position(1, 1));
+	assert.equal(enclosing()?.[1].startLineNumber, 2002);
+	const changedLines: unknown[] = [];
+	using listener = model.onDidChangeTokens(event => changedLines.push(event.ranges));
+	model.applyOperations([
+		{ range: new Range(2, 1, 2, 1), text: '文😀\r\n' },
+		{ range: new Range(1000, 1, 1000, 9), text: '{}' },
+	]);
+	assert.deepEqual(changedLines, [[{ fromLineNumber: 2, toLineNumber: 3 }, { fromLineNumber: 1001, toLineNumber: 1001 }]]);
+	assert.equal(enclosing()?.[1].startLineNumber, 2003);
+	assert.equal(model.bracketPairs.matchBracket(new Position(1001, 1))?.[1].startColumn, 2);
+	model.undo();
+	assert.equal(enclosing()?.[1].startLineNumber, 2002);
+	assert.equal(model.bracketPairs.matchBracket(new Position(1000, 6))?.[1].startColumn, 8);
+});
+
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;
 	readonly contentLeftPadding = 12;

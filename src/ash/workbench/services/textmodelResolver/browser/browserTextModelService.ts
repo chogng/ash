@@ -10,8 +10,9 @@ import { TextModelConflictError, TextModelSaveCompletionError, type TextModelInp
 import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type ITextResourceStore } from '../common/textResourceStore.js';
 import { ModelService } from '../../../../editor/common/services/modelService.js';
 import { createPieceTreeTextBuffer } from '../../../../editor/common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
-import { EndOfLineSequence, EndOfLinePreference } from '../../../../editor/common/model.js';
+import { EndOfLineSequence, EndOfLinePreference, type TextBufferSnapshot } from '../../../../editor/common/model.js';
 import { Range } from '../../../../editor/common/core/range.js';
+import type { TextModelChange } from '../../../../editor/common/core/textChange.js';
 import { TextModel, type TextModelMaintenanceOptions } from '../../../../editor/common/model/textModel.js';
 import { EditSources } from '../../../../editor/common/textModelEditSource.js';
 import { RetainedModelUndoRedoHistory } from '../common/retainedModelUndoRedoHistory.js';
@@ -28,6 +29,24 @@ import { assertEncoding } from '../../textfile/common/encoding.js';
 import { localize } from '../../../../nls.js';
 import { TernarySearchTree } from '../../../../base/common/ternarySearchTree.js';
 
+// A saved model version shares immutable pieces. Reloads may already supply normalized text.
+type SavedText = string | TextBufferSnapshot;
+
+function sameTextRange(left: string | Pick<TextBufferSnapshot, 'getTextBetweenOffsets'>, right: SavedText, start: number, end: number): boolean {
+	if (left === right) return true;
+	for (let from = start; from < end; from += 65_536) {
+		const to = Math.min(from + 65_536, end);
+		const a = typeof left === 'string' ? left.slice(from, to) : left.getTextBetweenOffsets(from, to);
+		const b = typeof right === 'string' ? right.slice(from, to) : right.getTextBetweenOffsets(from, to);
+		if (a !== b) return false;
+	}
+	return true;
+}
+
+function sameSavedText(left: SavedText, right: SavedText): boolean {
+	return left.length === right.length && sameTextRange(left, right, 0, left.length);
+}
+
 interface TextModelEntry {
 	readonly isSnapshot: boolean;
 	readonly identityLifetime: IDisposable;
@@ -37,7 +56,8 @@ interface TextModelEntry {
 	readonly externalChangeEmitter: Emitter<void>;
 	readonly modelChangeListener: IDisposable;
 	readonly languageChangeListener: IDisposable;
-	savedText: string;
+	savedText: SavedText;
+	comparison: SavedTextComparison;
 	revision: string | undefined;
 	encoding: TextResourceContent['encoding'];
 	savedEncoding: TextResourceContent['encoding'];
@@ -50,6 +70,16 @@ interface TextModelEntry {
 	saveQueue: Promise<void>;
 	refresh: TextModelRefresh | undefined;
 	references: number;
+}
+
+/** UTF-16 prefix and suffix known to match the saved text at this model version. */
+interface SavedTextComparison {
+	readonly baseline: SavedText;
+	readonly version: number;
+	readonly eol: string;
+	readonly length: number;
+	readonly prefix: number;
+	readonly suffix: number;
 }
 
 interface TextModelRefresh {
@@ -256,7 +286,8 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const externalChangeEmitter = new Emitter<void>();
 		const untitled = resource.scheme === Schemas.untitled;
 		const isBaselineChange = untitled ? input.isUntitledBaselineChange : undefined;
-		const startsDirty = untitled && !isBaselineChange && model.getText().length > 0;
+		const startsDirty = untitled && !isBaselineChange && model.length > 0;
+		const savedText = untitled && !isBaselineChange ? '' : model.getTextBuffer().createSnapshot();
 		const entry: TextModelEntry = {
 			isSnapshot: input.initialText !== undefined && input.readOnly === true,
 			identityLifetime: this.uriIdentity.retainUri(resource),
@@ -268,13 +299,16 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 				if (!entry.updatingFile) {
 					entry.refresh?.controller.abort();
 					if (isBaselineChange?.(change, entry.dirty)) {
-						entry.savedText = model.getText();
+						entry.savedText = model.getTextBuffer().createSnapshot();
+						this.refreshDirty(entry);
+					} else {
+						this.refreshDirty(entry, change);
 					}
-					this.refreshDirty(entry);
 				}
 			}),
 			languageChangeListener: model.onDidChangeLanguage(event => this.modelLanguageChanged.fire({ model, oldLanguageId: event.oldLanguage })),
-			savedText: untitled && !isBaselineChange ? '' : model.getText(),
+			savedText,
+			comparison: { baseline: savedText, version: model.version, eol: model.getEOL(), length: model.length, prefix: startsDirty ? 0 : model.length, suffix: startsDirty ? 0 : model.length },
 			revision: content.revision,
 			encoding: content.encoding,
 			savedEncoding: content.encoding,
@@ -358,6 +392,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	private async saveAs(entry: TextModelEntry, resource: URI, signal: AbortSignal): Promise<void> {
 		this.ensureEntryAlive(entry);
 		if (this.uriIdentity.extUri.isEqual(resource, entry.resource)) return this.save(entry, signal);
+		const snapshot = entry.model.getTextBuffer().createSnapshot();
 		const text = entry.model.getText();
 		const baseline = entry.savedText;
 		const languageId = entry.model.getLanguageId();
@@ -372,9 +407,9 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		}
 		target.model.applyOperations([{ range: target.model.getFullModelRange(), text }]);
 		await target.save(signal);
-		if (!entry.disposed && entry.resource.scheme === Schemas.untitled && !target.isDirty && entry.savedText === baseline) {
+		if (!entry.disposed && entry.resource.scheme === Schemas.untitled && !target.isDirty && sameSavedText(entry.savedText, baseline)) {
 			// Only the captured draft was saved. A generated baseline may have advanced during the write.
-			entry.savedText = text;
+			entry.savedText = snapshot;
 			entry.savedEncoding = encoding;
 			this.refreshDirty(entry);
 		}
@@ -398,6 +433,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const state = recovery;
 		const lifetime = this.reference(key, entry);
 		state.pending++;
+		let savedSnapshot = entry.model.getTextBuffer().createSnapshot();
 		let savedText = entry.model.getText();
 		const encoding = entry.encoding;
 		const save = entry.saveQueue.then(async () => {
@@ -419,6 +455,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 					}
 					// Participant edits belong to this save, not a later dirty snapshot.
 					this.ensureEntryAlive(entry);
+					savedSnapshot = entry.model.getTextBuffer().createSnapshot();
 					savedText = entry.model.getText();
 				}
 				throwIfCancelled(signal, 'Text model save was cancelled');
@@ -453,7 +490,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 					throw error;
 				}
 				if (entry.disposed) return;
-				entry.savedText = savedText;
+				entry.savedText = savedSnapshot;
 				entry.savedEncoding = encoding;
 				entry.revision = saved.revision;
 				this.setExternalChange(entry, false);
@@ -497,7 +534,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		if (entry.resource.scheme === Schemas.untitled) {
 			this.applyFileContent(entry, {
 				resource: entry.resource,
-				text: entry.savedText,
+				text: typeof entry.savedText === 'string' ? entry.savedText : entry.savedText.getText(),
 				revision: entry.revision,
 				...(entry.savedEncoding === undefined ? {} : { encoding: entry.savedEncoding }),
 			}, 'revert');
@@ -514,8 +551,31 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		this.setExternalChange(entry, false);
 	}
 
-	private refreshDirty(entry: TextModelEntry): void {
-		const dirty = entry.model.getText() !== entry.savedText || entry.encoding !== entry.savedEncoding;
+	private refreshDirty(entry: TextModelEntry, change?: TextModelChange): void {
+		const { model, savedText, comparison } = entry;
+		const length = model.length;
+		const version = model.version;
+		const eol = model.getEOL();
+		let prefix = 0;
+		let suffix = 0;
+		// A different baseline, an EOL conversion, or a missed/reentrant edit
+		// requires comparing the complete content the next time lengths match.
+		if (change?.version === version && version === comparison.version + 1 && eol === comparison.eol && savedText === comparison.baseline) {
+			prefix = comparison.prefix;
+			suffix = comparison.suffix;
+			for (const edit of change.changes) {
+				prefix = Math.min(prefix, edit.rangeOffset);
+				suffix = Math.min(suffix, comparison.length - edit.rangeOffset - edit.rangeLength);
+			}
+		}
+		const end = length - suffix;
+		const buffer = model.getTextBuffer();
+		const sameText = length === savedText.length && (prefix >= end || sameTextRange(buffer, savedText, prefix, end));
+		// A reload supplies normalized text. Once verified, subsequent edits can
+		// compare against a snapshot in the current model's storage as well.
+		if (sameText && typeof savedText === 'string' && length > 0) entry.savedText = buffer.createSnapshot();
+		entry.comparison = { baseline: entry.savedText, version, eol, length, prefix: sameText ? length : prefix, suffix: sameText ? length : suffix };
+		const dirty = !sameText || entry.encoding !== entry.savedEncoding;
 		const changed = entry.dirty !== dirty;
 		entry.dirty = dirty;
 		if (!dirty) {
@@ -602,7 +662,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			buffer.dispose();
 		}
 		// Compare with the persisted baseline, not local edits or raw mixed-EOL bytes.
-		if (text === entry.savedText && content.encoding === entry.encoding) {
+		if (sameSavedText(text, entry.savedText) && content.encoding === entry.encoding) {
 			entry.revision = content.revision;
 			this.setExternalChange(entry, false);
 			return;
@@ -657,6 +717,9 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		// identity, while the model can still answer version/text requests.
 		this.modelRemoved.fire(entry.model);
 		entry.model.dispose();
+		// A disposed file reference can still be reachable after its editor closes.
+		entry.savedText = '';
+		entry.comparison = { ...entry.comparison, baseline: '' };
 	}
 
 	private async resolveContent(request: TextResourceResolveRequest, signal: AbortSignal): Promise<TextResourceContent> {

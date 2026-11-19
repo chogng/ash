@@ -30,3 +30,9 @@ export function countEOL(text: string): [number, number, number, StringEOL] {
 	if (count === 0) firstLineLength = text.length;
 	return [count, firstLineLength, text.length - lastLineStart, eol];
 }
+
+/** Keep a normalized input string shareable by the buffer, change event and history. */
+export function normalizeTextToEOL(text: string, eol: '\n' | '\r\n'): string {
+	if (eol === '\n') return text.replace(/\r\n?/g, '\n');
+	return text.replace(/\r(?!\n)|(?<!\r)\n/g, '\r\n');
+}

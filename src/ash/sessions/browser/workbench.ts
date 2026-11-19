@@ -466,11 +466,13 @@ export abstract class Workbench extends Disposable {
 		this._register(themes);
 		const ownerWindow = options.container.ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
+		const editorRestoration = new DeferredPromise<void>();
+		this._register(toDisposable(() => { void editorRestoration.complete(); }));
 
 		const {
 			services, configurationService, themeService, view, lifecycleService, providerId,
-			workspaceProjectionReady, extensionReady, serviceContributionReady, languageDiagnosticsService,
-		} = this.initServices(options, themes, storage, this.logService, userDataFiles, ownerWindow);
+			workspaceProjectionReady, editorDeclarationsReady, serviceContributionReady, languageDiagnosticsService,
+		} = this.initServices(options, themes, storage, this.logService, userDataFiles, ownerWindow, editorRestoration.p);
 		this._configurationService = configurationService;
 		this._themeService = themeService;
 		this.sessionsView = view;
@@ -508,8 +510,10 @@ export abstract class Workbench extends Disposable {
 		this._whenRestored = this.restore(services, options, editor, {
 			contributions, terminalContribution, recoveredDrafts, workspaceProjectionReady,
 			hasBrowser: !!browsers,
-			ready: [keybindingsReady, extensionReady, ...serviceContributionReady, options.initialWorkspaceReady],
+			ready: [keybindingsReady, editorDeclarationsReady, ...serviceContributionReady, options.initialWorkspaceReady],
 		});
+		const releaseExtensionAssets = (): Promise<void> => editorRestoration.complete();
+		void this._whenRestored.then(releaseExtensionAssets, releaseExtensionAssets);
 	}
 
 	async acceptHandoff(options: AgentsWindowHandoff): Promise<void> {
@@ -546,6 +550,7 @@ export abstract class Workbench extends Disposable {
 		logger: LogService,
 		userDataFileSystemProvider: IFileSystemProvider & IDisposable,
 		ownerWindow: Window,
+		loadStartupAssetsAfter: Promise<void>,
 	): {
 		services: InstantiationService;
 		configurationService: ConfigurationService;
@@ -554,7 +559,7 @@ export abstract class Workbench extends Disposable {
 		lifecycleService: ILifecycleService;
 		providerId: string;
 		workspaceProjectionReady: DeferredPromise<void>;
-		extensionReady: Promise<void>;
+		editorDeclarationsReady: Promise<void>;
 		serviceContributionReady: Promise<void>[];
 		languageDiagnosticsService: ILanguageDiagnosticsService | undefined;
 	} {
@@ -600,9 +605,9 @@ export abstract class Workbench extends Disposable {
 		const themeService = this.registerHostServices(services, options, configurationService, enabledExtensions, ownerWindow);
 		const primary = this.registerPrimarySessionServices(services, options, configurationService);
 		const systemPolicies = hostServices.has(IPolicyService) ? hostServices.get(IPolicyService) : new NullPolicyService();
-		const extensionReady = this.registerWorkspaceServices(services, options, themes, themeService, primary.files);
+		const { editorDeclarationsReady, extensionAssetsReady } = this.registerWorkspaceServices(services, options, themes, themeService, primary.files, loadStartupAssetsAfter);
 		const { languageDiagnosticsService, configurationReady } = this.registerProviderRouting(
-			services, options, configurationService, primary, systemPolicies, extensionReady,
+			services, options, configurationService, primary, systemPolicies, editorDeclarationsReady, extensionAssetsReady,
 		);
 		const serviceContributionReady = [configurationReady];
 		services.registerInstance(IArtifactIntegrationRegistry, this._register(new ArtifactIntegrationRegistry()));
@@ -619,7 +624,7 @@ export abstract class Workbench extends Disposable {
 		}));
 		return {
 			services, configurationService, themeService, view: primary.view, lifecycleService, providerId: primary.providerId,
-			workspaceProjectionReady, extensionReady, serviceContributionReady, languageDiagnosticsService,
+			workspaceProjectionReady, editorDeclarationsReady, serviceContributionReady, languageDiagnosticsService,
 		};
 	}
 
@@ -792,7 +797,8 @@ export abstract class Workbench extends Disposable {
 		themes: ExtensionColorThemeService,
 		themeService: WorkbenchThemeService,
 		files: SessionFileService,
-	): Promise<void> {
+		loadStartupAssetsAfter: Promise<void>,
+	): { editorDeclarationsReady: Promise<void>; extensionAssetsReady: Promise<void>; } {
 		const configurationService = services.get(IConfigurationService);
 		const fileService = services.get(IFileService);
 		const languageService = services.get(ILanguageService);
@@ -823,11 +829,13 @@ export abstract class Workbench extends Disposable {
 		const treeSitterLibrary = this._register(services.createInstance(TreeSitterLibraryService));
 		services.registerInstance(ITreeSitterLibraryService, treeSitterLibrary);
 		this._register(new TreeSitterSyntaxProviders(services.get(ILanguageFeaturesService)));
-		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: options.api.events, languageService, languageConfigurationService: services.get(ILanguageConfigurationService) }));
+		const extensionService = this._register(services.createInstance(AppServerExtensionService, {
+			api: enabledExtensions, eventApi: options.api.events, languageService, languageConfigurationService: services.get(ILanguageConfigurationService), loadStartupAssetsAfter,
+		}));
 		services.registerInstance(IExtensionService, extensionService);
 		services.get(ISnippetsService);
-		const extensionReady = extensionService.start();
-		void extensionReady.catch(error => this.logService.error('extensions', 'Declarative extension activation failed', error));
+		const extensionAssetsReady = extensionService.start();
+		void extensionAssetsReady.catch(error => this.logService.error('extensions', 'Declarative extension activation failed', error));
 		const textModels = this._register(getBrowserTextModelService(getBrowserTextResourceStore(textFiles), services, {
 			languageService,
 			languageConfigurationService: services.get(ILanguageConfigurationService),
@@ -848,7 +856,9 @@ export abstract class Workbench extends Disposable {
 		if (!options.api.appServer.isAvailable) services.registerInstance(IContentSearchService, new FileContentSearchService(fileService));
 		services.registerSingleton(IKeybindingEditingService, () => services.createInstance(KeybindingsEditingService));
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
-		return extensionReady;
+		// Editor providers need verified declarations during restore. Language assets
+		// and unused icon themes can load once the saved window has been restored.
+		return { editorDeclarationsReady: extensionService.whenEditorContributionsReady(), extensionAssetsReady };
 	}
 
 	private registerProviderRouting(
@@ -857,7 +867,8 @@ export abstract class Workbench extends Disposable {
 		configurationService: ConfigurationService,
 		primary: { primaryHostServices: InstantiationService; providerId: string; chat: ChatService; },
 		systemPolicies: IPolicyService,
-		extensionReady: Promise<void>,
+		editorDeclarationsReady: Promise<void>,
+		extensionAssetsReady: Promise<void>,
 	): { languageDiagnosticsService: ILanguageDiagnosticsService | undefined; configurationReady: Promise<void>; } {
 		const { primaryHostServices, providerId, chat } = primary;
 		const fileService = services.get(IFileService);
@@ -926,11 +937,13 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IPolicyService, policies);
 		// Match Code startup: server initialization needs the extension defaults as
 		// well as the profile and workspace settings, before any background pull.
-		const configurationReady = Promise.all([configurationService.initialize(fileService, policies, workingCopies), extensionReady]).then(() => {
+		const configurationReady = Promise.all([configurationService.initialize(fileService, policies, workingCopies), editorDeclarationsReady]).then(() => undefined);
+		void Promise.all([configurationReady, extensionAssetsReady]).then(() => {
+			if (this.isDisposed) return;
 			languageLifecycle?.start();
 			languageProviders?.start();
 			languageDiagnosticsService?.start();
-		});
+		}).catch(error => this.logService.error('startup', 'Language service startup failed', error));
 		return { languageDiagnosticsService, configurationReady };
 	}
 
@@ -1752,6 +1765,7 @@ export abstract class Workbench extends Disposable {
 		if (this.isDisposed) return;
 		this.domNode.setAttribute('aria-busy', 'false');
 		this.logService.info('lifecycle', 'Agents restored');
+		performance.mark('ash.sessions.views-restored');
 		this._register(disposableWindowTimeout(this.domNode.ownerDocument.defaultView!, () => {
 			this.lifecycleService.phase = LifecyclePhase.Eventually;
 			contributions.advance(WorkbenchPhase.Eventually);

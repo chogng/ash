@@ -38,6 +38,27 @@ test('tokenization batches coalesce whole-document folding provider requests', a
 	assert.equal(calls, initial + 1);
 });
 
+test('a burst of edits cancels stale folding work and an immediate Fold uses the new indentation', async () => {
+	using features = new LanguageFeaturesService();
+	const requests: AbortSignal[] = [];
+	using provider = features.foldingRangeProvider.register('plaintext', {
+		provideFoldingRanges: (_request, signal) => { requests.push(signal); return []; },
+	});
+	using model = new TextModel('header\nbody\nend');
+	using editor = createTestCodeEditor({ container: document.createElement('main'), model, languageFeaturesService: features });
+	const initial = requests.length;
+	assert.ok(initial > 0);
+	for (let index = 0; index < 3; index++) {
+		model.applyEdits([{ range: new Range(2, 1, 2, 1), text: ' ' }]);
+	}
+	assert.ok(requests[initial - 1]!.aborted);
+	assert.equal(requests.length, initial);
+	assert.equal(model.getAllDecorations().some(item => item.options.description === 'folding-expanded'), false);
+	await editor.getAction('editor.fold')!.run();
+	assert.equal(requests.length, initial + 1);
+	assert.ok(model.getAllDecorations().some(item => item.options.description === 'folding-collapsed'));
+});
+
 
 test('FoldingDecorationProvider selects controls, highlights, and editor-owned decoration lifetime', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

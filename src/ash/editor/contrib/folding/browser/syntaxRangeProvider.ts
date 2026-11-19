@@ -20,35 +20,41 @@ export function computeEditorLanguageFoldingRanges(model: TextModel, languageId:
 			appendRange(ranges, pair.openingBracketRange.startLineNumber - 1, pair.closingBracketRange.startLineNumber - 1);
 		}
 	});
-	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex += 1) {
-		const line = model.getLineContent(lineIndex + 1);
-		const tokens = model.tokenization.getLineTokens(lineIndex + 1);
-		if (blockComment?.blockCommentStartToken && blockComment.blockCommentEndToken) {
+	const markers = configuration.foldingRules.markers;
+	const commentOpen = blockComment?.blockCommentStartToken;
+	const commentClose = blockComment?.blockCommentEndToken;
+	const hasBlockComments = !!commentOpen && !!commentClose;
+	if (!hasBlockComments && !markers) return Object.freeze(normalizeFoldingRanges(ranges));
+	const markerStart = markers && statelessMarker(markers.start);
+	const markerEnd = markers && statelessMarker(markers.end);
+	const lineCount = model.lineCount;
+	for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
+		const tokens = hasBlockComments ? model.tokenization.getLineTokens(lineIndex + 1) : undefined;
+		const line = tokens ? tokens.getLineContent() : model.getLineContent(lineIndex + 1);
+		if (tokens && hasBlockComments) {
 			for (let index = 0; index < tokens.getCount(); index++) {
 				if (tokens.getStandardTokenType(index) !== StandardTokenType.Comment) continue;
 				const text = line.slice(tokens.getStartOffset(index), tokens.getEndOffset(index));
-				if (commentStart === undefined && text.startsWith(blockComment.blockCommentStartToken)) commentStart = lineIndex;
-				if (commentStart !== undefined && text.endsWith(blockComment.blockCommentEndToken)) {
+				if (commentStart === undefined && text.startsWith(commentOpen)) commentStart = lineIndex;
+				if (commentStart !== undefined && text.endsWith(commentClose)) {
 					appendRange(ranges, commentStart, lineIndex);
 					commentStart = undefined;
 				}
 			}
 		}
-		if (matchesMarker(configuration.foldingRules.markers?.end, line)) {
+		if (markerEnd?.test(line)) {
 			const start = markerStarts.pop();
 			if (start !== undefined) appendRange(ranges, start, lineIndex);
-		} else if (matchesMarker(configuration.foldingRules.markers?.start, line)) {
+		} else if (markerStart?.test(line)) {
 			markerStarts.push(lineIndex);
 		}
 	}
 	return Object.freeze(normalizeFoldingRanges(ranges));
 }
 
-function matchesMarker(pattern: RegExp | undefined, line: string): boolean {
-	if (!pattern) return false;
-	// Configuration patterns are frozen at registration time. Recreate a
-	// stateless matcher so global/sticky contributions cannot mutate `lastIndex`.
-	return new RegExp(pattern.source, pattern.flags.replace(/[gy]/gu, '')).test(line);
+function statelessMarker(pattern: RegExp): RegExp {
+	// A scan owns its matchers; global and sticky configuration flags carry a line's lastIndex.
+	return new RegExp(pattern.source, pattern.flags.replace(/[gy]/gu, ''));
 }
 
 /** Merges independently-derived provider ranges while retaining only nested or disjoint spans. */

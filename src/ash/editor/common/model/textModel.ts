@@ -8,7 +8,7 @@ import { URI } from '../../../base/common/uri.js';
 import { LengthEdit, LengthReplacement } from '../core/edits/lengthEdit.js';
 import { TextEdit } from '../core/edits/textEdit.js';
 import type { DecorationProvider } from './decorationProvider.js';
-import { countEOL } from '../core/misc/eolCounter.js';
+import { countEOL, normalizeTextToEOL } from '../core/misc/eolCounter.js';
 import { normalizeIndentation } from '../core/misc/indentation.js';
 import { EDITOR_MODEL_DEFAULTS } from '../core/misc/textModelDefaults.js';
 import { OffsetRange } from '../core/ranges/offsetRange.js';
@@ -51,7 +51,6 @@ interface AnnotatedOffsetEdit extends OffsetEdit {
 
 interface PreparedEdit extends AnnotatedOffsetEdit {
 	readonly range: Range;
-	readonly replacedText: string;
 }
 
 interface ModelDecorationEntry {
@@ -2081,17 +2080,15 @@ export class TextModel implements ITextModel {
 		}
 
 		return sorted.flatMap<PreparedEdit>(edit => {
-			const replacedText = this.buffer.getValueInRange(this.buffer.getRangeAt(edit.startOffset, edit.endOffset - edit.startOffset));
 			// A forced replacement moves markers even when its characters match. Keep
 			// that semantic edit and its history replay observable to model consumers.
-			if (replacedText === edit.text && !edit.forceMoveMarkers && !replayingHistory) return [];
+			if (!edit.forceMoveMarkers && !replayingHistory && this.offsetEditIsNoOp(edit)) return [];
 			return [{
 				...edit,
 				range: Range.fromPositions(
 					this.positionAt(edit.startOffset),
 					this.positionAt(edit.endOffset),
 				),
-				replacedText,
 			}];
 		});
 	}
@@ -2111,7 +2108,18 @@ export class TextModel implements ITextModel {
 	}
 
 	private offsetEditsAreNoOps(edits: readonly OffsetEdit[]): boolean {
-		return edits.every(edit => this.buffer.getValueInRange(this.buffer.getRangeAt(edit.startOffset, edit.endOffset - edit.startOffset)) === edit.text);
+		return edits.every(edit => this.offsetEditIsNoOp(edit));
+	}
+
+	private offsetEditIsNoOp(edit: OffsetEdit): boolean {
+		if (edit.endOffset - edit.startOffset !== edit.text.length) return false;
+		// Keep an unchanged replacement a no-op without materializing the whole selection.
+		const chunkSize = 16_384;
+		for (let offset = 0; offset < edit.text.length; offset += chunkSize) {
+			const end = Math.min(offset + chunkSize, edit.text.length);
+			if (this.buffer.getTextBetweenOffsets(edit.startOffset + offset, edit.startOffset + end) !== edit.text.slice(offset, end)) return false;
+		}
+		return true;
 	}
 
 	/**
@@ -2245,7 +2253,7 @@ export class TextModel implements ITextModel {
 	private translateHistoryEdits(edits: readonly OffsetEdit[], editsEOL: EndOfLineSequence): OffsetEdit[] {
 		const currentEOL = this.getEndOfLineSequence();
 		if (editsEOL === currentEOL) return edits.map(edit => ({ ...edit }));
-		const sourceBuffer = createPieceTreeTextBuffer(
+		using sourceBuffer = createPieceTreeTextBuffer(
 			normalizeTextToEOL(this.buffer.createSnapshot().getText(), endOfLineText(editsEOL)),
 			editsEOL === EndOfLineSequence.CRLF ? DefaultEndOfLine.CRLF : DefaultEndOfLine.LF,
 		);
@@ -2495,10 +2503,6 @@ function requireEndOfLineSequence(eol: EndOfLineSequence): EndOfLineSequence {
 
 function endOfLineText(eol: EndOfLineSequence): '\n' | '\r\n' {
 	return eol === EndOfLineSequence.CRLF ? '\r\n' : '\n';
-}
-
-function normalizeTextToEOL(text: string, eol: '\n' | '\r\n'): string {
-	return text.replace(/\r\n|\r|\n/g, eol);
 }
 
 /** Fixed model-size limits used to keep expensive editor features bounded. */

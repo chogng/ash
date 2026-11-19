@@ -13,11 +13,25 @@ test('native edit-context offsets are clamped and validated', () => {
 	assert.equal(isNativeTextUpdateEvent({ text: 'x', updateRangeStart: -1, updateRangeEnd: 1 }), false);
 });
 
-test('native text window remains bounded around the selection', () => {
-	const text = 'a'.repeat(NATIVE_TEXT_WINDOW_LENGTH * 2);
-	const window = createNativeTextWindow(text, NATIVE_TEXT_WINDOW_LENGTH, NATIVE_TEXT_WINDOW_LENGTH);
-	assert.equal(window.endOffset - window.startOffset, NATIVE_TEXT_WINDOW_LENGTH);
-	assert.ok(window.startOffset <= NATIVE_TEXT_WINDOW_LENGTH && window.endOffset >= NATIVE_TEXT_WINDOW_LENGTH);
+test('native input reads only its selection window and preserves UTF-16 edges', () => {
+	const width = NATIVE_TEXT_WINDOW_LENGTH;
+	const text = 'a'.repeat(width / 2 - 1) + '😀' + 'x'.repeat(width - 2) + '😀' + '\r\n'.repeat(width);
+	const reads: number[] = [];
+	const source = {
+		getLength: () => text.length,
+		getTextBetweenOffsets: (start: number, end: number) => {
+			reads.push(end - start);
+			return text.slice(start, end);
+		},
+	};
+	const window = createNativeTextWindow(source, width, width);
+	assert.equal(window.startOffset, width / 2 - 1);
+	assert.equal(window.text, '😀' + 'x'.repeat(width - 2) + '😀');
+	assert.deepEqual(reads, [width + 2]);
+	const selected = createNativeTextWindow(source, 0, text.length);
+	assert.deepEqual(selected, { startOffset: 0, text });
+	const tail = createNativeTextWindow(source, text.length, text.length);
+	assert.deepEqual(tail, { startOffset: text.length - width, text: text.slice(-width) });
 });
 
 test('edit-context factory owns browser object construction and reports missing support', () => {

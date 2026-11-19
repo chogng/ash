@@ -41,9 +41,12 @@ export type CollapseMemento = readonly FoldingLineMemento[];
  */
 export class EditorFoldingModel extends Disposable {
 	private readonly changeEmitter = this._register(new Emitter<void>());
+	private readonly willChangeFoldState = this._register(new Emitter<void>());
 	private records: readonly EditorFoldingRegionRecord[] = Object.freeze([]);
 
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
+	/** Lets the range source flush pending local folds before an explicit user action. */
+	readonly onWillChangeFoldState: Event<void> = this.willChangeFoldState.event;
 
 	constructor(private readonly textModel: TextModel) {
 		super();
@@ -158,6 +161,7 @@ export class EditorFoldingModel extends Disposable {
 	/** Toggles the innermost fold whose header is exactly `lineIndex`. */
 	toggleAtLine(lineIndex: number): EditorFoldingRegion | undefined {
 		validateEditorFoldingLineIndex(this.textModel, lineIndex);
+		this.willChangeFoldState.fire();
 		const record = this.findRecord(candidate => candidate.range.range.startLineNumber - 1 === lineIndex);
 		if (!record) return undefined;
 		record.collapsed = !record.collapsed;
@@ -169,6 +173,7 @@ export class EditorFoldingModel extends Disposable {
 	/** Toggles the innermost fold containing `lineIndex`, as used by editor fold chords. */
 	toggleContainingLine(lineIndex: number): EditorFoldingRegion | undefined {
 		validateEditorFoldingLineIndex(this.textModel, lineIndex);
+		this.willChangeFoldState.fire();
 		const record = this.findRecord(candidate => {
 			const range = candidate.range.range;
 			return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
@@ -187,6 +192,7 @@ export class EditorFoldingModel extends Disposable {
 		options?: { levels: number; direction: 'up' | 'down'; },
 	): void {
 		if (typeof collapsed !== 'boolean') throw new TypeError('Folding collapse state must be boolean');
+		this.willChangeFoldState.fire();
 		const targets = new Set<EditorFoldingRegionRecord>();
 		const levels = options?.levels ?? 1;
 		const depths = options?.direction === 'down' && levels > 1
@@ -256,6 +262,7 @@ export class EditorFoldingModel extends Disposable {
 	addManualRange(startLineIndex: number, endLineIndex: number): EditorFoldingRegion | undefined {
 		validateEditorFoldingLineIndex(this.textModel, startLineIndex);
 		validateEditorFoldingLineIndex(this.textModel, endLineIndex);
+		this.willChangeFoldState.fire();
 		if (endLineIndex <= startLineIndex || !this.canAddManualRange(startLineIndex, endLineIndex)) return undefined;
 		const existingManual = this.records.find(record => {
 			const range = record.range.range;
@@ -305,6 +312,7 @@ export class EditorFoldingModel extends Disposable {
 	/** Sets the collapse state of every current range. */
 	setAllCollapsed(collapsed: boolean): boolean {
 		if (typeof collapsed !== 'boolean') throw new TypeError('Folding collapse state must be boolean');
+		this.willChangeFoldState.fire();
 		let changed = false;
 		for (const record of this.records) {
 			if (record.collapsed === collapsed) continue;
@@ -318,6 +326,7 @@ export class EditorFoldingModel extends Disposable {
 	/** Collapses one nesting level, preserving other levels and ranges containing a selected line. */
 	collapseToLevel(level: number, selectedLineIndexes: readonly number[] = []): boolean {
 		if (!Number.isSafeInteger(level) || level < 1) throw new RangeError('Folding level must be a positive safe integer');
+		this.willChangeFoldState.fire();
 		let changed = false;
 		for (const record of this.records) {
 			const range = record.range.range;
@@ -345,6 +354,7 @@ export class EditorFoldingModel extends Disposable {
 
 	private setContainingRegionRecursively(lineIndex: number, collapsed: boolean): EditorFoldingRegion | undefined {
 		validateEditorFoldingLineIndex(this.textModel, lineIndex);
+		this.willChangeFoldState.fire();
 		const target = this.findRecord(candidate => {
 			const range = candidate.range.range;
 			return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;

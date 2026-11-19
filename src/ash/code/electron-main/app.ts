@@ -23,6 +23,7 @@ import { SystemPolicyService } from '../../platform/policy/node/systemPolicyServ
 import { FilePolicyService } from '../../platform/policy/common/filePolicyService.js';
 import { PolicyChannel } from '../../platform/policy/common/policyIpc.js';
 import { randomUUID } from 'node:crypto';
+import { Worker, MessageChannel } from 'node:worker_threads';
 import { WebviewProtocolProvider } from '../../platform/webview/electron-main/webviewProtocolProvider.js';
 import { isAdmin, TerminalWindowTransferHost } from '../../platform/native/electron-main/nativeHostMainService.js';
 import { ChecksumService, checksumChannel } from '../../platform/checksum/electron-main/checksumService.js';
@@ -1196,21 +1197,29 @@ export class AshApplication extends Disposable {
 		let userKeyboardLayout: UserKeyboardLayoutMainService | undefined;
 		try {
 			let watcher: DiskFileSystemProviderClient | undefined;
-			// Windows directory watches use asynchronous I/O and can share Main's
-			// provider. Avoid an otherwise idle Electron process for profile notifications.
-			// FSEvents registration/close can block synchronously on macOS; preserve
-			// the isolated watcher on non-Windows hosts.
+			// Native watch registration and close can block on macOS. Keep them on
+			// a worker thread while sharing Main's process and executable mappings.
 			if (process.platform !== 'win32') {
-				const watcherProcess = this._register(new UtilityProcess({
-					name: 'Ash File Watcher',
-					entryPoint: join(utilityOutput, 'fileWatcher', 'fileWatcherMain.js'),
-					args: [this.profileRoot],
+				const watcherThread = new Worker(join(utilityOutput, 'fileWatcher', 'fileWatcherMain.js'), {
+					argv: [this.profileRoot],
+					execArgv: [],
+					name: 'ash-profile-file-watcher',
+				});
+				const { port1: watcherPort, port2 } = new MessageChannel();
+				this._register(toDisposable(() => {
+					void watcherThread.terminate().catch(error => this.logService.error('files', 'Failed to stop the profile file watcher', error));
 				}));
-				const watcherPort = watcherProcess.connect('profile');
+				watcherThread.once('error', error => {
+					this.logService.error('files', 'Profile file watcher failed', error);
+					watcherPort.close();
+				});
+				watcherThread.once('exit', () => watcherPort.close());
+				watcherThread.postMessage({ context: 'profile', port: port2 }, [port2]);
+				// Node types these as Event callbacks; the IPC boundary validates MessageEvent byte payloads.
 				const watcherClient = this._register(new MessagePortClient({
 					postMessage: data => watcherPort.postMessage(data), start: () => watcherPort.start(), close: () => watcherPort.close(),
-					addEventListener: (type, listener) => type === 'message' ? watcherPort.on('message', listener) : watcherPort.on('close', listener as () => void),
-					removeEventListener: (type, listener) => type === 'message' ? watcherPort.off('message', listener) : watcherPort.off('close', listener as () => void),
+					addEventListener: (type, listener) => watcherPort.addEventListener(type, listener as unknown as Parameters<typeof watcherPort.addEventListener>[1]),
+					removeEventListener: (type, listener) => watcherPort.removeEventListener(type, listener as unknown as Parameters<typeof watcherPort.removeEventListener>[1]),
 				}, 'profile'));
 				const watcherChannel = watcherClient.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME);
 				this._register(watcherChannel.listen<unknown>('watchError')(error => {

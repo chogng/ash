@@ -1,3 +1,4 @@
+import { parentPort, MessagePort } from 'node:worker_threads';
 import { isAbsolute } from 'node:path';
 import { Client } from '../../../base/parts/ipc/common/ipc.mp.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
@@ -8,14 +9,13 @@ import { LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../../platform/files/common/d
 import { DiskFileSystemProvider } from '../../../platform/files/node/diskFileSystemProvider.js';
 import { AbstractDiskFileSystemProviderChannel } from '../../../platform/files/node/diskFileSystemProviderServer.js';
 
-// Main grants one profile root at process launch; no renderer can widen this scope.
+// Main grants one profile root at thread launch; no renderer can widen this scope.
 const [profileRoot, ...extra] = process.argv.slice(2);
 if (!profileRoot || !isAbsolute(profileRoot) || profileRoot.includes('\0') || extra.length) {
 	throw new TypeError('Invalid file watcher profile root');
 }
 const resources = new DisposableStore();
-// Referenced watchers keep this process's Node event loop active for file notifications.
-// Main owns the utility lifetime and terminates it when the application closes.
+// Main owns the thread lifetime. Referenced watchers keep its event loop active.
 const provider = resources.add(new DiskFileSystemProvider([URI.file(profileRoot)], undefined, { persistent: true }));
 
 class FileWatcherChannel extends AbstractDiskFileSystemProviderChannel<string> {
@@ -27,22 +27,23 @@ class FileWatcherChannel extends AbstractDiskFileSystemProviderChannel<string> {
 	}
 
 	public override async call<T>(): Promise<T> {
-		// This process owns notifications only; all file mutations stay with Main.
+		// This thread owns notifications only; all file mutations stay with Main.
 		throw new Error('File watcher does not accept file operations');
 	}
 }
 
 let connected = false;
-process.parentPort.on('message', (event: Electron.MessageEvent) => {
-	if (connected || !isRecord(event.data) || event.data.context !== 'profile' || event.ports.length !== 1) {
+if (!parentPort) throw new Error('File watcher requires its parent thread');
+parentPort.on('message', (value: unknown) => {
+	if (connected || !isRecord(value) || value.context !== 'profile' || !(value.port instanceof MessagePort)) {
 		throw new TypeError('Invalid file watcher connection');
 	}
 	connected = true;
-	const [port] = event.ports;
+	const port = value.port;
 	const client = resources.add(new Client({
 		postMessage: data => port.postMessage(data), start: () => port.start(), close: () => port.close(),
-		addEventListener: (type, listener) => type === 'message' ? port.on('message', listener) : port.on('close', listener as () => void),
-		removeEventListener: (type, listener) => type === 'message' ? port.off('message', listener) : port.off('close', listener as () => void),
+		addEventListener: (type, listener) => port.addEventListener(type, listener as unknown as Parameters<typeof port.addEventListener>[1]),
+		removeEventListener: (type, listener) => port.removeEventListener(type, listener as unknown as Parameters<typeof port.removeEventListener>[1]),
 	}, 'profile'));
 	client.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, resources.add(new FileWatcherChannel(provider)));
 	port.once('close', () => resources.dispose());

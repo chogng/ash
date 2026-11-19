@@ -56,7 +56,8 @@ registerEditorPane({
 	id: MULTI_DIFF_EDITOR_ID,
 	name: 'Stanza Multi Diff',
 	canOpen: matchMultiDiffEditor,
-	create: options => {
+	create: async options => {
+		await import('../../../../editor/editor.code.all.js');
 		const instantiationService = options.instantiationService;
 		if (!instantiationService) throw new Error('Stanza Multi Diff requires the Workbench instantiation service');
 		return instantiationService.createInstance(MultiDiffEditor, {

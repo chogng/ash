@@ -335,6 +335,8 @@ export interface ITextBuffer extends IDisposable {
 	getOffsetAt(lineNumber: number, column: number): number;
 	getPositionAt(offset: number): Position;
 	getRangeAt(start: number, length: number): Range;
+	/** Reads raw UTF-16 units in [start, end), including partial line separators. */
+	getTextBetweenOffsets(start: number, end: number): string;
 	getValueInRange(range: Range, eol?: EndOfLinePreference): string;
 	getValueLengthInRange(range: Range, eol?: EndOfLinePreference): number;
 	getCharacterCountInRange(range: Range, eol?: EndOfLinePreference): number;

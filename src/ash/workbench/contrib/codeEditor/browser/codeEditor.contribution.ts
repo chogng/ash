@@ -34,7 +34,9 @@ registerEditorPane({
 	id: CODE_EDITOR_ID,
 	name: localize('workbench.textEditor', 'Text Editor'),
 	canOpen: matchCodeEditor,
-	create: options => {
+	create: async options => {
+		// Resolve features before creating a pane; its existing input lifetime owns cancellation.
+		await import('../../../../editor/editor.code.all.js');
 		if (!options.textFileService) throw new Error('Stanza Code requires the Workbench text file service');
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
@@ -93,7 +95,8 @@ registerEditorPane({
 	id: DIFF_EDITOR_ID,
 	name: 'Stanza Diff',
 	canOpen: matchDiffEditor,
-	create: options => {
+	create: async options => {
+		await import('../../../../editor/editor.code.all.js');
 		if (!options.textFileService) throw new Error('Stanza Diff requires the Workbench text file service');
 		const instantiationService = options.instantiationService;
 		if (!instantiationService) throw new Error('Stanza Diff requires the Workbench instantiation service');

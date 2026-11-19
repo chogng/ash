@@ -24,8 +24,16 @@ import '../workbench/browser/parts/panel/panelActions.js';
 import './common/theme.js';
 import './common/sessionConfig.js';
 import './browser/actions/devContainerActions.js';
-// The independent Sessions renderer hosts the same text and diff editors as Code.
-import '../editor/editor.code.all.js';
+// The composer needs text input, completion, hover and paste. Text/diff panes
+// admit the complete editor on first use, including restored document tabs.
+import '../editor/editor.all.js';
+import '../editor/browser/services/services.contribution.js';
+import '../editor/contrib/clipboard/browser/clipboard.js';
+import '../editor/contrib/dropOrPasteInto/browser/copyPasteContribution.js';
+import '../editor/contrib/hover/browser/hoverContribution.js';
+import '../editor/contrib/links/browser/links.js';
+import '../editor/contrib/suggest/browser/suggestController.js';
+import { activateEditorFeatures } from '../editor/browser/editorFeatureRegistration.js';
 import '../platform/uriIdentity/common/uriIdentityService.js';
 import '../workbench/contrib/commands/common/commands.contribution.js';
 import '../workbench/contrib/extensions/browser/extensions.contribution.js';
@@ -134,6 +142,8 @@ MenusRegistry.appendMenuItem(Menus.ActivityBar, {
 	command: { id: 'sessions.open.collaboration', title: localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), icon: Lxicon.collab, toggled: ContextKeyExpr.has('sessions.activity.collaborationSelected') },
 	group: 'more', order: 30, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code'),
 });
+
+activateEditorFeatures();
 
 registerTerminalView(SessionsViewRegistry);
 registerOutputView(SessionsViewRegistry);

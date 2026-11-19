@@ -19,10 +19,11 @@ export class MainThreadDocuments extends Disposable {
 		super();
 		this._register(models.onModelAdded(model => this.addModel(model)));
 		this._register(models.onModelRemoved(model => {
-			this.emit({ type: 'close', document: { ...extensionDocumentSnapshot(model) } });
+			if (this.observers.size) this.emit({ type: 'close', document: { ...extensionDocumentSnapshot(model) } });
 			this.modelListeners.deleteAndDispose(model.id);
 		}));
 		this._register(models.onModelLanguageChanged(({ model, oldLanguageId }) => {
+			if (!this.observers.size) return;
 			const snapshot = extensionDocumentSnapshot(model);
 			this.emit({ type: 'close', document: { ...snapshot, languageId: oldLanguageId } });
 			this.emit({ type: 'open', document: { ...snapshot } });
@@ -53,14 +54,18 @@ export class MainThreadDocuments extends Disposable {
 	private addModel(model: ITextModel): void {
 		const listeners = new DisposableStore();
 		this.modelListeners.set(model.id, listeners);
-		listeners.add(model.onDidChangeContent(change => this.emit({
-			type: 'change', document: { ...extensionDocumentSnapshot(model) }, reason: change.reason,
-			contentChanges: change.changes.map(edit => ({
-				range: { start: { line: edit.range.startLineNumber - 1, character: edit.range.startColumn - 1 }, end: { line: edit.range.endLineNumber - 1, character: edit.range.endColumn - 1 } },
-				rangeOffset: edit.rangeOffset, rangeLength: edit.rangeLength, text: edit.text,
-			})),
-		})));
-		this.emit({ type: 'open', document: { ...extensionDocumentSnapshot(model) } });
+		listeners.add(model.onDidChangeContent(change => {
+			// A new observer receives the current text in its initial open sequence.
+			if (!this.observers.size) return;
+			this.emit({
+				type: 'change', document: { ...extensionDocumentSnapshot(model) }, reason: change.reason,
+				contentChanges: change.changes.map(edit => ({
+					range: { start: { line: edit.range.startLineNumber - 1, character: edit.range.startColumn - 1 }, end: { line: edit.range.endLineNumber - 1, character: edit.range.endColumn - 1 } },
+					rangeOffset: edit.rangeOffset, rangeLength: edit.rangeLength, text: edit.text,
+				})),
+			});
+		}));
+		if (this.observers.size) this.emit({ type: 'open', document: { ...extensionDocumentSnapshot(model) } });
 	}
 
 	private emit(event: JsonValue): void { for (const [, observer] of this.observers) observer.send(event); }

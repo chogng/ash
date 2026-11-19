@@ -4,7 +4,7 @@ import { h } from '../../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { type IKeyboardEvent } from '../../../../../base/browser/keyboardEvent.js';
 import { type Event } from '../../../../../base/common/event.js';
-import { AbstractEditContext, type CompositionController, type EditContextOptions, type EditContextPosition, type EditContextState } from '../editContext.js';
+import { AbstractEditContext, type CompositionController, type EditContextOptions, type EditContextPosition } from '../editContext.js';
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 import { SelectionDirection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
@@ -175,8 +175,8 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	}
 
 	/** The accessibility controller is the state mirror for textarea input. */
-	syncState(state: EditContextState): void {
-		this.lastRenderPosition = state.position;
+	private synchronizeState(): void {
+		this.lastRenderPosition = this._context.viewModel.getSelections()[0]!.getPosition();
 	}
 
 	/** Textarea accessibility geometry is maintained by its dedicated controller. */

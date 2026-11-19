@@ -122,7 +122,10 @@ export class WorkerTextModelSyncClient<TLane extends string, TPayload, TResult> 
 			this.results?.stage(request.lane, Object.freeze({ requestId: request.requestId, snapshot: request.snapshot, result }));
 			return result;
 		}, error => {
-			this.mirroredVersion = undefined;
+			// The ordered channel installs the snapshot before starting the computation.
+			// A local cancellation leaves that mirror and subsequent edit deltas intact.
+			const cancelledLocally = signal.aborted && (error === signal.reason || error instanceof Error && error.name === 'AbortError');
+			if (!cancelledLocally) this.mirroredVersion = undefined;
 			throw error;
 		});
 	}

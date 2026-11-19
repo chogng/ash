@@ -712,8 +712,8 @@ test.describe('Desktop profile file watching', () => {
 		await expect(top).toBeVisible();
 		await writeFile(resource, '{ "workbench.activityBar.location": "bottom" }');
 		await expect(bottom).toBeVisible();
-		if (process.platform === 'win32' && 'windows' in application) {
-			// Profile hot reload must work without a second Electron runtime on Windows.
+		if ('windows' in application) {
+			// Profile notifications share Main's process through a worker on macOS and Linux.
 			expect(await application.evaluate(({ app }) => app.getAppMetrics().filter(metric => metric.name === 'Ash File Watcher'))).toEqual([]);
 		}
 	});

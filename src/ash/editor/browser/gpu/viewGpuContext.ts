@@ -14,6 +14,7 @@ import { ViewEventHandler } from '../../common/viewEventHandler.js';
 import { type ViewThemeChangedEvent } from '../../common/viewEvents.js';
 import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
 import { InlineDecorationType } from '../../common/viewModel/inlineDecorations.js';
+import { type ViewLineRenderingData } from '../../common/viewModel.js';
 import { type ViewContext } from '../../common/viewModel/viewContext.js';
 import { type ViewLineOptions } from '../viewParts/viewLines/viewLineOptions.js';
 import { TextureAtlas } from './atlas/textureAtlas.js';
@@ -174,13 +175,12 @@ export class ViewGpuContext extends Disposable {
 		this.semanticStyleResolver = new SemanticTokenStyleResolver(theme, this.semanticHighlightingEnabled(theme));
 	}
 
-	public canRender(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number): boolean {
+	public canRender(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number, line?: ViewLineRenderingData): boolean {
 		return this.activeDevice !== undefined && this.activeDevice === ViewGpuContext.deviceSync
-			&& this.canRenderDetailed(options, viewportData, lineNumber).length === 0;
+			&& this.canRenderDetailed(options, viewportData, lineNumber, line).length === 0;
 	}
 
-	public canRenderDetailed(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number): string[] {
-		const line = viewportData.getViewLineRenderingData(lineNumber);
+	public canRenderDetailed(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number, line = viewportData.getViewLineRenderingData(lineNumber)): string[] {
 		const reasons: string[] = [];
 		if (line.containsRTL) reasons.push('contains RTL text');
 		if (line.maxColumn > this.maxGpuCols) reasons.push('line is too long');

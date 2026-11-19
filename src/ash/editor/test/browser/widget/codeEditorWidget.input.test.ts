@@ -21,7 +21,7 @@ import { Selection } from '../../../common/core/selection.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { ScrollType } from '../../../common/editorCommon.js';
 import { EditorLineWrapping, EditorOption } from '../../../common/config/editorOptions.js';
-import { type ViewConfigurationChangedEvent } from '../../../common/viewEvents.js';
+import { type ViewConfigurationChangedEvent, ViewFlushedEvent, ViewLineMappingChangedEvent } from '../../../common/viewEvents.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { ViewContext } from '../../../common/viewModel/viewContext.js';
@@ -445,6 +445,45 @@ function installTestNativeEditContext(dom: JSDOM) {
 	Object.defineProperty(dom.window, 'EditContext', { configurable: true, value: TestEditContext });
 	return TestEditContext;
 }
+
+test('native input reuses the selected text across view notifications for the same revision', () => {
+	const dom = new JSDOM('<main></main>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	installTestNativeEditContext(dom);
+	try {
+		const original = '甲😀'.repeat(12_000);
+		using model = new TextModel(original);
+		using services = new InstantiationService();
+		services.registerInstance(ILogService, new NullLoggerService());
+		using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, instantiationService: services });
+		const native = editor.controller.editContext;
+		assert.ok(native instanceof NativeEditContext);
+		editor.setSelection(model.getFullModelRange());
+		assert.equal(native.nativeContext.text, original);
+		const buffer = model.getTextBuffer();
+		const read = buffer.getTextBetweenOffsets.bind(buffer);
+		let reads = 0;
+		let browserReads = 0;
+		let browserText = original;
+		Object.defineProperty(native.nativeContext, 'text', {
+			get() { browserReads++; return browserText; },
+			set(value: string) { browserText = value; },
+		});
+		buffer.getTextBetweenOffsets = (start, end) => { reads++; return read(start, end); };
+		native.onFlushed(new ViewFlushedEvent());
+		native.onLineMappingChanged(new ViewLineMappingChangedEvent());
+		assert.equal(reads, 0);
+		assert.equal(browserReads, 0);
+		editor.executeEdits('test', [{ range: model.getFullModelRange(), text: '乙'.repeat(original.length) }]);
+		editor.setSelection(model.getFullModelRange());
+		assert.equal(native.nativeContext.text, '乙'.repeat(original.length));
+		model.undo();
+		editor.setSelection(model.getFullModelRange());
+		assert.equal(native.nativeContext.text, original);
+	} finally {
+		dom.window.close();
+	}
+});
 
 test('browser EditContext reattaches its editing object after DOM ownership changes', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

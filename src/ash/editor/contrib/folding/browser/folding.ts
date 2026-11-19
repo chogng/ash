@@ -110,6 +110,7 @@ class FoldingDecorationPresenter extends Disposable {
 
 class FoldingRangeSource extends Disposable {
 	private request: AbortController | undefined;
+	private readonly scheduledRefresh = this._register(new RunOnceScheduler(() => this.refresh(), 200));
 
 	constructor(
 		private readonly editor: ICodeEditor,
@@ -125,12 +126,15 @@ class FoldingRangeSource extends Disposable {
 		},
 	) {
 		super();
-		// Tokenization arrives in batches. Recomputing whole-document providers for
-		// every batch can starve other invocations in the same extension Worker.
-		const tokenRefresh = this._register(new RunOnceScheduler(() => this.refresh(), 200));
-		this._register(folding.model.onDidChangeContent(() => this.refresh()));
+		// Tracked folds move with each edit. Resolve the provider ranges once the
+		// burst settles, or immediately if a fold command needs the local ranges.
+		this._register(folding.model.onDidChangeContent(() => {
+			this.request?.abort();
+			this.scheduledRefresh.schedule();
+		}));
+		this._register(folding.onWillChangeFoldState(() => this.scheduledRefresh.flush()));
 		this._register(folding.model.onDidChangeLanguage(() => this.refresh()));
-		this._register(folding.model.onDidChangeTokens(() => { if (!folding.model.tokenization.syntaxTree) tokenRefresh.schedule(); }));
+		this._register(folding.model.onDidChangeTokens(() => { if (!folding.model.tokenization.syntaxTree) this.scheduledRefresh.schedule(); }));
 		this._register(options.configurations.onDidChange(() => this.refresh()));
 		if (options.configuration) this._register(options.configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration('editor.defaultFoldingRangeProvider')) this.refresh(); }));
 		this._register(options.languageFeaturesService.foldingRangeProvider.onDidChange(() => this.refresh()));
@@ -143,6 +147,7 @@ class FoldingRangeSource extends Disposable {
 	}
 
 	private refresh(): void {
+		this.scheduledRefresh.cancel();
 		this.request?.abort();
 		this.limitReporter.update(0, false);
 		if (!this.editor.getOption(EditorOption.folding)) {

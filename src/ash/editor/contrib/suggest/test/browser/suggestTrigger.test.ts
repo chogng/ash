@@ -68,6 +68,25 @@ test('A registered trigger character requests after the text transaction', async
 	assert.equal(requests[0]!.snapshot.getText(), 'obj.');
 });
 
+test('only a single Unicode code point fires its registered completion trigger', async () => {
+	const requests: LanguageCompletionProviderRequest[] = [];
+	using fixture = createFixture({
+		id: 'unicode-trigger',
+		languageIds: ['typescript'],
+		triggerCharacters: ['😀'],
+		provideCompletions: request => {
+			requests.push(request);
+			return completionResult(request, 'emoji', false);
+		},
+	}, '');
+	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, 'a'.repeat(8192) + '😀'));
+	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, '😀'));
+	await waitFor(() => fixture.session.state !== undefined);
+	assert.deepEqual(requests.map(request => request.context), [
+		{ kind: LanguageCompletionTriggerKind.TriggerCharacter, triggerCharacter: '😀' },
+	]);
+});
+
 test('An auto-closed trigger character requests from the caret inside its pair', async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
 	using fixture = createFixture({

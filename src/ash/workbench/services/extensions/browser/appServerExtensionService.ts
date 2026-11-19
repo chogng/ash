@@ -238,8 +238,10 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 
 	public async getExtension(id: string): Promise<ExtensionDescriptor | undefined> {
 		this.assertNotDisposed();
-		// Await the catalog owner, without rescanning packages for every variable.
-		if (this.loading) await this.loading;
+		// Verified startup identities are available before optional assets. Editor
+		// providers can resolve their package while restoration holds that asset gate.
+		// Later reloads still await the catalog owner's atomic commit.
+		if (this.loading) await this.whenEditorContributionsReady();
 		else if (this.activeCatalogSignature === undefined) await this.start();
 		this.assertNotDisposed();
 		return this.catalog.extensions.find(extension => extension.id.toLowerCase() === id.toLowerCase());

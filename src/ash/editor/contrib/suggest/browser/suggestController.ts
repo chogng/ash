@@ -219,7 +219,8 @@ export class SuggestController extends Disposable {
 	}
 
 	private requestAfterInsert(insertedText: string, refreshIncomplete: boolean): void {
-		if ([...insertedText].length === 1) {
+		// A trigger is one Unicode code point. A paste or a full replacement can contain millions.
+		if (insertedText.length === 1 || (insertedText.length === 2 && insertedText.codePointAt(0)! > 0xFFFF)) {
 			const selections = this.editor.getSelections();
 			if (!selections || selections.length !== 1 || !selections[0]!.isEmpty()) {
 				this.session.cancel();

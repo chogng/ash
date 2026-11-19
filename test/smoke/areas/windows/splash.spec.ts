@@ -249,3 +249,74 @@ for (const [scheme, themeId] of [
 		});
 	});
 }
+
+test.describe('Agent Window startup assets', () => {
+	test.use({ electronArgs: ['--agents-window'] });
+
+	test('loads the full editor on first document use while retaining the Chat draft', { tag: '@electron-app-server' }, async ({ workbench }) => {
+		const page = workbench.page;
+		const cdp = await page.context().newCDPSession(page);
+		const scripts = new Set<string>();
+		const sources = new Map<string, string>();
+		cdp.on('Debugger.scriptParsed', script => { if (script.url.includes('/ash/assets/')) scripts.add(script.scriptId); });
+		const hasRenameModule = async (): Promise<boolean> => {
+			await Promise.all([...scripts].filter(id => !sources.has(id)).map(async id => {
+				sources.set(id, (await cdp.send('Debugger.getScriptSource', { scriptId: id })).scriptSource);
+			}));
+			return [...sources.values()].some(source => source.includes('editor.contrib.renameController'));
+		};
+		try {
+			await cdp.send('Debugger.enable');
+			const chat = page.locator('.ash-chat-input-editor:visible').first();
+			const input = chat.locator('.stanza-editor-input');
+			await input.focus();
+			await input.pressSequentially('Retain this Chat draft');
+			await expect(chat.locator('.stanza-editor-line-text').first()).toHaveText('Retain this Chat draft');
+			expect(await hasRenameModule()).toBe(false);
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+			await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+			await expect(page.locator('[data-part="editor"] .stanza-editor-input')).toBeVisible();
+			expect(await hasRenameModule()).toBe(true);
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+			await expect(chat.locator('.stanza-editor-line-text').first()).toHaveText('Retain this Chat draft');
+		} finally { await cdp.detach(); }
+	});
+
+	test('restores the Agent Window while optional language resources are pending', { tag: '@electron-app-server' }, async ({ workbench }) => {
+		const page = workbench.page;
+		await page.addInitScript(() => {
+			const post = MessagePort.prototype.postMessage;
+			const pending: (() => void)[] = [];
+			const state = { blocked: 0 };
+			Object.assign(window, {
+				ashStartupAssets: state,
+				releaseAshStartupAssets: () => {
+					MessagePort.prototype.postMessage = post;
+					for (const send of pending.splice(0)) send();
+				},
+			});
+			// Hold real package reads at the renderer's IPC boundary, preserving request IDs.
+			MessagePort.prototype.postMessage = function (...args: unknown[]) {
+				const message = args[0];
+				const data = message && typeof message === 'object' && 'data' in message ? message.data : undefined;
+				const frame = ArrayBuffer.isView(data) ? new TextDecoder().decode(data) : '';
+				if (frame.includes('"method":"extensions/resource/open"') && frame.includes('"path":"language-configuration.json"')) {
+					state.blocked++;
+					pending.push(() => Reflect.apply(post, this, args));
+					return;
+				}
+				Reflect.apply(post, this, args);
+			};
+		});
+		try {
+			await page.reload({ waitUntil: 'commit' });
+			await expect.poll(() => page.evaluate(() => (window as unknown as { ashStartupAssets: { blocked: number; }; }).ashStartupAssets.blocked)).toBeGreaterThan(0);
+			await expect(page.locator('.ash-sessions-window')).toHaveAttribute('aria-busy', 'false', { timeout: 5_000 });
+			await expect(page.locator('.ash-chat-input-part:visible').first()).toBeVisible();
+			expect(await page.evaluate(() => performance.getEntriesByName('ash.workbench.extension-assets-ready'))).toHaveLength(0);
+		} finally {
+			await page.evaluate(() => (window as unknown as { releaseAshStartupAssets(): void; }).releaseAshStartupAssets());
+		}
+		await expect.poll(() => page.evaluate(() => performance.getEntriesByName('ash.workbench.extension-assets-ready').length)).toBe(1);
+	});
+});

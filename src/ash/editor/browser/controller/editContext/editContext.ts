@@ -21,14 +21,6 @@ import { EditorOption } from '../../../common/config/editorOptions.js';
 import { isFirefox } from '../../../../base/browser/browser.js';
 import { createClipboardCopyEvent, createClipboardPasteEvent, type IClipboardCopyEvent, type IClipboardPasteEvent } from './clipboardUtils.js';
 
-/** The state that the browser editing surface mirrors from the common editor. */
-export interface EditContextState {
-	readonly text: string;
-	readonly selectionStart: number;
-	readonly selectionEnd: number;
-	readonly position: Position;
-}
-
 /**
  * A browser text update in absolute UTF-16 model offsets. The replacement range
  * and previous selection address the old text; selectionStart/End address the
@@ -179,8 +171,6 @@ export abstract class AbstractEditContext extends ViewPart {
 	abstract writeScreenReaderContent(reason: string): void;
 	/** Clears transient browser input after a routed DOM event. */
 	abstract clear(): void;
-	/** Mirrors the common model and primary selection into the browser surface. */
-	abstract syncState(state: EditContextState): void;
 	/** Updates native control and selection geometry for the primary caret. */
 	abstract updateBounds(position: EditContextPosition): void;
 	/** Starts the browser's composition presentation. */
@@ -364,17 +354,6 @@ export abstract class AbstractEditContext extends ViewPart {
 		// out of post-edit consumers such as SuggestController, matching VS Code's
 		// command dispatch ordering.
 		viewController.insertTab();
-	}
-
-	protected synchronizeState(): void {
-		const viewport = this.requireViewport();
-		const selection = this._context.viewModel.getSelections()[0]!;
-		this.syncState({
-			text: viewport.textModel.getText(),
-			selectionStart: viewport.textModel.offsetAt(selection.getStartPosition()),
-			selectionEnd: viewport.textModel.offsetAt(selection.getEndPosition()),
-			position: selection.getPosition(),
-		});
 	}
 
 	private requireViewport(): View {

@@ -145,7 +145,9 @@ export class LanguageTokenLineIndex extends Disposable {
 	getLineTokens(lineIndex: number): readonly LanguageToken[] {
 		this.assertNotDisposed();
 		assertLineIndex(lineIndex);
-		this.model.getLineContent((lineIndex) + 1);
+		if (lineIndex >= this.model.getLineCount()) {
+			throw new RangeError(`lineNumber must be a safe integer between 1 and ${this.model.getLineCount()}`);
+		}
 		return this.state.statesByLine.get(lineIndex)?.line.tokens ?? EMPTY_TOKENS;
 	}
 

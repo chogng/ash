@@ -14,14 +14,20 @@ export function bootstrapElectronMain(): void {
 
 	Error.stackTraceLimit = 100;
 	app.enableSandbox();
-	if (process.platform === 'darwin') {
-		// Budget roughly one 4K RGBA viewport each for tiles and discardable GPU
-		// resources before Chromium allocates IOSurfaces.
-		for (const memorySwitch of ['force-gpu-mem-available-mb', 'force-gpu-mem-discardable-limit-mb']) {
-			if (!app.commandLine.hasSwitch(memorySwitch)) { app.commandLine.appendSwitch(memorySwitch, '32'); }
-		}
-	}
+	if (process.platform === 'darwin') { configureMacGraphicsMemory(); }
 	registerProcessErrorHandlers();
+}
+
+function configureMacGraphicsMemory(): void {
+	if (!app.commandLine.hasSwitch('force-gpu-mem-discardable-limit-mb')) {
+		app.commandLine.appendSwitch('force-gpu-mem-discardable-limit-mb', '32');
+	}
+	// On Apple Silicon, software raster reduces the footprint of Retina tiles
+	// while leaving GPU compositing enabled. Keep Chromium's display-scaled
+	// tile budget so resizing cannot exhaust a fixed app-wide limit.
+	if (process.arch === 'arm64' && !app.commandLine.hasSwitch('enable-gpu-rasterization') && !app.commandLine.hasSwitch('disable-gpu-rasterization')) {
+		app.commandLine.appendSwitch('disable-gpu-rasterization');
+	}
 }
 
 function registerProcessErrorHandlers(): void {

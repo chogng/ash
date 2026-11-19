@@ -4,7 +4,7 @@ import { FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { StandardKeyboardEvent, type IKeyboardEvent } from '../../../../../base/browser/keyboardEvent.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { IME } from '../../../../../base/common/ime.js';
-import { AbstractEditContext, type EditContextCharacterBounds, type EditContextCompositionData, type EditContextOptions, type EditContextPosition, type EditContextState, type EditContextTextFormat, type EditContextTextFormatUpdate, type EditContextTextUpdate } from '../editContext.js';
+import { AbstractEditContext, type EditContextCharacterBounds, type EditContextCompositionData, type EditContextOptions, type EditContextPosition, type EditContextTextFormat, type EditContextTextFormatUpdate, type EditContextTextUpdate } from '../editContext.js';
 import { type Position } from '../../../../common/core/position.js';
 import { normalizeTextLineEndings } from '../../../../common/core/textChange.js';
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
@@ -45,6 +45,7 @@ export class NativeEditContext extends AbstractEditContext {
 	private connected = false;
 	private readOnlyState: boolean;
 	private shadowText = '';
+	private shadowModelVersion: number | undefined;
 	/** Absolute model offset represented by the first UTF-16 unit in shadowText. */
 	private shadowOffset = 0;
 	private shadowSelectionStart = 0;
@@ -507,33 +508,29 @@ export class NativeEditContext extends AbstractEditContext {
 	/** Native EditContext retains its own editing buffer; there is no textarea value to clear. */
 	clear(): void { }
 
-	syncState(state: EditContextState): void {
+	private synchronizeState(): void {
 		if (this.composing) return;
-		this.lastRenderPosition = state.position;
-		// Selection and window offsets address this exact model text, including both CRLF code units.
-		const text = state.text;
-		const selectionStart = clampOffset(Math.min(state.selectionStart, state.selectionEnd), text.length);
-		const selectionEnd = clampOffset(Math.max(state.selectionStart, state.selectionEnd), text.length);
-		const textWindow = createNativeTextWindow(text, selectionStart, selectionEnd);
-		const nextText = text.slice(textWindow.startOffset, textWindow.endOffset);
-		const nextSelectionStart = selectionStart - textWindow.startOffset;
-		const nextSelectionEnd = selectionEnd - textWindow.startOffset;
-		const previousText = this.shadowText;
-		const previousSelectionStart = this.shadowSelectionStart;
-		const previousSelectionEnd = this.shadowSelectionEnd;
-		this.shadowOffset = textWindow.startOffset;
-		this.shadowText = nextText;
-		this.shadowSelectionStart = nextSelectionStart;
-		this.shadowSelectionEnd = nextSelectionEnd;
-		this.pendingHighSurrogate = undefined;
-		const nativeText = typeof this.nativeContext.text === 'string' ? this.nativeContext.text : previousText;
-		if (nativeText !== nextText) this.nativeContext.updateText(0, nativeText.length, nextText);
-		if (
-			this.nativeContext.selectionStart !== nextSelectionStart ||
-			this.nativeContext.selectionEnd !== nextSelectionEnd
-		) {
-			this.nativeContext.updateSelection(nextSelectionStart, nextSelectionEnd);
+		const { model } = this._context.viewModel;
+		const selection = this._context.viewModel.getSelections()[0]!;
+		this.lastRenderPosition = selection.getPosition();
+		const selectionStart = model.getOffsetAt(selection.getStartPosition());
+		const selectionEnd = model.getOffsetAt(selection.getEndPosition());
+		const version = model.getVersionId();
+		// Only a browser edit can change the native text independently of this
+		// adapter. Read Blink's string once when reconciling such an edit.
+		const nativeText = this.shadowModelVersion === undefined ? this.nativeContext.text ?? this.shadowText : this.shadowText;
+		// A single model revision can emit line, mapping and cursor events. The
+		// native window still represents this selection until the browser edits it.
+		if (this.shadowModelVersion !== version || selectionStart !== this.shadowOffset + this.shadowSelectionStart || selectionEnd !== this.shadowOffset + this.shadowSelectionEnd) {
+			const window = createNativeTextWindow(model.getTextBuffer(), selectionStart, selectionEnd);
+			this.shadowText = window.text;
+			this.shadowOffset = window.startOffset;
+			this.shadowSelectionStart = selectionStart - window.startOffset;
+			this.shadowSelectionEnd = selectionEnd - window.startOffset;
+			this.shadowModelVersion = version;
 		}
+		this.pendingHighSurrogate = undefined;
+		this.restoreNativeState(nativeText);
 	}
 
 	setReadOnly(readOnly: boolean): void {
@@ -553,6 +550,7 @@ export class NativeEditContext extends AbstractEditContext {
 
 	prepareComposition(): void {
 		this.composing = true;
+		this.shadowModelVersion = undefined;
 		this.pendingHighSurrogate = undefined;
 		this.compositionStartOffset = Math.min(this.shadowSelectionStart, this.shadowSelectionEnd);
 		this.compositionEndOffset = Math.max(this.shadowSelectionStart, this.shadowSelectionEnd);
@@ -582,6 +580,7 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	private handleTextUpdate(event: TextUpdateEvent): void {
+		this.shadowModelVersion = undefined;
 		if (!isNativeTextUpdateEvent(event)) return;
 		if (!this.isFocused()) {
 			this.pendingHighSurrogate = undefined;
@@ -661,6 +660,7 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	private handleCompositionStart(event: CompositionEvent): void {
+		this.shadowModelVersion = undefined;
 		if (!this.isFocused()) {
 			event.preventDefault();
 			this.restoreNativeState();
@@ -753,8 +753,7 @@ export class NativeEditContext extends AbstractEditContext {
 		}
 	}
 
-	private restoreNativeState(): void {
-		const nativeText = typeof this.nativeContext.text === 'string' ? this.nativeContext.text : this.shadowText;
+	private restoreNativeState(nativeText = this.nativeContext.text ?? this.shadowText): void {
 		if (nativeText !== this.shadowText) {
 			this.nativeContext.updateText(0, nativeText.length, this.shadowText);
 		}

@@ -1,7 +1,8 @@
 import { TreeSitterSyntaxTokenBackend } from './treeSitter/treeSitterSyntaxTokenBackend.js';
-import { LanguageResultAcceptance } from '../languageResultStore.js';
+import { LanguageResultAcceptance, LanguageResultStoreChangeReason } from '../languageResultStore.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { type TextModelContentChange } from '../../core/textChange.js';
 import { Position } from '../../core/position.js';
 import { type Range } from '../../core/range.js';
 import { countEOL } from '../../core/misc/eolCounter.js';
@@ -83,21 +84,22 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		this.renderedTokens = this.semanticTokens
 			? overlayTokenSources(lexicalSource, this._register(new StyledTokenSource(this.semanticTokens, 'semantic')))
 			: lexicalSource;
-		this._register(this.languageTokenLineIndex.onDidChange(() => {
-			if (!this.lineBackend.value) this.changeEmitter.fire(undefined);
+		this._register(this.languageTokenLineIndex.onDidChange(event => {
+			if (!this.lineBackend.value && event.reason !== LanguageResultStoreChangeReason.ModelChanged) {
+				this.changeEmitter.fire(undefined);
+			}
 		}));
 		this._register(textModel.onDidChangeContent(change => {
-			if (!change.isEolChange) {
-				for (const contentChange of change.changes) {
-					const [eolCount, firstLineLength, lastLineLength] = countEOL(contentChange.text);
-					this.semanticTokensStore.acceptEdit(
-						contentChange.range,
-						eolCount,
-						firstLineLength,
-						lastLineLength,
-						contentChange.text.length > 0 ? contentChange.text.charCodeAt(0) : 0,
-					);
+			if (!change.isEolChange && !this.semanticTokensStore.isEmpty()) {
+				// Changes address the same pre-edit document.
+				for (let i = change.changes.length - 1; i >= 0; i--) {
+					const edit = change.changes[i]!;
+					const [eolCount, firstLineLength, lastLineLength] = countEOL(edit.text);
+					this.semanticTokensStore.acceptEdit(edit.range, eolCount, firstLineLength, lastLineLength, edit.text.charCodeAt(0) || 0);
 				}
+			}
+			if (!this.lineBackend.value) {
+				this.changeEmitter.fire(editedTokenLines(change.changes));
 			}
 			this.scheduleAnalysis();
 		}));
@@ -417,6 +419,25 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			throw new RangeError('Tokenization line number is outside the TextModel');
 		}
 	}
+}
+
+/** The sparse index moves untouched lines with the text. Only edited lines lose their tokens. */
+function editedTokenLines(changes: readonly TextModelContentChange[]): { fromLineNumber: number; toLineNumber: number; }[] {
+	const ranges: { fromLineNumber: number; toLineNumber: number; }[] = [];
+	let lineDelta = 0;
+	for (const edit of changes) {
+		const { startLineNumber, endLineNumber } = edit.range;
+		const fromLineNumber = startLineNumber + lineDelta;
+		const toLineNumber = fromLineNumber + countEOL(edit.text)[0];
+		const last = ranges.at(-1);
+		if (last && fromLineNumber <= last.toLineNumber + 1) {
+			last.toLineNumber = Math.max(last.toLineNumber, toLineNumber);
+		} else {
+			ranges.push({ fromLineNumber, toLineNumber });
+		}
+		lineDelta = toLineNumber - endLineNumber;
+	}
+	return ranges;
 }
 
 function createLineTokens(lineContent: string, tokens: readonly LanguageToken[], topLevelLanguageId: string, codec: ILanguageIdCodec): LineTokens {

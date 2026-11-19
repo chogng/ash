@@ -1,7 +1,8 @@
 import { addDisposableListener, getShadowRoot } from '../../../../../base/browser/dom.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
-import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
+import { isLowSurrogate } from '../../../../../base/common/strings.js';
 import { type ILogService } from '../../../../../platform/log/common/log.js';
+import type { ITextBuffer } from '../../../../common/model.js';
 
 interface EditorEditContextEventMap extends EditContextEventHandlersEventMap {
 	readonly compositionupdate: Event;
@@ -110,39 +111,22 @@ export function isNativeTextUpdateEvent(event: {
 }
 
 export function createNativeTextWindow(
-	text: string,
+	buffer: Pick<ITextBuffer, 'getLength' | 'getTextBetweenOffsets'>,
 	selectionStart: number,
 	selectionEnd: number,
-): { readonly startOffset: number; readonly endOffset: number; } {
-	if (text.length <= NATIVE_TEXT_WINDOW_LENGTH) {
-		return { startOffset: 0, endOffset: text.length };
-	}
+): { readonly startOffset: number; readonly text: string; } {
+	const length = buffer.getLength();
 	const selectionLength = selectionEnd - selectionStart;
-	if (selectionLength >= NATIVE_TEXT_WINDOW_LENGTH) {
-		return {
-			startOffset: moveToCodePointBoundary(text, selectionStart, -1),
-			endOffset: moveToCodePointBoundary(text, selectionEnd, 1),
-		};
-	}
+	const width = Math.max(NATIVE_TEXT_WINDOW_LENGTH, selectionLength);
+	const contextBefore = Math.floor((width - selectionLength) / 2);
+	let start = Math.max(0, Math.min(selectionStart - contextBefore, length - width));
+	let end = Math.min(length, start + width);
 
-	const availableContext = NATIVE_TEXT_WINDOW_LENGTH - selectionLength;
-	let startOffset = Math.max(0, selectionStart - Math.floor(availableContext / 2));
-	let endOffset = Math.min(text.length, startOffset + NATIVE_TEXT_WINDOW_LENGTH);
-	if (endOffset < selectionEnd) {
-		endOffset = selectionEnd;
-		startOffset = Math.max(0, endOffset - NATIVE_TEXT_WINDOW_LENGTH);
-	}
-	if (endOffset - startOffset < NATIVE_TEXT_WINDOW_LENGTH) {
-		startOffset = Math.max(0, endOffset - NATIVE_TEXT_WINDOW_LENGTH);
-	}
-	startOffset = moveToCodePointBoundary(text, startOffset, -1);
-	endOffset = moveToCodePointBoundary(text, endOffset, 1);
-	return { startOffset, endOffset };
-}
-
-function moveToCodePointBoundary(text: string, offset: number, direction: -1 | 1): number {
-	let result = clampOffset(offset, text.length);
-	if (direction < 0 && result > 0 && isLowSurrogate(text.charCodeAt(result))) result -= 1;
-	if (direction > 0 && result < text.length && isLowSurrogate(text.charCodeAt(result))) result += 1;
-	return result;
+	// Read one extra UTF-16 unit on each side so both edges can preserve surrogate
+	// pairs. Raw offsets also preserve boundaries inside a CRLF sequence.
+	const readStart = Math.max(0, start - 1);
+	const text = buffer.getTextBetweenOffsets(readStart, Math.min(length, end + 1));
+	if (start > 0 && isLowSurrogate(text.charCodeAt(start - readStart))) start--;
+	if (end < length && isLowSurrogate(text.charCodeAt(end - readStart))) end++;
+	return { startOffset: start, text: text.slice(start - readStart, end - readStart) };
 }

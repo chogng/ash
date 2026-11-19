@@ -107,7 +107,7 @@ test('A skipped model version makes the next wire request send a full snapshot',
 	assert.equal(messages[1]!.snapshot?.text, 'alpha alph');
 });
 
-test('Wire cancellation aborts remote work and ignores late messages', async () => {
+test('Cancelling a computation preserves the synchronized document for the next request', async () => {
 	const [clientPort, serverPort] = createPortPair();
 	let startRequest!: () => void;
 	const started = new Promise<void>(resolve => {
@@ -117,7 +117,11 @@ test('Wire cancellation aborts remote work and ignores late messages', async () 
 	const aborted = new Promise<void>(resolve => {
 		observeAbort = resolve;
 	});
-	const worker = new TestCompletionWorker(async (_request, signal) => {
+	const worker = new TestCompletionWorker(async (request, signal) => {
+		if (request.requestId === 2) {
+			assert.equal(request.snapshot.getText(), 'value!');
+			return { position: request.payload.position, items: [], isIncomplete: false };
+		}
 		startRequest();
 		await new Promise<void>((_resolve, reject) => {
 			signal.addEventListener('abort', () => {
@@ -134,10 +138,17 @@ test('Wire cancellation aborts remote work and ignores late messages', async () 
 	const promise = client.run(request(model, 1), controller.signal);
 	await started;
 
+	using listener = model.onDidChangeContent(change => client.synchronizeModel(change));
 	controller.abort('superseded');
+	model.applyEdits([{ range: new Range(1, 6, 1, 6), text: '!' }]);
 
 	await assert.rejects(promise, error => error instanceof Error && error.name === 'AbortError');
 	await aborted;
+	await client.run(request(model, 2), new AbortController().signal);
+	const messages = clientPort.sentMessages as WireMessage[];
+	assert.deepEqual(messages.map(message => message.kind), ['request', 'cancel', 'sync', 'request']);
+	assert.equal(messages[0]!.snapshot?.kind, 'full');
+	assert.equal(messages[3]!.snapshot?.kind, 'reference');
 });
 
 test('Remote failures and invalid DTO results reject in the client realm', async () => {

@@ -1,3 +1,4 @@
+import { type Event } from '../../../base/common/event.js';
 import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { type ViewConfigurationChangedEvent, type ViewLinesChangedEvent, type ViewLinesDeletedEvent, type ViewLinesInsertedEvent, type ViewScrollChangedEvent, type ViewTokensChangedEvent } from '../../common/viewEvents.js';
 import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
@@ -14,8 +15,15 @@ export const enum BindingId {
 	ScrollOffset,
 }
 
+export interface GpuLineGeometry {
+	readonly leftByOffset: readonly number[];
+	readonly newLineWidth: number;
+}
+
 export interface IGpuRenderStrategy extends IDisposable {
 	readonly type: string;
+	readonly lineGeometries: ReadonlyMap<number, GpuLineGeometry>;
+	readonly onDidChangeBindGroupEntries: Event<void>;
 	readonly wgsl: string;
 	readonly bindGroupEntries: GPUBindGroupEntry[];
 	readonly glyphRasterizer: IGlyphRasterizer;

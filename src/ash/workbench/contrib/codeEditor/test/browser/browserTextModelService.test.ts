@@ -253,6 +253,68 @@ test('reopening a shared file reserves restored redo line identities for subsequ
 	assert.equal(reopened.model.lineDocument.getText(), 'a\n\n');
 });
 
+test('localized undo and equal-length edits compare only the changed text with the saved file', async () => {
+	const saved = 'a'.repeat(32768) + '文😀' + 'b'.repeat(32768);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new TestTextFileService(saved)), {});
+	using reference = await models.acquire({ resource: URI.file('/workspace/saved.txt') }, new AbortController().signal);
+	const model = reference.model;
+	const buffer = model.getTextBuffer();
+	const read = buffer.getTextBetweenOffsets.bind(buffer);
+	const fullText = model.getText.bind(model);
+	let largestRead = 0;
+	let fullReads = 0;
+	buffer.getTextBetweenOffsets = (start, end) => {
+		largestRead = Math.max(largestRead, end - start);
+		return read(start, end);
+	};
+	model.getText = () => { fullReads++; return fullText(); };
+	try {
+		const at = 32769;
+		model.applyOperations([{ range: new Range(1, at, 1, at), text: 'x' }]);
+		assert.equal(reference.isDirty, true);
+		model.undo();
+		assert.equal(reference.isDirty, false);
+		model.redo();
+		assert.equal(reference.isDirty, true);
+		model.undo();
+		model.applyOperations([{ range: new Range(1, at, 1, at + 1), text: '字' }]);
+		assert.equal(reference.isDirty, true);
+		model.applyOperations([{ range: new Range(1, at, 1, at + 1), text: '文' }]);
+		assert.equal(reference.isDirty, false);
+		assert.equal(fullReads, 0);
+		assert.ok(largestRead <= 1, `Compared ${largestRead} UTF-16 units`);
+	} finally {
+		buffer.getTextBetweenOffsets = read;
+		model.getText = fullText;
+	}
+});
+
+test('dirty comparison follows disjoint edits, EOL changes and a new save baseline', async () => {
+	const original = '甲乙\r\n中间\r\n尾巴😀';
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new TestTextFileService(original)), {});
+	const signal = new AbortController().signal;
+	using reference = await models.acquire({ resource: URI.file('/workspace/baseline.txt') }, signal);
+	const model = reference.model;
+	let baseline = original;
+	const check = () => assert.equal(reference.isDirty, model.getText() !== baseline);
+	model.applyOperations([{ range: new Range(1, 1, 1, 2), text: '' }, { range: new Range(3, 2, 3, 2), text: '甲' }]);
+	check();
+	model.pushEOL(EndOfLineSequence.LF);
+	check();
+	model.undo();
+	check();
+	model.undo();
+	check();
+	model.redo();
+	baseline = model.getText();
+	await reference.save(signal);
+	check();
+	model.undo();
+	check();
+	model.redo();
+	check();
+});
+
 test('Stanza text model references track dirty content, save snapshots, and explicitly revert', async () => {
 	const textFiles = new TestTextFileService('from disk');
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});

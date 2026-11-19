@@ -45,6 +45,7 @@ export class UnicodeHighlighterController extends Disposable {
 				options: {
 					description: 'unicode-highlight',
 					className: 'unicode-highlight',
+					showIfCollapsed: true,
 					hoverMessage: { value: `${highlight.kind} Unicode character U+${highlight.character.codePointAt(0)!.toString(16).toUpperCase()}` },
 				},
 				metadata: highlight,

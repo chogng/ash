@@ -3,6 +3,7 @@ import { containsRTL, isBasicASCII } from '../../../../base/common/strings.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { NodeColor, deleteNode, insertAfter, insertBefore, leftmost, nextNode, previousNode } from './rbTreeBase.js';
+import { normalizeTextToEOL } from '../../core/misc/eolCounter.js';
 import { Position } from '../../core/position.js';
 import { Range } from '../../core/range.js';
 import { WordCharacterClass } from '../../core/wordCharacterClassifier.js';
@@ -60,7 +61,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 		}
 		this.bom = bom;
 		this.eol = eol;
-		this.originalBuffer = shouldNormalizeEOL ? normalizeEOL(text, eol) : text;
+		this.originalBuffer = shouldNormalizeEOL ? normalizeTextToEOL(text, eol) : text;
 		this.mightContainUnusualLineTerminatorsValue = text.includes('\u2028') || text.includes('\u2029');
 		if (this.originalBuffer.length > 0) this.root = this.createRootNode(createPiece(PieceBuffer.Original, 0, this.originalBuffer));
 	}
@@ -139,7 +140,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 		);
 	}
 
-	private getTextBetweenOffsets(startOffset: number, endOffset: number): string {
+	getTextBetweenOffsets(startOffset: number, endOffset: number): string {
 		this.assertRange(startOffset, endOffset);
 		if (startOffset === endOffset) return '';
 		const parts: string[] = [];
@@ -306,7 +307,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 			const range = Range.lift(operation.range);
 			const rangeOffset = this.getOffsetAt(range.startLineNumber, range.startColumn);
 			const rangeEndOffset = this.getOffsetAt(range.endLineNumber, range.endColumn);
-			const text = normalizeEOL(operation.text ?? '', this.eol);
+			const text = normalizeTextToEOL(operation.text ?? '', this.eol);
 			return {
 				sortIndex,
 				identifier: operation.identifier,
@@ -412,7 +413,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 	setEOL(eol: '\n' | '\r\n'): void {
 		if (eol !== '\n' && eol !== '\r\n') throw new TypeError('PieceTreeTextBuffer EOL must be LF or CRLF');
 		if (this.eol === eol) return;
-		const text = normalizeEOL(this.getText(), eol);
+		const text = normalizeTextToEOL(this.getText(), eol);
 		this.eol = eol;
 		this.originalBuffer = text;
 		this.addBuffer = '';
@@ -701,10 +702,6 @@ function isWholeWordMatch(line: string, startIndex: number, endIndex: number, se
 	const beforeIsRegular = startIndex > 0 && classifier.get(line.charCodeAt(startIndex - 1)) === WordCharacterClass.Regular;
 	const afterIsRegular = endIndex < line.length && classifier.get(line.charCodeAt(endIndex)) === WordCharacterClass.Regular;
 	return !(firstIsRegular && beforeIsRegular) && !(lastIsRegular && afterIsRegular);
-}
-
-function normalizeEOL(text: string, eol: '\n' | '\r\n'): string {
-	return text.replace(/\r\n|\r|\n/g, eol);
 }
 
 function assertSafeIndex(value: number, name: string): void {

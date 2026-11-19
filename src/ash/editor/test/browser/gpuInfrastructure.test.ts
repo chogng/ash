@@ -152,19 +152,69 @@ test('Viewport GPU strategy preserves tab stops and complete grapheme cells', as
 		const cellWrite = [...harness.writes].reverse().find(write => write.label === 'Ash viewport GPU cells');
 		const cells = cellWrite!.values;
 
-		assert.equal(objectCount, ViewportRenderStrategy.maxSupportedColumns);
-		assert.deepEqual([
-			cells[0],
-			cells[2 * 6],
-			cells[3 * 6],
-			cells[7 * 6],
-		], [0, 32, 0, 40]);
-		assert.deepEqual([
-			cells[4],
-			cells[2 * 6 + 4],
-			cells[3 * 6 + 4],
-			cells[7 * 6 + 4],
-		], [1, 1, 0, 1]);
+		assert.equal(objectCount, 4);
+		assert.deepEqual([cells[0], cells[6], cells[12]], [0, 32, 40]);
+		assert.deepEqual([cells[4], cells[10], cells[16]], [1, 1, 1]);
+		assert.deepEqual(strategy.lineGeometries.get(0)?.leftByOffset, [0, 8, 32, 32, 32, 32, 32, 40, 48]);
+	});
+});
+
+test('viewport edits reuse other glyphs and clear stale cells on shortening and DOM fallback', async () => {
+	const { ViewportRenderStrategy } = await import('../../browser/gpu/renderStrategy/viewportRenderStrategy.js');
+	withGpuBufferUsage(() => {
+		const harness = createStrategyHarness();
+		using strategy = new ViewportRenderStrategy(harness.context, harness.gpuContext, harness.device, { value: harness.rasterizer });
+		let domRow = 0;
+		Object.assign(harness.gpuContext, { canRender: (_options: unknown, _viewport: unknown, line: number) => line !== domRow });
+		const initial = viewport(['stable', 'abc'], 3500);
+		const writes = () => harness.writes.filter(w => w.label === 'Ash viewport GPU cells');
+		strategy.update(initial, viewLineOptions());
+		harness.writes.length = 0;
+		harness.glyphs.length = 0;
+		strategy.update(initial, viewLineOptions());
+		assert.equal(harness.glyphs.length, 0);
+		assert.equal(writes().length, 0);
+		strategy.reset();
+		strategy.draw({ draw: () => assert.fail('invalidated glyphs cannot be drawn') } as unknown as GPURenderPassEncoder, initial);
+		strategy.update(initial, viewLineOptions());
+		harness.writes.length = 0;
+
+		strategy.update(viewport(['stable', 'ab'], 3500), viewLineOptions());
+		assert.deepEqual(writes(), [{ label: 'Ash viewport GPU cells', offset: (8 + 2) * 24, values: [0, 0, 0, 0, 0, 0] }]);
+		harness.writes.length = 0;
+		domRow = 3501;
+		strategy.update(initial, viewLineOptions());
+		assert.equal(strategy.lineGeometries.has(domRow - 1), false);
+		assert.deepEqual(writes().map(w => [w.offset, ...w.values]), [[8 * 24, ...new Array(12).fill(0)]]);
+	});
+});
+
+test('consecutive changed glyph rows share an upload while gaps separate writes', async () => {
+	const { ViewportRenderStrategy } = await import('../../browser/gpu/renderStrategy/viewportRenderStrategy.js');
+	withGpuBufferUsage(() => {
+		const harness = createStrategyHarness();
+		using strategy = new ViewportRenderStrategy(harness.context, harness.gpuContext, harness.device, { value: harness.rasterizer });
+		strategy.update(viewport(['ab', 'cd', 'ef', 'gh']), viewLineOptions());
+		harness.writes.length = 0;
+		strategy.update(viewport(['a', 'c', 'ef', 'g']), viewLineOptions());
+		assert.deepEqual(harness.writes.filter(w => w.label === 'Ash viewport GPU cells').map(w => [w.offset, w.values.length]),
+			[[24, 3 * 6], [7 * 24, 6]]);
+	});
+});
+
+test('viewport buffers shrink after a wide view and publish replacement bindings', async () => {
+	const { ViewportRenderStrategy } = await import('../../browser/gpu/renderStrategy/viewportRenderStrategy.js');
+	withGpuBufferUsage(() => {
+		const harness = createStrategyHarness();
+		using strategy = new ViewportRenderStrategy(harness.context, harness.gpuContext, harness.device, { value: harness.rasterizer });
+		const sizes: number[] = [];
+		using listener = strategy.onDidChangeBindGroupEntries(() => {
+			const resource = strategy.bindGroupEntries[0]!.resource as GPUBufferBinding;
+			sizes.push(resource.buffer.size);
+		});
+		strategy.update(viewport(['a'.repeat(1500)], 3500), viewLineOptions());
+		strategy.update(viewport(['short'], 3500), viewLineOptions());
+		assert.deepEqual(sizes, [2048 * 24, 8 * 24]);
 	});
 });
 
@@ -563,7 +613,7 @@ function createStrategyHarness(): {
 			},
 		},
 		createBuffer: (descriptor: GPUBufferDescriptor) => {
-			const buffer = { destroy: () => undefined };
+			const buffer = { size: descriptor.size, destroy: () => undefined };
 			labels.set(buffer, descriptor.label?.toString() ?? '');
 			return buffer;
 		},
@@ -616,6 +666,7 @@ function viewport(contents: readonly string[], startLineNumber = 1, bigNumbersDe
 	));
 	return {
 		startLineNumber,
+		selections: [],
 		endLineNumber: startLineNumber + lines.length - 1,
 		relativeVerticalOffset: lines.map((_, index) => index * 20),
 		bigNumbersDelta,

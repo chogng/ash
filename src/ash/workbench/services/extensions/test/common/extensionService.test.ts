@@ -782,6 +782,7 @@ test('publishes editor declarations while optional package assets are blocked', 
 	const loading = service.start();
 	await service.whenEditorContributionsReady();
 	assert.equal(service.currentCatalog.generation, 1);
+	assert.equal((await service.getExtension(entry.id))?.id, entry.id);
 	assert.equal(languageService.guessLanguageIdByFilepathOrFirstLine(URI.file('/notes/test.startup-test')), 'startup-test');
 	assert.equal(configuration.getValue(key), true);
 	assert.deepEqual(reads, []);
