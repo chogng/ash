@@ -200,7 +200,11 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 			process.exitCode = 1;
 		}
 	} finally {
-		rmSync(outputDirectory, { recursive: true, force: true });
+		if (process.env.ASH_UNIT_TEST_PRESERVE_OUTPUT === '1') {
+			process.stdout.write(`Preserved unit test output: ${outputDirectory}\n`);
+		} else {
+			rmSync(outputDirectory, { recursive: true, force: true });
+		}
 	}
 }
 

@@ -1,0 +1,92 @@
+name: Scoped coverage baseline
+
+on:
+  push:
+    branches: ['coverage/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust / protocol and keybinding
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install matching LLVM coverage tools
+        run: rustup component add llvm-tools-preview
+      - uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with:
+          tool: cargo-llvm-cov@0.9.1
+      - name: Measure first-party Rust library coverage
+        run: |
+          mkdir -p .build/coverage/rust
+          cargo llvm-cov --locked --lib --package ash-protocol --package ash-keybinding --lcov --output-path .build/coverage/rust/lcov.info
+          python3 scripts/coverage_summary.py rust .build/coverage/rust/lcov.info
+      - name: Upload Rust LCOV report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rust-scope-coverage
+          path: .build/coverage/rust/lcov.info
+          if-no-files-found: warn
+
+  typescript:
+    name: TypeScript / Desktop unit-test scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024
+        with:
+          install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - name: Install frontend and browser test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libx11-dev libxkbfile-dev libcap-dev libssl-dev pkg-config
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium firefox
+      - name: Prepare source-mapped unit-test output
+        run: |
+          pnpm run protocol:generate
+          pnpm run prepare:output
+          node test/unit/prepare.ts tsconfig.test.json
+          node node_modules/@ash/typescript-compiler/bin/tsc -p tsconfig.test.json --sourceMap
+      - name: Run all Desktop and extension unit tests with V8 instrumentation
+        run: |
+          mkdir -p .build/coverage/typescript/v8
+          export NODE_V8_COVERAGE="$PWD/.build/coverage/typescript/v8"
+          export ASH_UNIT_TEST_PRESERVE_OUTPUT=1
+          pnpm run test:unit:no-compile
+      - name: Generate original TypeScript source coverage
+        run: |
+          shopt -s nullglob
+          snapshots=(.build/desktop/test-run-*)
+          if [[ ${#snapshots[@]} -ne 1 ]]; then
+            echo "Expected one retained unit-test snapshot; found ${#snapshots[@]}" >&2
+            exit 1
+          fi
+          pnpm dlx c8@10.1.3 report \
+            --all \
+            --src "${snapshots[0]}/src/ash" \
+            --exclude '**/test/**' \
+            --exclude '**/*.test.js' \
+            --temp-directory "$PWD/.build/coverage/typescript/v8" \
+            --reporter text-summary \
+            --reporter lcov \
+            --reports-dir "$PWD/.build/coverage/typescript/report"
+          python3 scripts/coverage_summary.py typescript .build/coverage/typescript/report/lcov.info
+      - name: Upload source-mapped TypeScript LCOV report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: typescript-scope-coverage
+          path: .build/coverage/typescript/report/lcov.info
+          if-no-files-found: warn
