@@ -3,6 +3,7 @@ import '../../../../../editor/test/browser/testEditorDom.js';
 import '../../browser/scm.contribution.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { CancellationError } from '../../../../../base/common/errors.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { StorageScope, type IStorageService } from '../../../../../platform/storage/common/storage.js';
@@ -58,6 +59,80 @@ test('SCM working sets save and restore editor state across branch changes', asy
 	provider.accept('other');
 	await nextTask();
 	assert.deepEqual(saved, ['main', 'feature']);
+});
+
+test('SCM preserves the target working set when closing editors is cancelled', async () => {
+	using configuration = new InMemoryConfigurationService();
+	await configuration.updateValue('scm.workingSets.enabled', true);
+	using provider = new TestSCMProvider('main');
+	using scmService = new SCMService();
+	using viewService = new SCMViewService(scmService, emptyEditorServiceState);
+	using repository = scmService.registerSCMProvider(provider);
+	const storage = new TestStorageService();
+	const main = workingSet('main');
+	const feature: EditorWorkingSet = {
+		id: 'feature',
+		activeGroupIndex: 1,
+		groups: [
+			{ activeEditorIndex: -1, editors: [], size: 0.25 },
+			{
+				activeEditorIndex: 0,
+				size: 0.75,
+				editors: [{
+					input: { typeId: 'workbench.editorInput.resource', value: { resource: 'file:///workspace/feature.ts' } },
+					preview: false,
+					viewState: { typeId: 'text', value: { lineNumber: 8 } },
+				}],
+			},
+		],
+	};
+	const persisted = { repositoryKey: repository.id, currentRef: 'main', editorWorkingSets: [['feature', feature]] };
+	storage.store('scm.workingSets', JSON.stringify([persisted]));
+	let visible = main;
+	const saved: string[] = [];
+	const applied: EditorWorkingSetTarget[] = [];
+	const editorPart = {
+		domNode: document.body,
+		saveWorkingSet(id: string): EditorWorkingSet {
+			saved.push(id);
+			return { ...visible, id };
+		},
+		async applyWorkingSet(target: EditorWorkingSetTarget): Promise<void> {
+			applied.push(target);
+			if (applied.length === 1) throw new CancellationError();
+			assert.ok(target !== 'empty');
+			visible = target;
+		},
+	} as unknown as IEditorPart;
+	using controller = new ScmWorkingSetController({
+		configurationService: configuration,
+		editorPart,
+		scmViewService: viewService,
+		storageService: storage as unknown as IStorageService,
+	});
+	await nextTask();
+
+	provider.accept('feature');
+	await nextTask();
+	assert.equal(visible, main);
+	provider.accept('feature');
+	await nextTask();
+	assert.deepEqual(applied, [feature]);
+
+	provider.accept('main');
+	await nextTask();
+	assert.deepEqual(saved, ['main']);
+	assert.deepEqual(JSON.parse(storage.get('scm.workingSets', StorageScope.WORKSPACE)!), [{
+		...persisted, editorWorkingSets: [['feature', feature], ['main', main]],
+	}]);
+
+	provider.accept('feature');
+	await nextTask();
+	assert.deepEqual(visible, feature);
+	assert.deepEqual(applied, [feature, feature]);
+	assert.deepEqual(JSON.parse(storage.get('scm.workingSets', StorageScope.WORKSPACE)!), [{
+		...persisted, currentRef: 'feature', editorWorkingSets: [['feature', feature], ['main', main]],
+	}]);
 });
 
 function workingSet(id: string): EditorWorkingSet {

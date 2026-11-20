@@ -11,12 +11,13 @@ const WorkingSetsStorageKey = 'scm.workingSets';
 
 interface SerializedRepositoryWorkingSets {
 	readonly repositoryKey: string;
+	/** Persisted ref that owns the visible working set. */
 	readonly currentRef: string;
 	readonly editorWorkingSets: readonly (readonly [string, EditorWorkingSet])[];
 }
 
 interface RepositoryWorkingSets {
-	currentRef: string;
+	workingSetRef: string;
 	readonly editorWorkingSets: Map<string, EditorWorkingSet>;
 }
 
@@ -33,7 +34,7 @@ export class ScmWorkingSetController extends Disposable {
 	private readonly providerListener = this._register(new MutableDisposable());
 	private readonly repositoryWorkingSets = new Map<string, RepositoryWorkingSets>();
 	private statusQueue = Promise.resolve();
-	private lastRefIdentity: string | undefined;
+	private lastObservedRefIdentity: string | undefined;
 	private generation = 0;
 
 	constructor(private readonly options: ScmWorkingSetControllerOptions) {
@@ -46,7 +47,7 @@ export class ScmWorkingSetController extends Disposable {
 		this.generation += 1;
 		this.enabledResources.clear();
 		this.repositoryWorkingSets.clear();
-		this.lastRefIdentity = undefined;
+		this.lastObservedRefIdentity = undefined;
 		this.providerListener.clear();
 		if (!enabled) {
 			this.options.storageService.remove(WorkingSetsStorageKey, StorageScope.WORKSPACE);
@@ -66,29 +67,33 @@ export class ScmWorkingSetController extends Disposable {
 	private enqueue(repositoryId: string, ref: string | undefined): void {
 		if (ref === undefined) return;
 		const identity = `${repositoryId}:${ref}`;
-		if (identity === this.lastRefIdentity) return;
-		this.lastRefIdentity = identity;
+		if (identity === this.lastObservedRefIdentity) return;
+		this.lastObservedRefIdentity = identity;
 		const generation = this.generation;
-		this.statusQueue = this.statusQueue.then(() => generation === this.generation ? this.acceptRef(repositoryId, ref) : undefined).catch(() => undefined);
+		this.statusQueue = this.statusQueue.then(() => {
+			if (!this.isDisposed && generation === this.generation) return this.acceptRef(repositoryId, ref);
+		}).catch(() => undefined);
 	}
 
 	private async acceptRef(repositoryKey: string, ref: string): Promise<void> {
 		const repository = this.repositoryWorkingSets.get(repositoryKey);
 		if (!repository) {
-			this.repositoryWorkingSets.set(repositoryKey, { currentRef: ref, editorWorkingSets: new Map() });
+			this.repositoryWorkingSets.set(repositoryKey, { workingSetRef: ref, editorWorkingSets: new Map() });
 			return;
 		}
-		if (repository.currentRef === ref) return;
-		repository.editorWorkingSets.set(repository.currentRef, this.options.editorPart.saveWorkingSet(repository.currentRef));
-		repository.currentRef = ref;
-		this.store();
-		const workingSet = repository.editorWorkingSets.get(ref);
-		if (workingSet) {
-			await this.options.editorPart.applyWorkingSet(workingSet, { preserveFocus: !this.hasEditorFocus() });
-			return;
-		}
-		if (this.options.configurationService.getValue('scm.workingSets.default') === 'empty') {
-			await this.options.editorPart.applyWorkingSet('empty', { preserveFocus: !this.hasEditorFocus() });
+		const previousRef = repository.workingSetRef;
+		if (previousRef === ref) return;
+		repository.editorWorkingSets.set(previousRef, this.options.editorPart.saveWorkingSet(previousRef));
+		const workingSet = repository.editorWorkingSets.get(ref)
+			?? (this.options.configurationService.getValue('scm.workingSets.default') === 'empty' ? 'empty' : undefined);
+		try {
+			if (workingSet) {
+				await this.options.editorPart.applyWorkingSet(workingSet, { preserveFocus: !this.hasEditorFocus() });
+			}
+			// Closing confirmation can veto restoration while Git remains on the new ref.
+			repository.workingSetRef = ref;
+		} finally {
+			if (!this.isDisposed && this.repositoryWorkingSets.get(repositoryKey) === repository) this.store();
 		}
 	}
 
@@ -105,7 +110,7 @@ export class ScmWorkingSetController extends Disposable {
 			for (const entry of parsed) {
 				const serialized = validateSerializedRepository(entry);
 				this.repositoryWorkingSets.set(serialized.repositoryKey, {
-					currentRef: serialized.currentRef,
+					workingSetRef: serialized.currentRef,
 					editorWorkingSets: new Map(serialized.editorWorkingSets),
 				});
 			}
@@ -118,7 +123,7 @@ export class ScmWorkingSetController extends Disposable {
 	private store(): void {
 		const serialized: SerializedRepositoryWorkingSets[] = [...this.repositoryWorkingSets].map(([repositoryKey, state]) => ({
 			repositoryKey,
-			currentRef: state.currentRef,
+			currentRef: state.workingSetRef,
 			editorWorkingSets: [...state.editorWorkingSets],
 		}));
 		this.options.storageService.store(WorkingSetsStorageKey, JSON.stringify(serialized), StorageScope.WORKSPACE, StorageTarget.MACHINE);
