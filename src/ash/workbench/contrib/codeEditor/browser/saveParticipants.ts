@@ -94,7 +94,8 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 		if (reason === SaveReason.AUTO) { return; }
 		const contribution = EditorExtensionsRegistry.getSomeEditorContributions(['editor.contrib.codeActionController'])[0];
 		if (!contribution) return;
-		const settings = this.configuration.getValue<Readonly<Record<string, 'always' | 'explicit' | 'never'>>>('editor.codeActionsOnSave', { overrideIdentifier: model.getLanguageId() });
+		const overrides = { resource: model.uri, overrideIdentifier: model.getLanguageId() };
+		const settings = this.configuration.getValue<Readonly<Record<string, 'always' | 'explicit' | 'never'>>>('editor.codeActionsOnSave', overrides);
 		const selected = Object.entries(settings)
 			.filter(([, mode]) => mode === 'always' || mode === 'explicit' && reason === SaveReason.EXPLICIT)
 			.map(([kind]) => new HierarchicalKind(kind));

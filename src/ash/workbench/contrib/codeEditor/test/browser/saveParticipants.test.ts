@@ -8,7 +8,7 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
-import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
+import { TestConfigurationFiles, TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IBulkEditService } from '../../../../../editor/browser/services/bulkEditService.js';
@@ -24,6 +24,7 @@ import { SnippetController2 } from '../../../../../editor/contrib/snippet/browse
 import { parseSnippet } from '../../../../../editor/contrib/snippet/common/snippetParser.js';
 import { registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IMarkerService, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
@@ -67,14 +68,19 @@ test('save cleanup waits for editor parts before creating the Workbench editor s
 });
 
 class SaveTestServices extends Disposable {
-	readonly bulk = this._register(new BulkEditTestServices([[resource, 'original'], [URI.file('/workspace/other.ts'), 'other']]));
-	readonly configuration = this._register(new WorkbenchConfigurationService());
+	readonly bulk: BulkEditTestServices;
+	readonly configuration: WorkbenchConfigurationService;
 	readonly features = this._register(new LanguageFeaturesService());
 	readonly markers = this._register(new MarkerService());
 	readonly services = this._register(new InstantiationService());
 	readonly host;
-	constructor() {
+	constructor(
+		configuration = new WorkbenchConfigurationService(),
+		resources: readonly (readonly [URI, string])[] = [[resource, 'original'], [URI.file('/workspace/other.ts'), 'other']],
+	) {
 		super();
+		this.bulk = this._register(new BulkEditTestServices(resources));
+		this.configuration = this._register(configuration);
 		this.services.registerInstance(IFileTextModelService, this.bulk.models);
 		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(ILanguageFeaturesService, this.features);
@@ -377,6 +383,52 @@ test('save contribution runs fixes before imports on the shared model, persists 
 	reference.model.undo();
 	assert.equal(reference.model.getText(), 'edited-fixed');
 	assert.equal(reference.isDirty, true);
+});
+
+test('explicit saves honor folder code action overrides in a multi-root workspace', async () => {
+	using files = new TestConfigurationFiles();
+	using provider = new InMemoryFileSystemProvider();
+	using registration = files.registerProvider('file', provider);
+	const first = URI.file('/workspace/first');
+	const second = URI.file('/workspace/second');
+	const workspaceFile = URI.file('/workspace/test.ash-workspace');
+	const firstFile = URI.joinPath(first, 'main.ts');
+	const secondFile = URI.joinPath(second, 'main.ts');
+	await files.createDirectory(URI.joinPath(first, '.vscode'));
+	await files.createDirectory(second);
+	await files.writeFile({
+		resource: workspaceFile,
+		content: JSON.stringify({
+			folders: [{ path: 'first' }, { path: 'second' }],
+			settings: { 'editor.codeActionsOnSave': { 'source.organizeImports': 'explicit' } },
+		}),
+	}, { create: true, overwrite: false });
+	await files.writeFile({
+		resource: URI.joinPath(first, '.vscode', 'settings.json'),
+		content: JSON.stringify({
+			'[typescript]': { 'editor.codeActionsOnSave': { 'source.organizeImports': 'never', 'source.fixAll': 'explicit' } },
+		}),
+	}, { create: true, overwrite: false });
+	const configuration = new WorkbenchConfigurationService({
+		files,
+		workspace: {
+			id: 'save-actions', configuration: workspaceFile,
+			folders: [first, second].map((uri, index) => ({ uri, id: String(index), name: String(index), index })),
+		},
+	});
+	using fixture = new SaveTestServices(configuration, [[firstFile, 'original'], [secondFile, 'original']]);
+	await configuration.initialize(files);
+	using actions = fixture.features.codeActionProvider.register('*', {
+		provideCodeActions: request => [action(request, `${request.snapshot.getText()} ${request.only![0]}`)],
+	});
+	using firstReference = await fixture.bulk.models.acquire({ resource: firstFile, languageId: 'typescript' }, signal());
+	using secondReference = await fixture.bulk.models.acquire({ resource: secondFile, languageId: 'typescript' }, signal());
+	firstReference.model.setValue('edited');
+	secondReference.model.setValue('edited');
+	await firstReference.save(signal(), { reason: SaveReason.EXPLICIT });
+	await secondReference.save(signal(), { reason: SaveReason.EXPLICIT });
+	assert.equal(fixture.bulk.store.text(firstFile), 'edited source.fixAll');
+	assert.equal(fixture.bulk.store.text(secondFile), 'edited source.organizeImports');
 });
 
 for (const reason of [SaveReason.EXPLICIT, SaveReason.AUTO, SaveReason.FOCUS_CHANGE, SaveReason.WINDOW_CHANGE]) {
