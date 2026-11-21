@@ -82,6 +82,24 @@ test('real Ash development services exit after worker death or launcher loss wit
 	}
 });
 
+test('F5 reports a busy debug port before starting development services', { timeout: 30_000 }, async t => {
+	const repository = resolve(import.meta.dirname, '../../..');
+	const occupied = createServer();
+	t.after(() => new Promise<void>(resolveClosed => occupied.close(() => resolveClosed())));
+	await new Promise<void>((resolveReady, reject) => occupied.once('error', reject).listen(0, '127.0.0.1', resolveReady));
+	const port = (occupied.address() as import('node:net').AddressInfo).port;
+	for (const argument of [`--inspect-brk=127.0.0.1:${port}`, `--remote-debugging-port=${port}`]) {
+		await assert.rejects(promisify(execFile)(process.execPath, ['build/desktop/launch/electron.ts', '--watch', '--dev-services', argument], {
+			cwd: repository, timeout: 15_000, env: { ...process.env, ASH_RENDERER_URL: undefined, ASH_DESKTOP_UI_ONLY: undefined },
+		}), {
+			code: 1,
+			stderr: new RegExp(`Ash desktop debug port 127[.]0[.]0[.]1:${port} is already in use`, 'u'),
+			stdout: '',
+		});
+	}
+	assert.equal(occupied.listening, true);
+});
+
 const launchSources = ['build/source-layout.json', 'build/processes.ts', 'build/processGroup.ts', 'build/desktop/launch/electron.ts', 'build/desktop/launch/supervisor.ts', 'build/desktop/electron.ts', 'src/ash/code/common/application.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/runtimeStore.ts', 'build/desktop/appServer.ts', 'build/desktop/liveBuild.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/lib/incrementalOutput.ts', 'build/lib/watchNativeFile.ts'];
 
 interface ObservedProcess { readonly pid: number; readonly recordedAt: number; }
@@ -446,15 +464,25 @@ export async function watchHost(onReady) {
 }
 `);
 		const record = `require('node:fs').appendFileSync('services.log', JSON.stringify({ pid: process.pid, recordedAt: Date.now() }) + '\\n');`;
-		await writeFile(join(root, 'fixture.cjs'), `${record}\nprocess.send('ash:dev:ready'); setInterval(() => {}, 1000);`);
+		await writeFile(join(root, 'fixture.cjs'), `
+require('node:fs').writeFileSync('renderer-url', process.env.ASH_RENDERER_URL);
+${record}
+process.send('ash:dev:ready'); setInterval(() => {}, 1000);
+`);
 		await writeFile(join(root, 'build/node_modules/vite/bin/vite.js'), `
 ${record}
 require('node:fs').writeFileSync('worker.pid', JSON.stringify({ pid: process.ppid, recordedAt: Date.now() }));
 const net = require('node:net');
-const port = Number(process.argv[process.argv.indexOf('--port') + 1]);
-net.createServer().listen(port, '127.0.0.1', () => {
+let port = Number(process.argv[process.argv.indexOf('--port') + 1]);
+const server = net.createServer();
+server.on('error', error => {
+  if (error.code !== 'EADDRINUSE' || !process.argv.includes('--no-strictPort')) throw error;
+  server.listen(++port, '127.0.0.1');
+});
+server.on('listening', () => {
   if (!['rendererStarting', 'supervisorKilledDuringRendererStartup', 'workerKilledDuringRendererStartup'].includes(require('node:fs').readFileSync('mode', 'utf8'))) console.log('\\x1b[32mLocal:\\x1b[0m \\x1b[36mhttp://\\x1b[1m127.0.0.1\\x1b[22m:' + port + '/');
 });
+server.listen(port, '127.0.0.1');
 `);
 		await writeFile(join(root, 'build/node_modules/vite/package.json'), '{"type":"commonjs"}');
 		await writeFile(join(root, 'build/desktop/watch-app-server.ts'), `
@@ -466,14 +494,17 @@ spawn(process.execPath, ['-e', ${JSON.stringify(`process.on('SIGTERM', () => {})
 console.log('[app-server] Watching Rust App Server sources');
 setInterval(() => {}, 1000);
 `);
-		const { createServer } = await import('node:net');
 		const reservation = createServer();
 		await new Promise<void>(resolveReady => reservation.listen(0, '127.0.0.1', resolveReady));
 		const port = (reservation.address() as import('node:net').AddressInfo).port;
-		await new Promise<void>((resolveClosed, reject) => reservation.close(error => error ? reject(error) : resolveClosed()));
-		if (mode === 'portBusy') await new Promise<void>(resolveReady => reservation.listen(port, '127.0.0.1', resolveReady));
+		const closeReservation = () => new Promise<void>((resolveClosed, reject) => reservation.close(error => error ? reject(error) : resolveClosed()));
+		if (mode !== 'portBusy') await closeReservation();
 		const runs: ProcessRun[] = [];
-		t.after(async () => { await Promise.all(runs.map(run => run.stop('SIGTERM'))); await rm(root, { recursive: true, force: true }); });
+		t.after(async () => {
+			if (reservation.listening) await closeReservation();
+			await Promise.all(runs.map(run => run.stop('SIGTERM')));
+			await rm(root, { recursive: true, force: true });
+		});
 		const services = async (): Promise<ObservedProcess[]> => readFile(join(root, 'services.log'), 'utf8').then(text => text.trim().split('\n').filter(Boolean).map(line => JSON.parse(line)), () => []);
 		const pids = async (): Promise<number[]> => (await services()).map(process => process.pid);
 		const supervisorKilled = mode === 'supervisorKilled' || mode === 'supervisorKilledDuringRendererStartup';
@@ -492,9 +523,21 @@ setInterval(() => {}, 1000);
 			child.stderr.on('data', chunk => { output += chunk; });
 			await run.own(child);
 			const startupDeadline = Date.now() + (process.platform === 'win32' ? 30_000 : 15_000);
-			const expectedCount = rendererStarting || mode === 'portBusy' ? 1 : mode === 'watcherFails' ? 2 : 4;
+			const expectedCount = rendererStarting ? 1 : mode === 'watcherFails' ? 2 : 4;
 			while ((await pids()).length < previousCount + expectedCount && Date.now() < startupDeadline) await delay(20);
 			assert.equal((await pids()).length, previousCount + expectedCount, output);
+			let rendererPort = port;
+			if (expectedCount === 4) {
+				const rendererUrl = new URL(await readFile(join(root, 'renderer-url'), 'utf8'));
+				assert.equal(rendererUrl.hostname, '127.0.0.1');
+				rendererPort = Number(rendererUrl.port);
+				if (mode === 'portBusy') {
+					assert.ok(rendererPort > port, output);
+					assert.ok(reservation.listening);
+				} else {
+					assert.equal(rendererPort, port, output);
+				}
+			}
 			const worker = JSON.parse(await readFile(join(root, 'worker.pid'), 'utf8')) as ObservedProcess;
 			const supervisor = JSON.parse(await readFile(join(root, 'supervisor.pid'), 'utf8')) as ObservedProcess;
 			if (workerKilled) {
@@ -511,7 +554,7 @@ setInterval(() => {}, 1000);
 				// the worker must reclaim its own services after the IPC channel closes.
 				await run.own(child);
 				child.kill('SIGKILL');
-			} else if (mode !== 'watcherFails' && mode !== 'portBusy') {
+			} else if (mode !== 'watcherFails') {
 				if (process.platform === 'win32') await run.stop('SIGTERM');
 				else child.kill('SIGTERM');
 			}
@@ -520,18 +563,18 @@ setInterval(() => {}, 1000);
 			while (child.exitCode === null && child.signalCode === null && Date.now() < cleanupDeadline) await delay(20);
 			if (supervisorKilled || mode === 'launcherKilledWorkerHung') assert.equal(child.signalCode, 'SIGKILL', output);
 			else if (workerKilled || workerHung) assert.equal(child.exitCode, 1, output);
-			else if (mode !== 'watcherFails' && mode !== 'portBusy' && process.platform === 'win32') assert.equal(child.signalCode, 'SIGTERM', output);
-			else assert.equal(child.exitCode, mode === 'watcherFails' || mode === 'portBusy' ? 1 : 143, output);
+			else if (mode !== 'watcherFails' && process.platform === 'win32') assert.equal(child.signalCode, 'SIGTERM', output);
+			else assert.equal(child.exitCode, mode === 'watcherFails' ? 1 : 143, output);
 			const owned = [supervisor, worker, ...(await services()).slice(previousCount)];
 			while (owned.some(process => isProcessRunning(process.pid)) && Date.now() < cleanupDeadline) await delay(20);
 			await assertProcessesExited(owned, output);
 			if (mode === 'workerHung') assert.match(output, /Development worker stopped responding/u);
 			if (mode === 'portBusy') {
 				assert.equal(reservation.listening, true, 'An unrelated port owner must survive launcher cleanup');
-				await new Promise<void>((resolveClosed, reject) => reservation.close(error => error ? reject(error) : resolveClosed()));
+				await closeReservation();
 			}
-			await new Promise<void>((resolveReady, reject) => reservation.once('error', reject).listen(port, '127.0.0.1', resolveReady));
-			await new Promise<void>((resolveClosed, reject) => reservation.close(error => error ? reject(error) : resolveClosed()));
+			await new Promise<void>((resolveReady, reject) => reservation.once('error', reject).listen(rendererPort, '127.0.0.1', resolveReady));
+			await closeReservation();
 		}
 	});
 }

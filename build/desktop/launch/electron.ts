@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { watchHost } from '../host.ts';
@@ -7,6 +8,27 @@ import { detachedProcess, ProcessRun, registerRunResource } from '../../processe
 import { prepareAppServer } from '../appServer.ts';
 import { resolveDevelopmentElectronExecutable } from '../electron.ts';
 import { developmentAshPackagePath } from '../runtimeStore.ts';
+
+async function checkDebugPorts(args: readonly string[]): Promise<void> {
+	// F5 shares fixed debugger endpoints even when Vite can choose a different port.
+	for (const argument of args) {
+		const match = /^--(?:inspect-brk=127\.0\.0\.1:|remote-debugging-port=)([1-9]\d{0,4})$/u.exec(argument);
+		if (!match) continue;
+		const port = Number(match[1]);
+		if (port > 65_535) continue;
+		const host = '127.0.0.1';
+		const probe = createServer();
+		try {
+			await new Promise<void>((ready, reject) => {
+				probe.once('error', reject);
+				probe.listen(port, host, () => probe.close(error => error ? reject(error) : ready()));
+			});
+		} catch (error) {
+			if (error.code !== 'EADDRINUSE') throw error;
+			throw new Error(`Ash desktop debug port ${host}:${port} is already in use. Stop the session using it before starting another.`);
+		}
+	}
+}
 
 if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	const child = spawn(process.execPath, [resolve(import.meta.dirname, 'supervisor.ts'), ...process.argv.slice(2)], {
@@ -102,9 +124,9 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	let generation = 0;
 	const cancellation = new AbortController();
 
-	async function startService(name: string, arguments_: readonly string[], readyPattern: RegExp): Promise<void> {
+	async function startService(name: string, arguments_: readonly string[], readyPattern: RegExp): Promise<RegExpExecArray | undefined> {
 		if (stopped) return;
-		const ready = Promise.withResolvers<void>();
+		const ready = Promise.withResolvers<RegExpExecArray>();
 		let listening = false;
 		let output = '';
 		const child = spawn(process.execPath, arguments_, {
@@ -115,10 +137,12 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		});
 		child.stdout.on('data', (chunk: Buffer) => {
 			process.stdout.write(chunk);
+			if (listening) return;
 			output = (output + chunk.toString()).slice(-8192);
-			if (!listening && readyPattern.test(stripVTControlCharacters(output))) {
+			const match = readyPattern.exec(stripVTControlCharacters(output));
+			if (match) {
 				listening = true;
-				ready.resolve();
+				ready.resolve(match);
 			}
 		});
 		child.once('error', error => ready.reject(error));
@@ -127,7 +151,8 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 			if (!listening) ready.reject(error);
 			else if (!stopped) fail(error);
 		});
-		await Promise.all([servicesRun!.own(child), ready.promise]);
+		const [, match] = await Promise.all([servicesRun!.own(child), ready.promise]);
+		return match;
 	}
 
 	async function launch(): Promise<void> {
@@ -229,7 +254,15 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		if (process.connected) process.send!('ash:dev:heartbeat', () => { });
 	}, 1_000).unref() : undefined;
 	process.once('exit', () => clearInterval(heartbeat));
-	if (!backendPrepared && environment.ASH_DESKTOP_UI_ONLY !== '1') {
+	if (developmentServices && !stopped) {
+		try { await checkDebugPorts(args); }
+		catch (error) {
+			console.error(`[host] ${error.message}`);
+			await stop();
+			process.exit(1);
+		}
+	}
+	if (!stopped && !backendPrepared && environment.ASH_DESKTOP_UI_ONLY !== '1') {
 		console.log('[app-server] Preparing the development backend (builds Rust binaries if needed)...');
 		try { await prepareAppServer('host-provided-node', cancellation.signal, subsecond ? serviceEnvironment : undefined); }
 		catch (error) { if (!stopped) throw error; }
@@ -248,11 +281,13 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 				|| renderer.pathname !== '/' || renderer.search || renderer.hash || renderer.username || renderer.password) {
 				throw new Error('--dev-services requires a loopback ASH_RENDERER_URL with an explicit port');
 			}
-			await startService('Renderer', [
+			// Only the renderer child knows which port Vite successfully bound.
+			const rendererReady = await startService('Renderer', [
 				resolve(sourceRoot, 'build/node_modules/vite/bin/vite.js'),
 				'--config', 'build/desktop/vite/vite.config.ts',
-				'--host', renderer.hostname, '--port', renderer.port, '--strictPort',
-			], /Local:.*http:\/\/127\.0\.0\.1:/u);
+				'--host', renderer.hostname, '--port', renderer.port, '--no-strictPort',
+			], /\bLocal:[ \t]+(http:\/\/127\.0\.0\.1:\d+)\//u);
+			if (rendererReady) environment.ASH_RENDERER_URL = rendererReady[1];
 			if (environment.ASH_DEV_APP_SERVER_RELOAD === '1') {
 				await startService('App Server watcher', ['build/desktop/watch-app-server.ts', '--skip-initial'], /\[app-server\] Watching Rust App Server sources/u);
 			}
