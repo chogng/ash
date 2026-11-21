@@ -53,6 +53,35 @@ test('replacement rejects stale ranges before changing any resource', async () =
 	assert.deepEqual({ text: fixture.store.text(resource), saved: fixture.store.saved }, { text: 'changed', saved: [] });
 });
 
+for (const source of ['needle$', 'needle\\b', 'needle(?=\\s|$)|need']) {
+	test(`replacement rejects a stale regex range for ${source} before editing or saving any file`, async () => {
+		const other = URI.joinPath(root, 'other.ts');
+		using fixture = new BulkEditTestServices([[resource, 'needle\n'], [other, 'needle\nneedle\n']]);
+		using reference = await fixture.models.acquire({ resource: other }, options.signal);
+		const matches = results('needle', [{ start: 0, end: 6 }]);
+		matches.add([{ dirId: 'workspace', path: 'other.ts', lineNumber: 1, preview: 'needle', ranges: [{ start: 0, end: 6 }] }]);
+		reference.model.setValue('needlework\nneedle\n');
+
+		await assert.rejects(new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(
+			matches.files.flatMap(file => file.matches), { ...query, text: source }, 'value', options,
+		), error => error instanceof WorkspaceEditConflictError && /Refresh the results before replacing/.test(error.message));
+		assert.equal(reference.model.getText(), 'needlework\nneedle\n');
+		assert.equal(fixture.store.text(resource), 'needle\n');
+		assert.equal(fixture.store.text(other), 'needle\nneedle\n');
+		assert.deepEqual(fixture.store.saved, []);
+	});
+}
+
+test('replacement saves captures from the current regex context', async () => {
+	using fixture = new BulkEditTestServices([[resource, 'new needle']]);
+	const matches = results('old needle', [{ start: 4, end: 10 }]);
+	const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(
+		matches.files[0]!.matches, { ...query, text: '(?<=(old|new) )(needle)' }, '$2 $1', options,
+	);
+	assert.equal(applied.isApplied, true);
+	assert.equal(fixture.store.text(resource), 'new needle new');
+});
+
 test('multiline replacement compares normalized previews with CRLF files and undo preserves their EOL', async () => {
 	const original = '中文😀 first\r\nsecond tail\r\n';
 	using fixture = new BulkEditTestServices([[resource, original]]);

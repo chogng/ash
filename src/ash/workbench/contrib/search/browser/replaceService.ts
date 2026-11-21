@@ -12,7 +12,7 @@ import { Schemas } from '../../../../base/common/network.js';
 import { IReplaceService, type SearchReplaceResult } from './replace.js';
 import type { SearchMatch } from './searchTreeModel/searchResult.js';
 
-/** Builds versioned edits from the searched snapshot and delegates mutation, preview and undo. */
+/** Validates search results against current model text and delegates versioned edits, preview and undo. */
 export class ReplaceService implements IReplaceService {
 	constructor(
 		@ITextModelResourceService private readonly models: ITextModelResourceService,
@@ -31,7 +31,7 @@ export class ReplaceService implements IReplaceService {
 		const pattern = query.patternKind === 'regex' ? parseReplaceString(replacement) : ReplacePattern.fromStaticValue(replacement);
 		const sensitive = query.caseSensitivity === 'sensitive' || query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text);
 		const expression = query.patternKind === 'regex'
-			? new RegExp(query.text.replace(/\r\n|\r/g, '\n').replaceAll('\n', '\\r?\\n'), sensitive ? 'gmu' : 'gmiu')
+			? new RegExp(query.text.replace(/\r\n|\r/g, '\n').replaceAll('\n', '\\r?\\n'), sensitive ? 'myu' : 'miyu')
 			: undefined;
 		const edits: LanguageTextDocumentEdit[] = [];
 		const acquired: TextModelReference[] = [];
@@ -40,24 +40,31 @@ export class ReplaceService implements IReplaceService {
 			const resource = entries[0]!.file.resource;
 			const reference = references.add(await this.models.acquire({ resource }, options.signal));
 			acquired.push(reference);
+			const { model } = reference;
+			const version = model.version;
+			const text = model.getText();
 			const textEdits = entries.map(match => {
+				const { range } = match;
 				const expected = match.preview.slice(match.previewRange.start, match.previewRange.end).replace(/\r\n|\r/g, '\n');
 				// Search previews can normalize line endings while the shared model retains the file's EOL.
-				if (!reference.model.isValidRange(match.range) || reference.model.getTextInRange(match.range).replace(/\r\n|\r/g, '\n') !== expected) {
+				if (!model.isValidRange(range) || model.getTextInRange(range).replace(/\r\n|\r/g, '\n') !== expected) {
 					throw new WorkspaceEditConflictError(localize('search.replaceStale', '{0} changed after the search. Refresh the results before replacing.', match.file.path));
 				}
 				let captures: string[] = [expected];
 				if (expression) {
-					expression.lastIndex = match.previewRange.start;
-					const found = expression.exec(match.preview);
-					if (!found || found.index !== match.previewRange.start || found[0].length !== match.previewRange.end - match.previewRange.start) {
+					const start = model.getOffsetAt(range.getStartPosition());
+					const end = model.getOffsetAt(range.getEndPosition());
+					// Sticky matching keeps the original start while assertions see the surrounding document.
+					expression.lastIndex = start;
+					const found = expression.exec(text);
+					if (!found || found.index !== start || expression.lastIndex !== end) {
 						throw new WorkspaceEditConflictError(localize('search.replacePatternChanged', 'The search expression no longer matches the selected result. Refresh the results before replacing.'));
 					}
 					captures = found;
 				}
-				return { range: match.range, text: pattern.buildReplaceString(captures, options.preserveCase) };
+				return { range, text: pattern.buildReplaceString(captures, options.preserveCase) };
 			});
-			edits.push({ kind: 'textDocument', resource, version: reference.model.version, expectedText: reference.model.getText(), edits: textEdits });
+			edits.push({ kind: 'textDocument', resource, version, expectedText: text, edits: textEdits });
 		}
 		const result = await this.bulkEdits.apply({ entries: edits }, {
 			token: options.signal,
