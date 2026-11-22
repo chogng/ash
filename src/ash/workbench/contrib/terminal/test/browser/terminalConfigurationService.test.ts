@@ -33,7 +33,7 @@ import { GeneralShellType, PosixShellType, TerminalLocation, WindowsShellType, t
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 
@@ -470,6 +470,37 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(await result, 'PowerShell');
 		assert.equal(configuration.inspect('terminal.integrated.defaultProfile.windows').userValue, 'PowerShell');
 		assert.deepEqual(profiles.availableProfiles.map(p => p.isDefault), [false, true]);
+	});
+
+	test('selecting a contributed default preserves user and workspace terminal profiles in their own settings', async () => {
+		using owner = new DisposableStore();
+		const { services, profiles, configuration, workspace } = createServices(owner);
+		const files = services.get(IFileService);
+		configuration.updateWorkspace(workspace.getWorkspace());
+		await configuration.initialize(files);
+		const profilesKey = 'terminal.integrated.profiles.windows';
+		const defaultKey = 'terminal.integrated.defaultProfile.windows';
+		const userProfiles = { 'Shared shell': { path: '/user/shared' }, 'Hidden shell': null };
+		const workspaceProfiles = { 'Shared shell': { path: '/workspace/shared' }, 'Project shell': { path: '/workspace/project' } };
+		await configuration.updateValue(profilesKey, userProfiles, ConfigurationTarget.USER);
+		await configuration.updateValue(profilesKey, workspaceProfiles, ConfigurationTarget.WORKSPACE);
+		assert.deepEqual(configuration.getValue(profilesKey), { ...userProfiles, ...workspaceProfiles });
+
+		const contributed = { extensionIdentifier: 'ash.code', id: 'cli', title: 'Ash Code' };
+		owner.add(profiles.registerInternalContributedProfile(contributed));
+		const ui = installPicker(owner, services);
+		using picker = services.createInstance(TerminalProfileQuickpick);
+		const result = picker.showAndGetResult('setDefault');
+		await waitFor(ui.shown);
+		ui.accept(ui.picker.items.findIndex(item => item.label === contributed.title));
+
+		assert.equal(await result, contributed.title);
+		assert.deepEqual(JSON.parse((await configuration.read()).source), {
+			[profilesKey]: { ...userProfiles, [contributed.title]: contributed },
+			[defaultKey]: contributed.title,
+		});
+		assert.deepEqual(configuration.inspect(profilesKey).workspaceValue, workspaceProfiles);
+		assert.equal((await profiles.getContributedDefaultProfile({}))?.id, contributed.id);
 	});
 
 	test('cancel and owner disposal settle a quick pick without a profile update', async () => {

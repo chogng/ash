@@ -181,9 +181,9 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 	async registerContributedProfile(args: IRegisterContributedProfileArgs): Promise<void> {
 		const platform = await this.getPlatformKey();
 		const key = `${TerminalSettingPrefix.Profiles}${platform}`;
-		const profiles = this.configuration.getValue<Readonly<Record<string, ProfileDefinition>>>(key);
+		const userProfiles = this.configuration.inspect<Record<string, ProfileDefinition>>(key).userValue;
 		await this.configuration.updateValue(key, {
-			...profiles, [args.title]: {
+			...userProfiles, [args.title]: {
 				extensionIdentifier: args.extensionIdentifier, id: args.id, title: args.title,
 				...(args.options?.icon ? { icon: args.options.icon.id } : {}), ...(args.options?.color ? { color: args.options.color } : {}),
 			}
