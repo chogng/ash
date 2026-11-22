@@ -99,6 +99,8 @@ export interface EditorGroupOptions extends IEditorGroupViewOptions {
 	readonly onDidFinishOpenEditor?: () => void;
 	readonly resolveOpenError?: (error: unknown, input: IResourceEditorInput, options: EditorOpenOptions, open: (options: EditorOpenOptions) => Promise<IEditorPane>) => unknown;
 	readonly onWillOpenEditor?: (input: IResourceEditorInput, options: EditorOpenOptions & { readonly restoring?: boolean; }) => Promise<void> | undefined;
+	/** Holds a recovered model until the restored pane has acquired its own reference. */
+	readonly prepareRestoredInput?: (input: IResourceEditorInput, paneId: string, signal: AbortSignal) => Promise<IDisposable | undefined> | undefined;
 	readonly onOpenError?: (error: unknown, input: IResourceEditorInput, options: EditorOpenOptions) => Promise<void>;
 	readonly dragAndDrop?: IEditorTabDragAndDrop;
 }
@@ -163,6 +165,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private readonly titleActions: EditorHeaderActions | undefined;
 	private readonly resolveOpenError: EditorGroupOptions['resolveOpenError'];
 	private readonly onWillOpenEditor: EditorGroupOptions['onWillOpenEditor'];
+	private readonly prepareRestoredInput: EditorGroupOptions['prepareRestoredInput'];
 	private readonly onOpenError: EditorGroupOptions['onOpenError'];
 	private readonly model: EditorGroupModel;
 	private readonly paneEntries = this._register(new DisposableMap<EditorInstanceId, EditorGroupEntry>());
@@ -196,6 +199,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.onOpenError = options.onOpenError;
 		this.resolveOpenError = options.resolveOpenError;
 		this.onWillOpenEditor = options.onWillOpenEditor;
+		this.prepareRestoredInput = options.prepareRestoredInput;
 		this.configurationService = options.configurationService;
 		this.contextKeyService = options.contextKeyService;
 		this.keybindingService = options.keybindingService;
@@ -694,6 +698,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		this.panes.setPending(paneInstance);
 		try {
+			const preparation = options.restoring ? this.prepareRestoredInput?.(input, pane.id, paneInstance.signal) : undefined;
+			using recoveryReference = preparation ? await preparation : undefined;
 			await pane.setInput(input, paneInstance.signal);
 		} catch (error) {
 			this.panes.disposePane(paneInstance);

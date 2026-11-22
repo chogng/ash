@@ -1211,6 +1211,20 @@ export class Workbench extends Disposable {
 		const breadcrumbsService = new BreadcrumbsService();
 		services.registerInstance(IBreadcrumbsService, breadcrumbsService);
 		const editorOptions: IEditorPartOptions = {
+			prepareRestoredInput: (input, paneId, signal) => {
+				if (paneId !== CODE_EDITOR_ID || !untitledTextEditorService.isUntitled(input.resource) || input.readOnly || textModelService.getModel(input.resource)) return;
+				return raceCancellationError(workingCopyBackups.resolve(input.resource), signal).then(backup => {
+					if (backup?.kind !== 'text') return undefined;
+					// Seed the shared model before the pane can mark its serialized template text dirty.
+					return textModelService.acquire({
+						resource: input.resource,
+						initialText: backup.content,
+						languageId: input.languageId ?? backup.languageId,
+						contentType: input.contentType ?? backup.contentType,
+						encoding: input.encoding,
+					}, signal, { waitForSyntax: false });
+				});
+			},
 			beforeCloseEditor: async resource => {
 				try { await textModelService.waitForSaveRecovery(resource); return true; }
 				catch (error) {

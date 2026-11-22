@@ -141,6 +141,7 @@ export interface IEditorPartOptions {
 	readonly modalContainer?: HTMLElement;
 	/** Waits for resource-owned save recovery before reading dirty state or releasing a pane. */
 	readonly beforeCloseEditor?: (resource: URI) => Promise<boolean>;
+	readonly prepareRestoredInput?: EditorGroupOptions['prepareRestoredInput'];
 	/** Allows the owning window to reveal this Part before an interactive editor open. */
 	readonly revealOnOpen?: () => void;
 	/** Ash extension: reuse the editor host for single-content groups without changing ordinary multi-tab editors. */
@@ -252,6 +253,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				return undefined;
 			},
 			onOpenError: (error, input, openOptions) => this.showEditorOpenErrorDialog(error, input, openOptions),
+			prepareRestoredInput: options.prepareRestoredInput,
 			configurationService: options.configurationService,
 			contextKeyService: options.contextKeyService ? this._register(options.contextKeyService.createScoped(this.domNode)) : undefined,
 			keybindingService: options.keybindingService,

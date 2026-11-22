@@ -1505,6 +1505,28 @@ test('Code restores unsaved editor content after a browser reload', { tag: ['@br
 	await expect.poll(() => hasWorkingCopyBackup(page, 'const recovered = 42;'), { message: 'saving removes the crash backup' }).toBe(false);
 });
 
+test('Code restores edited template drafts after quitting Desktop', { tag: ['@electron-app-server'] }, async ({ workbench, application, reloadWorkbench }) => {
+	await workbench.page.waitForFunction(() => performance.getEntriesByName('ash.workbench.extension-assets-ready').length > 0);
+	await workbench.quickaccess.runCommand('workbench.action.files.newFileFromTemplate');
+	await workbench.quickaccess.select('html doc');
+	let group = workbench.editors.groupAt(0);
+	await expect(group.editor.lines.first()).toContainText('<!DOCTYPE html>');
+	const content = 'Edited template draft';
+	await group.editor.input.focus();
+	await group.editor.input.press('ControlOrMeta+A');
+	await workbench.page.keyboard.insertText(content);
+	await expect(group.editor.lines).toHaveText([content]);
+	await expect.poll(() => hasWorkingCopyBackup(workbench.page, content, application as ElectronApplication)).toBe(true);
+
+	({ workbench, application } = await reloadWorkbench('quit'));
+	group = workbench.editors.groupAt(0);
+	const draft = group.title.locator('.ash-tab').filter({ hasText: 'Untitled-1' });
+	await expect(draft).toHaveCount(1);
+	await expect(draft).toHaveAttribute('data-state', 'dirty');
+	await expect(group.editor.lines).toHaveText([content]);
+	await expect.poll(() => hasWorkingCopyBackup(workbench.page, content, application as ElectronApplication)).toBe(true);
+});
+
 test('Code restores an untitled draft and opens the next document separately', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
