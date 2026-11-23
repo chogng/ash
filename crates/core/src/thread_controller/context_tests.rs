@@ -2,8 +2,11 @@ use super::*;
 use crate::CreateThreadRequest;
 use crate::InMemoryThreadStore;
 use crate::InterruptTurnRequest;
+use crate::RecordToolCallRequest;
+use crate::RecordToolResultRequest;
 use crate::SequenceExpectation;
 use crate::StartTurnRequest;
+use crate::ToolCallOutput;
 use crate::context::ContextAssembler;
 use ash_protocol::ApprovalMode;
 use ash_protocol::CommandId;
@@ -11,6 +14,7 @@ use ash_protocol::ContextSourceRange;
 use ash_protocol::ModelRequest;
 use ash_protocol::SessionId;
 use ash_protocol::StableTurnError;
+use ash_protocol::ToolName;
 use ash_protocol::TurnKind;
 use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
@@ -104,6 +108,58 @@ impl Fixture {
         };
         ContextAssembler::assemble(invocation.context()).unwrap()
     }
+}
+
+#[test]
+fn model_step_uses_only_its_own_items_when_turns_interleave() {
+    let fixture = Fixture::new();
+    let first = fixture.start("first request", TurnKind::Coding, ApprovalMode::Manual);
+    let first_call = fixture
+        .controller
+        .record_tool_call(
+            &fixture.thread,
+            &first,
+            RecordToolCallRequest {
+                tool_call_id: None,
+                name: ToolName::new("read_file").unwrap(),
+                arguments_json: serde_json::json!({"path": "first.rs"}).to_string(),
+                binding: None,
+            },
+        )
+        .unwrap();
+    let second = fixture.start("second request", TurnKind::Coding, ApprovalMode::Manual);
+    fixture
+        .controller
+        .record_tool_result(
+            &fixture.thread,
+            &first,
+            RecordToolResultRequest {
+                tool_call_id: first_call.tool_call_id.clone(),
+                output: ToolCallOutput::Success("first result".into()),
+            },
+        )
+        .unwrap();
+
+    let second_step = fixture
+        .controller
+        .read_model_step(&fixture.thread, &second)
+        .unwrap();
+    assert_eq!(second_step.first_query.as_deref(), Some("second request"));
+    assert!(second_step.read_paths.is_empty());
+    assert!(second_step.tool_results.is_empty());
+
+    let first_step = fixture
+        .controller
+        .read_model_step(&fixture.thread, &first)
+        .unwrap();
+    assert_eq!(first_step.sequence, second_step.sequence);
+    assert!(first_step.first_query.is_none());
+    assert_eq!(first_step.read_paths, [PathBuf::from("first.rs")]);
+    let [(call, text)] = first_step.tool_results.as_slice() else {
+        panic!("expected exactly one completed tool call");
+    };
+    assert_eq!(call.id, first_call.tool_call_id);
+    assert_eq!(text, "first result");
 }
 
 #[test]

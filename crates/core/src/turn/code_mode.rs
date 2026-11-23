@@ -58,8 +58,13 @@ mod unavailable {
             self.clone()
         }
 
-        pub(crate) fn close_turn(&self, _: &ThreadId, _: &TurnId) -> Result<(), CoreError> {
-            Ok(())
+        pub(crate) fn turn_cleanup(
+            &self,
+            _: &ash_protocol::SessionId,
+            _: &ThreadId,
+            _: &TurnId,
+        ) -> impl FnOnce() + Send + use<> {
+            || {}
         }
 
         pub(crate) fn close_session(&self, _: &ash_protocol::SessionId) {}

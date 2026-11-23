@@ -11,6 +11,7 @@ use ash_protocol::RequestId;
 use ash_protocol::RequestUserInput;
 use ash_protocol::RequestUserInputResponse;
 use ash_protocol::ReviewEvidence;
+use ash_protocol::ThreadItem;
 use ash_protocol::ThreadUpdateEnvelope;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolCallBinding;
@@ -24,6 +25,7 @@ use ash_sandboxing::SandboxPolicy;
 use core_api::ThreadUpdateSink;
 use sha2::Digest;
 use sha2::Sha256;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -732,8 +734,8 @@ pub(crate) fn read_paths_before_call(
         .into_iter().collect()
 }
 
-fn successful_read_paths<'a>(
-    items: impl IntoIterator<Item = &'a ash_protocol::ThreadItem>,
+pub(crate) fn successful_read_paths<'a>(
+    items: impl IntoIterator<Item = &'a ThreadItem>,
 ) -> BTreeSet<PathBuf> {
     let mut calls = std::collections::BTreeMap::new();
     let mut paths = BTreeSet::new();
@@ -765,6 +767,49 @@ fn successful_read_paths<'a>(
         }
     }
     paths
+}
+
+/// Pairs successful results with their exact calls, in transcript result order.
+pub(crate) fn tool_activation_results<'a>(
+    items: impl IntoIterator<Item = &'a ThreadItem>,
+) -> Result<Vec<(ToolCall, &'a str)>, CoreError> {
+    let mut calls = BTreeMap::new();
+    let mut results = Vec::new();
+    for item in items {
+        match item {
+            ThreadItem::ToolCall {
+                tool_call_id,
+                name,
+                arguments_json,
+                ..
+            } => {
+                let arguments = serde_json::from_str(arguments_json).map_err(|error| {
+                    CoreError::Execution(format!(
+                        "durable Tool Call arguments could not be reconstructed: {error}"
+                    ))
+                })?;
+                calls.insert(
+                    tool_call_id,
+                    ToolCall {
+                        id: tool_call_id.clone(),
+                        name: name.clone(),
+                        arguments,
+                    },
+                );
+            }
+            ThreadItem::ToolResult {
+                tool_call_id,
+                text,
+                is_error: false,
+                ..
+            } => results.push((tool_call_id, text.as_str())),
+            _ => {}
+        }
+    }
+    Ok(results
+        .into_iter()
+        .filter_map(|(id, text)| calls.remove(id).map(|call| (call, text)))
+        .collect())
 }
 
 impl ToolExecutionFacts {

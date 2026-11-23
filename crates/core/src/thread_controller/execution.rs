@@ -23,9 +23,7 @@ use ash_protocol::ThreadId;
 use ash_protocol::ThreadItem;
 use ash_protocol::TurnId;
 use ash_protocol::TurnSkillLoad;
-use std::sync::Arc;
 use std::sync::OnceLock;
-use std::sync::Weak;
 
 #[cfg(test)]
 use super::RecordedToolCall;
@@ -630,61 +628,6 @@ impl ThreadController {
             };
             self.record_batch(snapshot, events)
         })
-    }
-
-    pub(crate) fn cancel_turn_execution(&self, thread_id: &ThreadId, turn_id: &TurnId) {
-        self.execution_mailboxes.cancel(thread_id, turn_id);
-        self.finish_tool_turn(thread_id, turn_id);
-    }
-
-    pub(crate) fn finish_tool_turn(&self, thread_id: &ThreadId, turn_id: &TurnId) {
-        let tools = self
-            .turn_tool_services
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&(thread_id.clone(), turn_id.clone()))
-            .and_then(|tools| tools.upgrade());
-        if let Some(tools) = tools {
-            tools.finish_turn(thread_id, turn_id);
-        }
-    }
-
-    pub(crate) fn scope_turn_tools(
-        &self,
-        thread_id: &ThreadId,
-        turn_id: &TurnId,
-        tools: &Arc<dyn crate::ToolService>,
-        cancellation: &ash_async_utils::CancellationToken,
-    ) -> Result<Arc<dyn crate::ToolService>, CoreError> {
-        let mut services = self
-            .turn_tool_services
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        // Interruption cancels the token before removing the scope under this same lock.
-        cancellation
-            .check()
-            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-        let key = (thread_id.clone(), turn_id.clone());
-        let owner = services
-            .get(&key)
-            .and_then(Weak::upgrade)
-            .unwrap_or_else(|| {
-                services.insert(key, Arc::downgrade(tools));
-                Arc::clone(tools)
-            });
-        Ok(owner.scoped_to_turn(thread_id, turn_id).unwrap_or(owner))
-    }
-
-    pub(super) fn finish_tool_call(&self, scope: &ash_action_policy::ToolCallScope) {
-        let tools = self
-            .turn_tool_services
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&(scope.thread_id.clone(), scope.turn_id.clone()))
-            .and_then(Weak::upgrade);
-        if let Some(tools) = tools {
-            tools.finish_call(scope);
-        }
     }
 }
 

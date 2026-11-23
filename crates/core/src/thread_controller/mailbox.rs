@@ -69,12 +69,22 @@ impl ThreadExecutionContext {
         &self.cancellation
     }
 
+    pub(super) fn is_latest(&self) -> bool {
+        self.active.lock().is_ok_and(|active| {
+            active
+                .get(&(self.thread_id.clone(), self.turn_id.clone()))
+                .is_some_and(|execution| {
+                    execution.incarnation == self.incarnation
+                        && execution.operation_id == self.operation_id
+                })
+        })
+    }
+
     pub fn check_current(&self) -> Result<(), CoreError> {
-        let active = self
+        let is_current_operation = self
             .active
             .lock()
-            .map_err(|_| CoreError::Execution("execution mailbox state lock poisoned".into()))?;
-        let is_current_operation = active
+            .map_err(|_| CoreError::Execution("execution mailbox state lock poisoned".into()))?
             .get(&(self.thread_id.clone(), self.turn_id.clone()))
             .is_some_and(|execution| {
                 execution.incarnation == self.incarnation

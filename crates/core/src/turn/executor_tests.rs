@@ -4363,6 +4363,206 @@ fn started_turn_with_history() -> (Arc<ThreadController>, ThreadId, TurnId) {
     (threads, thread_id, turn_id)
 }
 
+#[test]
+#[ignore = "offline model step benchmark; run with --ignored --nocapture --test-threads=1"]
+fn long_thread_model_step_benchmark() {
+    const SAMPLES: usize = 50;
+
+    for history_items in [32, 512] {
+        let (threads, thread_id, history_turn) = started_turn();
+        let text = "Inspect the relevant source and verify the reported outcome. ".repeat(64);
+        for _ in 0..history_items {
+            threads
+                .record_agent_message(&thread_id, &history_turn, text.clone())
+                .unwrap();
+        }
+        threads
+            .complete_turn_without_agent_message(&thread_id, &history_turn)
+            .unwrap();
+        let turn_id = threads
+            .start_turn(
+                &thread_id,
+                StartTurnRequest {
+                    context_policy: Default::default(),
+                    mode: Default::default(),
+                    advisor: None,
+                    kind: ash_protocol::TurnKind::Coding,
+                    instructions: crate::test_turn_instructions(),
+                    command_id: CommandId::new("benchmark-model-step").unwrap(),
+                    expected_sequence: SequenceExpectation::Any,
+                    model: None,
+                    reasoning_effort: None,
+                    policy_revision: "test-policy-v1".into(),
+                    approval_mode: ash_protocol::ApprovalMode::Manual,
+                    tool_mode: ash_protocol::ToolMode::Direct,
+                    tool_profile: None,
+                    activated_skills: Vec::new(),
+                    input: vec![UserInput::Text {
+                        text: "Compare the prepared request.".into(),
+                    }],
+                },
+            )
+            .unwrap()
+            .turn_id;
+        let call = threads
+            .record_tool_call(
+                &thread_id,
+                &turn_id,
+                crate::RecordToolCallRequest {
+                    tool_call_id: Some(ToolCallId::new("benchmark-read").unwrap()),
+                    name: ToolName::new("read_file").unwrap(),
+                    arguments_json: json!({"path": "src/main.rs"}).to_string(),
+                    binding: None,
+                },
+            )
+            .unwrap();
+        threads
+            .record_tool_result(
+                &thread_id,
+                &turn_id,
+                crate::RecordToolResultRequest {
+                    tool_call_id: call.tool_call_id,
+                    output: crate::ToolCallOutput::Success("read result".into()),
+                },
+            )
+            .unwrap();
+
+        let executor =
+            TurnExecutor::without_tools(threads.clone(), Arc::new(ScriptedModel::new([])));
+        let read_full_snapshot = || {
+            let snapshot = threads.read_thread(&thread_id).unwrap();
+            let activated =
+                activated_tool_names(executor.tools.as_ref(), &snapshot.items, &turn_id).unwrap();
+            let turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| turn.turn_id == turn_id)
+                .unwrap();
+            let catalog = executor
+                .context_tool_catalog(
+                    &activated,
+                    Some(turn),
+                    turn.tool_mode,
+                    turn.instructions.as_ref(),
+                )
+                .unwrap();
+            let read_paths = crate::services::read_paths_for_turn(&snapshot, &turn_id);
+            // The active Turn already has a Tool Call, so it has no first-invocation query.
+            assert!(
+                snapshot.items.iter().any(|item| item.turn_id() == &turn_id
+                    && matches!(item, ThreadItem::ToolCall { .. }))
+            );
+            (catalog, read_paths, None)
+        };
+        let read_step = || {
+            let step = threads.read_model_step(&thread_id, &turn_id).unwrap();
+            let activated = activate_tools(
+                executor.tools.as_ref(),
+                step.tool_results
+                    .iter()
+                    .map(|(call, text)| (call, text.as_str())),
+            )
+            .unwrap();
+            let catalog = executor
+                .context_tool_catalog(
+                    &activated,
+                    Some(&step.turn),
+                    step.turn.tool_mode,
+                    step.turn.instructions.as_ref(),
+                )
+                .unwrap();
+            (catalog, step.read_paths, step.first_query)
+        };
+        let request = |(catalog, read_paths, query): (
+            crate::ModelToolCatalogSnapshot,
+            Vec<PathBuf>,
+            Option<String>,
+        )| {
+            std::hint::black_box((read_paths, query));
+            let ModelInvocationPreparation::Ready(invocation) = threads
+                .prepare_model_invocation(
+                    &thread_id,
+                    PrepareModelInvocationRequest {
+                        turn_id: &turn_id,
+                        harness_context: &HarnessContext::default(),
+                        additional_instructions: Vec::new(),
+                        evidence: Vec::new(),
+                        tools: catalog.shared_definitions(),
+                        budget: ContextBudget::provider_managed(),
+                    },
+                )
+                .unwrap()
+            else {
+                panic!("benchmark context must fit")
+            };
+            ContextAssembler::assemble(invocation.context()).unwrap()
+        };
+        let full_step = read_full_snapshot();
+        let narrow_step = read_step();
+        assert_eq!(
+            (&full_step.1, &full_step.2),
+            (&narrow_step.1, &narrow_step.2)
+        );
+        let full_request = serde_json::to_vec(&request(full_step)).unwrap();
+        let request_bytes = serde_json::to_vec(&request(narrow_step)).unwrap();
+        assert!(full_request == request_bytes, "model request changed");
+        let digest = ash_protocol::ContentDigest::sha256(&request_bytes);
+
+        let read_full = || {
+            std::hint::black_box(read_full_snapshot());
+        };
+        let read_narrow = || {
+            std::hint::black_box(read_step());
+        };
+        let request_full = || {
+            std::hint::black_box(request(read_full_snapshot()));
+        };
+        let request_narrow = || {
+            std::hint::black_box(request(read_step()));
+        };
+        let stages: [(&str, [&dyn Fn(); 2]); 2] = [
+            ("read_step", [&read_full, &read_narrow]),
+            ("assemble_request", [&request_full, &request_narrow]),
+        ];
+        for (stage, variants) in stages {
+            for _ in 0..10 {
+                for run in variants {
+                    run();
+                }
+            }
+            let mut timings = [Vec::with_capacity(SAMPLES), Vec::with_capacity(SAMPLES)];
+            let mut allocations = [Vec::with_capacity(SAMPLES), Vec::with_capacity(SAMPLES)];
+            for sample in 0..SAMPLES {
+                // Alternate order to sample both implementations under the same host load.
+                for index in [sample % 2, (sample + 1) % 2] {
+                    let started = Instant::now();
+                    let count = allocation_counter::measure(variants[index]);
+                    timings[index].push(started.elapsed().as_nanos() as u64);
+                    allocations[index].push(count.bytes_total);
+                }
+            }
+            for (index, variant) in ["full_snapshot", "model_step"].into_iter().enumerate() {
+                timings[index].sort_unstable();
+                allocations[index].sort_unstable();
+                println!(
+                    "{}",
+                    json!({
+                        "benchmark": "long_thread_model_step",
+                        "historical_items": history_items,
+                        "stage": stage,
+                        "variant": variant,
+                        "p50_ns": timings[index][SAMPLES / 2],
+                        "p95_ns": timings[index][SAMPLES * 95 / 100],
+                        "allocation_p50_bytes": allocations[index][SAMPLES / 2],
+                        "request_bytes": request_bytes.len(),
+                        "request_sha256": digest.as_str(),
+                    })
+                );
+            }
+        }
+    }
+}
+
 fn text_response(text: &str) -> ModelResponse {
     ModelResponse {
         output: vec![ResponseItem::Text(text.into())],
@@ -5186,6 +5386,143 @@ fn superseded_and_rejected_wakeups_reuse_the_frozen_model_until_the_turn_finishe
         assert_eq!(
             threads.read_thread(&thread_id).unwrap().turns[0].status,
             TurnStatus::Completed
+        );
+    }
+}
+
+#[test]
+fn interrupting_a_queued_or_waiting_turn_releases_its_resources_once() {
+    struct Selector {
+        snapshots: AtomicUsize,
+        frozen: Mutex<std::sync::Weak<ScriptedModel>>,
+    }
+    impl ModelService for Selector {
+        fn snapshot(
+            &self,
+            _: ModelSelection<'_>,
+        ) -> Result<Option<Arc<dyn ModelService>>, CoreError> {
+            self.snapshots.fetch_add(1, Ordering::SeqCst);
+            let frozen = Arc::new(ScriptedModel::new([Ok(ModelResponse {
+                output: vec![ResponseItem::ToolCall(ToolCall {
+                    id: ToolCallId::new("pending-weather").unwrap(),
+                    name: ToolName::new("weather").unwrap(),
+                    arguments: json!({"city":"Paris"}),
+                })],
+                usage: None,
+                billing: None,
+                stop_reason: StopReason::ToolUse,
+            })]));
+            *self.frozen.lock().unwrap() = Arc::downgrade(&frozen);
+            Ok(Some(frozen))
+        }
+
+        fn invoke(
+            &self,
+            _: ModelSelection<'_>,
+            _: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            unreachable!("only the frozen model executes the Turn")
+        }
+    }
+
+    #[derive(Default)]
+    struct ScopedWeather {
+        finishes: AtomicUsize,
+    }
+    impl ToolService for ScopedWeather {
+        fn definitions(&self) -> Vec<ToolDefinition> {
+            WeatherTool.definitions()
+        }
+
+        fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+            WeatherTool.prepare(call)
+        }
+
+        fn execute(
+            &self,
+            _: &ToolCall,
+            _: &ToolAuthorization,
+            _: &CancellationToken,
+        ) -> Result<ToolExecutionOutput, CoreError> {
+            unreachable!("the interrupted tool was never approved")
+        }
+
+        fn finish_turn(&self, _: &ThreadId, _: &TurnId) {
+            self.finishes.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    for wait_for_approval in [false, true] {
+        let (threads, thread_id, turn_id) = started_turn();
+        let selector = Arc::new(Selector {
+            snapshots: AtomicUsize::new(0),
+            frozen: Mutex::default(),
+        });
+        let tools = Arc::new(ScopedWeather::default());
+        let executor = TurnExecutor::new(
+            Arc::clone(&threads),
+            selector.clone(),
+            tools.clone(),
+            Arc::new(NetworkPromptPolicy),
+        );
+
+        let unblock = if wait_for_approval {
+            None
+        } else {
+            let (unblock, blocked) = std::sync::mpsc::channel();
+            threads
+                .enqueue_turn_execution(&thread_id, &TurnId::new("blocker").unwrap(), move |_| {
+                    blocked.recv_timeout(Duration::from_secs(5)).unwrap();
+                })
+                .unwrap();
+            Some(unblock)
+        };
+
+        executor.start(&thread_id, &turn_id).unwrap();
+        let drain_mailbox = || {
+            let (drained_tx, drained_rx) = std::sync::mpsc::channel();
+            threads
+                .enqueue_turn_execution(&thread_id, &TurnId::new("drained").unwrap(), move |_| {
+                    drained_tx.send(()).unwrap();
+                })
+                .unwrap();
+            drained_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        };
+        if wait_for_approval {
+            wait_for_turn_status(
+                &threads,
+                &thread_id,
+                &turn_id,
+                TurnStatus::WaitingForApproval,
+            );
+            drain_mailbox();
+        }
+        assert!(selector.frozen.lock().unwrap().upgrade().is_some());
+        assert_eq!(tools.finishes.load(Ordering::SeqCst), 0);
+
+        let interrupt = || crate::InterruptTurnRequest {
+            command_id: CommandId::new("interrupt-before-tool").unwrap(),
+            expected_sequence: SequenceExpectation::Any,
+            turn_id: turn_id.clone(),
+        };
+        threads.interrupt_turn(&thread_id, interrupt()).unwrap();
+        threads.interrupt_turn(&thread_id, interrupt()).unwrap();
+        executor.resume(&thread_id, &turn_id).unwrap();
+
+        assert!(selector.frozen.lock().unwrap().upgrade().is_none());
+        if let Some(unblock) = unblock {
+            unblock.send(()).unwrap();
+        }
+        drain_mailbox();
+        assert_eq!(selector.snapshots.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            tools.finishes.load(Ordering::SeqCst),
+            usize::from(wait_for_approval)
+        );
+        assert_eq!(
+            threads.read_thread(&thread_id).unwrap().turns[0].status,
+            TurnStatus::Interrupted,
         );
     }
 }

@@ -20,6 +20,7 @@ use crate::ToolExecutionOutput;
 use crate::ToolService;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
+use ash_async_utils::CancellationToken;
 use ash_code_mode::CodeModeHost;
 use ash_code_mode::CodeModeSession;
 use ash_code_mode_protocol::CellId;
@@ -143,39 +144,46 @@ impl CodeModeBroker {
         }
     }
 
-    /// Cancels this turn's cells while keeping the thread session and shared Host alive.
-    pub(crate) fn close_turn(
+    /// Releases this Turn's cells without retaining the broker or the Thread controller.
+    pub(crate) fn turn_cleanup(
         &self,
+        session_id: &ash_protocol::SessionId,
         thread_id: &ThreadId,
         turn_id: &TurnId,
-    ) -> Result<(), CoreError> {
-        let snapshot = self.inner.threads.read_thread(thread_id)?;
-        let key = TurnKey::new(snapshot.session_id.to_string(), thread_id, turn_id);
-        let runtime = self
-            .inner
+    ) -> impl FnOnce() + Send + use<> {
+        let inner = Arc::downgrade(&self.inner);
+        let key = TurnKey::new(session_id.to_string(), thread_id, turn_id);
+        move || {
+            if let Some(inner) = inner.upgrade() {
+                Self::close_turn(&inner, &key);
+            }
+        }
+    }
+
+    fn close_turn(inner: &CodeModeBrokerInner, key: &TurnKey) {
+        let runtime = inner
             .sessions
             .lock()
             .unwrap()
             .get(&key.session_key())
             .cloned();
         let cells = {
-            let mut calls = self.inner.cell_calls.lock().unwrap();
+            let mut calls = inner.cell_calls.lock().unwrap();
             let cells = calls
                 .keys()
-                .filter(|(owner, _)| owner == &key)
+                .filter(|(owner, _)| owner == key)
                 .map(|(_, id)| id.clone())
                 .collect::<Vec<_>>();
-            calls.retain(|(owner, _), _| owner != &key);
+            calls.retain(|(owner, _), _| owner != key);
             cells
         };
         if let Some(runtime) = runtime {
             for id in cells {
-                let id =
-                    CellId::new(id).map_err(|error| CoreError::Execution(error.to_string()))?;
-                runtime.terminate(&id).map_err(runtime_error)?;
+                if let Ok(id) = CellId::new(id) {
+                    let _ = runtime.terminate(&id);
+                }
             }
         }
-        Ok(())
     }
 
     pub(crate) fn close_session(&self, session_id: &ash_protocol::SessionId) {
@@ -410,7 +418,7 @@ impl CodeModeBroker {
             crate::context::apply_model_tool_descriptions(instructions, &mut model_definitions);
         }
         let projected = projected_tools(&model_definitions)?;
-        let runtime = self.session_for(&key)?;
+        let runtime = self.session_for(&key, context.cancellation())?;
         let invoker = Arc::new(BrokerToolInvoker::new(
             Arc::downgrade(&self.inner),
             key.clone(),
@@ -433,28 +441,50 @@ impl CodeModeBroker {
                 invoker,
             )
             .map_err(runtime_error)?;
-        self.inner
-            .cell_calls
-            .lock()
-            .map_err(|_| CoreError::Execution("Code Mode cell registry was poisoned".into()))?
-            .insert(
-                (key.clone(), started.cell_id.to_string()),
-                CellCall {
-                    parent: call.id.clone(),
-                    catalog: frozen_catalog,
-                    tools: Arc::clone(&self.tools),
-                    policy: Arc::clone(&self.policy),
-                },
-            );
+        if let Err(error) = self.register_cell(
+            &key,
+            &started.cell_id,
+            CellCall {
+                parent: call.id.clone(),
+                catalog: frozen_catalog,
+                tools: Arc::clone(&self.tools),
+                policy: Arc::clone(&self.policy),
+            },
+            context.cancellation(),
+        ) {
+            let _ = runtime.terminate(&started.cell_id);
+            return Err(error);
+        }
         let outcome = observe_runtime(
             &runtime,
             started.cell_id.clone(),
             yield_time_ms,
             max_output_tokens,
             context.cancellation(),
-        )?;
+        );
         self.release_finished_cell(&key, &runtime, &started.cell_id);
-        runtime_wait_output(outcome)
+        runtime_wait_output(outcome?)
+    }
+
+    fn register_cell(
+        &self,
+        key: &TurnKey,
+        cell_id: &CellId,
+        call: CellCall,
+        cancellation: &CancellationToken,
+    ) -> Result<(), CoreError> {
+        let mut calls = self
+            .inner
+            .cell_calls
+            .lock()
+            .map_err(|_| CoreError::Execution("Code Mode cell registry was poisoned".into()))?;
+        // Interruption cancels the Turn before clearing this registry. Registering under
+        // the same lock gives that cleanup ownership even when the host starts a cell late.
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        calls.insert((key.clone(), cell_id.to_string()), call);
+        Ok(())
     }
 
     fn wait_cell(
@@ -516,7 +546,7 @@ impl CodeModeBroker {
                 yield_time_ms,
                 max_output_tokens,
                 context.cancellation(),
-            )?
+            )
         } else {
             observe_runtime(
                 &runtime,
@@ -524,10 +554,10 @@ impl CodeModeBroker {
                 yield_time_ms,
                 max_output_tokens,
                 context.cancellation(),
-            )?
+            )
         };
         self.release_finished_cell(&key, &runtime, &cell_id);
-        runtime_wait_output(outcome)
+        runtime_wait_output(outcome?)
     }
 
     fn release_finished_cell(&self, key: &TurnKey, runtime: &CodeModeSession, cell_id: &CellId) {
@@ -540,12 +570,19 @@ impl CodeModeBroker {
         }
     }
 
-    fn session_for(&self, key: &TurnKey) -> Result<CodeModeSession, CoreError> {
+    fn session_for(
+        &self,
+        key: &TurnKey,
+        cancellation: &CancellationToken,
+    ) -> Result<CodeModeSession, CoreError> {
         let session_id = key.session_id()?;
         let mut runtimes =
             self.inner.sessions.lock().map_err(|_| {
                 CoreError::Execution("Code Mode session registry was poisoned".into())
             })?;
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         // Constructing the handle does no process I/O while holding the registry.
         Ok(runtimes
             .entry(key.session_key())
@@ -557,3 +594,7 @@ impl CodeModeBroker {
             .clone())
     }
 }
+
+#[cfg(test)]
+#[path = "broker_tests.rs"]
+mod tests;

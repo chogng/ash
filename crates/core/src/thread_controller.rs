@@ -100,6 +100,7 @@ mod mailbox;
 mod mode;
 mod restore;
 mod steering;
+mod turn_resources;
 mod user_input;
 mod voice_history;
 pub(crate) use user_input::chat_reference_source;
@@ -109,6 +110,9 @@ pub use mailbox::ThreadExecutionContext;
 pub use mode::ChangeTurnModeRequest;
 pub use mode::ChangeTurnModeResult;
 pub use mode::ModeChangeAuthority;
+pub(crate) use turn_resources::TurnExecutionPlan;
+pub(crate) use turn_resources::TurnModelServices;
+use turn_resources::TurnResources;
 
 pub(crate) enum TurnInterruption {
     Cancelled,
@@ -439,18 +443,7 @@ type GoalCreationObserver = dyn Fn(Option<ash_protocol::ReasoningEffort>) + Send
 
 /// Coordinates durable mutations for each loaded Thread.
 pub struct ThreadController {
-    // Some host tools hold the Thread controller. Track their active Turn without owning them.
-    turn_tool_services: Mutex<BTreeMap<(ThreadId, TurnId), Weak<dyn crate::ToolService>>>,
-    pub(crate) turn_tool_models: Mutex<
-        BTreeMap<
-            ThreadId,
-            (
-                ash_protocol::TurnId,
-                ash_protocol::ModelRef,
-                Arc<dyn crate::ModelService>,
-            ),
-        >,
-    >,
+    turn_resources: Mutex<BTreeMap<(ThreadId, TurnId), TurnResources>>,
     time_context: RwLock<Arc<dyn crate::TimeContextProvider>>,
     checkpoint_sources: RwLock<BTreeMap<ThreadId, Weak<dyn crate::MessageCheckpointSource>>>,
     store: Arc<dyn ThreadStore>,
@@ -620,8 +613,7 @@ impl ThreadController {
         Self {
             store,
             diagnostics: None,
-            turn_tool_models: Mutex::new(BTreeMap::new()),
-            turn_tool_services: Mutex::new(BTreeMap::new()),
+            turn_resources: Mutex::new(BTreeMap::new()),
             checkpoint_sources: RwLock::new(BTreeMap::new()),
             time_context: RwLock::new(Arc::new(crate::context::time::NoTimeContext)),
             writer_lease: None,
@@ -659,8 +651,7 @@ impl ThreadController {
         Self {
             store,
             diagnostics: None,
-            turn_tool_models: Mutex::new(BTreeMap::new()),
-            turn_tool_services: Mutex::new(BTreeMap::new()),
+            turn_resources: Mutex::new(BTreeMap::new()),
             checkpoint_sources: RwLock::new(BTreeMap::new()),
             time_context: RwLock::new(Arc::new(crate::context::time::NoTimeContext)),
             writer_lease: Some(writer_lease),
@@ -2851,7 +2842,7 @@ impl ThreadController {
                 error,
             }],
         )?;
-        self.finish_tool_turn(thread_id, turn_id);
+        self.release_turn_resources(thread_id, turn_id);
         Ok(())
     }
 
@@ -2941,7 +2932,7 @@ impl ThreadController {
             &turn_id_for_cancellation,
             InteractionCancelReason::TurnInterrupted,
         );
-        self.cancel_turn_execution(thread_id, &turn_id_for_cancellation);
+        self.finish_turn_execution(thread_id, &turn_id_for_cancellation);
         Ok(result)
     }
 

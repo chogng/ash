@@ -20,6 +20,7 @@ use crate::NoHooks;
 use crate::NoThreadUpdates;
 use crate::NoTools;
 use crate::ThreadController;
+use crate::ThreadExecutionContext;
 use crate::ThreadUpdateSink;
 use crate::ToolService;
 use crate::TurnCompletedHookRequest;
@@ -45,7 +46,9 @@ use crate::context::resolve_extension_fragment;
 use crate::thread_controller::CommitContextCheckpointRequest;
 use crate::thread_controller::CommitModelResponseResult;
 use crate::thread_controller::PrepareModelInvocationRequest;
+use crate::thread_controller::TurnExecutionPlan;
 use crate::thread_controller::TurnInterruption;
+use crate::thread_controller::TurnModelServices;
 use crate::turn::TurnExecutionBackend;
 use crate::turn_policy::UnavailableActionPolicyService;
 use ash_async_utils::Cancellation;
@@ -96,12 +99,6 @@ pub struct TurnExecutor {
     model: Arc<dyn ModelService>,
     // A continuation starts a new Turn and must read the profile again, even when launched by a frozen executor.
     pub(super) model_source: Arc<dyn ModelService>,
-    // Approval waits keep the same runtime. Terminal completion and session closure release it.
-    turn_models: Arc<
-        std::sync::Mutex<
-            BTreeMap<ThreadId, (TurnId, Arc<dyn ModelService>, Arc<dyn ActionPolicyService>)>,
-        >,
-    >,
     model_compaction: bool,
     pub(super) tools: Arc<dyn ToolService>,
     policy: Arc<dyn ActionPolicyService>,
@@ -160,22 +157,8 @@ impl TurnExecutor {
 
     /// Releases process-local cells and stored values when a session is stopped or archived.
     pub fn close_code_mode_session(&self, session_id: &SessionId) {
+        self.threads.finish_session_turns(session_id);
         self.close_directory_code_mode(session_id);
-        if let Ok(mut models) = self.threads.turn_tool_models.lock() {
-            models.retain(|thread, _| {
-                self.threads
-                    .read_thread(thread)
-                    .is_ok_and(|snapshot| &snapshot.session_id != session_id)
-            });
-        }
-
-        if let Ok(mut models) = self.turn_models.lock() {
-            models.retain(|thread, _| {
-                self.threads
-                    .read_thread(thread)
-                    .is_ok_and(|snapshot| &snapshot.session_id != session_id)
-            });
-        }
     }
 
     /// Closes the cells in this directory runtime without changing shared Thread model state.
@@ -387,7 +370,6 @@ impl TurnExecutor {
             threads,
             model_source: Arc::clone(&model),
             model,
-            turn_models: Arc::default(),
             model_compaction: true,
             tools,
             policy_source: Arc::clone(&policy),
@@ -528,15 +510,16 @@ impl TurnExecutor {
     /// The mailbox runs model and tool I/O away from the caller and from the Thread projection
     /// lock. Completion, failure, and cancellation remain durable Core transitions.
     pub fn start(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
-        let mut executor = self.clone();
-        let snapshot = self.threads.read_thread(thread_id)?;
-        let turn = snapshot
-            .turns
-            .iter()
-            .find(|turn| &turn.turn_id == turn_id)
-            .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
-        // Older Goal continuations may contain an unresolved Advisor preference. Reject them
-        // before taking the shared model lock so recovery cannot disrupt other Sessions.
+        self.enqueue_turn(thread_id, turn_id, |turn| {
+            self.freeze_turn_models(turn).map(TurnExecutionPlan::Model)
+        })
+    }
+
+    fn freeze_turn_models(
+        &self,
+        turn: &crate::TurnSnapshot,
+    ) -> Result<TurnModelServices, CoreError> {
+        // Older Goal continuations may contain an unresolved Advisor preference.
         let advisor_model = turn
             .advisor
             .as_ref()
@@ -546,126 +529,31 @@ impl TurnExecutor {
                 })
             })
             .transpose()?;
-        // Duplicate wakeups for one Turn must share the very same connection snapshot.
-        let mut models = self
-            .turn_models
-            .lock()
-            .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?;
-        let reused_model = models
-            .get(thread_id)
-            .is_some_and(|(id, _, _)| id == turn_id);
-        executor.model = if let Some((_, model, policy)) =
-            models.get(thread_id).filter(|(id, _, _)| id == turn_id)
-        {
-            executor.policy = Arc::clone(policy);
-            Arc::clone(model)
+        let selection = turn
+            .model
+            .as_ref()
+            .map_or(ModelSelection::ConfiguredDefault, ModelSelection::Session);
+        let model = self
+            .model_source
+            .snapshot(selection)?
+            .unwrap_or_else(|| Arc::clone(&self.model_source));
+        let policy = self
+            .policy_source
+            .snapshot(Arc::clone(&model))?
+            .unwrap_or_else(|| Arc::clone(&self.policy_source));
+        let advisor = if let Some(advisor_model) = advisor_model {
+            let auxiliary = model
+                .snapshot(ModelSelection::Session(advisor_model))?
+                .unwrap_or_else(|| Arc::clone(&model));
+            Some((advisor_model.clone(), auxiliary))
         } else {
-            let selection = turn
-                .model
-                .as_ref()
-                .map_or(ModelSelection::ConfiguredDefault, ModelSelection::Session);
-            let model = self
-                .model_source
-                .snapshot(selection)?
-                .unwrap_or_else(|| Arc::clone(&self.model_source));
-            executor.policy = self
-                .policy_source
-                .snapshot(Arc::clone(&model))?
-                .unwrap_or_else(|| Arc::clone(&self.policy_source));
-            if let Some(advisor_model) = advisor_model {
-                let auxiliary = model
-                    .snapshot(ModelSelection::Session(advisor_model))?
-                    .unwrap_or_else(|| Arc::clone(&model));
-                self.threads
-                    .turn_tool_models
-                    .lock()
-                    .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?
-                    .insert(
-                        thread_id.clone(),
-                        (turn_id.clone(), advisor_model.clone(), auxiliary),
-                    );
-            }
-            models.insert(
-                thread_id.clone(),
-                (
-                    turn_id.clone(),
-                    Arc::clone(&model),
-                    Arc::clone(&executor.policy),
-                ),
-            );
-            model
+            None
         };
-        if self.model_compaction {
-            executor.compaction = Arc::new(ModelContextCompactionService::new(
-                Arc::clone(&executor.model),
-                executor.threads.diagnostics.clone(),
-            ));
-        }
-        let queued_thread_id = thread_id.clone();
-        let queued_turn_id = turn_id.clone();
-        let result = self
-            .threads
-            .enqueue_turn_execution(thread_id, turn_id, move |execution| {
-                if execution.check_current().is_ok() {
-                    let result = executor
-                        .scope_tools_for_turn(
-                            &queued_thread_id,
-                            &queued_turn_id,
-                            execution.cancellation(),
-                        )
-                        .and_then(|executor| {
-                            executor.execute(
-                                &queued_thread_id,
-                                &queued_turn_id,
-                                execution.cancellation(),
-                            )
-                        });
-                    if !matches!(
-                        result,
-                        Ok(TurnExecutionOutcome::WaitingForApproval
-                            | TurnExecutionOutcome::WaitingForCapability)
-                    ) {
-                        executor.release_turn_model(&queued_thread_id, &queued_turn_id);
-                    }
-                } else if execution.cancellation().is_cancelled() {
-                    // Superseded wakeups share this Turn's frozen model with the queued wakeup.
-                    // Only cancellation ends that ownership before execution reaches a terminal state.
-                        executor
-                            .threads
-                            .finish_tool_turn(&queued_thread_id, &queued_turn_id);
-                    executor.release_turn_model(&queued_thread_id, &queued_turn_id);
-                }
-            });
-        if result.is_err() && !reused_model {
-            // Keep admission and rollback under the model lock: another accepted wakeup must
-            // never lose its frozen connection because this attempt was rejected.
-            models.remove(thread_id);
-            self.release_turn_tool_model(thread_id, turn_id);
-        }
-        result
-    }
-
-    fn release_turn_tool_model(&self, thread_id: &ThreadId, turn_id: &TurnId) {
-        if let Ok(mut models) = self.threads.turn_tool_models.lock() {
-            if models
-                .get(thread_id)
-                .is_some_and(|(id, _, _)| id == turn_id)
-            {
-                models.remove(thread_id);
-            }
-        }
-    }
-
-    fn release_turn_model(&self, thread_id: &ThreadId, turn_id: &TurnId) {
-        self.release_turn_tool_model(thread_id, turn_id);
-        if let Ok(mut models) = self.turn_models.lock() {
-            if models
-                .get(thread_id)
-                .is_some_and(|(id, _, _)| id == turn_id)
-            {
-                models.remove(thread_id);
-            }
-        }
+        Ok(TurnModelServices {
+            model,
+            policy,
+            advisor,
+        })
     }
 
     /// Enqueues one already-started model-free Shell Turn.
@@ -684,37 +572,69 @@ impl TurnExecutor {
         turn_id: &TurnId,
         kind: TurnExecutionKind,
     ) -> Result<(), CoreError> {
+        self.enqueue_turn(thread_id, turn_id, |_| {
+            Ok(TurnExecutionPlan::ModelFree(kind))
+        })
+    }
+
+    fn enqueue_turn(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        prepare: impl FnOnce(&crate::TurnSnapshot) -> Result<TurnExecutionPlan, CoreError>,
+    ) -> Result<(), CoreError> {
         let executor = self.clone();
         let queued_thread_id = thread_id.clone();
         let queued_turn_id = turn_id.clone();
-        self.threads
-            .enqueue_turn_execution(thread_id, turn_id, move |execution| {
-                if execution.check_current().is_ok() {
-                    let result = executor
-                        .scope_tools_for_turn(
-                            &queued_thread_id,
-                            &queued_turn_id,
-                            execution.cancellation(),
-                        )
-                        .and_then(|executor| {
-                            executor.execute_model_free(
-                                &queued_thread_id,
-                                &queued_turn_id,
-                                execution.cancellation(),
-                                kind,
-                            )
-                        });
-                    if !matches!(
-                        result,
-                        Ok(TurnExecutionOutcome::WaitingForApproval
-                            | TurnExecutionOutcome::WaitingForCapability)
-                    ) {
-                        executor
-                            .threads
-                            .finish_tool_turn(&queued_thread_id, &queued_turn_id);
-                    }
-                }
-            })
+        self.threads.enqueue_runtime_turn(
+            thread_id,
+            turn_id,
+            prepare,
+            |session_id| Box::new(self.code_mode.turn_cleanup(session_id, thread_id, turn_id)),
+            move |execution| {
+                executor.run_queued_turn(&queued_thread_id, &queued_turn_id, &execution);
+            },
+        )
+    }
+
+    fn run_queued_turn(
+        mut self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        execution: &ThreadExecutionContext,
+    ) {
+        let Some((plan, tools)) =
+            self.threads
+                .scope_turn_execution(thread_id, turn_id, &self.tools, execution)
+        else {
+            return;
+        };
+        if let TurnExecutionPlan::Model(services) = plan.as_ref() {
+            self.model = Arc::clone(&services.model);
+            self.policy = Arc::clone(&services.policy);
+            if self.model_compaction {
+                self.compaction = Arc::new(ModelContextCompactionService::new(
+                    Arc::clone(&self.model),
+                    self.threads.diagnostics.clone(),
+                ));
+            }
+        }
+        let cancellation = execution.cancellation();
+        self.tools = tools;
+        self.code_mode = self
+            .code_mode
+            .with_tool_service(Arc::clone(&self.tools), Arc::clone(&self.policy));
+        let result = match plan.as_ref() {
+            TurnExecutionPlan::Model(_) => self.execute(thread_id, turn_id, cancellation),
+            TurnExecutionPlan::ModelFree(kind) => {
+                self.execute_model_free(thread_id, turn_id, cancellation, *kind)
+            }
+        };
+        // Errors before terminal notification still release the admitted resources.
+        if result.is_err() {
+            self.threads
+                .release_failed_execution(thread_id, turn_id, execution);
+        }
     }
 
     /// Resumes a waiting or recovered Turn through the executor matching its durable command.
@@ -722,22 +642,6 @@ impl TurnExecutor {
         if self.is_shell_turn(thread_id, turn_id)? {
             self.start_shell(thread_id, turn_id)
         } else if self.is_tool_turn(thread_id, turn_id)? {
-    fn scope_tools_for_turn(
-        &self,
-        thread_id: &ThreadId,
-        turn_id: &TurnId,
-        cancellation: &CancellationToken,
-    ) -> Result<Self, CoreError> {
-        let mut executor = self.clone();
-        executor.tools =
-            self.threads
-                .scope_turn_tools(thread_id, turn_id, &self.tools, cancellation)?;
-        executor.code_mode = self
-            .code_mode
-            .with_tool_service(Arc::clone(&executor.tools), Arc::clone(&self.policy));
-        Ok(executor)
-    }
-
             self.start_tool(thread_id, turn_id)
         } else {
             self.start(thread_id, turn_id)
@@ -909,7 +813,7 @@ impl TurnExecutor {
             };
         self.publish_committed_after(thread_id, sequence_before_execution);
         if let Some(terminal_state) = terminal_state {
-            self.threads.cancel_turn_execution(thread_id, turn_id);
+            self.threads.finish_turn_execution(thread_id, turn_id);
             self.execution_observer.did_finish(&TurnExecutionFinished {
                 session_id: execution.session_id,
                 thread_id: execution.thread_id,
@@ -1074,21 +978,13 @@ impl TurnExecutor {
         };
         self.publish_committed_after(thread_id, sequence_before_execution);
         if let Some(terminal_state) = terminal_state {
-            self.threads.cancel_turn_execution(thread_id, turn_id);
+            self.threads.finish_turn_execution(thread_id, turn_id);
             self.execution_observer.did_finish(&TurnExecutionFinished {
                 session_id: execution.session_id,
                 thread_id: execution.thread_id,
                 turn_id: execution.turn_id,
                 terminal_state,
             });
-        }
-        if !matches!(
-            &result,
-            Ok(TurnExecutionOutcome::WaitingForApproval
-                | TurnExecutionOutcome::WaitingForCapability)
-        ) {
-            self.release_turn_model(thread_id, turn_id);
-            let _ = self.code_mode.close_turn(thread_id, turn_id);
         }
         if matches!(&result, Ok(TurnExecutionOutcome::Completed(_))) {
             let _ = self.start_extension_continuation(thread_id, turn_id);
@@ -1151,17 +1047,18 @@ impl TurnExecutor {
         let mut measurement_policy = ContextMeasurementPolicy::default();
         'model_steps: loop {
             check_cancellation(cancellation)?;
-            let snapshot = self
+            let step = self
                 .threads
-                .read_thread(thread_id)
+                .read_model_step(thread_id, turn_id)
                 .map_err(ExecutionFailure::model)?;
-            let activated = activated_tool_names(self.tools.as_ref(), &snapshot.items, turn_id)
-                .map_err(ExecutionFailure::model)?;
-            let turn = snapshot
-                .turns
-                .iter()
-                .find(|turn| &turn.turn_id == turn_id)
-                .ok_or_else(|| ExecutionFailure::model(CoreError::NotFound(turn_id.to_string())))?;
+            let activated = activate_tools(
+                self.tools.as_ref(),
+                step.tool_results
+                    .iter()
+                    .map(|(call, text)| (call, text.as_str())),
+            )
+            .map_err(ExecutionFailure::model)?;
+            let turn = &step.turn;
             let tool_catalog = self
                 .context_tool_catalog(
                     &activated,
@@ -1180,39 +1077,33 @@ impl TurnExecutor {
                 .model
                 .context_budget(model)
                 .map_err(ExecutionFailure::service)?;
-            let calibration = frozen_model
-                .as_ref()
-                .and_then(|model| snapshot.context_calibration(model, CONTEXT_ESTIMATOR_REVISION));
-            let base_budget = calibrated_budget(configured_budget, calibration)
+            let base_budget = calibrated_budget(configured_budget, step.calibration.as_ref())
                 .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
-            let base_budget = match snapshot.context_policy(turn_id) {
+            let base_budget = match step.context_policy {
                 ash_protocol::ContextCompactionPolicy::Handoff { buffer_tokens, .. } => {
                     base_budget.with_input_buffer(crate::ContextTokenCount::new(buffer_tokens))
                 }
                 ash_protocol::ContextCompactionPolicy::Summary { .. } => base_budget,
             };
             let budget = measurement_policy.adjusted_budget(base_budget);
-            let read_paths = crate::services::read_paths_for_turn(&snapshot, turn_id);
             let harness_context = self
                 .harness_context
                 .snapshot(&crate::HarnessContextRequest {
                     scope: crate::HarnessContextScope::Turn {
-                        session_id: &snapshot.session_id,
+                        session_id: &step.session_id,
                         thread_id: thread_id,
                         turn_id: turn_id,
                     },
-                    read_paths: &read_paths,
+                    read_paths: &step.read_paths,
                 })
                 .map_err(ExecutionFailure::model)?;
             let mut evidence = Vec::new();
-            if is_first_model_invocation(&snapshot, turn_id)
-                && let Some(query) = current_turn_query(&snapshot, turn_id)
-            {
+            if let Some(query) = &step.first_query {
                 let request = crate::ContextSourceRequest {
-                    session_id: &snapshot.session_id,
+                    session_id: &step.session_id,
                     thread_id,
                     turn_id,
-                    query: &query,
+                    query,
                 };
                 let contributed = self.extensions.collect_context(&request, cancellation);
                 check_cancellation(cancellation)?;
@@ -1233,7 +1124,7 @@ impl TurnExecutor {
             }
             let extension_fragments = self.extensions.contribute_turn_input(
                 ash_extension_api::TurnInputContext::for_session(
-                    &snapshot.session_id,
+                    &step.session_id,
                     thread_id,
                     turn_id,
                     &turn.activated_skills,
@@ -1247,18 +1138,7 @@ impl TurnExecutor {
                 .map(resolve_extension_fragment)
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(ExecutionFailure::model)?;
-            if turn.nonterminal_continuations > 0
-                && matches!(
-                    snapshot.items.last(),
-                    Some(ThreadItem::AgentMessage {
-                        phase: Some(
-                            ash_protocol::MessagePhase::Commentary
-                                | ash_protocol::MessagePhase::PartialAnswer
-                        ),
-                        ..
-                    })
-                )
-            {
+            if step.needs_continuation_instruction {
                 additional_instructions.push(InstructionFragment::new(
                     InstructionSource::new("core", "turn-loop-continuation", "v1"),
                     InstructionPlacement::Product,
@@ -1268,7 +1148,7 @@ impl TurnExecutor {
             }
             for fact in self
                 .policy
-                .permission_context(&snapshot.session_id, thread_id)
+                .permission_context(&step.session_id, thread_id)
                 .map_err(ExecutionFailure::model)?
             {
                 additional_instructions.push(InstructionFragment::new(
@@ -1560,7 +1440,7 @@ impl TurnExecutor {
             }
             // Make parent calls observable before a long-running control tool can request
             // nested approval. Its own publisher must not advance past an unseen parent.
-            self.publish_committed_after(thread_id, snapshot.sequence);
+            self.publish_committed_after(thread_id, step.sequence);
             match self
                 .tool_scheduler()
                 .run_pending(thread_id, turn_id, cancellation)
@@ -2115,35 +1995,6 @@ fn decide_model_response(
     }
 }
 
-fn is_first_model_invocation(snapshot: &crate::ThreadSnapshot, turn_id: &TurnId) -> bool {
-    !snapshot.items.iter().any(|item| {
-        item.turn_id() == turn_id
-            && matches!(
-                item,
-                ash_protocol::ThreadItem::AgentMessage { .. }
-                    | ash_protocol::ThreadItem::ToolCall { .. }
-                    | ash_protocol::ThreadItem::ToolResult { .. }
-            )
-    })
-}
-
-fn current_turn_query(snapshot: &crate::ThreadSnapshot, turn_id: &TurnId) -> Option<String> {
-    let query = snapshot
-        .items
-        .iter()
-        .filter_map(|item| match item {
-            ash_protocol::ThreadItem::UserMessage {
-                turn_id: item_turn,
-                text,
-                ..
-            } if item_turn == turn_id => Some(text.as_str()),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    (!query.trim().is_empty()).then_some(query)
-}
-
 fn validate_model_tool_calls(
     calls: &[ToolCall],
     definitions: &[ash_protocol::ToolDefinition],
@@ -2166,47 +2017,19 @@ pub(super) fn activated_tool_names(
     items: &[ThreadItem],
     turn_id: &TurnId,
 ) -> Result<BTreeSet<ash_protocol::ToolName>, CoreError> {
-    let mut calls = BTreeMap::new();
-    for item in items {
-        if let ThreadItem::ToolCall {
-            turn_id: item_turn_id,
-            tool_call_id,
-            name,
-            arguments_json,
-            ..
-        } = item
-            && item_turn_id == turn_id
-        {
-            let arguments = serde_json::from_str(arguments_json).map_err(|error| {
-                CoreError::Execution(format!(
-                    "durable Tool Call arguments could not be reconstructed: {error}"
-                ))
-            })?;
-            calls.insert(
-                tool_call_id.clone(),
-                ToolCall {
-                    id: tool_call_id.clone(),
-                    name: name.clone(),
-                    arguments,
-                },
-            );
-        }
-    }
+    let results = crate::services::tool_activation_results(
+        items.iter().filter(|item| item.turn_id() == turn_id),
+    )?;
+    activate_tools(tools, results.iter().map(|(call, text)| (call, *text)))
+}
 
+fn activate_tools<'a>(
+    tools: &dyn ToolService,
+    results: impl IntoIterator<Item = (&'a ToolCall, &'a str)>,
+) -> Result<BTreeSet<ash_protocol::ToolName>, CoreError> {
     let mut activated = BTreeSet::new();
-    for item in items {
-        if let ThreadItem::ToolResult {
-            turn_id: item_turn_id,
-            tool_call_id,
-            text,
-            is_error: false,
-            ..
-        } = item
-            && item_turn_id == turn_id
-            && let Some(call) = calls.get(tool_call_id)
-        {
-            activated.extend(tools.activated_tool_names(call, text)?);
-        }
+    for (call, text) in results {
+        activated.extend(tools.activated_tool_names(call, text)?);
     }
     Ok(activated)
 }

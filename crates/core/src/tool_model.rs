@@ -85,12 +85,7 @@ impl ToolModel {
         let selection = ModelSelection::Session(request.model);
         let model = self
             .threads
-            .turn_tool_models
-            .lock()
-            .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?
-            .get(thread_id)
-            .filter(|(owner, model, _)| owner == turn_id && model == request.model)
-            .map(|(_, _, model)| model.clone())
+            .turn_advisor_model(thread_id, turn_id, request.model)
             .ok_or_else(|| {
                 CoreError::Execution("auxiliary model was not captured at Turn start".into())
             })?;
