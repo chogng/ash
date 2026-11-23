@@ -14,11 +14,11 @@ const FOLLOWUPS: &str = "When a completed reply naturally leaves a specific next
 /// Freezes the approach separately from shared rules, model guidance and Role instructions.
 pub fn instructions(mode: protocol::AgentMode) -> protocol::TurnInstructions {
     let (id, revision, body) = match mode {
-        protocol::AgentMode::Agent => ("collaboration-mode/agent", "agent-v3", AGENT),
-        protocol::AgentMode::Plan => ("collaboration-mode/plan", "plan-v5", PLAN),
-        protocol::AgentMode::Debug => ("collaboration-mode/debug", "debug-v3", DEBUG),
-        protocol::AgentMode::Swarm => ("collaboration-mode/swarm", "swarm-v2", SWARM),
-        protocol::AgentMode::Ask => ("collaboration-mode/ask", "ask-v4", ASK),
+        protocol::AgentMode::Agent => ("agent-mode/agent", "agent-v4", AGENT),
+        protocol::AgentMode::Plan => ("agent-mode/plan", "plan-v6", PLAN),
+        protocol::AgentMode::Debug => ("agent-mode/debug", "debug-v4", DEBUG),
+        protocol::AgentMode::Swarm => ("agent-mode/swarm", "swarm-v3", SWARM),
+        protocol::AgentMode::Ask => ("agent-mode/ask", "ask-v5", ASK),
     };
     let body = if mode == protocol::AgentMode::Plan {
         std::borrow::Cow::Borrowed(body)
@@ -26,7 +26,7 @@ pub fn instructions(mode: protocol::AgentMode) -> protocol::TurnInstructions {
         std::borrow::Cow::Owned(format!("{}\n\n{FOLLOWUPS}\n", body.trim_end()))
     };
     // This owner and the IDs above are persisted with each accepted Turn.
-    protocol::TurnInstructions::new("collaboration-mode-templates", id, revision, body.as_ref())
+    protocol::TurnInstructions::new("agent-mode-templates", id, revision, body.as_ref())
         .expect("packaged mode templates have valid identities and nonempty bodies")
 }
 

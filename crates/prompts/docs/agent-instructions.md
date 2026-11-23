@@ -30,17 +30,17 @@ Core 按独立来源组装指令。工具、目录和外部服务的授权由对
 
 本次按本地 Codex 提交 `73a1148c9c775c2a4616ce5096291740a00ed68a` 的 `codex-rs/prompts` 逐项核对，并按 Ash 已有执行入口补齐。下表维护采用范围，不以目录或文件数相同作为完成标准。
 
-| Codex 资产/模块                                               | Ash 对应入口                                                                    | 当前差异与接线                                                                                          |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `collaboration-mode-templates`、`ModeKind` 与 Core 模式上下文 | [`ash-agent-mode-templates`](../../agent-mode-templates/README.md)、`AgentMode` | Core 分别保存模式资产、共同规则和 Role                                                                  |
-| `permissions_instructions` 与 `templates/permissions`         | [`permissions_instructions`](../src/permissions.rs)                             | 共同动作授权说明 + AskPermissions/AutoReview/BypassPermissions；Core 每次组装根据已保存的 Turn 模式选择 |
-| 沙箱 read-only/workspace-write/full-access                    | `templates/permissions/actions.md`                                              | Ash 按 Tool Call 解析文件、网络和沙箱授权；不从可访问目录推断写权限，不描述不存在的全局沙箱状态         |
-| approval never/on-request/unless-trusted、扩展权限工具        | `templates/permissions/approval/*`                                              | 使用 Ash 的三种真实批准模式；不引入 Codex 专用参数和工具                                                |
-| compact prompt / summary prefix                               | [`compact.rs`](../src/compact.rs)                                               | 原生成模板继续使用；补上 `checkpoint_prompt`，保留 ID/来源摘要并转义摘要内容                            |
-| review rubric / review request                                | [角色正文](../../agent-roles/assets/reviewer.md)、[目标渲染](../src/review.rs)  | App Server 从角色目录冻结审查职责；Git 比较仍经授权工具执行，prompt crate 只渲染目标                    |
-| review exit success / interrupted                             | `review_exit_prompt`                                                            | 按已保存的结果选择 completed/interrupted/failed，结果正文保留在原 Assistant 消息，不重复复制            |
-| 普通 Turn 中断说明                                            | `TURN_INTERRUPTED_PROMPT`                                                       | 将 Core 中的共享文案收归 prompts，不假定中断一定由用户主动发起                                          |
-| realtime start / end / backend                                | 尚未接入                                                                        | Ash 没有实时语音会话、转写来源与转发执行链路；不放入声称这些能力已存在的模板                            |
+| Codex 资产/模块                                        | Ash 对应入口                                                                    | 当前差异与接线                                                                                          |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 模式模板、`ModeKind` 与 Core 模式上下文                | [`ash-agent-mode-templates`](../../agent-mode-templates/README.md)、`AgentMode` | Core 分别保存模式资产、共同规则和 Role                                                                  |
+| `permissions_instructions` 与 `templates/permissions`  | [`permissions_instructions`](../src/permissions.rs)                             | 共同动作授权说明 + AskPermissions/AutoReview/BypassPermissions；Core 每次组装根据已保存的 Turn 模式选择 |
+| 沙箱 read-only/workspace-write/full-access             | `templates/permissions/actions.md`                                              | Ash 按 Tool Call 解析文件、网络和沙箱授权；不从可访问目录推断写权限，不描述不存在的全局沙箱状态         |
+| approval never/on-request/unless-trusted、扩展权限工具 | `templates/permissions/approval/*`                                              | 使用 Ash 的三种真实批准模式；不引入 Codex 专用参数和工具                                                |
+| compact prompt / summary prefix                        | [`compact.rs`](../src/compact.rs)                                               | 原生成模板继续使用；补上 `checkpoint_prompt`，保留 ID/来源摘要并转义摘要内容                            |
+| review rubric / review request                         | [角色正文](../../agent-roles/assets/reviewer.md)、[目标渲染](../src/review.rs)  | App Server 从角色目录冻结审查职责；Git 比较仍经授权工具执行，prompt crate 只渲染目标                    |
+| review exit success / interrupted                      | `review_exit_prompt`                                                            | 按已保存的结果选择 completed/interrupted/failed，结果正文保留在原 Assistant 消息，不重复复制            |
+| 普通 Turn 中断说明                                     | `TURN_INTERRUPTED_PROMPT`                                                       | 将 Core 中的共享文案收归 prompts，不假定中断一定由用户主动发起                                          |
+| realtime start / end / backend                         | 尚未接入                                                                        | Ash 没有实时语音会话、转写来源与转发执行链路；不放入声称这些能力已存在的模板                            |
 
 参考源码：[模块与导出](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/lib.rs)、[权限组装](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/permissions_instructions.rs)、[审查结束](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/review_exit.rs)、[实时语音资产入口](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/realtime.rs)。
 
@@ -109,7 +109,7 @@ Core 接收：冻结基础正文 + 按实际模式和根／子身份选择的模
 
 当前内置模型的完整基础提示词与规格统一登记在 [模型目录](../../model-provider-info/models/)。每条 `model_messages.system_instructions` 正文都可以独立修改；初始正文由原共同规则与对应模型指导合并而来。未登记模型使用 [`base_prompt.md`](../templates/agent/base_prompt.md)，命中 JSON 时不会再加入这份默认正文。
 
-目录不填写 revision，`models-manager` 按每段正文的 SHA-256 摘要生成冻结资产的 revision。历史保存完整正文与当时的标识，恢复时不重新读取当前目录。基础正文中的委托协调章节已移入 `multi_agent`，由真实根／子 Agent 身份选择；`tools` 的说明只用于当前可用工具，`collaboration_modes` 按当前五种模式选择。宿主指令、参数和权限契约继续保留。当前基础正文保留原有模型指导，并包含任务完成、环境调查、工具使用、编辑、验证、权限、上下文和沟通规则。运行时传入的 Role、权限与工具仍决定实际可执行范围；正文不授予新能力。结构与调用链测试不等于效果评测。
+目录不填写 revision，`models-manager` 按每段正文的 SHA-256 摘要生成冻结资产的 revision。历史保存完整正文与当时的标识，恢复时不重新读取当前目录。基础正文中的委托协调章节已移入 `multi_agent`，由真实根／子 Agent 身份选择；`tools` 的说明只用于当前可用工具，`agent_modes` 按当前五种模式选择。宿主指令、参数和权限契约继续保留。当前基础正文保留原有模型指导，并包含任务完成、环境调查、工具使用、编辑、验证、权限、上下文和沟通规则。运行时传入的 Role、权限与工具仍决定实际可执行范围；正文不授予新能力。结构与调用链测试不等于效果评测。
 
 这些初始正文尚未做真实模型效果评测。以下保留原指导的设计假设与来源，来源复核日期为 2026-09-09，不代表本轮验证了远端型号的在线可用性。
 

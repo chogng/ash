@@ -170,16 +170,42 @@ fn history_accepts_swarm_and_rejects_multitask_mode_ids() {
         value["threadId"] = "old".into();
         value["sequence"] = 2.into();
         value["recordedAt"] = 1.into();
-        for version in [35, CURRENT_STORED_EVENT_SCHEMA_VERSION] {
+        for version in [35, 36, CURRENT_STORED_EVENT_SCHEMA_VERSION] {
             value["schemaVersion"] = serde_json::json!(version);
             let record: StoredEvent = serde_json::from_value(value.clone()).unwrap();
             let encoded = serde_json::to_string(&record).unwrap();
+            let modes_key = if version <= 36 {
+                "collaborationModes"
+            } else {
+                "agentModes"
+            };
+            if value
+                .pointer("/event/instructions/modelGuidance/messages")
+                .is_some()
+            {
+                assert!(encoded.contains(&format!(r#""{modes_key}":{{"swarm":"#)));
+                let restored: StoredEvent = serde_json::from_str(&encoded).unwrap();
+                assert_eq!(serde_json::to_string(&restored).unwrap(), encoded);
+                let mut upgraded = restored;
+                upgraded.schema_version = CURRENT_STORED_EVENT_SCHEMA_VERSION;
+                let current = serde_json::to_string(&upgraded).unwrap();
+                // These two fields are the only byte changes allowed in this history-prefix member.
+                assert_eq!(
+                    encoded,
+                    current
+                        .replace(
+                            &format!(r#""schemaVersion":{}"#, CURRENT_STORED_EVENT_SCHEMA_VERSION),
+                            &format!(r#""schemaVersion":{version}"#),
+                        )
+                        .replace(r#""agentModes":"#, &format!(r#""{modes_key}":"#))
+                );
+            }
             let retired = encoded
                 .replace(r#""mode":"swarm""#, r#""mode":"multitask""#)
                 .replace(r#""fromMode":"swarm""#, r#""fromMode":"multitask""#)
                 .replace(
-                    r#""collaborationModes":{"swarm":"#,
-                    r#""collaborationModes":{"multitask":"#,
+                    &format!(r#""{modes_key}":{{"swarm":"#),
+                    &format!(r#""{modes_key}":{{"multitask":"#),
                 );
             assert_ne!(retired, encoded);
             let error = serde_json::from_str::<StoredEvent>(&retired).unwrap_err();

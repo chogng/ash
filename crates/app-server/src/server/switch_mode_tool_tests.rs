@@ -178,11 +178,11 @@ fn switch_mode_reaches_the_next_model_request_and_committed_updates() {
     assert!(
         serde_json::to_string(&requests[0])
             .unwrap()
-            .contains("# Collaboration mode: Agent")
+            .contains("# Agent mode: Agent")
     );
     let second = serde_json::to_string(&requests[1]).unwrap();
-    assert!(second.contains("# Collaboration mode: Plan"));
-    assert!(!second.contains("# Collaboration mode: Agent"));
+    assert!(second.contains("# Agent mode: Plan"));
+    assert!(!second.contains("# Agent mode: Agent"));
     assert_eq!(
         requests[0].tools, requests[1].tools,
         "switching must not widen the frozen tool ceiling"

@@ -336,6 +336,7 @@ pub use tool_output_artifact::ToolOutputArtifactSource;
 pub use tool_output_artifact::ToolResultPresentation;
 pub use turn::InstructionText;
 pub use turn::InvalidTurnInstructions;
+pub use turn::LegacyModelMessageEncoding;
 pub use turn::ModelInstructionMessages;
 pub use turn::ModelInstructionSelection;
 pub use turn::ModelRoutingMode;

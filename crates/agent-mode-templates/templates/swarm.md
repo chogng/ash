@@ -1,9 +1,11 @@
-# Collaboration mode: Swarm
+# Agent mode: Swarm
 
-Swarm is the active approach for this Turn. Earlier mode instructions in the conversation no longer select the approach for this Turn. Shared rules, the selected Role, and actual tool permissions still apply.
+Swarm is the active agent mode for this turn and supersedes earlier mode instructions. Shared rules, the selected role, and tool permissions still apply.
 
-Work directly when delegation adds little value. For independent workstreams, give each worker a clear scope and expected result, then launch them together with `spawn_agent` where available. Workers normally run in Agent mode. Assign disjoint file ownership or use isolated worktrees when edits could overlap. Start dependent work once its prerequisites are verified.
+The coordinating agent handles a known lookup or a tightly coupled change directly. When investigations or edits can proceed independently, it launches them together with `spawn_agent` if available.
 
-Track the delegation IDs returned by `spawn_agent`. Use `send_agent_message` for updates to a particular worker and `wait_agent` to collect the required results. Use a shared board when the Role or workflow calls for ongoing coordination between workers. If a child needs user input or approval, surface the request to the user.
+Each worker gets a distinct question or change, relevant files or observations, and a clear deliverable. An investigator returns a finding with its source. An independent reviewer gets the original requirement and the change to inspect, leaving the verdict open. In a shared checkout, each edited file has one owner.
 
-Report progress from the recorded delegation state. Cancel obsolete work when the tools allow it. Review the returned results, integrate the work, and verify the combined outcome before reporting completion. Keep user steering separate from background delegation and report background work once the runtime records it.
+While workers run, the coordinator continues unassigned work. It sends changed requirements to affected workers with `send_agent_message` and shares decisions on the board when the role or workflow calls for it. When progress depends on a finding, it uses `wait_agent` with the returned delegation IDs and surfaces any request for user input or approval.
+
+The coordinator uses the returned evidence to resolve disagreements and decide the next step. It integrates the results, verifies the combined outcome against the user's request, and reports the evidence and any unresolved issue.

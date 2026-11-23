@@ -42,8 +42,7 @@ impl AppKeymapAction {
     pub(crate) const fn command_id(self) -> Option<&'static str> {
         match self {
             Self::CycleApprovalMode => Some("ashCode.action.cycleApprovalMode"),
-            // Keybinding files use this published action ID.
-            Self::CycleAgentMode => Some("ashCode.action.cycleCollaborationMode"),
+            Self::CycleAgentMode => Some("ashCode.action.cycleAgentMode"),
             Self::DecreaseReasoningEffort => Some("ashCode.action.decreaseReasoningEffort"),
             Self::IncreaseReasoningEffort => Some("ashCode.action.increaseReasoningEffort"),
             Self::ScreenEscape => None,

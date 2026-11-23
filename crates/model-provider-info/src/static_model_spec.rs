@@ -36,7 +36,7 @@ pub struct ModelMessages {
     #[serde(default)]
     pub tools: BTreeMap<ToolName, ModelToolMessage>,
     /// Additional guidance selected by the active agent mode, without changing its permissions.
-    #[serde(default, rename = "collaboration_modes")]
+    #[serde(default)]
     pub agent_modes: BTreeMap<AgentMode, String>,
     /// Guidance selected by the Thread's actual root or delegated identity, separate from its task role.
     #[serde(default)]

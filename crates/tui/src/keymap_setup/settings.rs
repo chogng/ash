@@ -9,6 +9,7 @@ use serde_json::Value;
 
 use crate::client::new_command_id;
 use crate::keymap::AppKeymap;
+use crate::keymap::AppKeymapAction;
 use crate::keymap::compile_app_user_bindings;
 
 use super::KeymapChoices;
@@ -56,14 +57,12 @@ pub(crate) struct KeymapEditorUpdate {
 }
 
 pub(crate) fn settings_from_tui(section: &FrontendConfigDto) -> Result<KeymapSettings, String> {
-    let document = section
+    let mut document = section
         .0
         .get(CONFIG_KEY)
         .cloned()
         .unwrap_or_else(|| Value::Array(Vec::new()));
-    if !document.is_array() {
-        return Err("invalid [tui].keybindings: expected an array of shortcut rules".into());
-    }
+    current_binding_entries(&mut document)?;
     compile_settings(&document)
 }
 
@@ -168,10 +167,24 @@ fn compile_settings(document: &Value) -> Result<KeymapSettings, String> {
     })
 }
 
-fn edited_document(mut document: Value, edit: &KeymapEdit) -> Result<(Value, String), String> {
+// Normalize older shortcuts before resolving or editing them. Saving the ordered rules
+// through the shortcut editor persists the current IDs with the existing revision check.
+fn current_binding_entries(document: &mut Value) -> Result<&mut Vec<Value>, String> {
     let entries = document.as_array_mut().ok_or_else(|| {
         "invalid [tui].keybindings: expected an array of shortcut rules".to_owned()
     })?;
+    for entry in entries.iter_mut() {
+        if let Some(command) = entry.get_mut("command")
+            && command.as_str() == Some("ashCode.action.cycleCollaborationMode")
+        {
+            *command = Value::from(AppKeymapAction::CycleAgentMode.command_id().unwrap());
+        }
+    }
+    Ok(entries)
+}
+
+fn edited_document(mut document: Value, edit: &KeymapEdit) -> Result<(Value, String), String> {
+    let entries = current_binding_entries(&mut document)?;
     let command_matches = |entry: &Value| {
         entry.get("command").and_then(Value::as_str) == Some(edit.command_id.as_str())
     };

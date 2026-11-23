@@ -177,7 +177,7 @@ JSON 的层级和编辑字段由 [`static_model_spec.rs`](src/static_model_spec.
     "tools": {
       "spawn_agent": { "description": "Delegate one bounded task and verify its result." }
     },
-    "collaboration_modes": {
+    "agent_modes": {
       "plan": "Inspect the task and produce a concrete plan within the active constraints."
     },
     "multi_agent": {
@@ -238,7 +238,7 @@ Ultra Fast 是服务等级。加速档位、[模型推理档位](../model-provid
 
 `context_window` 是默认上下文预算，`max_context_window` 是长上下文开启后的最大预算；最大值不得小于默认值，未知默认值不能声明最大值。省略最大值表示没有更大的档位。长上下文默认关闭，用户偏好保存 `modelContext.<model>.longContext` 布尔值；手工 `contextWindow` 数值与布尔偏好互斥。后端根据当前连接的目录容量限制有效预算，GUI 和 TUI 不根据型号或容量猜测开关。压缩推荐使用有效预算的 90%，显式压缩阈值也受这一上限限制。
 
-`model_messages` 中的 `system_instructions` 必填；`tools`、`collaboration_modes` 和 `multi_agent` 可省略，省略表示没有额外的模型专用指导，保留所属模块的现有规则。声明的正文不得空白，全部文本合计最多 64 KiB。`tools` 按准确工具名声明，只接受 `description`；`collaboration_modes` 使用[内置模式 ID](../agent-mode-templates/README.md#内置模式)；`multi_agent` 只接受 `root`、`subagent`。这些字段不能声明工具参数、开关或授权。
+`model_messages` 中的 `system_instructions` 必填；`tools`、`agent_modes` 和 `multi_agent` 可省略，省略表示没有额外的模型专用指导，保留所属模块的现有规则。声明的正文不得空白，全部文本合计最多 64 KiB。`tools` 按准确工具名声明，只接受 `description`；`agent_modes` 使用[内置模式 ID](../agent-mode-templates/README.md#内置模式)；`multi_agent` 只接受 `root`、`subagent`。这些字段不能声明工具参数、开关或授权。
 
 Core 在现有工具说明之后加入模型专用 `description`，保留工具参数、动态角色信息和原绑定。只有本次实际可用的工具会得到这段说明，Code Mode 的 `ALL_TOOLS` 同样使用冻结的模型说明。当前模式选择一段模式指导，Thread 的真实父子关系选择根或子 Agent 指导；额外正文保留宿主的模式限制、Role 与权限。上下文检查与执行使用同一组装路径，并将工具说明计入工具预算。
 

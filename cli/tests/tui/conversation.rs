@@ -30,7 +30,7 @@ fn actual_tui_swarm_delegates_and_restores_the_completed_turn() {
     ];
     // Requests from the coordinator and workers may arrive in any order.
     let server = ScenarioServer::start_routed(6, move |request| {
-        if request.contains("Collaboration mode: Agent") {
+        if request.contains("# Agent mode: Agent") {
             let Some((_, _, finding)) = workers.iter().find(|(_, task, _)| request.contains(*task))
             else {
                 return HttpResponse::failure(422, "Unexpected Swarm worker task");
@@ -127,12 +127,7 @@ fn actual_tui_swarm_delegates_and_restores_the_completed_turn() {
 
     let bodies = server.request_bodies();
     assert_eq!(bodies.len(), 6);
-    assert!(bodies[0].contains("Collaboration mode: Swarm"));
-    assert!(
-        bodies[0].contains(
-            "Use a shared board when the Role or workflow calls for ongoing coordination"
-        )
-    );
+    assert!(bodies[0].contains("# Agent mode: Swarm"));
 
     let mut resumed = TuiProcess::start(
         &fixture,

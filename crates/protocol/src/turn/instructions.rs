@@ -3,6 +3,9 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use serde::Serializer;
+use serde::ser::SerializeStruct;
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
@@ -238,15 +241,51 @@ impl ModelInstructionSelection {
 }
 
 /// Model-owned guidance frozen at selection; Core chooses only the active mode, identity and available tools.
-#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelInstructionMessages {
     pub tools: BTreeMap<crate::ToolName, InstructionText>,
-    // Preserve this key in frozen model guidance and history records.
-    #[serde(rename = "collaborationModes")]
+    #[serde(alias = "collaborationModes")]
     pub agent_modes: BTreeMap<crate::AgentMode, InstructionText>,
     pub root: Option<InstructionText>,
     pub subagent: Option<InstructionText>,
+}
+
+impl Serialize for ModelInstructionMessages {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut fields = serializer.serialize_struct("ModelInstructionMessages", 4)?;
+        fields.serialize_field("tools", &self.tools)?;
+        let modes = if LEGACY_MESSAGE_KEYS.get() {
+            "collaborationModes"
+        } else {
+            "agentModes"
+        };
+        fields.serialize_field(modes, &self.agent_modes)?;
+        fields.serialize_field("root", &self.root)?;
+        fields.serialize_field("subagent", &self.subagent)?;
+        fields.end()
+    }
+}
+
+thread_local! {
+    static LEGACY_MESSAGE_KEYS: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Reproduces pre-v37 history and seed hashes. Applies only to typed model messages
+/// nested in this synchronous serialization, including those inside imported Turns.
+pub struct LegacyModelMessageEncoding<T>(pub T);
+
+impl<T: Serialize> Serialize for LegacyModelMessageEncoding<T> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        struct Restore(bool);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                LEGACY_MESSAGE_KEYS.set(self.0);
+            }
+        }
+        let _restore = Restore(LEGACY_MESSAGE_KEYS.replace(true));
+        self.0.serialize(serializer)
+    }
 }
 
 impl ModelInstructionMessages {

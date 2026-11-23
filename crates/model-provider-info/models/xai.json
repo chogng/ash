@@ -55,7 +55,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "collaboration_modes": {
+        "agent_modes": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -141,7 +141,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "collaboration_modes": {
+        "agent_modes": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -223,7 +223,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "collaboration_modes": {
+        "agent_modes": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",

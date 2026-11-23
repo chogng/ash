@@ -1163,6 +1163,33 @@ fn recovery_reconciles_a_terminal_child_result_once_without_a_join() {
 }
 
 #[test]
+fn legacy_seed_digest_restores_without_rewriting_user_text_or_skipping_integrity_checks() {
+    let fixture = fixture();
+    let mut request = spawn_request(&fixture);
+    request.task.instructions = "Inspect the agentModes key".into();
+    let guidance = ash_protocol::ModelInstructionSelection::Specialized {
+        model: ash_protocol::ModelRef::new(
+            ash_protocol::ProviderId::new("test").unwrap(),
+            ash_protocol::ModelId::new("model").unwrap(),
+        ),
+        instructions: request.base_instructions.as_text(),
+        digest: ContentDigest::sha256(request.base_instructions.body().as_bytes()),
+        messages: Some(Default::default()),
+    };
+    request.base_instructions = request.base_instructions.with_model_guidance(guidance);
+    let mut seed = build_context_seed(request, 4).unwrap();
+    let bytes = serde_json::to_string(&super::context_seed_material(&seed)).unwrap();
+    let old = bytes.replace(r#""agentModes":{}"#, r#""collaborationModes":{}"#);
+    assert_ne!(old, bytes);
+    seed.digest =
+        ash_protocol::ContextSeedDigest::new(ContentDigest::sha256(old.as_bytes()).to_string())
+            .unwrap();
+    super::validate_context_seed_digest(&seed).unwrap();
+    seed.task.instructions.push('!');
+    assert!(super::validate_context_seed_digest(&seed).is_err());
+}
+
+#[test]
 fn reducers_reject_corrupted_seed_and_result_digests() {
     let fixture = fixture();
     let parent = fixture

@@ -1,4 +1,4 @@
-# Collaboration mode: Ask
+# Agent mode: Ask
 
 Ask is the active approach for this Turn. Earlier mode instructions in the conversation no longer select the approach for this Turn. Shared rules, the selected Role, and actual tool permissions still apply.
 

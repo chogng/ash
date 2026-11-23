@@ -1379,7 +1379,7 @@ fn build_context_seed_with_materialized(
         digest: ContextSeedDigest::new(format!("sha256:{}", "0".repeat(64)))
             .expect("static context seed digest placeholder is valid"),
     };
-    seed.digest = context_seed_digest(&seed)?;
+    seed.digest = context_seed_digest(&context_seed_material(&seed))?;
     Ok(seed)
 }
 
@@ -1403,8 +1403,8 @@ struct ContextSeedMaterial<'a> {
     base_instructions: &'a Option<ash_protocol::TurnInstructions>,
 }
 
-fn context_seed_digest(seed: &AgentContextSeed) -> Result<ContextSeedDigest, CoreError> {
-    let material = ContextSeedMaterial {
+fn context_seed_material(seed: &AgentContextSeed) -> ContextSeedMaterial<'_> {
+    ContextSeedMaterial {
         delegation_id: &seed.delegation_id,
         agent_id: &seed.agent_id,
         parent_thread_id: &seed.parent_thread_id,
@@ -1417,8 +1417,11 @@ fn context_seed_digest(seed: &AgentContextSeed) -> Result<ContextSeedDigest, Cor
         policy_ceiling: &seed.policy_ceiling,
         capability_scope: &seed.agent.capability_scope,
         base_instructions: &seed.agent.base_instructions,
-    };
-    let bytes = serde_json::to_vec(&material).map_err(|error| {
+    }
+}
+
+fn context_seed_digest(material: &impl Serialize) -> Result<ContextSeedDigest, CoreError> {
+    let bytes = serde_json::to_vec(material).map_err(|error| {
         CoreError::Journal(format!("cannot encode Agent context seed: {error}"))
     })?;
     ContextSeedDigest::new(format!("sha256:{:x}", Sha256::digest(bytes)))
@@ -1426,12 +1429,17 @@ fn context_seed_digest(seed: &AgentContextSeed) -> Result<ContextSeedDigest, Cor
 }
 
 pub(crate) fn validate_context_seed_digest(seed: &AgentContextSeed) -> Result<(), CoreError> {
-    if context_seed_digest(seed)? != seed.digest {
-        return Err(CoreError::Context(
-            "Agent context seed digest does not match its immutable material".into(),
-        ));
+    let material = context_seed_material(seed);
+    if context_seed_digest(&material)? == seed.digest {
+        return Ok(());
     }
-    Ok(())
+    // Seeds have no encoding version. Older delegates hashed the original model-message keys.
+    if context_seed_digest(&ash_protocol::LegacyModelMessageEncoding(&material))? == seed.digest {
+        return Ok(());
+    }
+    Err(CoreError::Context(
+        "Agent context seed digest does not match its immutable material".into(),
+    ))
 }
 
 #[derive(Serialize)]

@@ -171,7 +171,7 @@
       "description": "Model-owned prompt text, assembled with runtime instructions before provider encoding.",
       "type": "object",
       "properties": {
-        "collaboration_modes": {
+        "agent_modes": {
           "description": "Additional guidance selected by the active agent mode, without changing its permissions.",
           "type": "object",
           "properties": {

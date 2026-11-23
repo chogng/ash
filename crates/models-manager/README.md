@@ -190,7 +190,7 @@ Codex 针对未知模型写入的固定规格不适用于这里的多供应商�
 
 ### 初版模板与修改入口
 
-1. 调整某个模型：编辑 `models/<provider>.json` 中该模型的 `model_messages` 对应正文，正文修改会自动改变冻结资产的 revision，无需填写版本号。`system_instructions` 是完整基础正文，不会自动拼入 `base_prompt.md`；公共要求的修改要同步相关模型条目。工具说明放入 `tools.<tool>.description`，模式指导放入 `collaboration_modes`，根／子 Agent 指导放入 `multi_agent`；这些文本随选择冻结，由 Core 按实际状态使用。
+1. 调整某个模型：编辑 `models/<provider>.json` 中该模型的 `model_messages` 对应正文，正文修改会自动改变冻结资产的 revision，无需填写版本号。`system_instructions` 是完整基础正文，不会自动拼入 `base_prompt.md`；公共要求的修改要同步相关模型条目。工具说明放入 `tools.<tool>.description`，模式指导放入 `agent_modes`，根／子 Agent 指导放入 `multi_agent`；这些文本随选择冻结，由 Core 按实际状态使用。
 2. 新增沿用现有协议的模型：只在 JSON 的 `models` 数组增加规格与完整提示词；无需增加模板枚举、Markdown 或指令选择分支。新增供应商协议仍需实现对应接入。
 3. 修改未登记模型的默认行为：编辑 `base_prompt.md` 并提升 `prompts/src/agent.rs` 的资产 revision，不会影响已有模型条目的正文。
 4. 编译并重启宿主。新建 Agent 按新目录选择基础提示词；已有 Agent 在模型未变时沿用保存的正文，已接受的 Turn 保留本轮快照。验证新正文时创建新的相应 Agent。

@@ -30,7 +30,7 @@ fn frozen_model_messages_restore_all_assets_and_reject_changed_text() {
     assert_eq!(restored, original);
     for path in [
         "/modelGuidance/messages/tools/spawn_agent/body",
-        "/modelGuidance/messages/collaborationModes/plan/body",
+        "/modelGuidance/messages/agentModes/plan/body",
         "/modelGuidance/messages/root/body",
         "/modelGuidance/messages/subagent/body",
     ] {

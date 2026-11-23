@@ -3513,7 +3513,7 @@ fn start_turn_model_and_reasoning_effort_are_scoped_to_their_thread() {
     assert_eq!(first_instructions.owner(), "prompts");
     assert_eq!(
         first_instructions.mode_instructions().unwrap().id,
-        "collaboration-mode/plan"
+        "agent-mode/plan"
     );
     assert!(first_instructions.shared().is_empty());
 

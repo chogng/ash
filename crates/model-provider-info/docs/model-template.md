@@ -289,7 +289,7 @@ Chat Debug／Agent Debug Logs 逐次显示客户端计时；`rollout-trace` 统�
 | 请求偏好     | `host_policy.request_defaults`                          | Ash 默认 effort/verbosity 等必须通过所选接入校验；不改写官方默认值                       |
 | 基础指导     | `model_messages.system_instructions`                    | 模型专用完整正文，按新 Turn 冻结；不保存账户、工具清单或本次项目状态                     |
 
-`model_messages` 保存本地模型指令声明，包含必填字符串 `system_instructions`，以及可选的 `tools.<tool>.description`、`collaboration_modes.<mode>`、`multi_agent.root/subagent`，没有手写版本号。工具参数由工具实现维护，模型文本追加到当前可用工具的说明；模式和身份指导按实际状态选择，保留宿主规则。省略可选字段表示没有额外指导，已声明文本不得空白，全部文本合计最多 64 KiB。`models-manager` 按每段正文的 SHA-256 摘要标识冻结资产，历史保留当时的全文及分组。该容器不直接作为供应商请求发送；Core 组装指令后由接入层编码，具体字段见第 2 节。Codex 的 `persistent_instructions` 是 persistent mode 的额外 developer 指令，省略或 `null` 使用其内置正文，空字符串关闭这项指导；Ash 当前没有对应字段。Role、权限、项目、工具参数和实际协作状态由各自负责方维护。
+`model_messages` 保存本地模型指令声明，包含必填字符串 `system_instructions`，以及可选的 `tools.<tool>.description`、`agent_modes.<mode>`、`multi_agent.root/subagent`，没有手写版本号。工具参数由工具实现维护，模型文本追加到当前可用工具的说明；模式和身份指导按实际状态选择，保留宿主规则。省略可选字段表示没有额外指导，已声明文本不得空白，全部文本合计最多 64 KiB。`models-manager` 按每段正文的 SHA-256 摘要标识冻结资产，历史保留当时的全文及分组。该容器不直接作为供应商请求发送；Core 组装指令后由接入层编码，具体字段见第 2 节。Codex 的 `persistent_instructions` 是 persistent mode 的额外 developer 指令，省略或 `null` 使用其内置正文，空字符串关闭这项指导；Ash 当前没有对应字段。Role、权限、项目、工具参数和实际协作状态由各自负责方维护。
 
 基础正文可以统一包含工作目标、工具和结果使用、编辑与验证、权限边界、任务完成和报告规则。型号专用指导只写有官方依据或评测证据的差异。Role、权限、项目指令、动态工具和用户当前任务由运行时加入；提示词不能开启推理档位、扩大 API 上限或授予工具权限。现有规则见 [Agent 指令设计](../../prompts/docs/agent-instructions.md)。
 

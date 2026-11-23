@@ -10,6 +10,7 @@ use serde::de::Error;
 use serde::ser::SerializeStruct;
 
 /// Schema version written for newly persisted Thread history records.
+/// Version 37 records frozen model guidance under `agentModes`.
 /// Version 36 records the Swarm agent mode as `swarm`.
 /// Version 35 supports opt-in context-window tool hints in frozen Turn policies.
 /// Version 34 records the actual Turn execution directory at acceptance.
@@ -22,7 +23,8 @@ use serde::ser::SerializeStruct;
 /// Version 27 adds durable Thread title changes and their command receipts.
 /// Version 26 added Thread history cursors and directory checkpoints.
 /// Older records retain their hashed byte representation.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 36;
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 37;
+const AGENT_MODES_SCHEMA_VERSION: u32 = 37;
 const SESSION_KIND_SCHEMA_VERSION: u32 = 33;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
@@ -156,22 +158,35 @@ impl Serialize for StoredEvent {
     where
         S: Serializer,
     {
+        if self.schema_version < AGENT_MODES_SCHEMA_VERSION {
+            ash_protocol::LegacyModelMessageEncoding(StoredEventFields(self)).serialize(serializer)
+        } else {
+            StoredEventFields(self).serialize(serializer)
+        }
+    }
+}
+
+struct StoredEventFields<'a>(&'a StoredEvent);
+
+impl Serialize for StoredEventFields<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let event = self.0;
         let mut record = serializer.serialize_struct("StoredEvent", 8)?;
-        if let Some(time_context) = &self.time_context {
+        if let Some(time_context) = &event.time_context {
             record.serialize_field("timeContext", time_context)?;
         }
-        record.serialize_field("schemaVersion", &self.schema_version)?;
-        record.serialize_field("eventId", &self.event_id)?;
-        record.serialize_field("sequence", &self.sequence)?;
-        record.serialize_field("threadId", &self.thread_id)?;
-        record.serialize_field("recordedAt", &self.recorded_at)?;
-        if let Some(command) = &self.command {
+        record.serialize_field("schemaVersion", &event.schema_version)?;
+        record.serialize_field("eventId", &event.event_id)?;
+        record.serialize_field("sequence", &event.sequence)?;
+        record.serialize_field("threadId", &event.thread_id)?;
+        record.serialize_field("recordedAt", &event.recorded_at)?;
+        if let Some(command) = &event.command {
             record.serialize_field(
                 "command",
-                &StoredCommandReceipt(command, self.schema_version),
+                &StoredCommandReceipt(command, event.schema_version),
             )?;
         }
-        record.serialize_field("event", &StoredThreadEvent(self))?;
+        record.serialize_field("event", &StoredThreadEvent(event))?;
         record.end()
     }
 }
